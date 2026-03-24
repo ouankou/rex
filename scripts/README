@@ -14,8 +14,6 @@ Files
 - test_port_whitelist.yml
   Optional renames/exclusions/allowlists for parity comparisons, including
   allow_depends_mismatch.
-- run_ctest_group.cmake
-  Helper used by make-target tests to run their dependency lists via CTest.
 
 Usage (no tests executed)
 1) Configure a build directory:
@@ -93,13 +91,12 @@ Common ways to reduce missing_executable (optional)
 - Valgrind-based uninitializedField_tests:
   install Valgrind headers and configure with `-DWITH-VALGRIND=<prefix>` or
   `-DWITH-VALGRIND-INCLUDE=<dir>`/`-DWITH-VALGRIND-LIB=<dir>` so CMake sets
-  `ROSE_USE_VALGRIND`. Reconfigure, rebuild, and run with
-  `-DREX_ENABLE_DISABLED_TESTS=ON`.
+  `ROSE_USE_VALGRIND`. Reconfigure and rebuild.
 - HPCToolkit tests:
   install HPCToolkit so `hpcrun` is on `PATH`.
 
-Make-target wrapper example (runs dependencies in CTest)
-ctest --test-dir build -R nonsmoke_functional_check-local
+Run the full default test set
+ctest --test-dir build --output-on-failure
 
 Counts (optional)
 python3 - <<'PY'

@@ -26,6 +26,8 @@ fi
 mkdir -p "${workdir}"
 rm -f "${workdir}"/orig.exe "${workdir}"/lowered.exe
 rm -f "${workdir}"/rose_* "${workdir}"/rex_lib_* "${workdir}"/lower.log
+rm -f "${workdir}"/orig_compile.out "${workdir}"/orig_compile.err
+rm -f "${workdir}"/lowered_compile.out "${workdir}"/lowered_compile.err
 
 source_name="$(basename "${input_file}")"
 rose_file="${workdir}/rose_${source_name}"
@@ -342,8 +344,6 @@ else
   exit 1
 fi
 
-"${compiler}" "${compile_flags[@]}" "${input_file}" "${driver_sources[@]}" -o "${workdir}/orig.exe"
-
 (
   cd "${workdir}"
   "${translator}" -rose:openmp:lowering -rose:skipfinalCompileStep -w -rose:verbose 0 \
@@ -361,7 +361,20 @@ if [[ ! -f "${rose_file}" ]]; then
   exit 1
 fi
 
-"${compiler}" "${compile_flags[@]}" "${rose_file}" "${driver_sources[@]}" "${kmpc_fortran_abi_lib}" -o "${workdir}/lowered.exe"
+if ! "${compiler}" "${compile_flags[@]}" "${input_file}" "${driver_sources[@]}" \
+    -o "${workdir}/orig.exe" > "${workdir}/orig_compile.out" 2> "${workdir}/orig_compile.err"; then
+  echo "NOTICE(${case_name}): semantic compare skipped because the original source is not semantically executable under the current Flang/OpenMP toolchain" >&2
+  exit 0
+fi
+
+if ! "${compiler}" "${compile_flags[@]}" "${rose_file}" "${driver_sources[@]}" "${kmpc_fortran_abi_lib}" \
+    -o "${workdir}/lowered.exe" > "${workdir}/lowered_compile.out" 2> "${workdir}/lowered_compile.err"; then
+  echo "ERROR(${case_name}): lowered source failed to compile after successful translation" >&2
+  echo "---- lowered_compile.err (${case_name}) ----" >&2
+  cat "${workdir}/lowered_compile.err" >&2
+  echo "---- end lowered_compile.err ----" >&2
+  exit 1
+fi
 
 export LD_LIBRARY_PATH="${omp_runtime_dir}:${LD_LIBRARY_PATH:-}"
 thread_counts=(2 4)

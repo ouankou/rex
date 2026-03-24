@@ -39,7 +39,8 @@ set(_f2018_tests
   R1181-F2018.f90
 )
 
-set(_f90_working_on_tests
+set(_translator_tests
+  ${_f90_tests}
   issue-38.f90
   R404.f90
   R1001.f90
@@ -98,23 +99,13 @@ set(_f90_working_on_tests
   R928.f90
   R929.f90
   R930.f90
-)
-
-set(_translator_working_tests
-  ${_f90_working_on_tests}
   pause_stmt.f77
-)
-
-set(_failing_tests
   R432.f90
   R452.f90
   R816.f90
   R858.f08
   R859.f08
   R862.f08
-)
-
-set(_non_fortran_failing_tests
   R1116.fxx
   R1118.fxx
   R1220.fxx
@@ -125,6 +116,10 @@ set(_non_fortran_failing_tests
   R722.fxx
   R723.fxx
   R733.fxx
+)
+
+set(_frontend_tests
+  ${_f2018_tests}
 )
 
 function(_experimental_sanitize_name input output_var)
@@ -161,22 +156,10 @@ function(_experimental_add_frontend_test test_prefix specimen)
   set_tests_properties(${test_prefix}_${_name} PROPERTIES RESOURCE_LOCK experimental_frontend_test_output)
 endfunction()
 
-foreach(specimen IN LISTS _f90_tests)
-  _experimental_add_translator_test(experimental_frontend_f90 ${specimen})
+foreach(specimen IN LISTS _translator_tests)
+  _experimental_add_translator_test(experimental_frontend ${specimen})
 endforeach()
 
-foreach(specimen IN LISTS _f2018_tests)
-  _experimental_add_frontend_test(experimental_frontend_f2018 ${specimen})
-endforeach()
-
-foreach(specimen IN LISTS _translator_working_tests)
-  _experimental_add_translator_test(experimental_frontend_working ${specimen})
-endforeach()
-
-foreach(specimen IN LISTS _failing_tests)
-  _experimental_add_translator_test(experimental_frontend_failing ${specimen})
-endforeach()
-
-foreach(specimen IN LISTS _non_fortran_failing_tests)
-  _experimental_add_translator_test(experimental_frontend_non_fortran ${specimen})
+foreach(specimen IN LISTS _frontend_tests)
+  _experimental_add_frontend_test(experimental_frontend ${specimen})
 endforeach()

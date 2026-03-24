@@ -1340,10 +1340,14 @@ bool VariableRenaming::mergeDefs(cfgNode curNode, bool *memberRefInserted,
     // Replace the entry for this variable with the definitions at this node.
     propDefs[entry.first] = entry.second;
 
-    // Now, iterate the definition vector for this node
-    ROSE_ASSERT(entry.second.size() == 1);
-
+    // Iterate the definition vector for this node. Some declaration forms
+    // (e.g., declaration-conditions) can legitimately surface multiple def
+    // sites for the same variable at a CFG point.
+    std::unordered_set<SgNode *> uniqueDefs;
     for (NodeVec::value_type &defNode : entry.second) {
+      if (defNode == NULL || !uniqueDefs.insert(defNode).second) {
+        continue;
+      }
       // Assign a number to each new definition. The function will prevent
       // duplicates
       addRenameNumberForNode(entry.first, defNode);

@@ -1498,18 +1498,18 @@ class SgCtorInitializerList;
  *
  * **Data members**
  *
- * #### `SgBitVector 	SgDeclarationModifier::p_modifierVector`
+ * #### `SgBitVector    SgDeclarationModifier::p_modifierVector`
  * Bit vector permitting specification of flags for friend, typedef, export,
  * throw.
  *
- * #### `SgTypeModifier 	SgDeclarationModifier::p_typeModifier`
+ * #### `SgTypeModifier    SgDeclarationModifier::p_typeModifier`
  * Modifier for type information.
  *
- * #### `SgAccessModifier 	SgDeclarationModifier::p_accessModifier`
+ * #### `SgAccessModifier    SgDeclarationModifier::p_accessModifier`
  * Modifier for access information (only set for declarations in class and
  * struct definitions)
  *
- * #### `SgStorageModifier 	SgDeclarationModifier::p_storageModifier`
+ * #### `SgStorageModifier    SgDeclarationModifier::p_storageModifier`
  * Modified for storage information.
  *
  * **Member functions**

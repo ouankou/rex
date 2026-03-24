@@ -10,6 +10,7 @@
 
 #include <sstream>
 
+#include <cstdlib>
 #include <string.h>
 using namespace std;
 
@@ -34,6 +35,14 @@ using namespace std;
 #include "constantPropagation.h"
 
 int numFails = 0, numPass = 0;
+
+static std::string get_debug_output_dir() {
+  const char *env = std::getenv("ROSE_TEST_OUTPUT_DIR");
+  if (env != nullptr && env[0] != '\0') {
+    return std::string(env);
+  }
+  return ".";
+}
 
 static void erase_all(std::string &value, const std::string &needle) {
   if (needle.empty()) {
@@ -125,7 +134,7 @@ int main(int argc, char *argv[]) {
   SgProject *project = frontend(argc, argv);
 
   initAnalysis(project);
-  Dbg::init("Divisibility Analysis Test", ".", "index.html");
+  Dbg::init("Divisibility Analysis Test", get_debug_output_dir(), "index.html");
 
   liveDeadAnalysisDebugLevel = 1;
   analysisDebugLevel = 1;

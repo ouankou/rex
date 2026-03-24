@@ -10,6 +10,28 @@
 
 using namespace std;
 
+static string joinPath(const string &directory, const string &filename) {
+  if (directory.empty()) {
+    return filename;
+  }
+
+  char last = directory.back();
+  if (last == '/' || last == '\\') {
+    return directory + filename;
+  }
+
+  return directory + "/" + filename;
+}
+
+static string getGeneratedOutputDirectory(const string &input_file_name) {
+  const char *output_dir = std::getenv("ROSE_TEST_OUTPUT_DIR");
+  if (output_dir != nullptr && *output_dir != '\0') {
+    return output_dir;
+  }
+
+  return Rose::getPathFromFileName(input_file_name);
+}
+
 string getFileExt(const string& s) 
    {
      size_t i = s.rfind('.', s.length());
@@ -56,11 +78,12 @@ getLibSourceFile(SgSourceFile* target)
 
      printf ("filename without extension: filenameWithoutExtension = %s \n",filenameWithoutExtension.c_str());
 
-     std::string filenamePath = Rose::getPathFromFileName(input_file_name);
+     std::string filenamePath = getGeneratedOutputDirectory(input_file_name);
+     string generated_filename =
+         filenameWithoutExtension + "_2ndFile" + "." + filenameExtension;
+     string new_file_name = joinPath(filenamePath, generated_filename);
 
-     string new_file_name = filenamePath + "/" + filenameWithoutExtension + "_2ndFile"+ "." + filenameExtension;
-
-  // new_file_name = filenamePath + "/" + new_file_name;
+     // new_file_name = filenamePath + "/" + new_file_name;
 
      printf ("filename with path: new_file_name    = %s \n",new_file_name.c_str());
 

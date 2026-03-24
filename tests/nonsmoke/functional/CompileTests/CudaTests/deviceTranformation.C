@@ -1,6 +1,65 @@
 // Example ROSE Translator used for testing ROSE infrastructure
 #include "rose.h"
 
+namespace {
+
+bool isCudaTraversalMarkerType(SgType *type) {
+  if (type == NULL) {
+    return false;
+  }
+
+  type = type->stripType(
+      SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
+      SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_TYPEDEF_TYPE);
+  SgClassType *classType = isSgClassType(type);
+  if (classType == NULL) {
+    return false;
+  }
+
+  SgClassDeclaration *decl = isSgClassDeclaration(classType->get_declaration());
+  if (decl == NULL) {
+    return false;
+  }
+
+  return decl->get_name() == "cuda_traversal";
+}
+
+bool lambdaIsMarkedByTraversalCall(SgFunctionCallExp *functionCallExp,
+                                   SgLambdaExp *lambdaExp) {
+  if (functionCallExp == NULL || lambdaExp == NULL) {
+    return false;
+  }
+
+  SgExprListExp *args = functionCallExp->get_args();
+  if (args == NULL) {
+    return false;
+  }
+
+  const SgExpressionPtrList &expressions = args->get_expressions();
+  size_t lambdaIndex = 0;
+  bool foundLambda = false;
+  for (SgExpressionPtrList::const_iterator i = expressions.begin();
+       i != expressions.end(); ++i, ++lambdaIndex) {
+    if (*i == lambdaExp) {
+      foundLambda = true;
+      break;
+    }
+  }
+
+  if (!foundLambda) {
+    return false;
+  }
+
+  for (size_t i = 0; i < lambdaIndex; ++i) {
+    if (isCudaTraversalMarkerType(expressions[i]->get_type())) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+} // namespace
 
 // Build an inherited attribute for the tree traversal to test the rewrite mechanism
 class InheritedAttribute
@@ -35,50 +94,8 @@ visitorTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute inher
        ROSE_ASSERT(exprListExp != NULL);
 
        if (inheritedAttribute.functionCallExp != NULL) {
-         SgExpression *expression =
-             inheritedAttribute.functionCallExp->get_function();
-         SgFunctionRefExp *functionRefExp = isSgFunctionRefExp(expression);
-         SgTemplateFunctionRefExp *templateFunctionRefExp =
-             isSgTemplateFunctionRefExp(expression);
-
-         SgFunctionDeclaration *functionDeclaration = NULL;
-
-         if (functionRefExp != NULL) {
-           SgFunctionSymbol *functionSymbol =
-               isSgFunctionSymbol(functionRefExp->get_symbol());
-           ROSE_ASSERT(functionSymbol != NULL);
-           functionDeclaration = functionSymbol->get_declaration();
-           ROSE_ASSERT(functionDeclaration != NULL);
-         } else {
-           if (templateFunctionRefExp != NULL) {
-             printf("Error: We should not have this case: Not required to be "
-                    "handled! (focus only on template instantiations and "
-                    "normal functions) \n");
-             ROSE_ASSERT(false);
-           } else {
-             // I don't think we have to worry about this case.
-           }
-         }
-
-         ROSE_ASSERT(functionDeclaration != NULL);
-
-         // Find the function argument position of the SgLambdaExp in the
-         // exprListExp.
-         size_t index_of_lambda_argument = 0;
-         SgExpressionPtrList::iterator i =
-             exprListExp->get_expressions().begin();
-         while (i != exprListExp->get_expressions().end() && lambdaExp != *i) {
-           index_of_lambda_argument++;
-           i++;
-         }
-
-         // SgFunctionParameterList* get_parameterList()
-         // Find the function parameter position of the device marked
-         // SgInitializedName in the function parameter list.
-         SgInitializedName *associatedFunctionParameter =
-             functionDeclaration->get_parameterList()
-                 ->get_args()[index_of_lambda_argument];
-         if (associatedFunctionParameter->get_using_device_keyword() == true) {
+         if (lambdaIsMarkedByTraversalCall(inheritedAttribute.functionCallExp,
+                                           lambdaExp)) {
            lambdaExp->set_is_device(true);
          }
        } else {

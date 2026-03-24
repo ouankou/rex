@@ -8,6 +8,8 @@
 
 #include <fstream>
 
+#include "test_output_path.h"
+
 using namespace std;
 using namespace SageInterface;
 
@@ -54,7 +56,7 @@ int main(int argc, char *argv[]) {
   string filename =
       Rose::StringUtility::stripPathFromFileName(firstfile->getFileName());
   string ofilename = filename + ".get_C_array_dimensions.output";
-  ofile.open(ofilename.c_str());
+  ofile.open(resolveTestOutputPath(ofilename).c_str());
   visitorTraversal myvisitor;
   myvisitor.traverseInputFiles(project, preorder);
   ofile.close();

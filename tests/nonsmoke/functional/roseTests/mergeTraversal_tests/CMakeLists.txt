@@ -1,7 +1,6 @@
 
 include_directories(${ROSE_INCLUDES})
 
-
 ########### next target ###############
 
 add_executable(traversalArray traversalArray.C)
@@ -32,17 +31,5 @@ add_test(
     -c ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_Grammar.C
 )
 
-
 ########### install files ###############
 
-# Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_roseTests_mergeTraversal_tests_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=merge_traversal_cxx_grammar\;merge_traversal_input
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_mergeTraversal_tests_check-local PROPERTIES DEPENDS "merge_traversal_cxx_grammar;merge_traversal_input" )

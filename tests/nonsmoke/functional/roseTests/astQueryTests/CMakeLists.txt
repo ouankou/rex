@@ -90,14 +90,3 @@ add_test(
 
 install(TARGETS testQuery testQuery2 testQuery3 DESTINATION bin)
 
-# Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_roseTests_astQueryTests_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=astQuery_test2_input1\;astQuery_test3_cxx_grammar\;astQuery_testQuery2_input1\;astQuery_testQuery3_input1\;astQuery_testQuery_input1
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_astQueryTests_check-local PROPERTIES DEPENDS "astQuery_test2_input1;astQuery_test3_cxx_grammar;astQuery_testQuery2_input1;astQuery_testQuery3_input1;astQuery_testQuery_input1" )

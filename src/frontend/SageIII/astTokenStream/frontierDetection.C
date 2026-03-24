@@ -1076,7 +1076,8 @@ int generate_physical_file_id(SgStatement *statement) {
     }
 
     if (SageInterface::isTemplateInstantiationNode(statement) == true) {
-      SgStatement *statement_parent = isSgStatement(statement->get_parent());
+      SgStatement *statement_parent =
+          SageInterface::getEnclosingStatement(statement->get_parent());
       ASSERT_not_null(statement_parent);
 
       int statement_physical_file_id =
@@ -1102,7 +1103,8 @@ int generate_physical_file_id(SgStatement *statement) {
     }
 
     if (physical_file_id < 0) {
-      SgStatement *statement_parent = isSgStatement(statement->get_parent());
+      SgStatement *statement_parent =
+          SageInterface::getEnclosingStatement(statement->get_parent());
       ASSERT_not_null(statement_parent);
 
       int statement_physical_file_id =

@@ -8088,10 +8088,50 @@ std::vector<SgTemplateParameter*> getTemplateParametersOrArgumentsList<SgTemplat
 
                SgFunctionDeclaration* functionDeclaration = templateFunctionSymbol->get_declaration();
                ROSE_ASSERT(functionDeclaration != NULL);
-               SgTemplateFunctionDeclaration* templateFunctionDeclaration = isSgTemplateFunctionDeclaration(functionDeclaration);
-               if (templateFunctionDeclaration != NULL)
+               auto getTemplateParameters =
+                   [](SgFunctionDeclaration *candidate)
+                       -> const SgTemplateParameterPtrList * {
+                 if (candidate == NULL)
+                    {
+                      return NULL;
+                    }
+
+                 if (SgTemplateFunctionDeclaration *templateFunctionDeclaration =
+                         isSgTemplateFunctionDeclaration(candidate))
+                    {
+                      return &(templateFunctionDeclaration->get_templateParameters());
+                    }
+
+                 if (SgTemplateInstantiationFunctionDecl *templateInstantiation =
+                         isSgTemplateInstantiationFunctionDecl(candidate))
+                    {
+                      if (templateInstantiation->get_templateDeclaration() != NULL)
+                         {
+                           return &(templateInstantiation->get_templateDeclaration()->get_templateParameters());
+                         }
+                    }
+
+                 return NULL;
+               };
+
+               const SgTemplateParameterPtrList *templateParameters =
+                   getTemplateParameters(functionDeclaration);
+               if (templateParameters == NULL)
                   {
-                    returnList = templateFunctionDeclaration->get_templateParameters();
+                    templateParameters =
+                        getTemplateParameters(isSgFunctionDeclaration(
+                            functionDeclaration->get_firstNondefiningDeclaration()));
+                  }
+               if (templateParameters == NULL)
+                  {
+                    templateParameters =
+                        getTemplateParameters(isSgFunctionDeclaration(
+                            functionDeclaration->get_definingDeclaration()));
+                  }
+
+               if (templateParameters != NULL)
+                  {
+                    returnList = *templateParameters;
                   }
                  else
                   {
@@ -8109,10 +8149,50 @@ std::vector<SgTemplateParameter*> getTemplateParametersOrArgumentsList<SgTemplat
 
                SgMemberFunctionDeclaration* memberFunctionDeclaration = templateMemberFunctionSymbol->get_declaration();
                ROSE_ASSERT(memberFunctionDeclaration != NULL);
-               SgTemplateMemberFunctionDeclaration* templateMemberFunctionDeclaration = isSgTemplateMemberFunctionDeclaration(memberFunctionDeclaration);
-               if (templateMemberFunctionDeclaration != NULL)
+               auto getTemplateParameters =
+                   [](SgMemberFunctionDeclaration *candidate)
+                       -> const SgTemplateParameterPtrList * {
+                 if (candidate == NULL)
+                    {
+                      return NULL;
+                    }
+
+                 if (SgTemplateMemberFunctionDeclaration *templateMemberFunctionDeclaration =
+                         isSgTemplateMemberFunctionDeclaration(candidate))
+                    {
+                      return &(templateMemberFunctionDeclaration->get_templateParameters());
+                    }
+
+                 if (SgTemplateInstantiationMemberFunctionDecl *templateInstantiation =
+                         isSgTemplateInstantiationMemberFunctionDecl(candidate))
+                    {
+                      if (templateInstantiation->get_templateDeclaration() != NULL)
+                         {
+                           return &(templateInstantiation->get_templateDeclaration()->get_templateParameters());
+                         }
+                    }
+
+                 return NULL;
+               };
+
+               const SgTemplateParameterPtrList *templateParameters =
+                   getTemplateParameters(memberFunctionDeclaration);
+               if (templateParameters == NULL)
                   {
-                    returnList = templateMemberFunctionDeclaration->get_templateParameters();
+                    templateParameters =
+                        getTemplateParameters(isSgMemberFunctionDeclaration(
+                            memberFunctionDeclaration->get_firstNondefiningDeclaration()));
+                  }
+               if (templateParameters == NULL)
+                  {
+                    templateParameters =
+                        getTemplateParameters(isSgMemberFunctionDeclaration(
+                            memberFunctionDeclaration->get_definingDeclaration()));
+                  }
+
+               if (templateParameters != NULL)
+                  {
+                    returnList = *templateParameters;
                   }
                  else
                   {

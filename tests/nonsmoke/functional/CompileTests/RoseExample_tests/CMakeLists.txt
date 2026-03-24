@@ -36,16 +36,5 @@ add_test(
     ${ROSE_INCLUDE_FLAGS}
     -c ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_Grammar.C
 )
-set_tests_properties(rose_example_src_frontend_SageIII_Cxx_Grammar_C PROPERTIES DISABLED TRUE LABELS rose_example)
+set_tests_properties(rose_example_src_frontend_SageIII_Cxx_Grammar_C PROPERTIES  LABELS rose_example)
 
-# Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_CompileTests_RoseExample_tests_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${_rose_example_tests}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_CompileTests_RoseExample_tests_check-local PROPERTIES DEPENDS "${_rose_example_tests}" )

@@ -125,6 +125,11 @@ public:
   // using extern "C". DQ (8/29/2005): Added to support differences in the order
   // of "extern C" and "template<>" with g++ version 3.3.x and 3.4.x void
   // outputExternLinkageSpecifier ( SgDeclarationStatement* decl_stmt );
+  static void resetActiveExternLinkageBraceStack();
+  static void pushActiveExternLinkageBraceLanguage(const std::string &language);
+  static void popActiveExternLinkageBraceLanguage();
+  static std::string getActiveExternLinkageBraceLanguage();
+
   void outputExternLinkageSpecifier(SgDeclarationStatement *decl_stmt,
                                     SgUnparse_Info &info);
 

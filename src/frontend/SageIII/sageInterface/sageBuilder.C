@@ -13179,9 +13179,44 @@ SgTemplateClassDeclaration *SageBuilder::buildTemplateClassDeclaration_nfi(
         nameWithTemplateSpecializationArguments, templateParameterList,
         templateSpecializationArgumentList);
     if (mysymbol == NULL) {
-      printf("WARNING: In buildTemplateClassDeclaration_nfi(): non-defining "
-             "declaration was provided but cannot be located in the associated "
-             "scope.\n");
+      // When the caller provides a nondefining declaration, prefer the symbol
+      // already attached to that declaration instead of issuing a looser
+      // template lookup. Partial specializations legitimately carry both
+      // template parameters and specialization arguments, so looking them up as
+      // "args only" violates the symbol-table API invariants.
+      if (nondefdecl != NULL) {
+        if (SgClassSymbol *existing_symbol =
+                isSgClassSymbol(nondefdecl->get_symbol_from_symbol_table())) {
+          SgScopeStatement *existing_scope = NULL;
+          if (SgSymbolTable *symbol_table =
+                  isSgSymbolTable(existing_symbol->get_parent())) {
+            existing_scope = isSgScopeStatement(symbol_table->get_parent());
+          }
+          if (existing_scope == scope) {
+            mysymbol = existing_symbol;
+          }
+        }
+      }
+    }
+
+    if (mysymbol == NULL) {
+      mysymbol =
+          scope->lookup_class_symbol(nameWithTemplateSpecializationArguments);
+    }
+
+    if (mysymbol == NULL) {
+      if (nondefdecl->get_parent() == NULL) {
+        nondefdecl->set_parent(scope);
+      }
+      if (nondefdecl->get_scope() != scope) {
+        nondefdecl->set_scope(scope);
+      }
+      if (nondefdecl->get_type() == NULL) {
+        nondefdecl->set_type(SgClassType::createType(nondefdecl));
+      }
+
+      mysymbol = new SgTemplateClassSymbol(nondefdecl);
+      scope->insert_symbol(nameWithTemplateSpecializationArguments, mysymbol);
     }
   }
 

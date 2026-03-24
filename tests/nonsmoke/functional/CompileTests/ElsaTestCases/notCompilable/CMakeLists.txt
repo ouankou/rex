@@ -1,30 +1,77 @@
+include(ElsaTestCases_notCompilable_Testcodes.cmake)
+include(ElsaTestCases_notCompilable_Testcodes_Additional.cmake)
+
+set(ROSE_FLAGS -w -std=gnu++03)
+set(ELSATEST_NOTCOMPILABLE_ALL_TESTCODES
+  ${ELSATEST_NOTCOMPILABLE_TESTCODES}
+  ${ELSATEST_NOTCOMPILABLE_ADDITIONAL_TESTCODES})
+
+# Historically in Elsa these lived in notCompilable, but Clang accepts them
+# and the translator handles them as ordinary compile tests.
+set(ELSATEST_NOTCOMPILABLE_EXPECT_PASS_TESTCODES
+  t0178.cc
+  t0196.cc)
+
+function(elsa_not_compilable_test input_file label)
+  set(_test_key ${input_file})
+  string(REPLACE "/" "_" _test_key "${_test_key}")
+  string(REPLACE "." "_" _test_key "${_test_key}")
+  set(test_id ${label}_${_test_key})
+
+  set(_test_output_dir "${ROSE_TEST_OUTPUT_DIR}")
+  if(_test_output_dir STREQUAL "")
+    set(_test_output_dir "${CMAKE_CURRENT_BINARY_DIR}/rose_output")
+  endif()
+  file(MAKE_DIRECTORY "${_test_output_dir}")
+  set(_rose_flags ${ROSE_FLAGS})
+
+  set(_source_path "")
+  foreach(_root IN LISTS ARGN)
+    if(EXISTS "${_root}/${input_file}")
+      set(_source_path "${_root}/${input_file}")
+      break()
+    endif()
+  endforeach()
+  if(_source_path STREQUAL "")
+    message(STATUS
+      "Skipping Elsa notCompilable source missing from tree: ${input_file}")
+    return()
+  endif()
+
+  get_filename_component(_source_dir "${_source_path}" DIRECTORY)
+  if(_source_path MATCHES "\\.c$")
+    list(FILTER _rose_flags EXCLUDE REGEX "^-std=.*")
+    list(APPEND _rose_flags -rose:C)
+  endif()
+
+  add_test(
+    NAME ${test_id}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${translator}
+      ${_rose_flags}
+      ${ROSE_INCLUDE_FLAGS}
+      -I${CMAKE_CURRENT_SOURCE_DIR}
+      -I${_source_dir}
+      -c ${_source_path}
+  )
+  set(_test_will_fail TRUE)
+  if(input_file IN_LIST ELSATEST_NOTCOMPILABLE_EXPECT_PASS_TESTCODES)
+    set(_test_will_fail FALSE)
+  endif()
+  set_tests_properties(${test_id} PROPERTIES LABELS "${label}" WILL_FAIL ${_test_will_fail})
+  set_property(TEST ${test_id} APPEND PROPERTY ENVIRONMENT
+               "ROSE_TEST_OUTPUT_DIR=${_test_output_dir}")
+endfunction()
+
+set(_elsa_notcompilable_roots
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+foreach(file_to_test ${ELSATEST_NOTCOMPILABLE_ALL_TESTCODES})
+  elsa_not_compilable_test(${file_to_test} ELSATEST ${_elsa_notcompilable_roots})
+endforeach()
+
 add_subdirectory(gnu)
 add_subdirectory(std)
 
-include(ElsaTestCases_notCompilable_Testcodes.cmake)
-include(ElsaTestCases_notCompilable_Testcodes_Disabled.cmake)
-
-set(ROSE_FLAGS -w)
-set(ROSE_DISABLED_TESTCODES
-  ${ELSATEST_NOTCOMPILABLE_TESTCODES}
-  ${ELSATEST_NOTCOMPILABLE_DISABLED_TESTCODES})
-
-foreach(file_to_test ${ELSATEST_NOTCOMPILABLE_TESTCODES}
-                     ${ELSATEST_NOTCOMPILABLE_DISABLED_TESTCODES})
-  compile_test(${file_to_test} ELSATEST)
-endforeach()
-
-# Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_CompileTests_ElsaTestCases_notCompilable_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=ELSATEST_d0041_cc\;ELSATEST_d0050elab_cc\;ELSATEST_d0053_cc\;ELSATEST_d0062_cc\;ELSATEST_d0063_cc\;ELSATEST_d0103_cc\;ELSATEST_d0110_cc\;ELSATEST_d0115_cc\;ELSATEST_d0123_cc\;ELSATEST_k0044_cc\;ELSATEST_k0053_cc\;ELSATEST_t0006_cc\;ELSATEST_t0007_cc\;ELSATEST_t0012_cc\;ELSATEST_t0014_cc\;ELSATEST_t0030_cc\;ELSATEST_t0031_cc\;ELSATEST_t0036_cc\;ELSATEST_t0040_cc\;ELSATEST_t0054_cc\;ELSATEST_t0062_cc\;ELSATEST_t0068_cc\;ELSATEST_t0069_cc\;ELSATEST_t0072_cc\;ELSATEST_t0074_cc\;ELSATEST_t0078_cc\;ELSATEST_t0079_cc\;ELSATEST_t0082_cc\;ELSATEST_t0091_cc\;ELSATEST_t0093_cc\;ELSATEST_t0099_cc\;ELSATEST_t0109_cc\;ELSATEST_t0116_cc\;ELSATEST_t0117_cc\;ELSATEST_t0118_cc\;ELSATEST_t0120_cc\;ELSATEST_t0123_cc\;ELSATEST_t0126_cc\;ELSATEST_t0134_cc\;ELSATEST_t0136_cc\;ELSATEST_t0137_cc\;ELSATEST_t0138_cc\;ELSATEST_t0139_cc\;ELSATEST_t0140_cc\;ELSATEST_t0141_cc\;ELSATEST_t0142_cc\;ELSATEST_t0143_cc\;ELSATEST_t0144_cc\;ELSATEST_t0145_cc\;ELSATEST_t0146_cc\;ELSATEST_t0147_cc\;ELSATEST_t0148_cc\;ELSATEST_t0157_cc\;ELSATEST_t0159_cc\;ELSATEST_t0162_cc\;ELSATEST_t0163_cc\;ELSATEST_t0177_cc\;ELSATEST_t0178_cc\;ELSATEST_t0196_cc\;ELSATEST_t0209_cc\;ELSATEST_t0215_cc\;ELSATEST_t0216_cc\;ELSATEST_t0221_cc\;ELSATEST_t0224_cc\;ELSATEST_t0228_cc\;ELSATEST_t0230_cc\;ELSATEST_t0242_cc\;ELSATEST_t0251_cc\;ELSATEST_t0258_cc\;ELSATEST_t0261_cc\;ELSATEST_t0263_cc\;ELSATEST_t0264_cc\;ELSATEST_t0265_cc\;ELSATEST_t0267_cc\;ELSATEST_t0279_cc\;ELSATEST_t0282_cc\;ELSATEST_t0287_cc\;ELSATEST_t0288_cc\;ELSATEST_t0297_cc\;ELSATEST_t0299_cc\;ELSATEST_t0309_cc\;ELSATEST_t0310_cc\;ELSATEST_t0311_cc\;ELSATEST_t0339_cc\;ELSATEST_t0342_cc\;ELSATEST_t0345_cc\;ELSATEST_t0347_cc\;ELSATEST_t0354_cc\;ELSATEST_t0380_cc\;ELSATEST_t0383_cc\;ELSATEST_t0385_cc\;ELSATEST_t0401_cc\;ELSATEST_t0402_cc\;ELSATEST_t0403_cc\;ELSATEST_t0408_cc\;ELSATEST_t0416_cc\;ELSATEST_t0423_cc\;ELSATEST_t0431_cc\;ELSATEST_t0452_cc\;ELSATEST_t0509_cc\;ELSATEST_t0511_cc\;ELSATEST_t0520_cc\;ELSATEST_t0529_cc\;ELSATEST_t0533_cc\;ELSATEST_t0561_cc\;ELSATEST_t0576_cc
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_CompileTests_ElsaTestCases_notCompilable_check-local PROPERTIES LABELS disabled DEPENDS "ELSATEST_d0041_cc;ELSATEST_d0050elab_cc;ELSATEST_d0053_cc;ELSATEST_d0062_cc;ELSATEST_d0063_cc;ELSATEST_d0103_cc;ELSATEST_d0110_cc;ELSATEST_d0115_cc;ELSATEST_d0123_cc;ELSATEST_k0044_cc;ELSATEST_k0053_cc;ELSATEST_t0006_cc;ELSATEST_t0007_cc;ELSATEST_t0012_cc;ELSATEST_t0014_cc;ELSATEST_t0030_cc;ELSATEST_t0031_cc;ELSATEST_t0036_cc;ELSATEST_t0040_cc;ELSATEST_t0054_cc;ELSATEST_t0062_cc;ELSATEST_t0068_cc;ELSATEST_t0069_cc;ELSATEST_t0072_cc;ELSATEST_t0074_cc;ELSATEST_t0078_cc;ELSATEST_t0079_cc;ELSATEST_t0082_cc;ELSATEST_t0091_cc;ELSATEST_t0093_cc;ELSATEST_t0099_cc;ELSATEST_t0109_cc;ELSATEST_t0116_cc;ELSATEST_t0117_cc;ELSATEST_t0118_cc;ELSATEST_t0120_cc;ELSATEST_t0123_cc;ELSATEST_t0126_cc;ELSATEST_t0134_cc;ELSATEST_t0136_cc;ELSATEST_t0137_cc;ELSATEST_t0138_cc;ELSATEST_t0139_cc;ELSATEST_t0140_cc;ELSATEST_t0141_cc;ELSATEST_t0142_cc;ELSATEST_t0143_cc;ELSATEST_t0144_cc;ELSATEST_t0145_cc;ELSATEST_t0146_cc;ELSATEST_t0147_cc;ELSATEST_t0148_cc;ELSATEST_t0157_cc;ELSATEST_t0159_cc;ELSATEST_t0162_cc;ELSATEST_t0163_cc;ELSATEST_t0177_cc;ELSATEST_t0178_cc;ELSATEST_t0196_cc;ELSATEST_t0209_cc;ELSATEST_t0215_cc;ELSATEST_t0216_cc;ELSATEST_t0221_cc;ELSATEST_t0224_cc;ELSATEST_t0228_cc;ELSATEST_t0230_cc;ELSATEST_t0242_cc;ELSATEST_t0251_cc;ELSATEST_t0258_cc;ELSATEST_t0261_cc;ELSATEST_t0263_cc;ELSATEST_t0264_cc;ELSATEST_t0265_cc;ELSATEST_t0267_cc;ELSATEST_t0279_cc;ELSATEST_t0282_cc;ELSATEST_t0287_cc;ELSATEST_t0288_cc;ELSATEST_t0297_cc;ELSATEST_t0299_cc;ELSATEST_t0309_cc;ELSATEST_t0310_cc;ELSATEST_t0311_cc;ELSATEST_t0339_cc;ELSATEST_t0342_cc;ELSATEST_t0345_cc;ELSATEST_t0347_cc;ELSATEST_t0354_cc;ELSATEST_t0380_cc;ELSATEST_t0383_cc;ELSATEST_t0385_cc;ELSATEST_t0401_cc;ELSATEST_t0402_cc;ELSATEST_t0403_cc;ELSATEST_t0408_cc;ELSATEST_t0416_cc;ELSATEST_t0423_cc;ELSATEST_t0431_cc;ELSATEST_t0452_cc;ELSATEST_t0509_cc;ELSATEST_t0511_cc;ELSATEST_t0520_cc;ELSATEST_t0529_cc;ELSATEST_t0533_cc;ELSATEST_t0561_cc;ELSATEST_t0576_cc" )
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(nonsmoke_functional_CompileTests_ElsaTestCases_notCompilable_check-local PROPERTIES DISABLED TRUE)
-endif()

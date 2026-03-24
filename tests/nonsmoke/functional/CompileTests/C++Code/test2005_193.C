@@ -1,19 +1,11 @@
 
 
+struct super {
+  virtual int operator[](const char *) = 0;
+};
 
-// #include <iostream>
-struct super
-   {
-     virtual int operator [] (char*) = 0;
-   };
+struct dummy : public super {
+  int operator[](const char *lala) override { return lala != nullptr ? 0 : 1; }
+};
 
-struct dummy : public super
-   {
-     virtual int operator [] (char* lala) {return 0;}
-   };
-
-int main()
-   {
-  // dummy()["Kuh"];
-     dummy::dummy()["Kuh"];
-   }
+int main() { dummy()["Kuh"]; }

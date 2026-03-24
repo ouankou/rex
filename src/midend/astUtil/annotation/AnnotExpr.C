@@ -32,6 +32,13 @@ bool ParseIntStrict(const std::string &text, int &value) {
   value = static_cast<int>(parsed);
   return true;
 }
+
+std::string ReadQualifiedId(std::istream &in) {
+  NameDescriptor name;
+  if (!name.read(in))
+    return "";
+  return name.get_name();
+}
 } // namespace
 
 template class CloseDescriptor<SymbolicValDescriptor, '{', '}'>;
@@ -172,7 +179,7 @@ SymbolicVal ReadSymbolicTerm(istream &in) {
       result = new SymbolicConst(val, "int");
     c = 0;
   } else if (is_id(c)) {
-    string id = read_id(in);
+    string id = ReadQualifiedId(in);
     if (id == "Min" || id == "min") {
       read_ch(in, '(');
       SymbolicSelect *r = new SymbolicSelect(-1);

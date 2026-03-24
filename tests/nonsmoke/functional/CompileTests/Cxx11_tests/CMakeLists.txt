@@ -923,55 +923,6 @@ set(CXX11_TESTCODES
   test2020_21.C
   test2018_100.C
 )
-set(CXX11_DISABLED_TESTCODES
-  test2016_41.C
-  test2019_37.C
-  test2019_38.C
-  test2019_103.C
-  test2019_104.C
-  test2019_132.C
-  test2019_243.C
-  test2019_244.C
-  test2019_245.C
-  test2019_257.C
-  test2019_259.C
-  test2019_260.C
-  test2019_261.C
-  test2019_262.C
-  test2019_263.C
-  test2019_264.C
-  test2019_265.C
-  test2019_266.C
-  test2019_277.C
-  test2019_278.C
-  test2019_279.C
-  test2019_280.C
-  test2019_285.C
-  test2019_286.C
-  test2019_296.C
-  test2019_297.C
-  test2019_301.C
-  test2019_306.C
-  test2019_311.C
-  test2019_382.C
-  test2019_388.C
-  test2019_453.C
-  test2019_504.C
-  test2019_506.C
-  test2020_82.C
-  test2020_91.C
-  test2020_95.C
-  test2018_100.C
-)
-
-set(CXX11_EXPECTED_FAIL_TESTCODES
-  # Pointer-to-member values can only be compared against nullptr or another
-  # pointer-to-member value. These specimens intentionally exercise Clang's
-  # required rejection of invalid integer comparisons.
-  test2019_313.C
-  test2020_40.C
-)
-
 set(CXX11_TESTCODES_CXX03
   # This test intentionally uses legacy access declarations (A::foo;).
   test2019_56.C
@@ -1002,8 +953,6 @@ endfunction()
 
 assert_cxx11_specimens_exist(CXX11_TESTCODES)
 assert_cxx11_specimens_exist(CXX11_TESTCODES_CXX03)
-assert_cxx11_specimens_exist(CXX11_DISABLED_TESTCODES)
-assert_cxx11_specimens_exist(CXX11_EXPECTED_FAIL_TESTCODES)
 
 set(ROSE_FLAGS_BASE
   -w -rose:verbose 0 -rose:skip_unparse_asm_commands)
@@ -1013,17 +962,11 @@ set(ROSE_FLAGS_CXX03
   ${ROSE_FLAGS_BASE} -std=c++03)
 set(ROSE_FLAGS ${ROSE_FLAGS_CXX11})
 
-set(ROSE_DISABLED_TESTCODES ${CXX11_DISABLED_TESTCODES})
-set(ROSE_EXPECTED_FAIL_TESTCODES ${CXX11_EXPECTED_FAIL_TESTCODES})
-set(_cxx11_check_local_tests)
-
 macro(compile_with_flags test_files_var_name flags_var_name)
   set(_saved_rose_flags ${ROSE_FLAGS})
   set(ROSE_FLAGS ${${flags_var_name}})
   foreach(file_to_test ${${test_files_var_name}})
     compile_test(${file_to_test} "Cxx11_tests")
-    rex_compile_test_name(_test_name Cxx11_tests "${file_to_test}")
-    list(APPEND _cxx11_check_local_tests "${_test_name}")
   endforeach()
   set(ROSE_FLAGS ${_saved_rose_flags})
   unset(_saved_rose_flags)
@@ -1066,7 +1009,6 @@ foreach(index RANGE 0 ${_multi_max} 3)
       ${CMAKE_CURRENT_SOURCE_DIR}/${_file2}
   )
   set_tests_properties(Cxx11_tests_${_name} PROPERTIES LABELS Cxx11_tests)
-  list(APPEND _cxx11_check_local_tests "Cxx11_tests_${_name}")
 endforeach()
 
 add_test(
@@ -1077,7 +1019,6 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2020_113.C
 )
 set_tests_properties(Cxx11_tests_test2020_113 PROPERTIES LABELS Cxx11_tests)
-list(APPEND _cxx11_check_local_tests Cxx11_tests_test2020_113)
 
 add_test(
   NAME Cxx11_tests_c_language_file_as_cxx
@@ -1086,7 +1027,6 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/C_language_file_1.c
 )
 set_tests_properties(Cxx11_tests_c_language_file_as_cxx PROPERTIES LABELS Cxx11_tests)
-list(APPEND _cxx11_check_local_tests Cxx11_tests_c_language_file_as_cxx)
 
 add_test(
   NAME Cxx11_tests_c_language_file_as_cxx11
@@ -1095,7 +1035,6 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/C_language_file_2.c
 )
 set_tests_properties(Cxx11_tests_c_language_file_as_cxx11 PROPERTIES LABELS Cxx11_tests)
-list(APPEND _cxx11_check_local_tests Cxx11_tests_c_language_file_as_cxx11)
 
 add_executable(globalVariablesInLambdas globalVariablesInLambdas.C)
 target_link_libraries(globalVariablesInLambdas ROSE_DLL ${link_with_libraries})
@@ -1107,23 +1046,4 @@ add_test(
   COMMAND globalVariablesInLambdas -std=c++11
     -c ${CMAKE_CURRENT_SOURCE_DIR}/globalVariablesInLambdas_test_01.C
 )
-set_tests_properties(Cxx11_tests_globalVariablesInLambdas PROPERTIES DISABLED TRUE LABELS Cxx11_tests)
-list(APPEND _cxx11_check_local_tests Cxx11_tests_globalVariablesInLambdas)
-
-# Makefile check targets.
-list(REMOVE_DUPLICATES _cxx11_check_local_tests)
-string(REPLACE ";" "\\;" _cxx11_check_local_tests_escaped "${_cxx11_check_local_tests}")
-
-add_test(
-  NAME nonsmoke_functional_CompileTests_Cxx11_tests_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${_cxx11_check_local_tests_escaped}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(
-  nonsmoke_functional_CompileTests_Cxx11_tests_check-local
-  PROPERTIES DEPENDS "${_cxx11_check_local_tests}"
-)
+set_tests_properties(Cxx11_tests_globalVariablesInLambdas PROPERTIES  LABELS Cxx11_tests)

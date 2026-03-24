@@ -1423,9 +1423,7 @@ def _is_make_check_target(target: str) -> bool:
 
 
 def _is_default_check_target(target: str) -> bool:
-    return bool(re.fullmatch(r"(make-)?check", target)) or bool(
-        re.fullmatch(r"(make-)?check-local", target)
-    )
+    return bool(re.fullmatch(r"(make-)?check", target))
 
 
 def _root_target_status(target: str) -> tuple[str, Optional[str]]:
@@ -4935,87 +4933,11 @@ def _compile_test_key(value: str) -> str:
 
 
 def _load_cxx_failing_tests(repo_root: Path) -> set[str]:
-    cmake_path = (
-        repo_root / "tests/nonsmoke/functional/CompileTests/Cxx_tests/CMakeLists.txt"
-    )
-    if not cmake_path.exists():
-        return set()
-    lines = cmake_path.read_text(errors="ignore").splitlines()
-    collecting = False
-    items: list[str] = []
-    for raw in lines:
-        line = raw.split("#", 1)[0].strip()
-        if not line:
-            continue
-        if not collecting:
-            if line.startswith("set(TESTCODE_CURRENTLY_FAILING"):
-                collecting = True
-                line = line[len("set(TESTCODE_CURRENTLY_FAILING"):].strip()
-                if line.startswith("("):
-                    line = line[1:].strip()
-        if collecting:
-            if ")" in line:
-                before, _ = line.split(")", 1)
-                if before.strip():
-                    items.extend(before.split())
-                break
-            items.extend(line.split())
-    return set(items)
+    return set()
 
 
 def _load_c_tests_failing_tests(repo_root: Path) -> set[str]:
-    cmake_path = (
-        repo_root / "tests/nonsmoke/functional/CompileTests/C_tests/CMakeLists.txt"
-    )
-    if not cmake_path.exists():
-        return set()
-    lines = cmake_path.read_text(errors="ignore").splitlines()
-    failing: list[str] = []
-    removing: list[str] = []
-    collecting = False
-    remove_collecting = False
-    for raw in lines:
-        line = raw.split("#", 1)[0].strip()
-        if not line:
-            continue
-        if not collecting and line.startswith("set(TESTCODE_CURRENTLY_FAILING"):
-            collecting = True
-            line = line[len("set(TESTCODE_CURRENTLY_FAILING") :].strip()
-            if line.startswith("("):
-                line = line[1:].strip()
-        if collecting:
-            if ")" in line:
-                before, _ = line.split(")", 1)
-                if before.strip():
-                    failing.extend(before.split())
-                collecting = False
-                continue
-            failing.extend(line.split())
-            continue
-        if line.startswith("list(REMOVE_ITEM TESTCODE_CURRENTLY_FAILING"):
-            rest = line[len("list(REMOVE_ITEM TESTCODE_CURRENTLY_FAILING") :].strip()
-            if rest.startswith("("):
-                rest = rest[1:].strip()
-            if ")" in rest:
-                before, _ = rest.split(")", 1)
-                if before.strip():
-                    removing.extend(before.split())
-            else:
-                remove_collecting = True
-                if rest:
-                    removing.extend(rest.split())
-            continue
-        if remove_collecting:
-            if ")" in line:
-                before, _ = line.split(")", 1)
-                if before.strip():
-                    removing.extend(before.split())
-                remove_collecting = False
-            else:
-                removing.extend(line.split())
-    if removing:
-        return set(failing) - set(removing)
-    return set(failing)
+    return set()
 
 
 @functools.lru_cache(maxsize=None)
@@ -5067,27 +4989,7 @@ def _load_uninit_lists(repo_root: Optional[Path]) -> dict[str, set[str]]:
 def _apply_unparse_to_string_failing(
     entry: TestEntry, cxx_failing: set[str]
 ) -> None:
-    if not entry.origin:
-        return
-    origin_path = str(entry.origin[0].get("path", ""))
-    if not origin_path.endswith("CompileTests/unparseToString_tests/Makefile.am"):
-        return
-    if not entry.name.startswith(("ua_", "ut_")):
-        return
-    if entry.name.startswith(("ua_failing_", "ut_failing_")):
-        return
-    file_name = entry.name[3:]
-    if file_name not in cxx_failing:
-        return
-    prefix = "ua_failing_" if entry.name.startswith("ua_") else "ut_failing_"
-    entry.name = f"{prefix}{file_name}"
-    entry.key = f"name:{entry.name}"
-    if "known_fail" not in entry.labels:
-        entry.labels.append("known_fail")
-    if "disabled" not in entry.labels:
-        entry.labels.append("disabled")
-    entry.status = "disabled"
-    entry.disable_reason = entry.disable_reason or "autotools:TESTCODE_CURRENTLY_FAILING"
+    return
 
 
 def _command_input_path(entry: TestEntry) -> Optional[str]:
@@ -5185,10 +5087,6 @@ def _map_cmake_compile_tests(
         elsa_label = _elsa_label_from_input(input_path, include_ctests=True)
         if elsa_label:
             label = elsa_label
-    if label == "Cxx_tests" and input_name in cxx_failing:
-        label = "Cxx_tests_failing"
-    if label == "C_tests" and input_name in c_tests_failing:
-        label = "C_tests_failing"
     mapped = f"{label}_{_compile_test_key(input_name)}"
     if mapped != name:
         return mapped
@@ -5383,21 +5281,11 @@ def _explicit_name_mapping(
         match = re.match(r"^(.*)\.CXX-INT(?:\.passed|-o)?$", base_name)
         if match:
             file_name = f"{match.group(1)}.C"
-            prefix = (
-                "testInterproceduralCFG_Cxx_failing_"
-                if file_name in cxx_failing
-                else "testInterproceduralCFG_Cxx_"
-            )
-            return f"{prefix}{file_name}"
+            return f"testInterproceduralCFG_Cxx_{file_name}"
         match = re.match(r"^(.*)\.CXX(?:\.passed|-o)?$", base_name)
         if match:
             file_name = f"{match.group(1)}.C"
-            prefix = (
-                "testStaticCFG_Cxx_failing_"
-                if file_name in cxx_failing
-                else "testStaticCFG_Cxx_"
-            )
-            return f"{prefix}{file_name}"
+            return f"testStaticCFG_Cxx_{file_name}"
 
     if origin_path.endswith("CompileTests/uninitializedField_tests/Makefile.am"):
         rex_root = repo_roots.get("rex")
@@ -5475,16 +5363,7 @@ def _explicit_name_mapping(
                 if name.startswith(prefix):
                     input_file = Path(name[len(prefix):]).name
 
-        is_failing = False
-        if entry.disable_reason and "TESTCODE_CURRENTLY_FAILING" in entry.disable_reason:
-            is_failing = True
-        for origin in entry.origin:
-            if "TESTCODE_CURRENTLY_FAILING" in origin.get("notes", ""):
-                is_failing = True
-                break
-        if input_file and input_file in cxx_failing:
-            is_failing = True
-        prefix_label = "Cxx_tests_failing_" if is_failing else "Cxx_tests_"
+        prefix_label = "Cxx_tests_"
         if any(
             "testTranslatorUnfoldedConstants" in token
             for token in entry.command
@@ -5503,9 +5382,7 @@ def _explicit_name_mapping(
         if name.startswith(prefix):
             suffix = name[len(prefix):]
             return f"{prefix_label}{_compile_test_key(suffix)}"
-        if name.endswith((".C", ".cc", ".cpp", ".cxx")) and not name.startswith(
-            ("Cxx_tests_", "Cxx_tests_failing_")
-        ):
+        if name.endswith((".C", ".cc", ".cpp", ".cxx")) and not name.startswith("Cxx_tests_"):
             return f"{prefix_label}{_compile_test_key(name)}"
 
     if origin_path.endswith("CompileTests/Cxx11_tests/Makefile.am"):
@@ -5605,15 +5482,7 @@ def _explicit_name_mapping(
             input_name = name[len(prefix):] if name.startswith(prefix) else name
         if input_name and input_name.endswith((".c", ".C", ".cc", ".cpp", ".cxx")):
             label = "ELSATEST"
-            if origin_path.endswith("CompileTests/ElsaTestCases/Makefile.am"):
-                failing = False
-                for origin in entry.origin:
-                    notes = origin.get("notes", "")
-                    if isinstance(notes, str) and "START_OF_FAILED_TESTS_USING_ROSE" in notes:
-                        failing = True
-                        break
-                label = "ElsaTestCases_failing" if failing else "ELSATEST"
-            else:
+            if not origin_path.endswith("CompileTests/ElsaTestCases/Makefile.am"):
                 elsa_label = _elsa_label_from_input(input_path, include_ctests=False)
                 if elsa_label:
                     label = elsa_label
@@ -5658,31 +5527,18 @@ def _explicit_name_mapping(
             return "C_tests_compile_and_link_with_NDEBUG"
         if name.endswith("test2019_16b.c"):
             return "C_tests_multiple_file_test_01"
-        is_failing = False
-        if entry.disable_reason and "TESTCODE_CURRENTLY_FAILING" in entry.disable_reason:
-            is_failing = True
-        for origin in entry.origin:
-            if "TESTCODE_CURRENTLY_FAILING" in origin.get("notes", ""):
-                is_failing = True
-                break
         input_file = None
         prefix = "nonsmoke_functional_CompileTests_C_tests_"
         if name.startswith(prefix):
             input_file = name[len(prefix) :]
         elif name.endswith(".c"):
             input_file = Path(name).name
-        if input_file and input_file in c_tests_failing:
-            is_failing = True
-            entry.status = "disabled"
-            entry.disable_reason = entry.disable_reason or "cmake:TESTCODE_CURRENTLY_FAILING"
-            if "disabled" not in entry.labels:
-                entry.labels.append("disabled")
-        prefix_label = "C_tests_failing_" if is_failing else "C_tests_"
+        prefix_label = "C_tests_"
         if name.startswith(prefix):
             suffix = name[len(prefix):]
             if suffix.endswith(".c"):
                 return f"{prefix_label}{_compile_test_key(suffix)}"
-        if name.endswith(".c") and not name.startswith(("C_tests_", "C_tests_failing_")):
+        if name.endswith(".c") and not name.startswith("C_tests_"):
             return f"{prefix_label}{_compile_test_key(name)}"
 
     if origin_path.endswith("CompileTests/C89_std_c89_tests/Makefile.am"):
@@ -5713,12 +5569,7 @@ def _explicit_name_mapping(
         match = re.match(r"^(.*)\.CXX(?:\.passed|-o)?$", base_name)
         if match:
             file_name = f"{match.group(1)}.C"
-            prefix = (
-                "testVirtualCFG_CXX_failing_"
-                if file_name in cxx_failing
-                else "testVirtualCFG_CXX_"
-            )
-            return f"{prefix}{file_name}"
+            return f"testVirtualCFG_CXX_{file_name}"
         match = re.match(r"(.+)\.C99$", base_name)
         if match:
             return f"testVirtualCFG_C99_{match.group(1)}.c"
@@ -5951,17 +5802,7 @@ def _explicit_name_mapping(
         prefix = "nonsmoke_functional_CompileTests_Fortran_tests_experimental_frontend_tests_"
         suffix = name[len(prefix):] if name.startswith(prefix) else name
         suffix = _cmake_sanitize_name(suffix)
-        origin_notes = " ".join(origin.get("notes", "") for origin in entry.origin)
-        if "F90_TESTCODES_WORKING_ON" in origin_notes:
-            return f"experimental_frontend_working_{suffix}"
-        if "FAILING_TESTS" in origin_notes:
-            return f"experimental_frontend_failing_{suffix}"
-        if "NON_FORTRAN_FAILING_TESTS" in origin_notes:
-            return f"experimental_frontend_non_fortran_{suffix}"
-        if "F2018_TESTCODES" in origin_notes:
-            return f"experimental_frontend_f2018_{suffix}"
-        if "F90_TESTCODES" in origin_notes:
-            return f"experimental_frontend_f90_{suffix}"
+        return f"experimental_frontend_{suffix}"
 
 
     return None

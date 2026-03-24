@@ -22,10 +22,6 @@ list(JOIN _single_stmt_switches " " _single_stmt_switches_str)
 set(_single_stmt_output_dir ${CMAKE_CURRENT_BINARY_DIR}/rose_test_output)
 file(MAKE_DIRECTORY ${_single_stmt_output_dir})
 
-set(_single_stmt_disabled
-)
-
-set(_single_stmt_test_targets)
 foreach(specimen IN LISTS REX_CXX_TRANSFORMATION_TEST_SOURCES)
   set(_single_stmt_target singleStatementToBlockNormalization_${specimen}.passed)
   rex_get_cxx_specimen_extra_flags(_single_stmt_extra_flags ${specimen})
@@ -44,13 +40,8 @@ foreach(specimen IN LISTS REX_CXX_TRANSFORMATION_TEST_SOURCES)
       ${_exit_status}
       ${_single_stmt_target}
   )
-  list(APPEND _single_stmt_test_targets
-    singleStatementToBlockNormalization_${specimen})
   set_tests_properties(singleStatementToBlockNormalization_${specimen} PROPERTIES
     ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_single_stmt_output_dir}")
-  if(specimen IN_LIST _single_stmt_disabled)
-    set_tests_properties(singleStatementToBlockNormalization_${specimen} PROPERTIES DISABLED TRUE)
-  endif()
 endforeach()
 
 set(_single_stmt_issue432_output_dir
@@ -66,8 +57,6 @@ add_test(
     "-DREX_EXPECTED_REGEX=template[ ]+void[ ]+X::foo<int>\\(int i,int j,int k\\)"
     -P ${CMAKE_CURRENT_SOURCE_DIR}/check_unparsed_contains.cmake
 )
-list(APPEND _single_stmt_test_targets
-  normalizationTranslator_test2005_155_explicit_instantiation_output)
 
 set(_single_stmt_issue426_output_dir
   ${CMAKE_CURRENT_BINARY_DIR}/issue426_array_new_output)
@@ -83,22 +72,4 @@ add_test(
     -DREX_CXX_COMPILER=${CMAKE_CXX_COMPILER}
     "-DREX_COMPILE_FLAGS=-std=c++17"
     -P ${CMAKE_CURRENT_SOURCE_DIR}/check_unparsed_contains.cmake
-)
-list(APPEND _single_stmt_test_targets
-  normalizationTranslator_test2005_38_array_new_output)
-
-# Makefile check targets.
-list(JOIN _single_stmt_test_targets "\;" _single_stmt_group_tests)
-add_test(
-  NAME nonsmoke_functional_roseTests_programTransformationTests_singleStatementToBlockNormalization_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${_single_stmt_group_tests}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(
-  nonsmoke_functional_roseTests_programTransformationTests_singleStatementToBlockNormalization_check-local
-  PROPERTIES DEPENDS "${_single_stmt_test_targets}"
 )

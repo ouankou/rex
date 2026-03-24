@@ -40,7 +40,7 @@ foreach(file_to_test ${F77_FIXED_FORMAT_TESTCODES})
     WORKING_DIRECTORY ${_gfortran_torture_output_dir})
 endforeach()
 
-set(_gfortran_torture_disabled_f90
+set(_gfortran_torture_additional_f90
   data_1.f90
   do_1.f90
   enum_1.f90
@@ -49,7 +49,7 @@ set(_gfortran_torture_disabled_f90
   pr40421.f90
 )
 
-foreach(file_to_test ${_gfortran_torture_disabled_f90})
+foreach(file_to_test ${_gfortran_torture_additional_f90})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
     COMMAND testTranslator ${ROSE_FLAGS} -rose:fortran_std=f90 -c
@@ -58,13 +58,13 @@ foreach(file_to_test ${_gfortran_torture_disabled_f90})
     WORKING_DIRECTORY ${_gfortran_torture_output_dir})
 endforeach()
 
-set(_gfortran_torture_disabled_f77
+set(_gfortran_torture_additional_f77
   pr32663.f
   pr39937.f
   pr40421.f
 )
 
-foreach(file_to_test ${_gfortran_torture_disabled_f77})
+foreach(file_to_test ${_gfortran_torture_additional_f77})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
     COMMAND testTranslator ${ROSE_FLAGS} -rose:fortran_std=f77 -c

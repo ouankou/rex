@@ -60,11 +60,14 @@ class ChangeReturnsToGotosVisitor : public AstSimpleProcessing {
 private:
   SgLabelStatement *label;
   SgExpression *where_to_write_answer;
+  bool returns_by_reference;
 
 public:
   ChangeReturnsToGotosVisitor(SgLabelStatement *label,
-                              SgExpression *where_to_write_answer)
-      : label(label), where_to_write_answer(where_to_write_answer) {}
+                              SgExpression *where_to_write_answer,
+                              bool returns_by_reference)
+      : label(label), where_to_write_answer(where_to_write_answer),
+        returns_by_reference(returns_by_reference) {}
 
   virtual void visit(SgNode *n) {
     SgReturnStmt *rs = isSgReturnStmt(n);
@@ -77,12 +80,18 @@ public:
       SgBasicBlock *block = SageBuilder::buildBasicBlock();
       // printf ("Building IR node #1: new SgBasicBlock = %p \n",block);
       if (return_expr) {
+        SgExpression *result_expr = return_expr;
+        if (returns_by_reference && where_to_write_answer != NULL &&
+            SageInterface::isPointerType(where_to_write_answer->get_type())) {
+          result_expr = SageBuilder::buildAddressOfOp(return_expr);
+        }
+
         SgExpression *assignment =
-            generateAssignmentMaybe(where_to_write_answer, return_expr);
+            generateAssignmentMaybe(where_to_write_answer, result_expr);
         if (where_to_write_answer)
           where_to_write_answer->set_parent(assignment);
-        if (return_expr != assignment)
-          return_expr->set_parent(assignment);
+        if (result_expr != assignment)
+          result_expr->set_parent(assignment);
         SgStatement *assign_stmt = SageBuilder::buildExprStatement(assignment);
         SageInterface::appendStatement(assign_stmt, block);
       }
@@ -106,13 +115,17 @@ class ChangeReturnsToGotosPrevisitor
     : public SageInterface::StatementGenerator {
   SgLabelStatement *end_of_inline_label;
   SgStatement *funbody_copy;
+  bool returns_by_reference;
 
 public:
-  ChangeReturnsToGotosPrevisitor(SgLabelStatement *end, SgStatement *body)
-      : end_of_inline_label(end), funbody_copy(body) {}
+  ChangeReturnsToGotosPrevisitor(SgLabelStatement *end, SgStatement *body,
+                                 bool returns_by_reference)
+      : end_of_inline_label(end), funbody_copy(body),
+        returns_by_reference(returns_by_reference) {}
 
   virtual SgStatement *generate(SgExpression *where_to_write_answer) {
-    ChangeReturnsToGotosVisitor(end_of_inline_label, where_to_write_answer)
+    ChangeReturnsToGotosVisitor(end_of_inline_label, where_to_write_answer,
+                                returns_by_reference)
         .traverse(funbody_copy, postorder);
     return funbody_copy;
   }
@@ -895,8 +908,9 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
   funbody_copy->append_statement(dummyStatement);
   dummyStatement->set_parent(funbody_copy);
 
-  ChangeReturnsToGotosPrevisitor previsitor =
-      ChangeReturnsToGotosPrevisitor(end_of_inline_label, funbody_copy);
+  ChangeReturnsToGotosPrevisitor previsitor = ChangeReturnsToGotosPrevisitor(
+      end_of_inline_label, funbody_copy,
+      SageInterface::isReferenceType(funcall->get_type()));
   replaceExpressionWithStatement(funcall, &previsitor);
 
   // Make sure the AST is consistent. To save time, we'll just fix things that

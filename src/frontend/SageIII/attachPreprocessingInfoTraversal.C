@@ -1317,6 +1317,27 @@ AttachPreprocessingInfoTreeTrav::evaluateInheritedAttribute(
     currentLocNodePtr = isSgLocatedNode(n);
     ROSE_ASSERT(currentLocNodePtr != NULL);
 
+    // Some helper IR nodes participate in traversal but are not valid
+    // preprocessing anchors because they are not unparsed as standalone syntax.
+    // Normalize them to the enclosing statement so directives that precede a
+    // declaration stay attached to that declaration instead of migrating into
+    // internal nodes like SgFunctionParameterList.
+    if (isSgForInitStatement(currentLocNodePtr) != NULL ||
+        isSgTypedefSeq(currentLocNodePtr) != NULL ||
+        isSgCatchStatementSeq(currentLocNodePtr) != NULL ||
+        isSgFunctionParameterList(currentLocNodePtr) != NULL ||
+        isSgCtorInitializerList(currentLocNodePtr) != NULL) {
+      SgStatement *currentStatement = isSgStatement(currentLocNodePtr);
+      ROSE_ASSERT(currentStatement != NULL);
+      SgStatement *parentStatement =
+          isSgStatement(currentStatement->get_parent());
+      ROSE_ASSERT((parentStatement != NULL) ||
+                  (isSgGlobal(currentStatement) != NULL));
+      if (parentStatement != NULL) {
+        currentLocNodePtr = parentStatement;
+      }
+    }
+
     // Attach the comments only to nodes from the same file
     ROSE_ASSERT(currentLocNodePtr->get_file_info() != NULL);
     // int currentFileNameId =
@@ -2359,33 +2380,39 @@ AttachPreprocessingInfoTreeTrav::evaluateSynthesizedAttribute(
         break;
       }
 
-        // The following cases are required because the fortran blocks can be
-        // nest in syntax, so a comment after the block should be after the
-        // closing syntax for the consruct containing the block. DQ (3/30/2021):
-        // Adding to support comments after statements which contain
-        // SgBasicBlock nodes.
+        // Statements with nested blocks need to become the previous anchor
+        // after their children are processed. This preserves directives that
+        // follow an inner block but still belong to the surrounding statement,
+        // such as a conditionally present block inside a case label:
+        //   case 1:
+        // #if X
+        //   {
+        // #endif
+        //     stmt;
+        // #if X
+        //   }
+        // #endif
+        // Without this, trailing directives drift to the next sibling
+        // statement instead of remaining attached to the case/if/loop/switch.
       case V_SgIfStmt: {
-        // I might need an example of this.
-        if (SageInterface::is_Fortran_language() == true) {
-          previousLocatedNode = locatedNode;
-        }
+        previousLocatedNode = locatedNode;
       }
 
-        // DQ (3/30/2021): Adding to support comments after statements which
-        // contain SgBasicBlock nodes.
+      case V_SgForStatement:
+      case V_SgWhileStmt:
       case V_SgDoWhileStmt: {
-        // I might need an example of this.
-        if (SageInterface::is_Fortran_language() == true) {
-          previousLocatedNode = locatedNode;
-        }
+        previousLocatedNode = locatedNode;
+      }
+
+      case V_SgSwitchStatement:
+      case V_SgCaseOptionStmt:
+      case V_SgDefaultOptionStmt: {
+        previousLocatedNode = locatedNode;
       }
 
         // DQ (3/30/2021): Adding to support comments after statements which
         // contain SgBasicBlock nodes.
       case V_SgFortranDo: {
-        // test2021_01.f90 through test2021_04.f90 are examples of this issue,
-        // but it fails in the OpenMP tests for Fortran. Note: Craign things
-        // that the case of a loop ending on a label might be an issue.
         previousLocatedNode = locatedNode;
       }
 

@@ -83,13 +83,41 @@ SgName SgExpression::get_qualified_name_prefix() const {
       return SgName(qualifier);
     };
 
-    if (const SgNonrealRefExp *nonreal_ref = isSgNonrealRefExp(this)) {
-      const SgStringList &tokens =
-          nonreal_ref->get_explicit_name_qualification_tokens();
-      bool explicit_global = nonreal_ref->get_explicit_global_qualification();
-      if (!tokens.empty() || explicit_global) {
-        nameQualifier = buildExplicitQualifier(tokens, explicit_global);
+    auto tryExplicitQualifier = [&](const SgStringList &tokens,
+                                    bool explicitGlobal) -> bool {
+      if (tokens.empty() && !explicitGlobal) {
+        return false;
       }
+      nameQualifier = buildExplicitQualifier(tokens, explicitGlobal);
+      return true;
+    };
+
+    if (const SgTemplateMemberFunctionRefExp *tmpl_member =
+            isSgTemplateMemberFunctionRefExp(this)) {
+      tryExplicitQualifier(
+          tmpl_member->get_explicit_name_qualification_tokens(),
+          tmpl_member->get_explicit_global_qualification());
+    } else if (const SgMemberFunctionRefExp *member_ref =
+                   isSgMemberFunctionRefExp(this)) {
+      tryExplicitQualifier(member_ref->get_explicit_name_qualification_tokens(),
+                           member_ref->get_explicit_global_qualification());
+    } else if (const SgTemplateFunctionRefExp *tmpl_func =
+                   isSgTemplateFunctionRefExp(this)) {
+      tryExplicitQualifier(tmpl_func->get_explicit_name_qualification_tokens(),
+                           tmpl_func->get_explicit_global_qualification());
+    } else if (const SgFunctionRefExp *func_ref = isSgFunctionRefExp(this)) {
+      tryExplicitQualifier(func_ref->get_explicit_name_qualification_tokens(),
+                           func_ref->get_explicit_global_qualification());
+    } else if (const SgVarRefExp *var_ref = isSgVarRefExp(this)) {
+      tryExplicitQualifier(var_ref->get_explicit_name_qualification_tokens(),
+                           var_ref->get_explicit_global_qualification());
+    } else if (const SgNonrealRefExp *nonreal_ref = isSgNonrealRefExp(this)) {
+      tryExplicitQualifier(
+          nonreal_ref->get_explicit_name_qualification_tokens(),
+          nonreal_ref->get_explicit_global_qualification());
+    } else if (const SgEnumVal *enum_val = isSgEnumVal(this)) {
+      tryExplicitQualifier(enum_val->get_explicit_name_qualification_tokens(),
+                           enum_val->get_explicit_global_qualification());
     }
 #if DEBUG_SGEXPRESSION_GET_QUALIFIED_NAME_PREFIX
     printf("In SgExpression::get_qualified_name_prefix(): Could NOT find a "

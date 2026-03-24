@@ -74,7 +74,7 @@ set(CXX_CONSTPROP_SPECIMENS
   rex_test2026_issue213_va_start.cpp
 )
 
-set(FAILING_CXX_CONSTPROP_SPECIMENS
+set(CXX_CONSTPROP_ADDITIONAL_SPECIMENS
   X.C
   lexPhase2003_01.C
   math.C
@@ -668,7 +668,7 @@ set(FAILING_CXX_CONSTPROP_SPECIMENS
   test_wchars.C
 )
 
-set(CXX_CONSTPROP_SPECIMENS_FAILING
+set(CXX_CONSTPROP_EXTENDED_SPECIMENS
   inputBug317.C
   inputBug327.C
   inputForLoopLocator.C
@@ -851,7 +851,7 @@ set(CXX_CONSTPROP_SPECIMENS_FAILING
   test2011_99.C
 )
 
-set(CXX_CONSTPROP_SPECIMENS_HANGING
+set(CXX_CONSTPROP_MORE_SPECIMENS
   test2005_114.C
 )
 
@@ -859,7 +859,7 @@ set(C_CONSTPROP_SPECIMENS
   rex_test2026_issue213_va_start.cpp
 )
 
-set(FAILING_C_CONSTPROP_SPECIMENS
+set(C_CONSTPROP_ADDITIONAL_SPECIMENS
   X.C
   test2001_02.C
   test2001_05.C
@@ -990,7 +990,7 @@ set(FAILING_C_CONSTPROP_SPECIMENS
   test_wchars.C
 )
 
-set(C_CONSTPROP_SPECIMENS_FAILING
+set(C_CONSTPROP_EXTENDED_SPECIMENS
   lastTest.C
   test2001_14.C
   test2003_15.C
@@ -1008,7 +1008,7 @@ set(C_CONSTPROP_SPECIMENS_FAILING
   test2006_50.C
 )
 
-set(FAILING_C99_CONSTPROP_SPECIMENS
+set(C99_CONSTPROP_ADDITIONAL_SPECIMENS
   bool.c
   complex_01.c
   complex_03.c
@@ -1018,7 +1018,7 @@ set(FAILING_C99_CONSTPROP_SPECIMENS
   test2006_143.c
 )
 
-set(C99_CONSTPROP_SPECIMENS_FAILING
+set(C99_CONSTPROP_EXTENDED_SPECIMENS
   test2008_01.c
 )
 
@@ -1026,7 +1026,7 @@ set(F77_CONSTPROP_SPECIMENS
   test2007_222.f
 )
 
-set(F77_CONSTPROP_SPECIMENS_FAILING
+set(F77_CONSTPROP_ADDITIONAL_SPECIMENS
   test2007_129.f
   test2007_132.f
   test2007_148.f
@@ -1080,7 +1080,7 @@ set(F77_CONSTPROP_SPECIMENS_FAILING
   test2007_261.f
 )
 
-set(F77_CONSTPROP_SPECIMENS_FAILING_CFG
+set(F77_CONSTPROP_ADDITIONAL_SPECIMENS_CFG
   test2007_124.f
   test2007_125.f
   test2007_128.f
@@ -1110,7 +1110,7 @@ set(F03_CONSTPROP_SPECIMENS
   test2007_37.f03
 )
 
-set(F03_CONSTPROP_SPECIMENS_FAILING
+set(F03_CONSTPROP_ADDITIONAL_SPECIMENS
   test2007_112.f03
   test2007_113.f03
   test2007_114.f03
@@ -1126,7 +1126,7 @@ set(F03_CONSTPROP_SPECIMENS_FAILING
   test2007_98.f03
 )
 
-set(F03_CONSTPROP_SPECIMENS_FAILING_CFG
+set(F03_CONSTPROP_ADDITIONAL_SPECIMENS_CFG
   test2007_115.f03
   test2007_116.f03
   test2007_130.f03
@@ -1138,9 +1138,8 @@ set(F03_CONSTPROP_SPECIMENS_FAILING_CFG
   test2007_45.f03
 )
 
-
 #-------------------------------------------------------------------------------
-# Taint analysis tests (disabled in Automake)
+# Taint analysis tests ported from Automake.
 set(_taint_conf ${CMAKE_CURRENT_SOURCE_DIR}/taintAnalysisTest.conf)
 foreach(specimen IN LISTS TAINT_ANALYSIS_SPECIMENS)
   string(REPLACE "." "_" _name ${specimen})
@@ -1154,11 +1153,10 @@ foreach(specimen IN LISTS TAINT_ANALYSIS_SPECIMENS)
       ${_taint_conf}
       cxxta_${specimen}.passed
   )
-  set_tests_properties(gdf_taint_${_name} PROPERTIES DISABLED TRUE)
 endforeach()
 
 #-------------------------------------------------------------------------------
-# C++ constant propagation (local) tests (disabled in Automake)
+# C++ constant propagation (local) tests ported from Automake.
 foreach(specimen IN LISTS CXX_CONSTPROP_LOCAL_SPECIMENS)
   string(REPLACE "." "_" _name ${specimen})
   add_test(
@@ -1169,7 +1167,6 @@ foreach(specimen IN LISTS CXX_CONSTPROP_LOCAL_SPECIMENS)
       ${_exit_status}
       cxxcpls_${specimen}.passed
   )
-  set_tests_properties(gdf_constprop_local_${_name} PROPERTIES DISABLED TRUE)
 endforeach()
 
 #-------------------------------------------------------------------------------
@@ -1187,13 +1184,13 @@ foreach(specimen IN LISTS CXX_CONSTPROP_SPECIMENS)
 endforeach()
 
 #-------------------------------------------------------------------------------
-# C++ constant propagation tests from CXX test directory (disabled in Automake)
-set(_cxx_constprop_disabled
-  ${FAILING_CXX_CONSTPROP_SPECIMENS}
-  ${CXX_CONSTPROP_SPECIMENS_FAILING}
-  ${CXX_CONSTPROP_SPECIMENS_HANGING}
+# Additional C++ constant propagation tests ported from Automake.
+set(_cxx_constprop_additional_specimens
+  ${CXX_CONSTPROP_ADDITIONAL_SPECIMENS}
+  ${CXX_CONSTPROP_EXTENDED_SPECIMENS}
+  ${CXX_CONSTPROP_MORE_SPECIMENS}
 )
-foreach(specimen IN LISTS _cxx_constprop_disabled)
+foreach(specimen IN LISTS _cxx_constprop_additional_specimens)
   string(REPLACE "." "_" _name ${specimen})
   add_test(
     NAME gdf_cxx_constprop_${_name}
@@ -1203,7 +1200,6 @@ foreach(specimen IN LISTS _cxx_constprop_disabled)
       ${_exit_status}
       cxxcp_${specimen}.passed
   )
-  set_tests_properties(gdf_cxx_constprop_${_name} PROPERTIES DISABLED TRUE)
 endforeach()
 
 #-------------------------------------------------------------------------------
@@ -1223,12 +1219,12 @@ foreach(specimen IN LISTS C_CONSTPROP_SPECIMENS)
 endforeach()
 
 #-------------------------------------------------------------------------------
-# C constant propagation tests from CXX test directory (disabled in Automake)
-set(_c_constprop_disabled
-  ${FAILING_C_CONSTPROP_SPECIMENS}
-  ${C_CONSTPROP_SPECIMENS_FAILING}
+# Additional C constant propagation tests ported from Automake.
+set(_c_constprop_additional_specimens
+  ${C_CONSTPROP_ADDITIONAL_SPECIMENS}
+  ${C_CONSTPROP_EXTENDED_SPECIMENS}
 )
-foreach(specimen IN LISTS _c_constprop_disabled)
+foreach(specimen IN LISTS _c_constprop_additional_specimens)
   string(REPLACE "." "_" _name ${specimen})
   get_filename_component(_name_we ${specimen} NAME_WE)
   set(_c_specimen "${_name_we}.c")
@@ -1240,16 +1236,15 @@ foreach(specimen IN LISTS _c_constprop_disabled)
       ${_exit_status}
       ccp_${specimen}.passed
   )
-  set_tests_properties(gdf_c_constprop_${_name} PROPERTIES DISABLED TRUE)
 endforeach()
 
 #-------------------------------------------------------------------------------
-# C99 constant propagation tests (disabled in Automake)
-set(_c99_constprop_disabled
-  ${FAILING_C99_CONSTPROP_SPECIMENS}
-  ${C99_CONSTPROP_SPECIMENS_FAILING}
+# Additional C99 constant propagation tests ported from Automake.
+set(_c99_constprop_additional_specimens
+  ${C99_CONSTPROP_ADDITIONAL_SPECIMENS}
+  ${C99_CONSTPROP_EXTENDED_SPECIMENS}
 )
-foreach(specimen IN LISTS _c99_constprop_disabled)
+foreach(specimen IN LISTS _c99_constprop_additional_specimens)
   string(REPLACE "." "_" _name ${specimen})
   add_test(
     NAME gdf_c99_constprop_${_name}
@@ -1259,7 +1254,6 @@ foreach(specimen IN LISTS _c99_constprop_disabled)
       ${_exit_status}
       c99cp_${specimen}.passed
   )
-  set_tests_properties(gdf_c99_constprop_${_name} PROPERTIES DISABLED TRUE)
 endforeach()
 
 #-------------------------------------------------------------------------------
@@ -1281,7 +1275,7 @@ if(enable-fortran)
     )
   endforeach()
 
-  foreach(specimen IN LISTS F77_CONSTPROP_SPECIMENS_FAILING F77_CONSTPROP_SPECIMENS_FAILING_CFG)
+  foreach(specimen IN LISTS F77_CONSTPROP_ADDITIONAL_SPECIMENS F77_CONSTPROP_ADDITIONAL_SPECIMENS_CFG)
     string(REPLACE "." "_" _name ${specimen})
     if(NOT EXISTS "${_f77_test_dir}/${specimen}")
       message(STATUS "Skipping gdf_f77_constprop_${_name} (missing ${_f77_test_dir}/${specimen})")
@@ -1313,7 +1307,7 @@ if(enable-fortran)
     )
   endforeach()
 
-  foreach(specimen IN LISTS F03_CONSTPROP_SPECIMENS_FAILING F03_CONSTPROP_SPECIMENS_FAILING_CFG)
+  foreach(specimen IN LISTS F03_CONSTPROP_ADDITIONAL_SPECIMENS F03_CONSTPROP_ADDITIONAL_SPECIMENS_CFG)
     string(REPLACE "." "_" _name ${specimen})
     if(NOT EXISTS "${_f03_test_dir}/${specimen}")
       message(STATUS "Skipping gdf_f03_constprop_${_name} (missing ${_f03_test_dir}/${specimen})")
@@ -1331,7 +1325,7 @@ if(enable-fortran)
 endif()
 
 #-------------------------------------------------------------------------------
-# C++ liveness analysis tests (disabled in Automake)
+# C++ liveness analysis tests ported from Automake.
 foreach(specimen IN LISTS CXX_LIVENESS_SPECIMENS)
   string(REPLACE "." "_" _name ${specimen})
   add_test(
@@ -1342,11 +1336,10 @@ foreach(specimen IN LISTS CXX_LIVENESS_SPECIMENS)
       ${_exit_status}
       cxxla_${specimen}.passed
   )
-  set_tests_properties(gdf_liveness_${_name} PROPERTIES DISABLED TRUE)
 endforeach()
 
 #-------------------------------------------------------------------------------
-# C++ pointer alias analysis tests (disabled in Automake)
+# C++ pointer alias analysis tests ported from Automake.
 foreach(specimen IN LISTS CXX_POINTER_ALIAS_SPECIMENS)
   string(REPLACE "." "_" _name ${specimen})
   add_test(
@@ -1357,27 +1350,14 @@ foreach(specimen IN LISTS CXX_POINTER_ALIAS_SPECIMENS)
       ${_exit_status}
       cxxpa_${specimen}.passed
   )
-  set_tests_properties(gdf_pointer_alias_${_name} PROPERTIES DISABLED TRUE)
 endforeach()
 
-# Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-cxx-constprop-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=gdf_f03_constprop_test2007_37_f03\;gdf_f77_constprop_test2007_222_f
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-cxx-constprop-local PROPERTIES DEPENDS "gdf_f03_constprop_test2007_37_f03;gdf_f77_constprop_test2007_222_f" )
-add_test(
-  NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-f03-constprop
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=gdf_f03_constprop_test2007_37_f03
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-f03-constprop PROPERTIES DEPENDS gdf_f03_constprop_test2007_37_f03 )
+set(_gdfa_debug_output_dir
+  ${CMAKE_CURRENT_BINARY_DIR}/analysis_debug_output)
+file(MAKE_DIRECTORY "${_gdfa_debug_output_dir}")
+get_property(_gdfa_registered_tests DIRECTORY PROPERTY TESTS)
+if(_gdfa_registered_tests)
+  set_property(TEST ${_gdfa_registered_tests} APPEND PROPERTY ENVIRONMENT
+               "ROSE_TEST_OUTPUT_DIR=${_gdfa_debug_output_dir}")
+endif()
+

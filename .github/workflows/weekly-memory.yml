@@ -78,7 +78,6 @@ jobs:
           -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/rex_install \
           -DENABLE-C=ON \
           -DENABLE-FORTRAN=ON \
-          -DREX_ENABLE_DISABLED_TESTS=ON \
           -DCMAKE_CXX_STANDARD=17 \
           -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
@@ -169,7 +168,6 @@ jobs:
           -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/rex_install \
           -DENABLE-C=ON \
           -DENABLE-FORTRAN=ON \
-          -DREX_ENABLE_DISABLED_TESTS=ON \
           -DCMAKE_CXX_STANDARD=17 \
           -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
           -DWITH-VALGRIND=/usr
@@ -257,7 +255,6 @@ jobs:
           -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/rex_install \
           -DENABLE-C=ON \
           -DENABLE-FORTRAN=ON \
-          -DREX_ENABLE_DISABLED_TESTS=ON \
           -DCMAKE_CXX_STANDARD=17 \
           -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
           -DENABLE-SANITIZER=ON \

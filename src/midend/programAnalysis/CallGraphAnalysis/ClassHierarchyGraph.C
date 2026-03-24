@@ -53,12 +53,36 @@ ClassHierarchyWrapper::ClassHierarchyWrapper(SgNode *node) {
     // relationship to the graph
     for (SgBaseClassPtrList::iterator it = baseClses.begin();
          it != baseClses.end(); it++) {
-      // AS (032806) Added fix to get the defining class declaration
-      SgClassDeclaration *baseCls = isSgClassDeclaration(
-          (*it)->get_base_class()->get_definingDeclaration());
-      ROSE_ASSERT(baseCls != NULL);
+      if (*it == NULL) {
+        continue;
+      }
+
+      SgClassDeclaration *baseDecl = (*it)->get_base_class();
+      if (baseDecl == NULL) {
+        // Unresolved/dependent base classes are represented without a concrete
+        // declaration target and cannot participate in class hierarchy edges.
+        continue;
+      }
+
+      // Prefer the defining declaration; fall back through first-nondefining if
+      // needed so compiler-generated anchors still map to a real class node.
+      SgClassDeclaration *baseCls =
+          isSgClassDeclaration(baseDecl->get_definingDeclaration());
+      if (baseCls == NULL) {
+        if (SgClassDeclaration *firstNondef = isSgClassDeclaration(
+                baseDecl->get_firstNondefiningDeclaration())) {
+          baseCls =
+              isSgClassDeclaration(firstNondef->get_definingDeclaration());
+        }
+      }
+      if (baseCls == NULL) {
+        continue;
+      }
+
       SgClassDefinition *baseClsDef = baseCls->get_definition();
-      ROSE_ASSERT(baseClsDef != NULL);
+      if (baseClsDef == NULL) {
+        continue;
+      }
 
       classParents.insert(baseClsDef);
       directChildren[baseCls->get_mangled_name().getString()].insert(

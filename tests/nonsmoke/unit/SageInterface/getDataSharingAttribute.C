@@ -9,6 +9,7 @@
 #include <fstream>
 
 #include "ompSupport.h"
+#include "test_output_path.h"
 using namespace std;
 using namespace OmpSupport;
 using namespace SageInterface;
@@ -62,7 +63,7 @@ int main(int argc, char *argv[]) {
   string filename =
       Rose::StringUtility::stripPathFromFileName(firstfile->getFileName());
   string ofilename = filename + ".getDataSharingAttribute.output";
-  ofile.open(ofilename.c_str());
+  ofile.open(resolveTestOutputPath(ofilename).c_str());
   visitorTraversal myvisitor;
   myvisitor.traverseInputFiles(project, preorder);
   ofile.close();

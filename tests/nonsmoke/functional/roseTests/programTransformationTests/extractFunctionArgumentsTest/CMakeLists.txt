@@ -23,7 +23,6 @@ set(_normalization_tests
 )
 list(REMOVE_DUPLICATES _normalization_tests)
 
-set(_normalization_test_targets)
 foreach(file_to_test ${_normalization_tests})
   set(extra_frontend_flags)
   rex_get_cxx_specimen_extra_flags(extra_frontend_flags ${file_to_test})
@@ -43,28 +42,6 @@ foreach(file_to_test ${_normalization_tests})
       ${_exit_status}
       normalizationTranslator_${file_to_test}.passed
   )
-  list(APPEND _normalization_test_targets normalizationTranslator_${file_to_test})
   set_tests_properties(normalizationTranslator_${file_to_test} PROPERTIES
     ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_normalization_output_dir}")
 endforeach()
-
-# Makefile check targets.
-set(_single_stmt_test_targets)
-foreach(specimen IN LISTS REX_CXX_TRANSFORMATION_TEST_SOURCES)
-  list(APPEND _single_stmt_test_targets singleStatementToBlockNormalization_${specimen})
-endforeach()
-set(_extract_args_group_tests ${_normalization_test_targets} ${_single_stmt_test_targets})
-list(JOIN _extract_args_group_tests "\;" _extract_args_group_tests_escaped)
-add_test(
-  NAME nonsmoke_functional_roseTests_programTransformationTests_extractFunctionArgumentsTest_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${_extract_args_group_tests_escaped}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(
-  nonsmoke_functional_roseTests_programTransformationTests_extractFunctionArgumentsTest_check-local
-  PROPERTIES DEPENDS "${_extract_args_group_tests}"
-)

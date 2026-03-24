@@ -26,6 +26,7 @@
 
 #include <iostream>
 
+#include "test_output_path.h"
 #include <set>
 using namespace std;
 
@@ -109,7 +110,7 @@ int main(int argc, char *argv[]) {
   string filename =
       Rose::StringUtility::stripPathFromFileName(firstfile->getFileName());
   string ofilename = filename + ".collectFunctionSideEffect.output";
-  ofile.open(ofilename.c_str());
+  ofile.open(resolveTestOutputPath(ofilename).c_str());
 
   RoseAst ast(project);
 

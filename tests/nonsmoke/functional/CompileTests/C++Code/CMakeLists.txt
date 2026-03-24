@@ -124,7 +124,6 @@ add_test(
           -c ${CMAKE_CURRENT_SOURCE_DIR}/test2004_30.C
 )
 
-
 # Test of simple STL (list) example code
 add_test(
   NAME test2004_41
@@ -223,7 +222,7 @@ foreach(file_to_test ${files_to_test})
   compile_test(${file_to_test} CXXCODE)
 endforeach()
 
-set(_cxxcode_disabled_tests
+set(_cxxcode_additional_tests
   test2001_03.C
   test2001_09.C
   test2001_14.C
@@ -231,8 +230,6 @@ set(_cxxcode_disabled_tests
   test_treeTrav_MK_01.C
   test_treeTrav_MK_02.C
   test2004_20.C
-  test2004_21.C
-  test2004_22.C
   test2004_62.C
   test2004_63.C
   test2005_24.C
@@ -243,65 +240,9 @@ set(_cxxcode_disabled_tests
   test2005_151.C
 )
 
-foreach(file_to_test ${_cxxcode_disabled_tests})
+foreach(file_to_test ${_cxxcode_additional_tests})
   compile_test(${file_to_test} CXXCODE)
   string(REPLACE "/" "_" _test_key "${file_to_test}")
   string(REPLACE "." "_" _test_key "${_test_key}")
-  set_tests_properties(CXXCODE_${_test_key} PROPERTIES DISABLED TRUE LABELS CXXCODE)
+  set_tests_properties(CXXCODE_${_test_key} PROPERTIES  LABELS CXXCODE)
 endforeach()
-
-# Makefile check targets.
-set(_cxxcode_group_tests
-  test2004_19
-  test2004_21
-  test2005_56
-  test2005_168
-  test2005_172
-  gconv_info_Cpp
-  gconv_info_C
-  gconv_info_C99
-  stdio_Cpp
-  stdio_C
-  stdio_C99
-  test_CplusplusMacro_C
-  test_CplusplusMacro_Cpp
-  test2004_30
-  test2004_41
-  test2005_64
-)
-set(_cxxcode_special_inputs
-  test2004_19.C
-  test2004_21.c
-  test2005_56.C
-  test2005_64.C
-  test2005_168.c
-  test2005_172.c
-  test2004_30.C
-  test2004_41.C
-  test_CplusplusMacro_C.C
-  test_CplusplusMacro_Cpp.C
-  gconv_info.c
-  stdio.c
-)
-foreach(file_to_test ${files_to_test})
-  if(file_to_test IN_LIST _cxxcode_special_inputs)
-    continue()
-  endif()
-  string(REPLACE "/" "_" _test_key "${file_to_test}")
-  string(REPLACE "." "_" _test_key "${_test_key}")
-  list(APPEND _cxxcode_group_tests "CXXCODE_${_test_key}")
-endforeach()
-list(JOIN _cxxcode_group_tests "$<SEMICOLON>" _cxxcode_group_tests_joined)
-add_test(
-  NAME nonsmoke_functional_CompileTests_C++Code_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${_cxxcode_group_tests_joined}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_CompileTests_C++Code_check-local PROPERTIES DEPENDS "${_cxxcode_group_tests}" )
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(nonsmoke_functional_CompileTests_C++Code_check-local PROPERTIES DISABLED TRUE)
-endif()

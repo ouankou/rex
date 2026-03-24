@@ -9,17 +9,18 @@ set(REX_FRONTEND_ERROR_TESTS
   rex_test2025_cfe_error_exit_code.cpp
   # Issue 99: Friend function template lookup requires error-tolerant mode.
   rex_test2025_issue99.cpp
+  # These specimens intentionally feed Clang diagnostics through the
+  # continue-on-error path and should still be part of the default CTest run.
+  test2006_131.C
+  test2014_22.C
   # Issue 441: Builtin redeclarations produce diagnostics; keep frontend alive.
   test2017_02.c
   test2018_26.c
   test2016_35.C
-)
-
-# These are intentionally exercised via dedicated tests with explicit pass/fail
-# semantics and should not be auto-added to default compile_test loops.
-set(REX_FRONTEND_ERROR_TESTS_SKIP_DEFAULT
-  rex_test2025_cfe_error_exit_code.cpp
-  rex_test2025_issue99.cpp
+  # C11 recovery tests: Clang diagnoses these inputs but still builds a valid
+  # AST that REX should carry through the backend.
+  test2014_17.c
+  test2014_19.c
 )
 
 set(REX_FUNCTIONAL_SYSTEM_HEADER_LIKE_DIR
@@ -82,8 +83,6 @@ target_link_libraries(readFileTwice ROSE_DLL ${link_with_libraries})
 
 add_executable(testPDFGeneration testPDFGeneration.C)
 target_link_libraries(testPDFGeneration ROSE_DLL ${link_with_libraries})
-
-option(with-ROSE_LONG_MAKE_CHECK_RULE "Specify longer internal testing" ON)
 
 find_program(BASH_EXECUTABLE bash)
 if(NOT BASH_EXECUTABLE)
@@ -328,13 +327,18 @@ add_test(
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:readFileTwice> -c ${_functional_input}
 )
-set_tests_properties(functional_testReadFileTwice PROPERTIES RESOURCE_LOCK ${_functional_lock})
+set(_functional_read_file_twice_output_dir
+    ${CMAKE_CURRENT_BINARY_DIR}/test-output/readFileTwice)
+file(MAKE_DIRECTORY ${_functional_read_file_twice_output_dir})
+set_tests_properties(
+  functional_testReadFileTwice
+  PROPERTIES
+    RESOURCE_LOCK ${_functional_lock}
+    ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_functional_read_file_twice_output_dir}")
 
 if(_keep_going_missing)
-  set_tests_properties(functional_testKeepGoingTranslator PROPERTIES DISABLED TRUE)
 endif()
 if(_identity_translator_missing)
-  set_tests_properties(functional_testExampleIdentityTranslator PROPERTIES DISABLED TRUE)
 endif()
 
 add_subdirectory(CompileTests)
@@ -356,39 +360,3 @@ if(BASH_EXECUTABLE)
 endif()
 
 install(TARGETS testTranslator DESTINATION bin)
-
-# Makefile check targets.
-set(_functional_check_tests
-  functional_testObjectFileTokenGeneration
-  functional_testObjectFileAnalysis
-  functional_testLinkFileAnalysis
-  functional_testCppFileAnalysis
-  functional_testExecutableFileAnalysis
-  functional_testObjectFileCodeGeneration
-  functional_testLinkFileCodeGeneration
-  functional_testCppFileCodeGeneration
-  functional_testExecutableFileCodeGeneration
-  functional_testObjectFileTranslator
-  functional_testLinkFileTranslator
-  functional_testCppFileTranslator
-  functional_testExecutableFileTranslator
-  functional_testTemplates
-  functional_testGraphGeneration
-  functional_testPDFGeneration
-  functional_testSimpleLinkFileTranslator
-  functional_testTranslatorFoldedConstants
-  functional_testTranslatorUnfoldedConstants
-  functional_testKeepGoingTranslator
-  functional_testExampleIdentityTranslator
-  functional_testReadFileTwice
-)
-add_test(
-  NAME nonsmoke_functional_conditional-check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${_functional_check_tests}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_conditional-check-local PROPERTIES DEPENDS "${_functional_check_tests}" )

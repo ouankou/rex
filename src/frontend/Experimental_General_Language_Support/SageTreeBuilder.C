@@ -157,6 +157,33 @@ std::string resolveCommentFilename(const SgSourceFile *source) {
   return filename;
 }
 
+std::string resolvePrimarySourceFilename(const SgSourceFile *source) {
+  if (source == nullptr) {
+    return {};
+  }
+  std::string filename = source->get_sourceFileNameWithPath();
+  if (filename.empty()) {
+    filename = source->getFileName();
+  }
+  if (filename.empty()) {
+    return {};
+  }
+  return StringUtility::getAbsolutePathFromRelativePath(filename);
+}
+
+bool isPrimaryFortranSourceRange(const SgSourceFile *source,
+                                 const SourcePosition &start,
+                                 const SourcePosition &end) {
+  const std::string primaryPath = resolvePrimarySourceFilename(source);
+  if (primaryPath.empty()) {
+    return true;
+  }
+  return StringUtility::getAbsolutePathFromRelativePath(start.path) ==
+             primaryPath &&
+         StringUtility::getAbsolutePathFromRelativePath(end.path) ==
+             primaryPath;
+}
+
 bool isInSourceFileForComments(const SgLocatedNode *node,
                                const SgSourceFile *source) {
   if (node == nullptr || source == nullptr) {
@@ -935,6 +962,7 @@ void SageTreeBuilder::setSourcePosition(SgLocatedNode *node,
 
   if (language_ == LanguageEnum::Fortran && source_ != nullptr &&
       source_->get_requires_C_preprocessor() &&
+      isPrimaryFortranSourceRange(source_, start, end) &&
       isSgStatement(node) != nullptr) {
     if (node->get_startOfConstruct() != nullptr) {
       node->get_startOfConstruct()->setOutputInCodeGeneration();

@@ -7,7 +7,8 @@
 inline const clang::Expr *
 getParmVarDeclDefaultArgExpr(const clang::ParmVarDecl *param_var_decl) {
   if (param_var_decl == nullptr || !param_var_decl->hasDefaultArg() ||
-      param_var_decl->hasUnparsedDefaultArg()) {
+      param_var_decl->hasUnparsedDefaultArg() ||
+      param_var_decl->hasInheritedDefaultArg()) {
     return nullptr;
   }
 

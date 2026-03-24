@@ -20,6 +20,20 @@
 SgClassDeclaration *SgConstructorInitializer::get_class_decl() const {
   SgClassDeclaration *class_decl = NULL;
 
+  auto normalize_class_decl =
+      [](SgClassDeclaration *decl) -> SgClassDeclaration * {
+    if (decl == NULL) {
+      return NULL;
+    }
+
+    if (SgClassDeclaration *first_nondef =
+            isSgClassDeclaration(decl->get_firstNondefiningDeclaration())) {
+      return first_nondef;
+    }
+
+    return decl;
+  };
+
   if (SgMemberFunctionDeclaration *fdecl = get_declaration()) {
     // The constructor is declared (and is a member of a class type)
     // DQ (11/11/2014): Modified version of code to address the fact that
@@ -34,22 +48,32 @@ SgClassDeclaration *SgConstructorInitializer::get_class_decl() const {
       class_decl = isSgClassDeclaration(cdef->get_parent());
       assert(class_decl != NULL);
     }
-  } else if (SgClassType *expr_type = isSgClassType(get_expression_type())) {
-    // Constructor initializer is for a class type with a non-declared default
-    // constructor.  We can follow the p_expression_type's declaration.
-    class_decl = isSgClassDeclaration(expr_type->get_declaration());
-    assert(class_decl != NULL);
+  } else if (SgType *expr_type = get_expression_type()) {
+    SgType *stripped_type = expr_type->stripType(
+        SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_TYPEDEF_TYPE |
+        SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE);
+
+    if (SgClassType *class_type = isSgClassType(stripped_type)) {
+      // Constructor initializer is for a class type with a non-declared
+      // default constructor. We can follow the expression type's declaration.
+      class_decl = isSgClassDeclaration(class_type->get_declaration());
+      assert(class_decl != NULL);
+    } else if (SgNonrealType *nonreal_type = isSgNonrealType(stripped_type)) {
+      // Qualified class names can be preserved as SgNonrealType. Recover the
+      // associated class declaration when the frontend attached it to the
+      // nonreal declaration.
+      if (SgNonrealDecl *nonreal_decl =
+              isSgNonrealDecl(nonreal_type->get_declaration())) {
+        class_decl =
+            isSgClassDeclaration(nonreal_decl->get_templateDeclaration());
+      }
+    }
   } else {
     // Constructor is for a primitive type.  There is no class declaration to
     // return.
   }
 
-  if (class_decl) {
-    class_decl =
-        isSgClassDeclaration(class_decl->get_firstNondefiningDeclaration());
-    assert(class_decl != NULL);
-  }
-  return class_decl;
+  return normalize_class_decl(class_decl);
 }
 
 void SgConstructorInitializer::post_construction_initialization() {
@@ -59,7 +83,8 @@ void SgConstructorInitializer::post_construction_initialization() {
 
     // DQ (1/19/2019): This is failing in the copyAST tests for test2005_24.C
     ROSE_ASSERT((isSgTypedefType(p_expression_type) ||
-                 isSgClassType(p_expression_type) != NULL) ||
+                 isSgClassType(p_expression_type) != NULL ||
+                 isSgNonrealType(p_expression_type) != NULL) ||
                 (p_associated_class_unknown == true));
   }
 

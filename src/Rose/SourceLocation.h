@@ -1,5 +1,5 @@
-#ifndef ROSE_SOURCELOCATION_H
-#define ROSE_SOURCELOCATION_H
+#ifndef ROSE_SourceLocation_H
+#define ROSE_SourceLocation_H
 
 #include "featureTests.h"
 
@@ -66,4 +66,4 @@ private:
 
 } // namespace Rose
 
-#endif // ROSE_SOURCELOCATION_H
+#endif // ROSE_SourceLocation_H

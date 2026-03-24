@@ -5,8 +5,8 @@
 #define CALL_GRAPH_TRAVERSE_H
 
 #include "CallGraph.h"
-
-#include "sage3.h"
+#include "Cxx_Grammar.h"
+#include "ROSE_ASSERT.h"
 
 #include <list>
 

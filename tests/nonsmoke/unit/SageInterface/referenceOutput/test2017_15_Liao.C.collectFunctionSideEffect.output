@@ -1,10 +1,10 @@
 --------------------------------------------------
 Function name:"::foo"
 Read references:
-	SgCastExp@0:0	"i"
-	SgCastExp@0:0	"i"
 	SgVarRefExp@10:13	"i"
+	SgVarRefExp@10:21	"i"
 	SgVarRefExp@11:13	"i"
+	SgVarRefExp@11:21	"i"
 	SgVarRefExp@4:11	"m_namix"
 	SgVarRefExp@6:22	"base"
 	SgVarRefExp@7:21	"m_nvol"
@@ -17,8 +17,8 @@ Write references:
 	SgInitializedName@6:3	"m_nvol"
 	SgInitializedName@7:3	"m_ovol"
 	SgInitializedName@9:9	"i"
-	SgPntrArrRefExp@10:11	"m_nvol"
-	SgPntrArrRefExp@11:11	"m_ovol"
+	SgPntrArrRefExp@10:5	"m_nvol"
+	SgPntrArrRefExp@11:5	"m_ovol"
 	SgVarRefExp@9:27	"i"
 Read var names:
 	"m_namix"
@@ -35,11 +35,11 @@ Write var names:
 --------------------------------------------------
 Function name:"::foo1"
 Read references:
-	SgPntrArrRefExp@22:11	"x1"
-	SgPntrArrRefExp@25:11	"x2"
-	SgPntrArrRefExp@26:9	"x2"
-	SgPntrArrRefExp@28:14	"x1"
-	SgPntrArrRefExp@28:7	"x2"
+	SgPntrArrRefExp@22:9	"x1"
+	SgPntrArrRefExp@25:9	"x2"
+	SgPntrArrRefExp@26:7	"x2"
+	SgPntrArrRefExp@28:12	"x1"
+	SgPntrArrRefExp@28:5	"x2"
 	SgVarRefExp@19:15	"base"
 	SgVarRefExp@20:16	"x1"
 	SgVarRefExp@21:18	"i"
@@ -56,9 +56,9 @@ Write references:
 	SgInitializedName@19:3	"x1"
 	SgInitializedName@20:3	"x2"
 	SgInitializedName@21:9	"i"
-	SgPntrArrRefExp@23:9	"x1"
-	SgPntrArrRefExp@26:9	"x2"
-	SgPntrArrRefExp@28:7	"x2"
+	SgPntrArrRefExp@23:7	"x1"
+	SgPntrArrRefExp@26:7	"x2"
+	SgPntrArrRefExp@28:5	"x2"
 	SgVarRefExp@21:28	"i"
 Read var names:
 	"sz"
@@ -74,17 +74,17 @@ Write var names:
 --------------------------------------------------
 Loop line:9
 Read references:
-	SgCastExp@0:0	"i"
-	SgCastExp@0:0	"i"
 	SgVarRefExp@10:13	"i"
+	SgVarRefExp@10:21	"i"
 	SgVarRefExp@11:13	"i"
+	SgVarRefExp@11:21	"i"
 	SgVarRefExp@9:18	"i"
 	SgVarRefExp@9:22	"N"
 	SgVarRefExp@9:27	"i"
 Write references:
 	SgInitializedName@9:9	"i"
-	SgPntrArrRefExp@10:11	"m_nvol"
-	SgPntrArrRefExp@11:11	"m_ovol"
+	SgPntrArrRefExp@10:5	"m_nvol"
+	SgPntrArrRefExp@11:5	"m_ovol"
 	SgVarRefExp@9:27	"i"
 Read var names:
 	"N"
@@ -96,11 +96,11 @@ Write var names:
 --------------------------------------------------
 Loop line:21
 Read references:
-	SgPntrArrRefExp@22:11	"x1"
-	SgPntrArrRefExp@25:11	"x2"
-	SgPntrArrRefExp@26:9	"x2"
-	SgPntrArrRefExp@28:14	"x1"
-	SgPntrArrRefExp@28:7	"x2"
+	SgPntrArrRefExp@22:9	"x1"
+	SgPntrArrRefExp@25:9	"x2"
+	SgPntrArrRefExp@26:7	"x2"
+	SgPntrArrRefExp@28:12	"x1"
+	SgPntrArrRefExp@28:5	"x2"
 	SgVarRefExp@21:18	"i"
 	SgVarRefExp@21:22	"sz"
 	SgVarRefExp@21:28	"i"
@@ -112,9 +112,9 @@ Read references:
 	SgVarRefExp@28:8	"i"
 Write references:
 	SgInitializedName@21:9	"i"
-	SgPntrArrRefExp@23:9	"x1"
-	SgPntrArrRefExp@26:9	"x2"
-	SgPntrArrRefExp@28:7	"x2"
+	SgPntrArrRefExp@23:7	"x1"
+	SgPntrArrRefExp@26:7	"x2"
+	SgPntrArrRefExp@28:5	"x2"
 	SgVarRefExp@21:28	"i"
 Read var names:
 	"sz"

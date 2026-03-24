@@ -34,10 +34,27 @@ Unparse_Type::~Unparse_Type() {
 void Unparse_Type::curprint(std::string str) { unp->u_sage->curprint(str); }
 
 bool Unparse_Type::generateElaboratedType(SgDeclarationStatement *,
-                                          const SgUnparse_Info &) {
-  // For now we just return true, later we will check the
-  // scopeStatement->get_type_elaboration_list();
-  bool useElaboratedType = true;
+                                          const SgUnparse_Info &info) {
+  bool useElaboratedType =
+      SageInterface::is_C_language() || SageInterface::is_C99_language() ||
+      info.get_type_elaboration_required() || !info.SkipClassDefinition();
+
+  if (!useElaboratedType) {
+    if (isSgTemplateArgument(info.get_reference_node_for_qualification()) !=
+        nullptr) {
+      return false;
+    }
+
+    if (SgTypedefDeclaration *typedef_decl =
+            isSgTypedefDeclaration(info.get_declstatement_ptr())) {
+      return !typedef_decl->skipElaborateType();
+    }
+
+    if (SgVariableDeclaration *var_decl =
+            isSgVariableDeclaration(info.get_declstatement_ptr())) {
+      return !var_decl->skipElaborateType();
+    }
+  }
 
   // unp-> cur << "\n /* In generateElaboratedType = " << (useElaboratedType ?
   // "true" : "false") << " */ \n ";
@@ -84,6 +101,90 @@ memberFunctionQualifiers(const SgMemberFunctionType *mfnFype,
     res.push_back(TEXT_SPACE);
 
   return res;
+}
+
+bool typeDependsOnQualifiedNonrealName(const SgType *type);
+
+bool templateArgumentsDependOnQualifiedNonrealName(
+    const SgTemplateArgumentPtrList &args) {
+  for (const SgTemplateArgument *arg : args) {
+    if (arg == nullptr) {
+      continue;
+    }
+
+    switch (arg->get_argumentType()) {
+    case SgTemplateArgument::type_argument:
+    case SgTemplateArgument::template_template_argument:
+      if (typeDependsOnQualifiedNonrealName(arg->get_type())) {
+        return true;
+      }
+      break;
+
+    default:
+      break;
+    }
+  }
+
+  return false;
+}
+
+bool nonrealTypeRequiresTypename(const SgNonrealType *nonreal_type) {
+  if (nonreal_type == nullptr) {
+    return false;
+  }
+
+  const SgNonrealDecl *nr_decl =
+      isSgNonrealDecl(nonreal_type->get_declaration());
+  if (nr_decl == nullptr) {
+    return false;
+  }
+
+  if (!nr_decl->get_suppress_typename()) {
+    return true;
+  }
+
+  return templateArgumentsDependOnQualifiedNonrealName(nr_decl->get_tpl_args());
+}
+
+bool typeDependsOnQualifiedNonrealName(const SgType *type) {
+  if (type == nullptr) {
+    return false;
+  }
+
+  if (const SgNonrealType *nonreal_type = isSgNonrealType(type)) {
+    return nonrealTypeRequiresTypename(nonreal_type);
+  }
+  if (const SgTypedefType *typedef_type = isSgTypedefType(type)) {
+    return typeDependsOnQualifiedNonrealName(typedef_type->get_base_type());
+  }
+  if (const SgModifierType *modifier_type = isSgModifierType(type)) {
+    return typeDependsOnQualifiedNonrealName(modifier_type->get_base_type());
+  }
+  if (const SgPointerType *pointer_type = isSgPointerType(type)) {
+    return typeDependsOnQualifiedNonrealName(pointer_type->get_base_type());
+  }
+  if (const SgReferenceType *reference_type = isSgReferenceType(type)) {
+    return typeDependsOnQualifiedNonrealName(reference_type->get_base_type());
+  }
+  if (const SgRvalueReferenceType *reference_type =
+          isSgRvalueReferenceType(type)) {
+    return typeDependsOnQualifiedNonrealName(reference_type->get_base_type());
+  }
+  if (const SgArrayType *array_type = isSgArrayType(type)) {
+    return typeDependsOnQualifiedNonrealName(array_type->get_base_type());
+  }
+  if (const SgPointerMemberType *member_ptr_type =
+          isSgPointerMemberType(type)) {
+    return typeDependsOnQualifiedNonrealName(
+               member_ptr_type->get_base_type()) ||
+           typeDependsOnQualifiedNonrealName(member_ptr_type->get_class_type());
+  }
+  if (const SgTemplateType *template_type = isSgTemplateType(type)) {
+    return templateArgumentsDependOnQualifiedNonrealName(
+        template_type->get_tpl_args());
+  }
+
+  return false;
 }
 } // namespace
 
@@ -512,6 +613,25 @@ void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
         tpl_arg->get_global_qualification_required() ||
         tpl_arg->get_type_elaboration_required()) {
       allowGeneratedTypeName = false;
+    }
+  }
+  if (allowGeneratedTypeName &&
+      isSgNamedType(type->findBaseType()) != nullptr) {
+    if (isSgTemplateArgument(nodeReferenceToType) != nullptr) {
+      allowGeneratedTypeName = false;
+    } else if (info.isTypeSecondPart() == false &&
+               info.get_declstatement_ptr() != nullptr) {
+      allowGeneratedTypeName = false;
+    }
+  }
+  if (allowGeneratedTypeName) {
+    if (SgClassType *class_type = isSgClassType(type->findBaseType())) {
+      if (SgTemplateInstantiationDecl *inst_decl =
+              isSgTemplateInstantiationDecl(class_type->get_declaration())) {
+        if (inst_decl->get_templateArguments().empty()) {
+          allowGeneratedTypeName = false;
+        }
+      }
     }
   }
 
@@ -1106,6 +1226,39 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
                                             SgUnparse_Info &info) {
   SgPointerMemberType *mpointer_type = isSgPointerMemberType(type);
   ASSERT_not_null(mpointer_type);
+  auto class_type_has_explicit_global_qualifier = [](SgType *class_type) {
+    SgNonrealType *nrtype = isSgNonrealType(class_type);
+    SgNonrealDecl *nrdecl = isSgNonrealDecl(
+        nrtype != nullptr ? nrtype->get_declaration() : nullptr);
+    return nrdecl != nullptr && nrdecl->get_has_global_qualifier();
+  };
+  auto emit_member_pointer_class_prefix_from_ast =
+      [&](SgType *class_type) -> bool {
+    SgNonrealType *nrtype = isSgNonrealType(class_type);
+    SgNonrealDecl *nrdecl = isSgNonrealDecl(
+        nrtype != nullptr ? nrtype->get_declaration() : nullptr);
+    if (nrdecl == nullptr) {
+      return false;
+    }
+
+    SgDeclarationScope *nrscope = isSgDeclarationScope(nrdecl->get_parent());
+    SgNonrealDecl *nrparent =
+        isSgNonrealDecl(nrscope != nullptr ? nrscope->get_parent() : nullptr);
+    if (nrparent != nullptr) {
+      SgUnparse_Info prefix_info(info);
+      prefix_info.set_reference_node_for_qualification(NULL);
+      unparseType(nrparent->get_type(), prefix_info);
+      curprint("::");
+      return true;
+    }
+
+    if (nrdecl->get_has_global_qualifier()) {
+      curprint("::");
+      return true;
+    }
+
+    return false;
+  };
 
 #define DEBUG_MEMBER_POINTER_TYPE 0
 #define CURPRINT_MEMBER_POINTER_TYPE 0
@@ -1216,6 +1369,14 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
       // SgPointerMemberType.
       SgName nameQualifier =
           mpointer_type->get_qualified_name_prefix_for_class_of();
+      if (nameQualifier.is_null()) {
+        if (emit_member_pointer_class_prefix_from_ast(
+                mpointer_type->get_class_type()) == false &&
+            class_type_has_explicit_global_qualifier(
+                mpointer_type->get_class_type())) {
+          curprint("::");
+        }
+      }
       curprint(nameQualifier.str());
 
 #if DEBUG_MEMBER_POINTER_TYPE
@@ -1378,6 +1539,14 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
       // SgPointerMemberType.
       SgName nameQualifier =
           mpointer_type->get_qualified_name_prefix_for_class_of();
+      if (nameQualifier.is_null()) {
+        if (emit_member_pointer_class_prefix_from_ast(
+                mpointer_type->get_class_type()) == false &&
+            class_type_has_explicit_global_qualifier(
+                mpointer_type->get_class_type())) {
+          curprint("::");
+        }
+      }
       curprint(nameQualifier.str());
 
       curprint(" ");
@@ -1641,7 +1810,14 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
         // DQ (6/6/2007): Type elaboration goes here.
         bool useElaboratedType = generateElaboratedType(decl, info);
         if (useElaboratedType == true) {
-          switch (decl->get_class_type()) {
+          SgClassDeclaration::class_types elaborated_type_kind =
+              decl->get_class_type();
+          if (isSgTemplateInstantiationDecl(decl) != nullptr &&
+              elaborated_type_kind != SgClassDeclaration::e_union) {
+            elaborated_type_kind = SgClassDeclaration::e_class;
+          }
+
+          switch (elaborated_type_kind) {
           case SgClassDeclaration::e_class: {
             curprint("class ");
             break;
@@ -1697,6 +1873,15 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
       } else {
         allowUnnamedInternalName = true;
       }
+    }
+
+    // unparseToString() operates in a type-only context, so prefer the
+    // frontend-generated internal name for anonymous class types when one is
+    // available. Expanding full anonymous class definitions here can recurse
+    // through compiler-generated copy/move members back into the same type.
+    if (!allowUnnamedInternalName && info.usedInUparseToStringFunction() &&
+        hasGeneratedAnonymousNamePrefix(decl->get_name())) {
+      allowUnnamedInternalName = true;
     }
 
     if (decl->get_isUnNamed() == false || allowUnnamedInternalName) {
@@ -1782,11 +1967,30 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
                  "info.get_reference_node_for_qualification() == NULL "
                  "(assuming this is for unparseToString() \n");
 #endif
-          // DQ (3/29/2019): In reviewing where we are using the
-          // get_qualified_name() function, this might be OK since it is likely
-          // only associated with the unparseToString() function.
-          SgName nameQualifierAndType = class_type->get_qualified_name();
-          curprint(nameQualifierAndType.str());
+          if (SgTemplateInstantiationDecl *templateInstantiationDeclaration =
+                  isSgTemplateInstantiationDecl(decl);
+              templateInstantiationDeclaration != nullptr &&
+              templateInstantiationDeclaration->get_templateArguments()
+                  .empty()) {
+            curprint(decl->get_qualified_name_prefix().str());
+            SgUnparse_Info ninfo(info);
+            if (ninfo.isTypeFirstPart() == true) {
+              ninfo.unset_isTypeFirstPart();
+            }
+            if (ninfo.isTypeSecondPart() == true) {
+              ninfo.unset_isTypeSecondPart();
+            }
+            ROSE_ASSERT(ninfo.isTypeFirstPart() == false);
+            ROSE_ASSERT(ninfo.isTypeSecondPart() == false);
+            unp->u_exprStmt->unparseTemplateName(
+                templateInstantiationDeclaration, ninfo);
+          } else {
+            // DQ (3/29/2019): In reviewing where we are using the
+            // get_qualified_name() function, this might be OK since it is
+            // likely only associated with the unparseToString() function.
+            SgName nameQualifierAndType = class_type->get_qualified_name();
+            curprint(nameQualifierAndType.str());
+          }
         } else {
           // DQ (6/2/2011): Newest support for name qualification...
 #if DEBUG_UNPARSE_CLASS_TYPE
@@ -2512,6 +2716,16 @@ void Unparse_Type::unparseTypedefType(SgType *type, SgUnparse_Info &info) {
       } else {
         SgName nameQualifier = unp->u_name->lookup_generated_qualified_name(
             info.get_reference_node_for_qualification());
+        const bool needs_typename =
+            !nameQualifier.is_null() &&
+            typeDependsOnQualifiedNonrealName(typedef_type->get_base_type()) &&
+            isSgBaseClass(info.get_reference_node_for_qualification()) ==
+                nullptr &&
+            isSgConstructorInitializer(
+                info.get_reference_node_for_qualification()) == nullptr;
+        if (needs_typename) {
+          curprint("typename ");
+        }
         curprint(nameQualifier.str());
 
         // DQ (4/14/2018): This is not the correct way to handle the output of
@@ -3369,12 +3583,16 @@ void Unparse_Type::unparseNonrealType(SgType *type, SgUnparse_Info &info,
 #if DEBUG_UNPARSE_NONREAL_TYPE
     printf("  tpl_args.size() = %d\n", tpl_args.size());
 #endif
-    SgTemplateArgumentPtrList explicit_args = tpl_args;
-    SgUnparse_Info ninfo(info);
-    ninfo.set_SkipClassDefinition();
-    ninfo.set_SkipEnumDefinition();
-    ninfo.set_SkipClassSpecifier();
-    unp->u_exprStmt->unparseTemplateArgumentList(explicit_args, ninfo);
+    if (tpl_args.empty()) {
+      curprint("<>");
+    } else {
+      SgTemplateArgumentPtrList explicit_args = tpl_args;
+      SgUnparse_Info ninfo(info);
+      ninfo.set_SkipClassDefinition();
+      ninfo.set_SkipEnumDefinition();
+      ninfo.set_SkipClassSpecifier();
+      unp->u_exprStmt->unparseTemplateArgumentList(explicit_args, ninfo);
+    }
   }
 
   curprint(" ");

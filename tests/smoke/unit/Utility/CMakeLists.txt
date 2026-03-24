@@ -78,14 +78,3 @@ foreach(test_target IN LISTS SMOKE_UTILITY_TESTS)
 endforeach()
 list(JOIN _smoke_utility_tests "$<SEMICOLON>" _smoke_utility_tests_joined)
 
-# Makefile check targets.
-add_test(
-  NAME smoke_unit_Utility_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${_smoke_utility_tests_joined}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(smoke_unit_Utility_check-local PROPERTIES DEPENDS "${_smoke_utility_tests}" )

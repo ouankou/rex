@@ -24,8 +24,8 @@ int main()
 
 int main()
    {
-     string c;
-//   if (std::cin >> c) { /* .... */ }
-     return 0;
+  std::string c;
+  //   if (std::cin >> c) { /* .... */ }
+  return 0;
    }
 #endif

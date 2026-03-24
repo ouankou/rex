@@ -10,6 +10,7 @@
 
 #include <map>
 
+#include <cstdlib>
 #include <string.h>
 
 using namespace std;
@@ -36,6 +37,14 @@ using namespace std;
 #include "taintedFlowAnalysis.h"
 
 int numFails = 0, numPass = 0;
+
+static std::string get_debug_output_dir() {
+  const char *env = std::getenv("ROSE_TEST_OUTPUT_DIR");
+  if (env != nullptr && env[0] != '\0') {
+    return std::string(env);
+  }
+  return ".";
+}
 
 class evaluateAnalysisStates : public UnstructuredPassIntraAnalysis {
 public:
@@ -117,7 +126,7 @@ int main(int argc, char *argv[]) {
   SgProject *project = frontend(argc, argv);
 
   initAnalysis(project);
-  Dbg::init("Divisibility Analysis Test", ".", "index.html");
+  Dbg::init("Divisibility Analysis Test", get_debug_output_dir(), "index.html");
 
   /* analysisDebugLevel = 0;
 

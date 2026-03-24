@@ -281,8 +281,32 @@ SgStatement *Outliner::generateCall(
       func_ref = SageBuilder::buildTemplateFunctionRefExp_nfi(template_symbol);
     }
   } else {
-    SgFunctionSymbol *func_symbol =
-        glob_scope->lookup_function_symbol(out_func->get_name());
+    SgFunctionSymbol *func_symbol = glob_scope->lookup_function_symbol(
+        out_func->get_name(), out_func->get_type());
+    if (func_symbol == NULL) {
+      func_symbol = glob_scope->lookup_function_symbol(out_func->get_name());
+    }
+    if (func_symbol == NULL) {
+      SgFunctionDeclaration *first_nondef =
+          isSgFunctionDeclaration(out_func->get_firstNondefiningDeclaration());
+      if (first_nondef != NULL) {
+        func_symbol = isSgFunctionSymbol(
+            glob_scope->find_symbol_from_declaration(first_nondef));
+        if (func_symbol == NULL) {
+          func_symbol =
+              isSgFunctionSymbol(first_nondef->get_symbol_from_symbol_table());
+        }
+        if (func_symbol == NULL) {
+          SgFunctionDeclaration *bridge_decl = first_nondef;
+          if (bridge_decl->get_scope() != glob_scope) {
+            bridge_decl = SageBuilder::buildNondefiningFunctionDeclaration(
+                bridge_decl, glob_scope);
+          }
+          func_symbol = new SgFunctionSymbol(bridge_decl);
+          glob_scope->insert_symbol(bridge_decl->get_name(), func_symbol);
+        }
+      }
+    }
     if (func_symbol == NULL) {
       printf("Failed to find a function symbol in %p for function %s\n",
              glob_scope, out_func->get_name().getString().c_str());

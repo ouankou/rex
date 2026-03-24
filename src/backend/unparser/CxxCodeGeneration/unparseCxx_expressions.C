@@ -930,9 +930,6 @@ void Unparse_ExprStmt::unparseTypeExpression(SgExpression *expr,
   ASSERT_not_null(type_exp);
   SgType *type = type_exp->get_type();
 
-  printf("In unparseTypeExpression = %p = %s \n", type,
-         type->class_name().c_str());
-
   SgUnparse_Info info_(info);
   info_.set_reference_node_for_qualification(nullptr);
   unp->u_type->unparseType(type, info_);
@@ -986,6 +983,13 @@ void Unparse_ExprStmt::unparseTemplateName(
   // DQ (5/7/2013): I think these should be false so that the full type will be
   // output.
   ROSE_ASSERT(info.isTypeSecondPart() == false);
+
+  // Class template instantiations remain template-ids even when every
+  // argument is defaulted, so an empty argument list still unparses as `<>`.
+  if (templateInstantiationDeclaration->get_templateArguments().empty()) {
+    unp->u_exprStmt->curprint("<>");
+    return;
+  }
 
   // DQ (6/21/2011): Refactored this code to generate more than templated class
   // names.

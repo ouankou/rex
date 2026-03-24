@@ -1069,6 +1069,9 @@ void getPropertiesForSgFunctionCallExp(
   while (SgCommaOpExp *comma = isSgCommaOpExp(functionExp))
     functionExp = comma->get_rhs_operand();
 
+  while (SgAddressOfOp *address_of = isSgAddressOfOp(functionExp))
+    functionExp = address_of->get_operand();
+
   switch (functionExp->variantT()) {
   case V_SgArrowStarOp:
   case V_SgDotStarOp: {
@@ -1272,6 +1275,39 @@ void getPropertiesForSgFunctionCallExp(
 
     // Replaced deprecated functions std::bind2nd and std::ptr_fun [Rasmussen,
     // 2023.08.07]
+    std::function<SgFunctionDeclarationPtrList(SgNode *, SgFunctionType *)>
+        ptrFun = solveFunctionPointerCallsFunctional;
+
+    SgFunctionDeclarationPtrList matches = AstQueryNamespace::queryMemoryPool(
+        std::bind(ptrFun, std::placeholders::_1, fctType), &vv);
+    functionList.insert(functionList.end(), matches.begin(), matches.end());
+    break;
+  }
+
+  case V_SgTemplateParameterVal: {
+    using SgFunctionDeclarationPtrList =
+        Rose_STL_Container<SgFunctionDeclaration *>;
+
+    // Calls through non-type template parameters (e.g. `FUNC();` inside
+    // `template<void (*FUNC)()>`) are indirect calls whose concrete target is
+    // not always encoded as a direct function-ref in the generic AST. Resolve
+    // them conservatively from the parameter's callable type, just like we do
+    // for ordinary function-pointer calls.
+    SgType *type = isSgTemplateParameterVal(functionExp)->get_type();
+    while (isSgTypedefType(type))
+      type = isSgTypedefType(type)->get_base_type();
+
+    if (type == NULL)
+      break;
+
+    SgFunctionType *fctType = isSgFunctionType(type->findBaseType());
+    if (fctType == NULL)
+      break;
+
+    VariantVector vv;
+    vv.push_back(V_SgFunctionDeclaration);
+    vv.push_back(V_SgTemplateInstantiationFunctionDecl);
+
     std::function<SgFunctionDeclarationPtrList(SgNode *, SgFunctionType *)>
         ptrFun = solveFunctionPointerCallsFunctional;
 

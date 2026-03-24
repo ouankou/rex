@@ -1,5 +1,5 @@
-# Generated from legacy test lists test lists.
-set(ELSATEST_NOTCOMPILABLE_DISABLED_TESTCODES
+# Generated from legacy test lists.
+set(ELSATEST_NOTCOMPILABLE_STD_ADDITIONAL_TESTCODES
   test2001_11.C
   test2001_01.C
   test2001_02.C

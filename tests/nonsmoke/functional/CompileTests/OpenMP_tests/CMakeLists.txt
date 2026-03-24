@@ -130,7 +130,6 @@ foreach(file_to_test ${OMP_ACC_TESTCODES})
   set_tests_properties(OMPACCTEST_${file_to_test} PROPERTIES LABELS OMPACCTEST)
 endforeach()
 
-
 # Multi-file test: verifies correct handling of multiple source files with OpenMP pragmas
 add_test(
   NAME OMPTEST_bonds-2

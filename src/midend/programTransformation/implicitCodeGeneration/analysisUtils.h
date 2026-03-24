@@ -1,5 +1,6 @@
 
-#include "sage3basic.h"
+#include "Cxx_Grammar.h"
+#include "ROSE_ASSERT.h"
 
 #include <list>
 

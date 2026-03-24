@@ -61,6 +61,7 @@ sub parse_policy_control {
     $linenum++;
     next unless /\S/; # blank lines
     next if /^\s*#/; # comments
+    next if /^\s*[_[:alpha:]][-_[:alnum:]\s]*=\s*.*$/; # metadata assignments
     if (my($filename,$disabled_list) = /\s*(\S+?):\s*disable\s+(.*?)\s*$/) {
       die "$policy_file:$linenum: error: file name must not include path components\n" if $filename =~ /\//;
       $filename = "$dir/$filename";

@@ -4,6 +4,49 @@
 #include "fixupTemplateDeclarations.h"
 
 #include "sage3basic.h"
+#include "sageInterface.h"
+
+namespace {
+bool project_has_frontend_errors(const SgNode *node) {
+  if (node == nullptr) {
+    return false;
+  }
+
+  if (SgProject *project = SageInterface::getProject(node)) {
+    return project->get_frontendErrorCode() != 0;
+  }
+
+  return false;
+}
+
+template <typename InstantiationDeclT, typename TemplateDeclT>
+void recover_template_declaration_link(InstantiationDeclT *decl) {
+  if (decl == nullptr || decl->get_templateDeclaration() != nullptr) {
+    return;
+  }
+
+  if (InstantiationDeclT *first_nondef = dynamic_cast<InstantiationDeclT *>(
+          decl->get_firstNondefiningDeclaration())) {
+    if (first_nondef->get_templateDeclaration() != nullptr) {
+      decl->set_templateDeclaration(first_nondef->get_templateDeclaration());
+      return;
+    }
+  }
+
+  if (InstantiationDeclT *defining_decl =
+          dynamic_cast<InstantiationDeclT *>(decl->get_definingDeclaration())) {
+    if (defining_decl->get_templateDeclaration() != nullptr) {
+      decl->set_templateDeclaration(defining_decl->get_templateDeclaration());
+      return;
+    }
+  }
+
+  if (TemplateDeclT *specialized_template = dynamic_cast<TemplateDeclT *>(
+          decl->get_specializedTemplateDeclaration())) {
+    decl->set_templateDeclaration(specialized_template);
+  }
+}
+} // namespace
 
 // DQ (8/10/2005): Test and fixup any template declaration that is mistakenly
 // marked as compiler-generated.
@@ -75,7 +118,14 @@ void FixupTemplateDeclarations::visit(SgNode *node) {
   case V_SgTemplateInstantiationDecl: {
     SgTemplateInstantiationDecl *s = isSgTemplateInstantiationDecl(node);
     ROSE_ASSERT(s != NULL);
-    ROSE_ASSERT(s->get_templateDeclaration() != NULL);
+    recover_template_declaration_link<SgTemplateInstantiationDecl,
+                                      SgTemplateClassDeclaration>(s);
+    if (s->get_templateDeclaration() == NULL) {
+      if (project_has_frontend_errors(node)) {
+        break;
+      }
+      ROSE_ASSERT(s->get_templateDeclaration() != NULL);
+    }
 
     // printf ("In FixupTemplateDeclarations::visit():
     // SgTemplateInstantiationDecl = %p \n",s);
@@ -109,7 +159,14 @@ void FixupTemplateDeclarations::visit(SgNode *node) {
     ROSE_ASSERT(s != NULL);
     // DQ (5/8/2004): templateName() removed
     // ROSE_ASSERT (s->get_templateName().str() != NULL);
-    ROSE_ASSERT(s->get_templateDeclaration() != NULL);
+    recover_template_declaration_link<SgTemplateInstantiationFunctionDecl,
+                                      SgTemplateFunctionDeclaration>(s);
+    if (s->get_templateDeclaration() == NULL) {
+      if (project_has_frontend_errors(node)) {
+        break;
+      }
+      ROSE_ASSERT(s->get_templateDeclaration() != NULL);
+    }
 
     // DQ (6/17/2005): Template declarations should not be marked as compiler
     // generated (only the instatiations are posibily marked as compiler
@@ -142,7 +199,17 @@ void FixupTemplateDeclarations::visit(SgNode *node) {
     ROSE_ASSERT(s != NULL);
     // DQ (5/8/2004): templateName() removed
     // ROSE_ASSERT (s->get_templateName().str() != NULL);
-    ROSE_ASSERT(s->get_templateDeclaration() != NULL);
+    recover_template_declaration_link<SgTemplateInstantiationMemberFunctionDecl,
+                                      SgTemplateMemberFunctionDeclaration>(s);
+    if (s->get_templateDeclaration() == NULL) {
+      if (s->get_specialization() == SgDeclarationStatement::e_specialization) {
+        break;
+      }
+      if (project_has_frontend_errors(node)) {
+        break;
+      }
+      ROSE_ASSERT(s->get_templateDeclaration() != NULL);
+    }
 
     // DQ (6/17/2005): Template declarations should not be marked as compiler
     // generated (only the instatiations are posibily marked as compiler

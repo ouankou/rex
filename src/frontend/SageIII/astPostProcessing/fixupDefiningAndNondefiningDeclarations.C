@@ -181,6 +181,14 @@ void FixupAstDefiningAndNondefiningDeclarations::visit(SgNode *node) {
           // DQ (2/25/2007): There could be multiple non-defining declarations
           // such that the symbol might already exist in the definingScope's
           // symbol table.  (Confirmed to be true).
+          //
+          // Keep declaration scope consistent with the destination symbol table
+          // before insertion. SgScopeStatement::insert_symbol validates this
+          // invariant for class symbols and warns/asserts if it is violated.
+          if (firstNondefiningDeclaration->get_scope() != definingScope) {
+            firstNondefiningDeclaration->set_scope(definingScope);
+          }
+
           if (definingScope->symbol_exists(symbolToMove->get_name(),
                                            symbolToMove) == false) {
             // DQ (2/25/2007): It is OK for the name to exist (e.g. overloader
@@ -294,6 +302,15 @@ void FixupAstDefiningAndNondefiningDeclarations::visit(SgNode *node) {
         // ROSE_ASSERT(firstNondefiningDeclarationScope != NULL);
 
         bool lookForDeclarationInAssociatedScope = true;
+        if (Sg_File_Info *nondef_file_info =
+                firstNondefiningDeclaration->get_file_info()) {
+          if (nondef_file_info->isCompilerGenerated() ||
+              nondef_file_info->isTransformation()) {
+            // Compiler-generated declarations can be type anchors that are not
+            // lexically attached to their parent scope's statement list.
+            lookForDeclarationInAssociatedScope = false;
+          }
+        }
         SgTemplateInstantiationDecl *templateClassInstantiation =
             isSgTemplateInstantiationDecl(firstNondefiningDeclaration);
         if (templateClassInstantiation != NULL) {

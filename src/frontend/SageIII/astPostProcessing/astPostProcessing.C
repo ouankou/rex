@@ -198,6 +198,194 @@ void pruneSymbolsForConstraintFailures(SgNode *node) {
 
   pruner.traverse(node, preorder);
 }
+
+bool isTrackedStdTemplateDebugName(const std::string &name) {
+  return name.find("ctype") != std::string::npos ||
+         name.find("numpunct") != std::string::npos;
+}
+
+bool isTrackedNamespaceFragmentDebugName(const std::string &name) {
+  return name == "std" || name == "__gnu_cxx";
+}
+
+bool isTrackedNamespaceDeclDebugName(SgDeclarationStatement *decl,
+                                     std::string &name) {
+  if (auto *tmpl_class = isSgTemplateClassDeclaration(decl)) {
+    name = tmpl_class->get_name().getString();
+    return name == "__normal_iterator";
+  }
+  if (auto *klass = isSgClassDeclaration(decl)) {
+    name = klass->get_name().getString();
+    return name == "__normal_iterator";
+  }
+  return false;
+}
+
+void debugDumpTrackedStdTemplateState(const char *phase, SgNode *node) {
+  (void)phase;
+  (void)node;
+  return;
+
+  if (node == nullptr) {
+    return;
+  }
+
+  struct Traversal : AstSimpleProcessing {
+    const char *phase;
+
+    explicit Traversal(const char *phase_name) : phase(phase_name) {}
+
+    void visit(SgNode *n) override {
+      auto *inst = isSgTemplateInstantiationDecl(n);
+      if (inst == nullptr) {
+        return;
+      }
+
+      const std::string name = inst->get_name().getString();
+      if (!isTrackedStdTemplateDebugName(name)) {
+        return;
+      }
+
+      auto *parent_scope = isSgScopeStatement(inst->get_parent());
+      auto *scope = inst->get_scope();
+      auto *first = isSgTemplateInstantiationDecl(
+          inst->get_firstNondefiningDeclaration());
+      auto *def =
+          isSgTemplateInstantiationDecl(inst->get_definingDeclaration());
+      auto *parent_ns = isSgNamespaceDefinitionStatement(parent_scope);
+      auto *scope_ns = isSgNamespaceDefinitionStatement(scope);
+
+      auto dump_ns = [](SgNamespaceDefinitionStatement *ns) {
+        if (ns == nullptr) {
+          return std::string();
+        }
+        SgNamespaceDeclarationStatement *decl = ns->get_namespaceDeclaration();
+        return decl != nullptr ? decl->get_name().getString() : std::string();
+      };
+
+      std::cerr
+          << "DEBUG ast post " << phase << " template-inst " << name
+          << " node=" << inst << " parent=" << inst->get_parent() << "/"
+          << (inst->get_parent() != nullptr ? inst->get_parent()->class_name()
+                                            : "")
+          << " scope=" << scope << "/"
+          << (scope != nullptr ? scope->class_name() : "")
+          << " parent-ns=" << dump_ns(parent_ns)
+          << " scope-ns=" << dump_ns(scope_ns) << " attached-parent="
+          << (parent_scope != nullptr &&
+                      std::find(parent_scope->getDeclarationList().begin(),
+                                parent_scope->getDeclarationList().end(),
+                                inst) !=
+                          parent_scope->getDeclarationList().end()
+                  ? "true"
+                  : "false")
+          << " forward=" << (inst->isForward() ? "true" : "false")
+          << " def=" << (inst->get_definition() != nullptr ? "true" : "false")
+          << " output="
+          << (inst->get_file_info() != nullptr &&
+                      inst->get_file_info()->isOutputInCodeGeneration()
+                  ? "true"
+                  : "false")
+          << " specialization=" << inst->get_specialization()
+          << " first=" << first << " defdecl=" << def << "\n";
+    }
+  } traversal(phase);
+
+  traversal.traverse(node, preorder);
+
+  Rose_STL_Container<SgNode *> namespaces =
+      NodeQuery::querySubTree(node, V_SgNamespaceDefinitionStatement);
+  for (SgNode *entry : namespaces) {
+    auto *ns = isSgNamespaceDefinitionStatement(entry);
+    if (ns == nullptr || ns->get_namespaceDeclaration() == nullptr) {
+      continue;
+    }
+
+    const std::string ns_name =
+        ns->get_namespaceDeclaration()->get_name().getString();
+    if (!isTrackedNamespaceFragmentDebugName(ns_name)) {
+      continue;
+    }
+
+    auto *ns_fi = ns->get_namespaceDeclaration()->get_startOfConstruct();
+    std::cerr << "DEBUG ast post " << phase << " " << ns_name << "-fragment "
+              << ns << " decls=" << ns->get_declarations().size()
+              << " line=" << (ns_fi != nullptr ? ns_fi->get_line() : 0) << "\n";
+    for (SgDeclarationStatement *decl : ns->get_declarations()) {
+      std::string tracked_name;
+      if (isTrackedNamespaceDeclDebugName(decl, tracked_name)) {
+        auto *parent_scope = isSgScopeStatement(decl->get_parent());
+        auto *decl_scope = decl->get_scope();
+        auto *parent_ns = isSgNamespaceDefinitionStatement(parent_scope);
+        auto *scope_ns = isSgNamespaceDefinitionStatement(decl_scope);
+        auto *decl_fi = decl->get_startOfConstruct();
+        auto *parent_ns_fi =
+            parent_ns != nullptr &&
+                    parent_ns->get_namespaceDeclaration() != nullptr
+                ? parent_ns->get_namespaceDeclaration()->get_startOfConstruct()
+                : nullptr;
+        auto *scope_ns_fi =
+            scope_ns != nullptr &&
+                    scope_ns->get_namespaceDeclaration() != nullptr
+                ? scope_ns->get_namespaceDeclaration()->get_startOfConstruct()
+                : nullptr;
+        std::cerr << "DEBUG ast post " << phase << " " << ns_name << "-entry "
+                  << tracked_name << " node=" << decl
+                  << " class=" << decl->class_name()
+                  << " line=" << (decl_fi != nullptr ? decl_fi->get_line() : 0)
+                  << " parent=" << decl->get_parent() << "/"
+                  << (decl->get_parent() != nullptr
+                          ? decl->get_parent()->class_name()
+                          : "")
+                  << " scope=" << decl_scope << "/"
+                  << (decl_scope != nullptr ? decl_scope->class_name() : "")
+                  << " parent-ns="
+                  << (parent_ns != nullptr &&
+                              parent_ns->get_namespaceDeclaration() != nullptr
+                          ? parent_ns->get_namespaceDeclaration()
+                                ->get_name()
+                                .getString()
+                          : "")
+                  << " parent-line="
+                  << (parent_ns_fi != nullptr ? parent_ns_fi->get_line() : 0)
+                  << " scope-ns="
+                  << (scope_ns != nullptr &&
+                              scope_ns->get_namespaceDeclaration() != nullptr
+                          ? scope_ns->get_namespaceDeclaration()
+                                ->get_name()
+                                .getString()
+                          : "")
+                  << " scope-line="
+                  << (scope_ns_fi != nullptr ? scope_ns_fi->get_line() : 0)
+                  << "\n";
+      }
+
+      if (ns_name != "std") {
+        continue;
+      }
+
+      auto *inst = isSgTemplateInstantiationDecl(decl);
+      if (inst == nullptr) {
+        continue;
+      }
+      const std::string name = inst->get_name().getString();
+      if (!isTrackedStdTemplateDebugName(name)) {
+        continue;
+      }
+      std::cerr << "DEBUG ast post " << phase << " std-entry " << name
+                << " node=" << inst
+                << " forward=" << (inst->isForward() ? "true" : "false")
+                << " def="
+                << (inst->get_definition() != nullptr ? "true" : "false")
+                << " output="
+                << (inst->get_file_info() != nullptr &&
+                            inst->get_file_info()->isOutputInCodeGeneration()
+                        ? "true"
+                        : "false")
+                << " specialization=" << inst->get_specialization() << "\n";
+    }
+  }
+}
 } // namespace
 
 namespace Rose {
@@ -383,6 +571,7 @@ void postProcessingSupport(SgNode *node) {
     // Reset and test and parent pointers so that it matches our definition
     // of the AST (as defined by the AST traversal mechanism).
     topLevelResetParentPointer(node);
+    debugDumpTrackedStdTemplateState("after-topLevelResetParentPointer", node);
 
     if (SgProject::get_verbose() > 1) {
       printf("DONE: Calling topLevelResetParentPointer() \n");
@@ -403,6 +592,8 @@ void postProcessingSupport(SgNode *node) {
     // step to make sure that parents of even IR nodes not traversed can be set
     // properly. resetParentPointersInMemoryPool();
     resetParentPointersInMemoryPool(node);
+    debugDumpTrackedStdTemplateState("after-resetParentPointersInMemoryPool",
+                                     node);
 
     if (SgProject::get_verbose() > 1) {
       printf("DONE: Calling resetParentPointersInMemoryPool() \n");
@@ -424,6 +615,8 @@ void postProcessingSupport(SgNode *node) {
     // declaration and requiring a fixup of the non-defining declaration
     // reference to the defining declaration.
     fixupAstDefiningAndNondefiningDeclarations(node);
+    debugDumpTrackedStdTemplateState(
+        "after-fixupAstDefiningAndNondefiningDeclarations", node);
 
 #if DEBUG_TYPEDEF_CYCLES
     printf("Calling TestAstForCyclesInTypedefs() \n");
@@ -444,6 +637,7 @@ void postProcessingSupport(SgNode *node) {
     // handle C and C++ we don't setup the global function type table
     // there to be uniform.
     fixupAstSymbolTables(node);
+    debugDumpTrackedStdTemplateState("after-fixupAstSymbolTables", node);
 
     if (SgProject::get_verbose() > 1) {
       printf("Calling fixupAstSymbolTablesToSupportAliasedSymbols() \n");
@@ -454,6 +648,8 @@ void postProcessingSupport(SgNode *node) {
     // aliases in the symbol table to provide correct visability of symbols
     // included from alternative scopes (e.g. namespaces).
     fixupAstSymbolTablesToSupportAliasedSymbols(node);
+    debugDumpTrackedStdTemplateState(
+        "after-fixupAstSymbolTablesToSupportAliasedSymbols", node);
 
     if (SgProject::get_verbose() > 1) {
       printf("Calling resetTemplateNames() \n");
@@ -477,6 +673,7 @@ void postProcessingSupport(SgNode *node) {
     // the phase where comments are attached.  Some fixup of filenames
     // and line numbers might also be required.
     fixupTemplateInstantiations(node);
+    debugDumpTrackedStdTemplateState("after-fixupTemplateInstantiations", node);
 
     if (SgProject::get_verbose() > 1) {
       printf("Calling markTemplateSpecializationsForOutput() \n");
@@ -491,6 +688,8 @@ void postProcessingSupport(SgNode *node) {
     // searched for uses of (references to) instantiated template functions and
     // member functions.
     markTemplateSpecializationsForOutput(node);
+    debugDumpTrackedStdTemplateState(
+        "after-markTemplateSpecializationsForOutput", node);
 
     if (SgProject::get_verbose() > 1) {
       printf("Calling markTemplateInstantiationsForOutput() \n");
@@ -504,6 +703,8 @@ void postProcessingSupport(SgNode *node) {
     // general problem of instantiation of both function and member
     // function templates (and static data, later)).
     markTemplateInstantiationsForOutput(node);
+    debugDumpTrackedStdTemplateState(
+        "after-markTemplateInstantiationsForOutput", node);
 
     if (SgProject::get_verbose() > 1) {
       printf("Calling fixupFriendTemplateDeclarations() \n");
@@ -526,6 +727,8 @@ void postProcessingSupport(SgNode *node) {
     // Setup any endOfConstruct Sg_File_Info objects (report on where they
     // occur)
     fixupSourcePositionConstructs();
+    debugDumpTrackedStdTemplateState("after-fixupSourcePositionConstructs",
+                                     node);
 
     if (SgProject::get_verbose() > 1) {
       printf("Calling fixupTemplateArguments() \n");
@@ -535,6 +738,7 @@ void postProcessingSupport(SgNode *node) {
     // DQ (11/27/2016): Fixup template arguments to additionally reference a
     // type that can be unparsed. fixupTemplateArguments();
     fixupTemplateArguments(node);
+    debugDumpTrackedStdTemplateState("after-fixupTemplateArguments", node);
 
     // DQ (2/12/2012): This is a problem for test2004_35.C (debugging this
     // issue). printf ("Exiting after calling resetTemplateNames() \n");
@@ -599,10 +803,14 @@ void postProcessingSupport(SgNode *node) {
     // DQ (2/25/2019): Adding support to mark shared defining declarations
     // across multiple files.
     markSharedDeclarationsForOutputInCodeGeneration(node);
+    debugDumpTrackedStdTemplateState(
+        "after-markSharedDeclarationsForOutputInCodeGeneration", node);
 
     // Prune symbols for constraint-unsatisfied instantiations after all
     // symbol-table fixups have completed.
     pruneSymbolsForConstraintFailures(node);
+
+    debugDumpTrackedStdTemplateState("final", node);
     if (SgProject::get_verbose() > 1) {
       printf("Calling checkIsModifiedFlag() \n");
     }

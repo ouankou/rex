@@ -14,6 +14,69 @@
 // 2) function reference expressions (SgFunctionRefExp)
 // 3) member function reference expressions (SgMemberFunctionRefExp)
 
+namespace {
+
+void fixupCanonicalStatementCopiesForReferences(
+    const SgStatementPtrList &statementList_original,
+    SgScopeStatement *copyScopeStatement, SgCopyHelp &help) {
+  ROSE_ASSERT(copyScopeStatement != NULL);
+
+  for (SgStatementPtrList::const_iterator i_original =
+           statementList_original.begin();
+       i_original != statementList_original.end(); ++i_original) {
+    SgStatement *originalStatement = *i_original;
+    if (originalStatement == NULL) {
+      continue;
+    }
+
+    SgCopyHelp::copiedNodeMapTypeIterator copyIter =
+        help.get_copiedNodeMap().find(originalStatement);
+    if (copyIter == help.get_copiedNodeMap().end()) {
+      continue;
+    }
+
+    SgStatement *copyStatement = isSgStatement(copyIter->second);
+    if (copyStatement == NULL ||
+        copyStatement->get_parent() != copyScopeStatement) {
+      continue;
+    }
+
+    originalStatement->fixupCopy_references(copyStatement, help);
+  }
+}
+
+void fixupCanonicalDeclarationCopiesForReferences(
+    const SgDeclarationStatementPtrList &statementList_original,
+    SgScopeStatement *copyScopeStatement, SgCopyHelp &help) {
+  ROSE_ASSERT(copyScopeStatement != NULL);
+
+  for (SgDeclarationStatementPtrList::const_iterator i_original =
+           statementList_original.begin();
+       i_original != statementList_original.end(); ++i_original) {
+    SgDeclarationStatement *originalDeclaration = *i_original;
+    if (originalDeclaration == NULL) {
+      continue;
+    }
+
+    SgCopyHelp::copiedNodeMapTypeIterator copyIter =
+        help.get_copiedNodeMap().find(originalDeclaration);
+    if (copyIter == help.get_copiedNodeMap().end()) {
+      continue;
+    }
+
+    SgDeclarationStatement *copyDeclaration =
+        isSgDeclarationStatement(copyIter->second);
+    if (copyDeclaration == NULL ||
+        copyDeclaration->get_parent() != copyScopeStatement) {
+      continue;
+    }
+
+    originalDeclaration->fixupCopy_references(copyDeclaration, help);
+  }
+}
+
+} // namespace
+
 void SgInitializedName::fixupCopy_references(SgNode *, SgCopyHelp &) const {
 #if DEBUG_FIXUP_COPY
   printf("Inside of SgInitializedName::fixupCopy_references() %p = %s \n", this,
@@ -268,25 +331,8 @@ void SgGlobal::fixupCopy_references(SgNode *copy, SgCopyHelp &help) const {
   SgGlobal *global_copy = isSgGlobal(copy);
   ROSE_ASSERT(global_copy != NULL);
 
-  const SgDeclarationStatementPtrList &statementList_original =
-      this->getDeclarationList();
-  const SgDeclarationStatementPtrList &statementList_copy =
-      global_copy->getDeclarationList();
-
-  SgDeclarationStatementPtrList::const_iterator i_original =
-      statementList_original.begin();
-  SgDeclarationStatementPtrList::const_iterator i_copy =
-      statementList_copy.begin();
-
-  // Iterate over both lists to match up the correct pairs of SgStatement
-  // objects
-  while ((i_original != statementList_original.end()) &&
-         (i_copy != statementList_copy.end())) {
-    (*i_original)->fixupCopy_references(*i_copy, help);
-
-    i_original++;
-    i_copy++;
-  }
+  fixupCanonicalDeclarationCopiesForReferences(this->getDeclarationList(),
+                                               global_copy, help);
 
   // Call the base class fixupCopy member function
   SgScopeStatement::fixupCopy_references(copy, help);
@@ -331,31 +377,8 @@ void SgBasicBlock::fixupCopy_references(SgNode *copy, SgCopyHelp &help) const {
   SgBasicBlock *block_copy = isSgBasicBlock(copy);
   ROSE_ASSERT(block_copy != NULL);
 
-  const SgStatementPtrList &statementList_original = this->getStatementList();
-  const SgStatementPtrList &statementList_copy = block_copy->getStatementList();
-
-  // Check that this need not be handled as a special case such as SgIfStmt.
-  if (this->containsOnlyDeclarations() == true) {
-    ROSE_ASSERT(this->getDeclarationList().size() ==
-                statementList_original.size());
-  } else {
-    ROSE_ASSERT(this->getStatementList().size() ==
-                statementList_original.size());
-  }
-
-  SgStatementPtrList::const_iterator i_original =
-      statementList_original.begin();
-  SgStatementPtrList::const_iterator i_copy = statementList_copy.begin();
-
-  // Iterate over both lists to match up the correct pairs of SgStatement
-  // objects
-  while ((i_original != statementList_original.end()) &&
-         (i_copy != statementList_copy.end())) {
-    (*i_original)->fixupCopy_references(*i_copy, help);
-
-    i_original++;
-    i_copy++;
-  }
+  fixupCanonicalStatementCopiesForReferences(this->getStatementList(),
+                                             block_copy, help);
 
   // Call the base class fixupCopy member function
   SgScopeStatement::fixupCopy_references(copy, help);
@@ -716,25 +739,8 @@ void SgClassDefinition::fixupCopy_references(SgNode *copy,
     i_copy++;
   }
 
-  const SgDeclarationStatementPtrList &statementList_original =
-      this->getDeclarationList();
-  const SgDeclarationStatementPtrList &statementList_copy =
-      classDefinition_copy->getDeclarationList();
-
-  SgDeclarationStatementPtrList::const_iterator j_original =
-      statementList_original.begin();
-  SgDeclarationStatementPtrList::const_iterator j_copy =
-      statementList_copy.begin();
-
-  // Iterate over both lists to match up the correct pairs of SgStatement
-  // objects
-  while ((j_original != statementList_original.end()) &&
-         (j_copy != statementList_copy.end())) {
-    (*j_original)->fixupCopy_references(*j_copy, help);
-
-    j_original++;
-    j_copy++;
-  }
+  fixupCanonicalDeclarationCopiesForReferences(this->getDeclarationList(),
+                                               classDefinition_copy, help);
 
   // Call the base class fixupCopy member function
   SgScopeStatement::fixupCopy_references(copy, help);
@@ -916,25 +922,8 @@ void SgNamespaceDefinitionStatement::fixupCopy_references(
       isSgNamespaceDefinitionStatement(copy);
   ROSE_ASSERT(namespaceDefinition_copy != NULL);
 
-  const SgDeclarationStatementPtrList &statementList_original =
-      this->getDeclarationList();
-  const SgDeclarationStatementPtrList &statementList_copy =
-      namespaceDefinition_copy->getDeclarationList();
-
-  SgDeclarationStatementPtrList::const_iterator i_original =
-      statementList_original.begin();
-  SgDeclarationStatementPtrList::const_iterator i_copy =
-      statementList_copy.begin();
-
-  // Iterate over both lists to match up the correct pairs of SgStatement
-  // objects
-  while ((i_original != statementList_original.end()) &&
-         (i_copy != statementList_copy.end())) {
-    (*i_original)->fixupCopy_references(*i_copy, help);
-
-    i_original++;
-    i_copy++;
-  }
+  fixupCanonicalDeclarationCopiesForReferences(this->getDeclarationList(),
+                                               namespaceDefinition_copy, help);
 
   // Call the base class fixupCopy member function
   SgScopeStatement::fixupCopy_references(copy, help);

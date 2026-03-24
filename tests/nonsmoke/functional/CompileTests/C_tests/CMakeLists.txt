@@ -813,7 +813,7 @@ set(TESTCODES_REQUIRED_TO_PASS
   test2015_112.c
   test2005_168.c
 )
-set(TESTCODES_REQUIRED_TO_PASS_DISABLED
+set(C_TESTCODES_LEGACY_DEFAULT
   test2004_126.c
   test2006_134.c
   test2009_06.c
@@ -870,7 +870,7 @@ set(TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2015_112.c
   test2005_168.c
 )
-set(TESTCODE_CURRENTLY_FAILING
+set(C_TESTCODES_ADDITIONAL_TO_RUN
   Yarden_client.c
   test2004_126.c
   test2005_168.c
@@ -1001,24 +1001,13 @@ set(TESTCODE_CURRENTLY_FAILING
   test2022_04.c
 )
 
-list(REMOVE_ITEM TESTCODES_REQUIRED_TO_PASS test2005_168.c test2012_145.c)
-list(REMOVE_ITEM TESTCODES_REQUIRED_TO_PASS_DISABLED test2005_168.c test2012_145.c)
-list(REMOVE_ITEM TESTCODE_CURRENTLY_FAILING
-  constants.c
-  test2005_168.c
-  test2006_136.c
-  test2006_14.c
-  test2012_145.c
-)
-
 set(TESTCODES_REQUIRED_TO_PASS "${TESTCODES_REQUIRED_TO_PASS}" CACHE INTERNAL "")
-set(TESTCODES_REQUIRED_TO_PASS_DISABLED "${TESTCODES_REQUIRED_TO_PASS_DISABLED}" CACHE INTERNAL "")
-set(TESTCODE_CURRENTLY_FAILING "${TESTCODE_CURRENTLY_FAILING}" CACHE INTERNAL "")
-set(C_TESTCODES_TO_RUN ${TESTCODES_REQUIRED_TO_PASS})
-list(REMOVE_ITEM C_TESTCODES_TO_RUN ${TESTCODE_CURRENTLY_FAILING})
-
-set(ROSE_DISABLED_TESTCODES ${TESTCODES_REQUIRED_TO_PASS_DISABLED})
-set(ROSE_FAILING_TESTCODES ${TESTCODE_CURRENTLY_FAILING})
+set(C_TESTCODES_TO_RUN
+  ${TESTCODES_REQUIRED_TO_PASS}
+  ${C_TESTCODES_LEGACY_DEFAULT}
+  ${C_TESTCODES_ADDITIONAL_TO_RUN}
+)
+list(REMOVE_DUPLICATES C_TESTCODES_TO_RUN)
 
 # These legacy C tests rely on GNU89/C89 behavior (e.g., implicit function
 # declarations and GNU extensions). Keep default C mode for the rest of
@@ -1054,19 +1043,10 @@ set(C_TESTCODES_REQUIRE_GNU89
 list(APPEND ROSE_GNU89_TESTCODES ${C_TESTCODES_REQUIRE_GNU89})
 list(REMOVE_DUPLICATES ROSE_GNU89_TESTCODES)
 
-foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
-  compile_test(${file_to_test} "C_tests_failing")
-endforeach()
-
 foreach(file_to_test ${C_TESTCODES_TO_RUN})
   compile_test(${file_to_test} "C_tests")
 endforeach()
 set(ROSE_FLAGS ${C_TEST_ROSE_FLAGS})
-
-set(_c_tests_disable_m32 FALSE)
-if(CMAKE_C_COMPILER_ID MATCHES "Intel")
-  set(_c_tests_disable_m32 TRUE)
-endif()
 
 set(_c_tests_string_macro [[-DSTRING_MACRO="some_text"]])
 
@@ -1079,7 +1059,7 @@ add_test(
 set_tests_properties(C_tests_check_pthread PROPERTIES LABELS C_tests)
 
 add_test(
-  NAME C_tests_test2005_168
+  NAME C_tests_test2005_168_special_includes
   WORKING_DIRECTORY ${_c_tests_special_dir}
   COMMAND ${C_TEST_TRANSLATOR} ${C_TEST_LANG_FLAGS} ${C_TEST_ROSE_FLAGS}
           -I${CMAKE_CURRENT_SOURCE_DIR}
@@ -1087,17 +1067,17 @@ add_test(
           -I${CMAKE_SOURCE_DIR}/src/frontend/SageIII
           -c ${CMAKE_CURRENT_SOURCE_DIR}/test2005_168.c
 )
-set_tests_properties(C_tests_test2005_168 PROPERTIES LABELS C_tests)
+set_tests_properties(C_tests_test2005_168_special_includes PROPERTIES LABELS C_tests)
 
 add_test(
-  NAME C_tests_test2012_145
+  NAME C_tests_test2012_145_string_macro
   WORKING_DIRECTORY ${_c_tests_special_dir}
   COMMAND ${C_TEST_TRANSLATOR} ${C_TEST_LANG_FLAGS} ${C_TEST_ROSE_FLAGS}
           -I${CMAKE_CURRENT_SOURCE_DIR}
           ${_c_tests_string_macro}
           -c ${CMAKE_CURRENT_SOURCE_DIR}/test2012_145.c
 )
-set_tests_properties(C_tests_test2012_145 PROPERTIES LABELS C_tests)
+set_tests_properties(C_tests_test2012_145_string_macro PROPERTIES LABELS C_tests)
 
 add_test(
   NAME C_tests_build_generated_file_in_same_directory_as_input_file
@@ -1132,10 +1112,7 @@ add_test(
   COMMAND testTranslator -rose:C89 --edg:no_warnings --edg:restrict -w
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2013_76.c
 )
-set_tests_properties(CTEST_test2013_76 PROPERTIES LABELS "CTEST;disabled")
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(CTEST_test2013_76 PROPERTIES DISABLED TRUE)
-endif()
+set_tests_properties(CTEST_test2013_76 PROPERTIES LABELS "CTEST")
 
 add_test(
   NAME C_tests_else_case_disambiguation
@@ -1194,7 +1171,7 @@ add_test(
   COMMAND ${C_TEST_TRANSLATOR} -m32 -mrtd -rose:C89 -c
           ${CMAKE_CURRENT_SOURCE_DIR}/test2015_89.c
 )
-set_tests_properties(C_tests_rtd_use PROPERTIES DISABLED ${_c_tests_disable_m32} LABELS C_tests)
+set_tests_properties(C_tests_rtd_use PROPERTIES LABELS C_tests)
 
 add_test(
   NAME C_tests_optimization_specifier_O
@@ -1230,7 +1207,7 @@ add_test(
   COMMAND ${C_TEST_TRANSLATOR} -mregparm=3 -m32 -rose:C89 -c
           ${CMAKE_CURRENT_SOURCE_DIR}/test2015_154.c
 )
-set_tests_properties(C_tests_mregparm_m32_use PROPERTIES DISABLED ${_c_tests_disable_m32} LABELS C_tests)
+set_tests_properties(C_tests_mregparm_m32_use PROPERTIES LABELS C_tests)
 
 add_test(
   NAME C_tests_compile_and_link_with_NDEBUG
@@ -1272,7 +1249,7 @@ add_test(
   COMMAND ${C_TEST_TRANSLATOR} -rose:C89 -rose:unparse_tokens -c
           ${CMAKE_CURRENT_SOURCE_DIR}/test2003_12.c
 )
-set_tests_properties(C_tests_token_mapping PROPERTIES DISABLED TRUE LABELS C_tests)
+set_tests_properties(C_tests_token_mapping PROPERTIES  LABELS C_tests)
 
 add_test(
   NAME C_tests_gnu_S_option
@@ -1280,7 +1257,7 @@ add_test(
   COMMAND ${C_TEST_TRANSLATOR} -S -o test2014_41.s
           ${CMAKE_CURRENT_SOURCE_DIR}/test2014_41.c
 )
-set_tests_properties(C_tests_gnu_S_option PROPERTIES DISABLED TRUE LABELS C_tests)
+set_tests_properties(C_tests_gnu_S_option PROPERTIES  LABELS C_tests)
 
 add_test(
   NAME C_tests_m32_use
@@ -1288,7 +1265,7 @@ add_test(
   COMMAND ${C_TEST_TRANSLATOR} -m32 -rose:C89 -c
           ${CMAKE_CURRENT_SOURCE_DIR}/test2015_95.c
 )
-set_tests_properties(C_tests_m32_use PROPERTIES DISABLED TRUE LABELS C_tests)
+set_tests_properties(C_tests_m32_use PROPERTIES  LABELS C_tests)
 
 add_test(
   NAME C_tests_file_suffix
@@ -1296,87 +1273,6 @@ add_test(
   COMMAND ${C_TEST_TRANSLATOR} -c
           ${CMAKE_CURRENT_SOURCE_DIR}/test2015_133.S
 )
-set_tests_properties(C_tests_file_suffix PROPERTIES DISABLED TRUE LABELS C_tests)
-
-# Makefile check targets.
-set(_c_tests_check_local_files ${C_TESTCODES_TO_RUN})
-list(REMOVE_ITEM _c_tests_check_local_files test2009_05.c test2009_17.c)
-
-set(_c_tests_check_local_tests "")
-foreach(file_to_test ${_c_tests_check_local_files})
-  set(_test_key "${file_to_test}")
-  string(REPLACE "/" "_" _test_key "${_test_key}")
-  string(REPLACE "." "_" _test_key "${_test_key}")
-  list(APPEND _c_tests_check_local_tests "C_tests_${_test_key}")
-endforeach()
-
-set(_c_tests_check_tests "")
-foreach(file_to_test IN ITEMS test2009_05.c test2009_17.c)
-  set(_test_key "${file_to_test}")
-  string(REPLACE "/" "_" _test_key "${_test_key}")
-  string(REPLACE "." "_" _test_key "${_test_key}")
-  list(APPEND _c_tests_check_tests "C_tests_${_test_key}")
-endforeach()
-list(APPEND _c_tests_check_tests C_tests_caller_out)
-
-list(APPEND _c_tests_check_local_tests
-  C_tests_check_pthread
-  C_tests_link_using_asm_symbol_injection
-  C_tests_link_using_alias_attribute
-  C_tests_build_generated_file_in_same_directory_as_input_file
-  C_tests_unparse_includes_option
-  C_tests_unparse_includes_option_with_link
-  C_tests_else_case_disambiguation
-  C_tests_common_configure_test_with_link
-  C_tests_using_explicit_output_file_option
-  C_tests_using_implicit_output_file_option
-  C_tests_rtd_use
-  C_tests_optimization_specifier_O
-  C_tests_optimization_specifier_Os
-  C_tests_optimization_specifier_O1
-  C_tests_optimization_specifier_O2
-  C_tests_mregparm_m32_use
-  C_tests_compile_and_link_with_NDEBUG
-  C_tests_compile_and_link_without_NDEBUG
-  C_tests_multiple_file_test_01
-)
-list(REMOVE_DUPLICATES _c_tests_check_local_tests)
-list(REMOVE_DUPLICATES _c_tests_check_tests)
-
-add_test(
-  NAME nonsmoke_functional_CompileTests_C_tests_check-TESTS
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${_c_tests_check_tests}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_CompileTests_C_tests_check-TESTS PROPERTIES LABELS disabled DEPENDS "${_c_tests_check_tests}" )
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(nonsmoke_functional_CompileTests_C_tests_check-TESTS PROPERTIES DISABLED TRUE)
-endif()
-
-add_test(
-  NAME nonsmoke_functional_CompileTests_C_tests_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${_c_tests_check_local_tests}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_CompileTests_C_tests_check-local PROPERTIES DEPENDS "${_c_tests_check_local_tests}" )
-
-add_test(
-  NAME nonsmoke_functional_CompileTests_C_tests_check-pthread.passed
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=C_tests_check_pthread
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_CompileTests_C_tests_check-pthread.passed PROPERTIES DEPENDS C_tests_check_pthread )
+set_tests_properties(C_tests_file_suffix PROPERTIES  LABELS C_tests)
 
 unset(ROSE_GNU89_TESTCODES)

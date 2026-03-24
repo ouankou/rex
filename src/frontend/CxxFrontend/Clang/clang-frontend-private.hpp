@@ -4,8 +4,9 @@
 
 #include "clang-frontend.hpp"
 
+#include "AstAttributeMechanism.h"
+#include "Cxx_Grammar.h"
 #include "astPostProcessing.h"
-#include "sage3basic.h"
 
 #include <algorithm>
 #include <cctype>
@@ -16,50 +17,32 @@
 #include <string>
 #include <vector>
 
-class MissingTemplateHeaderFixupAttribute : public AstAttribute {
+class TranslationUnitOrderAttribute : public AstAttribute {
 public:
-  MissingTemplateHeaderFixupAttribute(std::string file,
-                                      std::vector<unsigned> offsets)
-      : file_(std::move(file)), offsets_(std::move(offsets)) {
-    std::sort(offsets_.begin(), offsets_.end());
-    offsets_.erase(std::unique(offsets_.begin(), offsets_.end()),
-                   offsets_.end());
-  }
+  explicit TranslationUnitOrderAttribute(unsigned long long order)
+      : order_(order) {}
 
-  bool matches(const std::string &file, unsigned offset) const {
-    if (!file_.empty() && file != file_) {
-      return false;
-    }
-    return std::binary_search(offsets_.begin(), offsets_.end(), offset);
-  }
-
-  const std::string &file() const { return file_; }
-
-private:
-  std::string file_;
-  std::vector<unsigned> offsets_;
-};
-
-inline constexpr char kMissingTemplateHeaderFixupAttributeName[] =
-    "rex_missing_template_header_fixups";
-
-class ExplicitGlobalQualifierAttribute : public AstAttribute {
-public:
-  ExplicitGlobalQualifierAttribute() = default;
+  unsigned long long order() const { return order_; }
 
   AstAttribute *copy() const override {
-    return new ExplicitGlobalQualifierAttribute(*this);
+    return new TranslationUnitOrderAttribute(*this);
   }
 
   OwnershipPolicy getOwnershipPolicy() const override {
     return CONTAINER_OWNERSHIP;
   }
 
-  std::string toString() override { return "explicit_global_qualifier"; }
+  std::string attribute_class_name() const override {
+    return "TranslationUnitOrderAttribute";
+  }
+
+  std::string toString() override { return std::to_string(order_); }
+
+private:
+  unsigned long long order_;
 };
 
-inline constexpr char kExplicitGlobalQualifierAttributeName[] =
-    "rex_explicit_global_qualifier";
+inline constexpr char kTranslationUnitOrderAttributeName[] = "clang-tu-order";
 
 inline bool
 isImplicitAutoPlaceholderTemplateParamName(const std::string &name) {
@@ -326,6 +309,8 @@ resolveTemplateParameterNameFromSageScopeShared(SgScopeStatement *scope,
       template_levels.push_back(params);
     }
   }
+
+  std::reverse(template_levels.begin(), template_levels.end());
 
   if (depth >= template_levels.size()) {
     return "";
@@ -981,6 +966,8 @@ public:
 
 protected:
   std::map<clang::Decl *, SgNode *> p_decl_translation_map;
+  std::map<clang::NamespaceDecl *, SgNamespaceDeclarationStatement *>
+      p_namespace_canonical_decl_map;
   std::map<clang::Stmt *, SgNode *> p_stmt_translation_map;
   std::map<const clang::Type *, SgNode *> p_type_translation_map;
   std::map<clang::DeclContext *, SgScopeStatement *> p_decl_context_map;
@@ -1036,6 +1023,25 @@ protected:
   // Track when we are translating a for-init so we avoid appending decls
   // directly into the enclosing scope statement list.
   bool p_in_for_init_translation = false;
+  // Return types of out-of-class member declarations are translated with the
+  // enclosing class template scope available for name lookup, but injected
+  // class names are still non-local there and must spell the full current
+  // instantiation.
+  unsigned p_force_nonlocal_injected_class_name_depth = 0;
+  // Some source-backed contexts, such as function return type syntax, must
+  // preserve an explicitly written template-id even when it names the same
+  // specialization as a defaulted or injected form.
+  unsigned p_force_written_template_specialization_depth = 0;
+  // Preserve explicitly written qualification while lowering out-of-line
+  // member signatures. These translations intentionally use the enclosing
+  // class scope for template-parameter lookup, but that should not erase the
+  // qualifier as written in the source.
+  unsigned p_preserve_current_class_qualifier_depth = 0;
+  // Clang sometimes drops the TemplateTypeParmDecl and leaves only depth/index.
+  // Keep the active declaration context stack so type translation can recover
+  // template parameter names from the declaration currently being lowered.
+  std::vector<const clang::DeclContext *>
+      p_template_parameter_decl_context_stack;
 
   // Deferred translation queue for implicit function template
   // instantiations. These instantiations are discovered while traversing
@@ -2086,6 +2092,12 @@ protected:
   bool p_preprocessor_record_list_sorted;
   std::set<std::string> p_self_referential_macros;
   bool p_saw_self_referential_macro_expansion;
+  struct SkippedFileRange {
+    clang::FileID file_id;
+    unsigned begin_offset;
+    unsigned end_offset;
+  };
+  std::vector<SkippedFileRange> p_skipped_ranges;
 
   bool shouldRecordDirective(clang::SourceLocation loc) const;
   std::string getFilenameForLocation(clang::SourceLocation loc) const;
@@ -2101,6 +2113,8 @@ public:
   void recordInjectedDirective(clang::SourceLocation loc,
                                PreprocessingInfo::DirectiveType directive_type,
                                const std::string &text);
+  void recordSourceDirective(clang::SourceLocation loc,
+                             PreprocessingInfo::DirectiveType directive_type);
 
   void
   InclusionDirective(clang::SourceLocation HashLoc,

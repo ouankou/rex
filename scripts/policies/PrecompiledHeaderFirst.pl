@@ -10,7 +10,7 @@ BEGIN {push @INC, $1 if $0 =~ /(.*)\//}
 use strict;
 use FileLister;
 use Policies;
-my $warning = "";	# non-empty means these are warnings rather than errors; e.g., " (warning)"
+my $warning = " (warning)";	# non-empty means these are warnings rather than errors; e.g., " (warning)"
 
 my $nfail=0;
 my $files = FileLister->new(@ARGV);

@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <limits>
 #include <sstream>
 #include <unordered_set>
 
@@ -229,12 +230,33 @@ SgStatement *findNextOriginalStatementInScope(SgStatement *target) {
   SgScopeStatement *scope = target->get_scope();
   ROSE_ASSERT(scope != nullptr);
 
+  bool saw_target = false;
+  const SgStatementPtrList &stmts = scope->getStatementList();
+  for (SgStatementPtrList::const_iterator it = stmts.begin(); it != stmts.end();
+       ++it) {
+    SgStatement *stmt = *it;
+    if (stmt == nullptr) {
+      continue;
+    }
+    if (!saw_target) {
+      if (stmt == target) {
+        saw_target = true;
+      }
+      continue;
+    }
+
+    const Sg_File_Info *stmt_start = getStatementStartInfo(stmt);
+    if (stmt_start == nullptr || stmt_start->isTransformation()) {
+      continue;
+    }
+    return stmt;
+  }
+
   const Sg_File_Info *target_end = getStatementEndInfo(target);
   ROSE_ASSERT(target_end != nullptr);
 
   SgStatement *next_stmt = nullptr;
   const Sg_File_Info *next_info = nullptr;
-  const SgStatementPtrList &stmts = scope->getStatementList();
   for (SgStatementPtrList::const_iterator it = stmts.begin(); it != stmts.end();
        ++it) {
     SgStatement *stmt = *it;
@@ -4116,6 +4138,24 @@ omp_construct_enum getDataSharingAttribute(SgVarRefExp *varRef) {
 // for' is convenient, less directives to consider.
 vector<SgForStatement *>
 getAffectedForLoops(SgOmpClauseBodyStatement *forOrSimd) {
+  auto getLoopCount = [](SgExpression *expr, const char *clauseName) -> int {
+    SgValueExp *valueExp = isSgValueExp(expr);
+    if (valueExp == NULL) {
+      cerr << "Error. Expecting integer constant expression of " << clauseName
+           << "(exp), seeing " << expr->class_name() << " instead." << endl;
+      ROSE_ABORT();
+    }
+
+    unsigned long long count = SageInterface::getIntegerConstantValue(valueExp);
+    if (count >
+        static_cast<unsigned long long>(std::numeric_limits<int>::max())) {
+      cerr << "Error. " << clauseName << "(exp) exceeds supported loop count."
+           << endl;
+      ROSE_ABORT();
+    }
+    return static_cast<int>(count);
+  };
+
   vector<SgForStatement *> loops;
   ROSE_ASSERT(forOrSimd != NULL);
   int loop_count = 1; // by default, only one loop is affected.
@@ -4123,20 +4163,14 @@ getAffectedForLoops(SgOmpClauseBodyStatement *forOrSimd) {
   SgExpression *exp_ordered =
       getClauseExpression(forOrSimd, V_SgOmpOrderedClause);
   if (exp != NULL) {
-    SgIntVal *ival = isSgIntVal(exp);
-    if (ival == NULL) {
-      cerr << "Error. Expecting SgIntVal of Collapse(exp), seeing "
-           << exp->class_name() << " instead." << endl;
-      ROSE_ABORT();
-    }
-    loop_count = ival->get_value();
+    loop_count = getLoopCount(exp, "Collapse");
   } else if (exp_ordered != NULL) {
-    SgIntVal *ival = isSgIntVal(exp_ordered);
-    if (ival == NULL) // ordered clause may have no expression specified at all.
-                      // default to 1 loop affected.
+    if (isSgValueExp(exp_ordered) == NULL) // ordered clause may have no
+                                           // expression specified at all.
+                                           // default to 1 loop affected.
       loop_count = 1;
     else
-      loop_count = ival->get_value();
+      loop_count = getLoopCount(exp_ordered, "ordered");
   }
   // TODO: what if both ordered() and collapse() appear??
 
@@ -6541,7 +6575,7 @@ void main_omp_fn_0(void **__out_argv)
 // void **__out_argv = (void **) __out_argvp;
 int *i = (int *)(__out_argv[0]);
  *i = omp_get_thread_num();
- printf("Hello,world! I am thread %d\n", *i);
+  // No stdout noise from lowering.
  }
  */
 
@@ -8538,7 +8572,7 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
   SgStatement *body = target->get_body();
   ROSE_ASSERT(body != NULL);
   // Save preprocessing info as early as possible, avoiding mess up from the
-  // outliner
+  // outliner.
   AttachedPreprocessingInfoType save_buf1, save_buf2, save_buf_inside;
   cutPreprocessingInfo(target, PreprocessingInfo::before, save_buf1);
   cutPreprocessingInfo(target, PreprocessingInfo::after, save_buf2);
@@ -8859,6 +8893,24 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
   //------------now remove omp parallel since everything within it has been
   // outlined to a function
   replaceStatement(target, outlined_driver_body, true);
+
+  // Restore preprocessing info attached to the original directive.
+  // Outlining/statement replacement can otherwise drop conditional guards that
+  // the Clang frontend preserves via attached PreprocessingInfo (e.g., skipped
+  // #ifdef regions).
+  if (!save_buf_inside.empty()) {
+    for (PreprocessingInfo *info : save_buf_inside) {
+      if (info != nullptr) {
+        info->setRelativePosition(PreprocessingInfo::after);
+      }
+    }
+    SageInterface::pastePreprocessingInfo(
+        outlined_driver_body, PreprocessingInfo::after, save_buf_inside);
+  }
+  SageInterface::pastePreprocessingInfo(outlined_driver_body,
+                                        PreprocessingInfo::before, save_buf1);
+  SageInterface::pastePreprocessingInfo(outlined_driver_body,
+                                        PreprocessingInfo::after, save_buf2);
 
   target_outlined_function_list->push_back(isSgFunctionDeclaration(result));
 }
@@ -9281,7 +9333,7 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
   old_info->set_parent(body);
 
   // Save preprocessing info as early as possible, avoiding mess up from the
-  // outliner
+  // outliner.
   AttachedPreprocessingInfoType save_buf1, save_buf2, save_buf_inside;
   cutPreprocessingInfo(target, PreprocessingInfo::before, save_buf1);
   cutPreprocessingInfo(target, PreprocessingInfo::after, save_buf2);
@@ -9817,6 +9869,21 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
   //------------now remove omp parallel since everything within it has been
   // outlined to a function
   replaceStatement(target, outlined_driver_body, true);
+
+  // Restore preprocessing info attached to the original directive.
+  if (!save_buf_inside.empty()) {
+    for (PreprocessingInfo *info : save_buf_inside) {
+      if (info != nullptr) {
+        info->setRelativePosition(PreprocessingInfo::after);
+      }
+    }
+    SageInterface::pastePreprocessingInfo(
+        outlined_driver_body, PreprocessingInfo::after, save_buf_inside);
+  }
+  SageInterface::pastePreprocessingInfo(outlined_driver_body,
+                                        PreprocessingInfo::before, save_buf1);
+  SageInterface::pastePreprocessingInfo(outlined_driver_body,
+                                        PreprocessingInfo::after, save_buf2);
 
   target_outlined_function_list->push_back(isSgFunctionDeclaration(result));
 }
@@ -12987,6 +13054,8 @@ void lower_omp(SgSourceFile *file) {
         nodeList, NodeQuery::querySubTree(file, V_SgOmpAllocateStatement));
     nodeList = mergeSgNodeList(
         nodeList, NodeQuery::querySubTree(file, V_SgOmpRequiresStatement));
+    nodeList = mergeSgNodeList(
+        nodeList, NodeQuery::querySubTree(file, V_SgOmpTaskwaitStatement));
     if (cpu_outlined_file != NULL) {
       nodeList = mergeSgNodeList(
           nodeList,
@@ -13000,6 +13069,9 @@ void lower_omp(SgSourceFile *file) {
       nodeList = mergeSgNodeList(
           nodeList,
           NodeQuery::querySubTree(cpu_outlined_file, V_SgOmpRequiresStatement));
+      nodeList = mergeSgNodeList(
+          nodeList,
+          NodeQuery::querySubTree(cpu_outlined_file, V_SgOmpTaskwaitStatement));
     }
     Rose_STL_Container<SgNode *> visibleNodeList;
     std::unordered_set<SgNode *> seenVisibleNodes;
@@ -13029,6 +13101,8 @@ void lower_omp(SgSourceFile *file) {
       } else if (isSgOmpAllocateStatement(*iter) != NULL) {
         omp_nodes.push_back(*iter);
       } else if (isSgOmpThreadprivateStatement(*iter) != NULL) {
+        omp_nodes.push_back(*iter);
+      } else if (isSgOmpTaskwaitStatement(*iter) != NULL) {
         omp_nodes.push_back(*iter);
       }
     }
@@ -13699,15 +13773,18 @@ static void post_processing(SgSourceFile *file) {
     std::string file_extension = StringUtility::fileNameSuffix(
         cur_file->get_file_info()->get_filenameString());
 
-    if (CommandlineProcessing::isCFileNameSuffix(file_extension) ||
-        CommandlineProcessing::isCppFileNameSuffix(file_extension)) {
-      PreprocessingInfo *c_linkage_start = new PreprocessingInfo(
-          PreprocessingInfo::ClinkageSpecificationStart,
-          "#ifdef __cplusplus\nextern \"C\" {\n#endif",
-          "Transformation generated", 0, 0, 0, PreprocessingInfo::after);
-      SageInterface::insertHeader(new_scope->lastStatement(), c_linkage_start,
-                                  1);
-    };
+    bool needs_c_linkage_block =
+        CommandlineProcessing::isCFileNameSuffix(file_extension) ||
+        CommandlineProcessing::isCppFileNameSuffix(file_extension);
+    if (needs_c_linkage_block) {
+      SgClinkageStartStatement *c_linkage_start =
+          new SgClinkageStartStatement();
+      c_linkage_start->set_languageSpecifier("C");
+      c_linkage_start->set_definingDeclaration(c_linkage_start);
+      c_linkage_start->set_firstNondefiningDeclaration(c_linkage_start);
+      setOneSourcePositionForTransformation(c_linkage_start);
+      appendStatement(c_linkage_start, new_scope);
+    }
 
     // move the outlined functions
     std::vector<SgFunctionDeclaration *>::reverse_iterator i;
@@ -13727,14 +13804,14 @@ static void post_processing(SgSourceFile *file) {
       move_outlined_function(*i, new_file);
     };
 
-    if (CommandlineProcessing::isCFileNameSuffix(file_extension) ||
-        CommandlineProcessing::isCppFileNameSuffix(file_extension)) {
-      PreprocessingInfo *c_linkage_end = new PreprocessingInfo(
-          PreprocessingInfo::ClinkageSpecificationEnd,
-          "#ifdef __cplusplus\n}\n#endif", "Transformation generated", 0, 0, 0,
-          PreprocessingInfo::after);
-      SageInterface::insertHeader(new_scope->lastStatement(), c_linkage_end, 1);
-    };
+    if (needs_c_linkage_block) {
+      SgClinkageEndStatement *c_linkage_end = new SgClinkageEndStatement();
+      c_linkage_end->set_languageSpecifier("C");
+      c_linkage_end->set_definingDeclaration(c_linkage_end);
+      c_linkage_end->set_firstNondefiningDeclaration(c_linkage_end);
+      setOneSourcePositionForTransformation(c_linkage_end);
+      appendStatement(c_linkage_end, new_scope);
+    }
   };
 
   if (new_file != NULL) {

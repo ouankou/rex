@@ -896,6 +896,13 @@ bool ContextInsensitiveInterProceduralDataflow::transfer(
 
   if (callee.get_definition()) {
     FunctionState *funcS = FunctionState::getDefinedFuncState(callee);
+    if (funcS == NULL) {
+      // Some semantic callees (e.g., methods of local classes declared inside
+      // conditions) may not be represented in the call-graph traversal state.
+      // Treat them as non-analyzable here instead of dereferencing a null
+      // FunctionState.
+      return modified;
+    }
     // The lattices before the function (forward: before=above, after=below;
     // backward: before=below, after=above)
     const vector<Lattice *> *funcLatticesBefore;
