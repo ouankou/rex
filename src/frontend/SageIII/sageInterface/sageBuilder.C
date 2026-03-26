@@ -6131,6 +6131,47 @@ SgTemplateParameter *SageBuilder::buildTemplateParameter(
   SgTemplateParameter *result = new SgTemplateParameter(parameterType, t);
   ROSE_ASSERT(result);
   setOneSourcePositionForTransformation(result);
+
+  auto attach_parameter_name = [&](const SgName &parameter_name,
+                                   SgScopeStatement *scope) {
+    if (parameter_name.is_null() || parameter_name.getString().empty() ||
+        result->get_initializedName() != NULL) {
+      return;
+    }
+
+    SgInitializedName *initName =
+        SageBuilder::buildInitializedName(parameter_name, t, NULL);
+    ROSE_ASSERT(initName != NULL);
+    initName->set_parent(result);
+    if (scope != NULL) {
+      initName->set_scope(scope);
+    }
+    result->set_initializedName(initName);
+  };
+
+  if (parameterType == SgTemplateParameter::type_parameter) {
+    SgName parameter_name;
+    SgScopeStatement *parameter_scope = NULL;
+
+    if (SgTemplateType *template_type = isSgTemplateType(t)) {
+      parameter_name = template_type->get_name();
+    } else if (SgNonrealType *nonreal_type = isSgNonrealType(t)) {
+      parameter_name = nonreal_type->get_name();
+      if (SgNonrealDecl *nonreal_decl =
+              isSgNonrealDecl(nonreal_type->get_declaration())) {
+        parameter_scope = nonreal_decl->get_scope();
+        if (parameter_scope == NULL) {
+          if (SgDeclarationScope *decl_scope =
+                  isSgDeclarationScope(nonreal_decl->get_parent())) {
+            parameter_scope = decl_scope;
+          }
+        }
+      }
+    }
+
+    attach_parameter_name(parameter_name, parameter_scope);
+  }
+
   if (result->get_parent() == NULL) {
     if (SgScopeStatement *scope = SageBuilder::topScopeStack()) {
       result->set_parent(scope);
@@ -6147,10 +6188,10 @@ SgTemplateParameter *SageBuilder::buildTemplateParameter(
   ROSE_ASSERT(result);
   setOneSourcePositionForTransformation(result);
 
-  // For non-type parameters, create an initialized name with the parameter
-  // name so it unparsed correctly (e.g., "template<int N>" instead of
-  // "template<int 0>").
-  if (parameterType == SgTemplateParameter::nontype_parameter) {
+  // Carry a recoverable name on explicitly-built template parameters so later
+  // AST consumers can reconstruct owner argument lists without string parsing.
+  if (parameterType == SgTemplateParameter::nontype_parameter ||
+      parameterType == SgTemplateParameter::type_parameter) {
     SgInitializedName *initName =
         SageBuilder::buildInitializedName(parameterName, t, NULL);
     ROSE_ASSERT(initName != NULL);
@@ -13221,6 +13262,11 @@ SgTemplateClassDeclaration *SageBuilder::buildTemplateClassDeclaration_nfi(
   }
 
   defdecl->set_firstNondefiningDeclaration(nondefdecl);
+
+  // Keep the defining declaration's template parameter metadata in sync with
+  // the canonical first nondefining declaration so later AST consumers can
+  // recover the owner template parameters from either side of the pair.
+  setTemplateParametersInDeclaration(defdecl, templateParameterList);
 
   // DQ (9/16/2012): Setup the template specialization arguments on the defining
   // declaration (tested below at base of function).

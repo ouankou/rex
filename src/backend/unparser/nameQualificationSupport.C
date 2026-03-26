@@ -4526,17 +4526,6 @@ void NameQualificationTraversal::
       }
     }
   }
-  if (!preserve_unnamed_namespace_scope &&
-      isSgNamespaceDefinitionStatement(effectiveScope) != nullptr) {
-    SgNode *global_anchor =
-        positionStatement != nullptr
-            ? static_cast<SgNode *>(positionStatement)
-            : (currentScope != nullptr ? static_cast<SgNode *>(currentScope)
-                                       : static_cast<SgNode *>(effectiveScope));
-    if (SgGlobal *global_scope = SageInterface::getGlobalScope(global_anchor)) {
-      effectiveScope = global_scope;
-    }
-  }
   if (SgClassDefinition *class_def = isSgClassDefinition(effectiveScope)) {
     if (Sg_File_Info *fi = class_def->get_file_info()) {
       if (fi->isCompilerGenerated()) {
@@ -4544,61 +4533,6 @@ void NameQualificationTraversal::
           if (SgScopeStatement *decl_scope = class_decl->get_scope()) {
             effectiveScope = decl_scope;
           }
-        }
-      }
-    }
-  }
-  if (!templateArgumentList.empty()) {
-    SgTemplateArgument *first_arg = templateArgumentList.front();
-    if (first_arg != nullptr &&
-        isSgNonrealDecl(first_arg->get_parent()) != nullptr) {
-      SgNode *global_anchor =
-          positionStatement != nullptr
-              ? static_cast<SgNode *>(positionStatement)
-              : (currentScope != nullptr ? static_cast<SgNode *>(currentScope)
-                                         : static_cast<SgNode *>(first_arg));
-      SgGlobal *global_scope = SageInterface::getGlobalScope(global_anchor);
-      if (global_scope == nullptr) {
-        if (SgType *arg_type = first_arg->get_type()) {
-          if (SgDeclarationStatement *type_decl =
-                  getDeclarationAssociatedWithType(arg_type)) {
-            global_scope = SageInterface::getGlobalScope(type_decl);
-          }
-        }
-      }
-      if (global_scope != nullptr) {
-        effectiveScope = global_scope;
-      }
-    }
-  }
-  if (!templateArgumentList.empty()) {
-    SgTemplateArgument *first_arg = templateArgumentList.front();
-    SgDeclarationStatement *parent_decl = nullptr;
-    for (SgNode *parent = first_arg->get_parent(); parent != nullptr;
-         parent = parent->get_parent()) {
-      if ((parent_decl = isSgDeclarationStatement(parent)) != nullptr) {
-        break;
-      }
-      if (parent == parent->get_parent()) {
-        break;
-      }
-    }
-    if (parent_decl != nullptr) {
-      SgScopeStatement *decl_scope = parent_decl->get_scope();
-      bool saw_namespace = false;
-      for (SgScopeStatement *scope_iter = decl_scope; scope_iter != nullptr;
-           scope_iter = scope_iter->get_scope()) {
-        if (isSgNamespaceDefinitionStatement(scope_iter) != nullptr) {
-          saw_namespace = true;
-        }
-        if (SgGlobal *global_scope = isSgGlobal(scope_iter)) {
-          if (saw_namespace && !preserve_unnamed_namespace_scope) {
-            effectiveScope = global_scope;
-          }
-          break;
-        }
-        if (scope_iter == scope_iter->get_scope()) {
-          break;
         }
       }
     }
@@ -9176,6 +9110,24 @@ NameQualificationTraversal::evaluateInheritedAttribute(
       }
     }
 
+    // Reopened namespaces are represented by distinct ROSE namespace
+    // definitions that share a logical scope. For declarations attached to one
+    // fragment while their semantic scope points at an equivalent fragment, use
+    // the declaration scope for name-qualification analysis so we don't emit a
+    // redundant namespace qualifier inside the same logical namespace.
+    if (currentScope != NULL && functionDeclaration->get_scope() != NULL) {
+      SgNamespaceDefinitionStatement *currentNamespace =
+          isSgNamespaceDefinitionStatement(currentScope);
+      SgNamespaceDefinitionStatement *declarationNamespace =
+          isSgNamespaceDefinitionStatement(functionDeclaration->get_scope());
+      if (currentNamespace != NULL && declarationNamespace != NULL &&
+          currentNamespace != declarationNamespace &&
+          SgScopeStatement::isEquivalentScope(currentNamespace,
+                                              declarationNamespace)) {
+        currentScope = declarationNamespace;
+      }
+    }
+
     // ASSERT_not_null(currentScope);
     if (currentScope != NULL) {
       // Handle the function return type...
@@ -9399,6 +9351,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
               // qualification on any template arguments in the template
               // function instantiation. Ignore the case fo a
               // SgTemplateFunctionDeclaration.
+              setNameQualification(functionDeclaration, 0);
               if (isSgTemplateInstantiationFunctionDecl(functionDeclaration) !=
                   NULL) {
                 // This point of calling this function is to just have the
@@ -9479,6 +9432,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
             // parameters (see test2013_273.C). However, this just leads to over
             // qualification (use of global qualification which is not
             // required).
+            setNameQualification(functionDeclaration, 0);
 
             SgTemplateInstantiationFunctionDecl *templateFunction =
                 isSgTemplateInstantiationFunctionDecl(functionDeclaration);
@@ -14737,22 +14691,65 @@ void NameQualificationTraversal::setNameQualification(
 
   SgScopeStatement *scope =
       traverseNonrealDeclForCorrectScope(functionDeclaration);
-  // DQ (5/28/2022): The problem is that for a member function build from
-  // scratch and added to the AST, there is one level of name qualification too
-  // much being requested, and it is an error to use global qualification in
-  // these cases with at least GNU v10. Introduce error checking to detect when
-  // there is too much name qualification being requested. This needs to be
-  // fixed correctly before this point.
   ROSE_ASSERT(scope != NULL);
-  SgScopeStatement *outer_scope = scope->get_scope();
-  if (isSgGlobal(outer_scope) != NULL) {
-    amountOfNameQualificationRequired = 1;
-  } else {
-  }
 
   string qualifier = setNameQualificationSupport(
       scope, amountOfNameQualificationRequired, outputNameQualificationLength,
       outputGlobalQualification, outputTypeEvaluation);
+
+  SgScopeStatement *parent_scope =
+      isSgScopeStatement(functionDeclaration->get_parent());
+  auto same_logical_namespace_scope = [](SgScopeStatement *lhs,
+                                         SgScopeStatement *rhs) -> bool {
+    if (lhs == NULL || rhs == NULL) {
+      return false;
+    }
+    if (lhs == rhs || SgScopeStatement::isEquivalentScope(lhs, rhs)) {
+      return true;
+    }
+    if (isSgGlobal(lhs) != NULL && isSgGlobal(rhs) != NULL) {
+      return true;
+    }
+
+    SgNamespaceDefinitionStatement *lhs_ns =
+        isSgNamespaceDefinitionStatement(lhs);
+    SgNamespaceDefinitionStatement *rhs_ns =
+        isSgNamespaceDefinitionStatement(rhs);
+    if (lhs_ns == NULL || rhs_ns == NULL) {
+      return false;
+    }
+
+    SgNamespaceDeclarationStatement *lhs_decl =
+        lhs_ns->get_namespaceDeclaration();
+    SgNamespaceDeclarationStatement *rhs_decl =
+        rhs_ns->get_namespaceDeclaration();
+    if (lhs_decl == NULL || rhs_decl == NULL) {
+      return false;
+    }
+
+    SgDeclarationStatement *lhs_first =
+        lhs_decl->get_firstNondefiningDeclaration();
+    if (lhs_first == NULL) {
+      lhs_first = lhs_decl;
+    }
+    SgDeclarationStatement *rhs_first =
+        rhs_decl->get_firstNondefiningDeclaration();
+    if (rhs_first == NULL) {
+      rhs_first = rhs_decl;
+    }
+    return lhs_first == rhs_first;
+  };
+  const bool lexically_in_same_file_scope =
+      parent_scope != NULL &&
+      (isSgNamespaceDefinitionStatement(parent_scope) != NULL ||
+       isSgGlobal(parent_scope) != NULL) &&
+      same_logical_namespace_scope(parent_scope, scope);
+  if (lexically_in_same_file_scope) {
+    qualifier = "";
+    outputNameQualificationLength = 0;
+    outputGlobalQualification = false;
+    outputTypeEvaluation = false;
+  }
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || 0
   MLOG_WARN_C(MLOG_UNPARSER,
@@ -15048,22 +15045,10 @@ void NameQualificationTraversal::setNameQualification(
     // I think I can do this!
     // *i = std::pair<SgNode*,std::string>(templateArgument,qualifier);
     if (i->second != qualifier) {
-      // DQ (9/25/2019): Comment this out because it hides the error we are
-      // trying ti isolate. i->second = qualifier;
-
-      string tmp_previousQualifier = i->second.c_str();
-      MLOG_WARN_C(MLOG_UNPARSER,
-                  "WARNING: test 8: replacing previousQualifier = %s with new "
-                  "qualifier = %s \n",
-                  tmp_previousQualifier.c_str(), qualifier.c_str());
-      MLOG_WARN_C(
-          MLOG_UNPARSER, " --- functionDeclaration = %p = %s name = %s \n",
-          functionDeclaration, functionDeclaration->class_name().c_str(),
-          functionDeclaration->get_name().str());
-      // DQ (3/31/2012): Commented out this assertion.
-      MLOG_WARN_C(MLOG_UNPARSER, "Error: name in qualifiedNameMapForNames "
-                                 "already exists and is different... \n");
-      ROSE_ABORT();
+      // Later traversals can refine the declaration context, especially for
+      // declarations appearing in reopened namespaces or after declaration
+      // chain normalization. Keep the cache in sync with the final qualifier.
+      i->second = qualifier;
     }
   }
 
@@ -16520,6 +16505,13 @@ void NameQualificationTraversal::setNameQualification(
       outputGlobalQualification, outputTypeEvaluation);
   applyExplicitQualifier(exp, qualifier, outputNameQualificationLength,
                          outputGlobalQualification);
+
+  // Preserve an explicitly written elaborated spelling from the frontend. The
+  // name-qualification analysis can decide that no additional elaboration is
+  // required for lookup, but it should not erase a source-level `struct` /
+  // `class` / `enum` that was already attached to this type reference.
+  outputTypeEvaluation =
+      outputTypeEvaluation || exp->get_type_elaboration_required();
 
   exp->set_global_qualification_required(outputGlobalQualification);
   exp->set_name_qualification_length(outputNameQualificationLength);

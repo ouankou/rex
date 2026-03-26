@@ -26,7 +26,8 @@ set(files_to_test
 
 set(ROSE_FLAGS -rose:verbose 0 -rose:C99  -w )
 
+rex_register_compile_source_set(REX_C99_TESTS_SOURCES ${files_to_test})
+
 foreach(file_to_test ${files_to_test})
   compile_test(${file_to_test} C99TEST)
 endforeach()
-

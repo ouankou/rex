@@ -71,6 +71,11 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
         test_int_lexemes_donot_pass.C test_simple_int.C test_wchars.C X.C)
 endif()
 
+set(_c_subset_of_cxx_sources)
+foreach(file_to_test ${files_to_test})
+  list(APPEND _c_subset_of_cxx_sources ../Cxx_tests/${file_to_test})
+endforeach()
+
 set(ROSE_FLAGS -rose:C  -w)
 
 function(compile_test_in_binary_dir input_file label)
@@ -141,6 +146,13 @@ set(_additional_subset_tests
 )
 
 foreach(file_to_test ${_additional_subset_tests})
+  list(APPEND _c_subset_of_cxx_sources ../Cxx_tests/${file_to_test})
+endforeach()
+list(APPEND _c_subset_of_cxx_sources ../Cxx_tests/test2005_56.C)
+rex_register_compile_source_set(REX_C_SUBSET_OF_CXX_SOURCES
+  ${_c_subset_of_cxx_sources})
+
+foreach(file_to_test ${_additional_subset_tests})
   compile_test_in_binary_dir(${file_to_test} CSUBSETOFCXXTEST)
 endforeach()
 
@@ -158,4 +170,3 @@ add_test(
           -DTEST_STRING_MACRO="Thu Apr 14 08:18:33 PDT 2005"
           -c ${CMAKE_CURRENT_BINARY_DIR}/test2005_56.c)
 set_tests_properties(CSUBSETOFCXXTEST_test2005_56 PROPERTIES LABELS CSUBSETOFCXXTEST)
-

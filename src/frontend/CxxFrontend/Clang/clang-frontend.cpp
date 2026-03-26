@@ -643,6 +643,79 @@ static bool parseIncludeDirective(llvm::StringRef line, size_t hash_col,
   return true;
 }
 
+static bool containsIdentifierReference(llvm::StringRef text,
+                                        llvm::StringRef identifier) {
+  if (identifier.empty()) {
+    return false;
+  }
+
+  auto is_identifier_char = [](char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+           (c >= '0' && c <= '9') || c == '_';
+  };
+
+  size_t offset = 0;
+  while (true) {
+    offset = text.find(identifier, offset);
+    if (offset == llvm::StringRef::npos) {
+      return false;
+    }
+
+    const bool boundary_before =
+        offset == 0 || !is_identifier_char(text[offset - 1]);
+    const size_t end_offset = offset + identifier.size();
+    const bool boundary_after =
+        end_offset >= text.size() || !is_identifier_char(text[end_offset]);
+    if (boundary_before && boundary_after) {
+      return true;
+    }
+
+    offset = end_offset;
+  }
+}
+
+static bool sourceFileContainsBackendConditional(llvm::StringRef input_file) {
+  llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> buffer_or =
+      llvm::MemoryBuffer::getFile(input_file);
+  if (!buffer_or) {
+    return false;
+  }
+
+  llvm::StringRef source_text = (*buffer_or)->getBuffer();
+  size_t line_start = 0;
+  while (line_start < source_text.size()) {
+    size_t line_end = source_text.find_first_of("\r\n", line_start);
+    if (line_end == llvm::StringRef::npos) {
+      line_end = source_text.size();
+    }
+
+    llvm::StringRef line = source_text.slice(line_start, line_end);
+    size_t hash_col = 0;
+    if (isDirectiveLine(line, &hash_col)) {
+      llvm::StringRef directive = line.drop_front(hash_col + 1).ltrim(" \t\f");
+      if ((directive.consume_front("if") || directive.consume_front("ifdef") ||
+           directive.consume_front("ifndef") ||
+           directive.consume_front("elif")) &&
+          containsIdentifierReference(directive, "USE_ROSE_BACKEND")) {
+        return true;
+      }
+    }
+
+    line_start = line_end;
+    if (line_start < source_text.size()) {
+      if (source_text[line_start] == '\r' &&
+          line_start + 1 < source_text.size() &&
+          source_text[line_start + 1] == '\n') {
+        line_start += 2;
+      } else {
+        ++line_start;
+      }
+    }
+  }
+
+  return false;
+}
+
 static void skipDirectiveWhitespace(llvm::StringRef line, size_t *pos) {
   while (*pos < line.size() && (line[*pos] == ' ' || line[*pos] == '\t' ||
                                 line[*pos] == '\f' || line[*pos] == '\r')) {
@@ -1407,6 +1480,13 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     language = ClangToSageTranslator::OPENCL;
   }
 
+  if (language == ClangToSageTranslator::C && sageFile.get_Cxx_only()) {
+    language = ClangToSageTranslator::CPLUSPLUS;
+  } else if (language == ClangToSageTranslator::CPLUSPLUS &&
+             sageFile.get_C_only()) {
+    language = ClangToSageTranslator::C;
+  }
+
   ROSE_ASSERT(language != ClangToSageTranslator::unknown);
 
   std::string language_arg;
@@ -1443,6 +1523,8 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   };
   bool relax_register_diag = false;
   bool relax_dynamic_exception_diag = false;
+  bool relax_implicit_function_decl_diag = false;
+  bool relax_implicit_int_diag = false;
 
   auto has_passthrough_flag = [&](const std::string &flag) {
     return std::find(passthrough_args.begin(), passthrough_args.end(), flag) !=
@@ -1460,6 +1542,22 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     // Frontend parsing should only see the generic ROSE marker.
     // USE_ROSE_BACKEND is reserved for backend compiler invocations.
     add_passthrough_flag_if_missing("-DUSE_ROSE");
+  }
+
+  if (language == ClangToSageTranslator::C) {
+    // Legacy ROSE C tests rely on Clang's recovery path for undeclared
+    // functions and implicit-int declarations. Keep these diagnostics visible,
+    // but do not promote them to fatal frontend errors unless the user
+    // explicitly requested -Werror for them.
+    if (!has_passthrough_flag("-Werror=implicit-function-declaration")) {
+      add_passthrough_flag_if_missing(
+          "-Wno-error=implicit-function-declaration");
+      relax_implicit_function_decl_diag = true;
+    }
+    if (!has_passthrough_flag("-Werror=implicit-int")) {
+      add_passthrough_flag_if_missing("-Wno-error=implicit-int");
+      relax_implicit_int_diag = true;
+    }
   }
 
   if ((language == ClangToSageTranslator::CPLUSPLUS ||
@@ -2009,6 +2107,20 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   ensureX86BaselineTargetFeatures(target_opts);
 
   clang::DiagnosticsEngine &diags = compiler_instance->getDiagnostics();
+  if (language == ClangToSageTranslator::C) {
+    if (relax_implicit_function_decl_diag) {
+      diags.setSeverityForGroup(clang::diag::Flavor::WarningOrError,
+                                "implicit-function-declaration",
+                                clang::diag::Severity::Warning);
+      diags.setDiagnosticGroupWarningAsError("implicit-function-declaration",
+                                             false);
+    }
+    if (relax_implicit_int_diag) {
+      diags.setSeverityForGroup(clang::diag::Flavor::WarningOrError,
+                                "implicit-int", clang::diag::Severity::Warning);
+      diags.setDiagnosticGroupWarningAsError("implicit-int", false);
+    }
+  }
   if ((language == ClangToSageTranslator::CPLUSPLUS ||
        language == ClangToSageTranslator::CUDA) &&
       is_cxx17_or_later(sageFile.get_standard())) {
@@ -2463,6 +2575,19 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     // Preserve the original tokens for active self-referential macros whose
     // normalized AST spelling would otherwise be re-expanded on output.
     sageFile.set_unparse_tokens(true);
+  }
+
+  if (sageFile.get_unparse_tokens() && is_c_family_roundtrip_language &&
+      preprocessor_recorder != nullptr &&
+      preprocessor_recorder->sawSelfReferentialMacroExpansion() &&
+      sourceFileContainsBackendConditional(input_file) && !openmp_ast_mode &&
+      !sageFile.get_openmp_lowering()) {
+    // USE_ROSE_BACKEND is only defined during the backend compile. If the
+    // source toggles self-referential macros inside backend-only conditionals,
+    // replaying the frontend token stream preserves macro spellings that are
+    // intentionally undefined during recompilation. Prefer AST-based unparsing
+    // so the generated file emits the expanded expression instead.
+    sageFile.set_unparse_tokens(false);
   }
 
   SgGlobal *global_scope = translator->getGlobalScope();

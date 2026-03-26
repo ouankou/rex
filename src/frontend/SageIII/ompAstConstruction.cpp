@@ -32,6 +32,8 @@ OpenACCDirective *accparser_OpenACCIR;
 std::map<SgPragmaDeclaration *, OpenMPDirective *> fortran_paired_pragma_dict;
 std::map<SgPragmaDeclaration *, OpenACCDirective *>
     fortran_acc_paired_pragma_dict;
+static std::map<SgPragmaDeclaration *, SgPragmaDeclaration *>
+    cxx_explicit_end_pragma_dict;
 
 static const char *const kAccFortranEndAttributeName = "acc_fortran_end";
 static const char *const kOmpFortranEndAttributeName = "omp_fortran_end";
@@ -45,6 +47,7 @@ static const char *const kFortranOmpSourceTextAttributeName =
     "fortran_omp_source_text";
 static const char *const kOmpDirectiveSpellingOverrideAttrName =
     "omp_directive_spelling_override";
+static const char *const kOmpExplicitEndAttributeName = "omp_explicit_end";
 
 class AccFortranEndAttribute : public AstAttribute {
 public:
@@ -1029,6 +1032,251 @@ static void setLocatedNodeLineAndColumn(SgLocatedNode *node, int line,
   }
 }
 
+static void normalizeCopiedFileInfoLocation(Sg_File_Info *info) {
+  if (info == nullptr) {
+    return;
+  }
+
+  if (info->get_line() <= 0 && info->get_physical_line() > 0) {
+    info->set_line(info->get_physical_line());
+  }
+
+  const std::string filename = info->get_filenameString();
+  const std::string physical_filename = info->get_physical_filename();
+  if ((filename.empty() || filename == "NULL_FILE") &&
+      !physical_filename.empty() && physical_filename != "NULL_FILE") {
+    info->set_filenameString(physical_filename);
+  }
+}
+
+static bool hasUsableSourceLocation(const Sg_File_Info *info) {
+  return info != nullptr && info->get_line() > 0 && !info->isTransformation() &&
+         !info->isCompilerGenerated() &&
+         !info->isSourcePositionUnavailableInFrontend();
+}
+
+static const Sg_File_Info *findBestOpenMPSourceAnchor(SgStatement *statement) {
+  if (statement == nullptr) {
+    return nullptr;
+  }
+
+  if (SgLocatedNode *located = isSgLocatedNode(statement)) {
+    if (hasUsableSourceLocation(located->get_startOfConstruct())) {
+      return located->get_startOfConstruct();
+    }
+  }
+
+  if (SgOmpBodyStatement *omp_body = isSgOmpBodyStatement(statement)) {
+    if (SgLocatedNode *located_body = isSgLocatedNode(omp_body->get_body())) {
+      if (hasUsableSourceLocation(located_body->get_startOfConstruct())) {
+        return located_body->get_startOfConstruct();
+      }
+      if (hasUsableSourceLocation(located_body->get_endOfConstruct())) {
+        return located_body->get_endOfConstruct();
+      }
+    }
+  }
+
+  if (SgLocatedNode *parent = isSgLocatedNode(statement->get_parent())) {
+    if (hasUsableSourceLocation(parent->get_startOfConstruct())) {
+      return parent->get_startOfConstruct();
+    }
+  }
+
+  if (SgSourceFile *source_file = getEnclosingSourceFile(statement)) {
+    if (hasUsableSourceLocation(source_file->get_startOfConstruct())) {
+      return source_file->get_startOfConstruct();
+    }
+  }
+
+  return nullptr;
+}
+
+static const PreprocessingInfo *
+findOpenMPDirectiveLocationInfo(const SgStatement *statement) {
+  const SgLocatedNode *located = isSgLocatedNode(statement);
+  if (located == nullptr) {
+    return nullptr;
+  }
+
+  AttachedPreprocessingInfoType *infos =
+      const_cast<SgLocatedNode *>(located)->getAttachedPreprocessingInfo();
+  if (infos == nullptr) {
+    return nullptr;
+  }
+
+  const PreprocessingInfo *best = nullptr;
+  for (PreprocessingInfo *info : *infos) {
+    if (info == nullptr || info->getLineNumber() <= 0 ||
+        info->getTypeOfDirective() == PreprocessingInfo::CSkippedToken) {
+      continue;
+    }
+
+    if (best == nullptr || info->getLineNumber() < best->getLineNumber() ||
+        (info->getLineNumber() == best->getLineNumber() &&
+         info->getColumnNumber() < best->getColumnNumber())) {
+      best = info;
+    }
+  }
+
+  return best;
+}
+
+static Sg_File_Info *copyOpenMPSourceAnchor(const Sg_File_Info *anchor) {
+  if (anchor == nullptr) {
+    return nullptr;
+  }
+
+  Sg_File_Info *copy = new Sg_File_Info(*anchor);
+  normalizeCopiedFileInfoLocation(copy);
+  copy->unsetTransformation();
+  return copy;
+}
+
+static void replaceOpenMPStartLocation(SgLocatedNode *located,
+                                       Sg_File_Info *replacement) {
+  if (located == nullptr || replacement == nullptr) {
+    return;
+  }
+
+  Sg_File_Info *old_start = located->get_startOfConstruct();
+  Sg_File_Info *old_file_info = located->get_file_info();
+  if (old_start != nullptr) {
+    delete old_start;
+  }
+  if (old_file_info != nullptr && old_file_info != old_start) {
+    delete old_file_info;
+  }
+
+  located->set_startOfConstruct(replacement);
+  located->set_file_info(replacement);
+  replacement->set_parent(located);
+}
+
+static void replaceOpenMPEndLocation(SgLocatedNode *located,
+                                     Sg_File_Info *replacement) {
+  if (located == nullptr || replacement == nullptr) {
+    return;
+  }
+
+  Sg_File_Info *old_end = located->get_endOfConstruct();
+  if (old_end != nullptr) {
+    delete old_end;
+  }
+
+  located->set_endOfConstruct(replacement);
+  replacement->set_parent(located);
+}
+
+static void normalizeOpenMPStatementSourceLocation(SgStatement *statement) {
+  SgLocatedNode *located = isSgLocatedNode(statement);
+  if (located == nullptr) {
+    return;
+  }
+
+  const bool preserve_transformation =
+      (located->get_file_info() != nullptr &&
+       located->get_file_info()->isTransformation()) ||
+      (located->get_startOfConstruct() != nullptr &&
+       located->get_startOfConstruct()->isTransformation()) ||
+      (located->get_endOfConstruct() != nullptr &&
+       located->get_endOfConstruct()->isTransformation());
+  const bool preserve_output =
+      (located->get_file_info() != nullptr &&
+       located->get_file_info()->isOutputInCodeGeneration()) ||
+      (located->get_startOfConstruct() != nullptr &&
+       located->get_startOfConstruct()->isOutputInCodeGeneration()) ||
+      (located->get_endOfConstruct() != nullptr &&
+       located->get_endOfConstruct()->isOutputInCodeGeneration());
+
+  const bool need_start = located->get_file_info() == nullptr ||
+                          located->get_file_info()->get_line() <= 0;
+  const bool need_end = located->get_endOfConstruct() == nullptr ||
+                        located->get_endOfConstruct()->get_line() <= 0;
+  if (!need_start && !need_end) {
+    return;
+  }
+
+  const Sg_File_Info *anchor = findBestOpenMPSourceAnchor(statement);
+  if (anchor == nullptr) {
+    return;
+  }
+
+  if (need_start) {
+    Sg_File_Info *replacement = copyOpenMPSourceAnchor(anchor);
+    if (const PreprocessingInfo *info =
+            findOpenMPDirectiveLocationInfo(statement)) {
+      replacement->set_line(info->getLineNumber());
+      replacement->set_col(info->getColumnNumber());
+    }
+    if (preserve_transformation) {
+      replacement->setTransformation();
+    }
+    if (preserve_output) {
+      replacement->setOutputInCodeGeneration();
+    }
+    replaceOpenMPStartLocation(located, replacement);
+  }
+
+  if (need_end) {
+    const Sg_File_Info *end_anchor = nullptr;
+    if (SgOmpBodyStatement *omp_body = isSgOmpBodyStatement(statement)) {
+      if (SgLocatedNode *located_body = isSgLocatedNode(omp_body->get_body())) {
+        if (hasUsableSourceLocation(located_body->get_endOfConstruct())) {
+          end_anchor = located_body->get_endOfConstruct();
+        }
+      }
+    }
+
+    if (end_anchor == nullptr) {
+      end_anchor = anchor;
+    }
+
+    if (end_anchor != nullptr) {
+      Sg_File_Info *replacement = copyOpenMPSourceAnchor(end_anchor);
+      if (const PreprocessingInfo *info =
+              findOpenMPDirectiveLocationInfo(statement)) {
+        replacement->set_line(info->getLineNumber());
+        replacement->set_col(info->getColumnNumber());
+      }
+      if (preserve_transformation) {
+        replacement->setTransformation();
+      }
+      if (preserve_output) {
+        replacement->setOutputInCodeGeneration();
+      }
+      replaceOpenMPEndLocation(located, replacement);
+    }
+  }
+}
+
+static void
+ensureOpenMPStatementVisibleForCodeGeneration(SgStatement *statement) {
+  SgLocatedNode *located = isSgLocatedNode(statement);
+  if (located == nullptr) {
+    return;
+  }
+
+  const bool has_source_anchor =
+      hasUsableSourceLocation(located->get_startOfConstruct()) ||
+      hasUsableSourceLocation(located->get_endOfConstruct()) ||
+      findOpenMPDirectiveLocationInfo(statement) != nullptr;
+  if (!has_source_anchor) {
+    return;
+  }
+
+  if (located->get_file_info() != nullptr) {
+    located->get_file_info()->setOutputInCodeGeneration();
+  }
+  if (located->get_startOfConstruct() != nullptr) {
+    located->get_startOfConstruct()->setOutputInCodeGeneration();
+  }
+  if (located->get_endOfConstruct() != nullptr) {
+    located->get_endOfConstruct()->setOutputInCodeGeneration();
+  }
+  located->setOutputInCodeGeneration();
+}
+
 static bool isConditionalBeginDirective(const PreprocessingInfo *info) {
   if (info == nullptr) {
     return false;
@@ -1056,6 +1304,34 @@ static bool isStandaloneConditionalBoundaryToken(const std::string &text) {
     return false;
   }
   return text.find_first_not_of(" \t\r\n", begin + 1) == std::string::npos;
+}
+
+static bool isConditionalDirectiveLine(const std::string &line) {
+  size_t pos = line.find_first_not_of(" \t");
+  if (pos == std::string::npos || line[pos] != '#') {
+    return false;
+  }
+
+  ++pos;
+  pos = line.find_first_not_of(" \t", pos);
+  if (pos == std::string::npos) {
+    return false;
+  }
+
+  auto is_conditional_keyword = [&](const char *keyword) {
+    const size_t keyword_len = std::strlen(keyword);
+    if (!startsWithCaseInsensitiveKeyword(line, pos, keyword)) {
+      return false;
+    }
+
+    const size_t end = pos + keyword_len;
+    return end == line.size() ||
+           std::isspace(static_cast<unsigned char>(line[end]));
+  };
+
+  return is_conditional_keyword("if") || is_conditional_keyword("ifdef") ||
+         is_conditional_keyword("ifndef") || is_conditional_keyword("else") ||
+         is_conditional_keyword("elif") || is_conditional_keyword("endif");
 }
 
 static bool isDirectiveKindToken(const std::string &text, size_t pos,
@@ -1189,6 +1465,377 @@ static void normalizeMovedConditionalSkippedTokens(SgStatement *statement) {
   }
 }
 
+static bool preprocessingInfoComesBefore(const PreprocessingInfo *lhs,
+                                         const PreprocessingInfo *rhs) {
+  if (lhs == nullptr || rhs == nullptr) {
+    return lhs < rhs;
+  }
+
+  if (lhs->getLineNumber() != rhs->getLineNumber()) {
+    return lhs->getLineNumber() < rhs->getLineNumber();
+  }
+
+  if (lhs->getColumnNumber() != rhs->getColumnNumber()) {
+    return lhs->getColumnNumber() < rhs->getColumnNumber();
+  }
+
+  if (lhs->getFileId() != rhs->getFileId()) {
+    return lhs->getFileId() < rhs->getFileId();
+  }
+
+  return lhs < rhs;
+}
+
+static void attachPreprocessingInfoInSourceOrder(
+    SgStatement *target, PreprocessingInfo *info,
+    PreprocessingInfo::RelativePositionType position) {
+  if (target == nullptr || info == nullptr) {
+    return;
+  }
+
+  AttachedPreprocessingInfoType *target_infos =
+      target->get_attachedPreprocessingInfoPtr();
+  if (target_infos == nullptr) {
+    target_infos = new AttachedPreprocessingInfoType;
+    target->set_attachedPreprocessingInfoPtr(target_infos);
+  }
+
+  auto existing = std::find(target_infos->begin(), target_infos->end(), info);
+  if (existing != target_infos->end()) {
+    target_infos->erase(existing);
+  }
+
+  info->setRelativePosition(position);
+
+  if (position != PreprocessingInfo::before) {
+    target_infos->push_back(info);
+    return;
+  }
+
+  AttachedPreprocessingInfoType::iterator insert_pos = target_infos->begin();
+  for (; insert_pos != target_infos->end(); ++insert_pos) {
+    PreprocessingInfo *current = *insert_pos;
+    if (current == nullptr ||
+        current->getRelativePosition() != PreprocessingInfo::before ||
+        preprocessingInfoComesBefore(info, current)) {
+      break;
+    }
+  }
+
+  target_infos->insert(insert_pos, info);
+}
+
+static void movePreprocessingInfoPreservingCommentedDirectives(
+    SgStatement *stmt_src, SgStatement *stmt_dst,
+    PreprocessingInfo::RelativePositionType src_position,
+    PreprocessingInfo::RelativePositionType dst_position) {
+  if (stmt_src == nullptr || stmt_dst == nullptr) {
+    return;
+  }
+
+  AttachedPreprocessingInfoType *info_list =
+      stmt_src->getAttachedPreprocessingInfo();
+  if (info_list == nullptr) {
+    return;
+  }
+
+  AttachedPreprocessingInfoType info_to_remove;
+  PreprocessingInfo *prev_item = nullptr;
+  for (PreprocessingInfo *info : *info_list) {
+    if (info == nullptr || isCommentedOutDirective(info)) {
+      continue;
+    }
+
+    if (src_position != PreprocessingInfo::undef &&
+        info->getRelativePosition() != src_position) {
+      continue;
+    }
+
+    if (prev_item == nullptr) {
+      stmt_dst->addToAttachedPreprocessingInfo(info, PreprocessingInfo::after);
+    } else {
+      stmt_dst->insertToAttachedPreprocessingInfo(info, prev_item);
+    }
+    prev_item = info;
+
+    info->setAsTransformation();
+
+    const bool was_modified = stmt_dst->get_isModified();
+    stmt_dst->set_containsTransformationToSurroundingWhitespace(true);
+    if (!was_modified && stmt_dst->get_isModified()) {
+      stmt_dst->set_isModified(false);
+    }
+
+    if (dst_position != PreprocessingInfo::undef) {
+      info->setRelativePosition(dst_position);
+    }
+
+    info_to_remove.push_back(info);
+  }
+
+  for (PreprocessingInfo *info : info_to_remove) {
+    info_list->erase(std::find(info_list->begin(), info_list->end(), info));
+  }
+}
+
+static void
+moveTrailingPreprocessingInfoAfterExplicitOpenMPEnd(SgStatement *stmt_src,
+                                                    SgStatement *stmt_dst) {
+  if (stmt_src == nullptr || stmt_dst == nullptr) {
+    return;
+  }
+
+  AttachedPreprocessingInfoType *info_list =
+      stmt_src->getAttachedPreprocessingInfo();
+  if (info_list == nullptr) {
+    return;
+  }
+
+  AttachedPreprocessingInfoType info_to_remove;
+  PreprocessingInfo *prev_item = nullptr;
+  for (PreprocessingInfo *info : *info_list) {
+    if (info == nullptr ||
+        info->getRelativePosition() != PreprocessingInfo::before) {
+      continue;
+    }
+
+    if (prev_item == nullptr) {
+      stmt_dst->addToAttachedPreprocessingInfo(info, PreprocessingInfo::after);
+    } else {
+      stmt_dst->insertToAttachedPreprocessingInfo(info, prev_item);
+    }
+    prev_item = info;
+
+    info->setAsTransformation();
+
+    const bool was_modified = stmt_dst->get_isModified();
+    stmt_dst->set_containsTransformationToSurroundingWhitespace(true);
+    if (!was_modified && stmt_dst->get_isModified()) {
+      stmt_dst->set_isModified(false);
+    }
+
+    info->setRelativePosition(PreprocessingInfo::after);
+    info_to_remove.push_back(info);
+  }
+
+  for (PreprocessingInfo *info : info_to_remove) {
+    info_list->erase(std::find(info_list->begin(), info_list->end(), info));
+  }
+}
+
+static unsigned getOpenMPStatementEndLine(SgStatement *statement);
+
+static void
+moveMisattachedExplicitEndBoundaryInfo(SgStatement *body_stmt,
+                                       SgStatement *directive_stmt) {
+  if (body_stmt == nullptr || directive_stmt == nullptr) {
+    return;
+  }
+
+  AttachedPreprocessingInfoType *body_infos =
+      body_stmt->getAttachedPreprocessingInfo();
+  if (body_infos == nullptr || body_infos->empty()) {
+    return;
+  }
+
+  unsigned body_content_end_line = getOpenMPStatementEndLine(body_stmt);
+  if (SgBasicBlock *block = isSgBasicBlock(body_stmt)) {
+    SgStatementPtrList &statements = block->get_statements();
+    if (!statements.empty()) {
+      body_content_end_line = getOpenMPStatementEndLine(statements.back());
+    }
+  }
+  if (body_content_end_line == 0) {
+    return;
+  }
+
+  for (AttachedPreprocessingInfoType::iterator it = body_infos->begin();
+       it != body_infos->end();) {
+    PreprocessingInfo *info = *it;
+    if (info == nullptr ||
+        info->getRelativePosition() != PreprocessingInfo::before) {
+      ++it;
+      continue;
+    }
+
+    const unsigned info_line = info->getLineNumber();
+    if (info_line == 0 || info_line <= body_content_end_line) {
+      ++it;
+      continue;
+    }
+
+    attachPreprocessingInfoInSourceOrder(directive_stmt, info,
+                                         PreprocessingInfo::after);
+    it = body_infos->erase(it);
+  }
+}
+
+static unsigned getOpenMPStatementStartLine(SgStatement *statement) {
+  if (statement == nullptr) {
+    return 0;
+  }
+
+  if (SgLocatedNode *located = isSgLocatedNode(statement)) {
+    if (located->get_startOfConstruct() != nullptr &&
+        located->get_startOfConstruct()->get_line() > 0) {
+      return located->get_startOfConstruct()->get_line();
+    }
+    if (located->get_file_info() != nullptr &&
+        located->get_file_info()->get_line() > 0) {
+      return located->get_file_info()->get_line();
+    }
+  }
+
+  if (SgOmpBodyStatement *omp_body = isSgOmpBodyStatement(statement)) {
+    return getOpenMPStatementStartLine(omp_body->get_body());
+  }
+
+  return 0;
+}
+
+static unsigned getOpenMPStatementEndLine(SgStatement *statement) {
+  if (statement == nullptr) {
+    return 0;
+  }
+
+  if (SgLocatedNode *located = isSgLocatedNode(statement)) {
+    if (located->get_endOfConstruct() != nullptr &&
+        located->get_endOfConstruct()->get_line() > 0) {
+      return located->get_endOfConstruct()->get_line();
+    }
+  }
+
+  if (SgOmpBodyStatement *omp_body = isSgOmpBodyStatement(statement)) {
+    return getOpenMPStatementEndLine(omp_body->get_body());
+  }
+
+  return getOpenMPStatementStartLine(statement);
+}
+
+static bool blockContainsOpenMPStatement(const SgBasicBlock *block) {
+  if (block == nullptr) {
+    return false;
+  }
+
+  std::vector<SgNode *> nested_statements =
+      NodeQuery::querySubTree(const_cast<SgBasicBlock *>(block), V_SgStatement);
+  for (SgNode *node : nested_statements) {
+    SgStatement *statement = isSgStatement(node);
+    if (statement == nullptr || statement == block) {
+      continue;
+    }
+    if (SageInterface::isOmpStatement(statement)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static bool isRelocatableScopeConditionalInfo(const SgBasicBlock *block,
+                                              const PreprocessingInfo *info) {
+  if (info == nullptr) {
+    return false;
+  }
+
+  const PreprocessingInfo::RelativePositionType position =
+      info->getRelativePosition();
+  switch (info->getTypeOfDirective()) {
+  case PreprocessingInfo::C_StyleComment:
+  case PreprocessingInfo::CplusplusStyleComment: {
+    if (position == PreprocessingInfo::inside) {
+      return true;
+    }
+    if (position != PreprocessingInfo::after || block == nullptr) {
+      return false;
+    }
+
+    const unsigned info_line = info->getLineNumber();
+    if (info_line == 0) {
+      return false;
+    }
+
+    const unsigned block_end_line =
+        getOpenMPStatementEndLine(const_cast<SgBasicBlock *>(block));
+    return block_end_line > 0 && info_line < block_end_line;
+  }
+
+  case PreprocessingInfo::CpreprocessorIfdefDeclaration:
+  case PreprocessingInfo::CpreprocessorIfndefDeclaration:
+  case PreprocessingInfo::CpreprocessorIfDeclaration:
+  case PreprocessingInfo::CpreprocessorElseDeclaration:
+  case PreprocessingInfo::CpreprocessorElifDeclaration:
+  case PreprocessingInfo::CpreprocessorEndifDeclaration:
+  case PreprocessingInfo::CSkippedToken:
+    return position == PreprocessingInfo::inside ||
+           position == PreprocessingInfo::after;
+
+  default:
+    return false;
+  }
+}
+
+static void relocateScopeConditionalInfoForOpenMP(SgBasicBlock *block) {
+  if (block == nullptr) {
+    return;
+  }
+
+  SgStatementPtrList &statements = block->get_statements();
+  if (statements.empty()) {
+    return;
+  }
+
+  if (!blockContainsOpenMPStatement(block)) {
+    return;
+  }
+
+  AttachedPreprocessingInfoType *infos = block->getAttachedPreprocessingInfo();
+  if (infos == nullptr || infos->empty()) {
+    return;
+  }
+
+  for (AttachedPreprocessingInfoType::iterator it = infos->begin();
+       it != infos->end();) {
+    PreprocessingInfo *info = *it;
+    if (!isRelocatableScopeConditionalInfo(block, info)) {
+      ++it;
+      continue;
+    }
+
+    const unsigned info_line = info->getLineNumber();
+    SgStatement *target = nullptr;
+    bool attach_before = true;
+
+    for (SgStatement *statement : statements) {
+      const unsigned start_line = getOpenMPStatementStartLine(statement);
+      const unsigned end_line = getOpenMPStatementEndLine(statement);
+      if (info_line != 0 && start_line > 0 && end_line > 0 &&
+          start_line <= info_line && info_line <= end_line) {
+        target = statement;
+        attach_before = info_line <= start_line;
+        break;
+      }
+
+      if (target == nullptr && start_line > 0 &&
+          (info_line == 0 || start_line >= info_line)) {
+        target = statement;
+        attach_before = true;
+        break;
+      }
+    }
+
+    if (target == nullptr) {
+      target = statements.back();
+      attach_before = false;
+    }
+
+    attachPreprocessingInfoInSourceOrder(
+        target, info,
+        attach_before ? PreprocessingInfo::before : PreprocessingInfo::after);
+    it = infos->erase(it);
+  }
+}
+
 void initializeGeneratedOpenMPStatement(SgStatement *statement) {
   if (statement == nullptr) {
     return;
@@ -1209,8 +1856,12 @@ void initializeGeneratedOpenMPStatement(SgStatement *statement) {
     if (located->get_endOfConstruct() != nullptr) {
       located->get_endOfConstruct()->setTransformation();
     }
+    if (located->get_file_info() != nullptr) {
+      located->get_file_info()->setOutputInCodeGeneration();
+    }
     located->setTransformation();
     located->setOutputInCodeGeneration();
+    located->set_isModified(true);
   }
 
   if (SgOmpBodyStatement *omp_body = isSgOmpBodyStatement(statement)) {
@@ -1222,6 +1873,92 @@ void initializeGeneratedOpenMPStatement(SgStatement *statement) {
          located_body->get_endOfConstruct() == nullptr)) {
       initializeGeneratedOpenMPStatement(body);
     }
+  }
+
+  statement->set_isModified(true);
+}
+
+static void markOpenMPSourceFileAsModified(SgSourceFile *source_file) {
+  if (source_file == nullptr) {
+    return;
+  }
+
+  SgGlobal *global_scope = source_file->get_globalScope();
+  if (global_scope == nullptr) {
+    return;
+  }
+
+  if (global_scope->get_file_info() != nullptr) {
+    global_scope->get_file_info()->setOutputInCodeGeneration();
+  }
+  if (global_scope->get_startOfConstruct() != nullptr) {
+    global_scope->get_startOfConstruct()->setOutputInCodeGeneration();
+  }
+  if (global_scope->get_endOfConstruct() != nullptr) {
+    global_scope->get_endOfConstruct()->setOutputInCodeGeneration();
+  }
+
+  global_scope->setOutputInCodeGeneration();
+  global_scope->set_isModified(true);
+}
+
+static void backfillOpenMPWrapperStartFromBody(SgStatement *statement) {
+  auto *omp_body = isSgOmpBodyStatement(statement);
+  if (omp_body == nullptr) {
+    return;
+  }
+
+  SgStatement *body = omp_body->get_body();
+  auto *located_statement = isSgLocatedNode(statement);
+  auto *located_body = isSgLocatedNode(body);
+  if (located_statement == nullptr || located_body == nullptr) {
+    return;
+  }
+
+  const bool need_start = getLocatedNodeLine(located_statement) == 0 &&
+                          located_body->get_startOfConstruct() != nullptr &&
+                          getLocatedNodeLine(located_body) > 0;
+  const bool need_end =
+      located_statement->get_endOfConstruct() != nullptr &&
+      located_statement->get_endOfConstruct()->get_line() <= 0 &&
+      located_body->get_endOfConstruct() != nullptr &&
+      located_body->get_endOfConstruct()->get_line() > 0;
+
+  if (!need_start && !need_end) {
+    return;
+  }
+
+  if (need_start) {
+    Sg_File_Info *copy =
+        new Sg_File_Info(*(located_body->get_startOfConstruct()));
+    normalizeCopiedFileInfoLocation(copy);
+
+    Sg_File_Info *old_start = located_statement->get_startOfConstruct();
+    Sg_File_Info *old_file_info = located_statement->get_file_info();
+    if (old_start != nullptr) {
+      delete old_start;
+    }
+    if (old_file_info != nullptr && old_file_info != old_start) {
+      delete old_file_info;
+    }
+
+    located_statement->set_startOfConstruct(copy);
+    located_statement->set_file_info(copy);
+    copy->set_parent(located_statement);
+  }
+
+  if (need_end) {
+    Sg_File_Info *copy =
+        new Sg_File_Info(*(located_body->get_endOfConstruct()));
+    normalizeCopiedFileInfoLocation(copy);
+
+    Sg_File_Info *old_end = located_statement->get_endOfConstruct();
+    if (old_end != nullptr) {
+      delete old_end;
+    }
+
+    located_statement->set_endOfConstruct(copy);
+    copy->set_parent(located_statement);
   }
 }
 
@@ -1301,7 +2038,6 @@ void collectCommentedDirectiveRelocations(
                 return lhs.line < rhs.line;
               });
   }
-
   if (statement_positions_by_file.empty() &&
       statement_positions_by_filename.empty()) {
     return;
@@ -1322,36 +2058,24 @@ void collectCommentedDirectiveRelocations(
     }
   };
 
-  auto attach_to_target = [](SgStatement *target, PreprocessingInfo *info,
-                             bool attach_before) {
-    if (target == nullptr || info == nullptr) {
-      return;
+  auto find_previous_sibling_statement =
+      [](SgStatement *stmt) -> SgStatement * {
+    if (stmt == nullptr) {
+      return nullptr;
     }
 
-    AttachedPreprocessingInfoType *target_info =
-        target->get_attachedPreprocessingInfoPtr();
-    if (target_info == nullptr) {
-      target_info = new AttachedPreprocessingInfoType;
-      target->set_attachedPreprocessingInfoPtr(target_info);
+    SgScopeStatement *scope = isSgScopeStatement(stmt->get_parent());
+    if (scope == nullptr) {
+      return nullptr;
     }
 
-    if (std::find(target_info->begin(), target_info->end(), info) !=
-        target_info->end()) {
-      return;
+    SgStatementPtrList &statements = scope->getStatementList();
+    auto found = std::find(statements.begin(), statements.end(), stmt);
+    if (found == statements.end() || found == statements.begin()) {
+      return nullptr;
     }
 
-    info->setRelativePosition(attach_before ? PreprocessingInfo::before
-                                            : PreprocessingInfo::after);
-    if (attach_before) {
-      auto insert_after_existing_before = std::find_if(
-          target_info->begin(), target_info->end(),
-          [](PreprocessingInfo *current) {
-            return current->getRelativePosition() != PreprocessingInfo::before;
-          });
-      target_info->insert(insert_after_existing_before, info);
-    } else {
-      target_info->push_back(info);
-    }
+    return *(found - 1);
   };
 
   std::unordered_set<PreprocessingInfo *> seen_comments;
@@ -1360,6 +2084,12 @@ void collectCommentedDirectiveRelocations(
   for (SgNode *node : located_nodes) {
     SgLocatedNode *owner = isSgLocatedNode(node);
     if (owner == nullptr) {
+      continue;
+    }
+
+    SgPragmaDeclaration *owner_pragma = isSgPragmaDeclaration(owner);
+    if (owner_pragma == nullptr ||
+        pragma_set.find(owner_pragma) == pragma_set.end()) {
       continue;
     }
 
@@ -1475,7 +2205,36 @@ void collectCommentedDirectiveRelocations(
         continue;
       }
 
+      SgStatement *normalized_target = target_stmt;
+      while (SgStatement *parent_stmt =
+                 isSgStatement(normalized_target->get_parent())) {
+        const unsigned parent_line =
+            getLocatedNodeLine(isSgLocatedNode(parent_stmt));
+        if (comment_line > 0 && parent_line > 0 &&
+            static_cast<int>(parent_line) >= comment_line) {
+          normalized_target = parent_stmt;
+          continue;
+        }
+        break;
+      }
+      target_stmt = normalized_target;
+      target_stmt_line =
+          static_cast<int>(getLocatedNodeLine(isSgLocatedNode(target_stmt)));
+
       const bool appears_before_target =
+          target_stmt_line == 0 || comment_line <= target_stmt_line;
+      if (appears_before_target && isSgBasicBlock(target_stmt) != nullptr) {
+        if (SgStatement *previous_stmt =
+                find_previous_sibling_statement(target_stmt)) {
+          const int previous_line = static_cast<int>(
+              getLocatedNodeLine(isSgLocatedNode(previous_stmt)));
+          if (previous_line > 0 && previous_line < comment_line) {
+            target_stmt = previous_stmt;
+            target_stmt_line = previous_line;
+          }
+        }
+      }
+      const bool attach_before_target =
           target_stmt_line == 0 || comment_line <= target_stmt_line;
       if (SgPragmaDeclaration *target_pragma =
               isSgPragmaDeclaration(target_stmt)) {
@@ -1489,7 +2248,13 @@ void collectCommentedDirectiveRelocations(
       if (isSgLocatedNode(target_stmt) != owner) {
         detach_from_owner(owner, info);
       }
-      attach_to_target(target_stmt, info, appears_before_target);
+      if (isSgLocatedNode(target_stmt) == owner) {
+        detach_from_owner(owner, info);
+      }
+      attachPreprocessingInfoInSourceOrder(target_stmt, info,
+                                           attach_before_target
+                                               ? PreprocessingInfo::before
+                                               : PreprocessingInfo::after);
     }
   }
 }
@@ -1552,18 +2317,10 @@ void relocatePendingCommentedDirectivesForPragma(
         pragma_line == 0 ||
         (entry.source_line > 0 &&
          entry.source_line <= static_cast<int>(pragma_line));
-    if (appears_before_pragma) {
-      entry.info->setRelativePosition(PreprocessingInfo::before);
-      auto insert_after_existing_before = std::find_if(
-          directive_info->begin(), directive_info->end(),
-          [](PreprocessingInfo *current) {
-            return current->getRelativePosition() != PreprocessingInfo::before;
-          });
-      directive_info->insert(insert_after_existing_before, entry.info);
-    } else {
-      entry.info->setRelativePosition(PreprocessingInfo::after);
-      directive_info->push_back(entry.info);
-    }
+    attachPreprocessingInfoInSourceOrder(directive_stmt, entry.info,
+                                         appears_before_pragma
+                                             ? PreprocessingInfo::before
+                                             : PreprocessingInfo::after);
   }
 }
 
@@ -1594,6 +2351,59 @@ SgExpression *buildOmpVarExprFromNode(SgNode *node) {
     return expr;
   }
   return nullptr;
+}
+
+static SgExpression *cloneOmpVarExprFromNode(SgNode *node) {
+  if (SgInitializedName *iname = isSgInitializedName(node)) {
+    return SageBuilder::buildVarRefExp(iname);
+  }
+
+  SgExpression *expr = isSgExpression(node);
+  if (expr == nullptr) {
+    return nullptr;
+  }
+
+  if (SgVarRefExp *var_ref = isSgVarRefExp(expr)) {
+    if (SgVariableSymbol *symbol = var_ref->get_symbol()) {
+      SgVarRefExp *clone = SageBuilder::buildVarRefExp(symbol);
+      if (SgExpression *original_tree = var_ref->get_originalExpressionTree()) {
+        clone->set_originalExpressionTree(
+            SageInterface::copyExpression(original_tree));
+      }
+      return clone;
+    }
+  }
+
+  return SageInterface::copyExpression(expr);
+}
+
+static void appendFlattenedOmpVarExprNodes(SgOmpVariablesClause *clause,
+                                           SgNode *node) {
+  if (clause == nullptr || node == nullptr) {
+    return;
+  }
+
+  if (SgExprListExp *expr_list = isSgExprListExp(node)) {
+    for (SgExpression *expr : expr_list->get_expressions()) {
+      appendFlattenedOmpVarExprNodes(clause, expr);
+    }
+    return;
+  }
+
+  if (SgCommaOpExp *comma = isSgCommaOpExp(node)) {
+    appendFlattenedOmpVarExprNodes(clause, comma->get_lhs_operand());
+    appendFlattenedOmpVarExprNodes(clause, comma->get_rhs_operand());
+    return;
+  }
+
+  if (SgExpression *expr = cloneOmpVarExprFromNode(node)) {
+    clause->get_variables()->get_expressions().push_back(expr);
+    expr->set_parent(clause);
+    return;
+  }
+
+  cerr << "error: unhandled type of variable within a list:"
+       << node->class_name();
 }
 
 void clearOpenMPClauseTemporaryState() {
@@ -2482,13 +3292,19 @@ bool copyStartFileInfo(SgNode *src, SgNode *dest) {
 
   Sg_File_Info *copy = new Sg_File_Info(*(lsrc->get_startOfConstruct()));
   ROSE_ASSERT(copy != NULL);
+  normalizeCopiedFileInfoLocation(copy);
 
   // delete old start of construct
   Sg_File_Info *old_info = ldest->get_startOfConstruct();
+  Sg_File_Info *old_file_info = ldest->get_file_info();
   if (old_info)
     delete (old_info);
+  if (old_file_info != nullptr && old_file_info != old_info) {
+    delete old_file_info;
+  }
 
   ldest->set_startOfConstruct(copy);
+  ldest->set_file_info(copy);
   copy->set_parent(ldest);
   //  cout<<"debug: set ldest@"<<ldest <<" with file info @"<< copy <<endl;
 
@@ -2540,13 +3356,6 @@ bool copyEndFileInfo(SgNode *src, SgNode *dest) {
   SgLocatedNode *ldest = isSgLocatedNode(dest);
   ROSE_ASSERT(ldest);
 
-  bool expected_transformation = false;
-  if (ldest->get_file_info() != nullptr) {
-    expected_transformation = ldest->get_file_info()->isTransformation();
-  } else if (ldest->get_startOfConstruct() != nullptr) {
-    expected_transformation = ldest->get_startOfConstruct()->isTransformation();
-  }
-
   // ROSE_ASSERT (lsrc->get_file_info()->isTransformation() == false);
   // already the same, no copy is needed
   if (lsrc->get_endOfConstruct()->get_filenameString() ==
@@ -2554,13 +3363,12 @@ bool copyEndFileInfo(SgNode *src, SgNode *dest) {
       lsrc->get_endOfConstruct()->get_line() ==
           ldest->get_endOfConstruct()->get_line() &&
       lsrc->get_endOfConstruct()->get_col() ==
-          ldest->get_endOfConstruct()->get_col() &&
-      ldest->get_endOfConstruct()->isTransformation() ==
-          expected_transformation)
+          ldest->get_endOfConstruct()->get_col())
     return true;
 
   Sg_File_Info *copy = new Sg_File_Info(*(lsrc->get_endOfConstruct()));
   ROSE_ASSERT(copy != NULL);
+  normalizeCopiedFileInfoLocation(copy);
 
   // delete old start of construct
   Sg_File_Info *old_info = ldest->get_endOfConstruct();
@@ -2569,10 +3377,15 @@ bool copyEndFileInfo(SgNode *src, SgNode *dest) {
 
   ldest->set_endOfConstruct(copy);
   copy->set_parent(ldest);
-  if (expected_transformation) {
-    copy->setTransformation();
-  } else {
-    copy->unsetTransformation();
+
+  if (ldest->get_file_info() != nullptr &&
+      ldest->get_endOfConstruct()->isTransformation() !=
+          ldest->get_file_info()->isTransformation()) {
+    if (ldest->get_endOfConstruct()->isTransformation()) {
+      ldest->get_file_info()->setTransformation();
+    } else {
+      ldest->get_file_info()->unsetTransformation();
+    }
   }
 
   ROSE_ASSERT(lsrc->get_endOfConstruct()->get_filenameString() ==
@@ -2588,6 +3401,31 @@ bool copyEndFileInfo(SgNode *src, SgNode *dest) {
   }
 
   return result;
+}
+
+static void
+initializeGeneratedOpenMPVariantDirective(SgPragmaDeclaration *pragma,
+                                          SgStatement *statement) {
+  if (pragma == nullptr || statement == nullptr) {
+    return;
+  }
+
+  setOneSourcePositionForTransformation(statement);
+
+  if (SgOmpBodyStatement *omp_body = isSgOmpBodyStatement(statement)) {
+    if (SgStatement *nested_directive = omp_body->get_body()) {
+      initializeGeneratedOpenMPVariantDirective(pragma, nested_directive);
+      nested_directive->set_parent(statement);
+    }
+  }
+
+  copyStartFileInfo(pragma, statement);
+  backfillOpenMPWrapperStartFromBody(statement);
+  copyEndFileInfo(pragma, statement);
+  initializeGeneratedOpenMPStatement(statement);
+  if (SgLocatedNode *located = isSgLocatedNode(statement)) {
+    located->setOutputInCodeGeneration();
+  }
 }
 
 namespace OmpSupport {
@@ -2692,6 +3530,16 @@ static void releaseOpenMPParseStateForSourceFile(SgSourceFile *source_file) {
     if (belongsToSourceFile(it->first, source_file)) {
       track_openacc_directive(it->second);
       it = fortran_acc_paired_pragma_dict.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  for (auto it = cxx_explicit_end_pragma_dict.begin();
+       it != cxx_explicit_end_pragma_dict.end();) {
+    if (belongsToSourceFile(it->first, source_file) ||
+        belongsToSourceFile(it->second, source_file)) {
+      it = cxx_explicit_end_pragma_dict.erase(it);
     } else {
       ++it;
     }
@@ -5026,6 +5874,7 @@ ensureSingleStmtOrBasicBlock(SgPragmaDeclaration *begin_decl,
     ROSE_ASSERT(getNextStatement(begin_decl) == result);
   } else {
     result = buildBasicBlock();
+    initializeGeneratedOpenMPStatement(result);
     SgScopeStatement *new_scope = isSgScopeStatement(result);
     ROSE_ASSERT(new_scope != NULL);
     // Have to remove them from their original scope first.
@@ -5042,6 +5891,64 @@ ensureSingleStmtOrBasicBlock(SgPragmaDeclaration *begin_decl,
     insertStatementAfter(begin_decl, result, false);
   }
   return result;
+}
+
+static void merge_Matching_Cxx_Pragma_pairs(SgPragmaDeclaration *decl) {
+  if (decl == NULL) {
+    return;
+  }
+
+  auto end_it = cxx_explicit_end_pragma_dict.find(decl);
+  if (end_it == cxx_explicit_end_pragma_dict.end()) {
+    return;
+  }
+
+  SgPragmaDeclaration *end_decl = end_it->second;
+  if (end_decl == NULL) {
+    return;
+  }
+
+  std::vector<SgStatement *> affected_stmts;
+  SgStatement *next_stmt = getNextStatement(decl);
+  while (next_stmt != NULL && next_stmt != end_decl) {
+    affected_stmts.push_back(next_stmt);
+    next_stmt = getNextStatement(next_stmt);
+  }
+
+  ROSE_ASSERT(next_stmt == end_decl);
+
+  SgStatement *merged_body = ensureSingleStmtOrBasicBlock(decl, affected_stmts);
+  if (merged_body == NULL) {
+    return;
+  }
+
+  if (!affected_stmts.empty() && isSgBasicBlock(merged_body) != NULL) {
+    copyStartFileInfo(affected_stmts.front(), merged_body);
+    copyEndFileInfo(end_decl, merged_body);
+  }
+}
+
+static void convert_Cxx_Pragma_Pairs(SgSourceFile *sageFilePtr) {
+  ROSE_ASSERT(sageFilePtr != NULL);
+
+  for (list<SgPragmaDeclaration *>::reverse_iterator iter =
+           omp_pragma_list.rbegin();
+       iter != omp_pragma_list.rend(); ++iter) {
+    SgPragmaDeclaration *decl = *iter;
+    if (decl == NULL || decl->get_file_info() == NULL) {
+      continue;
+    }
+    if (decl->get_file_info()->get_filename() !=
+            sageFilePtr->get_file_info()->get_filename() &&
+        !(decl->get_file_info()->isTransformation())) {
+      continue;
+    }
+    if (cxx_explicit_end_pragma_dict.find(decl) ==
+        cxx_explicit_end_pragma_dict.end()) {
+      continue;
+    }
+    merge_Matching_Cxx_Pragma_pairs(decl);
+  }
 }
 
 static bool fortranAstUnparserEmitsOpenMPEnd(OpenMPDirectiveKind kind) {
@@ -5756,6 +6663,22 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
   bool isFortran = sageFilePtr->get_Fortran_only() ||
                    sageFilePtr->get_F77_only() || sageFilePtr->get_F90_only() ||
                    sageFilePtr->get_F95_only() || sageFilePtr->get_F2003_only();
+  if (!isFortran && (wantsOpenMP || wantsOpenACC)) {
+    // OpenMP/OpenACC pragma declarations are converted into directive AST
+    // nodes. Replaying original C/C++ tokens after that conversion preserves
+    // stale pragma spelling, spacing, and continuations instead of the
+    // directive AST we just built.
+    sageFilePtr->set_unparse_tokens(false);
+    if (SgProject *project = sageFilePtr->get_project()) {
+      if (SgFileList *file_list = project->get_fileList_ptr()) {
+        for (SgFile *file : file_list->get_listOfFiles()) {
+          if (SgSourceFile *source_file = isSgSourceFile(file)) {
+            source_file->set_unparse_tokens(false);
+          }
+        }
+      }
+    }
+  }
   bool parsed_fortran_pragmas = false;
 
   // ==================================================================================================================//
@@ -5781,6 +6704,8 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
                        std::shared_ptr<const std::vector<std::string>>>
         source_lines_cache;
     std::mutex source_lines_cache_mutex;
+    std::vector<std::pair<SgPragmaDeclaration *, OpenMPDirective *>>
+        explicit_end_stack;
     std::vector<SgNode *>::iterator iter;
     for (iter = all_pragmas.begin(); iter != all_pragmas.end(); iter++) {
       SgPragmaDeclaration *pragmaDeclaration = isSgPragmaDeclaration(*iter);
@@ -5821,6 +6746,37 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
               parseOpenMP(pragmaString.c_str(), nullptr, nullptr);
         }
         assert(ompparser_OpenMPIR != NULL);
+        if (isOpenMPDirectiveEndMarkerOnly(ompparser_OpenMPIR)) {
+          OpenMPEndDirective *end_wrapper =
+              static_cast<OpenMPEndDirective *>(ompparser_OpenMPIR);
+          OpenMPDirective *end_directive =
+              end_wrapper != NULL ? end_wrapper->getPairedDirective() : NULL;
+          bool matched = false;
+          while (!explicit_end_stack.empty()) {
+            std::pair<SgPragmaDeclaration *, OpenMPDirective *> begin_entry =
+                explicit_end_stack.back();
+            explicit_end_stack.pop_back();
+            if (begin_entry.first == NULL || begin_entry.second == NULL ||
+                end_directive == NULL) {
+              continue;
+            }
+            if (begin_entry.second->getKind() != end_directive->getKind() ||
+                !begin_entry.second->getRequiresExplicitEnd()) {
+              continue;
+            }
+            mergeEndClausesToBeginDirective(begin_entry.second, end_directive,
+                                            ompparser_OpenMPIR);
+            cxx_explicit_end_pragma_dict[begin_entry.first] = pragmaDeclaration;
+            matched = true;
+            break;
+          }
+          delete ompparser_OpenMPIR;
+          ompparser_OpenMPIR = nullptr;
+          if (!matched) {
+            continue;
+          }
+          continue;
+        }
         if (shouldSkipOpenMPDirectiveAstConversion(ompparser_OpenMPIR)) {
           delete ompparser_OpenMPIR;
           ompparser_OpenMPIR = nullptr;
@@ -5832,6 +6788,10 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
           delete ompparser_OpenMPIR;
           ompparser_OpenMPIR = nullptr;
           continue;
+        }
+        if (ompparser_OpenMPIR->getRequiresExplicitEnd()) {
+          explicit_end_stack.push_back(
+              std::make_pair(pragmaDeclaration, ompparser_OpenMPIR));
         }
         omp_pragma_list.push_back(pragmaDeclaration);
         OpenMPIR_list.push_back(
@@ -5873,6 +6833,7 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
 
   // Build OpenMP AST nodes based on parsing results
   if (!isFortran) {
+    convert_Cxx_Pragma_Pairs(sageFilePtr);
     collectCommentedDirectiveRelocations(sageFilePtr, omp_pragma_list);
   }
 
@@ -5899,6 +6860,30 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
     removeFortranDirectiveComments(sageFilePtr, "omp");
     if (hasFortranOpenMPArtifactsForSourceFile(sageFilePtr)) {
       removeFortranOpenMPPragmas(sageFilePtr);
+    }
+  }
+
+  struct OmpWrapperLocationFixup : AstSimpleProcessing {
+    void visit(SgNode *node) override {
+      if (SgStatement *stmt = isSgStatement(node)) {
+        if (!SageInterface::isOmpStatement(stmt)) {
+          return;
+        }
+        backfillOpenMPWrapperStartFromBody(stmt);
+        normalizeOpenMPStatementSourceLocation(stmt);
+        ensureOpenMPStatementVisibleForCodeGeneration(stmt);
+      }
+    }
+  };
+  OmpWrapperLocationFixup().traverse(sageFilePtr, preorder);
+  if (!isFortran && (!OpenMPIR_list.empty() || !OpenACCIR_list.empty())) {
+    markOpenMPSourceFileAsModified(sageFilePtr);
+  }
+  if (!isFortran) {
+    std::vector<SgNode *> basic_blocks =
+        NodeQuery::querySubTree(sageFilePtr, V_SgBasicBlock);
+    for (SgNode *node : basic_blocks) {
+      relocateScopeConditionalInfoForOpenMP(isSgBasicBlock(node));
     }
   }
 
@@ -6119,6 +7104,7 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   }
   setOneSourcePositionForTransformation(result);
   copyStartFileInfo(pdecl, result);
+  backfillOpenMPWrapperStartFromBody(result);
   // Structured OpenMP directives should end with their body, not with the
   // leading pragma line. Replacing the end location with the pragma extent can
   // also break directives whose end bookkeeping is derived from nested bodies
@@ -6126,14 +7112,17 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   if (SgOmpBodyStatement *body_stmt = isSgOmpBodyStatement(result)) {
     if (body_stmt->get_body() == NULL) {
       copyEndFileInfo(pdecl, result);
+    } else {
+      auto end_it = cxx_explicit_end_pragma_dict.find(pdecl);
+      if (end_it != cxx_explicit_end_pragma_dict.end() &&
+          end_it->second != NULL) {
+        copyEndFileInfo(end_it->second, result);
+      }
     }
   } else {
     copyEndFileInfo(pdecl, result);
   }
   initializeGeneratedOpenMPStatement(result);
-  if (SgLocatedNode *located_result = isSgLocatedNode(result)) {
-    located_result->setOutputInCodeGeneration();
-  }
   if (pdecl->getAttribute(kOmpFortranEndAttributeName) != NULL &&
       result->getAttribute(kOmpFortranEndAttributeName) == NULL) {
     result->addNewAttribute(kOmpFortranEndAttributeName,
@@ -6161,8 +7150,10 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     relocatePendingCommentedDirectivesForPragma(pdecl, result);
     moveUpPreprocessingInfo(result,
                             pdecl); // keep #ifdef etc attached to the pragma
+    normalizeMovedConditionalSkippedTokens(result);
   }
   replaceStatement(pdecl, result);
+  backfillOpenMPWrapperStartFromBody(result);
 
   return result;
 }
@@ -6187,7 +7178,8 @@ convertVariantDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     result = opaque_directive;
   }
 
-  setOneSourcePositionForTransformation(result);
+  initializeGeneratedOpenMPVariantDirective(current_OpenMPIR_to_SageIII.first,
+                                            result);
   return result;
 }
 
@@ -6445,6 +7437,10 @@ convertNonBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
           current_OpenMPIR_to_SageIII.first, OMPC_map, nullptr,
           mapper_data.user_defined_identifier);
       sg_mapper->set_user_defined_identifier(user_defined_identifier);
+      if (user_defined_identifier != nullptr) {
+        setOneSourcePositionForTransformation(user_defined_identifier);
+        user_defined_identifier->set_parent(sg_mapper);
+      }
     }
 
     if (!mapper_data.mapper_type.empty()) {
@@ -6459,7 +7455,10 @@ convertNonBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
       SgExpression *mapper_type =
           SageBuilder::buildTypeExpression(resolved_mapper_type);
       sg_mapper->set_mapper_type(mapper_type);
-      mapper_type->set_parent(sg_mapper);
+      if (mapper_type != nullptr) {
+        setOneSourcePositionForTransformation(mapper_type);
+        mapper_type->set_parent(sg_mapper);
+      }
     }
 
     if (!mapper_data.mapper_variable.empty()) {
@@ -6468,6 +7467,7 @@ convertNonBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
           mapper_data.mapper_variable);
       sg_mapper->set_mapper_variable(mapper_variable);
       if (mapper_variable != nullptr) {
+        setOneSourcePositionForTransformation(mapper_variable);
         mapper_variable->set_parent(sg_mapper);
       }
     }
@@ -6837,6 +7837,10 @@ convertBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   if (body != NULL) {
     body->set_parent(result);
   }
+  if (current_OpenMPIR_to_SageIII.second->getRequiresExplicitEnd()) {
+    result->addNewAttribute(kOmpExplicitEndAttributeName,
+                            new OmpOwnedIntAttribute(1));
+  }
   if (body != NULL) {
     bool is_fortran_file = false;
     if (SgSourceFile *source_file =
@@ -6849,9 +7853,20 @@ convertBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     if (!is_fortran_file) {
       moveUpInnerDanglingIfEndifDirective(body);
       if (next_stmt_after_body != NULL) {
-        movePreprocessingInfo(next_stmt_after_body, result,
-                              PreprocessingInfo::before,
-                              PreprocessingInfo::after);
+        if (current_OpenMPIR_to_SageIII.second->getRequiresExplicitEnd()) {
+          // For directives spelled with an explicit END marker (for example,
+          // `target ... begin/end`), leading comments before the following
+          // statement belong after the generated END, not inside the body.
+          moveTrailingPreprocessingInfoAfterExplicitOpenMPEnd(
+              next_stmt_after_body, result);
+        } else {
+          movePreprocessingInfoPreservingCommentedDirectives(
+              next_stmt_after_body, result, PreprocessingInfo::before,
+              PreprocessingInfo::after);
+        }
+      }
+      if (current_OpenMPIR_to_SageIII.second->getRequiresExplicitEnd()) {
+        moveMisattachedExplicitEndBoundaryInfo(body, result);
       }
       movePreprocessingInfo(body, result, PreprocessingInfo::after,
                             PreprocessingInfo::after);
@@ -7568,6 +8583,9 @@ convertScheduleClause(SgStatement *directive,
   SgOmpScheduleClause *result =
       new SgOmpScheduleClause(sg_modifier1, sg_modifier2, sg_kind, chunk_size);
   ROSE_ASSERT(result);
+  if (chunk_size != NULL) {
+    chunk_size->set_parent(result);
+  }
   setOneSourcePositionForTransformation(result);
   addOmpClause(directive, result);
   result->set_parent(directive);
@@ -7596,6 +8614,9 @@ convertDistScheduleClause(SgOmpClauseBodyStatement *clause_body,
   SgOmpDistScheduleClause *result =
       new SgOmpDistScheduleClause(sg_kind, chunk_size);
   ROSE_ASSERT(result);
+  if (chunk_size != NULL) {
+    chunk_size->set_parent(result);
+  }
   setOneSourcePositionForTransformation(result);
   SgOmpClause *sg_clause = result;
   clause_body->get_clauses().push_back(sg_clause);
@@ -8273,7 +9294,6 @@ convertVariantBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
 SgStatement *
 getOpenMPBlockBody(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                        current_OpenMPIR_to_SageIII) {
-
   SgStatement *result = NULL;
   bool current_is_fortran = false;
   if (SgSourceFile *source_file =
@@ -8294,12 +9314,6 @@ getOpenMPBlockBody(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     // cannot safely identify the structured block; keep the original pragma.
     if (!current_is_fortran) {
       return NULL;
-    }
-    // Skip stray/misplaced Fortran OpenMP pragmas so the construct body is
-    // the executable statement/loop that follows.
-    if (isFortranOpenMPPragmaDeclaration(next_pragma)) {
-      result = getNextStatement(next_pragma);
-      continue;
     }
     break;
   }
@@ -10453,13 +11467,7 @@ void buildVariableList(SgOmpVariablesClause *current_omp_clause) {
   std::vector<std::pair<std::string, SgNode *>>::iterator iter;
   for (iter = omp_variable_list.begin(); iter != omp_variable_list.end();
        iter++) {
-    if (SgExpression *expr = buildOmpVarExprFromNode((*iter).second)) {
-      current_omp_clause->get_variables()->get_expressions().push_back(expr);
-      expr->set_parent(current_omp_clause);
-    } else {
-      cerr << "error: unhandled type of variable within a list:"
-           << ((*iter).second)->class_name();
-    }
+    appendFlattenedOmpVarExprNodes(current_omp_clause, (*iter).second);
   }
 }
 
@@ -10511,15 +11519,14 @@ SgOmpParallelStatement *convertOmpParallelStatementFromCombinedDirectives(
 
   copyStartFileInfo(current_OpenMPIR_to_SageIII.first, second_stmt);
   copyEndFileInfo(current_OpenMPIR_to_SageIII.first, second_stmt);
-  if (SgLocatedNode *located_second = isSgLocatedNode(second_stmt)) {
-    located_second->setOutputInCodeGeneration();
-  }
+  initializeGeneratedOpenMPStatement(second_stmt);
   SgOmpParallelStatement *first_stmt =
       new SgOmpParallelStatement(NULL, second_stmt);
   setOneSourcePositionForTransformation(first_stmt);
   copyStartFileInfo(current_OpenMPIR_to_SageIII.first, first_stmt);
+  backfillOpenMPWrapperStartFromBody(first_stmt);
   copyEndFileInfo(current_OpenMPIR_to_SageIII.first, first_stmt);
-  first_stmt->setOutputInCodeGeneration();
+  initializeGeneratedOpenMPStatement(first_stmt);
   second_stmt->set_parent(first_stmt);
   first_stmt->addNewAttribute(
       kOmpCombinedParallelNestedVariantAttrName,

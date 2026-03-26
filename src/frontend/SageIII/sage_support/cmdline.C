@@ -4788,6 +4788,12 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
   }
 
 #if defined(BACKEND_CXX_IS_CLANG_COMPILER)
+  if (get_C_only() || get_C89_only() || get_C90_only() || get_C99_only() ||
+      get_C11_only() || get_C17_only() || get_C23_only() || get_C2y_only()) {
+    compilerNameString.push_back("-Wno-error=implicit-function-declaration");
+    compilerNameString.push_back("-Wno-error=implicit-int");
+  }
+
   if (get_standard() == e_cxx17_standard ||
       get_standard() == e_cxx20_standard ||
       get_standard() == e_cxx23_standard ||

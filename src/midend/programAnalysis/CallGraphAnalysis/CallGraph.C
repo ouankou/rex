@@ -24,6 +24,262 @@ static SgType *skipTypeAliases(SgType *ty) {
   return ty->stripType(SgType::STRIP_TYPEDEF_TYPE);
 }
 
+static bool is_types_equal(SgType *t1, SgType *t2);
+
+static SgClassType *
+getClassTypeFromDeclaration(SgClassDeclaration *class_decl) {
+  if (class_decl == NULL) {
+    return NULL;
+  }
+
+  if (class_decl->get_type() != NULL) {
+    return isSgClassType(class_decl->get_type());
+  }
+
+  if (SgClassDeclaration *nonDefDecl =
+          isSgClassDeclaration(class_decl->get_firstNondefiningDeclaration())) {
+    if (nonDefDecl->get_type() != NULL) {
+      return isSgClassType(nonDefDecl->get_type());
+    }
+  }
+
+  if (SgClassDeclaration *defDecl =
+          isSgClassDeclaration(class_decl->get_definingDeclaration())) {
+    if (defDecl->get_type() != NULL) {
+      return isSgClassType(defDecl->get_type());
+    }
+  }
+
+  return NULL;
+}
+
+static SgClassDeclaration *
+canonicalClassDeclaration(SgClassDeclaration *class_decl) {
+  if (class_decl == NULL) {
+    return NULL;
+  }
+
+  if (SgClassDeclaration *nonDefDecl =
+          isSgClassDeclaration(class_decl->get_firstNondefiningDeclaration())) {
+    return nonDefDecl;
+  }
+
+  return class_decl;
+}
+
+static SgClassType *
+resolveClassTypeFromScopeLookup(SgScopeStatement *scope,
+                                SgNonrealDecl *nonreal_decl) {
+  if (scope == NULL || nonreal_decl == NULL) {
+    return NULL;
+  }
+
+  SgTemplateArgumentPtrList *tpl_args = nonreal_decl->get_tpl_args().empty()
+                                            ? NULL
+                                            : &nonreal_decl->get_tpl_args();
+  SgName symbol_name = nonreal_decl->get_name();
+  if (tpl_args != NULL) {
+    symbol_name =
+        SageBuilder::appendTemplateArgumentsToName(symbol_name, *tpl_args);
+  }
+
+  SgClassSymbol *class_symbol =
+      scope->lookup_class_symbol(symbol_name, tpl_args);
+  if (class_symbol == NULL) {
+    class_symbol =
+        scope->lookup_class_symbol(nonreal_decl->get_name(), tpl_args);
+  }
+  if (class_symbol == NULL) {
+    return NULL;
+  }
+
+  SgClassDeclaration *class_decl = canonicalClassDeclaration(
+      isSgClassDeclaration(class_symbol->get_declaration()));
+  return getClassTypeFromDeclaration(class_decl);
+}
+
+static SgClassType *resolveClassTypeFromType(SgType *type) {
+  if (type == NULL) {
+    return NULL;
+  }
+
+  if (SgClassType *class_type = isSgClassType(type)) {
+    return class_type;
+  }
+
+  SgNonrealType *nonreal_type = isSgNonrealType(type);
+  if (nonreal_type == NULL) {
+    return NULL;
+  }
+
+  SgNonrealDecl *nonreal_decl =
+      isSgNonrealDecl(nonreal_type->get_declaration());
+  if (nonreal_decl == NULL) {
+    return NULL;
+  }
+
+  if (SgClassDeclaration *class_decl =
+          isSgClassDeclaration(nonreal_decl->get_templateDeclaration())) {
+    if (isSgTemplateClassDeclaration(class_decl) != NULL &&
+        (!nonreal_decl->get_tpl_args().empty() ||
+         nonreal_decl->get_templateDeclaration() != NULL)) {
+      std::vector<SgTemplateParameter *> tpl_params;
+      std::vector<SgTemplateArgument *> tpl_args;
+      if (SgClassType *instantiated_type =
+              isSgClassType(Rose::Builder::Templates::instantiateNonrealTypes(
+                  nonreal_type, tpl_params, tpl_args))) {
+        return instantiated_type;
+      }
+    }
+
+    return getClassTypeFromDeclaration(class_decl);
+  }
+
+  if (!nonreal_decl->get_tpl_args().empty()) {
+    std::set<SgScopeStatement *> visited_scopes;
+    for (SgNode *cursor = nonreal_decl->get_scope(); cursor != NULL;
+         cursor = cursor->get_parent()) {
+      SgScopeStatement *scope = isSgScopeStatement(cursor);
+      if (scope == NULL || !visited_scopes.insert(scope).second) {
+        continue;
+      }
+
+      if (SgClassType *resolved_type =
+              resolveClassTypeFromScopeLookup(scope, nonreal_decl)) {
+        return resolved_type;
+      }
+    }
+  }
+
+  return NULL;
+}
+
+static bool templateArgumentsAreEquivalent(SgTemplateArgument *lhs,
+                                           SgTemplateArgument *rhs) {
+  if (lhs == NULL || rhs == NULL) {
+    return false;
+  }
+
+  if (lhs->get_argumentType() != rhs->get_argumentType()) {
+    return false;
+  }
+
+  switch (lhs->get_argumentType()) {
+  case SgTemplateArgument::type_argument:
+    return lhs->get_type() != NULL && rhs->get_type() != NULL &&
+           is_types_equal(skipTypeAliases(lhs->get_type()),
+                          skipTypeAliases(rhs->get_type()));
+
+  case SgTemplateArgument::template_template_argument:
+    return lhs->get_templateDeclaration() != NULL &&
+           lhs->get_templateDeclaration() == rhs->get_templateDeclaration();
+
+  case SgTemplateArgument::nontype_argument:
+    return lhs->get_initializedName() != NULL &&
+           lhs->get_initializedName() == rhs->get_initializedName();
+
+  case SgTemplateArgument::start_of_pack_expansion_argument:
+    return true;
+
+  case SgTemplateArgument::argument_undefined:
+  default:
+    return false;
+  }
+}
+
+static bool
+templateArgumentListsAreEquivalent(const SgTemplateArgumentPtrList &lhs,
+                                   const SgTemplateArgumentPtrList &rhs) {
+  if (lhs.size() != rhs.size()) {
+    return false;
+  }
+
+  for (size_t i = 0; i < lhs.size(); ++i) {
+    if (!templateArgumentsAreEquivalent(lhs[i], rhs[i])) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static SgTemplateInstantiationMemberFunctionDecl *
+resolveMemberFunctionInstantiationFromNonrealType(
+    SgNonrealType *nonreal_type,
+    SgMemberFunctionDeclaration *memberFunctionDeclaration) {
+  if (nonreal_type == NULL || memberFunctionDeclaration == NULL) {
+    return NULL;
+  }
+
+  SgNonrealDecl *nonreal_decl =
+      isSgNonrealDecl(nonreal_type->get_declaration());
+  if (nonreal_decl == NULL || nonreal_decl->get_tpl_args().empty()) {
+    return NULL;
+  }
+
+  SgTemplateMemberFunctionDeclaration *template_pattern =
+      isSgTemplateMemberFunctionDeclaration(memberFunctionDeclaration);
+  if (template_pattern == NULL) {
+    return NULL;
+  }
+
+  VariantVector variants(V_SgTemplateInstantiationMemberFunctionDecl);
+  Rose_STL_Container<SgNode *> instantiations =
+      NodeQuery::queryMemoryPool(variants);
+  for (Rose_STL_Container<SgNode *>::const_iterator it = instantiations.begin();
+       it != instantiations.end(); ++it) {
+    SgTemplateInstantiationMemberFunctionDecl *candidate =
+        isSgTemplateInstantiationMemberFunctionDecl(*it);
+    if (candidate == NULL) {
+      continue;
+    }
+
+    if (candidate->get_templateDeclaration() != template_pattern &&
+        candidate->get_specializedTemplateDeclaration() != template_pattern) {
+      continue;
+    }
+
+    SgTemplateInstantiationMemberFunctionDecl *candidate_nondef =
+        isSgTemplateInstantiationMemberFunctionDecl(
+            candidate->get_firstNondefiningDeclaration());
+    if (candidate_nondef != NULL) {
+      candidate = candidate_nondef;
+    }
+
+    SgTemplateInstantiationDecl *associated_class =
+        isSgTemplateInstantiationDecl(
+            candidate->get_associatedClassDeclaration());
+    if (associated_class == NULL) {
+      continue;
+    }
+
+    if (SgTemplateInstantiationDecl *associated_nondef =
+            isSgTemplateInstantiationDecl(
+                associated_class->get_firstNondefiningDeclaration())) {
+      associated_class = associated_nondef;
+    }
+
+    SgName template_name = associated_class->get_templateName();
+    if (template_name.is_null() &&
+        associated_class->get_templateDeclaration() != NULL) {
+      template_name = associated_class->get_templateDeclaration()->get_name();
+    }
+    if (template_name != nonreal_decl->get_name()) {
+      continue;
+    }
+
+    if (!templateArgumentListsAreEquivalent(
+            associated_class->get_templateArguments(),
+            nonreal_decl->get_tpl_args())) {
+      continue;
+    }
+
+    return candidate;
+  }
+
+  return NULL;
+}
+
 namespace {
 template <class SageNode> SgType *genericUnderType(SageNode *ty) {
   ASSERT_not_null(ty);
@@ -874,6 +1130,79 @@ static void solveVirtualFunctionCall(
   }
 }
 
+static SgMemberFunctionDeclaration *findMemberDeclarationInReceiverClass(
+    SgClassType *crtClass,
+    SgMemberFunctionDeclaration *memberFunctionDeclaration) {
+  if (crtClass == NULL || memberFunctionDeclaration == NULL) {
+    return NULL;
+  }
+
+  SgClassDeclaration *class_decl =
+      isSgClassDeclaration(crtClass->get_declaration());
+  if (class_decl == NULL) {
+    return NULL;
+  }
+
+  SgClassDeclaration *defining_class_decl =
+      isSgClassDeclaration(class_decl->get_definingDeclaration());
+  if (defining_class_decl == NULL ||
+      defining_class_decl->get_definition() == NULL) {
+    return NULL;
+  }
+
+  SgMemberFunctionDeclaration *pattern_decl = memberFunctionDeclaration;
+  if (SgMemberFunctionDeclaration *first_nondef = isSgMemberFunctionDeclaration(
+          memberFunctionDeclaration->get_firstNondefiningDeclaration())) {
+    pattern_decl = first_nondef;
+  }
+
+  SgTemplateMemberFunctionDeclaration *template_pattern =
+      isSgTemplateMemberFunctionDeclaration(pattern_decl);
+  SgDeclarationStatementPtrList &members =
+      defining_class_decl->get_definition()->get_members();
+  for (SgDeclarationStatementPtrList::iterator it = members.begin();
+       it != members.end(); ++it) {
+    SgMemberFunctionDeclaration *candidate = isSgMemberFunctionDeclaration(*it);
+    if (candidate == NULL) {
+      continue;
+    }
+
+    if (SgMemberFunctionDeclaration *first_nondef =
+            isSgMemberFunctionDeclaration(
+                candidate->get_firstNondefiningDeclaration())) {
+      candidate = first_nondef;
+    }
+
+    if (candidate->get_name() != pattern_decl->get_name()) {
+      continue;
+    }
+
+    if (template_pattern != NULL) {
+      SgTemplateInstantiationMemberFunctionDecl *inst_candidate =
+          isSgTemplateInstantiationMemberFunctionDecl(candidate);
+      if (inst_candidate == NULL) {
+        continue;
+      }
+
+      if (inst_candidate->get_templateDeclaration() == template_pattern ||
+          inst_candidate->get_specializedTemplateDeclaration() ==
+              template_pattern) {
+        return candidate;
+      }
+
+      continue;
+    }
+
+    if (candidate == pattern_decl ||
+        candidate->get_type()->get_mangled() ==
+            pattern_decl->get_type()->get_mangled()) {
+      return candidate;
+    }
+  }
+
+  return NULL;
+}
+
 std::vector<SgFunctionDeclaration *> CallTargetSet::solveMemberFunctionCall(
     SgClassType *crtClass, ClassHierarchyWrapper *classHierarchy,
     SgMemberFunctionDeclaration *memberFunctionDeclaration, bool polymorphic,
@@ -928,6 +1257,11 @@ std::vector<SgFunctionDeclaration *> CallTargetSet::solveMemberFunctionCall(
       functionDeclarationInClass = memberFunctionDeclaration;
     }
     ASSERT_not_null(functionDeclarationInClass);
+    if (SgMemberFunctionDeclaration *resolved_decl =
+            findMemberDeclarationInReceiverClass(crtClass,
+                                                 functionDeclarationInClass)) {
+      functionDeclarationInClass = resolved_decl;
+    }
     functionList.push_back(functionDeclarationInClass);
   }
   return functionList;
@@ -1063,6 +1397,34 @@ void getPropertiesForSgFunctionCallExp(
     SgFunctionCallExp *sgFunCallExp, ClassHierarchyWrapper *classHierarchy,
     Rose_STL_Container<SgFunctionDeclaration *> &functionList,
     bool includePureVirtualFunc = false) {
+  auto resolveClassTypeFromMemberDecl =
+      [](SgMemberFunctionDeclaration *member_decl) -> SgClassType * {
+    if (member_decl == NULL)
+      return NULL;
+
+    if (SgMemberFunctionDeclaration *nonDefDecl = isSgMemberFunctionDeclaration(
+            member_decl->get_firstNondefiningDeclaration())) {
+      member_decl = nonDefDecl;
+    }
+
+    SgScopeStatement *scope = member_decl->get_scope();
+    if (scope == NULL)
+      scope = isSgScopeStatement(member_decl->get_parent());
+
+    if (SgClassDefinition *class_def = isSgClassDefinition(scope))
+      return getClassTypeFromDeclaration(class_def->get_declaration());
+
+    if (SgTemplateInstantiationDefn *inst_def =
+            isSgTemplateInstantiationDefn(scope))
+      return getClassTypeFromDeclaration(inst_def->get_declaration());
+
+    if (SgTemplateClassDefinition *tmpl_def =
+            isSgTemplateClassDefinition(scope))
+      return getClassTypeFromDeclaration(tmpl_def->get_declaration());
+
+    return NULL;
+  };
+
   SgExpression *functionExp = sgFunCallExp->get_function();
   ASSERT_not_null(functionExp);
 
@@ -1089,7 +1451,7 @@ void getPropertiesForSgFunctionCallExp(
     SgExpression *leftSide = isSgBinaryOp(functionExp)->get_lhs_operand();
     SgType *const receiverType = leftSide->get_type();
     SgType *const leftType = receiverType->findBaseType();
-    SgClassType *crtClass = isSgClassType(leftType);
+    SgClassType *crtClass = resolveClassTypeFromType(leftType);
 
     if (SgMemberFunctionRefExp *memberFunctionRefExp = isSgMemberFunctionRefExp(
             isSgBinaryOp(functionExp)->get_rhs_operand())) {
@@ -1146,23 +1508,37 @@ void getPropertiesForSgFunctionCallExp(
         ASSERT_not_null(crtClass);
       }
 
-      if (crtClass == NULL) {
-        // TV (10/26/2018) : I have leftType = SgFunctionType which make sense:
-        // when was buildCallGraph tested last!!
-        break; // FIXME ROSE-1487
-      }
-
       SgMemberFunctionDeclaration *memberFunctionDeclaration =
           isSgMemberFunctionDeclaration(
               memberFunctionRefExp->get_symbol()->get_declaration());
       ASSERT_not_null(memberFunctionDeclaration);
-      ASSERT_not_null(crtClass);
 
       // Set function to first non-defining declaration
       SgMemberFunctionDeclaration *nonDefDecl = isSgMemberFunctionDeclaration(
           memberFunctionDeclaration->get_firstNondefiningDeclaration());
       if (nonDefDecl)
         memberFunctionDeclaration = nonDefDecl;
+
+      if (crtClass == NULL) {
+        if (SgTemplateInstantiationMemberFunctionDecl *instantiated_member =
+                resolveMemberFunctionInstantiationFromNonrealType(
+                    isSgNonrealType(leftType), memberFunctionDeclaration)) {
+          functionList.push_back(instantiated_member);
+          break;
+        }
+
+        crtClass = resolveClassTypeFromMemberDecl(memberFunctionDeclaration);
+      }
+
+      if (crtClass == NULL) {
+        // Some frontend paths preserve the receiver expression as a nonreal
+        // type even though the member reference is already bound to a concrete
+        // instantiation. If we still cannot recover the owning class from the
+        // bound declaration, fall back to the historical conservative exit.
+        break; // FIXME ROSE-1487
+      }
+
+      ASSERT_not_null(crtClass);
 
       // test if the memberFunctionRefExp is scope qualified
       //   in which case the vcall is suppressed.

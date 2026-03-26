@@ -1541,9 +1541,16 @@ void FortranCodeGeneration_locatedNode::unparseUserDefinedUnaryOp(
 void FortranCodeGeneration_locatedNode::unparseUserDefinedBinaryOp(
     SgExpression *expr, SgUnparse_Info &info) {
   SgUserDefinedBinaryOp *userDefinedBinaryOp = isSgUserDefinedBinaryOp(expr);
+  ASSERT_not_null(userDefinedBinaryOp);
 
-  unparseBinaryOperator(expr, userDefinedBinaryOp->get_operator_name().str(),
-                        info);
+  SgUnparse_Info operandInfo(info);
+  operandInfo.set_nested_expression();
+
+  unparseExpression(userDefinedBinaryOp->get_lhs_operand(), operandInfo);
+  curprint(" ");
+  curprint(userDefinedBinaryOp->get_operator_name().str());
+  curprint(" ");
+  unparseExpression(userDefinedBinaryOp->get_rhs_operand(), operandInfo);
 }
 
 void FortranCodeGeneration_locatedNode::unparseCoArrayExpression(

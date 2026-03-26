@@ -5,13 +5,22 @@ set(TESTCODES
   13.1f.cc 13.3.1.1.2.cc 7.1.3b.cc 7.3.2.cc 7.3.3c.cc 7.3.3f.cc
   7.3.4d.cc 8.2.7a.cc 7.3.3a.cc)
 set(ROSE_FLAGS  -w -std=gnu++03)
+set(_elsa_std_output_dir "${ROSE_TEST_OUTPUT_DIR}")
+if(_elsa_std_output_dir STREQUAL "")
+  set(_elsa_std_output_dir "${CMAKE_CURRENT_BINARY_DIR}/rose_output")
+endif()
+file(MAKE_DIRECTORY "${_elsa_std_output_dir}")
 
 foreach(file_to_test ${TESTCODES})
   add_test(
     NAME ELSATEST_${file_to_test}
+    WORKING_DIRECTORY ${_elsa_std_output_dir}
     COMMAND testTranslator
       ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR} -c
       ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
-  set_tests_properties(ELSATEST_${file_to_test} PROPERTIES LABELS ELSATEST)
+  set_tests_properties(
+    ELSATEST_${file_to_test}
+    PROPERTIES
+      LABELS ELSATEST
+      ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_elsa_std_output_dir}")
 endforeach()
-

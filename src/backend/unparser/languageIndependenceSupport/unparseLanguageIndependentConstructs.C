@@ -96,6 +96,26 @@ bool is_standalone_hash_line(const std::string &line) {
   return line.find_first_not_of(" \t\r", begin + 1) == std::string::npos;
 }
 
+bool is_conditional_directive_line(const std::string &line) {
+  size_t pos = line.find_first_not_of(" \t");
+  if (pos == std::string::npos || line[pos] != '#') {
+    return false;
+  }
+
+  ++pos;
+  pos = line.find_first_not_of(" \t", pos);
+  if (pos == std::string::npos) {
+    return false;
+  }
+
+  return is_directive_kind_token(line, pos, "if") ||
+         is_directive_kind_token(line, pos, "ifdef") ||
+         is_directive_kind_token(line, pos, "ifndef") ||
+         is_directive_kind_token(line, pos, "else") ||
+         is_directive_kind_token(line, pos, "elif") ||
+         is_directive_kind_token(line, pos, "endif");
+}
+
 bool is_openmp_or_openacc_pragma_line(const std::string &line) {
   size_t pos = line.find_first_not_of(" \t");
   if (pos == std::string::npos || line[pos] != '#') {
@@ -124,6 +144,44 @@ bool is_openmp_or_openacc_pragma_line(const std::string &line) {
          is_directive_kind_token(line, pos, "acc");
 }
 
+bool preprocessing_info_is_within_node_construct(PreprocessingInfo *info,
+                                                 SgLocatedNode *node) {
+  if (info == nullptr || node == nullptr) {
+    return false;
+  }
+
+  Sg_File_Info *info_fi = info->get_file_info();
+  Sg_File_Info *start_fi = node->get_startOfConstruct();
+  Sg_File_Info *end_fi = node->get_endOfConstruct();
+  if (info_fi == nullptr || start_fi == nullptr || end_fi == nullptr) {
+    return false;
+  }
+
+  if (!start_fi->isSameFile(info_fi) || !end_fi->isSameFile(info_fi)) {
+    return false;
+  }
+
+  return (*start_fi <= *info_fi) && (*info_fi <= *end_fi);
+}
+
+bool suppress_misplaced_leading_variable_declaration_directive(
+    SgLocatedNode *node, PreprocessingInfo *info,
+    PreprocessingInfo::RelativePositionType where_to_unparse) {
+  if (where_to_unparse != PreprocessingInfo::before ||
+      isSgVariableDeclaration(node) == nullptr || info == nullptr) {
+    return false;
+  }
+
+  switch (info->getTypeOfDirective()) {
+  case PreprocessingInfo::CpreprocessorIncludeDeclaration:
+  case PreprocessingInfo::CpreprocessorIncludeNextDeclaration:
+    return preprocessing_info_is_within_node_construct(info, node);
+
+  default:
+    return false;
+  }
+}
+
 std::string
 sanitize_openmp_openacc_skipped_token_text(const std::string &text) {
   std::string sanitized;
@@ -150,6 +208,7 @@ sanitize_openmp_openacc_skipped_token_text(const std::string &text) {
     bool skip_line = skip_pragma_continuation;
     if (!skip_line) {
       skip_line = is_standalone_hash_line(logical_line) ||
+                  is_conditional_directive_line(logical_line) ||
                   is_openmp_or_openacc_pragma_line(logical_line);
     }
 
@@ -5255,6 +5314,26 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       }
       return text;
     };
+    auto is_commented_openmp_or_openacc_pragma =
+        [&](const std::string &comment) {
+          std::string text = normalize_fortran_comment(comment);
+          size_t pos = text.find_first_not_of(" \t");
+          if (pos == std::string::npos) {
+            return false;
+          }
+
+          const std::string trimmed = text.substr(pos);
+          std::string lowered = trimmed;
+          for (char &ch : lowered) {
+            ch =
+                static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+          }
+
+          return ((trimmed.rfind("//", 0) == 0) ||
+                  (trimmed.rfind("/*", 0) == 0)) &&
+                 (lowered.find("#pragma omp") != std::string::npos ||
+                  lowered.find("#pragma acc") != std::string::npos);
+        };
     auto normalize_preprocessing_comment = [&](const std::string &comment) {
       std::string text = normalize_fortran_comment(comment);
       size_t pos = text.find_first_not_of(" \t");
@@ -5263,15 +5342,9 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       }
 
       const std::string trimmed = text.substr(pos);
-      std::string lowered = trimmed;
-      for (char &ch : lowered) {
-        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-      }
-
       const bool is_commented_pragma =
           ((trimmed.rfind("//", 0) == 0) || (trimmed.rfind("/*", 0) == 0)) &&
-          (lowered.find("#pragma omp") != std::string::npos ||
-           lowered.find("#pragma acc") != std::string::npos);
+          is_commented_openmp_or_openacc_pragma(trimmed);
       if (is_commented_pragma) {
         return trimmed;
       }
@@ -5368,6 +5441,11 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         }
       }
 
+      if (suppress_misplaced_leading_variable_declaration_directive(
+              stmt, *i, whereToUnparse)) {
+        continue;
+      }
+
       // Check and see if the info object would indicate that the statement
       // would be printed, if not then don't print the comments associated with
       // it. These might have to be handled on a case by case basis. bool
@@ -5446,7 +5524,21 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       //                 and checked in.
 
       if (infoSaysGoAhead && (*i)->getRelativePosition() == whereToUnparse) {
-        unp->cur.format(stmt, info, FORMAT_BEFORE_DIRECTIVE);
+        const bool is_commented_pragma =
+            (((*i)->getTypeOfDirective() ==
+              PreprocessingInfo::CplusplusStyleComment) ||
+             ((*i)->getTypeOfDirective() ==
+              PreprocessingInfo::C_StyleComment) ||
+             ((*i)->getTypeOfDirective() ==
+              PreprocessingInfo::FortranStyleComment) ||
+             ((*i)->getTypeOfDirective() ==
+              PreprocessingInfo::F90StyleComment)) &&
+            is_commented_openmp_or_openacc_pragma((*i)->getString());
+        if (is_commented_pragma) {
+          emit_forced_newline(unp);
+        } else {
+          unp->cur.format(stmt, info, FORMAT_BEFORE_DIRECTIVE);
+        }
         // DQ (7/19/2008): If we can assert this, then we can simpleify the code
         // below! It is turned on in the
         // tests/nonsmoke/functional/roseTests/programTransformationTests/implicitCodeGenerationTest.C
@@ -11526,9 +11618,9 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       SgStatement * stmt, SgUnparse_Info & info) {
     ASSERT_not_null(stmt);
     LinewrapGuard disable_linewrap(unp);
-
     static const char *const kOmpCombinedParallelNestedVariantAttrName =
         "omp_combined_parallel_nested_variant";
+    static const char *const kOmpExplicitEndAttributeName = "omp_explicit_end";
 
     // Preserve combined `parallel <construct>` spelling only when FE marks the
     // outer `parallel` as originating from a combined directive.
@@ -11555,6 +11647,9 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         nested_body_stmt != nullptr && nested_body_stmt->get_body() != nullptr;
     const bool emit_combined_variant_selector =
         has_combined_parallel_shape && isVariant;
+    const bool emit_cxx_explicit_end =
+        !SageInterface::is_Fortran_language() &&
+        stmt->getAttribute(kOmpExplicitEndAttributeName) != nullptr;
     static const char *const kOmpClauseOriginalOrderAttrName =
         "omp_clause_original_order";
 
@@ -11688,7 +11783,27 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     SgOmpBodyStatement *b_stmt = isSgOmpBodyStatement(stmt);
     if (!isVariant && b_stmt && b_stmt->get_body() != nullptr) {
       SgUnparse_Info ninfo(info);
-      unparseStatement(b_stmt->get_body(), ninfo);
+      if (emit_cxx_explicit_end) {
+        if (SgBasicBlock *body_block = isSgBasicBlock(b_stmt->get_body())) {
+          unparseAttachedPreprocessingInfo(body_block, ninfo,
+                                           PreprocessingInfo::before);
+          for (SgStatement *body_stmt : body_block->get_statements()) {
+            if (body_stmt == nullptr) {
+              continue;
+            }
+            SgUnparse_Info body_info(ninfo);
+            unparseStatement(body_stmt, body_info);
+          }
+          unparseAttachedPreprocessingInfo(body_block, ninfo,
+                                           PreprocessingInfo::inside);
+          unparseAttachedPreprocessingInfo(body_block, ninfo,
+                                           PreprocessingInfo::after);
+        } else {
+          unparseStatement(b_stmt->get_body(), ninfo);
+        }
+      } else {
+        unparseStatement(b_stmt->get_body(), ninfo);
+      }
     } else {
       // TODO assertion for must-have bodies
     }
@@ -12539,10 +12654,16 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       precedence_value = 0;
       break;
 
-      // DQ (9/25/2013): Adding support for Fortran user defined binary
-      // operators (however, I am not certain this is the correct precedence).
+      // DQ (9/25/2013): Defined Fortran binary operators have lower precedence
+      // than the intrinsic operators.
     case V_SgUserDefinedBinaryOp: // return 0;
       precedence_value = 0;
+      break;
+
+      // Defined Fortran unary operators bind like other unary operators and
+      // more weakly than exponentiation.
+    case V_SgUserDefinedUnaryOp:
+      precedence_value = 15;
       break;
 
       // DQ (9/25/2013): Adding support for C/C++ asm operator (however, I am
@@ -12806,6 +12927,13 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       // does not make sense to output the warning below either.
     case V_SgMinusOp:
     case V_SgUnaryAddOp: {
+      return e_assoc_none;
+    }
+
+    case V_SgUserDefinedUnaryOp:
+    case V_SgUserDefinedBinaryOp: {
+      // Defined operators are not generally associative, so keep the
+      // parenthesization logic conservative when precedence ties occur.
       return e_assoc_none;
     }
 

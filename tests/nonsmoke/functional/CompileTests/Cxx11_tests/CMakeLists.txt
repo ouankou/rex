@@ -954,6 +954,11 @@ endfunction()
 assert_cxx11_specimens_exist(CXX11_TESTCODES)
 assert_cxx11_specimens_exist(CXX11_TESTCODES_CXX03)
 
+rex_register_compile_source_set(REX_CXX11_TESTS_CXX11_SOURCES
+  ${CXX11_TESTCODES})
+rex_register_compile_source_set(REX_CXX11_TESTS_CXX03_SOURCES
+  ${CXX11_TESTCODES_CXX03})
+
 set(ROSE_FLAGS_BASE
   -w -rose:verbose 0 -rose:skip_unparse_asm_commands)
 set(ROSE_FLAGS_CXX11
@@ -1022,7 +1027,7 @@ set_tests_properties(Cxx11_tests_test2020_113 PROPERTIES LABELS Cxx11_tests)
 
 add_test(
   NAME Cxx11_tests_c_language_file_as_cxx
-  COMMAND ${translator} -std=c++ ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+  COMMAND ${translator} ${ROSE_FLAGS_CXX03} -rose:Cxx_only ${ROSE_INCLUDE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/C_language_file_1.c
 )
@@ -1030,7 +1035,7 @@ set_tests_properties(Cxx11_tests_c_language_file_as_cxx PROPERTIES LABELS Cxx11_
 
 add_test(
   NAME Cxx11_tests_c_language_file_as_cxx11
-  COMMAND ${translator} -std=c++11 ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+  COMMAND ${translator} ${ROSE_FLAGS_CXX11} -rose:Cxx11_only ${ROSE_INCLUDE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/C_language_file_2.c
 )

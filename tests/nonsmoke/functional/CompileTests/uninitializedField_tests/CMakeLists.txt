@@ -35,153 +35,126 @@ if(NOT BASH_EXECUTABLE)
   message(FATAL_ERROR "bash not found; uninitializedField_tests requires bash")
 endif()
 
-include(${CMAKE_CURRENT_SOURCE_DIR}/uninitializedField_tests_lists.cmake)
-
 set(_uninit_flags -w -rose:verbose 0)
 set(_uninit_includes
   -isystem ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/input_codes/system_header_like
 )
 
-set(_uninit_cxx_dir
-  ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests)
-set(_uninit_cxx_dirs
-  ${_uninit_cxx_dir}
-  ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx03_tests
-  ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx11_tests
-  ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx14_tests
-  ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx17_tests
-  ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx20_tests
-)
-set(_uninit_c99_dir
-  ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/C99_tests)
-set(_uninit_fortran_dir
-  ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests)
+function(rex_uninit_test_name out_var prefix source_rel)
+  set(_name ${source_rel})
+  string(REPLACE "/" "_" _name "${_name}")
+  string(REPLACE "." "_" _name "${_name}")
+  set(${out_var} "${prefix}_${_name}" PARENT_SCOPE)
+endfunction()
 
-function(_resolve_uninit_source out_var testcode)
-  foreach(_uninit_dir IN LISTS ARGN)
-    set(_uninit_candidate ${_uninit_dir}/${testcode})
-    if(EXISTS ${_uninit_candidate})
-      set(${out_var} ${_uninit_candidate} PARENT_SCOPE)
-      return()
+function(rex_add_uninit_cxx_tests property_name)
+  set(_group_flags ${ARGN})
+  rex_get_registered_compile_source_set(_sources ${property_name})
+  foreach(source_rel IN LISTS _sources)
+    set(_source_path ${REX_COMPILE_TESTS_SOURCE_DIR}/${source_rel})
+    get_filename_component(_source_name ${_source_path} NAME)
+    get_filename_component(_source_dir ${_source_path} DIRECTORY)
+    rex_get_cxx_specimen_extra_flags(_extra_frontend_flags ${_source_name})
+    rex_uninit_test_name(_test_name uninit_fields_cxx ${source_rel})
+    add_test(
+      NAME ${_test_name}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+      COMMAND $<TARGET_FILE:testUninitializedFields>
+        ${_uninit_flags}
+        ${_group_flags}
+        ${_extra_frontend_flags}
+        -DTEST_STRING_MACRO="Thu Apr 14 08:18:33 PDT 2005"
+        -I${_source_dir}
+        ${_uninit_includes}
+        -c ${_source_path}
+    )
+    if(source_rel MATCHES "axpy")
+      set_tests_properties(${_test_name} PROPERTIES TIMEOUT 7200)
     endif()
   endforeach()
-  set(${out_var} "" PARENT_SCOPE)
+endfunction()
+
+function(rex_add_uninit_c_copy_tests prefix property_name)
+  set(_group_flags ${ARGN})
+  rex_get_registered_compile_source_set(_sources ${property_name})
+  foreach(source_rel IN LISTS _sources)
+    set(_source_path ${REX_COMPILE_TESTS_SOURCE_DIR}/${source_rel})
+    get_filename_component(_source_dir ${_source_path} DIRECTORY)
+    rex_uninit_test_name(_test_name ${prefix} ${source_rel})
+    add_test(
+      NAME ${_test_name}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+      COMMAND ${BASH_EXECUTABLE} -c
+        "cp \"$1\" \"$2\" && shift 2 && \"$@\""
+        dummy
+        ${_source_path}
+        ${_test_name}.temp.c
+        $<TARGET_FILE:testUninitializedFields>
+        ${_uninit_flags}
+        ${_group_flags}
+        -I${_source_dir}
+        ${_uninit_includes}
+        -c
+        ${_test_name}.temp.c
+    )
+  endforeach()
+endfunction()
+
+function(rex_add_uninit_fortran_tests prefix property_name)
+  set(_group_flags ${ARGN})
+  rex_get_registered_compile_source_set(_sources ${property_name})
+  foreach(source_rel IN LISTS _sources)
+    set(_source_path ${REX_COMPILE_TESTS_SOURCE_DIR}/${source_rel})
+    rex_uninit_test_name(_test_name ${prefix} ${source_rel})
+    rex_get_fortran_specimen_extra_flags(_extra_frontend_flags ${source_rel})
+    add_test(
+      NAME ${_test_name}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+      COMMAND $<TARGET_FILE:testUninitializedFields>
+        ${_uninit_flags}
+        ${_group_flags}
+        ${_extra_frontend_flags}
+        -c ${_source_path}
+    )
+  endforeach()
 endfunction()
 
 if(NOT _uninit_skip_all)
-set(_missing_uninit_cxx_sources)
-foreach(testcode IN LISTS UNINIT_CXX_TEST_SOURCES)
-  _resolve_uninit_source(_uninit_source_path ${testcode} ${_uninit_cxx_dirs})
-  if(_uninit_source_path STREQUAL "")
-    list(APPEND _missing_uninit_cxx_sources ${testcode})
-    continue()
-  endif()
-  get_filename_component(_uninit_source_dir ${_uninit_source_path} DIRECTORY)
-  string(REPLACE "." "_" _uninit_name ${testcode})
-  add_test(
-    NAME uninit_fields_cxx_${_uninit_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND $<TARGET_FILE:testUninitializedFields>
-      ${_uninit_flags}
-      -DTEST_STRING_MACRO="Thu Apr 14 08:18:33 PDT 2005"
-      -I${_uninit_source_dir}
-      ${_uninit_includes}
-      -c ${_uninit_source_path}
-  )
-  if(testcode MATCHES "axpy")
-    # Valgrind amplifies Clang frontend cost for heavy STL inputs; allow enough time.
-    set_tests_properties(uninit_fields_cxx_${_uninit_name} PROPERTIES TIMEOUT 7200)
-  endif()
-endforeach()
-if(_missing_uninit_cxx_sources)
-  list(JOIN _missing_uninit_cxx_sources ", " _missing_uninit_cxx_sources_msg)
-  message(STATUS
-    "Skipping uninitializedField_tests sources missing from CompileTests tree: "
-    "${_missing_uninit_cxx_sources_msg}")
-endif()
+  rex_add_uninit_cxx_tests(REX_CXX_TESTS_DEFAULT_SOURCES -std=gnu++14)
+  rex_add_uninit_cxx_tests(REX_CXX_TESTS_GNUXX03_SOURCES -std=gnu++03)
+  rex_add_uninit_cxx_tests(REX_CXX_TESTS_GNUXX17_SOURCES -std=gnu++17)
+  rex_add_uninit_cxx_tests(
+    REX_CXX_TESTS_DELAYED_TEMPLATE_PARSING_SOURCES
+    -std=gnu++14
+    -rex:clang:delayed-template-parsing)
+  rex_add_uninit_cxx_tests(REX_CXX03_TESTS_SOURCES -std=c++03)
+  rex_add_uninit_cxx_tests(REX_CXX11_TESTS_CXX11_SOURCES -std=c++11)
+  rex_add_uninit_cxx_tests(REX_CXX11_TESTS_CXX03_SOURCES -std=c++03)
+  rex_add_uninit_cxx_tests(REX_CXX14_TESTS_SOURCES -std=c++14)
+  rex_add_uninit_cxx_tests(REX_CXX17_TESTS_SOURCES -std=c++17)
+  rex_add_uninit_cxx_tests(REX_CXX20_TESTS_SOURCES -std=c++20)
 
-foreach(testcode IN LISTS UNINIT_C_TEST_SOURCES)
-  string(REPLACE "." "_" _uninit_name ${testcode})
-  if(testcode MATCHES "\\.c$")
-    set(_uninit_source_dir
-        ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/C_tests)
-  else()
-    set(_uninit_source_dir ${_uninit_cxx_dir})
+  rex_get_registered_compile_source_set(_gnu89_c_sources REX_C_TESTS_GNU89_SOURCES)
+  rex_get_registered_compile_source_set(_all_c_sources REX_C_TESTS_SOURCES)
+  if(_gnu89_c_sources)
+    list(REMOVE_ITEM _all_c_sources ${_gnu89_c_sources})
   endif()
-  add_test(
-    NAME uninit_fields_c_${_uninit_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${BASH_EXECUTABLE} -c
-      "cp \"$1\" \"$2\" && shift 2 && \"$@\""
-      dummy
-      ${_uninit_source_dir}/${testcode}
-      ${testcode}.temp.c
-      $<TARGET_FILE:testUninitializedFields>
-      ${_uninit_flags}
-      -I${_uninit_source_dir}
-      ${_uninit_includes}
-      -c
-      ${testcode}.temp.c
-  )
-endforeach()
+  set_property(GLOBAL PROPERTY REX_UNINIT_C_TESTS_DEFAULT_SOURCES ${_all_c_sources})
 
-foreach(testcode IN LISTS UNINIT_C99_TEST_SOURCES)
-  string(REPLACE "." "_" _uninit_name ${testcode})
-  add_test(
-    NAME uninit_fields_c99_${_uninit_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${BASH_EXECUTABLE} -c
-      "cp \"$1\" \"$2\" && shift 2 && \"$@\""
-      dummy
-      ${_uninit_c99_dir}/${testcode}
-      ${testcode}.temp.c
-      $<TARGET_FILE:testUninitializedFields>
-      ${_uninit_flags}
-      -I${_uninit_c99_dir}
-      ${_uninit_includes}
-      -c
-      ${testcode}.temp.c
-  )
-endforeach()
+  rex_add_uninit_c_copy_tests(uninit_fields_c REX_UNINIT_C_TESTS_DEFAULT_SOURCES)
+  rex_add_uninit_c_copy_tests(uninit_fields_c REX_C_TESTS_GNU89_SOURCES -std=gnu89)
+  rex_add_uninit_c_copy_tests(uninit_fields_c REX_C_SUBSET_OF_CXX_SOURCES)
+  rex_add_uninit_c_copy_tests(uninit_fields_c99 REX_C99_TESTS_SOURCES -rose:C99)
 
 if(enable-fortran)
-  foreach(testcode IN LISTS UNINIT_F90_TEST_SOURCES)
-    string(REPLACE "." "_" _uninit_name ${testcode})
-    add_test(
-      NAME uninit_fields_f90_${_uninit_name}
-      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND $<TARGET_FILE:testUninitializedFields>
-        ${_uninit_flags}
-        -rose:fortran_std=f90
-        -c ${_uninit_fortran_dir}/${testcode}
-    )
-  endforeach()
-
-  foreach(testcode IN LISTS UNINIT_F77_TEST_SOURCES)
-    string(REPLACE "." "_" _uninit_name ${testcode})
-    add_test(
-      NAME uninit_fields_f77_${_uninit_name}
-      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND $<TARGET_FILE:testUninitializedFields>
-        ${_uninit_flags}
-        -rose:fortran_std=f77
-        -c ${_uninit_fortran_dir}/${testcode}
-    )
-  endforeach()
-
-  foreach(testcode IN LISTS UNINIT_F03_TEST_SOURCES)
-    string(REPLACE "." "_" _uninit_name ${testcode})
-    add_test(
-      NAME uninit_fields_f03_${_uninit_name}
-      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND $<TARGET_FILE:testUninitializedFields>
-        ${_uninit_flags}
-        -rose:skip_syntax_check
-        -rose:skipfinalCompileStep
-        -rose:fortran_std=f2003
-        -c ${_uninit_fortran_dir}/${testcode}
-    )
-  endforeach()
+    rex_add_uninit_fortran_tests(uninit_fields_f90 REX_FORTRAN_F90_SOURCES
+      -rose:fortran_std=f90)
+    rex_add_uninit_fortran_tests(uninit_fields_f77 REX_FORTRAN_F77_SOURCES
+      -rose:fortran_std=f77)
+    rex_add_uninit_fortran_tests(uninit_fields_f03 REX_FORTRAN_F03_SOURCES
+      -rose:skip_syntax_check
+      -rose:skipfinalCompileStep
+      -rose:fortran_std=f2003)
 endif()
 
 endif()

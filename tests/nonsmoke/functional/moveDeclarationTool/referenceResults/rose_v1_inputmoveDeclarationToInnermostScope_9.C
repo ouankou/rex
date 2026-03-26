@@ -2,8 +2,8 @@
 
 void fallbackSimpleSort(int *fmap,int *eclass,int lo,int hi)
 {
-  if (lo == hi) 
-    return ;
+  if (lo == hi)
+    return;
   if (hi - lo > 3) {
     int i;
     unsigned int ec_tmp;

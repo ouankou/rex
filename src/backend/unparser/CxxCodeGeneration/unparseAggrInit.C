@@ -60,6 +60,38 @@ static bool sharesSameStatement(SgExpression *, SgType *expressionType) {
   return result;
 }
 
+static bool
+compoundLiteralContainsBaseTypeDefinition(SgAggregateInitializer *aggr_init,
+                                          bool &known) {
+  known = false;
+
+  SgInitializedName *initialized_name =
+      isSgInitializedName(aggr_init->get_parent());
+  if (initialized_name == NULL) {
+    return false;
+  }
+
+  SgVariableDeclaration *variable_declaration =
+      isSgVariableDeclaration(initialized_name->get_parent());
+  if (variable_declaration == NULL) {
+    return false;
+  }
+
+  // Compound literals are backed by a hidden compiler-generated declaration.
+  // When the original source spelled a fresh tag definition inside the type-id,
+  // the frontend records it here; otherwise we should reuse the existing type
+  // name and skip re-emitting a nested definition.
+  Sg_File_Info *file_info = variable_declaration->get_file_info();
+  if (file_info != NULL && file_info->isCompilerGenerated() &&
+      file_info->isOutputInCodeGeneration() == false) {
+    known = true;
+    return variable_declaration
+        ->get_variableDeclarationContainsBaseTypeDefiningDeclaration();
+  }
+
+  return false;
+}
+
 static bool containsIncludeDirective(SgLocatedNode *locatedNode) {
   bool returnResult = false;
   AttachedPreprocessingInfoType *comments =
@@ -316,7 +348,12 @@ void Unparse_ExprStmt::unparseAggrInit(SgExpression *expr,
            aggr_init->get_type()->class_name().c_str());
 #endif
 
-    bool shares = sharesSameStatement(aggr_init, aggr_init->get_type());
+    bool known_compound_literal_layout = false;
+    bool shares = compoundLiteralContainsBaseTypeDefinition(
+        aggr_init, known_compound_literal_layout);
+    if (!known_compound_literal_layout) {
+      shares = sharesSameStatement(aggr_init, aggr_init->get_type());
+    }
 #if DEBUG__unparseAggrInit
     printf("  shares = %s \n", shares ? "true" : "false");
 #endif

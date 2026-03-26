@@ -6,10 +6,24 @@ if(NOT BASH_EXECUTABLE)
   message(FATAL_ERROR "bash not found; Fortran_tests require bash")
 endif()
 
-include(Fortran_F90_Testcodes.cmake)
-include(Fortran_F77_Testcodes.cmake)
-include(Fortran_F03_Testcodes.cmake)
-include(Fortran_Comments_Testcodes.cmake)
+file(GLOB F77_TESTCODES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.f")
+file(GLOB F90_TESTCODES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.f90" "*.F90")
+file(GLOB F03_TESTCODES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.f03")
+file(GLOB F90_COMMENTS_TESTCODES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+  "test2020_comment_*.f90")
+list(SORT F77_TESTCODES)
+list(SORT F90_TESTCODES)
+list(SORT F03_TESTCODES)
+list(SORT F90_COMMENTS_TESTCODES)
+list(REMOVE_ITEM F90_TESTCODES
+  ${F90_COMMENTS_TESTCODES}
+  inputUsingDefinesOnCommandline.F90
+  invalid_fortran_error.f90)
+
+set(_fortran_f90_sources ${F90_TESTCODES} ${F90_COMMENTS_TESTCODES})
+rex_register_compile_source_set(REX_FORTRAN_F77_SOURCES ${F77_TESTCODES})
+rex_register_compile_source_set(REX_FORTRAN_F90_SOURCES ${_fortran_f90_sources})
+rex_register_compile_source_set(REX_FORTRAN_F03_SOURCES ${F03_TESTCODES})
 
 set(_fortran_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
 file(MAKE_DIRECTORY ${_fortran_output_dir})
@@ -57,7 +71,9 @@ endfunction()
 
 set(FORTRAN_FLAGS -rose:fortran_std=f77)
 set(_fortran_f77_frontend_negative_tests
+  test1956_01.f
   test2007_146.f
+  triangle-fixed.f
 )
 foreach(F77_test ${F77_TESTCODES})
   if(F77_test IN_LIST _fortran_f77_frontend_negative_tests)
@@ -82,6 +98,7 @@ set(_fortran_frontend_negative_tests
   test2007_88.f90
   test2007_152.f90
   test2007_177.f90
+  test2008_61.f90
   test2010_19.f90
   test2010_26.f90
   test2010_102.f90

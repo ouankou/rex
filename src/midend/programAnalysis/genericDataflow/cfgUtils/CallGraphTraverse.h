@@ -21,6 +21,8 @@
 // namespace CallGraph
 //{
 
+bool call_graph_traversal_includes_function_decl(SgFunctionDeclaration *decl);
+
 /* !!! NOTE: TraverseCallGraphDataflow LIMITED TO NON-RECURSIVE PROGRAMS (I.E.
  * CONTROL FLOW GRAPHS WITH NO CYCLES) !!! */
 
@@ -181,10 +183,12 @@ public:
       ROSE_ASSERT(isSgFunctionDeclaration(target->get_SgNode()));
       assert(!isSgTemplateFunctionDeclaration(target->get_SgNode()));
 
-      // Compiler-generated functions do not appear as nodes in the call graph
-      if (isSgFunctionDeclaration(target->get_SgNode())
-              ->get_file_info()
-              ->isCompilerGenerated())
+      // Skip only those functions that are intentionally absent from the
+      // traversal set. Template instantiations from user-written templates are
+      // admitted even when their synthesized declarations are marked as
+      // compiler-generated.
+      if (!call_graph_traversal_includes_function_decl(
+              isSgFunctionDeclaration(target->get_SgNode())))
         return NULL;
 
       // Find the CGFunction in functions that matches the target SgGraphNode

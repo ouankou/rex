@@ -11,14 +11,14 @@ void foo()
       for (int i = 0; i < size; i++) {
         array[i] = 1;
       }
-      break; 
+      break;
     }
     case 2:
 {
       for (int i = 0; i < size; i++) {
         array[i] = 2;
       }
-      break; 
+      break;
     }
     default:
 {

@@ -21,7 +21,7 @@ void foo()
         array[i] = 1;
         array[i] = foobar(array[i + 1]);
       }
-      break; 
+      break;
     }
     case 2:
 {
@@ -29,7 +29,7 @@ void foo()
         array[i] = 2;
         array[i] = foobar(array[i + 1]);
       }
-      break; 
+      break;
     }
     default:
 {

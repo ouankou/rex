@@ -139,6 +139,8 @@ SageBuilder::buildAttributeSpecificationStatement(
   attributeSpecificationStatement->set_attribute_kind(kind);
 
   switch (kind) {
+  case SgAttributeSpecificationStatement::e_accessStatement_private:
+  case SgAttributeSpecificationStatement::e_accessStatement_public:
   case SgAttributeSpecificationStatement::e_parameterStatement:
   case SgAttributeSpecificationStatement::e_externalStatement:
   case SgAttributeSpecificationStatement::e_dimensionStatement:

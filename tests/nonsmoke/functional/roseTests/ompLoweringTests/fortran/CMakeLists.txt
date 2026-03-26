@@ -1,13 +1,13 @@
 set(_omp_fortran_dir
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/OpenMP_tests/fortran)
 
-include(${_omp_fortran_dir}/OpenMP_fortran_Testcodes.cmake)
+file(GLOB OMP_FORTRAN_ALL_CASES RELATIVE ${_omp_fortran_dir}
+  ${_omp_fortran_dir}/*.f
+  ${_omp_fortran_dir}/*.f90)
+list(SORT OMP_FORTRAN_ALL_CASES)
 set(_omp_fortran_lowering_output_dir
   ${CMAKE_CURRENT_BINARY_DIR}/test-output)
 file(MAKE_DIRECTORY ${_omp_fortran_lowering_output_dir})
-
-set(OMP_FORTRAN_ALL_CASES ${OPENMP_FORTRAN_TESTCODES})
-list(REMOVE_DUPLICATES OMP_FORTRAN_ALL_CASES)
 
 # Semantic runs execute lowered and original binaries multiple times and can
 # legitimately run longer when the full OMP lowering suite is parallelized.

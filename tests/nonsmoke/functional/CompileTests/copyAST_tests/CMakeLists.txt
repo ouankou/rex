@@ -9,7 +9,7 @@ add_executable(copyFunctionDefinitions copyFunctionDefinitions.C)
 target_link_libraries(copyFunctionDefinitions ROSE_DLL ${CMAKE_THREAD_LIBS_INIT})
 install(TARGETS copyExample copyLoops copyBlocks copyFunctionDefinitions DESTINATION bin)
 
-  set(TESTCODES_REQUIRED_TO_PASS
+  set(COPYAST_LOCAL_TESTCODES
     copytest2007_01.C copytest2007_02.C copytest2007_03.C copytest2007_04.C
     copytest2007_05.C copytest2007_06.C copytest2007_07.C copytest2007_08.C
     copytest2007_09.C copytest2007_10.C copytest2007_11.C copytest2007_12.C
@@ -23,7 +23,7 @@ install(TARGETS copyExample copyLoops copyBlocks copyFunctionDefinitions DESTINA
     copytest2007_46.C copytest2007_47.C copytest2007_49.C copytest2007_50.C
     copytest2014_01.C copytest2014_02.C copyExampleInput.C)
 
-  set(EXTRA_TESTCODES_REQUIRED_TO_PASS
+  set(COPYAST_CXX_TESTCODES
     test_CplusplusMacro_Cpp.C test2001_01.C test2001_02.C test2001_03.C
     test2001_04.C test2001_05.C test2001_06.C test2001_07.C test2001_08.C
     test2001_09.C test2001_10.C test2001_14.C test2001_15.C test2001_17.C
@@ -166,7 +166,7 @@ install(TARGETS copyExample copyLoops copyBlocks copyFunctionDefinitions DESTINA
     test2006_141.C
   )
 
-list(APPEND EXTRA_TESTCODES_REQUIRED_TO_PASS
+list(APPEND COPYAST_CXX_TESTCODES
   test2004_149.C
   test2005_28.C
   test2005_45.C
@@ -185,7 +185,7 @@ file(MAKE_DIRECTORY ${ROSE_TEST_OUTPUT_DIR})
 
 set(TESTCODE_INCLUDES "")
 
-foreach(testcode ${TESTCODES_REQUIRED_TO_PASS})
+foreach(testcode ${COPYAST_LOCAL_TESTCODES})
   get_filename_component(basename ${testcode} NAME_WE)
   add_test(
     NAME copyAST_${basename}
@@ -220,7 +220,7 @@ add_test(
 set_tests_properties(copyAST_copyFunctionDefinitions PROPERTIES LABELS COPYASTTEST)
 
 # Use tests from the Cxx_tests directory
-foreach(testcode ${EXTRA_TESTCODES_REQUIRED_TO_PASS})
+foreach(testcode ${COPYAST_CXX_TESTCODES})
   get_filename_component(basename ${testcode} NAME_WE)
   add_test(
     NAME copyAST_${basename}
@@ -278,4 +278,3 @@ foreach(testcode ${_copyast_additional_local_tests})
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${testcode})
   set_tests_properties(copyAST_${basename} PROPERTIES  LABELS COPYASTTEST)
 endforeach()
-

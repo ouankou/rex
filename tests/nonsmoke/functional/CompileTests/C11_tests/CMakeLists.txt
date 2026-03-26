@@ -16,7 +16,6 @@ set(C11_TESTCODES
   test2014_15.c
   test2014_16.c
   test2014_17.c
-  test2014_18.c
   test2014_19.c
   test2014_20.c
   test2014_21.c

@@ -7,7 +7,8 @@ set(CXX03_TESTCODES
 
 set(ROSE_FLAGS -w -rose:verbose 0 -std=c++03)
 
+rex_register_compile_source_set(REX_CXX03_TESTS_SOURCES ${CXX03_TESTCODES})
+
 foreach(file_to_test ${CXX03_TESTCODES})
   compile_test(${file_to_test} "Cxx03_tests")
 endforeach()
-

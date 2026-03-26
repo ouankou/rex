@@ -25,6 +25,10 @@ if(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 endif()
 list(APPEND ROSE_FLAGS -w)
 
+# test2013_06.c is invalid even for stock C compilers because its header uses
+# `bool` before <stdbool.h> is included.
+list(REMOVE_ITEM files_to_test test2013_06.c)
+
 foreach(file_to_test ${files_to_test})
   compile_test(${file_to_test} C89TEST TRUE)
 endforeach()
@@ -44,4 +48,3 @@ foreach(file_to_test ${files_to_test})
   list(APPEND _c89_test_names "C89TEST_${_test_key}")
 endforeach()
 list(REMOVE_DUPLICATES _c89_test_names)
-

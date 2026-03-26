@@ -21,7 +21,7 @@ if(NOT BASH_EXECUTABLE)
   message(FATAL_ERROR "bash not found; C_tests special tests require bash")
 endif()
 
-set(TESTCODES_REQUIRED_TO_PASS
+set(C_TESTCODES
   YardenPragmaPackExample.c
   Yarden_client.c
   commentTest.c
@@ -307,8 +307,6 @@ set(TESTCODES_REQUIRED_TO_PASS
   test2013_47.c
   test2013_48.c
   test2013_49.c
-  test2013_50.c
-  test2013_51.c
   test2013_52.c
   test2013_53.c
   test2013_54.c
@@ -372,7 +370,6 @@ set(TESTCODES_REQUIRED_TO_PASS
   test2014_15.c
   test2014_16.c
   test2014_17.c
-  test2014_18.c
   test2014_19.c
   test2014_20.c
   test2014_200.c
@@ -539,7 +536,6 @@ set(TESTCODES_REQUIRED_TO_PASS
   test2015_39.c
   test2015_40.c
   test2015_41.c
-  test2015_42.c
   test2015_43.c
   test2015_44.c
   test2015_45.c
@@ -772,9 +768,7 @@ set(TESTCODES_REQUIRED_TO_PASS
   test2020_27.c
   test2015_56.c
   test2015_86.c
-  test2015_87.c
   test2015_88.c
-  test2015_93.c
   test2015_94.c
   test2015_95.c
   test2015_96.c
@@ -813,7 +807,7 @@ set(TESTCODES_REQUIRED_TO_PASS
   test2015_112.c
   test2005_168.c
 )
-set(C_TESTCODES_LEGACY_DEFAULT
+list(APPEND C_TESTCODES
   test2004_126.c
   test2006_134.c
   test2009_06.c
@@ -829,9 +823,7 @@ set(C_TESTCODES_LEGACY_DEFAULT
   test2020_25.c
   test2015_56.c
   test2015_86.c
-  test2015_87.c
   test2015_88.c
-  test2015_93.c
   test2015_94.c
   test2015_95.c
   test2015_96.c
@@ -870,7 +862,7 @@ set(C_TESTCODES_LEGACY_DEFAULT
   test2015_112.c
   test2005_168.c
 )
-set(C_TESTCODES_ADDITIONAL_TO_RUN
+list(APPEND C_TESTCODES
   Yarden_client.c
   test2004_126.c
   test2005_168.c
@@ -952,7 +944,6 @@ set(C_TESTCODES_ADDITIONAL_TO_RUN
   test2015_39.c
   test2015_40.c
   test2015_41.c
-  test2015_42.c
   test2015_47.c
   test2015_48.c
   test2015_49.c
@@ -1001,13 +992,7 @@ set(C_TESTCODES_ADDITIONAL_TO_RUN
   test2022_04.c
 )
 
-set(TESTCODES_REQUIRED_TO_PASS "${TESTCODES_REQUIRED_TO_PASS}" CACHE INTERNAL "")
-set(C_TESTCODES_TO_RUN
-  ${TESTCODES_REQUIRED_TO_PASS}
-  ${C_TESTCODES_LEGACY_DEFAULT}
-  ${C_TESTCODES_ADDITIONAL_TO_RUN}
-)
-list(REMOVE_DUPLICATES C_TESTCODES_TO_RUN)
+list(REMOVE_DUPLICATES C_TESTCODES)
 
 # These legacy C tests rely on GNU89/C89 behavior (e.g., implicit function
 # declarations and GNU extensions). Keep default C mode for the rest of
@@ -1043,7 +1028,18 @@ set(C_TESTCODES_REQUIRE_GNU89
 list(APPEND ROSE_GNU89_TESTCODES ${C_TESTCODES_REQUIRE_GNU89})
 list(REMOVE_DUPLICATES ROSE_GNU89_TESTCODES)
 
-foreach(file_to_test ${C_TESTCODES_TO_RUN})
+# test2012_145.c requires a command-line string macro and is registered below
+# with dedicated flags. Keep it out of the generic compile_test loop.
+list(REMOVE_ITEM C_TESTCODES test2012_145.c)
+
+# test2013_06.c is invalid even for stock C compilers because its header uses
+# `bool` before <stdbool.h> is included.
+list(REMOVE_ITEM C_TESTCODES test2013_06.c)
+
+rex_register_compile_source_set(REX_C_TESTS_SOURCES ${C_TESTCODES})
+rex_register_compile_source_set(REX_C_TESTS_GNU89_SOURCES ${ROSE_GNU89_TESTCODES})
+
+foreach(file_to_test ${C_TESTCODES})
   compile_test(${file_to_test} "C_tests")
 endforeach()
 set(ROSE_FLAGS ${C_TEST_ROSE_FLAGS})

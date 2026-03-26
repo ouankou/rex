@@ -1,10 +1,20 @@
-include(ElsaTestCases_big_Testcodes.cmake)
-include(ElsaTestCases_big_Testcodes_Additional.cmake)
-
 set(ROSE_FLAGS -w)
-set(ELSATEST_BIG_ALL_TESTCODES
-  ${ELSATEST_BIG_TESTCODES}
-  ${ELSATEST_BIG_ADDITIONAL_TESTCODES})
+set(_elsa_big_output_dir "${ROSE_TEST_OUTPUT_DIR}")
+if(_elsa_big_output_dir STREQUAL "")
+  set(_elsa_big_output_dir "${CMAKE_CURRENT_BINARY_DIR}/rose_output")
+endif()
+file(MAKE_DIRECTORY "${_elsa_big_output_dir}")
+file(GLOB _elsa_big_cpp_sources RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/..
+  ${CMAKE_CURRENT_SOURCE_DIR}/../*.cc)
+file(GLOB _elsa_big_c_sources RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/..
+  ${CMAKE_CURRENT_SOURCE_DIR}/../ctests/*.c)
+set(ELSATEST_BIG_ALL_TESTCODES ${_elsa_big_cpp_sources})
+foreach(_elsa_big_c_source IN LISTS _elsa_big_c_sources)
+  string(REGEX REPLACE "^ctests/" "c/" _elsa_big_testcode
+    "${_elsa_big_c_source}")
+  list(APPEND ELSATEST_BIG_ALL_TESTCODES ${_elsa_big_testcode})
+endforeach()
+list(SORT ELSATEST_BIG_ALL_TESTCODES)
 set(ELSATEST_BIG_GNU89_C_TESTCODES
   c/dC0026.c
   c/dC0027.c
@@ -20,7 +30,7 @@ set(ELSATEST_BIG_GNU89_C_TESTCODES
   c/t0016.c
   c/t0021.c
 )
-set(ELSATEST_BIG_EXPECT_FAIL
+set(ELSATEST_BIG_CONTINUE_ON_ERROR
   c/dC0024.c
   c/dC0025.c
   c/t0010.c
@@ -62,20 +72,22 @@ function(rex_elsa_big_test input_file)
     list(FILTER _rose_flags EXCLUDE REGEX "^-std=.*")
     list(APPEND _rose_flags -std=gnu++03)
   endif()
+  if(input_file IN_LIST ELSATEST_BIG_CONTINUE_ON_ERROR)
+    list(APPEND _rose_flags -rex:clang:continue-on-error)
+  endif()
 
   add_test(
     NAME ${test_id}
+    WORKING_DIRECTORY ${_elsa_big_output_dir}
     COMMAND ${translator}
       ${_rose_flags} ${ROSE_INCLUDE_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR} -c
       ${_input_path}
   )
   set_tests_properties(${test_id} PROPERTIES LABELS ELSATEST)
-  if(input_file IN_LIST ELSATEST_BIG_EXPECT_FAIL)
-    set_tests_properties(${test_id} PROPERTIES WILL_FAIL TRUE)
-  endif()
+  set_property(TEST ${test_id} APPEND PROPERTY ENVIRONMENT
+               "ROSE_TEST_OUTPUT_DIR=${_elsa_big_output_dir}")
 endfunction()
 
 foreach(file_to_test ${ELSATEST_BIG_ALL_TESTCODES})
   rex_elsa_big_test(${file_to_test})
 endforeach()
-

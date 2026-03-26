@@ -1,12 +1,12 @@
 -----------------------------------------------
-OpenMP region SgOmpParallelStatement @ 15
-"x"@19:5	copyprivate
-"y"@20:5	copyprivate
+OpenMP region SgOmpParallelStatement @ 13
+"x"@17:7	copyprivate
+"y"@18:7	copyprivate
 "x"@0:0	copyprivate
 "y"@0:0	copyprivate
-"x"@22:24	private
-"y"@22:26	private
+"x"@20:28	private
+"y"@20:31	private
 -----------------------------------------------
-OpenMP region SgOmpSingleStatement @ 17
-"x"@19:5	copyprivate
-"y"@20:5	copyprivate
+OpenMP region SgOmpSingleStatement @ 15
+"x"@17:7	copyprivate
+"y"@18:7	copyprivate

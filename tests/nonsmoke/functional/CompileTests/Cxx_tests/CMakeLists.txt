@@ -1,4 +1,4 @@
-set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
+set(CXX_TESTCODES
   Area-01.C
   X.C
   dynamic_cast.C
@@ -2438,7 +2438,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test_gnu.C
   test2017_44.C
 )
-set(CXX_TESTCODES_LEGACY_DEFAULT
+list(APPEND CXX_TESTCODES
   certSignalExample.C
   c++trick.C
   lexPhase2003_02.C
@@ -2706,7 +2706,7 @@ set(CXX_TESTCODES_LEGACY_DEFAULT
   test2020_36.C
   test2017_44.C
 )
-set(CXX_TESTCODES_ADDITIONAL_TO_RUN
+list(APPEND CXX_TESTCODES
   c++trick.C
   certSignalExample.C
   lexPhase2003_02.C
@@ -3026,7 +3026,7 @@ set(CXX_TESTCODES_ADDITIONAL_TO_RUN
   test2013_182.C
 )
 
-set(CXX_TESTCODES_EXTRA_DEFAULT
+list(APPEND CXX_TESTCODES
   test2006_131.C
   test2014_22.C
   test2014_63.C
@@ -3034,27 +3034,15 @@ set(CXX_TESTCODES_EXTRA_DEFAULT
   test2015_109.C
 )
 
-set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS "${EXAMPLE_TESTCODES_REQUIRED_TO_PASS}" CACHE INTERNAL "" FORCE)
-set(CXX_TESTCODES_STANDARD_TO_RUN
-  ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS}
-  ${CXX_TESTCODES_LEGACY_DEFAULT}
-  ${CXX_TESTCODES_ADDITIONAL_TO_RUN}
-  ${CXX_TESTCODES_EXTRA_DEFAULT}
-)
-set(CXX_TESTCODES_ALWAYS_RUN
+list(APPEND CXX_TESTCODES
   test2013_09.C)
-list(APPEND CXX_TESTCODES_STANDARD_TO_RUN ${CXX_TESTCODES_ALWAYS_RUN})
-list(REMOVE_DUPLICATES CXX_TESTCODES_STANDARD_TO_RUN)
-set(CXX_TESTCODES_STANDARD_TO_RUN "${CXX_TESTCODES_STANDARD_TO_RUN}" CACHE INTERNAL "" FORCE)
-
-set(CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_STANDARD_TO_RUN})
-list(REMOVE_DUPLICATES CXX_TESTCODES_TO_RUN)
+list(REMOVE_DUPLICATES CXX_TESTCODES)
 
 set(CXX_TESTCODES_GNUXX03
   # Legacy access declarations (e.g., A::foo;) require pre-C++11 mode.
   test2020_31.C
 )
-list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_GNUXX03})
+list(REMOVE_ITEM CXX_TESTCODES ${CXX_TESTCODES_GNUXX03})
 
 set(CXX_TESTCODES_GNUXX17
   # These use C++17 library/features (variant/filesystem/*_v traits/CTAD).
@@ -3067,12 +3055,12 @@ set(CXX_TESTCODES_GNUXX17
   rex_test2026_std_filesystem.cpp
   rex_test2026_std_variant_visit.cpp
 )
-list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_GNUXX17})
+list(REMOVE_ITEM CXX_TESTCODES ${CXX_TESTCODES_GNUXX17})
 
 set(CXX_TESTCODES_DELAYED_TEMPLATE_PARSING
   test2016_85.C
 )
-list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_DELAYED_TEMPLATE_PARSING})
+list(REMOVE_ITEM CXX_TESTCODES ${CXX_TESTCODES_DELAYED_TEMPLATE_PARSING})
 
 function(assert_cxx_specimens_exist list_name)
   foreach(specimen IN LISTS ${list_name})
@@ -3086,7 +3074,16 @@ endfunction()
 assert_cxx_specimens_exist(CXX_TESTCODES_GNUXX03)
 assert_cxx_specimens_exist(CXX_TESTCODES_GNUXX17)
 assert_cxx_specimens_exist(CXX_TESTCODES_DELAYED_TEMPLATE_PARSING)
-assert_cxx_specimens_exist(CXX_TESTCODES_TO_RUN)
+assert_cxx_specimens_exist(CXX_TESTCODES)
+
+rex_register_compile_source_set(REX_CXX_TESTS_GNUXX03_SOURCES
+  ${CXX_TESTCODES_GNUXX03})
+rex_register_compile_source_set(REX_CXX_TESTS_GNUXX17_SOURCES
+  ${CXX_TESTCODES_GNUXX17})
+rex_register_compile_source_set(REX_CXX_TESTS_DELAYED_TEMPLATE_PARSING_SOURCES
+  ${CXX_TESTCODES_DELAYED_TEMPLATE_PARSING})
+rex_register_compile_source_set(REX_CXX_TESTS_DEFAULT_SOURCES
+  ${CXX_TESTCODES})
 
 set(ROSE_FLAGS
   -w -rose:verbose 0
@@ -3135,7 +3132,7 @@ foreach(file_to_test ${CXX_TESTCODES_DELAYED_TEMPLATE_PARSING})
 endforeach()
 set(ROSE_FLAGS ${_rose_flags_default})
 
-foreach(file_to_test ${CXX_TESTCODES_TO_RUN})
+foreach(file_to_test ${CXX_TESTCODES})
   compile_test(${file_to_test} "Cxx_tests")
   rex_compile_test_name(_test_name "Cxx_tests" ${file_to_test})
   rex_lock_test_for_input(${_test_name} ${file_to_test})
@@ -3144,7 +3141,7 @@ foreach(file_to_test ${CXX_TESTCODES_TO_RUN})
 endforeach()
 
 # Additional unfolded-constants coverage for the default CTest run.
-set(_unfolded_constants_tests ${CXX_TESTCODES_STANDARD_TO_RUN})
+set(_unfolded_constants_tests ${CXX_TESTCODES})
 list(FILTER _unfolded_constants_tests INCLUDE REGEX "\\.C$")
 list(REMOVE_DUPLICATES _unfolded_constants_tests)
 
@@ -3230,7 +3227,7 @@ add_test(
   NAME unparse_includes_option
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:${translator}>
-    --edg:no_warnings -w -rose:verbose 0 -rose:skip_unparse_asm_commands
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -rose:unparse_includes -rose:verbose 0
     -I${CMAKE_BINARY_DIR}
@@ -3271,8 +3268,7 @@ add_test(
   NAME common_configure_test_with_link_part_1
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:${translator}>
-    --edg:no_warnings -w -rose:verbose 0 -rose:skip_unparse_asm_commands
-    -I${CMAKE_CURRENT_SOURCE_DIR}
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/conftest.C
     -o conftest_configure_test_part_1
@@ -3466,7 +3462,7 @@ add_test(
   NAME CXXTEST_test2012_246a
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:${translator}>
-    --edg:no_warnings -w -rose:verbose 0 -rose:skip_unparse_asm_commands
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2012_246a.C
 )
@@ -4627,7 +4623,7 @@ rex_lock_test_for_input(
   rex_test2025_template_argument_pack.cpp)
 
 # REX: Function-try-blocks should translate and unparse cleanly (including constructor init lists).
-# We add it manually here (not in Cxx_Testcodes.cmake) to avoid breaking downstream tests.
+# Keep this explicit because it exercises additional post-translation checks.
 add_test(
   NAME Cxx_tests_rex_test2025_issue99_failure_propagation
   COMMAND sh -c "\"$@\" && ${CMAKE_CXX_COMPILER} -std=c++17 -c rose_rex_test2025_issue99_failure_propagation.cpp"

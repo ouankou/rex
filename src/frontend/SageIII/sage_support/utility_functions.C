@@ -715,6 +715,14 @@ void enforceTokenUnparseContractForFile(SgSourceFile *sourceFile) {
       continue;
     }
 
+    // Clang explicit-instantiation directives are wrapped in a
+    // SgTemplateInstantiationDirectiveStatement, but token-subsequence
+    // coverage is tracked on the underlying declaration rather than this
+    // wrapper node.
+    if (isSgTemplateInstantiationDirectiveStatement(decl) != NULL) {
+      continue;
+    }
+
     requiredTopLevelMappings += 1;
 
     std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator declIt =

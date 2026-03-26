@@ -1,13 +1,15 @@
 #define fmin(a,b) ((a) < (b)) ? (a) : (b)
-#define fvswap(zzp1, zzp2, zzn)       \
-{                                     \
-   Int32 yyp1 = (zzp1);               \
-   Int32 yyp2 = (zzp2);               \
-   Int32 yyn  = (zzn);                \
-   while (yyn > 0) {                  \
-      yyp1++; yyp2++; yyn--;          \
-   }                                  \
-}
+#define fvswap(zzp1, zzp2, zzn)                                                \
+  {                                                                            \
+    Int32 yyp1 = (zzp1);                                                       \
+    Int32 yyp2 = (zzp2);                                                       \
+    Int32 yyn = (zzn);                                                         \
+    while (yyn > 0) {                                                          \
+      yyp1++;                                                                  \
+      yyp2++;                                                                  \
+      yyn--;                                                                   \
+    }                                                                          \
+  }
 typedef char Char;
 typedef unsigned char Bool;
 typedef unsigned char UChar;
@@ -54,9 +56,9 @@ static void fallbackQSort3(UInt32 *fmap,UInt32 *eclass,Int32 loSt,Int32 hiSt)
        */
     r = (r * 7621 + 1) % 32768;
     r3 = r % 3;
-    if (r3 == 0) 
+    if (r3 == 0)
       med = eclass[fmap[lo]];
-     else if (r3 == 1) 
+    else if (r3 == 1)
       med = eclass[fmap[lo + hi >> 1]];
      else 
       med = eclass[fmap[hi]];
@@ -64,39 +66,37 @@ static void fallbackQSort3(UInt32 *fmap,UInt32 *eclass,Int32 loSt,Int32 hiSt)
     unHi = gtHi = hi;
     while(1){
       while(1){
-        if (unLo > unHi) 
-          break; 
-        n = ((Int32 )eclass[fmap[unLo]]) - ((Int32 )med);
+        if (unLo > unHi)
+          break;
+        n = (Int32)eclass[fmap[unLo]] - (Int32)med;
         if (n == 0) {
           ltLo++;
           unLo++;
-          continue; 
-        }
-        ;
-        if (n > 0) 
-          break; 
+          continue;
+        };
+        if (n > 0)
+          break;
         unLo++;
       }
       while(1){
-        if (unLo > unHi) 
-          break; 
-        n = ((Int32 )eclass[fmap[unHi]]) - ((Int32 )med);
+        if (unLo > unHi)
+          break;
+        n = (Int32)eclass[fmap[unHi]] - (Int32)med;
         if (n == 0) {
           gtHi--;
           unHi--;
-          continue; 
-        }
-        ;
-        if (n < 0) 
-          break; 
+          continue;
+        };
+        if (n < 0)
+          break;
         unHi--;
       }
-      if (unLo > unHi) 
-        break; 
+      if (unLo > unHi)
+        break;
       unLo++;
       unHi--;
     }
-    if (gtHi < ltLo) 
+    if (gtHi < ltLo)
       continue; 
     n = (ltLo - lo < unLo - ltLo?ltLo - lo : unLo - ltLo);
 {
@@ -108,8 +108,7 @@ static void fallbackQSort3(UInt32 *fmap,UInt32 *eclass,Int32 loSt,Int32 hiSt)
         yyp2++;
         yyn--;
       }
-    }
-    ;
+};
     m = (hi - gtHi < gtHi - unHi?hi - gtHi : gtHi - unHi);
 {
       Int32 yyp1 = unLo;
@@ -120,8 +119,7 @@ static void fallbackQSort3(UInt32 *fmap,UInt32 *eclass,Int32 loSt,Int32 hiSt)
         yyp2++;
         yyn--;
       }
-    }
-    ;
+};
     n = lo + unLo - ltLo - 1;
     m = hi - (gtHi - unHi) + 1;
     if (n - lo > hi - m) {
@@ -162,10 +160,10 @@ static void fallbackQSort3(UInt32 *fmap,UInt32 *eclass,Int32 loSt,Int32 hiSt)
       int ttt;
       case 0:
       ttt++;
-      break; 
+      break;
       case 1:
       ttt--;
-      break; 
+      break;
     }
   }
 }
@@ -180,7 +178,7 @@ void uInt64_toAscii(char *outbuf,UInt64 *n)
   do {
     Int32 q;
     q = uInt64_qrm10(&n_copy);
-    buf[nBuf] = (q + '0');
+    buf[nBuf] = q + '0';
     nBuf++;
   }while (!(uInt64_isZero(&n_copy)));
   outbuf[nBuf] = 0;

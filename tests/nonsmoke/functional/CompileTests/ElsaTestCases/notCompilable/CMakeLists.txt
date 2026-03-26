@@ -1,10 +1,11 @@
-include(ElsaTestCases_notCompilable_Testcodes.cmake)
-include(ElsaTestCases_notCompilable_Testcodes_Additional.cmake)
-
 set(ROSE_FLAGS -w -std=gnu++03)
-set(ELSATEST_NOTCOMPILABLE_ALL_TESTCODES
-  ${ELSATEST_NOTCOMPILABLE_TESTCODES}
-  ${ELSATEST_NOTCOMPILABLE_ADDITIONAL_TESTCODES})
+file(GLOB ELSATEST_NOTCOMPILABLE_ALL_TESTCODES
+  RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+  "*.cc"
+  "*.c"
+  "c/*.c"
+  "c99/*.c")
+list(SORT ELSATEST_NOTCOMPILABLE_ALL_TESTCODES)
 
 # Historically in Elsa these lived in notCompilable, but Clang accepts them
 # and the translator handles them as ordinary compile tests.
@@ -74,4 +75,3 @@ endforeach()
 
 add_subdirectory(gnu)
 add_subdirectory(std)
-

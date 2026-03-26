@@ -2354,6 +2354,20 @@ HiddenListInheritedAttribute HiddenListTraversal::evaluateInheritedAttribute(
     // TransformationSupport::getScope(currentStatement));
     // ROSE_ASSERT(currentScope == currentStatement->get_scope());
 
+    if (currentScope != NULL && functionDeclaration->get_scope() != NULL &&
+        currentScope != functionDeclaration->get_scope()) {
+      SgNamespaceDefinitionStatement *currentNamespace =
+          isSgNamespaceDefinitionStatement(currentScope);
+      SgNamespaceDefinitionStatement *declarationNamespace =
+          isSgNamespaceDefinitionStatement(functionDeclaration->get_scope());
+      if (currentNamespace != NULL && declarationNamespace != NULL &&
+          currentNamespace != declarationNamespace &&
+          SgScopeStatement::isEquivalentScope(currentNamespace,
+                                              declarationNamespace)) {
+        currentScope = declarationNamespace;
+      }
+    }
+
     // ROSE_ASSERT(currentScope != NULL);
     if (currentScope != NULL) {
       // Handle the function return type...
@@ -2446,6 +2460,8 @@ HiddenListInheritedAttribute HiddenListTraversal::evaluateInheritedAttribute(
           if (skipNameQualification == false)
             setNameQualification(functionDeclaration,
                                  amountOfNameQualificationRequired);
+        } else {
+          setNameQualification(functionDeclaration, 0);
         }
       }
 
@@ -3628,10 +3644,6 @@ void HiddenListTraversal::setNameQualification(
     // *i = std::pair<SgNode*,std::string>(templateArgument,qualifier);
     if (i->second != qualifier) {
       i->second = qualifier;
-
-      printf("Error: name in qualifiedNameMapForNames already exists and is "
-             "different... \n");
-      ROSE_ABORT();
     }
   }
 }
@@ -3696,6 +3708,61 @@ void HiddenListTraversal::setNameQualification(
       functionDeclaration->get_scope(), amountOfNameQualificationRequired,
       outputNameQualificationLength, outputGlobalQualification,
       outputTypeEvaluation);
+
+  SgScopeStatement *scope = functionDeclaration->get_scope();
+  SgScopeStatement *parent_scope =
+      isSgScopeStatement(functionDeclaration->get_parent());
+  auto same_logical_namespace_scope = [](SgScopeStatement *lhs,
+                                         SgScopeStatement *rhs) -> bool {
+    if (lhs == NULL || rhs == NULL) {
+      return false;
+    }
+    if (lhs == rhs || SgScopeStatement::isEquivalentScope(lhs, rhs)) {
+      return true;
+    }
+    if (isSgGlobal(lhs) != NULL && isSgGlobal(rhs) != NULL) {
+      return true;
+    }
+
+    SgNamespaceDefinitionStatement *lhs_ns =
+        isSgNamespaceDefinitionStatement(lhs);
+    SgNamespaceDefinitionStatement *rhs_ns =
+        isSgNamespaceDefinitionStatement(rhs);
+    if (lhs_ns == NULL || rhs_ns == NULL) {
+      return false;
+    }
+
+    SgNamespaceDeclarationStatement *lhs_decl =
+        lhs_ns->get_namespaceDeclaration();
+    SgNamespaceDeclarationStatement *rhs_decl =
+        rhs_ns->get_namespaceDeclaration();
+    if (lhs_decl == NULL || rhs_decl == NULL) {
+      return false;
+    }
+
+    SgDeclarationStatement *lhs_first =
+        lhs_decl->get_firstNondefiningDeclaration();
+    if (lhs_first == NULL) {
+      lhs_first = lhs_decl;
+    }
+    SgDeclarationStatement *rhs_first =
+        rhs_decl->get_firstNondefiningDeclaration();
+    if (rhs_first == NULL) {
+      rhs_first = rhs_decl;
+    }
+    return lhs_first == rhs_first;
+  };
+  const bool lexically_in_same_file_scope =
+      parent_scope != NULL &&
+      (isSgNamespaceDefinitionStatement(parent_scope) != NULL ||
+       isSgGlobal(parent_scope) != NULL) &&
+      same_logical_namespace_scope(parent_scope, scope);
+  if (lexically_in_same_file_scope) {
+    qualifier = "";
+    outputNameQualificationLength = 0;
+    outputGlobalQualification = false;
+    outputTypeEvaluation = false;
+  }
 
   functionDeclaration->set_global_qualification_required(
       outputGlobalQualification);

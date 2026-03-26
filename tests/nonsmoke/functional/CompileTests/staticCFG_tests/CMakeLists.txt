@@ -21,7 +21,7 @@ endfunction()
 
 # This uses the native Cxx_tests specimen classification.
 
-set(CXX_TESTCODES_FOR_CFG ${CXX_TESTCODES_STANDARD_TO_RUN})
+set(CXX_TESTCODES_FOR_CFG ${CXX_TESTCODES})
 list(REMOVE_ITEM CXX_TESTCODES_FOR_CFG test2005_42.C)
 
 foreach(file_to_test ${CXX_TESTCODES_FOR_CFG})
@@ -50,7 +50,7 @@ foreach(file_to_test ${CXX_TESTCODES_FOR_CFG})
 
 endforeach()
 
-set(EXAMPLE_C_TESTCODES_VERIFIED_TO_PASS
+set(STATICCFG_C_FROM_CXX_TESTCODES
   test_CplusplusMacro_C.C test2001_02.C test2001_03.C test2001_05.C
   test2001_07.C test2001_08.C test2001_09.C test2001_14.C test2001_17.C
   test2001_23.C test2001_24.C test2001_25.C test2001_26.C test2002_01.C
@@ -83,7 +83,7 @@ set(EXAMPLE_C_TESTCODES_VERIFIED_TO_PASS
   test2006_181.C test_int_lexemes.C test_int_lexemes_donot_pass.C
   test_simple_int.C test_wchars.C X.C)
 
-foreach(input_file ${EXAMPLE_C_TESTCODES_VERIFIED_TO_PASS})
+foreach(input_file ${STATICCFG_C_FROM_CXX_TESTCODES})
 
   get_filename_component(base_filename "${input_file}" NAME_WE)
   set(file_to_test "${base_filename}.temp.c")
@@ -112,11 +112,11 @@ foreach(input_file ${EXAMPLE_C_TESTCODES_VERIFIED_TO_PASS})
 
 endforeach()
 
-set(C99_TESTCODES_REQUIRED_TO_PASS
+set(STATICCFG_C99_TESTCODES
   bool.c complex_01.c complex_03.c constants.c test2005_186.c test2006_127.c
   test2006_143.c test2008_01.c)
 
-foreach(input_file ${C99_TESTCODES_REQUIRED_TO_PASS})
+foreach(input_file ${STATICCFG_C99_TESTCODES})
 
   get_filename_component(base_filename "${input_file}" NAME_WE)
   set(file_to_test "${base_filename}.temp.c")
@@ -160,7 +160,7 @@ rex_set_cfg_output(test2008_01.C99-INT)
 set_tests_properties(test2008_01.C99-INT PROPERTIES LABELS STATICCFGTEST)
 
 if(ENABLE-FORTRAN)
-  set(F90_TESTCODES_REQUIRED_TO_PASS
+  set(STATICCFG_F90_TESTCODES
     test2007_01.f90 test2007_02.f90 test2007_03.f90 test2007_04.f90
     test2007_05.f90 test2007_06.f90 test2007_07.f90 test2007_08.f90
     test2007_09.f90 test2007_10.f90 test2007_11.f90 test2007_12.f90
@@ -191,7 +191,7 @@ if(ENABLE-FORTRAN)
     test2007_248.f90 test2007_249.f90 test2007_250.f90 test2007_262.f90
     canonicalExample.f90)
 
-  foreach(file_to_test ${F90_TESTCODES_REQUIRED_TO_PASS})
+  foreach(file_to_test ${STATICCFG_F90_TESTCODES})
     set(source_path ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
     if(NOT EXISTS "${source_path}")
       message(STATUS "Skipping testStaticCFG_f90_${file_to_test} (missing ${source_path})")
@@ -248,7 +248,7 @@ if(ENABLE-FORTRAN)
     set_tests_properties(testInterproceduralCFG_f90_${file_to_test} PROPERTIES DEPENDS testStaticCFG_f90_${file_to_test} LABELS STATICCFGTEST)
   endforeach()
 
-  set(F77_FIXED_FORMAT_TESTCODES_REQUIRED_TO_PASS
+  set(STATICCFG_F77_FIXED_FORMAT_TESTCODES
     test2007_129.f test2007_132.f test2007_148.f test2007_150.f
     test2007_151.f test2007_153.f test2007_154.f test2007_155.f
     test2007_156.f test2007_162.f test2007_163.f test2007_164.f
@@ -263,7 +263,7 @@ if(ENABLE-FORTRAN)
     test2007_245.f test2007_246.f test2007_247.f test2007_251.f
     test2007_253.f test2007_259.f test2007_260.f test2007_261.f)
 
-  foreach(file_to_test ${F77_FIXED_FORMAT_TESTCODES_REQUIRED_TO_PASS})
+  foreach(file_to_test ${STATICCFG_F77_FIXED_FORMAT_TESTCODES})
     set(source_path ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
     if(NOT EXISTS "${source_path}")
       message(STATUS "Skipping testStaticCFG_f77_${file_to_test} (missing ${source_path})")
@@ -330,13 +330,13 @@ if(ENABLE-FORTRAN)
     set_tests_properties(testStaticCFG_f77_${file_to_test} PROPERTIES DEPENDS testInterproceduralCFG_f77_${file_to_test} LABELS STATICCFGTEST)
   endforeach()
 
-  set(F03_TESTCODES_REQUIRED_TO_PASS
+  set(STATICCFG_F03_TESTCODES
     test2007_31.f03 test2007_37.f03 test2007_41.f03 test2007_42.f03
     test2007_44.f03 test2007_47.f03 test2007_98.f03 test2007_112.f03
     test2007_113.f03 test2007_114.f03 test2007_120.f03 test2007_123.f03
     test2007_134.f03 test2007_174.f03)
 
-  foreach(file_to_test ${F03_TESTCODES_REQUIRED_TO_PASS})
+  foreach(file_to_test ${STATICCFG_F03_TESTCODES})
     set(source_path ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
     if(NOT EXISTS "${source_path}")
       message(STATUS "Skipping testStaticCFG_f03_${file_to_test} (missing ${source_path})")
@@ -410,4 +410,3 @@ add_test(
     -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/test2005_42.C)
 set_tests_properties(testInterproceduralCFG_Cxx_test2005_42 PROPERTIES LABELS STATICCFGTEST)
-

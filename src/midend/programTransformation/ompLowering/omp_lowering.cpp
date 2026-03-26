@@ -4120,6 +4120,27 @@ static omp_construct_enum getExplicitDataSharingAttribute(
   return rt_val;
 }
 
+static bool shouldInheritDataSharingAttributeFromParent(
+    SgOmpClauseBodyStatement *omp_clause_body_stmt) {
+  if (omp_clause_body_stmt == NULL) {
+    return false;
+  }
+
+  return isSgOmpDoStatement(omp_clause_body_stmt) ||
+         isSgOmpForStatement(omp_clause_body_stmt) ||
+         isSgOmpForSimdStatement(omp_clause_body_stmt) ||
+         isSgOmpSimdStatement(omp_clause_body_stmt) ||
+         isSgOmpSingleStatement(omp_clause_body_stmt) ||
+         isSgOmpSectionsStatement(omp_clause_body_stmt) ||
+         isSgOmpSectionStatement(omp_clause_body_stmt) ||
+         isSgOmpMasterStatement(omp_clause_body_stmt) ||
+         isSgOmpOrderedStatement(omp_clause_body_stmt) ||
+         isSgOmpCriticalStatement(omp_clause_body_stmt) ||
+         isSgOmpAtomicStatement(omp_clause_body_stmt) ||
+         isSgOmpTargetStatement(omp_clause_body_stmt) ||
+         isSgOmpTargetDataStatement(omp_clause_body_stmt);
+}
+
 //! Check if a variable access is a shared access , assuming it is already
 //! within an OpenMP region.
 bool isSharedAccess(SgVarRefExp *varRef) {
@@ -4331,12 +4352,11 @@ omp_construct_enum getDataSharingAttribute(SgSymbol *sym, SgNode *anchor_node) {
         }
       }
       // Important algorithm step here:
-      // No this logic in the specification, but I split the combined parallel
-      // for into two constructs, need to double check this another case is
-      // parallel region + single region, we need to get the parallel region's
-      // attribute Similar handling for simd directives, going after parent omp
-      // parallel or omp for if there is any, to find out the attributes.
-      //   parallel+ for + simd: three levels
+      // No this logic in the specification, but I split combined constructs
+      // like parallel-for into separate AST nodes. Nested constructs that do
+      // not establish their own data-sharing environment must therefore fall
+      // back to the enclosing OpenMP region when their local rules do not
+      // determine an attribute.
       //
       //    #pragma omp parallel private(i,j)
       //      {
@@ -4350,20 +4370,14 @@ omp_construct_enum getDataSharingAttribute(SgSymbol *sym, SgNode *anchor_node) {
       //            }
       //       }
       //
-      // If implicit rules do not apply at this level (worksharing regions like
-      // single), Go to find higher level: most omp parallel
+      // If implicit rules do not apply at this level, go to the enclosing
+      // OpenMP clause body statement and reuse its rules.
       if (SgOmpClauseBodyStatement *parent_clause_body_stmt =
               findEnclosingOmpClauseBodyStatement(
                   getEnclosingStatement(omp_clause_body_stmt->get_parent()))) {
-        // TODO: add other directives which may be nested within others
-        if (isSgOmpForStatement(omp_clause_body_stmt) ||
-            isSgOmpSimdStatement(omp_clause_body_stmt) ||
-            isSgOmpSingleStatement(omp_clause_body_stmt)) {
-          // we need to consider the variable's data sharing attribute in the
-          // new context the body of parallel can be the single region again,
-          // causing infinite recursive calls.
-          // rt_val = getDataSharingAttribute (sym,
-          // parent_clause_body_stmt->get_body());
+        if (shouldInheritDataSharingAttributeFromParent(omp_clause_body_stmt)) {
+          // Use the parent construct as the new anchor. This keeps the search
+          // moving outward and avoids recursing on the same clause body again.
           rt_val = getDataSharingAttribute(sym, parent_clause_body_stmt);
           return rt_val;
         }
@@ -4644,31 +4658,6 @@ void insertRTLinitAndCleanCode(SgSourceFile *sgfile) {
     return;
   ROSE_ASSERT(mainDef != NULL); // Liao, at this point, we expect a defining
                                 // declaration of main() is found
-  // add parameter  int argc , char* argv[] if not exist
-  SgInitializedNamePtrList args = mainDef->get_declaration()->get_args();
-  SgType *intType = SgTypeInt::createType();
-  SgType *charType = SgTypeChar::createType();
-
-  // patch up argc, argv if they do not exit yet
-  if (args.size() == 0) {
-    SgFunctionParameterList *parameterList =
-        mainDef->get_declaration()->get_parameterList();
-    ROSE_ASSERT(parameterList);
-
-    // int argc
-    SgName name1("argc");
-    SgInitializedName *arg1 = buildInitializedName(name1, intType);
-
-    // char** argv
-    SgName name2("argv");
-    SgPointerType *pType1 = buildPointerType(charType);
-    SgPointerType *pType2 = buildPointerType(pType1);
-    SgInitializedName *arg2 = buildInitializedName(name2, pType2);
-
-    appendArg(parameterList, arg1);
-    appendArg(parameterList, arg2);
-
-  } // end if (args.size() ==0)
   // add statements to prepare the runtime system
   // int status=0;
   SgIntVal *intVal = buildIntVal(0);
@@ -4681,29 +4670,7 @@ void insertRTLinitAndCleanCode(SgSourceFile *sgfile) {
   // cout<<"debug:"<<varDecl1->unparseToString()<<endl;
 
   //_ompc_init(argc, argv);
-  SgType *voidtype = SgTypeVoid::createType();
-  SgFunctionType *myFuncType = new SgFunctionType(voidtype, false);
-  ROSE_ASSERT(myFuncType != NULL);
-
-  // SgExprListExp, two parameters (argc, argv)
-  //  look up symbol tables for symbols
   SgScopeStatement *currentscope = mainDef->get_body();
-
-  SgInitializedNamePtrList mainArgs =
-      mainDef->get_declaration()->get_parameterList()->get_args();
-  Rose_STL_Container<SgInitializedName *>::iterator i = mainArgs.begin();
-  ROSE_ASSERT(mainArgs.size() == 2);
-
-  SgExprListExp *exp_list_exp = buildExprListExp();
-  if (!SageInterface::is_Fortran_language()) {
-    SgVarRefExp *var1 =
-        buildVarRefExp(isSgInitializedName(*i), mainDef->get_body());
-    SgVarRefExp *var2 =
-        buildVarRefExp(isSgInitializedName(*++i), mainDef->get_body());
-
-    appendExpression(exp_list_exp, var1);
-    appendExpression(exp_list_exp, var2);
-  }
 
   if (SageInterface::is_Fortran_language()) {
     SgStatement *l_stmt = findLastDeclarationStatement(currentscope);

@@ -2,26 +2,26 @@
 OpenMP region SgOmpParallelStatement @ 14
 "sum0"@16:5	threadprivate
 "i"@18:10	private
-"i"@18:14	private
-"i"@18:22	private
-"sum0"@20:7	threadprivate
-"sum0"@20:12	threadprivate
-"i"@20:17	private
-"sum0"@24:37	threadprivate
-"sum"@25:7	shared
-"sum"@25:12	shared
-"sum0"@25:16	threadprivate
+"i"@18:17	private
+"i"@18:28	private
+"sum0"@19:7	threadprivate
+"sum0"@19:14	threadprivate
+"i"@19:21	private
+"sum0"@23:38	threadprivate
+"sum"@24:7	shared
+"sum"@24:13	shared
+"sum0"@24:19	threadprivate
 -----------------------------------------------
 OpenMP region SgOmpForStatement @ 17
 "i"@18:10	private
-"i"@18:14	private
-"i"@18:22	private
-"sum0"@20:7	threadprivate
-"sum0"@20:12	threadprivate
-"i"@20:17	private
+"i"@18:17	private
+"i"@18:28	private
+"sum0"@19:7	threadprivate
+"sum0"@19:14	threadprivate
+"i"@19:21	private
 -----------------------------------------------
-OpenMP region SgOmpCriticalStatement @ 22
-"sum0"@24:37	threadprivate
-"sum"@25:7	shared
-"sum"@25:12	shared
-"sum0"@25:16	threadprivate
+OpenMP region SgOmpCriticalStatement @ 21
+"sum0"@23:38	threadprivate
+"sum"@24:7	shared
+"sum"@24:13	shared
+"sum0"@24:19	threadprivate

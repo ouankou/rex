@@ -22,18 +22,22 @@ set(ROSE_GNU89_TESTCODES
   t0016.c
   t0021.c
 )
-set(ELSATEST_C_EXPECT_FAIL
+set(ELSATEST_C_CONTINUE_ON_ERROR
   dC0024.c
   dC0025.c
   t0010.c
   t0026.c
 )
 
-foreach(file_to_test ${TESTCODES})
-  if(file_to_test IN_LIST ELSATEST_C_EXPECT_FAIL)
-    compile_negative_test(${file_to_test} ELSATEST)
-  else()
-    compile_test(${file_to_test} ELSATEST)
+function(elsa_c_compile_test input_file)
+  set(_rose_flags ${ROSE_FLAGS})
+  if(input_file IN_LIST ELSATEST_C_CONTINUE_ON_ERROR)
+    list(APPEND _rose_flags -rex:clang:continue-on-error)
   endif()
-endforeach()
+  set(ROSE_FLAGS ${_rose_flags})
+  compile_test(${input_file} ELSATEST)
+endfunction()
 
+foreach(file_to_test ${TESTCODES})
+  elsa_c_compile_test(${file_to_test})
+endforeach()

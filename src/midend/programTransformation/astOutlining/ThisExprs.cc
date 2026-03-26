@@ -252,6 +252,20 @@ static bool isImplicitMemberFunctionCall(const SgFunctionCallExp *call) {
   if (call == NULL)
     return false;
 
+  // Overloaded operator syntax such as `cout << value` can lower to a
+  // member-function call wrapped by a user-defined operator node. These calls
+  // already have an explicit receiver and must not be rewritten as implicit
+  // `this` uses.
+  if (call->get_uses_operator_syntax()) {
+    return false;
+  }
+
+  SgNode *call_parent = call->get_parent();
+  if (isSgUserDefinedBinaryOp(call_parent) != NULL ||
+      isSgUserDefinedUnaryOp(call_parent) != NULL) {
+    return false;
+  }
+
   SgExpression *func_expr = call->get_function();
   if (SgMemberFunctionRefExp *mem_ref = isSgMemberFunctionRefExp(func_expr)) {
     SgMemberFunctionSymbol *sym = mem_ref->get_symbol();
