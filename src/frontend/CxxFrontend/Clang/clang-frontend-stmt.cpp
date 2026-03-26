@@ -65,6 +65,85 @@ using llvm::isa; // For LLVM type checking (isa<Type>)
 
 namespace {
 static bool
+type_has_elaborated_spelling_for_type_operand(const clang::Type *type) {
+  if (type == nullptr) {
+    return false;
+  }
+
+  if (const auto *tag_type = llvm::dyn_cast<clang::TagType>(type)) {
+    return tag_type->getKeyword() != clang::ElaboratedTypeKeyword::None;
+  }
+  if (const auto *typedef_type = llvm::dyn_cast<clang::TypedefType>(type)) {
+    return typedef_type->getKeyword() != clang::ElaboratedTypeKeyword::None;
+  }
+  if (const auto *using_type = llvm::dyn_cast<clang::UsingType>(type)) {
+    return using_type->getKeyword() != clang::ElaboratedTypeKeyword::None;
+  }
+  if (const auto *unresolved_using =
+          llvm::dyn_cast<clang::UnresolvedUsingType>(type)) {
+    return unresolved_using->getKeyword() != clang::ElaboratedTypeKeyword::None;
+  }
+  if (const auto *dependent_name =
+          llvm::dyn_cast<clang::DependentNameType>(type)) {
+    return dependent_name->getKeyword() != clang::ElaboratedTypeKeyword::None;
+  }
+  if (const auto *template_specialization =
+          llvm::dyn_cast<clang::TemplateSpecializationType>(type)) {
+    return template_specialization->getKeyword() !=
+           clang::ElaboratedTypeKeyword::None;
+  }
+  if (const auto *deduced_template_specialization =
+          llvm::dyn_cast<clang::DeducedTemplateSpecializationType>(type)) {
+    return deduced_template_specialization->getKeyword() !=
+           clang::ElaboratedTypeKeyword::None;
+  }
+  if (const auto *injected_class_name =
+          llvm::dyn_cast<clang::InjectedClassNameType>(type)) {
+    return injected_class_name->getKeyword() !=
+           clang::ElaboratedTypeKeyword::None;
+  }
+
+  return qualifiedTypeHasQualifier(type);
+}
+
+static bool qual_type_contains_elaborated_spelling_for_type_operand(
+    clang::QualType qual_type) {
+  const clang::Type *type = qual_type.getTypePtrOrNull();
+  while (type != nullptr) {
+    if (type_has_elaborated_spelling_for_type_operand(type)) {
+      return true;
+    }
+
+    if (const auto *paren_type = llvm::dyn_cast<clang::ParenType>(type)) {
+      qual_type = paren_type->getInnerType();
+    } else if (const auto *pointer_type =
+                   llvm::dyn_cast<clang::PointerType>(type)) {
+      qual_type = pointer_type->getPointeeType();
+    } else if (const auto *reference_type =
+                   llvm::dyn_cast<clang::ReferenceType>(type)) {
+      qual_type = reference_type->getPointeeType();
+    } else if (const auto *array_type =
+                   llvm::dyn_cast<clang::ArrayType>(type)) {
+      qual_type = array_type->getElementType();
+    } else if (const auto *attributed_type =
+                   llvm::dyn_cast<clang::AttributedType>(type)) {
+      qual_type = attributed_type->getModifiedType();
+    } else if (const auto *adjusted_type =
+                   llvm::dyn_cast<clang::AdjustedType>(type)) {
+      qual_type = adjusted_type->getOriginalType();
+    } else if (qualifiedTypeHasQualifier(type)) {
+      qual_type = qual_type.getCanonicalType();
+    } else {
+      break;
+    }
+
+    type = qual_type.getTypePtrOrNull();
+  }
+
+  return false;
+}
+
+static bool
 scope_supports_statement_list_for_instantiation_ref(SgScopeStatement *scope) {
   if (scope == nullptr) {
     return false;
@@ -2486,9 +2565,6 @@ bool ClangToSageTranslator::VisitGCCAsmStmt(clang::GCCAsmStmt *gcc_asm_stmt,
   // LLVM returns std::string
   std::string AsmString;
   AsmString = gcc_asm_stmt->getAsmString();
-
-  std::cout << "input op:" << asmNumInput << " output op: " << asmNumOutput
-            << std::endl;
 #if DEBUG_VISIT_STMT
   std::cerr << "AsmString:" << AsmString << std::endl;
 #endif
@@ -2561,11 +2637,14 @@ bool ClangToSageTranslator::VisitGCCAsmStmt(clang::GCCAsmStmt *gcc_asm_stmt,
         (SgAsmOp::asm_operand_modifier_enum)SgAsmOp::e_unknown;
     SgAsmOp *sageAsmOp = new SgAsmOp(constraint, modifiers, outputExpr);
     outputExpr->set_parent(sageAsmOp);
-
-    sageAsmOp->set_recordRawAsmOperandDescriptions(false);
+    sageAsmOp->set_recordRawAsmOperandDescriptions(true);
 
     // set as an output AsmOp
     sageAsmOp->set_isOutputOperand(true);
+    if (llvm::StringRef outputName = gcc_asm_stmt->getOutputName(i);
+        !outputName.empty()) {
+      sageAsmOp->set_name(outputName.str());
+    }
 
     ROSE_ASSERT(sm.size() == 4);
 
@@ -2581,7 +2660,7 @@ bool ClangToSageTranslator::VisitGCCAsmStmt(clang::GCCAsmStmt *gcc_asm_stmt,
 
     // set constraint
     sageAsmOp->set_constraint(get_sgAsmOperandConstraint(sm[3].str()));
-    sageAsmOp->set_constraintString(sm[3]);
+    sageAsmOp->set_constraintString(outputConstraintStr);
 
     Sg_File_Info *start_fi =
         Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode();
@@ -2631,11 +2710,14 @@ bool ClangToSageTranslator::VisitGCCAsmStmt(clang::GCCAsmStmt *gcc_asm_stmt,
         (SgAsmOp::asm_operand_modifier_enum)SgAsmOp::e_unknown;
     SgAsmOp *sageAsmOp = new SgAsmOp(constraint, modifiers, inputExpr);
     inputExpr->set_parent(sageAsmOp);
-
-    sageAsmOp->set_recordRawAsmOperandDescriptions(false);
+    sageAsmOp->set_recordRawAsmOperandDescriptions(true);
 
     // set as an input AsmOp
     sageAsmOp->set_isOutputOperand(false);
+    if (llvm::StringRef inputName = gcc_asm_stmt->getInputName(i);
+        !inputName.empty()) {
+      sageAsmOp->set_name(inputName.str());
+    }
 
     ROSE_ASSERT(sm.size() == 4);
 
@@ -2657,7 +2739,7 @@ bool ClangToSageTranslator::VisitGCCAsmStmt(clang::GCCAsmStmt *gcc_asm_stmt,
 
     // set constraint
     sageAsmOp->set_constraint(get_sgAsmOperandConstraint(sm[3].str()));
-    sageAsmOp->set_constraintString(sm[3]);
+    sageAsmOp->set_constraintString(inputConstraintStr);
 
     Sg_File_Info *start_fi =
         Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode();
@@ -3274,6 +3356,7 @@ SgPragmaDeclaration *ClangToSageTranslator::buildOpenMPPragmaDeclaration(
   Sg_File_Info *start_fi = new Sg_File_Info(filename, pragma_line, 1);
   Sg_File_Info *end_fi = new Sg_File_Info(filename, pragma_line, 1);
 
+  pragma_decl->set_file_info(start_fi);
   pragma_decl->set_startOfConstruct(start_fi);
   pragma_decl->set_endOfConstruct(end_fi);
   start_fi->set_parent(pragma_decl);
@@ -3608,17 +3691,6 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
 #endif
   bool res = true;
 
-  SgRangeBasedForStatement *sg_for_stmt =
-      SageBuilder::buildRangeBasedForStatement_nfi(
-          (SgVariableDeclaration *)nullptr, (SgVariableDeclaration *)nullptr,
-          (SgVariableDeclaration *)nullptr, (SgVariableDeclaration *)nullptr,
-          (SgExpression *)nullptr, (SgExpression *)nullptr,
-          (SgStatement *)nullptr);
-
-  sg_for_stmt->set_parent(SageBuilder::topScopeStack());
-  ROSE_ASSERT(sg_for_stmt->get_parent() != nullptr);
-  SageBuilder::pushScopeStack(sg_for_stmt);
-
   auto translate_for_init_child =
       [&](clang::Stmt *clang_stmt) -> SgStatement * {
     if (clang_stmt == nullptr) {
@@ -3645,6 +3717,33 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
 
     return stmt;
   };
+
+  SgBasicBlock *wrapper_block = nullptr;
+  SgStatement *init_stmt = nullptr;
+  if (clang::Stmt *clang_init = cxx_for_range_stmt->getInit()) {
+    wrapper_block = SageBuilder::buildBasicBlock_nfi();
+    if (wrapper_block != nullptr && wrapper_block->get_parent() == nullptr) {
+      wrapper_block->set_parent(SageBuilder::topScopeStack());
+    }
+
+    SageBuilder::pushScopeStack(wrapper_block);
+    init_stmt = translate_for_init_child(clang_init);
+    SageBuilder::popScopeStack();
+  }
+
+  SgRangeBasedForStatement *sg_for_stmt =
+      SageBuilder::buildRangeBasedForStatement_nfi(
+          (SgVariableDeclaration *)nullptr, (SgVariableDeclaration *)nullptr,
+          (SgVariableDeclaration *)nullptr, (SgVariableDeclaration *)nullptr,
+          (SgExpression *)nullptr, (SgExpression *)nullptr,
+          (SgStatement *)nullptr);
+
+  sg_for_stmt->set_parent(
+      wrapper_block != nullptr
+          ? static_cast<SgNode *>(wrapper_block)
+          : static_cast<SgNode *>(SageBuilder::topScopeStack()));
+  ROSE_ASSERT(sg_for_stmt->get_parent() != nullptr);
+  SageBuilder::pushScopeStack(sg_for_stmt);
 
   auto translate_var_decl_child =
       [&](clang::Stmt *clang_stmt,
@@ -3749,6 +3848,22 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
   finalize_decl(begin_decl);
   finalize_decl(end_decl);
 
+  if (wrapper_block != nullptr && init_stmt != nullptr) {
+    if (SgVariableDeclaration *init_decl = isSgVariableDeclaration(init_stmt)) {
+      if (init_decl->get_scope() == nullptr) {
+        init_decl->set_scope(wrapper_block);
+      }
+
+      for (SgInitializedName *init_name : init_decl->get_variables()) {
+        if (init_name != nullptr && init_name->get_scope() == nullptr) {
+          init_name->set_scope(wrapper_block);
+        }
+      }
+    }
+
+    init_stmt->set_parent(wrapper_block);
+  }
+
   if (iterator_decl != nullptr) {
     iterator_decl->set_parent(sg_for_stmt);
     sg_for_stmt->set_iterator_declaration(iterator_decl);
@@ -3785,7 +3900,22 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
   ROSE_ASSERT(sg_for_stmt->get_range_declaration() != nullptr);
   ROSE_ASSERT(sg_for_stmt->get_loop_body() != nullptr);
 
-  *node = sg_for_stmt;
+  if (wrapper_block != nullptr) {
+    SgStatementPtrList &stmts = wrapper_block->get_statements();
+    if (init_stmt != nullptr &&
+        std::find(stmts.begin(), stmts.end(), init_stmt) == stmts.end()) {
+      stmts.push_back(init_stmt);
+    }
+    if (std::find(stmts.begin(), stmts.end(), sg_for_stmt) == stmts.end()) {
+      stmts.push_back(sg_for_stmt);
+    }
+    sg_for_stmt->set_parent(wrapper_block);
+    applySourceRange(wrapper_block, cxx_for_range_stmt->getSourceRange());
+    *node = wrapper_block;
+  } else {
+    *node = sg_for_stmt;
+  }
+
   return VisitStmt(cxx_for_range_stmt, node) && res;
 }
 
@@ -6157,54 +6287,21 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
   clang::Expr *callee_expr = call_expr->getCallee();
   clang::Expr *callee_base =
       callee_expr != nullptr ? callee_expr->IgnoreParenImpCasts() : nullptr;
-  if (clang::LambdaExpr *lambda_callee =
-          llvm::dyn_cast_or_null<clang::LambdaExpr>(callee_base)) {
-    SgNode *tmp_lambda = Traverse(lambda_callee);
-    SgLambdaExp *lambda_exp = isSgLambdaExp(tmp_lambda);
-    ROSE_ASSERT(lambda_exp != nullptr);
-
-    SgFunctionDeclaration *lambda_func = lambda_exp->get_lambda_function();
-    ROSE_ASSERT(lambda_func != nullptr);
-    SgMemberFunctionDeclaration *member_decl =
-        isSgMemberFunctionDeclaration(lambda_func);
-    ROSE_ASSERT(member_decl != nullptr);
-
-    SgMemberFunctionSymbol *member_sym =
-        isSgMemberFunctionSymbol(member_decl->get_symbol_from_symbol_table());
-    if (member_sym == nullptr) {
-      if (SgScopeStatement *decl_scope = member_decl->get_scope()) {
-        member_sym =
-            isSgMemberFunctionSymbol(decl_scope->lookup_function_symbol(
-                member_decl->get_name(), member_decl->get_type()));
-      }
-    }
-    if (member_sym == nullptr) {
-      member_sym = new SgMemberFunctionSymbol(member_decl);
-      if (SgScopeStatement *decl_scope = member_decl->get_scope()) {
-        attachSymbolToScopeOrOrphan(member_sym, decl_scope);
-      } else {
-        attachSymbolToScopeOrOrphan(member_sym, nullptr);
-      }
-    }
-    ROSE_ASSERT(member_sym != nullptr);
-
-    SgExpression *member_ref =
-        SageBuilder::buildMemberFunctionRefExp_nfi(member_sym, false, false);
-    expr = SageBuilder::buildDotExp(lambda_exp, member_ref);
-  } else {
-    SgNode *tmp_expr = Traverse(callee_expr);
-    expr = isSgExpression(tmp_expr);
-    if (tmp_expr != nullptr && expr == nullptr) {
-      std::cerr << "Runtime error: tmp_expr != nullptr && expr == nullptr"
-                << std::endl;
-      res = false;
-    }
+  SgNode *tmp_expr = Traverse(callee_expr);
+  expr = isSgExpression(tmp_expr);
+  if (tmp_expr != nullptr && expr == nullptr) {
+    std::cerr << "Runtime error: tmp_expr != nullptr && expr == nullptr"
+              << std::endl;
+    res = false;
   }
 
   auto maybe_resolve_unresolved_overload_callee = [&]() {
     clang::UnresolvedLookupExpr *unresolved_lookup =
         llvm::dyn_cast_or_null<clang::UnresolvedLookupExpr>(callee_base);
     if (unresolved_lookup == nullptr) {
+      return;
+    }
+    if (unresolved_lookup->hasExplicitTemplateArgs()) {
       return;
     }
     if (expr != nullptr && isSgNonrealRefExp(expr) == nullptr) {
@@ -8282,6 +8379,62 @@ bool ClangToSageTranslator::VisitExplicitCastExpr(
   SgExpression *sg_expr = isSgExpression(tmp_expr);
   ROSE_ASSERT(sg_expr != nullptr);
 
+  auto suppress_nonautonomous_named_type_declaration = [](SgType *rose_type) {
+    if (rose_type == nullptr) {
+      return;
+    }
+
+    unsigned char strip_options =
+        SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
+        SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_POINTER_TYPE |
+        SgType::STRIP_ARRAY_TYPE;
+    SgType *stripped_type = rose_type->stripType(strip_options);
+
+    auto suppress_class_decl = [](SgClassDeclaration *decl) {
+      if (decl == nullptr) {
+        return;
+      }
+      decl->set_isAutonomousDeclaration(false);
+      suppress_unparse_output(decl);
+    };
+    auto suppress_enum_decl = [](SgEnumDeclaration *decl) {
+      if (decl == nullptr) {
+        return;
+      }
+      decl->set_isAutonomousDeclaration(false);
+      suppress_unparse_output(decl);
+    };
+
+    if (SgClassType *class_type = isSgClassType(stripped_type)) {
+      class_type->set_autonomous_declaration(false);
+      if (SgClassDeclaration *class_decl =
+              isSgClassDeclaration(class_type->get_declaration())) {
+        suppress_class_decl(class_decl);
+        suppress_class_decl(isSgClassDeclaration(
+            class_decl->get_firstNondefiningDeclaration()));
+        suppress_class_decl(
+            isSgClassDeclaration(class_decl->get_definingDeclaration()));
+      }
+      return;
+    }
+
+    if (SgEnumType *enum_type = isSgEnumType(stripped_type)) {
+      enum_type->set_autonomous_declaration(false);
+      if (SgEnumDeclaration *enum_decl =
+              isSgEnumDeclaration(enum_type->get_declaration())) {
+        suppress_enum_decl(enum_decl);
+        suppress_enum_decl(
+            isSgEnumDeclaration(enum_decl->get_firstNondefiningDeclaration()));
+        suppress_enum_decl(
+            isSgEnumDeclaration(enum_decl->get_definingDeclaration()));
+      }
+    }
+  };
+
+  bool cast_requires_elaboration =
+      qual_type_contains_elaborated_spelling_for_type_operand(
+          explicit_cast_expr->getTypeAsWritten());
+
   SgType *sg_type = nullptr;
   if (clang::TypeSourceInfo *type_info =
           explicit_cast_expr->getTypeInfoAsWritten()) {
@@ -8303,7 +8456,12 @@ bool ClangToSageTranslator::VisitExplicitCastExpr(
     cast_kind = SgCastExp::e_reinterpret_cast;
   }
 
-  *node = SageBuilder::buildCastExp(sg_expr, sg_type, cast_kind);
+  SgCastExp *cast_exp = SageBuilder::buildCastExp(sg_expr, sg_type, cast_kind);
+  if (cast_requires_elaboration) {
+    cast_exp->set_type_elaboration_required(true);
+    suppress_nonautonomous_named_type_declaration(sg_type);
+  }
+  *node = cast_exp;
 
   return VisitExpr(explicit_cast_expr, node) && res;
 }
@@ -11459,7 +11617,47 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
       pushed_scope = true;
     }
 
-    tmp_decl = Traverse(decl_ref_expr->getDecl());
+    if (clang::FunctionDecl *clang_func =
+            llvm::dyn_cast<clang::FunctionDecl>(decl_ref_expr->getDecl())) {
+      if (p_decl_translation_in_progress.find(clang_func) !=
+          p_decl_translation_in_progress.end()) {
+        if (clang::FunctionTemplateDecl *primary =
+                clang_func->getPrimaryTemplate()) {
+          tmp_decl = lookupSgDeclarationForClangDecl(primary,
+                                                     /*allow_on_demand=*/true);
+          if (tmp_decl == nullptr) {
+            tmp_decl = lookupSgDeclarationForClangDecl(
+                primary->getTemplatedDecl(), /*allow_on_demand=*/true);
+          }
+        }
+        if (tmp_decl == nullptr) {
+          if (clang::FunctionDecl *pattern =
+                  clang_func->getTemplateInstantiationPattern()) {
+            tmp_decl = lookupSgDeclarationForClangDecl(
+                pattern, /*allow_on_demand=*/true);
+          }
+        }
+        if (tmp_decl == nullptr) {
+          if (const clang::FunctionTemplateSpecializationInfo *spec_info =
+                  clang_func->getTemplateSpecializationInfo()) {
+            if (clang::FunctionTemplateDecl *template_decl =
+                    spec_info->getTemplate()) {
+              tmp_decl = lookupSgDeclarationForClangDecl(
+                  template_decl, /*allow_on_demand=*/true);
+              if (tmp_decl == nullptr) {
+                tmp_decl = lookupSgDeclarationForClangDecl(
+                    template_decl->getTemplatedDecl(),
+                    /*allow_on_demand=*/true);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (tmp_decl == nullptr) {
+      tmp_decl = Traverse(decl_ref_expr->getDecl());
+    }
 
     if (SgTemplateInstantiationDirectiveStatement *inst_directive =
             isSgTemplateInstantiationDirectiveStatement(tmp_decl)) {
@@ -13361,6 +13559,24 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
 
   SgLambdaCaptureList *lambda_capture_list =
       SageBuilder::buildLambdaCaptureList();
+  SgScopeStatement *lambda_capture_scope = nullptr;
+  if (lambda_function != nullptr) {
+    if (SgFunctionDefinition *lambda_def = lambda_function->get_definition()) {
+      lambda_capture_scope = lambda_def->get_body();
+      if (lambda_capture_scope == nullptr) {
+        lambda_capture_scope = lambda_def;
+      }
+    }
+    if (lambda_capture_scope == nullptr) {
+      lambda_capture_scope = lambda_function->get_scope();
+    }
+  }
+  if (lambda_capture_scope == nullptr && lambda_closure_class != nullptr) {
+    lambda_capture_scope = lambda_closure_class->get_definition();
+    if (lambda_capture_scope == nullptr) {
+      lambda_capture_scope = lambda_closure_class->get_scope();
+    }
+  }
   unsigned total_captures = lambda_expr->capture_size();
   unsigned capture_index = 0;
   for (auto capture_it = lambda_expr->capture_begin();
@@ -13396,11 +13612,11 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
           capture_expression = SageBuilder::buildVarRefExp(var_symbol);
           handled_capture = true;
         } else if (captured_var->isInitCapture()) {
-          // Create a dangling var ref for init-captures (symbol not in current
-          // scope yet)
+          // Init-captures introduce names in lambda-local context, not the
+          // enclosing file/block scope.
           SgName capture_name(captured_var->getNameAsString());
           capture_expression = SageBuilder::buildDanglingVarRefExp(
-              capture_name, SageBuilder::topScopeStack());
+              capture_name, lambda_capture_scope);
           handled_capture = true;
         }
       }
@@ -13562,6 +13778,239 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
 
   if (clang::CXXMethodDecl *clang_method =
           llvm::dyn_cast<clang::CXXMethodDecl>(member_expr->getMemberDecl())) {
+    auto resolve_receiver_member_scope = [&]() -> SgScopeStatement * {
+      auto scope_from_type = [&](SgType *type) -> SgScopeStatement * {
+        if (type == nullptr) {
+          return nullptr;
+        }
+
+        SgType *stripped = type->stripType(
+            SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_TYPEDEF_TYPE |
+            SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE);
+        if (SgPointerType *ptr_type = isSgPointerType(stripped)) {
+          stripped = ptr_type->get_base_type();
+          if (stripped != nullptr) {
+            stripped = stripped->stripType(SgType::STRIP_MODIFIER_TYPE |
+                                           SgType::STRIP_TYPEDEF_TYPE |
+                                           SgType::STRIP_REFERENCE_TYPE |
+                                           SgType::STRIP_RVALUE_REFERENCE_TYPE);
+          }
+        }
+
+        SgClassType *class_type = isSgClassType(stripped);
+        if (class_type == nullptr) {
+          return nullptr;
+        }
+
+        SgDeclarationStatement *decl = class_type->get_declaration();
+        if (SgTemplateInstantiationDecl *inst_decl =
+                isSgTemplateInstantiationDecl(decl)) {
+          if (SgTemplateInstantiationDecl *def_decl =
+                  isSgTemplateInstantiationDecl(
+                      inst_decl->get_definingDeclaration())) {
+            if (def_decl->get_definition() != nullptr) {
+              return def_decl->get_definition();
+            }
+          }
+          return inst_decl->get_definition();
+        }
+        if (SgTemplateClassDeclaration *tmpl_decl =
+                isSgTemplateClassDeclaration(decl)) {
+          if (SgTemplateClassDeclaration *def_decl =
+                  isSgTemplateClassDeclaration(
+                      tmpl_decl->get_definingDeclaration())) {
+            if (def_decl->get_definition() != nullptr) {
+              return def_decl->get_definition();
+            }
+          }
+          return tmpl_decl->get_definition();
+        }
+        if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
+          if (SgClassDeclaration *def_decl =
+                  isSgClassDeclaration(class_decl->get_definingDeclaration())) {
+            if (def_decl->get_definition() != nullptr) {
+              return def_decl->get_definition();
+            }
+          }
+          return class_decl->get_definition();
+        }
+
+        return nullptr;
+      };
+
+      if (base != nullptr) {
+        if (SgScopeStatement *scope = scope_from_type(base->get_type())) {
+          return scope;
+        }
+      }
+
+      if (clang::Expr *clang_base = member_expr->getBase()) {
+        if (SgType *base_type =
+                buildTypeFromQualifiedType(clang_base->getType())) {
+          return scope_from_type(base_type);
+        }
+      }
+
+      return nullptr;
+    };
+
+    auto lookup_template_member_decl =
+        [&](clang::Decl *lookup_decl) -> SgTemplateMemberFunctionDeclaration * {
+      if (lookup_decl == nullptr) {
+        return nullptr;
+      }
+
+      SgDeclarationStatement *decl_stmt =
+          lookupSgDeclarationForClangDecl(lookup_decl,
+                                          /*allow_on_demand=*/true);
+      if (SgTemplateInstantiationDirectiveStatement *inst_directive =
+              isSgTemplateInstantiationDirectiveStatement(decl_stmt)) {
+        decl_stmt = inst_directive->get_declaration();
+      }
+
+      if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+              isSgTemplateMemberFunctionDeclaration(decl_stmt)) {
+        return tmpl_decl;
+      }
+
+      return recover_instantiation_template_declaration<
+          SgTemplateMemberFunctionDeclaration,
+          SgTemplateInstantiationMemberFunctionDecl>(
+          isSgFunctionDeclaration(decl_stmt));
+    };
+
+    auto resolve_member_template_decl =
+        [&](SgMemberFunctionDeclaration *member_decl)
+        -> SgTemplateMemberFunctionDeclaration * {
+      if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+              recover_instantiation_template_declaration<
+                  SgTemplateMemberFunctionDeclaration,
+                  SgTemplateInstantiationMemberFunctionDecl>(member_decl)) {
+        return tmpl_decl;
+      }
+
+      if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+              lookup_template_member_decl(clang_method->getPrimaryTemplate())) {
+        return tmpl_decl;
+      }
+      if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+              lookup_template_member_decl(
+                  clang_method->getDescribedFunctionTemplate())) {
+        return tmpl_decl;
+      }
+      if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+              lookup_template_member_decl(
+                  clang_method->getInstantiatedFromMemberFunction())) {
+        return tmpl_decl;
+      }
+      return lookup_template_member_decl(
+          clang_method->getTemplateInstantiationPattern());
+    };
+
+    auto resolve_receiver_member_declaration =
+        [&](SgMemberFunctionDeclaration *member_decl)
+        -> SgMemberFunctionDeclaration * {
+      SgScopeStatement *receiver_scope = resolve_receiver_member_scope();
+      if (receiver_scope == nullptr) {
+        return nullptr;
+      }
+
+      SgMemberFunctionDeclaration *normalized_member_decl = member_decl;
+      if (SgMemberFunctionDeclaration *first_nondef =
+              isSgMemberFunctionDeclaration(
+                  normalized_member_decl != nullptr
+                      ? normalized_member_decl
+                            ->get_firstNondefiningDeclaration()
+                      : nullptr)) {
+        normalized_member_decl = first_nondef;
+      }
+
+      if (normalized_member_decl != nullptr &&
+          normalized_member_decl->get_scope() == receiver_scope) {
+        return normalized_member_decl;
+      }
+
+      SgName target_name = normalized_member_decl != nullptr
+                               ? normalized_member_decl->get_name()
+                               : SgName(clang_method->getNameAsString());
+      SgType *target_type = normalized_member_decl != nullptr
+                                ? normalized_member_decl->get_type()
+                                : nullptr;
+      if (target_type == nullptr) {
+        target_type = buildTypeFromQualifiedType(clang_method->getType());
+      }
+      SgTemplateMemberFunctionDeclaration *target_template_decl =
+          resolve_member_template_decl(normalized_member_decl);
+
+      SgMemberFunctionDeclaration *template_match = nullptr;
+      SgMemberFunctionDeclaration *type_match = nullptr;
+      SgMemberFunctionDeclaration *name_match = nullptr;
+      size_t name_match_count = 0;
+
+      SgDeclarationStatementPtrList *members =
+          get_scope_declaration_list_for_instantiation_ref(receiver_scope);
+      if (members == nullptr) {
+        return nullptr;
+      }
+
+      for (SgDeclarationStatement *member_stmt : *members) {
+        SgMemberFunctionDeclaration *candidate =
+            isSgMemberFunctionDeclaration(member_stmt);
+        if (candidate == nullptr) {
+          continue;
+        }
+
+        if (SgMemberFunctionDeclaration *first_nondef =
+                isSgMemberFunctionDeclaration(
+                    candidate->get_firstNondefiningDeclaration())) {
+          candidate = first_nondef;
+        }
+
+        if (candidate->get_name() != target_name) {
+          continue;
+        }
+
+        name_match = candidate;
+        ++name_match_count;
+
+        if (target_template_decl != nullptr) {
+          if (SgTemplateInstantiationMemberFunctionDecl *inst_candidate =
+                  isSgTemplateInstantiationMemberFunctionDecl(candidate)) {
+            if (inst_candidate->get_templateDeclaration() ==
+                target_template_decl) {
+              if (target_type == nullptr ||
+                  SageInterface::isEquivalentType(candidate->get_type(),
+                                                  target_type)) {
+                return candidate;
+              }
+              if (template_match == nullptr) {
+                template_match = candidate;
+              }
+            }
+          }
+        }
+
+        if (target_type != nullptr && SageInterface::isEquivalentType(
+                                          candidate->get_type(), target_type)) {
+          if (type_match == nullptr) {
+            type_match = candidate;
+          }
+        }
+      }
+
+      if (template_match != nullptr) {
+        return template_match;
+      }
+      if (type_match != nullptr) {
+        return type_match;
+      }
+      if (name_match_count == 1) {
+        return name_match;
+      }
+
+      return nullptr;
+    };
+
     auto resolve_member_symbol = [&](SgMemberFunctionDeclaration *member_decl)
         -> SgMemberFunctionSymbol * {
       if (member_decl == nullptr) {
@@ -13602,6 +14051,10 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
           decl_stmt = inst_directive->get_declaration();
         }
         member_decl = isSgMemberFunctionDeclaration(decl_stmt);
+      }
+      if (SgMemberFunctionDeclaration *receiver_member_decl =
+              resolve_receiver_member_declaration(member_decl)) {
+        member_decl = receiver_member_decl;
       }
 
       if (SgMemberFunctionSymbol *method_sym =
@@ -14795,6 +15248,12 @@ bool ClangToSageTranslator::VisitUnresolvedLookupExpr(
       return nullptr;
     }
 
+    // An explicit template-id must retain its source spelling. Collapsing it
+    // to a plain template symbol loses the written `<...>` argument list.
+    if (unresolved_lookup_expr->hasExplicitTemplateArgs()) {
+      return nullptr;
+    }
+
     // Keep unresolved ADL/dependent lookups in nonreal form. Even when Clang
     // exposes a single ordinary-lookup candidate, ADL or template-dependent
     // context can still change the selected callee at instantiation time.
@@ -15661,6 +16120,9 @@ bool ClangToSageTranslator::VisitUnaryExprOrTypeTraitExpr(
 
   SgExpression *expr = nullptr;
   SgType *type = nullptr;
+  bool type_requires_elaboration = false;
+  bool has_embedded_tag_declaration_in_type_operand = false;
+  clang::TypeSourceInfo *argument_type_info = nullptr;
 
   auto mark_first_seen_class_type = [&](SgType *rose_type,
                                         const auto &set_definition_flag) {
@@ -15713,9 +16175,273 @@ bool ClangToSageTranslator::VisitUnaryExprOrTypeTraitExpr(
     }
   };
 
+  auto suppress_embedded_tag_declaration_in_type_operand =
+      [&](clang::TypeSourceInfo *type_info) -> bool {
+    if (type_info == nullptr || p_compiler_instance == nullptr) {
+      return false;
+    }
+
+    clang::SourceManager &sm = p_compiler_instance->getSourceManager();
+    auto file_loc = [&](clang::SourceLocation loc) -> clang::SourceLocation {
+      if (!loc.isValid()) {
+        return clang::SourceLocation();
+      }
+      if (loc.isMacroID()) {
+        loc = sm.getSpellingLoc(loc);
+      }
+      return sm.getFileLoc(loc);
+    };
+
+    clang::SourceRange type_range = type_info->getTypeLoc().getSourceRange();
+    clang::SourceLocation range_begin = file_loc(type_range.getBegin());
+    clang::SourceLocation range_end = file_loc(type_range.getEnd());
+    if (!range_begin.isValid() || !range_end.isValid()) {
+      return false;
+    }
+
+    clang::QualType current_qual_type = type_info->getType();
+    const clang::Type *current_type = current_qual_type.getTypePtrOrNull();
+    clang::TagDecl *tag_decl = nullptr;
+
+    while (current_type != nullptr) {
+      if (const auto *tag_type = llvm::dyn_cast<clang::TagType>(current_type)) {
+        tag_decl = tag_type->getDecl();
+        break;
+      }
+      if (const auto *injected =
+              llvm::dyn_cast<clang::InjectedClassNameType>(current_type)) {
+        tag_decl = injected->getDecl();
+        break;
+      }
+      if (const auto *record_type =
+              llvm::dyn_cast<clang::RecordType>(current_type)) {
+        tag_decl = record_type->getDecl();
+        break;
+      }
+      if (const auto *paren_type =
+              llvm::dyn_cast<clang::ParenType>(current_type)) {
+        current_qual_type = paren_type->getInnerType();
+      } else if (const auto *pointer_type =
+                     llvm::dyn_cast<clang::PointerType>(current_type)) {
+        current_qual_type = pointer_type->getPointeeType();
+      } else if (const auto *reference_type =
+                     llvm::dyn_cast<clang::ReferenceType>(current_type)) {
+        current_qual_type = reference_type->getPointeeType();
+      } else if (const auto *array_type =
+                     llvm::dyn_cast<clang::ArrayType>(current_type)) {
+        current_qual_type = array_type->getElementType();
+      } else if (const auto *attributed_type =
+                     llvm::dyn_cast<clang::AttributedType>(current_type)) {
+        current_qual_type = attributed_type->getModifiedType();
+      } else if (const auto *adjusted_type =
+                     llvm::dyn_cast<clang::AdjustedType>(current_type)) {
+        current_qual_type = adjusted_type->getOriginalType();
+      } else if (qualifiedTypeHasQualifier(current_type)) {
+        current_qual_type = current_qual_type.getCanonicalType();
+      } else {
+        break;
+      }
+
+      current_type = current_qual_type.getTypePtrOrNull();
+    }
+
+    if (tag_decl == nullptr) {
+      return false;
+    }
+
+    clang::SourceLocation decl_loc = file_loc(tag_decl->getBeginLoc());
+    if (!decl_loc.isValid()) {
+      return false;
+    }
+    if (sm.isBeforeInTranslationUnit(decl_loc, range_begin) ||
+        sm.isBeforeInTranslationUnit(range_end, decl_loc)) {
+      return false;
+    }
+
+    auto suppress_class_decl = [&](SgClassDeclaration *decl) {
+      if (decl == nullptr) {
+        return;
+      }
+      decl->set_isAutonomousDeclaration(false);
+      suppress_unparse_output(decl);
+    };
+    auto suppress_enum_decl = [&](SgEnumDeclaration *decl) {
+      if (decl == nullptr) {
+        return;
+      }
+      decl->set_isAutonomousDeclaration(false);
+      suppress_unparse_output(decl);
+    };
+
+    if (SgClassDeclaration *class_decl = isSgClassDeclaration(
+            lookupSgDeclarationForClangDecl(tag_decl,
+                                            /*allow_on_demand=*/true))) {
+      suppress_class_decl(class_decl);
+      suppress_class_decl(
+          isSgClassDeclaration(class_decl->get_firstNondefiningDeclaration()));
+      suppress_class_decl(
+          isSgClassDeclaration(class_decl->get_definingDeclaration()));
+      return true;
+    }
+
+    if (SgEnumDeclaration *enum_decl = isSgEnumDeclaration(
+            lookupSgDeclarationForClangDecl(tag_decl,
+                                            /*allow_on_demand=*/true))) {
+      suppress_enum_decl(enum_decl);
+      suppress_enum_decl(
+          isSgEnumDeclaration(enum_decl->get_firstNondefiningDeclaration()));
+      suppress_enum_decl(
+          isSgEnumDeclaration(enum_decl->get_definingDeclaration()));
+      return true;
+    }
+
+    return false;
+  };
+
+  auto suppress_nonautonomous_named_type_declaration = [&](SgType *rose_type) {
+    if (rose_type == nullptr) {
+      return;
+    }
+
+    unsigned char strip_options =
+        SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
+        SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_POINTER_TYPE |
+        SgType::STRIP_ARRAY_TYPE;
+    SgType *stripped_type = rose_type->stripType(strip_options);
+
+    auto suppress_class_decl = [&](SgClassDeclaration *decl) {
+      if (decl == nullptr) {
+        return;
+      }
+      decl->set_isAutonomousDeclaration(false);
+      suppress_unparse_output(decl);
+    };
+    auto suppress_enum_decl = [&](SgEnumDeclaration *decl) {
+      if (decl == nullptr) {
+        return;
+      }
+      decl->set_isAutonomousDeclaration(false);
+      suppress_unparse_output(decl);
+    };
+    auto physical_start_line = [](SgLocatedNode *node) -> int {
+      if (node == nullptr) {
+        return -1;
+      }
+      if (node->get_startOfConstruct() != nullptr) {
+        return node->get_startOfConstruct()->get_physical_line();
+      }
+      if (node->get_file_info() != nullptr) {
+        return node->get_file_info()->get_physical_line();
+      }
+      return -1;
+    };
+    auto suppress_matching_scope_class_decls =
+        [&](SgClassDeclaration *seed_decl) {
+          if (seed_decl == nullptr || seed_decl->get_scope() == nullptr) {
+            return;
+          }
+
+          const SgName seed_name = seed_decl->get_name();
+          const int seed_line = physical_start_line(seed_decl);
+          std::function<void(SgNode *)> visit = [&](SgNode *node) {
+            if (node == nullptr) {
+              return;
+            }
+
+            if (SgClassDeclaration *candidate = isSgClassDeclaration(node)) {
+              if (candidate->get_scope() == seed_decl->get_scope() &&
+                  candidate->get_name() == seed_name &&
+                  physical_start_line(candidate) == seed_line) {
+                candidate->set_isAutonomousDeclaration(false);
+                suppress_unparse_output(candidate);
+              }
+            }
+
+            for (SgNode *child : node->get_traversalSuccessorContainer()) {
+              visit(child);
+            }
+          };
+
+          visit(seed_decl->get_scope());
+        };
+    auto suppress_matching_scope_enum_decls =
+        [&](SgEnumDeclaration *seed_decl) {
+          if (seed_decl == nullptr || seed_decl->get_scope() == nullptr) {
+            return;
+          }
+
+          const SgName seed_name = seed_decl->get_name();
+          const int seed_line = physical_start_line(seed_decl);
+          std::function<void(SgNode *)> visit = [&](SgNode *node) {
+            if (node == nullptr) {
+              return;
+            }
+
+            if (SgEnumDeclaration *candidate = isSgEnumDeclaration(node)) {
+              if (candidate->get_scope() == seed_decl->get_scope() &&
+                  candidate->get_name() == seed_name &&
+                  physical_start_line(candidate) == seed_line) {
+                candidate->set_isAutonomousDeclaration(false);
+                suppress_unparse_output(candidate);
+              }
+            }
+
+            for (SgNode *child : node->get_traversalSuccessorContainer()) {
+              visit(child);
+            }
+          };
+
+          visit(seed_decl->get_scope());
+        };
+
+    if (SgClassType *class_type = isSgClassType(stripped_type)) {
+      class_type->set_autonomous_declaration(false);
+      if (SgClassDeclaration *class_decl =
+              isSgClassDeclaration(class_type->get_declaration())) {
+        suppress_class_decl(class_decl);
+        suppress_class_decl(isSgClassDeclaration(
+            class_decl->get_firstNondefiningDeclaration()));
+        suppress_class_decl(
+            isSgClassDeclaration(class_decl->get_definingDeclaration()));
+        suppress_matching_scope_class_decls(class_decl);
+      }
+      return;
+    }
+
+    if (SgEnumType *enum_type = isSgEnumType(stripped_type)) {
+      enum_type->set_autonomous_declaration(false);
+      if (SgEnumDeclaration *enum_decl =
+              isSgEnumDeclaration(enum_type->get_declaration())) {
+        suppress_enum_decl(enum_decl);
+        suppress_enum_decl(
+            isSgEnumDeclaration(enum_decl->get_firstNondefiningDeclaration()));
+        suppress_enum_decl(
+            isSgEnumDeclaration(enum_decl->get_definingDeclaration()));
+        suppress_matching_scope_enum_decls(enum_decl);
+      }
+    }
+  };
+
   if (unary_expr_or_type_trait_expr->isArgumentType()) {
-    type = buildTypeFromQualifiedType(
-        unary_expr_or_type_trait_expr->getArgumentType());
+    clang::QualType argument_type =
+        unary_expr_or_type_trait_expr->getArgumentType();
+    type_requires_elaboration =
+        qual_type_contains_elaborated_spelling_for_type_operand(argument_type);
+
+    argument_type_info = unary_expr_or_type_trait_expr->getArgumentTypeInfo();
+    if (argument_type_info != nullptr) {
+      has_embedded_tag_declaration_in_type_operand =
+          suppress_embedded_tag_declaration_in_type_operand(argument_type_info);
+      type = buildTypeFromTypeLoc(argument_type_info->getTypeLoc());
+    }
+    if (type == nullptr) {
+      type = buildTypeFromQualifiedType(argument_type);
+    }
+    if (has_embedded_tag_declaration_in_type_operand) {
+      suppress_nonautonomous_named_type_declaration(type);
+    } else if (type_requires_elaboration) {
+      suppress_nonautonomous_named_type_declaration(type);
+    }
   } else {
     SgNode *tmp_expr =
         Traverse(unary_expr_or_type_trait_expr->getArgumentExpr());
@@ -15733,10 +16459,15 @@ bool ClangToSageTranslator::VisitUnaryExprOrTypeTraitExpr(
   case clang::UETT_DataSizeOf:
     if (type != nullptr) {
       SgSizeOfOp *sizeof_op = SageBuilder::buildSizeOfOp_nfi(type);
+      sizeof_op->set_type_elaboration_required(type_requires_elaboration);
 
-      mark_first_seen_class_type(type, [&]() {
+      if (has_embedded_tag_declaration_in_type_operand) {
         sizeof_op->set_sizeOfContainsBaseTypeDefiningDeclaration(true);
-      });
+      } else {
+        mark_first_seen_class_type(type, [&]() {
+          sizeof_op->set_sizeOfContainsBaseTypeDefiningDeclaration(true);
+        });
+      }
 
       *node = sizeof_op;
     } else if (expr != nullptr) {
@@ -15749,10 +16480,15 @@ bool ClangToSageTranslator::VisitUnaryExprOrTypeTraitExpr(
   case clang::UETT_PreferredAlignOf:
     if (type != nullptr) {
       SgAlignOfOp *alignof_op = SageBuilder::buildAlignOfOp_nfi(type);
+      alignof_op->set_type_elaboration_required(type_requires_elaboration);
 
-      mark_first_seen_class_type(type, [&]() {
+      if (has_embedded_tag_declaration_in_type_operand) {
         alignof_op->set_alignOfContainsBaseTypeDefiningDeclaration(true);
-      });
+      } else {
+        mark_first_seen_class_type(type, [&]() {
+          alignof_op->set_alignOfContainsBaseTypeDefiningDeclaration(true);
+        });
+      }
 
       *node = alignof_op;
     } else if (expr != nullptr) {

@@ -4842,6 +4842,26 @@ SgFunctionSymbol *SgFunctionCallExp::getAssociatedFunctionSymbol() const {
     break;
   }
 
+  case V_SgLambdaExp: {
+    SgLambdaExp *lambdaExp = isSgLambdaExp(functionExp);
+    ASSERT_not_null(lambdaExp);
+    SgFunctionDeclaration *lambdaFunction = lambdaExp->get_lambda_function();
+    if (lambdaFunction != nullptr) {
+      if (SgFunctionDeclaration *definingDecl = isSgFunctionDeclaration(
+              lambdaFunction->get_definingDeclaration())) {
+        lambdaFunction = definingDecl;
+      }
+
+      returnSymbol =
+          isSgFunctionSymbol(lambdaFunction->get_symbol_from_symbol_table());
+      if (returnSymbol == nullptr && lambdaFunction->get_scope() != nullptr) {
+        returnSymbol = lambdaFunction->get_scope()->lookup_function_symbol(
+            lambdaFunction->get_name(), lambdaFunction->get_type());
+      }
+    }
+    break;
+  }
+
   case V_SgArrowExp: {
     // The lhs is the this pointer (SgThisExp) and the rhs is the member
     // function.

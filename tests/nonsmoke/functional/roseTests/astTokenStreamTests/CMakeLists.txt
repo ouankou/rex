@@ -253,8 +253,6 @@ set(TOKEN_C_TESTCODES_REQUIRED
   test2013_45.c
   test2013_46.c
   test2013_49.c
-  test2013_50.c
-  test2013_51.c
   test2013_52.c
   test2013_53.c
   test2013_54.c
@@ -310,6 +308,10 @@ set(TOKEN_C_TESTCODES_REQUIRED
   test2010_14.c
   constants.c
 )
+
+# test2013_06.c is invalid even for stock C compilers because its header uses
+# `bool` before <stdbool.h> is included.
+list(REMOVE_ITEM TOKEN_C_TESTCODES_REQUIRED test2013_06.c)
 
 set(TOKEN_C_ADDITIONAL_TESTCODES
   test2012_17.c
@@ -1165,6 +1167,8 @@ foreach(file_to_test IN LISTS TOKEN_C_TESTCODES_REQUIRED)
   set(_target ${file_to_test}.mapping.passed)
   set(_token_mapping_extra_flags)
   set(_token_mapping_c_std_flags)
+  set(_mapping_output tokenStreamMapping_${file_to_test})
+  set(_mapping_object tokenStreamMapping_${_name}.o)
   if(file_to_test IN_LIST TOKEN_C_C89_RECOVERY_TESTCODES)
     set(_token_mapping_extra_flags -rex:clang:continue-on-error)
     set(_token_mapping_c_std_flags -std=gnu89)
@@ -1173,7 +1177,7 @@ foreach(file_to_test IN LISTS TOKEN_C_TESTCODES_REQUIRED)
     NAME tokenStreamMapping_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="\"$<TARGET_FILE:tokenStreamMapping>\" ${_rose_flags_str} ${_token_mapping_extra_flags} -rose:unparse_using_leading_and_trailing_token_mappings -c ${_c_test_dir}/${file_to_test} && gcc ${_token_mapping_c_std_flags} -I${_c_test_dir} -c token_leading_${file_to_test} && gcc ${_token_mapping_c_std_flags} -I${_c_test_dir} -c token_trailing_${file_to_test}"
+      CMD="\"$<TARGET_FILE:tokenStreamMapping>\" ${_rose_flags_str} ${_token_mapping_extra_flags} -rose:output ${_mapping_output} -o ${_mapping_object} -rose:unparse_using_leading_and_trailing_token_mappings -c ${_c_test_dir}/${file_to_test} && gcc ${_token_mapping_c_std_flags} -I${_c_test_dir} -c token_leading_${file_to_test} && gcc ${_token_mapping_c_std_flags} -I${_c_test_dir} -c token_trailing_${file_to_test}"
       ${_exit_status}
       ${_target}
   )
@@ -1188,11 +1192,13 @@ set(_token_c_all_testcodes
 foreach(file_to_test IN LISTS _token_c_all_testcodes)
   string(REPLACE "." "_" _name ${file_to_test})
   set(_target ${file_to_test}.passed)
+  set(_token_c_output tokenStreamC_${file_to_test})
+  set(_token_c_object tokenStreamC_${_name}.o)
   add_test(
     NAME tokenStream_C_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="$<TARGET_FILE:${translator}> ${_rose_flags_str} -c ${_c_test_dir}/${file_to_test} && diff -u ${_c_test_dir}/${file_to_test} rose_${file_to_test}"
+      CMD="$<TARGET_FILE:${translator}> ${_rose_flags_str} -rose:output ${_token_c_output} -o ${_token_c_object} -c ${_c_test_dir}/${file_to_test} && diff -u ${_c_test_dir}/${file_to_test} ${_token_c_output}"
       ${_exit_status}
       ${_target}
   )
@@ -1208,11 +1214,13 @@ set(_token_cxx_all_testcodes
 foreach(file_to_test IN LISTS _token_cxx_all_testcodes)
   string(REPLACE "." "_" _name ${file_to_test})
   set(_target ${file_to_test}.passed)
+  set(_token_cxx_output tokenStreamCXX_${file_to_test})
+  set(_token_cxx_object tokenStreamCXX_${_name}.o)
   add_test(
     NAME tokenStream_CXX_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="$<TARGET_FILE:${translator}> -rose:unparse_tokens -I${_cxx_test_dir} -c ${_cxx_test_dir}/${file_to_test} && diff -u ${_cxx_test_dir}/${file_to_test} rose_${file_to_test}"
+      CMD="$<TARGET_FILE:${translator}> -rose:unparse_tokens -rose:output ${_token_cxx_output} -o ${_token_cxx_object} -I${_cxx_test_dir} -c ${_cxx_test_dir}/${file_to_test} && diff -u ${_cxx_test_dir}/${file_to_test} ${_token_cxx_output}"
       ${_exit_status}
       ${_target}
   )
@@ -1311,4 +1319,3 @@ install(
     testUnparsingUsingTokenStream
     testTokenUnparserTransformations
   DESTINATION bin)
-

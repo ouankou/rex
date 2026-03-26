@@ -278,7 +278,14 @@ target_link_libraries(moveDeclarationToInnermostScope ROSE_DLL ${link_with_libra
 set(_reference_root
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/moveDeclarationTool/referenceResults)
 
-set(_move_flags -w -rose:verbose 0 -rose:debug -rose:trans-tracking)
+set(_move_flags
+  -w
+  -rose:verbose 0
+  -rose:skip_unparse_asm_commands
+  -rose:skip_unparse_cc_commands
+  -std=gnu++14
+  -rose:debug
+  -rose:trans-tracking)
 set(_move_output_dir ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(MAKE_DIRECTORY ${_move_output_dir})
 
@@ -377,3 +384,8 @@ foreach(specimen IN LISTS MOVE_DECLS_TESTCODES_WITH_TOKEN_UNPARSING_ALL)
 
 endforeach()
 
+get_property(_move_decl_registered_tests DIRECTORY PROPERTY TESTS)
+if(_move_decl_registered_tests)
+  set_property(TEST ${_move_decl_registered_tests} APPEND PROPERTY ENVIRONMENT
+               "ROSE_TEST_OUTPUT_DIR=${_move_output_dir}")
+endif()

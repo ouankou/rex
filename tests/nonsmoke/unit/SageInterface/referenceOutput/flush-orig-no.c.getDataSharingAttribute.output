@@ -1,5 +1,5 @@
 -----------------------------------------------
-OpenMP region SgOmpParallelStatement @ 65
-"i"@67:10	private
-"sum"@68:6	reduction
-"i"@68:12	private
+OpenMP region SgOmpParallelStatement @ 62
+"i"@64:9	private
+"sum"@65:5	reduction
+"i"@65:12	private

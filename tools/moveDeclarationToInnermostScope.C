@@ -109,6 +109,7 @@
 
 #include "transformationTracking.h"
 
+#include <cstdlib>
 #include <iostream>
 
 #include <map>   // used to store special var reference's scope
@@ -118,6 +119,31 @@
 
 // another level of control over transformation tracking code
 #define ENABLE_TRANS_TRACKING 1
+
+namespace {
+std::string resolveTestOutputPath(const std::string &filename) {
+  if (filename.empty()) {
+    return filename;
+  }
+
+  if (filename[0] == '/' || filename[0] == '\\' ||
+      (filename.size() > 1 && filename[1] == ':')) {
+    return filename;
+  }
+
+  const char *output_dir = std::getenv("ROSE_TEST_OUTPUT_DIR");
+  if (output_dir == nullptr || output_dir[0] == '\0') {
+    return filename;
+  }
+
+  std::string resolved(output_dir);
+  if (!resolved.empty() && resolved.back() != '/') {
+    resolved += '/';
+  }
+  resolved += filename;
+  return resolved;
+}
+} // namespace
 
 static const char *purpose =
     "This tool moves variable declarations to their innermost possible scopes";
@@ -755,7 +781,7 @@ std::string Scope_Node::prettyPrint() {
 }
 
 void Scope_Node::printToDot(std::string filename) {
-  string full_filename = filename + ".dot";
+  string full_filename = resolveTestOutputPath(filename + ".dot");
   ofstream dotfile(full_filename.c_str());
   dotfile << "digraph scopetree{" << endl;
   traverse_write(this, dotfile);

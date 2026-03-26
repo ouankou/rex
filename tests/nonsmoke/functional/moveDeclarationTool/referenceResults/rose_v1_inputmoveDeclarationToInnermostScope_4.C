@@ -1,8 +1,8 @@
 
 void fallbackSimpleSort(int *fmap,int *eclass,int lo,int hi)
 {
-  if (lo == hi) 
-    return ;
+  if (lo == hi)
+    return;
   if (hi - lo > 3) {
     for (int i = hi - 4; i >= lo; i--) {
       int j;

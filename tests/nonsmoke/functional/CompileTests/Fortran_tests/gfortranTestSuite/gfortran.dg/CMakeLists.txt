@@ -1,5 +1,5 @@
   # This is the long test of ROSE (takes a while!)
-  set(F90_TESTCODES_REQUIRED_TO_PASS
+  set(GFORTRAN_DG_F90_TESTCODES
     access_spec_1.f90 access_spec_3.f90 achar_1.f90 achar_2.f90 achar_4.f90
     actual_array_constructor_3.f90 actual_array_interface_1.f90
     actual_array_result_1.f90 actual_pointer_function_1.f90
@@ -329,7 +329,7 @@
     zero_sized_4.f90 zero_sized_5.f90)
 
   # This is the long test of ROSE (takes a while!)
-  set(F77_FIXED_FORMAT_TESTCODES_REQUIRED_TO_PASS
+  set(GFORTRAN_DG_F77_FIXED_FORMAT_TESTCODES
     allocate_zerosize_3.f array_constructor_type_9.f backslash_3.f
     bounds_check_13.f bounds_check_2.f char_comparison_1.f
     comma_format_extension_4.f comma.f common_equivalence_1.f
@@ -349,7 +349,7 @@
     string_null_compare_1.f substr_2.f substr_3.f t_editing.f write_back.f
     write_rewind_1.f write_rewind_2.f wtruncate_f77.f x_slash_1.f x_slash_2.f)
 
-set(F03_TESTCODES_REQUIRED_TO_PASS
+set(GFORTRAN_DG_F03_TESTCODES
   abstract_type_7.f03 array_constructor_25.f03 array_constructor_29.f03
   array_constructor_type_1.f03 array_constructor_type_12.f03
   array_constructor_type_4.f03 array_constructor_type_8.f03
@@ -367,7 +367,7 @@ set(_gfortran_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
 file(MAKE_DIRECTORY ${_gfortran_output_dir})
 list(APPEND ROSE_FLAGS -I${_gfortran_output_dir} -outputdir ${_gfortran_output_dir})
 
-foreach(file_to_test ${F90_TESTCODES_REQUIRED_TO_PASS})
+foreach(file_to_test ${GFORTRAN_DG_F90_TESTCODES})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
     COMMAND testTranslator ${ROSE_FLAGS} -rose:fortran_std=f90 -c
@@ -376,7 +376,7 @@ foreach(file_to_test ${F90_TESTCODES_REQUIRED_TO_PASS})
     WORKING_DIRECTORY ${_gfortran_output_dir})
 endforeach()
 
-foreach(file_to_test ${F77_FIXED_FORMAT_TESTCODES_REQUIRED_TO_PASS})
+foreach(file_to_test ${GFORTRAN_DG_F77_FIXED_FORMAT_TESTCODES})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
     COMMAND testTranslator ${ROSE_FLAGS} -rose:fortran_std=f77 -c
@@ -481,7 +481,7 @@ endforeach()
 #       to avoid processing the generated code (which would have the same problem).  It is easier to just use
 #       the version 4.1 gfortran which has better Fortran 2003 syntax checking support. This problem is confirmed
 #       on versions of gfortran 4.2 and 4.3.
-foreach(file_to_test ${F03_TESTCODES_REQUIRED_TO_PASS})
+foreach(file_to_test ${GFORTRAN_DG_F03_TESTCODES})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
     COMMAND testTranslator ${ROSE_FLAGS} -rose:skip_syntax_check

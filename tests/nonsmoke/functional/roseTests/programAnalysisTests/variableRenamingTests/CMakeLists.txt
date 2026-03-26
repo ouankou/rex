@@ -18,7 +18,7 @@ set(_excluded_specimens
   test2011_78.C
 )
 
-set(_variable_renaming_specimens ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
+set(_variable_renaming_specimens ${CXX_TESTCODES})
 list(REMOVE_ITEM _variable_renaming_specimens ${_excluded_specimens})
 list(APPEND _variable_renaming_specimens test2003_24.C test2004_82.C)
 list(REMOVE_DUPLICATES _variable_renaming_specimens)

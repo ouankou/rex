@@ -157,6 +157,9 @@ SgAssignedGotoStatement *
 BuildAssignedGotoStatement(const Fortran::parser::AssignedGotoStmt &x);
 SgComputedGotoStatement *
 BuildComputedGotoStatement(const Fortran::parser::ComputedGotoStmt &x);
+SgFunctionSymbol *LookupDefinedOperatorSymbol(const SgName &operatorName,
+                                              SgScopeStatement *scope);
+SgType *GetFunctionResultType(SgFunctionSymbol *symbol);
 
 constexpr const char *kFortranImplicitDeclAttr =
     "rose_fortran_implicit_declaration";
@@ -164,6 +167,7 @@ constexpr const char *kFortranEmitImplicitDeclAttr =
     "rose_fortran_emit_implicit_declaration";
 constexpr const char *kFortranSubmoduleParentAttr =
     "rose_fortran_submodule_parent";
+constexpr const char *kFortranModuleAccessAttr = "rose_fortran_module_access";
 
 class FortranImplicitDeclAttribute : public AstAttribute {
 public:
@@ -193,6 +197,37 @@ public:
   OwnershipPolicy getOwnershipPolicy() const override {
     return CONTAINER_OWNERSHIP;
   }
+};
+
+class FortranModuleAccessAttribute : public AstAttribute {
+public:
+  AstAttribute *copy() const override {
+    return new FortranModuleAccessAttribute(*this);
+  }
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
+  std::optional<SgAccessModifier::access_modifier_enum> defaultAccess{};
+  std::unordered_map<std::string, SgAccessModifier::access_modifier_enum>
+      explicitAccess{};
+};
+
+bool gSuppressFortranImplicitDeclsForExpr = false;
+
+class ScopedFortranImplicitDeclSuppression {
+public:
+  ScopedFortranImplicitDeclSuppression()
+      : saved_(gSuppressFortranImplicitDeclsForExpr) {
+    gSuppressFortranImplicitDeclsForExpr = true;
+  }
+
+  ~ScopedFortranImplicitDeclSuppression() {
+    gSuppressFortranImplicitDeclsForExpr = saved_;
+  }
+
+private:
+  bool saved_{false};
 };
 
 class FortranOwnedStringAttribute : public AstValueAttribute<std::string> {
@@ -259,6 +294,152 @@ void EnsureSymbolsForBlockDeclarations(SgBasicBlock *block) {
         block->insert_symbol(init_name->get_name(), var_sym);
       }
     }
+  }
+}
+
+void ResolveDanglingFortranVarRefs(SgNode *root,
+                                   SgScopeStatement *lookupScope) {
+  if (root == nullptr || lookupScope == nullptr) {
+    return;
+  }
+
+  std::set<SgVariableDeclaration *> staleGlobalDecls;
+  Rose_STL_Container<SgNode *> refs =
+      NodeQuery::querySubTree(root, V_SgVarRefExp);
+  for (SgNode *node : refs) {
+    SgVarRefExp *varRef = isSgVarRefExp(node);
+    if (varRef == nullptr) {
+      continue;
+    }
+
+    SgVariableSymbol *symbol = varRef->get_symbol();
+    if (symbol == nullptr) {
+      continue;
+    }
+
+    SgInitializedName *initName = symbol->get_declaration();
+    if (initName == nullptr) {
+      continue;
+    }
+
+    SgVariableDeclaration *decl =
+        isSgVariableDeclaration(initName->get_parent());
+    if (decl == nullptr) {
+      continue;
+    }
+    const bool isImplicitDecl =
+        decl->getAttribute(kFortranImplicitDeclAttr) != nullptr;
+    const bool isCompilerGenerated =
+        decl->get_file_info() != nullptr &&
+        decl->get_file_info()->isCompilerGenerated();
+    if (!isImplicitDecl && !isCompilerGenerated) {
+      continue;
+    }
+
+    SgVariableSymbol *resolved =
+        SageInterface::lookupVariableSymbolInParentScopes(symbol->get_name(),
+                                                          lookupScope);
+    if (resolved == nullptr || resolved == symbol) {
+      continue;
+    }
+
+    SgInitializedName *resolvedDecl = resolved->get_declaration();
+    if (resolvedDecl == nullptr || resolvedDecl == initName) {
+      continue;
+    }
+
+    varRef->set_symbol(resolved);
+    if (isSgGlobal(decl->get_scope()) != nullptr) {
+      staleGlobalDecls.insert(decl);
+    }
+  }
+
+  for (SgVariableDeclaration *decl : staleGlobalDecls) {
+    if (decl == nullptr) {
+      continue;
+    }
+    SgGlobal *globalScope = isSgGlobal(decl->get_scope());
+    if (globalScope == nullptr) {
+      continue;
+    }
+
+    for (SgInitializedName *var : decl->get_variables()) {
+      if (var == nullptr) {
+        continue;
+      }
+      if (SgVariableSymbol *sym =
+              globalScope->lookup_variable_symbol(var->get_name())) {
+        if (sym->get_declaration() == var) {
+          globalScope->remove_symbol(sym);
+        }
+      }
+    }
+
+    SageInterface::removeStatement(decl,
+                                   /*autoRelocatePreprocessingInfo=*/false);
+  }
+}
+
+void RemoveShadowedCompilerGeneratedGlobalDecls(
+    SgFunctionDeclaration *functionDecl, SgScopeStatement *lookupScope) {
+  if (functionDecl == nullptr || lookupScope == nullptr) {
+    return;
+  }
+
+  SgGlobal *globalScope = isSgGlobal(functionDecl->get_scope());
+  if (globalScope == nullptr) {
+    return;
+  }
+
+  std::vector<SgVariableDeclaration *> staleDecls;
+  for (SgDeclarationStatement *declStmt : globalScope->get_declarations()) {
+    SgVariableDeclaration *varDecl = isSgVariableDeclaration(declStmt);
+    if (varDecl == nullptr) {
+      continue;
+    }
+    const bool isImplicitDecl =
+        varDecl->getAttribute(kFortranImplicitDeclAttr) != nullptr;
+    const bool isCompilerGenerated =
+        varDecl->get_file_info() != nullptr &&
+        varDecl->get_file_info()->isCompilerGenerated();
+    if (!isImplicitDecl && !isCompilerGenerated) {
+      continue;
+    }
+
+    bool shadowedByFunctionScope = !varDecl->get_variables().empty();
+    for (SgInitializedName *var : varDecl->get_variables()) {
+      if (var == nullptr) {
+        shadowedByFunctionScope = false;
+        break;
+      }
+      SgVariableSymbol *resolved =
+          SageInterface::lookupVariableSymbolInParentScopes(var->get_name(),
+                                                            lookupScope);
+      if (resolved == nullptr) {
+        shadowedByFunctionScope = false;
+        break;
+      }
+    }
+
+    if (shadowedByFunctionScope) {
+      staleDecls.push_back(varDecl);
+    }
+  }
+
+  for (SgVariableDeclaration *varDecl : staleDecls) {
+    for (SgInitializedName *var : varDecl->get_variables()) {
+      if (var == nullptr) {
+        continue;
+      }
+      if (SgVariableSymbol *sym =
+              globalScope->lookup_variable_symbol(var->get_name())) {
+        if (sym->get_declaration() == var) {
+          globalScope->remove_symbol(sym);
+        }
+      }
+    }
+    SageInterface::removeStatement(varDecl,
+                                   /*autoRelocatePreprocessingInfo=*/false);
   }
 }
 
@@ -494,7 +675,11 @@ void BuildExprVisitor::Build(const Fortran::parser::Name &x) {
     }
   }
   if (expr == nullptr) {
-    expr = SageBuilderCpp17::buildVarRefExp_nfi(name);
+    SgScopeStatement *scope = SageBuilder::topScopeStack();
+    expr = gSuppressFortranImplicitDeclsForExpr
+               ? SageBuilderCpp17::buildVarRefExp_nfi(name, scope,
+                                                      /*allow_implicit=*/false)
+               : SageBuilderCpp17::buildVarRefExp_nfi(name);
   }
   this->set(expr);
 }
@@ -536,36 +721,17 @@ void BuildExprVisitor::Build(const Fortran::parser::StructureConstructor &x) {
 }
 
 void BuildExprVisitor::Build(const Fortran::parser::Expr::DefinedUnary &x) {
-  SgExpression *arg{nullptr};
-  WalkExpr(std::get<1>(x.t).value(), arg);
-  ASSERT_not_null(arg);
-  std::string name{std::get<0>(x.t).v.ToString()};
-  std::list<SgExpression *> args{arg};
-  SgExprListExp *params = SageBuilderCpp17::buildExprListExp_nfi(args);
-  ASSERT_not_null(params);
-  SgFunctionCallExp *call = SageBuilder::buildFunctionCallExp(
-      SgName(name), SageBuilder::buildUnknownType(), params,
-      SageBuilder::topScopeStack());
-  ASSERT_not_null(call);
-  this->set(call);
+  SgExpression *expr{nullptr};
+  Rose::builder::Build(x, expr);
+  ASSERT_not_null(expr);
+  this->set(expr);
 }
 
 void BuildExprVisitor::Build(const Fortran::parser::Expr::DefinedBinary &x) {
-  SgExpression *lhs{nullptr};
-  SgExpression *rhs{nullptr};
-  WalkExpr(std::get<1>(x.t).value(), lhs);
-  WalkExpr(std::get<2>(x.t).value(), rhs);
-  ASSERT_not_null(lhs);
-  ASSERT_not_null(rhs);
-  std::string name{std::get<0>(x.t).v.ToString()};
-  std::list<SgExpression *> args{lhs, rhs};
-  SgExprListExp *params = SageBuilderCpp17::buildExprListExp_nfi(args);
-  ASSERT_not_null(params);
-  SgFunctionCallExp *call = SageBuilder::buildFunctionCallExp(
-      SgName(name), SageBuilder::buildUnknownType(), params,
-      SageBuilder::topScopeStack());
-  ASSERT_not_null(call);
-  this->set(call);
+  SgExpression *expr{nullptr};
+  Rose::builder::Build(x, expr);
+  ASSERT_not_null(expr);
+  this->set(expr);
 }
 
 void BuildExprVisitor::Build(
@@ -2634,6 +2800,8 @@ bool namesMatch(const SgName &left, const SgName &right, bool caseInsensitive) {
 }
 
 bool isPubliclyAccessibleSymbol(SgSymbol *symbol);
+std::optional<SgAccessModifier::access_modifier_enum>
+getFortranModuleRecordedAccess(SgSymbol *symbol);
 
 using SymbolList = std::vector<SgSymbol *>;
 using PublicSymbolMap = std::unordered_map<std::string, SymbolList>;
@@ -2643,6 +2811,90 @@ std::string symbolKey(const SgName &name, bool caseInsensitive) {
     return name.str();
   }
   return StringUtility::convertToLowerCase(name.str());
+}
+
+SgClassDefinition *
+getFortranModuleDefinitionFromScope(SgScopeStatement *scope) {
+  if (scope == nullptr) {
+    return nullptr;
+  }
+
+  if (SgClassDefinition *classDefinition = isSgClassDefinition(scope)) {
+    if (isSgModuleStatement(classDefinition->get_declaration()) != nullptr) {
+      return classDefinition;
+    }
+  }
+
+  if (SgModuleStatement *moduleStmt =
+          SageInterface::getEnclosingModuleStatement(scope, true)) {
+    return moduleStmt->get_definition();
+  }
+
+  return nullptr;
+}
+
+FortranModuleAccessAttribute *
+getFortranModuleAccessAttribute(SgScopeStatement *scope, bool createIfMissing) {
+  SgClassDefinition *moduleDefinition =
+      getFortranModuleDefinitionFromScope(scope);
+  if (moduleDefinition == nullptr) {
+    return nullptr;
+  }
+
+  auto *attribute = dynamic_cast<FortranModuleAccessAttribute *>(
+      moduleDefinition->getAttribute(kFortranModuleAccessAttr));
+  if (attribute == nullptr && createIfMissing) {
+    auto *newAttribute = new FortranModuleAccessAttribute();
+    moduleDefinition->addNewAttribute(kFortranModuleAccessAttr, newAttribute);
+    attribute = newAttribute;
+  }
+  return attribute;
+}
+
+void recordFortranModuleDefaultAccess(
+    SgScopeStatement *scope,
+    SgAccessModifier::access_modifier_enum accessModifier) {
+  if (FortranModuleAccessAttribute *attribute =
+          getFortranModuleAccessAttribute(scope, true)) {
+    attribute->defaultAccess = accessModifier;
+  }
+}
+
+void recordFortranModuleExplicitAccess(
+    SgScopeStatement *scope, const std::string &name,
+    SgAccessModifier::access_modifier_enum accessModifier) {
+  FortranModuleAccessAttribute *attribute =
+      getFortranModuleAccessAttribute(scope, true);
+  if (attribute == nullptr) {
+    return;
+  }
+
+  const bool caseInsensitive = scope->isCaseInsensitive();
+  attribute->explicitAccess[symbolKey(SgName(name), caseInsensitive)] =
+      accessModifier;
+}
+
+std::optional<SgAccessModifier::access_modifier_enum>
+getFortranModuleRecordedAccess(SgSymbol *symbol) {
+  if (symbol == nullptr) {
+    return std::nullopt;
+  }
+
+  SgScopeStatement *scope = symbol->get_scope();
+  FortranModuleAccessAttribute *attribute =
+      getFortranModuleAccessAttribute(scope, false);
+  if (attribute == nullptr) {
+    return std::nullopt;
+  }
+
+  const bool caseInsensitive = scope != nullptr && scope->isCaseInsensitive();
+  auto it = attribute->explicitAccess.find(
+      symbolKey(symbol->get_name(), caseInsensitive));
+  if (it != attribute->explicitAccess.end()) {
+    return it->second;
+  }
+
+  return attribute->defaultAccess;
 }
 
 std::string formatSourcePosition(const SourcePosition &pos) {
@@ -2702,7 +2954,17 @@ bool isPubliclyAccessibleSymbol(SgSymbol *symbol) {
   SgNode *symbolBasis = symbol->get_symbol_basis();
   if (auto *declaration = isSgDeclarationStatement(symbolBasis)) {
     auto &access = declaration->get_declarationModifier().get_accessModifier();
-    return access.isPublic() || access.isDefault() || access.isUndefined();
+    if (access.isPublic()) {
+      return true;
+    }
+    if (access.isPrivate()) {
+      return false;
+    }
+    if (std::optional<SgAccessModifier::access_modifier_enum> moduleAccess =
+            getFortranModuleRecordedAccess(symbol)) {
+      return *moduleAccess == SgAccessModifier::e_public;
+    }
+    return access.isDefault() || access.isUndefined();
   }
 
   if (auto *initializedName = isSgInitializedName(symbolBasis)) {
@@ -2710,7 +2972,17 @@ bool isPubliclyAccessibleSymbol(SgSymbol *symbol) {
     if (auto *declaration = isSgDeclarationStatement(parent)) {
       auto &access =
           declaration->get_declarationModifier().get_accessModifier();
-      if (access.isPublic() || access.isDefault() || access.isUndefined()) {
+      if (access.isPublic()) {
+        return true;
+      }
+      if (access.isPrivate()) {
+        return false;
+      }
+      if (std::optional<SgAccessModifier::access_modifier_enum> moduleAccess =
+              getFortranModuleRecordedAccess(symbol)) {
+        return *moduleAccess == SgAccessModifier::e_public;
+      }
+      if (access.isDefault() || access.isUndefined()) {
         return true;
       }
       if (initializedName->get_protected_declaration()) {
@@ -3205,7 +3477,10 @@ void BuildVisitor::Build(parser::SeparateModuleSubprogram &x) {
 
   SgType *returnType{nullptr};
   std::string lookupName = name;
-  BuildFunctionReturnType(spec, lookupName, returnType);
+  {
+    ScopedFortranImplicitDeclSuppression suppressImplicitDecls;
+    BuildFunctionReturnType(spec, lookupName, returnType);
+  }
   SgType *paramResultType = returnType;
 
   // Enter SageTreeBuilder for SgFunctionParameterList
@@ -3318,6 +3593,7 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
   // know it
   if (!returnType) {
     std::string lookupName = resultName.empty() ? name : resultName;
+    ScopedFortranImplicitDeclSuppression suppressImplicitDecls;
     BuildFunctionReturnType(std::get<parser::SpecificationPart>(x.t),
                             lookupName, returnType);
   }
@@ -4049,6 +4325,16 @@ void TransferParamScopeToFunctionBody(SgScopeStatement *paramScope,
     }
   };
   transfer_label_symbols(paramBlock);
+  ResolveDanglingFortranVarRefs(functionDecl, functionBody);
+  if (SgFunctionDeclaration *nondef = isSgFunctionDeclaration(
+          functionDecl->get_firstNondefiningDeclaration())) {
+    ResolveDanglingFortranVarRefs(nondef, functionBody);
+  }
+  if (SgFunctionDeclaration *def =
+          isSgFunctionDeclaration(functionDecl->get_definingDeclaration())) {
+    ResolveDanglingFortranVarRefs(def, functionBody);
+  }
+  RemoveShadowedCompilerGeneratedGlobalDecls(functionDecl, functionBody);
 
   if (paramScope->getAttribute(kFlangParamScopeTransferredAttr) == nullptr) {
     paramScope->addNewAttribute(kFlangParamScopeTransferredAttr,
@@ -5808,7 +6094,6 @@ void Build(parser::FunctionStmt &x, std::list<std::string> &dummy_arg_name_list,
 
 void BuildVisitor::Build(parser::PrintStmt &x) {
   // std::tuple<Format, std::list<OutputItem>> t;
-  info(x, "Rose::builder::Build(PrintStmt)");
 
   // TODO: get unparse to work (may need const)
   // Fortran::parser::Unparse(llvm::errs(), x, /*encoding=*/true);
@@ -6624,7 +6909,10 @@ void BuildVisitor::BuildPrefix(
   for (auto &prefix : x) {
     common::visit(
         common::visitors{
-            [&](parser::DeclarationTypeSpec &y) { BuildType(y, type); },
+            [&](parser::DeclarationTypeSpec &y) {
+              ScopedFortranImplicitDeclSuppression suppressImplicitDecls;
+              BuildType(y, type);
+            },
             [&](const parser::PrefixSpec::Elemental &) {
               add_modifier(LanguageTranslation::FunctionModifier::
                                e_function_modifier_elemental);
@@ -7670,6 +7958,65 @@ void BuildVisitor::Build(
   SageInterface::appendStatement(importStmt, currentScope);
 }
 
+void BuildVisitor::Build(
+    parser::Statement<common::Indirection<parser::AccessStmt>> &x) {
+  using namespace Fortran::parser;
+
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  ASSERT_not_null(scope);
+
+  AccessStmt &accessStmt = x.statement.value();
+  auto &accessSpec = std::get<AccessSpec>(accessStmt.t);
+  auto &accessIds = std::get<std::list<AccessId>>(accessStmt.t);
+
+  SgAttributeSpecificationStatement::attribute_spec_enum attributeKind =
+      accessSpec.v == AccessSpec::Kind::Private
+          ? SgAttributeSpecificationStatement::e_accessStatement_private
+          : SgAttributeSpecificationStatement::e_accessStatement_public;
+  SgAccessModifier::access_modifier_enum accessModifier =
+      accessSpec.v == AccessSpec::Kind::Private ? SgAccessModifier::e_private
+                                                : SgAccessModifier::e_public;
+
+  SgAttributeSpecificationStatement *stmt =
+      SageBuilder::buildAttributeSpecificationStatement(attributeKind);
+  ASSERT_not_null(stmt);
+  ApplyCurrentStatementSource(stmt);
+
+  SgExprListExp *paramList = stmt->get_parameter_list();
+  if (paramList == nullptr) {
+    paramList = SageBuilder::buildExprListExp_nfi();
+    ASSERT_not_null(paramList);
+    stmt->set_parameter_list(paramList);
+    paramList->set_parent(stmt);
+  }
+
+  for (auto &accessId : accessIds) {
+    GenericSpec &genericSpec = accessId.v.value();
+    std::string accessName = genericSpec.source.ToString();
+    common::visit(
+        common::visitors{[&](Name &name) { accessName = name.ToString(); },
+                         [&](auto &) {}},
+        genericSpec.u);
+
+    if (accessName.empty()) {
+      continue;
+    }
+
+    SgExpression *ref = SageBuilder::buildOpaqueVarRefExp(accessName, scope);
+    ASSERT_not_null(ref);
+    paramList->get_expressions().push_back(ref);
+    ref->set_parent(paramList);
+
+    recordFortranModuleExplicitAccess(scope, accessName, accessModifier);
+  }
+
+  if (accessIds.empty()) {
+    recordFortranModuleDefaultAccess(scope, accessModifier);
+  }
+
+  InsertFortranSpecificationStatement(stmt, scope);
+}
+
 void BuildVisitor::Build(parser::CommonStmt &x) {
   // CommonStmt std::list<Block> blocks;
   // Block std::tuple<std::optional<Name>, std::list<CommonBlockObject>> t;
@@ -8513,12 +8860,44 @@ SgVariableSymbol *buildUseAssociatedVariableSymbol(SgVariableSymbol *varSymbol,
     varType = SageBuilder::buildUnknownType();
   }
 
-  SgInitializedName *initName = SageBuilder::buildInitializedName_nfi(
-      localName, varType, /*initializer*/ nullptr);
+  SgVariableDeclaration *placeholderDecl =
+      new SgVariableDeclaration(localName, varType, /*initializer*/ nullptr);
+  ASSERT_not_null(placeholderDecl);
+  placeholderDecl->set_firstNondefiningDeclaration(placeholderDecl);
+  placeholderDecl->set_definingDeclaration(placeholderDecl);
+  placeholderDecl->set_scope(scope);
+  placeholderDecl->set_parent(scope);
+  placeholderDecl->set_file_info(
+      Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode());
+  if (Sg_File_Info *fi = placeholderDecl->get_file_info()) {
+    fi->setCompilerGenerated();
+    fi->unsetOutputInCodeGeneration();
+  }
+
+  ROSE_ASSERT(!placeholderDecl->get_variables().empty());
+  SgInitializedName *initName = placeholderDecl->get_variables().front();
   ASSERT_not_null(initName);
-  SageInterface::setSourcePosition(initName);
   initName->set_scope(scope);
-  initName->set_parent(scope);
+  initName->set_parent(placeholderDecl);
+  initName->set_file_info(
+      Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode());
+  if (Sg_File_Info *fi = initName->get_file_info()) {
+    fi->setCompilerGenerated();
+    fi->unsetOutputInCodeGeneration();
+  }
+  if (SgVariableDefinition *def =
+          isSgVariableDefinition(initName->get_declptr())) {
+    def->set_parent(initName);
+    def->set_vardefn(initName);
+    if (def->get_file_info() == nullptr) {
+      def->set_file_info(
+          Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode());
+    }
+    if (Sg_File_Info *fi = def->get_file_info()) {
+      fi->setCompilerGenerated();
+      fi->unsetOutputInCodeGeneration();
+    }
+  }
 
   return new SgVariableSymbol(initName);
 }
@@ -9875,6 +10254,124 @@ BuildFunctionCallFromSymbolIfFound(const std::string &func_name,
   return SageBuilder::buildFunctionCallExp_nfi(func_ref, param_list);
 }
 
+SgType *GetFunctionResultType(SgFunctionSymbol *symbol) {
+  if (symbol == nullptr) {
+    return nullptr;
+  }
+  SgType *symbolType = symbol->get_type();
+  if (auto *functionType = isSgFunctionType(symbolType)) {
+    return functionType->get_return_type();
+  }
+  if (auto *memberFunctionType = isSgMemberFunctionType(symbolType)) {
+    return memberFunctionType->get_return_type();
+  }
+  return nullptr;
+}
+
+namespace {
+SgFunctionSymbol *ResolveInterfaceProcedureSymbol(SgInterfaceBody *body,
+                                                  SgScopeStatement *scope) {
+  if (body == nullptr || scope == nullptr) {
+    return nullptr;
+  }
+
+  if (SgFunctionDeclaration *decl = body->get_functionDeclaration()) {
+    if (SgFunctionSymbol *symbol =
+            isSgFunctionSymbol(decl->get_symbol_from_symbol_table())) {
+      return symbol;
+    }
+    if (SgFunctionSymbol *symbol =
+            SageInterface::lookupFunctionSymbolInParentScopes(decl->get_name(),
+                                                              scope)) {
+      return symbol;
+    }
+  }
+
+  const SgName functionName = body->get_function_name();
+  if (!functionName.is_null() && !functionName.getString().empty()) {
+    if (SgFunctionSymbol *symbol =
+            SageInterface::lookupFunctionSymbolInParentScopes(functionName,
+                                                              scope)) {
+      return symbol;
+    }
+  }
+
+  return nullptr;
+}
+
+SgFunctionSymbol *LookupDefinedOperatorSymbolInScope(const SgName &operatorName,
+                                                     SgScopeStatement *scope) {
+  if (scope == nullptr) {
+    return nullptr;
+  }
+
+  const bool caseInsensitive = scope->isCaseInsensitive() ||
+                               SageInterface::is_language_case_insensitive();
+  for (SgStatement *stmt : scope->generateStatementList()) {
+    SgInterfaceStatement *interfaceStmt = isSgInterfaceStatement(stmt);
+    if (interfaceStmt == nullptr) {
+      continue;
+    }
+    if (interfaceStmt->get_generic_spec() !=
+        SgInterfaceStatement::e_operator_interface_type) {
+      continue;
+    }
+    if (!NamesMatch(interfaceStmt->get_name().str(), operatorName.str(),
+                    caseInsensitive)) {
+      continue;
+    }
+    for (SgInterfaceBody *body : interfaceStmt->get_interface_body_list()) {
+      if (SgFunctionSymbol *symbol =
+              ResolveInterfaceProcedureSymbol(body, scope)) {
+        return symbol;
+      }
+    }
+  }
+
+  return nullptr;
+}
+} // namespace
+
+SgFunctionSymbol *LookupDefinedOperatorSymbol(const SgName &operatorName,
+                                              SgScopeStatement *scope) {
+  std::set<SgScopeStatement *> visitedScopes;
+  auto lookupInScope =
+      [&](SgScopeStatement *candidateScope) -> SgFunctionSymbol * {
+    if (candidateScope == nullptr ||
+        !visitedScopes.insert(candidateScope).second) {
+      return nullptr;
+    }
+    return LookupDefinedOperatorSymbolInScope(operatorName, candidateScope);
+  };
+
+  for (SgScopeStatement *current = scope; current != nullptr;
+       current = isSgGlobal(current) ? nullptr : current->get_scope()) {
+    if (SgFunctionSymbol *symbol = lookupInScope(current)) {
+      return symbol;
+    }
+
+    for (SgStatement *stmt : current->generateStatementList()) {
+      SgUseStatement *useStmt = isSgUseStatement(stmt);
+      if (useStmt == nullptr) {
+        continue;
+      }
+      SgModuleStatement *moduleStmt = useStmt->get_module();
+      if (moduleStmt == nullptr) {
+        continue;
+      }
+      SgClassDefinition *moduleDef = moduleStmt->get_definition();
+      if (moduleDef == nullptr) {
+        continue;
+      }
+      if (SgFunctionSymbol *symbol = lookupInScope(moduleDef)) {
+        return symbol;
+      }
+    }
+  }
+
+  return nullptr;
+}
+
 SgExpression *BuildIoUnitExpr(const parser::IoUnit &x) {
   SgExpression *expr{nullptr};
   common::visit(
@@ -10892,13 +11389,15 @@ void Build(const parser::Expr::DefinedBinary &x, SgExpression *&expr) {
   WalkExpr(std::get<2>(x.t).value(), rhs);
   ASSERT_not_null(lhs);
   ASSERT_not_null(rhs);
-  std::string name{std::get<0>(x.t).v.ToString()};
-  std::list<SgExpression *> args{lhs, rhs};
-  SgExprListExp *params = SageBuilderCpp17::buildExprListExp_nfi(args);
-  ASSERT_not_null(params);
-  expr = SageBuilder::buildFunctionCallExp(
-      SgName(name), SageBuilder::buildUnknownType(), params,
-      SageBuilder::topScopeStack());
+  SgName operatorName{std::get<0>(x.t).v.ToString()};
+  SgFunctionSymbol *symbol =
+      LookupDefinedOperatorSymbol(operatorName, SageBuilder::topScopeStack());
+  SgType *resultType = GetFunctionResultType(symbol);
+  if (resultType == nullptr) {
+    resultType = SageBuilder::buildUnknownType();
+  }
+  expr = new SgUserDefinedBinaryOp(lhs, rhs, resultType, operatorName, symbol);
+  SageInterface::setSourcePosition(expr);
   ASSERT_not_null(expr);
 }
 
@@ -10906,13 +11405,15 @@ void Build(const parser::Expr::DefinedUnary &x, SgExpression *&expr) {
   SgExpression *arg{nullptr};
   WalkExpr(std::get<1>(x.t).value(), arg);
   ASSERT_not_null(arg);
-  std::string name{std::get<0>(x.t).v.ToString()};
-  std::list<SgExpression *> args{arg};
-  SgExprListExp *params = SageBuilderCpp17::buildExprListExp_nfi(args);
-  ASSERT_not_null(params);
-  expr = SageBuilder::buildFunctionCallExp(
-      SgName(name), SageBuilder::buildUnknownType(), params,
-      SageBuilder::topScopeStack());
+  SgName operatorName{std::get<0>(x.t).v.ToString()};
+  SgFunctionSymbol *symbol =
+      LookupDefinedOperatorSymbol(operatorName, SageBuilder::topScopeStack());
+  SgType *resultType = GetFunctionResultType(symbol);
+  if (resultType == nullptr) {
+    resultType = SageBuilder::buildUnknownType();
+  }
+  expr = new SgUserDefinedUnaryOp(arg, resultType, operatorName, symbol);
+  SageInterface::setSourcePosition(expr);
   ASSERT_not_null(expr);
 }
 
@@ -11723,6 +12224,8 @@ void BuildVisitor::Build(parser::InterfaceBlock &x) {
                         if (!returnType) {
                           std::string lookupName =
                               resultName.empty() ? name : resultName;
+                          ScopedFortranImplicitDeclSuppression
+                              suppressImplicitDecls;
                           BuildFunctionReturnType(specPart.value(), lookupName,
                                                   returnType);
                         }

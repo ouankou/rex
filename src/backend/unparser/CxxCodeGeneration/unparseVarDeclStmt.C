@@ -5,6 +5,8 @@
 
 #include "rose_config.h"
 
+#include <map>
+
 #define DEBUG__unparse_alignas 0
 #define DEBUG__setup_decl_item_type_unparse_infos 0
 #define DEBUG__build_decl_item_name 0
@@ -76,7 +78,9 @@ static bool setup_decl_item_type_unparse_infos(SgUnparse_Info &ninfo_for_type,
 
   SgDeclarationStatement *base_type_defn_decl =
       vdecl->get_baseTypeDefiningDeclaration();
-  if (isSgClassDeclaration(base_type_defn_decl) != NULL) {
+  if (SgEnumDeclaration *enum_decl = isSgEnumDeclaration(base_type_defn_decl)) {
+    ninfo_for_type.set_declaration_of_context(enum_decl);
+  } else if (isSgClassDeclaration(base_type_defn_decl) != NULL) {
     ninfo_for_type.set_useAlternativeDefiningDeclaration();
     ninfo_for_type.set_declstatement_associated_with_type(base_type_defn_decl);
   }
@@ -153,7 +157,9 @@ build_structured_binding_pattern_name(SgInitializedName *decl_item) {
   return pattern_name;
 }
 
-std::string build_decl_item_name(SgInitializedName *decl_item) {
+std::string build_decl_item_name(
+    SgInitializedName *decl_item,
+    const std::string &qualified_name_override = std::string()) {
   if (decl_item == nullptr) {
     return "";
   }
@@ -178,7 +184,11 @@ std::string build_decl_item_name(SgInitializedName *decl_item) {
   std::string unparse_name{""};
   if (!is_anonymous) {
     if (SageInterface::is_Cxx_language()) {
-      unparse_name += decl_item->get_qualified_name_prefix().getString();
+      if (!qualified_name_override.empty()) {
+        unparse_name += qualified_name_override;
+      } else {
+        unparse_name += decl_item->get_qualified_name_prefix().getString();
+      }
     }
     unparse_name += decl_name;
   }
@@ -328,6 +338,866 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
 #endif
   ninfo.set_declstatement_ptr(vardecl_stmt);
 
+  using TemplateParamSubstitution = std::map<std::string, std::string>;
+  std::string normalized_static_member_prefix;
+  TemplateParamSubstitution normalized_static_member_substitutions;
+  SgDeclarationStatement *normalized_static_member_owner_decl = nullptr;
+  SgTemplateClassDeclaration *normalized_static_member_owner_template = nullptr;
+
+  auto get_template_parameter_name =
+      [](const SgTemplateParameter *param) -> std::string {
+    if (param == nullptr) {
+      return "";
+    }
+    if (SgInitializedName *init_name = param->get_initializedName()) {
+      return init_name->get_name().getString();
+    }
+    if (SgTemplateType *template_type = isSgTemplateType(param->get_type())) {
+      return template_type->get_name().getString();
+    }
+    if (SgTemplateDeclaration *template_decl =
+            isSgTemplateDeclaration(param->get_templateDeclaration())) {
+      return template_decl->get_name().getString();
+    }
+    return "";
+  };
+
+  auto substitute_template_parameter_name =
+      [&](const std::string &name) -> std::string {
+    if (name.empty()) {
+      return name;
+    }
+    auto found = normalized_static_member_substitutions.find(name);
+    if (found == normalized_static_member_substitutions.end() ||
+        found->second.empty()) {
+      return name;
+    }
+    return found->second;
+  };
+
+  auto add_template_parameter_substitution =
+      [&](const std::string &canonical_name,
+          const std::string &local_name) -> void {
+    if (canonical_name.empty() || local_name.empty()) {
+      return;
+    }
+    if (normalized_static_member_substitutions.find(canonical_name) ==
+        normalized_static_member_substitutions.end()) {
+      normalized_static_member_substitutions[canonical_name] = local_name;
+    }
+  };
+
+  std::function<std::string(SgExpression *)>
+      build_substituted_expression_string;
+  std::function<std::string(SgType *)> build_substituted_type_string;
+  std::function<std::string(SgTemplateArgument *)>
+      build_substituted_template_argument_string;
+
+  auto build_substituted_template_argument_list_string =
+      [&](const SgTemplateArgumentPtrList &template_args) -> std::string {
+    std::string result = "<";
+    bool need_separator = false;
+
+    for (SgTemplateArgument *arg : template_args) {
+      std::string argument = build_substituted_template_argument_string(arg);
+      if (argument.empty()) {
+        continue;
+      }
+
+      if (need_separator) {
+        result += ",";
+      }
+      result += argument;
+      need_separator = true;
+    }
+
+    if (!need_separator) {
+      return "";
+    }
+
+    result += ">";
+    return result;
+  };
+
+  auto build_template_parameter_argument_list =
+      [&](const SgTemplateParameterPtrList &template_params,
+          bool use_substitution) -> std::string {
+    std::string result = "<";
+    bool need_separator = false;
+
+    for (SgTemplateParameter *param : template_params) {
+      if (param == nullptr) {
+        continue;
+      }
+
+      std::string param_name = get_template_parameter_name(param);
+      if (use_substitution) {
+        param_name = substitute_template_parameter_name(param_name);
+      }
+      if (param_name.empty()) {
+        continue;
+      }
+
+      if (need_separator) {
+        result += ",";
+      }
+      result += param_name;
+      need_separator = true;
+    }
+
+    if (!need_separator) {
+      return "";
+    }
+
+    result += ">";
+    return result;
+  };
+
+  auto build_template_header_string =
+      [&](const SgTemplateParameterPtrList &template_params) -> std::string {
+    std::string result = "template <";
+    bool need_separator = false;
+
+    for (SgTemplateParameter *param : template_params) {
+      if (param == nullptr) {
+        continue;
+      }
+
+      if (need_separator) {
+        result += ",";
+      }
+
+      switch (param->get_parameterType()) {
+      case SgTemplateParameter::type_parameter: {
+        result += "class";
+        std::string param_name = substitute_template_parameter_name(
+            get_template_parameter_name(param));
+        if (!param_name.empty()) {
+          result += " ";
+          result += param_name;
+        }
+        break;
+      }
+
+      case SgTemplateParameter::nontype_parameter: {
+        SgInitializedName *init_name = param->get_initializedName();
+        if (init_name != nullptr) {
+          std::string param_type =
+              build_substituted_type_string(init_name->get_type());
+          if (!param_type.empty()) {
+            result += param_type;
+            result += " ";
+          }
+          result += substitute_template_parameter_name(
+              init_name->get_name().getString());
+        } else {
+          result += globalUnparseToString(param, NULL);
+        }
+        break;
+      }
+
+      default:
+        result += globalUnparseToString(param, NULL);
+        break;
+      }
+
+      need_separator = true;
+    }
+
+    result += ">";
+    return result;
+  };
+
+  build_substituted_expression_string = [&](SgExpression *expr) -> std::string {
+    if (expr == nullptr) {
+      return "";
+    }
+    if (SgVarRefExp *var_ref = isSgVarRefExp(expr)) {
+      if (SgVariableSymbol *symbol = var_ref->get_symbol()) {
+        return substitute_template_parameter_name(
+            symbol->get_name().getString());
+      }
+    }
+    if (SgNonrealRefExp *nonreal_ref = isSgNonrealRefExp(expr)) {
+      if (SgNonrealSymbol *symbol = nonreal_ref->get_symbol()) {
+        return substitute_template_parameter_name(
+            symbol->get_name().getString());
+      }
+    }
+    return globalUnparseToString(expr, NULL);
+  };
+
+  build_substituted_type_string = [&](SgType *type) -> std::string {
+    if (type == nullptr) {
+      return "";
+    }
+
+    if (SgModifierType *modifier_type = isSgModifierType(type)) {
+      return build_substituted_type_string(modifier_type->get_base_type());
+    }
+    if (SgTypedefType *typedef_type = isSgTypedefType(type)) {
+      return build_substituted_type_string(typedef_type->get_base_type());
+    }
+    if (SgPointerType *pointer_type = isSgPointerType(type)) {
+      return build_substituted_type_string(pointer_type->get_base_type()) +
+             " *";
+    }
+    if (SgReferenceType *reference_type = isSgReferenceType(type)) {
+      return build_substituted_type_string(reference_type->get_base_type()) +
+             " &";
+    }
+    if (SgRvalueReferenceType *reference_type = isSgRvalueReferenceType(type)) {
+      return build_substituted_type_string(reference_type->get_base_type()) +
+             " &&";
+    }
+    if (SgArrayType *array_type = isSgArrayType(type)) {
+      std::string result =
+          build_substituted_type_string(array_type->get_base_type());
+      result += "[";
+      if (array_type->get_index() != nullptr) {
+        result += build_substituted_expression_string(array_type->get_index());
+      }
+      result += "]";
+      return result;
+    }
+    if (SgTemplateType *template_type = isSgTemplateType(type)) {
+      std::string result = substitute_template_parameter_name(
+          template_type->get_name().getString());
+      if (!template_type->get_tpl_args().empty()) {
+        result += build_substituted_template_argument_list_string(
+            template_type->get_tpl_args());
+      }
+      if (template_type->get_packed()) {
+        result += "...";
+      }
+      return result;
+    }
+    if (SgNonrealType *nonreal_type = isSgNonrealType(type)) {
+      SgNonrealDecl *nonreal_decl =
+          isSgNonrealDecl(nonreal_type->get_declaration());
+      std::string result;
+
+      if (nonreal_decl != nullptr &&
+          nonreal_decl->get_templateDeclaration() == nullptr) {
+        SgDeclarationScope *decl_scope =
+            isSgDeclarationScope(nonreal_decl->get_parent());
+        SgNonrealDecl *parent_nonreal =
+            decl_scope != nullptr ? isSgNonrealDecl(decl_scope->get_parent())
+                                  : nullptr;
+        if (parent_nonreal != nullptr) {
+          result += build_substituted_type_string(parent_nonreal->get_type());
+          result += "::";
+        } else if (nonreal_decl->get_has_global_qualifier()) {
+          result += "::";
+        }
+      }
+
+      result += substitute_template_parameter_name(
+          nonreal_type->get_name().getString());
+      if (nonreal_decl != nullptr &&
+          (!nonreal_decl->get_tpl_args().empty() ||
+           nonreal_decl->get_is_nonreal_template())) {
+        if (nonreal_decl->get_tpl_args().empty()) {
+          result += "<>";
+        } else {
+          result += build_substituted_template_argument_list_string(
+              nonreal_decl->get_tpl_args());
+        }
+      }
+      return result;
+    }
+    if (SgClassType *class_type = isSgClassType(type)) {
+      SgClassDeclaration *class_decl =
+          isSgClassDeclaration(class_type->get_declaration());
+      if (SgTemplateInstantiationDecl *inst_decl =
+              isSgTemplateInstantiationDecl(class_decl)) {
+        std::string name = inst_decl->get_templateName().getString();
+        if (name.empty()) {
+          name = inst_decl->get_name().getString();
+        }
+        return name + build_substituted_template_argument_list_string(
+                          inst_decl->get_templateArguments());
+      }
+      if (class_decl != nullptr) {
+        return class_decl->get_name().getString();
+      }
+    }
+
+    return globalUnparseToString(type, NULL);
+  };
+
+  build_substituted_template_argument_string =
+      [&](SgTemplateArgument *arg) -> std::string {
+    if (arg == nullptr) {
+      return "";
+    }
+
+    switch (arg->get_argumentType()) {
+    case SgTemplateArgument::type_argument:
+    case SgTemplateArgument::template_template_argument:
+      return build_substituted_type_string(arg->get_type());
+
+    case SgTemplateArgument::nontype_argument:
+      return build_substituted_expression_string(arg->get_expression());
+
+    default:
+      return globalUnparseToString(arg, NULL);
+    }
+  };
+
+  auto class_like_decl_from_scope =
+      [](SgScopeStatement *scope) -> SgDeclarationStatement * {
+    if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+      return class_def->get_declaration();
+    }
+    if (SgTemplateClassDefinition *template_def =
+            isSgTemplateClassDefinition(scope)) {
+      return template_def->get_declaration();
+    }
+    if (SgTemplateInstantiationDefn *inst_def =
+            isSgTemplateInstantiationDefn(scope)) {
+      return inst_def->get_declaration();
+    }
+    return nullptr;
+  };
+
+  auto template_class_decl_from_decl =
+      [](SgDeclarationStatement *decl) -> SgTemplateClassDeclaration * {
+    if (SgTemplateClassDeclaration *template_decl =
+            isSgTemplateClassDeclaration(decl)) {
+      return template_decl;
+    }
+    if (SgTemplateInstantiationDecl *inst_decl =
+            isSgTemplateInstantiationDecl(decl)) {
+      return isSgTemplateClassDeclaration(inst_decl->get_templateDeclaration());
+    }
+    return nullptr;
+  };
+
+  std::function<std::vector<SgDeclarationStatement *>(SgDeclarationStatement *,
+                                                      SgScopeStatement *)>
+      collect_qualification_decl_chain;
+  collect_qualification_decl_chain =
+      [&](SgDeclarationStatement *associated_decl,
+          SgScopeStatement *fallback_scope)
+      -> std::vector<SgDeclarationStatement *> {
+    std::vector<SgDeclarationStatement *> chain;
+
+    auto append_decl = [&](SgDeclarationStatement *decl) {
+      if (decl != nullptr &&
+          std::find(chain.begin(), chain.end(), decl) == chain.end()) {
+        chain.push_back(decl);
+      }
+    };
+
+    append_decl(associated_decl);
+
+    SgNode *cursor = associated_decl != nullptr
+                         ? associated_decl->get_scope()
+                         : static_cast<SgNode *>(fallback_scope);
+    while (cursor != nullptr) {
+      if (SgClassDefinition *class_def = isSgClassDefinition(cursor)) {
+        append_decl(class_def->get_declaration());
+      } else if (SgTemplateClassDefinition *template_def =
+                     isSgTemplateClassDefinition(cursor)) {
+        append_decl(template_def->get_declaration());
+      } else if (SgTemplateInstantiationDefn *inst_def =
+                     isSgTemplateInstantiationDefn(cursor)) {
+        append_decl(inst_def->get_declaration());
+      } else if (SgNamespaceDefinitionStatement *ns_def =
+                     isSgNamespaceDefinitionStatement(cursor)) {
+        append_decl(ns_def->get_namespaceDeclaration());
+      }
+      cursor = cursor->get_parent();
+    }
+
+    return chain;
+  };
+
+  auto collect_template_class_chain =
+      [&](SgDeclarationStatement *associated_decl,
+          SgScopeStatement *fallback_scope)
+      -> std::vector<SgTemplateClassDeclaration *> {
+    std::vector<SgTemplateClassDeclaration *> chain;
+
+    auto append_template_decl = [&](SgDeclarationStatement *decl) {
+      SgTemplateClassDeclaration *template_decl =
+          template_class_decl_from_decl(decl);
+      if (template_decl != nullptr &&
+          std::find(chain.begin(), chain.end(), template_decl) == chain.end()) {
+        chain.push_back(template_decl);
+      }
+    };
+
+    append_template_decl(associated_decl);
+
+    SgNode *cursor = associated_decl != nullptr
+                         ? associated_decl->get_scope()
+                         : static_cast<SgNode *>(fallback_scope);
+    while (cursor != nullptr) {
+      if (SgClassDefinition *class_def = isSgClassDefinition(cursor)) {
+        append_template_decl(class_def->get_declaration());
+      } else if (SgTemplateClassDefinition *template_def =
+                     isSgTemplateClassDefinition(cursor)) {
+        append_template_decl(template_def->get_declaration());
+      } else if (SgTemplateInstantiationDefn *inst_def =
+                     isSgTemplateInstantiationDefn(cursor)) {
+        append_template_decl(inst_def->get_declaration());
+      }
+      cursor = cursor->get_parent();
+    }
+
+    return chain;
+  };
+
+  auto build_class_like_qualifier_segment =
+      [&](SgDeclarationStatement *decl, bool use_substitution) -> std::string {
+    if (decl == nullptr) {
+      return "";
+    }
+
+    if (SgTemplateClassDeclaration *template_decl =
+            isSgTemplateClassDeclaration(decl)) {
+      std::string name = template_decl->get_templateName().getString();
+      if (name.empty()) {
+        name = template_decl->get_name().getString();
+      }
+
+      const SgTemplateArgumentPtrList &specialization_args =
+          template_decl->get_templateSpecializationArguments();
+      if (!specialization_args.empty() &&
+          template_decl->get_specialization() !=
+              SgDeclarationStatement::e_no_specialization) {
+        if (use_substitution &&
+            !normalized_static_member_substitutions.empty()) {
+          return name + build_substituted_template_argument_list_string(
+                            specialization_args);
+        }
+        return name + globalUnparseToString(&specialization_args, NULL);
+      }
+
+      if (use_substitution && !normalized_static_member_substitutions.empty()) {
+        std::string args = build_template_parameter_argument_list(
+            template_decl->get_templateParameters(), true);
+        if (!args.empty()) {
+          return name + args;
+        }
+      }
+
+      if (!template_decl->get_templateParameters().empty()) {
+        std::string args = build_template_parameter_argument_list(
+            template_decl->get_templateParameters(), false);
+        if (!args.empty()) {
+          return name + args;
+        }
+      }
+
+      return name;
+    }
+
+    if (SgTemplateInstantiationDecl *inst_decl =
+            isSgTemplateInstantiationDecl(decl)) {
+      std::string name = inst_decl->get_templateName().getString();
+      if (name.empty()) {
+        name = inst_decl->get_name().getString();
+      }
+      if (!inst_decl->get_templateArguments().empty()) {
+        if (use_substitution) {
+          return name + build_substituted_template_argument_list_string(
+                            inst_decl->get_templateArguments());
+        }
+        return name +
+               globalUnparseToString(&inst_decl->get_templateArguments(), NULL);
+      }
+      return name;
+    }
+
+    if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
+      return class_decl->get_name().getString();
+    }
+    if (SgNamespaceDeclarationStatement *ns_decl =
+            isSgNamespaceDeclarationStatement(decl)) {
+      return ns_decl->get_name().getString();
+    }
+
+    return "";
+  };
+
+  auto simple_template_parameter_type_name = [&](SgType *type) -> std::string {
+    SgType *current = type;
+    while (true) {
+      if (SgModifierType *modifier_type = isSgModifierType(current)) {
+        current = modifier_type->get_base_type();
+        continue;
+      }
+      if (SgTypedefType *typedef_type = isSgTypedefType(current)) {
+        current = typedef_type->get_base_type();
+        continue;
+      }
+      break;
+    }
+
+    if (SgTemplateType *template_type = isSgTemplateType(current)) {
+      if (template_type->get_tpl_args().empty()) {
+        return template_type->get_name().getString();
+      }
+    }
+    if (SgNonrealType *nonreal_type = isSgNonrealType(current)) {
+      SgNonrealDecl *nonreal_decl =
+          isSgNonrealDecl(nonreal_type->get_declaration());
+      if (nonreal_decl != nullptr && nonreal_decl->get_tpl_args().empty()) {
+        return nonreal_type->get_name().getString();
+      }
+    }
+
+    return "";
+  };
+
+  auto simple_template_parameter_expr_name =
+      [](SgExpression *expr) -> std::string {
+    if (expr == nullptr) {
+      return "";
+    }
+    if (SgVarRefExp *var_ref = isSgVarRefExp(expr)) {
+      if (SgVariableSymbol *symbol = var_ref->get_symbol()) {
+        return symbol->get_name().getString();
+      }
+    }
+    if (SgNonrealRefExp *nonreal_ref = isSgNonrealRefExp(expr)) {
+      if (SgNonrealSymbol *symbol = nonreal_ref->get_symbol()) {
+        return symbol->get_name().getString();
+      }
+    }
+    return "";
+  };
+
+  std::function<void(SgType *, SgType *)> collect_substitutions_from_types;
+  std::function<void(const SgTemplateArgumentPtrList &,
+                     const SgTemplateArgumentPtrList &)>
+      collect_substitutions_from_template_args;
+
+  auto get_template_like_type_info =
+      [&](SgType *type, std::string *name,
+          const SgTemplateArgumentPtrList **args) -> bool {
+    if (type == nullptr || name == nullptr || args == nullptr) {
+      return false;
+    }
+
+    SgType *current = type;
+    while (true) {
+      if (SgModifierType *modifier_type = isSgModifierType(current)) {
+        current = modifier_type->get_base_type();
+        continue;
+      }
+      if (SgTypedefType *typedef_type = isSgTypedefType(current)) {
+        current = typedef_type->get_base_type();
+        continue;
+      }
+      break;
+    }
+
+    if (SgTemplateType *template_type = isSgTemplateType(current)) {
+      *name = template_type->get_name().getString();
+      *args = &template_type->get_tpl_args();
+      return !(*name).empty() && !(*args)->empty();
+    }
+    if (SgNonrealType *nonreal_type = isSgNonrealType(current)) {
+      SgNonrealDecl *nonreal_decl =
+          isSgNonrealDecl(nonreal_type->get_declaration());
+      if (nonreal_decl != nullptr && !nonreal_decl->get_tpl_args().empty()) {
+        *name = nonreal_type->get_name().getString();
+        *args = &nonreal_decl->get_tpl_args();
+        return !(*name).empty();
+      }
+    }
+    if (SgClassType *class_type = isSgClassType(current)) {
+      SgClassDeclaration *class_decl =
+          isSgClassDeclaration(class_type->get_declaration());
+      if (SgTemplateInstantiationDecl *inst_decl =
+              isSgTemplateInstantiationDecl(class_decl)) {
+        *name = inst_decl->get_templateName().getString();
+        if ((*name).empty()) {
+          *name = inst_decl->get_name().getString();
+        }
+        *args = &inst_decl->get_templateArguments();
+        return !(*name).empty() && !(*args)->empty();
+      }
+      if (SgTemplateClassDeclaration *template_decl =
+              isSgTemplateClassDeclaration(class_decl)) {
+        if (!template_decl->get_templateSpecializationArguments().empty()) {
+          *name = template_decl->get_templateName().getString();
+          if ((*name).empty()) {
+            *name = template_decl->get_name().getString();
+          }
+          *args = &template_decl->get_templateSpecializationArguments();
+          return !(*name).empty();
+        }
+      }
+    }
+
+    return false;
+  };
+
+  collect_substitutions_from_template_args =
+      [&](const SgTemplateArgumentPtrList &pattern_args,
+          const SgTemplateArgumentPtrList &actual_args) -> void {
+    const size_t pair_count = std::min(pattern_args.size(), actual_args.size());
+    for (size_t i = 0; i < pair_count; ++i) {
+      SgTemplateArgument *pattern_arg = pattern_args[i];
+      SgTemplateArgument *actual_arg = actual_args[i];
+      if (pattern_arg == nullptr || actual_arg == nullptr) {
+        continue;
+      }
+
+      if ((pattern_arg->get_argumentType() ==
+               SgTemplateArgument::type_argument ||
+           pattern_arg->get_argumentType() ==
+               SgTemplateArgument::template_template_argument) &&
+          (actual_arg->get_argumentType() ==
+               SgTemplateArgument::type_argument ||
+           actual_arg->get_argumentType() ==
+               SgTemplateArgument::template_template_argument)) {
+        collect_substitutions_from_types(pattern_arg->get_type(),
+                                         actual_arg->get_type());
+      } else if (pattern_arg->get_argumentType() ==
+                     SgTemplateArgument::nontype_argument &&
+                 actual_arg->get_argumentType() ==
+                     SgTemplateArgument::nontype_argument) {
+        add_template_parameter_substitution(
+            simple_template_parameter_expr_name(pattern_arg->get_expression()),
+            simple_template_parameter_expr_name(actual_arg->get_expression()));
+      }
+    }
+  };
+
+  collect_substitutions_from_types = [&](SgType *pattern,
+                                         SgType *actual) -> void {
+    if (pattern == nullptr || actual == nullptr) {
+      return;
+    }
+
+    std::string pattern_name = simple_template_parameter_type_name(pattern);
+    if (!pattern_name.empty()) {
+      add_template_parameter_substitution(
+          pattern_name, simple_template_parameter_type_name(actual));
+      return;
+    }
+
+    if (SgPointerType *pattern_ptr = isSgPointerType(pattern)) {
+      if (SgPointerType *actual_ptr = isSgPointerType(actual)) {
+        collect_substitutions_from_types(pattern_ptr->get_base_type(),
+                                         actual_ptr->get_base_type());
+      }
+      return;
+    }
+    if (SgReferenceType *pattern_ref = isSgReferenceType(pattern)) {
+      if (SgReferenceType *actual_ref = isSgReferenceType(actual)) {
+        collect_substitutions_from_types(pattern_ref->get_base_type(),
+                                         actual_ref->get_base_type());
+      }
+      return;
+    }
+    if (SgRvalueReferenceType *pattern_ref = isSgRvalueReferenceType(pattern)) {
+      if (SgRvalueReferenceType *actual_ref = isSgRvalueReferenceType(actual)) {
+        collect_substitutions_from_types(pattern_ref->get_base_type(),
+                                         actual_ref->get_base_type());
+      }
+      return;
+    }
+    if (SgModifierType *pattern_mod = isSgModifierType(pattern)) {
+      if (SgModifierType *actual_mod = isSgModifierType(actual)) {
+        collect_substitutions_from_types(pattern_mod->get_base_type(),
+                                         actual_mod->get_base_type());
+      } else {
+        collect_substitutions_from_types(pattern_mod->get_base_type(), actual);
+      }
+      return;
+    }
+    if (SgTypedefType *pattern_typedef = isSgTypedefType(pattern)) {
+      if (SgTypedefType *actual_typedef = isSgTypedefType(actual)) {
+        collect_substitutions_from_types(pattern_typedef->get_base_type(),
+                                         actual_typedef->get_base_type());
+      } else {
+        collect_substitutions_from_types(pattern_typedef->get_base_type(),
+                                         actual);
+      }
+      return;
+    }
+    if (SgArrayType *pattern_array = isSgArrayType(pattern)) {
+      if (SgArrayType *actual_array = isSgArrayType(actual)) {
+        collect_substitutions_from_types(pattern_array->get_base_type(),
+                                         actual_array->get_base_type());
+      }
+      return;
+    }
+
+    std::string pattern_template_name;
+    std::string actual_template_name;
+    const SgTemplateArgumentPtrList *pattern_template_args = nullptr;
+    const SgTemplateArgumentPtrList *actual_template_args = nullptr;
+    if (get_template_like_type_info(pattern, &pattern_template_name,
+                                    &pattern_template_args) &&
+        get_template_like_type_info(actual, &actual_template_name,
+                                    &actual_template_args) &&
+        pattern_template_name == actual_template_name &&
+        pattern_template_args != nullptr && actual_template_args != nullptr) {
+      collect_substitutions_from_template_args(*pattern_template_args,
+                                               *actual_template_args);
+    }
+  };
+
+  std::function<bool(SgType *, const std::string &,
+                     const SgTemplateArgumentPtrList **)>
+      find_owner_self_template_args;
+  find_owner_self_template_args =
+      [&](SgType *type, const std::string &owner_name,
+          const SgTemplateArgumentPtrList **resolved_args) -> bool {
+    if (type == nullptr || resolved_args == nullptr) {
+      return false;
+    }
+
+    std::string current_name;
+    const SgTemplateArgumentPtrList *current_args = nullptr;
+    if (get_template_like_type_info(type, &current_name, &current_args) &&
+        current_name == owner_name && current_args != nullptr &&
+        !current_args->empty()) {
+      *resolved_args = current_args;
+      return true;
+    }
+
+    if (SgPointerType *pointer_type = isSgPointerType(type)) {
+      return find_owner_self_template_args(pointer_type->get_base_type(),
+                                           owner_name, resolved_args);
+    }
+    if (SgReferenceType *reference_type = isSgReferenceType(type)) {
+      return find_owner_self_template_args(reference_type->get_base_type(),
+                                           owner_name, resolved_args);
+    }
+    if (SgRvalueReferenceType *reference_type = isSgRvalueReferenceType(type)) {
+      return find_owner_self_template_args(reference_type->get_base_type(),
+                                           owner_name, resolved_args);
+    }
+    if (SgModifierType *modifier_type = isSgModifierType(type)) {
+      return find_owner_self_template_args(modifier_type->get_base_type(),
+                                           owner_name, resolved_args);
+    }
+    if (SgTypedefType *typedef_type = isSgTypedefType(type)) {
+      return find_owner_self_template_args(typedef_type->get_base_type(),
+                                           owner_name, resolved_args);
+    }
+    if (SgArrayType *array_type = isSgArrayType(type)) {
+      return find_owner_self_template_args(array_type->get_base_type(),
+                                           owner_name, resolved_args);
+    }
+
+    return false;
+  };
+
+  if (!vardecl_stmt->get_variables().empty()) {
+    SgInitializedName *first_decl_item = vardecl_stmt->get_variables().front();
+    SgScopeStatement *decl_item_scope =
+        first_decl_item != nullptr ? first_decl_item->get_scope() : nullptr;
+    SgScopeStatement *decl_scope = vardecl_stmt->get_scope();
+
+    if (first_decl_item != nullptr && decl_item_scope != nullptr &&
+        decl_scope != nullptr && decl_item_scope != decl_scope &&
+        first_decl_item->get_prev_decl_item() != nullptr) {
+      normalized_static_member_owner_decl =
+          class_like_decl_from_scope(decl_item_scope);
+      normalized_static_member_owner_template =
+          template_class_decl_from_decl(normalized_static_member_owner_decl);
+
+      if (normalized_static_member_owner_decl != nullptr &&
+          normalized_static_member_owner_template != nullptr) {
+        collect_substitutions_from_types(
+            first_decl_item->get_prev_decl_item()->get_type(),
+            first_decl_item->get_type());
+
+        std::string owner_name =
+            normalized_static_member_owner_template->get_templateName()
+                .getString();
+        if (owner_name.empty()) {
+          owner_name =
+              normalized_static_member_owner_template->get_name().getString();
+        }
+
+        const SgTemplateArgumentPtrList *current_owner_args = nullptr;
+        if (!owner_name.empty() &&
+            find_owner_self_template_args(first_decl_item->get_type(),
+                                          owner_name, &current_owner_args) &&
+            current_owner_args != nullptr) {
+          const SgTemplateParameterPtrList &owner_params =
+              normalized_static_member_owner_template->get_templateParameters();
+          const size_t pair_count =
+              std::min(owner_params.size(), current_owner_args->size());
+          for (size_t i = 0; i < pair_count; ++i) {
+            SgTemplateParameter *owner_param = owner_params[i];
+            SgTemplateArgument *current_arg = (*current_owner_args)[i];
+            if (owner_param == nullptr || current_arg == nullptr) {
+              continue;
+            }
+
+            if (current_arg->get_argumentType() ==
+                    SgTemplateArgument::type_argument ||
+                current_arg->get_argumentType() ==
+                    SgTemplateArgument::template_template_argument) {
+              add_template_parameter_substitution(
+                  get_template_parameter_name(owner_param),
+                  simple_template_parameter_type_name(current_arg->get_type()));
+            } else if (current_arg->get_argumentType() ==
+                       SgTemplateArgument::nontype_argument) {
+              add_template_parameter_substitution(
+                  get_template_parameter_name(owner_param),
+                  simple_template_parameter_expr_name(
+                      current_arg->get_expression()));
+            }
+          }
+        }
+
+        std::vector<SgDeclarationStatement *> qualification_chain =
+            collect_qualification_decl_chain(
+                normalized_static_member_owner_decl, decl_item_scope);
+        for (auto it = qualification_chain.rbegin();
+             it != qualification_chain.rend(); ++it) {
+          SgDeclarationStatement *segment_decl = *it;
+          std::string segment = build_class_like_qualifier_segment(
+              segment_decl,
+              segment_decl == normalized_static_member_owner_decl);
+          if (segment_decl == normalized_static_member_owner_decl &&
+              normalized_static_member_owner_template != nullptr &&
+              segment.find('<') == std::string::npos) {
+            std::string owner_name =
+                normalized_static_member_owner_template->get_templateName()
+                    .getString();
+            if (owner_name.empty()) {
+              owner_name = normalized_static_member_owner_template->get_name()
+                               .getString();
+            }
+            if (!owner_name.empty() && segment == owner_name) {
+              std::string args = build_template_parameter_argument_list(
+                  normalized_static_member_owner_template
+                      ->get_templateParameters(),
+                  !normalized_static_member_substitutions.empty());
+              if (!args.empty()) {
+                segment += args;
+              }
+            }
+          }
+          if (segment.empty()) {
+            continue;
+          }
+          normalized_static_member_prefix += segment;
+          normalized_static_member_prefix += "::";
+        }
+
+        if (vardecl_stmt->get_global_qualification_required()) {
+          normalized_static_member_prefix =
+              "::" + normalized_static_member_prefix;
+        }
+      }
+    }
+  }
+
   auto unparse_enclosing_template_headers = [&]() {
     if (isSgTemplateVariableDeclaration(vardecl_stmt) != NULL) {
       return;
@@ -388,13 +1258,20 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
       if (tmpl_decl->get_templateParameters().empty()) {
         continue;
       }
-      curprint("template ");
-      SgTemplateParameterPtrList params = tmpl_decl->get_templateParameters();
-      SgUnparse_Info tinfo(info);
-      tinfo.set_declstatement_ptr(NULL);
-      tinfo.set_declstatement_ptr(tmpl_decl);
-      unparseTemplateParameterList(params, tinfo, true);
-      curprint("\n");
+      if (tmpl_decl == normalized_static_member_owner_template &&
+          !normalized_static_member_prefix.empty()) {
+        curprint(
+            build_template_header_string(tmpl_decl->get_templateParameters()));
+        curprint("\n");
+      } else {
+        curprint("template ");
+        SgTemplateParameterPtrList params = tmpl_decl->get_templateParameters();
+        SgUnparse_Info tinfo(info);
+        tinfo.set_declstatement_ptr(NULL);
+        tinfo.set_declstatement_ptr(tmpl_decl);
+        unparseTemplateParameterList(params, tinfo, true);
+        curprint("\n");
+      }
     }
   };
 
@@ -438,6 +1315,42 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
     ASSERT_not_null(decl_type);
     SgName decl_name = decl_item->get_name();
     SgInitializer *decl_init = decl_item->get_initializer();
+
+    auto describe_templateish_type = [](SgType *type) -> std::string {
+      if (type == nullptr) {
+        return "";
+      }
+
+      SgType *current = type;
+      while (true) {
+        if (SgModifierType *modifier = isSgModifierType(current)) {
+          current = modifier->get_base_type();
+          continue;
+        }
+        if (SgTypedefType *typedef_type = isSgTypedefType(current)) {
+          current = typedef_type->get_base_type();
+          continue;
+        }
+        break;
+      }
+
+      if (SgTemplateType *template_type = isSgTemplateType(current)) {
+        return std::string("SgTemplateType:") +
+               template_type->get_name().getString();
+      }
+      if (SgNonrealType *nonreal_type = isSgNonrealType(current)) {
+        return std::string("SgNonrealType:") +
+               nonreal_type->get_name().getString();
+      }
+      if (SgClassType *class_type = isSgClassType(current)) {
+        SgClassDeclaration *decl =
+            isSgClassDeclaration(class_type->get_declaration());
+        return std::string("SgClassType:") +
+               (decl != nullptr ? decl->get_name().getString() : "");
+      }
+
+      return current->class_name();
+    };
 
 #if DEBUG__unparseVarDeclStmt
     printf("  - decl_item = %p = %s\n", decl_item,
@@ -492,7 +1405,10 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
       if (apply_vdecl_attr)
         unp->u_sage->printAttributesForType(vardecl_stmt, info);
 
-      curprint(build_decl_item_name(decl_item));
+      curprint(build_decl_item_name(
+          decl_item, decl_item == vardecl_stmt->get_variables().front()
+                         ? normalized_static_member_prefix
+                         : std::string()));
       if (SgTemplateVariableDeclaration *template_var_decl =
               isSgTemplateVariableDeclaration(vardecl_stmt)) {
         const SgTemplateArgumentPtrList &spec_args =

@@ -1,5 +1,8 @@
 include_directories(${ROSE_INCLUDES})
 
+set(_callgraph_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
+file(MAKE_DIRECTORY ${_callgraph_output_dir})
+
 add_executable(testCG CG.C)
 target_link_libraries(testCG ROSE_DLL ${link_with_libraries})
 
@@ -30,19 +33,6 @@ target_link_libraries(testNewCallGraph ROSE_DLL ${link_with_libraries})
 set(_rth ${CMAKE_SOURCE_DIR}/scripts/rth_run.pl)
 set(_exit_status ${CMAKE_SOURCE_DIR}/scripts/test_exit_status)
 
-set(_callgraph_test01_enabled FALSE)
-if((CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
-    AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS "5.2")
-   OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  set(_callgraph_test01_enabled TRUE)
-endif()
-
-set(_callgraph_test04_enabled FALSE)
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
-   OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  set(_callgraph_test04_enabled TRUE)
-endif()
-
 set(_test01_spec_dir ${CMAKE_CURRENT_SOURCE_DIR}/test01-specimens)
 set(_test01_sources
   ${_test01_spec_dir}/main.C
@@ -66,8 +56,6 @@ add_test(
     ${_exit_status}
     test01.passed
 )
-if(NOT _callgraph_test01_enabled)
-endif()
 
 set(_test02_conf ${CMAKE_CURRENT_SOURCE_DIR}/test02.conf)
 foreach(n IN ITEMS 10 100)
@@ -140,22 +128,28 @@ foreach(answer_file IN LISTS _test04_answer_files)
       ${_test04_conf}
       test04_${_name}.passed
   )
-  if(NOT _callgraph_test04_enabled)
-  endif()
 endforeach()
 
 add_test(
   NAME callgraph_new_01
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND testNewCallGraph -c ${CMAKE_CURRENT_SOURCE_DIR}/newCallGraph_input_01.c
 )
 
 add_test(
   NAME callgraph_new_02
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND testNewCallGraph -c ${CMAKE_CURRENT_SOURCE_DIR}/newCallGraph_input_02.c
 )
 
 add_test(
   NAME callgraph_new_03
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND testNewCallGraph -c ${CMAKE_CURRENT_SOURCE_DIR}/newCallGraph_input_03.C
 )
 
+get_property(_callgraph_registered_tests DIRECTORY PROPERTY TESTS)
+if(_callgraph_registered_tests)
+  set_property(TEST ${_callgraph_registered_tests} APPEND PROPERTY ENVIRONMENT
+               "ROSE_TEST_OUTPUT_DIR=${_callgraph_output_dir}")
+endif()

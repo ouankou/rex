@@ -54,22 +54,25 @@ bool isBinaryOperatorName(const string &func_name) {
 
 bool isMemberOperatorCall(SgFunctionCallExp *func_call,
                           SgFunctionDeclaration *decl) {
-  if (decl != nullptr) {
-    return isSgMemberFunctionDeclaration(decl) != nullptr;
-  }
-
   SgExpression *function = func_call->get_function();
-  if (isSgMemberFunctionRefExp(function) != nullptr) {
-    return true;
-  }
   if (SgDotExp *dot = isSgDotExp(function)) {
     return isSgMemberFunctionRefExp(dot->get_rhs_operand()) != nullptr;
   }
   if (SgArrowExp *arrow = isSgArrowExp(function)) {
     return isSgMemberFunctionRefExp(arrow->get_rhs_operand()) != nullptr;
   }
-  return isSgDotStarOp(function) != nullptr ||
-         isSgArrowStarOp(function) != nullptr;
+  if (isSgDotStarOp(function) != nullptr ||
+      isSgArrowStarOp(function) != nullptr) {
+    return true;
+  }
+
+  if (decl == nullptr) {
+    return false;
+  }
+
+  return isSgMemberFunctionDeclaration(decl) != nullptr &&
+         isSgMemberFunctionRefExp(function) == nullptr &&
+         isSgTemplateMemberFunctionRefExp(function) == nullptr;
 }
 
 bool isUldOperatorCall(const SgUnparse_Info &info,
@@ -101,6 +104,31 @@ void handleUldOperatorRef(RefType *ref, bool &print_paren, SgUnparse_Info &info,
     info.set_user_defined_literal(true);
     record_suffix(decl);
   }
+}
+
+void applyTypeReferenceInfoFromExpression(SgExpression *expr,
+                                          SgUnparse_Info &info) {
+  if (expr == nullptr) {
+    return;
+  }
+
+  if (SgAggregateInitializer *aggregate_init = isSgAggregateInitializer(expr)) {
+    info.set_name_qualification_length(
+        aggregate_init->get_name_qualification_length_for_type());
+    info.set_global_qualification_required(
+        aggregate_init->get_global_qualification_required_for_type());
+    info.set_type_elaboration_required(
+        aggregate_init->get_type_elaboration_required_for_type());
+    if (aggregate_init->get_requiresGlobalNameQualificationOnType()) {
+      info.set_requiresGlobalNameQualification();
+    }
+    return;
+  }
+
+  info.set_name_qualification_length(expr->get_name_qualification_length());
+  info.set_global_qualification_required(
+      expr->get_global_qualification_required());
+  info.set_type_elaboration_required(expr->get_type_elaboration_required());
 }
 } // namespace
 
@@ -1649,7 +1677,30 @@ void Unparse_ExprStmt::unparseTemplateParameter(
     if (template_decl != NULL) {
       SgDeclarationStatement *first_nondef =
           template_decl->get_firstNondefiningDeclaration();
-      if (first_nondef != NULL && first_nondef != template_decl) {
+      auto source_matches = [](SgDeclarationStatement *lhs,
+                               SgDeclarationStatement *rhs) -> bool {
+        if (lhs == nullptr || rhs == nullptr) {
+          return false;
+        }
+        const Sg_File_Info *lhs_fi = lhs->get_file_info();
+        const Sg_File_Info *rhs_fi = rhs->get_file_info();
+        if (lhs_fi == nullptr || rhs_fi == nullptr) {
+          return false;
+        }
+        return lhs_fi->get_line() == rhs_fi->get_line() &&
+               lhs_fi->get_col() == rhs_fi->get_col() &&
+               lhs_fi->get_filenameString() == rhs_fi->get_filenameString();
+      };
+
+      const bool first_nondef_is_synthetic =
+          first_nondef != NULL &&
+          (first_nondef->get_file_info() == nullptr ||
+           first_nondef->get_file_info()->isCompilerGenerated() ||
+           !first_nondef->get_file_info()->isOutputInCodeGeneration());
+
+      if (first_nondef != NULL && first_nondef != template_decl &&
+          !first_nondef_is_synthetic &&
+          !source_matches(first_nondef, template_decl)) {
         emit_default_template_arg = false;
       }
     }
@@ -1725,10 +1776,6 @@ void Unparse_ExprStmt::unparseTemplateParameter(
 
       SgType *type = templateParameter->get_initializedName()->get_type();
       ASSERT_not_null(type);
-      bool is_pack = templateParameter->get_is_parameter_pack();
-      if (SgTemplateType *ttype = isSgTemplateType(type)) {
-        is_pack = is_pack || ttype->get_packed();
-      }
       // DQ (9/10/2014): Note that this will unparse "int T" which we want in
       // the template header, but not in the template parameter list.
       // unp->u_type->outputType<SgInitializedName>(templateParameter->get_initializedName(),type,info);
@@ -1757,17 +1804,16 @@ void Unparse_ExprStmt::unparseTemplateParameter(
           return false;
         };
 
-        if (!is_pack && is_function_pointer_like(type)) {
+        {
           SgUnparse_Info ninfo(info);
+          ninfo.set_SkipClassDefinition();
+          ninfo.set_SkipEnumDefinition();
+          if (is_function_pointer_like(type)) {
+            ninfo.set_inArgList();
+          }
           unp->u_type->outputType<SgInitializedName>(
               templateParameter->get_initializedName(), type, ninfo);
           printed_name_with_type = true;
-        } else {
-          SgUnparse_Info ninfo(info);
-          unp->u_type->unparseType(type, ninfo);
-          if (is_pack) {
-            curprint("... ");
-          }
         }
       }
       if (!printed_name_with_type) {
@@ -3192,7 +3238,11 @@ void Unparse_ExprStmt::unparseMFuncRefSupport(SgExpression *expr,
   // defaulted to the generation of the operator syntax (e.g. "x+y"), see
   // test2013_100.C for an example of where this is required.
   ASSERT_not_null(mfunc_ref->get_parent());
-  SgNode *possibleFunctionCall = mfunc_ref->get_parent()->get_parent();
+  SgNode *possibleFunctionCall = mfunc_ref->get_parent();
+  if (possibleFunctionCall != NULL &&
+      isSgFunctionCallExp(possibleFunctionCall) == NULL) {
+    possibleFunctionCall = possibleFunctionCall->get_parent();
+  }
 
   if (possibleFunctionCall == NULL) {
     // DQ (3/5/2017): Converted to use message logging.
@@ -5351,6 +5401,7 @@ void Unparse_ExprStmt::unparseSizeOfOp(SgExpression *expr,
     // unp->u_type->unparseType(sizeof_op->get_operand_type(), info2);
 
     SgUnparse_Info newinfo(info2);
+    applyTypeReferenceInfoFromExpression(sizeof_op, newinfo);
 
     if (outputTypeDefinition == true) {
       // DQ (10/11/2006): As part of new implementation of qualified names we
@@ -5431,6 +5482,7 @@ void Unparse_ExprStmt::unparseAlignOfOp(SgExpression *expr,
     // unp->u_type->unparseType(sizeof_op->get_operand_type(), info2);
 
     SgUnparse_Info newinfo(info2);
+    applyTypeReferenceInfoFromExpression(sizeof_op, newinfo);
 
     if (outputTypeDefinition == true) {
       // DQ (10/11/2006): As part of new implementation of qualified names we
@@ -5518,6 +5570,7 @@ void Unparse_ExprStmt::unparseTypeIdOp(SgExpression *expr,
     // (so detect it here where it is more clear how to fix it, above).
     ROSE_ASSERT(info2.SkipClassDefinition() == info2.SkipEnumDefinition());
 
+    applyTypeReferenceInfoFromExpression(typeid_op, info2);
     unp->u_type->unparseType(type, info2);
   }
 
@@ -5698,6 +5751,8 @@ void Unparse_ExprStmt::unparseCastOp(SgExpression *expr, SgUnparse_Info &info) {
     ROSE_ASSERT(newinfo.SkipClassDefinition() == true);
     ROSE_ASSERT(newinfo.SkipEnumDefinition() == true);
   }
+
+  applyTypeReferenceInfoFromExpression(cast_op, newinfo);
 
   bool addParens = false;
 
@@ -6407,7 +6462,7 @@ void Unparse_ExprStmt::unparseVarArgOp(SgExpression *expr,
   // DQ (1/7/2014): These should have been setup to be the same.
   ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
 
-  curprint("va_arg(");
+  curprint("__builtin_va_arg(");
   unparseExpression(operand, info);
   curprint(",");
   unp->u_type->unparseType(type, info);

@@ -979,6 +979,93 @@ void SageTreeBuilder::setSourcePosition(SgLocatedNode *node,
   }
 }
 
+namespace {
+bool hasConcreteSourceLocation(const Sg_File_Info *info) {
+  return info != nullptr && !info->get_filenameString().empty() &&
+         info->get_filenameString() != "NULL_FILE" && info->get_line() > 0 &&
+         info->get_col() > 0 && !info->isSourcePositionUnavailableInFrontend();
+}
+
+void setLocatedNodeSourceAnchor(SgLocatedNode *node,
+                                const SourcePosition &anchor) {
+  ASSERT_not_null(node);
+
+  Sg_File_Info *old_start = node->get_startOfConstruct();
+  Sg_File_Info *old_file_info = node->get_file_info();
+  Sg_File_Info *old_end = node->get_endOfConstruct();
+
+  if (old_start != nullptr) {
+    delete old_start;
+  }
+  if (old_file_info != nullptr && old_file_info != old_start) {
+    delete old_file_info;
+  }
+  if (old_end != nullptr) {
+    delete old_end;
+  }
+
+  Sg_File_Info *start_info =
+      new Sg_File_Info(anchor.path, anchor.line, anchor.column);
+  Sg_File_Info *end_info =
+      new Sg_File_Info(anchor.path, anchor.line, anchor.column);
+  ASSERT_not_null(start_info);
+  ASSERT_not_null(end_info);
+
+  node->set_startOfConstruct(start_info);
+  node->set_file_info(start_info);
+  node->set_endOfConstruct(end_info);
+  start_info->set_parent(node);
+  end_info->set_parent(node);
+}
+
+void ensureFortranParameterSourceLocations(SgFunctionDeclaration *function_decl,
+                                           const SourcePosition &anchor) {
+  ASSERT_not_null(function_decl);
+
+  auto repair_param_list = [&](SgFunctionParameterList *param_list,
+                               SgFunctionDeclaration *owner) {
+    if (param_list == nullptr) {
+      return;
+    }
+
+    if (!hasConcreteSourceLocation(param_list->get_file_info()) ||
+        !hasConcreteSourceLocation(param_list->get_startOfConstruct()) ||
+        !hasConcreteSourceLocation(param_list->get_endOfConstruct())) {
+      setLocatedNodeSourceAnchor(param_list, anchor);
+    }
+
+    for (SgInitializedName *arg : param_list->get_args()) {
+      if (arg == nullptr) {
+        continue;
+      }
+
+      if (!hasConcreteSourceLocation(arg->get_file_info()) ||
+          !hasConcreteSourceLocation(arg->get_startOfConstruct()) ||
+          !hasConcreteSourceLocation(arg->get_endOfConstruct())) {
+        setLocatedNodeSourceAnchor(arg, anchor);
+      }
+
+      if (arg->get_parent() == nullptr) {
+        arg->set_parent(param_list);
+      }
+      if (owner != nullptr && arg->get_declptr() == nullptr) {
+        arg->set_declptr(owner);
+      }
+    }
+  };
+
+  SgFunctionParameterList *def_params = function_decl->get_parameterList();
+  repair_param_list(def_params, function_decl);
+
+  SgFunctionDeclaration *first_nondef =
+      isSgFunctionDeclaration(function_decl->get_firstNondefiningDeclaration());
+  if (first_nondef != nullptr && first_nondef != function_decl &&
+      first_nondef->get_parameterList() != def_params) {
+    repair_param_list(first_nondef->get_parameterList(), first_nondef);
+  }
+}
+} // namespace
+
 /// Constructor
 ///
 SageTreeBuilder::SageTreeBuilder(SgSourceFile *source, LanguageEnum language,
@@ -1625,7 +1712,11 @@ void SageTreeBuilder::Enter(
     setSourcePosition(function_body, std::get<1>(sources),
                       std::get<2>(sources));
 
-  SageInterface::setSourcePosition(function_decl->get_parameterList());
+  if (is_fortran_language && fs.line > 0 && fs.column > 0 && !fs.path.empty()) {
+    ensureFortranParameterSourceLocations(function_decl, fs);
+  } else {
+    SageInterface::setSourcePosition(function_decl->get_parameterList());
+  }
 
   if (list_contains(modifiers, e_function_modifier_recursive))
     function_decl->get_functionModifier().setRecursive();
@@ -1884,9 +1975,8 @@ void SageTreeBuilder::Leave(SgFunctionDeclaration *function_decl,
       ASSERT_not_null(function_body->lookup_symbol(function_name));
     }
 
-    // The param_scope (SgBasicBlock) is still connected, so detach it from the
-    // AST without deleting pooled nodes.
-    param_scope->set_parent(nullptr);
+    // Keep the original parent so memory-pool diagnostics can still walk any
+    // compiler-generated placeholders that remain tied to the temporary scope.
 
     SageBuilder::popScopeStack(); // function body
     SageBuilder::popScopeStack(); // function definition

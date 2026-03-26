@@ -43,6 +43,26 @@ if(_autotools_list)
   list(APPEND _found ${_autotools_list})
 endif()
 
+set(_legacy_test_bucket_pattern
+  "[A-Z0-9_]*(REQUIRED_TO_PASS|VERIFIED_TO_PASS|ADDITIONAL_TO_RUN|LEGACY_DEFAULT|STANDARD_TO_RUN)")
+file(GLOB_RECURSE _test_cmake_files
+  "${REX_SOURCE_DIR}/tests/**/CMakeLists.txt"
+  "${REX_SOURCE_DIR}/tests/**/*.cmake")
+foreach(_cmake_file IN LISTS _test_cmake_files)
+  file(READ "${_cmake_file}" _cmake_contents)
+  string(REGEX MATCH "${_legacy_test_bucket_pattern}" _legacy_match "${_cmake_contents}")
+  if(_legacy_match)
+    list(APPEND _found "${_cmake_file}: ${_legacy_match}")
+  endif()
+endforeach()
+
+file(GLOB_RECURSE _legacy_test_config_files
+  "${REX_SOURCE_DIR}/tests/**/*_Testcodes*.cmake"
+  "${REX_SOURCE_DIR}/tests/**/*tests_lists.cmake")
+if(_legacy_test_config_files)
+  list(APPEND _found ${_legacy_test_config_files})
+endif()
+
 if(_found)
   list(SORT _found)
   message(FATAL_ERROR "Autotools artifacts detected:\n  ${_found}")

@@ -6,52 +6,6 @@
 
 using namespace std;
 
-namespace {
-std::pair<SgVariableDeclaration *, SgExpression *>
-createTempVariableAndReferenceForExpressionMove(SgExpression *expression,
-                                                SgScopeStatement *scope) {
-  SgType *expressionType = expression->get_type();
-  SgType *variableType = expressionType;
-
-  // If the expression has array type, use a pointer to its base type.
-  if (SgArrayType *arrayType = isSgArrayType(expressionType)) {
-    if (SgArrayType *strippedArrayType =
-            isSgArrayType(arrayType->stripType(SgType::STRIP_TYPEDEF_TYPE))) {
-      SgType *strippedArrayBaseType = strippedArrayType->get_base_type();
-      variableType = SageBuilder::buildPointerType(strippedArrayBaseType);
-    }
-  }
-
-  string name = SageInterface::generateUniqueVariableName(scope);
-  SgVariableDeclaration *tempVarDeclaration =
-      SageBuilder::buildVariableDeclaration(name, variableType, nullptr, scope);
-  ROSE_ASSERT(tempVarDeclaration != NULL);
-
-  SgExpression *varRefExpression =
-      SageBuilder::buildVarRefExp(tempVarDeclaration);
-  return std::make_pair(tempVarDeclaration, varRefExpression);
-}
-
-void setTempVariableInitializer(SgVariableDeclaration *decl,
-                                SgExpression *expression) {
-  ROSE_ASSERT(decl != NULL);
-  ROSE_ASSERT(expression != NULL);
-
-  SgInitializedName *initName = SageInterface::getFirstInitializedName(decl);
-  ROSE_ASSERT(initName != NULL);
-
-  // Detach from the old parent before re-homing in the initializer.
-  if (expression->get_parent() != NULL) {
-    expression->set_parent(NULL);
-  }
-
-  SgAssignInitializer *initializer =
-      SageBuilder::buildAssignInitializer(expression);
-  initName->set_initializer(initializer);
-  initializer->set_parent(initName);
-}
-} // namespace
-
 /** Performs the function argument extraction on all function calls in the given
  * subtree of the AST. */
 /** It does not do transofrmations in places where it is not safe. If you pass
@@ -283,7 +237,8 @@ void ExtractFunctionArguments::RewriteFunctionCallArguments(
     SgFunctionType *functionType = isSgFunctionType(arg->get_type());
     if (functionType == NULL) {
       tie(tempVarDeclaration, tempVarReference) =
-          createTempVariableAndReferenceForExpressionMove(arg, scope);
+          SageInterface::createTempVariableAndReferenceForExpression(arg,
+                                                                     scope);
 
       // createTempVariableOrReferenceForExpression does not set the parent if
       // the scope stack is empty. Hence set it manually to the currect scope.
@@ -305,10 +260,11 @@ void ExtractFunctionArguments::RewriteFunctionCallArguments(
 
       // Replace the argument with the new temporary variable
       SageInterface::replaceExpression(arg, tempVarReference);
-
-      // Use the original expression in the initializer to preserve its
-      // frontend-derived type information.
-      setTempVariableInitializer(tempVarDeclaration, arg);
+      tempVarReference->set_isModified(true);
+      if (SgStatement *enclosing_statement =
+              SageInterface::getEnclosingStatement(tempVarReference)) {
+        enclosing_statement->set_isModified(true);
+      }
     } else {
       printf("In ExtractFunctionArguments::RewriteFunctionCallArguments(): "
              "Skipping normalization of function arguments of type "

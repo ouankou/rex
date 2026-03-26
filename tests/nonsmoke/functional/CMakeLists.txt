@@ -5,6 +5,8 @@ foreach(include ${ROSE_INCLUDES})
   list(APPEND _functional_include_flags "-I${include}")
 endforeach()
 
+set(REX_COMPILE_TESTS_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/CompileTests)
+
 set(REX_FRONTEND_ERROR_TESTS
   rex_test2025_cfe_error_exit_code.cpp
   # Issue 99: Friend function template lookup requires error-tolerant mode.
@@ -40,6 +42,21 @@ function(rex_get_cxx_specimen_extra_flags out_var specimen)
   endif()
   if(specimen STREQUAL "rex_test2025_issue148_system_header_mutation.cpp")
     list(APPEND _flags -isystem ${REX_FUNCTIONAL_SYSTEM_HEADER_LIKE_DIR})
+  endif()
+  set(${out_var} "${_flags}" PARENT_SCOPE)
+endfunction()
+
+function(rex_get_fortran_specimen_extra_flags out_var specimen)
+  set(_flags)
+  get_filename_component(_specimen_name "${specimen}" NAME)
+  set(_cray_pointer_specimens
+    test2007_81.f90
+    test2007_82.f90
+    test2007_83.f90
+    test2007_84.f90
+    test2011_imperial_crayPointers.f90)
+  if(_specimen_name IN_LIST _cray_pointer_specimens)
+    list(APPEND _flags -fcray-pointer)
   endif()
   set(${out_var} "${_flags}" PARENT_SCOPE)
 endfunction()
@@ -307,7 +324,7 @@ set_tests_properties(functional_testTranslatorUnfoldedConstants PROPERTIES RESOU
 add_test(
   NAME functional_testKeepGoingTranslator
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND ${_keep_going_cmd} -c ${_functional_minimal_input}
+  COMMAND ${_keep_going_cmd} -rex:clang:continue-on-error -c ${_functional_minimal_input}
     ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests/restrict_template_parameter.C
     ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2017_13_Liao.C
     ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2017_12_Liao.C

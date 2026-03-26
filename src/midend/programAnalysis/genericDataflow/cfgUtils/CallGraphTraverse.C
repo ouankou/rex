@@ -14,6 +14,35 @@ using namespace Rose;
 // namespace CallGraph
 //{
 
+bool call_graph_traversal_includes_function_decl(SgFunctionDeclaration *decl) {
+  if (decl == NULL) {
+    return false;
+  }
+
+  Sg_File_Info *file_info = decl->get_file_info();
+  if (file_info == NULL || !file_info->isCompilerGenerated()) {
+    return true;
+  }
+
+  if (SgTemplateInstantiationFunctionDecl *tpl_func =
+          isSgTemplateInstantiationFunctionDecl(decl)) {
+    SgTemplateFunctionDeclaration *template_decl =
+        tpl_func->get_templateDeclaration();
+    return template_decl != NULL && template_decl->get_file_info() != NULL &&
+           !template_decl->get_file_info()->isCompilerGenerated();
+  }
+
+  if (SgTemplateInstantiationMemberFunctionDecl *tpl_member =
+          isSgTemplateInstantiationMemberFunctionDecl(decl)) {
+    SgTemplateMemberFunctionDeclaration *template_decl =
+        tpl_member->get_templateDeclaration();
+    return template_decl != NULL && template_decl->get_file_info() != NULL &&
+           !template_decl->get_file_info()->isCompilerGenerated();
+  }
+
+  return false;
+}
+
 /****************************
  ********* Function *********
  ****************************/
@@ -431,26 +460,11 @@ TraverseCallGraph::TraverseCallGraph(SgIncidenceDirectedGraph *graph) {
     assert(!isSgTemplateFunctionDeclaration(n));
     CGFunction func(isSgFunctionDeclaration(n), graph);
 
-    // Skip functions that are compiler generated. Beware that under
-    // some frontends, an instantiated function template or member
-    // function template is compiler generated even when the
-    // template from whence it came is not compiler generated.
-    if (!n->get_file_info()->isCompilerGenerated()) {
+    // Skip compiler-generated functions unless they are instantiations of
+    // user-written templates.
+    if (call_graph_traversal_includes_function_decl(
+            isSgFunctionDeclaration(n))) {
       functions.insert(func);
-    } else if (isSgTemplateInstantiationFunctionDecl(n)) {
-      SgTemplateInstantiationFunctionDecl *tpl =
-          isSgTemplateInstantiationFunctionDecl(n);
-      if (!tpl->get_templateDeclaration()
-               ->get_file_info()
-               ->isCompilerGenerated())
-        functions.insert(func);
-    } else if (isSgTemplateInstantiationMemberFunctionDecl(n)) {
-      SgTemplateInstantiationMemberFunctionDecl *tpl =
-          isSgTemplateInstantiationMemberFunctionDecl(n);
-      if (!tpl->get_templateDeclaration()
-               ->get_file_info()
-               ->isCompilerGenerated())
-        functions.insert(func);
     }
   }
 

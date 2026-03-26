@@ -11,6 +11,9 @@ include_directories(
   ${CMAKE_SOURCE_DIR}/src/midend/astUtil
 )
 
+set(_program_analysis_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
+file(MAKE_DIRECTORY ${_program_analysis_output_dir})
+
 add_executable(CFGTest CFGTest.C)
 target_link_libraries(CFGTest ROSE_DLL ${link_with_libraries})
 
@@ -75,7 +78,7 @@ set(_vfa_switches "-w -rose:verbose 0")
 set(_vfa_includes
   "-I${_vfa_specimen_dir}")
 
-foreach(specimen IN LISTS EXAMPLE_TESTCODES_REQUIRED_TO_PASS)
+foreach(specimen IN LISTS CXX_TESTCODES)
   string(REPLACE "." "_" _vfa_name ${specimen})
   set(_vfa_target vfa_${_vfa_name}.passed)
   rex_get_cxx_specimen_extra_flags(_vfa_extra_flags ${specimen})
@@ -245,3 +248,9 @@ add_test(
     vf_05.passed
 )
 
+get_property(_program_analysis_registered_tests DIRECTORY PROPERTY TESTS)
+if(_program_analysis_registered_tests)
+  set_property(TEST ${_program_analysis_registered_tests} APPEND PROPERTY
+               ENVIRONMENT
+               "ROSE_TEST_OUTPUT_DIR=${_program_analysis_output_dir}")
+endif()

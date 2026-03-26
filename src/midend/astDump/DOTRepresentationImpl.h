@@ -6,6 +6,7 @@
 
 #include "DOTRepresentation.h"
 
+#include <cstdlib>
 #include <fstream>
 
 #include <iostream>
@@ -16,6 +17,30 @@
 
 // DQ (4/23/2006): Required for g++ 4.1.0!
 #include <assert.h>
+
+inline bool roseIsAbsoluteTestOutputPath(const std::string &filename) {
+  return !filename.empty() && (filename[0] == '/' || filename[0] == '\\' ||
+                               (filename.size() > 1 && filename[1] == ':'));
+}
+
+inline std::string roseResolveTestOutputPath(const std::string &filename) {
+  if (roseIsAbsoluteTestOutputPath(filename)) {
+    return filename;
+  }
+
+  const char *output_dir = std::getenv("ROSE_TEST_OUTPUT_DIR");
+  if (output_dir == NULL || output_dir[0] == '\0') {
+    return filename;
+  }
+
+  std::string resolved(output_dir);
+  if (!resolved.empty() && resolved[resolved.size() - 1] != '/') {
+    resolved += '/';
+  }
+  resolved += filename;
+  return resolved;
+}
+
 template <class NodeType> DOTRepresentation<NodeType>::DOTRepresentation() {
   dotout = new std::ostringstream();
   assert(dotout != NULL);
@@ -36,13 +61,15 @@ template <class NodeType> void DOTRepresentation<NodeType>::clear() {
 template <class NodeType>
 void DOTRepresentation<NodeType>::writeToFileAsGraph(std::string filename) {
   std::string graphName = "\"G" + filename + "\"";
-  std::ofstream dotfile(filename.c_str());
+  std::string resolvedFilename = roseResolveTestOutputPath(filename);
+  std::ofstream dotfile(resolvedFilename.c_str());
   dotfile << graphStart(graphName) << (*dotout).str() << graphEnd();
 }
 
 template <class NodeType>
 void DOTRepresentation<NodeType>::writeToFile(std::string filename) {
-  std::ofstream dotfile(filename.c_str());
+  std::string resolvedFilename = roseResolveTestOutputPath(filename);
+  std::ofstream dotfile(resolvedFilename.c_str());
   dotfile << (*dotout).str();
 }
 

@@ -50,6 +50,151 @@ std::string stripGlobalModifer(std::string str) {
   return str;
 };
 
+static void normalizeTemplateNamesForDump(SgFunctionDeclaration *funcDecl) {
+  if (funcDecl == NULL) {
+    return;
+  }
+
+  if (SgTemplateInstantiationFunctionDecl *inst_func =
+          isSgTemplateInstantiationFunctionDecl(funcDecl)) {
+    inst_func->resetTemplateName();
+  } else if (SgTemplateInstantiationMemberFunctionDecl *inst_member =
+                 isSgTemplateInstantiationMemberFunctionDecl(funcDecl)) {
+    inst_member->resetTemplateName();
+    if (SgTemplateInstantiationDecl *inst_class = isSgTemplateInstantiationDecl(
+            inst_member->get_associatedClassDeclaration())) {
+      inst_class->resetTemplateName();
+    }
+  }
+}
+
+static std::string templateArgumentNameForDump(SgTemplateArgument *arg);
+
+static std::string templateArgumentListForDump(
+    const SgTemplateArgumentPtrList &templateArguments) {
+  bool first_argument = true;
+  std::string result;
+
+  for (SgTemplateArgument *arg : templateArguments) {
+    if (arg == NULL ||
+        arg->get_argumentType() ==
+            SgTemplateArgument::start_of_pack_expansion_argument) {
+      continue;
+    }
+
+    if (first_argument) {
+      result += " < ";
+      first_argument = false;
+    } else {
+      result += " , ";
+    }
+
+    result += templateArgumentNameForDump(arg);
+  }
+
+  if (!first_argument) {
+    result += " > ";
+  }
+
+  return result;
+}
+
+static std::string qualifiedClassNameForDump(SgClassDeclaration *classDecl) {
+  ROSE_ASSERT(classDecl != NULL);
+
+  if (SgClassDeclaration *first =
+          isSgClassDeclaration(classDecl->get_firstNondefiningDeclaration())) {
+    classDecl = first;
+  }
+
+  if (SgTemplateInstantiationDecl *inst_decl =
+          isSgTemplateInstantiationDecl(classDecl)) {
+    SgName base_name = inst_decl->get_templateName();
+    if (base_name.is_null() && inst_decl->get_templateDeclaration() != NULL) {
+      base_name = inst_decl->get_templateDeclaration()->get_name();
+    }
+    if (base_name.is_null()) {
+      base_name = inst_decl->get_name();
+    }
+
+    std::string scope_name = stripGlobalModifer(
+        inst_decl->get_scope()->get_qualified_name().getString());
+    std::string class_name =
+        base_name.getString() +
+        templateArgumentListForDump(inst_decl->get_templateArguments());
+    if (!scope_name.empty()) {
+      return scope_name + "::" + class_name;
+    }
+    return class_name;
+  }
+
+  return classDecl->get_qualified_name().getString();
+}
+
+static std::string templateArgumentNameForDump(SgTemplateArgument *arg) {
+  ROSE_ASSERT(arg != NULL);
+
+  switch (arg->get_argumentType()) {
+  case SgTemplateArgument::type_argument: {
+    SgType *type = arg->get_type();
+    if (SgNamedType *named_type = isSgNamedType(type)) {
+      if (SgClassDeclaration *class_decl =
+              isSgClassDeclaration(named_type->get_declaration())) {
+        return stripGlobalModifer(qualifiedClassNameForDump(class_decl));
+      }
+      if (SgTypedefDeclaration *typedef_decl =
+              isSgTypedefDeclaration(named_type->get_declaration())) {
+        return stripGlobalModifer(
+            typedef_decl->get_qualified_name().getString());
+      }
+      if (SgEnumDeclaration *enum_decl =
+              isSgEnumDeclaration(named_type->get_declaration())) {
+        return stripGlobalModifer(enum_decl->get_qualified_name().getString());
+      }
+    }
+    return stripGlobalModifer(arg->unparseToString());
+  }
+
+  case SgTemplateArgument::nontype_argument:
+  case SgTemplateArgument::template_template_argument:
+  case SgTemplateArgument::argument_undefined:
+  case SgTemplateArgument::start_of_pack_expansion_argument:
+  default:
+    return stripGlobalModifer(arg->unparseToString());
+  }
+}
+
+static std::string qualifiedDumpName(SgFunctionDeclaration *funcDecl) {
+  ROSE_ASSERT(funcDecl != NULL);
+  normalizeTemplateNamesForDump(funcDecl);
+
+  if (SgTemplateInstantiationMemberFunctionDecl *inst_member =
+          isSgTemplateInstantiationMemberFunctionDecl(funcDecl)) {
+    SgClassDeclaration *assoc_class =
+        isSgClassDeclaration(inst_member->get_associatedClassDeclaration());
+    ROSE_ASSERT(assoc_class != NULL);
+    return stripGlobalModifer(qualifiedClassNameForDump(assoc_class) +
+                              "::" + inst_member->get_name().getString());
+  }
+
+  if (SgTemplateInstantiationFunctionDecl *inst_func =
+          isSgTemplateInstantiationFunctionDecl(funcDecl)) {
+    SgName base_name = inst_func->get_templateName();
+    if (base_name.is_null()) {
+      base_name = inst_func->get_name();
+    }
+    std::string function_name =
+        base_name.getString() +
+        templateArgumentListForDump(inst_func->get_templateArguments());
+    return stripGlobalModifer(
+        SgName::assembleQualifiedName(
+            inst_func->get_scope()->get_qualified_name(), function_name)
+            .getString());
+  }
+
+  return stripGlobalModifer(funcDecl->get_qualified_name().getString());
+}
+
 bool nodeCompareGraph(const SgGraphNode *a, const SgGraphNode *b) {
   SgFunctionDeclaration *funcDecl1 = isSgFunctionDeclaration(a->get_SgNode());
   ROSE_ASSERT(funcDecl1 != NULL);
@@ -57,8 +202,7 @@ bool nodeCompareGraph(const SgGraphNode *a, const SgGraphNode *b) {
   SgFunctionDeclaration *funcDecl2 = isSgFunctionDeclaration(b->get_SgNode());
   ROSE_ASSERT(funcDecl2 != NULL);
 
-  return stripGlobalModifer(funcDecl1->get_qualified_name().getString()) <
-         stripGlobalModifer(funcDecl2->get_qualified_name().getString());
+  return qualifiedDumpName(funcDecl1) < qualifiedDumpName(funcDecl2);
 }
 
 bool nodeCompareGraphPair(const std::pair<SgGraphNode *, int> &a,
@@ -86,15 +230,7 @@ void sortedCallGraphDump(string fileName, SgIncidenceDirectedGraph *cg) {
   cgNodes.unique();
 
   auto formatDumpName = [](SgFunctionDeclaration *func_decl) -> std::string {
-    ROSE_ASSERT(func_decl != NULL);
-    std::string name =
-        stripGlobalModifer(func_decl->get_qualified_name().getString());
-    if ((isSgTemplateInstantiationFunctionDecl(func_decl) != NULL ||
-         isSgTemplateInstantiationMemberFunctionDecl(func_decl) != NULL) &&
-        !name.empty() && name[name.size() - 1] != ' ') {
-      name += " ";
-    }
-    return name;
+    return qualifiedDumpName(func_decl);
   };
 
   for (list<pair<SgGraphNode *, int>>::iterator it = cgNodes.begin();

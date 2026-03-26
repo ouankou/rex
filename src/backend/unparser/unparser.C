@@ -60,6 +60,53 @@ std::string trimLeadingWhitespace(const std::string &text) {
   return text.substr(first, last - first + 1);
 }
 
+bool isOpenMPOrOpenACCStatement(SgStatement *stmt) {
+  if (stmt == NULL) {
+    return false;
+  }
+
+  return SageInterface::isOmpStatement(stmt) ||
+         isSgAccParallelStatement(stmt) != NULL ||
+         isSgAccParallelLoopStatement(stmt) != NULL ||
+         isSgAccDataStatement(stmt) != NULL ||
+         isSgAccKernelsStatement(stmt) != NULL ||
+         isSgAccAtomicStatement(stmt) != NULL ||
+         isSgAccEnterDataStatement(stmt) != NULL ||
+         isSgAccExitDataStatement(stmt) != NULL ||
+         isSgAccRoutineStatement(stmt) != NULL ||
+         isSgAccWaitStatement(stmt) != NULL ||
+         isSgAccCacheStatement(stmt) != NULL ||
+         isSgAccBodyStatement(stmt) != NULL ||
+         isSgAccClauseBodyStatement(stmt) != NULL ||
+         isSgAccClauseStatement(stmt) != NULL;
+}
+
+bool fileContainsOpenMPOrOpenACCStatements(SgSourceFile *file) {
+  if (file == NULL) {
+    return false;
+  }
+
+  class DirectiveTraversal : public AstSimpleProcessing {
+  public:
+    bool found = false;
+
+    void visit(SgNode *node) override {
+      if (found == true) {
+        return;
+      }
+
+      SgStatement *stmt = isSgStatement(node);
+      if (isOpenMPOrOpenACCStatement(stmt)) {
+        found = true;
+      }
+    }
+  };
+
+  DirectiveTraversal traversal;
+  traversal.traverse(file, preorder);
+  return traversal.found;
+}
+
 ConditionalDirectiveRecord::Kind
 classifyConditionalDirective(const std::string &line) {
   const std::string trimmed = trimLeadingWhitespace(line);
@@ -319,6 +366,10 @@ std::string resolveUnparseOutputToTestDir(const std::string &filename) {
 bool fileHasRelevantModifications(SgSourceFile *file) {
 
   if (file == NULL) {
+    return true;
+  }
+
+  if (fileContainsOpenMPOrOpenACCStatements(file) == true) {
     return true;
   }
 
@@ -1060,7 +1111,6 @@ void Unparser::unparseFile(SgSourceFile *file, SgUnparse_Info &info,
       file->set_unparse_tokens(false);
     }
   }
-
   if ((isCfile || isCxxFile) && file->get_unparse_tokens() == true) {
 #define DEBUG_UNPARSE_TOKENS 0
 
@@ -1472,13 +1522,6 @@ void Unparser::unparseFileUsingTokenStream(
   ROSE_ASSERT(file != NULL);
   string fileNameForTokenStream = file->getFileName();
 
-  // The SgToken list can be empty even when a raw token stream exists (e.g.,
-  // Clang frontend). Fall back to the raw token stream below.
-  if (file->get_token_list().empty() == true) {
-    printf("Warning: unparseFileUsingTokenStream(): no SgToken list; using "
-           "raw token stream\n");
-  }
-
   ASSERT_not_null(file->get_preprocessorDirectivesAndCommentsList());
   ROSEAttributesListContainerPtr filePreprocInfo =
       file->get_preprocessorDirectivesAndCommentsList();
@@ -1502,12 +1545,13 @@ void Unparser::unparseFileUsingTokenStream(
   ASSERT_not_null(currentFileItr->second);
 
   ROSEAttributesList *existingListOfAttributes = currentFileItr->second;
-  // LexTokenStreamTypePointer tokenStream =
-  // existingListOfAttributes->get_rawTokenStream();
-  // ASSERT_not_null(tokenStream);
-
-  LexTokenStreamType &tokenList =
-      *(existingListOfAttributes->get_rawTokenStream());
+  // Clang-based workflows can legitimately skip building legacy SgToken IR
+  // nodes while still recording the raw preprocessing token stream used here
+  // for unchanged-file output.
+  LexTokenStreamTypePointer rawTokenStream =
+      existingListOfAttributes->get_rawTokenStream();
+  ASSERT_not_null(rawTokenStream);
+  LexTokenStreamType &tokenList = *rawTokenStream;
 
   // Write out the tokens into the output file.
   int current_line_number = 1;

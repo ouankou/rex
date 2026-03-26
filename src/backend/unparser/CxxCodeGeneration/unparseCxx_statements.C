@@ -19,7 +19,9 @@
 
 #include "unparser.h"
 
+#include <cctype>
 #include <functional>
+#include <map>
 
 // DQ (8/31/2013):  This should only be included by source files that require
 // it. This fixed a reported bug which caused conflicts with configure-time
@@ -37,6 +39,9 @@ using namespace Rose;
 
 #define OUTPUT_DEBUGGING_FUNCTION_BOUNDARIES 0
 #define OUTPUT_DEBUGGING_FUNCTION_INTERNALS 0
+
+static const char *kInlineTypeOperandStandaloneSuppressAttribute =
+    "rex:inline-type-operand-standalone-suppress";
 #define OUTPUT_DEBUGGING_UNPARSE_INFO 0
 
 // Output the class name and function names as we unparse (for debugging)
@@ -57,6 +62,213 @@ using namespace Rose;
 #define ENABLE_unparsedPartiallyUsingTokenStream 1
 
 namespace {
+struct FunctionLikeMacroDirective {
+  int line = 0;
+  int col = 0;
+  std::string name;
+  bool is_define = false;
+  bool is_function_like = false;
+};
+
+using FunctionLikeMacroDirectiveMap =
+    std::map<std::string, std::vector<FunctionLikeMacroDirective>>;
+
+bool isMacroIdentifierChar(char ch) {
+  return std::isalnum(static_cast<unsigned char>(ch)) != 0 || ch == '_';
+}
+
+bool parseMacroDirective(const std::string &directive,
+                         PreprocessingInfo::DirectiveType type,
+                         std::string &name, bool &is_function_like) {
+  const char *keyword = nullptr;
+  switch (type) {
+  case PreprocessingInfo::CpreprocessorDefineDeclaration:
+    keyword = "define";
+    break;
+  case PreprocessingInfo::CpreprocessorUndefDeclaration:
+    keyword = "undef";
+    break;
+  default:
+    return false;
+  }
+
+  size_t pos = 0;
+  while (pos < directive.size() &&
+         std::isspace(static_cast<unsigned char>(directive[pos])) != 0) {
+    ++pos;
+  }
+  if (pos >= directive.size() || directive[pos] != '#') {
+    return false;
+  }
+  ++pos;
+  while (pos < directive.size() &&
+         std::isspace(static_cast<unsigned char>(directive[pos])) != 0) {
+    ++pos;
+  }
+
+  const size_t keyword_len = std::strlen(keyword);
+  if (directive.compare(pos, keyword_len, keyword) != 0) {
+    return false;
+  }
+  pos += keyword_len;
+
+  while (pos < directive.size() &&
+         std::isspace(static_cast<unsigned char>(directive[pos])) != 0) {
+    ++pos;
+  }
+
+  const size_t start = pos;
+  while (pos < directive.size() && isMacroIdentifierChar(directive[pos])) {
+    ++pos;
+  }
+  if (start == pos) {
+    return false;
+  }
+
+  name = directive.substr(start, pos - start);
+  is_function_like =
+      type == PreprocessingInfo::CpreprocessorDefineDeclaration &&
+      pos < directive.size() && directive[pos] == '(';
+  return true;
+}
+
+const FunctionLikeMacroDirectiveMap &
+getFunctionLikeMacroDirectivesForSourceFile(SgSourceFile *source_file) {
+  static std::map<SgSourceFile *, FunctionLikeMacroDirectiveMap> cache;
+
+  ROSE_ASSERT(source_file != nullptr);
+
+  std::map<SgSourceFile *, FunctionLikeMacroDirectiveMap>::iterator cached =
+      cache.find(source_file);
+  if (cached != cache.end()) {
+    return cached->second;
+  }
+
+  FunctionLikeMacroDirectiveMap directives;
+  if (ROSEAttributesListContainerPtr container =
+          source_file->get_preprocessorDirectivesAndCommentsList()) {
+    for (const auto &entry : container->getList()) {
+      const std::string &filename = entry.first;
+      ROSEAttributesList *list = entry.second;
+      if (list == nullptr) {
+        continue;
+      }
+
+      std::vector<FunctionLikeMacroDirective> &file_directives =
+          directives[filename];
+      for (PreprocessingInfo *info : list->getList()) {
+        if (info == nullptr) {
+          continue;
+        }
+
+        std::string macro_name;
+        bool is_function_like = false;
+        if (!parseMacroDirective(info->getString(), info->getTypeOfDirective(),
+                                 macro_name, is_function_like)) {
+          continue;
+        }
+
+        Sg_File_Info *file_info = info->get_file_info();
+        file_directives.push_back(FunctionLikeMacroDirective{
+            file_info != nullptr ? file_info->get_line()
+                                 : info->getLineNumber(),
+            file_info != nullptr ? file_info->get_col()
+                                 : info->getColumnNumber(),
+            macro_name,
+            info->getTypeOfDirective() ==
+                PreprocessingInfo::CpreprocessorDefineDeclaration,
+            is_function_like});
+      }
+
+      std::stable_sort(file_directives.begin(), file_directives.end(),
+                       [](const FunctionLikeMacroDirective &lhs,
+                          const FunctionLikeMacroDirective &rhs) {
+                         if (lhs.line != rhs.line) {
+                           return lhs.line < rhs.line;
+                         }
+                         return lhs.col < rhs.col;
+                       });
+    }
+  }
+
+  return cache.emplace(source_file, std::move(directives)).first->second;
+}
+
+bool isFunctionLikeMacroDefinedAt(
+    const FunctionLikeMacroDirectiveMap &directives,
+    const std::string &filename, int line, int col, const std::string &name) {
+  if (line <= 0 || name.empty()) {
+    return false;
+  }
+
+  FunctionLikeMacroDirectiveMap::const_iterator file_it =
+      directives.find(filename);
+  if (file_it == directives.end()) {
+    return false;
+  }
+
+  bool is_defined = false;
+  bool is_function_like = false;
+  for (const FunctionLikeMacroDirective &directive : file_it->second) {
+    if (directive.line > line ||
+        (directive.line == line && directive.col >= col)) {
+      break;
+    }
+
+    if (directive.name != name) {
+      continue;
+    }
+
+    if (directive.is_define) {
+      is_defined = true;
+      is_function_like = directive.is_function_like;
+    } else {
+      is_defined = false;
+      is_function_like = false;
+    }
+  }
+
+  return is_defined && is_function_like;
+}
+
+bool shouldParenthesizeFunctionNameForMacro(
+    SgFunctionDeclaration *funcdecl_stmt) {
+  if (funcdecl_stmt == nullptr || funcdecl_stmt->get_file_info() == nullptr ||
+      funcdecl_stmt->get_file_info()->isCompilerGenerated()) {
+    return false;
+  }
+
+  if (funcdecl_stmt->get_name().is_null() ||
+      funcdecl_stmt->get_name().getString().empty()) {
+    return false;
+  }
+
+  if (funcdecl_stmt->get_name_qualification_length() > 0 ||
+      funcdecl_stmt->get_global_qualification_required()) {
+    return false;
+  }
+
+  SgSourceFile *source_file =
+      SageInterface::getEnclosingSourceFile(funcdecl_stmt, true);
+  if (source_file == nullptr) {
+    return false;
+  }
+
+  const FunctionLikeMacroDirectiveMap &directives =
+      getFunctionLikeMacroDirectivesForSourceFile(source_file);
+
+  Sg_File_Info *start = funcdecl_stmt->get_startOfConstruct();
+  const int line = start != nullptr
+                       ? start->get_line()
+                       : funcdecl_stmt->get_file_info()->get_line();
+  const int col = start != nullptr ? start->get_col()
+                                   : funcdecl_stmt->get_file_info()->get_col();
+
+  return isFunctionLikeMacroDefinedAt(
+      directives, funcdecl_stmt->get_file_info()->get_filenameString(), line,
+      col, funcdecl_stmt->get_name().getString());
+}
+
 SgTryStmt *getFunctionTryStmt(SgFunctionDefinition *definition) {
   if (definition == NULL) {
     return NULL;
@@ -123,6 +335,547 @@ bool isParenthesizedRequiresClauseText(const std::string &text) {
   return depth == 0;
 }
 
+bool isNormalizedClassTemplateMemberFunction(
+    const SgTemplateMemberFunctionDeclaration *decl) {
+  return decl != NULL && decl->get_marked_as_frontend_normalization() &&
+         decl->get_associatedClassDeclaration() != NULL;
+}
+
+using TemplateParamSubstitution = std::map<std::string, std::string>;
+
+std::string getTemplateParameterName(const SgTemplateParameter *param) {
+  if (param == NULL) {
+    return "";
+  }
+
+  if (SgInitializedName *init_name = param->get_initializedName()) {
+    return init_name->get_name().getString();
+  }
+  if (SgTemplateType *template_type = isSgTemplateType(param->get_type())) {
+    return template_type->get_name().getString();
+  }
+  if (SgTemplateDeclaration *template_decl =
+          isSgTemplateDeclaration(param->get_templateDeclaration())) {
+    return template_decl->get_name().getString();
+  }
+
+  return "";
+}
+
+std::string substituteTemplateParameterName(
+    const std::string &name, const TemplateParamSubstitution *substitutions) {
+  if (substitutions == NULL || name.empty()) {
+    return name;
+  }
+
+  TemplateParamSubstitution::const_iterator found = substitutions->find(name);
+  if (found == substitutions->end() || found->second.empty()) {
+    return name;
+  }
+
+  return found->second;
+}
+
+TemplateParamSubstitution buildTemplateParameterSubstitutionMap(
+    const SgTemplateParameterPtrList &canonical_params,
+    const SgTemplateParameterPtrList &override_params) {
+  TemplateParamSubstitution substitutions;
+  const size_t pair_count =
+      std::min(canonical_params.size(), override_params.size());
+
+  for (size_t i = 0; i < pair_count; ++i) {
+    std::string canonical_name = getTemplateParameterName(canonical_params[i]);
+    std::string override_name = getTemplateParameterName(override_params[i]);
+    if (!canonical_name.empty() && !override_name.empty()) {
+      substitutions[canonical_name] = override_name;
+    }
+  }
+
+  return substitutions;
+}
+
+std::string buildTemplateParameterArgumentList(
+    const SgTemplateParameterPtrList &templateParameterList,
+    const TemplateParamSubstitution *substitutions = NULL) {
+  std::string args = "<";
+  bool need_separator = false;
+
+  for (SgTemplateParameter *param : templateParameterList) {
+    if (param == NULL) {
+      continue;
+    }
+
+    std::string argument_name;
+    bool is_pack = param->get_is_parameter_pack();
+    if (SgInitializedName *init_name = param->get_initializedName()) {
+      argument_name = init_name->get_name().str();
+      is_pack = is_pack || init_name->get_is_parameter_pack() ||
+                init_name->get_is_pack_element();
+    }
+
+    if (argument_name.empty()) {
+      if (SgTemplateType *template_type = isSgTemplateType(param->get_type())) {
+        argument_name = template_type->get_name().str();
+        is_pack = is_pack || template_type->get_packed();
+      }
+    }
+
+    if (argument_name.empty()) {
+      if (SgTemplateDeclaration *template_decl =
+              isSgTemplateDeclaration(param->get_templateDeclaration())) {
+        argument_name = template_decl->get_name().str();
+      }
+    }
+
+    if (argument_name.empty()) {
+      continue;
+    }
+    argument_name =
+        substituteTemplateParameterName(argument_name, substitutions);
+
+    if (need_separator) {
+      args += ",";
+    }
+
+    bool has_pack_suffix =
+        argument_name.size() >= 3 &&
+        argument_name.compare(argument_name.size() - 3, 3, "...") == 0;
+    args += argument_name;
+    if (is_pack && !has_pack_suffix) {
+      args += "...";
+    }
+    need_separator = true;
+  }
+
+  if (!need_separator) {
+    return "";
+  }
+
+  args += ">";
+  return args;
+}
+
+std::string buildTemplateArgumentListString(
+    const SgTemplateArgumentPtrList &templateArgumentList) {
+  return globalUnparseToString(&templateArgumentList, NULL);
+}
+
+std::string buildSubstitutedExpressionString(
+    SgExpression *expr, const TemplateParamSubstitution *substitutions);
+std::string
+buildSubstitutedTypeString(SgType *type,
+                           const TemplateParamSubstitution *substitutions);
+
+std::string buildSubstitutedTemplateArgumentString(
+    SgTemplateArgument *arg, const TemplateParamSubstitution *substitutions) {
+  if (arg == NULL) {
+    return "";
+  }
+
+  switch (arg->get_argumentType()) {
+  case SgTemplateArgument::type_argument:
+  case SgTemplateArgument::template_template_argument:
+    return buildSubstitutedTypeString(arg->get_type(), substitutions);
+
+  case SgTemplateArgument::nontype_argument:
+    return buildSubstitutedExpressionString(arg->get_expression(),
+                                            substitutions);
+
+  default:
+    return globalUnparseToString(arg, NULL);
+  }
+}
+
+std::string buildSubstitutedTemplateArgumentListString(
+    const SgTemplateArgumentPtrList &templateArgumentList,
+    const TemplateParamSubstitution *substitutions) {
+  std::string args = "<";
+  bool need_separator = false;
+
+  for (SgTemplateArgument *arg : templateArgumentList) {
+    std::string argument =
+        buildSubstitutedTemplateArgumentString(arg, substitutions);
+    if (argument.empty()) {
+      continue;
+    }
+
+    if (need_separator) {
+      args += ",";
+    }
+    args += argument;
+    need_separator = true;
+  }
+
+  if (!need_separator) {
+    return "";
+  }
+
+  args += ">";
+  return args;
+}
+
+std::string buildSubstitutedExpressionString(
+    SgExpression *expr, const TemplateParamSubstitution *substitutions) {
+  if (expr == NULL) {
+    return "";
+  }
+
+  if (SgVarRefExp *var_ref = isSgVarRefExp(expr)) {
+    if (SgVariableSymbol *symbol = var_ref->get_symbol()) {
+      return substituteTemplateParameterName(symbol->get_name().getString(),
+                                             substitutions);
+    }
+  }
+  if (SgNonrealRefExp *nonreal_ref = isSgNonrealRefExp(expr)) {
+    if (SgNonrealSymbol *symbol = nonreal_ref->get_symbol()) {
+      return substituteTemplateParameterName(symbol->get_name().getString(),
+                                             substitutions);
+    }
+  }
+
+  return globalUnparseToString(expr, NULL);
+}
+
+std::string
+buildSubstitutedTypeString(SgType *type,
+                           const TemplateParamSubstitution *substitutions) {
+  if (type == NULL) {
+    return "";
+  }
+
+  if (SgModifierType *modifier_type = isSgModifierType(type)) {
+    return buildSubstitutedTypeString(modifier_type->get_base_type(),
+                                      substitutions);
+  }
+  if (SgTypedefType *typedef_type = isSgTypedefType(type)) {
+    return buildSubstitutedTypeString(typedef_type->get_base_type(),
+                                      substitutions);
+  }
+  if (SgPointerType *pointer_type = isSgPointerType(type)) {
+    return buildSubstitutedTypeString(pointer_type->get_base_type(),
+                                      substitutions) +
+           " *";
+  }
+  if (SgReferenceType *reference_type = isSgReferenceType(type)) {
+    return buildSubstitutedTypeString(reference_type->get_base_type(),
+                                      substitutions) +
+           " &";
+  }
+  if (SgRvalueReferenceType *reference_type = isSgRvalueReferenceType(type)) {
+    return buildSubstitutedTypeString(reference_type->get_base_type(),
+                                      substitutions) +
+           " &&";
+  }
+  if (SgArrayType *array_type = isSgArrayType(type)) {
+    std::string result =
+        buildSubstitutedTypeString(array_type->get_base_type(), substitutions);
+    result += "[";
+    if (array_type->get_index() != NULL) {
+      result += buildSubstitutedExpressionString(array_type->get_index(),
+                                                 substitutions);
+    }
+    result += "]";
+    return result;
+  }
+  if (SgTemplateType *template_type = isSgTemplateType(type)) {
+    std::string result = substituteTemplateParameterName(
+        template_type->get_name().getString(), substitutions);
+    if (!template_type->get_tpl_args().empty()) {
+      result += buildSubstitutedTemplateArgumentListString(
+          template_type->get_tpl_args(), substitutions);
+    }
+    if (template_type->get_packed()) {
+      result += "...";
+    }
+    return result;
+  }
+  if (SgNonrealType *nonreal_type = isSgNonrealType(type)) {
+    SgNonrealDecl *nonreal_decl =
+        isSgNonrealDecl(nonreal_type->get_declaration());
+    std::string result;
+
+    if (nonreal_decl != NULL &&
+        nonreal_decl->get_templateDeclaration() == NULL) {
+      SgDeclarationScope *decl_scope =
+          isSgDeclarationScope(nonreal_decl->get_parent());
+      SgNonrealDecl *parent_nonreal =
+          decl_scope != NULL ? isSgNonrealDecl(decl_scope->get_parent()) : NULL;
+      if (parent_nonreal != NULL) {
+        result += buildSubstitutedTypeString(parent_nonreal->get_type(),
+                                             substitutions);
+        result += "::";
+      } else if (nonreal_decl->get_has_global_qualifier()) {
+        result += "::";
+      }
+    }
+
+    result += substituteTemplateParameterName(
+        nonreal_type->get_name().getString(), substitutions);
+    if (nonreal_decl != NULL && (!nonreal_decl->get_tpl_args().empty() ||
+                                 nonreal_decl->get_is_nonreal_template())) {
+      if (nonreal_decl->get_tpl_args().empty()) {
+        result += "<>";
+      } else {
+        result += buildSubstitutedTemplateArgumentListString(
+            nonreal_decl->get_tpl_args(), substitutions);
+      }
+    }
+    return result;
+  }
+  if (SgClassType *class_type = isSgClassType(type)) {
+    SgClassDeclaration *class_decl =
+        isSgClassDeclaration(class_type->get_declaration());
+    if (SgTemplateInstantiationDecl *inst_decl =
+            isSgTemplateInstantiationDecl(class_decl)) {
+      std::string name = inst_decl->get_templateName().getString();
+      if (name.empty()) {
+        name = inst_decl->get_name().getString();
+      }
+      return name + buildSubstitutedTemplateArgumentListString(
+                        inst_decl->get_templateArguments(), substitutions);
+    }
+    if (class_decl != NULL) {
+      return class_decl->get_name().getString();
+    }
+  }
+
+  return globalUnparseToString(type, NULL);
+}
+
+std::string buildTemplateParameterListString(
+    const SgTemplateParameterPtrList &templateParameterList,
+    const TemplateParamSubstitution *substitutions = NULL) {
+  std::string result =
+      buildTemplateParameterArgumentList(templateParameterList, substitutions);
+  if (!result.empty()) {
+    return result;
+  }
+
+  return globalUnparseToString(&templateParameterList, NULL);
+}
+
+std::string buildClassLikeQualifierSegment(
+    SgDeclarationStatement *decl,
+    const SgTemplateParameterPtrList *overrideTemplateParameters = NULL,
+    const TemplateParamSubstitution *substitutions = NULL) {
+  if (decl == NULL) {
+    return "";
+  }
+
+  if (SgTemplateClassDeclaration *template_decl =
+          isSgTemplateClassDeclaration(decl)) {
+    std::string name = template_decl->get_templateName().getString();
+    if (name.empty()) {
+      name = template_decl->get_name().getString();
+    }
+
+    const SgTemplateArgumentPtrList &specialization_args =
+        template_decl->get_templateSpecializationArguments();
+    if (!specialization_args.empty() &&
+        template_decl->get_specialization() !=
+            SgDeclarationStatement::e_no_specialization) {
+      if (substitutions != NULL && !substitutions->empty()) {
+        return name + buildSubstitutedTemplateArgumentListString(
+                          specialization_args, substitutions);
+      }
+      return name + buildTemplateArgumentListString(specialization_args);
+    }
+
+    if (overrideTemplateParameters != NULL &&
+        overrideTemplateParameters->empty() == false) {
+      std::string args =
+          buildTemplateParameterListString(*overrideTemplateParameters);
+      if (!args.empty()) {
+        return name + args;
+      }
+    }
+
+    if (substitutions != NULL && !substitutions->empty() &&
+        !template_decl->get_templateParameters().empty()) {
+      std::string args = buildTemplateParameterListString(
+          template_decl->get_templateParameters(), substitutions);
+      if (!args.empty()) {
+        return name + args;
+      }
+    }
+
+    if (!template_decl->get_templateParameters().empty()) {
+      std::string args = buildTemplateParameterListString(
+          template_decl->get_templateParameters());
+      if (!args.empty()) {
+        return name + args;
+      }
+    }
+
+    return name;
+  }
+
+  if (SgTemplateInstantiationDecl *inst_decl =
+          isSgTemplateInstantiationDecl(decl)) {
+    std::string name = inst_decl->get_templateName().getString();
+    if (name.empty()) {
+      name = inst_decl->get_name().getString();
+    }
+    if (!inst_decl->get_templateArguments().empty()) {
+      if (substitutions != NULL && !substitutions->empty()) {
+        return name + buildSubstitutedTemplateArgumentListString(
+                          inst_decl->get_templateArguments(), substitutions);
+      }
+      return name + buildTemplateArgumentListString(
+                        inst_decl->get_templateArguments());
+    }
+    return name;
+  }
+
+  if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
+    return class_decl->get_name().getString();
+  }
+
+  if (SgNamespaceDeclarationStatement *ns_decl =
+          isSgNamespaceDeclarationStatement(decl)) {
+    return ns_decl->get_name().getString();
+  }
+
+  return "";
+}
+
+std::vector<SgDeclarationStatement *>
+collectQualificationDeclarationChain(SgDeclarationStatement *associated_decl,
+                                     SgScopeStatement *fallback_scope) {
+  std::vector<SgDeclarationStatement *> chain;
+
+  auto append_decl = [&](SgDeclarationStatement *decl) {
+    if (decl != NULL &&
+        std::find(chain.begin(), chain.end(), decl) == chain.end()) {
+      chain.push_back(decl);
+    }
+  };
+
+  append_decl(associated_decl);
+
+  SgNode *cursor = associated_decl != NULL
+                       ? associated_decl->get_scope()
+                       : static_cast<SgNode *>(fallback_scope);
+  while (cursor != NULL) {
+    if (SgClassDefinition *class_def = isSgClassDefinition(cursor)) {
+      append_decl(class_def->get_declaration());
+    } else if (SgTemplateClassDefinition *tpl_class_def =
+                   isSgTemplateClassDefinition(cursor)) {
+      append_decl(tpl_class_def->get_declaration());
+    } else if (SgTemplateInstantiationDefn *inst_def =
+                   isSgTemplateInstantiationDefn(cursor)) {
+      append_decl(inst_def->get_declaration());
+    } else if (SgNamespaceDefinitionStatement *ns_def =
+                   isSgNamespaceDefinitionStatement(cursor)) {
+      append_decl(ns_def->get_namespaceDeclaration());
+    }
+    cursor = cursor->get_parent();
+  }
+
+  return chain;
+}
+
+std::vector<SgTemplateClassDeclaration *>
+collectTemplateClassChain(SgDeclarationStatement *associated_decl,
+                          SgScopeStatement *fallback_scope) {
+  std::vector<SgTemplateClassDeclaration *> chain;
+
+  auto append_template_decl = [&](SgDeclarationStatement *decl) {
+    SgTemplateClassDeclaration *template_decl =
+        isSgTemplateClassDeclaration(decl);
+    if (template_decl != NULL &&
+        std::find(chain.begin(), chain.end(), template_decl) == chain.end()) {
+      chain.push_back(template_decl);
+    }
+  };
+
+  append_template_decl(associated_decl);
+
+  SgNode *cursor = associated_decl != NULL
+                       ? associated_decl->get_scope()
+                       : static_cast<SgNode *>(fallback_scope);
+  while (cursor != NULL) {
+    if (SgClassDefinition *class_def = isSgClassDefinition(cursor)) {
+      append_template_decl(class_def->get_declaration());
+    } else if (SgTemplateClassDefinition *tpl_class_def =
+                   isSgTemplateClassDefinition(cursor)) {
+      append_template_decl(tpl_class_def->get_declaration());
+    } else if (SgTemplateInstantiationDefn *inst_def =
+                   isSgTemplateInstantiationDefn(cursor)) {
+      append_template_decl(inst_def->get_declaration());
+    }
+    cursor = cursor->get_parent();
+  }
+
+  return chain;
+}
+
+std::string buildNormalizedTemplateMemberFunctionQualifier(
+    SgTemplateMemberFunctionDeclaration *decl) {
+  ASSERT_not_null(decl);
+
+  SgDeclarationStatement *associated_decl =
+      decl->get_associatedClassDeclaration();
+  if (associated_decl == NULL) {
+    return decl->get_qualified_name_prefix().str();
+  }
+
+  std::vector<SgDeclarationStatement *> chain =
+      collectQualificationDeclarationChain(associated_decl, decl->get_scope());
+  if (chain.empty()) {
+    return decl->get_qualified_name_prefix().str();
+  }
+
+  std::string qualifier;
+  TemplateParamSubstitution substitutions;
+  for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
+    SgDeclarationStatement *segment_decl = *it;
+    const SgTemplateParameterPtrList *override_params = NULL;
+    const TemplateParamSubstitution *segment_substitutions = NULL;
+    if (segment_decl == associated_decl &&
+        decl->get_templateParameters().empty() == false) {
+      if (SgTemplateClassDeclaration *template_decl =
+              isSgTemplateClassDeclaration(segment_decl)) {
+        substitutions = buildTemplateParameterSubstitutionMap(
+            template_decl->get_templateParameters(),
+            decl->get_templateParameters());
+        if (!substitutions.empty()) {
+          segment_substitutions = &substitutions;
+        }
+        if (template_decl->get_templateSpecializationArguments().empty()) {
+          override_params = &decl->get_templateParameters();
+        }
+      } else if (SgTemplateInstantiationDecl *inst_decl =
+                     isSgTemplateInstantiationDecl(segment_decl)) {
+        if (SgTemplateClassDeclaration *template_decl =
+                isSgTemplateClassDeclaration(
+                    inst_decl->get_templateDeclaration())) {
+          substitutions = buildTemplateParameterSubstitutionMap(
+              template_decl->get_templateParameters(),
+              decl->get_templateParameters());
+          if (!substitutions.empty()) {
+            segment_substitutions = &substitutions;
+          }
+        }
+      }
+    }
+
+    std::string segment = buildClassLikeQualifierSegment(
+        segment_decl, override_params, segment_substitutions);
+    if (segment.empty()) {
+      continue;
+    }
+    qualifier += segment;
+    qualifier += "::";
+  }
+
+  if (decl->get_global_qualification_required()) {
+    qualifier = "::" + qualifier;
+  }
+
+  return qualifier;
+}
+
 void unparseTrailingRequiresClauseIfPresent(
     Unparse_ExprStmt *expr_unparser, SgFunctionDeclaration *funcdecl_stmt,
     SgUnparse_Info &info) {
@@ -175,6 +928,67 @@ bool requiresTrailingReturnTypeSyntax(const SgType *return_type) {
   // when the expression references function parameters that are not in scope
   // for prefix return-type position.
   return true;
+}
+
+bool isBaseOrDelegatingCtorPreinitializer(const SgInitializedName *ctor_init) {
+  if (ctor_init == NULL) {
+    return false;
+  }
+
+  switch (ctor_init->get_preinitialization()) {
+  case SgInitializedName::e_virtual_base_class:
+  case SgInitializedName::e_nonvirtual_base_class:
+  case SgInitializedName::e_delegation_constructor:
+    return true;
+
+  default:
+    return false;
+  }
+}
+
+void unparseCtorPreinitializerDesignator(Unparse_ExprStmt *expr_unparser,
+                                         Unparser *backend_unparser,
+                                         SgInitializedName *ctor_init,
+                                         SgUnparse_Info &type_info) {
+  ASSERT_not_null(expr_unparser);
+  ASSERT_not_null(backend_unparser);
+  ASSERT_not_null(ctor_init);
+
+  SgInitializer *designator_initializer = ctor_init->get_initializer();
+  SgConstructorInitializer *ctor_initializer =
+      isSgConstructorInitializer(designator_initializer);
+  if (ctor_initializer == NULL) {
+    if (SgAssignInitializer *assign_initializer =
+            isSgAssignInitializer(designator_initializer)) {
+      ctor_initializer =
+          isSgConstructorInitializer(assign_initializer->get_operand());
+    }
+  }
+  if (isBaseOrDelegatingCtorPreinitializer(ctor_init)) {
+    // The preinitializer designator names the declared base/delegating target,
+    // not the nested constructor-expression type. Prefer the initialized
+    // entity's type so we preserve source-written qualifiers and template args.
+    SgType *target_type = ctor_init->get_type();
+    if (target_type == NULL && ctor_initializer != NULL) {
+      target_type = ctor_initializer->get_type();
+    }
+
+    if (target_type != NULL) {
+      SgUnparse_Info designator_info(type_info);
+      designator_info.set_SkipClassDefinition();
+      designator_info.set_SkipEnumDefinition();
+      designator_info.set_reference_node_for_qualification(NULL);
+      designator_info.set_SkipClassSpecifier();
+      backend_unparser->u_type->unparseType(target_type, designator_info);
+      return;
+    }
+  }
+
+  SgName nameQualifier = ctor_init->get_qualified_name_prefix();
+  if (!nameQualifier.is_null()) {
+    expr_unparser->curprint(nameQualifier.str());
+  }
+  expr_unparser->curprint(ctor_init->get_name().str());
 }
 
 SgClassDeclaration *
@@ -1033,7 +1847,8 @@ void Unparse_ExprStmt::unparseFunctionParameterDeclaration(
 
   // DQ (8/9/2013): refactored to support additional refactoring to seperate out
   // code to unparse SgInitializedName.
-  bool oldStyleDefinition = funcdecl_stmt->get_oldStyleDefinition();
+  bool oldStyleDefinition =
+      funcdecl_stmt->get_oldStyleDefinition() && !funcdecl_stmt->isForward();
 
   // printf ("In unparseFunctionParameterDeclaration(): Argument name = %s \n",
   //      (tmp_name.str() != NULL) ? tmp_name.str() : "NULL NAME");
@@ -1131,11 +1946,12 @@ void Unparse_ExprStmt::unparseFunctionParameterDeclaration(
       // DQ (4/12/2019): This version is required for C old-style function
       // parameters. DQ (4/11/2019): Try to comment this out to support
       // Clang 8.0 which can't handle the "enum class" type elaboration.
-      if (initializedName->get_needs_definitions()) {
-        if (ninfo.SkipClassDefinition() == false) {
+      if (outputParameterDeclaration ||
+          initializedName->get_needs_definitions()) {
+        if (ninfo.SkipClassDefinition()) {
           ninfo.unset_SkipClassDefinition();
         }
-        if (ninfo.SkipEnumDefinition() == false) {
+        if (ninfo.SkipEnumDefinition()) {
           ninfo.unset_SkipEnumDefinition();
         }
       }
@@ -1185,6 +2001,104 @@ void Unparse_ExprStmt::unparseFunctionParameterDeclaration(
   }
 }
 
+static bool
+hasUnsafeParameterPreprocessingInfo(SgInitializedName *initializedName) {
+  if (initializedName == nullptr) {
+    return false;
+  }
+
+  AttachedPreprocessingInfoType *infos =
+      initializedName->getAttachedPreprocessingInfo();
+  if (infos == nullptr) {
+    return false;
+  }
+
+  for (PreprocessingInfo *info : *infos) {
+    if (info == nullptr) {
+      continue;
+    }
+
+    switch (info->getTypeOfDirective()) {
+    case PreprocessingInfo::C_StyleComment:
+    case PreprocessingInfo::CplusplusStyleComment:
+    case PreprocessingInfo::FortranStyleComment:
+    case PreprocessingInfo::F90StyleComment:
+    case PreprocessingInfo::CpreprocessorBlankLine:
+      break;
+
+    default:
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static bool isCommentLikePreprocessingInfo(PreprocessingInfo *info) {
+  if (info == nullptr) {
+    return false;
+  }
+
+  switch (info->getTypeOfDirective()) {
+  case PreprocessingInfo::C_StyleComment:
+  case PreprocessingInfo::CplusplusStyleComment:
+  case PreprocessingInfo::FortranStyleComment:
+  case PreprocessingInfo::F90StyleComment:
+  case PreprocessingInfo::CpreprocessorBlankLine:
+    return true;
+
+  default:
+    return false;
+  }
+}
+
+static bool preprocessingInfoPrecedesNodeStart(PreprocessingInfo *info,
+                                               SgLocatedNode *node) {
+  if (info == nullptr || node == nullptr) {
+    return false;
+  }
+
+  Sg_File_Info *info_fi = info->get_file_info();
+  Sg_File_Info *node_fi = node->get_startOfConstruct();
+  if (info_fi == nullptr || node_fi == nullptr) {
+    return false;
+  }
+
+  if (!node_fi->isSameFile(info_fi)) {
+    return false;
+  }
+
+  if (info_fi->get_line() != node_fi->get_line()) {
+    return info_fi->get_line() < node_fi->get_line();
+  }
+
+  return info_fi->get_col() < node_fi->get_col();
+}
+
+static void dropMisplacedLeadingBodyDirectives(SgBasicBlock *body) {
+  if (body == nullptr) {
+    return;
+  }
+
+  AttachedPreprocessingInfoType *infos = body->getAttachedPreprocessingInfo();
+  if (infos == nullptr || infos->empty()) {
+    return;
+  }
+
+  for (AttachedPreprocessingInfoType::iterator it = infos->begin();
+       it != infos->end();) {
+    PreprocessingInfo *info = *it;
+    if (info != nullptr &&
+        info->getRelativePosition() == PreprocessingInfo::before &&
+        !isCommentLikePreprocessingInfo(info) &&
+        preprocessingInfoPrecedesNodeStart(info, body)) {
+      it = infos->erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
 void Unparse_ExprStmt::unparseFunctionArgs(SgFunctionDeclaration *funcdecl_stmt,
                                            SgUnparse_Info &info) {
   ASSERT_not_null(funcdecl_stmt);
@@ -1230,7 +2144,8 @@ void Unparse_ExprStmt::unparseFunctionArgs(SgFunctionDeclaration *funcdecl_stmt,
     // unparsing the arguments which are outside of the parameter list are
     // outside of the parameter list See example code:
     // tests/nonsmoke/functional/CompileTests/C_tests/test2010_10.c
-    if (funcdecl_stmt->get_oldStyleDefinition() == false) {
+    if (funcdecl_stmt->get_oldStyleDefinition() == false &&
+        !hasUnsafeParameterPreprocessingInfo(*p)) {
       unparseAttachedPreprocessingInfo(*p, info, PreprocessingInfo::before);
     }
     // DQ (1/17/2014): Adding support in C to output function prototypes without
@@ -1324,19 +2239,37 @@ void Unparse_ExprStmt::unparse_helper(SgFunctionDeclaration *funcdecl_stmt,
   bool need_qualifier = !(is_friend && is_1st_decl) || has_qualifier ||
                         force_global_friend_qualifier;
   if (need_qualifier) {
-    SgName nameQualifier = funcdecl_stmt->get_qualified_name_prefix();
+    std::string nameQualifier;
+    if (SgTemplateMemberFunctionDeclaration *template_member_decl =
+            isSgTemplateMemberFunctionDeclaration(funcdecl_stmt)) {
+      if (isNormalizedClassTemplateMemberFunction(template_member_decl) &&
+          template_member_decl->get_parent() !=
+              template_member_decl->get_scope()) {
+        nameQualifier = buildNormalizedTemplateMemberFunctionQualifier(
+            template_member_decl);
+      }
+    }
+    if (nameQualifier.empty()) {
+      nameQualifier = funcdecl_stmt->get_qualified_name_prefix().str();
+    }
 #if DEBUG_unparse_helper
-    printf("  nameQualifier = %s\n", nameQualifier.str());
+    printf("  nameQualifier = %s\n", nameQualifier.c_str());
 #endif
-    if (force_global_friend_qualifier && nameQualifier.getString().empty()) {
+    if (force_global_friend_qualifier && nameQualifier.empty()) {
       curprint("::");
     } else {
-      curprint(nameQualifier.str());
+      curprint(nameQualifier);
     }
   }
 
   SgTemplateInstantiationFunctionDecl *tpl_fdecl =
       isSgTemplateInstantiationFunctionDecl(funcdecl_stmt);
+  const bool parenthesize_function_name =
+      tpl_fdecl == NULL &&
+      shouldParenthesizeFunctionNameForMacro(funcdecl_stmt);
+  if (parenthesize_function_name) {
+    curprint("(");
+  }
   if (tpl_fdecl != NULL) {
 #if DEBUG_unparse_helper
     printf("  tpl_fdecl->get_templateName() = %s \n",
@@ -1345,6 +2278,9 @@ void Unparse_ExprStmt::unparse_helper(SgFunctionDeclaration *funcdecl_stmt,
     unp->u_exprStmt->unparseTemplateFunctionName(tpl_fdecl, info);
   } else {
     curprint(funcdecl_stmt->get_name().str());
+  }
+  if (parenthesize_function_name) {
+    curprint(")");
   }
 
   ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
@@ -1359,15 +2295,18 @@ void Unparse_ExprStmt::unparse_helper(SgFunctionDeclaration *funcdecl_stmt,
   unparseFunctionArgs(funcdecl_stmt, ninfo2);
   curprint(")");
 
-  if (funcdecl_stmt->get_oldStyleDefinition()) {
-    // Output old-style C (K&R) function definition
+  if (funcdecl_stmt->get_oldStyleDefinition() && !funcdecl_stmt->isForward()) {
+    // Output old-style C (K&R) parameter declarations only for definitions.
+    // Forward declarations must stay in prototype form.
     SgInitializedNamePtrList::iterator p = funcdecl_stmt->get_args().begin();
     if (p != funcdecl_stmt->get_args().end()) {
       unp->u_sage->curprint_newline();
     }
 
     while (p != funcdecl_stmt->get_args().end()) {
-      unparseAttachedPreprocessingInfo(*p, info, PreprocessingInfo::before);
+      if (!hasUnsafeParameterPreprocessingInfo(*p)) {
+        unparseAttachedPreprocessingInfo(*p, info, PreprocessingInfo::before);
+      }
       unparseFunctionParameterDeclaration(funcdecl_stmt, *p, true, ninfo2);
       curprint(";");
 
@@ -2342,16 +3281,10 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
   // unparseStatement(declaration,info);
   switch (declarationStatement->variantT()) {
   case V_SgTemplateInstantiationDecl: {
-    // unparseClassDeclStmt(declarationStatement,info);
-    // unparseTemplateInstantiationDeclStmt(declarationStatement,info);
     SgClassDeclaration *classDeclaration =
         isSgClassDeclaration(declarationStatement);
     ASSERT_not_null(classDeclaration);
 
-    // DQ (8/29/2005): "template" keyword now output by
-    // Unparse_ExprStmt::outputTemplateSpecializationSpecifier() curprint (
-    // string("template ";
-    // DQ (8/19/2014): Original code.
     unparseClassDeclStmt(classDeclaration, info);
     break;
   }
@@ -2373,11 +3306,29 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
   }
 
   case V_SgTemplateInstantiationMemberFunctionDecl: {
-    // printf ("Unparsing of SgTemplateInstantiationMemberFunctionDecl in
-    // unparseTemplateInstantiationDirectiveStmt ... \n"); ROSE_ASSERT(false);
     SgMemberFunctionDeclaration *memberFunctionDeclaration =
         isSgMemberFunctionDeclaration(declarationStatement);
     ASSERT_not_null(memberFunctionDeclaration);
+
+    SgTemplateInstantiationMemberFunctionDecl *template_member_inst =
+        isSgTemplateInstantiationMemberFunctionDecl(memberFunctionDeclaration);
+    ASSERT_not_null(template_member_inst);
+
+    const Sg_File_Info *member_file_info =
+        template_member_inst->get_file_info();
+    const Sg_File_Info *directive_file_info =
+        templateInstantiationDirective->get_file_info();
+    const bool directive_wraps_original_member_declaration =
+        template_member_inst->isSpecialization() == false &&
+        member_file_info != NULL && directive_file_info != NULL &&
+        member_file_info->isSourcePositionUnavailableInFrontend() == false &&
+        (member_file_info->get_filenameString() !=
+             directive_file_info->get_filenameString() ||
+         member_file_info->get_line() != directive_file_info->get_line() ||
+         member_file_info->get_col() != directive_file_info->get_col());
+    if (directive_wraps_original_member_declaration) {
+      return;
+    }
 
     // Explicit instantiation directives remain directives regardless of
     // whether the instantiated declaration is itself still a template at the
@@ -2843,8 +3794,25 @@ void Unparse_ExprStmt::unparseTemplateInstantiationMemberFunctionDeclStmt(
     // if ( declarationFileName == currentFileName &&
     // templateInstantiationMemberFunctionDeclaration->get_file_info()->isOutputInCodeGeneration()
     // == true)
-    if (templateInstantiationMemberFunctionDeclaration->get_file_info()
-            ->isOutputInCodeGeneration() == true) {
+    if (SgTemplateInstantiationDecl *associated_class_instantiation =
+            isSgTemplateInstantiationDecl(isSgClassDeclaration(
+                templateInstantiationMemberFunctionDeclaration
+                    ->get_associatedClassDeclaration()));
+        associated_class_instantiation != NULL &&
+        templateInstantiationMemberFunctionDeclaration->isSpecialization() ==
+            false &&
+        associated_class_instantiation->get_file_info() != NULL &&
+        associated_class_instantiation->get_file_info()
+                ->isOutputInCodeGeneration() == true &&
+        templateInstantiationMemberFunctionDeclaration->get_file_info() !=
+            NULL &&
+        (templateInstantiationMemberFunctionDeclaration->get_file_info()
+                 ->isCompilerGenerated() == true ||
+         templateInstantiationMemberFunctionDeclaration->get_file_info()
+                 ->isSourcePositionUnavailableInFrontend() == true)) {
+      outputMemberFunctionTemplateInstantiation = false;
+    } else if (templateInstantiationMemberFunctionDeclaration->get_file_info()
+                   ->isOutputInCodeGeneration() == true) {
       outputMemberFunctionTemplateInstantiation = true;
     } else {
       // DQ (5/22/2013): Added to support output of non-template member
@@ -2858,7 +3826,7 @@ void Unparse_ExprStmt::unparseTemplateInstantiationMemberFunctionDeclStmt(
   }
 
   if (outputMemberFunctionTemplateInstantiation == true) {
-    SgFunctionDeclaration *memberFunctionDeclaration =
+    SgMemberFunctionDeclaration *memberFunctionDeclaration =
         isSgMemberFunctionDeclaration(
             templateInstantiationMemberFunctionDeclaration);
     ASSERT_not_null(memberFunctionDeclaration);
@@ -4346,6 +5314,7 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
 
     ninfo_for_type.set_reference_node_for_qualification(funcdecl_stmt);
     ASSERT_not_null(ninfo_for_type.get_reference_node_for_qualification());
+    ninfo_for_type.set_declstatement_ptr(funcdecl_stmt);
 
     ninfo_for_type.set_name_qualification_length(
         funcdecl_stmt->get_name_qualification_length_for_return_type());
@@ -4639,6 +5608,8 @@ void Unparse_ExprStmt::unparseFuncDefnStmt(SgStatement *stmt,
   // (or member function declaration)
   info.set_declstatement_ptr(NULL);
 
+  dropMisplacedLeadingBodyDirectives(isSgBasicBlock(funcdefn_stmt->get_body()));
+
   // DQ (10/11/2006): As part of new implementation of qualified names we now
   // default to the generation of all qualified names unless they are skipped.
   // info.unset_SkipQualifiedNames();
@@ -4768,6 +5739,7 @@ void Unparse_ExprStmt::unparseReturnType(SgFunctionDeclaration *funcdecl_stmt,
       ninfo.set_SkipClassSpecifier();
 
       SgUnparse_Info ninfo_for_type(ninfo);
+      ninfo_for_type.unset_SkipQualifiedNames();
 
       // DQ (6/10/2007): set the declaration pointer so that the name
       // qualification can see if this is the declaration (so that exceptions to
@@ -5124,10 +6096,7 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
                ctor_init->get_name().str(),
                nameQualifier.is_null() ? "NULL" : nameQualifier.str());
 #endif
-        if (!nameQualifier.is_null()) {
-          curprint(nameQualifier.str());
-        }
-        curprint(ctor_init->get_name().str());
+        unparseCtorPreinitializerDesignator(this, unp, ctor_init, ninfo2);
 
         SgExpression *initializer = ctor_init->get_initializer();
         if (initializer != NULL) {
@@ -5387,6 +6356,13 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
   SgClassDeclaration *classdecl_stmt = isSgClassDeclaration(stmt);
   ASSERT_not_null(classdecl_stmt);
 
+  if (!info.inArgList() &&
+      info.get_reference_node_for_qualification() == NULL &&
+      classdecl_stmt->attributeExists(
+          kInlineTypeOperandStandaloneSuppressAttribute)) {
+    return;
+  }
+
 #define DEBUG_UNPARSE_CLASS_DECLARATION 0
 
 #if DEBUG_USING_CURPRINT
@@ -5628,13 +6604,20 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
 
       info.unset_inEmbeddedDecl();
       if (!info.SkipClassSpecifier()) {
+        const bool use_class_keyword_for_template_instantiation =
+            isSgTemplateInstantiationDecl(classdecl_stmt) != NULL &&
+            classdecl_stmt->get_definition() == NULL &&
+            (classdecl_stmt->get_parent() == classdecl_stmt->get_scope() ||
+             isSgTemplateInstantiationDirectiveStatement(
+                 classdecl_stmt->get_parent()) != NULL);
         switch (classdecl_stmt->get_class_type()) {
         case SgClassDeclaration::e_class: {
           curprint("class ");
           break;
         }
         case SgClassDeclaration::e_struct: {
-          curprint("struct ");
+          curprint(use_class_keyword_for_template_instantiation ? "class "
+                                                                : "struct ");
           break;
         }
         case SgClassDeclaration::e_union: {
@@ -5674,7 +6657,11 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
       // DQ (7/28/2012): This is the original code (I think it is what we really
       // want, but we need to test this. DQ (6/5/2011): Newest refactored
       // support for name qualification.
-      SgName nameQualifier = classdecl_stmt->get_qualified_name_prefix();
+      SgName nameQualifier;
+      if (classdecl_stmt->isForward() ||
+          classdecl_stmt->get_parent() != classdecl_stmt->get_scope()) {
+        nameQualifier = classdecl_stmt->get_qualified_name_prefix();
+      }
 
       // DQ (6/9/2013): Further restrict this to the special case of un-named
       // unions. bool isAnonymousName =
@@ -7842,17 +8829,25 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
     SgDeclarationStatement *tmp_associatedDefiningDeclaration =
         typedef_stmt->get_baseTypeDefiningDeclaration();
     if (tmp_associatedDefiningDeclaration != NULL) {
-      ninfo_for_type.set_useAlternativeDefiningDeclaration();
-
       ASSERT_not_null(declaration);
-      // Make sure this is not is use.
-      // ROSE_ASSERT(ninfo_for_type.get_declstatement_ptr() == NULL);
-      // ROSE_ASSERT(ninfo_for_type.get_declstatement_associated_with_type() ==
-      // NULL);
-      // ninfo_for_type.set_declaration(tmp_associatedDefiningDeclaration);
-      // ninfo_for_type.set_declstatement_ptr(tmp_associatedDefiningDeclaration);
-      ninfo_for_type.set_declstatement_associated_with_type(
-          tmp_associatedDefiningDeclaration);
+
+      if (SgEnumDeclaration *enumDeclaration =
+              isSgEnumDeclaration(tmp_associatedDefiningDeclaration)) {
+        // Enum types select their defining declaration via
+        // declaration_of_context rather than useAlternativeDefiningDeclaration.
+        ninfo_for_type.set_declaration_of_context(enumDeclaration);
+      } else {
+        ninfo_for_type.set_useAlternativeDefiningDeclaration();
+
+        // Make sure this is not is use.
+        // ROSE_ASSERT(ninfo_for_type.get_declstatement_ptr() == NULL);
+        // ROSE_ASSERT(ninfo_for_type.get_declstatement_associated_with_type()
+        // == NULL);
+        // ninfo_for_type.set_declaration(tmp_associatedDefiningDeclaration);
+        // ninfo_for_type.set_declstatement_ptr(tmp_associatedDefiningDeclaration);
+        ninfo_for_type.set_declstatement_associated_with_type(
+            tmp_associatedDefiningDeclaration);
+      }
     }
 
 #if DEBUG_TYPEDEF_DECLARATIONS
@@ -8328,6 +9323,8 @@ void Unparse_ExprStmt::unparseTemplateHeader(T *decl, SgUnparse_Info &info) {
   printf("In unparseTemplateHeader(decl = %p = %s) \n", decl,
          decl->class_name().c_str());
 #endif
+  resetTemplateParameterEmissionState();
+
   SgTemplateParameterPtrList tlist;
   for (SgTemplateParameter *param : decl->get_templateParameters()) {
     if (!SageInterface::isAbbreviatedFunctionTemplateParameter(param)) {
@@ -8484,11 +9481,7 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
           unparseAttachedPreprocessingInfo(ctor_init, decl_info,
                                            PreprocessingInfo::before);
 
-          SgName nameQualifier = ctor_init->get_qualified_name_prefix();
-          if (!nameQualifier.is_null()) {
-            curprint(nameQualifier.str());
-          }
-          curprint(ctor_init->get_name().str());
+          unparseCtorPreinitializerDesignator(this, unp, ctor_init, init_info);
 
           SgExpression *initializer = ctor_init->get_initializer();
           if (initializer == NULL) {
@@ -8512,42 +9505,6 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
         }
       };
 
-  auto collect_template_class_chain =
-      [](SgDeclarationStatement *associated_decl,
-         SgScopeStatement *fallback_scope) {
-        std::vector<SgTemplateClassDeclaration *> chain;
-
-        auto append_template_decl = [&](SgDeclarationStatement *decl) {
-          SgTemplateClassDeclaration *template_decl =
-              isSgTemplateClassDeclaration(decl);
-          if (template_decl == nullptr) {
-            return;
-          }
-          if (std::find(chain.begin(), chain.end(), template_decl) ==
-              chain.end()) {
-            chain.push_back(template_decl);
-          }
-        };
-
-        append_template_decl(associated_decl);
-
-        SgNode *cursor = associated_decl != nullptr
-                             ? associated_decl->get_scope()
-                             : static_cast<SgNode *>(fallback_scope);
-        while (cursor != nullptr) {
-          if (SgClassDefinition *class_def = isSgClassDefinition(cursor)) {
-            append_template_decl(class_def->get_declaration());
-          } else if (SgTemplateClassDefinition *tpl_class_def =
-                         isSgTemplateClassDefinition(cursor)) {
-            append_template_decl(tpl_class_def->get_declaration());
-          } else if (SgTemplateInstantiationDefn *inst_def =
-                         isSgTemplateInstantiationDefn(cursor)) {
-            append_template_decl(inst_def->get_declaration());
-          }
-          cursor = cursor->get_parent();
-        }
-        return chain;
-      };
   auto template_parameter_lists_match =
       [](const SgTemplateParameterPtrList &lhs,
          const SgTemplateParameterPtrList &rhs) -> bool {
@@ -8631,13 +9588,15 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
         isSgTemplateInstantiationDefn(parent) != nullptr;
     if (!parent_is_class_like_definition) {
       std::vector<SgTemplateClassDeclaration *> assoc_tpl_chain =
-          collect_template_class_chain(associated_decl,
-                                       template_stmt->get_scope());
+          collectTemplateClassChain(associated_decl,
+                                    template_stmt->get_scope());
       if (templateMemberFunctionDeclaration != nullptr &&
           !assoc_tpl_chain.empty() &&
-          template_parameter_lists_match(
-              assoc_tpl_chain.front()->get_templateParameters(),
-              templateMemberFunctionDeclaration->get_templateParameters())) {
+          (isNormalizedClassTemplateMemberFunction(
+               templateMemberFunctionDeclaration) ||
+           template_parameter_lists_match(
+               assoc_tpl_chain.front()->get_templateParameters(),
+               templateMemberFunctionDeclaration->get_templateParameters()))) {
         assoc_tpl_chain.erase(assoc_tpl_chain.begin());
       }
       for (auto it = assoc_tpl_chain.rbegin(); it != assoc_tpl_chain.rend();
@@ -8832,12 +9791,15 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
 
       if (assoc_tpl_class_decl != NULL && !parent_is_class_like_definition) {
         std::vector<SgTemplateClassDeclaration *> assoc_tpl_chain =
-            collect_template_class_chain(
+            collectTemplateClassChain(
                 assoc_decl, templateMemberFunctionDeclaration->get_scope());
         if (!assoc_tpl_chain.empty() &&
-            template_parameter_lists_match(
-                assoc_tpl_chain.front()->get_templateParameters(),
-                templateMemberFunctionDeclaration->get_templateParameters())) {
+            (isNormalizedClassTemplateMemberFunction(
+                 templateMemberFunctionDeclaration) ||
+             template_parameter_lists_match(
+                 assoc_tpl_chain.front()->get_templateParameters(),
+                 templateMemberFunctionDeclaration
+                     ->get_templateParameters()))) {
           assoc_tpl_chain.erase(assoc_tpl_chain.begin());
         }
         for (auto it = assoc_tpl_chain.rbegin(); it != assoc_tpl_chain.rend();
@@ -9014,11 +9976,32 @@ void Unparse_ExprStmt::unparseOmpBeginDirectiveClauses(SgStatement *stmt,
       ROSE_ABORT();
     }
 
+    bool mapper_type_needs_variable_separator = false;
     if (mapperstmt->get_mapper_type() != nullptr) {
-      unparseExpression(mapperstmt->get_mapper_type(), info);
+      if (SgTypeExpression *type_expr =
+              isSgTypeExpression(mapperstmt->get_mapper_type())) {
+        if (SgClassType *class_type = isSgClassType(type_expr->get_type())) {
+          curprint(string("class "));
+          if (SgClassDeclaration *class_decl =
+                  isSgClassDeclaration(class_type->get_declaration())) {
+            if (isSgGlobal(class_decl->get_scope()) != nullptr) {
+              curprint(string("::"));
+            }
+          }
+          curprint(class_type->get_name().getString());
+          mapper_type_needs_variable_separator = true;
+        } else {
+          unparseExpression(mapperstmt->get_mapper_type(), info);
+          mapper_type_needs_variable_separator = true;
+        }
+      } else {
+        unparseExpression(mapperstmt->get_mapper_type(), info);
+        mapper_type_needs_variable_separator = true;
+      }
     }
     if (mapperstmt->get_mapper_variable() != nullptr) {
-      if (mapperstmt->get_mapper_type() != nullptr) {
+      if (mapperstmt->get_mapper_type() != nullptr &&
+          mapper_type_needs_variable_separator) {
         curprint(string(" "));
       }
       unparseExpression(mapperstmt->get_mapper_variable(), info);

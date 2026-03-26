@@ -55,13 +55,15 @@ void foo2(bool allow,int update,int update2)
 
 class foo 
 {
-  
 
-  public: inline foo(double val) : m_a(val)
-{
-  }
-  void f1(bool allow,int update,int length,double *b);
-  private: double m_a;
+public:
+  foo(double val) : m_a(val) {}
+
+public:
+  void f1(bool allow, int update, int length, double *b);
+
+private:
+  double m_a;
 }
 ;
 
@@ -69,18 +71,18 @@ void foo::f1(bool allow,int update,int length,double *b)
 {
   if (allow) {
     for (int iz = 0; iz < length; ++iz) {
-      int dens = (int )((this) -> m_a / b[iz]);
+      int dens = m_a / b[iz];
     }
   }
    else {
     if (update > 0) {
       for (int iz = 0; iz < length; ++iz) {
-        int dens = (int )((this) -> m_a / b[iz]);
+        int dens = m_a / b[iz];
       }
     }
      else {
       for (int iz = 0; iz < length; ++iz) {
-        int dens = (int )((this) -> m_a / b[iz]);
+        int dens = m_a / b[iz];
       }
     }
   }

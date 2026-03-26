@@ -25569,6 +25569,31 @@ void SageInterface::printAST(SgNode *node, const char *filename) {
   printAST2TextFile(node, filename, true);
 }
 
+namespace {
+std::string resolveTestOutputPath(const std::string &filename) {
+  if (filename.empty()) {
+    return filename;
+  }
+
+  if (filename[0] == '/' || filename[0] == '\\' ||
+      (filename.size() > 1 && filename[1] == ':')) {
+    return filename;
+  }
+
+  const char *output_dir = std::getenv("ROSE_TEST_OUTPUT_DIR");
+  if (output_dir == nullptr || output_dir[0] == '\0') {
+    return filename;
+  }
+
+  std::string resolved(output_dir);
+  if (!resolved.empty() && resolved.back() != '/') {
+    resolved += '/';
+  }
+  resolved += filename;
+  return resolved;
+}
+} // namespace
+
 void SageInterface::printAST2TextFile(SgNode *node, std::string filename,
                                       bool printType /*=true*/) {
   // Rasmussen 9/21/2020: This leads to infinite recursion (clang warning
@@ -25583,8 +25608,9 @@ void SageInterface::printAST2TextFile(SgNode *node, const char *filename,
   string prefix;
   string label = "";
   serialize(node, prefix, false, oss, label);
+  std::string resolvedFilename = resolveTestOutputPath(filename);
   ofstream textfile;
-  textfile.open(filename, ios::out);
+  textfile.open(resolvedFilename.c_str(), ios::out);
   textfile << oss.str();
 
   if (printType) {

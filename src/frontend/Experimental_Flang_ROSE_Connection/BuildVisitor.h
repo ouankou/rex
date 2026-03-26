@@ -168,6 +168,8 @@ public:
   void Build(Fortran::parser::Statement<
              Fortran::common::Indirection<Fortran::parser::ImportStmt>> &);
   void Build(Fortran::parser::Statement<
+             Fortran::common::Indirection<Fortran::parser::AccessStmt>> &);
+  void Build(Fortran::parser::Statement<
              Fortran::common::Indirection<Fortran::parser::ParameterStmt>> &);
   void
   Build(Fortran::parser::Statement<

@@ -1,5 +1,8 @@
 include_directories(${ROSE_INCLUDES})
 
+set(_liveness_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
+file(MAKE_DIRECTORY ${_liveness_output_dir})
+
 add_executable(variableLivenessRunTest runTest.C)
 target_link_libraries(variableLivenessRunTest ROSE_DLL ${link_with_libraries})
 
@@ -25,3 +28,8 @@ foreach(testnum IN LISTS _liveness_test_numbers)
   )
 endforeach()
 
+get_property(_liveness_registered_tests DIRECTORY PROPERTY TESTS)
+if(_liveness_registered_tests)
+  set_property(TEST ${_liveness_registered_tests} APPEND PROPERTY ENVIRONMENT
+               "ROSE_TEST_OUTPUT_DIR=${_liveness_output_dir}")
+endif()

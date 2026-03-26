@@ -7,22 +7,6 @@ endforeach()
 set(ROSE_FLAGS -w -rose:verbose 0)
 set(translator testTranslator)
 
-# Legacy specimens that are invalid under modern Clang/libstdc++ should still
-# run under plain `ctest`, but as ordinary negative tests rather than through
-# ad hoc flag-gated lists.
-set(ROSE_ALWAYS_ENABLED_NEGATIVE_TESTCODES
-  test2005_57.C
-  test2005_135.C
-  test2005_136.C
-  test2005_138.C
-  test2005_139.C
-  test2005_144.C
-  test2005_149.C
-  test2005_156.C
-  test2005_171.C
-  test2005_173.C
-)
-
 # define compile_test CMake function
 function(compile_test input_file label)
   set(_test_key ${input_file})
@@ -68,9 +52,6 @@ function(compile_test input_file label)
     )
   endif()
   set_tests_properties(${test_id} PROPERTIES LABELS "${label}")
-  if(input_file IN_LIST ROSE_ALWAYS_ENABLED_NEGATIVE_TESTCODES)
-    set_tests_properties(${test_id} PROPERTIES WILL_FAIL TRUE)
-  endif()
   set_property(TEST ${test_id} APPEND PROPERTY ENVIRONMENT
                "ROSE_TEST_OUTPUT_DIR=${_test_output_dir}")
 endfunction()
@@ -95,6 +76,33 @@ function(rex_compile_test_name out_var label input_file)
   string(REPLACE "/" "_" _test_key "${_test_key}")
   string(REPLACE "." "_" _test_key "${_test_key}")
   set(${out_var} "${label}_${_test_key}" PARENT_SCOPE)
+endfunction()
+
+set(REX_COMPILE_TESTS_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+
+function(rex_register_compile_source_set property_name)
+  foreach(source_rel IN LISTS ARGN)
+    get_filename_component(_source_abs "${source_rel}" ABSOLUTE
+                           BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+    if(NOT EXISTS "${_source_abs}")
+      message(FATAL_ERROR
+        "CompileTests source '${source_rel}' registered from "
+        "${CMAKE_CURRENT_SOURCE_DIR} does not exist")
+    endif()
+    file(RELATIVE_PATH _source_from_root "${REX_COMPILE_TESTS_SOURCE_DIR}"
+         "${_source_abs}")
+    set_property(GLOBAL APPEND PROPERTY ${property_name} "${_source_from_root}")
+  endforeach()
+endfunction()
+
+function(rex_get_registered_compile_source_set out_var property_name)
+  get_property(_sources GLOBAL PROPERTY ${property_name})
+  if(NOT _sources)
+    set(_sources)
+  endif()
+  list(REMOVE_DUPLICATES _sources)
+  list(SORT _sources)
+  set(${out_var} "${_sources}" PARENT_SCOPE)
 endfunction()
 
 # determine what subdirectories to enter based on our configuration settings.
