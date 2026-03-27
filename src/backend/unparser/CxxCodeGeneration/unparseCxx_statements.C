@@ -221,22 +221,7 @@ bool functionReturnTypeNeedsInlineDefinition(SgType *type) {
 }
 
 bool parameterTypeNeedsInlineDefinition(SgType *type) {
-  SgType *stripped_type = stripFunctionReturnTypeForInlineDefinitionCheck(type);
-  if (stripped_type == nullptr) {
-    return false;
-  }
-
-  if (SgClassType *class_type = isSgClassType(stripped_type)) {
-    return declarationNeedsInlineFunctionReturnTypeDefinition(
-        class_type->get_declaration());
-  }
-
-  if (SgEnumType *enum_type = isSgEnumType(stripped_type)) {
-    return declarationNeedsInlineFunctionReturnTypeDefinition(
-        enum_type->get_declaration());
-  }
-
-  return false;
+  return functionReturnTypeNeedsInlineDefinition(type);
 }
 
 void enableInlineDefinitionForFunctionReturnTypeIfNeeded(SgUnparse_Info &info,
