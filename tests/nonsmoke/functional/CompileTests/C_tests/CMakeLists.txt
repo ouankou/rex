@@ -1033,11 +1033,6 @@ set(C_TESTCODES_C89_ONLY
 rex_register_compile_source_set(REX_C89_TESTS_SOURCES ${C_TESTCODES_C89_ONLY})
 list(REMOVE_ITEM C_TESTCODES ${C_TESTCODES_C89_ONLY})
 
-# This legacy constants specimen currently still duplicates declarations under
-# the Clang frontend. Keep it out of the generic C bucket until that root cause
-# is fixed, rather than silently treating it as passing coverage.
-list(REMOVE_ITEM C_TESTCODES constants.c)
-
 # These files compiled under the default C mode but were never registered in
 # CTest after the hand-written list migration.
 list(APPEND C_TESTCODES
@@ -1393,10 +1388,6 @@ rex_verify_compile_test_source_coverage(
   DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   PROPERTIES REX_C_TESTS_SOURCES REX_C89_TESTS_SOURCES
   IGNORE
-    # This legacy specimen still duplicates the C99 constant declarations under
-    # the Clang frontend and needs a dedicated root-cause fix before it can be
-    # re-registered without hiding a real regression.
-    constants.c
     test2014_20_inc.c
     test2014_27_inc.c
     test2014_28_inc.c
