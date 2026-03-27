@@ -16,6 +16,7 @@ set(C11_TESTCODES
   test2014_15.c
   test2014_16.c
   test2014_17.c
+  test2014_18.c
   test2014_19.c
   test2014_20.c
   test2014_21.c
@@ -28,11 +29,19 @@ set(C11_TESTCODES
   test2014_28.c
   test2014_29.c
   test2014_30.c
+  test2014_31.c
   last.c
 )
 
 set(ROSE_FLAGS -w -rose:verbose 0 -std=c11)
 
+rex_register_compile_source_set(REX_C11_TESTS_SOURCES ${C11_TESTCODES})
+
 foreach(file_to_test ${C11_TESTCODES})
   compile_test(${file_to_test} "C11_tests")
 endforeach()
+
+rex_verify_compile_test_source_coverage(
+  DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  PROPERTIES REX_C11_TESTS_SOURCES
+)

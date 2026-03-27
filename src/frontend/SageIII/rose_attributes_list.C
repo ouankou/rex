@@ -220,6 +220,7 @@ PreprocessingInfo::PreprocessingInfo(
   // know that the parent being NULL is not meaningful in the AST consistancy
   // tests).
   file_info->setCommentOrDirective();
+  file_info->setOutputInCodeGeneration();
 
   // DQ (3/7/2010): Switch this is a SgTypeDefault since one of these are
   // referenced in the generated rose_required_macros_and_functions.h which

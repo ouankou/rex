@@ -13181,11 +13181,13 @@ bool ClangToSageTranslator::VisitGenericSelectionExpr(
 #if DEBUG_VISIT_STMT
   std::cerr << "ClangToSageTranslator::VisitGenericSelectionExpr" << std::endl;
 #endif
-  bool res = true;
+  SgNode *result = Traverse(generic_Selection_expr->getResultExpr());
+  SgExpression *result_expr = isSgExpression(result);
+  ROSE_ASSERT(result_expr != nullptr);
 
-  // TODO
+  *node = result_expr;
 
-  return VisitExpr(generic_Selection_expr, node) && res;
+  return VisitExpr(generic_Selection_expr, node);
 }
 
 bool ClangToSageTranslator::VisitGNUNullExpr(clang::GNUNullExpr *gnu_null_expr,

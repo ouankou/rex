@@ -1955,31 +1955,27 @@ void Unparse_MOD_SAGE::printSpecifier2(SgDeclarationStatement *decl_stmt,
         SgInitializedName *initializedName =
             SageInterface::getFirstInitializedName(variableDeclaration);
         ROSE_ASSERT(initializedName != NULL);
-        SgType *initializedName_type = initializedName->get_type();
-        // Clang does not allow the use of extern on classes when the there is
-        // static declaration in the class (see Cxx11_tests/test2020_96.C for an
-        // example, also test2020_97.C and test2020_98.C). SgClassType*
-        // classType = isSgClassType(initializedName_type); if (classType ==
-        // NULL)
-        SgNamedType *namedType = isSgNamedType(initializedName_type);
-        if (namedType == NULL) {
-          SgInitializedName *previous_initializedName =
-              initializedName->get_prev_decl_item();
-          if (previous_initializedName != NULL) {
-            // supress_extern_keyword = true;
-
-            // Check if the parent variable declaration is for a static variable
-            // declaration and if so then suppress the output of the extern
-            // keyword.
-            SgVariableDeclaration *previous_variableDeclaration =
-                isSgVariableDeclaration(previous_initializedName->get_parent());
-            if (variableDeclaration != NULL) {
-              if (previous_variableDeclaration->get_declarationModifier()
+        SgInitializedName *previous_initializedName =
+            initializedName->get_prev_decl_item();
+        if (previous_initializedName != NULL) {
+          // Only suppress `extern` for out-of-class references to static class
+          // members. Ordinary C file-scope redeclarations such as
+          // `static int x; extern int x;` must retain `extern`.
+          SgVariableDeclaration *previous_variableDeclaration =
+              isSgVariableDeclaration(previous_initializedName->get_parent());
+          SgScopeStatement *previous_scope =
+              previous_variableDeclaration != NULL
+                  ? previous_variableDeclaration->get_scope()
+                  : NULL;
+          const bool previous_decl_is_class_member =
+              isSgClassDefinition(previous_scope) != NULL ||
+              isSgTemplateClassDefinition(previous_scope) != NULL ||
+              isSgTemplateInstantiationDefn(previous_scope) != NULL;
+          if (previous_decl_is_class_member &&
+              previous_variableDeclaration->get_declarationModifier()
                       .get_storageModifier()
                       .isStatic() == true) {
-                supress_extern_keyword = true;
-              }
-            }
+            supress_extern_keyword = true;
           }
         }
       }

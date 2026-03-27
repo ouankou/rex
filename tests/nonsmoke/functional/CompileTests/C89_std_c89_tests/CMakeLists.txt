@@ -19,26 +19,90 @@ set(files_to_test
   test_CplusplusMacro_C.c math.c testCvsCpp.c stdio.c
   YardenPragmaPackExample.c)
 
+# C_tests specimens that only work in a C89-family mode belong in this bucket,
+# not in the generic default-C sweep.
+list(APPEND files_to_test
+  ../C_tests/test2009_04.c
+  ../C_tests/test2010_01.c
+  ../C_tests/test2012_27.c
+  ../C_tests/test2012_32.c
+  ../C_tests/test2012_116.c
+  ../C_tests/test2012_44.c
+  ../C_tests/test2012_45.c
+  ../C_tests/test2012_173.c
+  ../C_tests/test2012_173_redhat_rel6.c
+  ../C_tests/test2012_79.c
+  ../C_tests/test2012_80.c
+  ../C_tests/test2012_135.c
+  ../C_tests/test2013_41.c
+  ../C_tests/test2013_53.c
+  ../C_tests/test2013_56.c
+  ../C_tests/test2013_57.c
+  ../C_tests/test2013_58.c
+  ../C_tests/test2013_59.c
+  ../C_tests/test2013_60.c
+  ../C_tests/test2013_61.c
+  ../C_tests/test2013_63.c
+  ../C_tests/test2013_105.c
+  ../C_tests/test2013_106.c
+  ../C_tests/test2013_107.c
+  ../C_tests/test2013_108.c
+  ../C_tests/test2013_109.c
+  ../C_tests/test2013_111.c
+  ../C_tests/test2014_06.c
+  ../C_tests/test2014_20.c
+  ../C_tests/test2014_21.c
+  ../C_tests/test2014_74.c
+  ../C_tests/test2015_28.c
+  ../C_tests/test2017_03.c
+  ../C_tests/test2017_12.c
+  ../C_tests/test2017_67.c
+  ../C_tests/test2018_49.c
+  ../C_tests/test2018_50.c
+  ../C_tests/test2018_51.c
+  ../C_tests/test2018_63.c
+  ../C_tests/test2020_06.c
+)
+list(REMOVE_DUPLICATES files_to_test)
+
 set(ROSE_FLAGS -std=c89)
 if(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
   list(APPEND ROSE_FLAGS  )
 endif()
 list(APPEND ROSE_FLAGS -w)
 
+set(ROSE_GNU89_TESTCODES
+  ../C_tests/test2012_44.c
+  ../C_tests/test2012_45.c
+  ../C_tests/test2012_173.c
+  ../C_tests/test2012_173_redhat_rel6.c
+  ../C_tests/test2015_28.c
+  ../C_tests/test2017_03.c
+)
+rex_register_compile_source_set(REX_C89_GNU89_SOURCES ${ROSE_GNU89_TESTCODES})
+
 # test2013_06.c is invalid even for stock C compilers because its header uses
 # `bool` before <stdbool.h> is included.
 list(REMOVE_ITEM files_to_test test2013_06.c)
+
+rex_register_compile_source_set(REX_C89_TESTS_SOURCES ${files_to_test} test2013_06.c)
 
 foreach(file_to_test ${files_to_test})
   compile_test(${file_to_test} C89TEST TRUE)
 endforeach()
 
+compile_negative_test(test2013_06.c C89TEST TRUE)
+
 add_test(
-  NAME C89TEST_test2003_12
-  COMMAND testTranslator -std=c89 --edg:no_warnings --edg:restrict -w
-    -c ${CMAKE_CURRENT_SOURCE_DIR}/test2003_12.c
+  NAME C89TEST_conftest_link
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND testTranslator -std=c89 -w -I${CMAKE_CURRENT_SOURCE_DIR}/../C_tests
+          ${CMAKE_CURRENT_SOURCE_DIR}/../C_tests/conftest.c
+          -o conftest_configure_test
 )
-set_tests_properties(C89TEST_test2003_12 PROPERTIES LABELS "C89TEST")
+set_tests_properties(C89TEST_conftest_link PROPERTIES LABELS "C89TEST")
+
+rex_register_compile_source_set(REX_C89_TESTS_SOURCES ../C_tests/conftest.c)
 
 set(_c89_test_names "")
 foreach(file_to_test ${files_to_test})
@@ -48,3 +112,8 @@ foreach(file_to_test ${files_to_test})
   list(APPEND _c89_test_names "C89TEST_${_test_key}")
 endforeach()
 list(REMOVE_DUPLICATES _c89_test_names)
+
+rex_verify_compile_test_source_coverage(
+  DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  PROPERTIES REX_C89_TESTS_SOURCES
+)

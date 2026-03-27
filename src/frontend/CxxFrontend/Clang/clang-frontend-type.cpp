@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 
 #include <clang/AST/APValue.h>
 
@@ -1588,6 +1589,38 @@ ClangToSageTranslator::buildTypeFromTypeLoc(const clang::TypeLoc &type_loc) {
         }
       };
 
+  auto build_translated_typedef_type_from_decl =
+      [&](clang::TypedefNameDecl *typedef_decl) -> SgType * {
+    if (typedef_decl == nullptr) {
+      return nullptr;
+    }
+
+    SgDeclarationStatement *translated_decl =
+        lookupSgDeclarationForClangDecl(typedef_decl, /*allow_on_demand=*/true);
+    if (translated_decl == nullptr &&
+        p_decl_translation_in_progress.find(typedef_decl) ==
+            p_decl_translation_in_progress.end() &&
+        p_decl_translation_on_demand.find(typedef_decl) ==
+            p_decl_translation_on_demand.end()) {
+      TraverseOnDemand(typedef_decl);
+      translated_decl = lookupSgDeclarationForClangDecl(
+          typedef_decl, /*allow_on_demand=*/true);
+    }
+
+    if (SgTypedefDeclaration *sg_typedef_decl =
+            isSgTypedefDeclaration(translated_decl)) {
+      repairTypedefDeclarationReferenceShared(sg_typedef_decl);
+      return sg_typedef_decl->get_type();
+    }
+
+    if (SgTemplateTypedefDeclaration *sg_template_typedef =
+            isSgTemplateTypedefDeclaration(translated_decl)) {
+      return sg_template_typedef->get_type();
+    }
+
+    return nullptr;
+  };
+
   auto nested_name_specifier_loc_prefix =
       [](clang::NestedNameSpecifierLoc qualifier_loc)
       -> clang::NestedNameSpecifierLoc {
@@ -2758,10 +2791,37 @@ ClangToSageTranslator::buildTypeFromTypeLoc(const clang::TypeLoc &type_loc) {
         static_cast<bool>(qualifier_loc.getNestedNameSpecifier());
     const bool qualifier_requires_written_nonreal =
         nested_name_specifier_loc_requires_written_nonreal(qualifier_loc);
+    const bool preserve_unqualified_written_typedef =
+        typedef_type != nullptr && !has_written_qualifier &&
+        !typedef_type->isDependentType() && !qualifier_requires_written_nonreal;
     const bool use_translated_typedef_type =
         typedef_type != nullptr && has_written_qualifier &&
         typedef_type->getKeyword() == clang::ElaboratedTypeKeyword::None &&
         !typedef_type->isDependentType() && !qualifier_requires_written_nonreal;
+
+    if (preserve_unqualified_written_typedef) {
+      SgNode *translated_typedef_node = nullptr;
+      if (VisitTypedefType(const_cast<clang::TypedefType *>(typedef_type),
+                           &translated_typedef_node)) {
+        if (SgType *resolved_typedef_type = isSgType(translated_typedef_node)) {
+          p_type_translation_map[typedef_type] = resolved_typedef_type;
+          resolved_typedef_type =
+              apply_local_qualifiers(resolved_typedef_type, type_loc.getType());
+          annotate_auto_type_constraints(resolved_typedef_type);
+          return resolved_typedef_type;
+        }
+      }
+
+      if (SgType *resolved_typedef_type =
+              build_translated_typedef_type_from_decl(
+                  typedef_type->getDecl())) {
+        p_type_translation_map[typedef_type] = resolved_typedef_type;
+        resolved_typedef_type =
+            apply_local_qualifiers(resolved_typedef_type, type_loc.getType());
+        annotate_auto_type_constraints(resolved_typedef_type);
+        return resolved_typedef_type;
+      }
+    }
 
     if (use_translated_typedef_type) {
       if (SgType *resolved_type =
@@ -3316,7 +3376,22 @@ SgNode *ClangToSageTranslator::Traverse(const clang::Type *type) {
     result = SageBuilder::buildUnknownType();
   }
 
-  if (cache_translation) {
+  bool store_translation_in_cache = cache_translation;
+  if (store_translation_in_cache &&
+      type->getTypeClass() == clang::Type::Typedef &&
+      isSgTypedefType(isSgType(result)) == nullptr) {
+    store_translation_in_cache = false;
+  }
+  if (store_translation_in_cache &&
+      type->getTypeClass() == clang::Type::Using) {
+    SgType *sg_type = isSgType(result);
+    if (isSgTypedefType(sg_type) == nullptr &&
+        isSgNonrealType(sg_type) == nullptr) {
+      store_translation_in_cache = false;
+    }
+  }
+
+  if (store_translation_in_cache) {
     p_type_translation_map.insert(
         std::pair<const clang::Type *, SgNode *>(type, result));
   }
@@ -4682,6 +4757,19 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
       }
       if (!is_specialization && *node == NULL) {
         *node = getTypeFromTraversedRecordDecl(this, lookup_decl);
+      }
+      if (*node == NULL && !is_specialization) {
+        if (SgDeclarationStatement *resolved =
+                lookupSgDeclarationForClangDecl(lookup_decl,
+                                                /*allow_on_demand=*/true)) {
+          if (SgClassDeclaration *sg_decl = isSgClassDeclaration(resolved)) {
+            if (SgClassDeclaration *first_nondef = isSgClassDeclaration(
+                    sg_decl->get_firstNondefiningDeclaration())) {
+              sg_decl = first_nondef;
+            }
+            *node = sg_decl->get_type();
+          }
+        }
       }
       if (*node == NULL) {
         if (is_specialization) {
@@ -8840,8 +8928,9 @@ bool ClangToSageTranslator::VisitTypedefType(clang::TypedefType *typedef_type,
                 << std::endl;
     }
 
-    *node = (tdef_sym != NULL) ? tdef_sym->get_type()
-                               : SageBuilder::buildUnknownType();
+    SgType *symbol_type = (tdef_sym != NULL) ? tdef_sym->get_type()
+                                             : SageBuilder::buildUnknownType();
+    *node = symbol_type;
   }
 
   return VisitType(typedef_type, node) && res;

@@ -132,6 +132,124 @@ bool parseMacroDirective(const std::string &directive,
   return true;
 }
 
+SgType *stripFunctionReturnTypeForInlineDefinitionCheck(SgType *type) {
+  if (type == nullptr) {
+    return nullptr;
+  }
+
+  return type->stripType(SgType::STRIP_MODIFIER_TYPE |
+                         SgType::STRIP_REFERENCE_TYPE |
+                         SgType::STRIP_RVALUE_REFERENCE_TYPE |
+                         SgType::STRIP_POINTER_TYPE | SgType::STRIP_ARRAY_TYPE);
+}
+
+bool declarationNeedsInlineFunctionReturnTypeDefinition(
+    SgDeclarationStatement *decl) {
+  if (decl == nullptr) {
+    return false;
+  }
+
+  auto is_function_signature_owned_decl =
+      [](SgDeclarationStatement *candidate) -> bool {
+    if (candidate == nullptr) {
+      return false;
+    }
+
+    SgNode *parent = candidate->get_parent();
+    return isSgFunctionDeclaration(parent) != nullptr ||
+           isSgMemberFunctionDeclaration(parent) != nullptr ||
+           isSgFunctionParameterScope(parent) != nullptr ||
+           isSgDeclarationScope(parent) != nullptr;
+  };
+
+  if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
+    if (SgClassDeclaration *first_nondef = isSgClassDeclaration(
+            class_decl->get_firstNondefiningDeclaration())) {
+      class_decl = first_nondef;
+    }
+    if (SgClassDeclaration *def_decl =
+            isSgClassDeclaration(class_decl->get_definingDeclaration())) {
+      if (is_function_signature_owned_decl(def_decl) &&
+          (!def_decl->get_isAutonomousDeclaration() ||
+           def_decl->get_isUnNamed())) {
+        return true;
+      }
+    }
+    return is_function_signature_owned_decl(class_decl) &&
+           (!class_decl->get_isAutonomousDeclaration() ||
+            class_decl->get_isUnNamed());
+  }
+
+  if (SgEnumDeclaration *enum_decl = isSgEnumDeclaration(decl)) {
+    if (SgEnumDeclaration *first_nondef =
+            isSgEnumDeclaration(enum_decl->get_firstNondefiningDeclaration())) {
+      enum_decl = first_nondef;
+    }
+    if (SgEnumDeclaration *def_decl =
+            isSgEnumDeclaration(enum_decl->get_definingDeclaration())) {
+      if (is_function_signature_owned_decl(def_decl) &&
+          (!def_decl->get_isAutonomousDeclaration() ||
+           def_decl->get_isUnNamed())) {
+        return true;
+      }
+    }
+    return is_function_signature_owned_decl(enum_decl) &&
+           (!enum_decl->get_isAutonomousDeclaration() ||
+            enum_decl->get_isUnNamed());
+  }
+
+  return false;
+}
+
+bool functionReturnTypeNeedsInlineDefinition(SgType *type) {
+  SgType *stripped_type = stripFunctionReturnTypeForInlineDefinitionCheck(type);
+  if (stripped_type == nullptr) {
+    return false;
+  }
+
+  if (SgClassType *class_type = isSgClassType(stripped_type)) {
+    return declarationNeedsInlineFunctionReturnTypeDefinition(
+        class_type->get_declaration());
+  }
+
+  if (SgEnumType *enum_type = isSgEnumType(stripped_type)) {
+    return declarationNeedsInlineFunctionReturnTypeDefinition(
+        enum_type->get_declaration());
+  }
+
+  return false;
+}
+
+bool parameterTypeNeedsInlineDefinition(SgType *type) {
+  SgType *stripped_type = stripFunctionReturnTypeForInlineDefinitionCheck(type);
+  if (stripped_type == nullptr) {
+    return false;
+  }
+
+  if (SgClassType *class_type = isSgClassType(stripped_type)) {
+    return declarationNeedsInlineFunctionReturnTypeDefinition(
+        class_type->get_declaration());
+  }
+
+  if (SgEnumType *enum_type = isSgEnumType(stripped_type)) {
+    return declarationNeedsInlineFunctionReturnTypeDefinition(
+        enum_type->get_declaration());
+  }
+
+  return false;
+}
+
+void enableInlineDefinitionForFunctionReturnTypeIfNeeded(SgUnparse_Info &info,
+                                                         SgType *type) {
+  if (!functionReturnTypeNeedsInlineDefinition(type)) {
+    return;
+  }
+
+  info.unset_SkipClassDefinition();
+  info.unset_SkipEnumDefinition();
+  info.unset_SkipClassSpecifier();
+}
+
 const FunctionLikeMacroDirectiveMap &
 getFunctionLikeMacroDirectivesForSourceFile(SgSourceFile *source_file) {
   static std::map<SgSourceFile *, FunctionLikeMacroDirectiveMap> cache;
@@ -1946,8 +2064,9 @@ void Unparse_ExprStmt::unparseFunctionParameterDeclaration(
       // DQ (4/12/2019): This version is required for C old-style function
       // parameters. DQ (4/11/2019): Try to comment this out to support
       // Clang 8.0 which can't handle the "enum class" type elaboration.
-      if (outputParameterDeclaration ||
-          initializedName->get_needs_definitions()) {
+      if (initializedName->get_needs_definitions() ||
+          (outputParameterDeclaration &&
+           parameterTypeNeedsInlineDefinition(tmp_type))) {
         if (ninfo.SkipClassDefinition()) {
           ninfo.unset_SkipClassDefinition();
         }
@@ -2034,17 +2153,58 @@ hasUnsafeParameterPreprocessingInfo(SgInitializedName *initializedName) {
   return false;
 }
 
-static bool isCommentLikePreprocessingInfo(PreprocessingInfo *info) {
+static bool samePreprocessingSourceFile(const Sg_File_Info *lhs,
+                                        const Sg_File_Info *rhs) {
+  if (lhs == nullptr || rhs == nullptr) {
+    return false;
+  }
+  if (lhs->get_file_id() == rhs->get_file_id()) {
+    return true;
+  }
+  return !lhs->get_filenameString().empty() &&
+         lhs->get_filenameString() == rhs->get_filenameString();
+}
+
+static bool sourceBeforeOrEqual(const Sg_File_Info *lhs,
+                                const Sg_File_Info *rhs) {
+  if (!samePreprocessingSourceFile(lhs, rhs)) {
+    return false;
+  }
+  if (lhs->get_line() != rhs->get_line()) {
+    return lhs->get_line() < rhs->get_line();
+  }
+  return lhs->get_col() <= rhs->get_col();
+}
+
+static Sg_File_Info *effectiveLocatedStart(SgLocatedNode *node) {
+  if (node == nullptr) {
+    return nullptr;
+  }
+  if (Sg_File_Info *info = node->get_startOfConstruct();
+      info != nullptr && info->get_line() > 0) {
+    return info;
+  }
+  if (Sg_File_Info *info = node->get_file_info();
+      info != nullptr && info->get_line() > 0) {
+    return info;
+  }
+  return node->get_endOfConstruct();
+}
+
+static bool isFunctionPrefixConditionalPayload(PreprocessingInfo *info) {
   if (info == nullptr) {
     return false;
   }
 
   switch (info->getTypeOfDirective()) {
-  case PreprocessingInfo::C_StyleComment:
-  case PreprocessingInfo::CplusplusStyleComment:
-  case PreprocessingInfo::FortranStyleComment:
-  case PreprocessingInfo::F90StyleComment:
-  case PreprocessingInfo::CpreprocessorBlankLine:
+  case PreprocessingInfo::CpreprocessorIfDeclaration:
+  case PreprocessingInfo::CpreprocessorIfdefDeclaration:
+  case PreprocessingInfo::CpreprocessorIfndefDeclaration:
+  case PreprocessingInfo::CpreprocessorElseDeclaration:
+  case PreprocessingInfo::CpreprocessorElifDeclaration:
+  case PreprocessingInfo::CpreprocessorEndifDeclaration:
+  case PreprocessingInfo::CpreprocessorDeadIfDeclaration:
+  case PreprocessingInfo::CSkippedToken:
     return true;
 
   default:
@@ -2052,51 +2212,149 @@ static bool isCommentLikePreprocessingInfo(PreprocessingInfo *info) {
   }
 }
 
-static bool preprocessingInfoPrecedesNodeStart(PreprocessingInfo *info,
-                                               SgLocatedNode *node) {
-  if (info == nullptr || node == nullptr) {
+static bool
+isFunctionDeclaratorLeadingConditionalPayload(PreprocessingInfo *info) {
+  if (info == nullptr) {
     return false;
   }
 
-  Sg_File_Info *info_fi = info->get_file_info();
-  Sg_File_Info *node_fi = node->get_startOfConstruct();
-  if (info_fi == nullptr || node_fi == nullptr) {
+  switch (info->getTypeOfDirective()) {
+  case PreprocessingInfo::CpreprocessorIfDeclaration:
+  case PreprocessingInfo::CpreprocessorIfdefDeclaration:
+  case PreprocessingInfo::CpreprocessorIfndefDeclaration:
+  case PreprocessingInfo::CpreprocessorElseDeclaration:
+  case PreprocessingInfo::CpreprocessorElifDeclaration:
+  case PreprocessingInfo::CpreprocessorDeadIfDeclaration:
+  case PreprocessingInfo::CSkippedToken:
+    return true;
+
+  default:
     return false;
   }
-
-  if (!node_fi->isSameFile(info_fi)) {
-    return false;
-  }
-
-  if (info_fi->get_line() != node_fi->get_line()) {
-    return info_fi->get_line() < node_fi->get_line();
-  }
-
-  return info_fi->get_col() < node_fi->get_col();
 }
 
-static void dropMisplacedLeadingBodyDirectives(SgBasicBlock *body) {
-  if (body == nullptr) {
+static void dropFunctionDeclaratorPrefixConditionalsFromOwner(
+    SgLocatedNode *owner, const Sg_File_Info *decl_start,
+    const Sg_File_Info *body_start) {
+  if (owner == nullptr || decl_start == nullptr || body_start == nullptr ||
+      decl_start->get_line() <= 0 || body_start->get_line() <= 0 ||
+      !samePreprocessingSourceFile(decl_start, body_start) ||
+      !sourceBeforeOrEqual(decl_start, body_start)) {
     return;
   }
 
-  AttachedPreprocessingInfoType *infos = body->getAttachedPreprocessingInfo();
-  if (infos == nullptr || infos->empty()) {
+  AttachedPreprocessingInfoType *attached =
+      owner->getAttachedPreprocessingInfo();
+  if (attached == nullptr || attached->empty()) {
     return;
   }
 
-  for (AttachedPreprocessingInfoType::iterator it = infos->begin();
-       it != infos->end();) {
+  for (auto it = attached->begin(); it != attached->end();) {
     PreprocessingInfo *info = *it;
-    if (info != nullptr &&
-        info->getRelativePosition() == PreprocessingInfo::before &&
-        !isCommentLikePreprocessingInfo(info) &&
-        preprocessingInfoPrecedesNodeStart(info, body)) {
-      it = infos->erase(it);
-    } else {
+    Sg_File_Info *info_fi = info != nullptr ? info->get_file_info() : nullptr;
+    if (info_fi == nullptr || info_fi->get_line() <= 0 ||
+        !isFunctionPrefixConditionalPayload(info) ||
+        !samePreprocessingSourceFile(info_fi, decl_start) ||
+        !sourceBeforeOrEqual(info_fi, body_start) ||
+        sourceBeforeOrEqual(info_fi, decl_start) ||
+        (info_fi->get_line() == body_start->get_line() &&
+         info_fi->get_col() == body_start->get_col())) {
       ++it;
+      continue;
     }
+
+    it = attached->erase(it);
   }
+}
+
+static bool
+ownerHasFunctionDeclaratorPrefixConditionals(SgLocatedNode *owner,
+                                             const Sg_File_Info *decl_start,
+                                             const Sg_File_Info *body_start) {
+  if (owner == nullptr || decl_start == nullptr || body_start == nullptr ||
+      decl_start->get_line() <= 0 || body_start->get_line() <= 0 ||
+      !samePreprocessingSourceFile(decl_start, body_start) ||
+      !sourceBeforeOrEqual(decl_start, body_start)) {
+    return false;
+  }
+
+  AttachedPreprocessingInfoType *attached =
+      owner->getAttachedPreprocessingInfo();
+  if (attached == nullptr || attached->empty()) {
+    return false;
+  }
+
+  for (PreprocessingInfo *info : *attached) {
+    Sg_File_Info *info_fi = info != nullptr ? info->get_file_info() : nullptr;
+    if (info_fi == nullptr || info_fi->get_line() <= 0 ||
+        !samePreprocessingSourceFile(info_fi, decl_start) ||
+        !sourceBeforeOrEqual(info_fi, body_start) ||
+        (info_fi->get_line() == body_start->get_line() &&
+         info_fi->get_col() == body_start->get_col())) {
+      continue;
+    }
+
+    const bool between_declarator_and_body =
+        isFunctionPrefixConditionalPayload(info) &&
+        !sourceBeforeOrEqual(info_fi, decl_start);
+    const bool before_declarator_with_leading_payload =
+        isFunctionDeclaratorLeadingConditionalPayload(info) &&
+        sourceBeforeOrEqual(info_fi, decl_start) &&
+        !(info_fi->get_line() == decl_start->get_line() &&
+          info_fi->get_col() == decl_start->get_col());
+    if (!between_declarator_and_body &&
+        !before_declarator_with_leading_payload) {
+      continue;
+    }
+    return true;
+  }
+
+  return false;
+}
+
+static void
+dropFunctionDeclaratorPrefixConditionals(SgFunctionDefinition *funcdefn_stmt) {
+  if (funcdefn_stmt == nullptr) {
+    return;
+  }
+
+  SgFunctionDeclaration *decl = funcdefn_stmt->get_declaration();
+  SgBasicBlock *body = funcdefn_stmt->get_body();
+  if (decl == nullptr || body == nullptr) {
+    return;
+  }
+
+  Sg_File_Info *decl_start = effectiveLocatedStart(decl);
+  Sg_File_Info *body_start = effectiveLocatedStart(body);
+  if (decl_start == nullptr || body_start == nullptr) {
+    return;
+  }
+
+  // Keep prefix conditionals when the declaration side still owns any part of
+  // that conditional region. Older C tests intentionally rely on `#if/#else`
+  // around the return-type spelling, with the matching `#endif` attached after
+  // the declarator.
+  if (ownerHasFunctionDeclaratorPrefixConditionals(decl, decl_start,
+                                                   body_start) ||
+      ownerHasFunctionDeclaratorPrefixConditionals(decl->get_parameterList(),
+                                                   decl_start, body_start) ||
+      ownerHasFunctionDeclaratorPrefixConditionals(
+          decl->get_parameterList_syntax(), decl_start, body_start) ||
+      ownerHasFunctionDeclaratorPrefixConditionals(funcdefn_stmt, decl_start,
+                                                   body_start)) {
+    return;
+  }
+
+  dropFunctionDeclaratorPrefixConditionalsFromOwner(decl, decl_start,
+                                                    body_start);
+  dropFunctionDeclaratorPrefixConditionalsFromOwner(decl->get_parameterList(),
+                                                    decl_start, body_start);
+  dropFunctionDeclaratorPrefixConditionalsFromOwner(
+      decl->get_parameterList_syntax(), decl_start, body_start);
+  dropFunctionDeclaratorPrefixConditionalsFromOwner(funcdefn_stmt, decl_start,
+                                                    body_start);
+  dropFunctionDeclaratorPrefixConditionalsFromOwner(body, decl_start,
+                                                    body_start);
 }
 
 void Unparse_ExprStmt::unparseFunctionArgs(SgFunctionDeclaration *funcdecl_stmt,
@@ -5311,6 +5569,7 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
     if (funcdecl_stmt->get_requiresNameQualificationOnReturnType() == true) {
       ninfo_for_type.set_requiresGlobalNameQualification();
     }
+    enableInlineDefinitionForFunctionReturnTypeIfNeeded(ninfo_for_type, rtype);
 
     ninfo_for_type.set_reference_node_for_qualification(funcdecl_stmt);
     ASSERT_not_null(ninfo_for_type.get_reference_node_for_qualification());
@@ -5535,6 +5794,8 @@ void Unparse_ExprStmt::unparseFuncDefnStmt(SgStatement *stmt,
   SgFunctionDefinition *funcdefn_stmt = isSgFunctionDefinition(stmt);
   ASSERT_not_null(funcdefn_stmt);
 
+  dropFunctionDeclaratorPrefixConditionals(funcdefn_stmt);
+
 #if OUTPUT_HIDDEN_LIST_DATA
   outputHiddenListData(funcdefn_stmt);
 #endif
@@ -5607,8 +5868,6 @@ void Unparse_ExprStmt::unparseFuncDefnStmt(SgStatement *stmt,
   // DQ (10/15/2006): Also un-mark that we are unparsing a function declaration
   // (or member function declaration)
   info.set_declstatement_ptr(NULL);
-
-  dropMisplacedLeadingBodyDirectives(isSgBasicBlock(funcdefn_stmt->get_body()));
 
   // DQ (10/11/2006): As part of new implementation of qualified names we now
   // default to the generation of all qualified names unless they are skipped.
@@ -5740,6 +5999,8 @@ void Unparse_ExprStmt::unparseReturnType(SgFunctionDeclaration *funcdecl_stmt,
 
       SgUnparse_Info ninfo_for_type(ninfo);
       ninfo_for_type.unset_SkipQualifiedNames();
+      enableInlineDefinitionForFunctionReturnTypeIfNeeded(ninfo_for_type,
+                                                          rtype);
 
       // DQ (6/10/2007): set the declaration pointer so that the name
       // qualification can see if this is the declaration (so that exceptions to
