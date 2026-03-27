@@ -2270,13 +2270,13 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
   // See test2015_153.c.
   // if ( CommandlineProcessing::isOption(argv,"-O","('
   // '|0|1|2|3|4|5|s)",true) == true )
-  if (CommandlineProcessing::isOption(argv, "-O", "(1|2|3|4|5|s)", true) ==
+  if (CommandlineProcessing::isOption(argv, "-O", "(1|2|3|4|5|s)", false) ==
       true) {
     // printf ("optimizaztion specified on commend line (specific level
     // provided) \n");
     set_optimization(true);
   } else {
-    if (CommandlineProcessing::isOption(argv, "-O", "", true) == true) {
+    if (CommandlineProcessing::isOption(argv, "-O", "", false) == true) {
       // printf ("optimizaztion specified on commend line (default level
       // specified: -O) \n");
       set_optimization(true);

@@ -536,20 +536,12 @@ bool UnparseLanguageIndependentConstructs::statementFromFile(
   }
 
   if (unp->opt.get_unparse_includes_opt() == true) {
-    // If we are to unparse all included files into the source file this this is
-    // ALWAYS true
-    statementInFile = true;
-
-    // DQ (9/16/2013): Restrict the unparsing using the -rose:unparse_includes
-    // option to eliminate the declarations added as part of the front-end
-    // support for compatability with the backend.
-    SgDeclarationStatement *declarationStatement =
-        isSgDeclarationStatement(stmt);
-    if (declarationStatement != NULL &&
-        stmt->get_file_info()->isFrontendSpecific() == true) {
-      statementInFile = false;
-    }
-  } else {
+    // Keep active #include directives in the primary source output, but do not
+    // flatten declarations from the included physical files into that same
+    // translation unit. Let the normal file-ownership logic below decide which
+    // statements belong to the current output file.
+  }
+  {
     // Compare the file names from the file info object in each statement
     // char* statementfilename = Rose::getFileName(stmt);
     // const char* statementfilename = "default";
@@ -5433,6 +5425,12 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
                   (*i)->getRelativePosition() == PreprocessingInfo::after ||
                   (*i)->getRelativePosition() == PreprocessingInfo::inside);
 
+      Sg_File_Info *preprocessing_info_fi = (*i)->get_file_info();
+      if (preprocessing_info_fi != NULL &&
+          !preprocessing_info_fi->isOutputInCodeGeneration()) {
+        continue;
+      }
+
       if (suppressNonTransformedGlobalPreproc == true) {
         Sg_File_Info *preprocFileInfo = (*i)->get_file_info();
         if (preprocFileInfo == NULL ||
@@ -5556,6 +5554,13 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 
           // DQ (9/16/2013): New version of code.
           switch ((*i)->getTypeOfDirective()) {
+          case PreprocessingInfo::CpreprocessorIncludeDeclaration:
+          case PreprocessingInfo::CpreprocessorIncludeNextDeclaration:
+            if (!info.SkipComments()) {
+              curprint((*i)->getString());
+            }
+            break;
+
             // Comments don't have to be further commented
           case PreprocessingInfo::FortranStyleComment:
           case PreprocessingInfo::F90StyleComment:

@@ -105,6 +105,110 @@ function(rex_get_registered_compile_source_set out_var property_name)
   set(${out_var} "${_sources}" PARENT_SCOPE)
 endfunction()
 
+function(rex_verify_compile_test_source_coverage)
+  set(options)
+  set(oneValueArgs DIRECTORY PATTERN)
+  set(multiValueArgs PROPERTIES IGNORE)
+  cmake_parse_arguments(REX_VERIFY "${options}" "${oneValueArgs}"
+                        "${multiValueArgs}" ${ARGN})
+
+  if(NOT REX_VERIFY_DIRECTORY)
+    set(REX_VERIFY_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+  endif()
+  if(NOT REX_VERIFY_PATTERN)
+    set(REX_VERIFY_PATTERN "*.c")
+  endif()
+  if(NOT REX_VERIFY_PROPERTIES)
+    message(FATAL_ERROR "rex_verify_compile_test_source_coverage requires PROPERTIES")
+  endif()
+
+  file(GLOB _actual_local_files RELATIVE "${REX_VERIFY_DIRECTORY}"
+       "${REX_VERIFY_DIRECTORY}/${REX_VERIFY_PATTERN}")
+  file(RELATIVE_PATH _directory_from_root "${REX_COMPILE_TESTS_SOURCE_DIR}"
+       "${REX_VERIFY_DIRECTORY}")
+
+  set(_actual_root_relative_files)
+  foreach(_file IN LISTS _actual_local_files)
+    if(_directory_from_root STREQUAL ".")
+      set(_root_relative "${_file}")
+    else()
+      set(_root_relative "${_directory_from_root}/${_file}")
+    endif()
+    list(APPEND _actual_root_relative_files "${_root_relative}")
+  endforeach()
+
+  set(_registered_root_relative_files)
+  foreach(_property IN LISTS REX_VERIFY_PROPERTIES)
+    get_property(_registered GLOBAL PROPERTY ${_property})
+    if(_registered)
+      list(APPEND _registered_root_relative_files ${_registered})
+    endif()
+  endforeach()
+  list(REMOVE_DUPLICATES _registered_root_relative_files)
+
+  set(_ignored_root_relative_files)
+  foreach(_ignore IN LISTS REX_VERIFY_IGNORE)
+    get_filename_component(_ignore_abs "${_ignore}" ABSOLUTE
+                           BASE_DIR "${REX_VERIFY_DIRECTORY}")
+    if(NOT EXISTS "${_ignore_abs}")
+      message(FATAL_ERROR
+        "Ignored compile-test source '${_ignore}' does not exist in "
+        "${REX_VERIFY_DIRECTORY}")
+    endif()
+    file(RELATIVE_PATH _ignore_root "${REX_COMPILE_TESTS_SOURCE_DIR}"
+         "${_ignore_abs}")
+    list(APPEND _ignored_root_relative_files "${_ignore_root}")
+  endforeach()
+  list(REMOVE_DUPLICATES _ignored_root_relative_files)
+
+  set(_unregistered_files)
+  foreach(_file IN LISTS _actual_root_relative_files)
+    if(NOT _file IN_LIST _registered_root_relative_files AND
+       NOT _file IN_LIST _ignored_root_relative_files)
+      list(APPEND _unregistered_files "${_file}")
+    endif()
+  endforeach()
+
+  set(_stale_registrations)
+  foreach(_file IN LISTS _registered_root_relative_files)
+    if(_directory_from_root STREQUAL ".")
+      set(_belongs_to_directory TRUE)
+    else()
+      string(FIND "${_file}" "${_directory_from_root}/" _prefix_pos)
+      if(_prefix_pos EQUAL 0)
+        set(_belongs_to_directory TRUE)
+      else()
+        set(_belongs_to_directory FALSE)
+      endif()
+    endif()
+
+    if(_belongs_to_directory AND
+       NOT _file IN_LIST _actual_root_relative_files)
+      list(APPEND _stale_registrations "${_file}")
+    endif()
+  endforeach()
+
+  if(_unregistered_files OR _stale_registrations)
+    list(SORT _unregistered_files)
+    list(SORT _stale_registrations)
+
+    set(_message "CompileTests source coverage mismatch in ${REX_VERIFY_DIRECTORY}")
+    if(_unregistered_files)
+      string(APPEND _message "\nUnregistered sources:")
+      foreach(_file IN LISTS _unregistered_files)
+        string(APPEND _message "\n  ${_file}")
+      endforeach()
+    endif()
+    if(_stale_registrations)
+      string(APPEND _message "\nStale registrations:")
+      foreach(_file IN LISTS _stale_registrations)
+        string(APPEND _message "\n  ${_file}")
+      endforeach()
+    endif()
+    message(FATAL_ERROR "${_message}")
+  endif()
+endfunction()
+
 # determine what subdirectories to enter based on our configuration settings.
 
 add_subdirectory(CudaTests)

@@ -1523,9 +1523,6 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   };
   bool relax_register_diag = false;
   bool relax_dynamic_exception_diag = false;
-  bool relax_implicit_function_decl_diag = false;
-  bool relax_implicit_int_diag = false;
-
   auto has_passthrough_flag = [&](const std::string &flag) {
     return std::find(passthrough_args.begin(), passthrough_args.end(), flag) !=
            passthrough_args.end();
@@ -1535,6 +1532,13 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       passthrough_args.push_back(flag);
     }
   };
+  auto has_passthrough_optimization_flag = [&]() {
+    return std::any_of(passthrough_args.begin(), passthrough_args.end(),
+                       [](const std::string &arg) {
+                         return arg.size() >= 2 && arg[0] == '-' &&
+                                arg[1] == 'O';
+                       });
+  };
 
   if (language == ClangToSageTranslator::C ||
       language == ClangToSageTranslator::CPLUSPLUS ||
@@ -1542,22 +1546,6 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     // Frontend parsing should only see the generic ROSE marker.
     // USE_ROSE_BACKEND is reserved for backend compiler invocations.
     add_passthrough_flag_if_missing("-DUSE_ROSE");
-  }
-
-  if (language == ClangToSageTranslator::C) {
-    // Legacy ROSE C tests rely on Clang's recovery path for undeclared
-    // functions and implicit-int declarations. Keep these diagnostics visible,
-    // but do not promote them to fatal frontend errors unless the user
-    // explicitly requested -Werror for them.
-    if (!has_passthrough_flag("-Werror=implicit-function-declaration")) {
-      add_passthrough_flag_if_missing(
-          "-Wno-error=implicit-function-declaration");
-      relax_implicit_function_decl_diag = true;
-    }
-    if (!has_passthrough_flag("-Werror=implicit-int")) {
-      add_passthrough_flag_if_missing("-Wno-error=implicit-int");
-      relax_implicit_int_diag = true;
-    }
   }
 
   if ((language == ClangToSageTranslator::CPLUSPLUS ||
@@ -1582,6 +1570,14 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
        language == ClangToSageTranslator::CUDA)) {
     exception_mode = ExceptionMode::Enabled;
     passthrough_args.push_back("-fexceptions");
+  }
+
+  if (sageFile.get_optimization() && !has_passthrough_optimization_flag()) {
+    // ROSE records optimization as a boolean and may strip the original `-O*`
+    // option before the Clang frontend sees argv. Synthesize a frontend
+    // optimization level so Clang defines `__OPTIMIZE__` and the parsed AST
+    // matches the requested mode.
+    passthrough_args.push_back("-O1");
   }
 
   bool frontend_rtti_enabled = true;
@@ -2107,20 +2103,6 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   ensureX86BaselineTargetFeatures(target_opts);
 
   clang::DiagnosticsEngine &diags = compiler_instance->getDiagnostics();
-  if (language == ClangToSageTranslator::C) {
-    if (relax_implicit_function_decl_diag) {
-      diags.setSeverityForGroup(clang::diag::Flavor::WarningOrError,
-                                "implicit-function-declaration",
-                                clang::diag::Severity::Warning);
-      diags.setDiagnosticGroupWarningAsError("implicit-function-declaration",
-                                             false);
-    }
-    if (relax_implicit_int_diag) {
-      diags.setSeverityForGroup(clang::diag::Flavor::WarningOrError,
-                                "implicit-int", clang::diag::Severity::Warning);
-      diags.setDiagnosticGroupWarningAsError("implicit-int", false);
-    }
-  }
   if ((language == ClangToSageTranslator::CPLUSPLUS ||
        language == ClangToSageTranslator::CUDA) &&
       is_cxx17_or_later(sageFile.get_standard())) {
@@ -3609,35 +3591,9 @@ void finishSageAST(ClangToSageTranslator &translator) {
 
     Rose_STL_Container<SgNode *> class_nodes =
         NodeQuery::querySubTree(global_scope, V_SgClassDeclaration);
-    for (SgNode *node : class_nodes) {
-      SgClassDeclaration *class_decl = isSgClassDeclaration(node);
-      if (class_decl == nullptr) {
-        continue;
-      }
-      SgClassDefinition *class_def = class_decl->get_definition();
-      if (class_def == nullptr) {
-        continue;
-      }
-      relocate_class_conditionals(class_def, class_def->get_members(),
-                                  class_decl);
-    }
 
     Rose_STL_Container<SgNode *> template_class_nodes =
         NodeQuery::querySubTree(global_scope, V_SgTemplateClassDeclaration);
-    for (SgNode *node : template_class_nodes) {
-      SgTemplateClassDeclaration *class_decl =
-          isSgTemplateClassDeclaration(node);
-      if (class_decl == nullptr) {
-        continue;
-      }
-      SgTemplateClassDefinition *class_def =
-          isSgTemplateClassDefinition(class_decl->get_definition());
-      if (class_def == nullptr) {
-        continue;
-      }
-      relocate_class_conditionals(class_def, class_def->get_members(),
-                                  class_decl);
-    }
 
     auto is_conditional_directive = [](PreprocessingInfo::DirectiveType type) {
       return type == PreprocessingInfo::CpreprocessorIfDeclaration ||
@@ -4058,55 +4014,10 @@ void finishSageAST(ClangToSageTranslator &translator) {
       }
     };
 
-    Rose_STL_Container<SgNode *> namespace_nodes = NodeQuery::querySubTree(
-        global_scope, V_SgNamespaceDeclarationStatement);
-    for (SgNode *node : namespace_nodes) {
-      SgNamespaceDeclarationStatement *ns_decl =
-          isSgNamespaceDeclarationStatement(node);
-      if (ns_decl == nullptr) {
-        continue;
-      }
-      SgNamespaceDefinitionStatement *ns_def = ns_decl->get_definition();
-      if (ns_def == nullptr) {
-        continue;
-      }
-      relocate_scope_conditionals(ns_decl, ns_def->get_declarations());
-      relocate_scope_conditionals(ns_def, ns_def->get_declarations());
-    }
-
-    for (SgNode *node : class_nodes) {
-      SgClassDeclaration *class_decl = isSgClassDeclaration(node);
-      if (class_decl == nullptr) {
-        continue;
-      }
-      SgClassDefinition *class_def = class_decl->get_definition();
-      if (class_def == nullptr) {
-        continue;
-      }
-      relocate_scope_conditionals(class_decl, class_def->get_members());
-      relocate_scope_conditionals(class_def, class_def->get_members());
-    }
-
-    for (SgNode *node : template_class_nodes) {
-      SgTemplateClassDeclaration *class_decl =
-          isSgTemplateClassDeclaration(node);
-      if (class_decl == nullptr) {
-        continue;
-      }
-      SgTemplateClassDefinition *class_def =
-          isSgTemplateClassDefinition(class_decl->get_definition());
-      if (class_def == nullptr) {
-        continue;
-      }
-      relocate_scope_conditionals(class_decl, class_def->get_members());
-      relocate_scope_conditionals(class_def, class_def->get_members());
-    }
-
-    Rose_STL_Container<SgNode *> basic_blocks =
-        NodeQuery::querySubTree(global_scope, V_SgBasicBlock);
-    for (SgNode *node : basic_blocks) {
-      relocate_basic_block_conditionals(isSgBasicBlock(node));
-    }
+    // Keep preprocessing attachment conservative. The generic relocation passes
+    // above were moving balanced `#if/#else/#endif` structure away from the
+    // declaration/member it lexically encloses, which in turn caused the
+    // unparser to duplicate active-branch source from raw gaps.
   }
 
   if (global_scope != nullptr) {
@@ -4138,6 +4049,712 @@ void finishSageAST(ClangToSageTranslator &translator) {
       }
       return lhs < rhs;
     };
+
+    auto same_source_file = [](const Sg_File_Info *lhs,
+                               const Sg_File_Info *rhs) {
+      if (lhs == nullptr || rhs == nullptr) {
+        return false;
+      }
+      if (lhs->get_file_id() == rhs->get_file_id()) {
+        return true;
+      }
+      return !lhs->get_filenameString().empty() &&
+             lhs->get_filenameString() == rhs->get_filenameString();
+    };
+
+    auto source_before_or_equal = [&](const Sg_File_Info *lhs,
+                                      const Sg_File_Info *rhs) {
+      if (lhs == nullptr || rhs == nullptr || !same_source_file(lhs, rhs)) {
+        return false;
+      }
+      if (lhs->get_line() != rhs->get_line()) {
+        return lhs->get_line() < rhs->get_line();
+      }
+      return lhs->get_col() <= rhs->get_col();
+    };
+
+    auto same_source_position = [&](const Sg_File_Info *lhs,
+                                    const Sg_File_Info *rhs) {
+      return lhs != nullptr && rhs != nullptr && same_source_file(lhs, rhs) &&
+             lhs->get_line() == rhs->get_line() &&
+             lhs->get_col() == rhs->get_col();
+    };
+
+    auto effective_node_start = [](SgLocatedNode *node) -> Sg_File_Info * {
+      if (node == nullptr) {
+        return nullptr;
+      }
+      Sg_File_Info *start = node->get_startOfConstruct();
+      if (start != nullptr && start->get_line() > 0) {
+        return start;
+      }
+      start = node->get_file_info();
+      if (start != nullptr && start->get_line() > 0) {
+        return start;
+      }
+      return node->get_endOfConstruct();
+    };
+
+    auto preprocessing_line = [](const PreprocessingInfo *info) {
+      if (info == nullptr) {
+        return 0;
+      }
+      Sg_File_Info *file_info = info->get_file_info();
+      if (file_info != nullptr && file_info->get_line() > 0) {
+        return file_info->get_line();
+      }
+      return info->getLineNumber();
+    };
+
+    auto preprocessing_col = [](const PreprocessingInfo *info) {
+      if (info == nullptr) {
+        return 0;
+      }
+      Sg_File_Info *file_info = info->get_file_info();
+      if (file_info != nullptr && file_info->get_col() > 0) {
+        return file_info->get_col();
+      }
+      return info->getColumnNumber();
+    };
+
+    auto preprocessing_same_file = [&](const PreprocessingInfo *info,
+                                       const Sg_File_Info *anchor) {
+      if (info == nullptr || anchor == nullptr) {
+        return false;
+      }
+      Sg_File_Info *file_info = info->get_file_info();
+      if (file_info != nullptr && file_info->get_line() > 0 &&
+          same_source_file(file_info, anchor)) {
+        return true;
+      }
+      if (info->getFileId() >= 0 &&
+          anchor->get_file_id() == info->getFileId()) {
+        return true;
+      }
+      const std::string filename = info->getFilename();
+      return !filename.empty() && filename == anchor->get_filenameString();
+    };
+
+    auto preprocessing_before_or_equal = [&](const PreprocessingInfo *info,
+                                             const Sg_File_Info *anchor) {
+      if (info == nullptr || anchor == nullptr ||
+          !preprocessing_same_file(info, anchor) || anchor->get_line() <= 0) {
+        return false;
+      }
+      const int line = preprocessing_line(info);
+      const int col = preprocessing_col(info);
+      if (line <= 0) {
+        return false;
+      }
+      if (line != anchor->get_line()) {
+        return line < anchor->get_line();
+      }
+      return col <= anchor->get_col();
+    };
+
+    auto preprocessing_same_position = [&](const PreprocessingInfo *info,
+                                           const Sg_File_Info *anchor) {
+      return info != nullptr && anchor != nullptr &&
+             preprocessing_same_file(info, anchor) &&
+             preprocessing_line(info) == anchor->get_line() &&
+             preprocessing_col(info) == anchor->get_col();
+    };
+
+    auto is_opening_pp_conditional = [](PreprocessingInfo::DirectiveType type) {
+      return type == PreprocessingInfo::CpreprocessorIfDeclaration ||
+             type == PreprocessingInfo::CpreprocessorIfdefDeclaration ||
+             type == PreprocessingInfo::CpreprocessorIfndefDeclaration;
+    };
+
+    auto is_comment_like_pp = [](const PreprocessingInfo *info) {
+      if (info == nullptr) {
+        return false;
+      }
+      switch (info->getTypeOfDirective()) {
+      case PreprocessingInfo::C_StyleComment:
+      case PreprocessingInfo::CplusplusStyleComment:
+      case PreprocessingInfo::FortranStyleComment:
+      case PreprocessingInfo::F90StyleComment:
+      case PreprocessingInfo::CpreprocessorBlankLine:
+        return true;
+      default:
+        return false;
+      }
+    };
+
+    auto is_relocatable_block_pp = [&](const PreprocessingInfo *info) {
+      if (info == nullptr) {
+        return false;
+      }
+      return is_pp_conditional_directive(info->getTypeOfDirective()) ||
+             info->getTypeOfDirective() == PreprocessingInfo::CSkippedToken ||
+             is_comment_like_pp(info);
+    };
+
+    auto is_include_directive_type = [](PreprocessingInfo::DirectiveType type) {
+      return type == PreprocessingInfo::CpreprocessorIncludeDeclaration ||
+             type == PreprocessingInfo::CpreprocessorIncludeNextDeclaration;
+    };
+
+    auto relocate_function_body_leading_conditionals =
+        [&](SgFunctionDefinition *function_definition) {
+          if (function_definition == nullptr) {
+            return;
+          }
+
+          SgBasicBlock *body = function_definition->get_body();
+          if (body == nullptr) {
+            return;
+          }
+
+          AttachedPreprocessingInfoType *attached =
+              body->getAttachedPreprocessingInfo();
+          if (attached == nullptr || attached->empty()) {
+            return;
+          }
+
+          Sg_File_Info *body_start = effective_node_start(body);
+          if (body_start == nullptr || body_start->get_line() <= 0) {
+            return;
+          }
+
+          std::vector<PreprocessingInfo *> moves;
+          for (auto it = attached->begin(); it != attached->end();) {
+            PreprocessingInfo *info = *it;
+            if (info == nullptr ||
+                info->getRelativePosition() != PreprocessingInfo::before ||
+                !is_pp_conditional_directive(info->getTypeOfDirective()) ||
+                preprocessing_line(info) <= 0 ||
+                !preprocessing_same_file(info, body_start) ||
+                !preprocessing_before_or_equal(info, body_start) ||
+                preprocessing_same_position(info, body_start)) {
+              ++it;
+              continue;
+            }
+
+            moves.push_back(info);
+            it = attached->erase(it);
+          }
+
+          if (moves.empty()) {
+            return;
+          }
+
+          std::stable_sort(moves.begin(), moves.end(), conditional_source_less);
+          for (PreprocessingInfo *info : moves) {
+            if (info == nullptr) {
+              continue;
+            }
+            info->setRelativePosition(PreprocessingInfo::before);
+            function_definition->addToAttachedPreprocessingInfo(info);
+          }
+        };
+
+    auto select_previous_expression_anchor =
+        [&](SgExpression *root, const Sg_File_Info *cursor) -> SgExpression * {
+      if (root == nullptr || cursor == nullptr || cursor->get_line() <= 0) {
+        return nullptr;
+      }
+
+      Rose_STL_Container<SgNode *> expressions =
+          NodeQuery::querySubTree(root, V_SgExpression);
+      SgExpression *best = nullptr;
+      Sg_File_Info *best_start = nullptr;
+      Sg_File_Info *best_end = nullptr;
+
+      for (SgNode *node : expressions) {
+        SgExpression *candidate = isSgExpression(node);
+        SgLocatedNode *located_candidate = isSgLocatedNode(candidate);
+        if (located_candidate == nullptr) {
+          continue;
+        }
+
+        Sg_File_Info *start = effective_node_start(located_candidate);
+        Sg_File_Info *end = located_candidate->get_endOfConstruct();
+        if (start == nullptr || end == nullptr || start->get_line() <= 0 ||
+            end->get_line() <= 0 || !same_source_file(start, cursor) ||
+            !same_source_file(end, cursor) ||
+            !source_before_or_equal(end, cursor)) {
+          continue;
+        }
+
+        const bool better_end =
+            best_end == nullptr || (!source_before_or_equal(end, best_end) &&
+                                    source_before_or_equal(best_end, end));
+        const bool same_end = same_source_position(end, best_end);
+        const bool earlier_start = best_start != nullptr &&
+                                   source_before_or_equal(start, best_start) &&
+                                   !same_source_position(start, best_start);
+        if (better_end || (same_end && earlier_start)) {
+          best = candidate;
+          best_start = start;
+          best_end = end;
+        }
+      }
+
+      return best;
+    };
+
+    auto select_next_expression_anchor =
+        [&](SgExpression *root, const Sg_File_Info *cursor) -> SgExpression * {
+      if (root == nullptr || cursor == nullptr || cursor->get_line() <= 0) {
+        return nullptr;
+      }
+
+      Rose_STL_Container<SgNode *> expressions =
+          NodeQuery::querySubTree(root, V_SgExpression);
+      SgExpression *best = nullptr;
+      Sg_File_Info *best_start = nullptr;
+      Sg_File_Info *best_end = nullptr;
+
+      for (SgNode *node : expressions) {
+        SgExpression *candidate = isSgExpression(node);
+        SgLocatedNode *located_candidate = isSgLocatedNode(candidate);
+        if (located_candidate == nullptr) {
+          continue;
+        }
+
+        Sg_File_Info *start = effective_node_start(located_candidate);
+        Sg_File_Info *end = located_candidate->get_endOfConstruct();
+        if (start == nullptr || end == nullptr || start->get_line() <= 0 ||
+            end->get_line() <= 0 || !same_source_file(start, cursor) ||
+            !same_source_file(end, cursor) ||
+            !source_before_or_equal(cursor, start)) {
+          continue;
+        }
+
+        const bool earlier_start =
+            best_start == nullptr ||
+            (!source_before_or_equal(best_start, start) &&
+             source_before_or_equal(start, best_start));
+        const bool same_start = same_source_position(start, best_start);
+        const bool later_end = best_end != nullptr &&
+                               source_before_or_equal(best_end, end) &&
+                               !same_source_position(end, best_end);
+        if (earlier_start || (same_start && later_end)) {
+          best = candidate;
+          best_start = start;
+          best_end = end;
+        }
+      }
+
+      return best;
+    };
+
+    auto relocate_enum_conditionals = [&](SgEnumDeclaration *enum_decl) {
+      if (enum_decl == nullptr) {
+        return;
+      }
+
+      AttachedPreprocessingInfoType *attached =
+          enum_decl->getAttachedPreprocessingInfo();
+      if (attached == nullptr || attached->empty()) {
+        return;
+      }
+
+      Sg_File_Info *enum_start = effective_node_start(enum_decl);
+      Sg_File_Info *enum_end = enum_decl->get_endOfConstruct();
+      if (enum_start == nullptr || enum_end == nullptr ||
+          enum_start->get_line() <= 0 || enum_end->get_line() <= 0 ||
+          !same_source_file(enum_start, enum_end)) {
+        return;
+      }
+
+      struct PendingMove {
+        PreprocessingInfo *info = nullptr;
+        SgLocatedNode *anchor = nullptr;
+        PreprocessingInfo::RelativePositionType relative_position =
+            PreprocessingInfo::after;
+      };
+
+      std::vector<PendingMove> moves;
+      for (auto it = attached->begin(); it != attached->end();) {
+        PreprocessingInfo *info = *it;
+        Sg_File_Info *directive_info =
+            info != nullptr ? info->get_file_info() : nullptr;
+        if (info == nullptr ||
+            !is_pp_conditional_directive(info->getTypeOfDirective()) ||
+            preprocessing_line(info) <= 0 ||
+            !preprocessing_same_file(info, enum_start) ||
+            !source_before_or_equal(enum_start, enum_end) ||
+            preprocessing_before_or_equal(info, enum_start) ||
+            !preprocessing_before_or_equal(info, enum_end)) {
+          ++it;
+          continue;
+        }
+
+        SgLocatedNode *anchor = nullptr;
+        PreprocessingInfo::RelativePositionType relative_position =
+            PreprocessingInfo::after;
+
+        for (SgInitializedName *enumerator : enum_decl->get_enumerators()) {
+          if (enumerator == nullptr) {
+            continue;
+          }
+
+          Sg_File_Info *enumerator_start = enumerator->get_startOfConstruct();
+          Sg_File_Info *enumerator_end = enumerator->get_endOfConstruct();
+          if (enumerator_start == nullptr || enumerator_end == nullptr ||
+              enumerator_start->get_line() <= 0 ||
+              enumerator_end->get_line() <= 0 ||
+              !preprocessing_same_file(info, enumerator_start) ||
+              !preprocessing_same_file(info, enumerator_end) ||
+              !source_before_or_equal(enumerator_start, enumerator_end) ||
+              preprocessing_before_or_equal(info, enumerator_start) ||
+              !preprocessing_before_or_equal(info, enumerator_end)) {
+            continue;
+          }
+
+          bool directive_inside_initializer = false;
+          if (SgExpression *initializer = enumerator->get_initializer()) {
+            SgLocatedNode *located_initializer = isSgLocatedNode(initializer);
+            Sg_File_Info *init_start =
+                effective_node_start(located_initializer);
+            Sg_File_Info *init_end =
+                located_initializer != nullptr
+                    ? located_initializer->get_endOfConstruct()
+                    : nullptr;
+            if (init_start != nullptr && init_end != nullptr &&
+                init_start->get_line() > 0 && init_end->get_line() > 0 &&
+                preprocessing_same_file(info, init_start) &&
+                preprocessing_same_file(info, init_end) &&
+                preprocessing_before_or_equal(info, init_end) &&
+                !preprocessing_before_or_equal(info, init_start) &&
+                directive_info != nullptr && directive_info->get_line() > 0 &&
+                same_source_file(init_start, directive_info)) {
+              directive_inside_initializer = true;
+              SgExpression *previous_expr = select_previous_expression_anchor(
+                  initializer, directive_info);
+              SgExpression *next_expr =
+                  select_next_expression_anchor(initializer, directive_info);
+
+              if (is_opening_pp_conditional(info->getTypeOfDirective())) {
+                if (previous_expr != nullptr) {
+                  anchor = isSgLocatedNode(previous_expr);
+                  relative_position = PreprocessingInfo::after;
+                } else if (next_expr != nullptr) {
+                  anchor = isSgLocatedNode(next_expr);
+                  relative_position = PreprocessingInfo::before;
+                }
+              } else {
+                if (previous_expr != nullptr) {
+                  anchor = isSgLocatedNode(previous_expr);
+                  relative_position = PreprocessingInfo::after;
+                } else if (next_expr != nullptr) {
+                  anchor = isSgLocatedNode(next_expr);
+                  relative_position = PreprocessingInfo::before;
+                }
+              }
+            }
+          }
+
+          if (anchor == nullptr && directive_inside_initializer) {
+            continue;
+          }
+
+          if (anchor == nullptr) {
+            anchor = enumerator;
+            relative_position =
+                is_opening_pp_conditional(info->getTypeOfDirective())
+                    ? PreprocessingInfo::before
+                    : PreprocessingInfo::after;
+          }
+          break;
+        }
+
+        if (anchor == nullptr) {
+          ++it;
+          continue;
+        }
+
+        moves.push_back({info, anchor, relative_position});
+        it = attached->erase(it);
+      }
+
+      if (moves.empty()) {
+        return;
+      }
+
+      std::stable_sort(moves.begin(), moves.end(),
+                       [&](const PendingMove &lhs, const PendingMove &rhs) {
+                         return conditional_source_less(lhs.info, rhs.info);
+                       });
+
+      for (const PendingMove &move : moves) {
+        if (move.info == nullptr || move.anchor == nullptr) {
+          continue;
+        }
+        move.info->setRelativePosition(move.relative_position);
+        move.anchor->addToAttachedPreprocessingInfo(move.info);
+      }
+    };
+
+    auto relocate_variable_initializer_directives =
+        [&](SgVariableDeclaration *variable_declaration) {
+          if (variable_declaration == nullptr) {
+            return;
+          }
+
+          AttachedPreprocessingInfoType *attached =
+              variable_declaration->getAttachedPreprocessingInfo();
+          if (attached == nullptr || attached->empty()) {
+            return;
+          }
+
+          struct PendingMove {
+            PreprocessingInfo *info = nullptr;
+            SgLocatedNode *anchor = nullptr;
+            PreprocessingInfo::RelativePositionType relative_position =
+                PreprocessingInfo::before;
+          };
+
+          std::vector<PendingMove> moves;
+          for (auto it = attached->begin(); it != attached->end();) {
+            PreprocessingInfo *info = *it;
+            if (info == nullptr ||
+                !is_include_directive_type(info->getTypeOfDirective()) ||
+                preprocessing_line(info) <= 0) {
+              ++it;
+              continue;
+            }
+
+            SgLocatedNode *anchor = nullptr;
+            for (SgInitializedName *variable :
+                 variable_declaration->get_variables()) {
+              if (variable == nullptr) {
+                continue;
+              }
+              SgLocatedNode *initializer =
+                  isSgLocatedNode(variable->get_initializer());
+              Sg_File_Info *init_start = effective_node_start(initializer);
+              Sg_File_Info *init_end = initializer != nullptr
+                                           ? initializer->get_endOfConstruct()
+                                           : nullptr;
+              if (init_start == nullptr || init_end == nullptr ||
+                  init_start->get_line() <= 0 || init_end->get_line() <= 0 ||
+                  !preprocessing_same_file(info, init_start) ||
+                  !preprocessing_same_file(info, init_end) ||
+                  !preprocessing_before_or_equal(info, init_end) ||
+                  preprocessing_before_or_equal(info, init_start)) {
+                continue;
+              }
+              anchor = initializer;
+              break;
+            }
+
+            if (anchor == nullptr) {
+              ++it;
+              continue;
+            }
+
+            moves.push_back({info, anchor, PreprocessingInfo::before});
+            it = attached->erase(it);
+          }
+
+          if (moves.empty()) {
+            return;
+          }
+
+          std::stable_sort(moves.begin(), moves.end(),
+                           [&](const PendingMove &lhs, const PendingMove &rhs) {
+                             return conditional_source_less(lhs.info, rhs.info);
+                           });
+
+          for (const PendingMove &move : moves) {
+            if (move.info == nullptr || move.anchor == nullptr) {
+              continue;
+            }
+            move.info->setRelativePosition(move.relative_position);
+            move.anchor->addToAttachedPreprocessingInfo(move.info);
+          }
+        };
+
+    auto relocate_basic_block_inside_preprocessing = [&](SgBasicBlock *block) {
+      if (block == nullptr) {
+        return;
+      }
+
+      AttachedPreprocessingInfoType *attached =
+          block->getAttachedPreprocessingInfo();
+      if (attached == nullptr || attached->empty()) {
+        return;
+      }
+
+      Sg_File_Info *block_start = effective_node_start(block);
+      Sg_File_Info *block_end = block->get_endOfConstruct();
+      if (block_start == nullptr || block_end == nullptr ||
+          block_start->get_line() <= 0 || block_end->get_line() <= 0 ||
+          !same_source_file(block_start, block_end)) {
+        return;
+      }
+
+      struct StatementAnchor {
+        SgStatement *statement = nullptr;
+        Sg_File_Info *start = nullptr;
+        Sg_File_Info *end = nullptr;
+      };
+
+      std::vector<StatementAnchor> anchors;
+      anchors.reserve(block->get_statements().size());
+      for (SgStatement *statement : block->get_statements()) {
+        SgLocatedNode *located_statement = isSgLocatedNode(statement);
+        Sg_File_Info *statement_start = effective_node_start(located_statement);
+        Sg_File_Info *statement_end =
+            located_statement != nullptr
+                ? located_statement->get_endOfConstruct()
+                : nullptr;
+        if (statement_start == nullptr || statement_end == nullptr ||
+            statement_start->get_line() <= 0 ||
+            statement_end->get_line() <= 0 ||
+            !same_source_file(statement_start, block_start) ||
+            !same_source_file(statement_end, block_start)) {
+          continue;
+        }
+        anchors.push_back({statement, statement_start, statement_end});
+      }
+
+      if (anchors.empty()) {
+        return;
+      }
+
+      auto pick_previous_statement =
+          [&](const PreprocessingInfo *info) -> SgStatement * {
+        SgStatement *best = nullptr;
+        Sg_File_Info *best_start = nullptr;
+        Sg_File_Info *best_end = nullptr;
+        for (const StatementAnchor &entry : anchors) {
+          if (!preprocessing_before_or_equal(info, entry.end)) {
+            continue;
+          }
+          const bool later_start =
+              best_start == nullptr ||
+              (!source_before_or_equal(entry.start, best_start) &&
+               source_before_or_equal(best_start, entry.start));
+          const bool same_start = same_source_position(entry.start, best_start);
+          const bool earlier_end =
+              best_end != nullptr &&
+              source_before_or_equal(entry.end, best_end) &&
+              !same_source_position(entry.end, best_end);
+          if (later_start || (same_start && earlier_end)) {
+            best = entry.statement;
+            best_start = entry.start;
+            best_end = entry.end;
+          }
+        }
+        return best;
+      };
+
+      auto pick_next_statement =
+          [&](const PreprocessingInfo *info) -> SgStatement * {
+        SgStatement *best = nullptr;
+        Sg_File_Info *best_start = nullptr;
+        Sg_File_Info *best_end = nullptr;
+        for (const StatementAnchor &entry : anchors) {
+          if (!preprocessing_same_file(info, entry.start) ||
+              !preprocessing_before_or_equal(info, entry.start)) {
+            continue;
+          }
+          const bool earlier_start =
+              best_start == nullptr ||
+              (!source_before_or_equal(best_start, entry.start) &&
+               source_before_or_equal(entry.start, best_start));
+          const bool same_start = same_source_position(entry.start, best_start);
+          const bool later_end = best_end != nullptr &&
+                                 source_before_or_equal(best_end, entry.end) &&
+                                 !same_source_position(entry.end, best_end);
+          if (earlier_start || (same_start && later_end)) {
+            best = entry.statement;
+            best_start = entry.start;
+            best_end = entry.end;
+          }
+        }
+        return best;
+      };
+
+      struct PendingMove {
+        PreprocessingInfo *info = nullptr;
+        SgLocatedNode *anchor = nullptr;
+        PreprocessingInfo::RelativePositionType relative_position =
+            PreprocessingInfo::after;
+      };
+
+      std::vector<PendingMove> moves;
+      for (auto it = attached->begin(); it != attached->end();) {
+        PreprocessingInfo *info = *it;
+        if (info == nullptr ||
+            info->getRelativePosition() != PreprocessingInfo::inside ||
+            !is_relocatable_block_pp(info) || preprocessing_line(info) <= 0 ||
+            !preprocessing_same_file(info, block_start) ||
+            !preprocessing_before_or_equal(info, block_end) ||
+            preprocessing_before_or_equal(info, block_start)) {
+          ++it;
+          continue;
+        }
+
+        SgStatement *previous = pick_previous_statement(info);
+        SgStatement *next = pick_next_statement(info);
+
+        SgLocatedNode *anchor = nullptr;
+        PreprocessingInfo::RelativePositionType relative_position =
+            PreprocessingInfo::after;
+        if (is_opening_pp_conditional(info->getTypeOfDirective()) ||
+            is_comment_like_pp(info)) {
+          if (next != nullptr) {
+            anchor = isSgLocatedNode(next);
+            relative_position = PreprocessingInfo::before;
+          } else if (previous != nullptr) {
+            anchor = isSgLocatedNode(previous);
+            relative_position = PreprocessingInfo::after;
+          }
+        } else {
+          if (previous != nullptr) {
+            anchor = isSgLocatedNode(previous);
+            relative_position = PreprocessingInfo::after;
+          } else if (next != nullptr) {
+            anchor = isSgLocatedNode(next);
+            relative_position = PreprocessingInfo::before;
+          }
+        }
+
+        if (anchor == nullptr) {
+          ++it;
+          continue;
+        }
+
+        moves.push_back({info, anchor, relative_position});
+        it = attached->erase(it);
+      }
+
+      if (moves.empty()) {
+        return;
+      }
+
+      std::stable_sort(moves.begin(), moves.end(),
+                       [&](const PendingMove &lhs, const PendingMove &rhs) {
+                         return conditional_source_less(lhs.info, rhs.info);
+                       });
+
+      for (const PendingMove &move : moves) {
+        if (move.info == nullptr || move.anchor == nullptr) {
+          continue;
+        }
+        move.info->setRelativePosition(move.relative_position);
+        move.anchor->addToAttachedPreprocessingInfo(move.info);
+      }
+    };
+
+    Rose_STL_Container<SgNode *> enum_nodes =
+        NodeQuery::querySubTree(global_scope, V_SgEnumDeclaration);
+    for (SgNode *node : enum_nodes) {
+      relocate_enum_conditionals(isSgEnumDeclaration(node));
+    }
+
+    // Keep late preprocessing relocation conservative. Earlier attachment and
+    // scope/class relocation passes already preserve inactive branches; these
+    // extra moves were broad enough to drag `#if` structure out of the
+    // declaration/expression it belongs to, which regressed strict C roundtrip
+    // cases such as conditional local declarations, enum initializers, and
+    // anonymous aggregate fields.
 
     auto reorder_attached_conditionals = [&](SgLocatedNode *node) {
       if (node == nullptr) {
@@ -4190,6 +4807,456 @@ void finishSageAST(ClangToSageTranslator &translator) {
         NodeQuery::querySubTree(global_scope, V_SgLocatedNode);
     for (SgNode *node : located_nodes) {
       reorder_attached_conditionals(isSgLocatedNode(node));
+    }
+
+    struct ConditionalRange {
+      Sg_File_Info *begin = nullptr;
+      Sg_File_Info *end = nullptr;
+      bool suppress_directives = false;
+    };
+
+    auto source_file_key = [](const Sg_File_Info *info) -> std::string {
+      if (info == nullptr) {
+        return std::string();
+      }
+      const std::string &filename = info->get_filenameString();
+      if (!filename.empty()) {
+        return filename;
+      }
+      return std::string("#") + std::to_string(info->get_file_id());
+    };
+
+    std::vector<PreprocessingInfo *> recorded_conditionals;
+    std::unordered_set<PreprocessingInfo *> seen_conditionals;
+    auto collect_recorded_conditionals = [&](SgLocatedNode *node) {
+      if (node == nullptr) {
+        return;
+      }
+      AttachedPreprocessingInfoType *attached =
+          node->getAttachedPreprocessingInfo();
+      if (attached == nullptr) {
+        return;
+      }
+      for (PreprocessingInfo *info : *attached) {
+        if (info == nullptr ||
+            !is_pp_conditional_directive(info->getTypeOfDirective()) ||
+            !seen_conditionals.insert(info).second) {
+          continue;
+        }
+        Sg_File_Info *fi = info->get_file_info();
+        if (fi == nullptr || fi->get_line() <= 0) {
+          continue;
+        }
+        recorded_conditionals.push_back(info);
+      }
+    };
+
+    collect_recorded_conditionals(global_scope);
+    for (SgNode *node : located_nodes) {
+      collect_recorded_conditionals(isSgLocatedNode(node));
+    }
+
+    std::map<std::string, std::vector<ConditionalRange>> conditional_ranges;
+    if (!recorded_conditionals.empty()) {
+      std::stable_sort(recorded_conditionals.begin(),
+                       recorded_conditionals.end(), conditional_source_less);
+
+      std::map<std::string, std::vector<PreprocessingInfo *>> open_stack;
+      for (PreprocessingInfo *info : recorded_conditionals) {
+        if (info == nullptr) {
+          continue;
+        }
+        Sg_File_Info *fi = info->get_file_info();
+        if (fi == nullptr || fi->get_line() <= 0) {
+          continue;
+        }
+
+        const std::string file_key = source_file_key(fi);
+        if (file_key.empty()) {
+          continue;
+        }
+
+        PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
+        if (type == PreprocessingInfo::CpreprocessorIfDeclaration ||
+            type == PreprocessingInfo::CpreprocessorIfdefDeclaration ||
+            type == PreprocessingInfo::CpreprocessorIfndefDeclaration) {
+          open_stack[file_key].push_back(info);
+          continue;
+        }
+
+        if (type != PreprocessingInfo::CpreprocessorEndifDeclaration) {
+          continue;
+        }
+
+        auto stack_it = open_stack.find(file_key);
+        if (stack_it == open_stack.end() || stack_it->second.empty()) {
+          continue;
+        }
+
+        PreprocessingInfo *open_info = stack_it->second.back();
+        stack_it->second.pop_back();
+        if (open_info == nullptr) {
+          continue;
+        }
+
+        Sg_File_Info *open_fi = open_info->get_file_info();
+        if (open_fi == nullptr || open_fi->get_line() <= 0 ||
+            !same_source_file(open_fi, fi)) {
+          continue;
+        }
+
+        conditional_ranges[file_key].push_back({open_fi, fi, false});
+      }
+    }
+
+    auto suppress_located_output = [](SgLocatedNode *node) {
+      if (node == nullptr) {
+        return;
+      }
+      if (Sg_File_Info *fi = node->get_file_info()) {
+        fi->unsetOutputInCodeGeneration();
+      }
+      if (Sg_File_Info *fi = node->get_startOfConstruct()) {
+        fi->unsetOutputInCodeGeneration();
+      }
+      if (Sg_File_Info *fi = node->get_endOfConstruct()) {
+        fi->unsetOutputInCodeGeneration();
+      }
+    };
+
+    auto node_is_spelled_within_conditional = [&](SgLocatedNode *node) -> bool {
+      if (node == nullptr) {
+        return false;
+      }
+
+      Sg_File_Info *start = effective_node_start(node);
+      Sg_File_Info *end = node->get_endOfConstruct();
+      if (start == nullptr || end == nullptr || start->get_line() <= 0 ||
+          end->get_line() <= 0 || !same_source_file(start, end)) {
+        return false;
+      }
+
+      const std::string file_key = source_file_key(start);
+      auto ranges_it = conditional_ranges.find(file_key);
+      if (file_key.empty() || ranges_it == conditional_ranges.end()) {
+        return false;
+      }
+
+      for (const ConditionalRange &range : ranges_it->second) {
+        if (range.begin == nullptr || range.end == nullptr ||
+            !same_source_file(start, range.begin) ||
+            !same_source_file(end, range.end)) {
+          continue;
+        }
+        if (source_before_or_equal(range.begin, start) &&
+            source_before_or_equal(end, range.end)) {
+          return true;
+        }
+      }
+
+      return false;
+    };
+
+    auto mark_conditional_ranges_for_node = [&](SgLocatedNode *node) {
+      if (node == nullptr) {
+        return;
+      }
+
+      Sg_File_Info *start = effective_node_start(node);
+      Sg_File_Info *end = node->get_endOfConstruct();
+      if (start == nullptr || end == nullptr || start->get_line() <= 0 ||
+          end->get_line() <= 0 || !same_source_file(start, end)) {
+        return;
+      }
+
+      const std::string file_key = source_file_key(start);
+      auto ranges_it = conditional_ranges.find(file_key);
+      if (file_key.empty() || ranges_it == conditional_ranges.end()) {
+        return;
+      }
+
+      for (ConditionalRange &range : ranges_it->second) {
+        if (range.begin == nullptr || range.end == nullptr ||
+            !same_source_file(start, range.begin) ||
+            !same_source_file(end, range.end)) {
+          continue;
+        }
+        if (source_before_or_equal(range.begin, start) &&
+            source_before_or_equal(end, range.end)) {
+          range.suppress_directives = true;
+        }
+      }
+    };
+
+    Rose_STL_Container<SgNode *> variable_declarations =
+        NodeQuery::querySubTree(global_scope, V_SgVariableDeclaration);
+    for (SgNode *node : variable_declarations) {
+      SgVariableDeclaration *var_decl = isSgVariableDeclaration(node);
+      if (var_decl == nullptr ||
+          !node_is_spelled_within_conditional(var_decl)) {
+        continue;
+      }
+
+      suppress_located_output(var_decl);
+      mark_conditional_ranges_for_node(var_decl);
+      if (SgVariableDefinition *def = var_decl->get_definition()) {
+        suppress_located_output(def);
+      }
+      for (SgInitializedName *init_name : var_decl->get_variables()) {
+        suppress_located_output(init_name);
+        if (SgVariableDefinition *declptr = isSgVariableDefinition(
+                init_name != nullptr ? init_name->get_declptr() : nullptr)) {
+          suppress_located_output(declptr);
+        }
+      }
+    }
+
+    Rose_STL_Container<SgNode *> function_declarations =
+        NodeQuery::querySubTree(global_scope, V_SgFunctionDeclaration);
+    auto is_function_declarator_leading_payload =
+        [](PreprocessingInfo::DirectiveType type) {
+          return type == PreprocessingInfo::CpreprocessorIfDeclaration ||
+                 type == PreprocessingInfo::CpreprocessorIfdefDeclaration ||
+                 type == PreprocessingInfo::CpreprocessorIfndefDeclaration ||
+                 type == PreprocessingInfo::CpreprocessorElseDeclaration ||
+                 type == PreprocessingInfo::CpreprocessorElifDeclaration ||
+                 type == PreprocessingInfo::CpreprocessorDeadIfDeclaration ||
+                 type == PreprocessingInfo::CSkippedToken;
+        };
+    auto owner_has_function_prefix_conditionals =
+        [&](SgLocatedNode *node, const Sg_File_Info *decl_start,
+            const Sg_File_Info *body_start) {
+          if (node == nullptr || decl_start == nullptr ||
+              body_start == nullptr || decl_start->get_line() <= 0 ||
+              body_start->get_line() <= 0 ||
+              !same_source_file(decl_start, body_start)) {
+            return false;
+          }
+
+          AttachedPreprocessingInfoType *attached =
+              node->getAttachedPreprocessingInfo();
+          if (attached == nullptr || attached->empty()) {
+            return false;
+          }
+
+          for (PreprocessingInfo *info : *attached) {
+            if (info == nullptr) {
+              continue;
+            }
+
+            PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
+            const bool declaration_prefix_conditional_payload =
+                is_pp_conditional_directive(type) ||
+                type == PreprocessingInfo::CpreprocessorDeadIfDeclaration ||
+                type == PreprocessingInfo::CSkippedToken;
+            if (!declaration_prefix_conditional_payload ||
+                !preprocessing_same_file(info, decl_start) ||
+                !preprocessing_before_or_equal(info, body_start) ||
+                preprocessing_same_position(info, body_start)) {
+              continue;
+            }
+
+            if (!preprocessing_before_or_equal(info, decl_start)) {
+              return true;
+            }
+
+            Sg_File_Info *info_fi = info->get_file_info();
+            if (info_fi == nullptr ||
+                (info_fi->get_line() == decl_start->get_line() &&
+                 info_fi->get_col() == decl_start->get_col())) {
+              continue;
+            }
+
+            if (is_function_declarator_leading_payload(type)) {
+              return true;
+            }
+          }
+
+          return false;
+        };
+    auto prune_function_prefix_conditionals =
+        [&](SgLocatedNode *node, const Sg_File_Info *decl_start,
+            const Sg_File_Info *body_start) {
+          if (node == nullptr || decl_start == nullptr ||
+              body_start == nullptr || decl_start->get_line() <= 0 ||
+              body_start->get_line() <= 0 ||
+              !same_source_file(decl_start, body_start)) {
+            return;
+          }
+
+          AttachedPreprocessingInfoType *attached =
+              node->getAttachedPreprocessingInfo();
+          if (attached == nullptr || attached->empty()) {
+            return;
+          }
+
+          for (auto it = attached->begin(); it != attached->end();) {
+            PreprocessingInfo *info = *it;
+            if (info == nullptr) {
+              ++it;
+              continue;
+            }
+
+            PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
+            const bool declaration_prefix_conditional_payload =
+                is_pp_conditional_directive(type) ||
+                type == PreprocessingInfo::CpreprocessorDeadIfDeclaration ||
+                type == PreprocessingInfo::CSkippedToken;
+            if (!declaration_prefix_conditional_payload ||
+                !preprocessing_same_file(info, decl_start) ||
+                preprocessing_before_or_equal(info, decl_start) ||
+                !preprocessing_before_or_equal(info, body_start) ||
+                preprocessing_same_position(info, body_start)) {
+              ++it;
+              continue;
+            }
+
+            it = attached->erase(it);
+          }
+        };
+
+    for (SgNode *node : function_declarations) {
+      SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(node);
+      if (func_decl == nullptr) {
+        continue;
+      }
+
+      SgFunctionDefinition *definition = func_decl->get_definition();
+      if (definition == nullptr || definition->get_body() == nullptr) {
+        continue;
+      }
+
+      Sg_File_Info *decl_start = effective_node_start(func_decl);
+      Sg_File_Info *body_start = effective_node_start(definition->get_body());
+      if (decl_start == nullptr || body_start == nullptr ||
+          decl_start->get_line() <= 0 || body_start->get_line() <= 0 ||
+          !same_source_file(decl_start, body_start) ||
+          !source_before_or_equal(decl_start, body_start)) {
+        continue;
+      }
+
+      const bool declaration_side_still_owns_prefix_conditionals =
+          owner_has_function_prefix_conditionals(func_decl, decl_start,
+                                                 body_start) ||
+          owner_has_function_prefix_conditionals(func_decl->get_parameterList(),
+                                                 decl_start, body_start) ||
+          owner_has_function_prefix_conditionals(
+              func_decl->get_parameterList_syntax(), decl_start, body_start);
+
+      const std::string file_key = source_file_key(decl_start);
+      auto ranges_it = conditional_ranges.find(file_key);
+      if (file_key.empty() || ranges_it == conditional_ranges.end()) {
+        continue;
+      }
+
+      if (!declaration_side_still_owns_prefix_conditionals) {
+        for (ConditionalRange &range : ranges_it->second) {
+          if (range.begin == nullptr || range.end == nullptr ||
+              !same_source_file(range.begin, decl_start) ||
+              !same_source_file(range.end, body_start)) {
+            continue;
+          }
+          if (source_before_or_equal(decl_start, range.begin) &&
+              source_before_or_equal(range.end, body_start)) {
+            range.suppress_directives = true;
+            auto extend_end_of_construct = [&](SgLocatedNode *node) {
+              if (node == nullptr) {
+                return;
+              }
+              Sg_File_Info *node_end = node->get_endOfConstruct();
+              if (node_end != nullptr && node_end->get_line() > 0 &&
+                  !same_source_file(node_end, body_start)) {
+                return;
+              }
+              if (node_end == nullptr || node_end->get_line() <= 0 ||
+                  source_before_or_equal(node_end, body_start)) {
+                Sg_File_Info *new_end = new Sg_File_Info(*body_start);
+                new_end->set_parent(node);
+                node->set_endOfConstruct(new_end);
+              }
+            };
+
+            extend_end_of_construct(func_decl);
+            extend_end_of_construct(func_decl->get_parameterList());
+            extend_end_of_construct(func_decl->get_parameterList_syntax());
+          }
+        }
+      }
+
+      if (!declaration_side_still_owns_prefix_conditionals) {
+        prune_function_prefix_conditionals(func_decl, decl_start, body_start);
+        prune_function_prefix_conditionals(func_decl->get_parameterList(),
+                                           decl_start, body_start);
+        prune_function_prefix_conditionals(
+            func_decl->get_parameterList_syntax(), decl_start, body_start);
+        prune_function_prefix_conditionals(definition, decl_start, body_start);
+        prune_function_prefix_conditionals(definition->get_body(), decl_start,
+                                           body_start);
+      }
+    }
+
+    auto directive_in_suppressed_variable_range = [&](PreprocessingInfo *info) {
+      if (info == nullptr) {
+        return false;
+      }
+
+      PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
+      const bool declaration_only_conditional_payload =
+          is_pp_conditional_directive(type) ||
+          type == PreprocessingInfo::CpreprocessorDeadIfDeclaration ||
+          type == PreprocessingInfo::CSkippedToken;
+      if (!declaration_only_conditional_payload) {
+        return false;
+      }
+
+      Sg_File_Info *fi = info->get_file_info();
+      if (fi == nullptr || fi->get_line() <= 0) {
+        return false;
+      }
+
+      const std::string file_key = source_file_key(fi);
+      auto ranges_it = conditional_ranges.find(file_key);
+      if (file_key.empty() || ranges_it == conditional_ranges.end()) {
+        return false;
+      }
+
+      for (const ConditionalRange &range : ranges_it->second) {
+        if (!range.suppress_directives || range.begin == nullptr ||
+            range.end == nullptr || !same_source_file(fi, range.begin) ||
+            !same_source_file(fi, range.end)) {
+          continue;
+        }
+        if (source_before_or_equal(range.begin, fi) &&
+            source_before_or_equal(fi, range.end)) {
+          return true;
+        }
+      }
+
+      return false;
+    };
+
+    auto prune_suppressed_conditionals = [&](SgLocatedNode *node) {
+      if (node == nullptr) {
+        return;
+      }
+      AttachedPreprocessingInfoType *attached =
+          node->getAttachedPreprocessingInfo();
+      if (attached == nullptr || attached->empty()) {
+        return;
+      }
+      for (PreprocessingInfo *info : *attached) {
+        if (!directive_in_suppressed_variable_range(info) || info == nullptr) {
+          continue;
+        }
+        if (Sg_File_Info *fi = info->get_file_info()) {
+          fi->unsetOutputInCodeGeneration();
+        }
+      }
+    };
+
+    prune_suppressed_conditionals(global_scope);
+    for (SgNode *node : located_nodes) {
+      prune_suppressed_conditionals(isSgLocatedNode(node));
     }
   }
 
@@ -4932,6 +5999,63 @@ void ClangToSageTranslator::applySourceRange(SgNode *node,
     if (begin.isValid() && end.isValid()) {
       clang::SourceManager &sm = p_compiler_instance->getSourceManager();
       const clang::LangOptions &lang_opts = p_compiler_instance->getLangOpts();
+      auto move_to_line_end =
+          [&](clang::SourceLocation loc) -> clang::SourceLocation {
+        if (!loc.isValid() || !loc.isFileID()) {
+          return loc;
+        }
+        bool invalid = false;
+        const char *cursor = sm.getCharacterData(loc, &invalid);
+        if (invalid || cursor == nullptr) {
+          return loc;
+        }
+
+        unsigned offset = 0;
+        while (cursor[offset] != '\0' && cursor[offset] != '\n' &&
+               cursor[offset] != '\r') {
+          ++offset;
+        }
+
+        if (offset == 0) {
+          return loc;
+        }
+
+        return loc.getLocWithOffset(static_cast<int>(offset) - 1);
+      };
+      auto map_to_ancestor_file =
+          [&](clang::SourceLocation loc, clang::FileID target_file,
+              bool extend_to_line_end) -> clang::SourceLocation {
+        if (!loc.isValid() || target_file.isInvalid()) {
+          return clang::SourceLocation();
+        }
+
+        clang::SourceLocation current = loc;
+        if (current.isMacroID()) {
+          current = sm.getExpansionLoc(current);
+        }
+        if (!current.isValid()) {
+          return clang::SourceLocation();
+        }
+
+        clang::FileID current_file = sm.getFileID(current);
+        while (!current_file.isInvalid() && current_file != target_file) {
+          clang::SourceLocation include_loc = sm.getIncludeLoc(current_file);
+          if (!include_loc.isValid()) {
+            return clang::SourceLocation();
+          }
+          current = sm.getExpansionLoc(include_loc);
+          if (!current.isValid()) {
+            return clang::SourceLocation();
+          }
+          current_file = sm.getFileID(current);
+        }
+
+        if (current_file != target_file) {
+          return clang::SourceLocation();
+        }
+
+        return extend_to_line_end ? move_to_line_end(current) : current;
+      };
 
       clang::SourceLocation spelling_begin = sm.getSpellingLoc(begin);
       clang::SourceLocation spelling_end = sm.getSpellingLoc(end);
@@ -4976,6 +6100,7 @@ void ClangToSageTranslator::applySourceRange(SgNode *node,
 
       clang::FileID file_begin = sm.getFileID(begin);
       clang::FileID file_end = sm.getFileID(end);
+      bool normalized_cross_file_end = false;
 
       if (!sm.isWrittenInMainFile(begin) &&
           sm.isWrittenInMainFile(spelling_begin)) {
@@ -4983,6 +6108,24 @@ void ClangToSageTranslator::applySourceRange(SgNode *node,
         end = spelling_end;
         file_begin = sm.getFileID(begin);
         file_end = sm.getFileID(end);
+      }
+
+      if (!file_begin.isInvalid() && !file_end.isInvalid() &&
+          file_begin != file_end) {
+        if (clang::SourceLocation mapped_end =
+                map_to_ancestor_file(end, file_begin, true);
+            mapped_end.isValid()) {
+          end = mapped_end;
+          file_end = sm.getFileID(end);
+          normalized_cross_file_end = true;
+        }
+      }
+
+      if (!file_begin.isInvalid() && !file_end.isInvalid() &&
+          file_begin != file_end) {
+        end = begin;
+        file_end = file_begin;
+        normalized_cross_file_end = false;
       }
 
       if (!file_begin.isInvalid() && !file_end.isInvalid()) {
@@ -5001,7 +6144,8 @@ void ClangToSageTranslator::applySourceRange(SgNode *node,
         // *start* of the last token; convert to the last character
         // of that token.
         clang::SourceLocation end_for_fi = end;
-        bool can_lex_end = end_for_fi.isFileID() && in_main_file && end_buffer;
+        bool can_lex_end = end_for_fi.isFileID() && in_main_file &&
+                           end_buffer && !normalized_cross_file_end;
         if (can_lex_end) {
           unsigned end_offset = sm.getFileOffset(end_for_fi);
           if (end_offset >= end_buffer->size()) {
@@ -6977,6 +8121,30 @@ void SagePreprocessorRecord::recordDirective(
     return;
   }
 
+  auto directive_requires_hash = [](PreprocessingInfo::DirectiveType type) {
+    switch (type) {
+    case PreprocessingInfo::CpreprocessorIncludeDeclaration:
+    case PreprocessingInfo::CpreprocessorIncludeNextDeclaration:
+    case PreprocessingInfo::CpreprocessorIfdefDeclaration:
+    case PreprocessingInfo::CpreprocessorIfndefDeclaration:
+    case PreprocessingInfo::CpreprocessorIfDeclaration:
+    case PreprocessingInfo::CpreprocessorDeadIfDeclaration:
+    case PreprocessingInfo::CpreprocessorElseDeclaration:
+    case PreprocessingInfo::CpreprocessorElifDeclaration:
+    case PreprocessingInfo::CpreprocessorEndifDeclaration:
+    case PreprocessingInfo::CpreprocessorLineDeclaration:
+    case PreprocessingInfo::CpreprocessorWarningDeclaration:
+    case PreprocessingInfo::CpreprocessorErrorDeclaration:
+    case PreprocessingInfo::CpreprocessorEmptyDeclaration:
+    case PreprocessingInfo::CpreprocessorDefineDeclaration:
+    case PreprocessingInfo::CpreprocessorUndefDeclaration:
+    case PreprocessingInfo::CpreprocessorIdentDeclaration:
+      return true;
+    default:
+      return false;
+    }
+  };
+
   clang::SourceLocation resolved = loc;
   if (resolved.isMacroID()) {
     resolved = p_source_manager->getSpellingLoc(resolved);
@@ -6989,6 +8157,25 @@ void SagePreprocessorRecord::recordDirective(
   clang::FileID file_id = file_loc.isValid()
                               ? p_source_manager->getFileID(file_loc)
                               : clang::FileID();
+  if (directive_requires_hash(directive_type) && file_loc.isValid() &&
+      !file_id.isInvalid()) {
+    if (auto buffer = p_source_manager->getBufferDataOrNone(file_id)) {
+      unsigned hash_offset = p_source_manager->getFileOffset(file_loc);
+      while (hash_offset > 0 && (*buffer)[hash_offset - 1] != '\n' &&
+             (*buffer)[hash_offset - 1] != '\r') {
+        --hash_offset;
+      }
+      while (hash_offset < buffer->size() && ((*buffer)[hash_offset] == ' ' ||
+                                              (*buffer)[hash_offset] == '\t')) {
+        ++hash_offset;
+      }
+      if (hash_offset < buffer->size() && (*buffer)[hash_offset] == '#') {
+        file_loc =
+            p_source_manager->getLocForStartOfFile(file_id).getLocWithOffset(
+                hash_offset);
+      }
+    }
+  }
   unsigned directive_offset = (file_loc.isValid() && file_id.isValid())
                                   ? p_source_manager->getFileOffset(file_loc)
                                   : 0;
@@ -7017,12 +8204,13 @@ void SagePreprocessorRecord::recordDirective(
     }
   }
 
+  clang::SourceLocation info_loc = file_loc.isValid() ? file_loc : resolved;
   bool inv_begin_line = false;
   bool inv_begin_col = false;
   unsigned ls =
-      p_source_manager->getSpellingLineNumber(resolved, &inv_begin_line);
+      p_source_manager->getSpellingLineNumber(info_loc, &inv_begin_line);
   unsigned cs =
-      p_source_manager->getSpellingColumnNumber(resolved, &inv_begin_col);
+      p_source_manager->getSpellingColumnNumber(info_loc, &inv_begin_col);
   (void)inv_begin_line;
   (void)inv_begin_col;
 
@@ -7104,29 +8292,6 @@ void SagePreprocessorRecord::recordDirective(
     }
   }
 
-  auto requires_hash = [](PreprocessingInfo::DirectiveType type) -> bool {
-    switch (type) {
-    case PreprocessingInfo::CpreprocessorIncludeDeclaration:
-    case PreprocessingInfo::CpreprocessorIncludeNextDeclaration:
-    case PreprocessingInfo::CpreprocessorIfdefDeclaration:
-    case PreprocessingInfo::CpreprocessorIfndefDeclaration:
-    case PreprocessingInfo::CpreprocessorIfDeclaration:
-    case PreprocessingInfo::CpreprocessorDeadIfDeclaration:
-    case PreprocessingInfo::CpreprocessorElseDeclaration:
-    case PreprocessingInfo::CpreprocessorElifDeclaration:
-    case PreprocessingInfo::CpreprocessorEndifDeclaration:
-    case PreprocessingInfo::CpreprocessorLineDeclaration:
-    case PreprocessingInfo::CpreprocessorWarningDeclaration:
-    case PreprocessingInfo::CpreprocessorErrorDeclaration:
-    case PreprocessingInfo::CpreprocessorEmptyDeclaration:
-    case PreprocessingInfo::CpreprocessorDefineDeclaration:
-    case PreprocessingInfo::CpreprocessorUndefDeclaration:
-    case PreprocessingInfo::CpreprocessorIdentDeclaration:
-      return true;
-    default:
-      return false;
-    }
-  };
   auto is_comment_directive = [](PreprocessingInfo::DirectiveType type) {
     switch (type) {
     case PreprocessingInfo::C_StyleComment:
@@ -7152,7 +8317,7 @@ void SagePreprocessorRecord::recordDirective(
     return true;
   };
 
-  if (requires_hash(directive_type)) {
+  if (directive_requires_hash(directive_type)) {
     size_t first_nonspace = content.find_first_not_of(" \t");
     if (first_nonspace != std::string::npos && content[first_nonspace] != '#') {
       content.insert(first_nonspace, "#");
