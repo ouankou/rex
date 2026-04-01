@@ -38,6 +38,7 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <memory>
 #include <set>
@@ -232,6 +233,41 @@ static bool needsFlangFortranExtensionFix(const std::string &path) {
   return !isFlangFortranSourceSuffix(suffix);
 }
 
+static bool commandLineSelectsFortran(const std::vector<std::string> &argv) {
+  for (size_t i = 0; i < argv.size(); ++i) {
+    const std::string &arg = argv[i];
+    if (arg == "-rose:fortran" || arg == "--rose:fortran" ||
+        arg == "-rose:CoArrayFortran" || arg == "--rose:CoArrayFortran" ||
+        arg == "-std=f2018" || arg == "--std=f2018" ||
+        arg.rfind("-rose:fortran_std=", 0) == 0 ||
+        arg.rfind("--rose:fortran_std=", 0) == 0) {
+      return true;
+    }
+    if ((arg == "-rose:fortran_std" || arg == "--rose:fortran_std") &&
+        i + 1 < argv.size()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool sourceContainsPreprocessorDirectives(const std::string &path) {
+  std::ifstream input(path.c_str());
+  if (!input) {
+    return false;
+  }
+
+  std::string line;
+  while (std::getline(input, line)) {
+    const size_t first_non_space = line.find_first_not_of(" \t\f\v\r");
+    if (first_non_space != std::string::npos && line[first_non_space] == '#') {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 static bool isFixedFormFortranSource(const SgSourceFile *source,
                                      const std::string &suffix) {
   if (source != nullptr) {
@@ -378,6 +414,202 @@ static SgIncludeFile *findIncludeFileByPath(SgIncludeFile *includeRoot,
   return NULL;
 }
 
+static PreprocessingInfo *findIncludingPreprocessingInfo(
+    SgProject *project,
+    const map<string, set<PreprocessingInfo *>> &includingPreprocessingInfosMap,
+    SgSourceFile *includingSourceFile, const std::string &includedPath) {
+  ROSE_ASSERT(project != NULL);
+  if (includingSourceFile == NULL) {
+    return NULL;
+  }
+
+  const std::string normalizedIncludedPath =
+      FileHelper::normalizePathIfPossible(includedPath);
+  const std::string normalizedIncludingPath =
+      FileHelper::normalizePathIfPossible(includingSourceFile->getFileName());
+
+  auto matchesInclude = [&](PreprocessingInfo *preprocessingInfo) {
+    if (preprocessingInfo == NULL) {
+      return false;
+    }
+
+    if (FileHelper::getNormalizedContainingFileName(preprocessingInfo) !=
+        normalizedIncludingPath) {
+      return false;
+    }
+
+    const std::string resolvedIncludedPath =
+        FileHelper::normalizePathIfPossible(
+            project->findIncludedFile(preprocessingInfo));
+    return !resolvedIncludedPath.empty() &&
+           resolvedIncludedPath == normalizedIncludedPath;
+  };
+
+  map<string, set<PreprocessingInfo *>>::const_iterator mapIt =
+      includingPreprocessingInfosMap.find(normalizedIncludedPath);
+  if (mapIt == includingPreprocessingInfosMap.end()) {
+    mapIt = includingPreprocessingInfosMap.find(includedPath);
+  }
+  if (mapIt != includingPreprocessingInfosMap.end()) {
+    const set<PreprocessingInfo *> &includingInfos = mapIt->second;
+    for (set<PreprocessingInfo *>::const_iterator infoIt =
+             includingInfos.begin();
+         infoIt != includingInfos.end(); ++infoIt) {
+      if (matchesInclude(*infoIt)) {
+        return *infoIt;
+      }
+    }
+  }
+
+  ROSEAttributesListContainerPtr filePreprocInfo =
+      includingSourceFile->get_preprocessorDirectivesAndCommentsList();
+  if (filePreprocInfo == NULL) {
+    return NULL;
+  }
+
+  std::map<std::string, ROSEAttributesList *> &attributeLists =
+      filePreprocInfo->getList();
+  for (std::map<std::string, ROSEAttributesList *>::iterator listIt =
+           attributeLists.begin();
+       listIt != attributeLists.end(); ++listIt) {
+    ROSEAttributesList *attributeList = listIt->second;
+    if (attributeList == NULL) {
+      continue;
+    }
+
+    std::vector<PreprocessingInfo *> &preprocessingInfos =
+        attributeList->getList();
+    for (std::vector<PreprocessingInfo *>::iterator infoIt =
+             preprocessingInfos.begin();
+         infoIt != preprocessingInfos.end(); ++infoIt) {
+      if (matchesInclude(*infoIt)) {
+        return *infoIt;
+      }
+    }
+  }
+
+  return NULL;
+}
+
+static SgIncludeFile *ensureSourceFileIncludeRoot(SgProject *project,
+                                                  SgSourceFile *sourceFile) {
+  ROSE_ASSERT(project != NULL);
+  if (sourceFile == NULL) {
+    return NULL;
+  }
+
+  SgIncludeFile *includeRoot = sourceFile->get_associated_include_file();
+  if (includeRoot != NULL) {
+    return includeRoot;
+  }
+
+  if (sourceFile->get_isHeaderFile() == true) {
+    return NULL;
+  }
+
+  const std::string sourcePath =
+      FileHelper::normalizePathIfPossible(sourceFile->getFileName());
+  includeRoot = new SgIncludeFile(sourcePath);
+  includeRoot->set_filename(sourcePath);
+  includeRoot->set_name_used_in_include_directive(
+      FileHelper::getFileName(sourcePath));
+  includeRoot->set_name_without_path(FileHelper::getFileName(sourcePath));
+
+  std::string directoryPrefix = Rose::getPathFromFileName(sourcePath);
+  if (directoryPrefix == ".") {
+    directoryPrefix.clear();
+  }
+  includeRoot->set_directory_prefix(directoryPrefix);
+  includeRoot->set_applicationRootDirectory(
+      project->get_applicationRootDirectory());
+  includeRoot->set_isApplicationFile(true);
+  includeRoot->set_isRootSourceFile(true);
+  includeRoot->set_source_file(sourceFile);
+  includeRoot->set_source_file_of_translation_unit(sourceFile);
+  includeRoot->set_including_source_file(sourceFile);
+
+  sourceFile->set_associated_include_file(includeRoot);
+  return includeRoot;
+}
+
+static SgIncludeFile *
+synthesizeIncludeFile(SgProject *project, SgSourceFile *includingSourceFile,
+                      SgSourceFile *includedSourceFile,
+                      const std::string &includedPath,
+                      PreprocessingInfo *preprocessingInfo) {
+  ROSE_ASSERT(project != NULL);
+  if (includingSourceFile == NULL || includedSourceFile == NULL) {
+    return NULL;
+  }
+
+  SgIncludeFile *parentIncludeFile =
+      includingSourceFile->get_associated_include_file();
+  if (parentIncludeFile == NULL) {
+    parentIncludeFile =
+        ensureSourceFileIncludeRoot(project, includingSourceFile);
+  }
+  if (parentIncludeFile == NULL) {
+    return NULL;
+  }
+
+  SgIncludeFile *includeFile =
+      findIncludeFileByPath(parentIncludeFile, includedPath);
+  if (includeFile != NULL) {
+    return includeFile;
+  }
+
+  const std::string normalizedIncludedPath =
+      FileHelper::normalizePathIfPossible(includedPath);
+  includeFile = new SgIncludeFile(normalizedIncludedPath);
+  includeFile->set_filename(normalizedIncludedPath);
+  includeFile->set_name_without_path(
+      FileHelper::getFileName(normalizedIncludedPath));
+
+  std::string nameUsedInIncludeDirective =
+      FileHelper::getFileName(normalizedIncludedPath);
+  bool isSystemInclude = false;
+  if (preprocessingInfo != NULL) {
+    IncludeDirective includeDirective(preprocessingInfo->getString());
+    nameUsedInIncludeDirective = includeDirective.getIncludedPath();
+    isSystemInclude = includeDirective.isQuotedInclude() == false;
+  }
+  includeFile->set_name_used_in_include_directive(nameUsedInIncludeDirective);
+
+  std::string directoryPrefix =
+      Rose::getPathFromFileName(nameUsedInIncludeDirective);
+  if (directoryPrefix == ".") {
+    directoryPrefix.clear();
+  }
+  includeFile->set_directory_prefix(directoryPrefix);
+  includeFile->set_applicationRootDirectory(
+      project->get_applicationRootDirectory());
+  includeFile->set_isSystemInclude(isSystemInclude);
+  includeFile->set_isApplicationFile(isSystemInclude == false);
+  includeFile->set_parent_include_file(parentIncludeFile);
+  includeFile->set_source_file(includedSourceFile);
+
+  SgSourceFile *translationUnit =
+      parentIncludeFile->get_source_file_of_translation_unit();
+  if (translationUnit == NULL &&
+      includingSourceFile->get_isHeaderFile() == false) {
+    translationUnit = includingSourceFile;
+  }
+  if (translationUnit == NULL) {
+    translationUnit = parentIncludeFile->get_including_source_file();
+  }
+  if (translationUnit == NULL) {
+    translationUnit = includingSourceFile;
+  }
+  includeFile->set_source_file_of_translation_unit(translationUnit);
+  includeFile->set_including_source_file(includingSourceFile);
+
+  SgIncludeFilePtrList &childIncludes =
+      parentIncludeFile->get_include_file_list();
+  childIncludes.push_back(includeFile);
+
+  return includeFile;
+}
+
 static void ensureHeaderTokenMapping(SgSourceFile *headerFile,
                                      SgSourceFile *traversalRoot) {
   ROSE_ASSERT(headerFile != NULL);
@@ -399,6 +631,30 @@ static void ensureHeaderTokenMapping(SgSourceFile *headerFile,
 
   std::vector<stream_element *> tokenVector = getTokenStream(headerFile);
   buildTokenStreamMappingForRoot(headerFile, traversalRoot, tokenVector);
+
+  std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap =
+      headerFile->get_tokenSubsequenceMap();
+  const int firstTokenIndex = tokenVector.empty() ? -1 : 0;
+  const int lastTokenIndex =
+      tokenVector.empty() ? -1 : static_cast<int>(tokenVector.size()) - 1;
+
+  auto ensureWholeFileMapping = [&](SgNode *node) {
+    if (node == NULL) {
+      return;
+    }
+
+    std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator mapIt =
+        tokenMap.find(node);
+    if (mapIt != tokenMap.end() && mapIt->second != NULL) {
+      return;
+    }
+
+    tokenMap[node] = new TokenStreamSequenceToNodeMapping(
+        node, -1, -1, firstTokenIndex, lastTokenIndex, -1, -1, -1, -1);
+  };
+
+  ensureWholeFileMapping(headerFile);
+  ensureWholeFileMapping(headerFile->get_globalScope());
 }
 
 // DQ (2/12/2011): Added const so that this could be called in get_mangled()
@@ -1267,6 +1523,24 @@ SgFile *determineFileType(vector<string> argv, int &nextErrorCode,
               // false.
               ROSE_ASSERT(file->get_requires_C_preprocessor() == false);
               sourceFile->initializeGlobalScope();
+            } else if (commandLineSelectsFortran(argv)) {
+              SgSourceFile *sourceFile = new SgSourceFile(argv, project);
+              file = sourceFile;
+
+              file->set_sourceFileUsesFortranFileExtension(false);
+              file->set_outputLanguage(SgFile::e_Fortran_language);
+              file->set_inputLanguage(SgFile::e_Fortran_language);
+              file->set_Fortran_only(true);
+
+              Rose::is_Fortran_language = true;
+              SageBuilder::symbol_table_case_insensitive_semantics = true;
+
+              const bool requires_C_preprocessor =
+                  sourceContainsPreprocessorDirectives(sourceFilename) ||
+                  !project->get_macroSpecifierList().empty();
+              file->set_requires_C_preprocessor(requires_C_preprocessor);
+
+              sourceFile->initializeGlobalScope();
             } else {
               file = new SgUnknownFile(argv, project);
 
@@ -1767,7 +2041,6 @@ int SgProject::parse() {
     set_includingPreprocessingInfosMap(includingPreprocessingInfosMap);
 
     std::map<std::string, SgSourceFile *> sourceFilesByPath;
-    std::map<std::string, SgSourceFile *> includingSourceFiles;
     for (SgFile *file : get_fileList()) {
       SgSourceFile *sourceFile = isSgSourceFile(file);
       if (sourceFile == NULL) {
@@ -1777,12 +2050,6 @@ int SgProject::parse() {
           FileHelper::normalizePathIfPossible(sourceFile->getFileName());
       if (!normalizedPath.empty()) {
         sourceFilesByPath[normalizedPath] = sourceFile;
-      }
-      if (sourceFile->get_isHeaderFile() == true) {
-        continue;
-      }
-      if (!normalizedPath.empty()) {
-        includingSourceFiles[normalizedPath] = sourceFile;
       }
     }
 
@@ -1806,80 +2073,110 @@ int SgProject::parse() {
       }
     }
 
-    std::set<std::string> processedHeaders;
-    for (map<string, set<string>>::const_iterator it = includedFilesMap.begin();
-         it != includedFilesMap.end(); ++it) {
-      const std::string includingPath =
-          FileHelper::normalizePathIfPossible(it->first);
-      std::map<std::string, SgSourceFile *>::const_iterator rootIt =
-          includingSourceFiles.find(includingPath);
-      if (rootIt == includingSourceFiles.end()) {
-        continue;
-      }
+    std::set<std::string> processedIncludingFiles;
+    bool discoveredNewSourceFile = false;
+    do {
+      discoveredNewSourceFile = false;
 
-      SgSourceFile *traversalRoot = rootIt->second;
-      if (unparse_using_tokens == true &&
-          !shouldBuildTokenMapping(traversalRoot)) {
-        continue;
-      }
-
-      const set<string> &includedSet = it->second;
-      for (set<string>::const_iterator incIt = includedSet.begin();
-           incIt != includedSet.end(); ++incIt) {
-        std::string includedPath = FileHelper::normalizePathIfPossible(*incIt);
-        if (!processedHeaders.insert(includedPath).second) {
-          continue;
-        }
-        if (!FileHelper::fileExists(includedPath)) {
+      for (map<string, set<string>>::const_iterator it =
+               includedFilesMap.begin();
+           it != includedFilesMap.end(); ++it) {
+        const std::string includingPath =
+            FileHelper::normalizePathIfPossible(it->first);
+        std::map<std::string, SgSourceFile *>::const_iterator rootIt =
+            sourceFilesByPath.find(includingPath);
+        if (rootIt == sourceFilesByPath.end()) {
           continue;
         }
 
-        std::map<std::string, SgSourceFile *>::const_iterator headerIt =
-            sourceFilesByPath.find(includedPath);
-        SgSourceFile *headerFile =
-            headerIt != sourceFilesByPath.end() ? headerIt->second : NULL;
-        if (headerFile == NULL && unparse_using_tokens == true) {
-          std::map<std::string, SgSourceFile *>::const_iterator tokenMapIt =
-              tokenMapFilesByPath.find(includedPath);
-          if (tokenMapIt != tokenMapFilesByPath.end()) {
-            headerFile = tokenMapIt->second;
+        if (!processedIncludingFiles.insert(includingPath).second) {
+          continue;
+        }
+
+        SgSourceFile *traversalRoot = rootIt->second;
+        if (unparse_using_tokens == true &&
+            !shouldBuildTokenMapping(traversalRoot)) {
+          continue;
+        }
+
+        ensureSourceFileIncludeRoot(this, traversalRoot);
+
+        const set<string> &includedSet = it->second;
+        for (set<string>::const_iterator incIt = includedSet.begin();
+             incIt != includedSet.end(); ++incIt) {
+          std::string includedPath =
+              FileHelper::normalizePathIfPossible(*incIt);
+          if (!FileHelper::fileExists(includedPath)) {
+            continue;
           }
-        }
-        if (headerFile == NULL) {
-          // Header-file unparsing needs a file wrapper even when the header
-          // AST is emitted from an enclosing scope in another translation
-          // unit. Token-based unparsing additionally uses the wrapper for the
-          // detached token map.
-          headerFile = buildHeaderSourceFile(this, includedPath, traversalRoot);
-          if (headerFile != NULL && unparse_using_tokens == true) {
-            tokenMapFilesByPath[includedPath] = headerFile;
-          }
-        }
-        if (headerFile == NULL) {
-          continue;
-        }
 
-        SgIncludeFile *includeFile = findIncludeFileByPath(
-            traversalRoot->get_associated_include_file(), includedPath);
-        if (includeFile != NULL && includeFile->get_source_file() == NULL) {
-          includeFile->set_source_file(headerFile);
-        }
-
-        if (unparse_using_tokens == true) {
-          if (Rose::tokenSubsequenceMapOfMapsBySourceFile.find(headerFile) !=
-              Rose::tokenSubsequenceMapOfMapsBySourceFile.end()) {
-            std::map<SgNode *, TokenStreamSequenceToNodeMapping *>
-                *existingMap =
-                    Rose::tokenSubsequenceMapOfMapsBySourceFile[headerFile];
-            if (existingMap != NULL && !existingMap->empty()) {
-              continue;
+          std::map<std::string, SgSourceFile *>::const_iterator headerIt =
+              sourceFilesByPath.find(includedPath);
+          SgSourceFile *headerFile =
+              headerIt != sourceFilesByPath.end() ? headerIt->second : NULL;
+          if (headerFile == NULL && unparse_using_tokens == true) {
+            std::map<std::string, SgSourceFile *>::const_iterator tokenMapIt =
+                tokenMapFilesByPath.find(includedPath);
+            if (tokenMapIt != tokenMapFilesByPath.end()) {
+              headerFile = tokenMapIt->second;
             }
           }
+          if (headerFile == NULL) {
+            // Header-file unparsing needs a file wrapper even when the header
+            // AST is emitted from an enclosing scope in another translation
+            // unit. Token-based unparsing additionally uses the wrapper for the
+            // detached token map.
+            headerFile =
+                buildHeaderSourceFile(this, includedPath, traversalRoot);
+          }
+          if (headerFile == NULL) {
+            continue;
+          }
 
-          ensureHeaderTokenMapping(headerFile, traversalRoot);
+          if (sourceFilesByPath.insert(std::make_pair(includedPath, headerFile))
+                  .second) {
+            discoveredNewSourceFile = true;
+          }
+          if (unparse_using_tokens == true) {
+            tokenMapFilesByPath[includedPath] = headerFile;
+          }
+
+          SgIncludeFile *includeFile = findIncludeFileByPath(
+              traversalRoot->get_associated_include_file(), includedPath);
+          if (includeFile == NULL) {
+            PreprocessingInfo *preprocessingInfo =
+                findIncludingPreprocessingInfo(this,
+                                               includingPreprocessingInfosMap,
+                                               traversalRoot, includedPath);
+            includeFile =
+                synthesizeIncludeFile(this, traversalRoot, headerFile,
+                                      includedPath, preprocessingInfo);
+          }
+
+          if (includeFile != NULL &&
+              headerFile->get_associated_include_file() == NULL) {
+            headerFile->set_associated_include_file(includeFile);
+          }
+          if (includeFile != NULL && includeFile->get_source_file() == NULL) {
+            includeFile->set_source_file(headerFile);
+          }
+
+          if (unparse_using_tokens == true) {
+            if (Rose::tokenSubsequenceMapOfMapsBySourceFile.find(headerFile) !=
+                Rose::tokenSubsequenceMapOfMapsBySourceFile.end()) {
+              std::map<SgNode *, TokenStreamSequenceToNodeMapping *>
+                  *existingMap =
+                      Rose::tokenSubsequenceMapOfMapsBySourceFile[headerFile];
+              if (existingMap != NULL && !existingMap->empty()) {
+                continue;
+              }
+            }
+
+            ensureHeaderTokenMapping(headerFile, traversalRoot);
+          }
         }
       }
-    }
+    } while (discoveredNewSourceFile == true);
 
     if (SgProject::get_verbose() >= 1) {
       printf("\nOutput info for unparse headers support: \n");

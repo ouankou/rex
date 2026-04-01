@@ -24,6 +24,7 @@
 #include <filesystem>
 
 #include "rose_config.h"
+#include "rose_test_output_path.h"
 
 #include <fstream>
 #include <string.h>
@@ -343,24 +344,50 @@ void restoreEmptyConditionalBodiesInOutput(SgFile *file,
 }
 
 std::string resolveUnparseOutputToTestDir(const std::string &filename) {
-  const char *output_dir = std::getenv("ROSE_TEST_OUTPUT_DIR");
-  if (output_dir == nullptr || output_dir[0] == '\0') {
-    return filename;
+  return Rose::TestOutput::resolvePath(filename);
+}
+
+static std::string findOutputDirArg(const std::vector<std::string> &argv) {
+  for (size_t i = 0; i + 1 < argv.size(); ++i) {
+    if (argv[i] == "-outputdir") {
+      return argv[i + 1];
+    }
+  }
+  return std::string();
+}
+
+std::string resolveUnparseOutputToTestDir(SgFile *file,
+                                          const std::string &filename) {
+  if (file == NULL) {
+    return resolveUnparseOutputToTestDir(filename);
   }
 
-  std::filesystem::path output_path(filename);
-  if (output_path.is_absolute()) {
-    return filename;
-  }
+  const std::string output_dir =
+      findOutputDirArg(file->get_originalCommandLineArgumentList());
+  return Rose::TestOutput::resolvePath(filename, output_dir);
+}
 
-  std::filesystem::path output_dir_path(output_dir);
+bool copyOriginalHeaderToOutputLocation(const std::string &originalFileName,
+                                        const std::string &outputFileName) {
+  std::filesystem::path originalFileNamePath(originalFileName);
+  std::filesystem::path outputFileNamePath(outputFileName);
   std::error_code ec;
-  std::filesystem::create_directories(output_dir_path, ec);
+  std::filesystem::create_directories(outputFileNamePath.parent_path(), ec);
   if (ec) {
-    return filename;
+    return false;
   }
 
-  return (output_dir_path / output_path).string();
+  if (!std::filesystem::exists(originalFileNamePath)) {
+    return false;
+  }
+
+  if (std::filesystem::exists(outputFileNamePath)) {
+    return true;
+  }
+
+  std::filesystem::copy_file(originalFileNamePath, outputFileNamePath,
+                             std::filesystem::copy_options::none, ec);
+  return !ec;
 }
 
 bool fileHasRelevantModifications(SgSourceFile *file) {
@@ -1635,7 +1662,7 @@ void Unparser::unparseFileUsingTokenStream(
   } else {
     outputFilename = "rose_raw_tokens_" + file->get_sourceFileNameWithoutPath();
   }
-  outputFilename = resolveUnparseOutputToTestDir(outputFilename);
+  outputFilename = resolveUnparseOutputToTestDir(file, outputFilename);
 
   fstream ROSE_RawTokenStream_OutputFile(outputFilename.c_str(), ios::out);
   // ROSE_OutputFile.open(s_file.c_str());
@@ -2003,7 +2030,7 @@ void resetSourcePositionToGeneratedCode(SgFile *file,
   } else {
     outputFilename = file->get_unparse_output_filename();
   }
-  outputFilename = resolveUnparseOutputToTestDir(outputFilename);
+  outputFilename = resolveUnparseOutputToTestDir(file, outputFilename);
 
   // Set the output file name, since this may be called before unparse().
   file->set_unparse_output_filename(outputFilename);
@@ -2273,6 +2300,33 @@ string globalUnparseToString_OpenMPSafe(
     }
   } // end if locatedNode
 
+  if (fileNameOfStatementsToUnparse ==
+          "defaultFileNameInGlobalUnparseToString" &&
+      inputUnparseInfoPointer != NULL) {
+    SgSourceFile *source_file =
+        inputUnparseInfoPointer->get_current_source_file();
+    if (source_file == NULL) {
+      SgNode *reference_node =
+          inputUnparseInfoPointer->get_reference_node_for_qualification();
+      source_file = SageInterface::getEnclosingSourceFile(reference_node);
+    }
+    if (source_file == NULL) {
+      source_file = SageInterface::getEnclosingSourceFile(
+          inputUnparseInfoPointer->get_current_scope());
+    }
+
+    if (source_file != NULL) {
+      if (source_file->get_file_info() != NULL &&
+          source_file->get_file_info()->get_filenameString().empty() == false) {
+        fileNameOfStatementsToUnparse =
+            source_file->get_file_info()->get_filenameString();
+      } else if (!source_file->get_sourceFileNameWithPath().empty()) {
+        fileNameOfStatementsToUnparse =
+            source_file->get_sourceFileNameWithPath();
+      }
+    }
+  }
+
   ROSE_ASSERT(fileNameOfStatementsToUnparse.size() > 0);
 
   // Unparser roseUnparser ( &outputString, fileNameOfStatementsToUnparse,
@@ -2369,6 +2423,31 @@ string globalUnparseToString_OpenMPSafe(
   ASSERT_not_null(inheritedAttributeInfoPointer);
   SgUnparse_Info &inheritedAttributeInfo = *inheritedAttributeInfoPointer;
 
+  SgSourceFile *currentSourceFile =
+      inheritedAttributeInfo.get_current_source_file();
+  if (currentSourceFile == NULL) {
+    currentSourceFile = SageInterface::getEnclosingSourceFile(astNode);
+    if (currentSourceFile == NULL) {
+      SgNode *referenceNode =
+          inheritedAttributeInfo.get_reference_node_for_qualification();
+      currentSourceFile = SageInterface::getEnclosingSourceFile(referenceNode);
+    }
+    if (currentSourceFile == NULL) {
+      currentSourceFile = SageInterface::getEnclosingSourceFile(
+          inheritedAttributeInfo.get_current_scope());
+    }
+    if (currentSourceFile != NULL) {
+      inheritedAttributeInfo.set_current_source_file(currentSourceFile);
+    }
+  }
+  if (currentSourceFile != NULL) {
+    if (inheritedAttributeInfo.get_language() == SgFile::e_default_language) {
+      inheritedAttributeInfo.set_language(
+          currentSourceFile->get_outputLanguage());
+    }
+    roseUnparser.currentFile = currentSourceFile;
+  }
+
   // DQ (1/6/2021): Adding support to detect use of unparseToString()
   // functionality.  This is required to avoid premature saving of state
   // regarding the static previouslyUnparsedTokenSubsequences which is required
@@ -2410,6 +2489,22 @@ string globalUnparseToString_OpenMPSafe(
     }
     // stmt->get_startOfConstruct()->display("In unparseStatement():
     // info.get_current_scope() == NULL: debug"); ROSE_ABORT();
+  }
+
+  if (roseUnparser.currentFile == NULL) {
+    SgSourceFile *currentSourceFile =
+        inheritedAttributeInfo.get_current_source_file();
+    if (currentSourceFile == NULL) {
+      currentSourceFile = SageInterface::getEnclosingSourceFile(
+          inheritedAttributeInfo.get_current_scope());
+    }
+    if (currentSourceFile == NULL) {
+      currentSourceFile = SageInterface::getEnclosingSourceFile(astNode);
+    }
+    if (currentSourceFile != NULL) {
+      inheritedAttributeInfo.set_current_source_file(currentSourceFile);
+      roseUnparser.currentFile = currentSourceFile;
+    }
   }
   // ASSERT_not_null(info.get_current_scope());
 
@@ -2876,7 +2971,7 @@ void unparseFile(SgFile *file, UnparseFormatHelp *unparseHelp,
 
     // string outputFilename = "rose_" + file->get_sourceFileNameWithoutPath();
 
-    outputFilename = resolveUnparseOutputToTestDir(outputFilename);
+    outputFilename = resolveUnparseOutputToTestDir(file, outputFilename);
 
     // Set the output filename in the SgFile IR node.
     file->set_unparse_output_filename(outputFilename);
@@ -2885,7 +2980,7 @@ void unparseFile(SgFile *file, UnparseFormatHelp *unparseHelp,
     // assert(file->get_unparse_output_filename().empty() == false);
   }
   const string resolvedOutputFilename =
-      resolveUnparseOutputToTestDir(file->get_unparse_output_filename());
+      resolveUnparseOutputToTestDir(file, file->get_unparse_output_filename());
   if (resolvedOutputFilename != file->get_unparse_output_filename()) {
     file->set_unparse_output_filename(resolvedOutputFilename);
   }
@@ -4703,6 +4798,9 @@ void unparseIncludedFiles(SgProject *project,
       printf("copySetInterator = %s \n", (*copySetInterator).c_str());
 #endif
       string originalFileName = *copySetInterator;
+      ASSERT_not_null(project);
+      const string applicationRootDirectory =
+          project->get_applicationRootDirectory();
 
       // #if DEBUG_UNPARSE_INCLUDE_FILES
       // DQ (4/4/2020): Added header file unparsing feature specific debug
@@ -4735,9 +4833,6 @@ void unparseIncludedFiles(SgProject *project,
         }
         // #endif
 
-        ASSERT_not_null(project);
-        string applicationRootDirectory =
-            project->get_applicationRootDirectory();
         string filenameWithOutPath = FileHelper::getFileName(originalFileName);
 
         string adjusted_header_file_directory = unparseRootPath;
@@ -4805,10 +4900,11 @@ void unparseIncludedFiles(SgProject *project,
 
         SgIncludeFile *associated_include_file =
             unparsedFile->get_associated_include_file();
-        ASSERT_not_null(associated_include_file);
-
         string name_used_in_include_directive =
-            associated_include_file->get_name_used_in_include_directive();
+            associated_include_file != NULL
+                ? associated_include_file->get_name_used_in_include_directive()
+                      .getString()
+                : filenameWithOutPath;
         string directoryPathPrefix =
             Rose::getPathFromFileName(name_used_in_include_directive);
         if (directoryPathPrefix == ".") {
@@ -4828,7 +4924,10 @@ void unparseIncludedFiles(SgProject *project,
             adjusted_header_file_directory + filenameWithOutPath;
 
         bool isApplicationFile =
-            associated_include_file->get_isApplicationFile();
+            associated_include_file != NULL
+                ? associated_include_file->get_isApplicationFile()
+                : (!applicationRootDirectory.empty() &&
+                   originalFileName.find(applicationRootDirectory) == 0);
 
         if (isApplicationFile == true) {
           std::filesystem::path pathPrefix(adjusted_header_file_directory);
@@ -5019,13 +5118,7 @@ void unparseIncludedFiles(SgProject *project,
                  originalFileName.c_str(), outputFileName.c_str());
         }
 
-        std::filesystem::path originalFileNamePath(originalFileName);
-        std::filesystem::path outputFileNamePath(outputFileName);
-        create_directories(outputFileNamePath.parent_path());
-
-        if (exists(originalFileNamePath) && !exists(outputFileNamePath))
-          copy_file(originalFileNamePath, outputFileNamePath,
-                    std::filesystem::copy_options::none);
+        copyOriginalHeaderToOutputLocation(originalFileName, outputFileName);
 
         continue;
       }
@@ -5059,6 +5152,9 @@ void unparseIncludedFiles(SgProject *project,
             associated_include_file
                     ->get_can_be_supported_using_token_based_unparsing() ==
                 false) {
+          const string outputFileName = FileHelper::concatenatePaths(
+              unparseRootPath, unparseMapEntry->second);
+
           // Only token-based header unparsing needs to reject headers that the
           // include analysis marks as unsafe for token output. The AST-based
           // header unparser must still emit those headers so declaration
@@ -5070,9 +5166,9 @@ void unparseIncludedFiles(SgProject *project,
             printf("Skip over this entry in the unparseMap \n");
           }
           // #endif
-          // Mark this as a header file that could not be unparsed
-          // (transformation is ignored).
-          // associated_include_file->set_suppressing_unparsing_of_header_file(true);
+          // The original header still has to exist in the output tree so the
+          // generated source compiles and the include graph remains complete.
+          copyOriginalHeaderToOutputLocation(originalFileName, outputFileName);
 
           continue;
         }

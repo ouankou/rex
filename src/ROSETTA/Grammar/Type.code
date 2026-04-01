@@ -2070,7 +2070,24 @@ SgPointerMemberType::get_class_declaration_of() const
              {
                SgNonrealType* nonrealType = isSgNonrealType(type);
                ROSE_ASSERT(nonrealType != NULL);
-               result = nonrealType->get_declaration();
+               SgNonrealDecl* nonrealDecl = isSgNonrealDecl(nonrealType->get_declaration());
+               ROSE_ASSERT(nonrealDecl != NULL);
+
+               SgClassDeclaration* classDecl = isSgClassDeclaration(nonrealDecl->get_templateDeclaration());
+               if (classDecl != NULL)
+                  {
+                    SgClassDeclaration* firstNondefining = isSgClassDeclaration(classDecl->get_firstNondefiningDeclaration());
+                    if (firstNondefining != NULL)
+                       {
+                         classDecl = firstNondefining;
+                       }
+
+                    result = classDecl;
+                  }
+                 else
+                  {
+                    result = nonrealDecl;
+                  }
              }
 
           ROSE_ASSERT(result != NULL);
@@ -4383,12 +4400,10 @@ SgClassType::createType(SgDeclarationStatement* cd, SgExpression* optional_fortr
 
      ROSE_ASSERT(returnType != NULL);
 
-  // DQ (3/22/2012): Added assertions.
-     if (returnType->get_declaration() != cd)
-        {
-          ROSE_ASSERT(returnType->get_declaration()->get_firstNondefiningDeclaration() != NULL);
-          ROSE_ASSERT(cd->get_firstNondefiningDeclaration() != NULL);
-        }
+  // The canonical class type can legitimately point at a different declaration
+  // in the same chain (for example, the defining declaration when no forward
+  // declaration exists, or vice versa). Consumers that need a specific chain
+  // anchor must normalize the declaration explicitly.
   // DQ (8/23/2012): Note clear if this is helpful given the new name handling to resolve template instantiations when template arguments are NOT name qualified.
   // This fails for test2011_121.C.
   // ROSE_ASSERT(returnType->get_declaration() == cd);

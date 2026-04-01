@@ -117,7 +117,8 @@ function(add_ompvv_version_tests version)
               "${source_extension}"
               ${rose_flags})
     set_tests_properties(OMPVV_${version_tag}_${safe_name}
-      PROPERTIES LABELS "OMPVV;OMPVV_${version_tag}")
+      PROPERTIES LABELS "OMPVV;OMPVV_${version_tag}"
+                 ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${workdir}")
   endforeach()
 
   list(LENGTH version_tests ompvv_count)

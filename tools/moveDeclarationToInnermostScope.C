@@ -143,6 +143,7 @@ std::string resolveTestOutputPath(const std::string &filename) {
   resolved += filename;
   return resolved;
 }
+
 } // namespace
 
 static const char *purpose =

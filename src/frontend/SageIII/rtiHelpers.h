@@ -291,11 +291,26 @@ toStringForRTI(const SgFunctionModifier::opencl_work_group_size_t &x) {
   return os.str();
 }
 
+template <typename T> static std::string formatRTIField(const void *fieldPtr) {
+  return toStringForRTI(*static_cast<const T *>(fieldPtr));
+}
+
+template <typename T>
+static RTIValueDescriptor makeRTIValueDescriptor(const T &field) {
+  return RTIValueDescriptor(static_cast<const void *>(&field),
+                            &formatRTIField<T>);
+}
+
 // For scoped enumerations from ROSETTA
 
 void doRTI(const char *fieldNameBase, void *fieldPtr, size_t fieldSize,
            void *thisPtr, const char *className, const char *typeString,
            const char *fieldName, const std::string &fieldContents,
+           RTIMemberData &memberData);
+
+void doRTI(const char *fieldNameBase, void *fieldPtr, size_t fieldSize,
+           void *thisPtr, const char *className, const char *typeString,
+           const char *fieldName, const RTIValueDescriptor &fieldContents,
            RTIMemberData &memberData);
 
 #endif // ROSE_RTIHELPERS_H

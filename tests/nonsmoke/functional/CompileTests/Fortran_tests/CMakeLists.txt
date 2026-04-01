@@ -75,6 +75,8 @@ set(_fortran_f77_frontend_negative_tests
   test2007_146.f
   triangle-fixed.f
 )
+rex_register_compile_source_set(REX_FORTRAN_F77_NEGATIVE_SOURCES
+  ${_fortran_f77_frontend_negative_tests})
 foreach(F77_test ${F77_TESTCODES})
   if(F77_test IN_LIST _fortran_f77_frontend_negative_tests)
     fortran_frontend_negative_test(${F77_test})
@@ -106,6 +108,8 @@ set(_fortran_frontend_negative_tests
   test2011_38.f90
   test2011_59.f90
 )
+rex_register_compile_source_set(REX_FORTRAN_F90_NEGATIVE_SOURCES
+  ${_fortran_frontend_negative_tests})
 foreach(F90_test ${F90_TESTCODES})
   if(F90_test IN_LIST _fortran_frontend_negative_tests)
     fortran_frontend_negative_test(${F90_test})
@@ -134,6 +138,8 @@ set(_fortran_f03_frontend_negative_tests
   test2010_27.f03
   test2010_74.f03
 )
+rex_register_compile_source_set(REX_FORTRAN_F03_NEGATIVE_SOURCES
+  ${_fortran_f03_frontend_negative_tests})
 foreach(F03_test ${F03_TESTCODES})
   if(F03_test IN_LIST _fortran_f03_frontend_negative_tests)
     fortran_frontend_negative_test(${F03_test})
@@ -326,3 +332,11 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2020_use_iso_c_binding_4.f90
 )
 set_tests_properties(fortran_module_test2020_use_iso_c_binding_4 PROPERTIES DEPENDS fortran_module_test2020_use_iso_c_binding_3)
+
+get_property(_fortran_registered_tests DIRECTORY PROPERTY TESTS)
+foreach(_test IN LISTS _fortran_registered_tests)
+  if(_test MATCHES "^FORTRANTEST_" OR _test MATCHES "^fortran_")
+    set_property(TEST ${_test} APPEND PROPERTY ENVIRONMENT
+                 "ROSE_TEST_OUTPUT_DIR=${_fortran_output_dir}")
+  endif()
+endforeach()

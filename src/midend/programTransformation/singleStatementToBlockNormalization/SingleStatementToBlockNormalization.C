@@ -23,8 +23,14 @@ public:
   void Normalize() {
     for (vector<SgStatement *>::iterator it = singleStatementBlocks.begin();
          it != singleStatementBlocks.end(); it++) {
-      SageInterface::makeSingleStatementBodyToBlock(*it);
+      SgStatement *stmt = *it;
+      if (stmt == nullptr || isSgBasicBlock(stmt) != nullptr ||
+          !SageInterface::isBodyStatement(stmt)) {
+        continue;
+      }
+      SageInterface::makeSingleStatementBodyToBlock(stmt);
     }
+    singleStatementBlocks.clear();
   }
 
 protected:

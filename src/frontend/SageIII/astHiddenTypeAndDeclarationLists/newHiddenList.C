@@ -31,6 +31,37 @@ SgDeclarationStatement *preferAssociatedDefinitionForTemplateInstantiation(
              ? static_cast<SgDeclarationStatement *>(def_inst)
              : declaration;
 }
+
+bool nonrealTypeCarriesWrittenQualification(const SgNonrealType *nonreal_type) {
+  if (nonreal_type == NULL) {
+    return false;
+  }
+
+  const SgNonrealDecl *nrdecl =
+      isSgNonrealDecl(nonreal_type->get_declaration());
+  if (nrdecl == NULL) {
+    return false;
+  }
+
+  if (nrdecl->get_has_global_qualifier()) {
+    return true;
+  }
+
+  SgDeclarationScope *nrscope = isSgDeclarationScope(nrdecl->get_parent());
+  return nrscope != NULL && isSgNonrealDecl(nrscope->get_parent()) != NULL;
+}
+
+bool typeCarriesWrittenNonrealQualification(const SgType *type) {
+  if (type == NULL) {
+    return false;
+  }
+
+  const SgType *stripped = type->stripType(
+      SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
+      SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_POINTER_TYPE |
+      SgType::STRIP_ARRAY_TYPE);
+  return nonrealTypeCarriesWrittenQualification(isSgNonrealType(stripped));
+}
 } // namespace
 
 // *******************************************************
@@ -296,6 +327,15 @@ HiddenListTraversal::associatedDeclaration(SgType *type) {
     ROSE_ASSERT(declaration != NULL);
 
     return_declaration = declaration;
+    break;
+  }
+
+  case V_SgNonrealType: {
+    SgNonrealType *nrtype = isSgNonrealType(strippedType);
+    ROSE_ASSERT(nrtype != NULL);
+
+    return_declaration = nrtype->get_declaration();
+    ROSE_ASSERT(return_declaration != NULL);
     break;
   }
 
@@ -1856,6 +1896,19 @@ void HiddenListTraversal::traverseType(SgType *type,
     // unparseInfoPointer->set_reference_node_for_qualification(currentScope);
     unparseInfoPointer->set_reference_node_for_qualification(
         nodeReferenceToType);
+    unparseInfoPointer->set_current_scope(currentScope);
+
+    SgSourceFile *sourceFile =
+        SageInterface::getEnclosingSourceFile(nodeReferenceToType);
+    if (sourceFile == NULL) {
+      sourceFile = SageInterface::getEnclosingSourceFile(positionStatement);
+    }
+    if (sourceFile == NULL) {
+      sourceFile = SageInterface::getEnclosingSourceFile(currentScope);
+    }
+    if (sourceFile != NULL) {
+      unparseInfoPointer->set_current_source_file(sourceFile);
+    }
 
     string typeNameString = globalUnparseToString(type, unparseInfoPointer);
     printf("++++++++++++++++ typeNameString (globalUnparseToString()) = %s \n",
@@ -2374,31 +2427,43 @@ HiddenListInheritedAttribute HiddenListTraversal::evaluateInheritedAttribute(
       ROSE_ASSERT(functionDeclaration->get_orig_return_type() != NULL);
       ROSE_ASSERT(functionDeclaration->get_type() != NULL);
       ROSE_ASSERT(functionDeclaration->get_type()->get_return_type() != NULL);
-      SgType *returnType = functionDeclaration->get_type()->get_return_type();
+      SgType *returnType = functionDeclaration->get_orig_return_type();
       ROSE_ASSERT(returnType != NULL);
-      SgDeclarationStatement *declaration =
-          getDeclarationAssociatedWithType(returnType);
-      if (declaration != NULL) {
-        int amountOfNameQualificationRequiredForReturnType =
-            nameQualificationDepth(declaration, currentScope,
-                                   functionDeclaration);
-        printf("SgFunctionDeclaration's return type: "
-               "amountOfNameQualificationRequiredForType = %d \n",
-               amountOfNameQualificationRequiredForReturnType);
-
-        printf("Putting the name qualification for the type into the return "
-               "type of SgFunctionDeclaration = %p = %s \n",
-               functionDeclaration, functionDeclaration->get_name().str());
-        // setNameQualificationReturnType(functionDeclaration,amountOfNameQualificationRequiredForReturnType);
-        setNameQualificationReturnType(
-            functionDeclaration, declaration,
-            amountOfNameQualificationRequiredForReturnType);
+      if (typeCarriesWrittenNonrealQualification(returnType)) {
+        const bool preserve_written_type_elaboration =
+            functionDeclaration
+                ->get_type_elaboration_required_for_return_type();
+        functionDeclaration->set_global_qualification_required_for_return_type(
+            false);
+        functionDeclaration->set_name_qualification_length_for_return_type(0);
+        functionDeclaration->set_type_elaboration_required_for_return_type(
+            preserve_written_type_elaboration);
+        qualifiedNameMapForTypes[functionDeclaration] = "";
       } else {
-        // This case is common for builtin functions such as: __builtin_powi
-        printf(
-            "declaration == NULL: could not put name qualification for the "
-            "type into the return type of SgFunctionDeclaration = %p = %s \n",
-            functionDeclaration, functionDeclaration->get_name().str());
+        SgDeclarationStatement *declaration =
+            getDeclarationAssociatedWithType(returnType);
+        if (declaration != NULL) {
+          int amountOfNameQualificationRequiredForReturnType =
+              nameQualificationDepth(declaration, currentScope,
+                                     functionDeclaration);
+          printf("SgFunctionDeclaration's return type: "
+                 "amountOfNameQualificationRequiredForType = %d \n",
+                 amountOfNameQualificationRequiredForReturnType);
+
+          printf("Putting the name qualification for the type into the return "
+                 "type of SgFunctionDeclaration = %p = %s \n",
+                 functionDeclaration, functionDeclaration->get_name().str());
+          // setNameQualificationReturnType(functionDeclaration,amountOfNameQualificationRequiredForReturnType);
+          setNameQualificationReturnType(
+              functionDeclaration, declaration,
+              amountOfNameQualificationRequiredForReturnType);
+        } else {
+          // This case is common for builtin functions such as: __builtin_powi
+          printf(
+              "declaration == NULL: could not put name qualification for the "
+              "type into the return type of SgFunctionDeclaration = %p = %s \n",
+              functionDeclaration, functionDeclaration->get_name().str());
+        }
       }
 
       // DQ (6/3/2011): Traverse the type to set any possible template arguments
@@ -2494,32 +2559,46 @@ HiddenListInheritedAttribute HiddenListTraversal::evaluateInheritedAttribute(
       ROSE_ASSERT(memberFunctionDeclaration->get_type() != NULL);
       ROSE_ASSERT(memberFunctionDeclaration->get_type()->get_return_type() !=
                   NULL);
-      SgType *returnType =
-          memberFunctionDeclaration->get_type()->get_return_type();
+      SgType *returnType = memberFunctionDeclaration->get_orig_return_type();
       ROSE_ASSERT(returnType != NULL);
-      SgDeclarationStatement *declaration =
-          getDeclarationAssociatedWithType(returnType);
-      if (declaration != NULL) {
-        int amountOfNameQualificationRequiredForReturnType =
-            nameQualificationDepth(declaration, currentScope,
-                                   memberFunctionDeclaration);
-        printf("SgMemberFunctionDeclaration's return type: "
-               "amountOfNameQualificationRequiredForType = %d \n",
-               amountOfNameQualificationRequiredForReturnType);
-
-        printf("Putting the name qualification for the type into the return "
-               "type of SgMemberFunctionDeclaration = %p = %s \n",
-               memberFunctionDeclaration,
-               memberFunctionDeclaration->get_name().str());
-        setNameQualificationReturnType(
-            memberFunctionDeclaration, declaration,
-            amountOfNameQualificationRequiredForReturnType);
+      if (typeCarriesWrittenNonrealQualification(returnType)) {
+        const bool preserve_written_type_elaboration =
+            memberFunctionDeclaration
+                ->get_type_elaboration_required_for_return_type();
+        memberFunctionDeclaration
+            ->set_global_qualification_required_for_return_type(false);
+        memberFunctionDeclaration
+            ->set_name_qualification_length_for_return_type(0);
+        memberFunctionDeclaration
+            ->set_type_elaboration_required_for_return_type(
+                preserve_written_type_elaboration);
+        qualifiedNameMapForTypes[memberFunctionDeclaration] = "";
       } else {
-        printf("declaration == NULL: could not put name qualification for the "
-               "type into the return type of SgMemberFunctionDeclaration = %p "
-               "= %s \n",
-               memberFunctionDeclaration,
-               memberFunctionDeclaration->get_name().str());
+        SgDeclarationStatement *declaration =
+            getDeclarationAssociatedWithType(returnType);
+        if (declaration != NULL) {
+          int amountOfNameQualificationRequiredForReturnType =
+              nameQualificationDepth(declaration, currentScope,
+                                     memberFunctionDeclaration);
+          printf("SgMemberFunctionDeclaration's return type: "
+                 "amountOfNameQualificationRequiredForType = %d \n",
+                 amountOfNameQualificationRequiredForReturnType);
+
+          printf("Putting the name qualification for the type into the return "
+                 "type of SgMemberFunctionDeclaration = %p = %s \n",
+                 memberFunctionDeclaration,
+                 memberFunctionDeclaration->get_name().str());
+          setNameQualificationReturnType(
+              memberFunctionDeclaration, declaration,
+              amountOfNameQualificationRequiredForReturnType);
+        } else {
+          printf(
+              "declaration == NULL: could not put name qualification for the "
+              "type into the return type of SgMemberFunctionDeclaration = %p "
+              "= %s \n",
+              memberFunctionDeclaration,
+              memberFunctionDeclaration->get_name().str());
+        }
       }
       // DQ (6/3/2011): Traverse the type to set any possible template arguments
       // (or other subtypes?) that require name qualification.
@@ -3848,13 +3927,15 @@ void HiddenListTraversal::setNameQualificationReturnType(
       declaration->get_scope(), amountOfNameQualificationRequired,
       outputNameQualificationLength, outputGlobalQualification,
       outputTypeEvaluation);
+  const bool preserve_written_type_elaboration =
+      functionDeclaration->get_type_elaboration_required_for_return_type();
 
   functionDeclaration->set_global_qualification_required_for_return_type(
       outputGlobalQualification);
   functionDeclaration->set_name_qualification_length_for_return_type(
       outputNameQualificationLength);
   functionDeclaration->set_type_elaboration_required_for_return_type(
-      outputTypeEvaluation);
+      outputTypeEvaluation || preserve_written_type_elaboration);
 
   // There should be no type evaluation required for a variable reference, as I
   // recall.

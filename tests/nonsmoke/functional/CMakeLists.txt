@@ -15,10 +15,16 @@ set(REX_FRONTEND_ERROR_TESTS
   # continue-on-error path and should still be part of the default CTest run.
   test2006_131.C
   test2014_22.C
+  # Name-qualification regression tests include one intentionally-invalid C++
+  # specimen that still needs backend coverage from Clang's recovered AST.
+  testNameQalTypeElab_21.C
   # Issue 441: Builtin redeclarations produce diagnostics; keep frontend alive.
   test2017_02.c
   test2018_26.c
   test2016_35.C
+  # Header-unparse recovery: frontend normalizes the missing template<> on an
+  # out-of-class specialization and the backend must preserve that fixup.
+  Simple19.C
   # C11 recovery tests: Clang diagnoses these inputs but still builds a valid
   # AST that REX should carry through the backend.
   test2014_17.c

@@ -22,6 +22,18 @@ $CONSTRUCT_ARG_COPY
   // Copy data members of "this" class
 $POST_CONSTRUCT_COPY
 
+  if (SgSymbolTable* symbolTable = isSgSymbolTable(result))
+     {
+       // Symbol tables are rebuilt structurally for copied scopes. Reusing the
+       // original table storage aliases the original and copied ASTs, which
+       // leaves detached symbols behind when either side mutates the table.
+          rose_hash_multimap* fresh_table = new rose_hash_multimap();
+          ROSE_ASSERT(fresh_table != NULL);
+          fresh_table->set_case_insensitive_semantics(symbolTable->isCaseInsensitive());
+          symbolTable->set_table(fresh_table);
+          symbolTable->set_symbolSet(SgNodeSet());
+     }
+
   // DQ (10/9/2007): comment out to test template problem ... This breaks test2004_76.C and test2004_142.C
   // DQ (10/5/2007): Add custom function to be called to fixup IR node specific details.
   // fixupCopy(result,help);
@@ -102,6 +114,7 @@ $POST_CONSTRUCT_COPY
 #else
           fixupCopy(result,help);
 #endif
+          help.finalizeRootCopy();
        // Allow this to be called recursively, so accumulate the state.
        // Also, clear the state in the SgCopyHelp object.
        // help.clearState();
@@ -109,5 +122,3 @@ $POST_CONSTRUCT_COPY
 
      return result;
    }
-
-

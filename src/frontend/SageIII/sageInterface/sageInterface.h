@@ -135,11 +135,10 @@ public:
   std::string get_name() { return name; };
 };
 
-// REX FIX: SgTemplateParameter cannot store attributes directly (inherits
-// SgSupport). So we use a global map to store the keyword.
-ROSE_DLL_API void setTemplateParameterKeyword(SgTemplateParameter *param,
-                                              std::string kw);
-ROSE_DLL_API std::string
+ROSE_DLL_API void setTemplateParameterKeyword(
+    SgTemplateParameter *param,
+    SgTemplateParameter::template_parameter_keyword_enum kw);
+ROSE_DLL_API SgTemplateParameter::template_parameter_keyword_enum
 getTemplateParameterKeyword(SgTemplateParameter *param);
 ROSE_DLL_API void
 setAbbreviatedFunctionTemplateParameter(SgTemplateParameter *param,
@@ -2540,6 +2539,51 @@ void setParameterList(actualFunction *func, SgFunctionParameterList *paralist) {
     for (SgInitializedNamePtrList::iterator i = args.begin(); i != args.end();
          i++) {
       (*i)->set_declptr(func);
+    }
+  }
+}
+
+//! Set ctor-initializer list for a member function declaration and repair the
+//! ownership links used by AST copy and scope initialization.
+template <class actualMemberFunction>
+void setCtorInitializerList(actualMemberFunction *func,
+                            SgCtorInitializerList *ctorlist) {
+  ROSE_ASSERT(func != NULL);
+  ROSE_ASSERT(ctorlist != NULL);
+
+  if (func->get_CtorInitializerList() != NULL) {
+    if (func->get_CtorInitializerList() != ctorlist) {
+      delete func->get_CtorInitializerList();
+    }
+  }
+
+  func->set_CtorInitializerList(ctorlist);
+  ctorlist->set_parent(func);
+  ctorlist->set_definingDeclaration(ctorlist);
+  ctorlist->set_firstNondefiningDeclaration(ctorlist);
+
+  SgScopeStatement *scope = NULL;
+  if (func->get_definingDeclaration() == func &&
+      func->get_definition() != NULL) {
+    scope = func->get_definition();
+  } else {
+    scope = func->get_scope();
+  }
+
+  SgInitializedNamePtrList &ctors = ctorlist->get_ctors();
+  for (SgInitializedNamePtrList::iterator i = ctors.begin(); i != ctors.end();
+       ++i) {
+    SgInitializedName *ctor = *i;
+    if (ctor == NULL) {
+      continue;
+    }
+
+    if (ctor->get_parent() != ctorlist) {
+      ctor->set_parent(ctorlist);
+    }
+    ctor->set_declptr(func);
+    if (scope != NULL) {
+      ctor->set_scope(scope);
     }
   }
 }

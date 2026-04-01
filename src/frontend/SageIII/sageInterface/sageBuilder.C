@@ -1300,7 +1300,9 @@ void SageBuilder::setTemplateArgumentParents(SgDeclarationStatement *decl) {
 
         SgDeclarationStatement *first_decl =
             decl->get_firstNondefiningDeclaration();
-        ROSE_ASSERT(first_decl != NULL);
+        if (first_decl == NULL) {
+          first_decl = decl;
+        }
 
         for (SgTemplateArgument *arg : templateArgumentsList) {
           if (arg == nullptr) {
@@ -1372,7 +1374,9 @@ void SageBuilder::setTemplateParameterParents(SgDeclarationStatement *decl) {
   if (templateParameterList != NULL) {
     SgDeclarationStatement *first_decl =
         decl->get_firstNondefiningDeclaration();
-    ROSE_ASSERT(first_decl != NULL);
+    if (first_decl == NULL) {
+      first_decl = decl;
+    }
 
     SgTemplateParameterPtrList::iterator i = templateParameterList->begin();
     while (i != templateParameterList->end()) {
@@ -1399,6 +1403,80 @@ void SageBuilder::setTemplateParameterParents(SgDeclarationStatement *decl) {
   testTemplateParameterParents(decl);
 }
 
+namespace {
+
+void reattachNonrealTemplateParameters(SgDeclarationStatement *decl) {
+  if (decl == nullptr) {
+    return;
+  }
+
+  SgTemplateParameterPtrList *templateParameterList =
+      SageBuilder::getTemplateParameterList(decl);
+  if (templateParameterList == nullptr) {
+    return;
+  }
+
+  SgDeclarationStatement *firstDecl = decl->get_firstNondefiningDeclaration();
+  if (firstDecl == nullptr) {
+    firstDecl = decl;
+  }
+
+  SgDeclarationScope *declScope =
+      SageBuilder::getOrCreateNonrealDeclarationScope(firstDecl);
+  if (declScope == nullptr) {
+    return;
+  }
+
+  for (SgTemplateParameter *param : *templateParameterList) {
+    if (param == nullptr) {
+      continue;
+    }
+
+    if (param->get_parameterType() != SgTemplateParameter::template_parameter) {
+      if (param->get_templateDeclaration() != firstDecl) {
+        param->set_templateDeclaration(firstDecl);
+      }
+      continue;
+    }
+
+    SgNonrealDecl *nrdecl = isSgNonrealDecl(param->get_templateDeclaration());
+    if (nrdecl == nullptr) {
+      continue;
+    }
+
+    nrdecl->set_is_template_param(true);
+
+    if (SgScopeStatement *previousScope =
+            isSgScopeStatement(nrdecl->get_parent())) {
+      if (previousScope != declScope &&
+          previousScope->statementExistsInScope(nrdecl)) {
+        previousScope->remove_statement(nrdecl);
+      }
+    }
+
+    if (nrdecl->get_parent() != declScope) {
+      nrdecl->set_parent(declScope);
+    }
+    if (nrdecl->get_scope() != declScope) {
+      nrdecl->set_scope(declScope);
+    }
+    if (!declScope->statementExistsInScope(nrdecl)) {
+      declScope->insertStatementInScope(nrdecl, false);
+    }
+
+    if (declScope->lookup_nonreal_symbol(nrdecl->get_name(), nullptr,
+                                         nullptr) == nullptr) {
+      SgNonrealSymbol *symbol = new SgNonrealSymbol(nrdecl);
+      declScope->insert_symbol(nrdecl->get_name(), symbol);
+      if (SgSymbolTable *symbol_table = declScope->get_symbol_table()) {
+        symbol->set_parent(symbol_table);
+      }
+    }
+  }
+}
+
+} // namespace
+
 void SageBuilder::testTemplateArgumentParents(SgDeclarationStatement *decl) {
   // DQ (9/13/2012): Set the parents of the template arguments (if not already
   // set, to the first non-defining declaration).
@@ -1422,6 +1500,12 @@ void SageBuilder::testTemplateArgumentParents(SgDeclarationStatement *decl) {
   // ROSE_ASSERT(templateArgumentsList != NULL);
 
   if (templateArgumentsList != NULL) {
+    SgDeclarationStatement *first_decl =
+        decl->get_firstNondefiningDeclaration();
+    if (first_decl == NULL) {
+      first_decl = decl;
+    }
+
     SgTemplateArgumentPtrList::iterator i = templateArgumentsList->begin();
     while (i != templateArgumentsList->end()) {
       SgNode *parent = (*i)->get_parent();
@@ -1433,7 +1517,7 @@ void SageBuilder::testTemplateArgumentParents(SgDeclarationStatement *decl) {
       ROSE_ASSERT(parent != NULL);
 
       // DQ (9/16/2012): Adding new test.
-      ROSE_ASSERT(decl->get_firstNondefiningDeclaration() != NULL);
+      ROSE_ASSERT(first_decl != NULL);
       // DQ (1/30/2013): Commented this test out so that we could reuse
       // SgTemplateArguments and assure that the mapping from legacy
       // frontend a_template_arg_ptr's to SgTemplateArgument's was
@@ -1571,6 +1655,7 @@ void SageBuilder::setTemplateParametersInDeclaration(
 
     // Set the parents.
     setTemplateParameterParents(decl);
+    reattachNonrealTemplateParameters(decl);
   } else {
   }
 
@@ -1590,7 +1675,18 @@ SageBuilder::buildInitializedName(const SgName &name, SgType *type,
 
   SgInitializedName *initializedName = new SgInitializedName(name, type, init);
   ASSERT_not_null(initializedName);
-  setSourcePositionAtRootAndAllChildren(initializedName);
+
+  // Frontend-translated types and initializers are attached incrementally and
+  // source-positioned at their construction sites. Recursively walking the
+  // whole initialized-name subtree here re-traverses shared type graphs for
+  // every parameter and local declaration in large headers.
+  if (SageBuilder::getSourcePositionClassificationMode() ==
+      SageBuilder::e_sourcePositionFrontendConstruction) {
+    SageInterface::setSourcePosition(initializedName);
+  } else {
+    setSourcePositionAtRootAndAllChildren(initializedName);
+  }
+
   return initializedName;
 }
 
@@ -1745,15 +1841,23 @@ SageBuilder::buildVariableDeclaration(const SgName &name, SgType *type,
   ROSE_ASSERT(initName != NULL);
   ROSE_ASSERT((initName->get_declptr()) != NULL);
 
-  // bug 119, SgVariableDefintion's File_info is needed for deep copy to work
-  //  AstQuery based setSourcePositionForTransformation() cannot access all
-  //  child nodes have to set SgVariableDefintion explicitly
+  // bug 119, SgVariableDefintion's File_info is needed for deep copy to work.
+  // Transformation-mode builders still rely on explicit recursive file-info
+  // initialization for the declaration subtree.
   SgDeclarationStatement *variableDefinition_original = initName->get_declptr();
-  setOneSourcePositionForTransformation(variableDefinition_original);
-  ROSE_ASSERT((variableDefinition_original->get_startOfConstruct()) != NULL);
-  ROSE_ASSERT((variableDefinition_original->get_endOfConstruct()) != NULL);
-
-  setSourcePositionAtRootAndAllChildren(varDecl);
+  if (SageBuilder::getSourcePositionClassificationMode() ==
+      SageBuilder::e_sourcePositionFrontendConstruction) {
+    if (variableDefinition_original->get_startOfConstruct() == NULL ||
+        variableDefinition_original->get_endOfConstruct() == NULL) {
+      SageInterface::setSourcePosition(variableDefinition_original);
+    }
+    SageInterface::setSourcePosition(varDecl);
+  } else {
+    setOneSourcePositionForTransformation(variableDefinition_original);
+    ROSE_ASSERT((variableDefinition_original->get_startOfConstruct()) != NULL);
+    ROSE_ASSERT((variableDefinition_original->get_endOfConstruct()) != NULL);
+    setSourcePositionAtRootAndAllChildren(varDecl);
+  }
   // ROSE_ASSERT
   // (isSgVariableDefinition(initName->get_declptr())->get_startOfConstruct()!=NULL);
 
@@ -4058,8 +4162,32 @@ actualFunction *SageBuilder::buildNondefiningFunctionDeclaration_T(
 
   ROSE_ASSERT(func->get_file_info() == NULL);
 
-  // set File_Info as transformation generated or front end generated
-  setSourcePositionAtRootAndAllChildren(func);
+  // Frontend-built parameter lists and template-parameter trees are already
+  // source-positioned explicitly by the frontend. Walking the whole function
+  // subtree here re-traverses shared type graphs through NodeQuery and turns
+  // large header translation units into quadratic work.
+  if (SageBuilder::getSourcePositionClassificationMode() ==
+      SageBuilder::e_sourcePositionFrontendConstruction) {
+    SageInterface::setSourcePosition(func);
+  } else {
+    // Transformation-mode builder clients still rely on recursive default file
+    // info initialization for freshly synthesized subtrees.
+    setSourcePositionAtRootAndAllChildren(func);
+  }
+
+  if (SgMemberFunctionDeclaration *member_func =
+          isSgMemberFunctionDeclaration(func)) {
+    if (SgCtorInitializerList *ctor_list =
+            member_func->get_CtorInitializerList()) {
+      if (ctor_list->get_parent() == NULL) {
+        ctor_list->set_parent(member_func);
+      }
+      if (ctor_list->get_startOfConstruct() == NULL ||
+          ctor_list->get_endOfConstruct() == NULL) {
+        SageInterface::setSourcePosition(ctor_list);
+      }
+    }
+  }
 
   ROSE_ASSERT(func->get_file_info() != NULL);
 
@@ -5094,8 +5222,31 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
   checkThatNoTemplateInstantiationIsDeclaredInTemplateDefinitionScope(
       defining_func, scope);
 
-  // set File_Info as transformation generated
-  setSourcePositionAtRootAndAllChildren(defining_func);
+  if (SageBuilder::getSourcePositionClassificationMode() ==
+      SageBuilder::e_sourcePositionFrontendConstruction) {
+    SageInterface::setSourcePosition(defining_func);
+  } else {
+    // Transformation-mode builders still expect recursive default file-info
+    // initialization across freshly synthesized function-definition subtrees.
+    setSourcePositionAtRootAndAllChildren(defining_func);
+  }
+
+  // The defining declaration builder always synthesizes a fresh
+  // SgFunctionDefinition/SgBasicBlock subtree. Some callers run under frontend
+  // construction mode, where the declaration itself gets initialized but the
+  // synthesized definition subtree can still be left without Sg_File_Info.
+  // Normalize that here so later outlining/source-position fixups can safely
+  // traverse the full function subtree.
+  if (defining_func->get_definition() != NULL &&
+      (defining_func->get_definition()->get_startOfConstruct() == NULL ||
+       defining_func->get_definition()->get_endOfConstruct() == NULL ||
+       defining_func->get_definition()->get_body() == NULL ||
+       defining_func->get_definition()->get_body()->get_startOfConstruct() ==
+           NULL ||
+       defining_func->get_definition()->get_body()->get_endOfConstruct() ==
+           NULL)) {
+    setSourcePositionAtRootAndAllChildren(defining_func);
+  }
 
   // DQ (2/11/2012): Enforce that the return type matches the specification to
   // build a member function.
@@ -11043,8 +11194,11 @@ DeclClass *SageBuilder::buildClassDeclarationStatement_nfi(
 
   defdecl->set_firstNondefiningDeclaration(nondefdecl);
 
-  // DQ (3/22/2012): I think we can assert this.
-  ROSE_ASSERT(defdecl->get_type() == NULL);
+  // set_firstNondefiningDeclaration() now canonicalizes class types across the
+  // declaration chain, so the defining declaration may already share the
+  // first-nondefining declaration's type at this point.
+  ROSE_ASSERT(defdecl->get_type() == NULL ||
+              defdecl->get_type() == nondefdecl->get_type());
 
   // Liao, 10/30/2009
   // The SgClassDeclaration constructor will automatically generate a
@@ -12408,8 +12562,11 @@ SgClassDeclaration *SageBuilder::buildClassDeclaration_nfi(
     setTemplateArgumentsInDeclaration(defdecl, templateArgumentsList);
   }
 
-  // DQ (3/22/2012): I think we can assert this.
-  ROSE_ASSERT(defdecl->get_type() == NULL);
+  // set_firstNondefiningDeclaration() can now eagerly propagate the canonical
+  // class type from the first nondefining declaration onto the defining
+  // declaration.
+  ROSE_ASSERT(defdecl->get_type() == NULL ||
+              defdecl->get_type() == nondefdecl->get_type());
 
   // Liao, 10/30/2009
   // The SgClassDeclaration constructor will automatically generate a
@@ -12820,6 +12977,8 @@ SageBuilder::buildNondefiningTemplateClassDeclaration_nfi(
 
     nondefdecl->set_scope(scope);
 
+    setTemplateParametersInDeclaration(nondefdecl, templateParameterList);
+
     // DQ (12/4/2011): Set the scope first and then set the type (scope is
     // required to compute the type (name mangling)). DQ (12/4/2011): Now we
     // want to enable this so that the SgClassType will be available from a
@@ -12874,19 +13033,6 @@ SageBuilder::buildNondefiningTemplateClassDeclaration_nfi(
     }
 
     testTemplateArgumentParents(nondefdecl);
-
-    // DQ (7/16/2017): Added code to set the template parameters in the just
-    // build declaration (if it is a template declaration). We want to set the
-    // parents of the template paremters to the frst nondefining template class
-    // declaration, and we want to reset the scope of the declarations
-    // associated with any previously marked SgClassType objects associated with
-    // any template parameters. printf
-    // ("SageBuilder::buildNondefiningTemplateClassDeclaration_nfi(): Calling
-    // setTemplateParametersInDeclaration():
-    // nameWithTemplateSpecializationArguments = %s
-    // \n",nameWithTemplateSpecializationArguments.str());
-
-    setTemplateParametersInDeclaration(nondefdecl, templateParameterList);
 
     // DQ (8/13/2013): Adding test of template parameter lists.
     SgTemplateClassDeclaration *templateClassDeclaration =
@@ -13182,6 +13328,8 @@ SgTemplateClassDeclaration *SageBuilder::buildTemplateClassDeclaration_nfi(
       nondefdecl->set_parent(scope);
       nondefdecl->set_scope(scope);
 
+      setTemplateParametersInDeclaration(nondefdecl, templateParameterList);
+
       if (nondefdecl->get_type() == NULL) {
         nondefdecl->set_type(SgClassType::createType(nondefdecl));
       }
@@ -13189,19 +13337,6 @@ SgTemplateClassDeclaration *SageBuilder::buildTemplateClassDeclaration_nfi(
       // DQ (9/12/2012): Test that the templateName is set (name without
       // template specialization parameters).
       ROSE_ASSERT(nondefdecl->get_templateName().is_null() == false);
-
-      // DQ (7/16/2017): Added code to set the template parameters in the just
-      // build declaration (if it is a template declaration). We want to set the
-      // parents of the template paremters to the frst nondefining template
-      // class declaration, and we want to reset the scope of the declarations
-      // associated with any previously marked SgClassType objects associated
-      // with any template parameters. printf
-      // ("SageBuilder::buildTemplateClassDeclaration_nfi(): Calling
-      // setTemplateParametersInDeclaration():
-      // nameWithTemplateSpecializationArguments = %s
-      // \n",nameWithTemplateSpecializationArguments.str());
-
-      setTemplateParametersInDeclaration(nondefdecl, templateParameterList);
 
       // DQ (8/13/2013): Adding test of template parameter lists.
       SgTemplateClassDeclaration *templateClassDeclaration =
@@ -13252,6 +13387,7 @@ SgTemplateClassDeclaration *SageBuilder::buildTemplateClassDeclaration_nfi(
       if (nondefdecl->get_scope() != scope) {
         nondefdecl->set_scope(scope);
       }
+      setTemplateParametersInDeclaration(nondefdecl, templateParameterList);
       if (nondefdecl->get_type() == NULL) {
         nondefdecl->set_type(SgClassType::createType(nondefdecl));
       }
@@ -13640,6 +13776,28 @@ SageBuilder::buildNonrealBaseClass(SgNonrealDecl *nrdecl,
 
   if (isVirtual == true) {
     baseclass->get_baseClassModifier()->setVirtual();
+  }
+
+  if (isSgScopeStatement(nrdecl->get_parent()) == NULL) {
+    SgDeclarationScope *declScope = isSgDeclarationScope(nrdecl->get_scope());
+    if (declScope == NULL) {
+      declScope = SageBuilder::buildDeclarationScope();
+    }
+    ROSE_ASSERT(declScope != NULL);
+
+    if (declScope->get_parent() != classDefinition) {
+      declScope->set_parent(classDefinition);
+    }
+
+    if (nrdecl->get_parent() != declScope) {
+      nrdecl->set_parent(declScope);
+    }
+    if (nrdecl->get_scope() != declScope) {
+      nrdecl->set_scope(declScope);
+    }
+    if (!declScope->statementExistsInScope(nrdecl)) {
+      declScope->insertStatementInScope(nrdecl, false);
+    }
   }
 
   baseclass->set_parent(classDefinition);
@@ -17160,7 +17318,7 @@ SgTemplateArgument *createTemplateArg(SgNode &n) {
 SgTemplateArgumentPtrList
 genTemplateArgumentList(Rose_STL_Container<SgNode *> &targs) {
   Rose_STL_Container<SgNode *>::iterator aa = targs.begin();
-  Rose_STL_Container<SgNode *>::iterator zz = targs.begin();
+  Rose_STL_Container<SgNode *>::iterator zz = targs.end();
   SgTemplateArgumentPtrList lst;
 
   for (; aa != zz; ++aa) {

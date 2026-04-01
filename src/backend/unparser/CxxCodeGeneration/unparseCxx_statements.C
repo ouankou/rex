@@ -201,6 +201,60 @@ bool declarationNeedsInlineFunctionReturnTypeDefinition(
   return false;
 }
 
+bool scopeHasTransformedDeclarations(SgScopeStatement *scope) {
+  if (scope == nullptr) {
+    return false;
+  }
+
+  SgDeclarationStatementPtrList *decls = nullptr;
+  if (SgGlobal *global = isSgGlobal(scope)) {
+    decls = &global->get_declarations();
+  } else if (SgNamespaceDefinitionStatement *ns_def =
+                 isSgNamespaceDefinitionStatement(scope)) {
+    decls = &ns_def->get_declarations();
+  } else if (SgDeclarationScope *decl_scope = isSgDeclarationScope(scope)) {
+    decls = &decl_scope->get_declarations();
+  }
+
+  if (decls == nullptr) {
+    return false;
+  }
+
+  for (SgDeclarationStatement *decl : *decls) {
+    if (decl == nullptr) {
+      continue;
+    }
+    if (decl->isTransformation() || decl->get_containsTransformation()) {
+      return true;
+    }
+    if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
+      if (SgClassDefinition *class_def = class_decl->get_definition()) {
+        if (class_def->isTransformation() ||
+            class_def->get_containsTransformation()) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+bool isWithinTransformedDeclarationScope(SgNode *node) {
+  for (SgNode *cursor = node; cursor != nullptr;
+       cursor = cursor->get_parent()) {
+    SgScopeStatement *scope = isSgScopeStatement(cursor);
+    if (scope == nullptr) {
+      continue;
+    }
+    if (scopeHasTransformedDeclarations(scope)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 bool functionReturnTypeNeedsInlineDefinition(SgType *type) {
   SgType *stripped_type = stripFunctionReturnTypeForInlineDefinitionCheck(type);
   if (stripped_type == nullptr) {
@@ -2046,12 +2100,23 @@ void Unparse_ExprStmt::unparseFunctionParameterDeclaration(
       if (pointerToMemberType != NULL) {
         ninfo.set_inArgList();
       }
-      // DQ (4/12/2019): This version is required for C old-style function
-      // parameters. DQ (4/11/2019): Try to comment this out to support
-      // Clang 8.0 which can't handle the "enum class" type elaboration.
-      if (initializedName->get_needs_definitions() ||
-          (outputParameterDeclaration &&
-           parameterTypeNeedsInlineDefinition(tmp_type))) {
+      // Decide inline parameter-type definitions from the final named-type
+      // declaration rather than trusting SgInitializedName::needs_definitions
+      // for class/enum types. That flag can be copied through declaration
+      // cloning long after the type declaration has been canonicalized, which
+      // leads to ordinary namespace-scope enums/classes being emitted inline in
+      // parameter lists.
+      SgType *inline_check_type =
+          stripFunctionReturnTypeForInlineDefinitionCheck(tmp_type);
+      bool needs_inline_type_definition = false;
+      if (isSgClassType(inline_check_type) != nullptr ||
+          isSgEnumType(inline_check_type) != nullptr) {
+        needs_inline_type_definition =
+            parameterTypeNeedsInlineDefinition(tmp_type);
+      } else {
+        needs_inline_type_definition = initializedName->get_needs_definitions();
+      }
+      if (needs_inline_type_definition) {
         if (ninfo.SkipClassDefinition()) {
           ninfo.unset_SkipClassDefinition();
         }
@@ -2136,210 +2201,6 @@ hasUnsafeParameterPreprocessingInfo(SgInitializedName *initializedName) {
   }
 
   return false;
-}
-
-static bool samePreprocessingSourceFile(const Sg_File_Info *lhs,
-                                        const Sg_File_Info *rhs) {
-  if (lhs == nullptr || rhs == nullptr) {
-    return false;
-  }
-  if (lhs->get_file_id() == rhs->get_file_id()) {
-    return true;
-  }
-  return !lhs->get_filenameString().empty() &&
-         lhs->get_filenameString() == rhs->get_filenameString();
-}
-
-static bool sourceBeforeOrEqual(const Sg_File_Info *lhs,
-                                const Sg_File_Info *rhs) {
-  if (!samePreprocessingSourceFile(lhs, rhs)) {
-    return false;
-  }
-  if (lhs->get_line() != rhs->get_line()) {
-    return lhs->get_line() < rhs->get_line();
-  }
-  return lhs->get_col() <= rhs->get_col();
-}
-
-static Sg_File_Info *effectiveLocatedStart(SgLocatedNode *node) {
-  if (node == nullptr) {
-    return nullptr;
-  }
-  if (Sg_File_Info *info = node->get_startOfConstruct();
-      info != nullptr && info->get_line() > 0) {
-    return info;
-  }
-  if (Sg_File_Info *info = node->get_file_info();
-      info != nullptr && info->get_line() > 0) {
-    return info;
-  }
-  return node->get_endOfConstruct();
-}
-
-static bool isFunctionPrefixConditionalPayload(PreprocessingInfo *info) {
-  if (info == nullptr) {
-    return false;
-  }
-
-  switch (info->getTypeOfDirective()) {
-  case PreprocessingInfo::CpreprocessorIfDeclaration:
-  case PreprocessingInfo::CpreprocessorIfdefDeclaration:
-  case PreprocessingInfo::CpreprocessorIfndefDeclaration:
-  case PreprocessingInfo::CpreprocessorElseDeclaration:
-  case PreprocessingInfo::CpreprocessorElifDeclaration:
-  case PreprocessingInfo::CpreprocessorEndifDeclaration:
-  case PreprocessingInfo::CpreprocessorDeadIfDeclaration:
-  case PreprocessingInfo::CSkippedToken:
-    return true;
-
-  default:
-    return false;
-  }
-}
-
-static bool
-isFunctionDeclaratorLeadingConditionalPayload(PreprocessingInfo *info) {
-  if (info == nullptr) {
-    return false;
-  }
-
-  switch (info->getTypeOfDirective()) {
-  case PreprocessingInfo::CpreprocessorIfDeclaration:
-  case PreprocessingInfo::CpreprocessorIfdefDeclaration:
-  case PreprocessingInfo::CpreprocessorIfndefDeclaration:
-  case PreprocessingInfo::CpreprocessorElseDeclaration:
-  case PreprocessingInfo::CpreprocessorElifDeclaration:
-  case PreprocessingInfo::CpreprocessorDeadIfDeclaration:
-  case PreprocessingInfo::CSkippedToken:
-    return true;
-
-  default:
-    return false;
-  }
-}
-
-static void dropFunctionDeclaratorPrefixConditionalsFromOwner(
-    SgLocatedNode *owner, const Sg_File_Info *decl_start,
-    const Sg_File_Info *body_start) {
-  if (owner == nullptr || decl_start == nullptr || body_start == nullptr ||
-      decl_start->get_line() <= 0 || body_start->get_line() <= 0 ||
-      !samePreprocessingSourceFile(decl_start, body_start) ||
-      !sourceBeforeOrEqual(decl_start, body_start)) {
-    return;
-  }
-
-  AttachedPreprocessingInfoType *attached =
-      owner->getAttachedPreprocessingInfo();
-  if (attached == nullptr || attached->empty()) {
-    return;
-  }
-
-  for (auto it = attached->begin(); it != attached->end();) {
-    PreprocessingInfo *info = *it;
-    Sg_File_Info *info_fi = info != nullptr ? info->get_file_info() : nullptr;
-    if (info_fi == nullptr || info_fi->get_line() <= 0 ||
-        !isFunctionPrefixConditionalPayload(info) ||
-        !samePreprocessingSourceFile(info_fi, decl_start) ||
-        !sourceBeforeOrEqual(info_fi, body_start) ||
-        sourceBeforeOrEqual(info_fi, decl_start) ||
-        (info_fi->get_line() == body_start->get_line() &&
-         info_fi->get_col() == body_start->get_col())) {
-      ++it;
-      continue;
-    }
-
-    it = attached->erase(it);
-  }
-}
-
-static bool
-ownerHasFunctionDeclaratorPrefixConditionals(SgLocatedNode *owner,
-                                             const Sg_File_Info *decl_start,
-                                             const Sg_File_Info *body_start) {
-  if (owner == nullptr || decl_start == nullptr || body_start == nullptr ||
-      decl_start->get_line() <= 0 || body_start->get_line() <= 0 ||
-      !samePreprocessingSourceFile(decl_start, body_start) ||
-      !sourceBeforeOrEqual(decl_start, body_start)) {
-    return false;
-  }
-
-  AttachedPreprocessingInfoType *attached =
-      owner->getAttachedPreprocessingInfo();
-  if (attached == nullptr || attached->empty()) {
-    return false;
-  }
-
-  for (PreprocessingInfo *info : *attached) {
-    Sg_File_Info *info_fi = info != nullptr ? info->get_file_info() : nullptr;
-    if (info_fi == nullptr || info_fi->get_line() <= 0 ||
-        !samePreprocessingSourceFile(info_fi, decl_start) ||
-        !sourceBeforeOrEqual(info_fi, body_start) ||
-        (info_fi->get_line() == body_start->get_line() &&
-         info_fi->get_col() == body_start->get_col())) {
-      continue;
-    }
-
-    const bool between_declarator_and_body =
-        isFunctionPrefixConditionalPayload(info) &&
-        !sourceBeforeOrEqual(info_fi, decl_start);
-    const bool before_declarator_with_leading_payload =
-        isFunctionDeclaratorLeadingConditionalPayload(info) &&
-        sourceBeforeOrEqual(info_fi, decl_start) &&
-        !(info_fi->get_line() == decl_start->get_line() &&
-          info_fi->get_col() == decl_start->get_col());
-    if (!between_declarator_and_body &&
-        !before_declarator_with_leading_payload) {
-      continue;
-    }
-    return true;
-  }
-
-  return false;
-}
-
-static void
-dropFunctionDeclaratorPrefixConditionals(SgFunctionDefinition *funcdefn_stmt) {
-  if (funcdefn_stmt == nullptr) {
-    return;
-  }
-
-  SgFunctionDeclaration *decl = funcdefn_stmt->get_declaration();
-  SgBasicBlock *body = funcdefn_stmt->get_body();
-  if (decl == nullptr || body == nullptr) {
-    return;
-  }
-
-  Sg_File_Info *decl_start = effectiveLocatedStart(decl);
-  Sg_File_Info *body_start = effectiveLocatedStart(body);
-  if (decl_start == nullptr || body_start == nullptr) {
-    return;
-  }
-
-  // Keep prefix conditionals when the declaration side still owns any part of
-  // that conditional region. Older C tests intentionally rely on `#if/#else`
-  // around the return-type spelling, with the matching `#endif` attached after
-  // the declarator.
-  if (ownerHasFunctionDeclaratorPrefixConditionals(decl, decl_start,
-                                                   body_start) ||
-      ownerHasFunctionDeclaratorPrefixConditionals(decl->get_parameterList(),
-                                                   decl_start, body_start) ||
-      ownerHasFunctionDeclaratorPrefixConditionals(
-          decl->get_parameterList_syntax(), decl_start, body_start) ||
-      ownerHasFunctionDeclaratorPrefixConditionals(funcdefn_stmt, decl_start,
-                                                   body_start)) {
-    return;
-  }
-
-  dropFunctionDeclaratorPrefixConditionalsFromOwner(decl, decl_start,
-                                                    body_start);
-  dropFunctionDeclaratorPrefixConditionalsFromOwner(decl->get_parameterList(),
-                                                    decl_start, body_start);
-  dropFunctionDeclaratorPrefixConditionalsFromOwner(
-      decl->get_parameterList_syntax(), decl_start, body_start);
-  dropFunctionDeclaratorPrefixConditionalsFromOwner(funcdefn_stmt, decl_start,
-                                                    body_start);
-  dropFunctionDeclaratorPrefixConditionalsFromOwner(body, decl_start,
-                                                    body_start);
 }
 
 void Unparse_ExprStmt::unparseFunctionArgs(SgFunctionDeclaration *funcdecl_stmt,
@@ -2453,7 +2314,7 @@ void Unparse_ExprStmt::unparse_helper(SgFunctionDeclaration *funcdecl_stmt,
                        funcdecl_stmt->get_global_qualification_required();
 
   bool force_global_friend_qualifier = false;
-  if (is_friend && !has_qualifier) {
+  if (is_friend) {
     SgClassDefinition *friend_class_def =
         isSgClassDefinition(funcdecl_stmt->get_parent());
     if (friend_class_def == nullptr &&
@@ -2470,7 +2331,12 @@ void Unparse_ExprStmt::unparse_helper(SgFunctionDeclaration *funcdecl_stmt,
     }
 
     if (friend_class_def != nullptr) {
-      SgScopeStatement *friend_enclosing_scope = friend_class_def->get_scope();
+      SgScopeStatement *friend_enclosing_scope =
+          SageInterface::enclosingNamespaceScope(
+              friend_class_def->get_declaration());
+      if (friend_enclosing_scope == nullptr) {
+        friend_enclosing_scope = friend_class_def->get_scope();
+      }
       SgScopeStatement *friend_decl_scope = funcdecl_stmt->get_scope();
       force_global_friend_qualifier =
           friend_decl_scope != nullptr && friend_enclosing_scope != nullptr &&
@@ -2495,10 +2361,32 @@ void Unparse_ExprStmt::unparse_helper(SgFunctionDeclaration *funcdecl_stmt,
     if (nameQualifier.empty()) {
       nameQualifier = funcdecl_stmt->get_qualified_name_prefix().str();
     }
+    if (is_friend) {
+      if (SgTemplateInstantiationFunctionDecl *friend_template_inst =
+              isSgTemplateInstantiationFunctionDecl(funcdecl_stmt)) {
+        if (SgTemplateFunctionDeclaration *primary_template =
+                friend_template_inst->get_templateDeclaration()) {
+          SgScopeStatement *template_scope = primary_template->get_scope();
+          SgClassDefinition *friend_class_def =
+              isSgClassDefinition(funcdecl_stmt->get_parent());
+          if (friend_class_def != nullptr && template_scope != nullptr &&
+              isSgGlobal(template_scope) != nullptr) {
+            SgScopeStatement *lexical_namespace =
+                SageInterface::enclosingNamespaceScope(
+                    friend_class_def->get_declaration());
+            if (lexical_namespace != nullptr &&
+                isSgGlobal(lexical_namespace) == nullptr) {
+              nameQualifier.clear();
+              force_global_friend_qualifier = false;
+            }
+          }
+        }
+      }
+    }
 #if DEBUG_unparse_helper
     printf("  nameQualifier = %s\n", nameQualifier.c_str());
 #endif
-    if (force_global_friend_qualifier && nameQualifier.empty()) {
+    if (force_global_friend_qualifier) {
       curprint("::");
     } else {
       curprint(nameQualifier);
@@ -3543,7 +3431,9 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
     // string("template ";
     SgUnparse_Info ninfo(info);
     ninfo.set_SkipFunctionDefinition();
-    ninfo.set_AddSemiColonAfterDeclaration();
+    if (functionDeclaration->isForward() == false) {
+      ninfo.set_AddSemiColonAfterDeclaration();
+    }
     unparseFuncDeclStmt(functionDeclaration, ninfo);
     break;
   }
@@ -3580,7 +3470,9 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
     // syntax.
     SgUnparse_Info ninfo(info);
     ninfo.set_SkipFunctionDefinition();
-    ninfo.set_AddSemiColonAfterDeclaration();
+    if (memberFunctionDeclaration->isForward() == false) {
+      ninfo.set_AddSemiColonAfterDeclaration();
+    }
     unparseMFuncDeclStmt(memberFunctionDeclaration, ninfo);
     break;
   }
@@ -5474,6 +5366,11 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
   // unparse this syntax, if not then we require this syntax.
   bool saved_unparsedPartiallyUsingTokenStream =
       info.unparsedPartiallyUsingTokenStream();
+  if (saved_unparsedPartiallyUsingTokenStream &&
+      isWithinTransformedDeclarationScope(funcdecl_stmt)) {
+    saved_unparsedPartiallyUsingTokenStream = false;
+    info.unset_unparsedPartiallyUsingTokenStream();
+  }
   if (saved_unparsedPartiallyUsingTokenStream == true) {
     SgFunctionDefinition *function_definition = funcdecl_stmt->get_definition();
     ASSERT_not_null(function_definition);
@@ -5549,6 +5446,15 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
     SgType *rtype = funcdecl_stmt->get_orig_return_type();
     bool use_trailing_return_type_syntax =
         !is_deduction_guide && requiresTrailingReturnTypeSyntax(rtype);
+
+    if (funcdecl_stmt->get_name().getString() == "foo") {
+      std::string filename;
+      if (Sg_File_Info *fi = funcdecl_stmt->get_file_info()) {
+        filename = fi->get_filenameString();
+      }
+      if (filename.find("test2011_43.C") != std::string::npos) {
+      }
+    }
 
     SgUnparse_Info ninfo_for_type(ninfo);
     if (funcdecl_stmt->get_requiresNameQualificationOnReturnType() == true) {
@@ -5779,8 +5685,6 @@ void Unparse_ExprStmt::unparseFuncDefnStmt(SgStatement *stmt,
   SgFunctionDefinition *funcdefn_stmt = isSgFunctionDefinition(stmt);
   ASSERT_not_null(funcdefn_stmt);
 
-  dropFunctionDeclaratorPrefixConditionals(funcdefn_stmt);
-
 #if OUTPUT_HIDDEN_LIST_DATA
   outputHiddenListData(funcdefn_stmt);
 #endif
@@ -5795,6 +5699,15 @@ void Unparse_ExprStmt::unparseFuncDefnStmt(SgStatement *stmt,
 
   info.set_SkipFunctionDefinition();
   SgStatement *declstmt = funcdefn_stmt->get_declaration();
+  const std::string trace_func_name =
+      isSgFunctionDeclaration(declstmt) != nullptr
+          ? isSgFunctionDeclaration(declstmt)->get_name().getString()
+          : std::string();
+  const bool trace_func = trace_func_name == "__push_heap" ||
+                          trace_func_name == "__copy_streambufs_eof" ||
+                          trace_func_name == "imbue" ||
+                          trace_func_name == "init" ||
+                          trace_func_name == "sentry";
 
   // DQ (1/19/2014): Adding gnu attribute prefix support.
   ASSERT_not_null(funcdefn_stmt->get_declaration());
@@ -5826,6 +5739,26 @@ void Unparse_ExprStmt::unparseFuncDefnStmt(SgStatement *stmt,
   // require this syntax. if (info.unparsedPartiallyUsingTokenStream() == false)
   bool saved_unparsedPartiallyUsingTokenStream =
       info.unparsedPartiallyUsingTokenStream();
+  if (saved_unparsedPartiallyUsingTokenStream &&
+      isWithinTransformedDeclarationScope(funcdefn_stmt)) {
+    saved_unparsedPartiallyUsingTokenStream = false;
+    info.unset_unparsedPartiallyUsingTokenStream();
+  }
+  if (trace_func) {
+    std::cerr << "TRACE funcdef mode def=" << funcdefn_stmt
+              << " name=" << trace_func_name << " scopeTransformed="
+              << (isWithinTransformedDeclarationScope(funcdefn_stmt) ? 1 : 0)
+              << " partial="
+              << (saved_unparsedPartiallyUsingTokenStream ? 1 : 0) << " scope="
+              << (funcdefn_stmt->get_scope() != nullptr
+                      ? funcdefn_stmt->get_scope()->class_name()
+                      : std::string("<null>"))
+              << " parent="
+              << (funcdefn_stmt->get_parent() != nullptr
+                      ? funcdefn_stmt->get_parent()->class_name()
+                      : std::string("<null>"))
+              << std::endl;
+  }
   if (saved_unparsedPartiallyUsingTokenStream == false) {
     if (isSgMemberFunctionDeclaration(declstmt)) {
       unparseMFuncDeclStmt(declstmt, info);
@@ -6058,6 +5991,12 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
       isSgMemberFunctionDeclaration(stmt);
   ASSERT_not_null(mfuncdecl_stmt);
 
+  const std::string trace_mfunc_name = mfuncdecl_stmt->get_name().getString();
+  const bool trace_mfunc =
+      trace_mfunc_name == "operator++" || trace_mfunc_name == "good" ||
+      trace_mfunc_name == "imbue" || trace_mfunc_name == "init" ||
+      trace_mfunc_name == "sentry";
+
 #if DEBUG_unparseMFuncDeclStmt
   printf("Enter Unparse_ExprStmt::unparseMFuncDeclStmt\n");
   printf("  stmt = %p = %s\n", stmt, stmt->class_name().c_str());
@@ -6071,6 +6010,28 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
   // unparse this syntax, if not then we require this syntax.
   bool saved_unparsedPartiallyUsingTokenStream =
       info.unparsedPartiallyUsingTokenStream();
+  if (saved_unparsedPartiallyUsingTokenStream &&
+      isWithinTransformedDeclarationScope(mfuncdecl_stmt)) {
+    saved_unparsedPartiallyUsingTokenStream = false;
+    info.unset_unparsedPartiallyUsingTokenStream();
+  }
+  if (trace_mfunc) {
+    std::cerr << "TRACE mfunc mode decl=" << mfuncdecl_stmt
+              << " name=" << trace_mfunc_name
+              << " forward=" << (mfuncdecl_stmt->isForward() ? 1 : 0)
+              << " scopeTransformed="
+              << (isWithinTransformedDeclarationScope(mfuncdecl_stmt) ? 1 : 0)
+              << " partial="
+              << (saved_unparsedPartiallyUsingTokenStream ? 1 : 0) << " scope="
+              << (mfuncdecl_stmt->get_scope() != nullptr
+                      ? mfuncdecl_stmt->get_scope()->class_name()
+                      : std::string("<null>"))
+              << " parent="
+              << (mfuncdecl_stmt->get_parent() != nullptr
+                      ? mfuncdecl_stmt->get_parent()->class_name()
+                      : std::string("<null>"))
+              << std::endl;
+  }
   if (saved_unparsedPartiallyUsingTokenStream == true) {
     SgFunctionDefinition *function_definition =
         mfuncdecl_stmt->get_definition();
@@ -6313,7 +6274,17 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
       curprint(" try");
     }
 
-    auto &ctor_inits = mfuncdecl_stmt->get_ctors();
+    const SgInitializedNamePtrList *ctor_inits_ptr =
+        &mfuncdecl_stmt->get_ctors();
+    if (ctor_inits_ptr->empty()) {
+      if (SgMemberFunctionDeclaration *def_decl = isSgMemberFunctionDeclaration(
+              mfuncdecl_stmt->get_definingDeclaration())) {
+        if (def_decl != mfuncdecl_stmt && !def_decl->get_ctors().empty()) {
+          ctor_inits_ptr = &def_decl->get_ctors();
+        }
+      }
+    }
+    auto const &ctor_inits = *ctor_inits_ptr;
     if ((mfuncdecl_stmt->isForward() && !info.SkipSemiColon()) ||
         isDefaultedOrDeletedMemberFunction) {
       curprint(";");
@@ -6602,6 +6573,30 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
   SgClassDeclaration *classdecl_stmt = isSgClassDeclaration(stmt);
   ASSERT_not_null(classdecl_stmt);
 
+  const std::string trace_class_name = classdecl_stmt->get_name().getString();
+  const bool trace_class_decl =
+      trace_class_name == "ios_base" || trace_class_name == "__gconv_info" ||
+      trace_class_name == "codecvt_base" || trace_class_name == "_Deque_impl" ||
+      trace_class_name == "PP_entry" || trace_class_name == "Frame" ||
+      trace_class_name == "Record";
+  if (trace_class_decl) {
+    std::cerr << "TRACE unparseClassDeclStmt decl=" << classdecl_stmt
+              << " forward=" << (classdecl_stmt->isForward() ? 1 : 0)
+              << " hasDef="
+              << (classdecl_stmt->get_definition() != NULL ? 1 : 0)
+              << " skipClassDef=" << (info.SkipClassDefinition() ? 1 : 0)
+              << " transformed=" << (classdecl_stmt->isTransformation() ? 1 : 0)
+              << " parent="
+              << (classdecl_stmt->get_parent() != NULL
+                      ? classdecl_stmt->get_parent()->class_name()
+                      : std::string("<null>"))
+              << " scope="
+              << (classdecl_stmt->get_scope() != NULL
+                      ? classdecl_stmt->get_scope()->class_name()
+                      : std::string("<null>"))
+              << std::endl;
+  }
+
   if (!info.inArgList() &&
       info.get_reference_node_for_qualification() == NULL &&
       classdecl_stmt->attributeExists(
@@ -6631,13 +6626,36 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
 #endif
 
   // DQ (6/2/2021): Adding support for partial token sequence unparsing.
+  SgClassDefinition *class_definition = classdecl_stmt->get_definition();
   bool saved_unparsedPartiallyUsingTokenStream =
       info.unparsedPartiallyUsingTokenStream();
+  if (saved_unparsedPartiallyUsingTokenStream &&
+      (classdecl_stmt->isTransformation() ||
+       (class_definition != NULL && class_definition->isTransformation()))) {
+    // Partial token-sequence mode can be inherited from an enclosing frontier
+    // statement. Reused/transformed class declarations must unparse from the
+    // AST instead; otherwise the nested class-declaration path consumes the
+    // token-fragment mode directly and can degrade a defining declaration back
+    // into a forward declaration.
+    saved_unparsedPartiallyUsingTokenStream = false;
+  }
+  if (trace_class_decl) {
+    std::cerr << "TRACE unparseClassDeclStmt mode decl=" << classdecl_stmt
+              << " partialTokens="
+              << (saved_unparsedPartiallyUsingTokenStream ? 1 : 0)
+              << " declTrans=" << (classdecl_stmt->isTransformation() ? 1 : 0)
+              << " defTrans="
+              << (class_definition != NULL &&
+                          class_definition->isTransformation()
+                      ? 1
+                      : 0)
+              << " skipBasicBlock=" << (info.SkipBasicBlock() ? 1 : 0)
+              << std::endl;
+  }
   if (saved_unparsedPartiallyUsingTokenStream == true) {
     // unparseStatementFromTokenStream (stmt, e_token_subsequence_start,
     // e_token_subsequence_start); unparseStatementFromTokenStream (stmt,
     // e_token_subsequence_start, e_token_subsequence_end);
-    SgClassDefinition *class_definition = classdecl_stmt->get_definition();
     ASSERT_not_null(class_definition);
 
     // unparseStatementFromTokenStream (stmt, function_body,
@@ -6801,8 +6819,29 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
 
     if (!classdecl_stmt->isForward() && classdecl_stmt->get_definition() &&
         !info.SkipClassDefinition()) {
+      if (trace_class_decl) {
+        std::cerr << "TRACE unparseClassDeclStmt recurse-def decl="
+                  << classdecl_stmt << " def=" << class_definition
+                  << " nestedPartial="
+                  << (class_info.unparsedPartiallyUsingTokenStream() ? 1 : 0)
+                  << std::endl;
+      }
       SgUnparse_Info ninfox(class_info);
       ninfox.unset_SkipSemiColon();
+      // Class definition emission is controlled by SkipClassDefinition, not by
+      // SkipBasicBlock from an outer statement/token-stream context. If a
+      // class declaration is selected for full AST unparsing, leaking
+      // SkipBasicBlock here collapses the defining declaration into a forward
+      // declaration by suppressing the class body inside unparseClassDefnStmt.
+      if (ninfox.SkipBasicBlock()) {
+        ninfox.unset_SkipBasicBlock();
+      }
+      if (ninfox.unparsedPartiallyUsingTokenStream() &&
+          (classdecl_stmt->isTransformation() ||
+           (class_definition != NULL &&
+            class_definition->isTransformation()))) {
+        ninfox.unset_unparsedPartiallyUsingTokenStream();
+      }
 
       // DQ (6/13/2007): Set to null before resetting to non-null value
       ninfox.set_declstatement_ptr(NULL);
@@ -7153,6 +7192,51 @@ void Unparse_ExprStmt::unparseClassDefnStmt(SgStatement *stmt,
 
   SgClassDefinition *classdefn_stmt = isSgClassDefinition(stmt);
   ASSERT_not_null(classdefn_stmt);
+
+  if (SgClassDeclaration *class_decl = classdefn_stmt->get_declaration()) {
+    std::string name = class_decl->get_name().getString();
+    if (name == "ios_base" || name == "__gconv_info" || name == "_Deque_base" ||
+        name == "ParmParse") {
+      std::cerr << "TRACE unparseClassDefnStmt def=" << classdefn_stmt
+                << " decl=" << class_decl << " name=" << name
+                << " skipBasicBlock=" << (info.SkipBasicBlock() ? 1 : 0)
+                << " skipClassDef=" << (info.SkipClassDefinition() ? 1 : 0)
+                << " partialTokens="
+                << (info.unparsedPartiallyUsingTokenStream() ? 1 : 0)
+                << " members="
+                << static_cast<long long>(classdefn_stmt->get_members().size())
+                << " parent="
+                << (classdefn_stmt->get_parent() != NULL
+                        ? classdefn_stmt->get_parent()->class_name()
+                        : std::string("<null>"))
+                << std::endl;
+      if (name == "_Deque_base" || name == "ParmParse") {
+        for (SgDeclarationStatement *member : classdefn_stmt->get_members()) {
+          if (SgClassDeclaration *member_class = isSgClassDeclaration(member)) {
+            std::cerr
+                << "TRACE unparseClassDefnStmt member name="
+                << member_class->get_name().getString()
+                << " decl=" << member_class
+                << " forward=" << (member_class->isForward() ? 1 : 0)
+                << " hasDef="
+                << (member_class->get_definition() != NULL ? 1 : 0)
+                << " output="
+                << (member_class->get_file_info() != NULL &&
+                            member_class->get_file_info()
+                                ->isOutputInCodeGeneration()
+                        ? 1
+                        : 0)
+                << " compilerGen="
+                << (member_class->get_file_info() != NULL &&
+                            member_class->get_file_info()->isCompilerGenerated()
+                        ? 1
+                        : 0)
+                << std::endl;
+          }
+        }
+      }
+    }
+  }
 
   // DQ (5/28/2021): Adding support for partial token sequence unparsing.
   bool saved_unparsedPartiallyUsingTokenStream =
@@ -9681,17 +9765,14 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
               templateTypedefDeclaration != nullptr);
 
   // Unparsing template from the AST can be controlled at the sourcefile or
-  // declaration level (for functions and method only)
+  // declaration level. The declaration-level flag is set on the shared
+  // template declaration base and applies to all template declaration kinds.
 
   SgSourceFile *sourcefile = info.get_current_source_file();
   bool unparse_template_from_ast =
       sourcefile != NULL && sourcefile->get_unparse_template_ast();
   unparse_template_from_ast |=
-      ((templateFunctionDeclaration != NULL) &&
-       (templateFunctionDeclaration->get_unparse_template_ast() == true));
-  unparse_template_from_ast |=
-      ((templateMemberFunctionDeclaration != NULL) &&
-       (templateMemberFunctionDeclaration->get_unparse_template_ast() == true));
+      template_stmt->get_unparse_template_ast() == true;
 
   auto unparse_member_function_ctor_initializers =
       [&](SgMemberFunctionDeclaration *member_function,
@@ -9699,8 +9780,23 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
         if (member_function == NULL) {
           return;
         }
+        if (member_function->isForward()) {
+          return;
+        }
 
-        auto const &ctor_inits = member_function->get_ctors();
+        const SgInitializedNamePtrList *ctor_inits_ptr =
+            &member_function->get_ctors();
+        if (ctor_inits_ptr->empty()) {
+          if (SgMemberFunctionDeclaration *def_decl =
+                  isSgMemberFunctionDeclaration(
+                      member_function->get_definingDeclaration())) {
+            if (def_decl != member_function && !def_decl->get_ctors().empty()) {
+              ctor_inits_ptr = &def_decl->get_ctors();
+            }
+          }
+        }
+
+        auto const &ctor_inits = *ctor_inits_ptr;
         if (ctor_inits.empty()) {
           return;
         }
@@ -10233,8 +10329,22 @@ void Unparse_ExprStmt::unparseOmpBeginDirectiveClauses(SgStatement *stmt,
             if (isSgGlobal(class_decl->get_scope()) != nullptr) {
               curprint(string("::"));
             }
+            if (SgTemplateInstantiationDecl *inst_decl =
+                    isSgTemplateInstantiationDecl(class_decl)) {
+              SgUnparse_Info ninfo(info);
+              if (ninfo.isTypeFirstPart()) {
+                ninfo.unset_isTypeFirstPart();
+              }
+              if (ninfo.isTypeSecondPart()) {
+                ninfo.unset_isTypeSecondPart();
+              }
+              unp->u_exprStmt->unparseTemplateName(inst_decl, ninfo);
+            } else {
+              curprint(class_type->get_name().getString());
+            }
+          } else {
+            curprint(class_type->get_name().getString());
           }
-          curprint(class_type->get_name().getString());
           mapper_type_needs_variable_separator = true;
         } else {
           unparseExpression(mapperstmt->get_mapper_type(), info);

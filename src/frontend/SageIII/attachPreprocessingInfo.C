@@ -53,6 +53,14 @@ static bool isFromMainSourceFile(SgLocatedNode *node,
   return node->get_file_info()->get_filenameString() == main_filename;
 }
 
+static bool isFromSourceFile(SgLocatedNode *node, const std::string &filename) {
+  if (node == nullptr || node->get_file_info() == nullptr) {
+    return false;
+  }
+
+  return node->get_file_info()->get_filenameString() == filename;
+}
+
 static bool isBracedScopePreprocessingTarget(SgLocatedNode *node) {
   return isSgClassDefinition(node) != nullptr ||
          isSgBasicBlock(node) != nullptr ||
@@ -81,12 +89,37 @@ collectLocatedNodesInMainFile(SgNode *node, const std::string &main_filename,
   }
 }
 
+static void
+collectSourceLocatedNodes(SgNode *node,
+                          std::vector<SgLocatedNode *> &located_nodes) {
+  if (node == nullptr) {
+    return;
+  }
+
+  if (SgLocatedNode *located = isSgLocatedNode(node)) {
+    if (located->get_file_info() != nullptr &&
+        located->get_file_info()->isCompilerGenerated() == false &&
+        located->get_file_info()->get_filenameString().empty() == false) {
+      located_nodes.push_back(located);
+    }
+  }
+
+  const std::vector<SgNode *> children =
+      node->get_traversalSuccessorContainer();
+  for (SgNode *child : children) {
+    collectSourceLocatedNodes(child, located_nodes);
+  }
+}
+
 static SgLocatedNode *findInnermostBracedScopeContainingLine(
     const std::vector<SgLocatedNode *> &located_nodes, size_t current_index,
-    int line, int source_file_id) {
+    int line, int source_file_id, const std::string &filename) {
   for (size_t i = current_index; i > 0; --i) {
     SgLocatedNode *candidate = located_nodes[i - 1];
     if (isBracedScopePreprocessingTarget(candidate) == false) {
+      continue;
+    }
+    if (!isFromSourceFile(candidate, filename)) {
       continue;
     }
 
@@ -169,9 +202,100 @@ static bool preprocessingInfoPrecedesNodeStart(const PreprocessingInfo *info,
   return info_col < node_col;
 }
 
+static bool isConditionalPreprocessingPayload(const PreprocessingInfo *info) {
+  if (info == nullptr) {
+    return false;
+  }
+
+  switch (info->getTypeOfDirective()) {
+  case PreprocessingInfo::CpreprocessorIfDeclaration:
+  case PreprocessingInfo::CpreprocessorIfdefDeclaration:
+  case PreprocessingInfo::CpreprocessorIfndefDeclaration:
+  case PreprocessingInfo::CpreprocessorElseDeclaration:
+  case PreprocessingInfo::CpreprocessorElifDeclaration:
+  case PreprocessingInfo::CpreprocessorEndifDeclaration:
+  case PreprocessingInfo::CpreprocessorDeadIfDeclaration:
+  case PreprocessingInfo::CSkippedToken:
+    return true;
+
+  default:
+    return false;
+  }
+}
+
+static int compareSourceLocation(const Sg_File_Info *lhs,
+                                 const Sg_File_Info *rhs) {
+  ROSE_ASSERT(lhs != nullptr);
+  ROSE_ASSERT(rhs != nullptr);
+
+  if (lhs->get_line() != rhs->get_line()) {
+    return lhs->get_line() < rhs->get_line() ? -1 : 1;
+  }
+
+  if (lhs->get_col() != rhs->get_col()) {
+    return lhs->get_col() < rhs->get_col() ? -1 : 1;
+  }
+
+  return 0;
+}
+
+static bool sourceLocationPrecedes(const Sg_File_Info *lhs,
+                                   const Sg_File_Info *rhs) {
+  return lhs != nullptr && rhs != nullptr &&
+         compareSourceLocation(lhs, rhs) < 0;
+}
+
+static bool sourceLocationPrecedesOrEqual(const Sg_File_Info *lhs,
+                                          const Sg_File_Info *rhs) {
+  return lhs != nullptr && rhs != nullptr &&
+         compareSourceLocation(lhs, rhs) <= 0;
+}
+
+static bool sameMainFileLocation(const Sg_File_Info *lhs,
+                                 const Sg_File_Info *rhs) {
+  return lhs != nullptr && rhs != nullptr &&
+         lhs->get_filenameString() == rhs->get_filenameString();
+}
+
+static Sg_File_Info *getEffectiveStartInfo(SgLocatedNode *node) {
+  if (node == nullptr) {
+    return nullptr;
+  }
+
+  if (Sg_File_Info *start = node->get_startOfConstruct();
+      start != nullptr && start->get_line() > 0) {
+    return start;
+  }
+
+  if (Sg_File_Info *info = node->get_file_info();
+      info != nullptr && info->get_line() > 0) {
+    return info;
+  }
+
+  return node->get_endOfConstruct();
+}
+
+static Sg_File_Info *getEffectiveEndInfo(SgLocatedNode *node) {
+  if (node == nullptr) {
+    return nullptr;
+  }
+
+  if (Sg_File_Info *end = node->get_endOfConstruct();
+      end != nullptr && end->get_line() > 0) {
+    return end;
+  }
+
+  if (Sg_File_Info *info = node->get_file_info();
+      info != nullptr && info->get_line() > 0) {
+    return info;
+  }
+
+  return node->get_startOfConstruct();
+}
+
 static SgStatement *
-findFirstSourceStatementInMainFile(SgBasicBlock *block,
-                                   const std::string &main_filename) {
+findFirstSourceStatementInFile(SgBasicBlock *block,
+                               const std::string &filename) {
   if (block == nullptr) {
     return nullptr;
   }
@@ -185,7 +309,7 @@ findFirstSourceStatementInMainFile(SgBasicBlock *block,
       continue;
     }
 
-    if (stmt->get_file_info()->get_filenameString() != main_filename) {
+    if (stmt->get_file_info()->get_filenameString() != filename) {
       continue;
     }
 
@@ -197,7 +321,7 @@ findFirstSourceStatementInMainFile(SgBasicBlock *block,
 
 static SgInitializedName *findFirstFollowingEnumeratorInMainFile(
     SgEnumDeclaration *enum_decl, const PreprocessingInfo *info,
-    const std::string &main_filename, int source_file_id) {
+    const std::string &filename, int source_file_id) {
   if (enum_decl == nullptr || info == nullptr) {
     return nullptr;
   }
@@ -211,7 +335,7 @@ static SgInitializedName *findFirstFollowingEnumeratorInMainFile(
       continue;
     }
 
-    if (enumerator->get_file_info()->get_filenameString() != main_filename) {
+    if (enumerator->get_file_info()->get_filenameString() != filename) {
       continue;
     }
 
@@ -232,12 +356,8 @@ normalizeLeadingBasicBlockPreprocessingInfo(SgSourceFile *source_file) {
     return;
   }
 
-  const std::string main_filename =
-      source_file->get_file_info()->get_filenameString();
-  const int source_file_id = source_file->get_file_info()->get_file_id();
-
   std::vector<SgLocatedNode *> located_nodes;
-  collectLocatedNodesInMainFile(source_file, main_filename, located_nodes);
+  collectSourceLocatedNodes(source_file, located_nodes);
 
   std::vector<MisplacedPreprocessingInfoMove> moves;
   moves.reserve(16);
@@ -254,14 +374,21 @@ normalizeLeadingBasicBlockPreprocessingInfo(SgSourceFile *source_file) {
       continue;
     }
 
+    Sg_File_Info *block_info = block->get_file_info();
+    if (block_info == nullptr) {
+      continue;
+    }
+    const std::string filename = block_info->get_filenameString();
+    const int source_file_id = block_info->get_file_id();
+
     SgStatement *first_statement =
-        findFirstSourceStatementInMainFile(block, main_filename);
+        findFirstSourceStatementInFile(block, filename);
     if (first_statement == nullptr) {
       continue;
     }
 
     for (PreprocessingInfo *info : *attached) {
-      if (info == nullptr || info->getFilename() != main_filename ||
+      if (info == nullptr || info->getFilename() != filename ||
           info->getRelativePosition() != PreprocessingInfo::inside) {
         continue;
       }
@@ -320,12 +447,8 @@ normalizeEnumEnumeratorPreprocessingInfo(SgSourceFile *source_file) {
     return;
   }
 
-  const std::string main_filename =
-      source_file->get_file_info()->get_filenameString();
-  const int source_file_id = source_file->get_file_info()->get_file_id();
-
   std::vector<SgLocatedNode *> located_nodes;
-  collectLocatedNodesInMainFile(source_file, main_filename, located_nodes);
+  collectSourceLocatedNodes(source_file, located_nodes);
 
   std::vector<MisplacedPreprocessingInfoMove> moves;
   moves.reserve(16);
@@ -342,8 +465,15 @@ normalizeEnumEnumeratorPreprocessingInfo(SgSourceFile *source_file) {
       continue;
     }
 
+    Sg_File_Info *enum_info = enum_decl->get_file_info();
+    if (enum_info == nullptr) {
+      continue;
+    }
+    const std::string filename = enum_info->get_filenameString();
+    const int source_file_id = enum_info->get_file_id();
+
     for (PreprocessingInfo *info : *attached) {
-      if (info == nullptr || info->getFilename() != main_filename) {
+      if (info == nullptr || info->getFilename() != filename) {
         continue;
       }
 
@@ -359,7 +489,7 @@ normalizeEnumEnumeratorPreprocessingInfo(SgSourceFile *source_file) {
       }
 
       SgInitializedName *target = findFirstFollowingEnumeratorInMainFile(
-          enum_decl, info, main_filename, source_file_id);
+          enum_decl, info, filename, source_file_id);
       if (target == nullptr) {
         continue;
       }
@@ -412,12 +542,8 @@ static void normalizeAsmStatementPreprocessingInfo(SgSourceFile *source_file) {
     return;
   }
 
-  const std::string main_filename =
-      source_file->get_file_info()->get_filenameString();
-  const int source_file_id = source_file->get_file_info()->get_file_id();
-
   std::vector<SgLocatedNode *> located_nodes;
-  collectLocatedNodesInMainFile(source_file, main_filename, located_nodes);
+  collectSourceLocatedNodes(source_file, located_nodes);
 
   std::vector<MisplacedPreprocessingInfoMove> moves;
   moves.reserve(16);
@@ -434,6 +560,13 @@ static void normalizeAsmStatementPreprocessingInfo(SgSourceFile *source_file) {
       continue;
     }
 
+    Sg_File_Info *asm_info = asm_stmt->get_file_info();
+    if (asm_info == nullptr) {
+      continue;
+    }
+    const std::string filename = asm_info->get_filenameString();
+    const int source_file_id = asm_info->get_file_id();
+
     const int asm_start_line = getPhysicalStartLine(asm_stmt, source_file_id);
     const int asm_end_line = getPhysicalEndLine(asm_stmt, source_file_id);
     if (asm_start_line <= 0 || asm_end_line <= 0) {
@@ -441,7 +574,7 @@ static void normalizeAsmStatementPreprocessingInfo(SgSourceFile *source_file) {
     }
 
     for (PreprocessingInfo *info : *attached) {
-      if (info == nullptr || info->getFilename() != main_filename ||
+      if (info == nullptr || info->getFilename() != filename ||
           info->getRelativePosition() != PreprocessingInfo::after) {
         continue;
       }
@@ -500,12 +633,8 @@ normalizeMisplacedBracedScopePreprocessingInfo(SgSourceFile *source_file) {
     return;
   }
 
-  const std::string main_filename =
-      source_file->get_file_info()->get_filenameString();
-  const int source_file_id = source_file->get_file_info()->get_file_id();
-
   std::vector<SgLocatedNode *> located_nodes;
-  collectLocatedNodesInMainFile(source_file, main_filename, located_nodes);
+  collectSourceLocatedNodes(source_file, located_nodes);
 
   std::vector<MisplacedPreprocessingInfoMove> moves;
   moves.reserve(16);
@@ -518,11 +647,18 @@ normalizeMisplacedBracedScopePreprocessingInfo(SgSourceFile *source_file) {
       continue;
     }
 
+    Sg_File_Info *owner_info = owner->get_file_info();
+    if (owner_info == nullptr) {
+      continue;
+    }
+    const std::string filename = owner_info->get_filenameString();
+    const int source_file_id = owner_info->get_file_id();
+
     const int owner_start_line = getPhysicalStartLine(owner, source_file_id);
     const int owner_end_line = getPhysicalEndLine(owner, source_file_id);
 
     for (PreprocessingInfo *info : *attached) {
-      if (info == nullptr || info->getFilename() != main_filename) {
+      if (info == nullptr || info->getFilename() != filename) {
         continue;
       }
 
@@ -546,7 +682,7 @@ normalizeMisplacedBracedScopePreprocessingInfo(SgSourceFile *source_file) {
       }
 
       SgLocatedNode *target = findInnermostBracedScopeContainingLine(
-          located_nodes, node_index, info_line, source_file_id);
+          located_nodes, node_index, info_line, source_file_id, filename);
       if (target == nullptr || target == owner) {
         continue;
       }
@@ -588,6 +724,226 @@ normalizeMisplacedBracedScopePreprocessingInfo(SgSourceFile *source_file) {
                    });
 
   for (const MisplacedPreprocessingInfoMove &move : moves) {
+    insertAttachedPreprocessingInfoInSourceOrder(move.target, move.info,
+                                                 move.target_position);
+  }
+}
+
+static void
+normalizeInlineFunctionConditionalPreprocessingInfo(SgSourceFile *source_file) {
+  if (source_file == nullptr || source_file->get_globalScope() == nullptr ||
+      source_file->get_file_info() == nullptr) {
+    return;
+  }
+
+  std::vector<SgLocatedNode *> located_nodes;
+  collectSourceLocatedNodes(source_file, located_nodes);
+
+  struct FunctionAnchor {
+    SgFunctionDeclaration *decl = nullptr;
+    SgFunctionDefinition *def = nullptr;
+    Sg_File_Info *decl_start = nullptr;
+    Sg_File_Info *decl_end = nullptr;
+    Sg_File_Info *body_start = nullptr;
+    Sg_File_Info *body_end = nullptr;
+  };
+
+  struct FunctionConditionalMove {
+    AttachedPreprocessingInfoType *source_list = nullptr;
+    PreprocessingInfo *info = nullptr;
+    SgFunctionDefinition *target = nullptr;
+    PreprocessingInfo::RelativePositionType target_position =
+        PreprocessingInfo::before;
+  };
+
+  auto collect_direct_child_functions =
+      [&](SgLocatedNode *owner, const std::string &filename,
+          std::vector<FunctionAnchor> &anchors) {
+        auto consider_decl = [&](SgDeclarationStatement *decl) {
+          SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(decl);
+          if (func_decl == nullptr || func_decl->get_parent() != owner ||
+              func_decl->get_definition() == nullptr) {
+            return;
+          }
+
+          SgLocatedNode *decl_node = isSgLocatedNode(func_decl);
+          SgFunctionDefinition *def = func_decl->get_definition();
+          SgBasicBlock *body = def != nullptr ? def->get_body() : nullptr;
+          if (decl_node == nullptr || def == nullptr || body == nullptr) {
+            return;
+          }
+
+          if (!isFromSourceFile(decl_node, filename) ||
+              !isFromSourceFile(def, filename) ||
+              !isFromSourceFile(body, filename)) {
+            return;
+          }
+
+          Sg_File_Info *decl_start = getEffectiveStartInfo(decl_node);
+          Sg_File_Info *decl_end = getEffectiveEndInfo(decl_node);
+          Sg_File_Info *body_start = getEffectiveStartInfo(body);
+          Sg_File_Info *body_end = getEffectiveEndInfo(body);
+          if (decl_start == nullptr || decl_end == nullptr ||
+              body_start == nullptr || body_end == nullptr ||
+              decl_start->get_line() <= 0 || decl_end->get_line() <= 0 ||
+              body_start->get_line() <= 0 || body_end->get_line() <= 0) {
+            return;
+          }
+
+          if (!sameMainFileLocation(decl_start, decl_end) ||
+              !sameMainFileLocation(decl_start, body_start) ||
+              !sameMainFileLocation(decl_start, body_end)) {
+            return;
+          }
+
+          if (!sourceLocationPrecedesOrEqual(decl_start, decl_end)) {
+            std::swap(decl_start, decl_end);
+          }
+          if (!sourceLocationPrecedesOrEqual(body_start, body_end)) {
+            std::swap(body_start, body_end);
+          }
+
+          anchors.push_back(
+              {func_decl, def, decl_start, decl_end, body_start, body_end});
+        };
+
+        if (SgClassDefinition *class_def = isSgClassDefinition(owner)) {
+          for (SgDeclarationStatement *member : class_def->get_members()) {
+            consider_decl(member);
+          }
+          return;
+        }
+
+        if (SgTemplateClassDefinition *class_def =
+                isSgTemplateClassDefinition(owner)) {
+          for (SgDeclarationStatement *member : class_def->get_members()) {
+            consider_decl(member);
+          }
+          return;
+        }
+
+        if (SgNamespaceDefinitionStatement *ns_def =
+                isSgNamespaceDefinitionStatement(owner)) {
+          for (SgDeclarationStatement *decl : ns_def->get_declarations()) {
+            consider_decl(decl);
+          }
+          return;
+        }
+
+        if (SgGlobal *global = isSgGlobal(owner)) {
+          for (SgDeclarationStatement *decl : global->getDeclarationList()) {
+            consider_decl(decl);
+          }
+        }
+      };
+
+  auto function_span_size =
+      [](const FunctionAnchor &anchor) -> std::pair<int, int> {
+    return {anchor.decl_end->get_line() - anchor.decl_start->get_line(),
+            anchor.decl_end->get_col() - anchor.decl_start->get_col()};
+  };
+
+  std::vector<FunctionConditionalMove> moves;
+  moves.reserve(16);
+
+  for (SgLocatedNode *owner : located_nodes) {
+    AttachedPreprocessingInfoType *attached =
+        owner->getAttachedPreprocessingInfo();
+    if (attached == nullptr || attached->empty()) {
+      continue;
+    }
+
+    Sg_File_Info *owner_info = owner->get_file_info();
+    if (owner_info == nullptr) {
+      continue;
+    }
+    const std::string filename = owner_info->get_filenameString();
+
+    std::vector<FunctionAnchor> anchors;
+    collect_direct_child_functions(owner, filename, anchors);
+    if (anchors.empty()) {
+      continue;
+    }
+
+    for (PreprocessingInfo *info : *attached) {
+      if (info == nullptr || info->getFilename() != filename ||
+          !isConditionalPreprocessingPayload(info)) {
+        continue;
+      }
+
+      Sg_File_Info *info_loc = info->get_file_info();
+      if (info_loc == nullptr || info_loc->get_line() <= 0) {
+        continue;
+      }
+
+      const FunctionAnchor *best_anchor = nullptr;
+      PreprocessingInfo::RelativePositionType target_position =
+          PreprocessingInfo::before;
+
+      for (const FunctionAnchor &anchor : anchors) {
+        if (!sameMainFileLocation(anchor.decl_start, info_loc)) {
+          continue;
+        }
+
+        if (!sourceLocationPrecedesOrEqual(anchor.decl_start, info_loc) ||
+            !sourceLocationPrecedesOrEqual(info_loc, anchor.decl_end)) {
+          continue;
+        }
+
+        if (sourceLocationPrecedes(info_loc, anchor.body_start)) {
+          if (best_anchor == nullptr ||
+              function_span_size(anchor) < function_span_size(*best_anchor)) {
+            best_anchor = &anchor;
+            target_position = PreprocessingInfo::before;
+          }
+          continue;
+        }
+
+        if (sourceLocationPrecedes(anchor.body_end, info_loc)) {
+          if (best_anchor == nullptr ||
+              function_span_size(anchor) < function_span_size(*best_anchor)) {
+            best_anchor = &anchor;
+            target_position = PreprocessingInfo::after;
+          }
+        }
+      }
+
+      if (best_anchor == nullptr) {
+        continue;
+      }
+
+      moves.push_back({attached, info, best_anchor->def, target_position});
+    }
+  }
+
+  if (moves.empty()) {
+    return;
+  }
+
+  for (const FunctionConditionalMove &move : moves) {
+    AttachedPreprocessingInfoType *attached = move.source_list;
+    ROSE_ASSERT(attached != nullptr);
+
+    for (AttachedPreprocessingInfoType::iterator it = attached->begin();
+         it != attached->end(); ++it) {
+      if (*it == move.info) {
+        attached->erase(it);
+        break;
+      }
+    }
+  }
+
+  std::stable_sort(moves.begin(), moves.end(),
+                   [](const FunctionConditionalMove &lhs,
+                      const FunctionConditionalMove &rhs) {
+                     if (lhs.target != rhs.target) {
+                       return lhs.target < rhs.target;
+                     }
+
+                     return preprocessingInfoComesBefore(lhs.info, rhs.info);
+                   });
+
+  for (const FunctionConditionalMove &move : moves) {
     insertAttachedPreprocessingInfoInSourceOrder(move.target, move.info,
                                                  move.target_position);
   }
@@ -788,6 +1144,47 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr,
     tt.traverse(sageFilePtr, inh);
   }
 
+  if (SgProject::get_verbose() > 0) {
+    Rose_STL_Container<SgNode *> located_nodes =
+        NodeQuery::querySubTree(sageFilePtr, V_SgLocatedNode);
+    for (SgNode *node : located_nodes) {
+      SgLocatedNode *located = isSgLocatedNode(node);
+      if (located == nullptr) {
+        continue;
+      }
+
+      AttachedPreprocessingInfoType *attached =
+          located->getAttachedPreprocessingInfo();
+      if (attached == nullptr || attached->empty()) {
+        continue;
+      }
+
+      for (PreprocessingInfo *info : *attached) {
+        if (info == nullptr ||
+            info->getString().find("#pragma GCC visibility") ==
+                std::string::npos) {
+          continue;
+        }
+
+        Sg_File_Info *owner_fi = located->get_file_info();
+        Sg_File_Info *owner_start = located->get_startOfConstruct();
+        std::cerr << "TRACE attached-visibility owner=" << located
+                  << " class=" << located->class_name() << " ownerFile="
+                  << (owner_fi != nullptr ? owner_fi->get_filenameString()
+                                          : std::string("<null>"))
+                  << " ownerLine="
+                  << (owner_fi != nullptr ? owner_fi->get_line() : -1)
+                  << " ownerStart="
+                  << (owner_start != nullptr ? owner_start->get_line() : -1)
+                  << " infoFile=" << info->getFilename()
+                  << " infoLine=" << info->getLineNumber() << " rel="
+                  << PreprocessingInfo::relativePositionName(
+                         info->getRelativePosition())
+                  << " text=" << info->getString() << std::endl;
+      }
+    }
+  }
+
   // endif for ifndef  CXX_IS_ROSE_CODE_GENERATION
 #endif
 
@@ -807,6 +1204,7 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr,
   normalizeLeadingBasicBlockPreprocessingInfo(sageFilePtr);
   normalizeEnumEnumeratorPreprocessingInfo(sageFilePtr);
   normalizeAsmStatementPreprocessingInfo(sageFilePtr);
+  normalizeInlineFunctionConditionalPreprocessingInfo(sageFilePtr);
 
   // DQ (11/18/2019): Set the flag that indicates that this SgSourceFile has had
   // its CPP directives and comments added.

@@ -1167,6 +1167,9 @@ rex_register_compile_source_set(REX_C_TESTS_SOURCES
   ${C_TESTCODES_NEGATIVE}
   ${C_TESTCODES_SPECIAL}
 )
+rex_register_compile_source_set(REX_C_TESTS_NEGATIVE_SOURCES
+  ${C_TESTCODES_NEGATIVE}
+)
 
 set(ROSE_FLAGS ${C_TEST_ROSE_FLAGS})
 

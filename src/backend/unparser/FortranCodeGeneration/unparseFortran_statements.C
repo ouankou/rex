@@ -11,6 +11,7 @@
 
 #include <cctype>
 #include <limits>
+#include <sstream>
 
 // DQ (10/14/2010):  This should only be included by source files that require
 // it. This fixed a reported bug which caused conflicts with configure-time
@@ -1006,15 +1007,22 @@ void FortranCodeGeneration_locatedNode::unparseAttributeSpecificationStatement(
     curprint(")");
   }
 
+  const bool is_access_statement =
+      attributeSpecificationStatement->get_attribute_kind() ==
+          SgAttributeSpecificationStatement::e_accessStatement_private ||
+      attributeSpecificationStatement->get_attribute_kind() ==
+          SgAttributeSpecificationStatement::e_accessStatement_public;
+  const bool has_named_access_targets =
+      is_access_statement &&
+      !attributeSpecificationStatement->get_name_list().empty();
+
   if ((attributeSpecificationStatement->get_attribute_kind() !=
        SgAttributeSpecificationStatement::e_parameterStatement) &&
       (attributeSpecificationStatement->get_attribute_kind() !=
        SgAttributeSpecificationStatement::e_dataStatement) &&
-      ((attributeSpecificationStatement->get_attribute_kind() !=
-            SgAttributeSpecificationStatement::e_accessStatement_private &&
-        attributeSpecificationStatement->get_attribute_kind() !=
-            SgAttributeSpecificationStatement::e_accessStatement_public) &&
-       attributeSpecificationStatement->get_parameter_list() != nullptr)) {
+      (((!is_access_statement) &&
+        attributeSpecificationStatement->get_parameter_list() != nullptr) ||
+       has_named_access_targets)) {
     // The parameter and data statement do not use "::" in their syntax
     curprint(" :: ");
   } else {
@@ -4635,6 +4643,11 @@ void FortranCodeGeneration_locatedNode::curprint(const std::string &str) const {
 #if USE_RICE_FORTRAN_WRAPPING
 
   if (unp->currentFile != nullptr && unp->currentFile->get_Fortran_only()) {
+    if (unp->cur.get_linewrap() <= 0) {
+      unp->u_sage->curprint(str);
+      return;
+    }
+
     // determine line wrapping parameters -- 'pos' variables are one-based
     bool is_fixed_format = unp->currentFile->get_outputFormat() ==
                            SgFile::e_fixed_form_output_format;
@@ -4729,13 +4742,101 @@ void FortranCodeGeneration_locatedNode::unparseOmpPrefix(SgUnparse_Info &info) {
   curprint(string("!$omp "));
 }
 
+static std::string collapseFortranContinuationText(std::string text) {
+  if (text.empty()) {
+    return text;
+  }
+
+  size_t pos = 0;
+  while ((pos = text.find("\r\n", pos)) != std::string::npos) {
+    text.replace(pos, 2, "\n");
+  }
+
+  pos = 0;
+  while ((pos = text.find("&\n&", pos)) != std::string::npos) {
+    text.erase(pos, 3);
+  }
+
+  if (text.size() >= 2 && text[text.size() - 2] == '\r' &&
+      text[text.size() - 1] == '\n') {
+    text.erase(text.size() - 2);
+  } else if (!text.empty() && (text.back() == '\n' || text.back() == '\r')) {
+    text.pop_back();
+  }
+
+  return text;
+}
+
+static void trimLeadingWhitespace(std::string &text) {
+  const size_t first_non_space = text.find_first_not_of(" \t\r\n");
+  if (first_non_space == std::string::npos) {
+    text.clear();
+    return;
+  }
+  if (first_non_space > 0) {
+    text.erase(0, first_non_space);
+  }
+}
+
+static std::string unparseFortranOmpClauseToString(SgOmpClause *clause,
+                                                   const SgUnparse_Info &info) {
+  ASSERT_not_null(clause);
+
+  bool auto_keyword = false;
+  bool linefile = false;
+  bool use_overloaded_operators = false;
+  bool num = false;
+  bool this_keyword = true;
+  bool caststring = false;
+  bool debug = false;
+  bool class_mode = false;
+  bool forced_transformation_format = false;
+  bool unparse_includes = false;
+  Unparser_Opt rose_options(auto_keyword, linefile, use_overloaded_operators,
+                            num, this_keyword, caststring, debug, class_mode,
+                            forced_transformation_format, unparse_includes);
+
+  std::ostringstream output;
+  std::string filename = "defaultFileNameInFortranOmpClauseToString.f90";
+  SgSourceFile *source_file = info.get_current_source_file();
+  if (source_file == nullptr) {
+    source_file = SageInterface::getEnclosingSourceFile(clause);
+  }
+  if (source_file != nullptr) {
+    if (source_file->get_file_info() != nullptr &&
+        !source_file->get_file_info()->get_filenameString().empty()) {
+      filename = source_file->get_file_info()->get_filenameString();
+    } else if (!source_file->get_sourceFileNameWithPath().empty()) {
+      filename = source_file->get_sourceFileNameWithPath();
+    }
+  }
+
+  Unparser rose_unparser(&output, filename, rose_options);
+  if (source_file != nullptr) {
+    rose_unparser.currentFile = source_file;
+  }
+
+  SgUnparse_Info clause_info(info);
+  clause_info.set_language(SgFile::e_Fortran_language);
+  if (source_file != nullptr) {
+    clause_info.set_current_source_file(source_file);
+  }
+
+  rose_unparser.u_fortran_locatedNode->unparseOmpClause(clause, clause_info);
+  return output.str();
+}
+
 static bool fortranOmpDirectiveUsesExplicitEnd(SgStatement *stmt) {
   if (stmt == nullptr) {
     return false;
   }
 
   static const char *const kOmpFortranEndAttributeName = "omp_fortran_end";
+  static const char *const kOmpExplicitEndAttributeName = "omp_explicit_end";
   if (stmt->getAttribute(kOmpFortranEndAttributeName) != nullptr) {
+    return true;
+  }
+  if (stmt->getAttribute(kOmpExplicitEndAttributeName) != nullptr) {
     return true;
   }
 
@@ -4776,10 +4877,36 @@ static bool fortranOmpCanEmitEndDirectivePrefix(SgStatement *stmt) {
   case V_SgOmpSingleStatement:
   case V_SgOmpTaskStatement:
   case V_SgOmpDoStatement:
+  case V_SgOmpAtomicStatement:
+  case V_SgOmpTargetStatement:
+  case V_SgOmpMetadirectiveStatement:
     return true;
   default:
     return false;
   }
+}
+
+static bool fortranOmpMovesClausesToEnd(SgStatement *stmt) {
+  if (stmt == nullptr) {
+    return false;
+  }
+
+  switch (stmt->variantT()) {
+  case V_SgOmpSectionsStatement:
+  case V_SgOmpSingleStatement:
+  case V_SgOmpWorkshareStatement:
+  case V_SgOmpDoStatement:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static bool fortranOmpJoinsFirstClauseWithoutSpace(SgStatement *stmt) {
+  static const char *const kOmpFortranJoinFirstClauseAttrName =
+      "omp_fortran_join_first_clause";
+  return stmt != nullptr &&
+         stmt->getAttribute(kOmpFortranJoinFirstClauseAttrName) != nullptr;
 }
 
 // Just skip nowait and copyprivate clauses for Fortran
@@ -4864,7 +4991,8 @@ void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
   if (clause_ptr_list != nullptr) {
     SgOmpClausePtrList::const_iterator i;
     bool first_clause = true;
-    const bool move_nowait_to_end = fortranOmpDirectiveUsesExplicitEnd(stmt) &&
+    const bool move_nowait_to_end = fortranOmpMovesClausesToEnd(stmt) &&
+                                    fortranOmpDirectiveUsesExplicitEnd(stmt) &&
                                     fortranOmpCanEmitEndDirectivePrefix(stmt);
     for (i = clause_ptr_list->begin(); i != clause_ptr_list->end(); i++) {
       SgOmpClause *c_clause = *i;
@@ -4873,11 +5001,36 @@ void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
           move_nowait_to_end) {
         continue;
       }
+      SgUnparse_Info clause_info(info);
+      SgNode *clause_context = stmt != nullptr
+                                   ? static_cast<SgNode *>(stmt)
+                                   : static_cast<SgNode *>(c_clause);
+      if (SgSourceFile *source_file =
+              SageInterface::getEnclosingSourceFile(clause_context)) {
+        clause_info.set_current_source_file(source_file);
+      }
+      SgScopeStatement *scope = info.get_current_scope();
+      if (scope == nullptr) {
+        scope = SageInterface::getEnclosingScope(stmt);
+      }
+      if (scope != nullptr) {
+        clause_info.set_current_scope(scope);
+      }
+      clause_info.set_language(SgFile::e_Fortran_language);
+      std::string clause_text = collapseFortranContinuationText(
+          unparseFortranOmpClauseToString(c_clause, clause_info));
       if (first_clause) {
-        curprint(" ");
+        if (fortranOmpJoinsFirstClauseWithoutSpace(stmt)) {
+          trimLeadingWhitespace(clause_text);
+          curprint("&");
+          unp->u_sage->curprint_newline();
+          curprint("&");
+        } else {
+          curprint(" ");
+        }
         first_clause = false;
       }
-      unparseOmpClause(c_clause, info);
+      curprint(clause_text);
     }
   }
   if (isSgOmpDeclareTargetStatement(stmt)) {
@@ -4919,9 +5072,11 @@ void FortranCodeGeneration_locatedNode::unparseOmpEndDirectiveClauses(
     SgOmpClausePtrList::const_iterator i;
     bool first_clause = true;
     const bool single_space_nowait = isSgOmpSectionsStatement(stmt) != nullptr;
+    const bool move_clauses_to_end = fortranOmpMovesClausesToEnd(stmt);
     for (i = clause_ptr_list.begin(); i != clause_ptr_list.end(); i++) {
       SgOmpClause *c_clause = *i;
-      if (isSgOmpNowaitClause(c_clause) || isSgOmpCopyprivateClause(c_clause)) {
+      if (move_clauses_to_end && (isSgOmpNowaitClause(c_clause) ||
+                                  isSgOmpCopyprivateClause(c_clause))) {
         if (first_clause) {
           if (!(isSgOmpNowaitClause(c_clause) && single_space_nowait)) {
             curprint(" ");
@@ -5043,6 +5198,21 @@ void FortranCodeGeneration_locatedNode::unparseOmpEndDirectivePrefixAndName(
   case V_SgOmpDoStatement: {
     unparseOmpPrefix(info);
     curprint(string("end do"));
+    break;
+  }
+  case V_SgOmpAtomicStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end atomic"));
+    break;
+  }
+  case V_SgOmpTargetStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end target"));
+    break;
+  }
+  case V_SgOmpMetadirectiveStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end metadirective"));
     break;
   }
   default:

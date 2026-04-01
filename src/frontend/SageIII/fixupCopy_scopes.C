@@ -48,7 +48,499 @@ SgNode *lookupCopiedNode(SgCopyHelp &help, const SgNode *original) {
   return it->second;
 }
 
+void remapCopiedNodePair(SgCopyHelp &help, const SgNode *original,
+                         SgNode *canonicalCopy) {
+  if (original == NULL || canonicalCopy == NULL) {
+    return;
+  }
+
+  SgCopyHelp::copiedNodeMapType &copiedNodeMap = help.get_copiedNodeMap();
+  SgCopyHelp::copiedNodeMapTypeIterator existing =
+      copiedNodeMap.find(const_cast<SgNode *>(original));
+  if (existing != copiedNodeMap.end() && existing->second != canonicalCopy) {
+    help.noteSupersededCopiedNode(existing->second);
+  }
+
+  copiedNodeMap[const_cast<SgNode *>(original)] = canonicalCopy;
+}
+
+bool isCopiedNodeValue(SgCopyHelp &help, const SgNode *candidate) {
+  if (candidate == NULL) {
+    return false;
+  }
+
+  for (SgCopyHelp::copiedNodeMapTypeIterator it =
+           help.get_copiedNodeMap().begin();
+       it != help.get_copiedNodeMap().end(); ++it) {
+    if (it->second == candidate) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void synchronizeCopiedDeclarationList(
+    const SgDeclarationStatementPtrList &originalDeclarations,
+    SgDeclarationStatementPtrList &copiedDeclarations,
+    SgScopeStatement *copiedScope, SgCopyHelp &help) {
+  if (copiedScope == NULL) {
+    return;
+  }
+
+  std::unordered_set<SgDeclarationStatement *> canonicalDeclarations;
+  canonicalDeclarations.reserve(originalDeclarations.size());
+
+  SgDeclarationStatementPtrList rebuiltDeclarations;
+  rebuiltDeclarations.reserve(originalDeclarations.size());
+
+  for (SgDeclarationStatement *originalDecl : originalDeclarations) {
+    if (originalDecl == NULL) {
+      rebuiltDeclarations.push_back(NULL);
+      continue;
+    }
+
+    SgDeclarationStatement *copiedDecl =
+        isSgDeclarationStatement(help.copyOrLookupAst(originalDecl));
+    ROSE_ASSERT(copiedDecl != NULL);
+
+    canonicalDeclarations.insert(copiedDecl);
+    rebuiltDeclarations.push_back(copiedDecl);
+
+    if (copiedDecl->get_parent() == NULL) {
+      copiedDecl->set_parent(copiedScope);
+    }
+  }
+
+  for (SgDeclarationStatement *existingDecl : copiedDeclarations) {
+    if (existingDecl == NULL) {
+      continue;
+    }
+
+    if (canonicalDeclarations.find(existingDecl) ==
+            canonicalDeclarations.end() &&
+        existingDecl->get_parent() == copiedScope) {
+      existingDecl->set_parent(NULL);
+    }
+  }
+
+  copiedDeclarations.swap(rebuiltDeclarations);
+}
+
+bool declarationFixupAvailable(const SgDeclarationStatement *originalOwner,
+                               const SgDeclarationStatement *originalTarget,
+                               SgCopyHelp &help) {
+  if (originalTarget == NULL) {
+    return true;
+  }
+
+  // Self-links are resolved by the current declaration fixup and do not
+  // require a recursive visit to a distinct declaration node.
+  if (originalTarget == originalOwner) {
+    return true;
+  }
+
+  SgDeclarationStatement *mappedTarget =
+      isSgDeclarationStatement(lookupCopiedNode(help, originalTarget));
+  if (mappedTarget == NULL) {
+    return false;
+  }
+
+  return help.isFixupNodePairActive(originalTarget, mappedTarget) ||
+         help.isFixupNodePairCompleted(originalTarget, mappedTarget);
+}
+
+SgDeclarationStatement *scopeOwningDeclaration(SgScopeStatement *scope) {
+  if (scope == NULL) {
+    return NULL;
+  }
+
+  if (SgClassDefinition *classDef = isSgClassDefinition(scope)) {
+    return classDef->get_declaration();
+  }
+  if (SgTemplateClassDefinition *templateClassDef =
+          isSgTemplateClassDefinition(scope)) {
+    return templateClassDef->get_declaration();
+  }
+  if (SgTemplateInstantiationDefn *templateInstDef =
+          isSgTemplateInstantiationDefn(scope)) {
+    return templateInstDef->get_declaration();
+  }
+  if (SgNamespaceDefinitionStatement *namespaceDef =
+          isSgNamespaceDefinitionStatement(scope)) {
+    return namespaceDef->get_namespaceDeclaration();
+  }
+
+  return NULL;
+}
+
+bool hasMatchingSourceLocation(const SgLocatedNode *original,
+                               const SgLocatedNode *candidate) {
+  if (original == NULL || candidate == NULL) {
+    return false;
+  }
+
+  Sg_File_Info *originalInfo = original->get_file_info();
+  Sg_File_Info *candidateInfo = candidate->get_file_info();
+  if (originalInfo == NULL || candidateInfo == NULL) {
+    return false;
+  }
+
+  return originalInfo->get_filenameString() ==
+             candidateInfo->get_filenameString() &&
+         originalInfo->get_line() == candidateInfo->get_line() &&
+         originalInfo->get_col() == candidateInfo->get_col();
+}
+
+bool functionDeclarationsMatch(const SgFunctionDeclaration *originalDecl,
+                               SgFunctionDeclaration *candidateDecl) {
+  if (originalDecl == NULL || candidateDecl == NULL) {
+    return false;
+  }
+
+  if (originalDecl->variantT() != candidateDecl->variantT()) {
+    return false;
+  }
+
+  if (originalDecl->get_name() != candidateDecl->get_name()) {
+    return false;
+  }
+
+  if (originalDecl->get_parameterList() != NULL &&
+      candidateDecl->get_parameterList() != NULL &&
+      originalDecl->get_parameterList()->get_args().size() !=
+          candidateDecl->get_parameterList()->get_args().size()) {
+    return false;
+  }
+
+  if (hasMatchingSourceLocation(originalDecl, candidateDecl)) {
+    return true;
+  }
+
+  return originalDecl->get_mangled_name() == candidateDecl->get_mangled_name();
+}
+
+bool declarationIsStructurallyAttachedToScope(SgDeclarationStatement *decl,
+                                              SgScopeStatement *scope) {
+  if (decl == NULL || scope == NULL || decl->get_parent() != scope) {
+    return false;
+  }
+
+  return scope->statementExistsInScope(decl);
+}
+
+SgFunctionDeclaration *
+findAttachedCopiedFunctionDeclaration(const SgFunctionDeclaration *originalDecl,
+                                      SgCopyHelp &help) {
+  if (originalDecl == NULL) {
+    return NULL;
+  }
+
+  SgScopeStatement *copiedScope =
+      isSgScopeStatement(lookupCopiedNode(help, originalDecl->get_scope()));
+  if (copiedScope == NULL) {
+    return NULL;
+  }
+
+  SgFunctionDeclaration *bestCandidate = NULL;
+  const SgDeclarationStatementPtrList &copiedDecls =
+      copiedScope->getDeclarationList();
+  for (SgDeclarationStatement *copiedDecl : copiedDecls) {
+    SgFunctionDeclaration *copiedFunction = isSgFunctionDeclaration(copiedDecl);
+    if (copiedFunction == NULL ||
+        !declarationIsStructurallyAttachedToScope(copiedFunction,
+                                                  copiedScope) ||
+        !functionDeclarationsMatch(originalDecl, copiedFunction)) {
+      continue;
+    }
+
+    if (originalDecl->get_definition() != NULL &&
+        copiedFunction->get_definition() != NULL &&
+        copiedFunction->get_definition()->get_parent() == copiedFunction) {
+      return copiedFunction;
+    }
+
+    if (bestCandidate == NULL) {
+      bestCandidate = copiedFunction;
+    }
+  }
+
+  return bestCandidate;
+}
+
+void remapCopiedFunctionParameterSubtree(
+    const SgFunctionDeclaration *originalDecl,
+    SgFunctionDeclaration *copiedDecl, SgCopyHelp &help) {
+  if (originalDecl == NULL || copiedDecl == NULL) {
+    return;
+  }
+
+  SgFunctionParameterList *originalParams = originalDecl->get_parameterList();
+  SgFunctionParameterList *copiedParams = copiedDecl->get_parameterList();
+  if (originalParams == NULL || copiedParams == NULL) {
+    return;
+  }
+
+  remapCopiedNodePair(help, originalParams, copiedParams);
+
+  const SgInitializedNamePtrList &originalArgs = originalParams->get_args();
+  const SgInitializedNamePtrList &copiedArgs = copiedParams->get_args();
+  const size_t argCount = std::min(originalArgs.size(), copiedArgs.size());
+  for (size_t i = 0; i < argCount; ++i) {
+    if (originalArgs[i] != NULL && copiedArgs[i] != NULL) {
+      remapCopiedNodePair(help, originalArgs[i], copiedArgs[i]);
+    }
+  }
+}
+
+void remapCopiedMemberFunctionCtorInitializerSubtree(
+    const SgMemberFunctionDeclaration *originalDecl,
+    SgMemberFunctionDeclaration *copiedDecl, SgCopyHelp &help) {
+  if (originalDecl == NULL || copiedDecl == NULL) {
+    return;
+  }
+
+  const SgCtorInitializerList *originalCtorList =
+      originalDecl->get_CtorInitializerList();
+  SgCtorInitializerList *copiedCtorList = copiedDecl->get_CtorInitializerList();
+  if (originalCtorList == NULL || copiedCtorList == NULL) {
+    return;
+  }
+
+  if (copiedCtorList->get_parent() != copiedDecl) {
+    copiedCtorList->set_parent(copiedDecl);
+  }
+
+  const SgInitializedNamePtrList &originalCtors = originalCtorList->get_ctors();
+  SgInitializedNamePtrList &copiedCtors = copiedCtorList->get_ctors();
+
+  if (copiedCtors.size() != originalCtors.size()) {
+    for (SgInitializedName *existingCtor : copiedCtors) {
+      if (existingCtor != NULL &&
+          existingCtor->get_parent() == copiedCtorList) {
+        existingCtor->set_parent(NULL);
+      }
+    }
+
+    copiedCtors.clear();
+
+    for (SgInitializedName *originalCtor : originalCtors) {
+      if (originalCtor == NULL) {
+        copiedCtors.push_back(NULL);
+        continue;
+      }
+
+      SgInitializedName *copiedCtor =
+          isSgInitializedName(help.copyOrLookupAst(originalCtor));
+      ROSE_ASSERT(copiedCtor != NULL);
+      copiedCtor->set_parent(copiedCtorList);
+      copiedCtors.push_back(copiedCtor);
+    }
+  }
+
+  remapCopiedNodePair(help, originalCtorList, copiedCtorList);
+
+  const size_t ctorCount = std::min(originalCtors.size(), copiedCtors.size());
+  for (size_t i = 0; i < ctorCount; ++i) {
+    if (originalCtors[i] != NULL && copiedCtors[i] != NULL) {
+      if (copiedCtors[i]->get_parent() != copiedCtorList) {
+        copiedCtors[i]->set_parent(copiedCtorList);
+      }
+      remapCopiedNodePair(help, originalCtors[i], copiedCtors[i]);
+    }
+  }
+}
+
+void canonicalizeCopiedFunctionDeclarationMapEntries(SgCopyHelp &help) {
+  std::vector<const SgFunctionDeclaration *> originalFunctionDecls;
+  originalFunctionDecls.reserve(help.get_copiedNodeMap().size());
+
+  for (SgCopyHelp::copiedNodeMapTypeIterator it =
+           help.get_copiedNodeMap().begin();
+       it != help.get_copiedNodeMap().end(); ++it) {
+    if (const SgFunctionDeclaration *originalDecl =
+            isSgFunctionDeclaration(it->first)) {
+      originalFunctionDecls.push_back(originalDecl);
+    }
+  }
+
+  for (const SgFunctionDeclaration *originalDecl : originalFunctionDecls) {
+    SgFunctionDeclaration *attachedCopiedDecl =
+        findAttachedCopiedFunctionDeclaration(originalDecl, help);
+    if (attachedCopiedDecl == NULL) {
+      continue;
+    }
+
+    remapCopiedNodePair(help, originalDecl, attachedCopiedDecl);
+    remapCopiedFunctionParameterSubtree(originalDecl, attachedCopiedDecl, help);
+    if (const SgMemberFunctionDeclaration *originalMemberDecl =
+            isSgMemberFunctionDeclaration(originalDecl)) {
+      if (SgMemberFunctionDeclaration *attachedCopiedMemberDecl =
+              isSgMemberFunctionDeclaration(attachedCopiedDecl)) {
+        remapCopiedMemberFunctionCtorInitializerSubtree(
+            originalMemberDecl, attachedCopiedMemberDecl, help);
+      }
+    }
+
+    if (SgFunctionDefinition *originalDef = originalDecl->get_definition()) {
+      if (SgFunctionDefinition *attachedCopiedDef =
+              attachedCopiedDecl->get_definition()) {
+        remapCopiedNodePair(help, originalDef, attachedCopiedDef);
+      }
+    }
+  }
+}
+
+bool explicitDeclarationScopeMatchesStructuralParent(
+    SgScopeStatement *declScope, SgScopeStatement *parentScope) {
+  if (declScope == NULL || parentScope == NULL) {
+    return false;
+  }
+
+  if (declScope == parentScope) {
+    return true;
+  }
+
+  if (isSgGlobal(declScope) != NULL && isSgGlobal(parentScope) != NULL) {
+    return true;
+  }
+
+  if (SgNamespaceDefinitionStatement *declNamespaceDef =
+          isSgNamespaceDefinitionStatement(declScope)) {
+    if (SgNamespaceDefinitionStatement *parentNamespaceDef =
+            isSgNamespaceDefinitionStatement(parentScope)) {
+      if (declNamespaceDef->isSameNamespace(parentNamespaceDef)) {
+        return true;
+      }
+
+      SgNamespaceDefinitionStatement *declGlobalDef =
+          declNamespaceDef->get_global_definition();
+      SgNamespaceDefinitionStatement *parentGlobalDef =
+          parentNamespaceDef->get_global_definition();
+      if (declGlobalDef != NULL && parentGlobalDef != NULL &&
+          declGlobalDef == parentGlobalDef) {
+        return true;
+      }
+    }
+  }
+
+  SgDeclarationStatement *declOwner = scopeOwningDeclaration(declScope);
+  SgDeclarationStatement *parentOwner = scopeOwningDeclaration(parentScope);
+  return declOwner != NULL && declOwner == parentOwner;
+}
+
+SgDeclarationScope *
+materializeCopiedDeclarationScope(const SgDeclarationScope *originalScope,
+                                  SgCopyHelp &help) {
+  if (originalScope == NULL) {
+    return NULL;
+  }
+
+  if (SgDeclarationScope *copiedScope =
+          isSgDeclarationScope(lookupCopiedNode(help, originalScope))) {
+    return copiedScope;
+  }
+
+  SgDeclarationStatement *owningDecl =
+      isSgDeclarationStatement(originalScope->get_parent());
+  if (owningDecl != NULL) {
+    return NULL;
+  }
+
+  SgScopeStatement *originalScopeParent =
+      isSgScopeStatement(originalScope->get_parent());
+  if (originalScopeParent == NULL) {
+    return NULL;
+  }
+
+  SgScopeStatement *copiedScopeParent =
+      isSgScopeStatement(lookupCopiedNode(help, originalScopeParent));
+  if (copiedScopeParent == NULL) {
+    return NULL;
+  }
+
+  SgDeclarationScope *copiedScope = SageBuilder::buildDeclarationScope();
+  ROSE_ASSERT(copiedScope != NULL);
+
+  if (copiedScope->get_parent() != copiedScopeParent) {
+    copiedScope->set_parent(copiedScopeParent);
+  }
+
+  help.insertCopiedNodePair(originalScope, copiedScope);
+  return copiedScope;
+}
+
+SgScopeStatement *resolveCopiedExplicitDeclarationScope(
+    const SgDeclarationStatement *originalDecl,
+    SgDeclarationStatement *copiedDecl, SgCopyHelp &help) {
+  if (originalDecl == NULL || copiedDecl == NULL ||
+      originalDecl->hasExplicitScope() == false) {
+    return NULL;
+  }
+
+  SgScopeStatement *originalParentScope =
+      isSgScopeStatement(originalDecl->get_parent());
+  SgScopeStatement *copiedParentScope =
+      isSgScopeStatement(copiedDecl->get_parent());
+  SgScopeStatement *originalDeclScope = originalDecl->get_scope();
+
+  // Preserve the copied equivalent of a distinct namespace scope. Re-entrant
+  // namespace declarations can be structurally nested under one namespace
+  // definition while explicitly belonging to that namespace's shared global
+  // definition. Collapsing those onto the copied parent scope creates local
+  // duplicate symbols that are later detached from any symbol table.
+  if (isSgNamespaceDefinitionStatement(originalDeclScope) != NULL &&
+      isSgNamespaceDefinitionStatement(originalParentScope) != NULL &&
+      originalDeclScope != originalParentScope) {
+    if (SgScopeStatement *copiedScope =
+            isSgScopeStatement(lookupCopiedNode(help, originalDeclScope))) {
+      return copiedScope;
+    }
+  }
+
+  if (isCopiedNodeValue(help, copiedParentScope) &&
+      explicitDeclarationScopeMatchesStructuralParent(originalDeclScope,
+                                                      originalParentScope)) {
+    return copiedParentScope;
+  }
+
+  if (SgScopeStatement *copiedScope =
+          isSgScopeStatement(lookupCopiedNode(help, originalDeclScope))) {
+    return copiedScope;
+  }
+
+  if (SgDeclarationScope *originalDeclarationScope =
+          isSgDeclarationScope(originalDeclScope)) {
+    if (SgDeclarationScope *copiedScope =
+            materializeCopiedDeclarationScope(originalDeclarationScope, help)) {
+      return copiedScope;
+    }
+  }
+
+  return NULL;
+}
+
 void canonicalizeCopiedNodeEdges(SgCopyHelp &help) {
+  struct EdgeRewriter : public SimpleReferenceToPointerHandler {
+    const std::unordered_map<SgNode *, SgNode *> &replacements;
+
+    explicit EdgeRewriter(
+        const std::unordered_map<SgNode *, SgNode *> &replacementMap)
+        : replacements(replacementMap) {}
+
+    void operator()(SgNode *&key, const SgName &, bool) override {
+      if (key == NULL) {
+        return;
+      }
+
+      std::unordered_map<SgNode *, SgNode *>::const_iterator it =
+          replacements.find(key);
+      if (it != replacements.end() && it->second != key) {
+        key = it->second;
+      }
+    }
+  };
+
   std::unordered_map<SgNode *, SgNode *> replacements;
   replacements.reserve(help.get_copiedNodeMap().size());
 
@@ -56,6 +548,24 @@ void canonicalizeCopiedNodeEdges(SgCopyHelp &help) {
            help.get_copiedNodeMap().begin();
        it != help.get_copiedNodeMap().end(); ++it) {
     replacements.emplace(const_cast<SgNode *>(it->first), it->second);
+  }
+
+  EdgeRewriter rewriter(replacements);
+
+  for (SgCopyHelp::copiedNodeMapTypeIterator it =
+           help.get_copiedNodeMap().begin();
+       it != help.get_copiedNodeMap().end(); ++it) {
+    SgNode *copyNode = it->second;
+    ROSE_ASSERT(copyNode != NULL);
+    copyNode->processDataMemberReferenceToPointers(&rewriter);
+  }
+}
+
+void rewriteCopiedNodeEdges(
+    SgCopyHelp &help,
+    const std::unordered_map<SgNode *, SgNode *> &replacements) {
+  if (replacements.empty()) {
+    return;
   }
 
   struct EdgeRewriter : public SimpleReferenceToPointerHandler {
@@ -89,16 +599,900 @@ void canonicalizeCopiedNodeEdges(SgCopyHelp &help) {
   }
 }
 
+void collectRelatedCopiedFunctionDeclarations(
+    SgFunctionDeclaration *seed,
+    std::unordered_set<SgFunctionDeclaration *> &chain) {
+  if (seed == NULL) {
+    return;
+  }
+
+  std::vector<SgFunctionDeclaration *> worklist(1, seed);
+  while (!worklist.empty()) {
+    SgFunctionDeclaration *current = worklist.back();
+    worklist.pop_back();
+    if (current == NULL || !chain.insert(current).second) {
+      continue;
+    }
+
+    if (SgFunctionDeclaration *first = isSgFunctionDeclaration(
+            current->get_firstNondefiningDeclaration())) {
+      worklist.push_back(first);
+    }
+
+    if (SgFunctionDeclaration *defining =
+            isSgFunctionDeclaration(current->get_definingDeclaration())) {
+      worklist.push_back(defining);
+    }
+  }
+}
+
+void addFunctionParameterSubtreeReplacements(
+    SgFunctionDeclaration *fromDecl, SgFunctionDeclaration *toDecl,
+    std::unordered_map<SgNode *, SgNode *> &replacements) {
+  if (fromDecl == NULL || toDecl == NULL || fromDecl == toDecl) {
+    return;
+  }
+
+  SgFunctionParameterList *fromParams = fromDecl->get_parameterList();
+  SgFunctionParameterList *toParams = toDecl->get_parameterList();
+  if (fromParams == NULL || toParams == NULL || fromParams == toParams) {
+    return;
+  }
+
+  replacements[fromParams] = toParams;
+
+  const SgInitializedNamePtrList &fromArgs = fromParams->get_args();
+  const SgInitializedNamePtrList &toArgs = toParams->get_args();
+  const size_t argCount = std::min(fromArgs.size(), toArgs.size());
+  for (size_t i = 0; i < argCount; ++i) {
+    if (fromArgs[i] != NULL && toArgs[i] != NULL && fromArgs[i] != toArgs[i]) {
+      replacements[fromArgs[i]] = toArgs[i];
+    }
+  }
+}
+
+void addMemberFunctionCtorInitializerSubtreeReplacements(
+    SgMemberFunctionDeclaration *fromDecl, SgMemberFunctionDeclaration *toDecl,
+    std::unordered_map<SgNode *, SgNode *> &replacements) {
+  if (fromDecl == NULL || toDecl == NULL || fromDecl == toDecl) {
+    return;
+  }
+
+  SgCtorInitializerList *fromCtorList = fromDecl->get_CtorInitializerList();
+  SgCtorInitializerList *toCtorList = toDecl->get_CtorInitializerList();
+  if (fromCtorList == NULL || toCtorList == NULL ||
+      fromCtorList == toCtorList) {
+    return;
+  }
+
+  replacements[fromCtorList] = toCtorList;
+
+  const SgInitializedNamePtrList &fromCtors = fromCtorList->get_ctors();
+  const SgInitializedNamePtrList &toCtors = toCtorList->get_ctors();
+  const size_t ctorCount = std::min(fromCtors.size(), toCtors.size());
+  for (size_t i = 0; i < ctorCount; ++i) {
+    if (fromCtors[i] != NULL && toCtors[i] != NULL &&
+        fromCtors[i] != toCtors[i]) {
+      replacements[fromCtors[i]] = toCtors[i];
+    }
+  }
+}
+
+void canonicalizeCopiedFunctionDeclarationChains(SgCopyHelp &help) {
+  std::vector<const SgFunctionDeclaration *> originalFunctionDecls;
+  originalFunctionDecls.reserve(help.get_copiedNodeMap().size());
+
+  for (SgCopyHelp::copiedNodeMapTypeIterator it =
+           help.get_copiedNodeMap().begin();
+       it != help.get_copiedNodeMap().end(); ++it) {
+    if (const SgFunctionDeclaration *originalDecl =
+            isSgFunctionDeclaration(it->first)) {
+      originalFunctionDecls.push_back(originalDecl);
+    }
+  }
+
+  std::unordered_set<SgFunctionDeclaration *> processedDefiningDecls;
+  std::unordered_map<SgNode *, SgNode *> replacements;
+
+  for (const SgFunctionDeclaration *originalDecl : originalFunctionDecls) {
+    SgFunctionDeclaration *canonicalDefiningDecl =
+        findAttachedCopiedFunctionDeclaration(originalDecl, help);
+    if (canonicalDefiningDecl == NULL ||
+        canonicalDefiningDecl->get_definition() == NULL ||
+        canonicalDefiningDecl->get_definition()->get_parent() !=
+            canonicalDefiningDecl ||
+        !processedDefiningDecls.insert(canonicalDefiningDecl).second) {
+      continue;
+    }
+
+    std::unordered_set<SgFunctionDeclaration *> functionChain;
+    collectRelatedCopiedFunctionDeclarations(canonicalDefiningDecl,
+                                             functionChain);
+
+    SgFunctionDeclaration *canonicalFirstNondefiningDecl =
+        isSgFunctionDeclaration(
+            canonicalDefiningDecl->get_firstNondefiningDeclaration());
+    if (canonicalFirstNondefiningDecl == canonicalDefiningDecl) {
+      canonicalFirstNondefiningDecl = NULL;
+    }
+    if (canonicalFirstNondefiningDecl == NULL) {
+      for (SgFunctionDeclaration *candidate : functionChain) {
+        if (candidate != canonicalDefiningDecl &&
+            candidate->get_definition() == NULL) {
+          canonicalFirstNondefiningDecl = candidate;
+          break;
+        }
+      }
+    }
+
+    SgFunctionDefinition *canonicalDefinition =
+        canonicalDefiningDecl->get_definition();
+    ROSE_ASSERT(canonicalDefinition != NULL);
+
+    if (canonicalFirstNondefiningDecl != NULL) {
+      canonicalFirstNondefiningDecl->set_firstNondefiningDeclaration(
+          canonicalFirstNondefiningDecl);
+      canonicalFirstNondefiningDecl->set_definingDeclaration(
+          canonicalDefiningDecl);
+    }
+
+    canonicalDefiningDecl->set_definingDeclaration(canonicalDefiningDecl);
+    canonicalDefiningDecl->set_firstNondefiningDeclaration(
+        canonicalFirstNondefiningDecl);
+    canonicalDefinition->set_declaration(canonicalDefiningDecl);
+
+    for (SgFunctionDeclaration *candidate : functionChain) {
+      if (candidate == NULL || candidate == canonicalDefiningDecl ||
+          candidate == canonicalFirstNondefiningDecl) {
+        continue;
+      }
+
+      replacements[candidate] = canonicalDefiningDecl;
+      addFunctionParameterSubtreeReplacements(candidate, canonicalDefiningDecl,
+                                              replacements);
+      if (SgMemberFunctionDeclaration *candidateMemberDecl =
+              isSgMemberFunctionDeclaration(candidate)) {
+        if (SgMemberFunctionDeclaration *canonicalMemberDecl =
+                isSgMemberFunctionDeclaration(canonicalDefiningDecl)) {
+          addMemberFunctionCtorInitializerSubtreeReplacements(
+              candidateMemberDecl, canonicalMemberDecl, replacements);
+        }
+      }
+
+      if (candidate->get_definition() != NULL &&
+          candidate->get_definition() != canonicalDefinition) {
+        replacements[candidate->get_definition()] = canonicalDefinition;
+      }
+    }
+  }
+
+  rewriteCopiedNodeEdges(help, replacements);
+}
+
+bool symbolIsStillOwnedByParentTable(SgSymbol *symbol) {
+  if (symbol == NULL) {
+    return false;
+  }
+
+  SgSymbolTable *parentTable = isSgSymbolTable(symbol->get_parent());
+  return parentTable != NULL && parentTable->exists(symbol);
+}
+
+void discardSupersededCopiedSymbols(
+    SgCopyHelp &help, const std::unordered_set<SgNode *> &canonicalCopies) {
+  std::vector<SgSymbol *> staleSymbols;
+  staleSymbols.reserve(help.get_supersededNodeCopies().size());
+
+  for (SgCopyHelp::supersededNodeSetTypeIterator it =
+           help.get_supersededNodeCopies().begin();
+       it != help.get_supersededNodeCopies().end(); ++it) {
+    SgSymbol *staleSymbol = isSgSymbol(*it);
+    if (staleSymbol == NULL) {
+      continue;
+    }
+
+    if (canonicalCopies.find(staleSymbol) != canonicalCopies.end()) {
+      continue;
+    }
+
+    if (symbolIsStillOwnedByParentTable(staleSymbol)) {
+      continue;
+    }
+
+    if (staleSymbol->get_parent() != NULL &&
+        isSgSymbolTable(staleSymbol->get_parent()) == NULL) {
+      continue;
+    }
+
+    staleSymbols.push_back(staleSymbol);
+  }
+
+  for (SgSymbol *staleSymbol : staleSymbols) {
+    delete staleSymbol;
+  }
+
+  help.get_supersededNodeCopies().clear();
+}
+
+SgClassDeclaration *
+canonicalFirstNondefiningClassDeclaration(SgClassDeclaration *classDecl) {
+  if (classDecl == NULL) {
+    return NULL;
+  }
+
+  if (SgClassDeclaration *firstNondefining =
+          isSgClassDeclaration(classDecl->get_firstNondefiningDeclaration())) {
+    return firstNondefining;
+  }
+
+  return classDecl;
+}
+
+SgClassDeclaration *
+canonicalDefiningClassDeclaration(SgClassDeclaration *classDecl) {
+  if (classDecl == NULL) {
+    return NULL;
+  }
+
+  SgClassDeclaration *firstNondefining =
+      canonicalFirstNondefiningClassDeclaration(classDecl);
+  if (firstNondefining == NULL) {
+    return NULL;
+  }
+
+  if (SgClassDeclaration *definingDecl =
+          isSgClassDeclaration(firstNondefining->get_definingDeclaration())) {
+    return definingDecl;
+  }
+
+  return isSgClassDeclaration(classDecl->get_definingDeclaration());
+}
+
+bool classDeclarationsShareCopyChain(SgClassDeclaration *candidate,
+                                     SgClassDeclaration *firstNondefining,
+                                     SgClassDeclaration *definingDecl) {
+  if (candidate == NULL || firstNondefining == NULL) {
+    return false;
+  }
+
+  SgClassDeclaration *candidateFirst =
+      canonicalFirstNondefiningClassDeclaration(candidate);
+  if (candidateFirst != firstNondefining) {
+    return false;
+  }
+
+  SgClassDeclaration *candidateDef =
+      canonicalDefiningClassDeclaration(candidate);
+  if (definingDecl == NULL || definingDecl == firstNondefining) {
+    return candidateDef == NULL || candidateDef == candidateFirst ||
+           candidateDef == definingDecl;
+  }
+
+  return candidateDef == definingDecl;
+}
+
+SgClassType *canonicalizeCopiedClassType(SgClassDeclaration *classDecl) {
+  if (classDecl == NULL) {
+    return NULL;
+  }
+
+  SgClassDeclaration *firstNondefining =
+      canonicalFirstNondefiningClassDeclaration(classDecl);
+  if (firstNondefining == NULL) {
+    return NULL;
+  }
+
+  SgClassDeclaration *definingDecl =
+      canonicalDefiningClassDeclaration(classDecl);
+
+  auto typeBelongsToCurrentChain = [&](SgClassType *candidateType) {
+    if (candidateType == NULL) {
+      return false;
+    }
+
+    SgClassDeclaration *typeDecl =
+        isSgClassDeclaration(candidateType->get_declaration());
+    return classDeclarationsShareCopyChain(typeDecl, firstNondefining,
+                                           definingDecl);
+  };
+
+  auto selectCanonicalType = [&](SgClassDeclaration *candidateDecl) {
+    if (candidateDecl == NULL) {
+      return static_cast<SgClassType *>(NULL);
+    }
+
+    SgClassType *candidateType = isSgClassType(candidateDecl->get_type());
+    return typeBelongsToCurrentChain(candidateType)
+               ? candidateType
+               : static_cast<SgClassType *>(NULL);
+  };
+
+  SgClassType *canonicalType = selectCanonicalType(firstNondefining);
+  if (canonicalType == NULL) {
+    canonicalType = selectCanonicalType(classDecl);
+  }
+  if (canonicalType == NULL) {
+    canonicalType = selectCanonicalType(definingDecl);
+  }
+  if (canonicalType == NULL) {
+    canonicalType = SgClassType::createType(firstNondefining);
+  }
+
+  ROSE_ASSERT(canonicalType != NULL);
+
+  auto attachType = [&](SgClassDeclaration *candidate) {
+    if (candidate != NULL && candidate->get_type() != canonicalType) {
+      candidate->set_type(canonicalType);
+    }
+  };
+
+  attachType(firstNondefining);
+  attachType(definingDecl);
+  attachType(classDecl);
+
+  if (canonicalType->get_declaration() != firstNondefining) {
+    canonicalType->set_declaration(firstNondefining);
+  }
+
+  return canonicalType;
+}
+
+void canonicalizeCopiedClassTypes(SgCopyHelp &help) {
+  std::unordered_set<SgClassDeclaration *> copiedClassDecls;
+  copiedClassDecls.reserve(help.get_copiedNodeMap().size());
+
+  for (SgCopyHelp::copiedNodeMapTypeIterator it =
+           help.get_copiedNodeMap().begin();
+       it != help.get_copiedNodeMap().end(); ++it) {
+    if (SgClassDeclaration *copyClassDecl = isSgClassDeclaration(it->second)) {
+      copiedClassDecls.insert(copyClassDecl);
+    }
+  }
+
+  for (SgClassDeclaration *classDecl : copiedClassDecls) {
+    canonicalizeCopiedClassType(classDecl);
+  }
+}
+
+void repairCopiedExplicitDeclarationScopesFromParents(SgCopyHelp &help) {
+  std::unordered_set<SgScopeStatement *> copiedScopes;
+  copiedScopes.reserve(help.get_copiedNodeMap().size());
+
+  for (SgCopyHelp::copiedNodeMapTypeIterator it =
+           help.get_copiedNodeMap().begin();
+       it != help.get_copiedNodeMap().end(); ++it) {
+    if (SgScopeStatement *copyScope = isSgScopeStatement(it->second)) {
+      copiedScopes.insert(copyScope);
+    }
+  }
+
+  for (SgCopyHelp::copiedNodeMapTypeIterator it =
+           help.get_copiedNodeMap().begin();
+       it != help.get_copiedNodeMap().end(); ++it) {
+    const SgDeclarationStatement *originalDecl =
+        isSgDeclarationStatement(it->first);
+    SgDeclarationStatement *copyDecl = isSgDeclarationStatement(it->second);
+    if (originalDecl == NULL || copyDecl == NULL ||
+        originalDecl->hasExplicitScope() == false) {
+      continue;
+    }
+
+    SgScopeStatement *copiedParentScope =
+        isSgScopeStatement(copyDecl->get_parent());
+    if (copiedParentScope == NULL ||
+        copiedScopes.find(copiedParentScope) == copiedScopes.end()) {
+      continue;
+    }
+
+    SgScopeStatement *currentCopiedScope = copyDecl->get_scope();
+    if (currentCopiedScope == copiedParentScope) {
+      continue;
+    }
+
+    SgScopeStatement *originalParentScope =
+        isSgScopeStatement(originalDecl->get_parent());
+    if (explicitDeclarationScopeMatchesStructuralParent(
+            originalDecl->get_scope(), originalParentScope) == false) {
+      continue;
+    }
+
+    copyDecl->set_scope(copiedParentScope);
+  }
+}
+
+void restoreCopiedReferencedDeclarationParentsToScope(
+    SgDeclarationStatement *copiedDecl, SgCopyHelp &help) {
+  if (copiedDecl == NULL) {
+    return;
+  }
+
+  std::unordered_set<SgDeclarationStatement *> candidates;
+  candidates.insert(copiedDecl);
+
+  if (SgDeclarationStatement *copiedFirstNondef =
+          copiedDecl->get_firstNondefiningDeclaration()) {
+    candidates.insert(copiedFirstNondef);
+  }
+
+  if (SgDeclarationStatement *copiedDefining =
+          copiedDecl->get_definingDeclaration()) {
+    candidates.insert(copiedDefining);
+  }
+
+  for (SgDeclarationStatement *candidate : candidates) {
+    if (candidate == NULL || isSgBaseClass(candidate->get_parent()) == NULL) {
+      continue;
+    }
+
+    SgScopeStatement *copiedScope = candidate->get_scope();
+    if (copiedScope == NULL) {
+      continue;
+    }
+
+    if (candidate->get_parent() != copiedScope) {
+      candidate->set_parent(copiedScope);
+    }
+  }
+}
+
+void repairCopiedDeclarationParentsFromScopes(SgCopyHelp &help) {
+  for (SgCopyHelp::copiedNodeMapTypeIterator it =
+           help.get_copiedNodeMap().begin();
+       it != help.get_copiedNodeMap().end(); ++it) {
+    const SgDeclarationStatement *originalDecl =
+        isSgDeclarationStatement(it->first);
+    SgDeclarationStatement *copyDecl = isSgDeclarationStatement(it->second);
+    if (originalDecl == NULL || copyDecl == NULL) {
+      continue;
+    }
+
+    SgScopeStatement *originalParentScope =
+        isSgScopeStatement(originalDecl->get_parent());
+    if (originalParentScope == NULL) {
+      continue;
+    }
+
+    SgScopeStatement *copiedParentScope =
+        isSgScopeStatement(lookupCopiedNode(help, originalParentScope));
+    if (copiedParentScope == NULL ||
+        !copiedParentScope->statementExistsInScope(copyDecl)) {
+      continue;
+    }
+
+    if (copyDecl->get_parent() != copiedParentScope) {
+      copyDecl->set_parent(copiedParentScope);
+    }
+  }
+}
+
+void canonicalizeCopiedEnumEnumerators(const SgEnumDeclaration *originalEnum,
+                                       SgEnumDeclaration *copyEnum,
+                                       SgCopyHelp &help) {
+  ROSE_ASSERT(originalEnum != NULL);
+  ROSE_ASSERT(copyEnum != NULL);
+
+  const SgInitializedNamePtrList &originalFields =
+      originalEnum->get_enumerators();
+  SgInitializedNamePtrList &copyFields = copyEnum->get_enumerators();
+
+  std::unordered_set<SgInitializedName *> canonicalFields;
+  canonicalFields.reserve(originalFields.size());
+
+  SgInitializedNamePtrList reorderedFields;
+  for (SgInitializedName *originalField : originalFields) {
+    SgInitializedName *copiedField =
+        isSgInitializedName(lookupCopiedNode(help, originalField));
+    if (copiedField == NULL) {
+      continue;
+    }
+
+    canonicalFields.insert(copiedField);
+    reorderedFields.push_back(copiedField);
+  }
+
+  for (SgInitializedName *field : copyFields) {
+    if (field != NULL && canonicalFields.find(field) == canonicalFields.end() &&
+        field->get_parent() == copyEnum) {
+      field->set_parent(NULL);
+    }
+  }
+
+  copyFields = reorderedFields;
+  for (SgInitializedName *field : copyFields) {
+    if (field != NULL && field->get_parent() != copyEnum) {
+      field->set_parent(copyEnum);
+    }
+  }
+}
+
+const SgEnumDeclaration *
+canonicalOriginalEnumDefinition(const SgEnumDeclaration *originalEnum) {
+  ROSE_ASSERT(originalEnum != NULL);
+
+  if (const SgEnumDeclaration *originalDefining =
+          isSgEnumDeclaration(originalEnum->get_definingDeclaration())) {
+    return originalDefining;
+  }
+
+  return originalEnum;
+}
+
+bool copiedEnumIsAttachedToAst(SgEnumDeclaration *copyEnum) {
+  if (copyEnum == NULL) {
+    return false;
+  }
+
+  SgScopeStatement *parentScope = isSgScopeStatement(copyEnum->get_parent());
+  return parentScope != NULL && parentScope->statementExistsInScope(copyEnum);
+}
+
+bool copiedEnumsShareSourceFile(SgEnumDeclaration *lhs,
+                                SgEnumDeclaration *rhs) {
+  if (lhs == NULL || rhs == NULL) {
+    return false;
+  }
+
+  auto filenameForEnum = [](SgEnumDeclaration *decl) -> std::string {
+    if (decl == NULL) {
+      return "";
+    }
+
+    if (decl->get_file_info() != NULL) {
+      std::string filename = decl->get_file_info()->get_filenameString();
+      if (!filename.empty()) {
+        return filename;
+      }
+    }
+
+    if (SgSourceFile *sourceFile =
+            SageInterface::getEnclosingSourceFile(decl)) {
+      if (sourceFile->get_file_info() != NULL) {
+        return sourceFile->get_file_info()->get_filenameString();
+      }
+    }
+
+    return "";
+  };
+
+  std::string lhsFilename = filenameForEnum(lhs);
+  std::string rhsFilename = filenameForEnum(rhs);
+  if (!lhsFilename.empty() || !rhsFilename.empty()) {
+    return lhsFilename == rhsFilename;
+  }
+
+  return false;
+}
+
+void repairCopiedOwnedDeclarationScope(
+    const SgDeclarationStatement *originalDecl,
+    SgDeclarationStatement *copiedDecl, SgCopyHelp &help) {
+  if (originalDecl == NULL || copiedDecl == NULL) {
+    return;
+  }
+
+  SgDeclarationScope *originalOwnedScope =
+      originalDecl->get_nonreal_decl_scope();
+  if (originalOwnedScope == NULL) {
+    return;
+  }
+
+  SgDeclarationScope *copiedOwnedScope =
+      isSgDeclarationScope(lookupCopiedNode(help, originalOwnedScope));
+  if (copiedOwnedScope == NULL) {
+    return;
+  }
+
+  if (copiedDecl->get_nonreal_decl_scope() != copiedOwnedScope) {
+    copiedDecl->set_nonreal_decl_scope(copiedOwnedScope);
+  }
+
+  if (copiedOwnedScope->get_parent() != copiedDecl) {
+    copiedOwnedScope->set_parent(copiedDecl);
+  }
+}
+
+void repairCopiedNonrealDeclScope(const SgNonrealDecl *originalNonreal,
+                                  SgNonrealDecl *copiedNonreal,
+                                  SgCopyHelp &help);
+
+SgDeclarationScope *
+resolveCopiedDeclarationScope(const SgDeclarationStatement *originalOwner,
+                              SgCopyHelp &help) {
+  if (originalOwner == NULL) {
+    return NULL;
+  }
+
+  SgDeclarationStatement *copiedOwner =
+      isSgDeclarationStatement(lookupCopiedNode(help, originalOwner));
+  if (copiedOwner != NULL) {
+    repairCopiedOwnedDeclarationScope(originalOwner, copiedOwner, help);
+    if (const SgNonrealDecl *originalOwnerNonreal =
+            isSgNonrealDecl(originalOwner)) {
+      repairCopiedNonrealDeclScope(originalOwnerNonreal,
+                                   isSgNonrealDecl(copiedOwner), help);
+    }
+
+    if (copiedOwner->get_nonreal_decl_scope() != NULL) {
+      return copiedOwner->get_nonreal_decl_scope();
+    }
+  }
+
+  if (SgDeclarationScope *copiedScope = isSgDeclarationScope(
+          lookupCopiedNode(help, originalOwner->get_nonreal_decl_scope()))) {
+    return copiedScope;
+  }
+
+  return NULL;
+}
+
+void repairCopiedNonrealDeclScope(const SgNonrealDecl *originalNonreal,
+                                  SgNonrealDecl *copiedNonreal,
+                                  SgCopyHelp &help) {
+  if (originalNonreal == NULL || copiedNonreal == NULL) {
+    return;
+  }
+
+  repairCopiedOwnedDeclarationScope(originalNonreal, copiedNonreal, help);
+
+  SgDeclarationScope *originalScope =
+      isSgDeclarationScope(originalNonreal->get_scope());
+  if (originalScope == NULL) {
+    return;
+  }
+
+  SgDeclarationStatement *originalOwner =
+      isSgDeclarationStatement(originalScope->get_parent());
+  if (originalOwner != NULL) {
+    if (const SgNonrealDecl *originalOwnerNonreal =
+            isSgNonrealDecl(originalOwner)) {
+      repairCopiedNonrealDeclScope(
+          originalOwnerNonreal,
+          isSgNonrealDecl(lookupCopiedNode(help, originalOwnerNonreal)), help);
+    } else {
+      repairCopiedOwnedDeclarationScope(
+          originalOwner,
+          isSgDeclarationStatement(lookupCopiedNode(help, originalOwner)),
+          help);
+    }
+  }
+
+  SgDeclarationScope *copiedScope =
+      materializeCopiedDeclarationScope(originalScope, help);
+  if (copiedScope == NULL) {
+    copiedScope = resolveCopiedDeclarationScope(originalOwner, help);
+  }
+  if (copiedScope == NULL) {
+    if (SgDeclarationStatement *copiedContainerDecl =
+            isSgDeclarationStatement(copiedNonreal->get_parent())) {
+      copiedScope =
+          SageBuilder::getOrCreateNonrealDeclarationScope(copiedContainerDecl);
+    }
+  }
+
+  if (copiedScope == NULL) {
+    return;
+  }
+
+  if (copiedNonreal->get_scope() != copiedScope) {
+    copiedNonreal->set_scope(copiedScope);
+  }
+
+  if (!copiedScope->statementExistsInScope(copiedNonreal)) {
+    copiedScope->insertStatementInScope(copiedNonreal, false);
+  }
+
+  if (copiedNonreal->get_parent() != copiedScope) {
+    copiedNonreal->set_parent(copiedScope);
+  }
+}
+
+void clearCopiedEnumEnumerators(SgEnumDeclaration *copyEnum) {
+  ROSE_ASSERT(copyEnum != NULL);
+
+  SgInitializedNamePtrList &copyEnumerators = copyEnum->get_enumerators();
+  for (SgInitializedName *field : copyEnumerators) {
+    if (field != NULL && field->get_parent() == copyEnum) {
+      field->set_parent(NULL);
+    }
+  }
+  copyEnumerators.clear();
+}
+
+SgEnumDeclaration *
+canonicalizeCopiedEnumDeclarationChain(const SgEnumDeclaration *originalEnum,
+                                       SgEnumDeclaration *copyEnum,
+                                       SgCopyHelp &help) {
+  ROSE_ASSERT(originalEnum != NULL);
+  ROSE_ASSERT(copyEnum != NULL);
+
+  const SgEnumDeclaration *originalFirstNondef =
+      isSgEnumDeclaration(originalEnum->get_firstNondefiningDeclaration());
+  const SgEnumDeclaration *originalDefining =
+      canonicalOriginalEnumDefinition(originalEnum);
+
+  SgEnumDeclaration *copiedFirstNondef = isSgEnumDeclaration(lookupCopiedNode(
+      help, originalFirstNondef != NULL ? originalFirstNondef : originalEnum));
+  if (copiedFirstNondef == NULL) {
+    copiedFirstNondef = copyEnum;
+  }
+
+  SgEnumDeclaration *copiedDefining = isSgEnumDeclaration(lookupCopiedNode(
+      help, originalDefining != NULL ? originalDefining : originalEnum));
+  SgEnumDeclaration *localFirstNondef =
+      copiedEnumsShareSourceFile(copyEnum, copiedFirstNondef)
+          ? copiedFirstNondef
+          : copyEnum;
+  SgEnumDeclaration *localDefining =
+      copiedEnumsShareSourceFile(copyEnum, copiedDefining) ? copiedDefining
+                                                           : NULL;
+
+  auto hasEnumerators = [](SgEnumDeclaration *candidate) -> bool {
+    return candidate != NULL && !candidate->get_enumerators().empty();
+  };
+
+  SgEnumDeclaration *effectiveDefinition = NULL;
+
+  if (hasEnumerators(copyEnum) &&
+      (localDefining == NULL || localDefining == copyEnum) &&
+      copiedEnumIsAttachedToAst(copyEnum)) {
+    effectiveDefinition = copyEnum;
+  } else if (hasEnumerators(localDefining) &&
+             copiedEnumIsAttachedToAst(localDefining)) {
+    effectiveDefinition = localDefining;
+  } else if (hasEnumerators(copyEnum) && copiedEnumIsAttachedToAst(copyEnum)) {
+    effectiveDefinition = copyEnum;
+  } else if (hasEnumerators(localFirstNondef) &&
+             copiedEnumIsAttachedToAst(localFirstNondef)) {
+    effectiveDefinition = localFirstNondef;
+  } else if (hasEnumerators(localDefining)) {
+    effectiveDefinition = localDefining;
+  } else if (hasEnumerators(copyEnum)) {
+    effectiveDefinition = copyEnum;
+  } else if (hasEnumerators(localFirstNondef)) {
+    effectiveDefinition = localFirstNondef;
+  } else if (localDefining != NULL) {
+    effectiveDefinition = localDefining;
+  } else {
+    effectiveDefinition = copyEnum;
+  }
+
+  localFirstNondef->set_firstNondefiningDeclaration(localFirstNondef);
+  localFirstNondef->set_definingDeclaration(effectiveDefinition);
+
+  effectiveDefinition->set_firstNondefiningDeclaration(localFirstNondef);
+  effectiveDefinition->set_definingDeclaration(effectiveDefinition);
+  effectiveDefinition->unsetForward();
+
+  auto normalizeCopy = [&](SgEnumDeclaration *candidate) {
+    if (candidate == NULL) {
+      return;
+    }
+
+    if (candidate->get_firstNondefiningDeclaration() != localFirstNondef) {
+      candidate->set_firstNondefiningDeclaration(localFirstNondef);
+    }
+    if (candidate == effectiveDefinition) {
+      if (candidate->get_definingDeclaration() != effectiveDefinition) {
+        candidate->set_definingDeclaration(effectiveDefinition);
+      }
+      candidate->unsetForward();
+    } else if (candidate->get_definingDeclaration() != effectiveDefinition) {
+      candidate->set_definingDeclaration(effectiveDefinition);
+    }
+  };
+
+  normalizeCopy(copyEnum);
+  if (localFirstNondef != copyEnum) {
+    normalizeCopy(localFirstNondef);
+  }
+  if (localDefining != NULL && localDefining != copyEnum &&
+      localDefining != localFirstNondef) {
+    normalizeCopy(localDefining);
+  }
+
+  auto clearDuplicateEnumerators = [&](SgEnumDeclaration *candidate) {
+    if (candidate != NULL && candidate != effectiveDefinition &&
+        copiedEnumsShareSourceFile(candidate, effectiveDefinition) &&
+        !candidate->get_enumerators().empty()) {
+      clearCopiedEnumEnumerators(candidate);
+    }
+  };
+
+  clearDuplicateEnumerators(copyEnum);
+  if (localFirstNondef != copyEnum) {
+    clearDuplicateEnumerators(localFirstNondef);
+  }
+  if (localDefining != NULL && localDefining != copyEnum &&
+      localDefining != localFirstNondef) {
+    clearDuplicateEnumerators(localDefining);
+  }
+
+  return effectiveDefinition;
+}
+
+SgFunctionDeclaration *resolveCanonicalCopiedDefiningFunctionDeclaration(
+    const SgFunctionDefinition *originalFunctionDef, SgCopyHelp &help) {
+  if (originalFunctionDef == NULL) {
+    return NULL;
+  }
+
+  const SgFunctionDeclaration *originalDecl =
+      originalFunctionDef->get_declaration();
+  if (originalDecl == NULL) {
+    return NULL;
+  }
+
+  const SgFunctionDeclaration *originalFirstNondef =
+      isSgFunctionDeclaration(originalDecl->get_firstNondefiningDeclaration());
+  if (originalFirstNondef == NULL) {
+    originalFirstNondef = originalDecl;
+  }
+
+  if (SgFunctionDeclaration *copiedFirstNondef = isSgFunctionDeclaration(
+          lookupCopiedNode(help, originalFirstNondef))) {
+    if (SgFunctionDeclaration *copiedDefining = isSgFunctionDeclaration(
+            copiedFirstNondef->get_definingDeclaration())) {
+      return copiedDefining;
+    }
+
+    if (copiedFirstNondef->get_definingDeclaration() == copiedFirstNondef) {
+      return copiedFirstNondef;
+    }
+  }
+
+  return isSgFunctionDeclaration(lookupCopiedNode(help, originalDecl));
+}
+
+void repairCopiedFunctionDefinitionDeclarations(SgCopyHelp &help) {
+  for (SgCopyHelp::copiedNodeMapTypeIterator it =
+           help.get_copiedNodeMap().begin();
+       it != help.get_copiedNodeMap().end(); ++it) {
+    const SgFunctionDefinition *originalFunctionDef =
+        isSgFunctionDefinition(it->first);
+    SgFunctionDefinition *copyFunctionDef = isSgFunctionDefinition(it->second);
+    if (originalFunctionDef == NULL || copyFunctionDef == NULL) {
+      continue;
+    }
+
+    SgFunctionDeclaration *canonicalDecl =
+        resolveCanonicalCopiedDefiningFunctionDeclaration(originalFunctionDef,
+                                                          help);
+    if (canonicalDecl == NULL) {
+      canonicalDecl = isSgFunctionDeclaration(copyFunctionDef->get_parent());
+    }
+    if (canonicalDecl == NULL) {
+      continue;
+    }
+
+    if (copyFunctionDef->get_declaration() != canonicalDecl) {
+      copyFunctionDef->set_declaration(canonicalDecl);
+    }
+
+    if (canonicalDecl->get_definition() != copyFunctionDef) {
+      canonicalDecl->set_definition(copyFunctionDef);
+    }
+  }
+}
+
 void finalizeCanonicalCopyLinks(SgCopyHelp &help) {
   std::unordered_set<SgNode *> canonicalCopies;
+  canonicalizeCopiedFunctionDeclarationMapEntries(help);
   canonicalCopies.reserve(help.get_copiedNodeMap().size());
   for (SgCopyHelp::copiedNodeMapTypeIterator it =
            help.get_copiedNodeMap().begin();
        it != help.get_copiedNodeMap().end(); ++it) {
     canonicalCopies.insert(it->second);
   }
-
   canonicalizeCopiedNodeEdges(help);
+
+  for (SgCopyHelp::copiedNodeMapTypeIterator it =
+           help.get_copiedNodeMap().begin();
+       it != help.get_copiedNodeMap().end(); ++it) {
+    if (SgDeclarationStatement *copyDecl =
+            isSgDeclarationStatement(it->second)) {
+      restoreCopiedReferencedDeclarationParentsToScope(copyDecl, help);
+    }
+  }
 
   for (SgCopyHelp::copiedNodeMapTypeIterator it =
            help.get_copiedNodeMap().begin();
@@ -135,11 +1529,9 @@ void finalizeCanonicalCopyLinks(SgCopyHelp &help) {
         copyDecl->set_firstNondefiningDeclaration(NULL);
       }
 
-      if (originalDecl->hasExplicitScope()) {
-        if (SgScopeStatement *copiedScope = isSgScopeStatement(
-                lookupCopiedNode(help, originalDecl->get_scope()))) {
-          copyDecl->set_scope(copiedScope);
-        }
+      if (SgScopeStatement *copiedScope = resolveCopiedExplicitDeclarationScope(
+              originalDecl, copyDecl, help)) {
+        copyDecl->set_scope(copiedScope);
       }
     }
 
@@ -217,16 +1609,23 @@ void finalizeCanonicalCopyLinks(SgCopyHelp &help) {
       SgEnumDeclaration *copyEnum = isSgEnumDeclaration(copyNode);
       ROSE_ASSERT(copyEnum != NULL);
 
-      if (originalEnum->get_definingDeclaration() != NULL &&
-          originalEnum->get_definingDeclaration() != originalEnum) {
-        SgInitializedNamePtrList &copyEnumerators = copyEnum->get_enumerators();
-        for (SgInitializedName *field : copyEnumerators) {
-          if (field != NULL && field->get_parent() == copyEnum) {
-            field->set_parent(NULL);
+      SgInitializedNamePtrList &copyEnumerators = copyEnum->get_enumerators();
+      for (SgInitializedNamePtrList::iterator field = copyEnumerators.begin();
+           field != copyEnumerators.end();) {
+        SgInitializedName *copyField = *field;
+        if (copyField != NULL &&
+            canonicalCopies.find(copyField) == canonicalCopies.end()) {
+          if (copyField->get_parent() == copyEnum) {
+            copyField->set_parent(NULL);
           }
+          field = copyEnumerators.erase(field);
+          continue;
         }
-        copyEnumerators.clear();
+
+        ++field;
       }
+
+      canonicalizeCopiedEnumDeclarationChain(originalEnum, copyEnum, help);
     }
 
     if (SgScopeStatement *copyScope = isSgScopeStatement(copyNode)) {
@@ -332,9 +1731,18 @@ void finalizeCanonicalCopyLinks(SgCopyHelp &help) {
       }
     }
   }
+
+  canonicalizeCopiedFunctionDeclarationChains(help);
+  repairCopiedFunctionDefinitionDeclarations(help);
+  canonicalizeCopiedClassTypes(help);
+  repairCopiedDeclarationParentsFromScopes(help);
+  repairCopiedExplicitDeclarationScopesFromParents(help);
+  discardSupersededCopiedSymbols(help, canonicalCopies);
 }
 
 } // namespace
+
+void SgTreeCopy::finalizeRootCopy() { finalizeCanonicalCopyLinks(*this); }
 
 void resetVariableDefinitionSupport(
     const SgInitializedName *originalInitializedName,
@@ -546,6 +1954,21 @@ void SgInitializedName::fixupCopy_scopes(SgNode *copy, SgCopyHelp &help) const {
 
         resetVariableDefinitionSupport(this, initializedName_copy,
                                        functionDeclaration);
+      }
+      break;
+    }
+
+    case V_SgCtorInitializerList: {
+      SgNode *parentFunction = parent->get_parent();
+      SgMemberFunctionDeclaration *memberFunctionDeclaration =
+          isSgMemberFunctionDeclaration(parentFunction);
+
+      if (memberFunctionDeclaration != NULL) {
+        ROSE_ASSERT(initializedName_copy != NULL);
+        ROSE_ASSERT(initializedName_copy->get_declptr() != NULL);
+
+        resetVariableDefinitionSupport(this, initializedName_copy,
+                                       memberFunctionDeclaration);
       }
       break;
     }
@@ -770,23 +2193,21 @@ void SgGlobal::fixupCopy_scopes(SgNode *copy, SgCopyHelp &help) const {
   ROSE_ASSERT(global_copy != NULL);
 
   const SgDeclarationStatementPtrList &statementList_original =
-      this->getDeclarationList();
-  const SgDeclarationStatementPtrList &statementList_copy =
-      global_copy->getDeclarationList();
+      this->get_declarations();
+  SgDeclarationStatementPtrList &statementList_copy =
+      global_copy->get_declarations();
+  synchronizeCopiedDeclarationList(statementList_original, statementList_copy,
+                                   global_copy, help);
+  const SgDeclarationStatementPtrList originalDeclarations =
+      statementList_original;
+  const SgDeclarationStatementPtrList copiedDeclarations = statementList_copy;
+  const size_t declarationCount =
+      std::min(originalDeclarations.size(), copiedDeclarations.size());
 
-  SgDeclarationStatementPtrList::const_iterator i_original =
-      statementList_original.begin();
-  SgDeclarationStatementPtrList::const_iterator i_copy =
-      statementList_copy.begin();
-
-  // Iterate over both lists to match up the correct pairs of SgStatement
-  // objects
-  while ((i_original != statementList_original.end()) &&
-         (i_copy != statementList_copy.end())) {
-    (*i_original)->fixupCopy_scopes(*i_copy, help);
-
-    i_original++;
-    i_copy++;
+  for (size_t i = 0; i < declarationCount; ++i) {
+    if (originalDeclarations[i] != NULL && copiedDeclarations[i] != NULL) {
+      originalDeclarations[i]->fixupCopy_scopes(copiedDeclarations[i], help);
+    }
   }
 
   // Call the base class fixupCopy member function
@@ -889,6 +2310,23 @@ void SgDeclarationStatement::fixupCopy_scopes(SgNode *copy,
       isSgDeclarationStatement(copy);
   ROSE_ASSERT(copyDeclarationStatement != NULL);
 
+  if (help.isFixupNodePairCompleted(this, copyDeclarationStatement)) {
+    return;
+  }
+
+  if (!help.beginFixupNodePair(this, copyDeclarationStatement)) {
+    return;
+  }
+
+  struct DeclarationFixupGuard {
+    SgCopyHelp &help;
+    const SgDeclarationStatement *original;
+    SgDeclarationStatement *copy;
+
+    ~DeclarationFixupGuard() { help.completeFixupNodePair(original, copy); }
+  } declarationFixupGuard{help, this, copyDeclarationStatement};
+  (void)declarationFixupGuard;
+
   // DQ (10/20/2007): This is an essential piece of the fixup of the AST copy.
   // This is a recursive construction of IR nodes that have defining and
   // non-defining parts used when either or both were not copied in the initial
@@ -905,11 +2343,10 @@ void SgDeclarationStatement::fixupCopy_scopes(SgNode *copy,
   // \n",hasBeenCopied ? "true" : "false"); if (hasBeenCopied == false)
 
   bool definingDeclarationCopied =
-      (help.get_copiedNodeMap().find(this->get_definingDeclaration()) !=
-       help.get_copiedNodeMap().end());
-  bool firstNondefiningDeclarationCopied =
-      (help.get_copiedNodeMap().find(this->get_firstNondefiningDeclaration()) !=
-       help.get_copiedNodeMap().end());
+      declarationFixupAvailable(this, this->get_definingDeclaration(), help);
+
+  bool firstNondefiningDeclarationCopied = declarationFixupAvailable(
+      this, this->get_firstNondefiningDeclaration(), help);
 
   // DQ (3/2/2009): Handle the case of friend declaration.
   bool isFriendDeclaration = this->get_declarationModifier().isFriend();
@@ -954,23 +2391,26 @@ void SgDeclarationStatement::fixupCopy_scopes(SgNode *copy,
       // copyOfFirstNondefiningDeclarationNode =
       // this->get_firstNondefiningDeclaration()->copy(help); printf ("Nested
       // copy of firstNondefiningDeclaration \n");
+      SgNode *existingCopyOfFirstNondefiningDeclarationNode =
+          lookupCopiedNode(help, this->get_firstNondefiningDeclaration());
       SgNode *copyOfFirstNondefiningDeclarationNode =
-          help.copyAst(this->get_firstNondefiningDeclaration());
+          help.copyOrLookupAst(this->get_firstNondefiningDeclaration());
       // printf ("DONE: Nested copy of firstNondefiningDeclaration \n");
 
       ROSE_ASSERT(copyOfFirstNondefiningDeclarationNode != NULL);
-      ROSE_ASSERT(copyOfFirstNondefiningDeclarationNode->get_parent() == NULL);
-      // Must reset the parent (semantics of AST copy), but this will be done by
-      // reset
+      if (copyOfFirstNondefiningDeclarationNode !=
+          existingCopyOfFirstNondefiningDeclarationNode) {
+        ROSE_ASSERT(copyOfFirstNondefiningDeclarationNode->get_parent() ==
+                    NULL);
 
-      // DQ (3/14/2014): The parent might not be set if the non-defining
-      // declaration has not be added to the AST (i.e. if it has only been used
-      // to build a symbol).
-      // ROSE_ASSERT(this->get_firstNondefiningDeclaration()->get_parent() !=
-      // NULL);
-
-      copyOfFirstNondefiningDeclarationNode->set_parent(
-          this->get_firstNondefiningDeclaration()->get_parent());
+        // Must reset the parent (semantics of AST copy), but this will be
+        // done by reset.
+        copyOfFirstNondefiningDeclarationNode->set_parent(
+            this->get_firstNondefiningDeclaration()->get_parent());
+      } else if (copyOfFirstNondefiningDeclarationNode->get_parent() == NULL) {
+        copyOfFirstNondefiningDeclarationNode->set_parent(
+            this->get_firstNondefiningDeclaration()->get_parent());
+      }
 
       // DQ (3/14/2014): The parent might not be set if the non-defining
       // declaration has not be added to the AST (i.e. if it has only been used
@@ -1008,60 +2448,63 @@ void SgDeclarationStatement::fixupCopy_scopes(SgNode *copy,
         // copying of defining vs. non-defining declaration. SgNode*
         // copyOfDefiningDeclarationNode =
         // this->get_definingDeclaration()->copy(help);
+        SgNode *existingCopyOfDefiningDeclarationNode =
+            lookupCopiedNode(help, this->get_definingDeclaration());
         SgNode *copyOfDefiningDeclarationNode =
-            help.copyAst(this->get_definingDeclaration());
+            help.copyOrLookupAst(this->get_definingDeclaration());
         ROSE_ASSERT(copyOfDefiningDeclarationNode != NULL);
 
         // If we didn't make a copy of the definingDeclaration then this is
         // still a valid pointer, so there is no need to reset the parent or
         // call
         if (copyOfDefiningDeclarationNode != this->get_definingDeclaration()) {
-          // DQ (2/26/2009): Set the parent to NULL (before resetting to valid
-          // value).
-          copyOfDefiningDeclarationNode->set_parent(NULL);
+          if (copyOfDefiningDeclarationNode !=
+              existingCopyOfDefiningDeclarationNode) {
+            // DQ (2/26/2009): Set the parent to NULL (before resetting to
+            // valid value).
+            copyOfDefiningDeclarationNode->set_parent(NULL);
 
-          ROSE_ASSERT(copyOfDefiningDeclarationNode->get_parent() == NULL);
+            ROSE_ASSERT(copyOfDefiningDeclarationNode->get_parent() == NULL);
 
-          if (this->get_definingDeclaration()->get_parent() == NULL) {
-            printf("ERROR: this = %p = %s = %s this->get_definingDeclaration() "
-                   "= %p \n",
-                   this, this->class_name().c_str(),
-                   SageInterface::get_name(this).c_str(),
-                   this->get_definingDeclaration());
-          }
-
-          // Must reset the parent (semantics of AST copy), but this will be
-          // done by reset
-
-          // DQ (9/10/2014): The new support for template function handling
-          // causes some template to be saved and there parent pointers not set
-          // until later. This is likely why this is failing (see
-          // copytest2007_40.C).
-          // ROSE_ASSERT(this->get_definingDeclaration()->get_parent() != NULL);
-          if (this->get_definingDeclaration()->get_parent() == NULL) {
-            if (isSgTemplateFunctionDeclaration(
-                    this->get_definingDeclaration()) != NULL ||
-                isSgTemplateMemberFunctionDeclaration(
-                    this->get_definingDeclaration()) != NULL) {
-              printf("Warning: (inner scope) "
-                     "this->get_definingDeclaration()->get_parent() == NULL "
-                     "(OK for some SgTemplateFunctionDeclaration and "
-                     "SgTemplateMemberFunctionDeclaration) \n");
-            } else if (isSgTemplateClassDeclaration(
-                           this->get_definingDeclaration()) != NULL) {
-              printf("WARNING: %p (%s) has no parent! \n",
-                     this->get_definingDeclaration(),
-                     this->get_definingDeclaration()->class_name().c_str());
-            } else {
-              printf("ERROR: %p (%s) has no parent! \n",
-                     this->get_definingDeclaration(),
-                     this->get_definingDeclaration()->class_name().c_str());
-              ROSE_ASSERT(this->get_definingDeclaration()->get_parent() !=
-                          NULL);
+            if (this->get_definingDeclaration()->get_parent() == NULL) {
+              printf("ERROR: this = %p = %s = %s "
+                     "this->get_definingDeclaration() = %p \n",
+                     this, this->class_name().c_str(),
+                     SageInterface::get_name(this).c_str(),
+                     this->get_definingDeclaration());
             }
+
+            // Must reset the parent (semantics of AST copy), but this will be
+            // done by reset.
+            if (this->get_definingDeclaration()->get_parent() == NULL) {
+              if (isSgTemplateFunctionDeclaration(
+                      this->get_definingDeclaration()) != NULL ||
+                  isSgTemplateMemberFunctionDeclaration(
+                      this->get_definingDeclaration()) != NULL) {
+                printf("Warning: (inner scope) "
+                       "this->get_definingDeclaration()->get_parent() == NULL "
+                       "(OK for some SgTemplateFunctionDeclaration and "
+                       "SgTemplateMemberFunctionDeclaration) \n");
+              } else if (isSgTemplateClassDeclaration(
+                             this->get_definingDeclaration()) != NULL) {
+                printf("WARNING: %p (%s) has no parent! \n",
+                       this->get_definingDeclaration(),
+                       this->get_definingDeclaration()->class_name().c_str());
+              } else {
+                printf("ERROR: %p (%s) has no parent! \n",
+                       this->get_definingDeclaration(),
+                       this->get_definingDeclaration()->class_name().c_str());
+                ROSE_ASSERT(this->get_definingDeclaration()->get_parent() !=
+                            NULL);
+              }
+            }
+
+            copyOfDefiningDeclarationNode->set_parent(
+                this->get_definingDeclaration()->get_parent());
+          } else if (copyOfDefiningDeclarationNode->get_parent() == NULL) {
+            copyOfDefiningDeclarationNode->set_parent(
+                this->get_definingDeclaration()->get_parent());
           }
-          copyOfDefiningDeclarationNode->set_parent(
-              this->get_definingDeclaration()->get_parent());
           // DQ (2/26/2009): This was valid code that was temporarily commented
           // out (turning it back on). DQ (10/21/2007): I think this was a bug!
           // this->get_firstNondefiningDeclaration()->fixupCopy_scopes(copyOfDefiningDeclarationNode,help);
@@ -1217,6 +2660,10 @@ void SgDeclarationStatement::fixupCopy_scopes(SgNode *copy,
             ->variantT());
   }
 
+  repairCopiedOwnedDeclarationScope(this, copyDeclarationStatement, help);
+  repairCopiedNonrealDeclScope(isSgNonrealDecl(this),
+                               isSgNonrealDecl(copyDeclarationStatement), help);
+
   // DQ (10/12/2007): Set the scope for those SgDeclarationStatements which
   // store their scope explicitly. printf ("this->hasExplicitScope() = %s
   // \n",this->hasExplicitScope() ? "true" : "false");
@@ -1235,17 +2682,7 @@ void SgDeclarationStatement::fixupCopy_scopes(SgNode *copy,
     // Check if copy's parent is a copied node (i.e., it's a VALUE in the
     // copy map) This determines if the copy is part of the proper copy tree
     // that will be deleted.
-    bool copyParentIsACopiedNode = false;
-    if (copyParent != NULL) {
-      for (SgCopyHelp::copiedNodeMapTypeIterator iter =
-               help.get_copiedNodeMap().begin();
-           iter != help.get_copiedNodeMap().end(); ++iter) {
-        if (iter->second == copyParent) {
-          copyParentIsACopiedNode = true;
-          break;
-        }
-      }
-    }
+    bool copyParentIsACopiedNode = isCopiedNodeValue(help, copyParent);
     bool isOrphanedCopy = (copyParent == NULL || !copyParentIsACopiedNode);
 #if DEBUG_FIXUP_COPY
     printf("  [scope fixup] this = %p, copy = %p, this->parent = %p, "
@@ -1255,7 +2692,10 @@ void SgDeclarationStatement::fixupCopy_scopes(SgNode *copy,
            copyParentIsACopiedNode ? "true" : "false",
            isOrphanedCopy ? "true" : "false");
 #endif
-    if (!isOrphanedCopy) {
+    if (SgScopeStatement *copiedScope = resolveCopiedExplicitDeclarationScope(
+            this, copyDeclarationStatement, help)) {
+      copyDeclarationStatement->set_scope(copiedScope);
+    } else if (!isOrphanedCopy) {
       // printf ("Reset the scope of the copy for this = %p = %s
       // \n",this,this->class_name().c_str());
       FixupCopyDataMemberMacro(copyDeclarationStatement, SgScopeStatement,
@@ -1591,6 +3031,8 @@ void SgMemberFunctionDeclaration::fixupCopy_scopes(SgNode *copy,
 
   // Setup the scopes of the SgInitializedName objects in the paraleter list
   ROSE_ASSERT(get_CtorInitializerList() != NULL);
+  remapCopiedMemberFunctionCtorInitializerSubtree(
+      this, memberFunctionDeclaration_copy, help);
   get_CtorInitializerList()->fixupCopy_scopes(
       memberFunctionDeclaration_copy->get_CtorInitializerList(), help);
 
@@ -1877,6 +3319,9 @@ void SgClassDeclaration::fixupCopy_scopes(SgNode *copy,
   SgClassDeclaration *classDeclaration_copy_firstNondefining =
       isSgClassDeclaration(
           classDeclaration_copy->get_firstNondefiningDeclaration());
+  if (classDeclaration_copy_firstNondefining == NULL) {
+    classDeclaration_copy_firstNondefining = classDeclaration_copy;
+  }
   SgClassDeclaration *classDeclaration_copy_defining =
       isSgClassDeclaration(classDeclaration_copy->get_definingDeclaration());
   ROSE_ASSERT(classDeclaration_copy_firstNondefining != NULL);
@@ -1887,31 +3332,17 @@ void SgClassDeclaration::fixupCopy_scopes(SgNode *copy,
   SgClassDeclaration *classDeclaration_original_firstNondefining =
       isSgClassDeclaration(
           classDeclaration_original->get_firstNondefiningDeclaration());
+  if (classDeclaration_original_firstNondefining == NULL) {
+    classDeclaration_original_firstNondefining =
+        const_cast<SgClassDeclaration *>(classDeclaration_original);
+  }
   SgClassDeclaration *classDeclaration_original_defining = isSgClassDeclaration(
       classDeclaration_original->get_definingDeclaration());
   ROSE_ASSERT(classDeclaration_original_firstNondefining != NULL);
   // ROSE_ASSERT(classDeclaration_original_defining != NULL);
 
-  SgClassType *classType = isSgClassType(classDeclaration_copy->get_type());
+  SgClassType *classType = canonicalizeCopiedClassType(classDeclaration_copy);
   ROSE_ASSERT(classType != NULL);
-
-  if (classDeclaration_copy_firstNondefining->get_type() != classType) {
-#if DEBUG_FIXUP_COPY
-    printf("   --- Reset the type on the "
-           "classDeclaration_copy->get_firstNondefiningDeclaration() (to match "
-           "the type in the copy) \n");
-#endif
-    classDeclaration_copy_firstNondefining->set_type(classType);
-  }
-
-  if (classDeclaration_copy_defining != NULL &&
-      classDeclaration_copy_defining->get_type() != classType) {
-#if DEBUG_FIXUP_COPY
-    printf("   --- Reset the type on the "
-           "classDeclaration_copy->get_definingDeclaration() \n");
-#endif
-    classDeclaration_copy_defining->set_type(classType);
-  }
 
   // DQ (3/15/2014): Check the types since they should be equivalent (error
   // checking).
@@ -1982,23 +3413,21 @@ void SgClassDefinition::fixupCopy_scopes(SgNode *copy, SgCopyHelp &help) const {
   }
 
   const SgDeclarationStatementPtrList &statementList_original =
-      this->getDeclarationList();
-  const SgDeclarationStatementPtrList &statementList_copy =
-      classDefinition_copy->getDeclarationList();
+      this->get_members();
+  SgDeclarationStatementPtrList &statementList_copy =
+      classDefinition_copy->get_members();
+  synchronizeCopiedDeclarationList(statementList_original, statementList_copy,
+                                   classDefinition_copy, help);
+  const SgDeclarationStatementPtrList originalDeclarations =
+      statementList_original;
+  const SgDeclarationStatementPtrList copiedDeclarations = statementList_copy;
+  const size_t declarationCount =
+      std::min(originalDeclarations.size(), copiedDeclarations.size());
 
-  SgDeclarationStatementPtrList::const_iterator j_original =
-      statementList_original.begin();
-  SgDeclarationStatementPtrList::const_iterator j_copy =
-      statementList_copy.begin();
-
-  // Iterate over both lists to match up the correct pairs of SgStatement
-  // objects
-  while ((j_original != statementList_original.end()) &&
-         (j_copy != statementList_copy.end())) {
-    (*j_original)->fixupCopy_scopes(*j_copy, help);
-
-    j_original++;
-    j_copy++;
+  for (size_t i = 0; i < declarationCount; ++i) {
+    if (originalDeclarations[i] != NULL && copiedDeclarations[i] != NULL) {
+      originalDeclarations[i]->fixupCopy_scopes(copiedDeclarations[i], help);
+    }
   }
 
   // Call the base class fixupCopy member function
@@ -2031,6 +3460,8 @@ void SgBaseClass::fixupCopy_scopes(SgNode *copy, SgCopyHelp &help) const {
 
     this->get_base_class()->fixupCopy_scopes(baseClass_copy->get_base_class(),
                                              help);
+    restoreCopiedReferencedDeclarationParentsToScope(
+        baseClass_copy->get_base_class(), help);
   } else if (nrBaseClass != NULL) {
     ROSE_ASSERT(nrBaseClass->get_base_class_nonreal() != NULL);
 
@@ -2038,6 +3469,8 @@ void SgBaseClass::fixupCopy_scopes(SgNode *copy, SgCopyHelp &help) const {
     ROSE_ASSERT(nrBaseClass_copy->get_base_class_nonreal() != NULL);
 
     nrBaseClass->get_base_class_nonreal()->fixupCopy_scopes(
+        nrBaseClass_copy->get_base_class_nonreal(), help);
+    restoreCopiedReferencedDeclarationParentsToScope(
         nrBaseClass_copy->get_base_class_nonreal(), help);
   } else {
     ROSE_ABORT();
@@ -2172,6 +3605,12 @@ void SgEnumDeclaration::fixupCopy_scopes(SgNode *copy, SgCopyHelp &help) const {
   SgEnumType *enum_type_copy = enumDeclaration_copy->get_type();
   ROSE_ASSERT(enum_type_copy != NULL);
 
+  const SgEnumDeclaration *originalEnumDefinition =
+      canonicalOriginalEnumDefinition(this);
+  SgEnumDeclaration *effectiveDefinitionCopy =
+      canonicalizeCopiedEnumDeclarationChain(originalEnumDefinition,
+                                             enumDeclaration_copy, help);
+
   // printf ("This is the non-defining declaration, so just fixup the SgEnumType
   // = %p with the correct SgEnumDeclaration declaration! \n",enum_type_copy);
 
@@ -2198,28 +3637,18 @@ void SgEnumDeclaration::fixupCopy_scopes(SgNode *copy, SgCopyHelp &help) const {
     }
   }
 
-  // A copied nondefining enum declaration must not retain its own duplicate
-  // enumerator list. The defining declaration owns the canonical enumerators,
-  // and keeping a second copied list causes symbol-table rebuilding to bind the
-  // scope's enum-field symbols to a different set of SgInitializedName nodes.
-  if (this->get_definingDeclaration() != NULL &&
-      this->get_definingDeclaration() != this &&
-      enumDeclaration_copy->get_definingDeclaration() != NULL &&
-      enumDeclaration_copy->get_definingDeclaration() != enumDeclaration_copy) {
-    SgInitializedNamePtrList &enumFieldList_copy =
-        enumDeclaration_copy->get_enumerators();
-    for (SgInitializedName *field : enumFieldList_copy) {
-      if (field != NULL && field->get_parent() == enumDeclaration_copy) {
-        field->set_parent(NULL);
-      }
-    }
-    enumFieldList_copy.clear();
+  if (effectiveDefinitionCopy != NULL &&
+      effectiveDefinitionCopy != enumDeclaration_copy &&
+      enumDeclaration_copy->get_enumerators().empty()) {
     return;
   }
 
+  canonicalizeCopiedEnumEnumerators(originalEnumDefinition,
+                                    enumDeclaration_copy, help);
+
   // Now reset the enum fields.
   const SgInitializedNamePtrList &enumFieldList_original =
-      this->get_enumerators();
+      originalEnumDefinition->get_enumerators();
   SgInitializedNamePtrList &enumFieldList_copy =
       enumDeclaration_copy->get_enumerators();
 
@@ -2344,23 +3773,21 @@ void SgNamespaceDefinitionStatement::fixupCopy_scopes(SgNode *copy,
   }
 
   const SgDeclarationStatementPtrList &statementList_original =
-      this->getDeclarationList();
-  const SgDeclarationStatementPtrList &statementList_copy =
-      namespaceDefinition_copy->getDeclarationList();
+      this->get_declarations();
+  SgDeclarationStatementPtrList &statementList_copy =
+      namespaceDefinition_copy->get_declarations();
+  synchronizeCopiedDeclarationList(statementList_original, statementList_copy,
+                                   namespaceDefinition_copy, help);
+  const SgDeclarationStatementPtrList originalDeclarations =
+      statementList_original;
+  const SgDeclarationStatementPtrList copiedDeclarations = statementList_copy;
+  const size_t declarationCount =
+      std::min(originalDeclarations.size(), copiedDeclarations.size());
 
-  SgDeclarationStatementPtrList::const_iterator i_original =
-      statementList_original.begin();
-  SgDeclarationStatementPtrList::const_iterator i_copy =
-      statementList_copy.begin();
-
-  // Iterate over both lists to match up the correct pairs of SgStatement
-  // objects
-  while ((i_original != statementList_original.end()) &&
-         (i_copy != statementList_copy.end())) {
-    (*i_original)->fixupCopy_scopes(*i_copy, help);
-
-    i_original++;
-    i_copy++;
+  for (size_t i = 0; i < declarationCount; ++i) {
+    if (originalDeclarations[i] != NULL && copiedDeclarations[i] != NULL) {
+      originalDeclarations[i]->fixupCopy_scopes(copiedDeclarations[i], help);
+    }
   }
 
   // Call the base class fixupCopy member function
@@ -2411,13 +3838,6 @@ void SgProject::fixupCopy_scopes(SgNode *copy, SgCopyHelp &help) const {
     SgFile &file_copy = project_copy->get_file(i);
     file.fixupCopy_scopes(&file_copy, help);
   }
-
-  // Declarations can be copied recursively through cross-links such as
-  // defining/nondefining and template-declaration pointers before the full copy
-  // map is populated. Reapply these links once with the complete map so the
-  // copied AST uses one canonical declaration graph instead of disconnected
-  // duplicate pairs.
-  finalizeCanonicalCopyLinks(help);
 }
 
 void SgSourceFile::fixupCopy_scopes(SgNode *copy, SgCopyHelp &help) const {
@@ -2811,4 +4231,40 @@ void SgTemplateArgument::fixupCopy_scopes(SgNode *copy, SgCopyHelp &) const {
          "%p \n",
          this, this->class_name().c_str(), copy);
 #endif
+}
+
+void SgTemplateParameter::fixupCopy_scopes(SgNode *copy,
+                                           SgCopyHelp &help) const {
+  SgTemplateParameter *templateParameter_copy = isSgTemplateParameter(copy);
+  ROSE_ASSERT(templateParameter_copy != NULL);
+
+  if (get_parameterType() != SgTemplateParameter::template_parameter) {
+    return;
+  }
+
+  SgNonrealDecl *original_nonreal = isSgNonrealDecl(get_templateDeclaration());
+  SgNonrealDecl *copied_nonreal =
+      isSgNonrealDecl(templateParameter_copy->get_templateDeclaration());
+  if (original_nonreal == NULL || copied_nonreal == NULL) {
+    return;
+  }
+
+  repairCopiedNonrealDeclScope(original_nonreal, copied_nonreal, help);
+
+  const SgTemplateParameterPtrList &original_params =
+      original_nonreal->get_tpl_params();
+  SgTemplateParameterPtrList &copied_params = copied_nonreal->get_tpl_params();
+  const size_t param_count =
+      std::min(original_params.size(), copied_params.size());
+  for (size_t i = 0; i < param_count; ++i) {
+    SgTemplateParameter *original_param = original_params[i];
+    SgTemplateParameter *copied_param = copied_params[i];
+    if (original_param == NULL || copied_param == NULL) {
+      continue;
+    }
+    if (copied_param->get_parent() == NULL) {
+      copied_param->set_parent(copied_nonreal);
+    }
+    original_param->fixupCopy_scopes(copied_param, help);
+  }
 }

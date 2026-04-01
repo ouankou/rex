@@ -166,6 +166,38 @@ bool getExplicitQualifierLength(const SgNode *node, int &length) {
   return true;
 }
 
+bool nonrealTypeCarriesWrittenQualification(const SgNonrealType *nonreal_type) {
+  if (nonreal_type == nullptr) {
+    return false;
+  }
+
+  const SgNonrealDecl *nrdecl =
+      isSgNonrealDecl(nonreal_type->get_declaration());
+  if (nrdecl == nullptr) {
+    return false;
+  }
+
+  if (nrdecl->get_has_global_qualifier()) {
+    return true;
+  }
+
+  SgDeclarationScope *nrscope = isSgDeclarationScope(nrdecl->get_parent());
+  return nrscope != nullptr &&
+         isSgNonrealDecl(nrscope->get_parent()) != nullptr;
+}
+
+bool typeCarriesWrittenNonrealQualification(const SgType *type) {
+  if (type == nullptr) {
+    return false;
+  }
+
+  const SgType *stripped = type->stripType(
+      SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
+      SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_POINTER_TYPE |
+      SgType::STRIP_ARRAY_TYPE);
+  return nonrealTypeCarriesWrittenQualification(isSgNonrealType(stripped));
+}
+
 SgName
 get_template_name_for_instantiation(SgDeclarationStatement *declaration) {
   if (SgTemplateInstantiationDecl *instantiation =
@@ -6003,6 +6035,19 @@ void NameQualificationTraversal::traverseType(SgType *type,
     // unparseInfoPointer->set_reference_node_for_qualification(currentScope);
     unparseInfoPointer->set_reference_node_for_qualification(
         nodeReferenceToType);
+    unparseInfoPointer->set_current_scope(currentScope);
+
+    SgSourceFile *sourceFile =
+        SageInterface::getEnclosingSourceFile(nodeReferenceToType);
+    if (sourceFile == NULL) {
+      sourceFile = SageInterface::getEnclosingSourceFile(positionStatement);
+    }
+    if (sourceFile == NULL) {
+      sourceFile = SageInterface::getEnclosingSourceFile(currentScope);
+    }
+    if (sourceFile != NULL) {
+      unparseInfoPointer->set_current_source_file(sourceFile);
+    }
 
     // DQ (5/7/2013): A problem with this is that it combines the first and
     // second parts of the type into a single string (e.g. the array type will
@@ -6129,9 +6174,18 @@ void NameQualificationTraversal::traverseType(SgType *type,
       typeNameString = globalUnparseToString(type, unparseInfoPointer);
     }
 
-    // Ensure constructor initializer types keep namespace qualification even
-    // before the name-qualification map is populated (e.g., std::string).
-    if (constructorInitializer != NULL &&
+    // Constructor initializers can carry the leading qualification on the
+    // initializer itself. Only force the type string to a fully qualified
+    // spelling when no constructor-name qualifier has been recorded yet.
+    bool constructor_has_name_qualifier = false;
+    if (constructorInitializer != NULL) {
+      NameQualificationMapType::const_iterator qualifier_it =
+          qualifiedNameMapForNames.find(constructorInitializer);
+      constructor_has_name_qualifier =
+          qualifier_it != qualifiedNameMapForNames.end() &&
+          !qualifier_it->second.empty();
+    }
+    if (constructorInitializer != NULL && !constructor_has_name_qualifier &&
         typeNameString.find("::") == std::string::npos &&
         typeNameString.find('<') == std::string::npos) {
       if (SgNamedType *named = isSgNamedType(strippedType)) {
@@ -6587,11 +6641,19 @@ void NameQualificationTraversal::traverseTemplatedClass(
     // unparseInfoPointer->set_reference_node_for_qualification(positionStatement);
     // unparseInfoPointer->set_reference_node_for_qualification(currentScope);
     unparseInfoPointer->set_reference_node_for_qualification(nodeReference);
+    unparseInfoPointer->set_current_scope(currentScope);
 
-    // DQ (3/16/2021): Need to set the assocated file, else it is caught in
-    // unparseStatement(). After review, I think we may not need this.
-    // SgSourceFile* sourceFile = xxx;
-    // unparseInfoPointer->set_current_source_file(xxx);
+    SgSourceFile *sourceFile = SageInterface::getEnclosingSourceFile(
+        templateInstantiationClassDeclaration);
+    if (sourceFile == NULL) {
+      sourceFile = SageInterface::getEnclosingSourceFile(positionStatement);
+    }
+    if (sourceFile == NULL) {
+      sourceFile = SageInterface::getEnclosingSourceFile(currentScope);
+    }
+    if (sourceFile != NULL) {
+      unparseInfoPointer->set_current_source_file(sourceFile);
+    }
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || 0
     MLOG_WARN_C(MLOG_UNPARSER, "Calling globalUnparseToString() \n");
@@ -7665,10 +7727,9 @@ NameQualificationTraversal::evaluateInheritedAttribute(
         // Name these better to be more clear.
         SgClassDeclaration *derivedClassDeclaration =
             classDefinition->get_declaration();
-        if (derivedClassDeclaration !=
-            derivedClassDeclaration->get_firstNondefiningDeclaration()) {
-          derivedClassDeclaration = isSgClassDeclaration(
-              derivedClassDeclaration->get_firstNondefiningDeclaration());
+        if (SgClassDeclaration *firstNondefining = isSgClassDeclaration(
+                derivedClassDeclaration->get_firstNondefiningDeclaration())) {
+          derivedClassDeclaration = firstNondefining;
 #if DEBUG_BASE_CLASS_SUPPORT
           MLOG_WARN_C(MLOG_UNPARSER,
                       "RESET derivedClassDeclaration to "
@@ -7678,10 +7739,9 @@ NameQualificationTraversal::evaluateInheritedAttribute(
         }
         // SgClassDeclaration* baseClassDeclaration    = classDeclaration;
         SgClassDeclaration *baseClassDeclaration = baseClass->get_base_class();
-        if (baseClassDeclaration !=
-            baseClassDeclaration->get_firstNondefiningDeclaration()) {
-          baseClassDeclaration = isSgClassDeclaration(
-              baseClassDeclaration->get_firstNondefiningDeclaration());
+        if (SgClassDeclaration *firstNondefining = isSgClassDeclaration(
+                baseClassDeclaration->get_firstNondefiningDeclaration())) {
+          baseClassDeclaration = firstNondefining;
 #if DEBUG_BASE_CLASS_SUPPORT
           MLOG_WARN_C(MLOG_UNPARSER,
                       "RESET baseClassDeclaration to "
@@ -9134,38 +9194,51 @@ NameQualificationTraversal::evaluateInheritedAttribute(
       ASSERT_not_null(functionDeclaration->get_orig_return_type());
       ASSERT_not_null(functionDeclaration->get_type());
       ASSERT_not_null(functionDeclaration->get_type()->get_return_type());
-      SgType *returnType = functionDeclaration->get_type()->get_return_type();
+      SgType *returnType = functionDeclaration->get_orig_return_type();
       ASSERT_not_null(returnType);
 
-      SgDeclarationStatement *declaration =
-          getDeclarationAssociatedWithType(returnType);
-      if (declaration != NULL) {
-        int amountOfNameQualificationRequiredForReturnType =
-            nameQualificationDepth(declaration, currentScope,
-                                   functionDeclaration);
-#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-        MLOG_WARN_C(MLOG_UNPARSER,
-                    "SgFunctionDeclaration's return type: "
-                    "amountOfNameQualificationRequiredForType = %d \n",
-                    amountOfNameQualificationRequiredForReturnType);
-        MLOG_WARN_C(MLOG_UNPARSER,
-                    "Putting the name qualification for the type into the "
-                    "return type of SgFunctionDeclaration = %p = %s \n",
-                    functionDeclaration, functionDeclaration->get_name().str());
-#endif
-        // setNameQualificationReturnType(functionDeclaration,amountOfNameQualificationRequiredForReturnType);
-        setNameQualificationReturnType(
-            functionDeclaration, declaration,
-            amountOfNameQualificationRequiredForReturnType);
+      if (typeCarriesWrittenNonrealQualification(returnType)) {
+        const bool preserve_written_type_elaboration =
+            functionDeclaration
+                ->get_type_elaboration_required_for_return_type();
+        functionDeclaration->set_global_qualification_required_for_return_type(
+            false);
+        functionDeclaration->set_name_qualification_length_for_return_type(0);
+        functionDeclaration->set_type_elaboration_required_for_return_type(
+            preserve_written_type_elaboration);
+        qualifiedNameMapForTypes[functionDeclaration] = "";
       } else {
-        // This case is common for builtin functions such as: __builtin_powi
+        SgDeclarationStatement *declaration =
+            getDeclarationAssociatedWithType(returnType);
+        if (declaration != NULL) {
+          int amountOfNameQualificationRequiredForReturnType =
+              nameQualificationDepth(declaration, currentScope,
+                                     functionDeclaration);
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-        MLOG_WARN_C(
-            MLOG_UNPARSER,
-            "declaration == NULL: could not put name qualification for the "
-            "type into the return type of SgFunctionDeclaration = %p = %s \n",
-            functionDeclaration, functionDeclaration->get_name().str());
+          MLOG_WARN_C(MLOG_UNPARSER,
+                      "SgFunctionDeclaration's return type: "
+                      "amountOfNameQualificationRequiredForType = %d \n",
+                      amountOfNameQualificationRequiredForReturnType);
+          MLOG_WARN_C(MLOG_UNPARSER,
+                      "Putting the name qualification for the type into the "
+                      "return type of SgFunctionDeclaration = %p = %s \n",
+                      functionDeclaration,
+                      functionDeclaration->get_name().str());
 #endif
+          // setNameQualificationReturnType(functionDeclaration,amountOfNameQualificationRequiredForReturnType);
+          setNameQualificationReturnType(
+              functionDeclaration, declaration,
+              amountOfNameQualificationRequiredForReturnType);
+        } else {
+          // This case is common for builtin functions such as: __builtin_powi
+#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
+          MLOG_WARN_C(
+              MLOG_UNPARSER,
+              "declaration == NULL: could not put name qualification for the "
+              "type into the return type of SgFunctionDeclaration = %p = %s \n",
+              functionDeclaration, functionDeclaration->get_name().str());
+#endif
+        }
       }
 
       // DQ (6/3/2011): Traverse the type to set any possible template arguments
@@ -9576,8 +9649,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
       ASSERT_not_null(memberFunctionDeclaration->get_orig_return_type());
       ASSERT_not_null(memberFunctionDeclaration->get_type());
       ASSERT_not_null(memberFunctionDeclaration->get_type()->get_return_type());
-      SgType *returnType =
-          memberFunctionDeclaration->get_type()->get_return_type();
+      SgType *returnType = memberFunctionDeclaration->get_orig_return_type();
       ASSERT_not_null(returnType);
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || 0
@@ -9659,37 +9731,52 @@ NameQualificationTraversal::evaluateInheritedAttribute(
                   memberFunctionDeclaration->get_type()->class_name().c_str());
 #endif
 
-      SgDeclarationStatement *declaration =
-          getDeclarationAssociatedWithType(returnType);
-      if (declaration != NULL) {
-
-        int amountOfNameQualificationRequiredForReturnType =
-            nameQualificationDepth(declaration, currentScope,
-                                   memberFunctionDeclaration);
-
-#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-        MLOG_WARN_C(MLOG_UNPARSER,
-                    "SgMemberFunctionDeclaration's return type: "
-                    "amountOfNameQualificationRequiredForType = %d \n",
-                    amountOfNameQualificationRequiredForReturnType);
-        MLOG_WARN_C(MLOG_UNPARSER,
-                    "Putting the name qualification for the type into the "
-                    "return type of SgMemberFunctionDeclaration = %p = %s \n",
-                    memberFunctionDeclaration,
-                    memberFunctionDeclaration->get_name().str());
-#endif
-        setNameQualificationReturnType(
-            memberFunctionDeclaration, declaration,
-            amountOfNameQualificationRequiredForReturnType);
+      if (typeCarriesWrittenNonrealQualification(returnType)) {
+        const bool preserve_written_type_elaboration =
+            memberFunctionDeclaration
+                ->get_type_elaboration_required_for_return_type();
+        memberFunctionDeclaration
+            ->set_global_qualification_required_for_return_type(false);
+        memberFunctionDeclaration
+            ->set_name_qualification_length_for_return_type(0);
+        memberFunctionDeclaration
+            ->set_type_elaboration_required_for_return_type(
+                preserve_written_type_elaboration);
+        qualifiedNameMapForTypes[memberFunctionDeclaration] = "";
       } else {
+        SgDeclarationStatement *declaration =
+            getDeclarationAssociatedWithType(returnType);
+        if (declaration != NULL) {
+
+          int amountOfNameQualificationRequiredForReturnType =
+              nameQualificationDepth(declaration, currentScope,
+                                     memberFunctionDeclaration);
+
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-        MLOG_WARN_C(MLOG_UNPARSER,
-                    "declaration == NULL: could not put name qualification for "
-                    "the type into the return type of "
-                    "SgMemberFunctionDeclaration = %p = %s \n",
-                    memberFunctionDeclaration,
-                    memberFunctionDeclaration->get_name().str());
+          MLOG_WARN_C(MLOG_UNPARSER,
+                      "SgMemberFunctionDeclaration's return type: "
+                      "amountOfNameQualificationRequiredForType = %d \n",
+                      amountOfNameQualificationRequiredForReturnType);
+          MLOG_WARN_C(MLOG_UNPARSER,
+                      "Putting the name qualification for the type into the "
+                      "return type of SgMemberFunctionDeclaration = %p = %s \n",
+                      memberFunctionDeclaration,
+                      memberFunctionDeclaration->get_name().str());
 #endif
+          setNameQualificationReturnType(
+              memberFunctionDeclaration, declaration,
+              amountOfNameQualificationRequiredForReturnType);
+        } else {
+#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
+          MLOG_WARN_C(
+              MLOG_UNPARSER,
+              "declaration == NULL: could not put name qualification for "
+              "the type into the return type of "
+              "SgMemberFunctionDeclaration = %p = %s \n",
+              memberFunctionDeclaration,
+              memberFunctionDeclaration->get_name().str());
+#endif
+        }
       }
 
       // DQ (6/3/2011): Traverse the type to set any possible template arguments
@@ -9725,31 +9812,24 @@ NameQualificationTraversal::evaluateInheritedAttribute(
 
         int amountOfNameQualificationRequired = nameQualificationDepth(
             memberFunctionDeclaration, currentScope, memberFunctionDeclaration);
-        auto structural_scope_distance =
-            [](SgScopeStatement *decl_scope,
-               SgScopeStatement *use_scope) -> int {
-          int distance = 0;
-          for (SgScopeStatement *cursor = decl_scope; cursor != NULL;
-               cursor = cursor->get_scope()) {
-            if (SgScopeStatement::isEquivalentScope(cursor, use_scope)) {
-              return distance;
-            }
-
-            SgScopeStatement *next_scope = cursor->get_scope();
-            if (next_scope == NULL || next_scope == cursor) {
-              break;
-            }
-
-            distance++;
+        if (SgClassDeclaration *associatedClassDeclaration =
+                isSgClassDeclaration(memberFunctionDeclaration
+                                         ->get_associatedClassDeclaration())) {
+          if (SgClassDeclaration *firstNondefining = isSgClassDeclaration(
+                  associatedClassDeclaration
+                      ->get_firstNondefiningDeclaration())) {
+            associatedClassDeclaration = firstNondefining;
           }
 
-          return 0;
-        };
-        int structuralQualificationRequired = structural_scope_distance(
-            memberFunctionDeclaration->get_scope(), currentScope);
-        if (amountOfNameQualificationRequired <
-            structuralQualificationRequired) {
-          amountOfNameQualificationRequired = structuralQualificationRequired;
+          // Out-of-class member syntax must always qualify through the
+          // associated class itself, even when that class lives in the global
+          // scope. Reuse the class's own required depth to avoid overcounting
+          // outer namespaces made visible through using directives, but force
+          // at least one qualification level so the class name is preserved.
+          amountOfNameQualificationRequired =
+              std::max(1, nameQualificationDepth(associatedClassDeclaration,
+                                                 currentScope,
+                                                 memberFunctionDeclaration));
         }
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
         MLOG_WARN_C(MLOG_UNPARSER,
@@ -11241,20 +11321,57 @@ NameQualificationTraversal::evaluateInheritedAttribute(
           constructorInitializer->get_class_decl();
       // ASSERT_not_null(classDeclaration);
       if (classDeclaration != NULL) {
-        // An example of the problem is test2005_42.C, where the class name is
-        // used to generate the constructor initializer name.
-        int amountOfNameQualificationRequired = nameQualificationDepth(
-            classDeclaration, currentScope, currentStatement);
+        SgDeclarationStatement *typeDeclaration =
+            getDeclarationAssociatedWithType(
+                constructorInitializer->get_type());
+        SgDeclarationStatement *canonicalTypeDeclaration =
+            typeDeclaration != NULL &&
+                    typeDeclaration->get_firstNondefiningDeclaration() != NULL
+                ? typeDeclaration->get_firstNondefiningDeclaration()
+                : typeDeclaration;
+        SgDeclarationStatement *canonicalClassDeclaration =
+            classDeclaration->get_firstNondefiningDeclaration() != NULL
+                ? classDeclaration->get_firstNondefiningDeclaration()
+                : classDeclaration;
+        bool type_already_spells_constructor_name =
+            isSgNonrealType(constructorInitializer->get_type()) != NULL;
+
+        // For constructor expressions that name the class type directly,
+        // traverseType() already records the class qualification on the type
+        // itself when the type node preserves the written qualified spelling.
+        // Adding a separate constructor-name qualifier in that case duplicates
+        // the prefix (e.g. `xxx::xxx::struct1`).
+        if (canonicalTypeDeclaration == canonicalClassDeclaration &&
+            type_already_spells_constructor_name) {
+          constructorInitializer->set_global_qualification_required(false);
+          constructorInitializer->set_name_qualification_length(0);
+          constructorInitializer->set_type_elaboration_required(false);
+          NameQualificationMapType::iterator qualifier_it =
+              qualifiedNameMapForNames.find(constructorInitializer);
+          if (qualifier_it == qualifiedNameMapForNames.end()) {
+            qualifiedNameMapForNames.insert(
+                std::pair<SgNode *, std::string>(constructorInitializer, ""));
+          } else {
+            qualifier_it->second.clear();
+          }
+          SgNode::get_globalQualifiedNameMapForNames()[constructorInitializer] =
+              "";
+        } else {
+          // An example of the problem is test2005_42.C, where the class name is
+          // used to generate the constructor initializer name.
+          int amountOfNameQualificationRequired = nameQualificationDepth(
+              classDeclaration, currentScope, currentStatement);
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-        MLOG_WARN_C(
-            MLOG_UNPARSER,
-            "SgConstructorInitializer's constructor (class default "
-            "constructor) name: amountOfNameQualificationRequired = %d \n",
-            amountOfNameQualificationRequired);
+          MLOG_WARN_C(
+              MLOG_UNPARSER,
+              "SgConstructorInitializer's constructor (class default "
+              "constructor) name: amountOfNameQualificationRequired = %d \n",
+              amountOfNameQualificationRequired);
 #endif
-        // This will attach the new type string to the classDeclaration.
-        setNameQualification(constructorInitializer, classDeclaration,
-                             amountOfNameQualificationRequired);
+          // This will attach the new type string to the classDeclaration.
+          setNameQualification(constructorInitializer, classDeclaration,
+                               amountOfNameQualificationRequired);
+        }
       } else {
         // This is a strange error: see test2004_77.C
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -11284,6 +11401,39 @@ NameQualificationTraversal::evaluateInheritedAttribute(
     // qualification.
     traverseType(constructorInitializer->get_type(), constructorInitializer,
                  currentScope, currentStatement);
+
+    if (SgClassDeclaration *classDeclaration =
+            constructorInitializer->get_class_decl()) {
+      SgDeclarationStatement *typeDeclaration =
+          getDeclarationAssociatedWithType(constructorInitializer->get_type());
+      SgDeclarationStatement *canonicalTypeDeclaration =
+          typeDeclaration != NULL &&
+                  typeDeclaration->get_firstNondefiningDeclaration() != NULL
+              ? typeDeclaration->get_firstNondefiningDeclaration()
+              : typeDeclaration;
+      SgDeclarationStatement *canonicalClassDeclaration =
+          classDeclaration->get_firstNondefiningDeclaration() != NULL
+              ? classDeclaration->get_firstNondefiningDeclaration()
+              : classDeclaration;
+      bool type_already_spells_constructor_name =
+          isSgNonrealType(constructorInitializer->get_type()) != NULL;
+      if (canonicalTypeDeclaration == canonicalClassDeclaration &&
+          type_already_spells_constructor_name) {
+        constructorInitializer->set_global_qualification_required(false);
+        constructorInitializer->set_name_qualification_length(0);
+        constructorInitializer->set_type_elaboration_required(false);
+        NameQualificationMapType::iterator qualifier_it =
+            qualifiedNameMapForNames.find(constructorInitializer);
+        if (qualifier_it == qualifiedNameMapForNames.end()) {
+          qualifiedNameMapForNames.insert(
+              std::pair<SgNode *, std::string>(constructorInitializer, ""));
+        } else {
+          qualifier_it->second.clear();
+        }
+        SgNode::get_globalQualifiedNameMapForNames()[constructorInitializer] =
+            "";
+      }
+    }
   }
 
   // DQ (3/21/2018): This is a derived class from SgConstructorInitializer...
@@ -13339,6 +13489,31 @@ traverseNonrealDeclForCorrectScope(SgDeclarationStatement *declaration) {
   return scope;
 }
 
+static SgScopeStatement *
+scopeForPointerMemberTypeQualification(SgDeclarationStatement *declaration) {
+  ASSERT_not_null(declaration);
+
+  SgScopeStatement *scope = NULL;
+  if (SgNonrealDecl *nrdecl = isSgNonrealDecl(declaration)) {
+    if (!nrdecl->get_is_template_param()) {
+      scope = nrdecl->get_scope();
+    }
+  } else {
+    scope = declaration->get_scope();
+  }
+
+  if (scope != NULL && isSgDeclarationScope(scope) == NULL) {
+    return scope;
+  }
+
+  if (SgScopeStatement *enclosing_scope =
+          SageInterface::getEnclosingScope(declaration)) {
+    return enclosing_scope;
+  }
+
+  return traverseNonrealDeclForCorrectScope(declaration);
+}
+
 // ************************************************************************************
 //    These overloaded functions, setNameQualification(), support references to
 //    IR
@@ -13429,7 +13604,7 @@ void NameQualificationTraversal::setNameQualificationOnClassOf(
               "In setNameQualification(SgPointerMemberType*) \n");
 #endif
 
-  SgScopeStatement *scope = traverseNonrealDeclForCorrectScope(declaration);
+  SgScopeStatement *scope = scopeForPointerMemberTypeQualification(declaration);
   // SgScopeStatement * scope =
   // traverseNonrealDeclForCorrectScope(referenceNode);
   string qualifier = setNameQualificationSupport(
@@ -13558,7 +13733,7 @@ void NameQualificationTraversal::setNameQualificationOnBaseType(
               "In setNameQualification(SgPointerMemberType*) \n");
 #endif
 
-  SgScopeStatement *scope = traverseNonrealDeclForCorrectScope(declaration);
+  SgScopeStatement *scope = scopeForPointerMemberTypeQualification(declaration);
   // SgScopeStatement * scope =
   // traverseNonrealDeclForCorrectScope(referenceNode);
   string qualifier = setNameQualificationSupport(
@@ -15121,12 +15296,14 @@ void NameQualificationTraversal::setNameQualificationReturnType(
   string qualifier = setNameQualificationSupport(
       scope, amountOfNameQualificationRequired, outputNameQualificationLength,
       outputGlobalQualification, outputTypeEvaluation);
+  const bool preserve_written_type_elaboration =
+      functionDeclaration->get_type_elaboration_required_for_return_type();
   functionDeclaration->set_global_qualification_required_for_return_type(
       outputGlobalQualification);
   functionDeclaration->set_name_qualification_length_for_return_type(
       outputNameQualificationLength);
   functionDeclaration->set_type_elaboration_required_for_return_type(
-      outputTypeEvaluation);
+      outputTypeEvaluation || preserve_written_type_elaboration);
 
   // There should be no type evaluation required for a variable reference, as I
   // recall.

@@ -464,6 +464,9 @@ bool isFortranPairedDirective(OpenMPDirective *node) {
   case OMPD_critical:
   case OMPD_sections:
   case OMPD_master:
+  case OMPD_masked:
+  case OMPD_masked_taskloop:
+  case OMPD_masked_taskloop_simd:
   case OMPD_ordered:
   case OMPD_workshare:
   case OMPD_single:
@@ -482,7 +485,7 @@ bool isFortranPairedDirective(OpenMPDirective *node) {
   case OMPD_master_taskloop_simd:
   case OMPD_parallel_master_taskloop:
   case OMPD_parallel_master_taskloop_simd:
-  case OMPD_metadirective:
+  case OMPD_begin_metadirective:
     return true;
   default:
     return false;

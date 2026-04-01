@@ -65,7 +65,7 @@ run_ctest_regex() {
 
 run_ctest_regex \
   "${build_dir}" \
-  "rex|astInterface|testQuery|fortran|f90|f03|gfortran|OMPTEST_|OMPACCTEST_|OMPFORTRAN_|OMPANALYZE_|OMPVV_5_0_|OMPVV_4_5_|OMPVV_5_1_|OMPVV_5_2_|OMPVV_6_0_|omp_lowering_|OMPLOWERING_CPU_|OMPLOWERING_RODINIA_"
+  "rex|astInterface|testQuery|fortran|f90|f03|gfortran|OMPTEST_|OMPACCTEST_|OMPFORTRAN_|OMPANALYZE_|OMPVV_5_0_|OMPVV_4_5_|OMPVV_5_1_|OMPVV_5_2_|OMPVV_6_0_|omp_lowering_|OMPLOWERING_CPU_|OMPLOWERING_RODINIA_|^Cxx_tests_test2013_69_C$|^Cxx_tests_test2013_198_C$"
 EOF
 
 chmod +x "$hook_path"

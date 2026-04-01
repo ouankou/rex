@@ -17,6 +17,48 @@
 using namespace std;
 
 namespace {
+void collectIncludeTreeFiles(SgIncludeFile *includeTreeRoot,
+                             set<string> &allFiles) {
+  if (includeTreeRoot == nullptr)
+    return;
+
+  vector<SgIncludeFile *> worklist;
+  set<SgIncludeFile *> visited;
+  worklist.push_back(includeTreeRoot);
+
+  while (!worklist.empty()) {
+    SgIncludeFile *includeFile = worklist.back();
+    worklist.pop_back();
+    if (includeFile == nullptr)
+      continue;
+
+    if (!visited.insert(includeFile).second)
+      continue;
+
+    const string includeFileName =
+        FileHelper::normalizePathIfPossible(includeFile->get_filename());
+    if (!includeFileName.empty()) {
+      allFiles.insert(includeFileName);
+    }
+
+    SgSourceFile *includedSourceFile = includeFile->get_source_file();
+    if (includedSourceFile != nullptr) {
+      const string sourceFileName = FileHelper::normalizePathIfPossible(
+          includedSourceFile->getFileName());
+      if (!sourceFileName.empty()) {
+        allFiles.insert(sourceFileName);
+        IncludedFilesUnparser::unparseSourceFileMap.insert(
+            pair<string, SgSourceFile *>(sourceFileName, includedSourceFile));
+      }
+    }
+
+    const SgIncludeFilePtrList &includeFileList =
+        includeFile->get_include_file_list();
+    for (size_t i = 0; i < includeFileList.size(); ++i)
+      worklist.push_back(includeFileList[i]);
+  }
+}
+
 void buildIncludeTreeParentMap(
     SgIncludeFile *includeTreeRoot,
     map<string, set<string>> &includedToIncludingFiles) {
@@ -197,6 +239,34 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
   // as modified.  Note: the travesal sets the allFiles list.
   traverse(projectNode, preorder);
 
+  for (std::map<SgSourceFile *,
+                std::map<SgNode *, TokenStreamSequenceToNodeMapping *>
+                    *>::const_iterator tokenMapIt =
+           Rose::tokenSubsequenceMapOfMapsBySourceFile.begin();
+       tokenMapIt != Rose::tokenSubsequenceMapOfMapsBySourceFile.end();
+       ++tokenMapIt) {
+    SgSourceFile *sourceFile = tokenMapIt->first;
+    if (sourceFile == NULL || sourceFile->get_isHeaderFile() == false) {
+      continue;
+    }
+
+    string normalizedFileName =
+        FileHelper::normalizePathIfPossible(sourceFile->getFileName());
+    if (normalizedFileName.empty() ||
+        FileHelper::fileExists(normalizedFileName) == false) {
+      continue;
+    }
+
+    allFiles.insert(normalizedFileName);
+    unparseSourceFileMap.insert(
+        pair<string, SgSourceFile *>(normalizedFileName, sourceFile));
+
+    SgScopeStatement *globalScope = sourceFile->get_globalScope();
+    if (globalScope != NULL) {
+      addToUnparseScopesMap(normalizedFileName, globalScope);
+    }
+  }
+
   // DQ (4/6/2020): We need a way to know when we want to trigger unparsing of
   // all header files.
   bool unparseAllHeaderFiles =
@@ -263,8 +333,9 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
     if (sourceFile == nullptr)
       continue;
 
-    buildIncludeTreeParentMap(sourceFile->get_associated_include_file(),
-                              includedToIncludingFiles);
+    SgIncludeFile *includeTreeRoot = sourceFile->get_associated_include_file();
+    collectIncludeTreeFiles(includeTreeRoot, allFiles);
+    buildIncludeTreeParentMap(includeTreeRoot, includedToIncludingFiles);
   }
 
   const map<string, set<PreprocessingInfo *>> &includingPreprocessingInfosMap =
@@ -312,6 +383,42 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
           if (allFiles.insert(normalizedIncludingFileName).second)
             newParents.insert(normalizedIncludingFileName);
         }
+      }
+    }
+
+    for (map<string, set<PreprocessingInfo *>>::const_iterator mapEntry =
+             includingPreprocessingInfosMap.begin();
+         mapEntry != includingPreprocessingInfosMap.end(); ++mapEntry) {
+      string normalizedIncludedFileName =
+          FileHelper::normalizePathIfPossible(mapEntry->first);
+      if (normalizedIncludedFileName.empty() ||
+          FileHelper::fileExists(normalizedIncludedFileName) == false ||
+          allFiles.find(normalizedIncludedFileName) != allFiles.end())
+        continue;
+
+      const set<PreprocessingInfo *> &includingPreprocessingInfos =
+          mapEntry->second;
+      for (set<PreprocessingInfo *>::const_iterator
+               includingPreprocessingInfoPtr =
+                   includingPreprocessingInfos.begin();
+           includingPreprocessingInfoPtr != includingPreprocessingInfos.end();
+           includingPreprocessingInfoPtr++) {
+        IncludeDirective includeDirective(
+            (*includingPreprocessingInfoPtr)->getString());
+        if (includeDirective.isQuotedInclude() == false &&
+            FileHelper::isAbsolutePath(includeDirective.getIncludedPath()) ==
+                false)
+          continue;
+
+        string normalizedIncludingFileName =
+            FileHelper::getNormalizedContainingFileName(
+                *includingPreprocessingInfoPtr);
+        if (allFiles.find(normalizedIncludingFileName) == allFiles.end())
+          continue;
+
+        if (allFiles.insert(normalizedIncludedFileName).second)
+          newParents.insert(normalizedIncludedFileName);
+        break;
       }
     }
     workSet.swap(newParents);

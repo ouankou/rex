@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -970,7 +971,13 @@ protected:
       p_namespace_canonical_decl_map;
   std::map<clang::Stmt *, SgNode *> p_stmt_translation_map;
   std::map<const clang::Type *, SgNode *> p_type_translation_map;
+  std::map<uintptr_t, SgType *> p_qualified_type_translation_map;
+  std::map<clang::RecordDecl *, SgType *> p_record_decl_type_map;
+  std::map<clang::RecordDecl *, SgClassDeclaration *>
+      p_record_type_placeholder_decl_map;
   std::map<clang::DeclContext *, SgScopeStatement *> p_decl_context_map;
+  std::map<const clang::DeclContext *, SgDeclarationScope *>
+      p_template_parameter_decl_scope_map;
   std::map<SgFunctionDefinition *, const clang::Stmt *> p_function_body_map;
   SgGlobal *p_global_scope;
 
@@ -978,7 +985,7 @@ protected:
   std::map<SgEnumType *, bool> p_enum_type_decl_first_see_in_type;
 
   const RoseOpenMPPragmaCallback *p_openmp_pragma_callback;
-  std::set<std::pair<clang::FileID, unsigned>> p_consumed_openmp_lines;
+  std::set<std::pair<clang::FileID, unsigned>> p_consumed_pragma_lines;
 
   // Template declaration cache - maps template name to
   // SgTemplateClassDeclaration Key: mangled template name (e.g., "std::array")
@@ -994,6 +1001,7 @@ protected:
   std::map<SgDeclarationStatement *, clang::Decl *>
       p_pending_specialized_template_links;
   struct CapturedPragma {
+    clang::FileID file_id;
     unsigned line;
     std::string text;
     bool is_openmp;
@@ -1010,6 +1018,9 @@ protected:
   // symbol lookup) so we can repair scope attachments without duplicating
   // normal traversal insertions.
   std::set<clang::Decl *> p_decl_translation_on_demand;
+  // Track user-supplied header files whose sibling top-level declarations have
+  // already been materialized during on-demand translation.
+  std::set<std::string> p_on_demand_materialized_header_paths;
   // Track class definitions already populated to avoid duplicate member
   // insertion during on-demand/re-entrant translation.
   std::set<const SgClassDefinition *> p_record_definitions_populated;
@@ -1020,9 +1031,18 @@ protected:
   // Track friend declarations that explicitly used a global qualifier ("::")
   // so we can preserve it during translation/unparsing.
   std::set<const clang::Decl *> p_explicit_global_friend_decls;
+  // Hidden friends are lexically attached to a class but can still acquire a
+  // synthesized namespace/global proxy declaration for lookup. Preserve the
+  // lexical declaration so call references can bind to the actual class-local
+  // friend node instead of the proxy chain.
+  std::unordered_map<const clang::FunctionDecl *, SgFunctionDeclaration *>
+      p_hidden_friend_function_decl_map;
   // Track when we are translating a for-init so we avoid appending decls
   // directly into the enclosing scope statement list.
   bool p_in_for_init_translation = false;
+  // Track direct translation of clang::DeclStmt children so declaration
+  // visitors can leave statement-list ownership to the enclosing stmt visitor.
+  bool p_in_decl_stmt_translation = false;
   // Return types of out-of-class member declarations are translated with the
   // enclosing class template scope available for name lookup, but injected
   // class names are still non-local there and must spell the full current
@@ -1103,6 +1123,10 @@ protected:
   size_t resolvePendingSpecializedTemplateLinks();
   SgDeclarationStatement *lookupSgDeclarationForClangDecl(clang::Decl *key,
                                                           bool allow_on_demand);
+  SgClassDeclaration *
+  lookupRecordTypePlaceholderDecl(clang::RecordDecl *record_decl) const;
+  void cacheRecordTypePlaceholderDecl(clang::RecordDecl *record_decl,
+                                      SgClassDeclaration *decl);
 
   // Select a scope that can safely accept an opaque type declaration.
   SgScopeStatement *getOpaqueTypeInsertionScope(SgScopeStatement *scope) const;
@@ -1115,8 +1139,10 @@ protected:
 
   SgType *buildTypeFromQualifiedType(const clang::QualType &qual_type);
   SgType *buildTypeFromTypeLoc(const clang::TypeLoc &type_loc);
+  SgType *getTypeFromTranslatedRecordDecl(clang::RecordDecl *record_decl);
   SgExpression *buildFallbackExpression(const clang::Expr *expr);
   SgExpression *buildFallbackExpression(SgType *type);
+  SgExpression *prepareExpressionForAttachment(SgExpression *expr);
 
   // Helper: Build nonreal return type for member typedefs of template
   // specializations (e.g., Spec::value_type) when needed for unparsing.
@@ -1210,10 +1236,11 @@ protected:
   translateTemplateParameterList(clang::TemplateParameterList *param_list,
                                  SgDeclarationStatement *owning_template);
 
-  SgTemplateClassDeclaration *
-  translateClassTemplateDecl(clang::ClassTemplateDecl *class_template_decl,
-                             SgScopeStatement *override_symbol_scope,
-                             SgScopeStatement *override_lexical_parent);
+  SgTemplateClassDeclaration *translateClassTemplateDecl(
+      clang::ClassTemplateDecl *class_template_decl,
+      SgScopeStatement *override_symbol_scope,
+      SgScopeStatement *override_lexical_parent,
+      const clang::Decl *source_decl_for_matching = nullptr);
 
   bool translateFunctionDeclCommon(clang::FunctionDecl *function_decl,
                                    clang::FunctionTemplateDecl *template_decl,
@@ -1221,14 +1248,14 @@ protected:
 
   void populateClassDefinition(clang::RecordDecl *record_decl,
                                SgClassDefinition *class_def);
-  bool collectOpenMPPragmas(clang::Stmt *stmt,
-                            std::vector<CapturedPragma> &pragmas);
+  bool collectPragmas(clang::Stmt *stmt, std::vector<CapturedPragma> &pragmas);
   SgPragmaDeclaration *
-  buildOpenMPPragmaDeclaration(const std::string &directive,
-                               unsigned pragma_line, SgScopeStatement *scope);
-  void appendOpenMPPragmasBefore(clang::Stmt *stmt, SgScopeStatement *scope);
-  SgStatement *wrapStatementWithOpenMPPragmas(clang::Stmt *stmt,
-                                              SgStatement *statement);
+  buildCapturedPragmaDeclaration(const std::string &directive,
+                                 clang::FileID file_id, unsigned pragma_line,
+                                 SgScopeStatement *scope);
+  void appendPragmasBefore(clang::Stmt *stmt, SgScopeStatement *scope);
+  SgStatement *wrapStatementWithPragmas(clang::Stmt *stmt,
+                                        SgStatement *statement);
 
   // Helper: Ensure a namespace declaration exists (creating stubs if
   // needed, recursively)
@@ -1303,7 +1330,7 @@ public:
     p_openmp_pragma_callback = callback;
   }
 
-  void appendUnattachedOpenMPPragmas();
+  void appendUnattachedPragmas();
 
   /* ASTConsumer's methods overload */
 
@@ -1316,6 +1343,7 @@ public:
   virtual SgNode *Traverse(const clang::Type *type);
   virtual bool TraverseForDeclContext(clang::DeclContext *decl_context);
   virtual SgNode *TraverseOnDemand(clang::Decl *decl);
+  void materializeApplicationHeaderDecls();
 
   /* Visit methods */
   /*
@@ -2090,6 +2118,7 @@ protected:
   std::vector<std::pair<Sg_File_Info *, PreprocessingInfo *>>
       p_preprocessor_record_list;
   bool p_preprocessor_record_list_sorted;
+  std::set<std::string> p_application_file_paths;
   std::set<std::string> p_self_referential_macros;
   bool p_saw_self_referential_macro_expansion;
   struct SkippedFileRange {
@@ -2110,6 +2139,7 @@ public:
   SagePreprocessorRecord(clang::SourceManager *source_manager,
                          clang::Preprocessor *preprocessor);
   void sortRecordedDirectives();
+  bool isApplicationHeaderPath(const std::string &path) const;
   void recordInjectedDirective(clang::SourceLocation loc,
                                PreprocessingInfo::DirectiveType directive_type,
                                const std::string &text);

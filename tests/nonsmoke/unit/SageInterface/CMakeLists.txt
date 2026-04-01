@@ -3,21 +3,12 @@ include_directories(${ROSE_INCLUDES} ${CMAKE_CURRENT_BINARY_DIR})
 file(GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test_output_path.h CONTENT [=[
 #pragma once
 
-#include <cstdlib>
 #include <string>
 
-inline std::string resolveTestOutputPath(const std::string &filename) {
-  const char *output_dir = std::getenv("ROSE_TEST_OUTPUT_DIR");
-  if (output_dir == nullptr || *output_dir == '\0') {
-    return filename;
-  }
+#include "rose_test_output_path.h"
 
-  std::string resolved(output_dir);
-  if (!resolved.empty() && resolved.back() != '/') {
-    resolved += '/';
-  }
-  resolved += filename;
-  return resolved;
+inline std::string resolveTestOutputPath(const std::string &filename) {
+  return Rose::TestOutput::resolvePath(filename);
 }
 ]=])
 

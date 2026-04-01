@@ -89,7 +89,7 @@ for (my $i = 0; $i <= $#lines; ++$i) {
         $segment =~ s/[ \t]+!.*$//;
         my $directive = trim($segment);
         my $continued = ($line =~ /&[ \t]*$/) ? 1 : 0;
-        my $join_without_space = ($line =~ /[A-Za-z0-9_][ \t]*&[ \t]*$/) ? 1 : 0;
+        my $join_without_space = ($line =~ /[A-Za-z0-9_]&[ \t]*$/) ? 1 : 0;
 
         while ($continued && $i + 1 <= $#lines) {
             my $next_raw = $lines[$i + 1];
@@ -100,7 +100,7 @@ for (my $i = 0; $i <= $#lines; ++$i) {
             ++$i;
             my $next = $lines[$i];
             my $next_join_without_space =
-                ($next =~ /[A-Za-z0-9_][ \t]*&[ \t]*$/) ? 1 : 0;
+                ($next =~ /[A-Za-z0-9_]&[ \t]*$/) ? 1 : 0;
             $continued = ($next =~ /&[ \t]*$/) ? 1 : 0;
             if ($is_omp_cont) {
                 $next =~ s/^[ \t]*[!cC\*]\$(?:omp|ompx)\b[ \t]*&?[ \t]*//i;

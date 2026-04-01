@@ -29,6 +29,14 @@ map<string, set<PreprocessingInfo *>>
 IncludingPreprocessingInfosCollector::collect() {
   traverse(projectNode, preorder);
 
+  for (std::map<SgSourceFile *,
+                std::map<SgNode *, TokenStreamSequenceToNodeMapping *>
+                    *>::const_iterator mapIt =
+           Rose::tokenSubsequenceMapOfMapsBySourceFile.begin();
+       mapIt != Rose::tokenSubsequenceMapOfMapsBySourceFile.end(); ++mapIt) {
+    collectFromSourceFile(mapIt->first);
+  }
+
   matchIncludedAndIncludingFiles();
 
   return includingPreprocessingInfosMap;
@@ -107,6 +115,47 @@ void IncludingPreprocessingInfosCollector::addIncludingPreprocessingInfoToMap(
   }
 }
 
+void IncludingPreprocessingInfosCollector::collectFromSourceFile(
+    SgSourceFile *sourceFile) {
+  if (sourceFile == NULL || !processedSourceFiles.insert(sourceFile).second) {
+    return;
+  }
+
+  ROSEAttributesListContainerPtr filePreprocInfo =
+      sourceFile->get_preprocessorDirectivesAndCommentsList();
+  if (filePreprocInfo == NULL) {
+    return;
+  }
+
+  std::map<std::string, ROSEAttributesList *> &attributeLists =
+      filePreprocInfo->getList();
+  for (std::map<std::string, ROSEAttributesList *>::iterator listIterator =
+           attributeLists.begin();
+       listIterator != attributeLists.end(); ++listIterator) {
+    ROSEAttributesList *attributeList = listIterator->second;
+    if (attributeList == NULL) {
+      continue;
+    }
+
+    std::vector<PreprocessingInfo *> &preprocessingInfos =
+        attributeList->getList();
+    for (std::vector<PreprocessingInfo *>::iterator preprocessingInfoIterator =
+             preprocessingInfos.begin();
+         preprocessingInfoIterator != preprocessingInfos.end();
+         ++preprocessingInfoIterator) {
+      PreprocessingInfo *preprocessingInfo = *preprocessingInfoIterator;
+      if (preprocessingInfo == NULL) {
+        continue;
+      }
+
+      if (preprocessingInfo->getTypeOfDirective() ==
+          PreprocessingInfo::CpreprocessorIncludeDeclaration) {
+        addIncludingPreprocessingInfoToMap(preprocessingInfo);
+      }
+    }
+  }
+}
+
 void IncludingPreprocessingInfosCollector::visit(SgNode *node) {
   SgLocatedNode *locatedNode = isSgLocatedNode(node);
   if (locatedNode != NULL) {
@@ -129,5 +178,10 @@ void IncludingPreprocessingInfosCollector::visit(SgNode *node) {
         }
       }
     }
+  }
+
+  SgSourceFile *sourceFile = isSgSourceFile(node);
+  if (sourceFile != NULL) {
+    collectFromSourceFile(sourceFile);
   }
 }

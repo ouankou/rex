@@ -7,6 +7,8 @@ set(_collect_comments_flags
   -w -rose:verbose 0
   -rose:compilationPerformanceFile ${_collect_comments_perf_file}
   -rose:collectAllCommentsAndDirectives)
+set(_collect_comments_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
+file(MAKE_DIRECTORY ${_collect_comments_output_dir})
 
 set(_collect_comments_test_dir
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests)
@@ -32,10 +34,24 @@ function(rex_add_collect_comments_tests property_name)
         -I${_source_dir}
         -c ${_source_path}
     )
+    set_property(TEST compiler_options_collect_comments_${_collect_name}
+                 APPEND PROPERTY ENVIRONMENT
+                 "ROSE_TEST_OUTPUT_DIR=${_collect_comments_output_dir}")
   endforeach()
 endfunction()
 
-rex_add_collect_comments_tests(REX_CXX_TESTS_DEFAULT_SOURCES -std=gnu++14)
+rex_get_registered_compile_source_set(_collect_default_sources
+  REX_CXX_TESTS_DEFAULT_SOURCES)
+rex_get_registered_compile_source_set(_collect_negative_sources
+  REX_CXX_TESTS_NEGATIVE_SOURCES)
+if(_collect_negative_sources)
+  list(REMOVE_ITEM _collect_default_sources ${_collect_negative_sources})
+endif()
+set_property(GLOBAL PROPERTY REX_COLLECT_COMMENTS_CXX_DEFAULT_POSITIVE_SOURCES
+  ${_collect_default_sources})
+
+rex_add_collect_comments_tests(REX_COLLECT_COMMENTS_CXX_DEFAULT_POSITIVE_SOURCES
+  -std=gnu++14)
 rex_add_collect_comments_tests(REX_CXX_TESTS_GNUXX03_SOURCES -std=gnu++03)
 rex_add_collect_comments_tests(REX_CXX_TESTS_GNUXX17_SOURCES -std=gnu++17)
 rex_add_collect_comments_tests(

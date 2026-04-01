@@ -163,12 +163,11 @@ public:
   void Build(Fortran::parser::ImplicitStmt &);
   void Build(Fortran::parser::CommonStmt &);
   void Build(Fortran::parser::EquivalenceStmt &);
+  void Build(Fortran::parser::AccessStmt &);
   void Build(Fortran::parser::Statement<
              Fortran::common::Indirection<Fortran::parser::UseStmt>> &);
   void Build(Fortran::parser::Statement<
              Fortran::common::Indirection<Fortran::parser::ImportStmt>> &);
-  void Build(Fortran::parser::Statement<
-             Fortran::common::Indirection<Fortran::parser::AccessStmt>> &);
   void Build(Fortran::parser::Statement<
              Fortran::common::Indirection<Fortran::parser::ParameterStmt>> &);
   void
@@ -307,12 +306,24 @@ public:
   }
 
 private:
+  struct ActiveConstructScope {
+    SgScopeStatement *scope;
+    SourcePositions sources;
+  };
+
   void BeginStatementSource(const Fortran::parser::CharBlock &source);
   void EndStatementSource();
   void MaybeInsertIncludeLine(const Fortran::parser::CharBlock &source);
   bool ShouldSkipIncludedSource(const Fortran::parser::CharBlock &source);
   void ApplyStatementLabel(SgStatement *stmt, SgScopeStatement *scope) const;
   void ApplyCurrentStatementSource(SgLocatedNode *node);
+  void PushActiveConstructScope(SgScopeStatement *scope,
+                                const SourcePositions &sources);
+  void PopActiveConstructScope(SgScopeStatement *scope);
+  SgScopeStatement *
+  FindActiveConstructScopeForSource(SgScopeStatement *scope,
+                                    SgSourceFile *sourceFile,
+                                    const SourcePosition &source) const;
 
   struct LabelDoFrame {
     enum class Kind { FortranDo, While, DoConcurrent };
@@ -329,6 +340,7 @@ private:
   std::optional<SourcePositionPair> current_stmt_source_;
   std::vector<std::optional<SourcePositionPair>> stmt_source_stack_;
   std::vector<Fortran::parser::ProvenanceRange> include_ranges_;
+  std::vector<ActiveConstructScope> active_construct_scopes_;
   std::vector<LabelDoFrame> label_do_stack_;
   int type_context_depth_;
 

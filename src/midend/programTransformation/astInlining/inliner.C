@@ -800,12 +800,12 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
           SageBuilder::buildDefiningMemberFunctionDeclaration(
               shadow_name, SageBuilder::buildVoidType(), captureParamList,
               lambdaClassDef);
-      selfDefiningFunctionDecl->set_CtorInitializerList(closureList);
+      SageInterface::setCtorInitializerList(selfDefiningFunctionDecl,
+                                            closureList);
       selfDefiningFunctionDecl->set_associatedClassDeclaration(
           definingLambdaClassDecl);
       // set constructor type to avoid return type being unparsed
       selfDefiningFunctionDecl->get_specialFunctionModifier().setConstructor();
-      closureList->set_parent(selfDefiningFunctionDecl);
       lambdaClassDef->append_member(selfDefiningFunctionDecl);
       funbody_copy->get_statements().insert(
           funbody_copy->get_statements().begin() + argNumber,

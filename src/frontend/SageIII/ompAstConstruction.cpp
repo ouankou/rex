@@ -30,6 +30,8 @@ static std::vector<std::pair<SgPragmaDeclaration *, OpenACCDirective *>>
 OpenACCDirective *accparser_OpenACCIR;
 
 std::map<SgPragmaDeclaration *, OpenMPDirective *> fortran_paired_pragma_dict;
+static std::map<SgPragmaDeclaration *, SgPragmaDeclaration *>
+    fortran_explicit_end_pragma_dict;
 std::map<SgPragmaDeclaration *, OpenACCDirective *>
     fortran_acc_paired_pragma_dict;
 static std::map<SgPragmaDeclaration *, SgPragmaDeclaration *>
@@ -48,6 +50,12 @@ static const char *const kFortranOmpSourceTextAttributeName =
 static const char *const kOmpDirectiveSpellingOverrideAttrName =
     "omp_directive_spelling_override";
 static const char *const kOmpExplicitEndAttributeName = "omp_explicit_end";
+static const char *const kOmpFortranDoDirectiveAttrName =
+    "omp_fortran_do_directive";
+static const char *const kOmpBeginMetadirectiveAttrName =
+    "omp_begin_metadirective";
+static const char *const kOmpFortranJoinFirstClauseAttrName =
+    "omp_fortran_join_first_clause";
 
 class AccFortranEndAttribute : public AstAttribute {
 public:
@@ -519,6 +527,238 @@ buildQualifiedDeclareMapperType(SgType *base_type,
 }
 
 SgType *resolveDeclareMapperType(SgPragmaDeclaration *directive,
+                                 const std::string &type_text);
+
+static bool splitDeclareMapperTemplateId(
+    const std::vector<std::string> &tokens,
+    std::vector<std::string> &template_name_tokens,
+    std::vector<std::vector<std::string>> &template_argument_tokens) {
+  int angle_depth = 0;
+  int paren_depth = 0;
+  int bracket_depth = 0;
+  size_t template_begin = tokens.size();
+  size_t template_end = tokens.size();
+
+  for (size_t i = 0; i < tokens.size(); ++i) {
+    const std::string &token = tokens[i];
+    if (token == "(") {
+      ++paren_depth;
+    } else if (token == ")") {
+      --paren_depth;
+    } else if (token == "[") {
+      ++bracket_depth;
+    } else if (token == "]") {
+      --bracket_depth;
+    } else if (paren_depth == 0 && bracket_depth == 0 && token == "<") {
+      if (angle_depth == 0 && template_begin == tokens.size()) {
+        template_begin = i;
+      }
+      ++angle_depth;
+    } else if (paren_depth == 0 && bracket_depth == 0 && token == ">") {
+      --angle_depth;
+      if (angle_depth == 0) {
+        template_end = i;
+      }
+    }
+
+    if (angle_depth < 0 || paren_depth < 0 || bracket_depth < 0) {
+      return false;
+    }
+  }
+
+  if (angle_depth != 0 || paren_depth != 0 || bracket_depth != 0 ||
+      template_begin == tokens.size() || template_end != tokens.size() - 1 ||
+      template_begin == 0 || template_begin + 1 >= template_end) {
+    return false;
+  }
+
+  template_name_tokens.assign(tokens.begin(), tokens.begin() + template_begin);
+
+  std::vector<std::string> current_arg_tokens;
+  angle_depth = 0;
+  paren_depth = 0;
+  bracket_depth = 0;
+  for (size_t i = template_begin + 1; i < template_end; ++i) {
+    const std::string &token = tokens[i];
+    if (token == "(") {
+      ++paren_depth;
+    } else if (token == ")") {
+      --paren_depth;
+    } else if (token == "[") {
+      ++bracket_depth;
+    } else if (token == "]") {
+      --bracket_depth;
+    } else if (paren_depth == 0 && bracket_depth == 0 && token == "<") {
+      ++angle_depth;
+    } else if (paren_depth == 0 && bracket_depth == 0 && token == ">") {
+      --angle_depth;
+    }
+
+    if (angle_depth < 0 || paren_depth < 0 || bracket_depth < 0) {
+      return false;
+    }
+
+    if (angle_depth == 0 && paren_depth == 0 && bracket_depth == 0 &&
+        token == ",") {
+      if (current_arg_tokens.empty()) {
+        return false;
+      }
+      template_argument_tokens.push_back(current_arg_tokens);
+      current_arg_tokens.clear();
+      continue;
+    }
+
+    current_arg_tokens.push_back(token);
+  }
+
+  if (angle_depth != 0 || paren_depth != 0 || bracket_depth != 0 ||
+      current_arg_tokens.empty()) {
+    return false;
+  }
+
+  template_argument_tokens.push_back(current_arg_tokens);
+  return !template_name_tokens.empty() && !template_argument_tokens.empty();
+}
+
+static SgTemplateArgument *
+resolveDeclareMapperTemplateArgument(SgPragmaDeclaration *directive,
+                                     const std::vector<std::string> &tokens) {
+  const std::string arg_text = joinDeclareMapperTypeTokens(tokens);
+  if (arg_text.empty()) {
+    return nullptr;
+  }
+
+  if (SgType *arg_type = resolveDeclareMapperType(directive, arg_text)) {
+    return SageBuilder::buildTemplateArgument(arg_type);
+  }
+
+  if (SgExpression *arg_expr =
+          parseOmpExpression(directive, OMPC_map, arg_text)) {
+    return SageBuilder::buildTemplateArgument(arg_expr);
+  }
+
+  return nullptr;
+}
+
+static bool buildDeclareMapperTemplateArgumentNodes(
+    const SgTemplateArgumentPtrList &template_arguments,
+    Rose_STL_Container<SgNode *> &argument_nodes) {
+  for (SgTemplateArgument *arg : template_arguments) {
+    if (arg == nullptr) {
+      return false;
+    }
+
+    switch (arg->get_argumentType()) {
+    case SgTemplateArgument::type_argument:
+      if (arg->get_type() == nullptr) {
+        return false;
+      }
+      argument_nodes.push_back(arg->get_type());
+      break;
+
+    case SgTemplateArgument::nontype_argument:
+      if (arg->get_expression() == nullptr) {
+        return false;
+      }
+      argument_nodes.push_back(
+          SageInterface::copyExpression(arg->get_expression()));
+      break;
+
+    default:
+      if (arg->get_templateDeclaration() == nullptr) {
+        return false;
+      }
+      argument_nodes.push_back(arg->get_templateDeclaration());
+      break;
+    }
+  }
+
+  return true;
+}
+
+static SgType *resolveDeclareMapperNamedBaseType(
+    SgPragmaDeclaration *directive,
+    const std::vector<std::string> &base_name_tokens) {
+  if (base_name_tokens.empty()) {
+    return nullptr;
+  }
+
+  SgScopeStatement *scope =
+      directive != nullptr ? directive->get_scope() : nullptr;
+  const std::string base_name = joinDeclareMapperTypeTokens(base_name_tokens);
+
+  std::vector<std::string> template_name_tokens;
+  std::vector<std::vector<std::string>> template_argument_tokens;
+  if (!splitDeclareMapperTemplateId(base_name_tokens, template_name_tokens,
+                                    template_argument_tokens)) {
+    return SageInterface::lookupNamedTypeInParentScopes(base_name, scope);
+  }
+
+  SgTemplateArgumentPtrList template_arguments;
+  template_arguments.reserve(template_argument_tokens.size());
+  for (const std::vector<std::string> &arg_tokens : template_argument_tokens) {
+    SgTemplateArgument *arg =
+        resolveDeclareMapperTemplateArgument(directive, arg_tokens);
+    if (arg == nullptr) {
+      return nullptr;
+    }
+    if (directive != nullptr && arg->get_parent() == nullptr) {
+      arg->set_parent(directive);
+    }
+    template_arguments.push_back(arg);
+  }
+
+  auto lookup_class_type = [&](const std::string &name) -> SgType * {
+    if (name.empty()) {
+      return nullptr;
+    }
+    if (SgClassSymbol *class_symbol =
+            SageInterface::lookupClassSymbolInParentScopes(
+                SgName(name), scope, &template_arguments)) {
+      return class_symbol->get_type();
+    }
+    return nullptr;
+  };
+
+  if (SgType *resolved = lookup_class_type(base_name)) {
+    return resolved;
+  }
+
+  const std::string template_name =
+      joinDeclareMapperTypeTokens(template_name_tokens);
+  if (SgType *resolved = lookup_class_type(template_name)) {
+    return resolved;
+  }
+
+  if (SgTemplateClassSymbol *template_symbol =
+          SageInterface::lookupTemplateClassSymbolInParentScopes(
+              SgName(template_name), nullptr, nullptr, scope)) {
+    if (SgTemplateClassDeclaration *template_decl =
+            isSgTemplateClassDeclaration(template_symbol->get_declaration())) {
+      Rose_STL_Container<SgNode *> argument_nodes;
+      if (buildDeclareMapperTemplateArgumentNodes(template_arguments,
+                                                  argument_nodes)) {
+        return SageBuilder::buildClassTemplateType(template_decl,
+                                                   argument_nodes);
+      }
+    }
+  }
+
+  if (SgType *resolved =
+          SageInterface::lookupNamedTypeInParentScopes(base_name, scope)) {
+    if (SgClassType *class_type = isSgClassType(resolved)) {
+      if (isSgTemplateInstantiationDecl(class_type->get_declaration()) ==
+          nullptr) {
+        return nullptr;
+      }
+    }
+    return resolved;
+  }
+
+  return nullptr;
+}
+
+SgType *resolveDeclareMapperType(SgPragmaDeclaration *directive,
                                  const std::string &type_text) {
   const std::string normalized = trimWhitespaceCopy(type_text);
   if (normalized.empty()) {
@@ -583,10 +823,8 @@ SgType *resolveDeclareMapperType(SgPragmaDeclaration *directive,
     return nullptr;
   }
 
-  SgScopeStatement *scope =
-      directive != nullptr ? directive->get_scope() : NULL;
-  SgType *resolved_type = SageInterface::lookupNamedTypeInParentScopes(
-      joinDeclareMapperTypeTokens(base_name_tokens), scope);
+  SgType *resolved_type =
+      resolveDeclareMapperNamedBaseType(directive, base_name_tokens);
   if (resolved_type == nullptr) {
     return nullptr;
   }
@@ -1053,6 +1291,44 @@ static bool hasUsableSourceLocation(const Sg_File_Info *info) {
   return info != nullptr && info->get_line() > 0 && !info->isTransformation() &&
          !info->isCompilerGenerated() &&
          !info->isSourcePositionUnavailableInFrontend();
+}
+
+static const Sg_File_Info *
+getPreferredLocatedNodeStartInfo(const SgLocatedNode *located) {
+  if (located == nullptr) {
+    return nullptr;
+  }
+
+  const Sg_File_Info *start = located->get_startOfConstruct();
+  if (start != nullptr && start->get_line() > 0) {
+    return start;
+  }
+
+  const Sg_File_Info *file_info = located->get_file_info();
+  if (file_info != nullptr && file_info->get_line() > 0) {
+    return file_info;
+  }
+
+  return start != nullptr ? start : file_info;
+}
+
+static const Sg_File_Info *
+getPreferredLocatedNodeEndInfo(const SgLocatedNode *located) {
+  if (located == nullptr) {
+    return nullptr;
+  }
+
+  const Sg_File_Info *end = located->get_endOfConstruct();
+  if (end != nullptr && end->get_line() > 0) {
+    return end;
+  }
+
+  const Sg_File_Info *file_info = located->get_file_info();
+  if (file_info != nullptr && file_info->get_line() > 0) {
+    return file_info;
+  }
+
+  return end != nullptr ? end : file_info;
 }
 
 static const Sg_File_Info *findBestOpenMPSourceAnchor(SgStatement *statement) {
@@ -1842,24 +2118,38 @@ void initializeGeneratedOpenMPStatement(SgStatement *statement) {
   }
 
   if (SgLocatedNode *located = isSgLocatedNode(statement)) {
+    const bool has_source_anchor =
+        hasUsableSourceLocation(located->get_file_info()) ||
+        hasUsableSourceLocation(located->get_startOfConstruct()) ||
+        hasUsableSourceLocation(located->get_endOfConstruct()) ||
+        findOpenMPDirectiveLocationInfo(statement) != nullptr;
+
     if (located->get_file_info() == nullptr ||
         located->get_startOfConstruct() == nullptr ||
         located->get_endOfConstruct() == nullptr) {
       setSourcePositionAsTransformation(located);
     }
-    if (located->get_file_info() != nullptr) {
-      located->get_file_info()->setTransformation();
+
+    // Preserve copied pragma/comment source anchors for generated OpenMP
+    // wrapper nodes. Marking those file infos as transformations forces
+    // get_line() back to 0, which loses the directive location needed by
+    // analyses and tests such as getDataSharingAttribute.
+    if (!has_source_anchor) {
+      if (located->get_file_info() != nullptr) {
+        located->get_file_info()->setTransformation();
+      }
+      if (located->get_startOfConstruct() != nullptr) {
+        located->get_startOfConstruct()->setTransformation();
+      }
+      if (located->get_endOfConstruct() != nullptr) {
+        located->get_endOfConstruct()->setTransformation();
+      }
+      located->setTransformation();
     }
-    if (located->get_startOfConstruct() != nullptr) {
-      located->get_startOfConstruct()->setTransformation();
-    }
-    if (located->get_endOfConstruct() != nullptr) {
-      located->get_endOfConstruct()->setTransformation();
-    }
+
     if (located->get_file_info() != nullptr) {
       located->get_file_info()->setOutputInCodeGeneration();
     }
-    located->setTransformation();
     located->setOutputInCodeGeneration();
     located->set_isModified(true);
   }
@@ -3437,6 +3727,11 @@ static std::list<SgPragmaDeclaration *> omp_pragma_list;
 static std::vector<std::pair<SgPragmaDeclaration *, OpenMPDirective *>>
     OpenMPIR_list;
 
+static void repositionFortranPragmaDeclarationsBySourceOrder(
+    SgSourceFile *sageFilePtr,
+    const std::vector<SgPragmaDeclaration *> &pragmas,
+    const std::map<SgPragmaDeclaration *, OpenMPDirective *> &pragma_dict);
+
 static void clearClauseParseCacheForSourceFile(SgSourceFile *source_file) {
   if (source_file == nullptr) {
     return;
@@ -3520,6 +3815,16 @@ static void releaseOpenMPParseStateForSourceFile(SgSourceFile *source_file) {
     if (belongsToSourceFile(it->first, source_file)) {
       track_openmp_directive(it->second);
       it = fortran_paired_pragma_dict.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  for (auto it = fortran_explicit_end_pragma_dict.begin();
+       it != fortran_explicit_end_pragma_dict.end();) {
+    if (belongsToSourceFile(it->first, source_file) ||
+        belongsToSourceFile(it->second, source_file)) {
+      it = fortran_explicit_end_pragma_dict.erase(it);
     } else {
       ++it;
     }
@@ -3965,6 +4270,425 @@ static bool shouldSkipOpenMPDirectiveAstConversion(OpenMPDirective *directive) {
   return isOpenMPDirectiveEndMarkerOnly(directive);
 }
 
+static bool
+isFortranPotentiallyExplicitEndDirective(OpenMPDirective *directive) {
+  if (directive == nullptr) {
+    return false;
+  }
+
+  switch (directive->getKind()) {
+  case OMPD_atomic:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static bool usesFortranDoDirectiveSpelling(OpenMPDirectiveKind kind) {
+  switch (kind) {
+  case OMPD_parallel_do_simd:
+  case OMPD_distribute_parallel_do:
+  case OMPD_distribute_parallel_do_simd:
+  case OMPD_teams_distribute_parallel_do:
+  case OMPD_teams_distribute_parallel_do_simd:
+  case OMPD_target_parallel_do:
+  case OMPD_target_parallel_do_simd:
+  case OMPD_target_teams_distribute_parallel_do:
+  case OMPD_target_teams_distribute_parallel_do_simd:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static void markFortranDoDirectiveSpelling(SgStatement *stmt) {
+  if (stmt == nullptr ||
+      stmt->getAttribute(kOmpFortranDoDirectiveAttrName) != nullptr) {
+    return;
+  }
+  stmt->addNewAttribute(kOmpFortranDoDirectiveAttrName,
+                        new OmpOwnedIntAttribute(1));
+}
+
+static OpenMPDirective *parseOpenMPDirectiveText(const std::string &text) {
+  std::string parse_buffer = text;
+  trimLeft(parse_buffer);
+  if (!startsWithCaseInsensitive(parse_buffer, "!$")) {
+    parse_buffer = std::string("!$") + parse_buffer;
+  }
+
+  OpenMPDirective *directive =
+      parseOpenMP(parse_buffer.c_str(), nullptr, nullptr);
+  if (directive == NULL && parse_buffer != text) {
+    directive = parseOpenMP(text.c_str(), nullptr, nullptr);
+  }
+  return directive;
+}
+
+static bool firstFortranContinuationAppendsWithoutSpace(
+    const std::string &raw_first_line_text) {
+  std::string raw_first_line = raw_first_line_text;
+  stripFortranComment(raw_first_line);
+  trimRight(raw_first_line);
+  if (raw_first_line.empty() || raw_first_line.back() != '&') {
+    return false;
+  }
+  if (raw_first_line.size() < 2) {
+    return false;
+  }
+  return !std::isspace(
+      static_cast<unsigned char>(raw_first_line[raw_first_line.size() - 2]));
+}
+
+static bool shouldJoinFirstFortranOpenMPClauseWithoutSpace(
+    const std::string &raw_first_line_text, const std::string &first_line_text,
+    const std::string &directive_text) {
+  if (first_line_text.empty() ||
+      !firstFortranContinuationAppendsWithoutSpace(raw_first_line_text)) {
+    return false;
+  }
+
+  OpenMPDirective *directive = parseOpenMPDirectiveText(directive_text);
+  if (directive == nullptr) {
+    return false;
+  }
+
+  std::string directive_spelling = directive->toString();
+  delete directive;
+
+  trim(directive_spelling);
+  if (directive_spelling.empty()) {
+    return false;
+  }
+
+  std::string first_line = first_line_text;
+  trim(first_line);
+  return canonicalizeDirectiveKey(first_line) ==
+         canonicalizeDirectiveKey(directive_spelling);
+}
+
+static bool fortranDirectiveJoinsFirstContinuationWithoutSpace(
+    SgPragmaDeclaration *pragma) {
+  if (pragma == nullptr) {
+    return false;
+  }
+
+  const Sg_File_Info *info = getPreferredLocatedNodeStartInfo(pragma);
+  if (info == nullptr || info->get_line() <= 0) {
+    return false;
+  }
+
+  std::string filename = info->get_filenameString();
+  if (filename.empty()) {
+    if (SgSourceFile *source_file = getEnclosingSourceFile(pragma)) {
+      filename = source_file->get_sourceFileNameWithPath();
+    }
+  }
+  if (filename.empty()) {
+    return false;
+  }
+
+  static std::unordered_map<std::string,
+                            std::shared_ptr<const std::vector<std::string>>>
+      source_lines_cache;
+  std::shared_ptr<const std::vector<std::string>> source_lines;
+  auto cache_it = source_lines_cache.find(filename);
+  if (cache_it != source_lines_cache.end()) {
+    source_lines = cache_it->second;
+  } else {
+    std::ifstream input(filename.c_str());
+    if (!input.is_open()) {
+      return false;
+    }
+    std::vector<std::string> lines;
+    for (std::string source_line; std::getline(input, source_line);) {
+      if (!source_line.empty() && source_line.back() == '\r') {
+        source_line.pop_back();
+      }
+      lines.push_back(source_line);
+    }
+    source_lines =
+        std::make_shared<const std::vector<std::string>>(std::move(lines));
+    source_lines_cache[filename] = source_lines;
+  }
+  const size_t line_index = static_cast<size_t>(info->get_line() - 1);
+  if (!source_lines || line_index >= source_lines->size()) {
+    return false;
+  }
+
+  std::string pending;
+  std::string raw_first_line;
+  std::string first_line;
+  for (size_t idx = line_index; idx < source_lines->size(); ++idx) {
+    std::string line = (*source_lines)[idx];
+    if (!extractFortranOpenMPDirectivePayload(line)) {
+      break;
+    }
+
+    stripFortranComment(line);
+    trim(line);
+    if (line.empty()) {
+      break;
+    }
+
+    if (pending.empty()) {
+      raw_first_line = line;
+    }
+
+    const bool has_continuation = hasFortranLineContinuation(line);
+    stripFortranLineContinuation(line);
+
+    if (pending.empty()) {
+      first_line = line;
+      pending = line;
+    } else {
+      std::string continuation = stripOmpPrefix(line);
+      stripLeadingContinuation(continuation);
+      pending += continuation;
+    }
+
+    if (!has_continuation) {
+      break;
+    }
+  }
+
+  if (pending.empty() || first_line.empty()) {
+    return false;
+  }
+
+  return shouldJoinFirstFortranOpenMPClauseWithoutSpace(raw_first_line,
+                                                        first_line, pending);
+}
+
+struct FortranDirectiveSourceOccurrence {
+  std::string key;
+  int line = 0;
+  int column = 0;
+  int end_column = 0;
+  bool join_first_clause_without_space = false;
+};
+
+static std::vector<FortranDirectiveSourceOccurrence>
+collectFortranOpenMPDirectiveOccurrences(const std::string &filename) {
+  std::vector<FortranDirectiveSourceOccurrence> occurrences;
+  if (filename.empty()) {
+    return occurrences;
+  }
+
+  std::ifstream input(filename);
+  if (!input) {
+    return occurrences;
+  }
+
+  std::string pending;
+  std::string pending_raw_first_line;
+  std::string pending_first_line;
+  int pending_line = 0;
+  int pending_column = 0;
+  int pending_end_column = 0;
+  bool pending_join_first_clause = false;
+  int line_number = 0;
+  for (std::string line; std::getline(input, line);) {
+    ++line_number;
+
+    std::string cleaned = line;
+    if (!extractFortranOpenMPDirectivePayload(cleaned)) {
+      continue;
+    }
+
+    stripFortranComment(cleaned);
+    trim(cleaned);
+    if (cleaned.empty()) {
+      continue;
+    }
+
+    if (pending.empty()) {
+      pending_raw_first_line = cleaned;
+    }
+
+    bool has_continuation = hasFortranLineContinuation(cleaned);
+    stripFortranLineContinuation(cleaned);
+
+    if (pending.empty()) {
+      pending_first_line = cleaned;
+      pending = cleaned;
+      const size_t first_non_ws = line.find_first_not_of(" \t");
+      pending_column = first_non_ws == std::string::npos
+                           ? 1
+                           : static_cast<int>(first_non_ws) + 1;
+      pending_line = line_number;
+      pending_join_first_clause = false;
+    } else {
+      std::string continuation = stripOmpPrefix(cleaned);
+      stripLeadingContinuation(continuation);
+      pending += continuation;
+    }
+
+    pending_end_column = static_cast<int>(line.size()) + 1;
+    if (!has_continuation) {
+      pending_join_first_clause =
+          shouldJoinFirstFortranOpenMPClauseWithoutSpace(
+              pending_raw_first_line, pending_first_line, pending);
+      occurrences.push_back({canonicalizeDirectiveKey(pending), pending_line,
+                             pending_column,
+                             std::max(pending_column + 1, pending_end_column),
+                             pending_join_first_clause});
+      pending.clear();
+      pending_raw_first_line.clear();
+      pending_first_line.clear();
+      pending_line = 0;
+      pending_column = 0;
+      pending_end_column = 0;
+      pending_join_first_clause = false;
+    }
+  }
+
+  return occurrences;
+}
+
+static void repairMissingFortranPragmaSourceLocations(
+    SgSourceFile *sageFilePtr,
+    const std::vector<SgPragmaDeclaration *> &omp_pragmas) {
+  if (sageFilePtr == nullptr || sageFilePtr->get_file_info() == nullptr) {
+    return;
+  }
+
+  const std::string filename =
+      sageFilePtr->get_file_info()->get_filenameString();
+  const int file_id = sageFilePtr->get_file_info()->get_file_id();
+  const std::vector<FortranDirectiveSourceOccurrence> occurrences =
+      collectFortranOpenMPDirectiveOccurrences(filename);
+  if (occurrences.empty()) {
+    return;
+  }
+
+  auto can_use_location = [](const Sg_File_Info *info) -> bool {
+    return info != nullptr && info->get_line() > 0 && !info->isTransformation();
+  };
+  auto canonicalize_pragma = [](SgPragmaDeclaration *pragma) -> std::string {
+    std::string text = getFortranOpenMPDirectiveSourceText(pragma);
+    trim(text);
+    return canonicalizeDirectiveKey(text);
+  };
+  auto apply_source_location =
+      [&](SgPragmaDeclaration *pragma,
+          const FortranDirectiveSourceOccurrence &occ) {
+        auto update = [&](Sg_File_Info *info, int column) {
+          if (info == nullptr) {
+            return;
+          }
+          info->set_filenameString(filename);
+          info->set_file_id(file_id);
+          info->set_line(occ.line);
+          info->set_physical_line(occ.line);
+          info->set_col(column);
+          info->unsetTransformation();
+          info->unsetCompilerGenerated();
+        };
+
+        update(pragma->get_startOfConstruct(), occ.column);
+        update(pragma->get_file_info(), occ.column);
+        update(pragma->get_endOfConstruct(), occ.end_column);
+        if (occ.join_first_clause_without_space &&
+            pragma->getAttribute(kOmpFortranJoinFirstClauseAttrName) == NULL) {
+          pragma->addNewAttribute(kOmpFortranJoinFirstClauseAttrName,
+                                  new OmpOwnedIntAttribute(1));
+        }
+
+        SgBasicBlock *scope = isSgBasicBlock(pragma->get_scope());
+        if (scope == nullptr) {
+          scope = isSgBasicBlock(pragma->get_parent());
+        }
+        if (scope == nullptr) {
+          return;
+        }
+
+        SgStatementPtrList &statements = scope->get_statements();
+        if (std::find(statements.begin(), statements.end(), pragma) !=
+            statements.end()) {
+          return;
+        }
+
+        auto insert_pos = statements.end();
+        for (auto it = statements.begin(); it != statements.end(); ++it) {
+          SgStatement *stmt = *it;
+          if (stmt == nullptr) {
+            continue;
+          }
+          const SgLocatedNode *located = isSgLocatedNode(stmt);
+          const Sg_File_Info *stmt_info =
+              located != nullptr ? getPreferredLocatedNodeStartInfo(located)
+                                 : stmt->get_file_info();
+          if (stmt_info == nullptr || stmt_info->isTransformation() ||
+              stmt_info->get_line() <= 0) {
+            continue;
+          }
+          if (stmt_info->get_line() > occ.line ||
+              (stmt_info->get_line() == occ.line &&
+               stmt_info->get_col() >= occ.column)) {
+            insert_pos = it;
+            break;
+          }
+        }
+
+        pragma->set_parent(scope);
+        pragma->set_scope(scope);
+        statements.insert(insert_pos, pragma);
+      };
+
+  std::unordered_map<std::string, std::vector<FortranDirectiveSourceOccurrence>>
+      source_occurrences_by_key;
+  source_occurrences_by_key.reserve(occurrences.size());
+  for (const FortranDirectiveSourceOccurrence &occ : occurrences) {
+    source_occurrences_by_key[occ.key].push_back(occ);
+  }
+
+  for (SgPragmaDeclaration *pragma : omp_pragmas) {
+    if (pragma == nullptr) {
+      continue;
+    }
+    const Sg_File_Info *info = getPreferredLocatedNodeStartInfo(pragma);
+    if (!can_use_location(info)) {
+      continue;
+    }
+    std::vector<FortranDirectiveSourceOccurrence> &candidates =
+        source_occurrences_by_key[canonicalize_pragma(pragma)];
+    for (auto it = candidates.begin(); it != candidates.end(); ++it) {
+      if (it->line == info->get_line()) {
+        if (it->join_first_clause_without_space &&
+            pragma->getAttribute(kOmpFortranJoinFirstClauseAttrName) == NULL) {
+          pragma->addNewAttribute(kOmpFortranJoinFirstClauseAttrName,
+                                  new OmpOwnedIntAttribute(1));
+        }
+        candidates.erase(it);
+        break;
+      }
+    }
+  }
+
+  for (SgPragmaDeclaration *pragma : omp_pragmas) {
+    if (pragma == nullptr) {
+      continue;
+    }
+    const Sg_File_Info *info = getPreferredLocatedNodeStartInfo(pragma);
+    if (can_use_location(info)) {
+      continue;
+    }
+
+    const std::string key = canonicalize_pragma(pragma);
+    if (key.empty()) {
+      continue;
+    }
+    std::vector<FortranDirectiveSourceOccurrence> &candidates =
+        source_occurrences_by_key[key];
+    if (candidates.empty()) {
+      continue;
+    }
+    apply_source_location(pragma, candidates.front());
+    candidates.erase(candidates.begin());
+  }
+}
+
 static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
   std::vector<SgNode *> all_pragmas =
       NodeQuery::querySubTree(sageFilePtr, V_SgPragmaDeclaration);
@@ -3986,6 +4710,30 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
   if (omp_pragmas.empty()) {
     return false;
   }
+
+  repairMissingFortranPragmaSourceLocations(sageFilePtr, omp_pragmas);
+
+  std::stable_sort(
+      omp_pragmas.begin(), omp_pragmas.end(),
+      [](SgPragmaDeclaration *lhs, SgPragmaDeclaration *rhs) {
+        ROSE_ASSERT(lhs != NULL);
+        ROSE_ASSERT(rhs != NULL);
+        const Sg_File_Info *lhs_info = getPreferredLocatedNodeStartInfo(lhs);
+        const Sg_File_Info *rhs_info = getPreferredLocatedNodeStartInfo(rhs);
+        ROSE_ASSERT(lhs_info != NULL);
+        ROSE_ASSERT(rhs_info != NULL);
+
+        const std::string lhs_file = lhs_info->get_filenameString();
+        const std::string rhs_file = rhs_info->get_filenameString();
+        if (lhs_file != rhs_file) {
+          return lhs_file < rhs_file;
+        }
+        if (lhs_info->get_line() != rhs_info->get_line()) {
+          return lhs_info->get_line() < rhs_info->get_line();
+        }
+        return lhs_info->get_col() < rhs_info->get_col();
+      });
+
   setLang(Lang_Fortran);
   std::vector<OpenMPDirective *> pairing_list;
   std::vector<std::pair<SgPragmaDeclaration *, OpenMPDirective *>>
@@ -3997,6 +4745,9 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
   std::vector<SgPragmaDeclaration *> pragmas_to_remove;
   std::vector<SgPragmaDeclaration *> pending_pragmas;
   std::string pending;
+  std::string pending_raw_first_line;
+  std::string pending_first_line;
+  bool pending_join_first_clause = false;
   SgPragmaDeclaration *prev_pragma = NULL;
   bool prev_continuation = false;
   auto cleanup_local_directives = [&]() {
@@ -4035,11 +4786,17 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
       continue;
     }
 
+    if (pending_pragmas.empty()) {
+      pending_raw_first_line = cleaned;
+    }
+
     bool has_continuation = hasFortranLineContinuation(cleaned);
     stripFortranLineContinuation(cleaned);
 
     if (pending_pragmas.empty()) {
+      pending_first_line = cleaned;
       pending = cleaned;
+      pending_join_first_clause = false;
       pending_pragmas.push_back(pragmaDecl);
     } else {
       std::string continuation = stripOmpPrefix(cleaned);
@@ -4054,26 +4811,32 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
       continue;
     }
 
-    std::string parse_buffer = pending;
-    trimLeft(parse_buffer);
-    if (!startsWithCaseInsensitive(parse_buffer, "!$")) {
-      parse_buffer = std::string("!$") + parse_buffer;
-    }
-
-    ompparser_OpenMPIR = parseOpenMP(parse_buffer.c_str(), nullptr, nullptr);
-    if (ompparser_OpenMPIR == NULL && parse_buffer != pending) {
-      ompparser_OpenMPIR = parseOpenMP(pending.c_str(), nullptr, nullptr);
-    }
+    ompparser_OpenMPIR = parseOpenMPDirectiveText(pending);
     if (ompparser_OpenMPIR == NULL) {
       cleanup_local_directives();
       setLang(Lang_unknown);
       return false;
     }
 
-    if (ompparser_OpenMPIR->getKind() != OMPD_end) {
+    pending_join_first_clause = shouldJoinFirstFortranOpenMPClauseWithoutSpace(
+        pending_raw_first_line, pending_first_line, pending);
+
+    SgPragmaDeclaration *primary = pending_pragmas.front();
+    if (pending_join_first_clause &&
+        primary->getAttribute(kOmpFortranJoinFirstClauseAttrName) == NULL) {
+      primary->addNewAttribute(kOmpFortranJoinFirstClauseAttrName,
+                               new OmpOwnedIntAttribute(1));
+    }
+    std::string directive_source_text = pending;
+
+    if (ompparser_OpenMPIR->getKind() != OMPD_end &&
+        (isFortranPairedDirective(ompparser_OpenMPIR) ||
+         isFortranPotentiallyExplicitEndDirective(ompparser_OpenMPIR))) {
       pairing_list.push_back(ompparser_OpenMPIR);
     }
     if (ompparser_OpenMPIR->getKind() == OMPD_end) {
+      OpenMPDirective *end_directive =
+          ((OpenMPEndDirective *)ompparser_OpenMPIR)->getPairedDirective();
       if (pairing_list.empty()) {
         cleanup_local_directives();
         delete ompparser_OpenMPIR;
@@ -4081,35 +4844,50 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
         setLang(Lang_unknown);
         return false;
       }
-      OpenMPDirective *end_directive =
-          ((OpenMPEndDirective *)ompparser_OpenMPIR)->getPairedDirective();
       bool matched = false;
-      while (!pairing_list.empty()) {
-        OpenMPDirective *begin_directive = pairing_list.back();
+      OpenMPDirective *matched_begin_directive = NULL;
+      size_t matched_index = 0;
+      for (size_t i = pairing_list.size(); i > 0; --i) {
+        OpenMPDirective *begin_directive = pairing_list[i - 1];
         if (end_directive->getKind() == begin_directive->getKind()) {
-          mergeEndClausesToBeginDirective(begin_directive, end_directive,
-                                          ompparser_OpenMPIR);
-          ((OpenMPEndDirective *)ompparser_OpenMPIR)
-              ->setPairedDirective(begin_directive);
-          pairing_list.pop_back();
           matched = true;
+          matched_begin_directive = begin_directive;
+          matched_index = i - 1;
           break;
         }
-        // Keep searching for the matching begin directive; some intervening
-        // directives are not closed by explicit END pragmas.
-        pairing_list.pop_back();
       }
       if (!matched) {
-        cleanup_local_directives();
-        delete ompparser_OpenMPIR;
-        ompparser_OpenMPIR = NULL;
-        setLang(Lang_unknown);
-        return false;
+        // Some explicit END markers (for example, END ATOMIC block forms) are
+        // kept as standalone Fortran pragmas rather than entering the paired
+        // structured-body conversion path. Do not collapse the enclosing
+        // pairing stack when such a raw END appears.
+        if (isFortranPairedDirective(end_directive)) {
+          cleanup_local_directives();
+          delete ompparser_OpenMPIR;
+          ompparser_OpenMPIR = NULL;
+          setLang(Lang_unknown);
+          return false;
+        }
+      } else {
+        if (isFortranPotentiallyExplicitEndDirective(matched_begin_directive)) {
+          for (const auto &entry : local_fortran_paired_pragma_dict) {
+            if (entry.second == matched_begin_directive) {
+              fortran_explicit_end_pragma_dict[entry.first] = primary;
+              break;
+            }
+          }
+        }
+        if (isFortranPotentiallyExplicitEndDirective(matched_begin_directive)) {
+          matched_begin_directive->setRequiresExplicitEnd(true);
+        }
+        mergeEndClausesToBeginDirective(matched_begin_directive, end_directive,
+                                        ompparser_OpenMPIR);
+        ((OpenMPEndDirective *)ompparser_OpenMPIR)
+            ->setPairedDirective(matched_begin_directive);
+        pairing_list.erase(pairing_list.begin() + matched_index);
       }
     }
 
-    SgPragmaDeclaration *primary = pending_pragmas.front();
-    std::string directive_source_text = pending;
     local_fortran_paired_pragma_dict[primary] = ompparser_OpenMPIR;
     local_pragma_text_by_ir[ompparser_OpenMPIR] = directive_source_text;
     const bool is_end_directive = ompparser_OpenMPIR->getKind() == OMPD_end;
@@ -4126,6 +4904,9 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
 
     pending_pragmas.clear();
     pending.clear();
+    pending_raw_first_line.clear();
+    pending_first_line.clear();
+    pending_join_first_clause = false;
   }
 
   if (!pending_pragmas.empty()) {
@@ -4153,6 +4934,8 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
   for (SgPragmaDeclaration *decl : pragmas_to_remove) {
     removeStatement(decl);
   }
+  repositionFortranPragmaDeclarationsBySourceOrder(
+      sageFilePtr, omp_pragmas, local_fortran_paired_pragma_dict);
   setLang(Lang_unknown);
   return true;
 }
@@ -5861,6 +6644,142 @@ void OpenMPIRToSageAST(SgSourceFile *sageFilePtr) {
 //  of statements Return the single statement or the basic block. This function
 //  is used to wrap all statement between begin and end Fortran directives into
 //  a block, if necessary(more than one statement)
+static SgStatement *getNextStatementInSameBasicBlock(SgStatement *stmt);
+static const Sg_File_Info *getStatementStartLocation(const SgStatement *stmt);
+static SgStatement *findFirstFortranBodyStatementAtOrAfter(
+    SgBasicBlock *body, int file_id, const std::string &filename, int line,
+    int column, const SgStatement *excluded_stmt);
+static SgStatement *findLastFortranBodyStatementAtOrBefore(
+    SgBasicBlock *body, int file_id, const std::string &filename, int line,
+    int column, const SgStatement *excluded_stmt);
+
+namespace {
+struct FortranSourceOrderedStatement {
+  SgStatement *statement = nullptr;
+  int file_id = 0;
+  std::string filename;
+  int line = 0;
+  int column = 0;
+  int phase = 0;
+  size_t ast_index = 0;
+};
+
+static bool getUsableStatementSourceStart(const SgStatement *stmt, int &file_id,
+                                          std::string &filename, int &line,
+                                          int &column) {
+  if (stmt == nullptr) {
+    return false;
+  }
+
+  const Sg_File_Info *start = getStatementStartLocation(stmt);
+  if (start == nullptr || start->isTransformation()) {
+    return false;
+  }
+
+  file_id = start->get_file_id();
+  filename = start->get_filenameString();
+  line = start->get_line();
+  column = start->get_col();
+  return line > 0;
+}
+
+static std::vector<FortranSourceOrderedStatement>
+getFortranStatementsInSourceOrder(SgBasicBlock *scope) {
+  std::vector<FortranSourceOrderedStatement> ordered;
+  if (scope == nullptr) {
+    return ordered;
+  }
+
+  const SgStatementPtrList &statements = scope->get_statements();
+  ordered.resize(statements.size());
+
+  std::vector<bool> has_exact_source(statements.size(), false);
+  std::vector<int> exact_file_id(statements.size(), 0);
+  std::vector<std::string> exact_filename(statements.size());
+  std::vector<int> exact_line(statements.size(), 0);
+  std::vector<int> exact_column(statements.size(), 0);
+
+  for (size_t i = 0; i < statements.size(); ++i) {
+    ordered[i].statement = statements[i];
+    ordered[i].ast_index = i;
+    has_exact_source[i] = getUsableStatementSourceStart(
+        statements[i], exact_file_id[i], exact_filename[i], exact_line[i],
+        exact_column[i]);
+  }
+
+  for (size_t i = 0; i < statements.size(); ++i) {
+    if (has_exact_source[i]) {
+      ordered[i].file_id = exact_file_id[i];
+      ordered[i].filename = exact_filename[i];
+      ordered[i].line = exact_line[i];
+      ordered[i].column = exact_column[i];
+      ordered[i].phase = 1;
+      continue;
+    }
+
+    bool found_next = false;
+    for (size_t j = i + 1; j < statements.size(); ++j) {
+      if (!has_exact_source[j]) {
+        continue;
+      }
+
+      ordered[i].file_id = exact_file_id[j];
+      ordered[i].filename = exact_filename[j];
+      ordered[i].line = exact_line[j];
+      ordered[i].column = exact_column[j];
+      ordered[i].phase = 0;
+      found_next = true;
+      break;
+    }
+    if (found_next) {
+      continue;
+    }
+
+    for (size_t j = i; j > 0; --j) {
+      if (!has_exact_source[j - 1]) {
+        continue;
+      }
+
+      ordered[i].file_id = exact_file_id[j - 1];
+      ordered[i].filename = exact_filename[j - 1];
+      ordered[i].line = exact_line[j - 1];
+      ordered[i].column = exact_column[j - 1];
+      ordered[i].phase = 2;
+      found_next = true;
+      break;
+    }
+
+    if (!found_next) {
+      ordered[i].phase = 3;
+      ordered[i].line = static_cast<int>(i);
+    }
+  }
+
+  std::stable_sort(ordered.begin(), ordered.end(),
+                   [](const FortranSourceOrderedStatement &lhs,
+                      const FortranSourceOrderedStatement &rhs) {
+                     if (lhs.file_id != rhs.file_id) {
+                       return lhs.file_id < rhs.file_id;
+                     }
+                     if (lhs.filename != rhs.filename) {
+                       return lhs.filename < rhs.filename;
+                     }
+                     if (lhs.line != rhs.line) {
+                       return lhs.line < rhs.line;
+                     }
+                     if (lhs.column != rhs.column) {
+                       return lhs.column < rhs.column;
+                     }
+                     if (lhs.phase != rhs.phase) {
+                       return lhs.phase < rhs.phase;
+                     }
+                     return lhs.ast_index < rhs.ast_index;
+                   });
+
+  return ordered;
+}
+} // namespace
+
 static SgStatement *
 ensureSingleStmtOrBasicBlock(SgPragmaDeclaration *begin_decl,
                              const std::vector<SgStatement *> &stmt_vec) {
@@ -5871,7 +6790,7 @@ ensureSingleStmtOrBasicBlock(SgPragmaDeclaration *begin_decl,
   }
   if (stmt_vec.size() == 1) {
     result = stmt_vec[0];
-    ROSE_ASSERT(getNextStatement(begin_decl) == result);
+    ROSE_ASSERT(getNextStatementInSameBasicBlock(begin_decl) == result);
   } else {
     result = buildBasicBlock();
     initializeGeneratedOpenMPStatement(result);
@@ -5891,6 +6810,85 @@ ensureSingleStmtOrBasicBlock(SgPragmaDeclaration *begin_decl,
     insertStatementAfter(begin_decl, result, false);
   }
   return result;
+}
+
+static SgStatement *getNextStatementInSameBasicBlock(SgStatement *stmt) {
+  if (stmt == NULL) {
+    return NULL;
+  }
+
+  SgBasicBlock *scope = isSgBasicBlock(stmt->get_parent());
+  if (scope == NULL) {
+    scope = isSgBasicBlock(stmt->get_scope());
+  }
+  if (scope == NULL) {
+    return getNextStatement(stmt);
+  }
+
+  const std::vector<FortranSourceOrderedStatement> ordered =
+      getFortranStatementsInSourceOrder(scope);
+  for (auto it = ordered.begin(); it != ordered.end(); ++it) {
+    if (it->statement != stmt) {
+      continue;
+    }
+
+    ++it;
+    return it != ordered.end() ? it->statement : NULL;
+  }
+
+  return NULL;
+}
+
+static SgStatement *getPreviousStatementInSameBasicBlock(SgStatement *stmt) {
+  if (stmt == NULL) {
+    return NULL;
+  }
+
+  SgBasicBlock *scope = isSgBasicBlock(stmt->get_parent());
+  if (scope == NULL) {
+    scope = isSgBasicBlock(stmt->get_scope());
+  }
+  if (scope == NULL) {
+    return NULL;
+  }
+
+  const std::vector<FortranSourceOrderedStatement> ordered =
+      getFortranStatementsInSourceOrder(scope);
+  SgStatement *previous = NULL;
+  for (const FortranSourceOrderedStatement &entry : ordered) {
+    if (entry.statement == stmt) {
+      return previous;
+    }
+    previous = entry.statement;
+  }
+
+  return NULL;
+}
+
+static SgStatement *
+getNextNonPragmaStatementInSameBasicBlock(SgStatement *stmt) {
+  for (SgStatement *candidate = getNextStatementInSameBasicBlock(stmt);
+       candidate != NULL;
+       candidate = getNextStatementInSameBasicBlock(candidate)) {
+    if (isSgPragmaDeclaration(candidate) == NULL) {
+      return candidate;
+    }
+  }
+
+  return NULL;
+}
+
+static SgStatement *
+getPreviousNonPragmaStatementInSameBasicBlock(SgStatement *stmt) {
+  for (SgStatement *candidate = getPreviousStatementInSameBasicBlock(stmt);
+       candidate != NULL;
+       candidate = getPreviousStatementInSameBasicBlock(candidate)) {
+    if (isSgPragmaDeclaration(candidate) == NULL) {
+      return candidate;
+    }
+  }
+
+  return NULL;
 }
 
 static void merge_Matching_Cxx_Pragma_pairs(SgPragmaDeclaration *decl) {
@@ -5961,9 +6959,12 @@ static bool fortranAstUnparserEmitsOpenMPEnd(OpenMPDirectiveKind kind) {
   case OMPD_workshare:
   case OMPD_single:
   case OMPD_task:
+  case OMPD_atomic:
   case OMPD_do:
   case OMPD_parallel_do:
   case OMPD_parallel_loop:
+  case OMPD_target:
+  case OMPD_begin_metadirective:
     return true;
   default:
     return false;
@@ -5976,7 +6977,6 @@ static bool fortranAstUnparserEmitsOpenMPEnd(OpenMPDirectiveKind kind) {
 //  one statements
 void merge_Matching_Fortran_Pragma_pairs(SgPragmaDeclaration *decl) {
   SgPragmaDeclaration *end_decl = NULL;
-  SgStatement *next_stmt = getNextStatement(decl);
   auto begin_it = fortran_paired_pragma_dict.find(decl);
   ROSE_ASSERT(begin_it != fortran_paired_pragma_dict.end());
   OpenMPDirective *begin_directive = begin_it->second;
@@ -5986,8 +6986,47 @@ void merge_Matching_Fortran_Pragma_pairs(SgPragmaDeclaration *decl) {
   std::vector<SgStatement *>
       affected_stmts; // statements which are inside the begin .. end pair
 
+  auto explicit_end_it = fortran_explicit_end_pragma_dict.find(decl);
+  if (explicit_end_it != fortran_explicit_end_pragma_dict.end()) {
+    end_decl = explicit_end_it->second;
+    const Sg_File_Info *end_info =
+        end_decl != NULL ? getStatementStartLocation(end_decl) : NULL;
+    SgBasicBlock *scope = isSgBasicBlock(decl->get_scope());
+    const Sg_File_Info *begin_info = getStatementStartLocation(decl);
+    if (scope != NULL && begin_info != NULL && end_info != NULL) {
+      SgStatement *first_stmt = findFirstFortranBodyStatementAtOrAfter(
+          scope, begin_info->get_file_id(), begin_info->get_filenameString(),
+          begin_info->get_line(), begin_info->get_col(), decl);
+      SgStatement *last_stmt = findLastFortranBodyStatementAtOrBefore(
+          scope, end_info->get_file_id(), end_info->get_filenameString(),
+          end_info->get_line(), end_info->get_col(), end_decl);
+      if (first_stmt != NULL && last_stmt != NULL) {
+        bool in_range = false;
+        const std::vector<FortranSourceOrderedStatement> ordered =
+            getFortranStatementsInSourceOrder(scope);
+        for (const FortranSourceOrderedStatement &entry : ordered) {
+          SgStatement *stmt = entry.statement;
+          if (stmt == NULL) {
+            continue;
+          }
+          if (stmt == first_stmt) {
+            in_range = true;
+          }
+          if (in_range && stmt != decl && stmt != end_decl &&
+              isSgPragmaDeclaration(stmt) == NULL) {
+            affected_stmts.push_back(stmt);
+          }
+          if (stmt == last_stmt) {
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  SgStatement *next_stmt = getNextStatementInSameBasicBlock(decl);
   // Find possible end directives attached to a pragma declaration
-  while (next_stmt != NULL) {
+  while (end_decl == NULL && next_stmt != NULL) {
     end_decl = isSgPragmaDeclaration(next_stmt);
     if (end_decl != NULL) {
       auto end_it = fortran_paired_pragma_dict.find(end_decl);
@@ -6005,7 +7044,7 @@ void merge_Matching_Fortran_Pragma_pairs(SgPragmaDeclaration *decl) {
       end_decl = NULL; // MUST reset to NULL if not a match
     }
     affected_stmts.push_back(next_stmt);
-    next_stmt = getNextStatement(next_stmt);
+    next_stmt = getNextStatementInSameBasicBlock(next_stmt);
   } // end while
 
   // End directives are optional for selected Fortran OpenMP constructs.
@@ -6074,7 +7113,9 @@ void convert_Fortran_Pragma_Pairs(SgSourceFile *sageFilePtr) {
             sageFilePtr->get_file_info()->get_filename() &&
         !(decl->get_file_info()->isTransformation()))
       continue;
-    if (isFortranPairedDirective(fortran_paired_pragma_dict[decl])) {
+    OpenMPDirective *directive = fortran_paired_pragma_dict[decl];
+    if (isFortranPairedDirective(directive) ||
+        (directive != NULL && directive->getRequiresExplicitEnd())) {
       merge_Matching_Fortran_Pragma_pairs(decl);
     }
   } // end for omp_pragma_list
@@ -6105,9 +7146,574 @@ static bool isFortranAccPairedDirective(OpenACCDirective *directive) {
   }
 }
 
+static const Sg_File_Info *getStatementStartLocation(const SgStatement *stmt) {
+  ROSE_ASSERT(stmt != NULL);
+  if (const SgLocatedNode *located = isSgLocatedNode(stmt)) {
+    if (const Sg_File_Info *info = getPreferredLocatedNodeStartInfo(located)) {
+      return info;
+    }
+  }
+  return stmt->get_file_info();
+}
+
+static const Sg_File_Info *getStatementEndLocation(const SgStatement *stmt) {
+  ROSE_ASSERT(stmt != NULL);
+  if (const SgLocatedNode *located = isSgLocatedNode(stmt)) {
+    if (const Sg_File_Info *info = getPreferredLocatedNodeEndInfo(located)) {
+      return info;
+    }
+  }
+  return stmt->get_file_info();
+}
+
+static bool sourcePositionMatchesFile(const Sg_File_Info *position, int file_id,
+                                      const std::string &filename) {
+  if (position == NULL || position->isTransformation()) {
+    return false;
+  }
+
+  if (position->get_file_id() == file_id) {
+    return true;
+  }
+
+  if (filename.empty()) {
+    return false;
+  }
+
+  const std::string position_filename = position->get_filenameString();
+  return !position_filename.empty() && position_filename == filename;
+}
+
+static bool sourcePositionAtOrAfter(const Sg_File_Info *position, int file_id,
+                                    const std::string &filename, int line,
+                                    int column) {
+  if (!sourcePositionMatchesFile(position, file_id, filename)) {
+    return false;
+  }
+  if (position->get_line() != line) {
+    return position->get_line() > line;
+  }
+  return position->get_col() >= column;
+}
+
+static bool sourcePositionAtOrAfter(const Sg_File_Info *position, int file_id,
+                                    int line, int column) {
+  return sourcePositionAtOrAfter(position, file_id, std::string(), line,
+                                 column);
+}
+
+static bool sourcePositionAtOrBefore(const Sg_File_Info *position, int file_id,
+                                     const std::string &filename, int line,
+                                     int column) {
+  if (!sourcePositionMatchesFile(position, file_id, filename)) {
+    return false;
+  }
+  if (position->get_line() != line) {
+    return position->get_line() < line;
+  }
+  return position->get_col() <= column;
+}
+
+static bool sourcePositionAtOrBefore(const Sg_File_Info *position, int file_id,
+                                     int line, int column) {
+  return sourcePositionAtOrBefore(position, file_id, std::string(), line,
+                                  column);
+}
+
+static bool sourcePositionWithinRange(const Sg_File_Info *start,
+                                      const Sg_File_Info *end, int file_id,
+                                      const std::string &filename, int line,
+                                      int column) {
+  if (start == NULL || end == NULL || start->isTransformation() ||
+      end->isTransformation() ||
+      !sourcePositionMatchesFile(start, file_id, filename) ||
+      !sourcePositionMatchesFile(end, file_id, filename)) {
+    return false;
+  }
+
+  return sourcePositionAtOrBefore(start, file_id, filename, line, column) &&
+         sourcePositionAtOrAfter(end, file_id, filename, line, column);
+}
+
+static bool sourcePositionWithinRange(const Sg_File_Info *start,
+                                      const Sg_File_Info *end, int file_id,
+                                      int line, int column) {
+  return sourcePositionWithinRange(start, end, file_id, std::string(), line,
+                                   column);
+}
+
+static bool sourcePositionLess(const Sg_File_Info *lhs,
+                               const Sg_File_Info *rhs) {
+  ROSE_ASSERT(lhs != NULL);
+  ROSE_ASSERT(rhs != NULL);
+  if (lhs->get_line() != rhs->get_line()) {
+    return lhs->get_line() < rhs->get_line();
+  }
+  return lhs->get_col() < rhs->get_col();
+}
+
+static bool hasUsableSourceRange(const Sg_File_Info *start,
+                                 const Sg_File_Info *end) {
+  return start != NULL && end != NULL && !start->isTransformation() &&
+         !end->isTransformation();
+}
+
+static void
+getFortranDirectiveInsertionRange(SgBasicBlock *body,
+                                  const Sg_File_Info *&candidate_start,
+                                  const Sg_File_Info *&candidate_end) {
+  ROSE_ASSERT(body != NULL);
+
+  const Sg_File_Info *child_start = NULL;
+  const Sg_File_Info *child_end = NULL;
+  const SgStatementPtrList &statements = body->get_statements();
+  for (SgStatement *stmt : statements) {
+    if (isSgPragmaDeclaration(stmt) != NULL) {
+      continue;
+    }
+
+    const Sg_File_Info *stmt_start = getStatementStartLocation(stmt);
+    const Sg_File_Info *stmt_end = getStatementEndLocation(stmt);
+    if (!hasUsableSourceRange(stmt_start, stmt_end) ||
+        stmt_start->get_file_id() != stmt_end->get_file_id()) {
+      continue;
+    }
+
+    if (child_start == NULL || sourcePositionLess(stmt_start, child_start)) {
+      child_start = stmt_start;
+    }
+    if (child_end == NULL || sourcePositionLess(child_end, stmt_end)) {
+      child_end = stmt_end;
+    }
+  }
+
+  if (hasUsableSourceRange(child_start, child_end) &&
+      child_start->get_file_id() == child_end->get_file_id()) {
+    candidate_start = child_start;
+    candidate_end = child_end;
+
+    SgStatement *owner_stmt = isSgStatement(body->get_parent());
+    if (owner_stmt != NULL) {
+      const Sg_File_Info *owner_start = getStatementStartLocation(owner_stmt);
+      const Sg_File_Info *owner_end = getStatementEndLocation(owner_stmt);
+      if (owner_start != NULL && !owner_start->isTransformation() &&
+          sourcePositionMatchesFile(owner_start, candidate_start->get_file_id(),
+                                    candidate_start->get_filenameString()) &&
+          sourcePositionLess(owner_start, candidate_start)) {
+        candidate_start = owner_start;
+      }
+      if (owner_end != NULL && !owner_end->isTransformation() &&
+          sourcePositionMatchesFile(owner_end, candidate_end->get_file_id(),
+                                    candidate_end->get_filenameString())) {
+        const bool owner_end_extends_body =
+            sourcePositionLess(candidate_end, owner_end);
+        const bool owner_end_clamps_body =
+            sourcePositionLess(owner_end, candidate_end) &&
+            !sourcePositionLess(owner_end, candidate_start);
+        if (owner_end_extends_body || owner_end_clamps_body) {
+          candidate_end = owner_end;
+        }
+      }
+    }
+    return;
+  }
+
+  candidate_start = getStatementStartLocation(body);
+  candidate_end = getStatementEndLocation(body);
+  if (hasUsableSourceRange(candidate_start, candidate_end)) {
+    return;
+  }
+
+  for (SgNode *parent = body->get_parent(); parent != NULL;
+       parent = parent->get_parent()) {
+    if (SgFunctionDefinition *def = isSgFunctionDefinition(parent)) {
+      const Sg_File_Info *start = getStatementStartLocation(def);
+      const Sg_File_Info *end = getStatementEndLocation(def);
+      if (hasUsableSourceRange(start, end)) {
+        candidate_start = start;
+        candidate_end = end;
+        return;
+      }
+      continue;
+    }
+
+    SgStatement *stmt = isSgStatement(parent);
+    if (stmt == NULL) {
+      continue;
+    }
+
+    const Sg_File_Info *start = getStatementStartLocation(stmt);
+    const Sg_File_Info *end = getStatementEndLocation(stmt);
+    if (hasUsableSourceRange(start, end)) {
+      candidate_start = start;
+      candidate_end = end;
+      return;
+    }
+  }
+}
+
+static SgBasicBlock *findInnermostFortranDirectiveInsertionBody(
+    SgSourceFile *sageFilePtr, int file_id, const std::string &filename,
+    int line, int column) {
+  ROSE_ASSERT(sageFilePtr != NULL);
+  ROSE_ASSERT(sageFilePtr->get_globalScope() != NULL);
+
+  SgBasicBlock *best_body = NULL;
+  const Sg_File_Info *best_start = NULL;
+  const Sg_File_Info *best_end = NULL;
+
+  std::vector<SgNode *> scopes = NodeQuery::querySubTree(
+      sageFilePtr->get_globalScope(), V_SgScopeStatement);
+  for (SgNode *node : scopes) {
+    SgBasicBlock *body = isSgBasicBlock(node);
+    if (body == NULL) {
+      continue;
+    }
+
+    // Inline Fortran IF statements ("IF (c) stmt") use a synthetic body block
+    // for the single statement. Those blocks are not lexical regions that can
+    // absorb later OpenMP directives.
+    if (SgIfStmt *if_parent = isSgIfStmt(body->get_parent())) {
+      if (!if_parent->get_use_then_keyword() &&
+          !if_parent->get_has_end_statement()) {
+        continue;
+      }
+    }
+
+    const Sg_File_Info *candidate_start = NULL;
+    const Sg_File_Info *candidate_end = NULL;
+    getFortranDirectiveInsertionRange(body, candidate_start, candidate_end);
+
+    if (!sourcePositionWithinRange(candidate_start, candidate_end, file_id,
+                                   filename, line, column)) {
+      continue;
+    }
+
+    if (best_body == NULL) {
+      best_body = body;
+      best_start = candidate_start;
+      best_end = candidate_end;
+      continue;
+    }
+
+    const bool start_is_not_earlier =
+        sourcePositionLess(best_start, candidate_start) ||
+        (best_start->get_line() == candidate_start->get_line() &&
+         best_start->get_col() == candidate_start->get_col());
+    const bool end_is_not_later =
+        sourcePositionLess(candidate_end, best_end) ||
+        (candidate_end->get_line() == best_end->get_line() &&
+         candidate_end->get_col() == best_end->get_col());
+    const bool range_is_strictly_smaller =
+        sourcePositionLess(best_start, candidate_start) ||
+        sourcePositionLess(candidate_end, best_end);
+    if (start_is_not_earlier && end_is_not_later && range_is_strictly_smaller) {
+      best_body = body;
+      best_start = candidate_start;
+      best_end = candidate_end;
+    }
+  }
+
+  return best_body;
+}
+
+static SgBasicBlock *getFortranDirectiveInsertionBody(SgStatement *stmt) {
+  if (SgBasicBlock *body = isSgBasicBlock(stmt)) {
+    return body;
+  }
+  if (SgFunctionDefinition *def = isSgFunctionDefinition(stmt->get_parent())) {
+    return def->get_body();
+  }
+  return NULL;
+}
+
+static SgStatement *
+findFirstFortranBodyStatementAtOrAfter(SgBasicBlock *body,
+                                       const PreprocessingInfo *info) {
+  ROSE_ASSERT(body != NULL);
+  ROSE_ASSERT(info != NULL);
+
+  const std::vector<FortranSourceOrderedStatement> ordered =
+      getFortranStatementsInSourceOrder(body);
+  for (const FortranSourceOrderedStatement &entry : ordered) {
+    SgStatement *candidate = entry.statement;
+    if (candidate == NULL) {
+      continue;
+    }
+    if (sourcePositionAtOrAfter(getStatementStartLocation(candidate),
+                                info->getFileId(), info->getLineNumber(),
+                                info->getColumnNumber())) {
+      return candidate;
+    }
+  }
+
+  return NULL;
+}
+
+static SgStatement *findFirstFortranBodyStatementAtOrAfter(
+    SgBasicBlock *body, int file_id, const std::string &filename, int line,
+    int column, const SgStatement *excluded_stmt) {
+  ROSE_ASSERT(body != NULL);
+
+  const std::vector<FortranSourceOrderedStatement> ordered =
+      getFortranStatementsInSourceOrder(body);
+  for (const FortranSourceOrderedStatement &entry : ordered) {
+    SgStatement *candidate = entry.statement;
+    if (candidate == NULL || candidate == excluded_stmt) {
+      continue;
+    }
+    if (sourcePositionAtOrAfter(getStatementStartLocation(candidate), file_id,
+                                filename, line, column)) {
+      return candidate;
+    }
+  }
+
+  return NULL;
+}
+
+static SgStatement *
+findLastFortranBodyStatementAtOrBefore(SgBasicBlock *body,
+                                       const PreprocessingInfo *info) {
+  ROSE_ASSERT(body != NULL);
+  ROSE_ASSERT(info != NULL);
+
+  SgStatement *best = NULL;
+  const Sg_File_Info *best_end = NULL;
+  const SgStatementPtrList &statements = body->get_statements();
+  for (SgStatementPtrList::const_iterator it = statements.begin();
+       it != statements.end(); ++it) {
+    SgStatement *candidate = *it;
+    if (candidate == NULL) {
+      continue;
+    }
+
+    const Sg_File_Info *candidate_end = getStatementEndLocation(candidate);
+    if (!sourcePositionAtOrBefore(candidate_end, info->getFileId(),
+                                  info->getLineNumber(),
+                                  info->getColumnNumber())) {
+      continue;
+    }
+
+    if (best_end == NULL || sourcePositionLess(best_end, candidate_end)) {
+      best = candidate;
+      best_end = candidate_end;
+    }
+  }
+
+  return best;
+}
+
+static SgStatement *findLastFortranBodyStatementAtOrBefore(
+    SgBasicBlock *body, int file_id, const std::string &filename, int line,
+    int column, const SgStatement *excluded_stmt) {
+  ROSE_ASSERT(body != NULL);
+
+  SgStatement *best = NULL;
+  const std::vector<FortranSourceOrderedStatement> ordered =
+      getFortranStatementsInSourceOrder(body);
+  for (const FortranSourceOrderedStatement &entry : ordered) {
+    SgStatement *candidate = entry.statement;
+    if (candidate == NULL || candidate == excluded_stmt) {
+      continue;
+    }
+
+    const Sg_File_Info *candidate_end = getStatementEndLocation(candidate);
+    if (!sourcePositionAtOrBefore(candidate_end, file_id, filename, line,
+                                  column)) {
+      continue;
+    }
+
+    best = candidate;
+  }
+
+  return best;
+}
+
+static void moveFortranPragmaDeclarationBefore(SgPragmaDeclaration *pragma,
+                                               SgStatement *anchor) {
+  ROSE_ASSERT(pragma != NULL);
+  ROSE_ASSERT(anchor != NULL);
+  if (pragma == anchor) {
+    return;
+  }
+
+  removeStatement(pragma, false);
+  insertStatementBefore(anchor, pragma, false);
+}
+
+static void moveFortranPragmaDeclarationAfter(SgPragmaDeclaration *pragma,
+                                              SgStatement *anchor) {
+  ROSE_ASSERT(pragma != NULL);
+  ROSE_ASSERT(anchor != NULL);
+  if (pragma == anchor) {
+    return;
+  }
+
+  removeStatement(pragma, false);
+  insertStatementAfter(anchor, pragma, false);
+}
+
+static void repositionFortranPragmaDeclarationsBySourceOrder(
+    SgSourceFile *sageFilePtr,
+    const std::vector<SgPragmaDeclaration *> &pragmas,
+    const std::map<SgPragmaDeclaration *, OpenMPDirective *> &pragma_dict) {
+  ROSE_ASSERT(sageFilePtr != NULL);
+
+  struct PragmaPlacement {
+    SgPragmaDeclaration *pragma = NULL;
+    OpenMPDirective *directive = NULL;
+    std::string filename;
+    int file_id = 0;
+    int line = 0;
+    int column = 0;
+    size_t order = 0;
+  };
+
+  std::vector<PragmaPlacement> placements;
+  placements.reserve(pragmas.size());
+
+  size_t order = 0;
+  for (SgPragmaDeclaration *pragma : pragmas) {
+    if (pragma == NULL) {
+      continue;
+    }
+
+    auto mapped = pragma_dict.find(pragma);
+    if (mapped == pragma_dict.end()) {
+      continue;
+    }
+
+    const Sg_File_Info *info = pragma->get_file_info();
+    if (info == NULL || info->isTransformation()) {
+      info = pragma->get_startOfConstruct();
+    }
+    if (info == NULL || info->isTransformation()) {
+      continue;
+    }
+
+    placements.push_back({pragma, mapped->second, info->get_filenameString(),
+                          info->get_file_id(), info->get_line(),
+                          info->get_col(), order++});
+  }
+
+  std::stable_sort(placements.begin(), placements.end(),
+                   [](const PragmaPlacement &lhs, const PragmaPlacement &rhs) {
+                     if (lhs.file_id != rhs.file_id) {
+                       return lhs.file_id < rhs.file_id;
+                     }
+                     if (lhs.line != rhs.line) {
+                       return lhs.line < rhs.line;
+                     }
+                     if (lhs.column != rhs.column) {
+                       return lhs.column < rhs.column;
+                     }
+                     return lhs.order < rhs.order;
+                   });
+
+  std::map<SgStatement *, SgPragmaDeclaration *> last_before_for_anchor;
+  std::map<SgStatement *, SgPragmaDeclaration *> last_after_for_anchor;
+
+  for (const PragmaPlacement &placement : placements) {
+    if (placement.pragma == NULL || placement.directive == NULL) {
+      continue;
+    }
+
+    SgBasicBlock *body = findInnermostFortranDirectiveInsertionBody(
+        sageFilePtr, placement.file_id, placement.filename, placement.line,
+        placement.column);
+    if (body == NULL) {
+      body = getFortranDirectiveInsertionBody(
+          isSgStatement(placement.pragma->get_scope()));
+      if (SgIfStmt *if_parent =
+              body != NULL ? isSgIfStmt(body->get_parent()) : NULL) {
+        if (!if_parent->get_use_then_keyword() &&
+            !if_parent->get_has_end_statement()) {
+          body = NULL;
+        }
+      }
+    }
+    if (body == NULL) {
+      continue;
+    }
+
+    if (placement.directive->getKind() == OMPD_end) {
+      SgStatement *anchor = findLastFortranBodyStatementAtOrBefore(
+          body, placement.file_id, placement.filename, placement.line,
+          placement.column, placement.pragma);
+      if (isSgPragmaDeclaration(anchor) != NULL) {
+        if (SgStatement *fallback_anchor =
+                getPreviousNonPragmaStatementInSameBasicBlock(
+                    placement.pragma)) {
+          anchor = fallback_anchor;
+        }
+      }
+      if (anchor != NULL) {
+        auto last_it = last_after_for_anchor.find(anchor);
+        if (last_it != last_after_for_anchor.end() && last_it->second != NULL) {
+          moveFortranPragmaDeclarationAfter(placement.pragma, last_it->second);
+        } else {
+          moveFortranPragmaDeclarationAfter(placement.pragma, anchor);
+        }
+        last_after_for_anchor[anchor] = placement.pragma;
+      } else {
+        auto last_it = last_before_for_anchor.find(body);
+        if (last_it != last_before_for_anchor.end() &&
+            last_it->second != NULL) {
+          moveFortranPragmaDeclarationAfter(placement.pragma, last_it->second);
+        } else {
+          removeStatement(placement.pragma, false);
+          prependStatement(placement.pragma, body);
+        }
+        last_before_for_anchor[body] = placement.pragma;
+      }
+      continue;
+    }
+
+    SgStatement *anchor = findFirstFortranBodyStatementAtOrAfter(
+        body, placement.file_id, placement.filename, placement.line,
+        placement.column, placement.pragma);
+    if (SgPragmaDeclaration *anchor_pragma = isSgPragmaDeclaration(anchor)) {
+      auto anchor_it = pragma_dict.find(anchor_pragma);
+      if (anchor_it != pragma_dict.end() && anchor_it->second != NULL &&
+          anchor_it->second->getKind() == OMPD_end) {
+        if (SgStatement *fallback_anchor =
+                getNextNonPragmaStatementInSameBasicBlock(placement.pragma)) {
+          anchor = fallback_anchor;
+        } else if (SgStatement *fallback_anchor =
+                       getPreviousNonPragmaStatementInSameBasicBlock(
+                           placement.pragma)) {
+          const Sg_File_Info *fallback_start =
+              getStatementStartLocation(fallback_anchor);
+          if (fallback_start == NULL || fallback_start->isTransformation()) {
+            anchor = fallback_anchor;
+          }
+        }
+      }
+    }
+    if (anchor != NULL) {
+      auto last_it = last_before_for_anchor.find(anchor);
+      if (last_it != last_before_for_anchor.end() && last_it->second != NULL) {
+        moveFortranPragmaDeclarationAfter(placement.pragma, last_it->second);
+      } else {
+        moveFortranPragmaDeclarationBefore(placement.pragma, anchor);
+      }
+      last_before_for_anchor[anchor] = placement.pragma;
+    } else {
+      auto last_it = last_before_for_anchor.find(body);
+      if (last_it != last_before_for_anchor.end() && last_it->second != NULL) {
+        moveFortranPragmaDeclarationAfter(placement.pragma, last_it->second);
+      } else {
+        removeStatement(placement.pragma, false);
+        appendStatement(placement.pragma, body);
+      }
+      last_before_for_anchor[body] = placement.pragma;
+    }
+  }
+}
+
 void merge_Matching_Fortran_ACC_Pragma_pairs(SgPragmaDeclaration *decl) {
   SgPragmaDeclaration *end_decl = NULL;
-  SgStatement *next_stmt = getNextStatement(decl);
+  SgStatement *next_stmt = getNextStatementInSameBasicBlock(decl);
   OpenACCDirectiveKind begin_directive_kind =
       fortran_acc_paired_pragma_dict[decl]->getKind();
 
@@ -6133,7 +7739,7 @@ void merge_Matching_Fortran_ACC_Pragma_pairs(SgPragmaDeclaration *decl) {
     }
     end_decl = NULL;
     affected_stmts.push_back(next_stmt);
-    next_stmt = getNextStatement(next_stmt);
+    next_stmt = getNextStatementInSameBasicBlock(next_stmt);
   }
 
   if (end_decl == NULL) {
@@ -6194,6 +7800,16 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
   ROSE_ASSERT(sageFilePtr != NULL);
   // step 1: Each OpenMPIR will have a dedicated SgPragmaDeclaration for it
 
+  struct FortranOmpCommentEntry {
+    SgLocatedNode *loc_node;
+    PreprocessingInfo *info;
+    OpenMPDirective *directive;
+    int file_id;
+    int line;
+    int column;
+    size_t order;
+  };
+
   // we record the last pragma inserted after a statement, if any
   std::map<SgStatement *, SgPragmaDeclaration *> stmt_last_pragma_dict;
   // Track pragmas inserted before a statement to preserve their original order.
@@ -6201,14 +7817,38 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
   std::unordered_set<std::string> seen_requires_directives;
   std::unordered_set<std::string> seen_directive_instances;
   std::unordered_map<OpenMPDirective *, std::string> pragma_text_by_ir;
+  std::vector<SgPragmaDeclaration *> generated_pragmas;
+  std::vector<FortranOmpCommentEntry> comment_entries;
+  comment_entries.reserve(fortran_omp_pragma_list.size());
 
-  std::vector<std::tuple<SgLocatedNode *, PreprocessingInfo *,
-                         OpenMPDirective *>>::iterator iter;
-  for (iter = fortran_omp_pragma_list.begin();
-       iter != fortran_omp_pragma_list.end(); iter++) {
-    SgLocatedNode *loc_node = std::get<0>(*iter);
+  size_t order = 0;
+  for (const auto &entry : fortran_omp_pragma_list) {
+    PreprocessingInfo *info = std::get<1>(entry);
+    ROSE_ASSERT(info != NULL);
+    comment_entries.push_back({std::get<0>(entry), info, std::get<2>(entry),
+                               info->getFileId(), info->getLineNumber(),
+                               info->getColumnNumber(), order++});
+  }
+
+  std::stable_sort(
+      comment_entries.begin(), comment_entries.end(),
+      [](const FortranOmpCommentEntry &lhs, const FortranOmpCommentEntry &rhs) {
+        if (lhs.file_id != rhs.file_id) {
+          return lhs.file_id < rhs.file_id;
+        }
+        if (lhs.line != rhs.line) {
+          return lhs.line < rhs.line;
+        }
+        if (lhs.column != rhs.column) {
+          return lhs.column < rhs.column;
+        }
+        return lhs.order < rhs.order;
+      });
+
+  for (const FortranOmpCommentEntry &entry : comment_entries) {
+    SgLocatedNode *loc_node = entry.loc_node;
     SgStatement *stmt = isSgStatement(loc_node);
-    OpenMPDirective *ompparser_directive_ir = std::get<2>(*iter);
+    OpenMPDirective *ompparser_directive_ir = entry.directive;
     // TODO verify this assertion is true for Fortran OpenMP comments
     ROSE_ASSERT(stmt != NULL);
     // cout<<"debug at ompAstConstruction.cpp:"<<stmt <<" " <<
@@ -6235,7 +7875,7 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
     // preprocessing info's line information !!
     copyStartFileInfo(loc_node, p_decl);
 
-    PreprocessingInfo *info = std::get<1>(*iter);
+    PreprocessingInfo *info = entry.info;
     ROSE_ASSERT(info != NULL);
     setLocatedNodeLineAndColumn(p_decl, info->getLineNumber(),
                                 info->getColumnNumber());
@@ -6310,13 +7950,40 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
     //     insert the pragma right before the original Fortran statement
     //  2. PreprocessingInfo::inside
     //      insert it as the last statement within stmt
+    const Sg_File_Info *stmt_location = getStatementStartLocation(stmt);
+    const std::string search_filename =
+        stmt_location != NULL ? stmt_location->get_filenameString()
+                              : info->getFilename();
     if (position == PreprocessingInfo::before) {
-      SgPragmaDeclaration *last_before = NULL;
-      if (stmt_last_before_pragma_dict.count(stmt)) {
-        last_before = stmt_last_before_pragma_dict[stmt];
+      SgStatement *before_key = stmt;
+      SgStatement *before_anchor = NULL;
+      SgBasicBlock *body = findInnermostFortranDirectiveInsertionBody(
+          sageFilePtr, info->getFileId(), search_filename,
+          info->getLineNumber(), info->getColumnNumber());
+      if (body == NULL) {
+        body = getFortranDirectiveInsertionBody(stmt);
       }
-      // Don't automatically move comments here!
-      if (isSgBasicBlock(stmt)) {
+      if (body != NULL) {
+        before_anchor = findFirstFortranBodyStatementAtOrAfter(body, info);
+        if (before_anchor != NULL) {
+          before_key = before_anchor;
+        }
+      }
+      SgPragmaDeclaration *last_before = NULL;
+      if (stmt_last_before_pragma_dict.count(before_key)) {
+        last_before = stmt_last_before_pragma_dict[before_key];
+      }
+
+      // Block-attached comments need a real statement anchor derived from the
+      // original source position. Otherwise paired directives can absorb the
+      // entire specification part of the enclosing procedure.
+      if (before_anchor != NULL) {
+        if (last_before) {
+          insertStatementAfter(last_before, p_decl, false);
+        } else {
+          insertStatementBefore(before_anchor, p_decl, false);
+        }
+      } else if (isSgBasicBlock(stmt)) {
         // Fortran directive comments are often anchored on a branch or loop
         // body block itself. Inserting before the block moves the directive
         // outside the structured region, so keep it inside the block instead.
@@ -6340,11 +8007,37 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
       } else {
         insertStatementBefore(stmt, p_decl, false);
       }
-      stmt_last_before_pragma_dict[stmt] = p_decl;
+      stmt_last_before_pragma_dict[before_key] = p_decl;
     } else if (position == PreprocessingInfo::inside) {
-      SgScopeStatement *scope = isSgScopeStatement(stmt);
-      ROSE_ASSERT(scope != NULL);
-      appendStatement(p_decl, scope);
+      SgBasicBlock *body = findInnermostFortranDirectiveInsertionBody(
+          sageFilePtr, info->getFileId(), search_filename,
+          info->getLineNumber(), info->getColumnNumber());
+      if (body == NULL) {
+        body = getFortranDirectiveInsertionBody(stmt);
+      }
+      if (body != NULL) {
+        if (ompparser_directive_ir->getKind() == OMPD_end) {
+          SgStatement *anchor =
+              findLastFortranBodyStatementAtOrBefore(body, info);
+          if (anchor != NULL) {
+            insertStatementAfter(anchor, p_decl, false);
+          } else {
+            appendStatement(p_decl, body);
+          }
+        } else {
+          SgStatement *anchor =
+              findFirstFortranBodyStatementAtOrAfter(body, info);
+          if (anchor != NULL) {
+            insertStatementBefore(anchor, p_decl, false);
+          } else {
+            appendStatement(p_decl, body);
+          }
+        }
+      } else {
+        SgScopeStatement *scope = isSgScopeStatement(stmt);
+        ROSE_ASSERT(scope != NULL);
+        appendStatement(p_decl, scope);
+      }
     } else if (position == PreprocessingInfo::after) {
       if (ompparser_directive_ir->getKind() == OMPD_requires) {
         SgFunctionDefinition *def = getEnclosingFunctionDefinition(stmt);
@@ -6368,9 +8061,23 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
         }
       }
 
-      SgStatement *last = stmt;
-      if (stmt_last_pragma_dict.count(stmt))
-        last = stmt_last_pragma_dict[stmt];
+      SgStatement *after_key = stmt;
+      SgStatement *after_anchor = NULL;
+      SgBasicBlock *body = findInnermostFortranDirectiveInsertionBody(
+          sageFilePtr, info->getFileId(), search_filename,
+          info->getLineNumber(), info->getColumnNumber());
+      if (body == NULL) {
+        body = getFortranDirectiveInsertionBody(stmt);
+      }
+      if (body != NULL) {
+        after_anchor = findLastFortranBodyStatementAtOrBefore(body, info);
+        if (after_anchor != NULL) {
+          after_key = after_anchor;
+        }
+      }
+      SgStatement *last = after_key;
+      if (stmt_last_pragma_dict.count(after_key))
+        last = stmt_last_pragma_dict[after_key];
       // Liao, 3/31/2021
       // It is possible there are several comments attached after a same
       // statement. In this case, we should not just insert each generated
@@ -6379,7 +8086,9 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
       // Otherwise , we will end up with reversed order of pragmas, causing
       // later pragma pair matching problem.
 
-      if (isSgFunctionDefinition(stmt->get_parent())) {
+      if (after_anchor != NULL) {
+        insertStatementAfter(last, p_decl, false);
+      } else if (isSgFunctionDefinition(stmt->get_parent())) {
         SgFunctionDefinition *def = isSgFunctionDefinition(stmt->get_parent());
         ROSE_ASSERT(def != NULL);
         SgBasicBlock *body = def->get_body();
@@ -6388,13 +8097,15 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
       } else {
         insertStatementAfter(last, p_decl, false);
       }
-      stmt_last_pragma_dict[stmt] = p_decl;
+      stmt_last_pragma_dict[after_key] = p_decl;
     } else {
       cerr << "ompAstConstruction.cpp , illegal "
               "PreprocessingInfo::RelativePositionType:"
            << position << endl;
       ROSE_ABORT();
     }
+
+    generated_pragmas.push_back(p_decl);
   } // end for omp_comment_list
 
   for (const auto &entry : OpenMPIR_list) {
@@ -6408,6 +8119,8 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
     }
   }
 
+  repositionFortranPragmaDeclarationsBySourceOrder(
+      sageFilePtr, generated_pragmas, fortran_paired_pragma_dict);
   convert_Fortran_Pragma_Pairs(sageFilePtr);
 } // end convert_Fortran_OMP_Comments_to_Pragmas ()
 
@@ -6558,12 +8271,37 @@ void convert_Fortran_ACC_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
 
     PreprocessingInfo::RelativePositionType position =
         pinfo->getRelativePosition();
+    const Sg_File_Info *stmt_location = getStatementStartLocation(stmt);
+    const std::string search_filename =
+        stmt_location != NULL ? stmt_location->get_filenameString()
+                              : pinfo->getFilename();
     if (position == PreprocessingInfo::before) {
-      SgPragmaDeclaration *last_before = NULL;
-      if (stmt_last_before_pragma_dict.count(stmt)) {
-        last_before = stmt_last_before_pragma_dict[stmt];
+      SgStatement *before_key = stmt;
+      SgStatement *before_anchor = NULL;
+      SgBasicBlock *body = findInnermostFortranDirectiveInsertionBody(
+          sageFilePtr, pinfo->getFileId(), search_filename,
+          pinfo->getLineNumber(), pinfo->getColumnNumber());
+      if (body == NULL) {
+        body = getFortranDirectiveInsertionBody(stmt);
       }
-      if (isSgBasicBlock(stmt)) {
+      if (body != NULL) {
+        before_anchor = findFirstFortranBodyStatementAtOrAfter(body, pinfo);
+        if (before_anchor != NULL) {
+          before_key = before_anchor;
+        }
+      }
+
+      SgPragmaDeclaration *last_before = NULL;
+      if (stmt_last_before_pragma_dict.count(before_key)) {
+        last_before = stmt_last_before_pragma_dict[before_key];
+      }
+      if (before_anchor != NULL) {
+        if (last_before) {
+          insertStatementAfter(last_before, p_decl, false);
+        } else {
+          insertStatementBefore(before_anchor, p_decl, false);
+        }
+      } else if (isSgBasicBlock(stmt)) {
         if (last_before) {
           insertStatementAfter(last_before, p_decl, false);
         } else {
@@ -6584,17 +8322,60 @@ void convert_Fortran_ACC_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
       } else {
         insertStatementBefore(stmt, p_decl, false);
       }
-      stmt_last_before_pragma_dict[stmt] = p_decl;
+      stmt_last_before_pragma_dict[before_key] = p_decl;
     } else if (position == PreprocessingInfo::inside) {
-      SgScopeStatement *scope = isSgScopeStatement(stmt);
-      ROSE_ASSERT(scope != NULL);
-      appendStatement(p_decl, scope);
-    } else if (position == PreprocessingInfo::after) {
-      SgStatement *last = stmt;
-      if (stmt_last_pragma_dict.count(stmt)) {
-        last = stmt_last_pragma_dict[stmt];
+      SgBasicBlock *body = findInnermostFortranDirectiveInsertionBody(
+          sageFilePtr, pinfo->getFileId(), search_filename,
+          pinfo->getLineNumber(), pinfo->getColumnNumber());
+      if (body == NULL) {
+        body = getFortranDirectiveInsertionBody(stmt);
       }
-      if (isSgFunctionDefinition(stmt->get_parent())) {
+      if (body != NULL) {
+        if (accparser_OpenACCIR->getKind() == ACCD_end) {
+          SgStatement *anchor =
+              findLastFortranBodyStatementAtOrBefore(body, pinfo);
+          if (anchor != NULL) {
+            insertStatementAfter(anchor, p_decl, false);
+          } else {
+            appendStatement(p_decl, body);
+          }
+        } else {
+          SgStatement *anchor =
+              findFirstFortranBodyStatementAtOrAfter(body, pinfo);
+          if (anchor != NULL) {
+            insertStatementBefore(anchor, p_decl, false);
+          } else {
+            appendStatement(p_decl, body);
+          }
+        }
+      } else {
+        SgScopeStatement *scope = isSgScopeStatement(stmt);
+        ROSE_ASSERT(scope != NULL);
+        appendStatement(p_decl, scope);
+      }
+    } else if (position == PreprocessingInfo::after) {
+      SgStatement *after_key = stmt;
+      SgStatement *after_anchor = NULL;
+      SgBasicBlock *body = findInnermostFortranDirectiveInsertionBody(
+          sageFilePtr, pinfo->getFileId(), search_filename,
+          pinfo->getLineNumber(), pinfo->getColumnNumber());
+      if (body == NULL) {
+        body = getFortranDirectiveInsertionBody(stmt);
+      }
+      if (body != NULL) {
+        after_anchor = findLastFortranBodyStatementAtOrBefore(body, pinfo);
+        if (after_anchor != NULL) {
+          after_key = after_anchor;
+        }
+      }
+
+      SgStatement *last = after_key;
+      if (stmt_last_pragma_dict.count(after_key)) {
+        last = stmt_last_pragma_dict[after_key];
+      }
+      if (after_anchor != NULL) {
+        insertStatementAfter(last, p_decl, false);
+      } else if (isSgFunctionDefinition(stmt->get_parent())) {
         SgFunctionDefinition *def = isSgFunctionDefinition(stmt->get_parent());
         ROSE_ASSERT(def != NULL);
         SgBasicBlock *body = def->get_body();
@@ -6603,7 +8384,7 @@ void convert_Fortran_ACC_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
       } else {
         insertStatementAfter(last, p_decl, false);
       }
-      stmt_last_pragma_dict[stmt] = p_decl;
+      stmt_last_pragma_dict[after_key] = p_decl;
     } else {
       cerr << "ompAstConstruction.cpp , illegal "
               "PreprocessingInfo::RelativePositionType:"
@@ -6638,6 +8419,33 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
       return;
     }
     file->set_openmp_processed(true);
+  };
+
+  auto report_openmp_parse_failure =
+      [&](SgPragmaDeclaration *pragma_decl,
+          const std::string &directive_text) -> void {
+    if (pragma_decl != nullptr) {
+      if (Sg_File_Info *info = pragma_decl->get_startOfConstruct()) {
+        std::cerr << "Error: failed to parse OpenMP directive at "
+                  << info->get_filenameString() << ":" << info->get_line()
+                  << ": " << directive_text << std::endl;
+      } else {
+        std::cerr << "Error: failed to parse OpenMP directive: "
+                  << directive_text << std::endl;
+      }
+    }
+
+    const int openmp_parse_error = 100;
+    sageFilePtr->set_frontendErrorCode(
+        std::max(sageFilePtr->get_frontendErrorCode(), openmp_parse_error));
+    if (SgProject *project = sageFilePtr->get_project()) {
+      project->set_frontendErrorCode(
+          std::max(project->get_frontendErrorCode(), openmp_parse_error));
+    }
+
+    ompparser_OpenMPIR = nullptr;
+    setLang(Lang_unknown);
+    mark_processed(sageFilePtr);
   };
 
   if (SgProject::get_verbose() > 1) {
@@ -6745,7 +8553,10 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
           ompparser_OpenMPIR =
               parseOpenMP(pragmaString.c_str(), nullptr, nullptr);
         }
-        assert(ompparser_OpenMPIR != NULL);
+        if (ompparser_OpenMPIR == NULL) {
+          report_openmp_parse_failure(pragmaDeclaration, pragmaString);
+          return;
+        }
         if (isOpenMPDirectiveEndMarkerOnly(ompparser_OpenMPIR)) {
           OpenMPEndDirective *end_wrapper =
               static_cast<OpenMPEndDirective *>(ompparser_OpenMPIR);
@@ -6930,6 +8741,7 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
 
   switch (directive_kind) {
   case OMPD_metadirective:
+  case OMPD_begin_metadirective:
   case OMPD_teams:
   case OMPD_atomic:
   case OMPD_do:
@@ -6943,12 +8755,16 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   case OMPD_target_enter_data:
   case OMPD_target_exit_data:
   case OMPD_target_parallel_for:
+  case OMPD_target_parallel_do:
   case OMPD_target_parallel:
   case OMPD_distribute_simd:
   case OMPD_distribute_parallel_for:
+  case OMPD_distribute_parallel_do:
   case OMPD_distribute_parallel_for_simd:
+  case OMPD_distribute_parallel_do_simd:
   case OMPD_taskloop_simd:
   case OMPD_target_parallel_for_simd:
+  case OMPD_target_parallel_do_simd:
   case OMPD_target_parallel_loop:
   case OMPD_target_simd:
   case OMPD_target_teams:
@@ -6956,14 +8772,18 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   case OMPD_target_teams_distribute_simd:
   case OMPD_target_teams_loop:
   case OMPD_target_teams_distribute_parallel_for:
+  case OMPD_target_teams_distribute_parallel_do:
   case OMPD_target_teams_distribute_parallel_for_simd:
+  case OMPD_target_teams_distribute_parallel_do_simd:
   case OMPD_master_taskloop_simd:
   case OMPD_parallel_master_taskloop:
   case OMPD_parallel_master_taskloop_simd:
   case OMPD_teams_distribute:
   case OMPD_teams_distribute_simd:
   case OMPD_teams_distribute_parallel_for:
+  case OMPD_teams_distribute_parallel_do:
   case OMPD_teams_distribute_parallel_for_simd:
+  case OMPD_teams_distribute_parallel_do_simd:
   case OMPD_teams_loop:
   case OMPD_parallel_master:
   case OMPD_master_taskloop:
@@ -7009,6 +8829,7 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     }
   }
   case OMPD_parallel_do:
+  case OMPD_parallel_do_simd:
   case OMPD_parallel_for:
   case OMPD_parallel_for_simd:
   case OMPD_parallel_sections:
@@ -7138,6 +8959,13 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
         source_file->get_Fortran_only() || source_file->get_F77_only() ||
         source_file->get_F90_only() || source_file->get_F95_only() ||
         source_file->get_F2003_only();
+  }
+  if (is_fortran_file &&
+      (pdecl->getAttribute(kOmpFortranJoinFirstClauseAttrName) != NULL ||
+       fortranDirectiveJoinsFirstContinuationWithoutSpace(pdecl)) &&
+      result->getAttribute(kOmpFortranJoinFirstClauseAttrName) == NULL) {
+    result->addNewAttribute(kOmpFortranJoinFirstClauseAttrName,
+                            new OmpOwnedIntAttribute(1));
   }
 
   if (isSgGlobal(scope) != NULL && isSgDeclarationStatement(result) == NULL) {
@@ -7697,12 +9525,22 @@ convertBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     result = new SgOmpSectionStatement(NULL, body);
     break;
   }
-  case OMPD_metadirective: {
+  case OMPD_metadirective:
+  case OMPD_begin_metadirective: {
     result = new SgOmpMetadirectiveStatement(NULL, body);
+    if (directive_kind == OMPD_begin_metadirective) {
+      result->addNewAttribute(kOmpBeginMetadirectiveAttrName,
+                              new OmpOwnedIntAttribute(1));
+    }
     break;
   }
   case OMPD_target_parallel_for: {
     result = new SgOmpTargetParallelForStatement(NULL, body);
+    break;
+  }
+  case OMPD_target_parallel_do: {
+    result = new SgOmpTargetParallelForStatement(NULL, body);
+    markFortranDoDirectiveSpelling(result);
     break;
   }
   case OMPD_target_parallel: {
@@ -7717,8 +9555,18 @@ convertBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     result = new SgOmpDistributeParallelForStatement(NULL, body);
     break;
   }
+  case OMPD_distribute_parallel_do: {
+    result = new SgOmpDistributeParallelForStatement(NULL, body);
+    markFortranDoDirectiveSpelling(result);
+    break;
+  }
   case OMPD_distribute_parallel_for_simd: {
     result = new SgOmpDistributeParallelForSimdStatement(NULL, body);
+    break;
+  }
+  case OMPD_distribute_parallel_do_simd: {
+    result = new SgOmpDistributeParallelForSimdStatement(NULL, body);
+    markFortranDoDirectiveSpelling(result);
     break;
   }
   case OMPD_taskloop_simd: {
@@ -7727,6 +9575,11 @@ convertBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   }
   case OMPD_target_parallel_for_simd: {
     result = new SgOmpTargetParallelForSimdStatement(NULL, body);
+    break;
+  }
+  case OMPD_target_parallel_do_simd: {
+    result = new SgOmpTargetParallelForSimdStatement(NULL, body);
+    markFortranDoDirectiveSpelling(result);
     break;
   }
   case OMPD_target_parallel_loop: {
@@ -7757,8 +9610,18 @@ convertBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     result = new SgOmpTargetTeamsDistributeParallelForStatement(NULL, body);
     break;
   }
+  case OMPD_target_teams_distribute_parallel_do: {
+    result = new SgOmpTargetTeamsDistributeParallelForStatement(NULL, body);
+    markFortranDoDirectiveSpelling(result);
+    break;
+  }
   case OMPD_target_teams_distribute_parallel_for_simd: {
     result = new SgOmpTargetTeamsDistributeParallelForSimdStatement(NULL, body);
+    break;
+  }
+  case OMPD_target_teams_distribute_parallel_do_simd: {
+    result = new SgOmpTargetTeamsDistributeParallelForSimdStatement(NULL, body);
+    markFortranDoDirectiveSpelling(result);
     break;
   }
   case OMPD_master_taskloop_simd: {
@@ -7790,8 +9653,18 @@ convertBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     result = new SgOmpTeamsDistributeParallelForStatement(NULL, body);
     break;
   }
+  case OMPD_teams_distribute_parallel_do: {
+    result = new SgOmpTeamsDistributeParallelForStatement(NULL, body);
+    markFortranDoDirectiveSpelling(result);
+    break;
+  }
   case OMPD_teams_distribute_parallel_for_simd: {
     result = new SgOmpTeamsDistributeParallelForSimdStatement(NULL, body);
+    break;
+  }
+  case OMPD_teams_distribute_parallel_do_simd: {
+    result = new SgOmpTeamsDistributeParallelForSimdStatement(NULL, body);
+    markFortranDoDirectiveSpelling(result);
     break;
   }
   case OMPD_teams_loop: {
@@ -8895,7 +10768,7 @@ convertVariantBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     second_stmt->set_parent(result);
     result->addNewAttribute(
         kOmpCombinedParallelNestedVariantAttrName,
-        new AstIntAttribute(static_cast<int>(second_stmt->variantT())));
+        new OmpOwnedIntAttribute(static_cast<int>(second_stmt->variantT())));
     break;
   }
   case OMPD_parallel_for: {
@@ -8904,7 +10777,7 @@ convertVariantBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     second_stmt->set_parent(result);
     result->addNewAttribute(
         kOmpCombinedParallelNestedVariantAttrName,
-        new AstIntAttribute(static_cast<int>(second_stmt->variantT())));
+        new OmpOwnedIntAttribute(static_cast<int>(second_stmt->variantT())));
     break;
   }
   case OMPD_parallel_for_simd: {
@@ -8913,7 +10786,17 @@ convertVariantBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     second_stmt->set_parent(result);
     result->addNewAttribute(
         kOmpCombinedParallelNestedVariantAttrName,
-        new AstIntAttribute(static_cast<int>(second_stmt->variantT())));
+        new OmpOwnedIntAttribute(static_cast<int>(second_stmt->variantT())));
+    break;
+  }
+  case OMPD_parallel_do_simd: {
+    SgStatement *second_stmt = new SgOmpForSimdStatement(NULL, NULL);
+    markFortranDoDirectiveSpelling(second_stmt);
+    result = new SgOmpParallelStatement(NULL, second_stmt);
+    second_stmt->set_parent(result);
+    result->addNewAttribute(
+        kOmpCombinedParallelNestedVariantAttrName,
+        new OmpOwnedIntAttribute(static_cast<int>(second_stmt->variantT())));
     break;
   }
   case OMPD_parallel_sections: {
@@ -8922,7 +10805,7 @@ convertVariantBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     second_stmt->set_parent(result);
     result->addNewAttribute(
         kOmpCombinedParallelNestedVariantAttrName,
-        new AstIntAttribute(static_cast<int>(second_stmt->variantT())));
+        new OmpOwnedIntAttribute(static_cast<int>(second_stmt->variantT())));
     break;
   }
   case OMPD_parallel_workshare: {
@@ -8931,7 +10814,7 @@ convertVariantBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     second_stmt->set_parent(result);
     result->addNewAttribute(
         kOmpCombinedParallelNestedVariantAttrName,
-        new AstIntAttribute(static_cast<int>(second_stmt->variantT())));
+        new OmpOwnedIntAttribute(static_cast<int>(second_stmt->variantT())));
     break;
   }
   case OMPD_simd: {
@@ -8960,7 +10843,7 @@ convertVariantBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     break;
   }
   case OMPD_nothing: {
-    result = new SgOmpMasterStatement(NULL, NULL);
+    result = new SgOmpBarrierStatement();
     setDirectiveSpellingOverride(result, "nothing");
     break;
   }
@@ -9022,12 +10905,22 @@ convertVariantBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     result = new SgOmpDepobjStatement(NULL, NULL, SgName(name));
     break;
   }
-  case OMPD_metadirective: {
+  case OMPD_metadirective:
+  case OMPD_begin_metadirective: {
     result = new SgOmpMetadirectiveStatement(NULL, NULL);
+    if (directive_kind == OMPD_begin_metadirective) {
+      result->addNewAttribute(kOmpBeginMetadirectiveAttrName,
+                              new OmpOwnedIntAttribute(1));
+    }
     break;
   }
   case OMPD_target_parallel_for: {
     result = new SgOmpTargetParallelForStatement(NULL, NULL);
+    break;
+  }
+  case OMPD_target_parallel_do: {
+    result = new SgOmpTargetParallelForStatement(NULL, NULL);
+    markFortranDoDirectiveSpelling(result);
     break;
   }
   case OMPD_target_parallel: {
@@ -9042,8 +10935,18 @@ convertVariantBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     result = new SgOmpDistributeParallelForStatement(NULL, NULL);
     break;
   }
+  case OMPD_distribute_parallel_do: {
+    result = new SgOmpDistributeParallelForStatement(NULL, NULL);
+    markFortranDoDirectiveSpelling(result);
+    break;
+  }
   case OMPD_distribute_parallel_for_simd: {
     result = new SgOmpDistributeParallelForSimdStatement(NULL, NULL);
+    break;
+  }
+  case OMPD_distribute_parallel_do_simd: {
+    result = new SgOmpDistributeParallelForSimdStatement(NULL, NULL);
+    markFortranDoDirectiveSpelling(result);
     break;
   }
   case OMPD_taskloop_simd: {
@@ -9052,6 +10955,11 @@ convertVariantBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   }
   case OMPD_target_parallel_for_simd: {
     result = new SgOmpTargetParallelForSimdStatement(NULL, NULL);
+    break;
+  }
+  case OMPD_target_parallel_do_simd: {
+    result = new SgOmpTargetParallelForSimdStatement(NULL, NULL);
+    markFortranDoDirectiveSpelling(result);
     break;
   }
   case OMPD_target_parallel_loop: {
@@ -9082,8 +10990,18 @@ convertVariantBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     result = new SgOmpTargetTeamsDistributeParallelForStatement(NULL, NULL);
     break;
   }
+  case OMPD_target_teams_distribute_parallel_do: {
+    result = new SgOmpTargetTeamsDistributeParallelForStatement(NULL, NULL);
+    markFortranDoDirectiveSpelling(result);
+    break;
+  }
   case OMPD_target_teams_distribute_parallel_for_simd: {
     result = new SgOmpTargetTeamsDistributeParallelForSimdStatement(NULL, NULL);
+    break;
+  }
+  case OMPD_target_teams_distribute_parallel_do_simd: {
+    result = new SgOmpTargetTeamsDistributeParallelForSimdStatement(NULL, NULL);
+    markFortranDoDirectiveSpelling(result);
     break;
   }
   case OMPD_master_taskloop_simd: {
@@ -9115,8 +11033,18 @@ convertVariantBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     result = new SgOmpTeamsDistributeParallelForStatement(NULL, NULL);
     break;
   }
+  case OMPD_teams_distribute_parallel_do: {
+    result = new SgOmpTeamsDistributeParallelForStatement(NULL, NULL);
+    markFortranDoDirectiveSpelling(result);
+    break;
+  }
   case OMPD_teams_distribute_parallel_for_simd: {
     result = new SgOmpTeamsDistributeParallelForSimdStatement(NULL, NULL);
+    break;
+  }
+  case OMPD_teams_distribute_parallel_do_simd: {
+    result = new SgOmpTeamsDistributeParallelForSimdStatement(NULL, NULL);
+    markFortranDoDirectiveSpelling(result);
     break;
   }
   case OMPD_teams_loop: {
@@ -9303,7 +11231,12 @@ getOpenMPBlockBody(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
         source_file->get_F90_only() || source_file->get_F95_only() ||
         source_file->get_F2003_only();
   }
-  result = getNextStatement(current_OpenMPIR_to_SageIII.first);
+  if (current_is_fortran) {
+    result =
+        getNextStatementInSameBasicBlock(current_OpenMPIR_to_SageIII.first);
+  } else {
+    result = getNextStatement(current_OpenMPIR_to_SageIII.first);
+  }
   while (SgPragmaDeclaration *next_pragma = isSgPragmaDeclaration(result)) {
     auto mapped = fortran_paired_pragma_dict.find(next_pragma);
     if (mapped != fortran_paired_pragma_dict.end() && mapped->second != NULL &&
@@ -9665,7 +11598,7 @@ buildVariantClauseCommonData(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                                      current_omp_clause);
 
   const std::string user_condition_string =
-      variant_clause->getUserCondition()->expression;
+      trimWhitespaceCopy(variant_clause->getUserCondition()->expression);
   if (!user_condition_string.empty()) {
     data.user_condition = parseClauseExpressionWithCache(
         current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
@@ -9673,7 +11606,7 @@ buildVariantClauseCommonData(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   }
 
   const std::string user_condition_score_string =
-      variant_clause->getUserCondition()->score;
+      trimWhitespaceCopy(variant_clause->getUserCondition()->score);
   if (!user_condition_score_string.empty()) {
     data.user_condition_score = parseClauseExpressionWithCache(
         current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
@@ -9681,7 +11614,7 @@ buildVariantClauseCommonData(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   }
 
   const std::string device_arch_string =
-      variant_clause->getArchExpression()->expression;
+      trimWhitespaceCopy(variant_clause->getArchExpression()->expression);
   if (!device_arch_string.empty()) {
     data.device_arch = parseClauseExpressionWithCache(
         current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
@@ -9689,7 +11622,7 @@ buildVariantClauseCommonData(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   }
 
   const std::string device_isa_string =
-      variant_clause->getIsaExpression()->expression;
+      trimWhitespaceCopy(variant_clause->getIsaExpression()->expression);
   if (!device_isa_string.empty()) {
     data.device_isa = parseClauseExpressionWithCache(
         current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
@@ -9697,7 +11630,7 @@ buildVariantClauseCommonData(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   }
 
   const std::string device_num_string =
-      variant_clause->getDeviceNumExpression()->expression;
+      trimWhitespaceCopy(variant_clause->getDeviceNumExpression()->expression);
   if (!device_num_string.empty()) {
     data.device_num = parseClauseExpressionWithCache(
         current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
@@ -9771,8 +11704,8 @@ buildVariantClauseCommonData(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     break;
   }
 
-  const std::string implementation_user_defined_string =
-      variant_clause->getImplementationExpression()->expression;
+  const std::string implementation_user_defined_string = trimWhitespaceCopy(
+      variant_clause->getImplementationExpression()->expression);
   if (!implementation_user_defined_string.empty()) {
     data.implementation_user_defined = parseClauseExpressionWithCache(
         current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
@@ -9780,7 +11713,7 @@ buildVariantClauseCommonData(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   }
 
   const std::string implementation_extension_string =
-      variant_clause->getExtensionExpression()->expression;
+      trimWhitespaceCopy(variant_clause->getExtensionExpression()->expression);
   if (!implementation_extension_string.empty()) {
     data.implementation_extension = parseClauseExpressionWithCache(
         current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
@@ -11496,6 +13429,11 @@ SgOmpParallelStatement *convertOmpParallelStatementFromCombinedDirectives(
     second_stmt = new SgOmpForSimdStatement(NULL, body);
     break;
   }
+  case OMPD_parallel_do_simd: {
+    second_stmt = new SgOmpForSimdStatement(NULL, body);
+    markFortranDoDirectiveSpelling(second_stmt);
+    break;
+  }
   case OMPD_parallel_sections: {
     second_stmt = new SgOmpSectionsStatement(NULL, body);
     break;
@@ -11671,6 +13609,8 @@ bool checkOpenMPIR(OpenMPDirective *directive) {
   case OMPD_depobj:
   case OMPD_dispatch:
   case OMPD_distribute:
+  case OMPD_distribute_parallel_do:
+  case OMPD_distribute_parallel_do_simd:
   case OMPD_do:
   case OMPD_flush:
   case OMPD_allocate:
@@ -11679,6 +13619,7 @@ bool checkOpenMPIR(OpenMPDirective *directive) {
   case OMPD_loop:
   case OMPD_master:
   case OMPD_metadirective:
+  case OMPD_begin_metadirective:
   case OMPD_masked:
   case OMPD_masked_taskloop:
   case OMPD_masked_taskloop_simd:
@@ -11686,6 +13627,7 @@ bool checkOpenMPIR(OpenMPDirective *directive) {
   case OMPD_ordered:
   case OMPD_parallel:
   case OMPD_parallel_do:
+  case OMPD_parallel_do_simd:
   case OMPD_parallel_for:
   case OMPD_parallel_for_simd:
   case OMPD_parallel_sections:
@@ -11700,6 +13642,7 @@ bool checkOpenMPIR(OpenMPDirective *directive) {
   case OMPD_target_enter_data:
   case OMPD_target_exit_data:
   case OMPD_target_parallel_for:
+  case OMPD_target_parallel_do:
   case OMPD_target_parallel:
   case OMPD_distribute_simd:
   case OMPD_distribute_parallel_for:
@@ -11708,6 +13651,7 @@ bool checkOpenMPIR(OpenMPDirective *directive) {
   case OMPD_target_update:
   case OMPD_requires:
   case OMPD_target_parallel_for_simd:
+  case OMPD_target_parallel_do_simd:
   case OMPD_target_parallel_loop:
   case OMPD_target_simd:
   case OMPD_target_teams:
@@ -11715,14 +13659,18 @@ bool checkOpenMPIR(OpenMPDirective *directive) {
   case OMPD_target_teams_distribute_simd:
   case OMPD_target_teams_loop:
   case OMPD_target_teams_distribute_parallel_for:
+  case OMPD_target_teams_distribute_parallel_do:
   case OMPD_target_teams_distribute_parallel_for_simd:
+  case OMPD_target_teams_distribute_parallel_do_simd:
   case OMPD_master_taskloop_simd:
   case OMPD_parallel_master_taskloop:
   case OMPD_parallel_master_taskloop_simd:
   case OMPD_teams_distribute:
   case OMPD_teams_distribute_simd:
   case OMPD_teams_distribute_parallel_for:
+  case OMPD_teams_distribute_parallel_do:
   case OMPD_teams_distribute_parallel_for_simd:
+  case OMPD_teams_distribute_parallel_do_simd:
   case OMPD_teams_loop:
   case OMPD_parallel_master:
   case OMPD_master_taskloop:

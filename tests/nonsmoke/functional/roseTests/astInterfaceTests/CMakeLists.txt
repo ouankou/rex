@@ -110,6 +110,8 @@ install(TARGETS ${bin_programs} DESTINATION bin)
 
 # Common test flags
 set(TEST_CXXFLAGS -rose:verbose 0 -g3)
+set(_ast_interface_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
+file(MAKE_DIRECTORY ${_ast_interface_output_dir})
 set(_ast_interface_fortran_output_dir
   ${CMAKE_CURRENT_BINARY_DIR}/test-output/fortran)
 file(MAKE_DIRECTORY ${_ast_interface_fortran_output_dir})
@@ -397,3 +399,10 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unitTests/CMakeLists.txt)
   add_subdirectory(unitTests)
 endif()
 
+get_property(_ast_interface_registered_tests DIRECTORY PROPERTY TESTS)
+foreach(_test IN LISTS _ast_interface_registered_tests)
+  if(_test MATCHES "^astInterface_")
+    set_property(TEST ${_test} APPEND PROPERTY ENVIRONMENT
+                 "ROSE_TEST_OUTPUT_DIR=${_ast_interface_output_dir}")
+  endif()
+endforeach()

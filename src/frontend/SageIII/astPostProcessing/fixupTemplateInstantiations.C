@@ -6,6 +6,629 @@
 #include "sage3basic.h"
 
 namespace {
+class MemoryPoolTraversalFilterGuard {
+public:
+  explicit MemoryPoolTraversalFilterGuard(
+      Rose::MemoryPoolTraversalFilter next_filter)
+      : previous_filter_(Rose::getMemoryPoolTraversalFilter()) {
+    Rose::setMemoryPoolTraversalFilter(next_filter);
+  }
+
+  ~MemoryPoolTraversalFilterGuard() {
+    Rose::setMemoryPoolTraversalFilter(previous_filter_);
+  }
+
+private:
+  Rose::MemoryPoolTraversalFilter previous_filter_;
+};
+
+template <typename InstantiationDeclT, typename TemplateDeclT>
+void recoverTemplateDeclarationLink(InstantiationDeclT *decl) {
+  if (decl == nullptr || decl->get_templateDeclaration() != nullptr) {
+    return;
+  }
+
+  if (InstantiationDeclT *first_nondef = dynamic_cast<InstantiationDeclT *>(
+          decl->get_firstNondefiningDeclaration())) {
+    if (first_nondef->get_templateDeclaration() != nullptr) {
+      decl->set_templateDeclaration(first_nondef->get_templateDeclaration());
+      return;
+    }
+  }
+
+  if (InstantiationDeclT *defining_decl =
+          dynamic_cast<InstantiationDeclT *>(decl->get_definingDeclaration())) {
+    if (defining_decl->get_templateDeclaration() != nullptr) {
+      decl->set_templateDeclaration(defining_decl->get_templateDeclaration());
+      return;
+    }
+  }
+
+  if (TemplateDeclT *specialized_template = dynamic_cast<TemplateDeclT *>(
+          decl->get_specializedTemplateDeclaration())) {
+    decl->set_templateDeclaration(specialized_template);
+  }
+}
+
+SgScopeStatement *selectTemplateLookupScope(SgDeclarationStatement *decl) {
+  if (decl == nullptr) {
+    return nullptr;
+  }
+
+  SgScopeStatement *lookup_scope = isSgScopeStatement(decl->get_parent());
+  if (lookup_scope == nullptr) {
+    lookup_scope = decl->get_scope();
+  }
+  if (lookup_scope == nullptr) {
+    lookup_scope = SageBuilder::topScopeStack();
+  }
+  if (lookup_scope == nullptr) {
+    lookup_scope = SageInterface::getGlobalScope(decl);
+  }
+
+  return lookup_scope;
+}
+
+SgScopeStatement *selectMemberInstantiationScope(
+    SgTemplateInstantiationMemberFunctionDecl *decl) {
+  if (decl == nullptr) {
+    return nullptr;
+  }
+
+  if (SgScopeStatement *class_scope = decl->get_class_scope()) {
+    return class_scope;
+  }
+
+  return selectTemplateLookupScope(decl);
+}
+
+void suppressLocatedNodeOutput(SgLocatedNode *node) {
+  if (node == nullptr) {
+    return;
+  }
+
+  if (Sg_File_Info *fi = node->get_startOfConstruct()) {
+    fi->unsetOutputInCodeGeneration();
+  }
+  if (Sg_File_Info *fi = node->get_endOfConstruct()) {
+    fi->unsetOutputInCodeGeneration();
+  }
+}
+
+void hideSynthesizedFunctionDeclaration(SgFunctionDeclaration *decl) {
+  if (decl == nullptr) {
+    return;
+  }
+
+  markAsCompilerGenerated(decl);
+  suppressLocatedNodeOutput(decl);
+
+  if (SgFunctionParameterList *params = decl->get_parameterList()) {
+    suppressLocatedNodeOutput(params);
+    for (SgInitializedName *param : params->get_args()) {
+      suppressLocatedNodeOutput(param);
+    }
+  }
+
+  if (SgMemberFunctionDeclaration *member_decl =
+          isSgMemberFunctionDeclaration(decl)) {
+    suppressLocatedNodeOutput(member_decl->get_CtorInitializerList());
+  }
+}
+
+bool scopeContainsStatement(SgScopeStatement *scope, SgStatement *stmt) {
+  if (scope == nullptr || stmt == nullptr) {
+    return false;
+  }
+
+  SgStatementPtrList statements = scope->generateStatementList();
+  return std::find(statements.begin(), statements.end(), stmt) !=
+         statements.end();
+}
+
+void ensureStatementInScopeBeforeTarget(SgScopeStatement *scope,
+                                        SgStatement *stmt,
+                                        SgStatement *target) {
+  if (scope == nullptr || stmt == nullptr) {
+    return;
+  }
+
+  if (scopeContainsStatement(scope, stmt)) {
+    if (stmt->get_parent() != scope) {
+      stmt->set_parent(scope);
+    }
+    return;
+  }
+
+  if (target != nullptr && scopeContainsStatement(scope, target)) {
+    scope->insert_statement(target, stmt, true);
+    return;
+  }
+
+  scope->append_statement(stmt);
+}
+
+SgFunctionParameterList *cloneParameterList(SgFunctionDeclaration *decl) {
+  if (decl == nullptr || decl->get_parameterList() == nullptr) {
+    return SageBuilder::buildFunctionParameterList_nfi();
+  }
+
+  SgFunctionParameterList *copied = isSgFunctionParameterList(
+      SageInterface::deepCopy(decl->get_parameterList()));
+  return copied != nullptr ? copied
+                           : SageBuilder::buildFunctionParameterList_nfi();
+}
+
+bool haveEquivalentTemplateArguments(const SgTemplateArgumentPtrList &lhs,
+                                     const SgTemplateArgumentPtrList &rhs) {
+  return SageInterface::templateArgumentListEquivalence(lhs, rhs);
+}
+
+bool sameTemplateInstantiationMemberFunctionSignature(
+    SgTemplateInstantiationMemberFunctionDecl *lhs,
+    SgTemplateInstantiationMemberFunctionDecl *rhs) {
+  if (lhs == nullptr || rhs == nullptr) {
+    return false;
+  }
+
+  if (lhs->get_name() != rhs->get_name()) {
+    return false;
+  }
+
+  if (!SageInterface::isEquivalentType(lhs->get_type(), rhs->get_type())) {
+    return false;
+  }
+
+  return haveEquivalentTemplateArguments(lhs->get_templateArguments(),
+                                         rhs->get_templateArguments());
+}
+
+SgTemplateInstantiationMemberFunctionDecl *
+canonicalFirstNondefiningMemberInstantiation(
+    SgTemplateInstantiationMemberFunctionDecl *decl) {
+  if (decl == nullptr) {
+    return nullptr;
+  }
+
+  if (SgTemplateInstantiationMemberFunctionDecl *first_nondef =
+          isSgTemplateInstantiationMemberFunctionDecl(
+              decl->get_firstNondefiningDeclaration())) {
+    return first_nondef;
+  }
+
+  return decl;
+}
+
+SgTemplateInstantiationMemberFunctionDecl *
+findExistingFirstNondefiningMemberInstantiation(
+    SgTemplateInstantiationMemberFunctionDecl *inst) {
+  if (inst == nullptr) {
+    return nullptr;
+  }
+
+  auto pick_candidate =
+      [&](SgTemplateInstantiationMemberFunctionDecl *candidate)
+      -> SgTemplateInstantiationMemberFunctionDecl * {
+    if (candidate == nullptr || candidate == inst) {
+      return nullptr;
+    }
+    if (!sameTemplateInstantiationMemberFunctionSignature(candidate, inst)) {
+      return nullptr;
+    }
+    return canonicalFirstNondefiningMemberInstantiation(candidate);
+  };
+
+  if (SgMemberFunctionSymbol *symbol =
+          isSgMemberFunctionSymbol(inst->get_symbol_from_symbol_table())) {
+    if (SgTemplateInstantiationMemberFunctionDecl *candidate =
+            pick_candidate(isSgTemplateInstantiationMemberFunctionDecl(
+                symbol->get_declaration()))) {
+      return candidate;
+    }
+  }
+
+  SgScopeStatement *scope = selectMemberInstantiationScope(inst);
+  SgMemberFunctionType *member_type = isSgMemberFunctionType(inst->get_type());
+  if (scope != nullptr && member_type != nullptr) {
+    SgName lookup_name = inst->get_name();
+    SgTemplateArgumentPtrList &template_args = inst->get_templateArguments();
+    lookup_name =
+        SageBuilder::appendTemplateArgumentsToName(lookup_name, template_args);
+
+    if (SgMemberFunctionSymbol *symbol =
+            isSgMemberFunctionSymbol(scope->find_symbol_by_type_of_function<
+                                     SgTemplateInstantiationMemberFunctionDecl>(
+                lookup_name, member_type, nullptr, &template_args))) {
+      if (SgTemplateInstantiationMemberFunctionDecl *candidate =
+              pick_candidate(isSgTemplateInstantiationMemberFunctionDecl(
+                  symbol->get_declaration()))) {
+        return candidate;
+      }
+    }
+
+    for (SgStatement *stmt : scope->generateStatementList()) {
+      if (SgTemplateInstantiationMemberFunctionDecl *candidate = pick_candidate(
+              isSgTemplateInstantiationMemberFunctionDecl(stmt))) {
+        return candidate;
+      }
+    }
+  }
+
+  return nullptr;
+}
+
+void copyTemplateInstantiationMemberFunctionMetadata(
+    SgTemplateInstantiationMemberFunctionDecl *src,
+    SgTemplateInstantiationMemberFunctionDecl *dst) {
+  if (src == nullptr || dst == nullptr) {
+    return;
+  }
+
+  dst->set_templateDeclaration(src->get_templateDeclaration());
+  dst->set_specializedTemplateDeclaration(
+      src->get_specializedTemplateDeclaration());
+  dst->set_template_argument_list_is_explicit(
+      src->get_template_argument_list_is_explicit());
+  dst->set_specialization(src->get_specialization());
+  dst->set_nameResetFromMangledForm(src->get_nameResetFromMangledForm());
+  dst->set_templateName(src->get_templateName());
+
+  SgTemplateArgumentPtrList copied_template_args;
+  for (SgTemplateArgument *arg : src->get_templateArguments()) {
+    copied_template_args.push_back(
+        isSgTemplateArgument(SageInterface::deepCopy(arg)));
+  }
+  SageBuilder::setTemplateArgumentsInDeclaration(dst, &copied_template_args);
+
+  dst->get_deducedTemplateArguments().clear();
+  for (SgTemplateArgument *arg : src->get_deducedTemplateArguments()) {
+    dst->get_deducedTemplateArguments().push_back(
+        isSgTemplateArgument(SageInterface::deepCopy(arg)));
+  }
+}
+
+void ensureTemplateInstantiationMemberFunctionDeclarationChain(
+    SgTemplateInstantiationMemberFunctionDecl *inst) {
+  if (inst == nullptr || inst->get_definition() == nullptr ||
+      inst->get_definingDeclaration() != inst) {
+    return;
+  }
+
+  SgDeclarationStatement *first_nondef_decl =
+      inst->get_firstNondefiningDeclaration();
+  if (first_nondef_decl != nullptr && first_nondef_decl != inst &&
+      first_nondef_decl != inst->get_definingDeclaration()) {
+    return;
+  }
+
+  SgTemplateInstantiationMemberFunctionDecl *first_nondef =
+      findExistingFirstNondefiningMemberInstantiation(inst);
+
+  if (first_nondef == nullptr) {
+    SgScopeStatement *scope = selectMemberInstantiationScope(inst);
+    SgMemberFunctionType *member_type =
+        isSgMemberFunctionType(inst->get_type());
+    if (scope == nullptr || member_type == nullptr ||
+        member_type->get_return_type() == nullptr) {
+      return;
+    }
+
+    SgFunctionParameterList *param_list = cloneParameterList(inst);
+    SgTemplateArgumentPtrList template_args;
+    for (SgTemplateArgument *arg : inst->get_templateArguments()) {
+      template_args.push_back(
+          isSgTemplateArgument(SageInterface::deepCopy(arg)));
+    }
+
+    SgMemberFunctionDeclaration *synthesized_decl =
+        SageBuilder::buildNondefiningMemberFunctionDeclaration(
+            inst->get_name(), member_type->get_return_type(), param_list, scope,
+            member_type->get_mfunc_specifier(),
+            /*buildTemplateInstantiation=*/true, &template_args);
+
+    first_nondef = canonicalFirstNondefiningMemberInstantiation(
+        isSgTemplateInstantiationMemberFunctionDecl(synthesized_decl));
+    if (first_nondef == nullptr) {
+      return;
+    }
+
+    copyTemplateInstantiationMemberFunctionMetadata(inst, first_nondef);
+    first_nondef->setForward();
+    hideSynthesizedFunctionDeclaration(first_nondef);
+    ensureStatementInScopeBeforeTarget(scope, first_nondef, inst);
+  }
+
+  if (first_nondef == nullptr || first_nondef == inst) {
+    return;
+  }
+
+  if (first_nondef->get_firstNondefiningDeclaration() == nullptr) {
+    first_nondef->set_firstNondefiningDeclaration(first_nondef);
+  }
+  first_nondef->set_definingDeclaration(inst);
+  inst->set_firstNondefiningDeclaration(first_nondef);
+}
+
+void canonicalizeClassTypeToFirstNondefiningDeclaration(
+    SgClassDeclaration *decl) {
+  if (decl == nullptr) {
+    return;
+  }
+
+  SgClassDeclaration *first_nondef =
+      isSgClassDeclaration(decl->get_firstNondefiningDeclaration());
+  if (first_nondef == nullptr) {
+    first_nondef = decl;
+  }
+
+  SgClassDeclaration *defining_decl =
+      isSgClassDeclaration(first_nondef->get_definingDeclaration());
+  if (defining_decl == nullptr) {
+    defining_decl = isSgClassDeclaration(decl->get_definingDeclaration());
+  }
+
+  auto belongs_to_current_chain = [&](SgClassDeclaration *candidate) {
+    if (candidate == nullptr) {
+      return false;
+    }
+
+    if (candidate == decl || candidate == first_nondef ||
+        candidate == defining_decl) {
+      return true;
+    }
+
+    SgClassDeclaration *candidate_first =
+        isSgClassDeclaration(candidate->get_firstNondefiningDeclaration());
+    SgClassDeclaration *candidate_def =
+        isSgClassDeclaration(candidate->get_definingDeclaration());
+
+    return candidate_first == first_nondef || candidate_first == decl ||
+           candidate_def == defining_decl || candidate_def == decl;
+  };
+
+  auto type_belongs_to_current_chain = [&](SgClassType *candidate_type) {
+    if (candidate_type == nullptr) {
+      return false;
+    }
+
+    SgClassDeclaration *type_decl =
+        isSgClassDeclaration(candidate_type->get_declaration());
+    return type_decl == nullptr || belongs_to_current_chain(type_decl);
+  };
+
+  bool saw_foreign_class_type = false;
+  auto select_canonical_type = [&](SgClassDeclaration *candidate_decl) {
+    if (candidate_decl == nullptr) {
+      return static_cast<SgClassType *>(nullptr);
+    }
+
+    SgClassType *candidate_type = isSgClassType(candidate_decl->get_type());
+    if (type_belongs_to_current_chain(candidate_type)) {
+      return candidate_type;
+    }
+    if (candidate_type != nullptr) {
+      saw_foreign_class_type = true;
+    }
+
+    return static_cast<SgClassType *>(nullptr);
+  };
+
+  SgClassType *canonical_type = select_canonical_type(first_nondef);
+  if (canonical_type == nullptr) {
+    canonical_type = select_canonical_type(decl);
+  }
+  if (canonical_type == nullptr) {
+    canonical_type = select_canonical_type(defining_decl);
+  }
+  if (canonical_type == nullptr && saw_foreign_class_type &&
+      first_nondef->get_firstNondefiningDeclaration() != nullptr) {
+    canonical_type = SgClassType::createType(first_nondef);
+  }
+  if (canonical_type == nullptr) {
+    return;
+  }
+
+  auto attach_type = [&](SgClassDeclaration *candidate) {
+    if (candidate != nullptr && candidate->get_type() != canonical_type) {
+      candidate->set_type(canonical_type);
+    }
+  };
+
+  attach_type(first_nondef);
+  attach_type(defining_decl);
+  attach_type(decl);
+
+  if (type_belongs_to_current_chain(canonical_type) &&
+      canonical_type->get_declaration() != first_nondef) {
+    canonical_type->set_declaration(first_nondef);
+  }
+}
+
+class CanonicalizeClassTypesOnMemoryPool : public ROSE_VisitTraversal {
+public:
+  void visit(SgNode *node) override {
+    SgClassType *class_type = isSgClassType(node);
+    if (class_type == nullptr) {
+      return;
+    }
+
+    SgClassDeclaration *decl =
+        isSgClassDeclaration(class_type->get_declaration());
+    if (decl == nullptr) {
+      return;
+    }
+
+    SgClassDeclaration *first_nondef =
+        isSgClassDeclaration(decl->get_firstNondefiningDeclaration());
+    if (first_nondef == nullptr) {
+      first_nondef = decl;
+    }
+
+    canonicalizeClassTypeToFirstNondefiningDeclaration(decl);
+
+    if (class_type->get_declaration() != first_nondef) {
+      class_type->set_declaration(first_nondef);
+    }
+  }
+};
+
+void normalizeNamespaceTemplateDeclarationFlags(
+    SgTemplateClassDeclaration *decl);
+
+void ensureTemplateInstantiationDeclarationLink(
+    SgTemplateInstantiationDecl *inst) {
+  recoverTemplateDeclarationLink<SgTemplateInstantiationDecl,
+                                 SgTemplateClassDeclaration>(inst);
+
+  if (inst == nullptr || inst->get_templateDeclaration() != nullptr) {
+    return;
+  }
+
+  SgName template_name = inst->get_templateName();
+  if (template_name.getString().empty()) {
+    template_name = inst->get_name();
+  }
+  if (template_name.getString().empty()) {
+    return;
+  }
+
+  SgScopeStatement *lookup_scope = selectTemplateLookupScope(inst);
+  if (lookup_scope == nullptr) {
+    return;
+  }
+
+  SgTemplateClassSymbol *tmpl_sym = lookup_scope->lookup_template_class_symbol(
+      template_name, nullptr, nullptr);
+  if (tmpl_sym == nullptr) {
+    tmpl_sym = SageInterface::lookupTemplateClassSymbolInParentScopes(
+        template_name, nullptr, nullptr, lookup_scope);
+  }
+  if (tmpl_sym != nullptr) {
+    inst->set_templateDeclaration(
+        isSgTemplateClassDeclaration(tmpl_sym->get_declaration()));
+    return;
+  }
+
+  SgTemplateParameterPtrList empty_params;
+  SgTemplateArgumentPtrList empty_args;
+  SgTemplateClassDeclaration *stub =
+      SageBuilder::buildNondefiningTemplateClassDeclaration_nfi(
+          template_name, inst->get_class_type(), lookup_scope, &empty_params,
+          &empty_args);
+  if (stub == nullptr) {
+    return;
+  }
+
+  stub->setForward();
+  stub->set_firstNondefiningDeclaration(stub);
+  stub->set_definingDeclaration(nullptr);
+  if (isSgGlobal(lookup_scope) != nullptr ||
+      isSgNamespaceDefinitionStatement(lookup_scope) != nullptr) {
+    normalizeNamespaceTemplateDeclarationFlags(stub);
+  } else if (stub->get_file_info() != nullptr) {
+    stub->get_file_info()->setCompilerGenerated();
+    stub->get_file_info()->unsetOutputInCodeGeneration();
+  }
+  inst->set_templateDeclaration(stub);
+}
+
+void ensureTemplateInstantiationFunctionDeclarationLink(
+    SgTemplateInstantiationFunctionDecl *inst) {
+  recoverTemplateDeclarationLink<SgTemplateInstantiationFunctionDecl,
+                                 SgTemplateFunctionDeclaration>(inst);
+
+  if (inst == nullptr || inst->get_templateDeclaration() != nullptr) {
+    return;
+  }
+
+  SgFunctionType *function_type = isSgFunctionType(inst->get_type());
+  if (function_type == nullptr) {
+    return;
+  }
+
+  SgName template_name = inst->get_templateName();
+  if (template_name.getString().empty()) {
+    template_name = inst->get_name();
+  }
+  if (template_name.getString().empty()) {
+    return;
+  }
+
+  SgScopeStatement *lookup_scope = selectTemplateLookupScope(inst);
+  if (lookup_scope == nullptr) {
+    return;
+  }
+
+  SgTemplateParameterPtrList empty_params;
+  SgTemplateFunctionSymbol *tmpl_sym =
+      lookup_scope->lookup_template_function_symbol(
+          template_name, function_type, &empty_params);
+  if (tmpl_sym == nullptr) {
+    tmpl_sym = isSgTemplateFunctionSymbol(
+        SageInterface::lookupTemplateFunctionSymbolInParentScopes(
+            template_name, function_type, &empty_params, lookup_scope));
+  }
+  if (tmpl_sym != nullptr) {
+    inst->set_templateDeclaration(
+        isSgTemplateFunctionDeclaration(tmpl_sym->get_declaration()));
+  }
+}
+
+void ensureTemplateInstantiationMemberFunctionDeclarationLink(
+    SgTemplateInstantiationMemberFunctionDecl *inst) {
+  recoverTemplateDeclarationLink<SgTemplateInstantiationMemberFunctionDecl,
+                                 SgTemplateMemberFunctionDeclaration>(inst);
+
+  if (inst == nullptr || inst->get_templateDeclaration() != nullptr) {
+    return;
+  }
+
+  SgFunctionType *function_type = isSgFunctionType(inst->get_type());
+  if (function_type == nullptr) {
+    return;
+  }
+
+  SgName template_name = inst->get_templateName();
+  if (template_name.getString().empty()) {
+    template_name = inst->get_name();
+  }
+  if (template_name.getString().empty()) {
+    return;
+  }
+
+  SgScopeStatement *lookup_scope = selectTemplateLookupScope(inst);
+  if (lookup_scope == nullptr) {
+    return;
+  }
+
+  SgTemplateParameterPtrList empty_params;
+  SgTemplateMemberFunctionSymbol *tmpl_sym =
+      lookup_scope->lookup_template_member_function_symbol(
+          template_name, function_type, &empty_params);
+  if (tmpl_sym == nullptr) {
+    tmpl_sym = isSgTemplateMemberFunctionSymbol(
+        SageInterface::lookupTemplateMemberFunctionSymbolInParentScopes(
+            template_name, function_type, &empty_params, lookup_scope));
+  }
+  if (tmpl_sym != nullptr) {
+    inst->set_templateDeclaration(
+        isSgTemplateMemberFunctionDeclaration(tmpl_sym->get_declaration()));
+  }
+}
+
+class RepairTemplateInstantiationLinksOnMemoryPool
+    : public ROSE_VisitTraversal {
+public:
+  void visit(SgNode *node) override {
+    ensureTemplateInstantiationDeclarationLink(
+        isSgTemplateInstantiationDecl(node));
+    ensureTemplateInstantiationFunctionDeclarationLink(
+        isSgTemplateInstantiationFunctionDecl(node));
+    ensureTemplateInstantiationMemberFunctionDeclarationLink(
+        isSgTemplateInstantiationMemberFunctionDecl(node));
+  }
+};
+
 void normalizeNamespaceTemplateDeclarationFlags(
     SgTemplateClassDeclaration *decl) {
   auto normalize_one = [](SgTemplateClassDeclaration *candidate) {
@@ -51,6 +674,8 @@ void normalizeNamespaceTemplateDeclarationFlags(
 }
 } // namespace
 
+void repairTemplateInstantiationDeclLinksInMemoryPool();
+
 void fixupTemplateInstantiations(SgNode *node) {
   // DQ (7/7/2005): Introduce tracking of performance of ROSE.
   TimingPerformance timer("Fixup template specializations:");
@@ -61,67 +686,58 @@ void fixupTemplateInstantiations(SgNode *node) {
   // I think the default should be preorder so that the interfaces would be more
   // uniform
   declarationFixupTraversal.traverse(node, preorder);
+
+  repairTemplateInstantiationDeclLinksInMemoryPool();
+  canonicalizeClassTypesInMemoryPool();
+}
+
+void canonicalizeClassTypesInMemoryPool() {
+  // Canonicalize all class types, including stray memory-pool entries that are
+  // intentionally skipped by the general AST post-processing filter. These
+  // detached nodes still participate in AST consistency checks, so their
+  // declaration links must remain coherent.
+  MemoryPoolTraversalFilterGuard clear_filter(nullptr);
+  CanonicalizeClassTypesOnMemoryPool memory_pool_fixup;
+  SgClassType::traverseMemoryPoolNodes(memory_pool_fixup);
+}
+
+void repairTemplateInstantiationDeclLinksInMemoryPool() {
+  MemoryPoolTraversalFilterGuard clear_filter(nullptr);
+  RepairTemplateInstantiationLinksOnMemoryPool memory_pool_fixup;
+  SgTemplateInstantiationDecl::traverseMemoryPoolNodes(memory_pool_fixup);
+  SgTemplateInstantiationFunctionDecl::traverseMemoryPoolNodes(
+      memory_pool_fixup);
+  SgTemplateInstantiationMemberFunctionDecl::traverseMemoryPoolNodes(
+      memory_pool_fixup);
 }
 
 void FixupTemplateInstantiations::visit(SgNode *node) {
   ROSE_ASSERT(node != NULL);
 
+  if (SgClassDeclaration *class_decl = isSgClassDeclaration(node)) {
+    canonicalizeClassTypeToFirstNondefiningDeclaration(class_decl);
+  }
+  if (SgClassType *class_type = isSgClassType(node)) {
+    canonicalizeClassTypeToFirstNondefiningDeclaration(
+        isSgClassDeclaration(class_type->get_declaration()));
+  }
+
   // Ensure template instantiations reference a valid template declaration.
   if (SgTemplateInstantiationDecl *inst = isSgTemplateInstantiationDecl(node)) {
-    if (inst->get_templateDeclaration() == nullptr) {
-      SgName template_name = inst->get_templateName();
-      if (template_name.getString().empty()) {
-        template_name = inst->get_name();
-      }
-      if (!template_name.getString().empty()) {
-        SgScopeStatement *lookup_scope = isSgScopeStatement(inst->get_parent());
-        if (lookup_scope == nullptr) {
-          lookup_scope = inst->get_scope();
-        }
-        if (lookup_scope == nullptr) {
-          lookup_scope = SageBuilder::topScopeStack();
-        }
-        if (lookup_scope == nullptr) {
-          lookup_scope = SageInterface::getGlobalScope(node);
-        }
-
-        SgTemplateClassSymbol *tmpl_sym =
-            lookup_scope->lookup_template_class_symbol(template_name, nullptr,
-                                                       nullptr);
-        if (tmpl_sym == nullptr) {
-          tmpl_sym = SageInterface::lookupTemplateClassSymbolInParentScopes(
-              template_name, nullptr, nullptr, lookup_scope);
-        }
-        if (tmpl_sym != nullptr) {
-          inst->set_templateDeclaration(
-              isSgTemplateClassDeclaration(tmpl_sym->get_declaration()));
-        } else {
-          SgTemplateParameterPtrList empty_params;
-          SgTemplateArgumentPtrList empty_args;
-          SgTemplateClassDeclaration *stub =
-              SageBuilder::buildNondefiningTemplateClassDeclaration_nfi(
-                  template_name, inst->get_class_type(), lookup_scope,
-                  &empty_params, &empty_args);
-          if (stub != nullptr) {
-            stub->setForward();
-            stub->set_firstNondefiningDeclaration(stub);
-            stub->set_definingDeclaration(nullptr);
-            if (isSgGlobal(lookup_scope) != nullptr ||
-                isSgNamespaceDefinitionStatement(lookup_scope) != nullptr) {
-              normalizeNamespaceTemplateDeclarationFlags(stub);
-            } else if (stub->get_file_info() != nullptr) {
-              stub->get_file_info()->setCompilerGenerated();
-              stub->get_file_info()->unsetOutputInCodeGeneration();
-            }
-            inst->set_templateDeclaration(stub);
-          }
-        }
-      }
-    }
+    ensureTemplateInstantiationDeclarationLink(inst);
     if (SgTemplateClassDeclaration *template_decl =
             isSgTemplateClassDeclaration(inst->get_templateDeclaration())) {
       normalizeNamespaceTemplateDeclarationFlags(template_decl);
     }
+  }
+  if (SgTemplateInstantiationFunctionDecl *inst =
+          isSgTemplateInstantiationFunctionDecl(node)) {
+    ensureTemplateInstantiationFunctionDeclarationLink(inst);
+  }
+  if (SgTemplateInstantiationMemberFunctionDecl *inst =
+          isSgTemplateInstantiationMemberFunctionDecl(node)) {
+    ensureTemplateInstantiationMemberFunctionDeclarationChain(inst);
+    ensureTemplateInstantiationMemberFunctionDeclarationLink(inst);
   }
 
   // Take care of marking the whole subtree of any declarations

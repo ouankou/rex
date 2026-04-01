@@ -68,6 +68,59 @@ void fixupCanonicalDeclarationCopiesForSymbols(
   }
 }
 
+void mirrorNamespaceFragmentSymbolsToGlobalDefinition(
+    SgNamespaceDefinitionStatement *namespaceDefinition) {
+  ROSE_ASSERT(namespaceDefinition != NULL);
+
+  SgNamespaceDefinitionStatement *globalDefinition =
+      namespaceDefinition->get_global_definition();
+  if (globalDefinition == NULL || globalDefinition == namespaceDefinition) {
+    return;
+  }
+
+  SgSymbolTable *localTable = namespaceDefinition->get_symbol_table();
+  SgSymbolTable *globalTable = globalDefinition->get_symbol_table();
+  if (localTable == NULL || globalTable == NULL) {
+    return;
+  }
+
+  SgSymbolTable::BaseHashType *globalEntries = globalTable->get_table();
+  ROSE_ASSERT(globalEntries != NULL);
+
+  std::set<SgNode *> localSymbols = localTable->get_symbols();
+  for (SgNode *entry : localSymbols) {
+    SgSymbol *localSymbol = isSgSymbol(entry);
+    if (localSymbol == NULL || isSgAliasSymbol(localSymbol) != NULL) {
+      continue;
+    }
+
+    const SgName &name = localSymbol->get_name();
+    const SgNode *basis = localSymbol->get_symbol_basis();
+
+    bool alreadyMirrored = false;
+    std::pair<SgSymbolTable::BaseHashType::iterator,
+              SgSymbolTable::BaseHashType::iterator>
+        matches = globalEntries->equal_range(name);
+    for (SgSymbolTable::BaseHashType::iterator it = matches.first;
+         it != matches.second; ++it) {
+      SgSymbol *existingSymbol = it->second;
+      if (existingSymbol != NULL &&
+          existingSymbol->get_symbol_basis() == basis) {
+        alreadyMirrored = true;
+        break;
+      }
+    }
+
+    if (alreadyMirrored) {
+      continue;
+    }
+
+    SgAliasSymbol *aliasSymbol = new SgAliasSymbol(localSymbol);
+    globalTable->insert(aliasSymbol->get_name(), aliasSymbol);
+    aliasSymbol->set_parent(globalTable);
+  }
+}
+
 } // namespace
 
 void SgInitializedName::fixupCopy_symbols(SgNode *, SgCopyHelp &) const {
@@ -139,9 +192,12 @@ void SgScopeStatement::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
   SgScopeStatement *copyScopeStatement = isSgScopeStatement(copy);
   ROSE_ASSERT(copyScopeStatement != NULL);
 
-  // The symbol table should not have been setup yet!
-  // ROSE_ASSERT(copyScopeStatement->get_symbol_table()->size() == 0);
-  ROSE_ASSERT(copyScopeStatement->symbol_table_size() == 0);
+  // Canonical copied scopes can now be reached from multiple original edges
+  // (e.g., declaration links reusing an already-copied subtree). Once a copied
+  // scope's symbol table has been rebuilt, revisiting it should be a no-op.
+  if (copyScopeStatement->symbol_table_size() != 0) {
+    return;
+  }
 
   SageInterface::rebuildSymbolTable(copyScopeStatement);
 
@@ -775,6 +831,7 @@ void SgNamespaceDefinitionStatement::fixupCopy_symbols(SgNode *copy,
                                             namespaceDefinition_copy, help);
   // Call the base class fixupCopy member function
   SgScopeStatement::fixupCopy_symbols(copy, help);
+  mirrorNamespaceFragmentSymbolsToGlobalDefinition(namespaceDefinition_copy);
 }
 
 void SgTemplateInstantiationDirectiveStatement::fixupCopy_symbols(
@@ -844,11 +901,6 @@ void SgIfStmt::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
   ROSE_ASSERT(ifStmtCopyTruBody != NULL);
   SgScopeStatement *scopeStmntCopyTrueBody =
       isSgScopeStatement(ifStmtCopyTruBody);
-  if (scopeStmntCopyTrueBody != NULL) {
-    // ROSE_ASSERT(scopeStmntCopyTrueBody->get_symbol_table() != NULL);
-    // ROSE_ASSERT(scopeStmntCopyTrueBody->get_symbol_table()->size()  == 0);
-    ROSE_ASSERT(scopeStmntCopyTrueBody->symbol_table_size() == 0);
-  }
 
   // printf ("\nProcess the TRUE body of the SgIfStmt \n\n");
 
@@ -858,11 +910,6 @@ void SgIfStmt::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
               (ifStatement_copy->get_false_body() != NULL));
   SgScopeStatement *scopeStmntCopyFalseBody =
       isSgScopeStatement(ifStatement_copy->get_false_body());
-  if (scopeStmntCopyFalseBody != NULL) {
-    // ROSE_ASSERT(scopeStmntCopyFalseBody->get_symbol_table() != NULL);
-    // ROSE_ASSERT(scopeStmntCopyFalseBody->get_symbol_table()->size()  == 0);
-    ROSE_ASSERT(scopeStmntCopyFalseBody->symbol_table_size() == 0);
-  }
 
   // printf ("\nProcess the FALSE body of the SgIfStmt \n\n");
 

@@ -306,7 +306,7 @@ void Grammar::setUpSymbols() {
                                    "../Grammar/Symbol.code");
   AliasSymbol.setDataPrototype("SgSymbol*", "alias", "= NULL",
                                CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                               DEF_TRAVERSAL, NO_DELETE);
+                               NO_TRAVERSAL, NO_DELETE);
 
   // Note that the "use" statment can rename symbols referenced across scopes
   // and this is different from the renaming of symbols (constructs that have
@@ -334,7 +334,7 @@ void Grammar::setUpSymbols() {
                                     "../Grammar/Symbol.code");
   RenameSymbol.setDataPrototype("SgSymbol*", "original_symbol", "= NULL",
                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                                DEF_TRAVERSAL, NO_DELETE);
+                                NO_TRAVERSAL, NO_DELETE);
   RenameSymbol.setDataPrototype("SgName", "new_name", "= \"\"",
                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                 NO_TRAVERSAL, NO_DELETE);

@@ -23,6 +23,112 @@ namespace SageInterface {
 map<SgType *, string> type_string_map;
 map<string, SgType *> string_type_map;
 
+namespace {
+SgDeclarationStatement *canonicalDeclaration(SgDeclarationStatement *decl) {
+  if (decl == NULL) {
+    return NULL;
+  }
+
+  if (SgDeclarationStatement *first_nondef =
+          decl->get_firstNondefiningDeclaration()) {
+    return first_nondef;
+  }
+
+  return decl;
+}
+
+template <typename SymbolT>
+SgType *resolvedTypeFromSymbol(SymbolT *symbol, SgNonrealDecl *source_decl) {
+  if (symbol == NULL || source_decl == NULL) {
+    return NULL;
+  }
+
+  SgDeclarationStatement *resolved_decl = symbol->get_declaration();
+  if (resolved_decl == NULL || canonicalDeclaration(resolved_decl) ==
+                                   canonicalDeclaration(source_decl)) {
+    return NULL;
+  }
+
+  return resolved_decl->get_type();
+}
+
+SgType *resolveNonrealType(SgNonrealType *nonreal_type) {
+  if (nonreal_type == NULL) {
+    return NULL;
+  }
+
+  SgNonrealDecl *nonreal_decl =
+      isSgNonrealDecl(nonreal_type->get_declaration());
+  if (nonreal_decl == NULL) {
+    return NULL;
+  }
+
+  if (SgNonrealType *decl_type = nonreal_decl->get_type()) {
+    if (decl_type != nonreal_type) {
+      return decl_type;
+    }
+  }
+
+  SgScopeStatement *lookup_scope = nonreal_decl->get_scope();
+  if (lookup_scope == NULL) {
+    if (SgDeclarationScope *decl_scope =
+            isSgDeclarationScope(nonreal_decl->get_parent())) {
+      lookup_scope = SageInterface::getEnclosingScope(decl_scope);
+    } else {
+      lookup_scope = SageInterface::getEnclosingScope(nonreal_decl);
+    }
+  }
+
+  if (lookup_scope == NULL) {
+    return NULL;
+  }
+
+  const SgName &name = nonreal_decl->get_name();
+  if (SgEnumSymbol *enum_symbol =
+          SageInterface::lookupEnumSymbolInParentScopes(name, lookup_scope)) {
+    if (SgType *resolved = resolvedTypeFromSymbol(enum_symbol, nonreal_decl)) {
+      return resolved;
+    }
+  }
+
+  if (SgTypedefSymbol *typedef_symbol =
+          SageInterface::lookupTypedefSymbolInParentScopes(name,
+                                                           lookup_scope)) {
+    if (SgType *resolved =
+            resolvedTypeFromSymbol(typedef_symbol, nonreal_decl)) {
+      return resolved;
+    }
+  }
+
+  if (SgClassSymbol *class_symbol =
+          SageInterface::lookupClassSymbolInParentScopes(name, lookup_scope)) {
+    if (SgType *resolved = resolvedTypeFromSymbol(class_symbol, nonreal_decl)) {
+      return resolved;
+    }
+  }
+
+  if (SgTemplateClassSymbol *template_class_symbol =
+          SageInterface::lookupTemplateClassSymbolInParentScopes(
+              name, NULL, NULL, lookup_scope)) {
+    if (SgType *resolved =
+            resolvedTypeFromSymbol(template_class_symbol, nonreal_decl)) {
+      return resolved;
+    }
+  }
+
+  if (SgNonrealSymbol *nonreal_symbol =
+          SageInterface::lookupNonrealSymbolInParentScopes(name,
+                                                           lookup_scope)) {
+    if (SgType *resolved =
+            resolvedTypeFromSymbol(nonreal_symbol, nonreal_decl)) {
+      return resolved;
+    }
+  }
+
+  return NULL;
+}
+} // namespace
+
 // copied from TransformationSupport::getTypeName
 std::string getTypeName(SgType *type) {
   std::string typeName;
@@ -675,6 +781,13 @@ bool isDefaultConstructible(SgType *type) {
     return isDefaultConstructible(isSgTypedefType(type)->get_base_type());
     break;
 
+  case V_SgNonrealType: {
+    if (SgType *resolved = resolveNonrealType(isSgNonrealType(type))) {
+      return isDefaultConstructible(resolved);
+    }
+    return false;
+  } break;
+
   case V_SgReferenceType:
     return false;
     break;
@@ -829,6 +942,13 @@ bool isCopyConstructible(SgType *type) {
     return isCopyConstructible(isSgTypedefType(type)->get_base_type());
     break;
 
+  case V_SgNonrealType: {
+    if (SgType *resolved = resolveNonrealType(isSgNonrealType(type))) {
+      return isCopyConstructible(resolved);
+    }
+    return false;
+  } break;
+
     // DQ (9/7/2016): Added support for new type now referenced as a result of
     // using new automated generation of builtin functions for ROSE.
   case V_SgTypeSigned128bitInteger:
@@ -960,6 +1080,13 @@ bool isAssignable(SgType *type) {
   case V_SgTypedefType:
     return isAssignable(isSgTypedefType(type)->get_base_type());
     break;
+
+  case V_SgNonrealType: {
+    if (SgType *resolved = resolveNonrealType(isSgNonrealType(type))) {
+      return isAssignable(resolved);
+    }
+    return false;
+  } break;
 
     // DQ (9/7/2016): Added support for new type now referenced as a result of
     // using new automated generation of builtin functions for ROSE.

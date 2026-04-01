@@ -32,6 +32,18 @@ using namespace Rose;
 #define OUTPUT_DEBUGGING_INFORMATION 0
 
 namespace {
+const char *templateParameterKeywordSpelling(
+    SgTemplateParameter::template_parameter_keyword_enum keyword) {
+  switch (keyword) {
+  case SgTemplateParameter::keyword_class:
+    return "class";
+  case SgTemplateParameter::keyword_typename:
+  case SgTemplateParameter::keyword_unspecified:
+  default:
+    return "typename";
+  }
+}
+
 bool isBinaryOperatorName(const string &func_name) {
   return func_name == "operator+" || func_name == "operator-" ||
          func_name == "operator*" || func_name == "operator/" ||
@@ -1005,15 +1017,14 @@ void Unparse_ExprStmt::unparseTemplateName(
     SgTemplateInstantiationDecl *templateInstantiationDeclaration,
     SgUnparse_Info &info) {
   ASSERT_not_null(templateInstantiationDeclaration);
-  unp->u_exprStmt->curprint(
-      templateInstantiationDeclaration->get_templateName().str());
 
   // DQ (5/7/2013): I think these should be false so that the full type will be
   // output.
   ROSE_ASSERT(info.isTypeSecondPart() == false);
 
-  // Class template instantiations remain template-ids even when every
-  // argument is defaulted, so an empty argument list still unparses as `<>`.
+  unp->u_exprStmt->curprint(
+      templateInstantiationDeclaration->get_templateName().str());
+
   if (templateInstantiationDeclaration->get_templateArguments().empty()) {
     unp->u_exprStmt->curprint("<>");
     return;
@@ -1732,12 +1743,8 @@ void Unparse_ExprStmt::unparseTemplateParameter(
         unparseExpression(constraint, cinfo);
         curprint(" ");
       } else {
-        std::string kw =
-            SageInterface::getTemplateParameterKeyword(templateParameter);
-        if (kw.empty()) {
-          kw = "typename";
-        }
-        curprint(kw);
+        curprint(templateParameterKeywordSpelling(
+            SageInterface::getTemplateParameterKeyword(templateParameter)));
         curprint(" ");
       }
       if (is_pack) {
@@ -1852,13 +1859,9 @@ void Unparse_ExprStmt::unparseTemplateParameter(
     Unparse_ExprStmt::unparseTemplateParameterList(templateParameterList, info,
                                                    true);
 
-    std::string kw =
-        SageInterface::getTemplateParameterKeyword(templateParameter);
-    if (kw.empty()) {
-      kw = "typename";
-    }
     curprint(" ");
-    curprint(kw);
+    curprint(templateParameterKeywordSpelling(
+        SageInterface::getTemplateParameterKeyword(templateParameter)));
     curprint(" ");
     if (templateParameter->get_is_parameter_pack()) {
       curprint("... ");

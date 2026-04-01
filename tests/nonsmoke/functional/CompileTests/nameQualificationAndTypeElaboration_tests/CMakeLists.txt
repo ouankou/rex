@@ -27,10 +27,10 @@ set(TESTCODE_INCLUDES
   -I${CMAKE_CURRENT_SOURCE_DIR})
 
 foreach(file_to_test ${TESTCODES})
+  rex_get_cxx_specimen_extra_flags(_extra_flags ${file_to_test})
   add_test(
     NAME NAMEQUALIFICATIONTEST_${file_to_test}
-    COMMAND testTranslator ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
+    COMMAND testTranslator ${ROSE_FLAGS} ${_extra_flags} ${TESTCODE_INCLUDES}
      -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(NAMEQUALIFICATIONTEST_${file_to_test} PROPERTIES LABELS NAMEQUALIFICATIONTEST)
 endforeach()
-

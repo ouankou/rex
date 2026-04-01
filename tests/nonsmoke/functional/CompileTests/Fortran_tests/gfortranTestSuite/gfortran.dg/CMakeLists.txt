@@ -405,6 +405,7 @@ foreach(file_to_test ${_gfortran_f90_additional_tests})
 endforeach()
 
 set(_gfortran_f77_additional_tests
+  g77/cpp5.F
   literal_character_constant_1_x.F
   literal_character_constant_1_y.F
   literal_character_constant_1_z.F
@@ -446,8 +447,6 @@ set(_gfortran_additional_c_tests
   enum_10.c
   f2c_4.c
   f2c_5.c
-  g77/cpp5.h
-  g77/cpp5inc.h
   global_vars_c_init_driver.c
   global_vars_f90_init_driver.c
   iso_c_binding_rename_1_driver.c

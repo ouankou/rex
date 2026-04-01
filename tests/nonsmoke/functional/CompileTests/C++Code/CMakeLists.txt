@@ -219,7 +219,9 @@ set(files_to_test
 list(APPEND ROSE_FLAGS -I${CMAKE_CURRENT_SOURCE_DIR})
 
 set(_cxxcode_negative_tests
+  test2003_29.C
   test2005_57.C
+  test2005_98.C
   test2005_135.C
   test2005_136.C
   test2005_138.C
@@ -258,7 +260,11 @@ set(_cxxcode_additional_tests
 )
 
 foreach(file_to_test ${_cxxcode_additional_tests})
-  compile_test(${file_to_test} CXXCODE)
+  if(file_to_test IN_LIST _cxxcode_negative_tests)
+    compile_negative_test(${file_to_test} CXXCODE)
+  else()
+    compile_test(${file_to_test} CXXCODE)
+  endif()
   string(REPLACE "/" "_" _test_key "${file_to_test}")
   string(REPLACE "." "_" _test_key "${_test_key}")
   set_tests_properties(CXXCODE_${_test_key} PROPERTIES  LABELS CXXCODE)

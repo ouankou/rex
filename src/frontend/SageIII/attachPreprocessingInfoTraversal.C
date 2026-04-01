@@ -78,6 +78,81 @@ found in the directory ROSE/TESTS/KnownBugs/AttachPreprocessingInfo.
 
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
+
+namespace {
+
+template <class TemplateDeclT>
+void mirrorTemplateDeclarationTokenMapping(
+    SgSourceFile *sourceFile, TemplateDeclT *decl,
+    std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap) {
+  if (sourceFile == NULL || decl == NULL) {
+    return;
+  }
+
+  if (tokenMap.find(decl) != tokenMap.end()) {
+    return;
+  }
+
+  Sg_File_Info *declInfo = decl->get_file_info();
+  if (declInfo == NULL || declInfo->isCompilerGenerated() ||
+      declInfo->isTransformation() ||
+      declInfo->get_filenameString() != sourceFile->getFileName()) {
+    return;
+  }
+
+  SgTemplateFunctionDefinition *definition =
+      isSgTemplateFunctionDefinition(decl->get_definition());
+  if (definition == NULL) {
+    return;
+  }
+
+  std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator mappingIt =
+      tokenMap.find(definition);
+  if (mappingIt == tokenMap.end() || mappingIt->second == NULL) {
+    return;
+  }
+
+  TokenStreamSequenceToNodeMapping *definitionMapping = mappingIt->second;
+  tokenMap[decl] = TokenStreamSequenceToNodeMapping::createTokenInterval(
+      sourceFile, decl, definitionMapping->leading_whitespace_start,
+      definitionMapping->leading_whitespace_end,
+      definitionMapping->token_subsequence_start,
+      definitionMapping->token_subsequence_end,
+      definitionMapping->trailing_whitespace_start,
+      definitionMapping->trailing_whitespace_end,
+      definitionMapping->else_whitespace_start,
+      definitionMapping->else_whitespace_end);
+}
+
+void repairTemplateFunctionDeclarationTokenMappings(SgSourceFile *sourceFile) {
+  if (sourceFile == NULL) {
+    return;
+  }
+
+  SgGlobal *global = sourceFile->get_globalScope();
+  if (global == NULL) {
+    return;
+  }
+
+  std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap =
+      sourceFile->get_tokenSubsequenceMap();
+
+  Rose_STL_Container<SgNode *> templateFunctions =
+      NodeQuery::querySubTree(global, V_SgTemplateFunctionDeclaration);
+  for (SgNode *node : templateFunctions) {
+    mirrorTemplateDeclarationTokenMapping(
+        sourceFile, isSgTemplateFunctionDeclaration(node), tokenMap);
+  }
+
+  Rose_STL_Container<SgNode *> templateMembers =
+      NodeQuery::querySubTree(global, V_SgTemplateMemberFunctionDeclaration);
+  for (SgNode *node : templateMembers) {
+    mirrorTemplateDeclarationTokenMapping(
+        sourceFile, isSgTemplateMemberFunctionDeclaration(node), tokenMap);
+  }
+}
+
+} // namespace
 using namespace Rose;
 
 // Debug flag
@@ -938,6 +1013,7 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
         // DQ (2/20/2021): This is a pretty expensive operation, about the same
         // cost of the frontend (without the call to this function).
         buildTokenStreamMapping(sourceFile, tokenVector);
+        repairTemplateFunctionDeclarationTokenMappings(sourceFile);
       } else {
       }
 

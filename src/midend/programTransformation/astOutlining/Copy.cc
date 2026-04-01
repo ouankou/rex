@@ -18,10 +18,13 @@ using namespace std;
 
 // ========================================================================
 
-static SgTreeCopy g_treeCopy;
-
 SgNode *ASTtools::deepCopy(const SgNode *n) {
-  return n ? n->copy(g_treeCopy) : 0;
+  if (n == NULL) {
+    return 0;
+  }
+
+  SgTreeCopy treeCopy;
+  return n->copy(treeCopy);
 }
 
 // eof
