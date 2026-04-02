@@ -4098,13 +4098,11 @@ SgScopeStatement *SgDeclarationStatement::get_scope(void) const {
 void SgDeclarationStatement::set_scope(SgScopeStatement *newScope) {
   ASSERT_this();
 
-  if (newScope == NULL) {
-    set_declarationScope(NULL);
-    return;
-  }
-
   if (SgDeclarationScope *declScope = isSgDeclarationScope(newScope)) {
     set_declarationScope(declScope);
+  } else {
+    set_declarationScope(NULL);
+    SgStatement::set_scope(newScope);
   }
 }
 
