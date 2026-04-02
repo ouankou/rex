@@ -81,6 +81,12 @@ bool isCopiedNodeValue(SgCopyHelp &help, const SgNode *candidate) {
   return false;
 }
 
+bool declarationIsStructurallyAttachedToScope(SgDeclarationStatement *decl,
+                                              SgScopeStatement *scope);
+bool declarationsMatchForCanonicalCopy(
+    const SgDeclarationStatement *originalDecl,
+    const SgDeclarationStatement *candidateDecl);
+
 void synchronizeCopiedDeclarationList(
     const SgDeclarationStatementPtrList &originalDeclarations,
     SgDeclarationStatementPtrList &copiedDeclarations,
@@ -95,14 +101,26 @@ void synchronizeCopiedDeclarationList(
   SgDeclarationStatementPtrList rebuiltDeclarations;
   rebuiltDeclarations.reserve(originalDeclarations.size());
 
-  for (SgDeclarationStatement *originalDecl : originalDeclarations) {
+  for (size_t index = 0; index < originalDeclarations.size(); ++index) {
+    SgDeclarationStatement *originalDecl = originalDeclarations[index];
     if (originalDecl == NULL) {
       rebuiltDeclarations.push_back(NULL);
       continue;
     }
 
-    SgDeclarationStatement *copiedDecl =
-        isSgDeclarationStatement(help.copyOrLookupAst(originalDecl));
+    SgDeclarationStatement *copiedDecl = NULL;
+    if (index < copiedDeclarations.size()) {
+      SgDeclarationStatement *existingDecl = copiedDeclarations[index];
+      if (declarationIsStructurallyAttachedToScope(existingDecl, copiedScope) &&
+          declarationsMatchForCanonicalCopy(originalDecl, existingDecl)) {
+        copiedDecl = existingDecl;
+        remapCopiedNodePair(help, originalDecl, copiedDecl);
+      }
+    }
+
+    if (copiedDecl == NULL) {
+      copiedDecl = isSgDeclarationStatement(help.copyOrLookupAst(originalDecl));
+    }
     ROSE_ASSERT(copiedDecl != NULL);
 
     canonicalDeclarations.insert(copiedDecl);
@@ -230,6 +248,50 @@ bool declarationIsStructurallyAttachedToScope(SgDeclarationStatement *decl,
   return scope->statementExistsInScope(decl);
 }
 
+bool declarationsMatchForCanonicalCopy(
+    const SgDeclarationStatement *originalDecl,
+    const SgDeclarationStatement *candidateDecl) {
+  if (originalDecl == NULL || candidateDecl == NULL ||
+      originalDecl->variantT() != candidateDecl->variantT()) {
+    return false;
+  }
+
+  if (const SgFunctionDeclaration *originalFunction =
+          isSgFunctionDeclaration(originalDecl)) {
+    return functionDeclarationsMatch(
+        originalFunction, const_cast<SgFunctionDeclaration *>(
+                              isSgFunctionDeclaration(candidateDecl)));
+  }
+
+  return hasMatchingSourceLocation(originalDecl, candidateDecl);
+}
+
+const SgDeclarationStatementPtrList *
+scopeOwnedDeclarationsForCanonicalLookup(SgScopeStatement *scope) {
+  if (scope == NULL) {
+    return NULL;
+  }
+
+  if (SgGlobal *globalScope = isSgGlobal(scope)) {
+    return &globalScope->get_declarations();
+  }
+
+  if (SgNamespaceDefinitionStatement *namespaceScope =
+          isSgNamespaceDefinitionStatement(scope)) {
+    return &namespaceScope->get_declarations();
+  }
+
+  if (SgClassDefinition *classScope = isSgClassDefinition(scope)) {
+    return &classScope->get_members();
+  }
+
+  if (SgDeclarationScope *declarationScope = isSgDeclarationScope(scope)) {
+    return &declarationScope->get_declarations();
+  }
+
+  return NULL;
+}
+
 SgFunctionDeclaration *
 findAttachedCopiedFunctionDeclaration(const SgFunctionDeclaration *originalDecl,
                                       SgCopyHelp &help) {
@@ -244,9 +306,13 @@ findAttachedCopiedFunctionDeclaration(const SgFunctionDeclaration *originalDecl,
   }
 
   SgFunctionDeclaration *bestCandidate = NULL;
-  const SgDeclarationStatementPtrList &copiedDecls =
-      copiedScope->getDeclarationList();
-  for (SgDeclarationStatement *copiedDecl : copiedDecls) {
+  const SgDeclarationStatementPtrList *copiedDecls =
+      scopeOwnedDeclarationsForCanonicalLookup(copiedScope);
+  if (copiedDecls == NULL) {
+    return NULL;
+  }
+
+  for (SgDeclarationStatement *copiedDecl : *copiedDecls) {
     SgFunctionDeclaration *copiedFunction = isSgFunctionDeclaration(copiedDecl);
     if (copiedFunction == NULL ||
         !declarationIsStructurallyAttachedToScope(copiedFunction,
@@ -1478,18 +1544,26 @@ void finalizeCanonicalCopyLinks(SgCopyHelp &help) {
   }
   canonicalizeCopiedNodeEdges(help);
 
+  std::vector<std::pair<const SgNode *, SgNode *>> copiedNodePairs;
+  copiedNodePairs.reserve(help.get_copiedNodeMap().size());
   for (SgCopyHelp::copiedNodeMapTypeIterator it =
            help.get_copiedNodeMap().begin();
        it != help.get_copiedNodeMap().end(); ++it) {
+    copiedNodePairs.push_back(std::make_pair(it->first, it->second));
+  }
+
+  for (std::vector<std::pair<const SgNode *, SgNode *>>::const_iterator it =
+           copiedNodePairs.begin();
+       it != copiedNodePairs.end(); ++it) {
     if (SgDeclarationStatement *copyDecl =
             isSgDeclarationStatement(it->second)) {
       restoreCopiedReferencedDeclarationParentsToScope(copyDecl, help);
     }
   }
 
-  for (SgCopyHelp::copiedNodeMapTypeIterator it =
-           help.get_copiedNodeMap().begin();
-       it != help.get_copiedNodeMap().end(); ++it) {
+  for (std::vector<std::pair<const SgNode *, SgNode *>>::const_iterator it =
+           copiedNodePairs.begin();
+       it != copiedNodePairs.end(); ++it) {
     const SgNode *originalNode = it->first;
     SgNode *copyNode = it->second;
 
@@ -1734,6 +1808,10 @@ void finalizeCanonicalCopyLinks(SgCopyHelp &help) {
 }
 
 } // namespace
+
+void SgTreeCopy::prepareRootCopyForFixup() {
+  canonicalizeCopiedFunctionDeclarationMapEntries(*this);
+}
 
 void SgTreeCopy::finalizeRootCopy() { finalizeCanonicalCopyLinks(*this); }
 

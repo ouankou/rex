@@ -40,8 +40,6 @@ using namespace Rose;
 #define OUTPUT_DEBUGGING_FUNCTION_BOUNDARIES 0
 #define OUTPUT_DEBUGGING_FUNCTION_INTERNALS 0
 
-static const char *kInlineTypeOperandStandaloneSuppressAttribute =
-    "rex:inline-type-operand-standalone-suppress";
 #define OUTPUT_DEBUGGING_UNPARSE_INFO 0
 
 // Output the class name and function names as we unparse (for debugging)
@@ -212,6 +210,8 @@ bool scopeHasTransformedDeclarations(SgScopeStatement *scope) {
   } else if (SgNamespaceDefinitionStatement *ns_def =
                  isSgNamespaceDefinitionStatement(scope)) {
     decls = &ns_def->get_declarations();
+  } else if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+    decls = &class_def->get_members();
   } else if (SgDeclarationScope *decl_scope = isSgDeclarationScope(scope)) {
     decls = &decl_scope->get_declarations();
   }
@@ -6515,13 +6515,6 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
                                             SgUnparse_Info &info) {
   SgClassDeclaration *classdecl_stmt = isSgClassDeclaration(stmt);
   ASSERT_not_null(classdecl_stmt);
-
-  if (!info.inArgList() &&
-      info.get_reference_node_for_qualification() == NULL &&
-      classdecl_stmt->attributeExists(
-          kInlineTypeOperandStandaloneSuppressAttribute)) {
-    return;
-  }
 
 #define DEBUG_UNPARSE_CLASS_DECLARATION 0
 

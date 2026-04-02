@@ -932,6 +932,10 @@ public:
   void noteSupersededCopiedNode(SgNode *value);
 
   // Allow specific copy strategies (e.g., tree copies) to perform one
+  // preparatory canonicalization pass before root fixup starts.
+  virtual void prepareRootCopyForFixup() {}
+
+  // Allow specific copy strategies (e.g., tree copies) to perform one
   // final canonicalization pass after the root node finishes copying.
   virtual void finalizeRootCopy() {}
 };
@@ -955,6 +959,7 @@ a "deep" copy.
 class ROSE_DLL_API SgTreeCopy : public SgCopyHelp {
 public:
   SgNode *copyAst(const SgNode *n);
+  void prepareRootCopyForFixup() override;
   void finalizeRootCopy() override;
 };
 

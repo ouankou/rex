@@ -32609,26 +32609,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       isMethodDecl && !function_decl->isImplicit() &&
       !function_decl->isOutOfLine();
 
-  const bool trace_member_output =
-      SgProject::get_verbose() > 0 && isMethodDecl &&
-      (function_decl->getQualifiedNameAsString().find("char_traits") !=
-           std::string::npos ||
-       function_decl->getQualifiedNameAsString().find("basic_string") !=
-           std::string::npos ||
-       function_decl->getQualifiedNameAsString().find("_Temporary_buffer") !=
-           std::string::npos) &&
-      (function_decl->getNameAsString() == "compare" ||
-       function_decl->getNameAsString() == "length" ||
-       function_decl->getNameAsString() == "find" ||
-       function_decl->getNameAsString() == "move" ||
-       function_decl->getNameAsString() == "copy" ||
-       function_decl->getNameAsString() == "assign" ||
-       function_decl->getNameAsString() == "reserve" ||
-       function_decl->getNameAsString() == "_M_leak_hard" ||
-       function_decl->getNameAsString() == "_S_construct" ||
-       function_decl->getNameAsString() == "basic_string" ||
-       function_decl->getNameAsString() == "_Temporary_buffer");
-
   bool suppress_hidden_parent_member = false;
   if (isMethodDecl) {
     auto *method_decl = llvm::cast<clang::CXXMethodDecl>(function_decl);
@@ -32664,22 +32644,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
             isSgFunctionDeclaration(
                 sg_function_decl->get_definingDeclaration()),
             parent_def);
-      }
-      if (trace_member_output) {
-        std::cerr << "TRACE function-member-hidden-check name="
-                  << function_decl->getQualifiedNameAsString()
-                  << " isDef=" << function_decl->isThisDeclarationADefinition()
-                  << " parentDef=" << parent_def
-                  << " activeScope=" << SageBuilder::topScopeStack()
-                  << " activeMatch=" << parent_def_is_active_scope
-                  << " parentVisible=" << parent_def_is_visible
-                  << " inClassBody=" << member_is_spelled_in_parent_class_body
-                  << " visibleFirstDecl="
-                  << has_visible_source_first_member_decl
-                  << " suppressHidden=" << suppress_hidden_parent_member
-                  << " mappedHidden="
-                  << mapped_parent_record_chain_is_hidden(parent_record)
-                  << std::endl;
       }
     }
   }
@@ -33536,20 +33500,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         }
       }
     }
-
-    if (trace_member_output) {
-      std::cerr << "TRACE function-member-header-check name="
-                << function_decl->getQualifiedNameAsString()
-                << " isDef=" << function_decl->isThisDeclarationADefinition()
-                << " suppressHeader=" << suppress_header_function
-                << " compilerGen=" << mark_header_function_compiler_generated
-                << " locValid=" << loc.isValid() << " writtenMain="
-                << (loc.isValid() && sm.isWrittenInMainFile(loc))
-                << " system=" << (loc.isValid() && sm.isInSystemHeader(loc))
-                << " builtin="
-                << (loc.isValid() && sm.isWrittenInBuiltinFile(loc))
-                << std::endl;
-    }
   }
 
   if (visit_res && suppress_header_function) {
@@ -33598,56 +33548,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       p_decl_translation_map[first] = explicit_instantiation_directive;
     }
     *node = explicit_instantiation_directive;
-  }
-
-  if (trace_member_output) {
-    auto decl_output = [](SgFunctionDeclaration *decl) -> int {
-      if (decl == nullptr || decl->get_file_info() == nullptr) {
-        return -1;
-      }
-      return decl->get_file_info()->isOutputInCodeGeneration() ? 1 : 0;
-    };
-    std::cerr << "TRACE function-member-final name="
-              << function_decl->getQualifiedNameAsString() << " nodeClass="
-              << (sg_function_decl != nullptr ? sg_function_decl->class_name()
-                                              : std::string("<null>"))
-              << " nodeOutput=" << decl_output(sg_function_decl)
-              << " firstOutput="
-              << decl_output(isSgFunctionDeclaration(
-                     sg_function_decl != nullptr
-                         ? sg_function_decl->get_firstNondefiningDeclaration()
-                         : nullptr))
-              << " defOutput="
-              << decl_output(isSgFunctionDeclaration(
-                     sg_function_decl != nullptr
-                         ? sg_function_decl->get_definingDeclaration()
-                         : nullptr))
-              << " suppressHidden=" << suppress_hidden_parent_member
-              << " suppressInstantiated=" << suppress_instantiated_member
-              << std::endl;
-  }
-
-  if (clang::CXXRecordDecl *record_decl = llvm::dyn_cast<clang::CXXRecordDecl>(
-          function_decl->getDeclContext())) {
-    std::string record_name = record_decl->getQualifiedNameAsString();
-    if (record_name == "ReferenceToPointerHandler" ||
-        record_name == "ReferenceToPointerHandlerImpl" ||
-        record_name == "rose_graph_string_node_hash_multimap") {
-      auto total_elapsed_ms =
-          std::chrono::duration_cast<std::chrono::milliseconds>(
-              std::chrono::steady_clock::now() - function_translation_start)
-              .count();
-      if (total_elapsed_ms >= 1) {
-        std::cerr << "REX function timing: record=" << record_name
-                  << " name=" << function_decl->getNameAsString()
-                  << " total_ms=" << total_elapsed_ms
-                  << " ensure_symbol_ms=" << ensure_function_symbol_elapsed_ms
-                  << " normalize_scope_ms="
-                  << normalize_function_scope_elapsed_ms
-                  << " fast_path=" << use_builder_member_symbol_fast_path
-                  << std::endl;
-      }
-    }
   }
 
   return visit_res;

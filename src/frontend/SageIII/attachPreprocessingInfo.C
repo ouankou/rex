@@ -1144,47 +1144,6 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr,
     tt.traverse(sageFilePtr, inh);
   }
 
-  if (SgProject::get_verbose() > 0) {
-    Rose_STL_Container<SgNode *> located_nodes =
-        NodeQuery::querySubTree(sageFilePtr, V_SgLocatedNode);
-    for (SgNode *node : located_nodes) {
-      SgLocatedNode *located = isSgLocatedNode(node);
-      if (located == nullptr) {
-        continue;
-      }
-
-      AttachedPreprocessingInfoType *attached =
-          located->getAttachedPreprocessingInfo();
-      if (attached == nullptr || attached->empty()) {
-        continue;
-      }
-
-      for (PreprocessingInfo *info : *attached) {
-        if (info == nullptr ||
-            info->getString().find("#pragma GCC visibility") ==
-                std::string::npos) {
-          continue;
-        }
-
-        Sg_File_Info *owner_fi = located->get_file_info();
-        Sg_File_Info *owner_start = located->get_startOfConstruct();
-        std::cerr << "TRACE attached-visibility owner=" << located
-                  << " class=" << located->class_name() << " ownerFile="
-                  << (owner_fi != nullptr ? owner_fi->get_filenameString()
-                                          : std::string("<null>"))
-                  << " ownerLine="
-                  << (owner_fi != nullptr ? owner_fi->get_line() : -1)
-                  << " ownerStart="
-                  << (owner_start != nullptr ? owner_start->get_line() : -1)
-                  << " infoFile=" << info->getFilename()
-                  << " infoLine=" << info->getLineNumber() << " rel="
-                  << PreprocessingInfo::relativePositionName(
-                         info->getRelativePosition())
-                  << " text=" << info->getString() << std::endl;
-      }
-    }
-  }
-
   // endif for ifndef  CXX_IS_ROSE_CODE_GENERATION
 #endif
 

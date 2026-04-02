@@ -117,8 +117,8 @@ SgType *resolveNonrealType(SgNonrealType *nonreal_type) {
   }
 
   if (SgNonrealSymbol *nonreal_symbol =
-          SageInterface::lookupNonrealSymbolInParentScopes(name,
-                                                           lookup_scope)) {
+          SageInterface::lookupNonrealSymbolInParentScopes(name, lookup_scope,
+                                                           NULL, NULL)) {
     if (SgType *resolved =
             resolvedTypeFromSymbol(nonreal_symbol, nonreal_decl)) {
       return resolved;

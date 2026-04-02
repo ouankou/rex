@@ -155,6 +155,8 @@ bool scope_has_transformed_declarations(SgScopeStatement *scope) {
   } else if (SgNamespaceDefinitionStatement *ns_def =
                  isSgNamespaceDefinitionStatement(scope)) {
     decls = &ns_def->get_declarations();
+  } else if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+    decls = &class_def->get_members();
   } else if (SgDeclarationScope *decl_scope = isSgDeclarationScope(scope)) {
     decls = &decl_scope->get_declarations();
   }
@@ -3112,6 +3114,9 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           } else if (SgNamespaceDefinitionStatement *ns_def =
                          isSgNamespaceDefinitionStatement(scope)) {
             decls = &ns_def->get_declarations();
+          } else if (SgClassDefinition *class_def =
+                         isSgClassDefinition(scope)) {
+            decls = &class_def->get_members();
           } else if (SgDeclarationScope *decl_scope =
                          isSgDeclarationScope(scope)) {
             decls = &decl_scope->get_declarations();

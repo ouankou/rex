@@ -2559,8 +2559,6 @@ void setCtorInitializerList(actualMemberFunction *func,
     func->set_CtorInitializerList(ctorlist);
   }
   ctorlist->set_parent(func);
-  ctorlist->set_definingDeclaration(ctorlist);
-  ctorlist->set_firstNondefiningDeclaration(ctorlist);
 
   SgScopeStatement *scope = NULL;
   if (func->get_definingDeclaration() == func &&

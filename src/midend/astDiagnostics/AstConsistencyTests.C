@@ -633,7 +633,11 @@ void AstTests::runAllTests(SgProject *sageProject) {
           }
 
           const bool allow_missing_first_nondef =
-              isSgTemplateInstantiationDecl(declarationStatement) != NULL;
+              isSgTemplateInstantiationDecl(declarationStatement) != NULL ||
+              isSgTemplateInstantiationFunctionDecl(declarationStatement) !=
+                  NULL ||
+              isSgTemplateInstantiationMemberFunctionDecl(
+                  declarationStatement) != NULL;
 
           if (declarationStatement->get_firstNondefiningDeclaration() == NULL &&
               !allow_missing_first_nondef) {
@@ -2680,7 +2684,9 @@ void TestAstForProperlySetDefiningAndNondefiningDeclarations::visit(
         // These nodes should have a non-defining declaration even if only a
         // defining declaration is present in the source code.  It may be that
         // the other IR nodes below should be treated similarly.
-      case V_SgTemplateInstantiationDecl: {
+      case V_SgTemplateInstantiationDecl:
+      case V_SgTemplateInstantiationFunctionDecl:
+      case V_SgTemplateInstantiationMemberFunctionDecl: {
         // Defining template instantiations do not necessarily have a distinct
         // nondefining declaration.
         break;
@@ -2705,8 +2711,6 @@ void TestAstForProperlySetDefiningAndNondefiningDeclarations::visit(
 
       case V_SgFunctionDeclaration:
       case V_SgMemberFunctionDeclaration:
-      case V_SgTemplateInstantiationFunctionDecl:
-      case V_SgTemplateInstantiationMemberFunctionDecl:
       case V_SgProcedureHeaderStatement:
       case V_SgProgramHeaderStatement: {
         // This is the reasonable case, where a function or template or typedef

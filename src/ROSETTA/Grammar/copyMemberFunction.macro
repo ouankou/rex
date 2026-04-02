@@ -105,6 +105,10 @@ $POST_CONSTRUCT_COPY
         {
        // This is the original calling node.
 
+       // Canonicalize provisional copied-node associations that influence
+       // fixup traversal before any scope/symbol/reference repair begins.
+          help.prepareRootCopyForFixup();
+
        // Call the fixup mechanism to correct details of the AST copy mechanism.
        // printf ("Calling $CLASSNAME::fixupCopy() (from root of AST being copied) \n");
 #if ALT_FIXUP_COPY
