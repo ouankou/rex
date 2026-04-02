@@ -2551,13 +2551,13 @@ void setCtorInitializerList(actualMemberFunction *func,
   ROSE_ASSERT(func != NULL);
   ROSE_ASSERT(ctorlist != NULL);
 
-  if (func->get_CtorInitializerList() != NULL) {
-    if (func->get_CtorInitializerList() != ctorlist) {
-      delete func->get_CtorInitializerList();
-    }
+  SgCtorInitializerList *previousCtorList = func->get_CtorInitializerList();
+  if (previousCtorList != NULL && previousCtorList != ctorlist) {
+    func->set_CtorInitializerList(ctorlist);
+    SageInterface::deleteAST(previousCtorList);
+  } else {
+    func->set_CtorInitializerList(ctorlist);
   }
-
-  func->set_CtorInitializerList(ctorlist);
   ctorlist->set_parent(func);
   ctorlist->set_definingDeclaration(ctorlist);
   ctorlist->set_firstNondefiningDeclaration(ctorlist);

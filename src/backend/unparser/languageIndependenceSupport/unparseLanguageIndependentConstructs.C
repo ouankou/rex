@@ -1750,26 +1750,6 @@ bool UnparseLanguageIndependentConstructs::
       ROSE_ASSERT((*i)->getRelativePosition() == PreprocessingInfo::before ||
                   (*i)->getRelativePosition() == PreprocessingInfo::after ||
                   (*i)->getRelativePosition() == PreprocessingInfo::inside);
-      if ((*i)->getString().find("#pragma GCC visibility") !=
-          std::string::npos) {
-        Sg_File_Info *stmt_fi = stmt->get_file_info();
-        Sg_File_Info *stmt_start = stmt->get_startOfConstruct();
-        Sg_File_Info *info_fi = (*i)->get_file_info();
-        std::cerr
-            << "TRACE token-preproc owner=" << stmt
-            << " class=" << stmt->class_name() << " where="
-            << PreprocessingInfo::relativePositionName(whereToUnparse)
-            << " rel="
-            << PreprocessingInfo::relativePositionName(
-                   (*i)->getRelativePosition())
-            << " dtype="
-            << PreprocessingInfo::directiveTypeName((*i)->getTypeOfDirective())
-            << " stmtLine=" << (stmt_fi != nullptr ? stmt_fi->get_line() : -1)
-            << " stmtStart="
-            << (stmt_start != nullptr ? stmt_start->get_line() : -1)
-            << " ppLine=" << (info_fi != nullptr ? info_fi->get_line() : -1)
-            << " text=" << (*i)->getString() << std::endl;
-      }
       if ((*i)->getRelativePosition() == whereToUnparse) {
         if (token_stream_available) {
           unparseUsingTokenStream = true;
@@ -2492,17 +2472,6 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
                    j <= tokenSubsequence->leading_whitespace_end; j++) {
                 const std::string &token_text =
                     tokenVector[j]->get_lexeme_string();
-                if ((tokenVector[j]->get_classification_code() ==
-                         ROSE_token_ids::C_CXX_PREPROCESSING_INFO &&
-                     token_text.find("#pragma GCC visibility") !=
-                         std::string::npos) ||
-                    token_text.find("visibility") != std::string::npos) {
-                  std::cerr << "TRACE leading-token-preproc owner=" << stmt
-                            << " class=" << stmt->class_name()
-                            << " name=" << SageInterface::get_name(stmt)
-                            << " token=" << j << " text=" << token_text
-                            << std::endl;
-                }
 #if OUTPUT_TOKEN_STREAM_FOR_DEBUGGING || 0
                 printf("Output leading whitespace "
                        "tokenVector[j=%d]->get_lexeme_string() = %s \n",
@@ -2576,16 +2545,6 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         for (int j = tokenSubsequence->token_subsequence_start;
              j <= tokenSubsequence->token_subsequence_end; j++) {
           const std::string &token_text = tokenVector[j]->get_lexeme_string();
-          if ((tokenVector[j]->get_classification_code() ==
-                   ROSE_token_ids::C_CXX_PREPROCESSING_INFO &&
-               token_text.find("#pragma GCC visibility") !=
-                   std::string::npos) ||
-              token_text.find("visibility") != std::string::npos) {
-            std::cerr << "TRACE body-token-preproc owner=" << stmt
-                      << " class=" << stmt->class_name()
-                      << " name=" << SageInterface::get_name(stmt)
-                      << " token=" << j << " text=" << token_text << std::endl;
-          }
 #if OUTPUT_TOKEN_STREAM_FOR_DEBUGGING
           printf("Output tokenVector[j=%d]->get_lexeme_string() = %s \n", j,
                  tokenVector[j]->get_lexeme_string().c_str());
@@ -3202,57 +3161,6 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           if (enclosing_transformed_declaration_scope(stmt) != NULL) {
             unparseViaTokenStream = false;
           }
-        }
-        auto should_trace_stmt = [&](SgStatement *candidate) {
-          if (SgClassDeclaration *class_decl =
-                  isSgClassDeclaration(candidate)) {
-            std::string name = class_decl->get_name().getString();
-            return name == "ios_base" || name == "__gconv_info" ||
-                   name == "codecvt_base";
-          }
-          if (SgClassDefinition *class_def = isSgClassDefinition(candidate)) {
-            if (SgClassDeclaration *class_decl = class_def->get_declaration()) {
-              std::string name = class_decl->get_name().getString();
-              return name == "ios_base" || name == "__gconv_info" ||
-                     name == "codecvt_base";
-            }
-          }
-          if (SgTypedefDeclaration *typedef_decl =
-                  isSgTypedefDeclaration(candidate)) {
-            return typedef_decl->get_name().getString() == "__gconv_t";
-          }
-          if (SgNamespaceDefinitionStatement *ns_def =
-                  isSgNamespaceDefinitionStatement(candidate)) {
-            return ns_def->get_namespaceDeclaration() != NULL &&
-                   ns_def->get_namespaceDeclaration()->get_name().getString() ==
-                       "std";
-          }
-          return false;
-        };
-        if (should_trace_stmt(stmt)) {
-          std::cerr
-              << "TRACE unparseStatement stmt=" << stmt
-              << " kind=" << stmt->class_name()
-              << " name=" << SageInterface::get_name(stmt)
-              << " transformed=" << (stmt->isTransformation() ? 1 : 0)
-              << " containsTrans="
-              << (stmt->get_containsTransformation() ? 1 : 0) << " partialWS="
-              << (stmt->get_containsTransformationToSurroundingWhitespace() ? 1
-                                                                            : 0)
-              << " frontier=" << (isFrontierNode ? 1 : 0) << " frontierTokens="
-              << (associatedFrontierNode != NULL &&
-                          associatedFrontierNode->unparseUsingTokenStream
-                      ? 1
-                      : 0)
-              << " canUseTokens=" << (canUseTokenStream ? 1 : 0)
-              << " unparseViaTokens=" << (unparseViaTokenStream ? 1 : 0)
-              << " parent="
-              << (stmt->get_parent() != NULL ? stmt->get_parent()->class_name()
-                                             : std::string("<null>"))
-              << " scope="
-              << (stmt->get_scope() != NULL ? stmt->get_scope()->class_name()
-                                            : std::string("<null>"))
-              << std::endl;
         }
 #if DEBUG_UNPARSE_STATEMENT
         printf("In UnparseLanguageIndependentConstructs::unparseStatement(): "
@@ -5768,27 +5676,6 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       //                 and checked in.
 
       if (infoSaysGoAhead && (*i)->getRelativePosition() == whereToUnparse) {
-        if ((*i)->getString().find("#pragma GCC visibility pop") !=
-            std::string::npos) {
-          Sg_File_Info *stmt_fi = stmt->get_file_info();
-          Sg_File_Info *stmt_start = stmt->get_startOfConstruct();
-          std::cerr << "TRACE visibility-pop owner=" << stmt
-                    << " class=" << stmt->class_name() << " where="
-                    << PreprocessingInfo::relativePositionName(whereToUnparse)
-                    << " dtype="
-                    << PreprocessingInfo::directiveTypeName(
-                           (*i)->getTypeOfDirective())
-                    << " stmtLine="
-                    << (stmt_fi != nullptr ? stmt_fi->get_line() : -1)
-                    << " stmtStart="
-                    << (stmt_start != nullptr ? stmt_start->get_line() : -1)
-                    << " scope="
-                    << (isSgStatement(stmt) != nullptr &&
-                                isSgStatement(stmt)->get_scope() != nullptr
-                            ? isSgStatement(stmt)->get_scope()->class_name()
-                            : std::string("<na>"))
-                    << " text=" << (*i)->getString() << std::endl;
-        }
         const bool is_commented_pragma =
             (((*i)->getTypeOfDirective() ==
               PreprocessingInfo::CplusplusStyleComment) ||

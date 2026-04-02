@@ -5447,15 +5447,6 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
     bool use_trailing_return_type_syntax =
         !is_deduction_guide && requiresTrailingReturnTypeSyntax(rtype);
 
-    if (funcdecl_stmt->get_name().getString() == "foo") {
-      std::string filename;
-      if (Sg_File_Info *fi = funcdecl_stmt->get_file_info()) {
-        filename = fi->get_filenameString();
-      }
-      if (filename.find("test2011_43.C") != std::string::npos) {
-      }
-    }
-
     SgUnparse_Info ninfo_for_type(ninfo);
     if (funcdecl_stmt->get_requiresNameQualificationOnReturnType() == true) {
       ninfo_for_type.set_requiresGlobalNameQualification();
@@ -5699,16 +5690,6 @@ void Unparse_ExprStmt::unparseFuncDefnStmt(SgStatement *stmt,
 
   info.set_SkipFunctionDefinition();
   SgStatement *declstmt = funcdefn_stmt->get_declaration();
-  const std::string trace_func_name =
-      isSgFunctionDeclaration(declstmt) != nullptr
-          ? isSgFunctionDeclaration(declstmt)->get_name().getString()
-          : std::string();
-  const bool trace_func = trace_func_name == "__push_heap" ||
-                          trace_func_name == "__copy_streambufs_eof" ||
-                          trace_func_name == "imbue" ||
-                          trace_func_name == "init" ||
-                          trace_func_name == "sentry";
-
   // DQ (1/19/2014): Adding gnu attribute prefix support.
   ASSERT_not_null(funcdefn_stmt->get_declaration());
 
@@ -5743,21 +5724,6 @@ void Unparse_ExprStmt::unparseFuncDefnStmt(SgStatement *stmt,
       isWithinTransformedDeclarationScope(funcdefn_stmt)) {
     saved_unparsedPartiallyUsingTokenStream = false;
     info.unset_unparsedPartiallyUsingTokenStream();
-  }
-  if (trace_func) {
-    std::cerr << "TRACE funcdef mode def=" << funcdefn_stmt
-              << " name=" << trace_func_name << " scopeTransformed="
-              << (isWithinTransformedDeclarationScope(funcdefn_stmt) ? 1 : 0)
-              << " partial="
-              << (saved_unparsedPartiallyUsingTokenStream ? 1 : 0) << " scope="
-              << (funcdefn_stmt->get_scope() != nullptr
-                      ? funcdefn_stmt->get_scope()->class_name()
-                      : std::string("<null>"))
-              << " parent="
-              << (funcdefn_stmt->get_parent() != nullptr
-                      ? funcdefn_stmt->get_parent()->class_name()
-                      : std::string("<null>"))
-              << std::endl;
   }
   if (saved_unparsedPartiallyUsingTokenStream == false) {
     if (isSgMemberFunctionDeclaration(declstmt)) {
@@ -5991,12 +5957,6 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
       isSgMemberFunctionDeclaration(stmt);
   ASSERT_not_null(mfuncdecl_stmt);
 
-  const std::string trace_mfunc_name = mfuncdecl_stmt->get_name().getString();
-  const bool trace_mfunc =
-      trace_mfunc_name == "operator++" || trace_mfunc_name == "good" ||
-      trace_mfunc_name == "imbue" || trace_mfunc_name == "init" ||
-      trace_mfunc_name == "sentry";
-
 #if DEBUG_unparseMFuncDeclStmt
   printf("Enter Unparse_ExprStmt::unparseMFuncDeclStmt\n");
   printf("  stmt = %p = %s\n", stmt, stmt->class_name().c_str());
@@ -6014,23 +5974,6 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
       isWithinTransformedDeclarationScope(mfuncdecl_stmt)) {
     saved_unparsedPartiallyUsingTokenStream = false;
     info.unset_unparsedPartiallyUsingTokenStream();
-  }
-  if (trace_mfunc) {
-    std::cerr << "TRACE mfunc mode decl=" << mfuncdecl_stmt
-              << " name=" << trace_mfunc_name
-              << " forward=" << (mfuncdecl_stmt->isForward() ? 1 : 0)
-              << " scopeTransformed="
-              << (isWithinTransformedDeclarationScope(mfuncdecl_stmt) ? 1 : 0)
-              << " partial="
-              << (saved_unparsedPartiallyUsingTokenStream ? 1 : 0) << " scope="
-              << (mfuncdecl_stmt->get_scope() != nullptr
-                      ? mfuncdecl_stmt->get_scope()->class_name()
-                      : std::string("<null>"))
-              << " parent="
-              << (mfuncdecl_stmt->get_parent() != nullptr
-                      ? mfuncdecl_stmt->get_parent()->class_name()
-                      : std::string("<null>"))
-              << std::endl;
   }
   if (saved_unparsedPartiallyUsingTokenStream == true) {
     SgFunctionDefinition *function_definition =
@@ -6573,30 +6516,6 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
   SgClassDeclaration *classdecl_stmt = isSgClassDeclaration(stmt);
   ASSERT_not_null(classdecl_stmt);
 
-  const std::string trace_class_name = classdecl_stmt->get_name().getString();
-  const bool trace_class_decl =
-      trace_class_name == "ios_base" || trace_class_name == "__gconv_info" ||
-      trace_class_name == "codecvt_base" || trace_class_name == "_Deque_impl" ||
-      trace_class_name == "PP_entry" || trace_class_name == "Frame" ||
-      trace_class_name == "Record";
-  if (trace_class_decl) {
-    std::cerr << "TRACE unparseClassDeclStmt decl=" << classdecl_stmt
-              << " forward=" << (classdecl_stmt->isForward() ? 1 : 0)
-              << " hasDef="
-              << (classdecl_stmt->get_definition() != NULL ? 1 : 0)
-              << " skipClassDef=" << (info.SkipClassDefinition() ? 1 : 0)
-              << " transformed=" << (classdecl_stmt->isTransformation() ? 1 : 0)
-              << " parent="
-              << (classdecl_stmt->get_parent() != NULL
-                      ? classdecl_stmt->get_parent()->class_name()
-                      : std::string("<null>"))
-              << " scope="
-              << (classdecl_stmt->get_scope() != NULL
-                      ? classdecl_stmt->get_scope()->class_name()
-                      : std::string("<null>"))
-              << std::endl;
-  }
-
   if (!info.inArgList() &&
       info.get_reference_node_for_qualification() == NULL &&
       classdecl_stmt->attributeExists(
@@ -6638,19 +6557,6 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
     // token-fragment mode directly and can degrade a defining declaration back
     // into a forward declaration.
     saved_unparsedPartiallyUsingTokenStream = false;
-  }
-  if (trace_class_decl) {
-    std::cerr << "TRACE unparseClassDeclStmt mode decl=" << classdecl_stmt
-              << " partialTokens="
-              << (saved_unparsedPartiallyUsingTokenStream ? 1 : 0)
-              << " declTrans=" << (classdecl_stmt->isTransformation() ? 1 : 0)
-              << " defTrans="
-              << (class_definition != NULL &&
-                          class_definition->isTransformation()
-                      ? 1
-                      : 0)
-              << " skipBasicBlock=" << (info.SkipBasicBlock() ? 1 : 0)
-              << std::endl;
   }
   if (saved_unparsedPartiallyUsingTokenStream == true) {
     // unparseStatementFromTokenStream (stmt, e_token_subsequence_start,
@@ -6819,13 +6725,6 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
 
     if (!classdecl_stmt->isForward() && classdecl_stmt->get_definition() &&
         !info.SkipClassDefinition()) {
-      if (trace_class_decl) {
-        std::cerr << "TRACE unparseClassDeclStmt recurse-def decl="
-                  << classdecl_stmt << " def=" << class_definition
-                  << " nestedPartial="
-                  << (class_info.unparsedPartiallyUsingTokenStream() ? 1 : 0)
-                  << std::endl;
-      }
       SgUnparse_Info ninfox(class_info);
       ninfox.unset_SkipSemiColon();
       // Class definition emission is controlled by SkipClassDefinition, not by
@@ -7192,51 +7091,6 @@ void Unparse_ExprStmt::unparseClassDefnStmt(SgStatement *stmt,
 
   SgClassDefinition *classdefn_stmt = isSgClassDefinition(stmt);
   ASSERT_not_null(classdefn_stmt);
-
-  if (SgClassDeclaration *class_decl = classdefn_stmt->get_declaration()) {
-    std::string name = class_decl->get_name().getString();
-    if (name == "ios_base" || name == "__gconv_info" || name == "_Deque_base" ||
-        name == "ParmParse") {
-      std::cerr << "TRACE unparseClassDefnStmt def=" << classdefn_stmt
-                << " decl=" << class_decl << " name=" << name
-                << " skipBasicBlock=" << (info.SkipBasicBlock() ? 1 : 0)
-                << " skipClassDef=" << (info.SkipClassDefinition() ? 1 : 0)
-                << " partialTokens="
-                << (info.unparsedPartiallyUsingTokenStream() ? 1 : 0)
-                << " members="
-                << static_cast<long long>(classdefn_stmt->get_members().size())
-                << " parent="
-                << (classdefn_stmt->get_parent() != NULL
-                        ? classdefn_stmt->get_parent()->class_name()
-                        : std::string("<null>"))
-                << std::endl;
-      if (name == "_Deque_base" || name == "ParmParse") {
-        for (SgDeclarationStatement *member : classdefn_stmt->get_members()) {
-          if (SgClassDeclaration *member_class = isSgClassDeclaration(member)) {
-            std::cerr
-                << "TRACE unparseClassDefnStmt member name="
-                << member_class->get_name().getString()
-                << " decl=" << member_class
-                << " forward=" << (member_class->isForward() ? 1 : 0)
-                << " hasDef="
-                << (member_class->get_definition() != NULL ? 1 : 0)
-                << " output="
-                << (member_class->get_file_info() != NULL &&
-                            member_class->get_file_info()
-                                ->isOutputInCodeGeneration()
-                        ? 1
-                        : 0)
-                << " compilerGen="
-                << (member_class->get_file_info() != NULL &&
-                            member_class->get_file_info()->isCompilerGenerated()
-                        ? 1
-                        : 0)
-                << std::endl;
-          }
-        }
-      }
-    }
-  }
 
   // DQ (5/28/2021): Adding support for partial token sequence unparsing.
   bool saved_unparsedPartiallyUsingTokenStream =

@@ -1,6 +1,7 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 
+#include "astPostProcessing/astPostProcessing.h"
 #include "fixupCopy.h"
 
 #include <unordered_map>
@@ -780,9 +781,6 @@ bool symbolIsStillOwnedByParentTable(SgSymbol *symbol) {
 
 void discardSupersededCopiedSymbols(
     SgCopyHelp &help, const std::unordered_set<SgNode *> &canonicalCopies) {
-  std::vector<SgSymbol *> staleSymbols;
-  staleSymbols.reserve(help.get_supersededNodeCopies().size());
-
   for (SgCopyHelp::supersededNodeSetTypeIterator it =
            help.get_supersededNodeCopies().begin();
        it != help.get_supersededNodeCopies().end(); ++it) {
@@ -803,12 +801,7 @@ void discardSupersededCopiedSymbols(
         isSgSymbolTable(staleSymbol->get_parent()) == NULL) {
       continue;
     }
-
-    staleSymbols.push_back(staleSymbol);
-  }
-
-  for (SgSymbol *staleSymbol : staleSymbols) {
-    delete staleSymbol;
+    move_symbol_to_orphan_table(staleSymbol);
   }
 
   help.get_supersededNodeCopies().clear();
