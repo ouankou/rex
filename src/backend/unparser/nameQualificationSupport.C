@@ -2,6 +2,7 @@
 
 #include "sage3basic.h"
 
+#include "nonrealQualificationSupport.h"
 #include "sageGeneric.h"
 
 using namespace std;
@@ -164,38 +165,6 @@ bool getExplicitQualifierLength(const SgNode *node, int &length) {
 
   length = effective_length;
   return true;
-}
-
-bool nonrealTypeCarriesWrittenQualification(const SgNonrealType *nonreal_type) {
-  if (nonreal_type == nullptr) {
-    return false;
-  }
-
-  const SgNonrealDecl *nrdecl =
-      isSgNonrealDecl(nonreal_type->get_declaration());
-  if (nrdecl == nullptr) {
-    return false;
-  }
-
-  if (nrdecl->get_has_global_qualifier()) {
-    return true;
-  }
-
-  SgDeclarationScope *nrscope = isSgDeclarationScope(nrdecl->get_parent());
-  return nrscope != nullptr &&
-         isSgNonrealDecl(nrscope->get_parent()) != nullptr;
-}
-
-bool typeCarriesWrittenNonrealQualification(const SgType *type) {
-  if (type == nullptr) {
-    return false;
-  }
-
-  const SgType *stripped = type->stripType(
-      SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
-      SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_POINTER_TYPE |
-      SgType::STRIP_ARRAY_TYPE);
-  return nonrealTypeCarriesWrittenQualification(isSgNonrealType(stripped));
 }
 
 SgName
@@ -9197,7 +9166,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
       SgType *returnType = functionDeclaration->get_orig_return_type();
       ASSERT_not_null(returnType);
 
-      if (typeCarriesWrittenNonrealQualification(returnType)) {
+      if (si::typeCarriesWrittenNonrealQualification(returnType)) {
         const bool preserve_written_type_elaboration =
             functionDeclaration
                 ->get_type_elaboration_required_for_return_type();
@@ -9731,7 +9700,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
                   memberFunctionDeclaration->get_type()->class_name().c_str());
 #endif
 
-      if (typeCarriesWrittenNonrealQualification(returnType)) {
+      if (si::typeCarriesWrittenNonrealQualification(returnType)) {
         const bool preserve_written_type_elaboration =
             memberFunctionDeclaration
                 ->get_type_elaboration_required_for_return_type();

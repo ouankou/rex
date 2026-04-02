@@ -6788,6 +6788,8 @@ SOURCE_END
 
 SOURCE_SYMBOL_TABLE_START
 
+#include <mutex>
+
 namespace
 {
   void recordFunctionSymbolForExactLookup(const SgSymbolTable* table,
@@ -9113,6 +9115,7 @@ namespace
   };
 
   typedef std::map<FunctionSymbolExactKey, std::vector<SgSymbol*> > FunctionSymbolExactIndex;
+  static std::mutex functionSymbolExactIndexesMutex;
   static std::map<const SgSymbolTable*, FunctionSymbolExactIndex> functionSymbolExactIndexes;
 
   const SgType*
@@ -9146,6 +9149,7 @@ namespace
     if (type == NULL)
       return;
 
+    std::lock_guard<std::mutex> lock(functionSymbolExactIndexesMutex);
     functionSymbolExactIndexes[table][FunctionSymbolExactKey{name, type}].push_back(symbol);
   }
 
@@ -9159,6 +9163,7 @@ namespace
     if (type == NULL)
       return;
 
+    std::lock_guard<std::mutex> lock(functionSymbolExactIndexesMutex);
     std::map<const SgSymbolTable*, FunctionSymbolExactIndex>::iterator table_it =
         functionSymbolExactIndexes.find(table);
     if (table_it == functionSymbolExactIndexes.end())
@@ -9199,6 +9204,7 @@ namespace
     if (table == NULL || type == NULL)
       return NULL;
 
+    std::lock_guard<std::mutex> lock(functionSymbolExactIndexesMutex);
     std::map<const SgSymbolTable*, FunctionSymbolExactIndex>::iterator table_it =
         functionSymbolExactIndexes.find(table);
     if (table_it == functionSymbolExactIndexes.end())

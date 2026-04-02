@@ -1,5 +1,6 @@
 #include "newHiddenList.h"
 
+#include "nonrealQualificationSupport.h"
 #include "sage3basic.h"
 
 using namespace std;
@@ -30,37 +31,6 @@ SgDeclarationStatement *preferAssociatedDefinitionForTemplateInstantiation(
   return (is_explicit_specialization || defining_decl_will_unparse)
              ? static_cast<SgDeclarationStatement *>(def_inst)
              : declaration;
-}
-
-bool nonrealTypeCarriesWrittenQualification(const SgNonrealType *nonreal_type) {
-  if (nonreal_type == NULL) {
-    return false;
-  }
-
-  const SgNonrealDecl *nrdecl =
-      isSgNonrealDecl(nonreal_type->get_declaration());
-  if (nrdecl == NULL) {
-    return false;
-  }
-
-  if (nrdecl->get_has_global_qualifier()) {
-    return true;
-  }
-
-  SgDeclarationScope *nrscope = isSgDeclarationScope(nrdecl->get_parent());
-  return nrscope != NULL && isSgNonrealDecl(nrscope->get_parent()) != NULL;
-}
-
-bool typeCarriesWrittenNonrealQualification(const SgType *type) {
-  if (type == NULL) {
-    return false;
-  }
-
-  const SgType *stripped = type->stripType(
-      SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
-      SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_POINTER_TYPE |
-      SgType::STRIP_ARRAY_TYPE);
-  return nonrealTypeCarriesWrittenQualification(isSgNonrealType(stripped));
 }
 } // namespace
 
@@ -2429,7 +2399,7 @@ HiddenListInheritedAttribute HiddenListTraversal::evaluateInheritedAttribute(
       ROSE_ASSERT(functionDeclaration->get_type()->get_return_type() != NULL);
       SgType *returnType = functionDeclaration->get_orig_return_type();
       ROSE_ASSERT(returnType != NULL);
-      if (typeCarriesWrittenNonrealQualification(returnType)) {
+      if (SageInterface::typeCarriesWrittenNonrealQualification(returnType)) {
         const bool preserve_written_type_elaboration =
             functionDeclaration
                 ->get_type_elaboration_required_for_return_type();
@@ -2561,7 +2531,7 @@ HiddenListInheritedAttribute HiddenListTraversal::evaluateInheritedAttribute(
                   NULL);
       SgType *returnType = memberFunctionDeclaration->get_orig_return_type();
       ROSE_ASSERT(returnType != NULL);
-      if (typeCarriesWrittenNonrealQualification(returnType)) {
+      if (SageInterface::typeCarriesWrittenNonrealQualification(returnType)) {
         const bool preserve_written_type_elaboration =
             memberFunctionDeclaration
                 ->get_type_elaboration_required_for_return_type();
