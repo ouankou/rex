@@ -4472,7 +4472,7 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
           class_decl->set_isAutonomousDeclaration(false);
           suppress_unparse_output(class_decl);
         }
-        var_decl->set_baseTypeDefiningDeclaration(def_decl);
+        SageInterface::setBaseTypeDefiningDeclaration(var_decl, def_decl);
         var_decl->set_variableDeclarationContainsBaseTypeDefiningDeclaration(
             true);
         return true;
@@ -4539,7 +4539,7 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
           enum_decl->set_isAutonomousDeclaration(false);
           suppress_unparse_output(enum_decl);
         }
-        var_decl->set_baseTypeDefiningDeclaration(def_decl);
+        SageInterface::setBaseTypeDefiningDeclaration(var_decl, def_decl);
         var_decl->set_variableDeclarationContainsBaseTypeDefiningDeclaration(
             true);
         return true;
@@ -9234,7 +9234,8 @@ bool ClangToSageTranslator::VisitCompoundLiteralExpr(
               defDecl->set_isAutonomousDeclaration(false);
               if (!isSgDeclarationStatement(defDecl->get_parent())) {
                 defDecl->set_parent(var_decl);
-                var_decl->set_baseTypeDefiningDeclaration(defDecl);
+                SageInterface::setBaseTypeDefiningDeclaration(var_decl,
+                                                              defDecl);
                 var_decl
                     ->set_variableDeclarationContainsBaseTypeDefiningDeclaration(
                         true);
@@ -9247,7 +9248,8 @@ bool ClangToSageTranslator::VisitCompoundLiteralExpr(
               defDecl->set_isAutonomousDeclaration(false);
               if (!isSgDeclarationStatement(defDecl->get_parent())) {
                 defDecl->set_parent(var_decl);
-                var_decl->set_baseTypeDefiningDeclaration(defDecl);
+                SageInterface::setBaseTypeDefiningDeclaration(var_decl,
+                                                              defDecl);
                 var_decl
                     ->set_variableDeclarationContainsBaseTypeDefiningDeclaration(
                         true);
@@ -14426,10 +14428,9 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
     //        if(classDecl->get_isUnNamed())
     {
       SgName varName(generate_name_for_variable(member_expr));
-      std::cerr << "build varName:" << varName << std::endl;
       SgVariableDeclaration *var_decl = SageBuilder::buildVariableDeclaration(
           varName, classType, nullptr, SageBuilder::topScopeStack());
-      var_decl->set_baseTypeDefiningDeclaration(classDefDecl);
+      SageInterface::setBaseTypeDefiningDeclaration(var_decl, classDefDecl);
       var_decl->set_variableDeclarationContainsBaseTypeDefiningDeclaration(
           true);
       var_decl->set_parent(SageBuilder::topScopeStack());

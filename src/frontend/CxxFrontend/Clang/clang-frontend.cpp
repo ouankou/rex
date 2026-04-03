@@ -6472,7 +6472,6 @@ void finishSageAST(ClangToSageTranslator &translator) {
 
       if (SgClassDefinition *class_def = class_def_decl->get_definition()) {
         class_def->set_parent(class_def_decl);
-        class_def->setTransformation();
         suppress_decl_output(class_def);
       }
     }

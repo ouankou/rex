@@ -7618,27 +7618,21 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         // This is the typical case.
         // curprint(enum_val->get_name().str());
 
-        // DQ (5/14/2018): For C++11 enum class declarations, the assocated enum
-        // value will ALWAYS require an explicit cast or additional name
-        // qualification.
         SgEnumDeclaration *enumDeclaration = enum_val->get_declaration();
-        if (enumDeclaration != NULL) {
-          if (enumDeclaration->get_isScopedEnum() == true) {
-            // curprint(enum_val->get_name().str());
-            curprint(enumDeclaration->get_name().str());
-            curprint("(");
-            string valueString =
-                StringUtility::numberToString(enum_val->get_value());
-            curprint(valueString);
-            curprint(")");
-          } else {
-            curprint(enum_val->get_name().str());
-          }
-        } else {
-          curprint(enum_val->get_name().str());
-        }
+        curprint(enum_val->get_name().str());
       } else {
-        curprint(tostring(enum_val->get_value()));
+        SgEnumDeclaration *enumDeclaration = enum_val->get_declaration();
+        if (enumDeclaration != NULL && enumDeclaration->get_isScopedEnum() &&
+            enumDeclaration->get_name().is_null() == false) {
+          curprint(enumDeclaration->get_name().str());
+          curprint("(");
+          string valueString =
+              StringUtility::numberToString(enum_val->get_value());
+          curprint(valueString);
+          curprint(")");
+        } else {
+          curprint(tostring(enum_val->get_value()));
+        }
       }
     }
 

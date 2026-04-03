@@ -43,6 +43,23 @@ bool should_replace_type_name(const std::string &existing,
   return candidate.size() > existing.size();
 }
 
+bool should_preseed_referenced_name_for_untraversed_declaration(
+    SgNode *reference_node, SgDeclarationStatement *declaration) {
+  if (reference_node == NULL || declaration == NULL) {
+    return true;
+  }
+
+  SgSourceFile *reference_file =
+      SageInterface::getEnclosingSourceFile(reference_node);
+  SgSourceFile *declaration_file =
+      SageInterface::getEnclosingSourceFile(declaration);
+  if (reference_file == NULL || declaration_file == NULL) {
+    return true;
+  }
+
+  return reference_file != declaration_file;
+}
+
 std::string build_explicit_qualifier_string(const SgStringList &tokens,
                                             bool explicit_global) {
   std::string qualifier;
@@ -7235,6 +7252,8 @@ void NameQualificationTraversal::nameQualificationTypeSupport(
            scopeOfDeclaration->variantT() != V_SgBasicBlock);
 
       if (acceptableDeclarationScope == true &&
+          should_preseed_referenced_name_for_untraversed_declaration(
+              currentStatement, declarationForReferencedNameSet) &&
           referencedNameSet.find(declarationForReferencedNameSet) ==
               referencedNameSet.end()) {
         referencedNameSet.insert(declarationForReferencedNameSet);
@@ -10608,6 +10627,8 @@ NameQualificationTraversal::evaluateInheritedAttribute(
              scopeOfDeclaration->variantT() != V_SgBasicBlock);
 
         if (acceptableDeclarationScope == true &&
+            should_preseed_referenced_name_for_untraversed_declaration(
+                currentStatement, declarationForReferencedNameSet) &&
             referencedNameSet.find(declarationForReferencedNameSet) ==
                 referencedNameSet.end()) {
           referencedNameSet.insert(declarationForReferencedNameSet);

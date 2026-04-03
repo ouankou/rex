@@ -3,6 +3,7 @@ include_directories( ${CMAKE_SOURCE_DIR}/src/frontend/Experimental_General_Langu
 add_library(sageInterface OBJECT
   sageInterface.C
   sageInterface_type.C
+  nonrealQualificationSupport.C
   generateUniqueName.C
   sageBuilder.C
   sageBuilder_fortran.C
