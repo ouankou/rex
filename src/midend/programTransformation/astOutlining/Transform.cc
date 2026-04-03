@@ -1366,9 +1366,9 @@ SgSourceFile *Outliner::getLibSourceFile(SgBasicBlock *target) {
     // par1: input file, par 2: output file name, par 3: the project to attach
     // the new file to simplify the lib file generation, we copy entire original
     // source file to it, then later append outlined functions
-    new_file = isSgSourceFile(buildSourceFile(
-        input_file_name, new_file_name,
-        project)); // TODO: should we pass false as the last parameter?
+    new_file =
+        isSgSourceFile(buildSourceFile(input_file_name, new_file_name, project,
+                                       /*clear_globalScopeAcrossFiles=*/true));
 
     if (enable_debug) {
       printf("DONE: In Outliner::getLibSourceFile(): Calling "

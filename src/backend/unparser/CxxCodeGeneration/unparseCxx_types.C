@@ -23,76 +23,7 @@ using namespace std;
 #define OUTPUT_DEBUGGING_FUNCTION_INTERNALS 0
 #define OUTPUT_DEBUGGING_UNPARSE_INFO 0
 
-static const char *kInlineTypeOperandStandaloneSuppressAttribute =
-    "rex:inline-type-operand-standalone-suppress";
-
-class InlineTypeOperandStandaloneSuppressAttribute : public AstAttribute {
-public:
-  AstAttribute *copy() const override {
-    return new InlineTypeOperandStandaloneSuppressAttribute(*this);
-  }
-};
-
-static void suppressStandaloneOutputForMatchingScopeClassDecls(
-    SgClassDeclaration *seed_decl) {
-  if (seed_decl == nullptr || seed_decl->get_scope() == nullptr) {
-    return;
-  }
-
-  const SgName seed_name = seed_decl->get_name();
-  if (seed_name.is_null()) {
-    return;
-  }
-
-  auto physical_start_line = [](SgLocatedNode *node) -> int {
-    if (node == nullptr) {
-      return -1;
-    }
-    if (node->get_startOfConstruct() != nullptr) {
-      return node->get_startOfConstruct()->get_physical_line();
-    }
-    if (node->get_file_info() != nullptr) {
-      return node->get_file_info()->get_physical_line();
-    }
-    return -1;
-  };
-
-  const int seed_line = physical_start_line(seed_decl);
-  std::function<void(SgNode *)> visit = [&](SgNode *node) {
-    if (node == nullptr) {
-      return;
-    }
-
-    if (SgClassDeclaration *candidate = isSgClassDeclaration(node)) {
-      if (candidate->get_scope() == seed_decl->get_scope() &&
-          candidate->get_name() == seed_name &&
-          physical_start_line(candidate) == seed_line) {
-        candidate->set_isAutonomousDeclaration(false);
-        if (!candidate->attributeExists(
-                kInlineTypeOperandStandaloneSuppressAttribute)) {
-          candidate->setAttribute(
-              kInlineTypeOperandStandaloneSuppressAttribute,
-              new InlineTypeOperandStandaloneSuppressAttribute());
-        }
-        if (candidate->get_file_info() != nullptr) {
-          candidate->get_file_info()->unsetOutputInCodeGeneration();
-        }
-        if (candidate->get_startOfConstruct() != nullptr) {
-          candidate->get_startOfConstruct()->unsetOutputInCodeGeneration();
-        }
-        if (candidate->get_endOfConstruct() != nullptr) {
-          candidate->get_endOfConstruct()->unsetOutputInCodeGeneration();
-        }
-      }
-    }
-
-    for (SgNode *child : node->get_traversalSuccessorContainer()) {
-      visit(child);
-    }
-  };
-
-  visit(seed_decl->get_scope());
-}
+string get_type_name(SgType *t);
 
 Unparse_Type::Unparse_Type(Unparser *unp) : unp(unp) {
   // Nothing to do here!
@@ -348,6 +279,7 @@ bool typedefRequiresDependentOwnerTypename(const SgTypedefDeclaration *tdecl,
   return owner_scope != nullptr && reference_scope != nullptr &&
          owner_scope != reference_scope;
 }
+
 } // namespace
 
 string get_type_name(SgType *t) {
@@ -460,24 +392,10 @@ string get_type_name(SgType *t) {
     return "char*";
 
   case T_BOOL: {
-    // DQ (8/27/2006): Modified to support C99 "_Bool" type (accepted by some C
-    // compilers, e.g. gcc). return "bool";
-
-    // DQ (8/27/2006): Later we want to make this an error!
-    // if (SgProject::get_C_only() == true)
-    if (SageInterface::is_C_language() == true) {
-    }
-
-    // DQ (10/27/2012): Modified to generate consistant with C applications used
-    // with GNU. I'm not sure if this is a great idea, but it appears to be more
-    // consistant with the larger scale C applications that we are seeing.
-    // ROSE_ASSERT(SgProject::get_C_only() == false);
-    // return (SgProject::get_C99_only() == true) ? "_Bool" : "bool";
-    // return (SageInterface::is_C99_language() == true) ? "_Bool" : "bool";
-    return (SageInterface::is_C99_language() == true ||
-            SageInterface::is_C_language() == true)
-               ? "_Bool"
-               : "bool";
+    // get_type_name() is used to build context-free type strings for
+    // qualification and lookup. Language-specific spelling belongs in
+    // unparseType(), which has access to the active source file.
+    return "bool";
   }
 
     // DQ (8/27/2006): Now this is finally done better!
@@ -752,6 +670,25 @@ void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
   // name qualification is required for subtypes (e.g. template arguments)).
   SgNode *nodeReferenceToType = info.get_reference_node_for_qualification();
 
+  auto currentBoolTypeName = [&]() -> std::string {
+    if (unp != nullptr && unp->currentFile != nullptr) {
+      SgFile *file = unp->currentFile;
+      const bool is_c_output =
+          file->get_outputLanguage() == SgFile::e_C_language ||
+          (file->get_outputLanguage() == SgFile::e_default_language &&
+           (file->get_C_only() || file->get_C89_only() ||
+            file->get_C90_only() || file->get_C99_only() ||
+            file->get_C11_only() || file->get_C17_only() ||
+            file->get_C23_only() || file->get_C2y_only()));
+      if (is_c_output) {
+        return "_Bool";
+      }
+      return "bool";
+    }
+
+    return get_type_name(SageBuilder::buildBoolType());
+  };
+
   SgInitializedName *init_name_reference_node =
       isSgInitializedName(nodeReferenceToType);
   if (init_name_reference_node != NULL) {
@@ -804,9 +741,8 @@ void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
     if (SgClassType *class_type = isSgClassType(type->findBaseType())) {
       if (SgTemplateInstantiationDecl *inst_decl =
               isSgTemplateInstantiationDecl(class_type->get_declaration())) {
-        if (inst_decl->get_templateArguments().empty()) {
-          allowGeneratedTypeName = false;
-        }
+        (void)inst_decl;
+        allowGeneratedTypeName = false;
       }
     }
   }
@@ -939,7 +875,11 @@ void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
           info.isTypeSecondPart()) {
         /* do nothing */
       } else {
-        curprint(get_type_name(type) + " ");
+        if (type->variant() == T_BOOL) {
+          curprint(currentBoolTypeName() + " ");
+        } else {
+          curprint(get_type_name(type) + " ");
+        }
       }
       break;
     }
@@ -1408,6 +1348,28 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
         nrtype != nullptr ? nrtype->get_declaration() : nullptr);
     return nrdecl != nullptr && nrdecl->get_has_global_qualifier();
   };
+  auto type_spells_its_own_qualification = [](SgType *candidate) {
+    SgType *stripped =
+        candidate != nullptr
+            ? candidate->stripType(SgType::STRIP_MODIFIER_TYPE |
+                                   SgType::STRIP_REFERENCE_TYPE |
+                                   SgType::STRIP_RVALUE_REFERENCE_TYPE)
+            : nullptr;
+    SgNonrealType *nrtype = isSgNonrealType(stripped);
+    SgNonrealDecl *nrdecl = isSgNonrealDecl(
+        nrtype != nullptr ? nrtype->get_declaration() : nullptr);
+    if (nrdecl == nullptr) {
+      return false;
+    }
+
+    if (nrdecl->get_has_global_qualifier()) {
+      return true;
+    }
+
+    SgDeclarationScope *nrscope = isSgDeclarationScope(nrdecl->get_parent());
+    return nrscope != nullptr &&
+           isSgNonrealDecl(nrscope->get_parent()) != nullptr;
+  };
   auto emit_member_pointer_class_prefix_from_ast =
       [&](SgType *class_type) -> bool {
     SgNonrealType *nrtype = isSgNonrealType(class_type);
@@ -1434,6 +1396,73 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
     }
 
     return false;
+  };
+  auto emit_member_pointer_scope_prefix = [&](auto &&self,
+                                              SgScopeStatement *scope) -> bool {
+    if (scope == nullptr || isSgGlobal(scope) != nullptr) {
+      return false;
+    }
+
+    if (SgDeclarationScope *decl_scope = isSgDeclarationScope(scope)) {
+      return self(self, isSgScopeStatement(decl_scope->get_parent()));
+    }
+
+    if (SgNamespaceDefinitionStatement *nsdef =
+            isSgNamespaceDefinitionStatement(scope)) {
+      SgNamespaceDeclarationStatement *nsdecl =
+          nsdef->get_namespaceDeclaration();
+      if (nsdecl == nullptr || nsdecl->get_name().is_null()) {
+        return false;
+      }
+
+      self(self, nsdecl->get_scope());
+      curprint(nsdecl->get_name().str());
+      curprint("::");
+      return true;
+    }
+
+    auto emit_enclosing_class = [&](SgClassDeclaration *parent_decl) -> bool {
+      if (parent_decl == nullptr) {
+        return false;
+      }
+
+      if (SgClassDeclaration *first_nondef = isSgClassDeclaration(
+              parent_decl->get_firstNondefiningDeclaration())) {
+        parent_decl = first_nondef;
+      }
+
+      self(self, parent_decl->get_scope());
+      curprint(get_type_name(parent_decl->get_type()));
+      curprint("::");
+      return true;
+    };
+
+    if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+      return emit_enclosing_class(
+          isSgClassDeclaration(class_def->get_declaration()));
+    }
+    if (SgTemplateClassDefinition *class_def =
+            isSgTemplateClassDefinition(scope)) {
+      return emit_enclosing_class(
+          isSgClassDeclaration(class_def->get_declaration()));
+    }
+    if (SgTemplateInstantiationDefn *class_def =
+            isSgTemplateInstantiationDefn(scope)) {
+      return emit_enclosing_class(
+          isSgClassDeclaration(class_def->get_declaration()));
+    }
+
+    return false;
+  };
+  auto emit_member_pointer_class_prefix_from_decl_scope =
+      [&](SgDeclarationStatement *decl) -> bool {
+    SgClassDeclaration *class_decl = isSgClassDeclaration(decl);
+    if (class_decl == nullptr) {
+      return false;
+    }
+
+    return emit_member_pointer_scope_prefix(emit_member_pointer_scope_prefix,
+                                            class_decl->get_scope());
   };
 
 #define DEBUG_MEMBER_POINTER_TYPE 0
@@ -1486,15 +1515,16 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
       // for the SgPointerMemberType when it is a member function pointer.
       SgName nameQualifierForBaseType =
           mpointer_type->get_qualified_name_prefix_for_base_type();
-
 #if DEBUG_MEMBER_POINTER_TYPE || 0
       printf("In unparseMemberPointerType(): pointer to member data: "
              "nameQualifierForBaseType = %s \n",
              nameQualifierForBaseType.str());
 #endif
 
-      // DQ (4/21/2019): Output the associated name qualification.
-      curprint(nameQualifierForBaseType);
+      // AST-preserved written qualified types already carry their own prefix.
+      if (!type_spells_its_own_qualification(mfnType->get_return_type())) {
+        curprint(nameQualifierForBaseType);
+      }
 
       // DQ (1/20/2019): Suppress the definition (for enum, function, and class
       // types). unparseType(mfnType->get_return_type(), info); // first part
@@ -1548,10 +1578,16 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
       if (nameQualifier.is_null()) {
         if (emit_member_pointer_class_prefix_from_ast(
                 mpointer_type->get_class_type()) == false &&
+            emit_member_pointer_class_prefix_from_decl_scope(
+                mpointer_type->get_class_declaration_of()) == false &&
             class_type_has_explicit_global_qualifier(
                 mpointer_type->get_class_type())) {
           curprint("::");
         }
+      } else if (nameQualifier.str() == std::string("::") &&
+                 class_type_has_explicit_global_qualifier(
+                     mpointer_type->get_class_type()) == false) {
+        nameQualifier = SgName("");
       }
       curprint(nameQualifier.str());
 
@@ -1677,8 +1713,10 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
       SgName nameQualifierForBaseType =
           mpointer_type->get_qualified_name_prefix_for_base_type();
 
-      // DQ (4/21/2019): Output the associated name qualification.
-      curprint(nameQualifierForBaseType);
+      // AST-preserved written qualified types already carry their own prefix.
+      if (!type_spells_its_own_qualification(btype)) {
+        curprint(nameQualifierForBaseType);
+      }
 
       // DQ (5/19/2019): If there was name qualification, then we didn't need
       // the class specifier (and it would be put in the wrong place anyway).
@@ -1718,10 +1756,16 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
       if (nameQualifier.is_null()) {
         if (emit_member_pointer_class_prefix_from_ast(
                 mpointer_type->get_class_type()) == false &&
+            emit_member_pointer_class_prefix_from_decl_scope(
+                mpointer_type->get_class_declaration_of()) == false &&
             class_type_has_explicit_global_qualifier(
                 mpointer_type->get_class_type())) {
           curprint("::");
         }
+      } else if (nameQualifier.str() == std::string("::") &&
+                 class_type_has_explicit_global_qualifier(
+                     mpointer_type->get_class_type()) == false) {
+        nameQualifier = SgName("");
       }
       curprint(nameQualifier.str());
 
@@ -1909,9 +1953,9 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
 #endif
 
   if (decl->get_definition() == NULL) {
-    // We likely have a forward declaration so get the defining declaration if
-    // it is available (likely the first non-defining declaration and the
-    // forward declaration are the same).
+    // The shared type often points at the first nondefining declaration. When
+    // a defining declaration exists, use that AST node so inline/attached
+    // record definitions are emitted from the real declaration site.
     ASSERT_not_null(class_type->get_declaration());
     if (decl->get_definingDeclaration() != NULL) {
       ASSERT_not_null(decl->get_definingDeclaration());
@@ -1920,7 +1964,6 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
              "defining declaration from decl = %p to decl = %p \n",
              decl, decl->get_definingDeclaration());
 #endif
-      // DQ (9/23/2012): Original version of code.
       decl = isSgClassDeclaration(decl->get_definingDeclaration());
       ASSERT_not_null(decl);
       ASSERT_not_null(decl->get_definition());
@@ -1931,12 +1974,9 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
     }
   }
 
-  // DQ (7/28/2013): Added assertion.
   ROSE_ASSERT(decl == decl->get_definingDeclaration() ||
               decl->get_definingDeclaration() == NULL);
 
-  // GB (09/19/2007): This is the defining declaration of the class, it might
-  // have preprocessing information attached to it.
   SgClassDeclaration *cDefiningDecl =
       isSgClassDeclaration(decl->get_definingDeclaration());
 
@@ -2184,7 +2224,6 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
             nameQualifier = unp->u_name->lookup_generated_qualified_name(
                 info.get_reference_node_for_qualification());
           }
-
 #if DEBUG_UNPARSE_CLASS_TYPE
           printf("nameQualifier (from "
                  "initializedName->get_qualified_name_prefix_for_type() "
@@ -2347,14 +2386,10 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
 #if DEBUG_UNPARSE_CLASS_TYPE
       printf("In unparseClassType: for decl = %p = %s we want to output the "
              "class definition = %p \n",
-             decl, decl->class_name().c_str(), classdefn_stmt);
+             declForDefinition, declForDefinition->class_name().c_str(),
+             classdefn_stmt);
 #endif
       if (classdefn_stmt != NULL) {
-        if (info.get_reference_node_for_qualification() != NULL &&
-            info.inArgList()) {
-          suppressStandaloneOutputForMatchingScopeClassDecls(decl);
-        }
-
         SgUnparse_Info ninfo(info);
         ninfo.unset_SkipSemiColon();
 

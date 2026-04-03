@@ -66,11 +66,14 @@ struct Vis : public ROSE_VisitTraversal {
 
 int main(int argc, char *argv[]) {
   SgProject *project = frontend(argc, argv);
+  int frontend_status = frontendExitStatus(project);
+  if (frontend_status != 0) {
+    return frontend_status;
+  }
+
   MemoryPoolFilterGuard guard(project);
   Vis().traverseMemoryPool();
-  // return (VALGRIND_COUNT_ERRORS != 0) ? 1 : 0;
-  return 0; // JJW hack: this is making the regression tests fail (probably
-            // properly) because there are uninitialized fields
+  return (VALGRIND_COUNT_ERRORS != 0) ? 1 : 0;
 }
 
 #else // !ROSE_USE_VALGRIND

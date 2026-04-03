@@ -184,7 +184,7 @@ string conditionalToCopyVariable(string typeName, string variableNameSource,
   string returnString = "          if (" + variableNameSource + " != NULL) \n" +
                         "             { \n" + "               " +
                         variableNameCopy + " = static_cast<" + typeName +
-                        ">(help.copyAst(" + iteratorName + ")); \n" +
+                        ">(help.copyOrLookupAst(" + iteratorName + ")); \n" +
                         "             } \n" + "            else \n" +
                         "             { \n" + "               " +
                         variableNameCopy + " = NULL; \n" + "             } \n";

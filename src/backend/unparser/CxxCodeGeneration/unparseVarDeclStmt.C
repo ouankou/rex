@@ -97,7 +97,11 @@ static bool setup_decl_item_type_unparse_infos(SgUnparse_Info &ninfo_for_type,
   ninfo_for_type.set_type_elaboration_required(
       decl_item->get_type_elaboration_required_for_type());
 
-  if (vdecl->get_isAssociatedWithDeclarationList()) {
+  bool is_later_decl_item = decl_item != nullptr &&
+                            !vdecl->get_variables().empty() &&
+                            decl_item != vdecl->get_variables().front();
+
+  if (vdecl->get_isAssociatedWithDeclarationList() || is_later_decl_item) {
     if (ninfo_for_type.SkipBaseType()) {
       SgPointerType *pointerType = isSgPointerType(decl_type);
       SgPointerType *nested_pointerType =
@@ -1369,12 +1373,12 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
            decl_type->class_name().c_str());
 #endif
 
-    if (vdecl_iname_it != vardecl_stmt->get_variables().begin()) {
-      // FIXME could need piece of type (const, *, &) and initializer
-      curprint(decl_name.str());
-    } else {
-      bool apply_vdecl_attr =
-          !ninfo.inEnumDecl() && !ninfo.inArgList() && !ninfo.SkipSemiColon();
+    bool is_first_decl_item =
+        vdecl_iname_it == vardecl_stmt->get_variables().begin();
+    bool apply_vdecl_attr =
+        !ninfo.inEnumDecl() && !ninfo.inArgList() && !ninfo.SkipSemiColon();
+
+    if (is_first_decl_item) {
 
       unp->u_exprStmt->unparseAttachedPreprocessingInfo(
           decl_item, info, PreprocessingInfo::before);
@@ -1391,62 +1395,60 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
           curprint("thread_local ");
         }
       }
+    }
 
-      SgUnparse_Info ninfo_for_type(ninfo);
-      std::string unparse_str{""};
-      if (setup_decl_item_type_unparse_infos(ninfo_for_type, vardecl_stmt,
-                                             decl_item, decl_type,
-                                             unparse_str)) {
-        unp->u_type->unparseType(decl_type, ninfo_for_type);
-      } else {
-        curprint(unparse_str);
-      }
-
-      if (apply_vdecl_attr)
-        unp->u_sage->printAttributesForType(vardecl_stmt, info);
-
-      curprint(build_decl_item_name(
-          decl_item, decl_item == vardecl_stmt->get_variables().front()
-                         ? normalized_static_member_prefix
-                         : std::string()));
-      if (SgTemplateVariableDeclaration *template_var_decl =
-              isSgTemplateVariableDeclaration(vardecl_stmt)) {
-        const SgTemplateArgumentPtrList &spec_args =
-            template_var_decl->get_templateSpecializationArguments();
-        if (!spec_args.empty()) {
-          SgUnparse_Info tinfo(ninfo);
-          tinfo.set_declstatement_ptr(template_var_decl);
-          unparseTemplateArgumentList(spec_args, tinfo);
-        }
-      }
-
-      ninfo_for_type.set_isTypeSecondPart();
+    SgUnparse_Info ninfo_for_type(ninfo);
+    std::string unparse_str{""};
+    if (setup_decl_item_type_unparse_infos(ninfo_for_type, vardecl_stmt,
+                                           decl_item, decl_type, unparse_str)) {
       unp->u_type->unparseType(decl_type, ninfo_for_type);
+    } else {
+      curprint(unparse_str);
+    }
 
-      curprint(build_decl_item_asm_register(decl_item));
+    if (is_first_decl_item && apply_vdecl_attr)
+      unp->u_sage->printAttributesForType(vardecl_stmt, info);
 
-      unp->u_sage->printAttributes(decl_item, info);
-      if (apply_vdecl_attr)
-        unp->u_sage->printAttributes(vardecl_stmt, info);
-
-      bool need_assign = false;
-      bool need_initializer = false;
-      need_assign_and_initializer_unparsed(
-          decl_item, need_assign, need_initializer, ninfo,
-          isSgForInitStatement(vardecl_stmt->get_parent()));
-      if (need_assign)
-        curprint(" = ");
-      if (need_initializer) {
-        SgUnparse_Info statementInfo(ninfo);
-        statementInfo.set_SkipClassDefinition();
-        statementInfo.set_SkipEnumDefinition();
-        statementInfo.set_declstatement_ptr(NULL);
-        statementInfo.set_reference_node_for_qualification(decl_init);
-        ASSERT_not_null(statementInfo.get_reference_node_for_qualification());
-        ROSE_ASSERT(statementInfo.SkipClassDefinition() ==
-                    statementInfo.SkipEnumDefinition());
-        unparseExpression(decl_init, statementInfo);
+    curprint(build_decl_item_name(
+        decl_item,
+        is_first_decl_item ? normalized_static_member_prefix : std::string()));
+    if (SgTemplateVariableDeclaration *template_var_decl =
+            isSgTemplateVariableDeclaration(vardecl_stmt)) {
+      const SgTemplateArgumentPtrList &spec_args =
+          template_var_decl->get_templateSpecializationArguments();
+      if (!spec_args.empty()) {
+        SgUnparse_Info tinfo(ninfo);
+        tinfo.set_declstatement_ptr(template_var_decl);
+        unparseTemplateArgumentList(spec_args, tinfo);
       }
+    }
+
+    ninfo_for_type.set_isTypeSecondPart();
+    unp->u_type->unparseType(decl_type, ninfo_for_type);
+
+    curprint(build_decl_item_asm_register(decl_item));
+
+    unp->u_sage->printAttributes(decl_item, info);
+    if (is_first_decl_item && apply_vdecl_attr)
+      unp->u_sage->printAttributes(vardecl_stmt, info);
+
+    bool need_assign = false;
+    bool need_initializer = false;
+    need_assign_and_initializer_unparsed(
+        decl_item, need_assign, need_initializer, ninfo,
+        isSgForInitStatement(vardecl_stmt->get_parent()));
+    if (need_assign)
+      curprint(" = ");
+    if (need_initializer) {
+      SgUnparse_Info statementInfo(ninfo);
+      statementInfo.set_SkipClassDefinition();
+      statementInfo.set_SkipEnumDefinition();
+      statementInfo.set_declstatement_ptr(NULL);
+      statementInfo.set_reference_node_for_qualification(decl_init);
+      ASSERT_not_null(statementInfo.get_reference_node_for_qualification());
+      ROSE_ASSERT(statementInfo.SkipClassDefinition() ==
+                  statementInfo.SkipEnumDefinition());
+      unparseExpression(decl_init, statementInfo);
     }
 
     vdecl_iname_it++;

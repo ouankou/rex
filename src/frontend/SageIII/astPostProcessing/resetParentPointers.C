@@ -689,6 +689,19 @@ void ResetParentPointers::resetParentPointersInTemplateArgumentList(
 }
 
 namespace {
+SgClassDeclaration *canonicalClassSymbolDeclaration(SgClassDeclaration *decl) {
+  if (decl == nullptr) {
+    return nullptr;
+  }
+
+  if (SgClassDeclaration *first =
+          isSgClassDeclaration(decl->get_firstNondefiningDeclaration())) {
+    return first;
+  }
+
+  return decl;
+}
+
 void repairSymbolTableParents(SgScopeStatement *scope) {
   if (scope == nullptr)
     return;
@@ -723,6 +736,80 @@ void repairSymbolTableParents(SgScopeStatement *scope) {
   if (isSgGlobal(scope) || isSgNamespaceDefinitionStatement(scope) ||
       isSgClassDefinition(scope) || isSgTemplateClassDefinition(scope) ||
       isSgTemplateInstantiationDefn(scope)) {
+    auto class_decl_matches = [](SgClassDeclaration *lhs,
+                                 SgClassDeclaration *rhs) -> bool {
+      if (lhs == nullptr || rhs == nullptr) {
+        return false;
+      }
+      if (lhs == rhs) {
+        return true;
+      }
+      SgClassDeclaration *lhs_first =
+          isSgClassDeclaration(lhs->get_firstNondefiningDeclaration());
+      if (lhs_first == nullptr) {
+        lhs_first = lhs;
+      }
+      SgClassDeclaration *rhs_first =
+          isSgClassDeclaration(rhs->get_firstNondefiningDeclaration());
+      if (rhs_first == nullptr) {
+        rhs_first = rhs;
+      }
+      return lhs_first == rhs_first;
+    };
+    auto scope_has_class_symbol = [&](SgClassDeclaration *decl) -> bool {
+      if (scope == nullptr || decl == nullptr) {
+        return false;
+      }
+      SgName name = decl->get_name();
+      if (name.getString().empty()) {
+        return false;
+      }
+      if (SgTemplateClassDeclaration *template_decl =
+              isSgTemplateClassDeclaration(decl)) {
+        if (SgTemplateClassSymbol *sym =
+                scope->lookup_template_class_symbol(name, nullptr, nullptr)) {
+          return isSgTemplateClassDeclaration(sym->get_declaration()) ==
+                 template_decl;
+        }
+      }
+      if (SgClassSymbol *sym = scope->lookup_class_symbol(name)) {
+        return class_decl_matches(sym->get_declaration(), decl);
+      }
+      return false;
+    };
+    auto scope_has_enum_symbol = [&](SgEnumDeclaration *decl) -> bool {
+      if (scope == nullptr || decl == nullptr) {
+        return false;
+      }
+      SgName name = decl->get_name();
+      if (name.getString().empty()) {
+        return false;
+      }
+      if (SgEnumSymbol *sym = scope->lookup_enum_symbol(name)) {
+        return sym->get_declaration() == decl;
+      }
+      return false;
+    };
+    auto class_symbol_belongs_to_scope = [&](SgClassDeclaration *decl) -> bool {
+      if (scope == nullptr || decl == nullptr) {
+        return false;
+      }
+      if (decl->get_scope() != scope) {
+        return false;
+      }
+
+      SgNamedType *named_type = isSgNamedType(decl->get_type());
+      if (named_type == nullptr) {
+        return true;
+      }
+
+      SgDeclarationStatement *type_decl = named_type->get_declaration();
+      if (type_decl == nullptr || type_decl->get_scope() == nullptr) {
+        return true;
+      }
+
+      return type_decl->get_scope() == scope;
+    };
     SgDeclarationStatementPtrList &decls = scope->getDeclarationList();
     for (SgDeclarationStatement *decl : decls) {
       if (decl == nullptr)
@@ -730,25 +817,33 @@ void repairSymbolTableParents(SgScopeStatement *scope) {
 
       if (SgTemplateInstantiationDecl *tid =
               isSgTemplateInstantiationDecl(decl)) {
-        if (tid->get_name().getString().empty())
+        SgClassDeclaration *symbol_decl = canonicalClassSymbolDeclaration(tid);
+        ROSE_ASSERT(symbol_decl != nullptr);
+        if (symbol_decl->get_name().getString().empty())
           continue;
-        if (tid->search_for_symbol_from_symbol_table() != nullptr)
+        if (!class_symbol_belongs_to_scope(symbol_decl))
           continue;
-        SgClassSymbol *sym = new SgClassSymbol(tid);
+        if (scope_has_class_symbol(symbol_decl))
+          continue;
+        SgClassSymbol *sym = new SgClassSymbol(symbol_decl);
         if (table != nullptr) {
-          table->insert(tid->get_name(), sym);
+          table->insert(symbol_decl->get_name(), sym);
           sym->set_parent(table);
         }
         continue;
       }
 
       if (SgClassDeclaration *cd = isSgClassDeclaration(decl)) {
-        if (cd->get_name().getString().empty())
+        SgClassDeclaration *symbol_decl = canonicalClassSymbolDeclaration(cd);
+        ROSE_ASSERT(symbol_decl != nullptr);
+        if (symbol_decl->get_name().getString().empty())
           continue;
-        if (cd->search_for_symbol_from_symbol_table() != nullptr)
+        if (!class_symbol_belongs_to_scope(symbol_decl))
+          continue;
+        if (scope_has_class_symbol(symbol_decl))
           continue;
         if (SgTemplateClassDeclaration *tcd =
-                isSgTemplateClassDeclaration(cd)) {
+                isSgTemplateClassDeclaration(symbol_decl)) {
           SgTemplateClassSymbol *sym = new SgTemplateClassSymbol(tcd);
           if (table != nullptr) {
             table->insert(tcd->get_name(), sym);
@@ -757,9 +852,9 @@ void repairSymbolTableParents(SgScopeStatement *scope) {
           continue;
         }
 
-        SgClassSymbol *sym = new SgClassSymbol(cd);
+        SgClassSymbol *sym = new SgClassSymbol(symbol_decl);
         if (table != nullptr) {
-          table->insert(cd->get_name(), sym);
+          table->insert(symbol_decl->get_name(), sym);
           sym->set_parent(table);
         }
         continue;
@@ -768,7 +863,7 @@ void repairSymbolTableParents(SgScopeStatement *scope) {
       if (SgEnumDeclaration *ed = isSgEnumDeclaration(decl)) {
         if (ed->get_name().getString().empty())
           continue;
-        if (ed->search_for_symbol_from_symbol_table() != nullptr)
+        if (scope_has_enum_symbol(ed))
           continue;
         SgEnumSymbol *sym = new SgEnumSymbol(ed);
         if (table != nullptr) {

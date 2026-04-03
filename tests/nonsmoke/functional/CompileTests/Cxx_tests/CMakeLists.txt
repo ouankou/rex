@@ -491,7 +491,6 @@ set(CXX_TESTCODES
   test2005_66.C
   test2005_67.C
   test2005_68.C
-  test2005_69.C
   test2005_70.C
   test2005_71.C
   test2005_72.C
@@ -3029,9 +3028,6 @@ list(APPEND CXX_TESTCODES
 list(APPEND CXX_TESTCODES
   test2006_131.C
   test2014_22.C
-  test2014_63.C
-  # Intentionally non-compiling template metaprogramming specimen.
-  test2015_109.C
 )
 
 list(APPEND CXX_TESTCODES
@@ -3045,7 +3041,8 @@ set(CXX_TESTCODES_GNUXX03
 list(REMOVE_ITEM CXX_TESTCODES ${CXX_TESTCODES_GNUXX03})
 
 set(CXX_TESTCODES_GNUXX17
-  # These use C++17 library/features (variant/filesystem/*_v traits/CTAD).
+  # These use C++17 library/features (variant/filesystem/*_v traits/CTAD),
+  # or include ROSE headers that now require at least C++17.
   rex_test2026_template_features.cpp
   rex_test2026_stl_map.cpp
   rex_test2026_stl_meta.cpp
@@ -3054,6 +3051,8 @@ set(CXX_TESTCODES_GNUXX17
   rex_test2026_deduction_guide.cpp
   rex_test2026_std_filesystem.cpp
   rex_test2026_std_variant_visit.cpp
+  test2010_02.C
+  test2017_99.C
 )
 list(REMOVE_ITEM CXX_TESTCODES ${CXX_TESTCODES_GNUXX17})
 
@@ -3076,6 +3075,25 @@ assert_cxx_specimens_exist(CXX_TESTCODES_GNUXX17)
 assert_cxx_specimens_exist(CXX_TESTCODES_DELAYED_TEMPLATE_PARSING)
 assert_cxx_specimens_exist(CXX_TESTCODES)
 
+# Keep intentionally ill-formed frontend specimens visible in CTest as
+# negative coverage instead of registering them as positive compile tests.
+# `test2017_08.C` is a frozen legacy libstdc++ snapshot that no longer compiles
+# as a standalone source with modern compilers because it accesses private
+# `std::complex` storage directly instead of using the public `__rep()` helper.
+set(CXX_TESTCODES_NEGATIVE
+  test2005_69.C
+  test2015_84.C
+  test2014_63.C
+  # Intentionally non-compiling template metaprogramming specimen.
+  test2015_109.C
+  test2017_08.C
+)
+assert_cxx_specimens_exist(CXX_TESTCODES_NEGATIVE)
+list(REMOVE_ITEM CXX_TESTCODES ${CXX_TESTCODES_NEGATIVE})
+list(REMOVE_ITEM CXX_TESTCODES_GNUXX03 ${CXX_TESTCODES_NEGATIVE})
+list(REMOVE_ITEM CXX_TESTCODES_GNUXX17 ${CXX_TESTCODES_NEGATIVE})
+list(REMOVE_ITEM CXX_TESTCODES_DELAYED_TEMPLATE_PARSING ${CXX_TESTCODES_NEGATIVE})
+
 rex_register_compile_source_set(REX_CXX_TESTS_GNUXX03_SOURCES
   ${CXX_TESTCODES_GNUXX03})
 rex_register_compile_source_set(REX_CXX_TESTS_GNUXX17_SOURCES
@@ -3083,7 +3101,10 @@ rex_register_compile_source_set(REX_CXX_TESTS_GNUXX17_SOURCES
 rex_register_compile_source_set(REX_CXX_TESTS_DELAYED_TEMPLATE_PARSING_SOURCES
   ${CXX_TESTCODES_DELAYED_TEMPLATE_PARSING})
 rex_register_compile_source_set(REX_CXX_TESTS_DEFAULT_SOURCES
-  ${CXX_TESTCODES})
+  ${CXX_TESTCODES}
+  ${CXX_TESTCODES_NEGATIVE})
+rex_register_compile_source_set(REX_CXX_TESTS_NEGATIVE_SOURCES
+  ${CXX_TESTCODES_NEGATIVE})
 
 set(ROSE_FLAGS
   -w -rose:verbose 0
@@ -3140,14 +3161,18 @@ foreach(file_to_test ${CXX_TESTCODES})
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endforeach()
 
-# Additional unfolded-constants coverage for the default CTest run.
-set(_unfolded_constants_tests ${CXX_TESTCODES})
-list(FILTER _unfolded_constants_tests INCLUDE REGEX "\\.C$")
-list(REMOVE_DUPLICATES _unfolded_constants_tests)
+foreach(file_to_test ${CXX_TESTCODES_NEGATIVE})
+  compile_negative_test(${file_to_test} "Cxx_tests")
+  rex_compile_test_name(_test_name "Cxx_tests" ${file_to_test})
+  rex_lock_test_for_input(${_test_name} ${file_to_test})
+  set_tests_properties(${_test_name} PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+endforeach()
 
-foreach(file_to_test ${_unfolded_constants_tests})
+function(add_cxx_unfolded_constants_test file_to_test will_fail)
   set(_unfolded_target "${file_to_test}.unfoldedConstants-o")
   set(_unfolded_flags ${_rose_flags_base})
+  rex_get_cxx_specimen_extra_flags(_extra_frontend_flags ${file_to_test})
   if(file_to_test IN_LIST CXX_TESTCODES_GNUXX03)
     list(APPEND _unfolded_flags -std=gnu++03)
   elseif(file_to_test IN_LIST CXX_TESTCODES_GNUXX17)
@@ -3161,12 +3186,34 @@ foreach(file_to_test ${_unfolded_constants_tests})
   add_test(
     NAME ${_unfolded_target}
     COMMAND $<TARGET_FILE:testTranslatorUnfoldedConstants>
-      ${_unfolded_flags} ${ROSE_INCLUDE_FLAGS}
+      ${_unfolded_flags} ${_extra_frontend_flags} ${ROSE_INCLUDE_FLAGS}
       -I${CMAKE_CURRENT_SOURCE_DIR}
       -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test}
   )
-  set_tests_properties(${_unfolded_target} PROPERTIES LABELS Cxx_tests)
+  set_tests_properties(${_unfolded_target} PROPERTIES
+    LABELS Cxx_tests
+    WILL_FAIL ${will_fail}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  set_property(TEST ${_unfolded_target} APPEND PROPERTY ENVIRONMENT
+               "ROSE_TEST_OUTPUT_DIR=${ROSE_TEST_OUTPUT_DIR}")
   rex_lock_test_for_input(${_unfolded_target} ${file_to_test})
+endfunction()
+
+# Additional unfolded-constants coverage for the default CTest run.
+set(_unfolded_constants_tests ${CXX_TESTCODES})
+list(FILTER _unfolded_constants_tests INCLUDE REGEX "\\.C$")
+list(REMOVE_DUPLICATES _unfolded_constants_tests)
+
+foreach(file_to_test ${_unfolded_constants_tests})
+  add_cxx_unfolded_constants_test(${file_to_test} FALSE)
+endforeach()
+
+set(_unfolded_negative_tests ${CXX_TESTCODES_NEGATIVE})
+list(FILTER _unfolded_negative_tests INCLUDE REGEX "\\.C$")
+list(REMOVE_DUPLICATES _unfolded_negative_tests)
+
+foreach(file_to_test ${_unfolded_negative_tests})
+  add_cxx_unfolded_constants_test(${file_to_test} TRUE)
 endforeach()
 
 # Additional custom command-line coverage.

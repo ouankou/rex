@@ -36,7 +36,10 @@ if(NOT BASH_EXECUTABLE)
 endif()
 
 set(_uninit_flags -w -rose:verbose 0)
+set(_uninit_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
+file(MAKE_DIRECTORY ${_uninit_output_dir})
 set(_uninit_includes
+  ${ROSE_INCLUDE_FLAGS}
   -isystem ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/input_codes/system_header_like
 )
 
@@ -47,7 +50,7 @@ function(rex_uninit_test_name out_var prefix source_rel)
   set(${out_var} "${prefix}_${_name}" PARENT_SCOPE)
 endfunction()
 
-function(rex_add_uninit_cxx_tests property_name)
+function(rex_add_uninit_cxx_tests property_name will_fail)
   set(_group_flags ${ARGN})
   rex_get_registered_compile_source_set(_sources ${property_name})
   foreach(source_rel IN LISTS _sources)
@@ -68,13 +71,16 @@ function(rex_add_uninit_cxx_tests property_name)
         ${_uninit_includes}
         -c ${_source_path}
     )
+    if(${will_fail})
+      set_tests_properties(${_test_name} PROPERTIES WILL_FAIL TRUE)
+    endif()
     if(source_rel MATCHES "axpy")
       set_tests_properties(${_test_name} PROPERTIES TIMEOUT 7200)
     endif()
   endforeach()
 endfunction()
 
-function(rex_add_uninit_c_copy_tests prefix property_name)
+function(rex_add_uninit_c_copy_tests prefix property_name will_fail)
   set(_group_flags ${ARGN})
   rex_get_registered_compile_source_set(_sources ${property_name})
   foreach(source_rel IN LISTS _sources)
@@ -97,10 +103,13 @@ function(rex_add_uninit_c_copy_tests prefix property_name)
         -c
         ${_test_name}.temp.c
     )
+    if(${will_fail})
+      set_tests_properties(${_test_name} PROPERTIES WILL_FAIL TRUE)
+    endif()
   endforeach()
 endfunction()
 
-function(rex_add_uninit_fortran_tests prefix property_name)
+function(rex_add_uninit_fortran_tests prefix property_name will_fail)
   set(_group_flags ${ARGN})
   rex_get_registered_compile_source_set(_sources ${property_name})
   foreach(source_rel IN LISTS _sources)
@@ -116,25 +125,58 @@ function(rex_add_uninit_fortran_tests prefix property_name)
         ${_extra_frontend_flags}
         -c ${_source_path}
     )
+    if(${will_fail})
+      set_tests_properties(${_test_name} PROPERTIES WILL_FAIL TRUE)
+    endif()
   endforeach()
 endfunction()
 
+function(rex_filter_negative_sources out_property source_property negative_property)
+  rex_get_registered_compile_source_set(_sources ${source_property})
+  rex_get_registered_compile_source_set(_negative_sources ${negative_property})
+  if(_negative_sources)
+    list(REMOVE_ITEM _sources ${_negative_sources})
+  endif()
+  set_property(GLOBAL PROPERTY ${out_property} ${_sources})
+endfunction()
+
 if(NOT _uninit_skip_all)
-  rex_add_uninit_cxx_tests(REX_CXX_TESTS_DEFAULT_SOURCES -std=gnu++14)
-  rex_add_uninit_cxx_tests(REX_CXX_TESTS_GNUXX03_SOURCES -std=gnu++03)
-  rex_add_uninit_cxx_tests(REX_CXX_TESTS_GNUXX17_SOURCES -std=gnu++17)
+  rex_filter_negative_sources(REX_UNINIT_CXX_TESTS_DEFAULT_POSITIVE_SOURCES
+    REX_CXX_TESTS_DEFAULT_SOURCES
+    REX_CXX_TESTS_NEGATIVE_SOURCES)
+  rex_add_uninit_cxx_tests(REX_UNINIT_CXX_TESTS_DEFAULT_POSITIVE_SOURCES FALSE
+    -std=gnu++14)
+  rex_add_uninit_cxx_tests(REX_CXX_TESTS_NEGATIVE_SOURCES TRUE
+    -std=gnu++14)
+  rex_add_uninit_cxx_tests(REX_CXX_TESTS_GNUXX03_SOURCES FALSE -std=gnu++03)
+  rex_add_uninit_cxx_tests(REX_CXX_TESTS_GNUXX17_SOURCES FALSE -std=gnu++17)
   rex_add_uninit_cxx_tests(
     REX_CXX_TESTS_DELAYED_TEMPLATE_PARSING_SOURCES
+    FALSE
     -std=gnu++14
     -rex:clang:delayed-template-parsing)
-  rex_add_uninit_cxx_tests(REX_CXX03_TESTS_SOURCES -std=c++03)
-  rex_add_uninit_cxx_tests(REX_CXX11_TESTS_CXX11_SOURCES -std=c++11)
-  rex_add_uninit_cxx_tests(REX_CXX11_TESTS_CXX03_SOURCES -std=c++03)
-  rex_add_uninit_cxx_tests(REX_CXX14_TESTS_SOURCES -std=c++14)
-  rex_add_uninit_cxx_tests(REX_CXX17_TESTS_SOURCES -std=c++17)
-  rex_add_uninit_cxx_tests(REX_CXX20_TESTS_SOURCES -std=c++20)
+  rex_add_uninit_cxx_tests(REX_CXX03_TESTS_SOURCES FALSE -std=c++03)
+  rex_filter_negative_sources(REX_UNINIT_CXX11_TESTS_CXX11_POSITIVE_SOURCES
+    REX_CXX11_TESTS_CXX11_SOURCES
+    REX_CXX11_TESTS_NEGATIVE_SOURCES)
+  rex_add_uninit_cxx_tests(REX_UNINIT_CXX11_TESTS_CXX11_POSITIVE_SOURCES FALSE
+    -std=c++11)
+  rex_add_uninit_cxx_tests(REX_CXX11_TESTS_NEGATIVE_SOURCES TRUE -std=c++11)
+  rex_add_uninit_cxx_tests(REX_CXX11_TESTS_CXX03_SOURCES FALSE -std=c++03)
+  rex_add_uninit_cxx_tests(REX_CXX14_TESTS_SOURCES FALSE -std=c++14)
+  rex_add_uninit_cxx_tests(REX_CXX17_TESTS_SOURCES FALSE -std=c++17)
+  rex_filter_negative_sources(REX_UNINIT_CXX20_TESTS_POSITIVE_SOURCES
+    REX_CXX20_TESTS_SOURCES
+    REX_CXX20_TESTS_NEGATIVE_SOURCES)
+  rex_add_uninit_cxx_tests(REX_UNINIT_CXX20_TESTS_POSITIVE_SOURCES FALSE
+    -std=c++20)
+  rex_add_uninit_cxx_tests(REX_CXX20_TESTS_NEGATIVE_SOURCES TRUE -std=c++20)
 
   rex_get_registered_compile_source_set(_all_c_sources REX_C_TESTS_SOURCES)
+  rex_get_registered_compile_source_set(_c_negative_sources REX_C_TESTS_NEGATIVE_SOURCES)
+  if(_c_negative_sources)
+    list(REMOVE_ITEM _all_c_sources ${_c_negative_sources})
+  endif()
   rex_get_registered_compile_source_set(_c89_sources REX_C89_TESTS_SOURCES)
   rex_get_registered_compile_source_set(_c89_gnu89_sources REX_C89_GNU89_SOURCES)
   if(_c89_gnu89_sources)
@@ -144,23 +186,51 @@ if(NOT _uninit_skip_all)
     list(REMOVE_ITEM _all_c_sources ${_c89_sources})
   endif()
   set_property(GLOBAL PROPERTY REX_UNINIT_C_TESTS_DEFAULT_SOURCES ${_all_c_sources})
+  set_property(GLOBAL PROPERTY REX_UNINIT_C_TESTS_NEGATIVE_SOURCES ${_c_negative_sources})
   set_property(GLOBAL PROPERTY REX_UNINIT_C89_STRICT_SOURCES ${_c89_sources})
 
-  rex_add_uninit_c_copy_tests(uninit_fields_c REX_UNINIT_C_TESTS_DEFAULT_SOURCES)
-  rex_add_uninit_c_copy_tests(uninit_fields_c89 REX_UNINIT_C89_STRICT_SOURCES -std=c89)
-  rex_add_uninit_c_copy_tests(uninit_fields_c89 REX_C89_GNU89_SOURCES -std=gnu89)
-  rex_add_uninit_c_copy_tests(uninit_fields_c REX_C_SUBSET_OF_CXX_SOURCES)
-  rex_add_uninit_c_copy_tests(uninit_fields_c99 REX_C99_TESTS_SOURCES -rose:C99)
+  rex_add_uninit_c_copy_tests(uninit_fields_c REX_UNINIT_C_TESTS_DEFAULT_SOURCES FALSE)
+  rex_add_uninit_c_copy_tests(uninit_fields_c REX_UNINIT_C_TESTS_NEGATIVE_SOURCES TRUE)
+  rex_add_uninit_c_copy_tests(uninit_fields_c89 REX_UNINIT_C89_STRICT_SOURCES FALSE -std=c89)
+  rex_add_uninit_c_copy_tests(uninit_fields_c89 REX_C89_GNU89_SOURCES FALSE -std=gnu89)
+  rex_add_uninit_c_copy_tests(uninit_fields_c REX_C_SUBSET_OF_CXX_SOURCES FALSE)
+  rex_filter_negative_sources(REX_UNINIT_C99_POSITIVE_SOURCES
+    REX_C99_TESTS_SOURCES
+    REX_C99_TESTS_NEGATIVE_SOURCES)
+  rex_add_uninit_c_copy_tests(uninit_fields_c99 REX_UNINIT_C99_POSITIVE_SOURCES FALSE -rose:C99)
+  rex_add_uninit_c_copy_tests(uninit_fields_c99 REX_C99_TESTS_NEGATIVE_SOURCES TRUE -rose:C99)
 
 if(enable-fortran)
-    rex_add_uninit_fortran_tests(uninit_fields_f90 REX_FORTRAN_F90_SOURCES
+    rex_filter_negative_sources(REX_UNINIT_FORTRAN_F90_POSITIVE_SOURCES
+      REX_FORTRAN_F90_SOURCES
+      REX_FORTRAN_F90_NEGATIVE_SOURCES)
+    rex_add_uninit_fortran_tests(uninit_fields_f90
+      REX_UNINIT_FORTRAN_F90_POSITIVE_SOURCES FALSE
       -rose:fortran_std=f90)
-    rex_add_uninit_fortran_tests(uninit_fields_f77 REX_FORTRAN_F77_SOURCES
+    rex_filter_negative_sources(REX_UNINIT_FORTRAN_F77_POSITIVE_SOURCES
+      REX_FORTRAN_F77_SOURCES
+      REX_FORTRAN_F77_NEGATIVE_SOURCES)
+    rex_add_uninit_fortran_tests(uninit_fields_f77
+      REX_UNINIT_FORTRAN_F77_POSITIVE_SOURCES FALSE
       -rose:fortran_std=f77)
-    rex_add_uninit_fortran_tests(uninit_fields_f03 REX_FORTRAN_F03_SOURCES
+    rex_filter_negative_sources(REX_UNINIT_FORTRAN_F03_POSITIVE_SOURCES
+      REX_FORTRAN_F03_SOURCES
+      REX_FORTRAN_F03_NEGATIVE_SOURCES)
+    rex_add_uninit_fortran_tests(uninit_fields_f03
+      REX_UNINIT_FORTRAN_F03_POSITIVE_SOURCES FALSE
       -rose:skip_syntax_check
       -rose:skipfinalCompileStep
       -rose:fortran_std=f2003)
+endif()
+
+if(NOT _uninit_skip_all)
+  get_property(_uninit_registered_tests DIRECTORY PROPERTY TESTS)
+  foreach(_test IN LISTS _uninit_registered_tests)
+    if(_test MATCHES "^uninit_fields_")
+      set_property(TEST ${_test} APPEND PROPERTY ENVIRONMENT
+                   "ROSE_TEST_OUTPUT_DIR=${_uninit_output_dir}")
+    endif()
+  endforeach()
 endif()
 
 endif()

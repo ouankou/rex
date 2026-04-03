@@ -201,6 +201,13 @@ public:
 
 class FortranModuleAccessAttribute : public AstAttribute {
 public:
+  struct AccessStatementRecord {
+    SgAccessModifier::access_modifier_enum accessModifier;
+    std::vector<std::string> names;
+    SourcePosition begin;
+    SourcePosition end;
+  };
+
   AstAttribute *copy() const override {
     return new FortranModuleAccessAttribute(*this);
   }
@@ -211,6 +218,7 @@ public:
   std::optional<SgAccessModifier::access_modifier_enum> defaultAccess{};
   std::unordered_map<std::string, SgAccessModifier::access_modifier_enum>
       explicitAccess{};
+  std::vector<AccessStatementRecord> accessStatements{};
 };
 
 bool gSuppressFortranImplicitDeclsForExpr = false;
@@ -523,6 +531,177 @@ bool IsFortranSpecificationStatement(const SgStatement *stmt) {
          isSgAttributeSpecificationStatement(stmt) != nullptr ||
          isSgEquivalenceStatement(stmt) != nullptr ||
          isSgFortranIncludeLine(stmt) != nullptr;
+}
+
+bool IsStatementAttachedToParentList(const SgStatement *statement) {
+  if (statement == nullptr) {
+    return false;
+  }
+
+  SgStatement *parent_statement = isSgStatement(statement->get_parent());
+  if (parent_statement == nullptr) {
+    return false;
+  }
+
+  if (SgScopeStatement *scope_parent = isSgScopeStatement(parent_statement)) {
+    if (scope_parent->containsOnlyDeclarations()) {
+      const SgDeclarationStatement *declaration =
+          isSgDeclarationStatement(const_cast<SgStatement *>(statement));
+      if (declaration == nullptr) {
+        return false;
+      }
+
+      const SgDeclarationStatementPtrList &declarations =
+          scope_parent->getDeclarationList();
+      return std::find(declarations.begin(), declarations.end(), declaration) !=
+             declarations.end();
+    }
+  }
+
+  std::vector<SgNode *> successors =
+      parent_statement->get_traversalSuccessorContainer();
+  return std::find(successors.begin(), successors.end(), statement) !=
+         successors.end();
+}
+
+bool IsDetachedConstructionScope(SgScopeStatement *scope) {
+  SgStatement *scope_stmt = isSgStatement(scope);
+  return scope_stmt != nullptr && scope_stmt->get_parent() != nullptr &&
+         !IsStatementAttachedToParentList(scope_stmt);
+}
+
+SgStatement *FindDetachedConstructionStatement(SgNode *node) {
+  for (SgNode *current = node; current != nullptr;
+       current = current->get_parent()) {
+    SgStatement *stmt = isSgStatement(current);
+    if (stmt == nullptr || stmt->get_parent() == nullptr) {
+      continue;
+    }
+
+    if (!IsStatementAttachedToParentList(stmt)) {
+      return stmt;
+    }
+  }
+
+  return nullptr;
+}
+
+SgStatement *FindDetachedConstructionAnchorStatement(SgNode *node) {
+  SgStatement *fallback = nullptr;
+  SgStatement *best = nullptr;
+  for (SgNode *current = node; current != nullptr;
+       current = current->get_parent()) {
+    SgStatement *stmt = isSgStatement(current);
+    if (stmt == nullptr || stmt->get_parent() == nullptr) {
+      continue;
+    }
+
+    if (IsStatementAttachedToParentList(stmt)) {
+      continue;
+    }
+
+    if (fallback == nullptr) {
+      fallback = stmt;
+    }
+
+    // Detached basic blocks can inherit source positions from included
+    // statements in their specification part. Prefer the outer detached
+    // construct when recovering include placement so the include is associated
+    // with the owning program unit rather than a transient inner scope.
+    if (isSgBasicBlock(stmt) == nullptr && isSgGlobal(stmt) == nullptr) {
+      best = stmt;
+    }
+  }
+
+  return best != nullptr ? best : fallback;
+}
+
+bool IsInDetachedConstructionSubtree(SgNode *node) {
+  return FindDetachedConstructionStatement(node) != nullptr;
+}
+
+std::string NormalizeSourcePath(const std::string &path);
+
+bool IsRawIncludeDirective(const PreprocessingInfo *info) {
+  if (info == nullptr) {
+    return false;
+  }
+
+  const PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
+  return type == PreprocessingInfo::CpreprocessorIncludeDeclaration ||
+         type == PreprocessingInfo::CpreprocessorIncludeNextDeclaration;
+}
+
+bool MatchesRawIncludeDirectiveAtSource(const PreprocessingInfo *info,
+                                        const SourcePosition &source) {
+  if (!IsRawIncludeDirective(info) || source.line <= 0) {
+    return false;
+  }
+  if (info->getLineNumber() != source.line) {
+    return false;
+  }
+
+  const std::string target_path = NormalizeSourcePath(source.path);
+  const std::string info_path = NormalizeSourcePath(info->getFilename());
+  return target_path.empty() || info_path.empty() || info_path == target_path;
+}
+
+void RemoveRawIncludeDirectiveFromAttachedInfo(SgLocatedNode *node,
+                                               const SourcePosition &source) {
+  if (node == nullptr) {
+    return;
+  }
+
+  AttachedPreprocessingInfoType *info_list =
+      node->getAttachedPreprocessingInfo();
+  if (info_list == nullptr || info_list->empty()) {
+    return;
+  }
+
+  for (auto it = info_list->begin(); it != info_list->end();) {
+    if (MatchesRawIncludeDirectiveAtSource(*it, source)) {
+      it = info_list->erase(it);
+      continue;
+    }
+    ++it;
+  }
+}
+
+void ConsumeRawFortranIncludeDirective(SgSourceFile *source_file,
+                                       const SourcePosition &source) {
+  if (source_file == nullptr || source.line <= 0) {
+    return;
+  }
+
+  if (ROSEAttributesListContainerPtr directives =
+          source_file->get_preprocessorDirectivesAndCommentsList()) {
+    std::map<std::string, ROSEAttributesList *> &lists = directives->getList();
+    for (std::map<std::string, ROSEAttributesList *>::iterator it =
+             lists.begin();
+         it != lists.end(); ++it) {
+      ROSEAttributesList *list = it->second;
+      if (list == nullptr) {
+        continue;
+      }
+      std::vector<PreprocessingInfo *> &entries = list->getList();
+      for (auto entry_it = entries.begin(); entry_it != entries.end();) {
+        if (MatchesRawIncludeDirectiveAtSource(*entry_it, source)) {
+          entry_it = entries.erase(entry_it);
+          continue;
+        }
+        ++entry_it;
+      }
+    }
+  }
+
+  RemoveRawIncludeDirectiveFromAttachedInfo(source_file->get_globalScope(),
+                                            source);
+
+  std::vector<SgNode *> nodes =
+      NodeQuery::querySubTree(source_file->get_globalScope(), V_SgLocatedNode);
+  for (SgNode *node : nodes) {
+    RemoveRawIncludeDirectiveFromAttachedInfo(isSgLocatedNode(node), source);
+  }
 }
 
 SgScopeStatement *FindFortranImplicitDeclScope(SgScopeStatement *scope) {
@@ -1155,6 +1334,25 @@ SourcePosition ChooseCommentAnchor(const std::optional<SourcePosition> &begin,
   return end;
 }
 
+void NormalizeConstructBodyStart(const std::optional<SourcePosition> &begin,
+                                 std::optional<SourcePosition> &body) {
+  if (!begin || !body) {
+    return;
+  }
+
+  const std::string begin_path = NormalizeSourcePath(begin->path);
+  const std::string body_path = NormalizeSourcePath(body->path);
+  if (begin_path.empty() || body_path.empty() || begin_path == body_path) {
+    return;
+  }
+
+  // The body of a subprogram/program construct belongs to the owning source
+  // file even when its first specification statement originates from an
+  // included file. Keep the construct range anchored in the owning file so the
+  // unparser does not treat the whole body as header-owned.
+  *body = *begin;
+}
+
 static bool StartsWithKeyword(const std::string &text, const char *keyword) {
   const std::size_t len = std::strlen(keyword);
   if (text.size() < len) {
@@ -1453,17 +1651,28 @@ bool ScopeHasPragmaAtSource(SgScopeStatement *scope,
 using SourcePragmaLineIndex = std::unordered_map<int, std::set<std::string>>;
 using SourcePragmaNodeIndex =
     std::unordered_map<int, std::vector<SgPragmaDeclaration *>>;
+using SourceUnpositionedPragmaIndex =
+    std::unordered_map<std::string, std::vector<SgPragmaDeclaration *>>;
 
 struct SourcePragmaIndices {
   SourcePragmaLineIndex line_index;
   SourcePragmaNodeIndex node_index;
+  SourceUnpositionedPragmaIndex unpositioned_index;
 };
+
+std::string CanonicalizeRecoveredDirectiveText(const std::string &text) {
+  std::string normalized = NormalizeOmpDirectiveLine(text);
+  TrimLeft(normalized);
+  return ToLowerCopy(normalized);
+}
 
 SourcePragmaIndices BuildSourcePragmaIndices(const SgSourceFile *source) {
   SourcePragmaLineIndex pragma_line_index;
   SourcePragmaNodeIndex pragma_node_index;
+  SourceUnpositionedPragmaIndex unpositioned_index;
   if (source == nullptr) {
-    return SourcePragmaIndices{pragma_line_index, pragma_node_index};
+    return SourcePragmaIndices{pragma_line_index, pragma_node_index,
+                               unpositioned_index};
   }
 
   std::vector<SgNode *> pragmas = NodeQuery::querySubTree(
@@ -1475,6 +1684,13 @@ SourcePragmaIndices BuildSourcePragmaIndices(const SgSourceFile *source) {
     }
     Sg_File_Info *info = pragmaStmt->get_file_info();
     if (info == nullptr || info->get_line() <= 0) {
+      if (SgPragma *pragma = pragmaStmt->get_pragma()) {
+        const std::string key =
+            CanonicalizeRecoveredDirectiveText(pragma->get_pragma());
+        if (!key.empty()) {
+          unpositioned_index[key].push_back(pragmaStmt);
+        }
+      }
       continue;
     }
     const std::string pragma_path =
@@ -1482,7 +1698,8 @@ SourcePragmaIndices BuildSourcePragmaIndices(const SgSourceFile *source) {
     pragma_line_index[info->get_line()].insert(pragma_path);
     pragma_node_index[info->get_line()].push_back(pragmaStmt);
   }
-  return SourcePragmaIndices{pragma_line_index, pragma_node_index};
+  return SourcePragmaIndices{pragma_line_index, pragma_node_index,
+                             unpositioned_index};
 }
 
 bool SourceHasPragmaAtSource(const SourcePragmaLineIndex &pragma_line_index,
@@ -1540,6 +1757,27 @@ FindSourcePragmaAtSource(const SourcePragmaNodeIndex &pragma_node_index,
   return nullptr;
 }
 
+SgPragmaDeclaration *
+TakeUnpositionedSourcePragma(SourceUnpositionedPragmaIndex &unpositioned_index,
+                             const std::string &directive_text) {
+  const std::string key = CanonicalizeRecoveredDirectiveText(directive_text);
+  if (key.empty()) {
+    return nullptr;
+  }
+
+  auto pragma_it = unpositioned_index.find(key);
+  if (pragma_it == unpositioned_index.end() || pragma_it->second.empty()) {
+    return nullptr;
+  }
+
+  SgPragmaDeclaration *pragma = pragma_it->second.front();
+  pragma_it->second.erase(pragma_it->second.begin());
+  if (pragma_it->second.empty()) {
+    unpositioned_index.erase(pragma_it);
+  }
+  return pragma;
+}
+
 bool IsStructuredDirectiveEnd(const std::string &directiveText) {
   std::string lowered = ToLowerCopy(directiveText);
   TrimLeft(lowered);
@@ -1587,10 +1825,211 @@ SgScopeStatement *NormalizeDirectiveInsertionScope(SgScopeStatement *scope,
   return scope;
 }
 
+bool LocatedNodeMatchesPath(const SgLocatedNode *node,
+                            const std::string &target_path) {
+  if (node == nullptr || target_path.empty()) {
+    return false;
+  }
+
+  const std::array<const Sg_File_Info *, 3> infos = {
+      node->get_startOfConstruct(), node->get_file_info(),
+      node->get_endOfConstruct()};
+  for (const Sg_File_Info *info : infos) {
+    if (info == nullptr) {
+      continue;
+    }
+
+    const std::string info_path =
+        NormalizeSourcePath(info->get_filenameString());
+    if (!info_path.empty() && info_path == target_path) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool LocatedNodeHasSourcePath(const SgLocatedNode *node) {
+  if (node == nullptr) {
+    return false;
+  }
+
+  const std::array<const Sg_File_Info *, 3> infos = {
+      node->get_startOfConstruct(), node->get_file_info(),
+      node->get_endOfConstruct()};
+  for (const Sg_File_Info *info : infos) {
+    if (info == nullptr) {
+      continue;
+    }
+
+    const std::string info_path =
+        NormalizeSourcePath(info->get_filenameString());
+    if (!info_path.empty()) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+SgScopeStatement *FindFortranIncludeInsertionScope(SgScopeStatement *scope,
+                                                   const std::string &path) {
+  const std::string target_path = NormalizeSourcePath(path);
+  if (scope == nullptr) {
+    return scope;
+  }
+
+  // The Fortran builder uses temporary statement scopes while constructing
+  // function/subroutine specification parts. These scopes are intentionally
+  // parented for name lookup but are not yet attached to the parent's child
+  // list, so they cannot serve as insert-before mutation targets outside the
+  // temporary subtree. Includes that originate from the same source file as
+  // the detached construct belong inside that construct; includes originating
+  // from the owning file need to be recovered in the detached construct's
+  // eventual parent scope instead.
+  if (target_path.empty()) {
+    return scope;
+  }
+  if (SgStatement *detached_stmt =
+          FindDetachedConstructionAnchorStatement(scope)) {
+    // Function/program units are built through a detached temporary scope
+    // before their defining declaration carries stable source-path metadata.
+    // In that state, treating a path mismatch as proof that the include
+    // belongs to the owner scope hoists procedure-local includes to file scope.
+    if (!LocatedNodeHasSourcePath(detached_stmt) ||
+        LocatedNodeMatchesPath(detached_stmt, target_path)) {
+      return scope;
+    }
+
+    if (SgScopeStatement *owner_scope = [&]() -> SgScopeStatement * {
+          for (SgNode *node = detached_stmt->get_parent(); node != nullptr;
+               node = node->get_parent()) {
+            SgScopeStatement *scope_parent = isSgScopeStatement(node);
+            if (scope_parent == nullptr) {
+              continue;
+            }
+            if (SgFunctionDefinition *function_def =
+                    isSgFunctionDefinition(scope_parent)) {
+              if (SgBasicBlock *body = function_def->get_body()) {
+                return body;
+              }
+            }
+            return scope_parent;
+          }
+          return nullptr;
+        }()) {
+      if (SgFunctionDefinition *function_def =
+              isSgFunctionDefinition(owner_scope)) {
+        if (SgBasicBlock *body = function_def->get_body()) {
+          return body;
+        }
+      }
+      return owner_scope;
+    }
+
+    return scope;
+  }
+
+  for (SgNode *node = scope; node != nullptr; node = node->get_parent()) {
+    SgScopeStatement *candidate_scope = isSgScopeStatement(node);
+    if (candidate_scope == nullptr) {
+      continue;
+    }
+
+    if (IsDetachedConstructionScope(candidate_scope)) {
+      return candidate_scope;
+    }
+
+    if (LocatedNodeMatchesPath(candidate_scope, target_path)) {
+      if (SgFunctionDefinition *function_def =
+              isSgFunctionDefinition(candidate_scope)) {
+        if (SgBasicBlock *body = function_def->get_body()) {
+          return body;
+        }
+      }
+      return candidate_scope;
+    }
+
+    if (SgStatement *owner_stmt =
+            isSgStatement(candidate_scope->get_parent())) {
+      if (LocatedNodeMatchesPath(owner_stmt, target_path)) {
+        return candidate_scope;
+      }
+    }
+  }
+
+  return scope;
+}
+
+SgStatement *FindFortranIncludeInsertionTarget(SgScopeStatement *scope,
+                                               SgNode *current_node) {
+  if (scope == nullptr || current_node == nullptr || current_node == scope) {
+    return nullptr;
+  }
+
+  SgStatement *target_stmt = nullptr;
+  for (SgNode *node = current_node; node != nullptr && node != scope;
+       node = node->get_parent()) {
+    if (SgStatement *stmt = isSgStatement(node)) {
+      if (!IsStatementAttachedToParentList(stmt)) {
+        return nullptr;
+      }
+      target_stmt = stmt;
+    }
+  }
+
+  return target_stmt;
+}
+
+SgScopeStatement *NormalizeFortranIncludeOwningScope(SgStatement *stmt) {
+  if (stmt == nullptr) {
+    return nullptr;
+  }
+
+  if (SgModuleStatement *module_stmt = isSgModuleStatement(stmt)) {
+    return module_stmt->get_definition();
+  }
+
+  if (SgClassDeclaration *class_decl = isSgClassDeclaration(stmt)) {
+    return class_decl->get_definition();
+  }
+
+  if (SgFunctionDeclaration *function_decl = isSgFunctionDeclaration(stmt)) {
+    if (SgFunctionDefinition *definition = function_decl->get_definition()) {
+      if (SgBasicBlock *body = definition->get_body()) {
+        return body;
+      }
+      return definition;
+    }
+  }
+
+  return nullptr;
+}
+
+bool IsAttachedFortranProcedureBodyScope(SgScopeStatement *scope) {
+  if (scope == nullptr) {
+    return false;
+  }
+
+  if (SgFunctionDefinition *definition = isSgFunctionDefinition(scope)) {
+    return IsStatementAttachedToParentList(definition);
+  }
+
+  if (SgBasicBlock *body = isSgBasicBlock(scope)) {
+    if (SgFunctionDefinition *definition =
+            isSgFunctionDefinition(body->get_parent())) {
+      return IsStatementAttachedToParentList(definition);
+    }
+  }
+
+  return false;
+}
+
 SgStatement *FindDirectiveInsertionTarget(SgScopeStatement *scope,
                                           SgSourceFile *source,
                                           const SourcePosition &anchor,
-                                          bool strictAfter) {
+                                          bool strictAfter,
+                                          bool requireExecutableTarget) {
   if (scope == nullptr || source == nullptr || anchor.line <= 0) {
     return nullptr;
   }
@@ -1690,24 +2129,145 @@ SgStatement *FindDirectiveInsertionTarget(SgScopeStatement *scope,
     if (!CanInsertDirectiveBefore(insertion_stmt)) {
       continue;
     }
+    if (requireExecutableTarget &&
+        IsFortranSpecificationStatement(insertion_stmt)) {
+      continue;
+    }
 
     int stmt_line = 0;
     int stmt_col = 0;
     if (!extract_stmt_anchor(insertion_stmt, stmt_line, stmt_col)) {
       continue;
     }
-    if (strictAfter) {
-      if (stmt_line <= anchor.line) {
-        continue;
-      }
-    } else {
-      if (stmt_line < anchor.line) {
-        continue;
-      }
+    if (stmt_line <= anchor.line) {
+      continue;
     }
 
     if (stmt_line < best_line ||
         (stmt_line == best_line && stmt_col < best_col)) {
+      best_stmt = insertion_stmt;
+      best_line = stmt_line;
+      best_col = stmt_col;
+    }
+  }
+
+  return best_stmt;
+}
+
+SgStatement *
+FindLastSpecificationDirectiveAnchor(SgScopeStatement *scope,
+                                     SgSourceFile *source,
+                                     const SourcePosition &anchor) {
+  if (scope == nullptr || source == nullptr || anchor.line <= 0) {
+    return nullptr;
+  }
+
+  const std::string target_path = NormalizeSourcePath(anchor.path);
+  std::string source_path;
+  if (source != nullptr) {
+    source_path = NormalizeSourcePath(source->get_sourceFileNameWithPath());
+    if (source_path.empty()) {
+      source_path = NormalizeSourcePath(source->getFileName());
+    }
+  }
+
+  auto extract_stmt_anchor = [&](SgStatement *stmt, int &stmt_line,
+                                 int &stmt_col) -> bool {
+    if (stmt == nullptr) {
+      return false;
+    }
+
+    const std::array<const Sg_File_Info *, 3> infos = {
+        stmt->get_startOfConstruct(), stmt->get_file_info(),
+        stmt->get_endOfConstruct()};
+    int best_match_line = std::numeric_limits<int>::max();
+    int best_match_col = std::numeric_limits<int>::max();
+    int best_fallback_line = std::numeric_limits<int>::max();
+    int best_fallback_col = std::numeric_limits<int>::max();
+    for (const Sg_File_Info *info : infos) {
+      if (info == nullptr || info->get_line() <= 0) {
+        continue;
+      }
+
+      const int line = info->get_line();
+      const int col = info->get_col();
+      if (line < best_fallback_line ||
+          (line == best_fallback_line && col < best_fallback_col)) {
+        best_fallback_line = line;
+        best_fallback_col = col;
+      }
+
+      bool matches_source = info->isSameFile(source);
+      const std::string stmt_path =
+          NormalizeSourcePath(info->get_filenameString());
+      if (!target_path.empty()) {
+        if (!stmt_path.empty()) {
+          matches_source = (stmt_path == target_path);
+        }
+      } else if (!source_path.empty() && !stmt_path.empty()) {
+        matches_source = (stmt_path == source_path);
+      } else if (stmt_path.empty()) {
+        matches_source = true;
+      }
+
+      if (!matches_source) {
+        continue;
+      }
+
+      if (line < best_match_line ||
+          (line == best_match_line && col < best_match_col)) {
+        best_match_line = line;
+        best_match_col = col;
+      }
+    }
+
+    if (best_match_line != std::numeric_limits<int>::max()) {
+      stmt_line = best_match_line;
+      stmt_col = best_match_col;
+      return true;
+    }
+    if (best_fallback_line != std::numeric_limits<int>::max()) {
+      stmt_line = best_fallback_line;
+      stmt_col = best_fallback_col;
+      return true;
+    }
+    return false;
+  };
+
+  SgStatement *best_stmt = nullptr;
+  int best_line = -1;
+  int best_col = -1;
+  const SgStatementPtrList &stmts = scope->generateStatementList();
+  for (SgStatement *stmt : stmts) {
+    SgStatement *insertion_stmt = stmt;
+    SgNode *parent = insertion_stmt != nullptr ? insertion_stmt->get_parent()
+                                               : static_cast<SgNode *>(nullptr);
+    while (parent != nullptr && parent != scope) {
+      SgStatement *parent_stmt = isSgStatement(parent);
+      if (parent_stmt == nullptr) {
+        insertion_stmt = nullptr;
+        break;
+      }
+      insertion_stmt = parent_stmt;
+      parent = insertion_stmt->get_parent();
+    }
+    if (insertion_stmt == nullptr || parent != scope) {
+      continue;
+    }
+    if (!CanInsertDirectiveBefore(insertion_stmt) ||
+        !IsFortranSpecificationStatement(insertion_stmt)) {
+      continue;
+    }
+
+    int stmt_line = 0;
+    int stmt_col = 0;
+    if (!extract_stmt_anchor(insertion_stmt, stmt_line, stmt_col) ||
+        stmt_line >= anchor.line) {
+      continue;
+    }
+
+    if (stmt_line > best_line ||
+        (stmt_line == best_line && stmt_col >= best_col)) {
       best_stmt = insertion_stmt;
       best_line = stmt_line;
       best_col = stmt_col;
@@ -1733,6 +2293,22 @@ bool DirectiveLikelyRequiresLoopBody(const std::string &directive_text) {
          lowered.find(" for") != std::string::npos ||
          lowered.find("do ") == 0 || lowered.find("for ") == 0 ||
          lowered.find("loop ") == 0 || lowered.find("simd ") == 0;
+}
+
+bool DirectiveCanAppearInFortranSpecificationPart(
+    const std::string &directive_text) {
+  std::string lowered = ToLowerCopy(directive_text);
+  TrimLeft(lowered);
+  if (lowered.find("omp ", 0) == 0 || lowered.find("acc ", 0) == 0 ||
+      lowered.find("cuf ", 0) == 0) {
+    lowered.erase(0, 4);
+    TrimLeft(lowered);
+  }
+
+  return lowered.find("threadprivate", 0) == 0 ||
+         lowered.find("declare ", 0) == 0 ||
+         lowered.find("end declare", 0) == 0 ||
+         lowered.find("requires", 0) == 0 || lowered.find("allocate", 0) == 0;
 }
 
 bool IsLoopBodyStatementCandidate(SgStatement *stmt) {
@@ -2139,6 +2715,58 @@ SgScopeStatement *FindInnermostScopeForLine(SgSourceFile *source, int line) {
   auto has_valid_line_info = [&](const Sg_File_Info *info) -> bool {
     return info != nullptr && info->isSameFile(source) && info->get_line() > 0;
   };
+  auto update_line_range = [&](const Sg_File_Info *info, bool &has_range,
+                               int &start_line, int &end_line) {
+    if (!has_valid_line_info(info)) {
+      return;
+    }
+
+    if (!has_range) {
+      start_line = info->get_line();
+      end_line = info->get_line();
+      has_range = true;
+      return;
+    }
+
+    start_line = std::min(start_line, info->get_line());
+    end_line = std::max(end_line, info->get_line());
+  };
+  auto update_line_range_from_node = [&](const SgLocatedNode *node,
+                                         bool &has_range, int &start_line,
+                                         int &end_line) {
+    if (node == nullptr) {
+      return;
+    }
+
+    const std::array<const Sg_File_Info *, 3> infos = {
+        node->get_startOfConstruct(), node->get_file_info(),
+        node->get_endOfConstruct()};
+    for (const Sg_File_Info *info : infos) {
+      update_line_range(info, has_range, start_line, end_line);
+    }
+  };
+  auto get_scope_line_range = [&](SgScopeStatement *scope, int &start_line,
+                                  int &end_line) -> bool {
+    bool has_range = false;
+    start_line = 0;
+    end_line = 0;
+
+    update_line_range_from_node(scope, has_range, start_line, end_line);
+
+    if (SgStatement *owner_stmt = isSgStatement(scope->get_parent())) {
+      update_line_range_from_node(owner_stmt, has_range, start_line, end_line);
+    }
+
+    const SgStatementPtrList &scope_statements = scope->generateStatementList();
+    for (SgStatement *stmt : scope_statements) {
+      if (isSgPragmaDeclaration(stmt) != nullptr) {
+        continue;
+      }
+      update_line_range_from_node(stmt, has_range, start_line, end_line);
+    }
+
+    return has_range;
+  };
 
   SgScopeStatement *best_scope = source->get_globalScope();
   int best_span = std::numeric_limits<int>::max();
@@ -2169,20 +2797,12 @@ SgScopeStatement *FindInnermostScopeForLine(SgSourceFile *source, int line) {
       }
     }
 
-    const Sg_File_Info *start = scope->get_file_info();
-    const Sg_File_Info *end = scope->get_endOfConstruct();
-
     SgStatement *owner_stmt = isSgStatement(scope->get_parent());
     const Sg_File_Info *owner_start = nullptr;
-    const Sg_File_Info *owner_end = nullptr;
     if (owner_stmt != nullptr) {
       owner_start = owner_stmt->get_startOfConstruct();
       if (owner_start == nullptr) {
         owner_start = owner_stmt->get_file_info();
-      }
-      owner_end = owner_stmt->get_endOfConstruct();
-      if (owner_end == nullptr) {
-        owner_end = owner_stmt->get_file_info();
       }
     }
 
@@ -2195,28 +2815,10 @@ SgScopeStatement *FindInnermostScopeForLine(SgSourceFile *source, int line) {
       continue;
     }
 
-    // Some nested Fortran scopes (notably loop/while bodies) do not carry
-    // reliable line info on the scope node itself. Recover from the owning
-    // statement so directives are inserted in the true lexical region.
-    if (!has_valid_line_info(start) || !has_valid_line_info(end)) {
-      if (owner_stmt != nullptr) {
-        if (!has_valid_line_info(start) && has_valid_line_info(owner_start)) {
-          start = owner_start;
-        }
-        if (!has_valid_line_info(end) && has_valid_line_info(owner_end)) {
-          end = owner_end;
-        }
-      }
-    }
-
-    if (!has_valid_line_info(start) || !has_valid_line_info(end)) {
+    int start_line = 0;
+    int end_line = 0;
+    if (!get_scope_line_range(scope, start_line, end_line)) {
       continue;
-    }
-
-    int start_line = start->get_line();
-    int end_line = end->get_line();
-    if (end_line < start_line) {
-      std::swap(start_line, end_line);
     }
 
     if (line < start_line || line > end_line) {
@@ -2226,6 +2828,128 @@ SgScopeStatement *FindInnermostScopeForLine(SgSourceFile *source, int line) {
     if (span < best_span) {
       best_span = span;
       best_scope = scope;
+    }
+  }
+
+  return best_scope;
+}
+
+SgScopeStatement *FindInnermostConstructionScopeForLine(SgScopeStatement *scope,
+                                                        SgSourceFile *source,
+                                                        int line) {
+  if (scope == nullptr || source == nullptr || line <= 0) {
+    return nullptr;
+  }
+
+  auto has_valid_line_info = [&](const Sg_File_Info *info) -> bool {
+    return info != nullptr && info->isSameFile(source) && info->get_line() > 0;
+  };
+  auto update_line_range = [&](const Sg_File_Info *info, bool &has_range,
+                               int &start_line, int &end_line) {
+    if (!has_valid_line_info(info)) {
+      return;
+    }
+
+    if (!has_range) {
+      start_line = info->get_line();
+      end_line = info->get_line();
+      has_range = true;
+      return;
+    }
+
+    start_line = std::min(start_line, info->get_line());
+    end_line = std::max(end_line, info->get_line());
+  };
+  auto update_line_range_from_node = [&](const SgLocatedNode *node,
+                                         bool &has_range, int &start_line,
+                                         int &end_line) {
+    if (node == nullptr) {
+      return;
+    }
+
+    const std::array<const Sg_File_Info *, 3> infos = {
+        node->get_startOfConstruct(), node->get_file_info(),
+        node->get_endOfConstruct()};
+    for (const Sg_File_Info *info : infos) {
+      update_line_range(info, has_range, start_line, end_line);
+    }
+  };
+  auto get_scope_line_range = [&](SgScopeStatement *candidate, int &start_line,
+                                  int &end_line) -> bool {
+    bool has_range = false;
+    start_line = 0;
+    end_line = 0;
+
+    update_line_range_from_node(candidate, has_range, start_line, end_line);
+
+    if (SgStatement *owner_stmt = isSgStatement(candidate->get_parent())) {
+      update_line_range_from_node(owner_stmt, has_range, start_line, end_line);
+    }
+
+    const SgStatementPtrList &scope_statements =
+        candidate->generateStatementList();
+    for (SgStatement *stmt : scope_statements) {
+      if (isSgPragmaDeclaration(stmt) != nullptr) {
+        continue;
+      }
+      update_line_range_from_node(stmt, has_range, start_line, end_line);
+    }
+
+    return has_range;
+  };
+
+  SgScopeStatement *best_scope = nullptr;
+  int best_span = std::numeric_limits<int>::max();
+
+  for (SgNode *node = scope; node != nullptr; node = node->get_parent()) {
+    SgScopeStatement *candidate = isSgScopeStatement(node);
+    if (candidate == nullptr) {
+      continue;
+    }
+    if (isSgBasicBlock(candidate) == nullptr &&
+        isSgClassDefinition(candidate) == nullptr &&
+        isSgModuleStatement(candidate) == nullptr &&
+        isSgFunctionDefinition(candidate) == nullptr) {
+      continue;
+    }
+
+    if (SgBasicBlock *body = isSgBasicBlock(candidate)) {
+      if (SgIfStmt *if_parent = isSgIfStmt(body->get_parent())) {
+        if (!if_parent->get_use_then_keyword() &&
+            !if_parent->get_has_end_statement()) {
+          continue;
+        }
+      }
+    }
+
+    SgStatement *owner_stmt = isSgStatement(candidate->get_parent());
+    const Sg_File_Info *owner_start = nullptr;
+    if (owner_stmt != nullptr) {
+      owner_start = owner_stmt->get_startOfConstruct();
+      if (owner_start == nullptr) {
+        owner_start = owner_stmt->get_file_info();
+      }
+    }
+
+    if (isSgBasicBlock(candidate) != nullptr && owner_stmt != nullptr &&
+        isSgFunctionDefinition(owner_stmt) == nullptr &&
+        has_valid_line_info(owner_start) && line <= owner_start->get_line()) {
+      continue;
+    }
+
+    int start_line = 0;
+    int end_line = 0;
+    if (!get_scope_line_range(candidate, start_line, end_line)) {
+      continue;
+    }
+    if (line < start_line || line > end_line) {
+      continue;
+    }
+
+    int span = end_line - start_line;
+    if (span < best_span) {
+      best_span = span;
+      best_scope = candidate;
     }
   }
 
@@ -2247,6 +2971,41 @@ void InjectFortranDirectivePragmasFromSource(SgSourceFile *source) {
   SourcePragmaLineIndex &pragma_line_index = pragma_indices.line_index;
   SourcePragmaNodeIndex &pragma_node_index = pragma_indices.node_index;
   std::unordered_map<SgStatement *, bool> targets_with_inserted_pragmas;
+  std::unordered_map<SgStatement *, SgPragmaDeclaration *>
+      last_inserted_before_pragma_by_target;
+  std::unordered_map<SgStatement *, SgPragmaDeclaration *>
+      last_inserted_after_pragma_by_target;
+  auto find_first_executable_line = [&](SgScopeStatement *scope) -> int {
+    if (scope == nullptr) {
+      return 0;
+    }
+
+    int first_executable_line = std::numeric_limits<int>::max();
+    const SgStatementPtrList &stmts = scope->generateStatementList();
+    for (SgStatement *stmt : stmts) {
+      if (stmt == nullptr || !CanInsertDirectiveBefore(stmt) ||
+          IsFortranSpecificationStatement(stmt)) {
+        continue;
+      }
+
+      const std::array<const Sg_File_Info *, 3> infos = {
+          stmt->get_startOfConstruct(), stmt->get_file_info(),
+          stmt->get_endOfConstruct()};
+      for (const Sg_File_Info *info : infos) {
+        if (info == nullptr || info->get_line() <= 0 ||
+            !info->isSameFile(source)) {
+          continue;
+        }
+        first_executable_line =
+            std::min(first_executable_line, info->get_line());
+      }
+    }
+
+    if (first_executable_line == std::numeric_limits<int>::max()) {
+      return 0;
+    }
+    return first_executable_line;
+  };
 
   for (const RawFortranDirective &directive : directives) {
     if (SgPragmaDeclaration *existing =
@@ -2304,12 +3063,35 @@ void InjectFortranDirectivePragmasFromSource(SgSourceFile *source) {
     }
 
     const bool strict_after = IsStructuredDirectiveEnd(directive.text);
-    const SourcePosition &anchor_pos =
-        strict_after ? directive.end : directive.start;
+    bool spec_part_directive =
+        !strict_after &&
+        DirectiveCanAppearInFortranSpecificationPart(directive.text);
     SgScopeStatement *insertion_scope =
         NormalizeDirectiveInsertionScope(scope, source);
-    SgStatement *target = FindDirectiveInsertionTarget(
-        insertion_scope, source, anchor_pos, strict_after);
+    if (spec_part_directive) {
+      const int first_executable_line =
+          find_first_executable_line(insertion_scope);
+      if (first_executable_line > 0 &&
+          directive.start.line >= first_executable_line) {
+        spec_part_directive = false;
+      }
+    }
+    const SourcePosition &anchor_pos =
+        strict_after ? directive.end : directive.start;
+    const bool require_executable_target =
+        !strict_after && !spec_part_directive;
+    bool insert_after_target = false;
+    SgStatement *target = nullptr;
+    if (spec_part_directive) {
+      target = FindLastSpecificationDirectiveAnchor(insertion_scope, source,
+                                                    anchor_pos);
+      insert_after_target = (target != nullptr);
+    }
+    if (target == nullptr) {
+      target =
+          FindDirectiveInsertionTarget(insertion_scope, source, anchor_pos,
+                                       strict_after, require_executable_target);
+    }
 
     const bool has_prior_for_target =
         target != nullptr && targets_with_inserted_pragmas.find(target) !=
@@ -2342,14 +3124,46 @@ void InjectFortranDirectivePragmasFromSource(SgSourceFile *source) {
       insertion_scope = source->get_globalScope();
     }
 
-    SgPragmaDeclaration *pragma =
-        SageBuilder::buildPragmaDeclaration(directive.text, insertion_scope);
-    ASSERT_not_null(pragma);
+    SgPragmaDeclaration *pragma = TakeUnpositionedSourcePragma(
+        pragma_indices.unpositioned_index, directive.text);
+    if (pragma == nullptr) {
+      pragma =
+          SageBuilder::buildPragmaDeclaration(directive.text, insertion_scope);
+      ASSERT_not_null(pragma);
+    } else {
+      if (SgPragma *pragma_text = pragma->get_pragma()) {
+        if (pragma_text->get_pragma() != directive.text) {
+          SageInterface::setPragma(pragma,
+                                   SageBuilder::buildPragma(directive.text));
+        }
+      }
+      if (IsStatementAttachedToParentList(pragma)) {
+        SageInterface::removeStatement(pragma, false);
+      }
+    }
     AttachFortranDirectiveSourceText(pragma, directive.text);
     builder.setSourcePosition(pragma, directive.start, directive.end);
 
     if (target != nullptr) {
-      SageInterface::insertStatementBefore(target, pragma);
+      if (insert_after_target) {
+        auto last_inserted = last_inserted_after_pragma_by_target.find(target);
+        if (last_inserted != last_inserted_after_pragma_by_target.end() &&
+            last_inserted->second != nullptr) {
+          SageInterface::insertStatementAfter(last_inserted->second, pragma);
+        } else {
+          SageInterface::insertStatementAfter(target, pragma);
+        }
+        last_inserted_after_pragma_by_target[target] = pragma;
+      } else {
+        auto last_inserted = last_inserted_before_pragma_by_target.find(target);
+        if (last_inserted != last_inserted_before_pragma_by_target.end() &&
+            last_inserted->second != nullptr) {
+          SageInterface::insertStatementAfter(last_inserted->second, pragma);
+        } else {
+          SageInterface::insertStatementBefore(target, pragma);
+        }
+        last_inserted_before_pragma_by_target[target] = pragma;
+      }
       targets_with_inserted_pragmas[target] = true;
     } else {
       SageInterface::appendStatement(pragma, insertion_scope);
@@ -2633,6 +3447,30 @@ SourcePosition BuildSourcePosition(const Fortran::parser::Statement<T> &x,
     pos.emplace(SourcePosition{});
   }
 
+  if ((pos->path.empty() || pos->line <= 0 || pos->column <= 0) &&
+      cooked_ != nullptr && !x.source.empty()) {
+    if (auto provenanceRange{cooked_->GetProvenanceRange(x.source)}) {
+      const auto &sources = cooked_->allSources();
+      const Fortran::parser::Provenance provenance =
+          from == Order::begin ? provenanceRange->start()
+                               : provenanceRange->Last();
+      if (auto sourcePos = sources.GetSourcePosition(provenance)) {
+        std::string path;
+        if (IsFromIncludedFile(x.source)) {
+          if (auto filePath =
+                  GetSourceFilePathForProvenance(sources, provenance,
+                                                 /*topLevel=*/false)) {
+            path = NormalizeSourcePath(*filePath);
+          }
+        }
+        if (path.empty()) {
+          path = NormalizeSourcePath(sourcePos->path.get());
+        }
+        pos.emplace(SourcePosition{path, sourcePos->line, sourcePos->column});
+      }
+    }
+  }
+
   return pos.value();
 }
 
@@ -2662,6 +3500,30 @@ BuildSourcePosition(const Fortran::parser::UnlabeledStatement<T> &x,
                                  sourceInfo->second.column});
   } else {
     pos.emplace(SourcePosition{});
+  }
+
+  if ((pos->path.empty() || pos->line <= 0 || pos->column <= 0) &&
+      cooked_ != nullptr && !x.source.empty()) {
+    if (auto provenanceRange{cooked_->GetProvenanceRange(x.source)}) {
+      const auto &sources = cooked_->allSources();
+      const Fortran::parser::Provenance provenance =
+          from == Order::begin ? provenanceRange->start()
+                               : provenanceRange->Last();
+      if (auto sourcePos = sources.GetSourcePosition(provenance)) {
+        std::string path;
+        if (IsFromIncludedFile(x.source)) {
+          if (auto filePath =
+                  GetSourceFilePathForProvenance(sources, provenance,
+                                                 /*topLevel=*/false)) {
+            path = NormalizeSourcePath(*filePath);
+          }
+        }
+        if (path.empty()) {
+          path = NormalizeSourcePath(sourcePos->path.get());
+        }
+        pos.emplace(SourcePosition{path, sourcePos->line, sourcePos->column});
+      }
+    }
   }
 
   return pos.value();
@@ -2874,6 +3736,22 @@ void recordFortranModuleExplicitAccess(
       accessModifier;
 }
 
+void recordFortranModuleAccessStatement(
+    SgScopeStatement *scope,
+    SgAccessModifier::access_modifier_enum accessModifier,
+    const std::vector<std::string> &names, const SourcePosition &begin,
+    const SourcePosition &end) {
+  FortranModuleAccessAttribute *attribute =
+      getFortranModuleAccessAttribute(scope, true);
+  if (attribute == nullptr) {
+    return;
+  }
+
+  attribute->accessStatements.push_back(
+      FortranModuleAccessAttribute::AccessStatementRecord{accessModifier, names,
+                                                          begin, end});
+}
+
 std::optional<SgAccessModifier::access_modifier_enum>
 getFortranModuleRecordedAccess(SgSymbol *symbol) {
   if (symbol == nullptr) {
@@ -2895,6 +3773,169 @@ getFortranModuleRecordedAccess(SgSymbol *symbol) {
   }
 
   return attribute->defaultAccess;
+}
+
+void applyFortranModuleAccessToDeclaration(
+    SgDeclarationStatement *decl,
+    SgAccessModifier::access_modifier_enum accessModifier) {
+  if (decl == nullptr) {
+    return;
+  }
+
+  auto apply = [&](SgDeclarationStatement *target) {
+    if (target == nullptr) {
+      return;
+    }
+
+    SgAccessModifier &modifier =
+        target->get_declarationModifier().get_accessModifier();
+    if (accessModifier == SgAccessModifier::e_private) {
+      modifier.setPrivate();
+    } else if (accessModifier == SgAccessModifier::e_public) {
+      modifier.setPublic();
+    }
+  };
+
+  apply(decl);
+  apply(decl->get_firstNondefiningDeclaration());
+  apply(decl->get_definingDeclaration());
+}
+
+void applyFortranModuleAccessToSymbolBasis(
+    SgNode *symbolBasis,
+    SgAccessModifier::access_modifier_enum accessModifier) {
+  if (symbolBasis == nullptr) {
+    return;
+  }
+
+  if (SgDeclarationStatement *decl = isSgDeclarationStatement(symbolBasis)) {
+    applyFortranModuleAccessToDeclaration(decl, accessModifier);
+    return;
+  }
+
+  if (SgInitializedName *initName = isSgInitializedName(symbolBasis)) {
+    if (SgVariableDeclaration *varDecl =
+            isSgVariableDeclaration(initName->get_parent())) {
+      applyFortranModuleAccessToDeclaration(varDecl, accessModifier);
+    }
+  }
+}
+
+void applyFortranModuleExplicitAccessToName(
+    SgClassDefinition *moduleDefinition, const std::string &name,
+    SgAccessModifier::access_modifier_enum accessModifier) {
+  if (moduleDefinition == nullptr) {
+    return;
+  }
+
+  SgSymbolTable *symbolTable = moduleDefinition->get_symbol_table();
+  if (symbolTable == nullptr) {
+    return;
+  }
+
+  const bool caseInsensitive = moduleDefinition->isCaseInsensitive();
+  const std::string key = symbolKey(SgName(name), caseInsensitive);
+
+  for (SgNode *symbolNode : symbolTable->get_symbols()) {
+    SgSymbol *symbol = isSgSymbol(symbolNode);
+    if (symbol == nullptr) {
+      continue;
+    }
+
+    if (symbolKey(symbol->get_name(), caseInsensitive) != key) {
+      continue;
+    }
+
+    if (SgAliasSymbol *alias = isSgAliasSymbol(symbol)) {
+      applyFortranModuleAccessToSymbolBasis(alias->get_alias(), accessModifier);
+    }
+    applyFortranModuleAccessToSymbolBasis(symbol->get_symbol_basis(),
+                                          accessModifier);
+  }
+}
+
+bool moduleHasMaterializedAccessStatements(
+    SgClassDefinition *moduleDefinition) {
+  if (moduleDefinition == nullptr) {
+    return false;
+  }
+
+  for (SgDeclarationStatement *member : moduleDefinition->get_members()) {
+    SgAttributeSpecificationStatement *attrStmt =
+        isSgAttributeSpecificationStatement(member);
+    if (attrStmt == nullptr) {
+      continue;
+    }
+
+    switch (attrStmt->get_attribute_kind()) {
+    case SgAttributeSpecificationStatement::e_accessStatement_private:
+    case SgAttributeSpecificationStatement::e_accessStatement_public:
+      return true;
+
+    default:
+      break;
+    }
+  }
+
+  return false;
+}
+
+void materializeFortranModuleAccessStatements(SgModuleStatement *moduleStmt) {
+  if (moduleStmt == nullptr) {
+    return;
+  }
+
+  SgClassDefinition *moduleDefinition = moduleStmt->get_definition();
+  if (moduleDefinition == nullptr) {
+    return;
+  }
+
+  FortranModuleAccessAttribute *attribute =
+      getFortranModuleAccessAttribute(moduleDefinition, false);
+  if (attribute == nullptr) {
+    return;
+  }
+
+  const bool hasMaterializedAccess =
+      moduleHasMaterializedAccessStatements(moduleDefinition);
+
+  for (const auto &record : attribute->accessStatements) {
+    if (record.names.empty()) {
+      if (!hasMaterializedAccess &&
+          record.accessModifier == SgAccessModifier::e_private) {
+        moduleDefinition->set_isPrivate(true);
+      } else if (!hasMaterializedAccess &&
+                 record.accessModifier == SgAccessModifier::e_public) {
+        SgAttributeSpecificationStatement *stmt =
+            SageBuilder::buildAttributeSpecificationStatement(
+                SgAttributeSpecificationStatement::e_accessStatement_public);
+        ASSERT_not_null(stmt);
+        builder.setSourcePosition(stmt, record.begin, record.end);
+        InsertFortranSpecificationStatement(stmt, moduleDefinition);
+      }
+      continue;
+    }
+
+    if (hasMaterializedAccess) {
+      continue;
+    }
+
+    SgAttributeSpecificationStatement::attribute_spec_enum attributeKind =
+        record.accessModifier == SgAccessModifier::e_private
+            ? SgAttributeSpecificationStatement::e_accessStatement_private
+            : SgAttributeSpecificationStatement::e_accessStatement_public;
+    SgAttributeSpecificationStatement *stmt =
+        SageBuilder::buildAttributeSpecificationStatement(attributeKind);
+    ASSERT_not_null(stmt);
+    builder.setSourcePosition(stmt, record.begin, record.end);
+
+    SgStringList &nameList = stmt->get_name_list();
+    for (const std::string &name : record.names) {
+      nameList.push_back(name);
+    }
+
+    InsertFortranSpecificationStatement(stmt, moduleDefinition);
+  }
 }
 
 std::string formatSourcePosition(const SourcePosition &pos) {
@@ -3152,6 +4193,72 @@ void use_statement_fixup(SgScopeStatement *currentScope) {
 }
 } // namespace
 
+void BuildVisitor::PushActiveConstructScope(SgScopeStatement *scope,
+                                            const SourcePositions &sources) {
+  if (scope == nullptr) {
+    return;
+  }
+
+  active_construct_scopes_.push_back(ActiveConstructScope{scope, sources});
+}
+
+void BuildVisitor::PopActiveConstructScope(SgScopeStatement *scope) {
+  if (scope == nullptr || active_construct_scopes_.empty()) {
+    return;
+  }
+
+  for (auto it = active_construct_scopes_.rbegin();
+       it != active_construct_scopes_.rend(); ++it) {
+    if (it->scope != scope) {
+      continue;
+    }
+    active_construct_scopes_.erase(std::next(it).base());
+    return;
+  }
+}
+
+SgScopeStatement *BuildVisitor::FindActiveConstructScopeForSource(
+    SgScopeStatement *scope, SgSourceFile *sourceFile,
+    const SourcePosition &source) const {
+  if (scope == nullptr || sourceFile == nullptr || source.line <= 0) {
+    return nullptr;
+  }
+
+  const std::string primaryPath = GetPrimarySourcePath(sourceFile);
+  const std::string sourcePath = NormalizeSourcePath(source.path);
+  if (!primaryPath.empty() && !sourcePath.empty() &&
+      primaryPath != sourcePath) {
+    return nullptr;
+  }
+
+  for (auto it = active_construct_scopes_.rbegin();
+       it != active_construct_scopes_.rend(); ++it) {
+    if (it->scope != scope) {
+      continue;
+    }
+
+    const SourcePosition &begin = std::get<0>(it->sources);
+    const SourcePosition &body = std::get<1>(it->sources);
+    const SourcePosition &end = std::get<2>(it->sources);
+
+    int startLine = begin.line > 0 ? begin.line : body.line;
+    int endLine = end.line > 0 ? end.line : body.line;
+    if (startLine <= 0 || endLine <= 0) {
+      continue;
+    }
+    if (endLine < startLine) {
+      std::swap(startLine, endLine);
+    }
+    if (source.line < startLine || source.line > endLine) {
+      continue;
+    }
+
+    return it->scope;
+  }
+
+  return nullptr;
+}
+
 // Callback for the Flang parser. Converts a parsed
 // Fortran::Parser::Program to ROSE Sage nodes.
 void Build(parser::Program &x, parser::AllCookedSources &cooked) {
@@ -3228,6 +4335,7 @@ void BuildVisitor::Build(parser::MainProgram &x) {
   if (auto pos{FirstSourcePosition(spec)}) {
     srcPosBody.emplace(*pos);
   }
+  NormalizeConstructBodyStart(srcPosBegin, srcPosBody);
 
   // Fortran only needs an end statement so check for no beginning source
   // position
@@ -3375,6 +4483,7 @@ void BuildVisitor::Build(parser::SubroutineSubprogram &x) {
       srcPosBody.emplace(srcPosEnd);
     }
   }
+  NormalizeConstructBodyStart(srcPosBegin, srcPosBody);
   SourcePosition comment_pos =
       ChooseCommentAnchor(srcPosBegin, srcPosBody, srcPosEnd);
   builder.consumePrecedingComments(
@@ -3401,7 +4510,9 @@ void BuildVisitor::Build(parser::SubroutineSubprogram &x) {
   DeclareFortranDummyArguments(paramScope, dummyArgs);
 
   // SpecificationPart
+  PushActiveConstructScope(paramScope, sources);
   Walk(std::get<SpecificationPart>(x.t));
+  PopActiveConstructScope(paramScope);
 
   // Leave SageTreeBuilder for SgFunctionParameterList
   builder.Leave(paramList, paramScope, dummyArgs);
@@ -3458,6 +4569,7 @@ void BuildVisitor::Build(parser::SeparateModuleSubprogram &x) {
   if (!srcPosBegin) {
     srcPosBegin.emplace(*srcPosBody);
   }
+  NormalizeConstructBodyStart(srcPosBegin, srcPosBody);
   SourcePosition comment_pos =
       ChooseCommentAnchor(srcPosBegin, srcPosBody, srcPosEnd);
   builder.consumePrecedingComments(
@@ -3487,7 +4599,9 @@ void BuildVisitor::Build(parser::SeparateModuleSubprogram &x) {
   builder.Enter(paramList, paramScope, name, paramResultType, isDefDecl);
 
   // SpecificationPart
+  PushActiveConstructScope(paramScope, sources);
   Walk(spec);
+  PopActiveConstructScope(paramScope);
 
   // Leave SageTreeBuilder for SgFunctionParameterList
   builder.Leave(paramList, paramScope, dummyArgs);
@@ -3547,6 +4661,7 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
       srcPosBody.emplace(srcPosEnd);
     }
   }
+  NormalizeConstructBodyStart(srcPosBegin, srcPosBody);
   SourcePosition comment_pos =
       ChooseCommentAnchor(srcPosBegin, srcPosBody, srcPosEnd);
   builder.consumePrecedingComments(
@@ -3604,7 +4719,9 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
   DeclareFortranDummyArguments(paramScope, dummyArgs);
 
   // SpecificationPart
+  PushActiveConstructScope(paramScope, sources);
   Walk(std::get<SpecificationPart>(x.t));
+  PopActiveConstructScope(paramScope);
 
   // Need to create initialized name here for result, if result is not declared
   // in SpecificationPart
@@ -3689,6 +4806,7 @@ void BuildVisitor::Build(parser::Module &x) {
 
   Walk(std::get<parser::SpecificationPart>(x.t));
   Walk(std::get<std::optional<ModuleSubprogramPart>>(x.t));
+  materializeFortranModuleAccessStatements(module);
 
   // EndModuleStmt - std::optional<Name> v;
   std::string endName;
@@ -3737,6 +4855,7 @@ void BuildVisitor::Build(parser::Submodule &x) {
 
   Walk(std::get<parser::SpecificationPart>(x.t));
   Walk(std::get<std::optional<ModuleSubprogramPart>>(x.t));
+  materializeFortranModuleAccessStatements(module);
 
   // Leave SageTreeBuilder for SgModuleStatement
   builder.Leave(module);
@@ -3775,6 +4894,7 @@ void BuildVisitor::Build(parser::BlockData &x) {
       srcPosBody.emplace(srcPosEnd);
     }
   }
+  NormalizeConstructBodyStart(srcPosBegin, srcPosBody);
   SourcePosition comment_pos =
       ChooseCommentAnchor(srcPosBegin, srcPosBody, srcPosEnd);
   builder.consumePrecedingComments(
@@ -3792,7 +4912,9 @@ void BuildVisitor::Build(parser::BlockData &x) {
   builder.Enter(paramList, paramScope, name, /*function_type*/ nullptr,
                 isDefDecl);
 
+  PushActiveConstructScope(paramScope, sources);
   Walk(std::get<SpecificationPart>(x.t));
+  PopActiveConstructScope(paramScope);
 
   builder.Leave(paramList, paramScope, dummyArgs);
 
@@ -4621,6 +5743,14 @@ void BuildVisitor::Build(parser::DoConstruct &x) {
       std::get<Statement<NonLabelDoStmt>>(x.t), Order::begin)};
   SourcePosition srcEnd{
       BuildSourcePosition(std::get<Statement<EndDoStmt>>(x.t), Order::end)};
+  if ((srcBegin.path.empty() || srcBegin.line <= 0 || srcBegin.column <= 0) &&
+      current_stmt_source_) {
+    srcBegin = std::get<0>(*current_stmt_source_);
+  }
+  if ((srcEnd.path.empty() || srcEnd.line <= 0 || srcEnd.column <= 0) &&
+      current_stmt_source_) {
+    srcEnd = std::get<1>(*current_stmt_source_);
+  }
   if (SgProject::get_verbose() > 2) {
     std::cerr << "DoConstruct source range: " << srcBegin.line << "->"
               << srcEnd.line << "\n";
@@ -4657,6 +5787,7 @@ void BuildVisitor::Build(parser::DoConstruct &x) {
       body->set_parent(doConcurrent);
       header->set_parent(doConcurrent);
       builder.setSourcePosition(doConcurrent, srcBegin, srcEnd);
+      builder.setSourcePosition(body, srcBegin, srcEnd);
 
       SageInterface::appendStatement(doConcurrent, outerScope);
 
@@ -4674,6 +5805,9 @@ void BuildVisitor::Build(parser::DoConstruct &x) {
     ASSERT_not_null(control.condition);
     builder.Enter(whileStmt, control.condition);
     builder.setSourcePosition(whileStmt, srcBegin, srcEnd);
+    if (whileStmt->get_body() != nullptr) {
+      builder.setSourcePosition(whileStmt->get_body(), srcBegin, srcEnd);
+    }
     if (!doName.empty()) {
       whileStmt->set_string_label(doName);
     }
@@ -4681,6 +5815,9 @@ void BuildVisitor::Build(parser::DoConstruct &x) {
     builder.Enter(doStmt, control.initialization, control.bound,
                   control.increment);
     builder.setSourcePosition(doStmt, srcBegin, srcEnd);
+    if (doStmt->get_body() != nullptr) {
+      builder.setSourcePosition(doStmt->get_body(), srcBegin, srcEnd);
+    }
     if (!doName.empty()) {
       doStmt->set_string_label(doName);
     }
@@ -5443,6 +6580,7 @@ void BuildVisitor::Build(parser::LabelDoStmt &x) {
     body->set_parent(doConcurrent);
     header->set_parent(doConcurrent);
     ApplyCurrentStatementSource(doConcurrent);
+    ApplyCurrentStatementSource(body);
 
     if (label_) {
       SgScopeStatement *labelScope =
@@ -5468,6 +6606,9 @@ void BuildVisitor::Build(parser::LabelDoStmt &x) {
     SgWhileStmt *whileStmt{nullptr};
     builder.Enter(whileStmt, control.condition);
     ApplyCurrentStatementSource(whileStmt);
+    if (whileStmt->get_body() != nullptr) {
+      ApplyCurrentStatementSource(whileStmt->get_body());
+    }
 
     if (label_) {
       SgScopeStatement *labelScope =
@@ -5490,6 +6631,9 @@ void BuildVisitor::Build(parser::LabelDoStmt &x) {
   builder.Enter(doStmt, control.initialization, control.bound,
                 control.increment);
   ApplyCurrentStatementSource(doStmt);
+  if (doStmt->get_body() != nullptr) {
+    ApplyCurrentStatementSource(doStmt->get_body());
+  }
   doStmt->set_has_end_statement(false);
 
   if (label_) {
@@ -5678,6 +6822,14 @@ void BuildVisitor::MaybeInsertIncludeLine(
 
   SgScopeStatement *scope = SageBuilder::topScopeStack();
   ASSERT_not_null(scope);
+  bool use_construction_scope = false;
+  if (SgStatement *detached_stmt =
+          FindDetachedConstructionAnchorStatement(scope)) {
+    const std::string includerAbs = NormalizeSourcePath(includerPath);
+    use_construction_scope = includerAbs.empty() ||
+                             !LocatedNodeHasSourcePath(detached_stmt) ||
+                             LocatedNodeMatchesPath(detached_stmt, includerAbs);
+  }
   SgFortranIncludeLine *includeLine =
       SageBuilder::buildFortranIncludeLine(includeFilename);
   ASSERT_not_null(includeLine);
@@ -5692,7 +6844,74 @@ void BuildVisitor::MaybeInsertIncludeLine(
     SageInterface::setSourcePosition(includeLine);
   }
 
-  SageInterface::appendStatement(includeLine, scope);
+  SgSourceFile *sourceFile = builder.getSourceFile();
+  if (sourceFile != nullptr && startPos) {
+    ConsumeRawFortranIncludeDirective(sourceFile, *startPos);
+    RemoveRawIncludeDirectiveFromAttachedInfo(isSgLocatedNode(scope),
+                                              *startPos);
+    std::vector<SgNode *> scopeNodes =
+        NodeQuery::querySubTree(scope, V_SgLocatedNode);
+    for (SgNode *node : scopeNodes) {
+      RemoveRawIncludeDirectiveFromAttachedInfo(isSgLocatedNode(node),
+                                                *startPos);
+    }
+  }
+
+  SgScopeStatement *insertion_scope = nullptr;
+  if (sourceFile != nullptr && startPos) {
+    insertion_scope =
+        FindActiveConstructScopeForSource(scope, sourceFile, *startPos);
+    if (insertion_scope != nullptr) {
+      use_construction_scope = true;
+    }
+  }
+  if (insertion_scope == nullptr) {
+    insertion_scope = FindFortranIncludeInsertionScope(scope, includerPath);
+  }
+  if (!use_construction_scope && sourceFile != nullptr && startPos) {
+    const std::string sourcePath = GetPrimarySourcePath(sourceFile);
+    const std::string includerAbs = NormalizeSourcePath(startPos->path);
+    if (!sourcePath.empty() && !includerAbs.empty() &&
+        sourcePath == includerAbs) {
+      SgScopeStatement *line_scope = FindInnermostConstructionScopeForLine(
+          scope, sourceFile, startPos->line);
+      if (line_scope == nullptr ||
+          line_scope == sourceFile->get_globalScope()) {
+        line_scope = FindInnermostScopeForLine(sourceFile, startPos->line);
+      }
+      if (line_scope != nullptr) {
+        if (line_scope != sourceFile->get_globalScope() ||
+            insertion_scope == scope) {
+          insertion_scope =
+              NormalizeDirectiveInsertionScope(line_scope, sourceFile);
+        }
+      }
+
+      if (insertion_scope == sourceFile->get_globalScope() &&
+          IsAttachedFortranProcedureBodyScope(scope)) {
+        insertion_scope = NormalizeDirectiveInsertionScope(scope, sourceFile);
+      }
+    }
+  }
+  if (insertion_scope == nullptr) {
+    insertion_scope = scope;
+  }
+
+  SgStatement *insertion_target =
+      FindFortranIncludeInsertionTarget(insertion_scope, scope);
+  if (sourceFile != nullptr && insertion_target != nullptr &&
+      insertion_scope == sourceFile->get_globalScope()) {
+    if (SgScopeStatement *owning_scope =
+            NormalizeFortranIncludeOwningScope(insertion_target)) {
+      insertion_scope = owning_scope;
+      insertion_target = nullptr;
+    }
+  }
+  if (insertion_target != nullptr) {
+    SageInterface::insertStatementBefore(insertion_target, includeLine);
+  } else {
+    SageInterface::appendStatement(includeLine, insertion_scope);
+  }
   include_ranges_.push_back(includeRange.value());
 }
 
@@ -7958,16 +9177,14 @@ void BuildVisitor::Build(
   SageInterface::appendStatement(importStmt, currentScope);
 }
 
-void BuildVisitor::Build(
-    parser::Statement<common::Indirection<parser::AccessStmt>> &x) {
+void BuildVisitor::Build(parser::AccessStmt &x) {
   using namespace Fortran::parser;
 
   SgScopeStatement *scope = SageBuilder::topScopeStack();
   ASSERT_not_null(scope);
 
-  AccessStmt &accessStmt = x.statement.value();
-  auto &accessSpec = std::get<AccessSpec>(accessStmt.t);
-  auto &accessIds = std::get<std::list<AccessId>>(accessStmt.t);
+  auto &accessSpec = std::get<AccessSpec>(x.t);
+  auto &accessIds = std::get<std::list<AccessId>>(x.t);
 
   SgAttributeSpecificationStatement::attribute_spec_enum attributeKind =
       accessSpec.v == AccessSpec::Kind::Private
@@ -7982,13 +9199,8 @@ void BuildVisitor::Build(
   ASSERT_not_null(stmt);
   ApplyCurrentStatementSource(stmt);
 
-  SgExprListExp *paramList = stmt->get_parameter_list();
-  if (paramList == nullptr) {
-    paramList = SageBuilder::buildExprListExp_nfi();
-    ASSERT_not_null(paramList);
-    stmt->set_parameter_list(paramList);
-    paramList->set_parent(stmt);
-  }
+  std::vector<std::string> accessNames{};
+  SgStringList &nameList = stmt->get_name_list();
 
   for (auto &accessId : accessIds) {
     GenericSpec &genericSpec = accessId.v.value();
@@ -8002,16 +9214,22 @@ void BuildVisitor::Build(
       continue;
     }
 
-    SgExpression *ref = SageBuilder::buildOpaqueVarRefExp(accessName, scope);
-    ASSERT_not_null(ref);
-    paramList->get_expressions().push_back(ref);
-    ref->set_parent(paramList);
-
+    nameList.push_back(accessName);
+    accessNames.push_back(accessName);
     recordFortranModuleExplicitAccess(scope, accessName, accessModifier);
   }
 
   if (accessIds.empty()) {
     recordFortranModuleDefaultAccess(scope, accessModifier);
+  }
+
+  if (current_stmt_source_) {
+    recordFortranModuleAccessStatement(scope, accessModifier, accessNames,
+                                       std::get<0>(*current_stmt_source_),
+                                       std::get<1>(*current_stmt_source_));
+  } else {
+    recordFortranModuleAccessStatement(scope, accessModifier, accessNames,
+                                       SourcePosition{}, SourcePosition{});
   }
 
   InsertFortranSpecificationStatement(stmt, scope);
@@ -11826,11 +13044,13 @@ void BuildVisitor::Build(parser::CompilerDirective &x) {
   if (x.source.empty()) {
     return;
   }
-  std::string directive = x.source.ToString();
-  if (directive.empty()) {
-    return;
+  // Primary-source OpenMP/OpenACC directives are recovered after the full AST
+  // is built so they can be reinserted into the innermost lexical scope by
+  // source line. Keep eager insertion only for included files, which the
+  // recovery pass intentionally does not rescan.
+  if (IsFromIncludedFile(x.source)) {
+    AppendPragmasFromCharBlockIfMissing(x.source);
   }
-  AppendPragmasFromCharBlock(x.source);
 }
 
 void BuildVisitor::Build(parser::OmpBeginDirective &x) {

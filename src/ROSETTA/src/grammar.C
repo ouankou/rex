@@ -3720,7 +3720,7 @@ string Grammar::generateRTICode(GrammarString *gs,
   ss << "doRTI(\"" << memberVariableName << "\", (void*)(&p_"
      << memberVariableName << "), sizeof(p_" << memberVariableName
      << "), (void*)this, \"" << className << "\", \"" << typeString
-     << "\", \"p_" << memberVariableName << "\", toStringForRTI(p_"
+     << "\", \"p_" << memberVariableName << "\", makeRTIValueDescriptor(p_"
      << memberVariableName << "), " << dataMemberContainerName << "[" << index
      << "]);\n";
   return ss.str();

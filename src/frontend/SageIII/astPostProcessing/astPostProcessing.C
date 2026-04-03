@@ -199,6 +199,20 @@ void pruneSymbolsForConstraintFailures(SgNode *node) {
   pruner.traverse(node, preorder);
 }
 
+void parkDetachedSymbolsInMemoryPool() {
+  struct Parker : public ROSE_VisitTraversal {
+    void visit(SgNode *n) override {
+      if (SgSymbol *symbol = isSgSymbol(n)) {
+        if (symbol->get_parent() == nullptr) {
+          move_symbol_to_orphan_table(symbol);
+        }
+      }
+    }
+  } parker;
+
+  parker.traverseMemoryPool();
+}
+
 bool isTrackedStdTemplateDebugName(const std::string &name) {
   return name.find("ctype") != std::string::npos ||
          name.find("numpunct") != std::string::npos;
@@ -810,6 +824,12 @@ void postProcessingSupport(SgNode *node) {
     // symbol-table fixups have completed.
     pruneSymbolsForConstraintFailures(node);
 
+    // Late declaration fixups can relink class declaration chains after the
+    // earlier template-instantiation pass. Re-canonicalize all reachable class
+    // types in the memory pool so shared type nodes point back to the first
+    // nondefining declaration.
+    canonicalizeClassTypesInMemoryPool();
+
     debugDumpTrackedStdTemplateState("final", node);
     if (SgProject::get_verbose() > 1) {
       printf("Calling checkIsModifiedFlag() \n");
@@ -866,6 +886,13 @@ void postProcessingSupport(SgNode *node) {
     }
 
     checkPhysicalSourcePosition(node);
+
+    // Final declaration and prototype fixups above can still allocate or relink
+    // class types. Re-canonicalize the memory pool at the end of the pipeline
+    // so every reachable SgClassType points back to the first nondefining
+    // declaration in its class declaration chain.
+    canonicalizeClassTypesInMemoryPool();
+    parkDetachedSymbolsInMemoryPool();
 
     return;
   } else {
@@ -1035,6 +1062,8 @@ void postProcessingSupport(SgNode *node) {
     // marked which caused their generated template symbols to be added to the
     // wrong symbol tables.  This is a cause of numerous symbol table problems.
     fixupFriendTemplateDeclarations();
+
+    canonicalizeClassTypesInMemoryPool();
 
     // DQ (3/17/2007): This should be the last point at which the
     // globalMangledNameMap is empty The fixupAstSymbolTables will generate
@@ -1214,5 +1243,10 @@ void postProcessingSupport(SgNode *node) {
         }
       }
     }
+
+    // Keep class-type declarations canonical after the complete post-processing
+    // pipeline, including late type reset and symbol-table fixups.
+    canonicalizeClassTypesInMemoryPool();
+    parkDetachedSymbolsInMemoryPool();
   }
 }

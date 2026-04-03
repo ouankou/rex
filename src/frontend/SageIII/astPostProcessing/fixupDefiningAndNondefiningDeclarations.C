@@ -156,6 +156,26 @@ void FixupAstDefiningAndNondefiningDeclarations::visit(SgNode *node) {
       bool equivalent_scopes =
           (definingScope == nondefiningScope) ||
           (isSgGlobal(nondefiningScope) && isSgGlobal(definingScope));
+      if (equivalent_scopes == false &&
+          isSgClassDeclaration(firstNondefiningDeclaration) != NULL) {
+        const bool nondefining_is_member_class =
+            isSgClassDefinition(nondefiningScope) != NULL ||
+            isSgTemplateClassDefinition(nondefiningScope) != NULL ||
+            isSgTemplateInstantiationDefn(nondefiningScope) != NULL;
+        const bool defining_is_outside_class_scope =
+            isSgClassDefinition(definingScope) == NULL &&
+            isSgTemplateClassDefinition(definingScope) == NULL &&
+            isSgTemplateInstantiationDefn(definingScope) == NULL;
+
+        // A nested class can be forward-declared inside its owning class and
+        // then defined later at namespace scope using a qualified name (e.g.
+        // `class A::B { ... };`). The first nondefining declaration and its
+        // symbol must stay in the owning class scope even though the defining
+        // declaration is lexically outside that class.
+        if (nondefining_is_member_class && defining_is_outside_class_scope) {
+          equivalent_scopes = true;
+        }
+      }
       if (!equivalent_scopes) {
         SgSymbol *symbolToMove =
             firstNondefiningDeclaration->get_symbol_from_symbol_table();
@@ -599,32 +619,19 @@ void FixupAstDefiningAndNondefiningDeclarations::visit(SgNode *node) {
     // node requiring a reference to the declaration (which is why it is stored
     // explicitly).  Thus the firstNondefiningDeclaration should never be the
     // same as the definingDeclaration (if they are non-null)
-    bool allow_self_nondef_for_template_instantiation =
-        isSgTemplateInstantiationDecl(declaration) != NULL ||
-        isSgTemplateInstantiationFunctionDecl(declaration) != NULL ||
-        isSgTemplateInstantiationMemberFunctionDecl(declaration) != NULL;
-
     if (firstNondefiningDeclaration != NULL &&
         firstNondefiningDeclaration == definingDeclaration) {
-      if (allow_self_nondef_for_template_instantiation) {
-        // Template instantiations can be represented as a single declaration.
-        // Preserve the chain anchor for mangling/unparsing paths that depend
-        // on a non-null first-nondefining link.
-        declaration->set_firstNondefiningDeclaration(declaration);
-      } else {
-        // reset this to NULL since it is not a non-defining declaration (we
-        // might later want to build a non-defining declaration to have be
-        // referenced here, but it is not clear that that is required).
-        declaration->set_firstNondefiningDeclaration(NULL);
-      }
+      // A declaration cannot simultaneously serve as the defining
+      // declaration and the first non-defining declaration. When there is no
+      // real forward declaration, the first-nondefining link must stay empty.
+      declaration->set_firstNondefiningDeclaration(NULL);
 
       // reset the firstNondefiningDeclaration
       firstNondefiningDeclaration =
           declaration->get_firstNondefiningDeclaration();
     }
 
-    if (firstNondefiningDeclaration == definingDeclaration &&
-        !allow_self_nondef_for_template_instantiation) {
+    if (firstNondefiningDeclaration == definingDeclaration) {
       MLOG_WARN_CXX("astPostProcessing")
           << "firstNondefiningDeclaration == definingDeclaration failed for "
              "node of"

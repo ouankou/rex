@@ -587,26 +587,28 @@ bool isLocatedNodeInSourceFile(const SgLocatedNode *node,
     return false;
   }
 
-  // getEnclosingSourceFile is legacy and not const-correct; it only walks
-  // parent/source-file links and does not mutate the node, so this cast is
-  // safe for read-only ownership lookup.
-  SgSourceFile *owner =
-      SageInterface::getEnclosingSourceFile(const_cast<SgLocatedNode *>(node));
-  if (owner != NULL) {
-    return owner == sourceFile;
-  }
-
   const Sg_File_Info *nodeInfo = node->get_file_info();
   const Sg_File_Info *sourceInfo = sourceFile->get_file_info();
-  if (nodeInfo == NULL || sourceInfo == NULL) {
-    return false;
-  }
-
-  if (nodeInfo->get_file_id() >= 0 && sourceInfo->get_file_id() >= 0) {
+  if (nodeInfo != NULL && sourceInfo != NULL && nodeInfo->get_file_id() >= 0 &&
+      sourceInfo->get_file_id() >= 0) {
     return nodeInfo->get_file_id() == sourceInfo->get_file_id();
   }
 
-  return nodeInfo->get_filenameString() == sourceFile->getFileName();
+  if (nodeInfo != NULL) {
+    const std::string nodeFilename = nodeInfo->get_filenameString();
+    if (!nodeFilename.empty()) {
+      return nodeFilename == sourceFile->getFileName();
+    }
+  }
+
+  // getEnclosingSourceFile is legacy and not const-correct; it only walks
+  // parent/source-file links and does not mutate the node, so this cast is
+  // safe for read-only ownership lookup. Use it only when file-info ownership
+  // is unavailable so header declarations attached under a translation unit do
+  // not get charged to the wrong token stream.
+  SgSourceFile *owner =
+      SageInterface::getEnclosingSourceFile(const_cast<SgLocatedNode *>(node));
+  return owner != NULL && owner == sourceFile;
 }
 
 void assertTokenSubsequenceWithinBounds(
@@ -713,6 +715,20 @@ void enforceTokenUnparseContractForFile(SgSourceFile *sourceFile) {
 
     if (!isLocatedNodeInSourceFile(decl, sourceFile)) {
       continue;
+    }
+
+    if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
+      if (!class_decl->get_isAutonomousDeclaration() ||
+          class_decl->get_isUnNamed()) {
+        continue;
+      }
+    }
+
+    if (SgEnumDeclaration *enum_decl = isSgEnumDeclaration(decl)) {
+      if (!enum_decl->get_isAutonomousDeclaration() ||
+          enum_decl->get_isUnNamed()) {
+        continue;
+      }
     }
 
     // Clang explicit-instantiation directives are wrapped in a

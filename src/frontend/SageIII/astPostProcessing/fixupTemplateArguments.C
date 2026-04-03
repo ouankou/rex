@@ -423,6 +423,9 @@ bool FixupTemplateArguments::contains_private_type(
     ROSE_ASSERT(templateArgument->get_type() != NULL);
 
     SgType *templateArgumentType = templateArgument->get_type();
+    SgType *strippedTemplateArgumentType = templateArgumentType->stripType(
+        SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
+        SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_ARRAY_TYPE);
 #if DEBUG_PRIVATE_TYPE
     printf("templateArgumentType = %p = %s \n", templateArgumentType,
            templateArgumentType->class_name().c_str());
@@ -450,7 +453,7 @@ bool FixupTemplateArguments::contains_private_type(
 
     // DQ (3/2/2019): Detect any class declaration that is un-named since it
     // can't be a tempalte argument either.
-    SgNamedType *namedType = isSgNamedType(templateArgumentType);
+    SgNamedType *namedType = isSgNamedType(strippedTemplateArgumentType);
     if (namedType != NULL) {
       SgDeclarationStatement *declarationStatement =
           namedType->get_declaration();
@@ -708,17 +711,7 @@ void FixupTemplateArguments::processTemplateArgument(
 void FixupTemplateArguments::visit(SgNode *node) {
   ROSE_ASSERT(node != NULL);
 
-  SgVariableDeclaration *variableDeclaration = isSgVariableDeclaration(node);
-  if (variableDeclaration != NULL) {
-    // Check the type of the variable declaration, and any template arguments if
-    // it is a template type with template arguments. SgType* type =
-    // variableDeclaration->get_type(); ROSE_ASSERT(type != NULL);
-    SgInitializedName *initializedName =
-        SageInterface::getFirstInitializedName(variableDeclaration);
-    ROSE_ASSERT(initializedName != NULL);
-    SgType *type = initializedName->get_type();
-    ROSE_ASSERT(type != NULL);
-    SgScopeStatement *targetScope = variableDeclaration->get_scope();
+  auto shouldProcessScope = [&](SgScopeStatement *targetScope) {
     ROSE_ASSERT(targetScope != NULL);
 
     // DQ (2/16/2017): Don't process code in template instantiations.
@@ -731,22 +724,58 @@ void FixupTemplateArguments::visit(SgNode *node) {
     SgTemplateInstantiationMemberFunctionDecl
         *templateInstantiationMemberFunctionDec =
             isSgTemplateInstantiationMemberFunctionDecl(functionDeclaration);
-    // if (templateInstantiationDefn == NULL)
-    if (templateInstantiationDefn == NULL &&
-        templateInstantiationFunctionDec == NULL &&
-        templateInstantiationMemberFunctionDec == NULL) {
-      // DQ (2/15/2017): When this is run, we cause transformations that cause
-      // ROSE to have an infinte loop. Since this is a second (redundant)
-      // invocaion, we likely should just not run this.  But it is not clear if
-      // this truely fixes the problem that I am seeing.
-      bool result = contains_private_type(type, targetScope);
 
-      // DQ (3/25/2017): Added a trivial use to eliminate Clang warning about
-      // the return value not being used. But it might be that we should not run
-      // the function, however this is a complex subject from last month that I
-      // don't wish to revisit at the moment while being focused om eliminating
-      // warnings from Clang.
+    return templateInstantiationDefn == NULL &&
+           templateInstantiationFunctionDec == NULL &&
+           templateInstantiationMemberFunctionDec == NULL;
+  };
+
+  auto processTypeInScope = [&](SgType *type, SgScopeStatement *targetScope) {
+    ROSE_ASSERT(type != NULL);
+    ROSE_ASSERT(targetScope != NULL);
+
+    if (shouldProcessScope(targetScope)) {
+      bool result = contains_private_type(type, targetScope);
       ROSE_ASSERT(result == true || result == false);
+
+      SgType *current = type;
+      while (SgTypedefType *typedefType = isSgTypedefType(current)) {
+        SgType *baseType = typedefType->get_base_type();
+        if (baseType == NULL || baseType == current) {
+          break;
+        }
+
+        result = contains_private_type(baseType, targetScope);
+        ROSE_ASSERT(result == true || result == false);
+        current = baseType;
+      }
+    }
+  };
+
+  if (SgVariableDeclaration *variableDeclaration =
+          isSgVariableDeclaration(node)) {
+    // Check the type of the variable declaration, and any template arguments if
+    // it is a template type with template arguments. SgType* type =
+    // variableDeclaration->get_type(); ROSE_ASSERT(type != NULL);
+    SgInitializedName *initializedName =
+        SageInterface::getFirstInitializedName(variableDeclaration);
+    ROSE_ASSERT(initializedName != NULL);
+    processTypeInScope(initializedName->get_type(),
+                       variableDeclaration->get_scope());
+    return;
+  }
+
+  if (SgTypedefDeclaration *typedefDeclaration = isSgTypedefDeclaration(node)) {
+    processTypeInScope(typedefDeclaration->get_base_type(),
+                       typedefDeclaration->get_scope());
+    return;
+  }
+
+  if (SgTemplateArgument *templateArgument = isSgTemplateArgument(node)) {
+    SgScopeStatement *targetScope =
+        SageInterface::getEnclosingScope(templateArgument);
+    if (targetScope != NULL && shouldProcessScope(targetScope)) {
+      processTemplateArgument(templateArgument, targetScope);
     }
   }
 }

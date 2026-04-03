@@ -43,10 +43,10 @@ std::ostream &operator<<(std::ostream &os, const SgFormatItemPtrList &) {
   return os;
 }
 
-void doRTI(const char *fieldNameBase, void *fieldPtr, size_t fieldSize,
-           void *thisPtr, const char *className, const char *typeString,
-           const char *fieldName, const std::string &fieldContents,
-           RTIMemberData &memberData) {
+static void doRTIDefinednessCheck(const char *fieldNameBase, void *fieldPtr,
+                                  size_t fieldSize, void *thisPtr,
+                                  const char *className,
+                                  const char *typeString) {
 #if ROSE_USE_VALGRIND
   auto shouldCheckDefinedForType = [](const char *typeName) {
     if (typeName == nullptr) {
@@ -87,5 +87,23 @@ void doRTI(const char *fieldNameBase, void *fieldPtr, size_t fieldSize,
   (void)thisPtr;
   (void)className;
 #endif
+  (void)typeString;
+}
+
+void doRTI(const char *fieldNameBase, void *fieldPtr, size_t fieldSize,
+           void *thisPtr, const char *className, const char *typeString,
+           const char *fieldName, const std::string &fieldContents,
+           RTIMemberData &memberData) {
+  doRTIDefinednessCheck(fieldNameBase, fieldPtr, fieldSize, thisPtr, className,
+                        typeString);
+  memberData = RTIMemberData(typeString, fieldName, fieldContents);
+}
+
+void doRTI(const char *fieldNameBase, void *fieldPtr, size_t fieldSize,
+           void *thisPtr, const char *className, const char *typeString,
+           const char *fieldName, const RTIValueDescriptor &fieldContents,
+           RTIMemberData &memberData) {
+  doRTIDefinednessCheck(fieldNameBase, fieldPtr, fieldSize, thisPtr, className,
+                        typeString);
   memberData = RTIMemberData(typeString, fieldName, fieldContents);
 }

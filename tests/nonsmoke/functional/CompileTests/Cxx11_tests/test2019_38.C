@@ -1,10 +1,6 @@
-template <class T> int c(T const& t);
+template <class T> int c(T const &t) { return 0; }
 
-// This line will not compile with GNU version 5.1 (at least).
-template <class T> int e(int xxxxx = c( []{} )) { }
+// This line did not compile with older GNU versions.
+template <class T> int e(int xxxxx = c([] {})) { return 0; }
 
-void foo() 
-   {
-     e<long>();
-   }
-
+void foo() { e<long>(); }

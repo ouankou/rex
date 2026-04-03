@@ -218,11 +218,16 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
           // the surrounding expression context.
           if (!handled_typedef_ctor_name) {
             info_for_typename.unset_SkipBaseType();
+            SgNode *type_qualification_reference = con_init;
             if (!qualifier.empty() && ctor_decl == nullptr) {
-              info_for_typename.set_SkipQualifiedNames();
               info_for_typename.set_global_qualification_required(false);
+              // We already emitted the outer qualifier text above. Point type
+              // qualification at the type node itself so nested template
+              // arguments still keep their own AST-based qualification.
+              type_qualification_reference = type_for_ctor_name;
             }
-            info_for_typename.set_reference_node_for_qualification(con_init);
+            info_for_typename.set_reference_node_for_qualification(
+                type_qualification_reference);
             info_for_typename.set_SkipClassSpecifier();
             unp->u_type->unparseType(type_for_ctor_name, info_for_typename);
           }

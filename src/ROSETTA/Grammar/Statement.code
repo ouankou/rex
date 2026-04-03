@@ -812,6 +812,9 @@ SgName generate_alternative_name_for_unnamed_declaration_in_scope(
     SgScopeStatement *scope) const;
 
 public:
+virtual SgScopeStatement *get_scope(void) const override;
+virtual void set_scope(SgScopeStatement *newScope) override;
+
 #if ALT_FIXUP_COPY
 // DQ (11/7/2007): These need to be called separately (see documentation)
 virtual void fixupCopy_scopes(SgNode *copy, SgCopyHelp &help) const override;
@@ -2754,6 +2757,8 @@ void set_name(SgName name);
 SgNonrealType *get_type(void) const;
 void set_type(SgNonrealType *t);
 
+virtual bool hasExplicitScope() const override;
+
 SgName get_mangled_name(void) const override;
 
 virtual SgSymbol *get_symbol_from_symbol_table() const override;
@@ -4078,6 +4083,27 @@ bool SgStatement::hasExplicitScope() const {
   // scope explicitly.
 
   return false;
+}
+
+SgScopeStatement *SgDeclarationStatement::get_scope(void) const {
+  ASSERT_this();
+
+  if (SgDeclarationScope *declScope = get_declarationScope()) {
+    return declScope;
+  }
+
+  return SgStatement::get_scope();
+}
+
+void SgDeclarationStatement::set_scope(SgScopeStatement *newScope) {
+  ASSERT_this();
+
+  if (SgDeclarationScope *declScope = isSgDeclarationScope(newScope)) {
+    set_declarationScope(declScope);
+  } else {
+    set_declarationScope(NULL);
+    SgStatement::set_scope(newScope);
+  }
 }
 
 void SgStatement::setExtern() {
@@ -9025,6 +9051,12 @@ SgDeclarationStatement::get_definingDeclaration() const {
   return p_definingDeclaration;
 }
 
+namespace {
+void canonicalizeClassTypeForDeclarationChain(
+    SgDeclarationStatement *decl_stmt,
+    SgDeclarationStatement *previous_first_nondefining);
+}
+
 void SgDeclarationStatement::set_definingDeclaration(
     SgDeclarationStatement *definingDeclaration) {
   // DQ (1/26/2013): Added non-automatically generated versions of this function
@@ -9048,6 +9080,7 @@ void SgDeclarationStatement::set_definingDeclaration(
   }
 #endif
   p_definingDeclaration = definingDeclaration;
+  canonicalizeClassTypeForDeclarationChain(this, NULL);
 
   // DQ (5/21/2013): Added debugging code.
   if (definingDeclaration != NULL) {
@@ -9087,12 +9120,126 @@ SgDeclarationStatement::get_firstNondefiningDeclaration() const {
   return p_firstNondefiningDeclaration;
 }
 
+namespace {
+void canonicalizeClassTypeForDeclarationChain(
+    SgDeclarationStatement *decl_stmt,
+    SgDeclarationStatement *previous_first_nondefining) {
+  SgClassDeclaration *decl = isSgClassDeclaration(decl_stmt);
+  if (decl == NULL) {
+    return;
+  }
+
+  SgClassDeclaration *first_nondefining =
+      isSgClassDeclaration(decl->get_firstNondefiningDeclaration());
+  if (first_nondefining == NULL) {
+    first_nondefining = decl;
+  }
+
+  SgClassDeclaration *defining_decl =
+      isSgClassDeclaration(decl->get_definingDeclaration());
+  if (defining_decl == NULL) {
+    defining_decl =
+        isSgClassDeclaration(first_nondefining->get_definingDeclaration());
+  }
+
+  SgClassDeclaration *old_first_nondefining =
+      isSgClassDeclaration(previous_first_nondefining);
+
+  auto belongs_to_current_chain = [&](SgClassDeclaration *candidate) {
+    if (candidate == NULL) {
+      return false;
+    }
+
+    if (candidate == decl || candidate == first_nondefining ||
+        candidate == defining_decl) {
+      return true;
+    }
+
+    SgClassDeclaration *candidate_first = isSgClassDeclaration(
+        candidate->get_firstNondefiningDeclaration());
+    SgClassDeclaration *candidate_def =
+        isSgClassDeclaration(candidate->get_definingDeclaration());
+
+    return candidate_first == first_nondefining ||
+           candidate_first == decl || candidate_def == defining_decl ||
+           candidate_def == decl;
+  };
+
+  auto type_belongs_to_current_chain = [&](SgClassType *candidate_type) {
+    if (candidate_type == NULL) {
+      return false;
+    }
+
+    SgClassDeclaration *type_decl =
+        isSgClassDeclaration(candidate_type->get_declaration());
+    return type_decl == NULL || belongs_to_current_chain(type_decl);
+  };
+
+  bool saw_foreign_class_type = false;
+  auto select_canonical_type = [&](SgClassDeclaration *candidate_decl) {
+    if (candidate_decl == NULL) {
+      return static_cast<SgClassType *>(NULL);
+    }
+
+    SgClassType *candidate_type = isSgClassType(candidate_decl->get_type());
+    if (type_belongs_to_current_chain(candidate_type)) {
+      return candidate_type;
+    }
+    if (candidate_type != NULL) {
+      saw_foreign_class_type = true;
+    }
+
+    return static_cast<SgClassType *>(NULL);
+  };
+
+  SgClassType *canonical_type = select_canonical_type(first_nondefining);
+  if (canonical_type == NULL) {
+    canonical_type = select_canonical_type(decl);
+  }
+  if (canonical_type == NULL) {
+    canonical_type = select_canonical_type(defining_decl);
+  }
+  if (canonical_type == NULL &&
+      belongs_to_current_chain(old_first_nondefining)) {
+    canonical_type = select_canonical_type(old_first_nondefining);
+  }
+  if (canonical_type == NULL && saw_foreign_class_type &&
+      first_nondefining->get_firstNondefiningDeclaration() != NULL) {
+    canonical_type = SgClassType::createType(first_nondefining);
+  }
+  if (canonical_type == NULL) {
+    return;
+  }
+
+  auto attach_type = [&](SgClassDeclaration *candidate) {
+    if (candidate != NULL && candidate->get_type() != canonical_type) {
+      candidate->set_type(canonical_type);
+    }
+  };
+
+  if (belongs_to_current_chain(old_first_nondefining)) {
+    attach_type(old_first_nondefining);
+  }
+  attach_type(first_nondefining);
+  attach_type(defining_decl);
+  attach_type(decl);
+
+  if (type_belongs_to_current_chain(canonical_type) &&
+      canonical_type->get_declaration() != first_nondefining) {
+    canonical_type->set_declaration(first_nondefining);
+  }
+}
+} // namespace
+
 void SgDeclarationStatement::set_firstNondefiningDeclaration(
     SgDeclarationStatement *firstNondefiningDeclaration) {
   // DQ (1/26/2013): Added non-automatically generated versions of this function
   // so that we could implement more testing.
   ROSE_ASSERT(this != NULL);
   set_isModified(true);
+
+  SgDeclarationStatement *oldFirstNondefiningDeclaration =
+      p_firstNondefiningDeclaration;
 
 #if DEBUG_SAGE_ACCESS_FUNCTIONS
   if (p_firstNondefiningDeclaration != NULL &&
@@ -9111,6 +9258,7 @@ void SgDeclarationStatement::set_firstNondefiningDeclaration(
   }
 #endif
   p_firstNondefiningDeclaration = firstNondefiningDeclaration;
+  canonicalizeClassTypeForDeclarationChain(this, oldFirstNondefiningDeclaration);
 
   // DQ (5/21/2013): Added debugging code.
   if (firstNondefiningDeclaration != NULL) {
@@ -12360,6 +12508,8 @@ SgNonrealType *SgNonrealDecl::get_type(void) const { return p_type; }
 
 void SgNonrealDecl::set_type(SgNonrealType *t) { p_type = t; }
 
+bool SgNonrealDecl::hasExplicitScope() const { return true; }
+
 #define DEBUG_NONREAL_DECL_MANGLED 0
 #define WARN_NONREAL_DECL_MANGLED 0
 
@@ -12373,6 +12523,10 @@ SgName SgNonrealDecl::get_mangled_name(void) const {
 
   SgNode *parent_decl = NULL;
   SgScopeStatement *scope = get_scope();
+  const bool scoped_in_class_definition =
+      isSgClassDefinition(scope) != NULL ||
+      isSgTemplateClassDefinition(scope) != NULL ||
+      isSgTemplateInstantiationDefn(scope) != NULL;
   if (scope != NULL) {
 #if DEBUG_NONREAL_DECL_MANGLED
     printf("  - scope = %p (%s)\n", scope,
@@ -12380,7 +12534,7 @@ SgName SgNonrealDecl::get_mangled_name(void) const {
 #endif
 
     SgDeclarationScope *s_nrscope = isSgDeclarationScope(scope);
-    if (s_nrscope == NULL) {
+    if (s_nrscope == NULL && scoped_in_class_definition == false) {
       printf(
           "[ROSE-1881] SgNonrealDecl::get_mangled_name:\n> Scope is not an "
           "instantiation scope (nonreal)!\n> First observed for test2007_41.C "
@@ -12411,7 +12565,9 @@ SgName SgNonrealDecl::get_mangled_name(void) const {
          parent_decl ? parent_decl->class_name().c_str() : "");
 #endif
 
-  if (get_is_class_member()) {
+  const bool is_class_member =
+      get_is_class_member() || scoped_in_class_definition;
+  if (is_class_member) {
     SgTemplateClassDeclaration *tplcdecl =
         isSgTemplateClassDeclaration(parent_decl);
     SgClassDeclaration *xdecl = isSgClassDeclaration(parent_decl);
@@ -12667,7 +12823,9 @@ SgName SgTemplateInstantiationDecl::get_mangled_name(void) const {
            " mangledName = %s \n",
            get_templateArguments().size(), mangledName.str());
 #endif
-    ROSE_ASSERT(get_firstNondefiningDeclaration() != NULL);
+    // Defining instantiations do not always have a separate forward
+    // declaration. The mangled name depends on the template name, arguments,
+    // and scope, not on a non-null first-nondefining link.
     // DQ (7/24/2010): Added to support type tables.
     ROSE_ASSERT(mangledName.is_null() == false);
 
@@ -12732,21 +12890,33 @@ void SgTemplateInstantiationDecl::resetTemplateName() {
 // scope
 SgSymbol *SgTemplateInstantiationDecl::get_symbol_from_symbol_table() const {
   ROSE_ASSERT(get_scope() != NULL);
-  SgScopeStatement *scope = get_scope();
-  SgSymbol *sym = scope->find_symbol_from_declaration(this);
-  if (sym != NULL)
-    return sym;
-
-  SgSymbolTable *table = scope->get_symbol_table();
-  if (table != NULL) {
-    SgClassSymbol *cls_sym =
-        new SgClassSymbol(const_cast<SgTemplateInstantiationDecl *>(this));
-    table->insert(get_name(), cls_sym);
-    cls_sym->set_parent(table);
-    sym = cls_sym;
+  if (SgSymbol *symbol = get_scope()->find_symbol_from_declaration(this)) {
+    return symbol;
   }
 
-  return sym;
+  SgTemplateInstantiationDecl *first_nondef =
+      isSgTemplateInstantiationDecl(get_firstNondefiningDeclaration());
+  if (first_nondef != NULL && first_nondef != this &&
+      first_nondef->get_scope() != NULL) {
+    if (SgSymbol *symbol =
+            first_nondef->get_scope()->find_symbol_from_declaration(
+                first_nondef)) {
+      return symbol;
+    }
+  }
+
+  SgTemplateInstantiationDecl *defining_decl =
+      isSgTemplateInstantiationDecl(get_definingDeclaration());
+  if (defining_decl != NULL && defining_decl != this &&
+      defining_decl->get_scope() != NULL) {
+    if (SgSymbol *symbol =
+            defining_decl->get_scope()->find_symbol_from_declaration(
+                defining_decl)) {
+      return symbol;
+    }
+  }
+
+  return NULL;
 }
 
 SOURCE_TEMPLATE_INSTANTIATION_DECLARATION_STATEMENT_END

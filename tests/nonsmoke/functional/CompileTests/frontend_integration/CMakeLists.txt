@@ -22,6 +22,17 @@ set(_frontend_additional_c_tests
 list(APPEND FRONTEND_INTEGRATION_C_TESTS ${_frontend_additional_c_tests})
 list(REMOVE_DUPLICATES FRONTEND_INTEGRATION_C_TESTS)
 
+rex_get_registered_compile_source_set(_frontend_negative_c_sources
+  REX_C_TESTS_NEGATIVE_SOURCES)
+set(_frontend_negative_c_tests)
+foreach(source_rel IN LISTS _frontend_negative_c_sources)
+  get_filename_component(_negative_name "${source_rel}" NAME)
+  list(APPEND _frontend_negative_c_tests "${_negative_name}")
+endforeach()
+if(_frontend_negative_c_tests)
+  list(REMOVE_ITEM FRONTEND_INTEGRATION_C_TESTS ${_frontend_negative_c_tests})
+endif()
+
 # Map of specimen file names to their extra include paths via aligned key/value lists.
 set(_specimen_include_keys
   "test2005_168.c"
@@ -66,4 +77,3 @@ foreach(specimen IN LISTS FRONTEND_INTEGRATION_CXX_TESTS)
       -c ${_frontend_cxx_tests_dir}/${specimen}
   )
 endforeach()
-

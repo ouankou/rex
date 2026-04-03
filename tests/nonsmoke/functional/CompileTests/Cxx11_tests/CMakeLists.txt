@@ -954,10 +954,26 @@ endfunction()
 assert_cxx11_specimens_exist(CXX11_TESTCODES)
 assert_cxx11_specimens_exist(CXX11_TESTCODES_CXX03)
 
+set(CXX11_NEGATIVE_TESTCODES
+  test2020_103.C
+  test2020_104.C
+  test2020_105.C
+  test2020_106.C
+  test2020_107.C
+  test2020_108.C
+  test2020_109.C
+  test2020_110.C
+)
+assert_cxx11_specimens_exist(CXX11_NEGATIVE_TESTCODES)
+set(CXX11_POSITIVE_TESTCODES ${CXX11_TESTCODES})
+list(REMOVE_ITEM CXX11_POSITIVE_TESTCODES ${CXX11_NEGATIVE_TESTCODES})
+
 rex_register_compile_source_set(REX_CXX11_TESTS_CXX11_SOURCES
   ${CXX11_TESTCODES})
 rex_register_compile_source_set(REX_CXX11_TESTS_CXX03_SOURCES
   ${CXX11_TESTCODES_CXX03})
+rex_register_compile_source_set(REX_CXX11_TESTS_NEGATIVE_SOURCES
+  ${CXX11_NEGATIVE_TESTCODES})
 
 set(ROSE_FLAGS_BASE
   -w -rose:verbose 0 -rose:skip_unparse_asm_commands)
@@ -977,9 +993,13 @@ macro(compile_with_flags test_files_var_name flags_var_name)
   unset(_saved_rose_flags)
 endmacro()
 
-compile_with_flags(CXX11_TESTCODES ROSE_FLAGS_CXX11)
+compile_with_flags(CXX11_POSITIVE_TESTCODES ROSE_FLAGS_CXX11)
 compile_with_flags(CXX11_TESTCODES_CXX03 ROSE_FLAGS_CXX03)
 set(ROSE_FLAGS ${ROSE_FLAGS_CXX11})
+
+foreach(file_to_test ${CXX11_NEGATIVE_TESTCODES})
+  compile_negative_test(${file_to_test} "Cxx11_tests")
+endforeach()
 
 set(_multi_file_tests
   test2019_196_ab;test2019_196_a.C;test2019_196_b.C

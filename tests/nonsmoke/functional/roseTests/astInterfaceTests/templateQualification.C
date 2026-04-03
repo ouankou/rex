@@ -4,6 +4,8 @@
 
 #include <cctype>
 
+#include <cstdlib>
+
 #include <fstream>
 
 #include <iterator>
@@ -13,15 +15,6 @@
 #include <string>
 
 namespace {
-std::string makeOutputPath(const std::string &input_path) {
-  std::string::size_type pos = input_path.find_last_of("/\\");
-  std::string dir =
-      (pos == std::string::npos) ? "" : input_path.substr(0, pos + 1);
-  std::string base =
-      (pos == std::string::npos) ? input_path : input_path.substr(pos + 1);
-  return dir + "rose_" + base;
-}
-
 std::string makeOutputName(const std::string &input_path) {
   std::string::size_type pos = input_path.find_last_of("/\\");
   std::string base =
@@ -29,20 +22,21 @@ std::string makeOutputName(const std::string &input_path) {
   return "rose_" + base;
 }
 
-std::string locateOutputFile(const std::string &input_path) {
-  const std::string preferred = makeOutputPath(input_path);
-  const std::string local = makeOutputName(input_path);
+std::string locateOutputFile(const std::string &output_name) {
+  if (const char *output_dir = std::getenv("ROSE_TEST_OUTPUT_DIR");
+      output_dir != nullptr && output_dir[0] != '\0') {
+    std::string resolved = std::string(output_dir) + "/" + output_name;
+    std::ifstream resolved_stream(resolved.c_str(), std::ios::in);
+    if (resolved_stream.good()) {
+      return resolved;
+    }
+  }
 
-  std::ifstream preferred_stream(preferred.c_str(), std::ios::in);
-  if (preferred_stream.good())
-    return preferred;
-
-  std::ifstream local_stream(local.c_str(), std::ios::in);
+  std::ifstream local_stream(output_name.c_str(), std::ios::in);
   if (local_stream.good())
-    return local;
+    return output_name;
 
-  // Fall back to preferred to trigger a clear assertion later.
-  return preferred;
+  return output_name;
 }
 
 std::string readFile(const std::string &path) {
@@ -116,7 +110,7 @@ int main(int argc, char *argv[]) {
   int backend_status = backend(project);
   ROSE_ASSERT(backend_status == 0);
 
-  std::string output_path = locateOutputFile(input_path);
+  std::string output_path = locateOutputFile(makeOutputName(input_path));
   std::string output = readFile(output_path);
   std::string normalized = output;
   normalized.erase(

@@ -2628,7 +2628,6 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
         get_sourceFileUsesFortranFileExtension() == false) {
       printf("WARNING: Non Fortran source file name specified with explicit "
              "-rose:fortran Fortran language option! \n");
-      set_Fortran_only(false);
     }
     if (get_C_only() && get_sourceFileUsesCppFileExtension() == true) {
       // It isn't impossible for a file to contain C code but have a C++ suffix.
@@ -2672,7 +2671,6 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     if (get_sourceFileUsesFortran77FileExtension() == false) {
       printf("WARNING: Non Fortran77 source file name specificed with explicit "
              "-rose:fortran_std=f77 Fortran 77 dialect option! \n");
-      set_default_standard();
     }
     break;
   }
@@ -2680,7 +2678,6 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     if (get_sourceFileUsesFortran90FileExtension() == false) {
       printf("WARNING: Non Fortran90 source file name specificed with explicit "
              "-rose:fortran_std=f90 Fortran 90 dialect option! \n");
-      set_default_standard();
     }
     break;
   }
@@ -2688,7 +2685,6 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     if (get_sourceFileUsesFortran95FileExtension() == false) {
       printf("WARNING: Non Fortran95 source file name specificed with explicit "
              "-rose:fortran_std=f95 Fortran 95 dialect option! \n");
-      set_default_standard();
     }
     break;
   }
@@ -2698,13 +2694,11 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
       printf(
           "WARNING: Non Fortran2003 source file name specificed with "
           "explicit -rose:fortran_std=f2003 Fortran 2003 dialect option! \n");
-      set_default_standard();
     }
     if (get_CoArrayFortran_only() == true &&
         get_sourceFileUsesCoArrayFortranFileExtension() == false) {
       printf("WARNING: Non Co-Array Fortran source file name specificed with "
              "explicit -rose:CoArrayFortran language option! \n");
-      set_CoArrayFortran_only(false);
     }
     break;
   }
@@ -2713,7 +2707,6 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
       printf(
           "WARNING: Non Fortran2008 source file name specificed with "
           "explicit -rose:fortran_std=f2008 Fortran 2008 dialect option! \n");
-      set_default_standard();
     }
     break;
   }

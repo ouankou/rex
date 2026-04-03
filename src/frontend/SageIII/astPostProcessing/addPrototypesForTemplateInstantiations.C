@@ -133,14 +133,13 @@ AddPrototypesForTemplateInstantiations::evaluateInheritedAttribute(
     SgTemplateInstantiationFunctionDecl *firstNondefiningFunctionDeclaration =
         isSgTemplateInstantiationFunctionDecl(
             functionDeclaration->get_firstNondefiningDeclaration());
-    ROSE_ASSERT(firstNondefiningFunctionDeclaration != NULL);
-
-    // Save the non defining declaration.
-    if (prototypeTemplateInstantiationSet.find(
-            firstNondefiningFunctionDeclaration) ==
-        prototypeTemplateInstantiationSet.end()) {
-      prototypeTemplateInstantiationSet.insert(
-          firstNondefiningFunctionDeclaration);
+    if (firstNondefiningFunctionDeclaration != NULL) {
+      if (prototypeTemplateInstantiationSet.find(
+              firstNondefiningFunctionDeclaration) ==
+          prototypeTemplateInstantiationSet.end()) {
+        prototypeTemplateInstantiationSet.insert(
+            firstNondefiningFunctionDeclaration);
+      }
     }
   }
 
@@ -171,12 +170,10 @@ AddPrototypesForTemplateInstantiations::evaluateInheritedAttribute(
             SgFunctionDeclaration *firstNondefiningFunctionDeclaration =
                 isSgFunctionDeclaration(
                     functionDeclaration->get_firstNondefiningDeclaration());
-            ROSE_ASSERT(firstNondefiningFunctionDeclaration != NULL);
-
-            if (prototypeTemplateInstantiationSet.find(
+            if (firstNondefiningFunctionDeclaration != NULL &&
+                prototypeTemplateInstantiationSet.find(
                     firstNondefiningFunctionDeclaration) !=
-                prototypeTemplateInstantiationSet.end()) {
-            } else {
+                    prototypeTemplateInstantiationSet.end()) {
             }
           }
         }

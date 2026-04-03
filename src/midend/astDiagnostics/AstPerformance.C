@@ -820,6 +820,7 @@ void TracingPerformance::emitTraceDurationEvent(std::string label, double t,
                 << "\"pid\": 1, "
                 << "\"tid\": 1, "
                 << "\"args\": {} }";
+  trace_stream->flush();
 }
 
 void TracingPerformance::emitTraceBoundaryEvent(std::string label, double t,
@@ -865,6 +866,7 @@ void TracingPerformance::emitTraceBoundaryEvent(std::string label, double t,
                 << "\"pid\": 1, "
                 << "\"tid\": 1, "
                 << "\"args\": {} }";
+  trace_stream->flush();
 }
 
 // DQ (6/30/2013): Refactored this function to be something that can be called

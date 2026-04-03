@@ -595,48 +595,36 @@ int GetOperatorVariant(SgExpression *expr) {
     return expr->variantT();
   }
 
-  SgName name;
   SgExpression *func = func_call->get_function();
-  switch (func->variantT()) {
-  case V_SgFunctionRefExp:
-    name = isSgFunctionRefExp(func)->get_symbol()->get_name();
-    break;
-  case V_SgDotExp:
-  case V_SgArrowExp: {
-    SgExpression *mfunc = isSgBinaryOp(func)->get_rhs_operand();
+  string func_name;
 
-    // DQ (9/28/2012): Added assertion.
+  if (SgDotExp *dot = isSgDotExp(func)) {
+    SgExpression *mfunc = dot->get_rhs_operand();
     ASSERT_not_null(mfunc);
 
-    if (mfunc->variantT() == V_SgPseudoDestructorRefExp)
+    if (isSgPseudoDestructorRefExp(mfunc) != NULL)
       return V_SgFunctionCallExp;
 
-    // DQ (9/28/2012): This could be a variable (pointer to function).
-    SgVarRefExp *var_ref = isSgVarRefExp(mfunc);
-    if (var_ref != NULL)
-      return (int)V_SgVarRefExp;
+    if (isSgVarRefExp(mfunc) != NULL)
+      return V_SgVarRefExp;
 
-    // DQ (11/27/2012): Added more general support for templates to include new
-    // IR nodes.
-    SgMemberFunctionRefExp *mfunc_ref = isSgMemberFunctionRefExp(mfunc);
-    SgTemplateMemberFunctionRefExp *tplmfunc_ref =
-        isSgTemplateMemberFunctionRefExp(mfunc);
-    SgNonrealRefExp *nrref = isSgNonrealRefExp(mfunc);
-    if (mfunc_ref != NULL) {
-      name = mfunc_ref->get_symbol()->get_name();
-    } else if (tplmfunc_ref != NULL) {
-      name = tplmfunc_ref->get_symbol()->get_name();
-    } else if (nrref != NULL) {
-      name = nrref->get_symbol()->get_name();
-    }
-    break;
-  }
+    if (!getOperatorFunctionName(mfunc, func_name))
+      return V_SgFunctionCallExp;
+  } else if (SgArrowExp *arrow = isSgArrowExp(func)) {
+    SgExpression *mfunc = arrow->get_rhs_operand();
+    ASSERT_not_null(mfunc);
 
-  default:
+    if (isSgPseudoDestructorRefExp(mfunc) != NULL)
+      return V_SgFunctionCallExp;
+
+    if (isSgVarRefExp(mfunc) != NULL)
+      return V_SgVarRefExp;
+
+    if (!getOperatorFunctionName(mfunc, func_name))
+      return V_SgFunctionCallExp;
+  } else if (!getOperatorFunctionName(func, func_name)) {
     return V_SgFunctionCallExp;
   }
-
-  string func_name = name.str();
 
   if (func_name == "operator,")
     return V_SgCommaOpExp;

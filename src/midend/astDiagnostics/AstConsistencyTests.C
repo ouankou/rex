@@ -632,15 +632,24 @@ void AstTests::runAllTests(SgProject *sageProject) {
             }
           }
 
-          if (declarationStatement->get_firstNondefiningDeclaration() == NULL) {
+          const bool allow_missing_first_nondef =
+              isSgTemplateInstantiationDecl(declarationStatement) != NULL ||
+              isSgTemplateInstantiationFunctionDecl(declarationStatement) !=
+                  NULL ||
+              isSgTemplateInstantiationMemberFunctionDecl(
+                  declarationStatement) != NULL;
+
+          if (declarationStatement->get_firstNondefiningDeclaration() == NULL &&
+              !allow_missing_first_nondef) {
             printf("Error: declarationStatement = %p \n", declarationStatement);
             declarationStatement->get_file_info()->display(
                 "Error: "
                 "declarationStatement->get_firstNondefiningDeclaration() == "
                 "NULL");
           }
-          ROSE_ASSERT(declarationStatement->get_firstNondefiningDeclaration() !=
-                      NULL);
+          ROSE_ASSERT(allow_missing_first_nondef ||
+                      declarationStatement->get_firstNondefiningDeclaration() !=
+                          NULL);
           // ROSE_ASSERT(declarationStatement->get_definingDeclaration() !=
           // NULL);
 
@@ -1110,6 +1119,10 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode *node,
     case V_SgVarRefExp:
     case V_SgTemplateMemberFunctionRefExp:
     case V_SgPseudoDestructorRefExp: {
+      break;
+    }
+
+    case V_SgLambdaExp: {
       break;
     }
 
@@ -2671,9 +2684,16 @@ void TestAstForProperlySetDefiningAndNondefiningDeclarations::visit(
         // These nodes should have a non-defining declaration even if only a
         // defining declaration is present in the source code.  It may be that
         // the other IR nodes below should be treated similarly.
+      case V_SgTemplateInstantiationDecl:
+      case V_SgTemplateInstantiationFunctionDecl:
+      case V_SgTemplateInstantiationMemberFunctionDecl: {
+        // Defining template instantiations do not necessarily have a distinct
+        // nondefining declaration.
+        break;
+      }
+
       case V_SgClassDeclaration:
-      case V_SgDerivedTypeStatement:
-      case V_SgTemplateInstantiationDecl: {
+      case V_SgDerivedTypeStatement: {
         printf("Warning AST Consistancy Test: declaration %p = %s has no "
                "firstNondefiningDeclaration = %p \n",
                declaration, declaration->sage_class_name(),
@@ -2691,8 +2711,6 @@ void TestAstForProperlySetDefiningAndNondefiningDeclarations::visit(
 
       case V_SgFunctionDeclaration:
       case V_SgMemberFunctionDeclaration:
-      case V_SgTemplateInstantiationFunctionDecl:
-      case V_SgTemplateInstantiationMemberFunctionDecl:
       case V_SgProcedureHeaderStatement:
       case V_SgProgramHeaderStatement: {
         // This is the reasonable case, where a function or template or typedef
@@ -2929,6 +2947,26 @@ void TestAstSymbolTables::visit(SgNode *node) {
             printf("Error: initializedName->get_symbol_from_symbol_table() == "
                    "NULL initializedName = %p = %s \n",
                    initializedName, initializedName->get_name().str());
+            printf("Error: initializedName parent = %p = %s \n",
+                   initializedName->get_parent(),
+                   initializedName->get_parent() != NULL
+                       ? initializedName->get_parent()->class_name().c_str()
+                       : "NULL");
+            printf("Error: initializedName scope = %p = %s \n",
+                   initializedName->get_scope(),
+                   initializedName->get_scope() != NULL
+                       ? initializedName->get_scope()->class_name().c_str()
+                       : "NULL");
+            printf("Error: initializedName declptr = %p = %s \n",
+                   initializedName->get_declptr(),
+                   initializedName->get_declptr() != NULL
+                       ? initializedName->get_declptr()->class_name().c_str()
+                       : "NULL");
+            printf("Error: initializedName prev_decl_item = %p = %s \n",
+                   initializedName->get_prev_decl_item(),
+                   initializedName->get_prev_decl_item() != NULL
+                       ? initializedName->get_prev_decl_item()->get_name().str()
+                       : "NULL");
             initializedName->get_startOfConstruct()->display(
                 "Error: initializedName->get_symbol_from_symbol_table() == "
                 "NULL");

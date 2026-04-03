@@ -322,9 +322,6 @@ void FixupAstSymbolTables::visit(SgNode *node) {
       ROSE_ASSERT(associatedSymbolTable == symbolTable);
 
       associatedSymbolTable->remove(removeSymbol);
-
-      printf("Redundant symbol removed...from symbol table \n");
-      // ROSE_ABORT();
     }
   }
 }

@@ -91,6 +91,15 @@ using namespace ROSE_token_ids;
 // file.
 int *Graph_TokenMappingTraversal::first_leading_whitespace_start = NULL;
 
+namespace {
+SgNode *shareOwnerForTokenInterval(SgNode *node) {
+  if (node != NULL && node->get_parent() != NULL) {
+    return node->get_parent();
+  }
+  return node;
+}
+} // namespace
+
 // TokenStreamSequenceToNodeMapping_key::TokenStreamSequenceToNodeMapping_key(SgNode*
 // n, int input_lower_bound, int input_upper_bound)
 TokenStreamSequenceToNodeMapping_key::TokenStreamSequenceToNodeMapping_key(
@@ -101,6 +110,7 @@ TokenStreamSequenceToNodeMapping_key::TokenStreamSequenceToNodeMapping_key(
   sourceFile = input_sourceFile;
 
   node = n;
+  share_owner = shareOwnerForTokenInterval(n);
   lower_bound = input_lower_bound;
   upper_bound = input_upper_bound;
 }
@@ -112,6 +122,7 @@ TokenStreamSequenceToNodeMapping_key::TokenStreamSequenceToNodeMapping_key(
   sourceFile = X.sourceFile;
 
   node = X.node;
+  share_owner = X.share_owner;
   lower_bound = X.lower_bound;
   upper_bound = X.upper_bound;
 }
@@ -121,15 +132,9 @@ bool TokenStreamSequenceToNodeMapping_key::operator==(
 
 #define DEBUG_OPERATOR_EQUALS 0
 
-  // Use the parent as the key when available so siblings share one interval.
-  // Fallback to the node itself for roots (no parent) to preserve uniqueness.
-  auto keyNode = [](SgNode *n) -> SgNode * {
-    return (n != NULL && n->get_parent() != NULL) ? n->get_parent() : n;
-  };
-
   bool result =
       (X.sourceFile == sourceFile) && (X.lower_bound == lower_bound) &&
-      (X.upper_bound == upper_bound) && (keyNode(X.node) == keyNode(node));
+      (X.upper_bound == upper_bound) && (X.share_owner == share_owner);
 
 #if DEBUG_OPERATOR_EQUALS
   printf("In TokenStreamSequenceToNodeMapping_key::operator==(X): \n");
@@ -156,11 +161,6 @@ bool TokenStreamSequenceToNodeMapping_key::operator<(
 
 #define DEBUG_OPERATOR_LESS_THAN 0
 
-  // Keep ordering strict and deterministic for std::map.
-  auto keyNode = [](SgNode *n) -> SgNode * {
-    return (n != NULL && n->get_parent() != NULL) ? n->get_parent() : n;
-  };
-
   bool result = false;
   if (sourceFile != X.sourceFile) {
     result = std::less<SgSourceFile *>()(sourceFile, X.sourceFile);
@@ -169,9 +169,7 @@ bool TokenStreamSequenceToNodeMapping_key::operator<(
   } else if (upper_bound != X.upper_bound) {
     result = upper_bound < X.upper_bound;
   } else {
-    SgNode *thisKeyNode = keyNode(node);
-    SgNode *otherKeyNode = keyNode(X.node);
-    result = std::less<SgNode *>()(thisKeyNode, otherKeyNode);
+    result = std::less<SgNode *>()(share_owner, X.share_owner);
   }
 
 #if DEBUG_OPERATOR_LESS_THAN

@@ -2950,6 +2950,15 @@ void Grammar::setUpSupport() {
       "SgInitializedName*", "initializedName", "= nullptr",
       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
   TemplateParameter.setDataPrototype(
+      "SgTemplateParameter::template_parameter_keyword_enum",
+      "templateParameterKeyword", "= keyword_unspecified",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_DATA);
+  TemplateParameter.setDataPrototype(
+      "bool", "isAbbreviatedFunctionTemplateParameter", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_DATA);
+  TemplateParameter.setDataPrototype(
       "bool", "is_parameter_pack", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 

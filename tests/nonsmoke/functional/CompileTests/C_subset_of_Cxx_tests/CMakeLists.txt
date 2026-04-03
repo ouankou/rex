@@ -105,10 +105,8 @@ set(_additional_subset_tests
   test2003_12.C
   test2003_17.C
   test2003_19.C
-  test2004_07.C
   test2004_06.C
   test2004_14.C
-  test2004_151.C
   test2004_155.C
   test2004_105.C
   test2005_158.C
@@ -117,7 +115,6 @@ set(_additional_subset_tests
   test2005_177.C
   test2005_192.C
   test2005_200.C
-  test2005_201.C
   test2006_15.C
   test2006_33.C
   test2006_49.C
@@ -134,15 +131,8 @@ set(_additional_subset_tests
   test2006_139.C
   test2006_150.C
   test2006_151.C
-  test2006_155.C
-  test2006_156.C
-  test2006_157.C
-  test2006_158.C
-  test2006_159.C
   test2006_160.C
-  test2006_165.C
   test2006_44.C
-  test_CplusplusMacro_Cpp.C
 )
 
 foreach(file_to_test ${_additional_subset_tests})

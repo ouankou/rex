@@ -17,6 +17,7 @@
 #include "rose_config.h"
 
 #include "rose_path_resolver.h"
+#include "rose_test_output_path.h"
 
 #include <cstdlib>
 #include <set>
@@ -195,101 +196,35 @@ private:
 static constexpr char kAutoTypeConstraintAttributeName[] =
     "rex_auto_type_constraint";
 
-// REX FIX: Global maps for frontend-only template placeholder metadata.
-static std::map<SgTemplateParameter *, std::string> templateKeywordMap;
-static std::map<SgTemplateParameter *, bool>
-    abbreviatedFunctionTemplateParameterMap;
-
-void setTemplateParameterKeyword(SgTemplateParameter *param, std::string kw) {
-  if (param) {
-    templateKeywordMap[param] = std::move(kw);
+void setTemplateParameterKeyword(
+    SgTemplateParameter *param,
+    SgTemplateParameter::template_parameter_keyword_enum kw) {
+  if (param != nullptr) {
+    param->set_templateParameterKeyword(kw);
   }
 }
 
-std::string getTemplateParameterKeyword(SgTemplateParameter *param) {
-  if (param && templateKeywordMap.find(param) != templateKeywordMap.end()) {
-    return templateKeywordMap[param];
+SgTemplateParameter::template_parameter_keyword_enum
+getTemplateParameterKeyword(SgTemplateParameter *param) {
+  if (param != nullptr) {
+    return param->get_templateParameterKeyword();
   }
-  return "";
+  return SgTemplateParameter::keyword_unspecified;
 }
 
 void setAbbreviatedFunctionTemplateParameter(SgTemplateParameter *param,
                                              bool is_abbreviated_placeholder) {
-  if (param) {
-    abbreviatedFunctionTemplateParameterMap[param] = is_abbreviated_placeholder;
+  if (param != nullptr) {
+    param->set_isAbbreviatedFunctionTemplateParameter(
+        is_abbreviated_placeholder);
   }
 }
 
 bool isAbbreviatedFunctionTemplateParameter(SgTemplateParameter *param) {
-  auto it = abbreviatedFunctionTemplateParameterMap.find(param);
-  if (it != abbreviatedFunctionTemplateParameterMap.end()) {
-    return it->second;
-  }
   if (param == nullptr) {
     return false;
   }
-
-  auto looks_like_placeholder_name = [](const std::string &name) {
-    if (name.empty()) {
-      return false;
-    }
-    if (name.rfind("auto_", 0) == 0 && name.size() > 5) {
-      for (size_t i = 5; i < name.size(); ++i) {
-        if (!std::isdigit(static_cast<unsigned char>(name[i]))) {
-          return false;
-        }
-      }
-      return true;
-    }
-    return name.size() > 5 && name.compare(name.size() - 5, 5, "_auto") == 0;
-  };
-
-  auto type_contains_auto = [&](auto &&self, SgType *type) -> bool {
-    if (type == nullptr) {
-      return false;
-    }
-    if (isSgAutoType(type) != nullptr) {
-      return true;
-    }
-    if (SgModifierType *modifier_type = isSgModifierType(type)) {
-      return self(self, modifier_type->get_base_type());
-    }
-    if (SgPointerType *pointer_type = isSgPointerType(type)) {
-      return self(self, pointer_type->get_base_type());
-    }
-    if (SgPointerMemberType *pointer_member_type =
-            isSgPointerMemberType(type)) {
-      return self(self, pointer_member_type->get_base_type());
-    }
-    if (SgReferenceType *reference_type = isSgReferenceType(type)) {
-      return self(self, reference_type->get_base_type());
-    }
-    if (SgRvalueReferenceType *rvalue_reference_type =
-            isSgRvalueReferenceType(type)) {
-      return self(self, rvalue_reference_type->get_base_type());
-    }
-    if (SgArrayType *array_type = isSgArrayType(type)) {
-      return self(self, array_type->get_base_type());
-    }
-    return false;
-  };
-
-  if (param->get_parameterType() == SgTemplateParameter::type_parameter) {
-    if (SgTemplateType *template_type = isSgTemplateType(param->get_type())) {
-      return looks_like_placeholder_name(template_type->get_name().getString());
-    }
-  }
-
-  if (param->get_parameterType() == SgTemplateParameter::nontype_parameter) {
-    if (SgInitializedName *init_name = param->get_initializedName()) {
-      std::string name = init_name->get_name().getString();
-      if (looks_like_placeholder_name(name) || name.empty()) {
-        return type_contains_auto(type_contains_auto, init_name->get_type());
-      }
-    }
-  }
-
-  return false;
+  return param->get_isAbbreviatedFunctionTemplateParameter();
 }
 
 void setAutoTypeConstraint(SgAutoType *type, std::string constraint) {
@@ -574,10 +509,21 @@ bool SageInterface::DeclarationSets::isLocatedInDefiningScope(
 #endif
     // DQ (4/7/2014): If it is a member of a class then we don't consider the
     // structural scope, else it makes a difference,
-    SgScopeStatement *scope = isSgClassDefinition(semantic_scope) != NULL
-                                  ? semantic_scope
-                                  : structural_scope;
-    ROSE_ASSERT(scope != NULL);
+    auto is_class_like_scope = [](SgScopeStatement *scope) {
+      return isSgClassDefinition(scope) != NULL ||
+             isSgTemplateClassDefinition(scope) != NULL ||
+             isSgTemplateInstantiationDefn(scope) != NULL;
+    };
+
+    SgScopeStatement *scope =
+        is_class_like_scope(semantic_scope) ? semantic_scope : structural_scope;
+    if (scope == NULL) {
+      scope = structural_scope != NULL ? structural_scope : semantic_scope;
+    }
+    if (scope == NULL) {
+      i++;
+      continue;
+    }
 
 #if DEBUG_LOCATED_IN_DEFINING_SCOPE
     printf("   --- scope = %p = %s \n", scope, scope->class_name().c_str());
@@ -3801,9 +3747,14 @@ void supportForBaseTypeDefiningDeclaration(
   case V_SgClassDeclaration: {
     SgClassDeclaration *classDeclaration =
         isSgClassDeclaration(declarationForType);
+    ROSE_ASSERT(classDeclaration != NULL);
+    if (SgClassDeclaration *firstNondefining = isSgClassDeclaration(
+            classDeclaration->get_firstNondefiningDeclaration())) {
+      classDeclaration = firstNondefining;
+    }
     // SgSymbol* symbol = new SgClassSymbol(classDeclaration);
     SgSymbol *symbol = NULL;
-    if (isSgTemplateClassDeclaration(declarationForType) != NULL) {
+    if (isSgTemplateClassDeclaration(classDeclaration) != NULL) {
       symbol = new SgTemplateClassSymbol(classDeclaration);
     } else {
       symbol = new SgClassSymbol(classDeclaration);
@@ -4456,20 +4407,22 @@ void SageInterface::rebuildSymbolTable(SgScopeStatement *scope) {
 
         // if (derivedDeclaration->get_declarationModifier().isFriend() ==
         // false)
-        if (scope == derivedDeclaration->get_scope()) {
-          SgSymbol *symbol = new SgClassSymbol(derivedDeclaration);
-          // printf ("Inserting SgClassSymbol = %p into scope = %p = %s
-          // \n",symbol,scope,scope->class_name().c_str());
-          ROSE_ASSERT(symbol != NULL);
-          SgName name = derivedDeclaration->get_name();
-          symbolTable->insert(name, symbol);
-        } else {
-          // printf ("SgTemplateInstantiationDecl: scope = %p derivedDeclaration
-          // = %p = %s didn't match the scope
-          // \n",scope,derivedDeclaration,get_name(derivedDeclaration).c_str());
+        if (useThisDeclaration == true) {
+          SgClassDeclaration *symbolDeclaration = derivedDeclaration;
+          if (SgClassDeclaration *firstNondefining = isSgClassDeclaration(
+                  derivedDeclaration->get_firstNondefiningDeclaration())) {
+            symbolDeclaration = firstNondefining;
+          }
 
-          if (derivedDeclaration->get_declarationModifier().isFriend() ==
-              false) {
+          if (scope == symbolDeclaration->get_scope()) {
+            SgSymbol *symbol = new SgClassSymbol(symbolDeclaration);
+            // printf ("Inserting SgClassSymbol = %p into scope = %p = %s
+            // \n",symbol,scope,scope->class_name().c_str());
+            ROSE_ASSERT(symbol != NULL);
+            SgName name = symbolDeclaration->get_name();
+            symbolTable->insert(name, symbol);
+          } else if (derivedDeclaration->get_declarationModifier().isFriend() ==
+                     false) {
 #if PRINT_DEVELOPER_WARNINGS
             printf("Shouldn't this be a friend declaration = %p = %s \n",
                    derivedDeclaration,
@@ -4492,20 +4445,26 @@ void SageInterface::rebuildSymbolTable(SgScopeStatement *scope) {
         //      ? "true" : "false");
         // if (derivedDeclaration->get_declarationModifier().isFriend() ==
         // false)
-        if (scope == derivedDeclaration->get_scope()) {
-          // SgSymbol* symbol = new SgClassSymbol(derivedDeclaration);
-          SgSymbol *symbol = NULL;
-          if (isSgTemplateClassDeclaration(declaration) != NULL)
-            symbol = new SgTemplateClassSymbol(derivedDeclaration);
-          else
-            symbol = new SgClassSymbol(derivedDeclaration);
+        if (useThisDeclaration == true) {
+          SgClassDeclaration *symbolDeclaration = derivedDeclaration;
+          if (SgClassDeclaration *firstNondefining = isSgClassDeclaration(
+                  derivedDeclaration->get_firstNondefiningDeclaration())) {
+            symbolDeclaration = firstNondefining;
+          }
 
-          ROSE_ASSERT(symbol != NULL);
-          SgName name = derivedDeclaration->get_name();
-          symbolTable->insert(name, symbol);
-        } else {
-          if (derivedDeclaration->get_declarationModifier().isFriend() ==
-              false) {
+          if (scope == symbolDeclaration->get_scope()) {
+            // SgSymbol* symbol = new SgClassSymbol(derivedDeclaration);
+            SgSymbol *symbol = NULL;
+            if (isSgTemplateClassDeclaration(symbolDeclaration) != NULL)
+              symbol = new SgTemplateClassSymbol(symbolDeclaration);
+            else
+              symbol = new SgClassSymbol(symbolDeclaration);
+
+            ROSE_ASSERT(symbol != NULL);
+            SgName name = symbolDeclaration->get_name();
+            symbolTable->insert(name, symbol);
+          } else if (derivedDeclaration->get_declarationModifier().isFriend() ==
+                     false) {
 #if PRINT_DEVELOPER_WARNINGS
             printf("Shouldn't this be a friend declaration = %p = %s \n",
                    derivedDeclaration,
@@ -4998,8 +4957,19 @@ void SageInterface::fixupReferencesToSymbols(const SgScopeStatement *this_scope,
       // DQ (3/2/2009): accumulate the symbol pair into the SgCopyHelp object
       // (to support the outliner). Actually this should also improve the
       // robustness of the outliner.
-      help.get_copiedNodeMap().insert(
-          pair<const SgNode *, SgNode *>(symbol, associated_symbol));
+      // Rebuilding the copied scope's symbol table defines the canonical
+      // symbol copy for this original symbol. Overwrite any provisional
+      // deep-copy entry so later edge canonicalization does not reattach
+      // references to a detached symbol node, then discard the superseded
+      // copied symbol once canonical edge rewrites have finished.
+      SgCopyHelp::copiedNodeMapType &copiedNodeMap = help.get_copiedNodeMap();
+      SgCopyHelp::copiedNodeMapTypeIterator existing =
+          copiedNodeMap.find(symbol);
+      if (existing != copiedNodeMap.end() &&
+          existing->second != associated_symbol) {
+        help.noteSupersededCopiedNode(existing->second);
+      }
+      copiedNodeMap[symbol] = associated_symbol;
     } else {
       // DQ (3/4/2009): This case was broken out because copytest2007_14.C fails
       // here.
@@ -11601,6 +11571,20 @@ bool SageInterface::normalizeForLoopInitDeclaration(SgForStatement *loop) {
   if (decl == NULL) // we only handle for (int i=0; ...)
     return true; // the return value is ambiguous: if not int i=0; it is already
                  // normalized
+
+  if (decl->get_variables().size() == 1) {
+    SgInitializedName *loop_index = decl->get_variables().front();
+    if (loop_index != NULL &&
+        isSgVariableSymbol(loop_index->get_symbol_from_symbol_table()) ==
+            NULL) {
+      // Copied/transformed loops can lose the current for-scope symbol for a
+      // C99 loop index while the test/increment/body still reference an older
+      // symbol object. Recreate the declaration symbol in this scope and
+      // rebind loop-local references before normalizing the header.
+      fixVariableDeclaration(decl, loop);
+      fixVariableReferences(loop, false);
+    }
+  }
 
   SgVariableSymbol *osymbol = getFirstVarSym(decl);
   SgInitializedName *ivarname = decl->get_variables().front();
@@ -18449,9 +18433,19 @@ void CollectDependentDeclarationsTraversal::visit(SgNode *astNode) {
   if (eval != NULL) {
     declaration = eval->get_declaration();
     ROSE_ASSERT(declaration != NULL);
+    if (SgEnumDeclaration *enum_decl = isSgEnumDeclaration(declaration)) {
+      if (SgDeclarationStatement *defining_decl =
+              enum_decl->get_definingDeclaration()) {
+        declaration = defining_decl;
+      }
+    }
     addDeclaration(declaration);
-    SgSymbol *symbol = declaration->get_firstNondefiningDeclaration()
-                           ->get_symbol_from_symbol_table();
+    SgDeclarationStatement *symbol_decl =
+        declaration->get_firstNondefiningDeclaration();
+    if (symbol_decl == NULL) {
+      symbol_decl = declaration;
+    }
+    SgSymbol *symbol = symbol_decl->search_for_symbol_from_symbol_table();
     ROSE_ASSERT(symbol != NULL);
     symbolList.push_back(symbol);
   }
@@ -25571,26 +25565,7 @@ void SageInterface::printAST(SgNode *node, const char *filename) {
 
 namespace {
 std::string resolveTestOutputPath(const std::string &filename) {
-  if (filename.empty()) {
-    return filename;
-  }
-
-  if (filename[0] == '/' || filename[0] == '\\' ||
-      (filename.size() > 1 && filename[1] == ':')) {
-    return filename;
-  }
-
-  const char *output_dir = std::getenv("ROSE_TEST_OUTPUT_DIR");
-  if (output_dir == nullptr || output_dir[0] == '\0') {
-    return filename;
-  }
-
-  std::string resolved(output_dir);
-  if (!resolved.empty() && resolved.back() != '/') {
-    resolved += '/';
-  }
-  resolved += filename;
-  return resolved;
+  return Rose::TestOutput::resolvePath(filename);
 }
 } // namespace
 

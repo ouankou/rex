@@ -144,6 +144,62 @@ bool is_openmp_or_openacc_pragma_line(const std::string &line) {
          is_directive_kind_token(line, pos, "acc");
 }
 
+bool scope_has_transformed_declarations(SgScopeStatement *scope) {
+  if (scope == nullptr) {
+    return false;
+  }
+
+  SgDeclarationStatementPtrList *decls = nullptr;
+  if (SgGlobal *global = isSgGlobal(scope)) {
+    decls = &global->get_declarations();
+  } else if (SgNamespaceDefinitionStatement *ns_def =
+                 isSgNamespaceDefinitionStatement(scope)) {
+    decls = &ns_def->get_declarations();
+  } else if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+    decls = &class_def->get_members();
+  } else if (SgDeclarationScope *decl_scope = isSgDeclarationScope(scope)) {
+    decls = &decl_scope->get_declarations();
+  }
+
+  if (decls == nullptr) {
+    return false;
+  }
+
+  for (SgDeclarationStatement *decl : *decls) {
+    if (decl == nullptr) {
+      continue;
+    }
+    if (decl->isTransformation() || decl->get_containsTransformation()) {
+      return true;
+    }
+    if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
+      if (SgClassDefinition *class_def = class_decl->get_definition()) {
+        if (class_def->isTransformation() ||
+            class_def->get_containsTransformation()) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+bool is_within_transformed_declaration_scope(SgNode *node) {
+  for (SgNode *cursor = node; cursor != nullptr;
+       cursor = cursor->get_parent()) {
+    SgScopeStatement *scope = isSgScopeStatement(cursor);
+    if (scope == nullptr) {
+      continue;
+    }
+    if (scope_has_transformed_declarations(scope)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 bool preprocessing_info_is_within_node_construct(PreprocessingInfo *info,
                                                  SgLocatedNode *node) {
   if (info == nullptr || node == nullptr) {
@@ -344,6 +400,11 @@ void UnparseLanguageIndependentConstructs::curprint(
 #if USE_RICE_FORTRAN_WRAPPING
 
   if (unp->currentFile != NULL && unp->currentFile->get_Fortran_only()) {
+    if (unp->cur.get_linewrap() <= 0) {
+      unp->u_sage->curprint(str);
+      return;
+    }
+
     // determine line wrapping parameters -- 'pos' variables are one-based
     bool is_fixed_format = unp->currentFile->get_outputFormat() ==
                            SgFile::e_fixed_form_output_format;
@@ -1187,6 +1248,10 @@ bool UnparseLanguageIndependentConstructs::canBeUnparsedFromTokenStream(
     return false;
   }
 
+  if (stmt->isTransformation()) {
+    return false;
+  }
+
   if (sourceFile->get_openmp() || sourceFile->get_openacc()) {
     // OpenMP/OpenACC tests expect directive spelling to come from the AST, not
     // from preserved token text. Token-stream unparsing can retain inactive
@@ -1581,6 +1646,10 @@ bool UnparseLanguageIndependentConstructs::
   AttachedPreprocessingInfoType *prepInfoPtr =
       stmt->getAttachedPreprocessingInfo();
 
+  if (is_within_transformed_declaration_scope(stmt)) {
+    return false;
+  }
+
   // DQ (1/18/2015): The default should always be to output the tokens from the
   // token stream, unless we detect a transformation or this is a shared token
   // stream. bool unparseUsingTokenStream = false;
@@ -1712,6 +1781,9 @@ bool UnparseLanguageIndependentConstructs::
   // unparse the comments and CPP directives from the AST and not from the token
   // stream.
   if (has_transformation_preproc) {
+    unparseUsingTokenStream = false;
+  }
+  if (stmt->isTransformation()) {
     unparseUsingTokenStream = false;
   }
   if (has_directive_comment) {
@@ -2214,15 +2286,20 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           // figure out where the mark that this is the last statement when it
           // is detected.
           if (sourceFile->get_isHeaderFile() == true) {
+            SgStatement *lastStatement = NULL;
             SgIncludeFile *associated_include_file =
                 sourceFile->get_associated_include_file();
-            ROSE_ASSERT(associated_include_file != NULL);
+            if (associated_include_file != NULL) {
+              lastStatement = associated_include_file->get_lastStatement();
+            }
+            if (lastStatement == NULL) {
+              lastStatement = sourceFile->get_lastStatement();
+            }
 #if DEBUG_USING_CURPRINT
             curprint("/* In unparseStatementFromTokenStream(): globalScope != "
                      "NULL: testing for last statement of include file */ \n");
 #endif
-            ROSE_ASSERT(associated_include_file->get_lastStatement() != NULL);
-            if (stmt == associated_include_file->get_lastStatement()) {
+            if (lastStatement != NULL && stmt == lastStatement) {
               lastStatementOfGlobalScopeUnparsedUsingTokenStream = true;
 #if DEBUG_USING_CURPRINT
               curprint(
@@ -2395,6 +2472,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 #endif
               for (int j = tokenSubsequence->leading_whitespace_start;
                    j <= tokenSubsequence->leading_whitespace_end; j++) {
+                const std::string &token_text =
+                    tokenVector[j]->get_lexeme_string();
 #if OUTPUT_TOKEN_STREAM_FOR_DEBUGGING || 0
                 printf("Output leading whitespace "
                        "tokenVector[j=%d]->get_lexeme_string() = %s \n",
@@ -2467,6 +2546,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 #endif
         for (int j = tokenSubsequence->token_subsequence_start;
              j <= tokenSubsequence->token_subsequence_end; j++) {
+          const std::string &token_text = tokenVector[j]->get_lexeme_string();
 #if OUTPUT_TOKEN_STREAM_FOR_DEBUGGING
           printf("Output tokenVector[j=%d]->get_lexeme_string() = %s \n", j,
                  tokenVector[j]->get_lexeme_string().c_str());
@@ -2659,6 +2739,12 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     ASSERT_not_null(stmt);
 
 #define DEBUG_UNPARSE_STATEMENT 0
+
+    // Detached unparse-to-string calls build textual spellings from the AST
+    // only. They can originate while a token-stream-enabled file is being
+    // unparsed, but they are not part of that file-level token frontier /
+    // trailing-whitespace bookkeeping.
+    const bool usingUnparseToString = info.usedInUparseToStringFunction();
 
     // DQ (6/5/2021): Support for debugging, we want to debug the transitions
     // between token-based unparsing and unparsing from the AST.
@@ -2923,7 +3009,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       // Get the file and check if -rose:unparse_tokens was used then we want to
       // try to access the token stream and output this statement directly as
       // tokens.
-      SgFile *cur_file = info.get_current_source_file();
+      SgFile *cur_file =
+          usingUnparseToString ? NULL : info.get_current_source_file();
 
       ASSERT_require(cur_file == nullptr ||
                      info.get_current_source_file()->get_unparse_tokens() ==
@@ -3014,6 +3101,71 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         bool canUseTokenStream = canBeUnparsedFromTokenStream(sourceFile, stmt);
         if (unparseViaTokenStream == true && canUseTokenStream == false) {
           unparseViaTokenStream = false;
+        }
+        auto scope_has_transformed_declarations =
+            [](SgScopeStatement *scope) -> bool {
+          if (scope == NULL) {
+            return false;
+          }
+
+          SgDeclarationStatementPtrList *decls = NULL;
+          if (SgGlobal *global = isSgGlobal(scope)) {
+            decls = &global->get_declarations();
+          } else if (SgNamespaceDefinitionStatement *ns_def =
+                         isSgNamespaceDefinitionStatement(scope)) {
+            decls = &ns_def->get_declarations();
+          } else if (SgClassDefinition *class_def =
+                         isSgClassDefinition(scope)) {
+            decls = &class_def->get_members();
+          } else if (SgDeclarationScope *decl_scope =
+                         isSgDeclarationScope(scope)) {
+            decls = &decl_scope->get_declarations();
+          }
+
+          if (decls == NULL) {
+            return false;
+          }
+
+          for (SgDeclarationStatement *decl : *decls) {
+            if (decl == NULL) {
+              continue;
+            }
+            if (decl->isTransformation() ||
+                decl->get_containsTransformation()) {
+              return true;
+            }
+            if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
+              if (SgClassDefinition *class_def = class_decl->get_definition()) {
+                if (class_def->isTransformation() ||
+                    class_def->get_containsTransformation()) {
+                  return true;
+                }
+              }
+            }
+          }
+
+          return false;
+        };
+        auto enclosing_transformed_declaration_scope =
+            [&](SgStatement *candidate) -> SgScopeStatement * {
+          for (SgNode *cursor = candidate; cursor != NULL;
+               cursor = cursor->get_parent()) {
+            SgScopeStatement *scope = isSgScopeStatement(cursor);
+            if (scope == NULL) {
+              continue;
+            }
+
+            if (scope_has_transformed_declarations(scope)) {
+              return scope;
+            }
+          }
+
+          return NULL;
+        };
+        if (unparseViaTokenStream == true) {
+          if (enclosing_transformed_declaration_scope(stmt) != NULL) {
+            unparseViaTokenStream = false;
+          }
         }
 #if DEBUG_UNPARSE_STATEMENT
         printf("In UnparseLanguageIndependentConstructs::unparseStatement(): "
@@ -3201,11 +3353,14 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
             curprint("\n/* In unparseStatement(): unparse using PARTIAL token "
                      "stream */ \n");
 #endif
-            int status =
-                unparseStatementFromTokenStreamForNodeContainingTransformation(
-                    sourceFile, stmt, info,
-                    lastStatementOfGlobalScopeUnparsedUsingTokenStream,
-                    global_previous_unparsed_as);
+            int status = -1;
+            if (enclosing_transformed_declaration_scope(stmt) == NULL) {
+              status =
+                  unparseStatementFromTokenStreamForNodeContainingTransformation(
+                      sourceFile, stmt, info,
+                      lastStatementOfGlobalScopeUnparsedUsingTokenStream,
+                      global_previous_unparsed_as);
+            }
 
 #if DEBUG_USING_CURPRINT
             curprint(string("\n/* Inside of unparseStatement (") +
@@ -3924,7 +4079,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       // used after the executaion of the true and false branches (to support
       // when to unparse and suppress the trailing whitespace of the global
       // scope).
-      SgSourceFile *sourceFile = info.get_current_source_file();
+      SgSourceFile *sourceFile =
+          usingUnparseToString ? NULL : info.get_current_source_file();
       // ROSE_ASSERT(sourceFile != NULL);
 
       SgStatement *firstStatement = NULL;
@@ -4295,9 +4451,12 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       // comments and CPP directives attached to global scope can't be unparsed
       // in the header files.
       SgGlobal *globalScope = isSgGlobal(stmt);
+      SgSourceFile *contextSourceFile =
+          sourceFile != NULL ? sourceFile : info.get_current_source_file();
       // if (globalScope != NULL && sourceFile->get_isHeaderFile() == true)
       // if (globalScope != NULL)
-      if (globalScope != NULL && sourceFile->get_isHeaderFile() == true) {
+      if (globalScope != NULL && contextSourceFile != NULL &&
+          contextSourceFile->get_isHeaderFile() == true) {
 #if DEBUG_USING_CURPRINT
         curprint("/* reseting skipOutputOfPreprocessingInfo = true */\n");
 #endif
@@ -7459,27 +7618,21 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         // This is the typical case.
         // curprint(enum_val->get_name().str());
 
-        // DQ (5/14/2018): For C++11 enum class declarations, the assocated enum
-        // value will ALWAYS require an explicit cast or additional name
-        // qualification.
         SgEnumDeclaration *enumDeclaration = enum_val->get_declaration();
-        if (enumDeclaration != NULL) {
-          if (enumDeclaration->get_isScopedEnum() == true) {
-            // curprint(enum_val->get_name().str());
-            curprint(enumDeclaration->get_name().str());
-            curprint("(");
-            string valueString =
-                StringUtility::numberToString(enum_val->get_value());
-            curprint(valueString);
-            curprint(")");
-          } else {
-            curprint(enum_val->get_name().str());
-          }
-        } else {
-          curprint(enum_val->get_name().str());
-        }
+        curprint(enum_val->get_name().str());
       } else {
-        curprint(tostring(enum_val->get_value()));
+        SgEnumDeclaration *enumDeclaration = enum_val->get_declaration();
+        if (enumDeclaration != NULL && enumDeclaration->get_isScopedEnum() &&
+            enumDeclaration->get_name().is_null() == false) {
+          curprint(enumDeclaration->get_name().str());
+          curprint("(");
+          string valueString =
+              StringUtility::numberToString(enum_val->get_value());
+          curprint(valueString);
+          curprint(")");
+        } else {
+          curprint(tostring(enum_val->get_value()));
+        }
       }
     }
 
@@ -11254,6 +11407,13 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
   // bothering clauses examples:
   //  #pragma omp parallel,
   //  !$omp parallel,
+  static bool ompUsesFortranDoDirectiveSpelling(SgStatement * stmt) {
+    static const char *const kOmpFortranDoDirectiveAttrName =
+        "omp_fortran_do_directive";
+    return SageInterface::is_Fortran_language() && stmt != NULL &&
+           stmt->getAttribute(kOmpFortranDoDirectiveAttrName) != NULL;
+  }
+
   void UnparseLanguageIndependentConstructs::unparseOmpDirectivePrefixAndName(
       SgStatement * stmt, SgUnparse_Info & info) {
     ROSE_ASSERT(stmt != NULL);
@@ -11308,7 +11468,12 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       break;
     }
     case V_SgOmpMetadirectiveStatement: {
-      curprint(string("metadirective"));
+      static const char *const kOmpBeginMetadirectiveAttrName =
+          "omp_begin_metadirective";
+      curprint(stmt->getAttribute(kOmpBeginMetadirectiveAttrName) != NULL &&
+                       SageInterface::is_Fortran_language()
+                   ? string("begin metadirective")
+                   : string("metadirective"));
       break;
     }
     case V_SgOmpParallelStatement: {
@@ -11396,7 +11561,9 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       break;
     }
     case V_SgOmpTargetParallelForStatement: {
-      curprint(string("target parallel for"));
+      curprint(ompUsesFortranDoDirectiveSpelling(stmt)
+                   ? string("target parallel do")
+                   : string("target parallel for"));
       break;
     }
     case V_SgOmpTargetParallelStatement: {
@@ -11408,11 +11575,15 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       break;
     }
     case V_SgOmpDistributeParallelForStatement: {
-      curprint(string("distribute parallel for"));
+      curprint(ompUsesFortranDoDirectiveSpelling(stmt)
+                   ? string("distribute parallel do")
+                   : string("distribute parallel for"));
       break;
     }
     case V_SgOmpDistributeParallelForSimdStatement: {
-      curprint(string("distribute parallel for simd"));
+      curprint(ompUsesFortranDoDirectiveSpelling(stmt)
+                   ? string("distribute parallel do simd")
+                   : string("distribute parallel for simd"));
       break;
     }
     case V_SgOmpTaskloopSimdStatement: {
@@ -11428,7 +11599,9 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       break;
     }
     case V_SgOmpTargetParallelForSimdStatement: {
-      curprint(string("target parallel for simd"));
+      curprint(ompUsesFortranDoDirectiveSpelling(stmt)
+                   ? string("target parallel do simd")
+                   : string("target parallel for simd"));
       break;
     }
     case V_SgOmpTargetParallelLoopStatement: {
@@ -11456,11 +11629,15 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       break;
     }
     case V_SgOmpTargetTeamsDistributeParallelForStatement: {
-      curprint(string("target teams distribute parallel for"));
+      curprint(ompUsesFortranDoDirectiveSpelling(stmt)
+                   ? string("target teams distribute parallel do")
+                   : string("target teams distribute parallel for"));
       break;
     }
     case V_SgOmpTargetTeamsDistributeParallelForSimdStatement: {
-      curprint(string("target teams distribute parallel for simd"));
+      curprint(ompUsesFortranDoDirectiveSpelling(stmt)
+                   ? string("target teams distribute parallel do simd")
+                   : string("target teams distribute parallel for simd"));
       break;
     }
     case V_SgOmpMasterTaskloopSimdStatement: {
@@ -11484,11 +11661,15 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       break;
     }
     case V_SgOmpTeamsDistributeParallelForStatement: {
-      curprint(string("teams distribute parallel for"));
+      curprint(ompUsesFortranDoDirectiveSpelling(stmt)
+                   ? string("teams distribute parallel do")
+                   : string("teams distribute parallel for"));
       break;
     }
     case V_SgOmpTeamsDistributeParallelForSimdStatement: {
-      curprint(string("teams distribute parallel for simd"));
+      curprint(ompUsesFortranDoDirectiveSpelling(stmt)
+                   ? string("teams distribute parallel do simd")
+                   : string("teams distribute parallel for simd"));
       break;
     }
     case V_SgOmpTeamsLoopStatement: {
@@ -11544,7 +11725,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       break;
     }
     case V_SgOmpForSimdStatement: {
-      curprint(string("for simd"));
+      curprint(ompUsesFortranDoDirectiveSpelling(stmt) ? string("do simd")
+                                                       : string("for simd"));
       break;
     }
     case V_SgOmpDoStatement: {
@@ -11622,7 +11804,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
   void UnparseLanguageIndependentConstructs::unparseOmpGenericStatement(
       SgStatement * stmt, SgUnparse_Info & info) {
     ASSERT_not_null(stmt);
-    LinewrapGuard disable_linewrap(unp);
+    LinewrapGuard disable_linewrap(
+        SageInterface::is_Fortran_language() ? nullptr : unp);
     static const char *const kOmpCombinedParallelNestedVariantAttrName =
         "omp_combined_parallel_nested_variant";
     static const char *const kOmpExplicitEndAttributeName = "omp_explicit_end";

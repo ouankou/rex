@@ -11,6 +11,7 @@ class TokenStreamSequenceToNodeMapping_key {
 
 public:
   SgNode *node;
+  SgNode *share_owner;
   int lower_bound, upper_bound;
 
   // DQ (4/21/2021): We need to include the SgSourceFile to allow header files

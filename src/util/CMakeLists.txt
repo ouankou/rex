@@ -72,5 +72,5 @@ endif()
 install(FILES
   processSupport.h rose_paths.h mlog.h ROSE_ASSERT.h ROSE_ABORT.h ROSE_DEPRECATED.h ROSE_UNUSED.h ROSE_FALLTHROUGH.h FileSystem.h
   Unique.h timing.h rose_getline.h rose_strtoull.h rose_isnan.h
-  rose_pragma_message.h rose_path_resolver.h
+  rose_pragma_message.h rose_path_resolver.h rose_test_output_path.h
   DESTINATION ${INCLUDE_INSTALL_DIR})

@@ -37,6 +37,9 @@ rex_register_compile_source_set(REX_C99_TESTS_SOURCES
   ${files_to_test}
   ${negative_files}
 )
+rex_register_compile_source_set(REX_C99_TESTS_NEGATIVE_SOURCES
+  ${negative_files}
+)
 
 foreach(file_to_test ${files_to_test})
   compile_test(${file_to_test} C99TEST)

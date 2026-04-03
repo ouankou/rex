@@ -6,6 +6,41 @@
 
 using namespace std;
 
+namespace {
+
+std::pair<SgVariableDeclaration *, SgExpression *>
+createTempVariableAndReferenceByMovingExpression(SgExpression *expression,
+                                                 SgScopeStatement *scope) {
+  ROSE_ASSERT(expression != NULL);
+  ROSE_ASSERT(scope != NULL);
+
+  SgType *expressionType = expression->get_type();
+  SgType *variableType = expressionType;
+
+  // Match the existing extraction behavior for array arguments.
+  if (SgArrayType *arrayType = isSgArrayType(expressionType)) {
+    if (SgArrayType *strippedArrayType =
+            isSgArrayType(arrayType->stripType(SgType::STRIP_TYPEDEF_TYPE))) {
+      SgType *strippedArrayBaseType = strippedArrayType->get_base_type();
+      variableType = SageBuilder::buildPointerType(strippedArrayBaseType);
+    }
+  }
+
+  std::string name = SageInterface::generateUniqueVariableName(scope);
+
+  SgAssignInitializer *initializer = SageBuilder::buildAssignInitializer();
+  SgVariableDeclaration *tempVarDeclaration =
+      SageBuilder::buildVariableDeclaration(name, variableType, initializer,
+                                            scope);
+  ROSE_ASSERT(tempVarDeclaration != NULL);
+
+  SgExpression *varRefExpression =
+      SageBuilder::buildVarRefExp(tempVarDeclaration);
+  return std::make_pair(tempVarDeclaration, varRefExpression);
+}
+
+} // namespace
+
 /** Performs the function argument extraction on all function calls in the given
  * subtree of the AST. */
 /** It does not do transofrmations in places where it is not safe. If you pass
@@ -237,8 +272,7 @@ void ExtractFunctionArguments::RewriteFunctionCallArguments(
     SgFunctionType *functionType = isSgFunctionType(arg->get_type());
     if (functionType == NULL) {
       tie(tempVarDeclaration, tempVarReference) =
-          SageInterface::createTempVariableAndReferenceForExpression(arg,
-                                                                     scope);
+          createTempVariableAndReferenceByMovingExpression(arg, scope);
 
       // createTempVariableOrReferenceForExpression does not set the parent if
       // the scope stack is empty. Hence set it manually to the currect scope.
@@ -259,7 +293,15 @@ void ExtractFunctionArguments::RewriteFunctionCallArguments(
       temporariesIntroduced.push_back(tempVarDeclaration);
 
       // Replace the argument with the new temporary variable
-      SageInterface::replaceExpression(arg, tempVarReference);
+      SageInterface::replaceExpression(arg, tempVarReference, true);
+      SgInitializedNamePtrList &declared_vars =
+          tempVarDeclaration->get_variables();
+      ROSE_ASSERT(declared_vars.size() == 1);
+      SgAssignInitializer *initializer =
+          isSgAssignInitializer(declared_vars.front()->get_initializer());
+      ROSE_ASSERT(initializer != NULL);
+      SageInterface::setOperand(initializer, arg);
+
       tempVarReference->set_isModified(true);
       if (SgStatement *enclosing_statement =
               SageInterface::getEnclosingStatement(tempVarReference)) {

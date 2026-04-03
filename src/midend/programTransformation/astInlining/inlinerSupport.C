@@ -1,5 +1,6 @@
 #include "sage3basic.h"
 
+#include "astPostProcessing.h"
 #include "sageBuilder.h"
 
 #undef SgNULL_FILE
@@ -158,8 +159,10 @@ public:
       // enclosing function definition
       SgSymbolTable *st = l->get_scope()->get_symbol_table();
       ROSE_ASSERT(st);
-      ROSE_ASSERT(st->find_label(name));
-      st->remove(st->find_label(name));
+      SgLabelSymbol *old_symbol = st->find_label(name);
+      ROSE_ASSERT(old_symbol);
+      st->remove(old_symbol);
+      move_symbol_to_orphan_table(old_symbol);
       name << "__" << ++labelRenameCounter;
       l->set_label(name);
       l->set_scope(newScope);
