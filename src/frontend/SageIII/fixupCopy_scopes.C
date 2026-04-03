@@ -266,6 +266,15 @@ bool declarationsMatchForCanonicalCopy(
   return hasMatchingSourceLocation(originalDecl, candidateDecl);
 }
 
+bool enumFieldsMatchForCanonicalCopy(const SgInitializedName *originalField,
+                                     const SgInitializedName *candidateField) {
+  if (originalField == NULL || candidateField == NULL) {
+    return originalField == candidateField;
+  }
+
+  return originalField->get_name() == candidateField->get_name();
+}
+
 const SgDeclarationStatementPtrList *
 scopeOwnedDeclarationsForCanonicalLookup(SgScopeStatement *scope) {
   if (scope == NULL) {
@@ -1138,14 +1147,31 @@ void canonicalizeCopiedEnumEnumerators(const SgEnumDeclaration *originalEnum,
   canonicalFields.reserve(originalFields.size());
 
   SgInitializedNamePtrList reorderedFields;
-  for (SgInitializedName *originalField : originalFields) {
-    SgInitializedName *copiedField =
-        isSgInitializedName(lookupCopiedNode(help, originalField));
-    if (copiedField == NULL) {
+  reorderedFields.reserve(originalFields.size());
+  for (size_t index = 0; index < originalFields.size(); ++index) {
+    SgInitializedName *originalField = originalFields[index];
+    if (originalField == NULL) {
+      reorderedFields.push_back(NULL);
       continue;
     }
 
+    SgInitializedName *copiedField =
+        isSgInitializedName(lookupCopiedNode(help, originalField));
+    if (copiedField == NULL) {
+      if (index < copyFields.size()) {
+        SgInitializedName *existingField = copyFields[index];
+        if (enumFieldsMatchForCanonicalCopy(originalField, existingField)) {
+          copiedField = existingField;
+        }
+      }
+    }
+    if (copiedField == NULL) {
+      copiedField = isSgInitializedName(help.copyOrLookupAst(originalField));
+    }
+    ROSE_ASSERT(copiedField != NULL);
+
     canonicalFields.insert(copiedField);
+    remapCopiedNodePair(help, originalField, copiedField);
     reorderedFields.push_back(copiedField);
   }
 

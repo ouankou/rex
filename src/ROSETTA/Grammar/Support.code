@@ -3835,7 +3835,7 @@ struct FunctionSymbolExactKey
             return true;
           if (rhs.name < name)
             return false;
-          return type < rhs.type;
+          return std::less<const SgType*>()(type, rhs.type);
         }
    };
 
@@ -7649,7 +7649,6 @@ SgSymbolTable::remove( const SgSymbol* symbol )
 
   // This is a virtual function call
      SgName name = symbol->get_name();
-     eraseFunctionSymbolFromExactLookup(this, name, const_cast<SgSymbol*>(symbol));
 //#ifdef _MSCx_VER
 //     rose_hash::unordered_multimap<SgName, SgSymbol*>::iterator elementToDelete = get_table()->end();
 //     rose_hash::unordered_multimap<SgName, SgSymbol*>::iterator it = get_table()->find(name);
@@ -7673,18 +7672,20 @@ SgSymbolTable::remove( const SgSymbol* symbol )
 
   // DQ (8/15/2020): Original code before the chagne below.
      ROSE_ASSERT(elementToDelete != get_table()->end());
+     SgSymbol* storedSymbol = elementToDelete->second;
 
   // DQ (5/9/2007): Moved to after the call to "p_symbolSet.erase(elementToDelete->second);"
   // get_table()->erase(elementToDelete);
 
+     eraseFunctionSymbolFromExactLookup(this, name, storedSymbol);
+
   // DQ (3/10/2007): Remove the symbol from the symbol set used to test for if the symbol exists
   // p_symbolSet.erase(symbol);
-     p_symbolSet.erase(elementToDelete->second);
+     p_symbolSet.erase(storedSymbol);
 
-     SgSymbol* mutable_symbol = const_cast<SgSymbol*>(symbol);
-     if (mutable_symbol != NULL && mutable_symbol->get_parent() == this)
+     if (storedSymbol != NULL && storedSymbol->get_parent() == this)
         {
-          mutable_symbol->set_parent(NULL);
+          storedSymbol->set_parent(NULL);
         }
 
      get_table()->erase(elementToDelete);
