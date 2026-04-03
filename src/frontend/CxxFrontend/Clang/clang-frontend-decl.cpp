@@ -2305,6 +2305,80 @@ static void cleanup_unused_param_list(SgFunctionDeclaration *decl,
   }
 }
 
+static void rehomeFunctionParameterSymbolToScope(SgSymbol *symbol,
+                                                 SgScopeStatement *scope) {
+  if (symbol == nullptr || scope == nullptr) {
+    return;
+  }
+
+  SgSymbolTable *target_table = scope->get_symbol_table();
+  if (target_table == nullptr) {
+    return;
+  }
+
+  if (SgSymbolTable *current_table = isSgSymbolTable(symbol->get_parent())) {
+    if (current_table != target_table &&
+        symbol_present_in_table(current_table, symbol)) {
+      current_table->remove(symbol);
+    }
+  } else if (SgScopeStatement *old_scope =
+                 isSgScopeStatement(symbol->get_parent())) {
+    if (old_scope != scope && symbol_present_in_scope(old_scope, symbol)) {
+      old_scope->remove_symbol(symbol);
+    }
+  }
+
+  if (!symbol_present_in_scope(scope, symbol)) {
+    scope->insert_symbol(symbol->get_name(), symbol);
+  } else if (symbol->get_parent() != target_table) {
+    symbol->set_parent(target_table);
+  }
+}
+
+static SgScopeStatement *
+ensureFunctionParameterSymbolScope(SgFunctionDeclaration *decl) {
+  if (decl == nullptr) {
+    return nullptr;
+  }
+
+  if (SgFunctionDefinition *def = decl->get_definition()) {
+    return def;
+  }
+
+  if (SgFunctionParameterScope *param_scope =
+          decl->get_functionParameterScope()) {
+    if (param_scope->get_parent() == nullptr) {
+      if (SgScopeStatement *enclosing_scope = decl->get_scope()) {
+        param_scope->set_parent(enclosing_scope);
+      }
+    }
+    return param_scope;
+  }
+
+  if (SgScopeStatement *decl_scope = decl->get_scope()) {
+    if (isSgDeclarationScope(decl_scope) != nullptr ||
+        isSgFunctionParameterScope(decl_scope) != nullptr) {
+      return decl_scope;
+    }
+  }
+
+  SgFunctionParameterList *params = decl->get_parameterList();
+  if (params == nullptr || params->get_args().empty()) {
+    return decl->get_scope();
+  }
+
+  SgFunctionParameterScope *param_scope = new SgFunctionParameterScope();
+  SageInterface::setSourcePosition(param_scope);
+  if (SgScopeStatement *enclosing_scope = decl->get_scope()) {
+    param_scope->set_parent(enclosing_scope);
+    if (enclosing_scope->isCaseInsensitive()) {
+      param_scope->setCaseInsensitive(true);
+    }
+  }
+  decl->set_functionParameterScope(param_scope);
+  return param_scope;
+}
+
 static void ensureFunctionParameterSymbols(SgFunctionDeclaration *decl) {
   if (decl == nullptr) {
     return;
@@ -2313,6 +2387,10 @@ static void ensureFunctionParameterSymbols(SgFunctionDeclaration *decl) {
   std::set<SgFunctionDeclaration *> visited;
   std::vector<SgFunctionDeclaration *> worklist;
   worklist.push_back(decl);
+  if (SgFunctionDeclaration *first_nondef =
+          isSgFunctionDeclaration(decl->get_firstNondefiningDeclaration())) {
+    worklist.push_back(first_nondef);
+  }
   if (SgFunctionDeclaration *def_decl =
           isSgFunctionDeclaration(decl->get_definingDeclaration())) {
     worklist.push_back(def_decl);
@@ -2323,39 +2401,37 @@ static void ensureFunctionParameterSymbols(SgFunctionDeclaration *decl) {
       continue;
     }
 
-    SgFunctionDefinition *def = current->get_definition();
-    if (def == nullptr) {
-      continue;
-    }
-
     SgFunctionParameterList *params = current->get_parameterList();
     if (params == nullptr) {
       continue;
     }
 
-    SgScopeStatement *scope = def;
+    SgScopeStatement *scope = ensureFunctionParameterSymbolScope(current);
+    if (scope == nullptr) {
+      continue;
+    }
+
     for (SgInitializedName *param : params->get_args()) {
       if (param == nullptr) {
         continue;
       }
+      param->set_declptr(current);
+      param->set_scope(scope);
+
       if (param->get_name().getString().empty()) {
         continue;
       }
-      param->set_declptr(current);
-      param->set_scope(scope);
+
       SgVariableSymbol *symbol =
           isSgVariableSymbol(param->get_symbol_from_symbol_table());
       if (symbol == nullptr) {
-        symbol = new SgVariableSymbol(param);
-        if (scope != nullptr) {
-          scope->insert_symbol(param->get_name(), symbol);
-          if (SgSymbolTable *symbol_table = scope->get_symbol_table()) {
-            symbol->set_parent(symbol_table);
-          }
-        } else {
-          move_symbol_to_orphan_table(symbol);
-        }
+        symbol = isSgVariableSymbol(scope->find_symbol_from_declaration(param));
       }
+      if (symbol == nullptr) {
+        symbol = new SgVariableSymbol(param);
+      }
+
+      rehomeFunctionParameterSymbolToScope(symbol, scope);
     }
   }
 }
@@ -28996,24 +29072,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     };
 
     auto fixup_nondef_params = [&](SgFunctionDeclaration *decl) -> void {
-      if (decl == nullptr) {
-        return;
-      }
-
-      if (SgFunctionParameterList *params = decl->get_parameterList()) {
-        SgScopeStatement *param_scope = decl->get_functionParameterScope();
-        if (param_scope == nullptr) {
-          param_scope = decl->get_scope();
-        }
-        for (SgInitializedName *param : params->get_args()) {
-          if (param != nullptr) {
-            param->set_declptr(decl);
-            if (param_scope != nullptr) {
-              param->set_scope(param_scope);
-            }
-          }
-        }
-      }
+      ensureFunctionParameterSymbols(decl);
     };
 
     // Build friend free-function definitions as free functions regardless of
@@ -31698,17 +31757,13 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     }
     first_nondef->set_parameterList(cloned);
     cloned->set_parent(first_nondef);
-    SgScopeStatement *nondef_scope = first_nondef->get_scope();
     for (SgInitializedName *param : cloned->get_args()) {
       if (param == nullptr) {
         continue;
       }
-      param->set_declptr(first_nondef);
       param->set_parent(cloned);
-      if (nondef_scope != nullptr) {
-        param->set_scope(nondef_scope);
-      }
     }
+    ensureFunctionParameterSymbols(first_nondef);
   };
 
   ensure_unique_nondef_param_list(sg_function_decl);

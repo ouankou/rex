@@ -233,6 +233,18 @@ string SageInterface::generateUniqueName(
       break;
     }
 
+      // Generate a name for SgFunctionParameterScope
+    case V_SgFunctionParameterScope: {
+      key = "__function_parameter_scope_";
+
+      // Keep function parameter scopes distinct even for synthesized
+      // nondefining declarations.
+      const SgFunctionParameterScope *parameterScope =
+          isSgFunctionParameterScope(statement);
+      key = key + StringUtility::numberToString(parameterScope);
+      break;
+    }
+
       // Declarations
 
       // Generate a name for SgGlobal

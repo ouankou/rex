@@ -10527,6 +10527,7 @@ void transOmpOrdered(SgNode *node) {
 //  GOMP_critical_name_end (&gomp_critical_user_aaa);
 //
 static const int kKmpCriticalNameWords = 8; // kmp_critical_name is int32_t[8]
+static const int kKmpCriticalNameAlignment = alignof(void *);
 
 void transOmpCritical(SgNode *node) {
   ROSE_ASSERT(node != NULL);
@@ -10663,6 +10664,9 @@ void transOmpCritical(SgNode *node) {
           buildArrayType(buildIntType(), buildIntVal(kKmpCriticalNameWords));
       SgVariableDeclaration *vardecl =
           buildVariableDeclaration(g_lock_name, lock_type, NULL, global);
+      if (SgInitializedName *lock_decl = getFirstInitializedName(vardecl)) {
+        lock_decl->set_gnu_attribute_alignment(kKmpCriticalNameAlignment);
+      }
       setStatic(vardecl);
       prependStatement(vardecl, global);
       sym = getFirstVarSym(vardecl);
