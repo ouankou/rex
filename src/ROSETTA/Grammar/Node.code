@@ -11,6 +11,8 @@ HEADER_NODE_PREDECLARATION_START
 
 #include <functional>
 
+#include <atomic>
+
 #include <cstdint>
 
 #include <sstream>
@@ -1098,6 +1100,14 @@ bool get_isModified() const;
  */
 bool get_containsTransformation() const;
 
+/*! \brief Returns a process-wide sequence that advances whenever ROSE records
+   an AST modification.
+
+    Analyses can use this to invalidate caches across transformations without
+   conservatively disabling caching for all transformed projects.
+ */
+static uint64_t get_globalAstModificationSequence();
+
 //! All nodes in the AST contain a reference to a parent node
 void set_parent(SgNode *parent);
 
@@ -2010,9 +2020,30 @@ void SgNode::post_construction_initialization() {
   // default implementation does nothing!
 }
 
+namespace {
+std::atomic<uint64_t> &globalAstModificationSequenceCounter() {
+  static std::atomic<uint64_t> counter(0);
+  return counter;
+}
+
+void noteAstModification() {
+  globalAstModificationSequenceCounter().fetch_add(1,
+                                                   std::memory_order_relaxed);
+}
+} // namespace
+
+uint64_t SgNode::get_globalAstModificationSequence() {
+  return globalAstModificationSequenceCounter().load(
+      std::memory_order_relaxed);
+}
+
 void SgNode::set_isModified(bool isModified) {
   // DQ (4/14/2015): Detect if this is called from a NULL pointer.
   ASSERT_this();
+
+  if (isModified && p_isModified == false) {
+    noteAstModification();
+  }
 
   p_isModified = isModified;
 }
@@ -2029,6 +2060,10 @@ bool SgNode::get_isModified() const {
 void SgNode::set_containsTransformation(bool containsTransformation) {
   // DQ (4/14/2015): Detect if this is called from a NULL pointer.
   ASSERT_this();
+
+  if (containsTransformation && p_containsTransformation == false) {
+    noteAstModification();
+  }
 
   p_containsTransformation = containsTransformation;
 }

@@ -1818,6 +1818,7 @@ public:
   std::recursive_mutex mutex;
   DefinitionExpressionIndex index;
   bool initialized = false;
+  uint64_t astModificationSequence = 0;
 
   AstAttribute::OwnershipPolicy getOwnershipPolicy() const override {
     return CONTAINER_OWNERSHIP;
@@ -1850,32 +1851,6 @@ indexDefinitionExpression(SgExpression *exp,
   }
 }
 
-static bool expressionTargetsDefinition(SgExpression *exp,
-                                        ClassHierarchyWrapper *classHierarchy,
-                                        SgFunctionDefinition *targetDef) {
-  ASSERT_not_null(exp);
-  ASSERT_not_null(classHierarchy);
-  ASSERT_not_null(targetDef);
-
-  Rose_STL_Container<SgFunctionDefinition *> candidateDefs;
-  CallTargetSet::getDefinitionsForExpression(exp, classHierarchy,
-                                             candidateDefs);
-
-  std::set<SgFunctionDefinition *> uniqueCandidateDefs;
-  for (SgFunctionDefinition *candidateDef : candidateDefs) {
-    if (candidateDef == NULL ||
-        !uniqueCandidateDefs.insert(candidateDef).second) {
-      continue;
-    }
-
-    if (candidateDef == targetDef) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 static void
 buildDefinitionExpressionIndex(SgProject *project,
                                ClassHierarchyWrapper *classHierarchy,
@@ -1903,34 +1878,6 @@ buildDefinitionExpressionIndex(SgProject *project,
   }
 }
 
-static void appendExpressionsForDefinitionBySearch(
-    SgProject *project, SgFunctionDefinition *targetDef,
-    ClassHierarchyWrapper *classHierarchy,
-    Rose_STL_Container<SgExpression *> &exps) {
-  ASSERT_not_null(project);
-  ASSERT_not_null(targetDef);
-  ASSERT_not_null(classHierarchy);
-
-  VariantVector callSiteVariants;
-  callSiteVariants.push_back(V_SgFunctionCallExp);
-  callSiteVariants.push_back(V_SgConstructorInitializer);
-  callSiteVariants.push_back(V_SgPntrArrRefExp);
-  callSiteVariants.push_back(V_SgPointerDerefExp);
-
-  Rose_STL_Container<SgNode *> callSites =
-      NodeQuery::querySubTree(project, callSiteVariants);
-  for (SgNode *callSite : callSites) {
-    SgExpression *exp = isSgExpression(callSite);
-    if (exp == NULL) {
-      continue;
-    }
-
-    if (expressionTargetsDefinition(exp, classHierarchy, targetDef)) {
-      exps.push_back(exp);
-    }
-  }
-}
-
 static DefinitionExpressionIndexAttribute *
 getOrCreateDefinitionExpressionIndexAttribute(SgProject *project) {
   ASSERT_not_null(project);
@@ -1951,29 +1898,6 @@ getOrCreateDefinitionExpressionIndexAttribute(SgProject *project) {
       dynamic_cast<DefinitionExpressionIndexAttribute *>(attribute);
   ASSERT_not_null(index_attribute);
   return index_attribute;
-}
-
-static void clearDefinitionExpressionIndexCache(SgProject *project) {
-  ASSERT_not_null(project);
-
-  std::lock_guard<std::mutex> install_guard(
-      definitionExpressionIndexInstallMutex());
-
-  AstAttribute *attribute =
-      project->getAttribute(definitionExpressionIndexAttributeName());
-  if (attribute == NULL) {
-    return;
-  }
-
-  DefinitionExpressionIndexAttribute *index_attribute =
-      dynamic_cast<DefinitionExpressionIndexAttribute *>(attribute);
-  ASSERT_not_null(index_attribute);
-
-  std::lock_guard<std::recursive_mutex> index_guard(index_attribute->mutex);
-  if (index_attribute->initialized) {
-    index_attribute->index.clear();
-    index_attribute->initialized = false;
-  }
 }
 
 static void
@@ -2006,20 +1930,17 @@ void CallTargetSet::getExpressionsForDefinition(
   SgProject *project = SageInterface::getProject(targetDef);
   ASSERT_not_null(project);
 
-  if (project->get_containsTransformation()) {
-    clearDefinitionExpressionIndexCache(project);
-    appendExpressionsForDefinitionBySearch(project, targetDef, classHierarchy,
-                                           exps);
-    return;
-  }
-
   DefinitionExpressionIndexAttribute *index_attribute =
       getOrCreateDefinitionExpressionIndexAttribute(project);
   std::lock_guard<std::recursive_mutex> index_guard(index_attribute->mutex);
-  if (index_attribute->initialized == false) {
+  uint64_t currentSequence = SgNode::get_globalAstModificationSequence();
+  if (index_attribute->initialized == false ||
+      index_attribute->astModificationSequence != currentSequence) {
     buildDefinitionExpressionIndex(project, classHierarchy,
                                    index_attribute->index);
     index_attribute->initialized = true;
+    index_attribute->astModificationSequence =
+        SgNode::get_globalAstModificationSequence();
   }
 
   appendExpressionsForDefinition(targetDef, index_attribute->index, exps);
