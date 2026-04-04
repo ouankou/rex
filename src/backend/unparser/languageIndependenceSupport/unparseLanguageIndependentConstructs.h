@@ -8,10 +8,11 @@
 #ifndef UNPARSER_LANGUAGE_INDEPENDENT_SUPPORT
 #define UNPARSER_LANGUAGE_INDEPENDENT_SUPPORT
 
+#include <cstdint>
 #include <iomanip>
-
+#include <map>
+#include <set>
 #include <sstream>
-
 #include <string>
 
 #include "rose_attributes_list.h"
@@ -37,6 +38,7 @@ class SgOmpClause;
 class SgAccClause;
 class SgAccExpressionClause;
 class SgAccVariablesClause;
+class FrontierNode;
 class SgSourceFile;
 class SgStatement;
 class SgThisExp;
@@ -58,8 +60,20 @@ class Unparser;
 // This is a base class for the language dependent parts of the unparser.
 class UnparseLanguageIndependentConstructs {
 protected:
+  struct PartialTokenUnparseFrontierCache {
+    const std::map<SgStatement *, FrontierNode *> *frontier_nodes = nullptr;
+    size_t frontier_size = 0;
+    uint64_t ast_modification_sequence = 0;
+    std::set<SgStatement *> statements_requiring_partial_token_unparse;
+  };
+
   Unparser *unp;
   std::string currentOutputFileName;
+  std::map<SgSourceFile *, PartialTokenUnparseFrontierCache>
+      partialTokenUnparseFrontierCacheByFile;
+
+  bool frontierRequiresPartialTokenUnparse(SgSourceFile *sourceFile,
+                                           SgStatement *candidate);
 
 public:
   // DQ (12/6/2014): This type permits specification of what bounds to use in

@@ -2735,6 +2735,51 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
   //  General function that gets called when unparsing a statement. Then it
   //  routes to the appropriate function to unparse each kind of statement.
   //-----------------------------------------------------------------------------------
+  bool
+  UnparseLanguageIndependentConstructs::frontierRequiresPartialTokenUnparse(
+      SgSourceFile * sourceFile, SgStatement * candidate) {
+    if (sourceFile == NULL || candidate == NULL ||
+        candidate->isTransformation()) {
+      return false;
+    }
+
+    std::map<SgStatement *, FrontierNode *> &frontier_nodes =
+        sourceFile->get_token_unparse_frontier();
+    PartialTokenUnparseFrontierCache &cache =
+        partialTokenUnparseFrontierCacheByFile[sourceFile];
+    const uint64_t ast_modification_sequence =
+        SgNode::get_globalAstModificationSequence();
+
+    if (cache.frontier_nodes != &frontier_nodes ||
+        cache.frontier_size != frontier_nodes.size() ||
+        cache.ast_modification_sequence != ast_modification_sequence) {
+      cache.frontier_nodes = &frontier_nodes;
+      cache.frontier_size = frontier_nodes.size();
+      cache.ast_modification_sequence = ast_modification_sequence;
+      cache.statements_requiring_partial_token_unparse.clear();
+
+      for (const auto &entry : frontier_nodes) {
+        SgStatement *frontier_statement = entry.first;
+        FrontierNode *frontier = entry.second;
+        if (frontier_statement == NULL || frontier == NULL ||
+            frontier->unparseFromTheAST == false) {
+          continue;
+        }
+
+        for (SgNode *cursor = frontier_statement; cursor != NULL;
+             cursor = cursor->get_parent()) {
+          SgStatement *statement = isSgStatement(cursor);
+          if (statement != NULL && statement->isTransformation() == false) {
+            cache.statements_requiring_partial_token_unparse.insert(statement);
+          }
+        }
+      }
+    }
+
+    return cache.statements_requiring_partial_token_unparse.find(candidate) !=
+           cache.statements_requiring_partial_token_unparse.end();
+  }
+
   void UnparseLanguageIndependentConstructs::unparseStatement(
       SgStatement * stmt, SgUnparse_Info & info) {
     ASSERT_not_null(stmt);
@@ -3204,25 +3249,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         };
         auto frontier_requires_partial_token_unparse =
             [&](SgStatement *candidate) -> bool {
-          if (candidate == NULL || candidate->isTransformation()) {
-            return false;
-          }
-
-          for (const auto &entry : frontier_nodes) {
-            SgStatement *descendant = entry.first;
-            FrontierNode *frontier = entry.second;
-            if (descendant == NULL || frontier == NULL ||
-                frontier->unparseFromTheAST == false) {
-              continue;
-            }
-
-            if (candidate == descendant ||
-                SageInterface::isAncestor(candidate, descendant)) {
-              return true;
-            }
-          }
-
-          return false;
+          return frontierRequiresPartialTokenUnparse(sourceFile, candidate);
         };
         if (unparseViaTokenStream == true) {
           if (enclosing_transformed_declaration_scope(stmt) != NULL) {

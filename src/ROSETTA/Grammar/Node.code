@@ -2028,13 +2028,13 @@ std::atomic<uint64_t> &globalAstModificationSequenceCounter() {
 
 void noteAstModification() {
   globalAstModificationSequenceCounter().fetch_add(1,
-                                                   std::memory_order_relaxed);
+                                                   std::memory_order_release);
 }
 } // namespace
 
 uint64_t SgNode::get_globalAstModificationSequence() {
   return globalAstModificationSequenceCounter().load(
-      std::memory_order_relaxed);
+      std::memory_order_acquire);
 }
 
 void SgNode::set_isModified(bool isModified) {

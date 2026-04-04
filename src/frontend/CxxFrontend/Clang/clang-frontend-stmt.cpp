@@ -8005,14 +8005,32 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
   };
 
   auto build_member_operator_call_expr =
-      [&](clang::FunctionDecl *direct_callee) -> SgFunctionCallExp * {
+      [&](clang::FunctionDecl *direct_callee,
+          const std::vector<SgExpression *> *translated_args = nullptr,
+          bool copy_translated_args = false) -> SgFunctionCallExp * {
     if (direct_callee == nullptr ||
-        !llvm::isa<clang::CXXMethodDecl>(direct_callee) ||
-        cxx_operator_call_expr->getNumArgs() == 0) {
+        !llvm::isa<clang::CXXMethodDecl>(direct_callee)) {
       return nullptr;
     }
 
-    SgExpression *base = traverse_operator_arg(0);
+    SgExpression *base = nullptr;
+    if (translated_args != nullptr) {
+      if (translated_args->empty()) {
+        return nullptr;
+      }
+
+      base = translated_args->front();
+      if (copy_translated_args) {
+        base = SageInterface::copyExpression(base);
+      }
+    } else {
+      if (cxx_operator_call_expr->getNumArgs() == 0) {
+        return nullptr;
+      }
+
+      base = traverse_operator_arg(0);
+    }
+
     SgMemberFunctionSymbol *member_sym =
         resolve_member_operator_symbol(direct_callee);
     if (base == nullptr || member_sym == nullptr) {
@@ -8031,14 +8049,26 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
     SgExprListExp *param_list = SageBuilder::buildExprListExp_nfi();
     applySourceRange(param_list, cxx_operator_call_expr->getSourceRange());
 
-    for (unsigned i = 1; i < cxx_operator_call_expr->getNumArgs(); ++i) {
-      if (clang::isa<clang::CXXDefaultArgExpr>(
-              cxx_operator_call_expr->getArg(i))) {
-        continue;
+    if (translated_args != nullptr) {
+      for (size_t i = 1; i < translated_args->size(); ++i) {
+        SgExpression *arg = (*translated_args)[i];
+        if (copy_translated_args) {
+          arg = SageInterface::copyExpression(arg);
+        }
+        if (arg != nullptr) {
+          param_list->append_expression(arg);
+        }
       }
-      SgExpression *arg = traverse_operator_arg(i);
-      if (arg != nullptr) {
-        param_list->append_expression(arg);
+    } else {
+      for (unsigned i = 1; i < cxx_operator_call_expr->getNumArgs(); ++i) {
+        if (clang::isa<clang::CXXDefaultArgExpr>(
+                cxx_operator_call_expr->getArg(i))) {
+          continue;
+        }
+        SgExpression *arg = traverse_operator_arg(i);
+        if (arg != nullptr) {
+          param_list->append_expression(arg);
+        }
       }
     }
 
@@ -8136,8 +8166,10 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
             }
             SageInterface::setSourcePosition(arr_ref);
             arr_ref->set_need_paren(false);
+            const std::vector<SgExpression *> semantic_args{base, idx};
             if (SgFunctionCallExp *semantic_call =
-                    build_member_operator_call_expr(direct_callee)) {
+                    build_member_operator_call_expr(direct_callee,
+                                                    &semantic_args, true)) {
               arr_ref->set_originalExpressionTree(semantic_call);
               semantic_call->set_parent(arr_ref);
             }

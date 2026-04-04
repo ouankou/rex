@@ -320,6 +320,87 @@ static Sg_File_Info *getEffectiveEndInfo(SgLocatedNode *node) {
   return node->get_startOfConstruct();
 }
 
+static int compareSourceLocationWithFilename(const Sg_File_Info *lhs,
+                                             const Sg_File_Info *rhs) {
+  if (lhs == rhs) {
+    return 0;
+  }
+  if (lhs == nullptr || rhs == nullptr) {
+    return lhs == nullptr ? 1 : -1;
+  }
+
+  if (lhs->get_filenameString() != rhs->get_filenameString()) {
+    return lhs->get_filenameString() < rhs->get_filenameString() ? -1 : 1;
+  }
+
+  return compareSourceLocation(lhs, rhs);
+}
+
+static bool locatedNodeComesBeforeInSource(SgLocatedNode *lhs,
+                                           SgLocatedNode *rhs) {
+  if (lhs == rhs) {
+    return false;
+  }
+  if (lhs == nullptr || rhs == nullptr) {
+    return lhs != nullptr;
+  }
+
+  Sg_File_Info *lhs_start = getEffectiveStartInfo(lhs);
+  Sg_File_Info *rhs_start = getEffectiveStartInfo(rhs);
+  const bool lhs_has_start = hasUsableSourceLocation(lhs_start);
+  const bool rhs_has_start = hasUsableSourceLocation(rhs_start);
+  if (lhs_has_start != rhs_has_start) {
+    return lhs_has_start;
+  }
+  if (lhs_has_start) {
+    const int start_cmp =
+        compareSourceLocationWithFilename(lhs_start, rhs_start);
+    if (start_cmp != 0) {
+      return start_cmp < 0;
+    }
+  }
+
+  Sg_File_Info *lhs_end = getEffectiveEndInfo(lhs);
+  Sg_File_Info *rhs_end = getEffectiveEndInfo(rhs);
+  const bool lhs_has_end = hasUsableSourceLocation(lhs_end);
+  const bool rhs_has_end = hasUsableSourceLocation(rhs_end);
+  if (lhs_has_end != rhs_has_end) {
+    return lhs_has_end;
+  }
+  if (lhs_has_end) {
+    const int end_cmp = compareSourceLocationWithFilename(lhs_end, rhs_end);
+    if (end_cmp != 0) {
+      return end_cmp < 0;
+    }
+  }
+
+  return false;
+}
+
+static void
+buildLocatedNodeOrder(const std::vector<SgLocatedNode *> &located_nodes,
+                      std::map<SgLocatedNode *, size_t> &node_order) {
+  std::vector<SgLocatedNode *> ordered_nodes(located_nodes.begin(),
+                                             located_nodes.end());
+  std::stable_sort(ordered_nodes.begin(), ordered_nodes.end(),
+                   [](SgLocatedNode *lhs, SgLocatedNode *rhs) {
+                     return locatedNodeComesBeforeInSource(lhs, rhs);
+                   });
+
+  node_order.clear();
+  for (size_t i = 0; i < ordered_nodes.size(); ++i) {
+    node_order[ordered_nodes[i]] = i;
+  }
+}
+
+static size_t
+getLocatedNodeOrder(const std::map<SgLocatedNode *, size_t> &node_order,
+                    SgLocatedNode *node) {
+  const std::map<SgLocatedNode *, size_t>::const_iterator found =
+      node_order.find(node);
+  return found != node_order.end() ? found->second : node_order.size();
+}
+
 static SgStatement *
 findFirstSourceStatementInFile(SgBasicBlock *block,
                                const std::string &filename) {
@@ -385,6 +466,8 @@ normalizeLeadingBasicBlockPreprocessingInfo(SgSourceFile *source_file) {
 
   std::vector<SgLocatedNode *> located_nodes;
   collectSourceLocatedNodes(source_file, located_nodes);
+  std::map<SgLocatedNode *, size_t> node_order;
+  buildLocatedNodeOrder(located_nodes, node_order);
 
   std::vector<MisplacedPreprocessingInfoMove> moves;
   moves.reserve(16);
@@ -452,10 +535,14 @@ normalizeLeadingBasicBlockPreprocessingInfo(SgSourceFile *source_file) {
   }
 
   std::stable_sort(moves.begin(), moves.end(),
-                   [](const MisplacedPreprocessingInfoMove &lhs,
-                      const MisplacedPreprocessingInfoMove &rhs) {
-                     if (lhs.target != rhs.target) {
-                       return lhs.target < rhs.target;
+                   [&](const MisplacedPreprocessingInfoMove &lhs,
+                       const MisplacedPreprocessingInfoMove &rhs) {
+                     const size_t lhs_order =
+                         getLocatedNodeOrder(node_order, lhs.target);
+                     const size_t rhs_order =
+                         getLocatedNodeOrder(node_order, rhs.target);
+                     if (lhs_order != rhs_order) {
+                       return lhs_order < rhs_order;
                      }
 
                      return preprocessingInfoComesBefore(lhs.info, rhs.info);
@@ -476,6 +563,8 @@ normalizeEnumEnumeratorPreprocessingInfo(SgSourceFile *source_file) {
 
   std::vector<SgLocatedNode *> located_nodes;
   collectSourceLocatedNodes(source_file, located_nodes);
+  std::map<SgLocatedNode *, size_t> node_order;
+  buildLocatedNodeOrder(located_nodes, node_order);
 
   std::vector<MisplacedPreprocessingInfoMove> moves;
   moves.reserve(16);
@@ -548,10 +637,14 @@ normalizeEnumEnumeratorPreprocessingInfo(SgSourceFile *source_file) {
   }
 
   std::stable_sort(moves.begin(), moves.end(),
-                   [](const MisplacedPreprocessingInfoMove &lhs,
-                      const MisplacedPreprocessingInfoMove &rhs) {
-                     if (lhs.target != rhs.target) {
-                       return lhs.target < rhs.target;
+                   [&](const MisplacedPreprocessingInfoMove &lhs,
+                       const MisplacedPreprocessingInfoMove &rhs) {
+                     const size_t lhs_order =
+                         getLocatedNodeOrder(node_order, lhs.target);
+                     const size_t rhs_order =
+                         getLocatedNodeOrder(node_order, rhs.target);
+                     if (lhs_order != rhs_order) {
+                       return lhs_order < rhs_order;
                      }
 
                      return preprocessingInfoComesBefore(lhs.info, rhs.info);
@@ -571,6 +664,8 @@ static void normalizeAsmStatementPreprocessingInfo(SgSourceFile *source_file) {
 
   std::vector<SgLocatedNode *> located_nodes;
   collectSourceLocatedNodes(source_file, located_nodes);
+  std::map<SgLocatedNode *, size_t> node_order;
+  buildLocatedNodeOrder(located_nodes, node_order);
 
   std::vector<MisplacedPreprocessingInfoMove> moves;
   moves.reserve(16);
@@ -638,10 +733,14 @@ static void normalizeAsmStatementPreprocessingInfo(SgSourceFile *source_file) {
   }
 
   std::stable_sort(moves.begin(), moves.end(),
-                   [](const MisplacedPreprocessingInfoMove &lhs,
-                      const MisplacedPreprocessingInfoMove &rhs) {
-                     if (lhs.target != rhs.target) {
-                       return lhs.target < rhs.target;
+                   [&](const MisplacedPreprocessingInfoMove &lhs,
+                       const MisplacedPreprocessingInfoMove &rhs) {
+                     const size_t lhs_order =
+                         getLocatedNodeOrder(node_order, lhs.target);
+                     const size_t rhs_order =
+                         getLocatedNodeOrder(node_order, rhs.target);
+                     if (lhs_order != rhs_order) {
+                       return lhs_order < rhs_order;
                      }
 
                      return preprocessingInfoComesBefore(lhs.info, rhs.info);
@@ -662,6 +761,8 @@ normalizeMisplacedBracedScopePreprocessingInfo(SgSourceFile *source_file) {
 
   std::vector<SgLocatedNode *> located_nodes;
   collectSourceLocatedNodes(source_file, located_nodes);
+  std::map<SgLocatedNode *, size_t> node_order;
+  buildLocatedNodeOrder(located_nodes, node_order);
 
   std::vector<MisplacedPreprocessingInfoMove> moves;
   moves.reserve(16);
@@ -741,10 +842,14 @@ normalizeMisplacedBracedScopePreprocessingInfo(SgSourceFile *source_file) {
   }
 
   std::stable_sort(moves.begin(), moves.end(),
-                   [](const MisplacedPreprocessingInfoMove &lhs,
-                      const MisplacedPreprocessingInfoMove &rhs) {
-                     if (lhs.target != rhs.target) {
-                       return lhs.target < rhs.target;
+                   [&](const MisplacedPreprocessingInfoMove &lhs,
+                       const MisplacedPreprocessingInfoMove &rhs) {
+                     const size_t lhs_order =
+                         getLocatedNodeOrder(node_order, lhs.target);
+                     const size_t rhs_order =
+                         getLocatedNodeOrder(node_order, rhs.target);
+                     if (lhs_order != rhs_order) {
+                       return lhs_order < rhs_order;
                      }
 
                      return preprocessingInfoComesBefore(lhs.info, rhs.info);
@@ -765,6 +870,8 @@ normalizeInlineFunctionConditionalPreprocessingInfo(SgSourceFile *source_file) {
 
   std::vector<SgLocatedNode *> located_nodes;
   collectSourceLocatedNodes(source_file, located_nodes);
+  std::map<SgLocatedNode *, size_t> node_order;
+  buildLocatedNodeOrder(located_nodes, node_order);
 
   struct FunctionAnchor {
     SgFunctionDeclaration *decl = nullptr;
@@ -961,10 +1068,14 @@ normalizeInlineFunctionConditionalPreprocessingInfo(SgSourceFile *source_file) {
   }
 
   std::stable_sort(moves.begin(), moves.end(),
-                   [](const FunctionConditionalMove &lhs,
-                      const FunctionConditionalMove &rhs) {
-                     if (lhs.target != rhs.target) {
-                       return lhs.target < rhs.target;
+                   [&](const FunctionConditionalMove &lhs,
+                       const FunctionConditionalMove &rhs) {
+                     const size_t lhs_order =
+                         getLocatedNodeOrder(node_order, lhs.target);
+                     const size_t rhs_order =
+                         getLocatedNodeOrder(node_order, rhs.target);
+                     if (lhs_order != rhs_order) {
+                       return lhs_order < rhs_order;
                      }
 
                      return preprocessingInfoComesBefore(lhs.info, rhs.info);
@@ -1042,6 +1153,11 @@ static void normalizeAstUnparsedTemplateFunctionPreprocessingInfo(
   if (source_file == nullptr || source_file->get_globalScope() == nullptr) {
     return;
   }
+
+  std::vector<SgLocatedNode *> located_nodes;
+  collectSourceLocatedNodes(source_file, located_nodes);
+  std::map<SgLocatedNode *, size_t> node_order;
+  buildLocatedNodeOrder(located_nodes, node_order);
 
   struct TemplatePreprocessingMove {
     AttachedPreprocessingInfoType *source_list = nullptr;
@@ -1239,10 +1355,14 @@ static void normalizeAstUnparsedTemplateFunctionPreprocessingInfo(
   }
 
   std::stable_sort(moves.begin(), moves.end(),
-                   [](const TemplatePreprocessingMove &lhs,
-                      const TemplatePreprocessingMove &rhs) {
-                     if (lhs.target != rhs.target) {
-                       return lhs.target < rhs.target;
+                   [&](const TemplatePreprocessingMove &lhs,
+                       const TemplatePreprocessingMove &rhs) {
+                     const size_t lhs_order =
+                         getLocatedNodeOrder(node_order, lhs.target);
+                     const size_t rhs_order =
+                         getLocatedNodeOrder(node_order, rhs.target);
+                     if (lhs_order != rhs_order) {
+                       return lhs_order < rhs_order;
                      }
 
                      if (lhs.target_position != rhs.target_position) {
