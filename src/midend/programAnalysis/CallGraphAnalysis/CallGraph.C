@@ -1863,6 +1863,7 @@ buildDefinitionExpressionIndex(SgProject *project,
   callSiteVariants.push_back(V_SgFunctionCallExp);
   callSiteVariants.push_back(V_SgConstructorInitializer);
   callSiteVariants.push_back(V_SgPntrArrRefExp);
+  callSiteVariants.push_back(V_SgPointerDerefExp);
 
   Rose_STL_Container<SgNode *> callSites =
       NodeQuery::querySubTree(project, callSiteVariants);
@@ -2015,10 +2016,13 @@ FunctionData::FunctionData(SgFunctionDeclaration *inputFunctionDeclaration,
                                                 classHierarchy, functionList);
     }
 
-    Rose_STL_Container<SgNode *> subscriptList =
-        NodeQuery::querySubTree(defDecl, V_SgPntrArrRefExp);
-    for (SgNode *subscript : subscriptList) {
-      CallTargetSet::getPropertiesForExpression(isSgExpression(subscript),
+    VariantVector callSiteVariants;
+    callSiteVariants.push_back(V_SgPntrArrRefExp);
+    callSiteVariants.push_back(V_SgPointerDerefExp);
+    Rose_STL_Container<SgNode *> callSiteList =
+        NodeQuery::querySubTree(defDecl, callSiteVariants);
+    for (SgNode *callSite : callSiteList) {
+      CallTargetSet::getPropertiesForExpression(isSgExpression(callSite),
                                                 classHierarchy, functionList);
     }
   }
