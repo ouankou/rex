@@ -312,12 +312,7 @@ static Sg_File_Info *getEffectiveEndInfo(SgLocatedNode *node) {
     return end;
   }
 
-  if (Sg_File_Info *info = node->get_file_info();
-      info != nullptr && info->get_line() > 0) {
-    return info;
-  }
-
-  return node->get_startOfConstruct();
+  return nullptr;
 }
 
 static int compareSourceLocationWithFilename(const Sg_File_Info *lhs,

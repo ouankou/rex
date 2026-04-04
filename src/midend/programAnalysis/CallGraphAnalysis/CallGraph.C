@@ -1939,8 +1939,7 @@ void CallTargetSet::getExpressionsForDefinition(
     buildDefinitionExpressionIndex(project, classHierarchy,
                                    index_attribute->index);
     index_attribute->initialized = true;
-    index_attribute->astModificationSequence =
-        SgNode::get_globalAstModificationSequence();
+    index_attribute->astModificationSequence = currentSequence;
   }
 
   appendExpressionsForDefinition(targetDef, index_attribute->index, exps);

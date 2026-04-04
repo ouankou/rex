@@ -2041,7 +2041,7 @@ void SgNode::set_isModified(bool isModified) {
   // DQ (4/14/2015): Detect if this is called from a NULL pointer.
   ASSERT_this();
 
-  if (isModified && p_isModified == false) {
+  if (isModified) {
     noteAstModification();
   }
 
