@@ -1850,6 +1850,32 @@ indexDefinitionExpression(SgExpression *exp,
   }
 }
 
+static bool expressionTargetsDefinition(SgExpression *exp,
+                                        ClassHierarchyWrapper *classHierarchy,
+                                        SgFunctionDefinition *targetDef) {
+  ASSERT_not_null(exp);
+  ASSERT_not_null(classHierarchy);
+  ASSERT_not_null(targetDef);
+
+  Rose_STL_Container<SgFunctionDefinition *> candidateDefs;
+  CallTargetSet::getDefinitionsForExpression(exp, classHierarchy,
+                                             candidateDefs);
+
+  std::set<SgFunctionDefinition *> uniqueCandidateDefs;
+  for (SgFunctionDefinition *candidateDef : candidateDefs) {
+    if (candidateDef == NULL ||
+        !uniqueCandidateDefs.insert(candidateDef).second) {
+      continue;
+    }
+
+    if (candidateDef == targetDef) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 static void
 buildDefinitionExpressionIndex(SgProject *project,
                                ClassHierarchyWrapper *classHierarchy,
@@ -1874,6 +1900,34 @@ buildDefinitionExpressionIndex(SgProject *project,
     }
 
     indexDefinitionExpression(exp, classHierarchy, definitionIndex);
+  }
+}
+
+static void appendExpressionsForDefinitionBySearch(
+    SgProject *project, SgFunctionDefinition *targetDef,
+    ClassHierarchyWrapper *classHierarchy,
+    Rose_STL_Container<SgExpression *> &exps) {
+  ASSERT_not_null(project);
+  ASSERT_not_null(targetDef);
+  ASSERT_not_null(classHierarchy);
+
+  VariantVector callSiteVariants;
+  callSiteVariants.push_back(V_SgFunctionCallExp);
+  callSiteVariants.push_back(V_SgConstructorInitializer);
+  callSiteVariants.push_back(V_SgPntrArrRefExp);
+  callSiteVariants.push_back(V_SgPointerDerefExp);
+
+  Rose_STL_Container<SgNode *> callSites =
+      NodeQuery::querySubTree(project, callSiteVariants);
+  for (SgNode *callSite : callSites) {
+    SgExpression *exp = isSgExpression(callSite);
+    if (exp == NULL) {
+      continue;
+    }
+
+    if (expressionTargetsDefinition(exp, classHierarchy, targetDef)) {
+      exps.push_back(exp);
+    }
   }
 }
 
@@ -1916,8 +1970,10 @@ static void clearDefinitionExpressionIndexCache(SgProject *project) {
   ASSERT_not_null(index_attribute);
 
   std::lock_guard<std::recursive_mutex> index_guard(index_attribute->mutex);
-  index_attribute->index.clear();
-  index_attribute->initialized = false;
+  if (index_attribute->initialized) {
+    index_attribute->index.clear();
+    index_attribute->initialized = false;
+  }
 }
 
 static void
@@ -1952,10 +2008,8 @@ void CallTargetSet::getExpressionsForDefinition(
 
   if (project->get_containsTransformation()) {
     clearDefinitionExpressionIndexCache(project);
-
-    DefinitionExpressionIndex definitionIndex;
-    buildDefinitionExpressionIndex(project, classHierarchy, definitionIndex);
-    appendExpressionsForDefinition(targetDef, definitionIndex, exps);
+    appendExpressionsForDefinitionBySearch(project, targetDef, classHierarchy,
+                                           exps);
     return;
   }
 

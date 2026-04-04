@@ -8022,7 +8022,7 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
     SgExpression *member_ref =
         SageBuilder::buildMemberFunctionRefExp_nfi(member_sym, false, false);
     SgExpression *callee = nullptr;
-    if (isSgPointerType(base->get_type())) {
+    if (SageInterface::isPointerType(base->get_type())) {
       callee = SageBuilder::buildArrowExp(base, member_ref);
     } else {
       callee = SageBuilder::buildDotExp(base, member_ref);
