@@ -1819,6 +1819,7 @@ public:
   DefinitionExpressionIndex index;
   bool initialized = false;
   uint64_t astModificationSequence = 0;
+  const ClassHierarchyWrapper *classHierarchy = nullptr;
 
   AstAttribute::OwnershipPolicy getOwnershipPolicy() const override {
     return CONTAINER_OWNERSHIP;
@@ -1954,11 +1955,13 @@ void CallTargetSet::getExpressionsForDefinition(
   std::lock_guard<std::recursive_mutex> index_guard(index_attribute->mutex);
   uint64_t currentSequence = SgNode::get_globalAstModificationSequence();
   if (index_attribute->initialized == false ||
-      index_attribute->astModificationSequence != currentSequence) {
+      index_attribute->astModificationSequence != currentSequence ||
+      index_attribute->classHierarchy != classHierarchy) {
     buildDefinitionExpressionIndex(project, classHierarchy,
                                    index_attribute->index);
     index_attribute->initialized = true;
     index_attribute->astModificationSequence = currentSequence;
+    index_attribute->classHierarchy = classHierarchy;
   }
 
   appendExpressionsForDefinition(targetDef, index_attribute->index, exps);
