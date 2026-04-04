@@ -198,14 +198,11 @@ static void detachMovedPreprocessingInfo(const MoveContainer &moves) {
     ROSE_ASSERT(attached != nullptr);
 
     const std::set<PreprocessingInfo *> &removed_info = entry.second;
-    for (AttachedPreprocessingInfoType::iterator it = attached->begin();
-         it != attached->end();) {
-      if (removed_info.find(*it) != removed_info.end()) {
-        it = attached->erase(it);
-      } else {
-        ++it;
-      }
-    }
+    attached->erase(std::remove_if(attached->begin(), attached->end(),
+                                   [&removed_info](PreprocessingInfo *info) {
+                                     return removed_info.count(info) > 0;
+                                   }),
+                    attached->end());
   }
 }
 
@@ -1293,16 +1290,14 @@ static void normalizeAstUnparsedTemplateFunctionPreprocessingInfo(
     }
   };
 
-  Rose_STL_Container<SgNode *> template_functions = NodeQuery::querySubTree(
-      source_file->get_globalScope(), V_SgTemplateFunctionDeclaration);
-  for (SgNode *node : template_functions) {
-    consider_decl(isSgTemplateFunctionDeclaration(node));
-  }
-
-  Rose_STL_Container<SgNode *> template_members = NodeQuery::querySubTree(
-      source_file->get_globalScope(), V_SgTemplateMemberFunctionDeclaration);
-  for (SgNode *node : template_members) {
-    consider_decl(isSgTemplateMemberFunctionDeclaration(node));
+  for (SgLocatedNode *node : located_nodes) {
+    if (SgTemplateFunctionDeclaration *decl =
+            isSgTemplateFunctionDeclaration(node)) {
+      consider_decl(decl);
+    } else if (SgTemplateMemberFunctionDeclaration *decl =
+                   isSgTemplateMemberFunctionDeclaration(node)) {
+      consider_decl(decl);
+    }
   }
 
   if (moves.empty()) {
