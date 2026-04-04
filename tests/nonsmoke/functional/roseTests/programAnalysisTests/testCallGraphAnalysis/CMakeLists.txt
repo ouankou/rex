@@ -50,7 +50,7 @@ set(_test01_cmd
 
 add_test(
   NAME callgraph_test01
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  WORKING_DIRECTORY ${_callgraph_output_dir}
   COMMAND ${_rth}
     CMD=${_test01_cmd}
     ${_exit_status}
@@ -61,7 +61,7 @@ set(_test02_conf ${CMAKE_CURRENT_SOURCE_DIR}/test02.conf)
 foreach(n IN ITEMS 10 100)
   add_test(
     NAME callgraph_test02_${n}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    WORKING_DIRECTORY ${_callgraph_output_dir}
     COMMAND ${_rth}
       N=${n}
       srcdir=${CMAKE_CURRENT_SOURCE_DIR}
@@ -91,7 +91,7 @@ foreach(specimen IN LISTS _test03_specimens)
   get_filename_component(_base ${specimen} NAME_WE)
   add_test(
     NAME callgraph_test03_${_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    WORKING_DIRECTORY ${_callgraph_output_dir}
     COMMAND ${_rth}
       INPUT=${specimen}
       OUTPUT=${_base}.o
@@ -117,7 +117,7 @@ foreach(answer_file IN LISTS _test04_answer_files)
   get_filename_component(_base ${_specimen} NAME_WE)
   add_test(
     NAME callgraph_test04_${_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    WORKING_DIRECTORY ${_callgraph_output_dir}
     COMMAND ${_rth}
       INPUT=${_specimen}
       OUTPUT=${_base}.o
@@ -132,19 +132,19 @@ endforeach()
 
 add_test(
   NAME callgraph_new_01
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  WORKING_DIRECTORY ${_callgraph_output_dir}
   COMMAND testNewCallGraph -c ${CMAKE_CURRENT_SOURCE_DIR}/newCallGraph_input_01.c
 )
 
 add_test(
   NAME callgraph_new_02
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  WORKING_DIRECTORY ${_callgraph_output_dir}
   COMMAND testNewCallGraph -c ${CMAKE_CURRENT_SOURCE_DIR}/newCallGraph_input_02.c
 )
 
 add_test(
   NAME callgraph_new_03
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  WORKING_DIRECTORY ${_callgraph_output_dir}
   COMMAND testNewCallGraph -c ${CMAKE_CURRENT_SOURCE_DIR}/newCallGraph_input_03.C
 )
 

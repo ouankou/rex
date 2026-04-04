@@ -89,7 +89,8 @@ void mirrorTemplateDeclarationTokenMapping(
     return;
   }
 
-  if (tokenMap.find(decl) != tokenMap.end()) {
+  if (tokenMap.find(decl) != tokenMap.end() &&
+      decl->get_unparse_template_ast() == false) {
     return;
   }
 

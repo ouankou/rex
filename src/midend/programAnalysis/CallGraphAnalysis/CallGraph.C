@@ -1717,17 +1717,44 @@ void getPropertiesForSgFunctionCallExp(
 // function pointers and virtual functions, append the set of declarations
 // to functionList.
 
+static SgExpression *
+semanticCallExpressionForLoweredOperatorSyntax(SgExpression *expr) {
+  if (expr == NULL) {
+    return NULL;
+  }
+
+  SgExpression *original = expr->get_originalExpressionTree();
+  if (original == NULL || original == expr) {
+    return NULL;
+  }
+
+  if (isSgFunctionCallExp(original) != NULL ||
+      isSgConstructorInitializer(original) != NULL) {
+    return original;
+  }
+
+  return NULL;
+}
+
 void CallTargetSet::getPropertiesForExpression(
     SgExpression *sgexp, ClassHierarchyWrapper *classHierarchy,
     Rose_STL_Container<SgFunctionDeclaration *> &functionList,
     bool includePureVirtualFunc) {
-  if (SgFunctionCallExp *fncall = isSgFunctionCallExp(sgexp)) {
+  if (SgExpression *semantic_call =
+          semanticCallExpressionForLoweredOperatorSyntax(sgexp)) {
+    getPropertiesForExpression(semantic_call, classHierarchy, functionList,
+                               includePureVirtualFunc);
+  } else if (SgFunctionCallExp *fncall = isSgFunctionCallExp(sgexp)) {
     getPropertiesForSgFunctionCallExp(fncall, classHierarchy, functionList,
                                       includePureVirtualFunc);
   } else if (SgConstructorInitializer *ctorini =
                  isSgConstructorInitializer(sgexp)) {
     getPropertiesForSgConstructorInitializer(ctorini, classHierarchy,
                                              functionList);
+  } else if (isSgPntrArrRefExp(sgexp) != NULL ||
+             isSgPointerDerefExp(sgexp) != NULL) {
+    // Built-in subscripts/dereferences are not calls. Syntax-lowered overloaded
+    // operators are handled through their preserved semantic call above.
   } else {
     std::cerr << "Cannot determine Properties for " << sgexp->class_name()
               << std::endl;
@@ -1801,6 +1828,22 @@ void CallTargetSet::getExpressionsForDefinition(
       }
     }
   }
+
+  VariantVector vv3(V_SgPntrArrRefExp);
+  Rose_STL_Container<SgNode *> subscriptCandidates =
+      NodeQuery::queryMemoryPool(vv3);
+  for (SgNode *subscriptCandidate : subscriptCandidates) {
+    SgPntrArrRefExp *subscriptExp = isSgPntrArrRefExp(subscriptCandidate);
+    Rose_STL_Container<SgFunctionDefinition *> candidateDefs;
+    CallTargetSet::getDefinitionsForExpression(subscriptExp, classHierarchy,
+                                               candidateDefs);
+    for (SgFunctionDefinition *candidateDef : candidateDefs) {
+      if (candidateDef == targetDef) {
+        exps.push_back(subscriptExp);
+        break;
+      }
+    }
+  }
 }
 
 FunctionData::FunctionData(SgFunctionDeclaration *inputFunctionDeclaration,
@@ -1845,6 +1888,13 @@ FunctionData::FunctionData(SgFunctionDeclaration *inputFunctionDeclaration,
         NodeQuery::querySubTree(defDecl, V_SgConstructorInitializer);
     for (SgNode *ctorInit : ctorInitList) {
       CallTargetSet::getPropertiesForExpression(isSgExpression(ctorInit),
+                                                classHierarchy, functionList);
+    }
+
+    Rose_STL_Container<SgNode *> subscriptList =
+        NodeQuery::querySubTree(defDecl, V_SgPntrArrRefExp);
+    for (SgNode *subscript : subscriptList) {
+      CallTargetSet::getPropertiesForExpression(isSgExpression(subscript),
                                                 classHierarchy, functionList);
     }
   }

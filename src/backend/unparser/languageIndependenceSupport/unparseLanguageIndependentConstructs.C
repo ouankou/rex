@@ -1240,10 +1240,11 @@ bool UnparseLanguageIndependentConstructs::canBeUnparsedFromTokenStream(
 
 #define DEBUG_CAN_BE_UNPARSED 0
 
-  // Token-stream unparsing expects statements to be owned by a scope (or a
-  // function definition with a declaration-owned scope). Skip other cases
-  // to avoid invalid scope assumptions during trailing token handling.
+  // Token-stream unparsing expects statements to be owned by a scope, or by a
+  // function definition in the case of a function body basic block. Skip other
+  // cases to avoid invalid scope assumptions during trailing token handling.
   if (isSgScopeStatement(stmt->get_parent()) == NULL &&
+      isSgFunctionDefinition(stmt->get_parent()) == NULL &&
       isSgGlobal(stmt) == NULL && isSgFunctionDefinition(stmt) == NULL) {
     return false;
   }
@@ -3102,8 +3103,48 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         if (unparseViaTokenStream == true && canUseTokenStream == false) {
           unparseViaTokenStream = false;
         }
+        auto node_has_transformation = [](SgNode *node) -> bool {
+          SgLocatedNode *located = isSgLocatedNode(node);
+          return located != NULL && (located->isTransformation() ||
+                                     located->get_containsTransformation());
+        };
+        auto declaration_requires_scope_ast_fallback =
+            [&](SgDeclarationStatement *decl) -> bool {
+          if (decl == NULL) {
+            return false;
+          }
+
+          if (SgFunctionDeclaration *function_decl =
+                  isSgFunctionDeclaration(decl)) {
+            if (function_decl->isTransformation()) {
+              return true;
+            }
+
+            if (node_has_transformation(function_decl->get_parameterList())) {
+              return true;
+            }
+
+            // Function bodies already participate in the frontier map through
+            // their statement subtrees. Letting a body-local transformation
+            // poison the surrounding declaration scope forces unrelated
+            // declarations, and the function's own preserved signature tokens,
+            // back onto AST unparsing.
+            if (SgFunctionDefinition *definition =
+                    function_decl->get_definition()) {
+              if (node_has_transformation(definition->get_body())) {
+                return false;
+              }
+            }
+          }
+
+          if (decl->isTransformation() || decl->get_containsTransformation()) {
+            return true;
+          }
+
+          return false;
+        };
         auto scope_has_transformed_declarations =
-            [](SgScopeStatement *scope) -> bool {
+            [&](SgScopeStatement *scope) -> bool {
           if (scope == NULL) {
             return false;
           }
@@ -3130,8 +3171,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
             if (decl == NULL) {
               continue;
             }
-            if (decl->isTransformation() ||
-                decl->get_containsTransformation()) {
+            if (declaration_requires_scope_ast_fallback(decl)) {
               return true;
             }
             if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
@@ -3161,6 +3201,35 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           }
 
           return NULL;
+        };
+        auto frontier_requires_partial_token_unparse =
+            [&](SgStatement *candidate) -> bool {
+          if (candidate == NULL || candidate->isTransformation()) {
+            return false;
+          }
+
+          std::map<SgStatement *, FrontierNode *>::iterator frontier_it =
+              frontier_nodes.find(candidate);
+          if (frontier_it == frontier_nodes.end() ||
+              frontier_it->second == NULL ||
+              frontier_it->second->unparseFromTheAST == false) {
+            return false;
+          }
+
+          for (const auto &entry : frontier_nodes) {
+            SgStatement *descendant = entry.first;
+            FrontierNode *frontier = entry.second;
+            if (descendant == NULL || descendant == candidate ||
+                frontier == NULL) {
+              continue;
+            }
+
+            if (SageInterface::isAncestor(candidate, descendant)) {
+              return true;
+            }
+          }
+
+          return false;
         };
         if (unparseViaTokenStream == true) {
           if (enclosing_transformed_declaration_scope(stmt) != NULL) {
@@ -3338,7 +3407,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
                  "stmt->get_containsTransformation() = %s \n",
                  stmt->get_containsTransformation() ? "true" : "false");
 #endif
-          if (stmt->get_containsTransformation() == true) {
+          if (stmt->get_containsTransformation() == true ||
+              frontier_requires_partial_token_unparse(stmt) == true) {
             // This should not BE a transformation (else it needs to be unparsed
             // using the AST).
             ROSE_ASSERT(stmt->isTransformation() == false);

@@ -5025,6 +5025,20 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
       func_symbol = nondef_symbol;
     }
   }
+  if (func_symbol != NULL && first_nondefining_declaration != NULL) {
+    // Preserve the caller-selected declaration chain when it already carries a
+    // symbol. Frontends can intentionally rehome or synthesize the canonical
+    // first nondefining declaration in the target scope (for example, hidden
+    // friend free-function definitions). A fresh lookup may still hit another
+    // same-signature declaration, which would incorrectly rewrite the defining
+    // declaration to that unrelated chain.
+    SgSymbol *symbol_from_first_nondefining_function =
+        first_nondefining_declaration->get_symbol_from_symbol_table();
+    if (symbol_from_first_nondefining_function != NULL &&
+        func_symbol != symbol_from_first_nondefining_function) {
+      func_symbol = symbol_from_first_nondefining_function;
+    }
+  }
 
   if (func_symbol == NULL) {
     printf("Could not find an existing symbol for this function! \n");

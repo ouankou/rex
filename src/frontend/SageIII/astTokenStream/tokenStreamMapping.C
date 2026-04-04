@@ -53,6 +53,7 @@ generated
 #include "Rose/StringUtility/FileUtility.h"
 
 #include "general_token_defs.h"
+#include "rose_test_output_path.h"
 
 // DQ (10/9/2013): Required mods:
 //    1) The edges of subtress need to be trimmed back to avoid overlap.
@@ -989,6 +990,7 @@ void Graph_TokenMappingTraversal::graph_ast_and_token_stream(
 
   string dot_header = filename;
   filename += ".dot";
+  filename = Rose::TestOutput::resolvePath(filename);
 
   printf("In graph_ast_and_token_stream(): filename = %s \n", filename.c_str());
 
@@ -7350,6 +7352,7 @@ void outputSourceCodeFromTokenStream_globalScope(
   string dot_header =
       StringUtility::stripPathFromFileName(sourceFile->getFileName());
   // filename += ".c";
+  filename = Rose::TestOutput::resolvePath(filename);
 
   // Open file...(file is declared in the legacy frontend graph namespace).
   std::ofstream file;
