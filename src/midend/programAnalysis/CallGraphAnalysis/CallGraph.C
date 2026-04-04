@@ -1868,10 +1868,17 @@ public:
     switch (node->variantT()) {
     case V_SgFunctionCallExp:
     case V_SgConstructorInitializer:
+      if (SgExpression *exp = isSgExpression(node)) {
+        indexDefinitionExpression(exp, classHierarchy_, definitionIndex_);
+      }
+      break;
+
     case V_SgPntrArrRefExp:
     case V_SgPointerDerefExp:
       if (SgExpression *exp = isSgExpression(node)) {
-        indexDefinitionExpression(exp, classHierarchy_, definitionIndex_);
+        if (semanticCallExpressionForLoweredOperatorSyntax(exp) != NULL) {
+          indexDefinitionExpression(exp, classHierarchy_, definitionIndex_);
+        }
       }
       break;
 

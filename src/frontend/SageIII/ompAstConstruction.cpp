@@ -2151,7 +2151,7 @@ void initializeGeneratedOpenMPStatement(SgStatement *statement) {
       located->get_file_info()->setOutputInCodeGeneration();
     }
     located->setOutputInCodeGeneration();
-    located->set_isModified(true);
+    located->markAsModified();
   }
 
   if (SgOmpBodyStatement *omp_body = isSgOmpBodyStatement(statement)) {
@@ -2165,7 +2165,7 @@ void initializeGeneratedOpenMPStatement(SgStatement *statement) {
     }
   }
 
-  statement->set_isModified(true);
+  statement->markAsModified();
 }
 
 static void markOpenMPSourceFileAsModified(SgSourceFile *source_file) {
@@ -2189,7 +2189,7 @@ static void markOpenMPSourceFileAsModified(SgSourceFile *source_file) {
   }
 
   global_scope->setOutputInCodeGeneration();
-  global_scope->set_isModified(true);
+  global_scope->markAsModified();
 }
 
 static void backfillOpenMPWrapperStartFromBody(SgStatement *statement) {

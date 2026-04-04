@@ -24,6 +24,11 @@ struct MisplacedPreprocessingInfoMove {
       PreprocessingInfo::inside;
 };
 
+struct LocatedNodeSourceOrder {
+  std::vector<SgLocatedNode *> located_nodes;
+  std::map<SgLocatedNode *, size_t> node_order;
+};
+
 static int getPhysicalStartLine(SgLocatedNode *node, int source_file_id) {
   if (node == nullptr || node->get_startOfConstruct() == nullptr) {
     return -1;
@@ -337,6 +342,34 @@ static Sg_File_Info *getEffectiveEndInfo(SgLocatedNode *node) {
     return end;
   }
 
+  if (Sg_File_Info *info = node->get_file_info();
+      info != nullptr && info->get_line() > 0) {
+    return info;
+  }
+
+  return node->get_startOfConstruct();
+}
+
+static Sg_File_Info *getPreciseEndInfo(SgLocatedNode *node) {
+  if (node == nullptr) {
+    return nullptr;
+  }
+
+  if (Sg_File_Info *end = node->get_endOfConstruct();
+      hasUsableSourceLocation(end)) {
+    return end;
+  }
+
+  if (Sg_File_Info *info = node->get_file_info();
+      hasUsableSourceLocation(info)) {
+    Sg_File_Info *start = node->get_startOfConstruct();
+    if (!hasUsableSourceLocation(start) ||
+        info->get_filenameString() != start->get_filenameString() ||
+        compareSourceLocation(info, start) != 0) {
+      return info;
+    }
+  }
+
   return nullptr;
 }
 
@@ -413,6 +446,20 @@ buildLocatedNodeOrder(const std::vector<SgLocatedNode *> &located_nodes,
   }
 }
 
+static void buildLocatedNodeSourceOrder(SgSourceFile *source_file,
+                                        LocatedNodeSourceOrder &source_order) {
+  source_order.located_nodes.clear();
+  source_order.node_order.clear();
+
+  if (source_file == nullptr || source_file->get_globalScope() == nullptr ||
+      source_file->get_file_info() == nullptr) {
+    return;
+  }
+
+  collectSourceLocatedNodes(source_file, source_order.located_nodes);
+  buildLocatedNodeOrder(source_order.located_nodes, source_order.node_order);
+}
+
 static size_t
 getLocatedNodeOrder(const std::map<SgLocatedNode *, size_t> &node_order,
                     SgLocatedNode *node) {
@@ -477,17 +524,15 @@ static SgInitializedName *findFirstFollowingEnumeratorInMainFile(
   return nullptr;
 }
 
-static void
-normalizeLeadingBasicBlockPreprocessingInfo(SgSourceFile *source_file) {
-  if (source_file == nullptr || source_file->get_globalScope() == nullptr ||
-      source_file->get_file_info() == nullptr) {
+static void normalizeLeadingBasicBlockPreprocessingInfo(
+    const LocatedNodeSourceOrder &source_order) {
+  if (source_order.located_nodes.empty()) {
     return;
   }
 
-  std::vector<SgLocatedNode *> located_nodes;
-  collectSourceLocatedNodes(source_file, located_nodes);
-  std::map<SgLocatedNode *, size_t> node_order;
-  buildLocatedNodeOrder(located_nodes, node_order);
+  const std::vector<SgLocatedNode *> &located_nodes =
+      source_order.located_nodes;
+  const std::map<SgLocatedNode *, size_t> &node_order = source_order.node_order;
 
   std::vector<MisplacedPreprocessingInfoMove> moves;
   moves.reserve(16);
@@ -563,17 +608,15 @@ normalizeLeadingBasicBlockPreprocessingInfo(SgSourceFile *source_file) {
   }
 }
 
-static void
-normalizeEnumEnumeratorPreprocessingInfo(SgSourceFile *source_file) {
-  if (source_file == nullptr || source_file->get_globalScope() == nullptr ||
-      source_file->get_file_info() == nullptr) {
+static void normalizeEnumEnumeratorPreprocessingInfo(
+    const LocatedNodeSourceOrder &source_order) {
+  if (source_order.located_nodes.empty()) {
     return;
   }
 
-  std::vector<SgLocatedNode *> located_nodes;
-  collectSourceLocatedNodes(source_file, located_nodes);
-  std::map<SgLocatedNode *, size_t> node_order;
-  buildLocatedNodeOrder(located_nodes, node_order);
+  const std::vector<SgLocatedNode *> &located_nodes =
+      source_order.located_nodes;
+  const std::map<SgLocatedNode *, size_t> &node_order = source_order.node_order;
 
   std::vector<MisplacedPreprocessingInfoMove> moves;
   moves.reserve(16);
@@ -654,16 +697,15 @@ normalizeEnumEnumeratorPreprocessingInfo(SgSourceFile *source_file) {
   }
 }
 
-static void normalizeAsmStatementPreprocessingInfo(SgSourceFile *source_file) {
-  if (source_file == nullptr || source_file->get_globalScope() == nullptr ||
-      source_file->get_file_info() == nullptr) {
+static void normalizeAsmStatementPreprocessingInfo(
+    const LocatedNodeSourceOrder &source_order) {
+  if (source_order.located_nodes.empty()) {
     return;
   }
 
-  std::vector<SgLocatedNode *> located_nodes;
-  collectSourceLocatedNodes(source_file, located_nodes);
-  std::map<SgLocatedNode *, size_t> node_order;
-  buildLocatedNodeOrder(located_nodes, node_order);
+  const std::vector<SgLocatedNode *> &located_nodes =
+      source_order.located_nodes;
+  const std::map<SgLocatedNode *, size_t> &node_order = source_order.node_order;
 
   std::vector<MisplacedPreprocessingInfoMove> moves;
   moves.reserve(16);
@@ -739,17 +781,15 @@ static void normalizeAsmStatementPreprocessingInfo(SgSourceFile *source_file) {
   }
 }
 
-static void
-normalizeMisplacedBracedScopePreprocessingInfo(SgSourceFile *source_file) {
-  if (source_file == nullptr || source_file->get_globalScope() == nullptr ||
-      source_file->get_file_info() == nullptr) {
+static void normalizeMisplacedBracedScopePreprocessingInfo(
+    const LocatedNodeSourceOrder &source_order) {
+  if (source_order.located_nodes.empty()) {
     return;
   }
 
-  std::vector<SgLocatedNode *> located_nodes;
-  collectSourceLocatedNodes(source_file, located_nodes);
-  std::map<SgLocatedNode *, size_t> node_order;
-  buildLocatedNodeOrder(located_nodes, node_order);
+  const std::vector<SgLocatedNode *> &located_nodes =
+      source_order.located_nodes;
+  const std::map<SgLocatedNode *, size_t> &node_order = source_order.node_order;
 
   std::vector<MisplacedPreprocessingInfoMove> moves;
   moves.reserve(16);
@@ -837,17 +877,15 @@ normalizeMisplacedBracedScopePreprocessingInfo(SgSourceFile *source_file) {
   }
 }
 
-static void
-normalizeInlineFunctionConditionalPreprocessingInfo(SgSourceFile *source_file) {
-  if (source_file == nullptr || source_file->get_globalScope() == nullptr ||
-      source_file->get_file_info() == nullptr) {
+static void normalizeInlineFunctionConditionalPreprocessingInfo(
+    const LocatedNodeSourceOrder &source_order) {
+  if (source_order.located_nodes.empty()) {
     return;
   }
 
-  std::vector<SgLocatedNode *> located_nodes;
-  collectSourceLocatedNodes(source_file, located_nodes);
-  std::map<SgLocatedNode *, size_t> node_order;
-  buildLocatedNodeOrder(located_nodes, node_order);
+  const std::vector<SgLocatedNode *> &located_nodes =
+      source_order.located_nodes;
+  const std::map<SgLocatedNode *, size_t> &node_order = source_order.node_order;
 
   struct FunctionAnchor {
     SgFunctionDeclaration *decl = nullptr;
@@ -890,9 +928,9 @@ normalizeInlineFunctionConditionalPreprocessingInfo(SgSourceFile *source_file) {
           }
 
           Sg_File_Info *decl_start = getEffectiveStartInfo(decl_node);
-          Sg_File_Info *decl_end = getEffectiveEndInfo(decl_node);
+          Sg_File_Info *decl_end = getPreciseEndInfo(decl_node);
           Sg_File_Info *body_start = getEffectiveStartInfo(body);
-          Sg_File_Info *body_end = getEffectiveEndInfo(body);
+          Sg_File_Info *body_end = getPreciseEndInfo(body);
           if (decl_start == nullptr || decl_end == nullptr ||
               body_start == nullptr || body_end == nullptr ||
               decl_start->get_line() <= 0 || decl_end->get_line() <= 0 ||
@@ -1095,7 +1133,7 @@ static bool getDirectChildDeclarationNeighbors(SgLocatedNode *owner,
   }
 
   for (size_t i = target_index; i > 0; --i) {
-    previous_end = getEffectiveEndInfo(isSgLocatedNode((*declarations)[i - 1]));
+    previous_end = getPreciseEndInfo(isSgLocatedNode((*declarations)[i - 1]));
     if (hasUsableSourceLocation(previous_end)) {
       break;
     }
@@ -1114,15 +1152,14 @@ static bool getDirectChildDeclarationNeighbors(SgLocatedNode *owner,
 }
 
 static void normalizeAstUnparsedTemplateFunctionPreprocessingInfo(
-    SgSourceFile *source_file) {
-  if (source_file == nullptr || source_file->get_globalScope() == nullptr) {
+    const LocatedNodeSourceOrder &source_order) {
+  if (source_order.located_nodes.empty()) {
     return;
   }
 
-  std::vector<SgLocatedNode *> located_nodes;
-  collectSourceLocatedNodes(source_file, located_nodes);
-  std::map<SgLocatedNode *, size_t> node_order;
-  buildLocatedNodeOrder(located_nodes, node_order);
+  const std::vector<SgLocatedNode *> &located_nodes =
+      source_order.located_nodes;
+  const std::map<SgLocatedNode *, size_t> &node_order = source_order.node_order;
 
   struct TemplatePreprocessingMove {
     AttachedPreprocessingInfoType *source_list = nullptr;
@@ -1160,9 +1197,9 @@ static void normalizeAstUnparsedTemplateFunctionPreprocessingInfo(
 
     Sg_File_Info *decl_start = getEffectiveStartInfo(decl);
     Sg_File_Info *body_start = getEffectiveStartInfo(body);
-    Sg_File_Info *body_end = getEffectiveEndInfo(body);
+    Sg_File_Info *body_end = getPreciseEndInfo(body);
     Sg_File_Info *owner_start = getEffectiveStartInfo(owner);
-    Sg_File_Info *owner_end = getEffectiveEndInfo(owner);
+    Sg_File_Info *owner_end = getPreciseEndInfo(owner);
     if (!hasUsableSourceLocation(decl_start) ||
         !hasUsableSourceLocation(body_start) ||
         !hasUsableSourceLocation(body_end) ||
@@ -1540,12 +1577,14 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr,
   // DQ (8/26/2020): Remove the redundent include files for initializers.
   fixupInitializersUsingIncludeFiles(project);
 
-  normalizeMisplacedBracedScopePreprocessingInfo(sageFilePtr);
-  normalizeLeadingBasicBlockPreprocessingInfo(sageFilePtr);
-  normalizeEnumEnumeratorPreprocessingInfo(sageFilePtr);
-  normalizeAsmStatementPreprocessingInfo(sageFilePtr);
-  normalizeAstUnparsedTemplateFunctionPreprocessingInfo(sageFilePtr);
-  normalizeInlineFunctionConditionalPreprocessingInfo(sageFilePtr);
+  LocatedNodeSourceOrder source_order;
+  buildLocatedNodeSourceOrder(sageFilePtr, source_order);
+  normalizeMisplacedBracedScopePreprocessingInfo(source_order);
+  normalizeLeadingBasicBlockPreprocessingInfo(source_order);
+  normalizeEnumEnumeratorPreprocessingInfo(source_order);
+  normalizeAsmStatementPreprocessingInfo(source_order);
+  normalizeAstUnparsedTemplateFunctionPreprocessingInfo(source_order);
+  normalizeInlineFunctionConditionalPreprocessingInfo(source_order);
 
   // DQ (11/18/2019): Set the flag that indicates that this SgSourceFile has had
   // its CPP directives and comments added.

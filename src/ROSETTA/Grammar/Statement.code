@@ -4630,8 +4630,8 @@ void SgScopeStatement::set_type_elaboration_list(
          "know if this is called! \n");
   ROSE_ASSERT(false);
 
-  set_isModified(true);
   p_type_elaboration_list = type_elaboration_list;
+  markAsModified();
 }
 
 // DQ (6/5/2007): Build special operator to return by reference
@@ -4650,8 +4650,8 @@ void SgScopeStatement::set_hidden_type_list(
          "know if this is called! \n");
   ROSE_ASSERT(false);
 
-  set_isModified(true);
   p_hidden_type_list = hidden_type_list;
+  markAsModified();
 }
 
 // DQ (6/5/2007): Build special operator to return by reference
@@ -4670,8 +4670,8 @@ void SgScopeStatement::set_hidden_declaration_list(
          "know if this is called! \n");
   ROSE_ASSERT(false);
 
-  set_isModified(true);
   p_hidden_declaration_list = hidden_declaration_list;
+  markAsModified();
 }
 
 std::ostream &operator<<(std::ostream &os, const std::set<SgSymbol *> &l) {
@@ -4790,8 +4790,8 @@ SgSymbolTable *SgScopeStatement::get_symbol_table() const {
 // public member function (see comment above).
 void SgScopeStatement::set_symbol_table(SgSymbolTable *symbol_table) {
   ROSE_ASSERT(this != NULL);
-  set_isModified(true);
   p_symbol_table = symbol_table;
+  markAsModified();
 }
 
 #define DEBUG__SGSCOPESTATEMENT__INSERT_SYMBOL 0
@@ -9063,7 +9063,6 @@ void SgDeclarationStatement::set_definingDeclaration(
   // so that we could implement more testing.
 
   ROSE_ASSERT(this != NULL);
-  set_isModified(true);
 
 #if DEBUG_SAGE_ACCESS_FUNCTIONS
   if (p_definingDeclaration != NULL && definingDeclaration != NULL &&
@@ -9081,6 +9080,7 @@ void SgDeclarationStatement::set_definingDeclaration(
 #endif
   p_definingDeclaration = definingDeclaration;
   canonicalizeClassTypeForDeclarationChain(this, NULL);
+  markAsModified();
 
   // DQ (5/21/2013): Added debugging code.
   if (definingDeclaration != NULL) {
@@ -9236,7 +9236,6 @@ void SgDeclarationStatement::set_firstNondefiningDeclaration(
   // DQ (1/26/2013): Added non-automatically generated versions of this function
   // so that we could implement more testing.
   ROSE_ASSERT(this != NULL);
-  set_isModified(true);
 
   SgDeclarationStatement *oldFirstNondefiningDeclaration =
       p_firstNondefiningDeclaration;
@@ -9259,6 +9258,7 @@ void SgDeclarationStatement::set_firstNondefiningDeclaration(
 #endif
   p_firstNondefiningDeclaration = firstNondefiningDeclaration;
   canonicalizeClassTypeForDeclarationChain(this, oldFirstNondefiningDeclaration);
+  markAsModified();
 
   // DQ (5/21/2013): Added debugging code.
   if (firstNondefiningDeclaration != NULL) {
@@ -11353,7 +11353,6 @@ SgMemberFunctionDeclaration::get_associatedClassDeclaration() const {
 void SgMemberFunctionDeclaration::set_associatedClassDeclaration(
     SgDeclarationStatement *associatedClassDeclaration) {
   assert(this != NULL);
-  set_isModified(true);
 
 #if DEBUG_SAGE_ACCESS_FUNCTIONS
   if (p_associatedClassDeclaration != NULL &&
@@ -11371,6 +11370,7 @@ void SgMemberFunctionDeclaration::set_associatedClassDeclaration(
   }
 #endif
   p_associatedClassDeclaration = associatedClassDeclaration;
+  markAsModified();
 }
 
 SgScopeStatement *SgMemberFunctionDeclaration::get_class_scope(void) const {

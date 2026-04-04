@@ -11330,10 +11330,8 @@ SgInitializedName::set_type(SgType *t)
    {
      assert(this != NULL);
 
-  // DQ (4/14/2015): Added call to set_isModified() function to record change to this IR node.
-     set_isModified(true);
-
      p_typeptr = t;
+     markAsModified();
    }
 
 SgInitializer*
@@ -11357,11 +11355,9 @@ SgInitializedName::set_initializer(SgInitializer* i)
 
      ASSERT_this();
 
-  // DQ (4/14/2015): Added call to set_isModified() function to record change to this IR node.
-     set_isModified(true);
-
      p_initptr        = i;
      p_is_initializer = 1;
+     markAsModified();
    }
 
 
@@ -11501,10 +11497,8 @@ SgInitializedName::set_definition(SgDeclarationStatement * def)
         }
 #endif
 
-  // DQ (4/14/2015): Added call to set_isModified() function to record change to this IR node.
-     set_isModified(true);
-
      set_declptr(def);
+     markAsModified();
    }
 
 bool
@@ -12204,7 +12198,7 @@ Sg_File_Info::operator= ( const Sg_File_Info & X )
      p_source_sequence_number = X.p_source_sequence_number;
 
   // Record that this source position information was updated.
-     set_isModified(true);
+     markAsModified();
 
      return *this;
    }
@@ -12714,11 +12708,11 @@ void
 Sg_File_Info::set_file_id( int file_id )
    {
      assert (this != NULL);
-     set_isModified(true);
 
      check_file_id("Sg_File_Info::set_file_id");
 
      p_file_id = file_id;
+     markAsModified();
    }
 
 
@@ -12865,9 +12859,6 @@ Sg_File_Info::set_physical_file_id( int physical_file_id )
    {
      assert (this != NULL);
 
-     set_isModified(true);
-
-
      p_physical_file_id = physical_file_id;
 
   // Make sure this is a previously handled file.
@@ -12875,6 +12866,8 @@ Sg_File_Info::set_physical_file_id( int physical_file_id )
         {
           ROSE_ASSERT(p_fileidtoname_map.find(p_physical_file_id) != p_fileidtoname_map.end());
         }
+
+     markAsModified();
    }
 
 
@@ -12882,8 +12875,6 @@ void
 Sg_File_Info::set_physical_source_position_to_match_logical_source_position()
    {
      assert (this != NULL);
-
-     set_isModified(true);
 
      p_physical_file_id = p_file_id;
      p_physical_line    = p_line;
@@ -12893,6 +12884,8 @@ Sg_File_Info::set_physical_source_position_to_match_logical_source_position()
         {
           ROSE_ASSERT(p_fileidtoname_map.find(p_physical_file_id) != p_fileidtoname_map.end());
         }
+
+     markAsModified();
    }
 
 
@@ -15949,9 +15942,8 @@ void
 SgProject::set_fileList( SgFilePtrList & fileList )
    {
      ASSERT_this();
-     set_isModified(true);
-
      p_fileList_ptr->get_listOfFiles() = fileList;
+     markAsModified();
    }
 
 #endif
@@ -16872,9 +16864,8 @@ void
 SgProject::set_includePathList ( const SgStringList & includePathList )
    {
      assert (this != NULL);
-     set_isModified(true);
-
      p_includePathList = includePathList;
+     markAsModified();
    }
 
 
@@ -16896,9 +16887,8 @@ void
 SgProject::set_excludePathList ( const SgStringList & excludePathList )
    {
      assert (this != NULL);
-     set_isModified(true);
-
      p_excludePathList = excludePathList;
+     markAsModified();
    }
 
 const SgStringList &
@@ -16919,9 +16909,8 @@ void
 SgProject::set_includeFileList ( const SgStringList & includeFileList )
    {
      assert (this != NULL);
-     set_isModified(true);
-
      p_includeFileList = includeFileList;
+     markAsModified();
    }
 
 
@@ -16943,9 +16932,8 @@ void
 SgProject::set_excludeFileList ( const SgStringList & excludeFileList )
    {
      assert (this != NULL);
-     set_isModified(true);
-
      p_excludeFileList = excludeFileList;
+     markAsModified();
    }
 
 bool

@@ -1079,6 +1079,13 @@ public:
  */
 void set_isModified(bool isModified);
 
+/*! \brief Records that this node was mutated.
+
+    Unlike set_isModified(), this is the API for real AST mutations and
+   advances the global modification sequence on every call.
+ */
+void markAsModified();
+
 /*! \brief Many nodes can hide other AST nodes and we need to track when outer
    nodes contain modified nodes even if they are not themselves modified.
 
@@ -2041,11 +2048,19 @@ void SgNode::set_isModified(bool isModified) {
   // DQ (4/14/2015): Detect if this is called from a NULL pointer.
   ASSERT_this();
 
-  if (isModified) {
+  const bool became_modified = isModified && p_isModified == false;
+  p_isModified = isModified;
+
+  if (became_modified) {
     noteAstModification();
   }
+}
 
-  p_isModified = isModified;
+void SgNode::markAsModified() {
+  ASSERT_this();
+
+  p_isModified = true;
+  noteAstModification();
 }
 
 bool SgNode::get_isModified() const {
@@ -2061,11 +2076,13 @@ void SgNode::set_containsTransformation(bool containsTransformation) {
   // DQ (4/14/2015): Detect if this is called from a NULL pointer.
   ASSERT_this();
 
-  if (containsTransformation && p_containsTransformation == false) {
+  const bool became_transformed =
+      containsTransformation && p_containsTransformation == false;
+  p_containsTransformation = containsTransformation;
+
+  if (became_transformed) {
     noteAstModification();
   }
-
-  p_containsTransformation = containsTransformation;
 }
 
 // DQ (12/3/2014): Added support to recode when an AST subtree holds an AST node
@@ -2098,7 +2115,7 @@ void SgNode::set_isVisited(bool /*isVisited*/) {
          "this function (set_isVisited). \n");
   ASSERT_require(false);
 
-  set_isModified(true);
+  markAsModified();
 }
 
 //  ! Permits specification of parent node (connects the AST tree)

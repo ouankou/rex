@@ -2831,7 +2831,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     // tokens.
     sageFile.set_unparse_tokens(false);
     global_scope->setTransformation();
-    global_scope->set_isModified(true);
+    global_scope->markAsModified();
     if (Sg_File_Info *scope_info = global_scope->get_file_info()) {
       scope_info->setTransformation();
       scope_info->setOutputInCodeGeneration();

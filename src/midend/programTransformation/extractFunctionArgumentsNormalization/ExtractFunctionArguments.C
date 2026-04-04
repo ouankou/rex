@@ -302,10 +302,10 @@ void ExtractFunctionArguments::RewriteFunctionCallArguments(
       ROSE_ASSERT(initializer != NULL);
       SageInterface::setOperand(initializer, arg);
 
-      tempVarReference->set_isModified(true);
+      tempVarReference->markAsModified();
       if (SgStatement *enclosing_statement =
               SageInterface::getEnclosingStatement(tempVarReference)) {
-        enclosing_statement->set_isModified(true);
+        enclosing_statement->markAsModified();
       }
     } else {
       printf("In ExtractFunctionArguments::RewriteFunctionCallArguments(): "
