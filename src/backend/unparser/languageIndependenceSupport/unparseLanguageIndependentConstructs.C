@@ -3208,23 +3208,16 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
             return false;
           }
 
-          std::map<SgStatement *, FrontierNode *>::iterator frontier_it =
-              frontier_nodes.find(candidate);
-          if (frontier_it == frontier_nodes.end() ||
-              frontier_it->second == NULL ||
-              frontier_it->second->unparseFromTheAST == false) {
-            return false;
-          }
-
           for (const auto &entry : frontier_nodes) {
             SgStatement *descendant = entry.first;
             FrontierNode *frontier = entry.second;
-            if (descendant == NULL || descendant == candidate ||
-                frontier == NULL) {
+            if (descendant == NULL || frontier == NULL ||
+                frontier->unparseFromTheAST == false) {
               continue;
             }
 
-            if (SageInterface::isAncestor(candidate, descendant)) {
+            if (candidate == descendant ||
+                SageInterface::isAncestor(candidate, descendant)) {
               return true;
             }
           }

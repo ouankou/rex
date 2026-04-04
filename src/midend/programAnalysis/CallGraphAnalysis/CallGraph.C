@@ -1796,52 +1796,90 @@ void CallTargetSet::getDefinitionsForExpression(
   }
 }
 
+namespace {
+
+using DefinitionExpressionIndex =
+    std::map<SgFunctionDefinition *, Rose_STL_Container<SgExpression *>>;
+using ProjectDefinitionExpressionIndexCache =
+    std::map<SgProject *, DefinitionExpressionIndex>;
+
+static void
+indexDefinitionExpression(SgExpression *exp,
+                          ClassHierarchyWrapper *classHierarchy,
+                          DefinitionExpressionIndex &definitionIndex) {
+  ASSERT_not_null(exp);
+  ASSERT_not_null(classHierarchy);
+
+  Rose_STL_Container<SgFunctionDefinition *> candidateDefs;
+  CallTargetSet::getDefinitionsForExpression(exp, classHierarchy,
+                                             candidateDefs);
+
+  std::set<SgFunctionDefinition *> uniqueCandidateDefs;
+  for (SgFunctionDefinition *candidateDef : candidateDefs) {
+    if (candidateDef == NULL ||
+        !uniqueCandidateDefs.insert(candidateDef).second) {
+      continue;
+    }
+
+    definitionIndex[candidateDef].push_back(exp);
+  }
+}
+
+static DefinitionExpressionIndex &
+getDefinitionExpressionIndex(SgProject *project,
+                             ClassHierarchyWrapper *classHierarchy) {
+  ASSERT_not_null(project);
+  ASSERT_not_null(classHierarchy);
+
+  static ProjectDefinitionExpressionIndexCache cachedIndices;
+  std::pair<ProjectDefinitionExpressionIndexCache::iterator, bool> insertion =
+      cachedIndices.insert(
+          std::make_pair(project, DefinitionExpressionIndex()));
+  if (insertion.second == false) {
+    return insertion.first->second;
+  }
+
+  VariantVector callSiteVariants;
+  callSiteVariants.push_back(V_SgFunctionCallExp);
+  callSiteVariants.push_back(V_SgConstructorInitializer);
+  callSiteVariants.push_back(V_SgPntrArrRefExp);
+
+  Rose_STL_Container<SgNode *> callSites =
+      NodeQuery::querySubTree(project, callSiteVariants);
+  for (SgNode *callSite : callSites) {
+    SgExpression *exp = isSgExpression(callSite);
+    if (exp == NULL) {
+      continue;
+    }
+
+    indexDefinitionExpression(exp, classHierarchy, insertion.first->second);
+  }
+
+  return insertion.first->second;
+}
+
+} // namespace
+
 void CallTargetSet::getExpressionsForDefinition(
     SgFunctionDefinition *targetDef, ClassHierarchyWrapper *classHierarchy,
     Rose_STL_Container<SgExpression *> &exps) {
-  VariantVector vv(V_SgFunctionCallExp);
-  Rose_STL_Container<SgNode *> callCandidates = NodeQuery::queryMemoryPool(vv);
-  for (SgNode *callCandidate : callCandidates) {
-    SgFunctionCallExp *callexp = isSgFunctionCallExp(callCandidate);
-    Rose_STL_Container<SgFunctionDefinition *> candidateDefs;
-    CallTargetSet::getDefinitionsForExpression(callexp, classHierarchy,
-                                               candidateDefs);
-    for (SgFunctionDefinition *candidateDef : candidateDefs) {
-      if (candidateDef == targetDef) {
-        exps.push_back(callexp);
-        break;
-      }
-    }
-  }
-  VariantVector vv2(V_SgConstructorInitializer);
-  Rose_STL_Container<SgNode *> ctorCandidates = NodeQuery::queryMemoryPool(vv2);
-  for (SgNode *ctorCandidate : ctorCandidates) {
-    SgConstructorInitializer *ctorInit =
-        isSgConstructorInitializer(ctorCandidate);
-    Rose_STL_Container<SgFunctionDefinition *> candidateDefs;
-    CallTargetSet::getDefinitionsForExpression(ctorInit, classHierarchy,
-                                               candidateDefs);
-    for (SgFunctionDefinition *candidateDef : candidateDefs) {
-      if (candidateDef == targetDef) {
-        exps.push_back(ctorInit);
-        break;
-      }
-    }
+  ASSERT_not_null(targetDef);
+  ASSERT_not_null(classHierarchy);
+
+  SgProject *project = SageInterface::getProject(targetDef);
+  ASSERT_not_null(project);
+
+  DefinitionExpressionIndex &definitionIndex =
+      getDefinitionExpressionIndex(project, classHierarchy);
+  DefinitionExpressionIndex::const_iterator expressionIt =
+      definitionIndex.find(targetDef);
+  if (expressionIt == definitionIndex.end()) {
+    return;
   }
 
-  VariantVector vv3(V_SgPntrArrRefExp);
-  Rose_STL_Container<SgNode *> subscriptCandidates =
-      NodeQuery::queryMemoryPool(vv3);
-  for (SgNode *subscriptCandidate : subscriptCandidates) {
-    SgPntrArrRefExp *subscriptExp = isSgPntrArrRefExp(subscriptCandidate);
-    Rose_STL_Container<SgFunctionDefinition *> candidateDefs;
-    CallTargetSet::getDefinitionsForExpression(subscriptExp, classHierarchy,
-                                               candidateDefs);
-    for (SgFunctionDefinition *candidateDef : candidateDefs) {
-      if (candidateDef == targetDef) {
-        exps.push_back(subscriptExp);
-        break;
-      }
+  for (SgExpression *exp : expressionIt->second) {
+    if (exp != NULL) {
+      exps.push_back(exp);
     }
   }
 }
