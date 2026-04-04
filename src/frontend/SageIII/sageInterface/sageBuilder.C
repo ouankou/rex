@@ -5018,9 +5018,53 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
       scope->find_symbol_by_type_of_function<actualFunction>(
           nameWithTemplateArguments, func_type, templateParameterList,
           templateArgumentsList);
+  auto requireMatchingFunctionSymbol = [&](SgSymbol *symbol) -> SgSymbol * {
+    if (symbol == NULL) {
+      return NULL;
+    }
+
+    switch ((VariantT)actualFunction::static_variant) {
+    case V_SgFunctionDeclaration:
+    case V_SgProcedureHeaderStatement:
+    case V_SgTemplateInstantiationFunctionDecl: {
+      SgFunctionSymbol *typed_symbol = isSgFunctionSymbol(symbol);
+      ROSE_ASSERT(typed_symbol != NULL);
+      return typed_symbol;
+    }
+
+    case V_SgMemberFunctionDeclaration:
+    case V_SgTemplateInstantiationMemberFunctionDecl: {
+      SgMemberFunctionSymbol *typed_symbol = isSgMemberFunctionSymbol(symbol);
+      ROSE_ASSERT(typed_symbol != NULL);
+      return typed_symbol;
+    }
+
+    case V_SgTemplateFunctionDeclaration: {
+      SgTemplateFunctionSymbol *typed_symbol =
+          isSgTemplateFunctionSymbol(symbol);
+      ROSE_ASSERT(typed_symbol != NULL);
+      return typed_symbol;
+    }
+
+    case V_SgTemplateMemberFunctionDeclaration: {
+      SgTemplateMemberFunctionSymbol *typed_symbol =
+          isSgTemplateMemberFunctionSymbol(symbol);
+      ROSE_ASSERT(typed_symbol != NULL);
+      return typed_symbol;
+    }
+
+    default: {
+      printf("default reach in buildDefiningFunctionDeclaration_T(): "
+             "variantT(actualFunction::static_variant) = %d \n",
+             actualFunction::static_variant);
+      ROSE_ABORT();
+    }
+    }
+  };
+  func_symbol = requireMatchingFunctionSymbol(func_symbol);
   if (func_symbol == NULL && first_nondefining_declaration != NULL) {
-    SgSymbol *nondef_symbol =
-        first_nondefining_declaration->get_symbol_from_symbol_table();
+    SgSymbol *nondef_symbol = requireMatchingFunctionSymbol(
+        first_nondefining_declaration->get_symbol_from_symbol_table());
     if (nondef_symbol != NULL) {
       func_symbol = nondef_symbol;
     }
@@ -5033,7 +5077,8 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
     // same-signature declaration, which would incorrectly rewrite the defining
     // declaration to that unrelated chain.
     SgSymbol *symbol_from_first_nondefining_function =
-        first_nondefining_declaration->get_symbol_from_symbol_table();
+        requireMatchingFunctionSymbol(
+            first_nondefining_declaration->get_symbol_from_symbol_table());
     if (symbol_from_first_nondefining_function != NULL &&
         func_symbol != symbol_from_first_nondefining_function) {
       func_symbol = symbol_from_first_nondefining_function;
