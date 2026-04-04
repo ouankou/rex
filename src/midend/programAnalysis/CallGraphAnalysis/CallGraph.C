@@ -1851,6 +1851,39 @@ indexDefinitionExpression(SgExpression *exp,
   }
 }
 
+class DefinitionExpressionIndexBuilder : public AstSimpleProcessing {
+public:
+  DefinitionExpressionIndexBuilder(ClassHierarchyWrapper *classHierarchy,
+                                   DefinitionExpressionIndex &definitionIndex)
+      : classHierarchy_(classHierarchy), definitionIndex_(definitionIndex) {
+    ASSERT_not_null(classHierarchy_);
+  }
+
+  void visit(SgNode *node) override {
+    if (node == NULL) {
+      return;
+    }
+
+    switch (node->variantT()) {
+    case V_SgFunctionCallExp:
+    case V_SgConstructorInitializer:
+    case V_SgPntrArrRefExp:
+    case V_SgPointerDerefExp:
+      if (SgExpression *exp = isSgExpression(node)) {
+        indexDefinitionExpression(exp, classHierarchy_, definitionIndex_);
+      }
+      break;
+
+    default:
+      break;
+    }
+  }
+
+private:
+  ClassHierarchyWrapper *classHierarchy_ = nullptr;
+  DefinitionExpressionIndex &definitionIndex_;
+};
+
 static void
 buildDefinitionExpressionIndex(SgProject *project,
                                ClassHierarchyWrapper *classHierarchy,
@@ -1860,22 +1893,8 @@ buildDefinitionExpressionIndex(SgProject *project,
 
   definitionIndex.clear();
 
-  VariantVector callSiteVariants;
-  callSiteVariants.push_back(V_SgFunctionCallExp);
-  callSiteVariants.push_back(V_SgConstructorInitializer);
-  callSiteVariants.push_back(V_SgPntrArrRefExp);
-  callSiteVariants.push_back(V_SgPointerDerefExp);
-
-  Rose_STL_Container<SgNode *> callSites =
-      NodeQuery::querySubTree(project, callSiteVariants);
-  for (SgNode *callSite : callSites) {
-    SgExpression *exp = isSgExpression(callSite);
-    if (exp == NULL) {
-      continue;
-    }
-
-    indexDefinitionExpression(exp, classHierarchy, definitionIndex);
-  }
+  DefinitionExpressionIndexBuilder builder(classHierarchy, definitionIndex);
+  builder.traverse(project, preorder);
 }
 
 static DefinitionExpressionIndexAttribute *

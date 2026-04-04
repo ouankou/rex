@@ -181,6 +181,34 @@ static void insertAttachedPreprocessingInfoInSourceOrder(
   attached->push_back(info);
 }
 
+template <class MoveContainer>
+static void detachMovedPreprocessingInfo(const MoveContainer &moves) {
+  std::map<AttachedPreprocessingInfoType *, std::set<PreprocessingInfo *>>
+      info_by_source_list;
+  for (const auto &move : moves) {
+    if (move.source_list == nullptr || move.info == nullptr) {
+      continue;
+    }
+
+    info_by_source_list[move.source_list].insert(move.info);
+  }
+
+  for (const auto &entry : info_by_source_list) {
+    AttachedPreprocessingInfoType *attached = entry.first;
+    ROSE_ASSERT(attached != nullptr);
+
+    const std::set<PreprocessingInfo *> &removed_info = entry.second;
+    for (AttachedPreprocessingInfoType::iterator it = attached->begin();
+         it != attached->end();) {
+      if (removed_info.find(*it) != removed_info.end()) {
+        it = attached->erase(it);
+      } else {
+        ++it;
+      }
+    }
+  }
+}
+
 static bool preprocessingInfoPrecedesNodeStart(const PreprocessingInfo *info,
                                                SgLocatedNode *node,
                                                int source_file_id) {
@@ -516,18 +544,7 @@ normalizeLeadingBasicBlockPreprocessingInfo(SgSourceFile *source_file) {
     return;
   }
 
-  for (const MisplacedPreprocessingInfoMove &move : moves) {
-    AttachedPreprocessingInfoType *attached = move.source_list;
-    ROSE_ASSERT(attached != nullptr);
-
-    for (AttachedPreprocessingInfoType::iterator it = attached->begin();
-         it != attached->end(); ++it) {
-      if (*it == move.info) {
-        attached->erase(it);
-        break;
-      }
-    }
-  }
+  detachMovedPreprocessingInfo(moves);
 
   std::stable_sort(moves.begin(), moves.end(),
                    [&](const MisplacedPreprocessingInfoMove &lhs,
@@ -618,18 +635,7 @@ normalizeEnumEnumeratorPreprocessingInfo(SgSourceFile *source_file) {
     return;
   }
 
-  for (const MisplacedPreprocessingInfoMove &move : moves) {
-    AttachedPreprocessingInfoType *attached = move.source_list;
-    ROSE_ASSERT(attached != nullptr);
-
-    for (AttachedPreprocessingInfoType::iterator it = attached->begin();
-         it != attached->end(); ++it) {
-      if (*it == move.info) {
-        attached->erase(it);
-        break;
-      }
-    }
-  }
+  detachMovedPreprocessingInfo(moves);
 
   std::stable_sort(moves.begin(), moves.end(),
                    [&](const MisplacedPreprocessingInfoMove &lhs,
@@ -714,18 +720,7 @@ static void normalizeAsmStatementPreprocessingInfo(SgSourceFile *source_file) {
     return;
   }
 
-  for (const MisplacedPreprocessingInfoMove &move : moves) {
-    AttachedPreprocessingInfoType *attached = move.source_list;
-    ROSE_ASSERT(attached != nullptr);
-
-    for (AttachedPreprocessingInfoType::iterator it = attached->begin();
-         it != attached->end(); ++it) {
-      if (*it == move.info) {
-        attached->erase(it);
-        break;
-      }
-    }
-  }
+  detachMovedPreprocessingInfo(moves);
 
   std::stable_sort(moves.begin(), moves.end(),
                    [&](const MisplacedPreprocessingInfoMove &lhs,
@@ -823,18 +818,7 @@ normalizeMisplacedBracedScopePreprocessingInfo(SgSourceFile *source_file) {
     return;
   }
 
-  for (const MisplacedPreprocessingInfoMove &move : moves) {
-    AttachedPreprocessingInfoType *attached = move.source_list;
-    ROSE_ASSERT(attached != nullptr);
-
-    for (AttachedPreprocessingInfoType::iterator it = attached->begin();
-         it != attached->end(); ++it) {
-      if (*it == move.info) {
-        attached->erase(it);
-        break;
-      }
-    }
-  }
+  detachMovedPreprocessingInfo(moves);
 
   std::stable_sort(moves.begin(), moves.end(),
                    [&](const MisplacedPreprocessingInfoMove &lhs,
@@ -1049,18 +1033,7 @@ normalizeInlineFunctionConditionalPreprocessingInfo(SgSourceFile *source_file) {
     return;
   }
 
-  for (const FunctionConditionalMove &move : moves) {
-    AttachedPreprocessingInfoType *attached = move.source_list;
-    ROSE_ASSERT(attached != nullptr);
-
-    for (AttachedPreprocessingInfoType::iterator it = attached->begin();
-         it != attached->end(); ++it) {
-      if (*it == move.info) {
-        attached->erase(it);
-        break;
-      }
-    }
-  }
+  detachMovedPreprocessingInfo(moves);
 
   std::stable_sort(moves.begin(), moves.end(),
                    [&](const FunctionConditionalMove &lhs,
@@ -1336,18 +1309,7 @@ static void normalizeAstUnparsedTemplateFunctionPreprocessingInfo(
     return;
   }
 
-  for (const TemplatePreprocessingMove &move : moves) {
-    AttachedPreprocessingInfoType *attached = move.source_list;
-    ROSE_ASSERT(attached != nullptr);
-
-    for (AttachedPreprocessingInfoType::iterator it = attached->begin();
-         it != attached->end(); ++it) {
-      if (*it == move.info) {
-        attached->erase(it);
-        break;
-      }
-    }
-  }
+  detachMovedPreprocessingInfo(moves);
 
   std::stable_sort(moves.begin(), moves.end(),
                    [&](const TemplatePreprocessingMove &lhs,
