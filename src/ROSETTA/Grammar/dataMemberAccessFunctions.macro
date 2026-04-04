@@ -12,9 +12,9 @@ void
 $CLASSNAME::set_$DATA($DATA_TYPE $DATA)
    {
      ASSERT_this();
-     set_isModified(true);
      $TEST_DATA_POINTER
      p_$DATA = $DATA;
+     markAsModified();
    }
 
 // *** DATA ACCESS FUNCTION SECTION ENDS HERE ***

@@ -1356,7 +1356,7 @@ int SageInterface::set_name(SgInitializedName *initializedNameNode,
   // should be unparsed.
   SgStatement *enclosingStatement = getEnclosingStatement(initializedNameNode);
   ROSE_ASSERT(enclosingStatement != NULL);
-  enclosingStatement->set_isModified(true);
+  enclosingStatement->markAsModified();
   enclosingStatement->setTransformation();
 
   // Invalidate the p_iterator, p_no_name and p_name data members in the Symbol
@@ -1384,7 +1384,7 @@ int SageInterface::set_name(SgInitializedName *initializedNameNode,
                "varRefExp = %p to symbol associated_symbol = %p \n",
                varRefExp, variableSymbol);
 #endif
-        varRefExp->set_isModified(true);
+        varRefExp->markAsModified();
         varRefExp->setTransformation();
         // DQ (5/2/2021): The traversal over the file will identify the nesting
         // of and transformations in outer (enclosing) IR nodes. DQ (5/1/2021):

@@ -685,7 +685,7 @@ insertFriendDecl(const SgFunctionDeclaration *func,
               matchingClassDefinition->get_members().insert(i2, friendFunction);
 
               // Also mark the class definition as transformed.
-              matchingClassDefinition->set_isModified(true);
+              matchingClassDefinition->markAsModified();
               ROSE_ASSERT(orig_count + 1 ==
                           matchingClassDefinition->get_members().size());
               friendFunction->set_parent(matchingClassDefinition);
@@ -694,7 +694,7 @@ insertFriendDecl(const SgFunctionDeclaration *func,
                   alternativeSourceFile->getFileName().c_str());
               friendFunction->get_endOfConstruct()->set_physical_filename(
                   alternativeSourceFile->getFileName().c_str());
-              friendFunction->set_isModified(true);
+              friendFunction->markAsModified();
               if (enable_debug) {
                 cout << "after insertion, checking the matching class "
                         "definition for the result,  members size="
@@ -752,8 +752,8 @@ insertFriendDecl(const SgFunctionDeclaration *func,
     // detected as something to trigger the output of the header file when the
     // class declaration appears in a header file. Maybe the insert function
     // should do this?
-    friend_proto->set_isModified(true);
-    cls_def->set_isModified(true);
+    friend_proto->markAsModified();
+    cls_def->markAsModified();
   }
 
   //  printf ("In insertFriendDecl(): Returning SgFunctionDeclaration prototype

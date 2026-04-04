@@ -10,6 +10,7 @@
 #include "sageGeneric.h"
 
 #include <err.h>
+#include <mutex>
 
 using namespace std;
 using namespace Rose;
@@ -1717,17 +1718,44 @@ void getPropertiesForSgFunctionCallExp(
 // function pointers and virtual functions, append the set of declarations
 // to functionList.
 
+static SgExpression *
+semanticCallExpressionForLoweredOperatorSyntax(SgExpression *expr) {
+  if (expr == NULL) {
+    return NULL;
+  }
+
+  SgExpression *original = expr->get_originalExpressionTree();
+  if (original == NULL || original == expr) {
+    return NULL;
+  }
+
+  if (isSgFunctionCallExp(original) != NULL ||
+      isSgConstructorInitializer(original) != NULL) {
+    return original;
+  }
+
+  return NULL;
+}
+
 void CallTargetSet::getPropertiesForExpression(
     SgExpression *sgexp, ClassHierarchyWrapper *classHierarchy,
     Rose_STL_Container<SgFunctionDeclaration *> &functionList,
     bool includePureVirtualFunc) {
-  if (SgFunctionCallExp *fncall = isSgFunctionCallExp(sgexp)) {
+  if (SgExpression *semantic_call =
+          semanticCallExpressionForLoweredOperatorSyntax(sgexp)) {
+    getPropertiesForExpression(semantic_call, classHierarchy, functionList,
+                               includePureVirtualFunc);
+  } else if (SgFunctionCallExp *fncall = isSgFunctionCallExp(sgexp)) {
     getPropertiesForSgFunctionCallExp(fncall, classHierarchy, functionList,
                                       includePureVirtualFunc);
   } else if (SgConstructorInitializer *ctorini =
                  isSgConstructorInitializer(sgexp)) {
     getPropertiesForSgConstructorInitializer(ctorini, classHierarchy,
                                              functionList);
+  } else if (isSgPntrArrRefExp(sgexp) != NULL ||
+             isSgPointerDerefExp(sgexp) != NULL) {
+    // Built-in subscripts/dereferences are not calls. Syntax-lowered overloaded
+    // operators are handled through their preserved semantic call above.
   } else {
     std::cerr << "Cannot determine Properties for " << sgexp->class_name()
               << std::endl;
@@ -1769,38 +1797,181 @@ void CallTargetSet::getDefinitionsForExpression(
   }
 }
 
+namespace {
+
+using DefinitionExpressionIndex =
+    std::map<SgFunctionDefinition *, Rose_STL_Container<SgExpression *>>;
+
+std::mutex &definitionExpressionIndexInstallMutex() {
+  static std::mutex install_mutex;
+  return install_mutex;
+}
+
+const std::string &definitionExpressionIndexAttributeName() {
+  static const std::string attribute_name =
+      "rose.callGraph.definitionExpressionIndex";
+  return attribute_name;
+}
+
+class DefinitionExpressionIndexAttribute : public AstAttribute {
+public:
+  std::recursive_mutex mutex;
+  DefinitionExpressionIndex index;
+  bool initialized = false;
+  uint64_t astModificationSequence = 0;
+  const ClassHierarchyWrapper *classHierarchy = nullptr;
+
+  AstAttribute::OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
+  std::string attribute_class_name() const override {
+    return "DefinitionExpressionIndexAttribute";
+  }
+};
+
+static void
+indexDefinitionExpression(SgExpression *exp,
+                          ClassHierarchyWrapper *classHierarchy,
+                          DefinitionExpressionIndex &definitionIndex) {
+  ASSERT_not_null(exp);
+  ASSERT_not_null(classHierarchy);
+
+  Rose_STL_Container<SgFunctionDefinition *> candidateDefs;
+  CallTargetSet::getDefinitionsForExpression(exp, classHierarchy,
+                                             candidateDefs);
+
+  std::set<SgFunctionDefinition *> uniqueCandidateDefs;
+  for (SgFunctionDefinition *candidateDef : candidateDefs) {
+    if (candidateDef == NULL ||
+        !uniqueCandidateDefs.insert(candidateDef).second) {
+      continue;
+    }
+
+    definitionIndex[candidateDef].push_back(exp);
+  }
+}
+
+class DefinitionExpressionIndexBuilder : public AstSimpleProcessing {
+public:
+  DefinitionExpressionIndexBuilder(ClassHierarchyWrapper *classHierarchy,
+                                   DefinitionExpressionIndex &definitionIndex)
+      : classHierarchy_(classHierarchy), definitionIndex_(definitionIndex) {
+    ASSERT_not_null(classHierarchy_);
+  }
+
+  void visit(SgNode *node) override {
+    if (node == NULL) {
+      return;
+    }
+
+    switch (node->variantT()) {
+    case V_SgFunctionCallExp:
+    case V_SgConstructorInitializer:
+      if (SgExpression *exp = isSgExpression(node)) {
+        indexDefinitionExpression(exp, classHierarchy_, definitionIndex_);
+      }
+      break;
+
+    case V_SgPntrArrRefExp:
+    case V_SgPointerDerefExp:
+      if (SgExpression *exp = isSgExpression(node)) {
+        if (semanticCallExpressionForLoweredOperatorSyntax(exp) != NULL) {
+          indexDefinitionExpression(exp, classHierarchy_, definitionIndex_);
+        }
+      }
+      break;
+
+    default:
+      break;
+    }
+  }
+
+private:
+  ClassHierarchyWrapper *classHierarchy_ = nullptr;
+  DefinitionExpressionIndex &definitionIndex_;
+};
+
+static void
+buildDefinitionExpressionIndex(SgProject *project,
+                               ClassHierarchyWrapper *classHierarchy,
+                               DefinitionExpressionIndex &definitionIndex) {
+  ASSERT_not_null(project);
+  ASSERT_not_null(classHierarchy);
+
+  definitionIndex.clear();
+
+  DefinitionExpressionIndexBuilder builder(classHierarchy, definitionIndex);
+  builder.traverse(project, preorder);
+}
+
+static DefinitionExpressionIndexAttribute *
+getOrCreateDefinitionExpressionIndexAttribute(SgProject *project) {
+  ASSERT_not_null(project);
+
+  std::lock_guard<std::mutex> install_guard(
+      definitionExpressionIndexInstallMutex());
+
+  const std::string &attribute_name = definitionExpressionIndexAttributeName();
+  AstAttribute *attribute = project->getAttribute(attribute_name);
+  if (attribute == NULL) {
+    project->addNewAttribute(attribute_name,
+                             new DefinitionExpressionIndexAttribute);
+    attribute = project->getAttribute(attribute_name);
+  }
+
+  ASSERT_not_null(attribute);
+  DefinitionExpressionIndexAttribute *index_attribute =
+      dynamic_cast<DefinitionExpressionIndexAttribute *>(attribute);
+  ASSERT_not_null(index_attribute);
+  return index_attribute;
+}
+
+static void
+appendExpressionsForDefinition(SgFunctionDefinition *targetDef,
+                               const DefinitionExpressionIndex &definitionIndex,
+                               Rose_STL_Container<SgExpression *> &exps) {
+  ASSERT_not_null(targetDef);
+
+  DefinitionExpressionIndex::const_iterator expressionIt =
+      definitionIndex.find(targetDef);
+  if (expressionIt == definitionIndex.end()) {
+    return;
+  }
+
+  for (SgExpression *exp : expressionIt->second) {
+    if (exp != NULL) {
+      exps.push_back(exp);
+    }
+  }
+}
+
+} // namespace
+
 void CallTargetSet::getExpressionsForDefinition(
     SgFunctionDefinition *targetDef, ClassHierarchyWrapper *classHierarchy,
     Rose_STL_Container<SgExpression *> &exps) {
-  VariantVector vv(V_SgFunctionCallExp);
-  Rose_STL_Container<SgNode *> callCandidates = NodeQuery::queryMemoryPool(vv);
-  for (SgNode *callCandidate : callCandidates) {
-    SgFunctionCallExp *callexp = isSgFunctionCallExp(callCandidate);
-    Rose_STL_Container<SgFunctionDefinition *> candidateDefs;
-    CallTargetSet::getDefinitionsForExpression(callexp, classHierarchy,
-                                               candidateDefs);
-    for (SgFunctionDefinition *candidateDef : candidateDefs) {
-      if (candidateDef == targetDef) {
-        exps.push_back(callexp);
-        break;
-      }
-    }
+  ASSERT_not_null(targetDef);
+  ASSERT_not_null(classHierarchy);
+
+  SgProject *project = SageInterface::getProject(targetDef);
+  ASSERT_not_null(project);
+
+  DefinitionExpressionIndexAttribute *index_attribute =
+      getOrCreateDefinitionExpressionIndexAttribute(project);
+  std::lock_guard<std::recursive_mutex> index_guard(index_attribute->mutex);
+  uint64_t currentSequence = SgNode::get_globalAstModificationSequence();
+  if (index_attribute->initialized == false ||
+      index_attribute->astModificationSequence != currentSequence ||
+      index_attribute->classHierarchy != classHierarchy) {
+    buildDefinitionExpressionIndex(project, classHierarchy,
+                                   index_attribute->index);
+    index_attribute->initialized = true;
+    index_attribute->astModificationSequence = currentSequence;
+    index_attribute->classHierarchy = classHierarchy;
   }
-  VariantVector vv2(V_SgConstructorInitializer);
-  Rose_STL_Container<SgNode *> ctorCandidates = NodeQuery::queryMemoryPool(vv2);
-  for (SgNode *ctorCandidate : ctorCandidates) {
-    SgConstructorInitializer *ctorInit =
-        isSgConstructorInitializer(ctorCandidate);
-    Rose_STL_Container<SgFunctionDefinition *> candidateDefs;
-    CallTargetSet::getDefinitionsForExpression(ctorInit, classHierarchy,
-                                               candidateDefs);
-    for (SgFunctionDefinition *candidateDef : candidateDefs) {
-      if (candidateDef == targetDef) {
-        exps.push_back(ctorInit);
-        break;
-      }
-    }
-  }
+
+  appendExpressionsForDefinition(targetDef, index_attribute->index, exps);
 }
 
 FunctionData::FunctionData(SgFunctionDeclaration *inputFunctionDeclaration,
@@ -1845,6 +2016,16 @@ FunctionData::FunctionData(SgFunctionDeclaration *inputFunctionDeclaration,
         NodeQuery::querySubTree(defDecl, V_SgConstructorInitializer);
     for (SgNode *ctorInit : ctorInitList) {
       CallTargetSet::getPropertiesForExpression(isSgExpression(ctorInit),
+                                                classHierarchy, functionList);
+    }
+
+    VariantVector callSiteVariants;
+    callSiteVariants.push_back(V_SgPntrArrRefExp);
+    callSiteVariants.push_back(V_SgPointerDerefExp);
+    Rose_STL_Container<SgNode *> callSiteList =
+        NodeQuery::querySubTree(defDecl, callSiteVariants);
+    for (SgNode *callSite : callSiteList) {
+      CallTargetSet::getPropertiesForExpression(isSgExpression(callSite),
                                                 classHierarchy, functionList);
     }
   }

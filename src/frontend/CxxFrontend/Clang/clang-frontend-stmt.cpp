@@ -7669,6 +7669,9 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
   };
 
   const bool has_explicit_template_args = callee_has_explicit_template_args();
+  const bool preserve_unary_deref_call =
+      cxx_operator_call_expr->getOperator() == clang::OO_Star &&
+      cxx_operator_call_expr->getNumArgs() == 1;
 
   if (cxx_operator_call_expr->getOperator() == clang::OO_Equal &&
       cxx_operator_call_expr->getNumArgs() >= 2) {
@@ -7959,7 +7962,126 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
     return nullptr;
   };
 
-  if (!has_explicit_template_args) {
+  auto resolve_member_operator_symbol =
+      [&](clang::FunctionDecl *direct_callee) -> SgMemberFunctionSymbol * {
+    if (direct_callee == nullptr ||
+        !llvm::isa<clang::CXXMethodDecl>(direct_callee)) {
+      return nullptr;
+    }
+
+    SgNode *tmp_decl = nullptr;
+    auto it_decl = p_decl_translation_map.find(direct_callee);
+    if (it_decl != p_decl_translation_map.end()) {
+      tmp_decl = it_decl->second;
+    } else {
+      tmp_decl = Traverse(direct_callee);
+    }
+
+    SgMemberFunctionDeclaration *member_decl =
+        isSgMemberFunctionDeclaration(tmp_decl);
+    if (member_decl == nullptr) {
+      return nullptr;
+    }
+
+    SgMemberFunctionSymbol *member_sym =
+        isSgMemberFunctionSymbol(member_decl->get_symbol_from_symbol_table());
+    if (member_sym == nullptr) {
+      if (SgScopeStatement *decl_scope = member_decl->get_scope()) {
+        member_sym =
+            isSgMemberFunctionSymbol(decl_scope->lookup_function_symbol(
+                member_decl->get_name(), member_decl->get_type()));
+      }
+    }
+    if (member_sym == nullptr) {
+      member_sym = new SgMemberFunctionSymbol(member_decl);
+      if (SgScopeStatement *decl_scope = member_decl->get_scope()) {
+        attachSymbolToScopeOrOrphan(member_sym, decl_scope);
+      } else {
+        attachSymbolToScopeOrOrphan(member_sym, nullptr);
+      }
+    }
+
+    return member_sym;
+  };
+
+  auto build_member_operator_call_expr =
+      [&](clang::FunctionDecl *direct_callee,
+          const std::vector<SgExpression *> *translated_args = nullptr,
+          bool copy_translated_args = false) -> SgFunctionCallExp * {
+    if (direct_callee == nullptr ||
+        !llvm::isa<clang::CXXMethodDecl>(direct_callee)) {
+      return nullptr;
+    }
+
+    SgExpression *base = nullptr;
+    if (translated_args != nullptr) {
+      if (translated_args->empty()) {
+        return nullptr;
+      }
+
+      base = translated_args->front();
+      if (copy_translated_args) {
+        base = SageInterface::copyExpression(base);
+      }
+    } else {
+      if (cxx_operator_call_expr->getNumArgs() == 0) {
+        return nullptr;
+      }
+
+      base = traverse_operator_arg(0);
+    }
+
+    SgMemberFunctionSymbol *member_sym =
+        resolve_member_operator_symbol(direct_callee);
+    if (base == nullptr || member_sym == nullptr) {
+      return nullptr;
+    }
+
+    SgExpression *member_ref =
+        SageBuilder::buildMemberFunctionRefExp_nfi(member_sym, false, false);
+    SgExpression *callee = nullptr;
+    if (SageInterface::isPointerType(base->get_type())) {
+      callee = SageBuilder::buildArrowExp(base, member_ref);
+    } else {
+      callee = SageBuilder::buildDotExp(base, member_ref);
+    }
+
+    SgExprListExp *param_list = SageBuilder::buildExprListExp_nfi();
+    applySourceRange(param_list, cxx_operator_call_expr->getSourceRange());
+
+    if (translated_args != nullptr) {
+      for (size_t i = 1; i < translated_args->size(); ++i) {
+        SgExpression *arg = (*translated_args)[i];
+        if (copy_translated_args) {
+          arg = SageInterface::copyExpression(arg);
+        }
+        if (arg != nullptr) {
+          param_list->append_expression(arg);
+        }
+      }
+    } else {
+      for (unsigned i = 1; i < cxx_operator_call_expr->getNumArgs(); ++i) {
+        if (clang::isa<clang::CXXDefaultArgExpr>(
+                cxx_operator_call_expr->getArg(i))) {
+          continue;
+        }
+        SgExpression *arg = traverse_operator_arg(i);
+        if (arg != nullptr) {
+          param_list->append_expression(arg);
+        }
+      }
+    }
+
+    SgFunctionCallExp *call =
+        SageBuilder::buildFunctionCallExp_nfi(callee, param_list);
+    if (call != nullptr) {
+      call->set_uses_operator_syntax(true);
+      applySourceRange(call, cxx_operator_call_expr->getSourceRange());
+    }
+    return call;
+  };
+
+  if (!has_explicit_template_args && !preserve_unary_deref_call) {
     if (clang::FunctionDecl *direct_callee =
             cxx_operator_call_expr->getDirectCallee()) {
       if (llvm::isa<clang::CXXMethodDecl>(direct_callee) &&
@@ -7967,7 +8089,6 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
         switch (cxx_operator_call_expr->getOperator()) {
         case clang::OO_Plus:
         case clang::OO_Minus:
-        case clang::OO_Star:
         case clang::OO_Amp:
         case clang::OO_Tilde:
         case clang::OO_Exclaim:
@@ -7986,7 +8107,7 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
     }
   }
 
-  if (!has_explicit_template_args &&
+  if (!has_explicit_template_args && !preserve_unary_deref_call &&
       cxx_operator_call_expr->getDirectCallee() == nullptr) {
     clang::Expr *callee = cxx_operator_call_expr->getCallee();
     clang::Expr *base_callee =
@@ -8045,6 +8166,13 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
             }
             SageInterface::setSourcePosition(arr_ref);
             arr_ref->set_need_paren(false);
+            const std::vector<SgExpression *> semantic_args{base, idx};
+            if (SgFunctionCallExp *semantic_call =
+                    build_member_operator_call_expr(direct_callee,
+                                                    &semantic_args, true)) {
+              arr_ref->set_originalExpressionTree(semantic_call);
+              semantic_call->set_parent(arr_ref);
+            }
             *node = arr_ref;
             return VisitExpr(cxx_operator_call_expr, node) && res;
           }
@@ -8111,80 +8239,9 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
         }
       }
 
-      SgNode *tmp_base = Traverse(cxx_operator_call_expr->getArg(0));
-      SgExpression *base = isSgExpression(tmp_base);
-      if (tmp_base != nullptr && base == nullptr) {
-        std::cerr << "Runtime error: tmp_base != nullptr && base == nullptr"
-                  << std::endl;
-        res = false;
-      }
-
-      SgNode *tmp_decl = nullptr;
-      auto it_decl = p_decl_translation_map.find(direct_callee);
-      if (it_decl != p_decl_translation_map.end()) {
-        tmp_decl = it_decl->second;
-      } else {
-        tmp_decl = Traverse(direct_callee);
-      }
-
-      SgMemberFunctionDeclaration *member_decl =
-          isSgMemberFunctionDeclaration(tmp_decl);
-      SgMemberFunctionSymbol *member_sym = nullptr;
-      if (member_decl != nullptr) {
-        member_sym = isSgMemberFunctionSymbol(
-            member_decl->get_symbol_from_symbol_table());
-        if (member_sym == nullptr) {
-          if (SgScopeStatement *decl_scope = member_decl->get_scope()) {
-            member_sym =
-                isSgMemberFunctionSymbol(decl_scope->lookup_function_symbol(
-                    member_decl->get_name(), member_decl->get_type()));
-          }
-        }
-        if (member_sym == nullptr) {
-          member_sym = new SgMemberFunctionSymbol(member_decl);
-          if (SgScopeStatement *decl_scope = member_decl->get_scope()) {
-            attachSymbolToScopeOrOrphan(member_sym, decl_scope);
-          } else {
-            attachSymbolToScopeOrOrphan(member_sym, nullptr);
-          }
-        }
-      }
-
-      if (base != nullptr && member_sym != nullptr) {
-        SgExpression *member_ref = SageBuilder::buildMemberFunctionRefExp_nfi(
-            member_sym, false, false);
-
-        SgExpression *callee = nullptr;
-        if (isSgPointerType(base->get_type())) {
-          callee = SageBuilder::buildArrowExp(base, member_ref);
-        } else {
-          callee = SageBuilder::buildDotExp(base, member_ref);
-        }
-
-        SgExprListExp *param_list = SageBuilder::buildExprListExp_nfi();
-        applySourceRange(param_list, cxx_operator_call_expr->getSourceRange());
-
-        for (unsigned i = 1; i < cxx_operator_call_expr->getNumArgs(); ++i) {
-          if (clang::isa<clang::CXXDefaultArgExpr>(
-                  cxx_operator_call_expr->getArg(i))) {
-            continue;
-          }
-          SgNode *tmp_arg = Traverse(cxx_operator_call_expr->getArg(i));
-          SgExpression *arg = isSgExpression(tmp_arg);
-          if (tmp_arg != nullptr && arg == nullptr) {
-            std::cerr << "Runtime error: tmp_arg != nullptr && arg == nullptr"
-                      << std::endl;
-            res = false;
-            continue;
-          }
-          param_list->append_expression(arg);
-        }
-
-        SgFunctionCallExp *call =
-            SageBuilder::buildFunctionCallExp_nfi(callee, param_list);
-        call->set_uses_operator_syntax(true);
+      if (SgFunctionCallExp *call =
+              build_member_operator_call_expr(direct_callee)) {
         *node = call;
-
         return VisitExpr(cxx_operator_call_expr, node) && res;
       }
     }

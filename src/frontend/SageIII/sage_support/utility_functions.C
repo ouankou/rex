@@ -464,7 +464,7 @@ SgProject *frontend(const std::vector<std::string> &argv,
           }
         }
         if (mark_stmt != nullptr) {
-          mark_stmt->set_isModified(true);
+          mark_stmt->markAsModified();
         }
       }
 

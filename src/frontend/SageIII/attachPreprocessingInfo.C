@@ -24,6 +24,11 @@ struct MisplacedPreprocessingInfoMove {
       PreprocessingInfo::inside;
 };
 
+struct LocatedNodeSourceOrder {
+  std::vector<SgLocatedNode *> located_nodes;
+  std::map<SgLocatedNode *, size_t> node_order;
+};
+
 static int getPhysicalStartLine(SgLocatedNode *node, int source_file_id) {
   if (node == nullptr || node->get_startOfConstruct() == nullptr) {
     return -1;
@@ -181,6 +186,31 @@ static void insertAttachedPreprocessingInfoInSourceOrder(
   attached->push_back(info);
 }
 
+template <class MoveContainer>
+static void detachMovedPreprocessingInfo(const MoveContainer &moves) {
+  std::map<AttachedPreprocessingInfoType *, std::set<PreprocessingInfo *>>
+      info_by_source_list;
+  for (const auto &move : moves) {
+    if (move.source_list == nullptr || move.info == nullptr) {
+      continue;
+    }
+
+    info_by_source_list[move.source_list].insert(move.info);
+  }
+
+  for (const auto &entry : info_by_source_list) {
+    AttachedPreprocessingInfoType *attached = entry.first;
+    ROSE_ASSERT(attached != nullptr);
+
+    const std::set<PreprocessingInfo *> &removed_info = entry.second;
+    attached->erase(std::remove_if(attached->begin(), attached->end(),
+                                   [&removed_info](PreprocessingInfo *info) {
+                                     return removed_info.count(info) > 0;
+                                   }),
+                    attached->end());
+  }
+}
+
 static bool preprocessingInfoPrecedesNodeStart(const PreprocessingInfo *info,
                                                SgLocatedNode *node,
                                                int source_file_id) {
@@ -223,6 +253,28 @@ static bool isConditionalPreprocessingPayload(const PreprocessingInfo *info) {
   }
 }
 
+static bool
+isCommentOrConditionalPreprocessingPayload(const PreprocessingInfo *info) {
+  if (isConditionalPreprocessingPayload(info)) {
+    return true;
+  }
+
+  if (info == nullptr) {
+    return false;
+  }
+
+  switch (info->getTypeOfDirective()) {
+  case PreprocessingInfo::C_StyleComment:
+  case PreprocessingInfo::CplusplusStyleComment:
+  case PreprocessingInfo::FortranStyleComment:
+  case PreprocessingInfo::F90StyleComment:
+    return true;
+
+  default:
+    return false;
+  }
+}
+
 static int compareSourceLocation(const Sg_File_Info *lhs,
                                  const Sg_File_Info *rhs) {
   ROSE_ASSERT(lhs != nullptr);
@@ -255,6 +307,11 @@ static bool sameMainFileLocation(const Sg_File_Info *lhs,
                                  const Sg_File_Info *rhs) {
   return lhs != nullptr && rhs != nullptr &&
          lhs->get_filenameString() == rhs->get_filenameString();
+}
+
+static bool hasUsableSourceLocation(const Sg_File_Info *info) {
+  return info != nullptr && info->get_line() > 0 &&
+         info->get_filenameString().empty() == false;
 }
 
 static Sg_File_Info *getEffectiveStartInfo(SgLocatedNode *node) {
@@ -291,6 +348,124 @@ static Sg_File_Info *getEffectiveEndInfo(SgLocatedNode *node) {
   }
 
   return node->get_startOfConstruct();
+}
+
+static Sg_File_Info *getPreciseEndInfo(SgLocatedNode *node) {
+  if (node == nullptr) {
+    return nullptr;
+  }
+
+  if (Sg_File_Info *end = node->get_endOfConstruct();
+      hasUsableSourceLocation(end)) {
+    return end;
+  }
+
+  if (Sg_File_Info *info = node->get_file_info();
+      hasUsableSourceLocation(info)) {
+    Sg_File_Info *start = node->get_startOfConstruct();
+    if (!hasUsableSourceLocation(start) ||
+        info->get_filenameString() != start->get_filenameString() ||
+        compareSourceLocation(info, start) != 0) {
+      return info;
+    }
+  }
+
+  return nullptr;
+}
+
+static int compareSourceLocationWithFilename(const Sg_File_Info *lhs,
+                                             const Sg_File_Info *rhs) {
+  if (lhs == rhs) {
+    return 0;
+  }
+  if (lhs == nullptr || rhs == nullptr) {
+    return lhs == nullptr ? 1 : -1;
+  }
+
+  if (lhs->get_filenameString() != rhs->get_filenameString()) {
+    return lhs->get_filenameString() < rhs->get_filenameString() ? -1 : 1;
+  }
+
+  return compareSourceLocation(lhs, rhs);
+}
+
+static bool locatedNodeComesBeforeInSource(SgLocatedNode *lhs,
+                                           SgLocatedNode *rhs) {
+  if (lhs == rhs) {
+    return false;
+  }
+  if (lhs == nullptr || rhs == nullptr) {
+    return lhs != nullptr;
+  }
+
+  Sg_File_Info *lhs_start = getEffectiveStartInfo(lhs);
+  Sg_File_Info *rhs_start = getEffectiveStartInfo(rhs);
+  const bool lhs_has_start = hasUsableSourceLocation(lhs_start);
+  const bool rhs_has_start = hasUsableSourceLocation(rhs_start);
+  if (lhs_has_start != rhs_has_start) {
+    return lhs_has_start;
+  }
+  if (lhs_has_start) {
+    const int start_cmp =
+        compareSourceLocationWithFilename(lhs_start, rhs_start);
+    if (start_cmp != 0) {
+      return start_cmp < 0;
+    }
+  }
+
+  Sg_File_Info *lhs_end = getEffectiveEndInfo(lhs);
+  Sg_File_Info *rhs_end = getEffectiveEndInfo(rhs);
+  const bool lhs_has_end = hasUsableSourceLocation(lhs_end);
+  const bool rhs_has_end = hasUsableSourceLocation(rhs_end);
+  if (lhs_has_end != rhs_has_end) {
+    return lhs_has_end;
+  }
+  if (lhs_has_end) {
+    const int end_cmp = compareSourceLocationWithFilename(lhs_end, rhs_end);
+    if (end_cmp != 0) {
+      return end_cmp < 0;
+    }
+  }
+
+  return false;
+}
+
+static void
+buildLocatedNodeOrder(const std::vector<SgLocatedNode *> &located_nodes,
+                      std::map<SgLocatedNode *, size_t> &node_order) {
+  std::vector<SgLocatedNode *> ordered_nodes(located_nodes.begin(),
+                                             located_nodes.end());
+  std::stable_sort(ordered_nodes.begin(), ordered_nodes.end(),
+                   [](SgLocatedNode *lhs, SgLocatedNode *rhs) {
+                     return locatedNodeComesBeforeInSource(lhs, rhs);
+                   });
+
+  node_order.clear();
+  for (size_t i = 0; i < ordered_nodes.size(); ++i) {
+    node_order[ordered_nodes[i]] = i;
+  }
+}
+
+static void buildLocatedNodeSourceOrder(SgSourceFile *source_file,
+                                        LocatedNodeSourceOrder &source_order) {
+  source_order.located_nodes.clear();
+  source_order.node_order.clear();
+
+  if (source_file == nullptr || source_file->get_globalScope() == nullptr ||
+      source_file->get_file_info() == nullptr) {
+    return;
+  }
+
+  collectSourceLocatedNodes(source_file, source_order.located_nodes);
+  buildLocatedNodeOrder(source_order.located_nodes, source_order.node_order);
+}
+
+static size_t
+getLocatedNodeOrder(const std::map<SgLocatedNode *, size_t> &node_order,
+                    SgLocatedNode *node) {
+  const std::map<SgLocatedNode *, size_t>::const_iterator found =
+      node_order.find(node);
+  return found != node_order.end() ? found->second : node_order.size();
 }
 
 static SgStatement *
@@ -349,15 +524,15 @@ static SgInitializedName *findFirstFollowingEnumeratorInMainFile(
   return nullptr;
 }
 
-static void
-normalizeLeadingBasicBlockPreprocessingInfo(SgSourceFile *source_file) {
-  if (source_file == nullptr || source_file->get_globalScope() == nullptr ||
-      source_file->get_file_info() == nullptr) {
+static void normalizeLeadingBasicBlockPreprocessingInfo(
+    const LocatedNodeSourceOrder &source_order) {
+  if (source_order.located_nodes.empty()) {
     return;
   }
 
-  std::vector<SgLocatedNode *> located_nodes;
-  collectSourceLocatedNodes(source_file, located_nodes);
+  const std::vector<SgLocatedNode *> &located_nodes =
+      source_order.located_nodes;
+  const std::map<SgLocatedNode *, size_t> &node_order = source_order.node_order;
 
   std::vector<MisplacedPreprocessingInfoMove> moves;
   moves.reserve(16);
@@ -411,24 +586,17 @@ normalizeLeadingBasicBlockPreprocessingInfo(SgSourceFile *source_file) {
     return;
   }
 
-  for (const MisplacedPreprocessingInfoMove &move : moves) {
-    AttachedPreprocessingInfoType *attached = move.source_list;
-    ROSE_ASSERT(attached != nullptr);
-
-    for (AttachedPreprocessingInfoType::iterator it = attached->begin();
-         it != attached->end(); ++it) {
-      if (*it == move.info) {
-        attached->erase(it);
-        break;
-      }
-    }
-  }
+  detachMovedPreprocessingInfo(moves);
 
   std::stable_sort(moves.begin(), moves.end(),
-                   [](const MisplacedPreprocessingInfoMove &lhs,
-                      const MisplacedPreprocessingInfoMove &rhs) {
-                     if (lhs.target != rhs.target) {
-                       return lhs.target < rhs.target;
+                   [&](const MisplacedPreprocessingInfoMove &lhs,
+                       const MisplacedPreprocessingInfoMove &rhs) {
+                     const size_t lhs_order =
+                         getLocatedNodeOrder(node_order, lhs.target);
+                     const size_t rhs_order =
+                         getLocatedNodeOrder(node_order, rhs.target);
+                     if (lhs_order != rhs_order) {
+                       return lhs_order < rhs_order;
                      }
 
                      return preprocessingInfoComesBefore(lhs.info, rhs.info);
@@ -440,15 +608,15 @@ normalizeLeadingBasicBlockPreprocessingInfo(SgSourceFile *source_file) {
   }
 }
 
-static void
-normalizeEnumEnumeratorPreprocessingInfo(SgSourceFile *source_file) {
-  if (source_file == nullptr || source_file->get_globalScope() == nullptr ||
-      source_file->get_file_info() == nullptr) {
+static void normalizeEnumEnumeratorPreprocessingInfo(
+    const LocatedNodeSourceOrder &source_order) {
+  if (source_order.located_nodes.empty()) {
     return;
   }
 
-  std::vector<SgLocatedNode *> located_nodes;
-  collectSourceLocatedNodes(source_file, located_nodes);
+  const std::vector<SgLocatedNode *> &located_nodes =
+      source_order.located_nodes;
+  const std::map<SgLocatedNode *, size_t> &node_order = source_order.node_order;
 
   std::vector<MisplacedPreprocessingInfoMove> moves;
   moves.reserve(16);
@@ -507,24 +675,17 @@ normalizeEnumEnumeratorPreprocessingInfo(SgSourceFile *source_file) {
     return;
   }
 
-  for (const MisplacedPreprocessingInfoMove &move : moves) {
-    AttachedPreprocessingInfoType *attached = move.source_list;
-    ROSE_ASSERT(attached != nullptr);
-
-    for (AttachedPreprocessingInfoType::iterator it = attached->begin();
-         it != attached->end(); ++it) {
-      if (*it == move.info) {
-        attached->erase(it);
-        break;
-      }
-    }
-  }
+  detachMovedPreprocessingInfo(moves);
 
   std::stable_sort(moves.begin(), moves.end(),
-                   [](const MisplacedPreprocessingInfoMove &lhs,
-                      const MisplacedPreprocessingInfoMove &rhs) {
-                     if (lhs.target != rhs.target) {
-                       return lhs.target < rhs.target;
+                   [&](const MisplacedPreprocessingInfoMove &lhs,
+                       const MisplacedPreprocessingInfoMove &rhs) {
+                     const size_t lhs_order =
+                         getLocatedNodeOrder(node_order, lhs.target);
+                     const size_t rhs_order =
+                         getLocatedNodeOrder(node_order, rhs.target);
+                     if (lhs_order != rhs_order) {
+                       return lhs_order < rhs_order;
                      }
 
                      return preprocessingInfoComesBefore(lhs.info, rhs.info);
@@ -536,14 +697,15 @@ normalizeEnumEnumeratorPreprocessingInfo(SgSourceFile *source_file) {
   }
 }
 
-static void normalizeAsmStatementPreprocessingInfo(SgSourceFile *source_file) {
-  if (source_file == nullptr || source_file->get_globalScope() == nullptr ||
-      source_file->get_file_info() == nullptr) {
+static void normalizeAsmStatementPreprocessingInfo(
+    const LocatedNodeSourceOrder &source_order) {
+  if (source_order.located_nodes.empty()) {
     return;
   }
 
-  std::vector<SgLocatedNode *> located_nodes;
-  collectSourceLocatedNodes(source_file, located_nodes);
+  const std::vector<SgLocatedNode *> &located_nodes =
+      source_order.located_nodes;
+  const std::map<SgLocatedNode *, size_t> &node_order = source_order.node_order;
 
   std::vector<MisplacedPreprocessingInfoMove> moves;
   moves.reserve(16);
@@ -597,24 +759,17 @@ static void normalizeAsmStatementPreprocessingInfo(SgSourceFile *source_file) {
     return;
   }
 
-  for (const MisplacedPreprocessingInfoMove &move : moves) {
-    AttachedPreprocessingInfoType *attached = move.source_list;
-    ROSE_ASSERT(attached != nullptr);
-
-    for (AttachedPreprocessingInfoType::iterator it = attached->begin();
-         it != attached->end(); ++it) {
-      if (*it == move.info) {
-        attached->erase(it);
-        break;
-      }
-    }
-  }
+  detachMovedPreprocessingInfo(moves);
 
   std::stable_sort(moves.begin(), moves.end(),
-                   [](const MisplacedPreprocessingInfoMove &lhs,
-                      const MisplacedPreprocessingInfoMove &rhs) {
-                     if (lhs.target != rhs.target) {
-                       return lhs.target < rhs.target;
+                   [&](const MisplacedPreprocessingInfoMove &lhs,
+                       const MisplacedPreprocessingInfoMove &rhs) {
+                     const size_t lhs_order =
+                         getLocatedNodeOrder(node_order, lhs.target);
+                     const size_t rhs_order =
+                         getLocatedNodeOrder(node_order, rhs.target);
+                     if (lhs_order != rhs_order) {
+                       return lhs_order < rhs_order;
                      }
 
                      return preprocessingInfoComesBefore(lhs.info, rhs.info);
@@ -626,15 +781,15 @@ static void normalizeAsmStatementPreprocessingInfo(SgSourceFile *source_file) {
   }
 }
 
-static void
-normalizeMisplacedBracedScopePreprocessingInfo(SgSourceFile *source_file) {
-  if (source_file == nullptr || source_file->get_globalScope() == nullptr ||
-      source_file->get_file_info() == nullptr) {
+static void normalizeMisplacedBracedScopePreprocessingInfo(
+    const LocatedNodeSourceOrder &source_order) {
+  if (source_order.located_nodes.empty()) {
     return;
   }
 
-  std::vector<SgLocatedNode *> located_nodes;
-  collectSourceLocatedNodes(source_file, located_nodes);
+  const std::vector<SgLocatedNode *> &located_nodes =
+      source_order.located_nodes;
+  const std::map<SgLocatedNode *, size_t> &node_order = source_order.node_order;
 
   std::vector<MisplacedPreprocessingInfoMove> moves;
   moves.reserve(16);
@@ -700,24 +855,17 @@ normalizeMisplacedBracedScopePreprocessingInfo(SgSourceFile *source_file) {
     return;
   }
 
-  for (const MisplacedPreprocessingInfoMove &move : moves) {
-    AttachedPreprocessingInfoType *attached = move.source_list;
-    ROSE_ASSERT(attached != nullptr);
-
-    for (AttachedPreprocessingInfoType::iterator it = attached->begin();
-         it != attached->end(); ++it) {
-      if (*it == move.info) {
-        attached->erase(it);
-        break;
-      }
-    }
-  }
+  detachMovedPreprocessingInfo(moves);
 
   std::stable_sort(moves.begin(), moves.end(),
-                   [](const MisplacedPreprocessingInfoMove &lhs,
-                      const MisplacedPreprocessingInfoMove &rhs) {
-                     if (lhs.target != rhs.target) {
-                       return lhs.target < rhs.target;
+                   [&](const MisplacedPreprocessingInfoMove &lhs,
+                       const MisplacedPreprocessingInfoMove &rhs) {
+                     const size_t lhs_order =
+                         getLocatedNodeOrder(node_order, lhs.target);
+                     const size_t rhs_order =
+                         getLocatedNodeOrder(node_order, rhs.target);
+                     if (lhs_order != rhs_order) {
+                       return lhs_order < rhs_order;
                      }
 
                      return preprocessingInfoComesBefore(lhs.info, rhs.info);
@@ -729,15 +877,15 @@ normalizeMisplacedBracedScopePreprocessingInfo(SgSourceFile *source_file) {
   }
 }
 
-static void
-normalizeInlineFunctionConditionalPreprocessingInfo(SgSourceFile *source_file) {
-  if (source_file == nullptr || source_file->get_globalScope() == nullptr ||
-      source_file->get_file_info() == nullptr) {
+static void normalizeInlineFunctionConditionalPreprocessingInfo(
+    const LocatedNodeSourceOrder &source_order) {
+  if (source_order.located_nodes.empty()) {
     return;
   }
 
-  std::vector<SgLocatedNode *> located_nodes;
-  collectSourceLocatedNodes(source_file, located_nodes);
+  const std::vector<SgLocatedNode *> &located_nodes =
+      source_order.located_nodes;
+  const std::map<SgLocatedNode *, size_t> &node_order = source_order.node_order;
 
   struct FunctionAnchor {
     SgFunctionDeclaration *decl = nullptr;
@@ -780,9 +928,9 @@ normalizeInlineFunctionConditionalPreprocessingInfo(SgSourceFile *source_file) {
           }
 
           Sg_File_Info *decl_start = getEffectiveStartInfo(decl_node);
-          Sg_File_Info *decl_end = getEffectiveEndInfo(decl_node);
+          Sg_File_Info *decl_end = getPreciseEndInfo(decl_node);
           Sg_File_Info *body_start = getEffectiveStartInfo(body);
-          Sg_File_Info *body_end = getEffectiveEndInfo(body);
+          Sg_File_Info *body_end = getPreciseEndInfo(body);
           if (decl_start == nullptr || decl_end == nullptr ||
               body_start == nullptr || body_end == nullptr ||
               decl_start->get_line() <= 0 || decl_end->get_line() <= 0 ||
@@ -920,30 +1068,300 @@ normalizeInlineFunctionConditionalPreprocessingInfo(SgSourceFile *source_file) {
     return;
   }
 
-  for (const FunctionConditionalMove &move : moves) {
-    AttachedPreprocessingInfoType *attached = move.source_list;
-    ROSE_ASSERT(attached != nullptr);
-
-    for (AttachedPreprocessingInfoType::iterator it = attached->begin();
-         it != attached->end(); ++it) {
-      if (*it == move.info) {
-        attached->erase(it);
-        break;
-      }
-    }
-  }
+  detachMovedPreprocessingInfo(moves);
 
   std::stable_sort(moves.begin(), moves.end(),
-                   [](const FunctionConditionalMove &lhs,
-                      const FunctionConditionalMove &rhs) {
-                     if (lhs.target != rhs.target) {
-                       return lhs.target < rhs.target;
+                   [&](const FunctionConditionalMove &lhs,
+                       const FunctionConditionalMove &rhs) {
+                     const size_t lhs_order =
+                         getLocatedNodeOrder(node_order, lhs.target);
+                     const size_t rhs_order =
+                         getLocatedNodeOrder(node_order, rhs.target);
+                     if (lhs_order != rhs_order) {
+                       return lhs_order < rhs_order;
                      }
 
                      return preprocessingInfoComesBefore(lhs.info, rhs.info);
                    });
 
   for (const FunctionConditionalMove &move : moves) {
+    insertAttachedPreprocessingInfoInSourceOrder(move.target, move.info,
+                                                 move.target_position);
+  }
+}
+
+static bool getDirectChildDeclarationNeighbors(SgLocatedNode *owner,
+                                               SgDeclarationStatement *target,
+                                               Sg_File_Info *&previous_end,
+                                               Sg_File_Info *&next_start) {
+  previous_end = nullptr;
+  next_start = nullptr;
+
+  if (owner == nullptr || target == nullptr) {
+    return false;
+  }
+
+  const SgDeclarationStatementPtrList *declarations = nullptr;
+  if (SgClassDefinition *class_def = isSgClassDefinition(owner)) {
+    declarations = &class_def->get_members();
+  } else if (SgTemplateClassDefinition *class_def =
+                 isSgTemplateClassDefinition(owner)) {
+    declarations = &class_def->get_members();
+  } else if (SgNamespaceDefinitionStatement *ns_def =
+                 isSgNamespaceDefinitionStatement(owner)) {
+    declarations = &ns_def->get_declarations();
+  } else if (SgGlobal *global = isSgGlobal(owner)) {
+    declarations = &global->getDeclarationList();
+  } else if (SgDeclarationScope *decl_scope = isSgDeclarationScope(owner)) {
+    declarations = &decl_scope->get_declarations();
+  }
+
+  if (declarations == nullptr) {
+    return false;
+  }
+
+  size_t target_index = declarations->size();
+  for (size_t i = 0; i < declarations->size(); ++i) {
+    if ((*declarations)[i] == target) {
+      target_index = i;
+      break;
+    }
+  }
+
+  if (target_index == declarations->size()) {
+    return false;
+  }
+
+  for (size_t i = target_index; i > 0; --i) {
+    previous_end = getPreciseEndInfo(isSgLocatedNode((*declarations)[i - 1]));
+    if (hasUsableSourceLocation(previous_end)) {
+      break;
+    }
+    previous_end = nullptr;
+  }
+
+  for (size_t i = target_index + 1; i < declarations->size(); ++i) {
+    next_start = getEffectiveStartInfo(isSgLocatedNode((*declarations)[i]));
+    if (hasUsableSourceLocation(next_start)) {
+      break;
+    }
+    next_start = nullptr;
+  }
+
+  return true;
+}
+
+static void normalizeAstUnparsedTemplateFunctionPreprocessingInfo(
+    const LocatedNodeSourceOrder &source_order) {
+  if (source_order.located_nodes.empty()) {
+    return;
+  }
+
+  const std::vector<SgLocatedNode *> &located_nodes =
+      source_order.located_nodes;
+  const std::map<SgLocatedNode *, size_t> &node_order = source_order.node_order;
+
+  struct TemplatePreprocessingMove {
+    AttachedPreprocessingInfoType *source_list = nullptr;
+    PreprocessingInfo *info = nullptr;
+    SgLocatedNode *target = nullptr;
+    PreprocessingInfo::RelativePositionType target_position =
+        PreprocessingInfo::before;
+  };
+
+  std::vector<TemplatePreprocessingMove> moves;
+  moves.reserve(32);
+
+  auto consider_decl = [&](SgFunctionDeclaration *decl) {
+    if (decl == nullptr || decl->get_unparse_template_ast() == false) {
+      return;
+    }
+
+    SgFunctionDefinition *definition = decl->get_definition();
+    SgBasicBlock *body =
+        definition != nullptr ? definition->get_body() : nullptr;
+    SgLocatedNode *owner = isSgLocatedNode(decl->get_parent());
+    if (definition == nullptr || body == nullptr || owner == nullptr) {
+      return;
+    }
+
+    const std::string filename =
+        decl->get_file_info() != nullptr
+            ? decl->get_file_info()->get_filenameString()
+            : std::string();
+    if (filename.empty() || !isFromSourceFile(decl, filename) ||
+        !isFromSourceFile(definition, filename) ||
+        !isFromSourceFile(body, filename)) {
+      return;
+    }
+
+    Sg_File_Info *decl_start = getEffectiveStartInfo(decl);
+    Sg_File_Info *body_start = getEffectiveStartInfo(body);
+    Sg_File_Info *body_end = getPreciseEndInfo(body);
+    Sg_File_Info *owner_start = getEffectiveStartInfo(owner);
+    Sg_File_Info *owner_end = getPreciseEndInfo(owner);
+    if (!hasUsableSourceLocation(decl_start) ||
+        !hasUsableSourceLocation(body_start) ||
+        !hasUsableSourceLocation(body_end) ||
+        !hasUsableSourceLocation(owner_start) ||
+        !hasUsableSourceLocation(owner_end) ||
+        !sameMainFileLocation(decl_start, body_start) ||
+        !sameMainFileLocation(decl_start, body_end) ||
+        !sameMainFileLocation(decl_start, owner_start) ||
+        !sameMainFileLocation(decl_start, owner_end)) {
+      return;
+    }
+
+    Sg_File_Info *previous_end = nullptr;
+    Sg_File_Info *next_start = nullptr;
+    if (!getDirectChildDeclarationNeighbors(owner, decl, previous_end,
+                                            next_start)) {
+      return;
+    }
+
+    auto record_move = [&](AttachedPreprocessingInfoType *source_list,
+                           PreprocessingInfo *info, SgLocatedNode *target,
+                           PreprocessingInfo::RelativePositionType position) {
+      if (source_list == nullptr || info == nullptr || target == nullptr) {
+        return;
+      }
+
+      moves.push_back({source_list, info, target, position});
+    };
+
+    auto classify_location =
+        [&](const Sg_File_Info *info_loc, SgLocatedNode *&target,
+            PreprocessingInfo::RelativePositionType &position) -> bool {
+      if (info_loc == nullptr || !sameMainFileLocation(info_loc, decl_start)) {
+        return false;
+      }
+
+      if (sourceLocationPrecedes(info_loc, decl_start)) {
+        target = decl;
+        position = PreprocessingInfo::before;
+        return true;
+      }
+
+      if (sourceLocationPrecedes(info_loc, body_start)) {
+        target = body;
+        position = PreprocessingInfo::before;
+        return true;
+      }
+
+      if (sourceLocationPrecedes(body_end, info_loc)) {
+        target = body;
+        position = PreprocessingInfo::after;
+        return true;
+      }
+
+      if (sourceLocationPrecedesOrEqual(body_start, info_loc) &&
+          sourceLocationPrecedesOrEqual(info_loc, body_end)) {
+        target = body;
+        position = PreprocessingInfo::inside;
+        return true;
+      }
+
+      return false;
+    };
+
+    AttachedPreprocessingInfoType *owner_attached =
+        owner->getAttachedPreprocessingInfo();
+    if (owner_attached != nullptr && owner_attached->empty() == false) {
+      const Sg_File_Info *lower_bound =
+          hasUsableSourceLocation(previous_end) ? previous_end : owner_start;
+      const Sg_File_Info *upper_bound =
+          hasUsableSourceLocation(next_start) ? next_start : owner_end;
+
+      for (PreprocessingInfo *info : *owner_attached) {
+        if (info == nullptr || info->getFilename() != filename ||
+            !isCommentOrConditionalPreprocessingPayload(info)) {
+          continue;
+        }
+
+        Sg_File_Info *info_loc = info->get_file_info();
+        if (!hasUsableSourceLocation(info_loc) ||
+            !sameMainFileLocation(info_loc, decl_start)) {
+          continue;
+        }
+
+        if (lower_bound != nullptr &&
+            sourceLocationPrecedes(info_loc, lower_bound)) {
+          continue;
+        }
+        if (upper_bound != nullptr &&
+            !sourceLocationPrecedes(info_loc, upper_bound)) {
+          continue;
+        }
+
+        SgLocatedNode *target = nullptr;
+        PreprocessingInfo::RelativePositionType position =
+            PreprocessingInfo::before;
+        if (classify_location(info_loc, target, position)) {
+          record_move(owner_attached, info, target, position);
+        }
+      }
+    }
+
+    AttachedPreprocessingInfoType *definition_attached =
+        definition->getAttachedPreprocessingInfo();
+    if (definition_attached != nullptr &&
+        definition_attached->empty() == false) {
+      for (PreprocessingInfo *info : *definition_attached) {
+        if (info == nullptr || info->getFilename() != filename ||
+            !isCommentOrConditionalPreprocessingPayload(info)) {
+          continue;
+        }
+
+        Sg_File_Info *info_loc = info->get_file_info();
+        if (!hasUsableSourceLocation(info_loc)) {
+          continue;
+        }
+
+        SgLocatedNode *target = nullptr;
+        PreprocessingInfo::RelativePositionType position =
+            PreprocessingInfo::before;
+        if (classify_location(info_loc, target, position)) {
+          record_move(definition_attached, info, target, position);
+        }
+      }
+    }
+  };
+
+  for (SgLocatedNode *node : located_nodes) {
+    if (SgTemplateFunctionDeclaration *decl =
+            isSgTemplateFunctionDeclaration(node)) {
+      consider_decl(decl);
+    } else if (SgTemplateMemberFunctionDeclaration *decl =
+                   isSgTemplateMemberFunctionDeclaration(node)) {
+      consider_decl(decl);
+    }
+  }
+
+  if (moves.empty()) {
+    return;
+  }
+
+  detachMovedPreprocessingInfo(moves);
+
+  std::stable_sort(moves.begin(), moves.end(),
+                   [&](const TemplatePreprocessingMove &lhs,
+                       const TemplatePreprocessingMove &rhs) {
+                     const size_t lhs_order =
+                         getLocatedNodeOrder(node_order, lhs.target);
+                     const size_t rhs_order =
+                         getLocatedNodeOrder(node_order, rhs.target);
+                     if (lhs_order != rhs_order) {
+                       return lhs_order < rhs_order;
+                     }
+
+                     if (lhs.target_position != rhs.target_position) {
+                       return lhs.target_position < rhs.target_position;
+                     }
+
+                     return preprocessingInfoComesBefore(lhs.info, rhs.info);
+                   });
+
+  for (const TemplatePreprocessingMove &move : moves) {
     insertAttachedPreprocessingInfoInSourceOrder(move.target, move.info,
                                                  move.target_position);
   }
@@ -1159,11 +1577,14 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr,
   // DQ (8/26/2020): Remove the redundent include files for initializers.
   fixupInitializersUsingIncludeFiles(project);
 
-  normalizeMisplacedBracedScopePreprocessingInfo(sageFilePtr);
-  normalizeLeadingBasicBlockPreprocessingInfo(sageFilePtr);
-  normalizeEnumEnumeratorPreprocessingInfo(sageFilePtr);
-  normalizeAsmStatementPreprocessingInfo(sageFilePtr);
-  normalizeInlineFunctionConditionalPreprocessingInfo(sageFilePtr);
+  LocatedNodeSourceOrder source_order;
+  buildLocatedNodeSourceOrder(sageFilePtr, source_order);
+  normalizeMisplacedBracedScopePreprocessingInfo(source_order);
+  normalizeLeadingBasicBlockPreprocessingInfo(source_order);
+  normalizeEnumEnumeratorPreprocessingInfo(source_order);
+  normalizeAsmStatementPreprocessingInfo(source_order);
+  normalizeAstUnparsedTemplateFunctionPreprocessingInfo(source_order);
+  normalizeInlineFunctionConditionalPreprocessingInfo(source_order);
 
   // DQ (11/18/2019): Set the flag that indicates that this SgSourceFile has had
   // its CPP directives and comments added.

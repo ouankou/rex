@@ -26,6 +26,7 @@
 #include "rose.h"
 
 #include "rose_path_resolver.h"
+#include "rose_test_output_path.h"
 
 #include <filesystem>
 
@@ -214,7 +215,8 @@ bool nodeCompareGraphPair(const std::pair<SgGraphNode *, int> &a,
 void sortedCallGraphDump(string fileName, SgIncidenceDirectedGraph *cg) {
   // Opening output file
   ofstream file;
-  file.open(fileName.c_str());
+  const std::string resolvedFileName = Rose::TestOutput::resolvePath(fileName);
+  file.open(resolvedFileName.c_str());
 
   // Get all nodes of the current CallGraph
   list<pair<SgGraphNode *, int>> cgNodes;
