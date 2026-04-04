@@ -10,6 +10,7 @@
 #include "sageGeneric.h"
 
 #include <err.h>
+#include <mutex>
 
 using namespace std;
 using namespace Rose;
@@ -1800,8 +1801,32 @@ namespace {
 
 using DefinitionExpressionIndex =
     std::map<SgFunctionDefinition *, Rose_STL_Container<SgExpression *>>;
-using ProjectDefinitionExpressionIndexCache =
-    std::map<SgProject *, DefinitionExpressionIndex>;
+
+std::mutex &definitionExpressionIndexInstallMutex() {
+  static std::mutex install_mutex;
+  return install_mutex;
+}
+
+const std::string &definitionExpressionIndexAttributeName() {
+  static const std::string attribute_name =
+      "rose.callGraph.definitionExpressionIndex";
+  return attribute_name;
+}
+
+class DefinitionExpressionIndexAttribute : public AstAttribute {
+public:
+  std::recursive_mutex mutex;
+  DefinitionExpressionIndex index;
+  bool initialized = false;
+
+  AstAttribute::OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
+  std::string attribute_class_name() const override {
+    return "DefinitionExpressionIndexAttribute";
+  }
+};
 
 static void
 indexDefinitionExpression(SgExpression *exp,
@@ -1825,19 +1850,14 @@ indexDefinitionExpression(SgExpression *exp,
   }
 }
 
-static DefinitionExpressionIndex &
-getDefinitionExpressionIndex(SgProject *project,
-                             ClassHierarchyWrapper *classHierarchy) {
+static void
+buildDefinitionExpressionIndex(SgProject *project,
+                               ClassHierarchyWrapper *classHierarchy,
+                               DefinitionExpressionIndex &definitionIndex) {
   ASSERT_not_null(project);
   ASSERT_not_null(classHierarchy);
 
-  static ProjectDefinitionExpressionIndexCache cachedIndices;
-  std::pair<ProjectDefinitionExpressionIndexCache::iterator, bool> insertion =
-      cachedIndices.insert(
-          std::make_pair(project, DefinitionExpressionIndex()));
-  if (insertion.second == false) {
-    return insertion.first->second;
-  }
+  definitionIndex.clear();
 
   VariantVector callSiteVariants;
   callSiteVariants.push_back(V_SgFunctionCallExp);
@@ -1852,10 +1872,70 @@ getDefinitionExpressionIndex(SgProject *project,
       continue;
     }
 
-    indexDefinitionExpression(exp, classHierarchy, insertion.first->second);
+    indexDefinitionExpression(exp, classHierarchy, definitionIndex);
+  }
+}
+
+static DefinitionExpressionIndexAttribute *
+getOrCreateDefinitionExpressionIndexAttribute(SgProject *project) {
+  ASSERT_not_null(project);
+
+  std::lock_guard<std::mutex> install_guard(
+      definitionExpressionIndexInstallMutex());
+
+  const std::string &attribute_name = definitionExpressionIndexAttributeName();
+  AstAttribute *attribute = project->getAttribute(attribute_name);
+  if (attribute == NULL) {
+    project->addNewAttribute(attribute_name,
+                             new DefinitionExpressionIndexAttribute);
+    attribute = project->getAttribute(attribute_name);
   }
 
-  return insertion.first->second;
+  ASSERT_not_null(attribute);
+  DefinitionExpressionIndexAttribute *index_attribute =
+      dynamic_cast<DefinitionExpressionIndexAttribute *>(attribute);
+  ASSERT_not_null(index_attribute);
+  return index_attribute;
+}
+
+static void clearDefinitionExpressionIndexCache(SgProject *project) {
+  ASSERT_not_null(project);
+
+  std::lock_guard<std::mutex> install_guard(
+      definitionExpressionIndexInstallMutex());
+
+  AstAttribute *attribute =
+      project->getAttribute(definitionExpressionIndexAttributeName());
+  if (attribute == NULL) {
+    return;
+  }
+
+  DefinitionExpressionIndexAttribute *index_attribute =
+      dynamic_cast<DefinitionExpressionIndexAttribute *>(attribute);
+  ASSERT_not_null(index_attribute);
+
+  std::lock_guard<std::recursive_mutex> index_guard(index_attribute->mutex);
+  index_attribute->index.clear();
+  index_attribute->initialized = false;
+}
+
+static void
+appendExpressionsForDefinition(SgFunctionDefinition *targetDef,
+                               const DefinitionExpressionIndex &definitionIndex,
+                               Rose_STL_Container<SgExpression *> &exps) {
+  ASSERT_not_null(targetDef);
+
+  DefinitionExpressionIndex::const_iterator expressionIt =
+      definitionIndex.find(targetDef);
+  if (expressionIt == definitionIndex.end()) {
+    return;
+  }
+
+  for (SgExpression *exp : expressionIt->second) {
+    if (exp != NULL) {
+      exps.push_back(exp);
+    }
+  }
 }
 
 } // namespace
@@ -1869,19 +1949,25 @@ void CallTargetSet::getExpressionsForDefinition(
   SgProject *project = SageInterface::getProject(targetDef);
   ASSERT_not_null(project);
 
-  DefinitionExpressionIndex &definitionIndex =
-      getDefinitionExpressionIndex(project, classHierarchy);
-  DefinitionExpressionIndex::const_iterator expressionIt =
-      definitionIndex.find(targetDef);
-  if (expressionIt == definitionIndex.end()) {
+  if (project->get_containsTransformation()) {
+    clearDefinitionExpressionIndexCache(project);
+
+    DefinitionExpressionIndex definitionIndex;
+    buildDefinitionExpressionIndex(project, classHierarchy, definitionIndex);
+    appendExpressionsForDefinition(targetDef, definitionIndex, exps);
     return;
   }
 
-  for (SgExpression *exp : expressionIt->second) {
-    if (exp != NULL) {
-      exps.push_back(exp);
-    }
+  DefinitionExpressionIndexAttribute *index_attribute =
+      getOrCreateDefinitionExpressionIndexAttribute(project);
+  std::lock_guard<std::recursive_mutex> index_guard(index_attribute->mutex);
+  if (index_attribute->initialized == false) {
+    buildDefinitionExpressionIndex(project, classHierarchy,
+                                   index_attribute->index);
+    index_attribute->initialized = true;
   }
+
+  appendExpressionsForDefinition(targetDef, index_attribute->index, exps);
 }
 
 FunctionData::FunctionData(SgFunctionDeclaration *inputFunctionDeclaration,
