@@ -9621,10 +9621,11 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
   unparse_template_from_ast |=
       template_stmt->get_unparse_template_ast() == true;
   if (!unparse_template_from_ast) {
-    const char *saved_template_string = template_stmt->get_string().str();
-    const bool missing_saved_template_string =
-        template_stmt->get_string().is_null() ||
-        saved_template_string == NULL || saved_template_string[0] == '\0';
+    const SgName saved_template_name = template_stmt->get_string();
+    const char *saved_template_string = saved_template_name.str();
+    const bool missing_saved_template_string = saved_template_name.is_null() ||
+                                               saved_template_string == NULL ||
+                                               saved_template_string[0] == '\0';
     if (missing_saved_template_string) {
       // Token-preserving transformation frontiers can force a template
       // declaration down the AST path even when the legacy saved-string form

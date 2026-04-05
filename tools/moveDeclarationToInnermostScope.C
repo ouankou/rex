@@ -673,16 +673,23 @@ int main(int argc, char *argv[]) {
           SgNode *input_node = TransformationTracking::getNode((*iditer));
           SgLocatedNode *lnode = isSgLocatedNode(input_node);
           cout << describeTrackingNode(lnode) << endl;
-          cout << "//Transformation generated based on line #"
-               << lnode->get_file_info()->get_line() << endl;
-          src_comment += " line # " + StringUtility::numberToString(
-                                          lnode->get_file_info()->get_line());
+          const Sg_File_Info *file_info =
+              lnode != nullptr ? lnode->get_file_info() : nullptr;
+          if (file_info != nullptr && file_info->get_line() > 0) {
+            cout << "//Transformation generated based on line #"
+                 << file_info->get_line() << endl;
+            src_comment += " line # " +
+                           StringUtility::numberToString(file_info->get_line());
+          } else {
+            cout << "//Transformation generated based on an unmapped node"
+                 << endl;
+            src_comment += " an unmapped node";
+          }
         }
         src_comment += "\n";
         //        SgStatement* enclosing_stmt =
         //        getEnclosingStatement(affected_node);
         cout << src_comment << endl;
-        // TODO: turn this on and update the reference results
         //         attachComment (enclosing_stmt, src_comment);
       } // end if ids.size() >0
     } // end for inputIDs
