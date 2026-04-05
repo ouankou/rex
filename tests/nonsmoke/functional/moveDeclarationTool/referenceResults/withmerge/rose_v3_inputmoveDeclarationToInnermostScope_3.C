@@ -1,16 +1,15 @@
 /*
  * Test case for declaration movement
- *  
+ *
  * */
 int x;
 int y;
-extern int f(int );
-extern int foo(int );
-extern int goo(int );
-extern int g(int );
+extern int f(int);
+extern int foo(int);
+extern int goo(int);
+extern int g(int);
 
-void func1(int len)
-{
+void func1(int len) {
   /* declared once, used multiple times as loop index variable*/
   for (int i = 0; i < len; ++i) {
     int tmp = f(i);
@@ -25,8 +24,7 @@ void func1(int len)
   /* declared once, used multiple times */
 }
 
-void func2(int len)
-{
+void func2(int len) {
   /* declared once, used multiple times as loop index variable*/
   {
     int tmp;
@@ -37,7 +35,7 @@ void func2(int len)
     }
     for (int i = 0; i < len; ++i) {
       tmp = g(i) + tmp;
-// here is live in!
+      // here is live in!
       y = goo(tmp);
     }
     /* … */

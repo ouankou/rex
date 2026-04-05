@@ -8,9 +8,7 @@
 // used in multiple branches, can be moved
 #include <stdio.h>
 
-void foo(int cond,int *blockx,int loSt)
-{
-// if-stmt , eligible to move into two branches
+void foo(int cond, int *blockx, int loSt) {
   if (cond) {
     int tmp = 6;
     printf("%d",tmp);
@@ -19,10 +17,6 @@ void foo(int cond,int *blockx,int loSt)
     int tmp = 7;
     printf("%d",tmp);
   }
-// another if-stmt case
-// variable is used in both true and false body
-// But not eligible to move into two bodies
-// Naive analysis will find if-stmt is the inner-most common scope.
 {
     if (loSt) {
       int blockx;
@@ -32,8 +26,7 @@ void foo(int cond,int *blockx,int loSt)
       int blockx;
       blockx--;
     }
-  }
-// static variable should not be moved
+}
   static int stmp;
   if (cond) {
     stmp = 6;
@@ -43,6 +36,12 @@ void foo(int cond,int *blockx,int loSt)
     stmp = 7;
     printf("%d",stmp);
   }
+  // if-stmt , eligible to move into two branches
+  // another if-stmt case
+  // variable is used in both true and false body
+  // But not eligible to move into two bodies
+  // Naive analysis will find if-stmt is the inner-most common scope.
+  // static variable should not be moved
 }
 // A tricky case of if-stmt,
 // move to two bodies, trigger another round of moving: iterative moving

@@ -111,6 +111,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <sstream>
 
 #include <map>   // used to store special var reference's scope
 #include <queue> // used for a worklist of declarations to be moved
@@ -142,6 +143,42 @@ std::string resolveTestOutputPath(const std::string &filename) {
   }
   resolved += filename;
   return resolved;
+}
+
+std::string describeTrackingNode(const SgLocatedNode *node) {
+  std::ostringstream out;
+  if (node == nullptr) {
+    out << "<null>";
+    return out.str();
+  }
+
+  out << node->class_name();
+
+  const auto *file_info = node->get_file_info();
+  if (file_info != nullptr && file_info->get_line() > 0 &&
+      !file_info->get_filenameString().empty()) {
+    out << " @ " << file_info->get_filenameString() << ":"
+        << file_info->get_line();
+    if (file_info->get_col() > 0) {
+      out << ":" << file_info->get_col();
+    }
+  }
+
+  if (const auto *var_decl = isSgVariableDeclaration(node)) {
+    const auto &variables = var_decl->get_variables();
+    if (!variables.empty() && variables.front() != nullptr) {
+      out << " '" << variables.front()->get_name().getString() << "'";
+    }
+  } else if (const auto *func_decl = isSgFunctionDeclaration(node)) {
+    out << " '" << func_decl->get_name().getString() << "'";
+  } else if (const auto *init_name = isSgInitializedName(node)) {
+    out << " '" << init_name->get_name().getString() << "'";
+  } else if (const auto *var_ref = isSgVarRefExp(node);
+             var_ref != nullptr && var_ref->get_symbol() != nullptr) {
+    out << " '" << var_ref->get_symbol()->get_name().getString() << "'";
+  }
+
+  return out.str();
 }
 
 } // namespace
@@ -629,15 +666,13 @@ int main(int argc, char *argv[]) {
         string src_comment = "Transformation generated based on ";
         cout << "Found a node with IR mapping info" << endl;
         SgNode *affected_node = TransformationTracking::getNode((*iter).first);
-        cout << isSgLocatedNode(affected_node)->unparseToString() << endl;
+        cout << describeTrackingNode(isSgLocatedNode(affected_node)) << endl;
         cout << "-- with input nodes ----------" << endl;
         std::set<AST_NODE_ID>::iterator iditer;
         for (iditer = ids.begin(); iditer != ids.end(); iditer++) {
           SgNode *input_node = TransformationTracking::getNode((*iditer));
           SgLocatedNode *lnode = isSgLocatedNode(input_node);
-          cout << lnode->unparseToString()
-               << endl; // TODO this function has unexpected side effects
-                        // impacting token-based unparsing
+          cout << describeTrackingNode(lnode) << endl;
           cout << "//Transformation generated based on line #"
                << lnode->get_file_info()->get_line() << endl;
           src_comment += " line # " + StringUtility::numberToString(
