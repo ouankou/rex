@@ -171,6 +171,8 @@ std::string describeTrackingNode(const SgLocatedNode *node) {
     }
   } else if (const auto *func_decl = isSgFunctionDeclaration(node)) {
     out << " '" << func_decl->get_name().getString() << "'";
+  } else if (const auto *class_decl = isSgClassDeclaration(node)) {
+    out << " '" << class_decl->get_name().getString() << "'";
   } else if (const auto *init_name = isSgInitializedName(node)) {
     out << " '" << init_name->get_name().getString() << "'";
   } else if (const auto *var_ref = isSgVarRefExp(node);
