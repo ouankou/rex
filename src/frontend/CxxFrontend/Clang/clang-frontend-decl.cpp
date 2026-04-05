@@ -29787,6 +29787,13 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
     const bool current_is_namespace_scoped_friend_free_definition =
         isFriendFreeFunction && decl_context_is_namespace_or_tu;
+    const bool needs_constrained_destructor_symbol_isolation =
+        current_matches_first_source_decl && templateDecl == nullptr &&
+        llvm::isa<clang::CXXDestructorDecl>(function_decl) && [&]() -> bool {
+      const clang::AssociatedConstraint &trailing_requires =
+          function_decl->getTrailingRequiresClause();
+      return trailing_requires && trailing_requires.ConstraintExpr != nullptr;
+    }();
     auto ensure_primary_template_nondef_symbol =
         [&](SgFunctionDeclaration *decl) -> bool {
       if (decl == nullptr) {
@@ -29879,7 +29886,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         return function_symbol_can_bind_to_declaration(
             bound_symbol, decl, BIND_REQUIRE_SAME_DECL_CHAIN);
       }
-
       return false;
     };
 
@@ -29899,6 +29905,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
         SgTemplateMemberFunctionDeclaration *first_nondef = nullptr;
         bool synthesized_first_nondef = false;
+        bool detached_synthesized_constraint_first_nondef = false;
 
         if (!current_matches_first_source_decl) {
           auto map_it =
@@ -29933,16 +29940,63 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
               clone_param_list(param_list);
           synthesized_first_nondef = true;
 
+          SgSymbol *hidden_conflicting_symbol = nullptr;
+          const bool synthesizing_constrained_destructor_first_nondef =
+              needs_constrained_destructor_symbol_isolation &&
+              builder_scope != nullptr;
+          if (synthesizing_constrained_destructor_first_nondef) {
+            SgFunctionParameterTypeList *probe_type_list =
+                SageBuilder::buildFunctionParameterTypeList(first_param_list);
+            SgMemberFunctionType *probe_type =
+                SageBuilder::buildMemberFunctionType(
+                    ret_type, probe_type_list, builder_scope,
+                    functionConstVolatileFlags);
+            hidden_conflicting_symbol =
+                builder_scope->lookup_template_member_function_symbol(
+                    name, probe_type, effective_template_params);
+            if (hidden_conflicting_symbol != nullptr) {
+              if (symbol_present_in_scope(builder_scope,
+                                          hidden_conflicting_symbol)) {
+                builder_scope->remove_symbol(hidden_conflicting_symbol);
+              } else if (SgSymbolTable *table =
+                             builder_scope->get_symbol_table()) {
+                if (symbol_present_in_table(table, hidden_conflicting_symbol)) {
+                  table->remove(hidden_conflicting_symbol);
+                  hidden_conflicting_symbol->set_parent(nullptr);
+                }
+              }
+            }
+          }
+
           first_nondef =
               SageBuilder::buildNondefiningTemplateMemberFunctionDeclaration(
                   name, ret_type, first_param_list, builder_scope,
                   functionConstVolatileFlags, effective_template_params);
+
+          if (hidden_conflicting_symbol != nullptr &&
+              !symbol_present_in_scope(builder_scope,
+                                       hidden_conflicting_symbol)) {
+            builder_scope->insert_symbol(hidden_conflicting_symbol->get_name(),
+                                         hidden_conflicting_symbol);
+          }
+
           ROSE_ASSERT(first_nondef != nullptr);
           propagate_template_parameter_metadata(
               effective_template_params,
               first_nondef->get_templateParameters());
 
-          applySourceRange(first_nondef, declaration_source_range);
+          if (synthesizing_constrained_destructor_first_nondef) {
+            setCompilerGeneratedFileInfo(first_nondef);
+            setCompilerGeneratedFileInfo(first_param_list);
+            for (SgInitializedName *param : first_param_list->get_args()) {
+              if (param != nullptr) {
+                setCompilerGeneratedFileInfo(param);
+              }
+            }
+            detached_synthesized_constraint_first_nondef = true;
+          } else {
+            applySourceRange(first_nondef, declaration_source_range);
+          }
           first_param_list->set_parent(first_nondef);
           if (function_decl->isVariadic())
             first_nondef->hasEllipses();
@@ -29961,16 +30015,63 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
               clone_param_list(param_list);
           synthesized_first_nondef = true;
 
+          SgSymbol *hidden_conflicting_symbol = nullptr;
+          const bool synthesizing_constrained_destructor_first_nondef =
+              needs_constrained_destructor_symbol_isolation &&
+              builder_scope != nullptr;
+          if (synthesizing_constrained_destructor_first_nondef) {
+            SgFunctionParameterTypeList *probe_type_list =
+                SageBuilder::buildFunctionParameterTypeList(first_param_list);
+            SgMemberFunctionType *probe_type =
+                SageBuilder::buildMemberFunctionType(
+                    ret_type, probe_type_list, builder_scope,
+                    functionConstVolatileFlags);
+            hidden_conflicting_symbol =
+                builder_scope->lookup_template_member_function_symbol(
+                    name, probe_type, effective_template_params);
+            if (hidden_conflicting_symbol != nullptr) {
+              if (symbol_present_in_scope(builder_scope,
+                                          hidden_conflicting_symbol)) {
+                builder_scope->remove_symbol(hidden_conflicting_symbol);
+              } else if (SgSymbolTable *table =
+                             builder_scope->get_symbol_table()) {
+                if (symbol_present_in_table(table, hidden_conflicting_symbol)) {
+                  table->remove(hidden_conflicting_symbol);
+                  hidden_conflicting_symbol->set_parent(nullptr);
+                }
+              }
+            }
+          }
+
           first_nondef =
               SageBuilder::buildNondefiningTemplateMemberFunctionDeclaration(
                   name, ret_type, first_param_list, builder_scope,
                   functionConstVolatileFlags, effective_template_params);
+
+          if (hidden_conflicting_symbol != nullptr &&
+              !symbol_present_in_scope(builder_scope,
+                                       hidden_conflicting_symbol)) {
+            builder_scope->insert_symbol(hidden_conflicting_symbol->get_name(),
+                                         hidden_conflicting_symbol);
+          }
+
           ROSE_ASSERT(first_nondef != nullptr);
           propagate_template_parameter_metadata(
               effective_template_params,
               first_nondef->get_templateParameters());
 
-          applySourceRange(first_nondef, declaration_source_range);
+          if (synthesizing_constrained_destructor_first_nondef) {
+            setCompilerGeneratedFileInfo(first_nondef);
+            setCompilerGeneratedFileInfo(first_param_list);
+            for (SgInitializedName *param : first_param_list->get_args()) {
+              if (param != nullptr) {
+                setCompilerGeneratedFileInfo(param);
+              }
+            }
+            detached_synthesized_constraint_first_nondef = true;
+          } else {
+            applySourceRange(first_nondef, declaration_source_range);
+          }
           first_param_list->set_parent(first_nondef);
           if (function_decl->isVariadic())
             first_nondef->hasEllipses();
@@ -29978,6 +30079,11 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
         if (synthesized_first_nondef) {
           suppress_synthesized_builder_prototype(first_nondef);
+          if (detached_synthesized_constraint_first_nondef) {
+            if (SgScopeStatement *first_scope = first_nondef->get_scope()) {
+              detach_decl_from_scope_child_list(first_nondef, first_scope);
+            }
+          }
         }
 
         first_nondef->set_firstNondefiningDeclaration(first_nondef);
