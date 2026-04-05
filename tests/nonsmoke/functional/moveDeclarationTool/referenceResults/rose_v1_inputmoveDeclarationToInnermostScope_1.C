@@ -3,11 +3,10 @@ int main()
 {
   int k;
   k = 0;
-// k is used in the same scope in which it is declared
-// simplest use-def chain
-{
-{
-{
+  // k is used in the same scope in which it is declared
+  {
+    {
+      {
         int i;
         i = 0;
       }
@@ -36,4 +35,5 @@ int main()
     }
   }
   return 0;
+  // simplest use-def chain
 }

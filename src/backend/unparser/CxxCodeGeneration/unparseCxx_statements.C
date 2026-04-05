@@ -9620,6 +9620,20 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
       sourcefile != NULL && sourcefile->get_unparse_template_ast();
   unparse_template_from_ast |=
       template_stmt->get_unparse_template_ast() == true;
+  if (!unparse_template_from_ast) {
+    const SgName saved_template_name = template_stmt->get_string();
+    const char *saved_template_string = saved_template_name.str();
+    const bool missing_saved_template_string = saved_template_name.is_null() ||
+                                               saved_template_string == NULL ||
+                                               saved_template_string[0] == '\0';
+    if (missing_saved_template_string) {
+      // Token-preserving transformation frontiers can force a template
+      // declaration down the AST path even when the legacy saved-string form
+      // was never populated. In that case, emitting from the empty saved string
+      // drops the declaration entirely, so fall back to the structural AST.
+      unparse_template_from_ast = true;
+    }
+  }
 
   auto unparse_member_function_ctor_initializers =
       [&](SgMemberFunctionDeclaration *member_function,

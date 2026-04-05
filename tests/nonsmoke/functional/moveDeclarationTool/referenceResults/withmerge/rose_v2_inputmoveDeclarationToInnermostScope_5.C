@@ -41,15 +41,8 @@ static void fallbackQSort3(UInt32 *fmap,UInt32 *eclass,Int32 loSt,Int32 hiSt)
     UInt32 med;
     if (hi - lo < 10) {
       fallbackSimpleSort(fmap,eclass,lo,hi);
-      continue; 
+      continue;
     }
-/* Random partitioning.  Median of 3 sometimes fails to
-       avoid bad cases.  Median of 9 seems to help but 
-       looks rather expensive.  This too seems to work but
-       is cheaper.  Guidance for the magic constants 
-       7621 and 32768 is taken from Sedgewick's algorithms
-       book, chapter 35.
-       */
     r = (r * 7621 + 1) % 32768;
     UInt32 r3 = r % 3;
     if (r3 == 0)
@@ -122,8 +115,14 @@ static void fallbackQSort3(UInt32 *fmap,UInt32 *eclass,Int32 loSt,Int32 hiSt)
     }
      else {
     }
+    /* Random partitioning.  Median of 3 sometimes fails to
+           avoid bad cases.  Median of 9 seems to help but
+           looks rather expensive.  This too seems to work but
+           is cheaper.  Guidance for the magic constants
+           7621 and 32768 is taken from Sedgewick's algorithms
+           book, chapter 35.
+           */
   }
-// made up another test for if (condition)
 {
     Int32 lo;
     Int32 hi;
@@ -135,10 +134,7 @@ static void fallbackQSort3(UInt32 *fmap,UInt32 *eclass,Int32 loSt,Int32 hiSt)
       Int32 *budget;
       mainQSort3(ptr,block,quadrant,nblock,lo,hi,2,budget);
     }
-  }
-// another if-stmt case
-// variable is used in both true and false body.
-// Naive analysis will find if-stmt is the inner-most common scope.
+}
 {
     if (loSt) {
       int blockx;
@@ -148,8 +144,7 @@ static void fallbackQSort3(UInt32 *fmap,UInt32 *eclass,Int32 loSt,Int32 hiSt)
       int blockx;
       blockx--;
     }
-  }
-//switch
+}
 {
     int blockx;
     switch(blockx){
@@ -162,6 +157,11 @@ static void fallbackQSort3(UInt32 *fmap,UInt32 *eclass,Int32 loSt,Int32 hiSt)
       break;
     }
   }
+  // made up another test for if (condition)
+  // another if-stmt case
+  // variable is used in both true and false body.
+  // Naive analysis will find if-stmt is the inner-most common scope.
+  // switch
 }
 Int32 uInt64_qrm10(UInt64 *n);
 Bool uInt64_isZero(UInt64 *n);
