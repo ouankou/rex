@@ -210,6 +210,36 @@ void FortranCodeGeneration_locatedNode::unparseLanguageSpecificExpression(
   case V_SgAssignOp:
     unparseAssnOp(expr, info);
     break;
+  case V_SgPlusAssignOp:
+    unparseBinaryOperator(expr, "+=", info);
+    break;
+  case V_SgMinusAssignOp:
+    unparseBinaryOperator(expr, "-=", info);
+    break;
+  case V_SgMultAssignOp:
+    unparseBinaryOperator(expr, "*=", info);
+    break;
+  case V_SgDivAssignOp:
+    unparseBinaryOperator(expr, "/=", info);
+    break;
+  case V_SgModAssignOp:
+    unparseBinaryOperator(expr, "%=", info);
+    break;
+  case V_SgAndAssignOp:
+    unparseBinaryOperator(expr, "&=", info);
+    break;
+  case V_SgIorAssignOp:
+    unparseBinaryOperator(expr, "|=", info);
+    break;
+  case V_SgXorAssignOp:
+    unparseBinaryOperator(expr, "^=", info);
+    break;
+  case V_SgLshiftAssignOp:
+    unparseBinaryOperator(expr, "<<=", info);
+    break;
+  case V_SgRshiftAssignOp:
+    unparseBinaryOperator(expr, ">>=", info);
+    break;
   case V_SgPointerAssignOp:
     unparsePointerAssnOp(expr, info);
     break;

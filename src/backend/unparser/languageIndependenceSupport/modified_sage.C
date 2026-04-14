@@ -195,7 +195,7 @@ bool Unparse_MOD_SAGE::isBinaryInequalityOperator(SgExpression *expr) {
 
   if (func_name == "operator<=" || func_name == "operator>=" ||
       func_name == "operator<" || func_name == "operator>" ||
-      func_name == "operator!=") {
+      func_name == "operator!=" || func_name == "operator<=>") {
     return true;
   }
 
@@ -285,10 +285,11 @@ bool Unparse_MOD_SAGE::isBinaryOperator(SgExpression *expr) {
       func_name == "operator>>" || func_name == "operator>>=" ||
       func_name == "operator<<=" || func_name == "operator==" ||
       func_name == "operator!=" || func_name == "operator<=" ||
-      func_name == "operator>=" || func_name == "operator&&" ||
-      func_name == "operator||" || func_name == "operator," ||
-      func_name == "operator->*" || func_name == "operator->" ||
-      func_name == "operator()" || func_name == "operator[]") {
+      func_name == "operator>=" || func_name == "operator<=>" ||
+      func_name == "operator&&" || func_name == "operator||" ||
+      func_name == "operator," || func_name == "operator->*" ||
+      func_name == "operator->" || func_name == "operator()" ||
+      func_name == "operator[]") {
     // DQ (5/6/2007): Make sure this could not be a unary operator (using new
     // fix for unary operators). if (isUnaryOperatorPlus(expr) ||
     // isUnaryOperatorMinus(expr))
@@ -672,6 +673,8 @@ int GetOperatorVariant(SgExpression *expr) {
     return V_SgLessOrEqualOp;
   else if (func_name == "operator>=")
     return V_SgGreaterOrEqualOp;
+  else if (func_name == "operator<=>")
+    return V_SgSpaceshipOp;
   else if (func_name == "operator<<")
     return V_SgLshiftOp;
   else if (func_name == "operator>>")
@@ -1189,7 +1192,8 @@ void Unparse_MOD_SAGE::printSpecifier1(SgDeclarationStatement *decl_stmt,
               .isPrivate()) {
         info.set_isPrivateAccess();
         if (flag) {
-          curprint("private: ");
+          curprint("private:");
+          unp->cur.insert_newline(1, unp->cur.statement_indent());
           // printf ("Output PRIVATE keyword! \n");
         }
       } else {
@@ -1198,7 +1202,8 @@ void Unparse_MOD_SAGE::printSpecifier1(SgDeclarationStatement *decl_stmt,
                 .isProtected()) {
           info.set_isProtectedAccess();
           if (flag) {
-            curprint("protected: ");
+            curprint("protected:");
+            unp->cur.insert_newline(1, unp->cur.statement_indent());
             // printf ("Output PROTECTED keyword! \n");
           }
         } else {
@@ -1209,7 +1214,8 @@ void Unparse_MOD_SAGE::printSpecifier1(SgDeclarationStatement *decl_stmt,
                   .isPublic() == true) {
             info.set_isPublicAccess();
             if (flag) {
-              curprint("public: ");
+              curprint("public:");
+              unp->cur.insert_newline(1, unp->cur.statement_indent());
               // printf ("Output PUBLIC keyword! \n");
             }
           } else {
@@ -1400,7 +1406,7 @@ void Unparse_MOD_SAGE::outputTemplateSpecializationSpecifier(
     unparse_template_from_ast |= tvdecl->get_unparse_template_ast() == true;
 
     if (!unparse_template_from_ast) {
-      curprint("template <> ");
+      curprint("template<> ");
     }
   }
 

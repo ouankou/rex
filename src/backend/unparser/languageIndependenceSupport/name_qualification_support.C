@@ -7,6 +7,221 @@
 
 using namespace std;
 
+namespace {
+
+SgDeclarationStatement *
+referencedDeclarationForTemplateArgument(const SgTemplateArgument *arg) {
+  if (arg == NULL) {
+    return NULL;
+  }
+
+  switch (arg->get_argumentType()) {
+  case SgTemplateArgument::type_argument: {
+    SgType *type = arg->get_type();
+    return type != NULL ? type->getAssociatedDeclaration() : NULL;
+  }
+
+  case SgTemplateArgument::template_template_argument:
+    return isSgDeclarationStatement(arg->get_templateDeclaration());
+
+  default:
+    return NULL;
+  }
+}
+
+SgScopeStatement *
+scopeForTemplateArgumentQualification(SgDeclarationStatement *declaration) {
+  if (declaration == NULL) {
+    return NULL;
+  }
+
+  SgScopeStatement *scope = declaration->get_scope();
+  ASSERT_not_null(scope);
+
+  SgNonrealDecl *nrdecl = isSgNonrealDecl(declaration);
+  while (nrdecl != NULL) {
+    if (nrdecl->get_is_template_param()) {
+      SgScopeStatement *param_scope = nrdecl->get_scope();
+      if (SgDeclarationScope *decl_scope = isSgDeclarationScope(param_scope)) {
+        scope = decl_scope;
+      } else {
+        scope = param_scope;
+      }
+      ASSERT_not_null(scope);
+      break;
+    }
+
+    if (nrdecl->get_templateDeclaration() == NULL) {
+      SgDeclarationScope *decl_scope =
+          isSgDeclarationScope(nrdecl->get_scope());
+      if (decl_scope == NULL) {
+        scope = nrdecl->get_scope();
+        ASSERT_not_null(scope);
+        break;
+      }
+
+      SgNode *decl_scope_parent = decl_scope->get_parent();
+      ASSERT_not_null(decl_scope_parent);
+
+      if (SgNonrealDecl *nr_parent = isSgNonrealDecl(decl_scope_parent)) {
+        ROSE_ASSERT(nr_parent != nrdecl);
+        nrdecl = nr_parent;
+      } else {
+        SgScopeStatement *parent_scope = isSgScopeStatement(decl_scope_parent);
+        if (parent_scope == NULL) {
+          parent_scope = SageInterface::getEnclosingScope(decl_scope_parent);
+        }
+        ASSERT_not_null(parent_scope);
+        scope = parent_scope;
+        break;
+      }
+    } else {
+      scope = nrdecl->get_templateDeclaration()->get_scope();
+      ASSERT_not_null(scope);
+      break;
+    }
+  }
+
+  return scope;
+}
+
+std::string
+nameForTemplateArgumentQualificationScope(SgScopeStatement *scope,
+                                          SgScopeStatement *&next_scope) {
+  if (scope == NULL) {
+    next_scope = NULL;
+    return "";
+  }
+
+  next_scope = scope->get_scope();
+  std::string scope_name;
+
+  if (SgDeclarationScope *decl_scope = isSgDeclarationScope(scope)) {
+    if (SgNonrealDecl *nrdecl = isSgNonrealDecl(scope->get_parent())) {
+      SgName nonreal_name = nrdecl->get_name();
+      if (!nrdecl->get_tpl_args().empty()) {
+        nonreal_name = SageBuilder::appendTemplateArgumentsToName(
+            nonreal_name, nrdecl->get_tpl_args());
+      }
+      scope_name = nonreal_name.getString();
+      if (SgScopeStatement *nr_scope = nrdecl->get_scope()) {
+        next_scope = nr_scope;
+      }
+    } else if (next_scope == NULL) {
+      next_scope = SageInterface::getEnclosingScope(scope);
+    }
+  } else if (SgNamespaceDefinitionStatement *ns_def =
+                 isSgNamespaceDefinitionStatement(scope)) {
+    SgNamespaceDeclarationStatement *ns_decl =
+        ns_def->get_namespaceDeclaration();
+    ASSERT_not_null(ns_decl);
+    if (!ns_decl->get_isUnnamedNamespace()) {
+      scope_name = ns_decl->get_name().getString();
+    }
+  } else if (SgTemplateInstantiationDefn *inst_def =
+                 isSgTemplateInstantiationDefn(scope)) {
+    SgTemplateInstantiationDecl *inst_decl =
+        isSgTemplateInstantiationDecl(inst_def->get_declaration());
+    ASSERT_not_null(inst_decl);
+    scope_name = inst_decl->get_name().getString();
+  } else if (SgTemplateClassDefinition *template_def =
+                 isSgTemplateClassDefinition(scope)) {
+    SgTemplateClassDeclaration *template_decl = template_def->get_declaration();
+    ASSERT_not_null(template_decl);
+    scope_name = template_decl->get_name().getString();
+  } else if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+    SgClassDeclaration *class_decl = class_def->get_declaration();
+    ASSERT_not_null(class_decl);
+    if (!class_decl->get_isUnNamed()) {
+      scope_name = class_decl->get_name().getString();
+    }
+  } else if (isSgGlobal(scope) == NULL) {
+    scope_name = SageInterface::get_name(scope);
+  }
+
+  if (scope_name == "undefined_name") {
+    scope_name.clear();
+  }
+
+  if (scope_name.rfind("__anonymous_0x", 0) == 0) {
+    scope_name.clear();
+  }
+
+  if (scope_name.rfind("0x", 0) == 0 && isSgGlobal(scope) == NULL) {
+    scope_name.clear();
+  }
+
+  return scope_name;
+}
+
+SgName synthesizeTemplateArgumentQualifier(SgTemplateArgument *arg) {
+  if (arg == NULL) {
+    return SgName();
+  }
+
+  int qualification_length = arg->get_name_qualification_length_for_type();
+  bool global_qualification = arg->get_global_qualification_required_for_type();
+
+  if (qualification_length <= 0 && !global_qualification) {
+    qualification_length = arg->get_name_qualification_length();
+    global_qualification = arg->get_global_qualification_required();
+  }
+
+  if (qualification_length <= 0 && !global_qualification) {
+    return SgName();
+  }
+
+  SgDeclarationStatement *declaration =
+      referencedDeclarationForTemplateArgument(arg);
+  if (declaration == NULL) {
+    return SgName();
+  }
+
+  SgScopeStatement *scope = scopeForTemplateArgumentQualification(declaration);
+  if (scope == NULL) {
+    return SgName();
+  }
+
+  std::vector<std::string> components;
+  while (scope != NULL &&
+         static_cast<int>(components.size()) < qualification_length) {
+    if (isSgGlobal(scope) != NULL) {
+      break;
+    }
+
+    SgScopeStatement *next_scope = NULL;
+    std::string scope_name =
+        nameForTemplateArgumentQualificationScope(scope, next_scope);
+    if (!scope_name.empty()) {
+      components.push_back(scope_name);
+    }
+
+    if (next_scope == scope) {
+      break;
+    }
+    scope = next_scope;
+  }
+
+  if (components.empty() && !global_qualification) {
+    return SgName();
+  }
+
+  std::string qualifier;
+  if (global_qualification) {
+    qualifier = "::";
+  }
+
+  for (std::vector<std::string>::reverse_iterator i = components.rbegin();
+       i != components.rend(); ++i) {
+    qualifier += *i;
+    qualifier += "::";
+  }
+
+  return SgName(qualifier);
+}
+
+} // namespace
+
 // DQ (5/11/2011): New name qualification for ROSE (the 4th try).
 // This is a part of a rewrite of the name qualification support in ROSE with
 // the follwoing properties:

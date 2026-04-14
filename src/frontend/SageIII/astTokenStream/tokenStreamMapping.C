@@ -990,7 +990,8 @@ void Graph_TokenMappingTraversal::graph_ast_and_token_stream(
 
   string dot_header = filename;
   filename += ".dot";
-  filename = Rose::TestOutput::resolvePath(filename);
+  filename = Rose::TestOutput::resolvePath(
+      filename, std::string(ROSE_BUILD_TREE) + "/test-output/token-stream");
 
   printf("In graph_ast_and_token_stream(): filename = %s \n", filename.c_str());
 
@@ -2228,7 +2229,12 @@ SynthesizedAttribute TokenMappingTraversal::evaluateSynthesizedAttribute(
               printf("Remove the inner class from the tokenToNodeVector, and "
                      "the IR node to token subsequence map \n");
 #endif
-              tokenToNodeEntriesToRemove.push_back(previous_mappingInfo);
+              if (find(tokenToNodeEntriesToRemove.begin(),
+                       tokenToNodeEntriesToRemove.end(),
+                       previous_mappingInfo) ==
+                  tokenToNodeEntriesToRemove.end()) {
+                tokenToNodeEntriesToRemove.push_back(previous_mappingInfo);
+              }
 
               // Mark the outer token sequense as being shared across multiple
               // IR nodes
@@ -2307,11 +2313,6 @@ SynthesizedAttribute TokenMappingTraversal::evaluateSynthesizedAttribute(
                   // tokenStreamSequenceMap.erase(tokenStreamSequenceMap.find(mappingInfo->node));
                   tokenStreamSequenceMap.erase(
                       tokenStreamSequenceMap.find(mappingInfo->node));
-                } else {
-                  printf("mappingInfo = %p node = %p = %s NOT FOUND in "
-                         "tokenStreamSequenceMap \n",
-                         mappingInfo, mappingInfo->node,
-                         mappingInfo->node->class_name().c_str());
                 }
 
                 vector<TokenStreamSequenceToNodeMapping *>::iterator k2 =
@@ -2374,8 +2375,6 @@ SynthesizedAttribute TokenMappingTraversal::evaluateSynthesizedAttribute(
               tokenToNodeVector.erase(k1);
             }
 
-            ROSE_ASSERT(tokenStreamSequenceMap.find(n) !=
-                        tokenStreamSequenceMap.end());
             ROSE_ASSERT(tokenToNodeEntriesToRemove[index]->node != NULL);
 #if DEBUG_TOKEN_SHARING_BETWEEN_STATEMENTS
             printf("BEFORE ERASE: tokenStreamSequenceMap.size() = %" PRIuPTR
@@ -2383,6 +2382,12 @@ SynthesizedAttribute TokenMappingTraversal::evaluateSynthesizedAttribute(
                    tokenStreamSequenceMap.size(),
                    tokenStreamSequenceVector.size());
 #endif
+            // The current parent node `n` does not always own a direct token
+            // sequence entry (for example SgTemplateInstantiationDefn scopes
+            // can be represented entirely by their child declarations). The
+            // cleanup here is removing the nested child mappings recorded in
+            // tokenToNodeEntriesToRemove, so only those entries are required
+            // to exist in the token-sequence containers.
             // tokenStreamSequenceMap.erase(tokenToNodeEntriesToRemove[index].node);
             // tokenStreamSequenceMap.erase(tokenStreamSequenceMap.find(tokenToNodeEntriesToRemove[index]->node));
             if (tokenStreamSequenceMap.find(
@@ -2476,17 +2481,6 @@ SynthesizedAttribute TokenMappingTraversal::evaluateSynthesizedAttribute(
             ROSE_ASSERT(start != NULL);
             ROSE_ASSERT(end != NULL);
 
-            ROSE_ASSERT(tokenStreamSequenceMap.find(n) !=
-                        tokenStreamSequenceMap.end());
-            TokenStreamSequenceToNodeMapping *current_mappingInfo =
-                tokenStreamSequenceMap[n];
-            ROSE_ASSERT(current_mappingInfo != NULL);
-
-            // DQ (3/25/2017): Clang reports these as unused variables.
-            // int current_token_sequence_start  =
-            // current_mappingInfo->token_subsequence_start; int
-            // current_token_sequence_end    =
-            // current_mappingInfo->token_subsequence_end;
             // ROSE_ASSERT(childAttributes[i].node != NULL);
             if (childAttributes[i].node != NULL) {
               // ROSE_ASSERT(tokenStreamSequenceMap.find(childAttributes[i].node)
@@ -4602,8 +4596,14 @@ SynthesizedAttribute TokenMappingTraversal::evaluateSynthesizedAttribute(
                          end_of_token_subsequence,
                          original_start_of_token_subsequence);
 #endif
-                  ROSE_ASSERT(end_of_token_subsequence >=
-                              original_start_of_token_subsequence);
+                  if (end_of_token_subsequence < start_of_token_subsequence) {
+                    start_of_token_subsequence = -1;
+                    end_of_token_subsequence = -1;
+                  }
+                  if (start_of_token_subsequence != -1) {
+                    ROSE_ASSERT(end_of_token_subsequence >=
+                                start_of_token_subsequence);
+                  }
                 }
 
                 // ROSE_ASSERT(end_of_token_subsequence >=
@@ -5306,7 +5306,6 @@ InheritedAttribute TokenMappingTraversal::evaluateInheritedAttribute(
     if ((locatedNode != NULL) && (isSgInitializedName(n) == NULL)) {
       Sg_File_Info *start_pos = locatedNode->get_startOfConstruct();
       Sg_File_Info *end_pos = locatedNode->get_endOfConstruct();
-
       ROSE_ASSERT(inheritedAttribute.node != NULL);
       bool nodeIsFromSameFileAsInheritedAttributeNode =
           inheritedAttribute.node->get_file_info()->isSameFile(
@@ -6296,67 +6295,70 @@ InheritedAttribute TokenMappingTraversal::evaluateInheritedAttribute(
 
           SgClassDefinition *classDefinition = isSgClassDefinition(n);
           if (classDefinition != NULL) {
-            // DQ (5/3/2021): Added assertion to debug failing case in
-            // astTokenStreamTests with file: C_tests/test2012_25.c.
-            ROSE_ASSERT((size_t)start_of_token_subsequence >= 0);
-            ROSE_ASSERT((size_t)start_of_token_subsequence <
-                        tokenStream.size());
-            // while ( (start_of_token_subsequence <
-            // original_start_of_token_subsequence) &&
-            // (tokenStream[start_of_token_subsequence]->p_tok_elem->token_id ==
-            // C_CXX_WHITESPACE ||
-            // tokenStream[start_of_token_subsequence]->p_tok_elem->token_lexeme
-            // == "{") )
             int saved_start_of_token_subsequence = start_of_token_subsequence;
             int saved_end_of_token_subsequence = end_of_token_subsequence;
-            while ((start_of_token_subsequence <
-                    original_end_of_token_subsequence) &&
-                   (tokenStream[start_of_token_subsequence]
-                        ->p_tok_elem->token_lexeme != "{")) {
-              start_of_token_subsequence++;
-            }
+            const int token_stream_size = static_cast<int>(tokenStream.size());
+            const int safe_upper_bound =
+                std::min(original_end_of_token_subsequence, token_stream_size);
 
-            // DQ (5/3/2021): Added assertion to debug failing case in
-            // astTokenStreamTests with file: C_tests/test2012_25.c.
-            ROSE_ASSERT((size_t)start_of_token_subsequence >= 0);
-            ROSE_ASSERT((size_t)start_of_token_subsequence <
-                        tokenStream.size());
+            if (saved_start_of_token_subsequence >= 0 &&
+                saved_start_of_token_subsequence < token_stream_size &&
+                saved_end_of_token_subsequence >= 0 &&
+                saved_end_of_token_subsequence < token_stream_size) {
+              // while ( (start_of_token_subsequence <
+              // original_start_of_token_subsequence) &&
+              // (tokenStream[start_of_token_subsequence]->p_tok_elem->token_id
+              // ==
+              // C_CXX_WHITESPACE ||
+              // tokenStream[start_of_token_subsequence]->p_tok_elem->token_lexeme
+              // == "{") )
+              while ((start_of_token_subsequence < safe_upper_bound) &&
+                     (tokenStream[start_of_token_subsequence]
+                          ->p_tok_elem->token_lexeme != "{")) {
+                start_of_token_subsequence++;
+              }
 
-            // DQ (12/19/2014): If we didn't find the "{" then reset it back to
-            // it's original value (this is an issue for some template types
-            // used in variable declarations in template declarations (iostream
-            // header file). See
-            // inputmoveDeclarationToInnermostScope_test2014_18.C
-            if (tokenStream[start_of_token_subsequence]
-                    ->p_tok_elem->token_lexeme != "{") {
+              // DQ (12/19/2014): If we didn't find the "{" then reset it back
+              // to it's original value (this is an issue for some template
+              // types used in variable declarations in template declarations
+              // (iostream header file). See
+              // inputmoveDeclarationToInnermostScope_test2014_18.C
+              if (start_of_token_subsequence >= token_stream_size ||
+                  tokenStream[start_of_token_subsequence]
+                          ->p_tok_elem->token_lexeme != "{") {
+                start_of_token_subsequence = saved_start_of_token_subsequence;
+              }
+
+              // while ( (end_of_token_subsequence <
+              // original_end_of_token_subsequence) &&
+              // (tokenStream[end_of_token_subsequence]->p_tok_elem->token_id
+              // == C_CXX_WHITESPACE ||
+              // tokenStream[end_of_token_subsequence]->p_tok_elem->token_lexeme
+              // == "}") )
+              while ((end_of_token_subsequence >
+                      original_start_of_token_subsequence) &&
+                     (tokenStream[end_of_token_subsequence]
+                          ->p_tok_elem->token_lexeme != "}")) {
+                end_of_token_subsequence--;
+              }
+
+              // DQ (12/19/2014): If we didn't find the "{" then reset it back
+              // to it's original value (this is an issue for some template
+              // types used in variable declarations in template declarations
+              // (iostream header file). See
+              // inputmoveDeclarationToInnermostScope_test2014_18.C
+              if (start_of_token_subsequence >= token_stream_size ||
+                  tokenStream[start_of_token_subsequence]
+                          ->p_tok_elem->token_lexeme != "{") {
+                start_of_token_subsequence = saved_start_of_token_subsequence;
+              }
+
+              if (tokenStream[end_of_token_subsequence]
+                      ->p_tok_elem->token_lexeme != "}") {
+                end_of_token_subsequence = saved_end_of_token_subsequence;
+              }
+            } else {
               start_of_token_subsequence = saved_start_of_token_subsequence;
-            }
-
-            // while ( (end_of_token_subsequence <
-            // original_end_of_token_subsequence) &&
-            // (tokenStream[end_of_token_subsequence]->p_tok_elem->token_id ==
-            // C_CXX_WHITESPACE ||
-            // tokenStream[end_of_token_subsequence]->p_tok_elem->token_lexeme
-            // == "}") )
-            while ((end_of_token_subsequence >
-                    original_start_of_token_subsequence) &&
-                   (tokenStream[end_of_token_subsequence]
-                        ->p_tok_elem->token_lexeme != "}")) {
-              end_of_token_subsequence--;
-            }
-
-            // DQ (12/19/2014): If we didn't find the "{" then reset it back to
-            // it's original value (this is an issue for some template types
-            // used in variable declarations in template declarations (iostream
-            // header file). See
-            // inputmoveDeclarationToInnermostScope_test2014_18.C
-            if (tokenStream[start_of_token_subsequence]
-                    ->p_tok_elem->token_lexeme != "{") {
-              start_of_token_subsequence = saved_start_of_token_subsequence;
-            }
-
-            if (tokenStream[end_of_token_subsequence]
-                    ->p_tok_elem->token_lexeme != "}") {
               end_of_token_subsequence = saved_end_of_token_subsequence;
             }
           }
@@ -6511,18 +6513,49 @@ InheritedAttribute TokenMappingTraversal::evaluateInheritedAttribute(
           SgNamespaceDefinitionStatement *namespaceDefinition =
               isSgNamespaceDefinitionStatement(n);
           if (namespaceDefinition != NULL) {
-            // adjust the start_of_token_subsequence
-            // while ( (start_of_token_subsequence <
-            // original_start_of_token_subsequence) &&
-            // (tokenStream[start_of_token_subsequence]->p_tok_elem->token_id ==
-            // C_CXX_WHITESPACE ||
-            // tokenStream[start_of_token_subsequence]->p_tok_elem->token_lexeme
-            // == "{") )
-            while ((start_of_token_subsequence <
-                    original_end_of_token_subsequence) &&
-                   (tokenStream[start_of_token_subsequence]
-                        ->p_tok_elem->token_lexeme != "{")) {
-              start_of_token_subsequence++;
+            int saved_start_of_token_subsequence = start_of_token_subsequence;
+            int saved_end_of_token_subsequence = end_of_token_subsequence;
+            const int token_stream_size = static_cast<int>(tokenStream.size());
+            const int safe_upper_bound =
+                std::min(original_end_of_token_subsequence, token_stream_size);
+
+            if (saved_start_of_token_subsequence >= 0 &&
+                saved_start_of_token_subsequence < token_stream_size &&
+                saved_end_of_token_subsequence >= 0 &&
+                saved_end_of_token_subsequence < token_stream_size) {
+              // adjust the start_of_token_subsequence
+              // while ( (start_of_token_subsequence <
+              // original_start_of_token_subsequence) &&
+              // (tokenStream[start_of_token_subsequence]->p_tok_elem->token_id
+              // == C_CXX_WHITESPACE ||
+              // tokenStream[start_of_token_subsequence]->p_tok_elem->token_lexeme
+              // == "{") )
+              while ((start_of_token_subsequence < safe_upper_bound) &&
+                     (tokenStream[start_of_token_subsequence]
+                          ->p_tok_elem->token_lexeme != "{")) {
+                start_of_token_subsequence++;
+              }
+
+              if (start_of_token_subsequence >= token_stream_size ||
+                  tokenStream[start_of_token_subsequence]
+                          ->p_tok_elem->token_lexeme != "{") {
+                start_of_token_subsequence = saved_start_of_token_subsequence;
+              }
+
+              while ((end_of_token_subsequence >
+                      original_start_of_token_subsequence) &&
+                     (tokenStream[end_of_token_subsequence]
+                          ->p_tok_elem->token_lexeme != "}")) {
+                end_of_token_subsequence--;
+              }
+
+              if (tokenStream[end_of_token_subsequence]
+                      ->p_tok_elem->token_lexeme != "}") {
+                end_of_token_subsequence = saved_end_of_token_subsequence;
+              }
+            } else {
+              start_of_token_subsequence = saved_start_of_token_subsequence;
+              end_of_token_subsequence = saved_end_of_token_subsequence;
             }
           }
 
@@ -6634,42 +6667,8 @@ InheritedAttribute TokenMappingTraversal::evaluateInheritedAttribute(
             ((isSgStatement(n) != NULL &&
               isSgFunctionParameterList(n) == NULL) ||
              forStatementIncrementExpression != NULL)) {
-#if DEBUG_TOKEN_MAPPING
-          printf("In evaluateInheritedAttribute(): n = %p = %s returning "
-                 "InheritedAttribute with start_of_token_subsequence = %d "
-                 "end_of_token_subsequence = %d \n",
-                 n, n->class_name().c_str(), start_of_token_subsequence,
-                 end_of_token_subsequence);
-#endif
-
-#if DEBUG_TOKEN_MAPPING
-          printf("\n############################################ \n");
-          printf("Evaluate the leading and trailing whitespace: n = %p = %s = "
-                 "%s \n",
-                 n, n->class_name().c_str(),
-                 SageInterface::get_name(n).c_str());
-          printf(" --- start_of_token_subsequence = %d \n",
-                 start_of_token_subsequence);
-          printf(" --- end_of_token_subsequence   = %d \n",
-                 end_of_token_subsequence);
-          printf("############################################ \n");
-#endif
           // Disallow the default value: -1
           if (start_of_token_subsequence >= 0) {
-#if DEBUG_EVALUATE_INHERITATE_ATTRIBUTE
-            printf("   --- token string = ");
-            for (int i = start_of_token_subsequence;
-                 i <= end_of_token_subsequence; i++) {
-              printf("%s", tokenStream[i]->p_tok_elem->token_lexeme.c_str());
-            }
-            printf("\n");
-#endif
-            // Save the subsequence associated with the of the token stream for
-            // this IR node. tokenStreamSequenceMap[n] =
-            // pair<int,int>(start_of_token_subsequence,end_of_token_subsequence);
-            // tokenStreamSequenceVector.push_back(pair<SgNode*,pair<int,int>
-            // >(n,pair<int,int>(start_of_token_subsequence,end_of_token_subsequence)));
-
             int leading_whitespace_start = -1;
             int leading_whitespace_end = -1;
             int trailing_whitespace_start = -1;
@@ -7331,6 +7330,92 @@ vector<stream_element *> getTokenStream(SgSourceFile *file) {
   return tokenVector;
 }
 
+namespace {
+
+template <class TemplateDeclT>
+void mirrorTemplateDeclarationTokenMapping(
+    SgSourceFile *sourceFile, TemplateDeclT *decl,
+    std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap) {
+  if (sourceFile == NULL || decl == NULL) {
+    return;
+  }
+
+  if (tokenMap.find(decl) != tokenMap.end() &&
+      decl->get_unparse_template_ast() == false) {
+    return;
+  }
+
+  Sg_File_Info *declInfo = decl->get_file_info();
+  if (declInfo == NULL || declInfo->isCompilerGenerated() ||
+      declInfo->isTransformation() ||
+      declInfo->get_filenameString() != sourceFile->getFileName()) {
+    return;
+  }
+
+  SgTemplateFunctionDefinition *definition =
+      isSgTemplateFunctionDefinition(decl->get_definition());
+  if (definition == NULL) {
+    return;
+  }
+
+  std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator mappingIt =
+      tokenMap.find(definition);
+  if (mappingIt == tokenMap.end() || mappingIt->second == NULL) {
+    return;
+  }
+
+  TokenStreamSequenceToNodeMapping *definitionMapping = mappingIt->second;
+  tokenMap[decl] = TokenStreamSequenceToNodeMapping::createTokenInterval(
+      sourceFile, decl, definitionMapping->leading_whitespace_start,
+      definitionMapping->leading_whitespace_end,
+      definitionMapping->token_subsequence_start,
+      definitionMapping->token_subsequence_end,
+      definitionMapping->trailing_whitespace_start,
+      definitionMapping->trailing_whitespace_end,
+      definitionMapping->else_whitespace_start,
+      definitionMapping->else_whitespace_end);
+}
+
+void repairTemplateFunctionDeclarationTokenMappings(SgSourceFile *sourceFile) {
+  if (sourceFile == NULL) {
+    return;
+  }
+
+  SgGlobal *global = sourceFile->get_globalScope();
+  if (global == NULL) {
+    return;
+  }
+
+  std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap =
+      sourceFile->get_tokenSubsequenceMap();
+
+  Rose_STL_Container<SgNode *> templateFunctions =
+      NodeQuery::querySubTree(global, V_SgTemplateFunctionDeclaration);
+  for (SgNode *node : templateFunctions) {
+    mirrorTemplateDeclarationTokenMapping(
+        sourceFile, isSgTemplateFunctionDeclaration(node), tokenMap);
+  }
+
+  Rose_STL_Container<SgNode *> templateMembers =
+      NodeQuery::querySubTree(global, V_SgTemplateMemberFunctionDeclaration);
+  for (SgNode *node : templateMembers) {
+    mirrorTemplateDeclarationTokenMapping(
+        sourceFile, isSgTemplateMemberFunctionDeclaration(node), tokenMap);
+  }
+}
+
+} // namespace
+
+void buildTokenStreamMappingForSourceFile(SgSourceFile *sourceFile) {
+  if (sourceFile == NULL) {
+    return;
+  }
+
+  std::vector<stream_element *> tokenVector = getTokenStream(sourceFile);
+  buildTokenStreamMapping(sourceFile, tokenVector);
+  repairTemplateFunctionDeclarationTokenMappings(sourceFile);
+}
+
 void outputSourceCodeFromTokenStream_globalScope(
     SgSourceFile *sourceFile, vector<stream_element *> tokenVector,
     map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenStreamSequenceMap,
@@ -7352,7 +7437,13 @@ void outputSourceCodeFromTokenStream_globalScope(
   string dot_header =
       StringUtility::stripPathFromFileName(sourceFile->getFileName());
   // filename += ".c";
-  filename = Rose::TestOutput::resolvePath(filename);
+  const char *test_output_dir = std::getenv("ROSE_TEST_OUTPUT_DIR");
+  if (test_output_dir != NULL && test_output_dir[0] != '\0') {
+    filename = Rose::TestOutput::resolvePath(filename);
+  } else {
+    filename = Rose::TestOutput::resolvePath(
+        filename, std::string(ROSE_BUILD_TREE) + "/test-output/token-stream");
+  }
 
   // Open file...(file is declared in the legacy frontend graph namespace).
   std::ofstream file;
@@ -7383,6 +7474,24 @@ void outputSourceCodeFromTokenStream_globalScope(
     bool ignore_firstDeclarationOutput = false;
 
     bool skipSharedSequences = false;
+    int lastOutputTokenIndex = -1;
+
+    auto emitTokenRange = [&](int start, int end) {
+      if (start < 0 || end < 0) {
+        return;
+      }
+
+      const int clippedStart = std::max(start, lastOutputTokenIndex + 1);
+      if (clippedStart > end) {
+        return;
+      }
+
+      for (int j = clippedStart; j <= end; j++) {
+        file << tokenVector[j]->p_tok_elem->token_lexeme;
+      }
+
+      lastOutputTokenIndex = end;
+    };
 
     for (size_t i = 0; i < declarationList.size(); i++) {
       // ROSE_ASSERT(tokenStreamSequenceMap.find(declarationList[i]) !=
@@ -7397,12 +7506,8 @@ void outputSourceCodeFromTokenStream_globalScope(
         if (i == firstDeclarationOutput) {
           if (preferTrailingWhitespaceInOutput == true) {
             // Output the leading white space.
-            if (tokenSubsequence->leading_whitespace_start != -1) {
-              for (int j = tokenSubsequence->leading_whitespace_start;
-                   j <= tokenSubsequence->leading_whitespace_end; j++) {
-                file << tokenVector[j]->p_tok_elem->token_lexeme;
-              }
-            }
+            emitTokenRange(tokenSubsequence->leading_whitespace_start,
+                           tokenSubsequence->leading_whitespace_end);
           }
 
           ignore_firstDeclarationOutput = true;
@@ -7412,32 +7517,20 @@ void outputSourceCodeFromTokenStream_globalScope(
           if (preferTrailingWhitespaceInOutput == false) {
             // We need to always output the leading token stream for each
             // declaration. Output the leading white space.
-            if (tokenSubsequence->leading_whitespace_start != -1) {
-              for (int j = tokenSubsequence->leading_whitespace_start;
-                   j <= tokenSubsequence->leading_whitespace_end; j++) {
-                file << tokenVector[j]->p_tok_elem->token_lexeme;
-              }
-            }
+            emitTokenRange(tokenSubsequence->leading_whitespace_start,
+                           tokenSubsequence->leading_whitespace_end);
           }
 
           // Output the leading white space.
-          if (tokenSubsequence->token_subsequence_start != -1) {
-            for (int j = tokenSubsequence->token_subsequence_start;
-                 j <= tokenSubsequence->token_subsequence_end; j++) {
-              file << tokenVector[j]->p_tok_elem->token_lexeme;
-            }
-          }
+          emitTokenRange(tokenSubsequence->token_subsequence_start,
+                         tokenSubsequence->token_subsequence_end);
 
           if (preferTrailingWhitespaceInOutput == true) {
             // We need to always output the trailing token stream for each
             // declaration. if (i+1 == declarationList.size()) Output the
             // trailing white space.
-            if (tokenSubsequence->trailing_whitespace_start != -1) {
-              for (int j = tokenSubsequence->trailing_whitespace_start;
-                   j <= tokenSubsequence->trailing_whitespace_end; j++) {
-                file << tokenVector[j]->p_tok_elem->token_lexeme;
-              }
-            }
+            emitTokenRange(tokenSubsequence->trailing_whitespace_start,
+                           tokenSubsequence->trailing_whitespace_end);
           }
         }
 
@@ -7450,12 +7543,8 @@ void outputSourceCodeFromTokenStream_globalScope(
           // file.
           if (i == declarationList.size() - 1) {
             // Output the leading white space.
-            if (tokenSubsequence->trailing_whitespace_start != -1) {
-              for (int j = tokenSubsequence->trailing_whitespace_start;
-                   j <= tokenSubsequence->trailing_whitespace_end; j++) {
-                file << tokenVector[j]->p_tok_elem->token_lexeme;
-              }
-            }
+            emitTokenRange(tokenSubsequence->trailing_whitespace_start,
+                           tokenSubsequence->trailing_whitespace_end);
           }
         }
 
@@ -7967,6 +8056,26 @@ void buildTokenStreamMappingForRoot(SgSourceFile *sourceFile,
       sourceFile->get_use_token_stream_to_improve_source_position_info(),
       tokenStreamSequenceMapPointer);
 
+  const int firstTokenIndex = tokenVector.empty() ? -1 : 0;
+  const int lastTokenIndex =
+      tokenVector.empty() ? -1 : static_cast<int>(tokenVector.size()) - 1;
+  auto ensureWholeFileMapping = [&](SgNode *node) {
+    if (node == NULL) {
+      return;
+    }
+
+    std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator mapIt =
+        tokenStreamSequenceMapPointer->find(node);
+    if (mapIt != tokenStreamSequenceMapPointer->end() &&
+        mapIt->second != NULL) {
+      return;
+    }
+
+    (*tokenStreamSequenceMapPointer)[node] =
+        new TokenStreamSequenceToNodeMapping(node, -1, -1, firstTokenIndex,
+                                             lastTokenIndex, -1, -1, -1, -1);
+  };
+
   // std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* tokenSubsequenceMap
   // = new std::map<SgNode*,TokenStreamSequenceToNodeMapping*>();
   // ROSE_ASSERT(tokenSubsequenceMap != NULL);
@@ -8046,6 +8155,14 @@ void buildTokenStreamMappingForRoot(SgSourceFile *sourceFile,
   // DQ (12/1/2013): Make the output of this graph conditional upon the verbose
   // level. This generates files: token_leading_<filename>.c and
   // token_trailing_<filename>.c. if ( SgProject::get_verbose() > 0 )
+  ensureWholeFileMapping(sourceFile);
+  if (sourceFile->get_unparse_using_leading_and_trailing_token_mappings() ==
+          true ||
+      sourceFile->get_use_token_stream_to_improve_source_position_info() ==
+          true) {
+    ensureWholeFileMapping(sourceFile->get_globalScope());
+  }
+
   if (sourceFile->get_unparse_using_leading_and_trailing_token_mappings() ==
       true) {
     // Output a file generated from the token sequences of each declaration

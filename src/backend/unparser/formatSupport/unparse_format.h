@@ -102,6 +102,7 @@ public:
   int current_line() const { return currentLine; }
   int current_col() const { return chars_on_line; }
   int current_indent() const { return currentIndent; }
+  int statement_indent() const { return stmtIndent; }
   bool line_is_empty() const { return currentIndent == chars_on_line; }
 
   // DQ (2/16/2004): Make this part of the public interface (to control
@@ -112,6 +113,10 @@ public:
   // unparsing to reset the formatting for AST subtrees unparsed using the AST
   // in conjunction with the token based unparsing.
   void reset_chars_on_line();
+
+  // Keep formatting state synchronized when code is written directly to the
+  // ostream instead of through UnparseFormat::operator<<.
+  void account_for_raw_text(const std::string &text);
 
 public:
   UnparseFormat(std::ostream *_os = nullptr, UnparseFormatHelp *help = nullptr);

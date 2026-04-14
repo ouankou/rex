@@ -827,7 +827,8 @@ SgName SageBuilder::appendTemplateArgumentsToName(
           // used for dependent names (e.g., T::value_type). Use template
           // argument unparsing to preserve the full dependent spelling.
         case V_SgNonrealDecl: {
-          string fully_qualified_name = templateArgument->unparseToString(info);
+          string fully_qualified_name =
+              unparseTemplateArgumentToString(templateArgument).str();
 
           if (fully_qualified_name.empty()) {
             SgNonrealDecl *nonrealDeclaration = isSgNonrealDecl(declaration);
@@ -983,7 +984,7 @@ SgName SageBuilder::appendTemplateArgumentsToName(
     // (SgUnparse_Info *info) function instead of the version not taking an
     // argument. returnName += (*i)->unparseToString(info);
     if (used_fully_qualified_name == false) {
-      std::string argument_string = (*i)->unparseToString(info);
+      std::string argument_string = unparseTemplateArgumentToString(*i).str();
       argument_string = Rose::StringUtility::trim(argument_string);
       returnName += argument_string;
     }
@@ -1039,7 +1040,22 @@ SgName SageBuilder::unparseTemplateArgumentToString(
   info->set_SkipEnumDefinition();
   info->set_use_generated_name_for_template_arguments(true);
 
-  SgName returnName = templateArgument->unparseToString(info);
+  std::string returnName;
+  if (templateArgument->get_argumentType() ==
+      SgTemplateArgument::type_argument) {
+    SgType *type = templateArgument->get_type();
+    if (type != NULL &&
+        (isSgPointerType(type) != NULL || isSgPointerMemberType(type) != NULL ||
+         isSgReferenceType(type) != NULL ||
+         isSgRvalueReferenceType(type) != NULL ||
+         isSgArrayType(type) != NULL)) {
+      returnName = Rose::StringUtility::trim(globalUnparseToString(type, NULL));
+    }
+  }
+
+  if (returnName.empty()) {
+    returnName = templateArgument->unparseToString(info);
+  }
 
   delete info;
   info = NULL;
@@ -1393,6 +1409,15 @@ void SageBuilder::setTemplateParameterParents(SgDeclarationStatement *decl) {
           // (*i)->set_parent(decl);
           (*i)->set_parent(first_decl);
         } else {
+        }
+      }
+
+      if (SgType *default_type = (*i)->get_defaultTypeParameter()) {
+        // Default template type arguments are structural children of the
+        // template parameter. Attach the root here; the normal parent-fixup
+        // traversal will repair the rest of the type subtree.
+        if (default_type->get_parent() == nullptr) {
+          default_type->set_parent(*i);
         }
       }
 
@@ -3894,8 +3919,6 @@ actualFunction *SageBuilder::buildNondefiningFunctionDeclaration_T(
       // The symbol points to a defining declaration and now that we have added
       // a non-defining declaration we should have the symbol point to the new
       // non-defining declaration.
-      printf("WARNING: Switching declaration in functionSymbol to point to the "
-             "non-defining declaration \n");
       function_symbol->set_declaration(isSgFunctionDeclaration(func));
       ROSE_ASSERT(function_symbol->get_declaration() != NULL);
     }
@@ -4305,12 +4328,15 @@ SgFunctionDeclaration *SageBuilder::buildNondefiningFunctionDeclaration(
 
   // make sure the function has consistent function type based on its return
   // type and parameter list
-  SgFunctionType *ref_funcType =
-      findFunctionType(return_type, funcType->get_argument_list());
+  SgFunctionParameterTypeList *parameterTypes =
+      buildFunctionParameterTypeList(funcdecl->get_parameterList());
+  SgFunctionType *ref_funcType = findFunctionType(return_type, parameterTypes);
   // ROSE_ASSERT (funcType ==
   // buildFunctionType(funcdecl->get_type()->get_return_type(),
   // buildFunctionParameterTypeList(funcdecl->get_parameterList())));
-  ROSE_ASSERT(funcType == ref_funcType);
+  if (funcType != ref_funcType) {
+    ROSE_ASSERT(SageInterface::isEquivalentType(funcType, ref_funcType));
+  }
   // buildNondefiningFunctionDeclaration() will check if a same function is
   // created before by looking up function symbols.
   SgFunctionDeclaration *returnFunction = buildNondefiningFunctionDeclaration(
@@ -5633,7 +5659,7 @@ SgProcedureHeaderStatement *SageBuilder::buildProcedureHeaderStatement(
   ROSE_ASSERT(return_type != NULL);
   ROSE_ASSERT(parameter_list != NULL);
 
-  SgFunctionDeclaration *nondef_decl = NULL;
+  SgProcedureHeaderStatement *nondef_decl = NULL;
 
   if (scope == NULL) {
     scope = SageBuilder::topScopeStack();
@@ -5643,28 +5669,45 @@ SgProcedureHeaderStatement *SageBuilder::buildProcedureHeaderStatement(
   SgFunctionSymbol *func_symbol =
       scope->find_symbol_by_type_of_function<SgProcedureHeaderStatement>(
           name, func_type, NULL, NULL);
-  if (func_symbol == NULL) {
+  if (func_symbol != NULL) {
+    SgProcedureHeaderStatement *symbol_decl =
+        isSgProcedureHeaderStatement(func_symbol->get_declaration());
+    SgProcedureHeaderStatement *first_nondef_decl =
+        isSgProcedureHeaderStatement(
+            symbol_decl != NULL ? symbol_decl->get_firstNondefiningDeclaration()
+                                : NULL);
+    const bool has_real_nondef_decl =
+        first_nondef_decl != NULL &&
+        first_nondef_decl->get_firstNondefiningDeclaration() ==
+            first_nondef_decl &&
+        first_nondef_decl != isSgProcedureHeaderStatement(
+                                 first_nondef_decl->get_definingDeclaration());
+    if (has_real_nondef_decl) {
+      nondef_decl = first_nondef_decl;
+    }
+  }
+
+  if (nondef_decl == NULL) {
+    // Some Fortran frontend paths seed a procedure symbol before the defining
+    // declaration is built. When that seed declaration has no real forward
+    // declaration (or incorrectly self-links a defining declaration), build a
+    // fresh hidden nondefining declaration now so the defining builder can
+    // attach to a canonical declaration chain.
     // CR (3/25/2020): Replaced call to builder function with templated version.
-    nondef_decl =
+    nondef_decl = isSgProcedureHeaderStatement(
         buildNondefiningFunctionDeclaration_T<SgProcedureHeaderStatement>(
             name, return_type, parameter_list, /*isMemberFunction*/ false,
             scope,
             /*functionConstVolatileFlags*/ 0, NULL, NULL,
-            SgStorageModifier::e_default);
-  } else {
-    nondef_decl = func_symbol->get_declaration();
+            SgStorageModifier::e_default));
   }
 
   ROSE_ASSERT(nondef_decl != NULL);
   ROSE_ASSERT(nondef_decl->get_firstNondefiningDeclaration() != NULL);
   ROSE_ASSERT(nondef_decl->get_firstNondefiningDeclaration() == nondef_decl);
 
-  SgProcedureHeaderStatement *proc_header_stmt =
-      isSgProcedureHeaderStatement(nondef_decl);
-  ROSE_ASSERT(proc_header_stmt);
-
   return buildProcedureHeaderStatement(name.str(), return_type, parameter_list,
-                                       kind, scope, proc_header_stmt);
+                                       kind, scope, nondef_decl);
 }
 
 //! Build a Fortran subroutine or procedure

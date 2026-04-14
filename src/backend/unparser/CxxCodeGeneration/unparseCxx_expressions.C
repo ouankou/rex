@@ -16,6 +16,7 @@
 
 #include "unparser.h"
 
+#include <cctype>
 #include <limits>
 
 // DQ (2/21/2019): Added to support remove_substring function.
@@ -32,6 +33,8 @@ using namespace Rose;
 #define OUTPUT_DEBUGGING_INFORMATION 0
 
 namespace {
+constexpr int kParameterWrapColumn = 80;
+
 const char *templateParameterKeywordSpelling(
     SgTemplateParameter::template_parameter_keyword_enum keyword) {
   switch (keyword) {
@@ -44,24 +47,372 @@ const char *templateParameterKeywordSpelling(
   }
 }
 
+bool typeEndsWithTemplateIdClose(const SgType *type) {
+  if (type == nullptr) {
+    return false;
+  }
+
+  if (const SgModifierType *modifier_type = isSgModifierType(type)) {
+    return typeEndsWithTemplateIdClose(modifier_type->get_base_type());
+  }
+
+  if (isSgPointerType(type) != nullptr ||
+      isSgPointerMemberType(type) != nullptr ||
+      isSgReferenceType(type) != nullptr ||
+      isSgRvalueReferenceType(type) != nullptr ||
+      isSgArrayType(type) != nullptr || isSgFunctionType(type) != nullptr ||
+      isSgPartialFunctionType(type) != nullptr ||
+      isSgMemberFunctionType(type) != nullptr) {
+    return false;
+  }
+
+  if (isSgTemplateType(type) != nullptr) {
+    return true;
+  }
+
+  if (const SgNonrealType *nonreal_type = isSgNonrealType(type)) {
+    const SgNonrealDecl *decl =
+        isSgNonrealDecl(nonreal_type->get_declaration());
+    return decl != nullptr &&
+           (!decl->get_tpl_args().empty() || decl->get_is_nonreal_template());
+  }
+
+  if (const SgClassType *class_type = isSgClassType(type)) {
+    return isSgTemplateInstantiationDecl(class_type->get_declaration()) !=
+           nullptr;
+  }
+
+  return false;
+}
+
+bool templateArgumentHasTypeSpecificTypeMetadata(
+    const SgTemplateArgument *arg) {
+  return arg != nullptr && (arg->get_name_qualification_length_for_type() > 0 ||
+                            arg->get_global_qualification_required_for_type() ||
+                            arg->get_type_elaboration_required_for_type());
+}
+
+int templateArgumentQualificationLengthForTypeOutput(
+    const SgTemplateArgument *arg) {
+  if (arg == nullptr) {
+    return 0;
+  }
+
+  return templateArgumentHasTypeSpecificTypeMetadata(arg)
+             ? arg->get_name_qualification_length_for_type()
+             : arg->get_name_qualification_length();
+}
+
+bool templateArgumentRequiresGlobalQualificationForTypeOutput(
+    const SgTemplateArgument *arg) {
+  if (arg == nullptr) {
+    return false;
+  }
+
+  return templateArgumentHasTypeSpecificTypeMetadata(arg)
+             ? arg->get_global_qualification_required_for_type()
+             : arg->get_global_qualification_required();
+}
+
+bool templateArgumentRequiresTypeElaborationForTypeOutput(
+    const SgTemplateArgument *arg) {
+  if (arg == nullptr) {
+    return false;
+  }
+
+  return templateArgumentHasTypeSpecificTypeMetadata(arg)
+             ? arg->get_type_elaboration_required_for_type()
+             : arg->get_type_elaboration_required();
+}
+
+bool templateArgumentEndsWithTemplateIdClose(const SgTemplateArgument *arg) {
+  if (arg == nullptr) {
+    return false;
+  }
+
+  switch (arg->get_argumentType()) {
+  case SgTemplateArgument::type_argument:
+    return typeEndsWithTemplateIdClose(arg->get_type());
+
+  case SgTemplateArgument::template_template_argument: {
+    const SgNonrealDecl *decl = isSgNonrealDecl(arg->get_templateDeclaration());
+    return decl != nullptr &&
+           (!decl->get_tpl_args().empty() || decl->get_is_nonreal_template());
+  }
+
+  default:
+    return false;
+  }
+}
+
+std::string
+normalizeTemplateParameterPreviewWhitespace(const std::string &text);
+
+bool templateArgumentCanUseCompactPointerLikeTypeSpelling(
+    const SgTemplateArgument *arg) {
+  if (arg == nullptr ||
+      arg->get_argumentType() != SgTemplateArgument::type_argument) {
+    return false;
+  }
+
+  SgType *type = arg->get_type();
+  return type != nullptr &&
+         (isSgPointerType(type) != nullptr ||
+          isSgPointerMemberType(type) != nullptr ||
+          isSgReferenceType(type) != nullptr ||
+          isSgRvalueReferenceType(type) != nullptr ||
+          isSgArrayType(type) != nullptr) &&
+         templateArgumentQualificationLengthForTypeOutput(arg) == 0 &&
+         !templateArgumentRequiresGlobalQualificationForTypeOutput(arg) &&
+         !templateArgumentRequiresTypeElaborationForTypeOutput(arg);
+}
+
+bool templateArgumentRequiresDirectExpressionUnparse(
+    const SgTemplateArgument *arg) {
+  if (arg == nullptr ||
+      arg->get_argumentType() != SgTemplateArgument::nontype_argument) {
+    return false;
+  }
+
+  SgExpression *expr = arg->get_expression();
+  SgNonrealRefExp *nr_refexp = isSgNonrealRefExp(expr);
+  if (nr_refexp == nullptr) {
+    return false;
+  }
+
+  if (!nr_refexp->get_templateArguments().empty()) {
+    return true;
+  }
+
+  SgNonrealSymbol *nrsym = nr_refexp->get_symbol();
+  SgNonrealDecl *nrdecl = nrsym != nullptr ? nrsym->get_declaration() : nullptr;
+  return nrdecl != nullptr && !nrdecl->get_tpl_args().empty();
+}
+
+std::string compactTemplateArgumentTypeSpelling(const SgTemplateArgument *arg) {
+  if (!templateArgumentCanUseCompactPointerLikeTypeSpelling(arg)) {
+    return "";
+  }
+
+  std::string spelling = normalizeTemplateParameterPreviewWhitespace(
+      globalUnparseToString(arg->get_type(), NULL));
+  if (arg->get_is_pack_element() &&
+      (spelling.size() < 3 ||
+       spelling.compare(spelling.size() - 3, 3, "...") != 0)) {
+    spelling += "...";
+  }
+  return spelling;
+}
+
+std::string
+normalizeTemplateParameterPreviewWhitespace(const std::string &text) {
+  std::string normalized;
+  normalized.reserve(text.size());
+
+  bool have_pending_space = false;
+  for (char ch : text) {
+    if (std::isspace(static_cast<unsigned char>(ch)) != 0) {
+      have_pending_space = !normalized.empty();
+      continue;
+    }
+
+    if (have_pending_space) {
+      normalized += ' ';
+      have_pending_space = false;
+    }
+    normalized += ch;
+  }
+
+  return normalized;
+}
+
+std::string trimTrailingWhitespace(const std::string &text) {
+  const size_t last_non_space = text.find_last_not_of(" \t\n\r\f\v");
+  if (last_non_space == std::string::npos) {
+    return "";
+  }
+
+  return text.substr(0, last_non_space + 1);
+}
+
+std::string
+operatorFunctionNameWithoutTemplateArguments(const std::string &func_name) {
+  std::string normalized_name = trimTrailingWhitespace(func_name);
+  if (normalized_name.compare(0, 8, "operator") != 0) {
+    return normalized_name;
+  }
+
+  const size_t template_args_pos = normalized_name.find(" <", 8);
+  if (template_args_pos == std::string::npos) {
+    return normalized_name;
+  }
+
+  return trimTrailingWhitespace(normalized_name.substr(0, template_args_pos));
+}
+
+std::string
+buildTemplateParameterPreviewString(SgTemplateParameter *template_parameter,
+                                    int parameter_index);
+
+std::string buildTemplateParameterListPreviewString(
+    const SgTemplateParameterPtrList &template_parameter_list) {
+  if (template_parameter_list.empty()) {
+    return "";
+  }
+
+  std::string preview = "<";
+  for (size_t i = 0; i < template_parameter_list.size(); ++i) {
+    const std::string parameter_preview = buildTemplateParameterPreviewString(
+        template_parameter_list[i], static_cast<int>(i));
+    if (parameter_preview.empty()) {
+      return "";
+    }
+
+    if (i != 0) {
+      preview += ", ";
+    }
+    preview += parameter_preview;
+  }
+  preview += ">";
+  return preview;
+}
+
+std::string
+buildTemplateParameterPreviewString(SgTemplateParameter *template_parameter,
+                                    int parameter_index) {
+  if (template_parameter == nullptr) {
+    return "";
+  }
+
+  switch (template_parameter->get_parameterType()) {
+  case SgTemplateParameter::type_parameter: {
+    std::string preview;
+    if (SgExpression *constraint = template_parameter->get_typeConstraint()) {
+      preview = normalizeTemplateParameterPreviewWhitespace(
+          globalUnparseToString(constraint, NULL));
+    } else {
+      preview = templateParameterKeywordSpelling(
+          SageInterface::getTemplateParameterKeyword(template_parameter));
+    }
+
+    bool is_pack = template_parameter->get_is_parameter_pack();
+    std::string parameter_name;
+    if (SgType *type = template_parameter->get_type()) {
+      if (SgNonrealType *nrtype = isSgNonrealType(type)) {
+        parameter_name = nrtype->get_name().getString();
+      } else if (SgTemplateType *ttype = isSgTemplateType(type)) {
+        parameter_name = ttype->get_name().getString();
+        is_pack = is_pack || ttype->get_packed();
+      }
+    }
+
+    if (is_pack) {
+      preview += "...";
+    }
+    if (!parameter_name.empty() ||
+        template_parameter->get_defaultTypeParameter() != nullptr) {
+      preview += " ";
+    }
+    preview += parameter_name;
+
+    if (SgType *default_type = template_parameter->get_defaultTypeParameter()) {
+      preview += " = ";
+      preview += normalizeTemplateParameterPreviewWhitespace(
+          globalUnparseToString(default_type, NULL));
+    }
+    return preview;
+  }
+
+  case SgTemplateParameter::nontype_parameter: {
+    if (SgExpression *expression = template_parameter->get_expression()) {
+      return normalizeTemplateParameterPreviewWhitespace(
+          globalUnparseToString(expression, NULL));
+    }
+
+    SgInitializedName *initialized_name =
+        template_parameter->get_initializedName();
+    if (initialized_name == nullptr) {
+      return "";
+    }
+
+    std::string preview;
+    if (SgType *type = initialized_name->get_type()) {
+      preview = normalizeTemplateParameterPreviewWhitespace(
+          globalUnparseToString(type, NULL));
+    }
+
+    std::string parameter_name = initialized_name->get_name().getString();
+    if (parameter_name.empty()) {
+      parameter_name =
+          "__non_type_param_" + std::to_string(std::max(parameter_index, 0));
+    }
+    if (!preview.empty()) {
+      const char last = preview[preview.size() - 1];
+      if (std::isalnum(static_cast<unsigned char>(last)) != 0 || last == '_' ||
+          last == '>' || last == ')' || last == ']') {
+        preview += ' ';
+      }
+    }
+    preview += parameter_name;
+
+    if (SgExpression *default_expr =
+            template_parameter->get_defaultExpressionParameter()) {
+      preview += " = ";
+      preview += normalizeTemplateParameterPreviewWhitespace(
+          globalUnparseToString(default_expr, NULL));
+    }
+    return preview;
+  }
+
+  case SgTemplateParameter::template_parameter: {
+    SgNonrealDecl *nrdecl =
+        isSgNonrealDecl(template_parameter->get_templateDeclaration());
+    if (nrdecl == nullptr) {
+      return "";
+    }
+
+    std::string preview = "template ";
+    const std::string nested_parameters =
+        buildTemplateParameterListPreviewString(nrdecl->get_tpl_params());
+    preview += nested_parameters.empty() ? "<>" : nested_parameters;
+    preview += " ";
+    preview += templateParameterKeywordSpelling(
+        SageInterface::getTemplateParameterKeyword(template_parameter));
+    if (template_parameter->get_is_parameter_pack()) {
+      preview += " ...";
+    }
+    preview += " ";
+    preview += nrdecl->get_name().getString();
+    return preview;
+  }
+
+  default:
+    return normalizeTemplateParameterPreviewWhitespace(
+        globalUnparseToString(template_parameter, NULL));
+  }
+}
+
 bool isBinaryOperatorName(const string &func_name) {
-  return func_name == "operator+" || func_name == "operator-" ||
-         func_name == "operator*" || func_name == "operator/" ||
-         func_name == "operator%" || func_name == "operator^" ||
-         func_name == "operator&" || func_name == "operator|" ||
-         func_name == "operator=" || func_name == "operator<" ||
-         func_name == "operator>" || func_name == "operator+=" ||
-         func_name == "operator-=" || func_name == "operator*=" ||
-         func_name == "operator/=" || func_name == "operator%=" ||
-         func_name == "operator^=" || func_name == "operator&=" ||
-         func_name == "operator|=" || func_name == "operator<<" ||
-         func_name == "operator>>" || func_name == "operator>>=" ||
-         func_name == "operator<<=" || func_name == "operator==" ||
-         func_name == "operator!=" || func_name == "operator<=" ||
-         func_name == "operator>=" || func_name == "operator&&" ||
-         func_name == "operator||" || func_name == "operator," ||
-         func_name == "operator->*" || func_name == "operator->" ||
-         func_name == "operator()" || func_name == "operator[]";
+  const std::string normalized_name =
+      operatorFunctionNameWithoutTemplateArguments(func_name);
+  return normalized_name == "operator+" || normalized_name == "operator-" ||
+         normalized_name == "operator*" || normalized_name == "operator/" ||
+         normalized_name == "operator%" || normalized_name == "operator^" ||
+         normalized_name == "operator&" || normalized_name == "operator|" ||
+         normalized_name == "operator=" || normalized_name == "operator<" ||
+         normalized_name == "operator>" || normalized_name == "operator+=" ||
+         normalized_name == "operator-=" || normalized_name == "operator*=" ||
+         normalized_name == "operator/=" || normalized_name == "operator%=" ||
+         normalized_name == "operator^=" || normalized_name == "operator&=" ||
+         normalized_name == "operator|=" || normalized_name == "operator<<" ||
+         normalized_name == "operator>>" || normalized_name == "operator>>=" ||
+         normalized_name == "operator<<=" || normalized_name == "operator==" ||
+         normalized_name == "operator!=" || normalized_name == "operator<=" ||
+         normalized_name == "operator>=" || normalized_name == "operator<=>" ||
+         normalized_name == "operator&&" || normalized_name == "operator||" ||
+         normalized_name == "operator," || normalized_name == "operator->*" ||
+         normalized_name == "operator->" || normalized_name == "operator()" ||
+         normalized_name == "operator[]";
 }
 
 bool isMemberOperatorCall(SgFunctionCallExp *func_call,
@@ -82,9 +433,42 @@ bool isMemberOperatorCall(SgFunctionCallExp *func_call,
     return false;
   }
 
-  return isSgMemberFunctionDeclaration(decl) != nullptr &&
-         isSgMemberFunctionRefExp(function) == nullptr &&
+  SgMemberFunctionDeclaration *member_decl =
+      isSgMemberFunctionDeclaration(decl);
+  if (member_decl == nullptr ||
+      member_decl->get_declarationModifier().isFriend()) {
+    return false;
+  }
+
+  return isSgMemberFunctionRefExp(function) == nullptr &&
          isSgTemplateMemberFunctionRefExp(function) == nullptr;
+}
+
+SgExpression *directOperatorReference(SgExpression *expr) {
+  if (expr == nullptr) {
+    return nullptr;
+  }
+
+  if (SgDotExp *dot = isSgDotExp(expr)) {
+    return dot->get_rhs_operand();
+  }
+  if (SgArrowExp *arrow = isSgArrowExp(expr)) {
+    return arrow->get_rhs_operand();
+  }
+  if (SgDotStarOp *dot_star = isSgDotStarOp(expr)) {
+    return dot_star->get_rhs_operand();
+  }
+  if (SgArrowStarOp *arrow_star = isSgArrowStarOp(expr)) {
+    return arrow_star->get_rhs_operand();
+  }
+
+  return expr;
+}
+
+bool isOverloadedOperatorReference(SgExpression *expr) {
+  string func_name;
+  return expr != nullptr && getOperatorFunctionName(expr, func_name) &&
+         func_name.rfind("operator", 0) == 0;
 }
 
 bool isUldOperatorCall(const SgUnparse_Info &info,
@@ -756,7 +1140,7 @@ void Unparse_ExprStmt::unparseNonrealRefExpression(SgExpression *expr,
 
   string func_name = nrsym->get_name().str();
   if (!unp->opt.get_overload_opt() && uses_operator_syntax &&
-      func_name.compare(0, 8, "operator") == 0 && tpl_args.empty()) {
+      func_name.compare(0, 8, "operator") == 0) {
     const bool is_new_operator = func_name.compare(0, 12, "operator new") == 0;
     const bool is_delete_operator =
         func_name.compare(0, 15, "operator delete") == 0;
@@ -771,7 +1155,7 @@ void Unparse_ExprStmt::unparseNonrealRefExpression(SgExpression *expr,
   }
   curprint(func_name);
 
-  if (!tpl_args.empty()) {
+  if (!tpl_args.empty() && !uses_operator_syntax) {
     unparseTemplateArgumentList(tpl_args, info);
   }
 }
@@ -975,6 +1359,119 @@ void Unparse_ExprStmt::unparseTypeExpression(SgExpression *expr,
   unp->u_type->unparseType(type, info_);
 }
 
+namespace {
+
+SgType *stripAnonymousTemplateArgumentAliasType(SgType *type) {
+  return type != nullptr ? type->stripType(SgType::STRIP_MODIFIER_TYPE |
+                                           SgType::STRIP_REFERENCE_TYPE |
+                                           SgType::STRIP_RVALUE_REFERENCE_TYPE |
+                                           SgType::STRIP_ARRAY_TYPE)
+                         : nullptr;
+}
+
+SgType *findAnonymousTemplateArgumentAlias(SgType *type) {
+  SgType *stripped_type = stripAnonymousTemplateArgumentAliasType(type);
+  SgClassType *class_type = isSgClassType(stripped_type);
+  if (class_type == nullptr) {
+    return nullptr;
+  }
+
+  if (SgClassDeclaration *class_declaration =
+          isSgClassDeclaration(class_type->get_declaration())) {
+    if (SgTypedefDeclaration *typedef_declaration =
+            isSgTypedefDeclaration(class_declaration->get_parent())) {
+      return typedef_declaration->get_type();
+    }
+    if (SgClassDeclaration *defining_declaration = isSgClassDeclaration(
+            class_declaration->get_definingDeclaration())) {
+      if (SgTypedefDeclaration *typedef_declaration =
+              isSgTypedefDeclaration(defining_declaration->get_parent())) {
+        return typedef_declaration->get_type();
+      }
+    }
+
+    const bool is_anonymous_type =
+        std::string(class_declaration->get_name().getString())
+            .rfind("__anonymous_0x", 0) == 0;
+    if (!is_anonymous_type) {
+      return nullptr;
+    }
+  }
+
+  SgTypedefSeq *typedefs = stripped_type->get_typedefs();
+  if (typedefs == nullptr) {
+    return nullptr;
+  }
+
+  for (SgType *alias_type : typedefs->get_typedefs()) {
+    SgTypedefType *typedef_type = isSgTypedefType(alias_type);
+    if (typedef_type == nullptr) {
+      continue;
+    }
+
+    SgType *alias_base =
+        stripAnonymousTemplateArgumentAliasType(typedef_type->get_base_type());
+    if (alias_base == stripped_type) {
+      return typedef_type;
+    }
+  }
+
+  return nullptr;
+}
+
+std::string instantiatedConversionOperatorName(
+    SgFunctionDeclaration *function_declaration) {
+  if (function_declaration == nullptr) {
+    return "";
+  }
+
+  const std::string function_name =
+      function_declaration->get_name().getString();
+  const bool is_named_keyword_operator = function_name == "operator new" ||
+                                         function_name == "operator new[]" ||
+                                         function_name == "operator delete" ||
+                                         function_name == "operator delete[]" ||
+                                         function_name == "operator co_await";
+  const bool is_conversion_operator =
+      function_declaration->get_specialFunctionModifier().isConversion() ||
+      (function_name.rfind("operator ", 0) == 0 &&
+       is_named_keyword_operator == false &&
+       function_declaration->get_specialFunctionModifier().isUldOperator() ==
+           false &&
+       function_declaration->get_specialFunctionModifier().isConstructor() ==
+           false &&
+       function_declaration->get_specialFunctionModifier().isDestructor() ==
+           false);
+  if (!is_conversion_operator) {
+    return "";
+  }
+
+  SgType *return_type = function_declaration->get_orig_return_type();
+  if (return_type == nullptr && function_declaration->get_type() != nullptr) {
+    if (SgFunctionType *function_type =
+            isSgFunctionType(function_declaration->get_type())) {
+      return_type = function_type->get_return_type();
+    } else if (SgMemberFunctionType *member_function_type =
+                   isSgMemberFunctionType(function_declaration->get_type())) {
+      return_type = member_function_type->get_return_type();
+    }
+  }
+
+  if (return_type == nullptr) {
+    return "";
+  }
+
+  std::string return_type_text = normalizeTemplateParameterPreviewWhitespace(
+      globalUnparseToString(return_type, NULL));
+  if (return_type_text.empty()) {
+    return "";
+  }
+
+  return std::string("operator ") + return_type_text;
+}
+
+} // namespace
+
 // DQ (7/21/2012): Added support for new template IR nodes (only used in C++11
 // code so far, see test2012_133.C).
 void Unparse_ExprStmt::unparseTemplateParameterValue(SgExpression *expr,
@@ -1074,6 +1571,11 @@ void Unparse_ExprStmt::unparseTemplateFunctionName(
   // template arguments that where not explicit in the original code will be
   // handled seperately in the near future (in the SgTemplateArgument IR nodes).
   if (unparseTemplateArguments == true) {
+    if (templateInstantiationFunctionDeclaration->get_templateArguments()
+            .empty()) {
+      unp->u_exprStmt->curprint("<>");
+      return;
+    }
     unparseTemplateArgumentList(
         templateInstantiationFunctionDeclaration->get_templateArguments(),
         info);
@@ -1100,6 +1602,11 @@ void Unparse_ExprStmt::unparseTemplateMemberFunctionName(
       function_name.compare(0, 8, "operator") != 0) {
     function_name =
         templateInstantiationMemberFunctionDeclaration->get_name().str();
+  }
+  std::string instantiated_conversion_name = instantiatedConversionOperatorName(
+      templateInstantiationMemberFunctionDeclaration);
+  if (!instantiated_conversion_name.empty()) {
+    function_name = instantiated_conversion_name;
   }
 
   // DQ (6/15/2013): Now that we have fixed template handling for member
@@ -1133,9 +1640,17 @@ void Unparse_ExprStmt::unparseTemplateMemberFunctionName(
   bool isDestructor = templateInstantiationMemberFunctionDeclaration
                           ->get_specialFunctionModifier()
                           .isDestructor();
-  bool isConversionOperator = templateInstantiationMemberFunctionDeclaration
-                                  ->get_specialFunctionModifier()
-                                  .isConversion();
+  bool isConversionOperator =
+      !instantiatedConversionOperatorName(
+           templateInstantiationMemberFunctionDeclaration)
+           .empty();
+  if (isConversionOperator) {
+    std::string instantiated_name = instantiatedConversionOperatorName(
+        templateInstantiationMemberFunctionDeclaration);
+    if (!instantiated_name.empty()) {
+      function_name = instantiated_name;
+    }
+  }
 
   // DQ (5/26/2013): Output output the template argument list when this is not a
   // constructor, destructor, or conversion operator.
@@ -1154,6 +1669,11 @@ void Unparse_ExprStmt::unparseTemplateMemberFunctionName(
   }
 
   if (skipTemplateArgumentList == false) {
+    if (templateInstantiationMemberFunctionDeclaration->get_templateArguments()
+            .empty()) {
+      unp->u_exprStmt->curprint("<>");
+      return;
+    }
     unparseTemplateArgumentList(
         templateInstantiationMemberFunctionDeclaration->get_templateArguments(),
         info);
@@ -1221,6 +1741,15 @@ void SgTemplateArgument::outputTemplateArgument(bool &skip_unparsing,
   }
 
   bool isAnonymousClass = this->isTemplateArgumentFromAnonymousClass();
+  SgType *anonymous_template_alias = nullptr;
+  if (isAnonymousClass &&
+      this->get_argumentType() == SgTemplateArgument::type_argument) {
+    anonymous_template_alias =
+        findAnonymousTemplateArgumentAlias(this->get_type());
+  }
+  if (isAnonymousClass && anonymous_template_alias != nullptr) {
+    isAnonymousClass = false;
+  }
 #if DEBUG_OUTPUT_TEMPLATE_ARGUMENT
   printf(" --- isAnonymousClass = %s \n", isAnonymousClass ? "true" : "false");
 #endif
@@ -1279,41 +1808,6 @@ void SgTemplateArgument::outputTemplateArgument(bool &skip_unparsing,
 void Unparse_ExprStmt::unparseTemplateArgumentList(
     const SgTemplateArgumentPtrList &input_templateArgListPtr,
     SgUnparse_Info &info) {
-  auto compact_scope_operators = [](const std::string &input) -> std::string {
-    std::string out;
-    out.reserve(input.size());
-    size_t i = 0;
-    while (i < input.size()) {
-      unsigned char ch = static_cast<unsigned char>(input[i]);
-      if (std::isspace(ch) != 0) {
-        size_t j = i;
-        while (j < input.size() &&
-               std::isspace(static_cast<unsigned char>(input[j])) != 0) {
-          ++j;
-        }
-        bool remove_space = false;
-        if (!out.empty() && out.back() == ':') {
-          remove_space = true;
-        }
-        if (j + 1 < input.size() && input[j] == ':' && input[j + 1] == ':') {
-          remove_space = true;
-        }
-        if (!remove_space) {
-          out.append(input.substr(i, j - i));
-        }
-        i = j;
-        continue;
-      }
-      if (input[i] == ':' && i + 1 < input.size() && input[i + 1] == ':') {
-        out.append("::");
-        i += 2;
-        continue;
-      }
-      out.push_back(input[i]);
-      ++i;
-    }
-    return out;
-  };
   // DQ (7/23/2012): This is one of three locations where the template arguments
   // are assembled and where the name generated identically (in each case) is
   // critical.  Not clear how to best refactor this code. The other two are:
@@ -1427,7 +1921,7 @@ void Unparse_ExprStmt::unparseTemplateArgumentList(
     ROSE_ASSERT(templateArgListPtr.empty() == true);
   }
 
-  std::string last_arg_text;
+  bool last_argument_requires_spacing_before_close = false;
   bool emitted_arg = false;
   if (templateArgListPtr.empty() == false) {
 #if DEBUG_TEMPLATE_ARGUMENT_LIST
@@ -1491,15 +1985,38 @@ void Unparse_ExprStmt::unparseTemplateArgumentList(
              *i, (*i)->class_name().c_str());
 #endif
       SgUnparse_Info arg_info(ninfo);
+      arg_info.set_declstatement_ptr(NULL);
+      arg_info.set_current_context(NULL);
       arg_info.set_reference_node_for_qualification(*i);
       arg_info.set_SkipClassDefinition();
       arg_info.set_SkipEnumDefinition();
       arg_info.set_use_generated_name_for_template_arguments(true);
-      std::string arg_text = (*i)->unparseToString(&arg_info);
-      arg_text = StringUtility::trim(arg_text);
-      arg_text = compact_scope_operators(arg_text);
-      unp->u_exprStmt->curprint(arg_text);
-      last_arg_text = arg_text;
+      const bool requires_direct_type_unparse =
+          (*i)->get_argumentType() == SgTemplateArgument::type_argument ||
+          (*i)->get_argumentType() ==
+              SgTemplateArgument::template_template_argument;
+      const bool requires_direct_expression_unparse =
+          templateArgumentRequiresDirectExpressionUnparse(*i);
+      std::string arg_text;
+      const std::string compact_type_text =
+          compactTemplateArgumentTypeSpelling(*i);
+      if (!compact_type_text.empty()) {
+        arg_text = compact_type_text;
+      } else if (!requires_direct_type_unparse &&
+                 !requires_direct_expression_unparse) {
+        arg_text = (*i)->unparseToString(&arg_info);
+        arg_text = StringUtility::trim(arg_text);
+      }
+      if (((requires_direct_type_unparse ||
+            requires_direct_expression_unparse) &&
+           compact_type_text.empty()) ||
+          arg_text.empty()) {
+        unparseTemplateArgument(*i, arg_info);
+      } else {
+        unp->u_exprStmt->curprint(arg_text);
+      }
+      last_argument_requires_spacing_before_close =
+          templateArgumentEndsWithTemplateIdClose(*i);
       emitted_arg = true;
 
 #if DEBUG_TEMPLATE_ARGUMENT_LIST
@@ -1632,11 +2149,7 @@ void Unparse_ExprStmt::unparseTemplateArgumentList(
     // parameters.
     bool needs_space_before_close = false;
     if (!use_compact_template_brackets && emitted_arg) {
-      size_t last_non_space = last_arg_text.find_last_not_of(" \t\r\n");
-      if (last_non_space != std::string::npos &&
-          last_arg_text[last_non_space] == '>') {
-        needs_space_before_close = true;
-      }
+      needs_space_before_close = last_argument_requires_spacing_before_close;
     }
     unp->u_exprStmt->curprint(needs_space_before_close ? " >" : ">");
   }
@@ -1653,8 +2166,24 @@ void Unparse_ExprStmt::unparseTemplateParameterList(
 
   if (templateParameterList.empty() == false) {
     curprint("<");
+    const int parameter_wrap_indent = unp->cur.current_col();
+    std::vector<std::string> parameter_previews;
+    parameter_previews.reserve(templateParameterList.size());
+    bool can_wrap_parameters = true;
+    size_t preview_index = 0;
+    for (SgTemplateParameter *template_parameter : templateParameterList) {
+      const std::string preview = buildTemplateParameterPreviewString(
+          template_parameter, static_cast<int>(preview_index));
+      if (preview.empty()) {
+        can_wrap_parameters = false;
+        break;
+      }
+      parameter_previews.push_back(preview);
+      ++preview_index;
+    }
     SgTemplateParameterPtrList::const_iterator i =
         templateParameterList.begin();
+    size_t parameter_index = 0;
     while (i != templateParameterList.end()) {
       SgTemplateParameter *templateParameter = *i;
       ASSERT_not_null(templateParameter);
@@ -1663,12 +2192,24 @@ void Unparse_ExprStmt::unparseTemplateParameterList(
       i++;
 
       if (i != templateParameterList.end()) {
-        // unp->u_exprStmt->curprint(" /* output comma: part 2 */ ");
         curprint(",");
+        const bool wrap_before_next =
+            can_wrap_parameters &&
+            parameter_index + 1 < parameter_previews.size() &&
+            unp->cur.current_col() + 1 +
+                    static_cast<int>(
+                        parameter_previews[parameter_index + 1].size()) >
+                kParameterWrapColumn;
+        if (wrap_before_next) {
+          unp->cur.insert_newline(1, parameter_wrap_indent);
+        } else {
+          curprint(" ");
+        }
       }
+      ++parameter_index;
     }
 
-    curprint("> ");
+    curprint(">");
   }
 }
 
@@ -1734,6 +2275,13 @@ void Unparse_ExprStmt::unparseTemplateParameter(
       is_pack = is_pack || ttype->get_packed();
     }
 
+    std::string parameter_name;
+    if (SgNonrealType *nrtype = isSgNonrealType(type)) {
+      parameter_name = nrtype->get_name().getString();
+    } else if (SgTemplateType *ttype = isSgTemplateType(type)) {
+      parameter_name = ttype->get_name().getString();
+    }
+
     if (is_template_header) {
       SgExpression *constraint = templateParameter->get_typeConstraint();
       if (constraint != NULL) {
@@ -1745,10 +2293,12 @@ void Unparse_ExprStmt::unparseTemplateParameter(
       } else {
         curprint(templateParameterKeywordSpelling(
             SageInterface::getTemplateParameterKeyword(templateParameter)));
-        curprint(" ");
       }
       if (is_pack) {
         curprint("... ");
+      } else if (!parameter_name.empty() ||
+                 templateParameter->get_defaultTypeParameter() != NULL) {
+        curprint(" ");
       }
     }
 
@@ -1768,6 +2318,7 @@ void Unparse_ExprStmt::unparseTemplateParameter(
       dinfo.set_SkipClassDefinition();
       dinfo.set_SkipEnumDefinition();
       dinfo.set_SkipQualifiedNames();
+      dinfo.set_reference_node_for_qualification(templateParameter);
       unp->u_type->unparseType(default_type, dinfo);
       emitted_default_template_args_.insert(templateParameter);
     }
@@ -1788,6 +2339,27 @@ void Unparse_ExprStmt::unparseTemplateParameter(
       // unp->u_type->outputType<SgInitializedName>(templateParameter->get_initializedName(),type,info);
       // TV (03/20/2018) only if it is a template header (not a specialization)
       bool printed_name_with_type = false;
+      SgInitializedName *parameter_name =
+          templateParameter->get_initializedName();
+      const SgName original_parameter_name = parameter_name->get_name();
+      bool synthesized_parameter_name = false;
+      if (is_template_header && original_parameter_name.getString().empty()) {
+        int parameter_position = 0;
+        if (SgTemplateDeclaration *template_decl =
+                isSgTemplateDeclaration(info.get_declstatement_ptr())) {
+          const SgTemplateParameterPtrList &params =
+              template_decl->get_templateParameters();
+          for (size_t i = 0; i < params.size(); ++i) {
+            if (params[i] == templateParameter) {
+              parameter_position = static_cast<int>(i);
+              break;
+            }
+          }
+        }
+        parameter_name->set_name(
+            SgName("__non_type_param_" + std::to_string(parameter_position)));
+        synthesized_parameter_name = true;
+      }
       if (is_template_header) {
         SgExpression *constraint = templateParameter->get_typeConstraint();
         if (constraint != NULL) {
@@ -1830,6 +2402,9 @@ void Unparse_ExprStmt::unparseTemplateParameter(
           curprint(" ");
         }
         curprint(templateParameter->get_initializedName()->get_name());
+      }
+      if (synthesized_parameter_name) {
+        parameter_name->set_name(original_parameter_name);
       }
       if (emit_default_template_arg) {
         if (SgExpression *default_expr =
@@ -1965,11 +2540,12 @@ void Unparse_ExprStmt::unparseTemplateArgument(
   // templateArgument->get_name_qualification_length() = %d
   // \n",templateArgument->get_name_qualification_length());
   newInfo.set_name_qualification_length(
-      templateArgument->get_name_qualification_length());
+      templateArgumentQualificationLengthForTypeOutput(templateArgument));
   newInfo.set_global_qualification_required(
-      templateArgument->get_global_qualification_required());
+      templateArgumentRequiresGlobalQualificationForTypeOutput(
+          templateArgument));
   newInfo.set_type_elaboration_required(
-      templateArgument->get_type_elaboration_required());
+      templateArgumentRequiresTypeElaborationForTypeOutput(templateArgument));
 
   // DQ (5/30/2011): Added support for name qualification.
   newInfo.set_reference_node_for_qualification(templateArgument);
@@ -2019,6 +2595,13 @@ void Unparse_ExprStmt::unparseTemplateArgument(
     ASSERT_not_null(templateArgument->get_type());
 
     SgType *templateArgumentType = templateArgument->get_type();
+    if (templateArgument->get_unparsable_type_alias() != NULL) {
+      templateArgumentType = templateArgument->get_unparsable_type_alias();
+    } else if (SgType *anonymous_alias =
+                   findAnonymousTemplateArgumentAlias(templateArgumentType)) {
+      templateArgumentType = anonymous_alias;
+    }
+
     // DQ (1/21/2018): Check if this is an unnamed class (used as a template
     // argument, which is not alloweded, so we should not unparse it).
     bool isAnonymous = isAnonymousClass(templateArgumentType);
@@ -2035,10 +2618,6 @@ void Unparse_ExprStmt::unparseTemplateArgument(
     // alias. The test for this is done on the whole of the AST within the ast
     // post processing. Note that this fix also requires that the name
     // qualification support be computed using the unparsable_type_alias.
-    if (templateArgument->get_unparsable_type_alias() != NULL) {
-      templateArgumentType = templateArgument->get_unparsable_type_alias();
-    }
-
 #if OUTPUT_DEBUGGING_INFORMATION
     printf("In unparseTemplateArgument(): templateArgument->get_type() = %s \n",
            templateArgumentType->class_name().c_str());
@@ -2049,7 +2628,25 @@ void Unparse_ExprStmt::unparseTemplateArgument(
     // DQ (7/24/2011): Comment out to test going back to previous version befor
     // unparsing array types correctly.
     newInfo.set_SkipClassDefinition();
-    newInfo.set_SkipClassSpecifier();
+    SgType *stripped_template_argument_type =
+        templateArgumentType != nullptr
+            ? templateArgumentType->stripType(
+                  SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
+                  SgType::STRIP_RVALUE_REFERENCE_TYPE)
+            : nullptr;
+    const bool qualified_class_template_argument =
+        isSgClassType(stripped_template_argument_type) != nullptr &&
+        (templateArgumentQualificationLengthForTypeOutput(templateArgument) >
+             0 ||
+         templateArgumentRequiresGlobalQualificationForTypeOutput(
+             templateArgument));
+    if (!templateArgumentRequiresTypeElaborationForTypeOutput(
+            templateArgument) &&
+        !qualified_class_template_argument) {
+      newInfo.set_SkipClassSpecifier();
+    } else {
+      newInfo.unset_SkipClassSpecifier();
+    }
 
     // DQ (7/24/2011): Added to prevent output of enum declarations with enum
     // fields in template argument.
@@ -2062,39 +2659,46 @@ void Unparse_ExprStmt::unparseTemplateArgument(
 
     // DQ (5/28/2011): We have to handle the name qualification directly since
     // types can be qualified different and so it depends upon where the type is
-    // referenced.  Thus the qualified name is stored in a map to the IR node
+    // referenced. Thus the qualified name is stored in a map to the IR node
     // that references the type.
-    SgName nameQualifier;
-    if (templateArgument->get_name_qualification_length() > 0) {
-
-      // DQ (4/7/2013): If this is an enum type then we need to output an enum
-      // type specifier sometimes (do so unconditionally since that always
-      // works).  See test2013_91.C as an example. if
-      // (isSgEnumType(templateArgument->get_type()) != NULL ||
-      // isSgClassType(templateArgument->get_type()) != NULL)
-      if (isSgNamedType(templateArgument->get_type()) != NULL) {
-        // Note that typedefs are not elaborated in C++.
-        if (isSgEnumType(templateArgument->get_type()) != NULL) {
-          curprint("enum ");
-        } else {
-          if (isSgClassType(templateArgument->get_type()) != NULL) {
-            curprint("class ");
-          }
-        }
-      }
-      // newInfo.display("In unparseTemplateArgument(): newInfo.display()");
-
-      // DQ (5/5/2013): Refactored code used here and in the
-      // unparseFunctionParameterDeclaration().
+    const bool needs_declaration_style_type_output =
+        templateArgumentQualificationLengthForTypeOutput(templateArgument) >
+            0 ||
+        templateArgumentRequiresGlobalQualificationForTypeOutput(
+            templateArgument) ||
+        templateArgumentRequiresTypeElaborationForTypeOutput(
+            templateArgument) ||
+        isSgPointerType(templateArgumentType) != nullptr ||
+        isSgPointerMemberType(templateArgumentType) != nullptr ||
+        isSgReferenceType(templateArgumentType) != nullptr ||
+        isSgRvalueReferenceType(templateArgumentType) != nullptr ||
+        isSgArrayType(templateArgumentType) != nullptr;
+    const bool requires_compact_reference_type_output =
+        isSgReferenceType(templateArgumentType) != nullptr ||
+        isSgRvalueReferenceType(templateArgumentType) != nullptr;
+    const bool can_use_compact_pointer_like_type_output =
+        (isSgPointerType(templateArgumentType) != nullptr ||
+         isSgPointerMemberType(templateArgumentType) != nullptr ||
+         isSgReferenceType(templateArgumentType) != nullptr ||
+         isSgRvalueReferenceType(templateArgumentType) != nullptr ||
+         isSgArrayType(templateArgumentType) != nullptr) &&
+        templateArgumentQualificationLengthForTypeOutput(templateArgument) ==
+            0 &&
+        !templateArgumentRequiresGlobalQualificationForTypeOutput(
+            templateArgument) &&
+        !templateArgumentRequiresTypeElaborationForTypeOutput(templateArgument);
+    if (requires_compact_reference_type_output ||
+        can_use_compact_pointer_like_type_output) {
+      std::string compact_type_text =
+          normalizeTemplateParameterPreviewWhitespace(
+              globalUnparseToString(templateArgumentType, NULL));
+      curprint(compact_type_text);
+    } else if (needs_declaration_style_type_output) {
       unp->u_type->outputType<SgTemplateArgument>(
           templateArgument, templateArgumentType, newInfo);
     } else {
-      // DQ (7/23/2011): To unparse the type directly we can't have either of
-      // these set! ROSE_ASSERT(newInfo.isTypeFirstPart()  == false);
-      // ROSE_ASSERT(newInfo.isTypeSecondPart() == false);
-
-      // This will unparse the type will any required name qualification.
-      // unp->u_type->unparseType(templateArgument->get_type(),newInfo);
+      // This will unparse the type with any required subtype qualification
+      // without introducing declaration-style separator whitespace.
       unp->u_type->unparseType(templateArgumentType, newInfo);
     }
     break;
@@ -2890,12 +3494,15 @@ void Unparse_ExprStmt::unparseFuncRefSupport(SgExpression *expr,
       return;
     }
 
+    std::string operator_name =
+        operatorFunctionNameWithoutTemplateArguments(func_name);
+
     // check that this an operator overloading function
     if (!unp->opt.get_overload_opt() &&
-        !strncmp(func_name.c_str(), "operator", 8)) {
+        !strncmp(operator_name.c_str(), "operator", 8)) {
       // set the length difference between "operator" and function
       diff = (uses_operator_syntax == true)
-                 ? strlen(func_name.c_str()) - strlen("operator")
+                 ? strlen(operator_name.c_str()) - strlen("operator")
                  : 0;
 
       // DQ (1/6/2006): trap out cases of global new and delete functions called
@@ -2903,10 +3510,11 @@ void Unparse_ExprStmt::unparseFuncRefSupport(SgExpression *expr,
       // the function are treated as normal function calls and not classified in
       // the AST as SgNewExp and SgDeleteExp.  See test2006_04.C.
       bool isNewOperator =
-          (strncmp(func_name.c_str(), "operator new", 12) == 0) ? true : false;
+          (strncmp(operator_name.c_str(), "operator new", 12) == 0) ? true
+                                                                    : false;
       bool isDeleteOperator =
-          (strncmp(func_name.c_str(), "operator delete", 15) == 0) ? true
-                                                                   : false;
+          (strncmp(operator_name.c_str(), "operator delete", 15) == 0) ? true
+                                                                       : false;
 
 #if DEBUG_FUNCTION_REFERENCE_SUPPORT
       printf("isNewOperator    = %s \n", isNewOperator ? "true" : "false");
@@ -2923,16 +3531,12 @@ void Unparse_ExprStmt::unparseFuncRefSupport(SgExpression *expr,
         // strchr works, look up the man page for it. func_name =
         // strchr(func_name.c_str(), func_name[8]);
         if (uses_operator_syntax == true) {
-          // Keep the full operator spelling when extra suffix tokens are
-          // attached to the name (e.g. explicit template arguments) to avoid
-          // producing invalid forms like "<< <T>(...)"
-          if (func_name.find(' ') == string::npos) {
-            func_name = strchr(func_name.c_str(), func_name[8]);
-            if (is_literal_operator == true) {
-              // func_name = strchr(func_name.c_str(), func_name[8]);
-              // func_name = strchr(func_name.c_str(), "\"\"");
-              func_name = strchr(func_name.c_str(), func_name[4]);
-            }
+          func_name = operator_name;
+          func_name = strchr(func_name.c_str(), func_name[8]);
+          if (is_literal_operator == true) {
+            // func_name = strchr(func_name.c_str(), func_name[8]);
+            // func_name = strchr(func_name.c_str(), "\"\"");
+            func_name = strchr(func_name.c_str(), func_name[4]);
           }
 
 #if DEBUG_FUNCTION_REFERENCE_SUPPORT
@@ -3364,6 +3968,21 @@ void Unparse_ExprStmt::unparseMFuncRefSupport(SgExpression *expr,
          functionNameString.c_str());
 #endif
 
+  if (!instantiatedConversionOperatorName(mfd).empty()) {
+    std::string instantiated_name = instantiatedConversionOperatorName(mfd);
+    if (!instantiated_name.empty()) {
+      if (usingGeneratedNameQualifiedFunctionNameString) {
+        size_t operator_pos = functionNameString.rfind("operator");
+        if (operator_pos != std::string::npos) {
+          functionNameString =
+              functionNameString.substr(0, operator_pos) + instantiated_name;
+        } else {
+          functionNameString = instantiated_name;
+        }
+      }
+    }
+  }
+
   if (usingGeneratedNameQualifiedFunctionNameString == true) {
     // Output the previously generated type name contianing the correct name
     // qualification of subtypes (e.g. template arguments). curprint ("/* output
@@ -3453,6 +4072,12 @@ void Unparse_ExprStmt::unparseMFuncRefSupport(SgExpression *expr,
 
     // char* func_name = mfunc_ref->get_symbol()->get_name();
     string func_name = mfunc_ref->get_symbol()->get_name().str();
+    if (!instantiatedConversionOperatorName(mfd).empty()) {
+      std::string instantiated_name = instantiatedConversionOperatorName(mfd);
+      if (!instantiated_name.empty()) {
+        func_name = instantiated_name;
+      }
+    }
 
     string full_function_name = func_name;
 
@@ -3523,7 +4148,7 @@ void Unparse_ExprStmt::unparseMFuncRefSupport(SgExpression *expr,
     // !mfd->get_specialFunctionModifier().isConversion())
     if (!unp->opt.get_overload_opt() && (uses_operator_syntax == true) &&
         func_name.size() >= 8 && func_name.substr(0, 8) == "operator" &&
-        !print_colons && !mfd->get_specialFunctionModifier().isConversion()) {
+        !print_colons && instantiatedConversionOperatorName(mfd).empty()) {
       func_name = func_name.substr(8);
     }
 #if MFuncRefSupport_DEBUG
@@ -3669,11 +4294,11 @@ void Unparse_ExprStmt::unparseMFuncRefSupport(SgExpression *expr,
 
                 // DQ (6/15/2013): I think this mod is required for
                 // test2010_03.C.
-                curprint(" " + func_name + " ");
+                curprint(func_name);
               }
             } else {
               // DQ (6/15/2013): I think this mod is required for test2010_03.C.
-              curprint(" " + func_name + " ");
+              curprint(func_name);
             }
           }
         } else {
@@ -3775,14 +4400,14 @@ void Unparse_ExprStmt::unparseMFuncRefSupport(SgExpression *expr,
                          "reference or dereference operator: function name = " +
                          func_name + " IS output */ \n");
 #endif
-                curprint(" " + func_name + " ");
+                curprint(func_name);
               } else {
 #if MFuncRefSupport_DEBUG
                 printf("info.isPrefixOperator() = %s \n",
                        info.isPrefixOperator() ? "true" : "false");
 #endif
                 if (info.isPrefixOperator() == true) {
-                  curprint(" " + func_name + " ");
+                  curprint(func_name);
                 } else {
 #if MFuncRefSupport_DEBUG
                   printf("In unparseMFuncRefSupport(): function name is NOT "
@@ -4200,6 +4825,13 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
   ASSERT_not_null(func_call);
   SgUnparse_Info newinfo(info);
   bool needSquareBrackets = false;
+  SgExpression *operator_ref =
+      directOperatorReference(func_call->get_function());
+  const bool call_uses_unary_operator =
+      operator_ref != nullptr && unp->u_sage->isUnaryOperator(operator_ref);
+  const bool call_uses_unary_postfix_operator =
+      call_uses_unary_operator &&
+      unp->u_sage->isUnaryPostfixOperator(operator_ref);
 
 #if DEBUG_FUNCTION_CALL
   curprint("/* func_call->get_function()                   = " +
@@ -4238,6 +4870,7 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
     } else {
       getOperatorFunctionName(func_call->get_function(), op_name);
     }
+    op_name = operatorFunctionNameWithoutTemplateArguments(op_name);
 
     if (op_name == "operator()") {
       is_binary_operator = false;
@@ -4282,6 +4915,14 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
          func_call->get_function()->class_name().c_str());
 #endif
 
+  auto isCompilerGeneratedLocatedNode = [](SgNode *node) {
+    if (SgLocatedNode *located_node = isSgLocatedNode(node)) {
+      Sg_File_Info *start = located_node->get_startOfConstruct();
+      return start != nullptr && start->isCompilerGenerated();
+    }
+    return false;
+  };
+
   bool suppress_implicit_conversion_operator = false;
 
   SgDotExp *dotExp = isSgDotExp(func_call->get_function());
@@ -4310,13 +4951,16 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
       // isSgMemberFunctionDeclaration(functionDeclaration);
       // ASSERT_not_null(memberFunctionDeclaration);
 
-      bool is_compiler_generated = func_call->isCompilerGenerated();
+      bool is_compiler_generated =
+          func_call->isCompilerGenerated() ||
+          isCompilerGeneratedLocatedNode(func_call) ||
+          isCompilerGeneratedLocatedNode(dotExp) ||
+          isCompilerGeneratedLocatedNode(memberFunctionRefExp);
 
       // If operator form is specified then turn it off.
       // if (uses_operator_syntax == true)
       {
-        if (functionDeclaration->get_specialFunctionModifier().isConversion() ==
-            true) {
+        if (!instantiatedConversionOperatorName(functionDeclaration).empty()) {
 #if DEBUG_FUNCTION_CALL
           printf("In Unparse_ExprStmt::unparseFuncCall(): Detected a "
                  "conversion operator! \n");
@@ -4717,9 +5361,7 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
       // DQ (2/2/2018): Handle the case of a non-postfix operator.
       // unparseExpression(func_call->get_function(), alt_info);
       if (!((uses_operator_syntax == true) &&
-            (unp->u_sage->isUnaryOperator(func_call->get_function()) == true) &&
-            (unp->u_sage->isUnaryPostfixOperator(func_call->get_function()) ==
-             true))) {
+            (call_uses_unary_postfix_operator == true))) {
 #if DEBUG_FUNCTION_CALL
         // printf ("func_call->get_function()->get_name() = %s
         // \n",func_call->get_function()->get_name().str());
@@ -4862,16 +5504,10 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
           SgFunctionRefExp *func_ref = isSgFunctionRefExp(rhs);
           SgMemberFunctionRefExp *mfunc_ref = isSgMemberFunctionRefExp(rhs);
 
-          if ((func_ref != NULL) && func_ref->get_symbol()
-                                        ->get_declaration()
-                                        ->get_specialFunctionModifier()
-                                        .isOperator())
+          if ((func_ref != NULL) && isOverloadedOperatorReference(func_ref))
             print_paren = false;
 
-          if ((mfunc_ref != NULL) && mfunc_ref->get_symbol()
-                                         ->get_declaration()
-                                         ->get_specialFunctionModifier()
-                                         .isOperator())
+          if ((mfunc_ref != NULL) && isOverloadedOperatorReference(mfunc_ref))
             print_paren = false;
 
           // Liao, work around for bug 320, operator flag for *i is not set
@@ -5046,10 +5682,7 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
           // DQ (1/2/2018): Supress the trailing function argument in the case
           // of a postfix non-member function using operator syntax.
           if ((uses_operator_syntax == true) &&
-              (unp->u_sage->isUnaryOperator(func_call->get_function()) ==
-               true) &&
-              (unp->u_sage->isUnaryPostfixOperator(func_call->get_function()) ==
-               true)) {
+              (call_uses_unary_postfix_operator == true)) {
 #if DEBUG_FUNCTION_CALL
             printf("Suppress the trailing argument of the unary postfix "
                    "operator \n");
@@ -5117,9 +5750,7 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
 
     // DQ (2/2/2018): Handle the case of a postfix operator.
     if ((uses_operator_syntax == true) &&
-        (unp->u_sage->isUnaryOperator(func_call->get_function()) == true) &&
-        (unp->u_sage->isUnaryPostfixOperator(func_call->get_function()) ==
-         true)) {
+        (call_uses_unary_postfix_operator == true)) {
       SgUnparse_Info alt_info(info);
       unparseExpression(func_call->get_function(), alt_info);
     }
@@ -5282,13 +5913,17 @@ void Unparse_ExprStmt::unparseFoldExpression(SgExpression *expr,
     ASSERT_not_null(expressions[1]);
 
     curprint("(");
+    curprint("(");
     unparseExpression(expressions[0], info);
+    curprint(")");
     curprint(" ");
     curprint(operator_token.c_str());
     curprint(" ... ");
     curprint(operator_token.c_str());
     curprint(" ");
+    curprint("(");
     unparseExpression(expressions[1], info);
+    curprint(")");
     curprint(")");
     return;
   }
@@ -5859,6 +6494,7 @@ void Unparse_ExprStmt::unparseCastOp(SgExpression *expr, SgUnparse_Info &info) {
 
         // DQ (8/27/2020): unset the SkipClassSpecifier flag, at least for C.
         newinfo.unset_SkipClassSpecifier();
+        newinfo.set_reference_node_for_qualification(cast_op);
 
         // DQ (10/17/2012): We have to separate these out if we want to output
         // the defining declarations.
@@ -5884,6 +6520,7 @@ void Unparse_ExprStmt::unparseCastOp(SgExpression *expr, SgUnparse_Info &info) {
           // DQ (1/14/2006): p_expression_type is no longer stored (type is
           // computed instead)
           // unp->u_type->unparseType(cast_op->get_expression_type(), newinfo);
+          newinfo.set_reference_node_for_qualification(cast_op);
           unp->u_type->unparseType(cast_op->get_type(), newinfo);
 
           curprint(")");

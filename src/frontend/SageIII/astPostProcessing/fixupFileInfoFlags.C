@@ -43,6 +43,92 @@ size_t fixupFileInfoInconsistanties(SgNode *ast) {
     void visit(SgNode *node) {
       SgLocatedNode *located = isSgLocatedNode(node);
       if (located) {
+        auto has_real_source = [](const Sg_File_Info *fi) {
+          if (fi == NULL) {
+            return false;
+          }
+
+          const std::string &filename = fi->get_filenameString();
+          return fi->get_line() > 0 && !filename.empty() &&
+                 filename != "compilerGenerated" && filename != "NULL_FILE" &&
+                 fi->isCompilerGenerated() == false &&
+                 fi->isFrontendSpecific() == false &&
+                 fi->isSourcePositionUnavailableInFrontend() == false;
+        };
+
+        auto restore_source_backed_file_info = [&](Sg_File_Info *target,
+                                                   const Sg_File_Info *source,
+                                                   SgNode *parent) {
+          if (target == NULL || source == NULL) {
+            return;
+          }
+
+          *target = *source;
+          target->set_parent(parent);
+        };
+
+        auto synchronize_with_anchor = [&](Sg_File_Info *target,
+                                           const Sg_File_Info *anchor,
+                                           SgNode *parent) {
+          if (target == NULL || anchor == NULL) {
+            return;
+          }
+
+          const bool anchor_has_real_source = has_real_source(anchor);
+          const std::string &target_filename = target->get_filenameString();
+          const bool target_missing_real_source =
+              target->get_line() <= 0 || target_filename.empty() ||
+              target_filename == "compilerGenerated" ||
+              target_filename == "NULL_FILE" ||
+              target->isCompilerGenerated() == true ||
+              target->isFrontendSpecific() == true ||
+              target->isSourcePositionUnavailableInFrontend() == true;
+
+          if (anchor_has_real_source && target_missing_real_source) {
+            restore_source_backed_file_info(target, anchor, parent);
+            return;
+          }
+
+          if (anchor->isCompilerGenerated() != target->isCompilerGenerated()) {
+            if (anchor->isCompilerGenerated()) {
+              target->setCompilerGenerated();
+            } else {
+              if (target->get_file_id() ==
+                      Sg_File_Info::COMPILER_GENERATED_FILE_ID ||
+                  target->get_file_id() ==
+                      Sg_File_Info::TRANSFORMATION_FILE_ID ||
+                  target->get_file_id() == Sg_File_Info::NULL_FILE_ID) {
+                target->set_file_id(anchor->get_file_id());
+                target->set_physical_file_id(anchor->get_physical_file_id());
+              }
+              target->unsetCompilerGenerated();
+            }
+          }
+
+          if (anchor->isFrontendSpecific() != target->isFrontendSpecific()) {
+            if (anchor->isFrontendSpecific()) {
+              target->setFrontendSpecific();
+            } else {
+              if (target->get_file_id() ==
+                      Sg_File_Info::COMPILER_GENERATED_FILE_ID ||
+                  target->get_file_id() == Sg_File_Info::NULL_FILE_ID) {
+                target->set_file_id(anchor->get_file_id());
+                target->set_physical_file_id(anchor->get_physical_file_id());
+              }
+              target->unsetFrontendSpecific();
+            }
+          }
+
+          if (anchor->isOutputInCodeGeneration() !=
+              target->isOutputInCodeGeneration()) {
+            if (anchor->isOutputInCodeGeneration()) {
+              target->setOutputInCodeGeneration();
+            } else {
+              target->unsetOutputInCodeGeneration();
+            }
+          }
+        };
+
         // This test is only looking at the consistancy of the setting of
         // transforamtions across all of the Sg_File_Info objects in a
         // SgLocatedNode (and the extra one in a SgExpression).
@@ -83,6 +169,9 @@ size_t fixupFileInfoInconsistanties(SgNode *ast) {
           }
           ROSE_ASSERT(located->get_startOfConstruct()->isTransformation() ==
                       located->get_endOfConstruct()->isTransformation());
+
+          synchronize_with_anchor(located->get_endOfConstruct(),
+                                  located->get_startOfConstruct(), located);
         } else {
           printf("WARNING: In fixupFileInfoInconsistanties(): located = %p = "
                  "%s testing: get_endOfConstruct() != NULL (failed) \n",
@@ -125,6 +214,10 @@ size_t fixupFileInfoInconsistanties(SgNode *ast) {
           }
           ROSE_ASSERT(expression->get_startOfConstruct()->isTransformation() ==
                       expression->get_operatorPosition()->isTransformation());
+
+          synchronize_with_anchor(expression->get_operatorPosition(),
+                                  expression->get_startOfConstruct(),
+                                  const_cast<SgExpression *>(expression));
         }
       }
     }

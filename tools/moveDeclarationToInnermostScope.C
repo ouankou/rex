@@ -104,12 +104,15 @@
  */
 
 #include "rose.h"
+#include "rose_test_output_path.h"
+#include "tokenStreamMapping.h"
 
 #include "wholeAST_API.h"
 
 #include "transformationTracking.h"
 
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 
@@ -117,32 +120,162 @@
 #include <queue> // used for a worklist of declarations to be moved
 #include <set>
 #include <stack> // used for a worklist of declarations to be moved , first found, last processing
+#include <vector>
 
 // another level of control over transformation tracking code
 #define ENABLE_TRANS_TRACKING 1
 
 namespace {
 std::string resolveTestOutputPath(const std::string &filename) {
-  if (filename.empty()) {
-    return filename;
+  return Rose::TestOutput::resolvePath(filename,
+                                       std::string(ROSE_BUILD_TREE) +
+                                           "/test-output/moveDeclarationTool");
+}
+
+void appendRoseOptionIfMissing(std::vector<std::string> &argvList,
+                               const std::string &option) {
+  if (option.empty()) {
+    return;
   }
 
-  if (filename[0] == '/' || filename[0] == '\\' ||
-      (filename.size() > 1 && filename[1] == ':')) {
-    return filename;
+  if (std::find(argvList.begin(), argvList.end(), option) == argvList.end()) {
+    argvList.push_back(option);
+  }
+}
+
+void removeRoseOption(std::vector<std::string> &argvList,
+                      const std::string &option) {
+  if (option.empty()) {
+    return;
   }
 
-  const char *output_dir = std::getenv("ROSE_TEST_OUTPUT_DIR");
-  if (output_dir == nullptr || output_dir[0] == '\0') {
-    return filename;
+  argvList.erase(std::remove(argvList.begin(), argvList.end(), option),
+                 argvList.end());
+}
+
+bool sourceFileSupportsDeferredTokenSetup(const std::string &filename) {
+  std::ifstream input(filename.c_str());
+  if (!input) {
+    return false;
   }
 
-  std::string resolved(output_dir);
-  if (!resolved.empty() && resolved.back() != '/') {
-    resolved += '/';
+  std::string line;
+  size_t line_count = 0;
+  bool saw_include = false;
+  while (std::getline(input, line)) {
+    ++line_count;
+    if (line.find("#include") != std::string::npos) {
+      saw_include = true;
+    }
+    if (line_count > 256) {
+      return false;
+    }
   }
-  resolved += filename;
-  return resolved;
+
+  return saw_include;
+}
+
+bool shouldDeferTokenSetup(const std::vector<std::string> &source_filenames,
+                           bool requested_token_preserving_mode) {
+  if (!requested_token_preserving_mode || source_filenames.empty()) {
+    return false;
+  }
+
+  for (const std::string &filename : source_filenames) {
+    if (!sourceFileSupportsDeferredTokenSetup(filename)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool copyFileContents(const std::string &from, const std::string &to) {
+  if (from.empty() || to.empty() || from == to) {
+    return false;
+  }
+
+  std::ifstream input(from.c_str(), std::ios::binary);
+  std::ofstream output(to.c_str(), std::ios::binary | std::ios::trunc);
+  if (!input || !output) {
+    return false;
+  }
+
+  output << input.rdbuf();
+  return input.good() || input.eof();
+}
+
+bool fileInfoBelongsToSourceFile(const Sg_File_Info *file_info,
+                                 const std::string &filename) {
+  return file_info != nullptr && !filename.empty() &&
+         (file_info->get_filenameString() == filename ||
+          file_info->get_raw_filename() == filename);
+}
+
+bool locatedNodeBelongsToSourceFile(const SgLocatedNode *located,
+                                    const std::string &filename) {
+  if (located == nullptr) {
+    return false;
+  }
+
+  const Sg_File_Info *positions[] = {located->get_file_info(),
+                                     located->get_startOfConstruct(),
+                                     located->get_endOfConstruct()};
+  for (const Sg_File_Info *position : positions) {
+    if (fileInfoBelongsToSourceFile(position, filename)) {
+      return true;
+    }
+  }
+
+  if (const SgExpression *expr =
+          isSgExpression(const_cast<SgLocatedNode *>(located))) {
+    if (fileInfoBelongsToSourceFile(expr->get_operatorPosition(), filename)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool sourceFileHasMainFileTransformations(SgSourceFile *source_file) {
+  if (source_file == nullptr) {
+    return false;
+  }
+
+  const std::string filename = source_file->getFileName();
+  for (SgNode *node : NodeQuery::querySubTree(source_file, V_SgLocatedNode)) {
+    const SgLocatedNode *located = isSgLocatedNode(node);
+    if (located == nullptr) {
+      continue;
+    }
+
+    if (locatedNodeBelongsToSourceFile(located, filename) &&
+        (located->isTransformation() || located->get_containsTransformation() ||
+         located->get_containsTransformationToSurroundingWhitespace())) {
+      return true;
+    }
+
+    const Sg_File_Info *positions[] = {located->get_file_info(),
+                                       located->get_startOfConstruct(),
+                                       located->get_endOfConstruct()};
+    for (const Sg_File_Info *position : positions) {
+      if (position != nullptr && position->isTransformation() &&
+          fileInfoBelongsToSourceFile(position, filename)) {
+        return true;
+      }
+    }
+
+    if (const SgExpression *expr = isSgExpression(located)) {
+      const Sg_File_Info *operator_position = expr->get_operatorPosition();
+      if (operator_position != nullptr &&
+          operator_position->isTransformation() &&
+          fileInfoBelongsToSourceFile(operator_position, filename)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 std::string describeTrackingNode(const SgLocatedNode *node) {
@@ -181,6 +314,188 @@ std::string describeTrackingNode(const SgLocatedNode *node) {
   }
 
   return out.str();
+}
+
+void markSubtreeAsTransformation(SgNode *root) {
+  if (root == nullptr) {
+    return;
+  }
+
+  for (SgNode *node : NodeQuery::querySubTree(root, V_SgNode)) {
+    if (SgLocatedNode *located = isSgLocatedNode(node)) {
+      if (Sg_File_Info *file_info = located->get_file_info()) {
+        file_info->setTransformation();
+        file_info->setOutputInCodeGeneration();
+      }
+      if (Sg_File_Info *start = located->get_startOfConstruct()) {
+        start->setTransformation();
+        start->setOutputInCodeGeneration();
+      }
+      if (Sg_File_Info *end = located->get_endOfConstruct()) {
+        end->setTransformation();
+        end->setOutputInCodeGeneration();
+      }
+      if (SgExpression *expr = isSgExpression(located)) {
+        if (Sg_File_Info *op = expr->get_operatorPosition()) {
+          op->setTransformation();
+          op->setOutputInCodeGeneration();
+        }
+      }
+    } else {
+      SageInterface::setSourcePositionAsTransformation(node);
+    }
+  }
+}
+
+void moveLeadingPreprocessingInfoPreservingDestinationTokens(
+    SgStatement *source, SgStatement *destination) {
+  ROSE_ASSERT(source != nullptr);
+  ROSE_ASSERT(destination != nullptr);
+
+  AttachedPreprocessingInfoType moved_info;
+  SageInterface::cutPreprocessingInfo(source, PreprocessingInfo::before,
+                                      moved_info);
+  if (moved_info.empty()) {
+    return;
+  }
+
+  for (PreprocessingInfo *info : moved_info) {
+    ROSE_ASSERT(info != nullptr);
+    info->setRelativePosition(PreprocessingInfo::before);
+    info->setAsTransformation();
+  }
+
+  // Mirror SageInterface::movePreprocessingInfo(): once comments/directives are
+  // reattached to a different statement, the destination owns transformed
+  // surrounding whitespace and must be formatted from the AST.
+  const bool destination_was_modified = destination->get_isModified();
+  destination->set_containsTransformationToSurroundingWhitespace(true);
+  if (!destination_was_modified && destination->get_isModified()) {
+    destination->set_isModified(false);
+  }
+
+  SageInterface::pastePreprocessingInfo(destination, PreprocessingInfo::before,
+                                        moved_info);
+}
+
+void markStatementSurroundingWhitespaceTransformation(SgStatement *statement) {
+  if (statement == nullptr) {
+    return;
+  }
+
+  const bool was_modified = statement->get_isModified();
+  statement->set_containsTransformationToSurroundingWhitespace(true);
+  if (!was_modified && statement->get_isModified()) {
+    statement->set_isModified(false);
+  }
+}
+
+void markStatementStructuralTransformation(SgStatement *statement) {
+  if (statement == nullptr) {
+    return;
+  }
+
+  statement->set_containsTransformation(true);
+}
+
+void markBasicBlockSubtreeSurroundingWhitespaceTransformation(SgNode *root) {
+  if (root == nullptr) {
+    return;
+  }
+
+  for (SgNode *node : NodeQuery::querySubTree(root, V_SgBasicBlock)) {
+    if (SgBasicBlock *basic_block = isSgBasicBlock(node)) {
+      markStatementSurroundingWhitespaceTransformation(basic_block);
+    }
+  }
+}
+
+void markBasicBlockSubtreeStructuralTransformation(SgNode *root) {
+  if (root == nullptr) {
+    return;
+  }
+
+  for (SgNode *node : NodeQuery::querySubTree(root, V_SgBasicBlock)) {
+    if (SgBasicBlock *basic_block = isSgBasicBlock(node)) {
+      markStatementStructuralTransformation(basic_block);
+    }
+  }
+}
+
+void markDuplicatedDeclarationScopePath(SgScopeStatement *target_scope,
+                                        SgScopeStatement *stop_scope) {
+  markBasicBlockSubtreeStructuralTransformation(target_scope);
+
+  std::set<SgScopeStatement *> visited_scopes;
+  for (SgScopeStatement *cursor = target_scope;
+       cursor != nullptr && visited_scopes.insert(cursor).second;
+       cursor = cursor->get_scope()) {
+    if (SgBasicBlock *basic_block = isSgBasicBlock(cursor)) {
+      markStatementStructuralTransformation(basic_block);
+    }
+    if (SgStatement *parent_statement = isSgStatement(cursor->get_parent())) {
+      if (isSgIfStmt(parent_statement) != nullptr ||
+          isSgForStatement(parent_statement) != nullptr ||
+          isSgWhileStmt(parent_statement) != nullptr ||
+          isSgDoWhileStmt(parent_statement) != nullptr ||
+          isSgSwitchStatement(parent_statement) != nullptr ||
+          isSgCaseOptionStmt(parent_statement) != nullptr ||
+          isSgDefaultOptionStmt(parent_statement) != nullptr) {
+        markStatementStructuralTransformation(parent_statement);
+      }
+    }
+    if (cursor == stop_scope) {
+      break;
+    }
+  }
+}
+
+SgScopeStatement *
+findInnermostCommonScope(const std::vector<SgScopeStatement *> &scopes) {
+  if (scopes.empty() || scopes.front() == nullptr) {
+    return nullptr;
+  }
+
+  std::vector<SgScopeStatement *> first_scope_chain;
+  std::set<SgScopeStatement *> visited_first_scope_chain;
+  for (SgScopeStatement *cursor = scopes.front(); cursor != nullptr;
+       cursor = cursor->get_scope()) {
+    if (!visited_first_scope_chain.insert(cursor).second) {
+      break;
+    }
+    first_scope_chain.push_back(cursor);
+  }
+
+  std::set<SgScopeStatement *> common_scopes(first_scope_chain.begin(),
+                                             first_scope_chain.end());
+  for (size_t i = 1; i < scopes.size() && !common_scopes.empty(); ++i) {
+    std::set<SgScopeStatement *> scope_chain;
+    std::set<SgScopeStatement *> visited_scope_chain;
+    for (SgScopeStatement *cursor = scopes[i]; cursor != nullptr;
+         cursor = cursor->get_scope()) {
+      if (!visited_scope_chain.insert(cursor).second) {
+        break;
+      }
+      scope_chain.insert(cursor);
+    }
+
+    for (std::set<SgScopeStatement *>::iterator it = common_scopes.begin();
+         it != common_scopes.end();) {
+      if (scope_chain.find(*it) == scope_chain.end()) {
+        common_scopes.erase(it++);
+      } else {
+        ++it;
+      }
+    }
+  }
+
+  for (SgScopeStatement *scope : first_scope_chain) {
+    if (common_scopes.find(scope) != common_scopes.end()) {
+      return scope;
+    }
+  }
+
+  return nullptr;
 }
 
 } // namespace
@@ -565,6 +880,38 @@ int main(int argc, char *argv[]) {
     cout << "Turing on transformation tracking model..." << endl;
   }
 
+  const bool explicit_token_unparse = CommandlineProcessing::isOption(
+      argvList, "-rose:", "(unparse_tokens)", false);
+  const bool explicit_token_source_positions = CommandlineProcessing::isOption(
+      argvList, "-rose:", "(use_token_stream_to_improve_source_position_info)",
+      false);
+  const bool explicit_token_whitespace = CommandlineProcessing::isOption(
+      argvList, "-rose:", "(unparse_using_leading_and_trailing_token_mappings)",
+      false);
+  const bool requested_token_preserving_mode =
+      transTracking || explicit_token_unparse ||
+      explicit_token_source_positions || explicit_token_whitespace;
+  const std::vector<std::string> source_filenames =
+      GetSourceFilenamesFromCommandline(argvList);
+  const bool defer_token_setup =
+      shouldDeferTokenSetup(source_filenames, requested_token_preserving_mode);
+
+  if (defer_token_setup) {
+    // Small wrapper-style inputs that mostly include headers do not need the
+    // source-preserving Clang path during frontend translation. Build the
+    // token mapping explicitly after frontend() instead.
+    removeRoseOption(argvList, "-rose:unparse_tokens");
+    removeRoseOption(argvList,
+                     "-rose:use_token_stream_to_improve_source_position_info");
+    removeRoseOption(argvList,
+                     "-rose:unparse_using_leading_and_trailing_token_mappings");
+  } else if (transTracking) {
+    appendRoseOptionIfMissing(
+        argvList, "-rose:use_token_stream_to_improve_source_position_info");
+    appendRoseOptionIfMissing(
+        argvList, "-rose:unparse_using_leading_and_trailing_token_mappings");
+  }
+
   // TOO1 (2014/12/05): Temporarily added this to support keep-going in rose-sh.
   if (CommandlineProcessing::isOption(argvList, "--list-filenames", "", true)) {
     std::vector<std::string> filenames = GetSourceFilenamesFromCommandline(
@@ -605,6 +952,51 @@ int main(int argc, char *argv[]) {
 
   SgProject *project = frontend(argvList);
 
+  if (transTracking || explicit_token_unparse ||
+      explicit_token_source_positions || explicit_token_whitespace) {
+    for (SgFile *file : project->get_fileList()) {
+      SgSourceFile *source_file = isSgSourceFile(file);
+      if (source_file == NULL) {
+        continue;
+      }
+
+      // Tracking runs still need variable-declaration normalization
+      // suppression, but template unparsing must stay selective. The Clang
+      // frontend now marks only the template declarations that cannot safely
+      // reuse preserved spellings, and forcing file-wide AST template unparsing
+      // causes large formatting churn in untouched headers.
+      source_file->set_suppress_variable_declaration_normalization(
+          transTracking);
+
+      // Move-declaration tracking depends on token mappings even when the test
+      // is not using full-file `-rose:unparse_tokens` mode. Without this, a
+      // partially transformed scope falls back to AST unparsing for large
+      // untouched declaration regions and rewrites their original spelling and
+      // layout.
+      const bool enable_token_source_positions =
+          transTracking || explicit_token_source_positions ||
+          explicit_token_unparse;
+      const bool enable_token_whitespace =
+          transTracking || explicit_token_whitespace || explicit_token_unparse;
+
+      source_file->set_use_token_stream_to_improve_source_position_info(
+          enable_token_source_positions);
+      source_file->set_unparse_using_leading_and_trailing_token_mappings(
+          enable_token_whitespace);
+
+      if (explicit_token_unparse) {
+        source_file->set_unparse_tokens(true);
+      }
+
+      if (defer_token_setup &&
+          (source_file->get_unparse_tokens() ||
+           source_file
+               ->get_use_token_stream_to_improve_source_position_info())) {
+        buildTokenStreamMappingForSourceFile(source_file);
+      }
+    }
+  }
+
   // DQ (11/20/2015): AST consistency tests (optional for users, but this
   // enforces more of our tests). I have added this to detect a
   // SgTemplateClassDefinition that is being visited twice.
@@ -620,6 +1012,7 @@ int main(int argc, char *argv[]) {
   }
 
   // DQ (10/6/2015): Remove transformation for debugging token-unparsing.
+  std::vector<std::pair<std::string, std::string>> passthrough_outputs;
   if (!isIdentity) {
     SgFilePtrList file_ptr_list = project->get_fileList();
     visitorTraversal exampleTraversal;
@@ -635,6 +1028,12 @@ int main(int argc, char *argv[]) {
             cout << "Begin merging declarations # " << inserted_decls.size()
                  << endl;
           collectiveMergeDeclarationAndAssignment(inserted_decls);
+        }
+
+        if (defer_token_setup &&
+            !sourceFileHasMainFileTransformations(s_file)) {
+          passthrough_outputs.push_back(std::make_pair(
+              s_file->getFileName(), s_file->get_unparse_output_filename()));
         }
       }
     }
@@ -700,8 +1099,13 @@ int main(int argc, char *argv[]) {
 
   // run all tests
   AstTests::runAllTests(project);
-
-  return backend(project);
+  int status = backend(project);
+  if (status == 0) {
+    for (const auto &paths : passthrough_outputs) {
+      copyFileContents(paths.first, paths.second);
+    }
+  }
+  return status;
 }
 
 //==================================================================================
@@ -1190,7 +1594,7 @@ Scope_Node *generateScopeTree(
     scope_tree->traverse_node(allnodes);
     cout << "Scope tree node count:" << allnodes.size() << endl;
     // write the tree into a dot file
-    scope_tree->printToDot(filename);
+    scope_tree->printToDot(resolveTestOutputPath(filename));
   }
   return scope_tree;
 }
@@ -1314,6 +1718,13 @@ void copyMoveVariableDeclaration(
   // TODO, no longer need this, simply ensure BB if it is a single statement of
   // true/false body
   scopes = processTargetScopes(scopes);
+  SgScopeStatement *duplicated_common_scope =
+      scopes.size() > 1 ? findInnermostCommonScope(scopes) : nullptr;
+  if (duplicated_common_scope != nullptr &&
+      duplicated_common_scope != orig_scope) {
+    markBasicBlockSubtreeSurroundingWhitespaceTransformation(
+        duplicated_common_scope);
+  }
 
   for (size_t i = 0; i < scopes.size(); i++) {
     SgScopeStatement *target_scope = scopes[i];
@@ -1324,6 +1735,8 @@ void copyMoveVariableDeclaration(
         NULL; // we may not want to actually make copies here until the copy
               // will really be inserted into AST
     decl_copy = SageInterface::deepCopy(decl);
+    SageInterface::setSourcePositionForTransformation(decl_copy);
+    markSubtreeAsTransformation(decl_copy);
 
     // Liao 1/14/2015
     // AST copy will copy the pointer to attached preprocessing information of
@@ -1521,6 +1934,10 @@ void copyMoveVariableDeclaration(
       worklist.push(decl_copy);
     }
 
+    if (orig_scope != adjusted_scope) {
+      markDuplicatedDeclarationScopePath(adjusted_scope, orig_scope);
+    }
+
     // SageInterface::setSourcePositionForTransformation (decl_copy);
     // send out warning info if there is a for loop between declaration's scope
     // and the target scope a declaration is moved across the loop boundary.
@@ -1550,12 +1967,20 @@ void copyMoveVariableDeclaration(
 
   // Special handing of preprocessing info.
   // Must happen before removing decl
+  SgStatement *next_stmt = SageInterface::getNextStatement(decl);
+  if (next_stmt != NULL) {
+    // Once the declaration is removed, the following statement owns the
+    // transformed leading token region that previously contained the original
+    // declaration text. Mark that boundary so token-aware unparsing does not
+    // replay the deleted declaration from preserved source text.
+    markStatementSurroundingWhitespaceTransformation(next_stmt);
+  }
+
   if (decl->get_attachedPreprocessingInfoPtr() != NULL) {
     // For a variable declaration to be copy/moved, the assumption is that they
     // must have next statements (or no movement is possible) Another assumption
     // is that the preprocessing info must be attached to the "before" position
     // of the declaration.
-    SgStatement *next_stmt = SageInterface::getNextStatement(decl);
     if (next_stmt == NULL) {
       cerr << "Error. Cannot find the next statement of the declaration to be "
               "moved!"
@@ -1565,9 +1990,7 @@ void copyMoveVariableDeclaration(
     } else {
       // consider things attached before, move to the same location, using
       // preprepend  to insert it.
-      SageInterface::movePreprocessingInfo(decl, next_stmt,
-                                           PreprocessingInfo::before,
-                                           PreprocessingInfo::before, true);
+      moveLeadingPreprocessingInfoPreservingDestinationTokens(decl, next_stmt);
     }
   } // end if preprocessingInfo
 

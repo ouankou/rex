@@ -19,6 +19,26 @@ using namespace Rose;
  * Get the vector of base types for the current type
  **************************************************/
 
+static bool
+isUninstantiatedTemplateFunctionPattern(SgFunctionDeclaration *fdecl) {
+  return isSgTemplateFunctionDeclaration(fdecl) != NULL ||
+         isSgTemplateMemberFunctionDeclaration(fdecl) != NULL;
+}
+
+static SgFunctionDeclaration *
+canonicalCallableFunctionDecl(SgFunctionDeclaration *fdecl) {
+  if (fdecl == NULL) {
+    return NULL;
+  }
+
+  fdecl = canonicalFunctionDeclForCallGraph(fdecl);
+  if (isUninstantiatedTemplateFunctionPattern(fdecl)) {
+    return NULL;
+  }
+
+  return fdecl;
+}
+
 static SgType *skipTypeAliases(SgType *ty) {
   ASSERT_not_null(ty);
 
@@ -734,18 +754,18 @@ is_function_exists(SgClassDefinition *cls,
     }
   }
 
-  ASSERT_require(!isSgTemplateFunctionDeclaration(resultDecl));
-  return resultDecl;
+  return canonicalCallableFunctionDecl(resultDecl);
 }
 
 bool dummyFilter::operator()(SgFunctionDeclaration *node) const {
-  ASSERT_require(!isSgTemplateFunctionDeclaration(node));
-  return true;
+  return canonicalCallableFunctionDecl(node) != NULL;
 };
 
 bool builtinFilter::operator()(SgFunctionDeclaration *funcDecl) const {
-  ASSERT_not_null(funcDecl);
-  ASSERT_require(!isSgTemplateFunctionDeclaration(funcDecl));
+  funcDecl = canonicalCallableFunctionDecl(funcDecl);
+  if (funcDecl == NULL) {
+    return false;
+  }
 
   bool returnValue = true;
   string filename = funcDecl->get_file_info()->get_filename();
@@ -835,25 +855,17 @@ CallTargetSet::solveFunctionPointerCallsFunctional(
 
   Rose_STL_Container<SgFunctionDeclaration *> functionList;
 
-  SgFunctionDeclaration *fctDecl = isSgFunctionDeclaration(node);
-  ASSERT_not_null(fctDecl);
-  ASSERT_require(!isSgTemplateFunctionDeclaration(
-      fctDecl)); // Should only be SgTemplateInstantiationFunctionDecl
+  SgFunctionDeclaration *fctDecl =
+      canonicalCallableFunctionDecl(isSgFunctionDeclaration(node));
+  if (fctDecl == NULL) {
+    return functionList;
+  }
 
   // Find all function declarations which is both first non-defining declaration
   // and has a mangled name which is equal to the mangled name of 'functionType'
   if (functionType->get_mangled().getString() ==
       fctDecl->get_type()->get_mangled().getString()) {
-    SgFunctionDeclaration *nonDefDecl =
-        isSgFunctionDeclaration(fctDecl->get_firstNondefiningDeclaration());
-    ASSERT_require(!isSgTemplateFunctionDeclaration(nonDefDecl));
-
-    // The ROSE AST normalizes functions so that there should be a nondef
-    // function decl for every function
-    if (fctDecl == nonDefDecl)
-      functionList.push_back(nonDefDecl);
-    else
-      functionList.push_back(fctDecl);
+    functionList.push_back(fctDecl);
   }
   return functionList;
 }
@@ -1275,29 +1287,18 @@ solveFunctionPointerCallsFunctional(SgNode *node,
 
   Rose_STL_Container<SgFunctionDeclaration *> functionList;
 
-  SgFunctionDeclaration *fctDecl = isSgFunctionDeclaration(node);
-  ASSERT_not_null(fctDecl);
-  ASSERT_require(!isSgTemplateFunctionDeclaration(fctDecl));
+  SgFunctionDeclaration *fctDecl =
+      canonicalCallableFunctionDecl(isSgFunctionDeclaration(node));
+  if (fctDecl == NULL) {
+    return functionList;
+  }
   // if ( functionType == fctDecl->get_type() )
   // Find all function declarations which is both first non-defining declaration
   // and has a mangled name which is equal to the mangled name of 'functionType'
   if (functionType->get_mangled().getString() ==
       fctDecl->get_type()->get_mangled().getString()) {
-    // ROSE_ASSERT( functionType->get_mangled().getString() ==
-    // fctDecl->get_mangled().getString() );
-
-    SgFunctionDeclaration *nonDefDecl =
-        isSgFunctionDeclaration(fctDecl->get_firstNondefiningDeclaration());
-
-    // The ROSE AST normalizes functions so that there should be a nondef
-    // function decl for every function
-    ASSERT_not_null(nonDefDecl);
-    ASSERT_require(!isSgTemplateFunctionDeclaration(nonDefDecl));
-    if (fctDecl == nonDefDecl)
-      functionList.push_back(nonDefDecl);
-  } // else
-  // ROSE_ASSERT( functionType->get_mangled().getString() !=
-  // fctDecl->get_type()->get_mangled().getString() );
+    functionList.push_back(fctDecl);
+  }
 
   return functionList;
 }
@@ -1359,7 +1360,14 @@ std::vector<SgFunctionDeclaration *> CallTargetSet::solveConstructorInitializer(
       }
 
       for (SgBaseClass *baseClass : currClass->get_inheritances()) {
-        ASSERT_not_null(baseClass->get_base_class());
+        if (baseClass == NULL || baseClass->get_base_class() == NULL) {
+          // Clang translation can materialize placeholder inheritance entries
+          // for anonymous or otherwise unresolved bases. They do not denote a
+          // callable constructor target and should not abort call-graph
+          // discovery for the enclosing constructor initializer.
+          continue;
+        }
+
         SgMemberFunctionDeclaration *constructorCalled =
             SageInterface::getDefaultConstructor(baseClass->get_base_class());
         if (constructorCalled != NULL) {
@@ -1600,23 +1608,16 @@ void getPropertiesForSgFunctionCallExp(
 
   case V_SgMemberFunctionRefExp:
   case V_SgFunctionRefExp: {
-    SgFunctionDeclaration *fctDecl =
+    SgFunctionDeclaration *fctDecl = canonicalCallableFunctionDecl(
         isSgFunctionRefExp(functionExp)
             ? isSgFunctionDeclaration(isSgFunctionRefExp(functionExp)
                                           ->get_symbol()
                                           ->get_declaration())
             : isSgFunctionDeclaration(isSgMemberFunctionRefExp(functionExp)
                                           ->get_symbol()
-                                          ->get_declaration());
-    ASSERT_not_null(fctDecl);
-    ASSERT_require(!isSgTemplateFunctionDeclaration(fctDecl));
-    SgFunctionDeclaration *nonDefDecl =
-        isSgFunctionDeclaration(fctDecl->get_firstNondefiningDeclaration());
-
-    // Construction Function Props
-    if (nonDefDecl) {
-      ASSERT_require(!isSgTemplateFunctionDeclaration(nonDefDecl));
-      fctDecl = nonDefDecl;
+                                          ->get_declaration()));
+    if (fctDecl == NULL) {
+      break;
     }
 
     functionList.push_back(fctDecl);
@@ -1771,9 +1772,10 @@ void CallTargetSet::getDeclarationsForExpression(
                                             includePureVirtualFunc);
 
   for (SgFunctionDeclaration *candidateDecl : props) {
-    ASSERT_not_null(candidateDecl);
-    ASSERT_require(!isSgTemplateFunctionDeclaration(candidateDecl));
-    defList.push_back(candidateDecl);
+    candidateDecl = canonicalCallableFunctionDecl(candidateDecl);
+    if (candidateDecl != NULL) {
+      defList.push_back(candidateDecl);
+    }
   }
 }
 
@@ -1784,8 +1786,10 @@ void CallTargetSet::getDefinitionsForExpression(
   CallTargetSet::getPropertiesForExpression(sgexp, classHierarchy, props);
 
   for (SgFunctionDeclaration *candidateDecl : props) {
-    ASSERT_not_null(candidateDecl);
-    ASSERT_require(!isSgTemplateFunctionDeclaration(candidateDecl));
+    candidateDecl = canonicalCallableFunctionDecl(candidateDecl);
+    if (candidateDecl == NULL) {
+      continue;
+    }
     candidateDecl =
         isSgFunctionDeclaration(candidateDecl->get_definingDeclaration());
     if (candidateDecl != NULL) {
@@ -1979,8 +1983,8 @@ FunctionData::FunctionData(SgFunctionDeclaration *inputFunctionDeclaration,
                            ClassHierarchyWrapper *classHierarchy) {
   hasDefinition = false;
 
-  functionDeclaration = inputFunctionDeclaration;
-  ASSERT_require(!isSgTemplateFunctionDeclaration(functionDeclaration));
+  functionDeclaration = canonicalCallableFunctionDecl(inputFunctionDeclaration);
+  ASSERT_not_null(functionDeclaration);
 
   SgFunctionDeclaration *defDecl =
       (inputFunctionDeclaration->get_definition() != NULL

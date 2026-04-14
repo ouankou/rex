@@ -43,6 +43,23 @@ SgType *asTypeNodeFromAstPool(SgNode *candidate) {
   return isSgType(candidate);
 }
 
+bool variantRepresentsTypeNode(VariantT variant) {
+  return (rose_ClassHierarchyCastTable[variant][SgType::static_variant >> 3] &
+          (1 << (SgType::static_variant & 7))) != 0;
+}
+
+bool targetVariantVectorMayMatchTypeNodes(
+    const VariantVector &targetVariantVector) {
+  for (vector<VariantT>::const_iterator i = targetVariantVector.begin();
+       i != targetVariantVector.end(); ++i) {
+    if (variantRepresentsTypeNode(*i)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 } // namespace
 
 void printNodeList(const Rose_STL_Container<SgNode *> &localList) {
@@ -107,54 +124,57 @@ void *querySolverGrammarElementFromVariantVector(
 
   pushNewNode(returnNodeList, targetVariantVector, astNode);
 
-  vector<SgNode *> succContainer = astNode->get_traversalSuccessorContainer();
-  vector<pair<SgNode *, string>> allNodesInSubtree =
-      astNode->returnDataMemberPointers();
+  if (targetVariantVectorMayMatchTypeNodes(targetVariantVector)) {
+    vector<SgNode *> succContainer = astNode->get_traversalSuccessorContainer();
+    vector<pair<SgNode *, string>> allNodesInSubtree =
+        astNode->returnDataMemberPointers();
 
-  if (succContainer.size() != allNodesInSubtree.size()) {
-    for (vector<pair<SgNode *, string>>::iterator iItr =
-             allNodesInSubtree.begin();
-         iItr != allNodesInSubtree.end(); ++iItr) {
-      SgType *type = asTypeNodeFromAstPool(iItr->first);
-      if (type != NULL) {
-        // DQ (1/13/2011): If we have not already seen this entry then we have
-        // to chase down possible nested types. if
-        // (std::find(succContainer.begin(),succContainer.end(),iItr->first) ==
-        // succContainer.end() )
-        if (std::find(succContainer.begin(), succContainer.end(), type) ==
-            succContainer.end()) {
-          // DQ (1/30/2010): Push the current type onto the list first, then any
-          // internal types...
-          pushNewNode(returnNodeList, targetVariantVector, type);
+    if (succContainer.size() != allNodesInSubtree.size()) {
+      for (vector<pair<SgNode *, string>>::iterator iItr =
+               allNodesInSubtree.begin();
+           iItr != allNodesInSubtree.end(); ++iItr) {
+        SgType *type = asTypeNodeFromAstPool(iItr->first);
+        if (type != NULL) {
+          // DQ (1/13/2011): If we have not already seen this entry then we
+          // have to chase down possible nested types. if
+          // (std::find(succContainer.begin(),succContainer.end(),iItr->first)
+          // == succContainer.end() )
+          if (std::find(succContainer.begin(), succContainer.end(), type) ==
+              succContainer.end()) {
+            // DQ (1/30/2010): Push the current type onto the list first, then
+            // any internal types...
+            pushNewNode(returnNodeList, targetVariantVector, type);
 
-          // Are there any other places where nested types can be found...?
-          // if ( isSgPointerType(iItr->first) != NULL  ||
-          // isSgArrayType(iItr->first) != NULL ||
-          // isSgReferenceType(iItr->first) != NULL ||
-          // isSgTypedefType(iItr->first) != NULL ||
-          // isSgFunctionType(iItr->first) != NULL ||
-          // isSgModifierType(iItr->first) != NULL) if
-          // (type->containsInternalTypes() == true)
-          if (type->containsInternalTypes() == true) {
+            // Are there any other places where nested types can be found...?
+            // if ( isSgPointerType(iItr->first) != NULL  ||
+            // isSgArrayType(iItr->first) != NULL ||
+            // isSgReferenceType(iItr->first) != NULL ||
+            // isSgTypedefType(iItr->first) != NULL ||
+            // isSgFunctionType(iItr->first) != NULL ||
+            // isSgModifierType(iItr->first) != NULL) if
+            // (type->containsInternalTypes() == true)
+            if (type->containsInternalTypes() == true) {
 
-            Rose_STL_Container<SgType *> typeVector = type->getInternalTypes();
-            Rose_STL_Container<SgType *>::iterator i = typeVector.begin();
-            while (i != typeVector.end()) {
-              // DQ (1/16/2011): This causes a test in
-              // tests/nonsmoke/functional/roseTests/programAnalysisTests/variableLivenessTests
-              // to fail with error "Error :: Number of nodes = 37 should be :
-              // 36"
+              Rose_STL_Container<SgType *> typeVector =
+                  type->getInternalTypes();
+              Rose_STL_Container<SgType *>::iterator i = typeVector.begin();
+              while (i != typeVector.end()) {
+                // DQ (1/16/2011): This causes a test in
+                // tests/nonsmoke/functional/roseTests/programAnalysisTests/variableLivenessTests
+                // to fail with error "Error :: Number of nodes = 37 should be :
+                // 36"
 
-              // Add this type to the return list of types.
-              pushNewNode(returnNodeList, targetVariantVector, *i);
+                // Add this type to the return list of types.
+                pushNewNode(returnNodeList, targetVariantVector, *i);
 
-              i++;
+                i++;
+              }
             }
-          }
 
-          // DQ (1/30/2010): Move this code to the top of the basic block.
-          // pushNewNode (returnNodeList,targetVariantVector,iItr->first);
-          // pushNewNode (returnNodeList,targetVariantVector,type);
+            // DQ (1/30/2010): Move this code to the top of the basic block.
+            // pushNewNode (returnNodeList,targetVariantVector,iItr->first);
+            // pushNewNode (returnNodeList,targetVariantVector,type);
+          }
         }
       }
     }

@@ -51,8 +51,9 @@ function(rex_elsa_big_test input_file)
   set(_test_key ${input_file})
   string(REPLACE "/" "_" _test_key "${_test_key}")
   string(REPLACE "." "_" _test_key "${_test_key}")
-  set(test_id ELSATEST_${_test_key})
+  set(test_id ELSATEST_BIG_${_test_key})
   set(_rose_flags ${ROSE_FLAGS})
+  set(_test_output_dir "${_elsa_big_output_dir}/${_test_key}")
 
   set(_input_path "${input_file}")
   string(REGEX REPLACE "^c/" "ctests/" _input_path "${_input_path}")
@@ -61,6 +62,7 @@ function(rex_elsa_big_test input_file)
     message(STATUS "Skipping Elsa big source missing from tree: ${input_file}")
     return()
   endif()
+  file(MAKE_DIRECTORY "${_test_output_dir}")
 
   if(input_file MATCHES "^c/")
     list(FILTER _rose_flags EXCLUDE REGEX "^-std=.*")
@@ -78,14 +80,14 @@ function(rex_elsa_big_test input_file)
 
   add_test(
     NAME ${test_id}
-    WORKING_DIRECTORY ${_elsa_big_output_dir}
+    WORKING_DIRECTORY ${_test_output_dir}
     COMMAND ${translator}
       ${_rose_flags} ${ROSE_INCLUDE_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR} -c
       ${_input_path}
   )
   set_tests_properties(${test_id} PROPERTIES LABELS ELSATEST)
   set_property(TEST ${test_id} APPEND PROPERTY ENVIRONMENT
-               "ROSE_TEST_OUTPUT_DIR=${_elsa_big_output_dir}")
+               "ROSE_TEST_OUTPUT_DIR=${_test_output_dir}")
 endfunction()
 
 foreach(file_to_test ${ELSATEST_BIG_ALL_TESTCODES})

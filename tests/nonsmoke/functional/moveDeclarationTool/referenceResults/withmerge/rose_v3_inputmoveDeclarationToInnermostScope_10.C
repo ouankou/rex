@@ -1,4 +1,5 @@
 
+
 void foo(int len, int condition) {
   for (int i = 0; i < len; ++i) {
   }
@@ -49,11 +50,8 @@ void foo2(bool allow, int update, int update2) {
 }
 
 class foo {
-
 public:
   foo(double val) : m_a(val) {}
-
-public:
   void f1(bool allow, int update, int length, double *b);
 
 private:

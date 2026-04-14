@@ -1,5 +1,4 @@
 #include <stdio.h>
-
 void foo(int dimensions) {
   int numItems;
   if (dimensions == 2) {
@@ -7,6 +6,7 @@ void foo(int dimensions) {
   } else {
     numItems = 20;
   }
+
   double *buffer = new double[numItems];
   delete[] buffer;
 }

@@ -21,7 +21,7 @@ LiveVarsLattice::LiveVarsLattice(const set<varID> &liveVars)
 void LiveVarsLattice::initialize() {}
 
 // Returns a copy of this lattice
-Lattice *LiveVarsLattice::copy() const { return new LiveVarsLattice(); }
+Lattice *LiveVarsLattice::copy() const { return new LiveVarsLattice(liveVars); }
 
 // Overwrites the state of this Lattice with that of that Lattice
 void LiveVarsLattice::copy(Lattice *that) {
@@ -55,9 +55,7 @@ void LiveVarsLattice::remapVars(const map<varID, varID> &varNameMap,
 //    Lattices have per-variable information.
 void LiveVarsLattice::incorporateVars(Lattice *that_arg) {
   LiveVarsLattice *that = dynamic_cast<LiveVarsLattice *>(that_arg);
-  for (set<varID>::iterator var = that->liveVars.begin();
-       var != that->liveVars.end(); var++)
-    liveVars.insert(*var);
+  liveVars.insert(that->liveVars.begin(), that->liveVars.end());
 }
 
 // Returns a Lattice that describes the information known within this lattice
@@ -99,20 +97,10 @@ bool LiveVarsLattice::unProject(SgExpression *expr, Lattice *exprState) {
 // computes the meet of this and that and saves the result in this
 // returns true if this causes this to change and false otherwise
 bool LiveVarsLattice::meetUpdate(Lattice *that_arg) {
-  bool modified = false;
   LiveVarsLattice *that = dynamic_cast<LiveVarsLattice *>(that_arg);
-
-  // Add all variables from that to this
-  for (set<varID>::iterator var = that->liveVars.begin();
-       var != that->liveVars.end(); var++) {
-    // If this lattice doesn't yet record *var as being live
-    if (liveVars.find(*var) == liveVars.end()) {
-      modified = true;
-      liveVars.insert(*var);
-    }
-  }
-
-  return modified;
+  const size_t sizeBefore = liveVars.size();
+  liveVars.insert(that->liveVars.begin(), that->liveVars.end());
+  return liveVars.size() != sizeBefore;
 }
 
 bool LiveVarsLattice::operator==(Lattice *that_arg) {
@@ -129,18 +117,10 @@ bool LiveVarsLattice::operator==(Lattice *that_arg) {
 //    removed was previously added
 // Returns true if this causes the lattice to change and false otherwise.
 bool LiveVarsLattice::addVar(const varID &var) {
-  if (liveVars.find(var) == liveVars.end()) {
-    liveVars.insert(var);
-    return true;
-  }
-  return false;
+  return liveVars.insert(var).second;
 }
 bool LiveVarsLattice::remVar(const varID &var) {
-  if (liveVars.find(var) != liveVars.end()) {
-    liveVars.erase(var);
-    return true;
-  }
-  return false;
+  return liveVars.erase(var) > 0;
 }
 
 // Returns true if the given variable is recorded as live and false otherwise

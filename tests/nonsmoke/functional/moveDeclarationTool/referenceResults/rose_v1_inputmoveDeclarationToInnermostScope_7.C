@@ -1,6 +1,10 @@
 // Test headers
-#include <algorithm>
-#include <cstdio>
-#include <math.h>
-#include <string>
 #include <vector>
+
+#include <cstdio>
+
+#include <string>
+
+#include <algorithm>
+
+#include <math.h>

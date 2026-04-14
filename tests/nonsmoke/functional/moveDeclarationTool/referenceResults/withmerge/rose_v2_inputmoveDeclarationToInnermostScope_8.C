@@ -7,34 +7,31 @@
 //      if-stmt is the innermost scope to be inserted into. Must adjust to a higher level scope instead.
 // used in multiple branches, can be moved
 #include <stdio.h>
-
 void foo(int cond, int *blockx, int loSt) {
   if (cond) {
     int tmp = 6;
-    printf("%d",tmp);
-  }
-   else {
+    printf("%d", tmp);
+  } else {
     int tmp = 7;
-    printf("%d",tmp);
+    printf("%d", tmp);
   }
-{
+  {
     if (loSt) {
       int blockx;
       blockx++;
-    }
-     else {
+    } else {
       int blockx;
       blockx--;
     }
-}
+  }
   static int stmp;
+
   if (cond) {
     stmp = 6;
-    printf("%d",stmp);
-  }
-   else {
+    printf("%d", stmp);
+  } else {
     stmp = 7;
-    printf("%d",stmp);
+    printf("%d", stmp);
   }
   // if-stmt , eligible to move into two branches
   // another if-stmt case

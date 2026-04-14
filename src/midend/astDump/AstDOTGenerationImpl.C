@@ -16,6 +16,8 @@
 #include "wholeAST_API.h"
 #endif
 
+#include "rose_test_output_path.h"
+
 template <typename ExtraNodeInfo_t, typename ExtraNodeOptions_t,
           typename ExtraEdgeInfo_t, typename ExtraEdgeOptions_t>
 DOTSynthesizedAttribute
@@ -247,6 +249,7 @@ AstDOTGenerationExtended<ExtraNodeInfo_t, ExtraNodeOptions_t, ExtraEdgeInfo_t,
     }
 
     string filename = string("./") + generatedProjectName + ".dot";
+    filename = Rose::TestOutput::resolvePath(filename);
 
     // printf ("generated filename for dot file (from SgProject) = %s
     // \n",filename.c_str());
@@ -277,6 +280,7 @@ AstDOTGenerationExtended<ExtraNodeInfo_t, ExtraNodeOptions_t, ExtraEdgeInfo_t,
         string("./") +
         Rose::StringUtility::stripPathFromFileName(original_filename) +
         filenamePostfix + ".dot";
+    filename = Rose::TestOutput::resolvePath(filename);
 
     // printf ("generated filename for dot file (from
     // SgSourceFile) = %s file->get_parent() = %p

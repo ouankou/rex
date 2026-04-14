@@ -18,6 +18,19 @@ using namespace SageInterface;
 map<SgFunctionDefinition *, set<varID>> allVars;
 map<SgFunctionDefinition *, set<varID>> activeVars;
 
+namespace {
+const char *const kExprVarIdAttributeName = "RoseExprVarIdAttribute";
+
+class ExprVarIdAttribute : public AstAttribute {
+public:
+  explicit ExprVarIdAttribute(const varID &value) : value(value) {}
+
+  AstAttribute *copy() const override { return new ExprVarIdAttribute(value); }
+
+  varID value;
+};
+} // namespace
+
 #define SgDefaultFile                                                          \
   Sg_File_Info::generateDefaultFileInfoForTransformationNode()
 
@@ -706,19 +719,36 @@ unique id varID getVarReference( SgInitializedName *iN )
 
 // Returns the varID that corresponds to the given SgExpression
 varID SgExpr2Var(const SgExpression *expr) {
+  if (AstAttribute *attr = expr->getAttribute(kExprVarIdAttributeName)) {
+    ExprVarIdAttribute *cached = dynamic_cast<ExprVarIdAttribute *>(attr);
+    ROSE_ASSERT(cached != NULL);
+    return cached->value;
+  }
+
+  varID var;
   // If this expression is a use of a variable that can be represented by a
   // varID
   if (varID::isValidVarExp(expr)) {
-    varID var(expr);
-    return var;
+    var = varID(expr);
   } else {
     AstAttribute *attr = expr->getAttribute("UniqueNameAttribute");
+    if (attr == NULL) {
+      SgExpression *mutable_expr = const_cast<SgExpression *>(expr);
+      const std::string unique_name =
+          SageInterface::generateUniqueName(expr, false) + "-" +
+          expr->class_name();
+      attr = new UniqueNameAttribute(unique_name);
+      mutable_expr->addNewAttribute("UniqueNameAttribute", attr);
+    }
     ROSE_ASSERT(attr != NULL);
     UniqueNameAttribute *uAttr = dynamic_cast<UniqueNameAttribute *>(attr);
     ROSE_ASSERT(uAttr != NULL);
-    varID var(uAttr->get_name());
-    return var;
+    var = varID(uAttr->get_name());
   }
+
+  const_cast<SgExpression *>(expr)->setAttribute(kExprVarIdAttributeName,
+                                                 new ExprVarIdAttribute(var));
+  return var;
 }
 
 // Returns true if the given expression can be interepreted as a concrete

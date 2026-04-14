@@ -933,13 +933,15 @@ public:
   void insertCopiedNodePair(const SgNode *key, SgNode *value);
   void noteSupersededCopiedNode(SgNode *value);
 
-  // Allow specific copy strategies (e.g., tree copies) to perform one
-  // preparatory canonicalization pass before root fixup starts.
-  virtual void prepareRootCopyForFixup() {}
+  // Allow copy strategies to canonicalize the copied-node map before root
+  // fixup starts. The default implementation only acts for non-identity
+  // copies, so shallow/aliasing copy helpers remain inert.
+  virtual void prepareRootCopyForFixup();
 
-  // Allow specific copy strategies (e.g., tree copies) to perform one
-  // final canonicalization pass after the root node finishes copying.
-  virtual void finalizeRootCopy() {}
+  // Allow copy strategies to canonicalize the copied graph after the root node
+  // finishes copying. The default implementation is a no-op for identity-only
+  // copies and runs the shared deep-copy finalization otherwise.
+  virtual void finalizeRootCopy();
 };
 
 /*! \brief Supporting class for "Shallow" copies of the AST.

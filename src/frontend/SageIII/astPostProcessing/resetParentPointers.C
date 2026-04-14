@@ -1621,15 +1621,24 @@ ResetParentPointers::evaluateInheritedAttribute(
     }
     }
   } else {
-    // DQ (2/14/2015): Comment out to debug C++11 data member initialization
-    // (See C++11 test2015_13.C). This was a problem because of a stored SgType
-    // pointer that was traversed as part of the AST, this is fixed now.
-
-    // Since we don't traverse types this branch is never executed!
-    printf("Found a type or symbol while resetting parents \n");
-    printf("$$$$$ In evaluateInheritedAttribute() \n");
-    printf("   --- astNode->class_name() = %s \n", node->class_name().c_str());
-    ROSE_ABORT();
+    if (SgType *type = isSgType(node)) {
+      if (inheritedAttribute.parentNode != nullptr &&
+          type->get_parent() == nullptr) {
+        type->set_parent(inheritedAttribute.parentNode);
+      }
+    } else if (SgSymbol *symbol = isSgSymbol(node)) {
+      if (inheritedAttribute.parentNode != nullptr &&
+          symbol->get_parent() == nullptr &&
+          isSgSymbolTable(inheritedAttribute.parentNode) != nullptr) {
+        symbol->set_parent(inheritedAttribute.parentNode);
+      }
+    } else {
+      printf("Found an unsupported node while resetting parents \n");
+      printf("$$$$$ In evaluateInheritedAttribute() \n");
+      printf("   --- astNode->class_name() = %s \n",
+             node->class_name().c_str());
+      ROSE_ABORT();
+    }
   }
 
   // I/O useful for debugging

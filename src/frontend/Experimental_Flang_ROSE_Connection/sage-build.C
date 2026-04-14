@@ -4323,6 +4323,7 @@ void BuildVisitor::Build(parser::MainProgram &x) {
 
   // ProgramStmt is optional
   if (stmt) {
+    MaybeInsertIncludeLine(stmt->source);
     name.emplace(stmt.value().statement.v.ToString());
   }
   if (stmt && stmt->label) {
@@ -4435,6 +4436,7 @@ void BuildVisitor::Build(parser::ContainsStmt &x) {
   // ContainsStmt is an empty class
   SgContainsStatement *stmt{nullptr};
   builder.Enter(stmt);
+  ApplyCurrentStatementSource(stmt);
   builder.Leave(stmt);
 }
 
@@ -4466,6 +4468,7 @@ void BuildVisitor::Build(parser::SubroutineSubprogram &x) {
 
   auto &stmt{std::get<Statement<SubroutineStmt>>(x.t)};
   auto &end{std::get<Statement<EndSubroutineStmt>>(x.t)};
+  MaybeInsertIncludeLine(stmt.source);
 
   std::vector<std::string> labels{};
   std::optional<SourcePosition> srcPosBody{
@@ -4551,6 +4554,7 @@ void BuildVisitor::Build(parser::SeparateModuleSubprogram &x) {
 
   auto &stmt{std::get<Statement<MpSubprogramStmt>>(x.t)};
   auto &end{std::get<Statement<EndMpSubprogramStmt>>(x.t)};
+  MaybeInsertIncludeLine(stmt.source);
   auto &spec{std::get<SpecificationPart>(x.t)};
 
   std::optional<SourcePosition> srcPosBody{FirstSourcePosition(spec)};
@@ -4645,6 +4649,7 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
   // std::optional<Suffix>
   auto &stmt{std::get<Statement<FunctionStmt>>(x.t)};
   auto &end{std::get<Statement<EndFunctionStmt>>(x.t)};
+  MaybeInsertIncludeLine(stmt.source);
 
   std::optional<SourcePosition> srcPosBody{
       FirstSourcePosition(std::get<SpecificationPart>(x.t))};
@@ -4797,9 +4802,16 @@ void BuildVisitor::Build(parser::Module &x) {
 
   auto &stmt{std::get<Statement<ModuleStmt>>(x.t)};
   auto &end{std::get<Statement<EndModuleStmt>>(x.t)};
+  MaybeInsertIncludeLine(stmt.source);
+  SourcePosition srcBegin{BuildSourcePosition(stmt, Order::begin)};
+  SourcePosition srcEnd{BuildSourcePosition(end, Order::end)};
 
   SgModuleStatement *module{nullptr};
   builder.Enter(module, stmt.statement.v.ToString());
+  builder.setSourcePosition(module, srcBegin, srcEnd);
+  if (SgClassDefinition *moduleDef = module->get_definition()) {
+    builder.setSourcePosition(moduleDef, srcBegin, srcEnd);
+  }
 
   ApplyFortranBoundaryLabels(module, module->get_definition(), stmt.label,
                              end.label);
@@ -4820,11 +4832,8 @@ void BuildVisitor::Build(parser::Module &x) {
 
 void BuildVisitor::Build(parser::ModuleSubprogramPart &x) {
   // std::tuple<> Statement<ContainsStmt>, std::list<ModuleSubprogram>
-
-  // ContainsStmt
-  SgContainsStatement *contains{nullptr};
-  builder.Enter(contains);
-  builder.Leave(contains);
+  using namespace Fortran::parser;
+  Walk(std::get<Statement<ContainsStmt>>(x.t));
 
   Walk(std::get<std::list<parser::ModuleSubprogram>>(x.t));
 }
@@ -4838,6 +4847,9 @@ void BuildVisitor::Build(parser::Submodule &x) {
 
   auto &stmt{std::get<Statement<SubmoduleStmt>>(x.t)};
   auto &end{std::get<Statement<EndSubmoduleStmt>>(x.t)};
+  MaybeInsertIncludeLine(stmt.source);
+  SourcePosition srcBegin{BuildSourcePosition(stmt, Order::begin)};
+  SourcePosition srcEnd{BuildSourcePosition(end, Order::end)};
   auto &parentId = std::get<ParentIdentifier>(stmt.statement.t);
   std::string parentName = std::get<Name>(parentId.t).ToString();
   if (auto &parentMod = std::get<std::optional<Name>>(parentId.t)) {
@@ -4847,6 +4859,10 @@ void BuildVisitor::Build(parser::Submodule &x) {
 
   SgModuleStatement *module{nullptr};
   builder.Enter(module, submoduleName);
+  builder.setSourcePosition(module, srcBegin, srcEnd);
+  if (SgClassDefinition *moduleDef = module->get_definition()) {
+    builder.setSourcePosition(moduleDef, srcBegin, srcEnd);
+  }
   module->addNewAttribute(kFortranSubmoduleParentAttr,
                           new FortranOwnedStringAttribute(parentName));
 
@@ -4871,6 +4887,7 @@ void BuildVisitor::Build(parser::BlockData &x) {
   std::cout << "Rose::builder::Build(BlockData)\n";
   auto &stmt{std::get<Statement<BlockDataStmt>>(x.t)};
   auto &end{std::get<Statement<EndBlockDataStmt>>(x.t)};
+  MaybeInsertIncludeLine(stmt.source);
 
   std::string name;
   if (stmt.statement.v) {
@@ -5496,6 +5513,12 @@ void BuildVisitor::Build(parser::ForallAssignmentStmt &x) {
       x.u);
 }
 
+namespace {
+std::optional<SourcePosition> FirstConcreteStatementStart(SgBasicBlock *body);
+void SetBlockSourceRange(SgBasicBlock *body, const SourcePosition &begin,
+                         const SourcePosition &end);
+} // namespace
+
 void BuildVisitor::Build(parser::AssociateConstruct &x) {
   using namespace Fortran::parser;
 
@@ -5589,6 +5612,9 @@ void BuildVisitor::Build(parser::AssociateConstruct &x) {
   Walk(block);
 
   SageBuilder::popScopeStack();
+
+  SetBlockSourceRange(
+      body, FirstConcreteStatementStart(body).value_or(srcBegin), srcEnd);
 }
 
 namespace {
@@ -5620,6 +5646,28 @@ void SetBlockSourceRange(SgBasicBlock *body, const SourcePosition &begin,
     return;
   }
   builder.setSourcePosition(body, begin, end);
+}
+
+std::optional<SourcePosition> FirstConcreteStatementStart(SgBasicBlock *body) {
+  if (body == nullptr) {
+    return std::nullopt;
+  }
+
+  for (SgStatement *stmt : body->get_statements()) {
+    if (stmt == nullptr) {
+      continue;
+    }
+    Sg_File_Info *fi = stmt->get_file_info();
+    if (fi == nullptr || fi->get_filenameString().empty() ||
+        fi->get_filenameString() == "NULL_FILE" || fi->get_line() <= 0 ||
+        fi->get_col() <= 0) {
+      continue;
+    }
+    return SourcePosition{fi->get_filenameString(), fi->get_line(),
+                          fi->get_col()};
+  }
+
+  return std::nullopt;
 }
 
 SgExpression *BuildScalarExpr(parser::ScalarExpr &expr) {
@@ -6002,7 +6050,9 @@ void BuildVisitor::Build(parser::CaseConstruct &x) {
                                                   force_case_insensitive);
   SageInterface::ensureCaseInsensitiveSymbolTable(body, force_case_insensitive);
 
-  for (auto &caseEntry : cases) {
+  std::optional<SourcePosition> firstCaseBegin{std::nullopt};
+  for (auto caseIter = cases.begin(); caseIter != cases.end(); ++caseIter) {
+    auto &caseEntry = *caseIter;
     auto &caseStmt = std::get<Statement<CaseStmt>>(caseEntry.t);
     auto &caseBlock = std::get<Block>(caseEntry.t);
     auto &selector = std::get<CaseSelector>(caseStmt.statement.t);
@@ -6047,12 +6097,26 @@ void BuildVisitor::Build(parser::CaseConstruct &x) {
 
     caseBody->set_parent(caseNode);
     SourcePosition caseBegin{BuildSourcePosition(caseStmt, Order::begin)};
-    SourcePosition caseEnd{BuildSourcePosition(caseStmt, Order::end)};
-    builder.setSourcePosition(caseNode, caseBegin, caseEnd);
+    if (!firstCaseBegin) {
+      firstCaseBegin = caseBegin;
+    }
+
+    SourcePosition clauseEnd{srcEnd};
+    if (auto nextCaseIter = std::next(caseIter); nextCaseIter != cases.end()) {
+      clauseEnd = BuildSourcePosition(
+          std::get<Statement<CaseStmt>>(nextCaseIter->t), Order::begin);
+    }
 
     SageInterface::appendStatement(caseNode, body);
     PopulateBlock(*this, caseBlock, caseBody);
+
+    builder.setSourcePosition(caseNode, caseBegin, clauseEnd);
+    SetBlockSourceRange(
+        caseBody, FirstConcreteStatementStart(caseBody).value_or(caseBegin),
+        clauseEnd);
   }
+
+  SetBlockSourceRange(body, firstCaseBegin.value_or(srcBegin), srcEnd);
 }
 
 void BuildVisitor::Build(parser::WhereConstruct &x) {
@@ -6143,9 +6207,22 @@ void BuildVisitor::Build(parser::WhereConstruct &x) {
   };
 
   populate_where_body(bodyConstructs, body);
+  SourcePosition whereBodyEnd{srcEnd};
+  if (!maskedElsewheres.empty()) {
+    whereBodyEnd = BuildSourcePosition(
+        std::get<Statement<MaskedElsewhereStmt>>(maskedElsewheres.front().t),
+        Order::begin);
+  } else if (optElsewhere) {
+    whereBodyEnd = BuildSourcePosition(
+        std::get<Statement<ElsewhereStmt>>(optElsewhere->t), Order::begin);
+  }
+  SetBlockSourceRange(
+      body, FirstConcreteStatementStart(body).value_or(srcBegin), whereBodyEnd);
 
   SgElseWhereStatement *currentElse = nullptr;
-  for (auto &masked : maskedElsewheres) {
+  for (auto maskedIter = maskedElsewheres.begin();
+       maskedIter != maskedElsewheres.end(); ++maskedIter) {
+    auto &masked = *maskedIter;
     auto &maskedStmt = std::get<Statement<MaskedElsewhereStmt>>(masked.t);
     auto &maskedBody = std::get<std::list<WhereBodyConstruct>>(masked.t);
 
@@ -6171,8 +6248,16 @@ void BuildVisitor::Build(parser::WhereConstruct &x) {
     elseBody->set_parent(elseStmt);
 
     SourcePosition elseBegin{BuildSourcePosition(maskedStmt, Order::begin)};
-    SourcePosition elseEnd{BuildSourcePosition(maskedStmt, Order::end)};
-    builder.setSourcePosition(elseStmt, elseBegin, elseEnd);
+    SourcePosition clauseEnd{srcEnd};
+    if (auto nextMaskedIter = std::next(maskedIter);
+        nextMaskedIter != maskedElsewheres.end()) {
+      clauseEnd = BuildSourcePosition(
+          std::get<Statement<MaskedElsewhereStmt>>(nextMaskedIter->t),
+          Order::begin);
+    } else if (optElsewhere) {
+      clauseEnd = BuildSourcePosition(
+          std::get<Statement<ElsewhereStmt>>(optElsewhere->t), Order::begin);
+    }
 
     set_label(elseStmt, maskedStmt.label, SgLabelSymbol::e_start_label_type);
 
@@ -6186,6 +6271,10 @@ void BuildVisitor::Build(parser::WhereConstruct &x) {
     currentElse = elseStmt;
 
     populate_where_body(maskedBody, elseBody);
+    builder.setSourcePosition(elseStmt, elseBegin, clauseEnd);
+    SetBlockSourceRange(
+        elseBody, FirstConcreteStatementStart(elseBody).value_or(elseBegin),
+        clauseEnd);
   }
 
   if (optElsewhere) {
@@ -6214,8 +6303,6 @@ void BuildVisitor::Build(parser::WhereConstruct &x) {
     elseBody->set_parent(elseStmt);
 
     SourcePosition elseBegin{BuildSourcePosition(elsewhereStmt, Order::begin)};
-    SourcePosition elseEnd{BuildSourcePosition(elsewhereStmt, Order::end)};
-    builder.setSourcePosition(elseStmt, elseBegin, elseEnd);
 
     set_label(elseStmt, elsewhereStmt.label, SgLabelSymbol::e_start_label_type);
 
@@ -6229,6 +6316,10 @@ void BuildVisitor::Build(parser::WhereConstruct &x) {
     currentElse = elseStmt;
 
     populate_where_body(elsewhereBody, elseBody);
+    builder.setSourcePosition(elseStmt, elseBegin, srcEnd);
+    SetBlockSourceRange(
+        elseBody, FirstConcreteStatementStart(elseBody).value_or(elseBegin),
+        srcEnd);
   }
 }
 
@@ -8074,6 +8165,7 @@ void BuildVisitor::Build(parser::PointerAssignmentStmt &x) {
   SgExprStatement *stmt = SageBuilder::buildExprStatement_nfi(assign);
   ASSERT_not_null(stmt);
   assign->set_parent(stmt);
+  ApplyCurrentStatementSource(stmt);
 
   auto labels = getLabels();
   builder.Leave(stmt, labels);
@@ -9484,7 +9576,6 @@ void BuildVisitor::Build(parser::BasedPointerStmt &x) {
 
   SgScopeStatement *scope = SageBuilder::topScopeStack();
   ASSERT_not_null(scope);
-
   for (auto &based : x.v) {
     const auto &pointerNameNode = std::get<0>(based.t);
     const auto &targetNameNode = std::get<1>(based.t);
@@ -9494,7 +9585,46 @@ void BuildVisitor::Build(parser::BasedPointerStmt &x) {
 
     SgVariableSymbol *targetSymbol =
         SageInterface::lookupVariableSymbolInParentScopes(targetName, scope);
-    if (targetSymbol == nullptr) {
+    SgInitializedName *targetInit = nullptr;
+    if (targetSymbol != nullptr) {
+      targetInit = targetSymbol->get_declaration();
+    } else if (SgFunctionSymbol *procedureSymbol =
+                   SageInterface::lookupFunctionSymbolInParentScopes(targetName,
+                                                                     scope)) {
+      SgType *targetType = nullptr;
+      if (SgFunctionType *functionType =
+              isSgFunctionType(procedureSymbol->get_type())) {
+        targetType = functionType->get_return_type();
+      }
+      if (targetType == nullptr) {
+        if (SgFunctionDeclaration *procedureDecl =
+                procedureSymbol->get_declaration()) {
+          if (SgFunctionType *functionType =
+                  isSgFunctionType(procedureDecl->get_type())) {
+            targetType = functionType->get_return_type();
+          }
+        }
+      }
+      if (targetType == nullptr || isSgTypeVoid(targetType) != nullptr) {
+        targetType = SageBuilder::buildIntType();
+      }
+
+      std::string surrogateName = pointerName + "_pointee";
+      int surrogateIndex = 0;
+      while (scope->lookup_symbol(surrogateName) != nullptr) {
+        ++surrogateIndex;
+        surrogateName =
+            pointerName + "_pointee_" + std::to_string(surrogateIndex);
+      }
+
+      SgVariableDeclaration *targetDecl =
+          SageBuilder::buildVariableDeclaration_nfi(
+              surrogateName, targetType, /*initializer*/ nullptr, scope);
+      ASSERT_not_null(targetDecl);
+      ApplyCurrentStatementSource(targetDecl);
+      InsertFortranSpecificationStatement(targetDecl, scope);
+      targetInit = targetDecl->get_variables().front();
+    } else {
       SgType *implicitType = SageBuilder::buildFortranImplicitType(targetName);
       SgVariableDeclaration *targetDecl =
           SageBuilder::buildVariableDeclaration_nfi(
@@ -9506,10 +9636,9 @@ void BuildVisitor::Build(parser::BasedPointerStmt &x) {
       SageInterface::appendStatement(targetDecl, scope);
       targetSymbol =
           SageInterface::lookupVariableSymbolInParentScopes(targetName, scope);
+      targetInit =
+          targetSymbol != nullptr ? targetSymbol->get_declaration() : nullptr;
     }
-    ASSERT_not_null(targetSymbol);
-
-    SgInitializedName *targetInit = targetSymbol->get_declaration();
     ASSERT_not_null(targetInit);
 
     if (arrayOpt) {
@@ -9533,7 +9662,7 @@ void BuildVisitor::Build(parser::BasedPointerStmt &x) {
         pointerName, SgTypeCrayPointer::createType(),
         /*initializer*/ nullptr, scope);
     ASSERT_not_null(ptrDecl);
-    SageInterface::setSourcePosition(ptrDecl);
+    ApplyCurrentStatementSource(ptrDecl);
     ptrDecl->get_declarationModifier().get_accessModifier().setUndefined();
     SgInitializedName *ptrInit = ptrDecl->get_variables().front();
     ASSERT_not_null(ptrInit);
@@ -9707,9 +9836,15 @@ void BuildVisitor::Build(parser::DerivedTypeDef &x) {
   // DerivedTypeStmt std::tuple<std::list<TypeAttrSpec>, Name, std::list<Name>>
   // t;
   std::string name{std::get<Name>(stmt.statement.t).ToString()};
+  SourcePosition srcBegin{BuildSourcePosition(stmt, Order::begin)};
+  SourcePosition srcEnd{BuildSourcePosition(end, Order::end)};
 
   SgDerivedTypeStatement *derived{nullptr};
   builder.Enter(derived, name);
+  builder.setSourcePosition(derived, srcBegin, srcEnd);
+  if (SgClassDefinition *classDef = derived->get_definition()) {
+    builder.setSourcePosition(classDef, srcBegin, srcEnd);
+  }
 
   ApplyFortranBoundaryLabels(derived, derived->get_scope(), stmt.label,
                              end.label);
@@ -9760,10 +9895,14 @@ void BuildVisitor::Build(parser::DerivedTypeDef &x) {
 
   for (auto &componentStmt :
        std::get<std::list<Statement<ComponentDefStmt>>>(x.t)) {
+    SgStatement *builtStmt{nullptr};
+    const SourcePosition componentBegin{
+        BuildSourcePosition(componentStmt, Order::begin)};
+    const SourcePosition componentEnd{
+        BuildSourcePosition(componentStmt, Order::end)};
     common::visit(
         common::visitors{
             [&](DataComponentDefStmt &y) {
-              SgStatement *builtStmt{nullptr};
               Rose::builder::Build(y, builtStmt);
             },
             [&](ProcComponentDefStmt &y) {
@@ -9826,12 +9965,16 @@ void BuildVisitor::Build(parser::DerivedTypeDef &x) {
               SgVariableDeclaration *varDecl{nullptr};
               builder.Enter(varDecl, procType, initInfo);
               builder.Leave(varDecl, modifiers);
+              builtStmt = varDecl;
             },
             [&](common::Indirection<CompilerDirective> &y) {
               Build(y.value());
             },
             [&](ErrorRecovery &) { ABORT_NO_IMPL; }},
         componentStmt.statement.u);
+    if (builtStmt != nullptr) {
+      builder.setSourcePosition(builtStmt, componentBegin, componentEnd);
+    }
   }
 
   // Leave SageTreeBuilder for SgDerivedTypeStmt
@@ -10013,6 +10156,7 @@ void BuildVisitor::Build(parser::ProcedureDeclarationStmt &x) {
 
   SgVariableDeclaration *varDecl{nullptr};
   builder.Enter(varDecl, procType, initInfo);
+  ApplyCurrentStatementSource(varDecl);
   builder.Leave(varDecl, modifiers);
 }
 
@@ -13324,7 +13468,9 @@ void BuildVisitor::Build(parser::InterfaceBlock &x) {
   SgInterfaceStatement *interfaceStmt =
       new SgInterfaceStatement(interfaceName, kind);
   ASSERT_not_null(interfaceStmt);
-  SageInterface::setSourcePosition(interfaceStmt);
+  builder.setSourcePosition(interfaceStmt,
+                            BuildSourcePosition(stmt, Order::begin),
+                            BuildSourcePosition(end, Order::end));
   SageInterface::appendStatement(interfaceStmt, SageBuilder::topScopeStack());
 
   ApplyFortranBoundaryLabels(interfaceStmt, interfaceStmt->get_scope(),

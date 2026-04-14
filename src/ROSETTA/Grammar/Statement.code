@@ -7782,7 +7782,8 @@ std::string SgDeclarationStatement::buildTemplateNameWithArguments(
       argumentsString += " , ";
     }
 
-    std::string argumentString = argument->unparseToString(&unparseInfo);
+    std::string argumentString =
+        SageBuilder::unparseTemplateArgumentToString(argument).str();
     argumentString = Rose::StringUtility::trim(argumentString);
     auto initializedNameIsPack = [](SgInitializedName *initName) -> bool {
       if (initName == NULL) {

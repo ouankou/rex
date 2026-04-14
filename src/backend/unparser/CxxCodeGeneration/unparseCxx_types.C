@@ -44,7 +44,9 @@ bool Unparse_Type::generateElaboratedType(
   if (!useElaboratedType) {
     if (isSgTemplateArgument(info.get_reference_node_for_qualification()) !=
         nullptr) {
-      return false;
+      return declarationStatement != nullptr
+                 ? !declarationStatement->skipElaborateType()
+                 : false;
     }
 
     if (SgTypedefDeclaration *typedef_decl =
@@ -201,38 +203,37 @@ bool typeDependsOnQualifiedNonrealName(const SgType *type) {
 }
 
 SgClassDeclaration *classDeclarationFromScope(SgScopeStatement *scope) {
-  if (scope == nullptr) {
-    return nullptr;
-  }
-
-  if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
-    return class_def->get_declaration();
-  }
-  if (SgTemplateClassDefinition *template_def =
-          isSgTemplateClassDefinition(scope)) {
-    return template_def->get_declaration();
-  }
-  if (SgTemplateInstantiationDefn *inst_def =
-          isSgTemplateInstantiationDefn(scope)) {
-    return isSgClassDeclaration(inst_def->get_declaration());
+  for (SgScopeStatement *current = scope; current != nullptr;
+       current = isSgScopeStatement(current->get_parent())) {
+    if (SgClassDefinition *class_def = isSgClassDefinition(current)) {
+      return class_def->get_declaration();
+    }
+    if (SgTemplateClassDefinition *template_def =
+            isSgTemplateClassDefinition(current)) {
+      return template_def->get_declaration();
+    }
+    if (SgTemplateInstantiationDefn *inst_def =
+            isSgTemplateInstantiationDefn(current)) {
+      return isSgClassDeclaration(inst_def->get_declaration());
+    }
   }
 
   return nullptr;
 }
 
 SgScopeStatement *scopeForQualificationReference(const SgNode *node) {
-  if (node == nullptr) {
-    return nullptr;
-  }
-
-  if (const SgScopeStatement *scope = isSgScopeStatement(node)) {
-    return const_cast<SgScopeStatement *>(scope);
-  }
-  if (const SgDeclarationStatement *decl = isSgDeclarationStatement(node)) {
-    return decl->get_scope();
-  }
-  if (const SgStatement *stmt = isSgStatement(node)) {
-    return stmt->get_scope();
+  for (const SgNode *current = node; current != nullptr;
+       current = current->get_parent()) {
+    if (const SgScopeStatement *scope = isSgScopeStatement(current)) {
+      return const_cast<SgScopeStatement *>(scope);
+    }
+    if (const SgDeclarationStatement *decl =
+            isSgDeclarationStatement(current)) {
+      return decl->get_scope();
+    }
+    if (const SgStatement *stmt = isSgStatement(current)) {
+      return stmt->get_scope();
+    }
   }
 
   return nullptr;
@@ -278,6 +279,265 @@ bool typedefRequiresDependentOwnerTypename(const SgTypedefDeclaration *tdecl,
       scopeForQualificationReference(reference_node);
   return owner_scope != nullptr && reference_scope != nullptr &&
          owner_scope != reference_scope;
+}
+
+bool storedQualifierDropsDependentOwnerTemplateArguments(
+    const SgTypedefDeclaration *tdecl, const SgName &nameQualifier) {
+  if (!typedefOwnerIsDependentTemplateClass(tdecl) || nameQualifier.is_null()) {
+    return false;
+  }
+
+  const std::string qualifier = nameQualifier.str();
+  if (qualifier.empty() || qualifier.find('<') != std::string::npos) {
+    return false;
+  }
+
+  SgClassDeclaration *owner_decl =
+      classDeclarationFromScope(isSgScopeStatement(tdecl->get_parent()));
+  if (owner_decl == nullptr) {
+    return false;
+  }
+
+  const std::string owner_qualified_name =
+      owner_decl->get_qualified_name().str();
+  if (owner_qualified_name.find('<') == std::string::npos) {
+    return false;
+  }
+
+  const std::string owner_suffix = owner_decl->get_name().getString() + "::";
+  return qualifier.size() >= owner_suffix.size() &&
+         qualifier.compare(qualifier.size() - owner_suffix.size(),
+                           owner_suffix.size(), owner_suffix) == 0;
+}
+
+bool templateArgumentUsesNonrealReference(const SgTemplateArgument *arg) {
+  return arg != nullptr &&
+         arg->get_argumentType() == SgTemplateArgument::nontype_argument &&
+         isSgNonrealRefExp(arg->get_expression()) != nullptr;
+}
+
+bool templateArgumentListUsesNonrealReference(
+    const SgTemplateArgumentPtrList &args) {
+  for (const SgTemplateArgument *arg : args) {
+    if (templateArgumentUsesNonrealReference(arg)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+std::string formatQualifiedNameForTypeOutput(const std::string &name,
+                                             const SgUnparse_Info &info);
+
+void unparseNonrealDeclChainByName(Unparse_Type *unparse_type,
+                                   Unparser *unparser, SgNonrealDecl *nrdecl,
+                                   SgUnparse_Info info,
+                                   bool emit_global_qualifier) {
+  ASSERT_not_null(unparse_type);
+  ASSERT_not_null(unparser);
+  ASSERT_not_null(nrdecl);
+
+  info.set_reference_node_for_qualification(nrdecl);
+
+  bool has_nonreal_parent = false;
+  if (SgDeclarationScope *parent_scope =
+          isSgDeclarationScope(nrdecl->get_parent())) {
+    if (SgNonrealDecl *parent_decl =
+            isSgNonrealDecl(parent_scope->get_parent())) {
+      has_nonreal_parent = true;
+      SgUnparse_Info parent_info(info);
+      parent_info.set_reference_node_for_qualification(parent_decl);
+      unparseNonrealDeclChainByName(unparse_type, unparser, parent_decl,
+                                    parent_info, emit_global_qualifier);
+      unparse_type->curprint("::");
+    }
+  }
+
+  if (!has_nonreal_parent) {
+    if (info.get_reference_node_for_qualification() != nullptr &&
+        !info.SkipQualifiedNames() &&
+        nrdecl->get_templateDeclaration() != nullptr &&
+        (info.get_name_qualification_length() > 0 ||
+         info.get_global_qualification_required())) {
+      SgName nameQualifier = unparser->u_name->lookup_generated_qualified_name(
+          info.get_reference_node_for_qualification());
+      unparse_type->curprint(
+          formatQualifiedNameForTypeOutput(nameQualifier.str(), info));
+    } else if (emit_global_qualifier) {
+      unparse_type->curprint("::");
+    }
+  } else if (nrdecl->get_has_template_keyword()) {
+    unparse_type->curprint("template ");
+  }
+
+  unparse_type->curprint(nrdecl->get_name().str());
+
+  SgTemplateArgumentPtrList &tpl_args = nrdecl->get_tpl_args();
+  if (tpl_args.empty() && !nrdecl->get_is_nonreal_template()) {
+    return;
+  }
+
+  if (tpl_args.empty()) {
+    unparse_type->curprint("<>");
+    return;
+  }
+
+  SgTemplateArgumentPtrList explicit_args = tpl_args;
+  SgUnparse_Info ninfo(info);
+  ninfo.set_reference_node_for_qualification(nrdecl);
+  ninfo.set_SkipClassDefinition();
+  ninfo.set_SkipEnumDefinition();
+  ninfo.set_SkipClassSpecifier();
+  unparser->u_exprStmt->unparseTemplateArgumentList(explicit_args, ninfo);
+}
+
+bool typeUsesDeclaratorPunctuation(const SgType *type) {
+  if (type == nullptr) {
+    return false;
+  }
+
+  if (const SgModifierType *modifier_type = isSgModifierType(type)) {
+    return typeUsesDeclaratorPunctuation(modifier_type->get_base_type());
+  }
+
+  return isSgPointerType(type) != nullptr ||
+         isSgPointerMemberType(type) != nullptr ||
+         isSgReferenceType(type) != nullptr ||
+         isSgRvalueReferenceType(type) != nullptr ||
+         isSgArrayType(type) != nullptr || isSgFunctionType(type) != nullptr ||
+         isSgPartialFunctionType(type) != nullptr ||
+         isSgMemberFunctionType(type) != nullptr;
+}
+
+bool suppressTrailingTypeSeparator(const SgUnparse_Info &info) {
+  const SgNode *reference_node = info.get_reference_node_for_qualification();
+  if (isSgTemplateArgument(reference_node) != nullptr) {
+    return true;
+  }
+
+  SgNode *mutable_reference_node = const_cast<SgNode *>(reference_node);
+  if (SgCastExp *cast_exp = isSgCastExp(mutable_reference_node)) {
+    // Preserve the historical separator for scalar/typedef casts like
+    // "(int64_t )n" while still avoiding awkward pointer-style casts such as
+    // "(void** )ptr".
+    return typeUsesDeclaratorPunctuation(cast_exp->get_type());
+  }
+
+  if (isSgConstructorInitializer(mutable_reference_node) != nullptr ||
+      isSgNewExp(mutable_reference_node) != nullptr) {
+    return true;
+  }
+
+  if (const SgTemplateParameter *template_parameter =
+          isSgTemplateParameter(reference_node)) {
+    SgType *default_type = template_parameter->get_defaultTypeParameter();
+    if (default_type != nullptr &&
+        !typeUsesDeclaratorPunctuation(default_type)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+std::string formatQualifiedNameForTypeOutput(const std::string &name,
+                                             const SgUnparse_Info &info) {
+  if (isSgTemplateArgument(info.get_reference_node_for_qualification()) !=
+      nullptr) {
+    if (name.rfind("::", 0) == 0) {
+      return std::string(" ") + name;
+    }
+    return name;
+  }
+
+  return name;
+}
+
+bool templateArgumentHasTypeSpecificTypeMetadata(
+    const SgTemplateArgument *arg) {
+  return arg != nullptr && (arg->get_name_qualification_length_for_type() > 0 ||
+                            arg->get_global_qualification_required_for_type() ||
+                            arg->get_type_elaboration_required_for_type());
+}
+
+int templateArgumentQualificationLengthForTypeOutput(
+    const SgTemplateArgument *arg) {
+  if (arg == nullptr) {
+    return 0;
+  }
+
+  return templateArgumentHasTypeSpecificTypeMetadata(arg)
+             ? arg->get_name_qualification_length_for_type()
+             : arg->get_name_qualification_length();
+}
+
+bool templateArgumentRequiresGlobalQualificationForTypeOutput(
+    const SgTemplateArgument *arg) {
+  if (arg == nullptr) {
+    return false;
+  }
+
+  return templateArgumentHasTypeSpecificTypeMetadata(arg)
+             ? arg->get_global_qualification_required_for_type()
+             : arg->get_global_qualification_required();
+}
+
+bool templateArgumentRequiresTypeElaborationForTypeOutput(
+    const SgTemplateArgument *arg) {
+  if (arg == nullptr) {
+    return false;
+  }
+
+  return templateArgumentHasTypeSpecificTypeMetadata(arg)
+             ? arg->get_type_elaboration_required_for_type()
+             : arg->get_type_elaboration_required();
+}
+
+int initializedNameQualificationLengthForTypeOutput(
+    const SgInitializedName *initialized_name) {
+  if (initialized_name == nullptr) {
+    return 0;
+  }
+
+  return initialized_name->get_name_qualification_length_for_type() > 0
+             ? initialized_name->get_name_qualification_length_for_type()
+             : initialized_name->get_name_qualification_length();
+}
+
+bool initializedNameRequiresGlobalQualificationForTypeOutput(
+    const SgInitializedName *initialized_name) {
+  if (initialized_name == nullptr) {
+    return false;
+  }
+
+  return initialized_name->get_global_qualification_required_for_type()
+             ? true
+             : initialized_name->get_global_qualification_required();
+}
+
+bool initializedNameRequiresTypeElaborationForTypeOutput(
+    const SgInitializedName *initialized_name) {
+  if (initialized_name == nullptr) {
+    return false;
+  }
+
+  return initialized_name->get_type_elaboration_required_for_type()
+             ? true
+             : initialized_name->get_type_elaboration_required();
+}
+
+void printTrailingTypeSeparator(Unparse_Type *unp_type,
+                                const SgUnparse_Info &info) {
+  if (!suppressTrailingTypeSeparator(info)) {
+    unp_type->curprint(" ");
+  }
+}
+
+void printTypeToken(Unparse_Type *unp_type, const std::string &token,
+                    const SgUnparse_Info &info) {
+  unp_type->curprint(token);
+  printTrailingTypeSeparator(unp_type, info);
 }
 
 } // namespace
@@ -708,18 +968,25 @@ void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
 
   bool allowGeneratedTypeName = true;
   if (SgTemplateArgument *tpl_arg = isSgTemplateArgument(nodeReferenceToType)) {
-    if (tpl_arg->get_name_qualification_length() > 0 ||
-        tpl_arg->get_global_qualification_required() ||
-        tpl_arg->get_type_elaboration_required()) {
+    if (templateArgumentQualificationLengthForTypeOutput(tpl_arg) > 0 ||
+        templateArgumentRequiresGlobalQualificationForTypeOutput(tpl_arg) ||
+        templateArgumentRequiresTypeElaborationForTypeOutput(tpl_arg)) {
+      allowGeneratedTypeName = false;
+    }
+  }
+  if (SgInitializedName *initialized_name =
+          isSgInitializedName(nodeReferenceToType)) {
+    if (initializedNameQualificationLengthForTypeOutput(initialized_name) > 0 ||
+        initializedNameRequiresGlobalQualificationForTypeOutput(
+            initialized_name) ||
+        initializedNameRequiresTypeElaborationForTypeOutput(initialized_name)) {
       allowGeneratedTypeName = false;
     }
   }
   if (allowGeneratedTypeName &&
       isSgNamedType(type->findBaseType()) != nullptr) {
-    if (isSgTemplateArgument(nodeReferenceToType) != nullptr) {
-      allowGeneratedTypeName = false;
-    } else if (info.isTypeSecondPart() == false &&
-               info.get_declstatement_ptr() != nullptr) {
+    if (info.isTypeSecondPart() == false &&
+        info.get_declstatement_ptr() != nullptr) {
       allowGeneratedTypeName = false;
     }
   }
@@ -805,7 +1072,6 @@ void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
       }
     }
   } else {
-
     // This is the code that was always used before the addition of type names
     // generated from where name qualification of subtypes are required.
     switch (type->variant()) {
@@ -820,7 +1086,7 @@ void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
       if (info.isTypeSecondPart() == true) {
         /* do nothing */
       } else {
-        curprint(get_type_name(type) + " ");
+        printTypeToken(this, get_type_name(type), info);
       }
       break;
     }
@@ -876,9 +1142,9 @@ void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
         /* do nothing */
       } else {
         if (type->variant() == T_BOOL) {
-          curprint(currentBoolTypeName() + " ");
+          printTypeToken(this, currentBoolTypeName(), info);
         } else {
-          curprint(get_type_name(type) + " ");
+          printTypeToken(this, get_type_name(type), info);
         }
       }
       break;
@@ -1026,7 +1292,8 @@ void Unparse_Type::unparseDeclType(SgType *type, SgUnparse_Info &info) {
       curprint("decltype(");
       unp->u_exprStmt->unparseExpression(decltype_node->get_base_expression(),
                                          info);
-      curprint(") ");
+      curprint(")");
+      printTrailingTypeSeparator(this, info);
     }
   }
 }
@@ -1099,7 +1366,8 @@ void Unparse_Type::unparseTypeOfType(SgType *type, SgUnparse_Info &info) {
       unparseType(typeof_node->get_base_type(), ninfo1);
     }
     // curprint("/* end of typeof */ )");
-    curprint(") ");
+    curprint(")");
+    printTrailingTypeSeparator(this, info);
   }
 }
 
@@ -1342,12 +1610,6 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
                                             SgUnparse_Info &info) {
   SgPointerMemberType *mpointer_type = isSgPointerMemberType(type);
   ASSERT_not_null(mpointer_type);
-  auto class_type_has_explicit_global_qualifier = [](SgType *class_type) {
-    SgNonrealType *nrtype = isSgNonrealType(class_type);
-    SgNonrealDecl *nrdecl = isSgNonrealDecl(
-        nrtype != nullptr ? nrtype->get_declaration() : nullptr);
-    return nrdecl != nullptr && nrdecl->get_has_global_qualifier();
-  };
   auto type_spells_its_own_qualification = [](SgType *candidate) {
     SgType *stripped =
         candidate != nullptr
@@ -1370,99 +1632,20 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
     return nrscope != nullptr &&
            isSgNonrealDecl(nrscope->get_parent()) != nullptr;
   };
-  auto emit_member_pointer_class_prefix_from_ast =
-      [&](SgType *class_type) -> bool {
-    SgNonrealType *nrtype = isSgNonrealType(class_type);
-    SgNonrealDecl *nrdecl = isSgNonrealDecl(
-        nrtype != nullptr ? nrtype->get_declaration() : nullptr);
-    if (nrdecl == nullptr) {
-      return false;
-    }
+  auto unparse_member_pointer_owner_type_from_ast = [&](SgType *class_type) {
+    ASSERT_not_null(class_type);
 
-    SgDeclarationScope *nrscope = isSgDeclarationScope(nrdecl->get_parent());
-    SgNonrealDecl *nrparent =
-        isSgNonrealDecl(nrscope != nullptr ? nrscope->get_parent() : nullptr);
-    if (nrparent != nullptr) {
-      SgUnparse_Info prefix_info(info);
-      prefix_info.set_reference_node_for_qualification(NULL);
-      unparseType(nrparent->get_type(), prefix_info);
-      curprint("::");
-      return true;
-    }
+    SgUnparse_Info owner_info(info);
+    owner_info.set_language(SgFile::e_Cxx_language);
+    owner_info.set_SkipClassDefinition();
+    owner_info.set_SkipEnumDefinition();
+    owner_info.set_SkipClassSpecifier();
+    owner_info.set_reference_node_for_qualification(mpointer_type);
+    owner_info.unset_isTypeFirstPart();
+    owner_info.unset_isTypeSecondPart();
+    owner_info.unset_SkipBaseType();
 
-    if (nrdecl->get_has_global_qualifier()) {
-      curprint("::");
-      return true;
-    }
-
-    return false;
-  };
-  auto emit_member_pointer_scope_prefix = [&](auto &&self,
-                                              SgScopeStatement *scope) -> bool {
-    if (scope == nullptr || isSgGlobal(scope) != nullptr) {
-      return false;
-    }
-
-    if (SgDeclarationScope *decl_scope = isSgDeclarationScope(scope)) {
-      return self(self, isSgScopeStatement(decl_scope->get_parent()));
-    }
-
-    if (SgNamespaceDefinitionStatement *nsdef =
-            isSgNamespaceDefinitionStatement(scope)) {
-      SgNamespaceDeclarationStatement *nsdecl =
-          nsdef->get_namespaceDeclaration();
-      if (nsdecl == nullptr || nsdecl->get_name().is_null()) {
-        return false;
-      }
-
-      self(self, nsdecl->get_scope());
-      curprint(nsdecl->get_name().str());
-      curprint("::");
-      return true;
-    }
-
-    auto emit_enclosing_class = [&](SgClassDeclaration *parent_decl) -> bool {
-      if (parent_decl == nullptr) {
-        return false;
-      }
-
-      if (SgClassDeclaration *first_nondef = isSgClassDeclaration(
-              parent_decl->get_firstNondefiningDeclaration())) {
-        parent_decl = first_nondef;
-      }
-
-      self(self, parent_decl->get_scope());
-      curprint(get_type_name(parent_decl->get_type()));
-      curprint("::");
-      return true;
-    };
-
-    if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
-      return emit_enclosing_class(
-          isSgClassDeclaration(class_def->get_declaration()));
-    }
-    if (SgTemplateClassDefinition *class_def =
-            isSgTemplateClassDefinition(scope)) {
-      return emit_enclosing_class(
-          isSgClassDeclaration(class_def->get_declaration()));
-    }
-    if (SgTemplateInstantiationDefn *class_def =
-            isSgTemplateInstantiationDefn(scope)) {
-      return emit_enclosing_class(
-          isSgClassDeclaration(class_def->get_declaration()));
-    }
-
-    return false;
-  };
-  auto emit_member_pointer_class_prefix_from_decl_scope =
-      [&](SgDeclarationStatement *decl) -> bool {
-    SgClassDeclaration *class_decl = isSgClassDeclaration(decl);
-    if (class_decl == nullptr) {
-      return false;
-    }
-
-    return emit_member_pointer_scope_prefix(emit_member_pointer_scope_prefix,
-                                            class_decl->get_scope());
+    unparseType(class_type, owner_info);
   };
 
 #define DEBUG_MEMBER_POINTER_TYPE 0
@@ -1571,39 +1754,14 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
       // be a valid pointer, but we will not be using it.
       // ASSERT_not_null(info.get_reference_node_for_qualification());
 
-      // DQ (4/20/2019): Get the name qualification directly using the
-      // SgPointerMemberType.
-      SgName nameQualifier =
-          mpointer_type->get_qualified_name_prefix_for_class_of();
-      if (nameQualifier.is_null()) {
-        if (emit_member_pointer_class_prefix_from_ast(
-                mpointer_type->get_class_type()) == false &&
-            emit_member_pointer_class_prefix_from_decl_scope(
-                mpointer_type->get_class_declaration_of()) == false &&
-            class_type_has_explicit_global_qualifier(
-                mpointer_type->get_class_type())) {
-          curprint("::");
-        }
-      } else if (nameQualifier.str() == std::string("::") &&
-                 class_type_has_explicit_global_qualifier(
-                     mpointer_type->get_class_type()) == false) {
-        nameQualifier = SgName("");
-      }
-      curprint(nameQualifier.str());
-
-#if DEBUG_MEMBER_POINTER_TYPE
-      printf("nameQualifier (from "
-             "xxx->get_qualified_name_prefix_for_class_of() function) = %s \n",
-             nameQualifier.str());
-#endif
-
 #if DEBUG_MEMBER_POINTER_TYPE && CURPRINT_MEMBER_POINTER_TYPE
       curprint(" /* Calling get_type_name() */ ");
 #endif
       // curprint ( "\n/* mpointer_type->get_class_of() = " +
       // mpointer_type->get_class_of()->sage_class_name() + " */ \n";
       curprint(" ");
-      curprint(get_type_name(mpointer_type->get_class_type()));
+      unparse_member_pointer_owner_type_from_ast(
+          mpointer_type->get_class_type());
 #if DEBUG_MEMBER_POINTER_TYPE
       printf("In unparseMemberPointerType(): pointer to member function: "
              "mpointer_type->get_class_type()                = %s \n",
@@ -1734,7 +1892,7 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
       // Not clear yet where this was required in the first place.
       // curprint ( "(");
       // if ( info.inTypedefDecl() == true)
-      if (info.inTypedefDecl() == true || info.inArgList() == true) {
+      if (info.inTypedefDecl() == true) {
         curprint("(");
       }
 
@@ -1749,28 +1907,9 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
       // be a valid pointer, but we will not be using it.
       // ASSERT_not_null(info.get_reference_node_for_qualification());
 
-      // DQ (4/20/2019): Get the name qualification directly using the
-      // SgPointerMemberType.
-      SgName nameQualifier =
-          mpointer_type->get_qualified_name_prefix_for_class_of();
-      if (nameQualifier.is_null()) {
-        if (emit_member_pointer_class_prefix_from_ast(
-                mpointer_type->get_class_type()) == false &&
-            emit_member_pointer_class_prefix_from_decl_scope(
-                mpointer_type->get_class_declaration_of()) == false &&
-            class_type_has_explicit_global_qualifier(
-                mpointer_type->get_class_type())) {
-          curprint("::");
-        }
-      } else if (nameQualifier.str() == std::string("::") &&
-                 class_type_has_explicit_global_qualifier(
-                     mpointer_type->get_class_type()) == false) {
-        nameQualifier = SgName("");
-      }
-      curprint(nameQualifier.str());
-
       curprint(" ");
-      curprint(get_type_name(mpointer_type->get_class_type()));
+      unparse_member_pointer_owner_type_from_ast(
+          mpointer_type->get_class_type());
       curprint("::*");
     } else {
       if (info.isTypeSecondPart()) {
@@ -1784,7 +1923,7 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
         // curprint(")");
         // if ( info.inTypedefDecl() == true)
         // if ( info.inTypedefDecl() == true || info.inArgList() == true)
-        if (info.inTypedefDecl() == true || info.inArgList() == true) {
+        if (info.inTypedefDecl() == true) {
           curprint(")");
         } else {
         }
@@ -2123,7 +2262,7 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
       // if (SageInterface::is_C_language() == true)
       if (SageInterface::is_C_language() == true ||
           SageInterface::is_C99_language() == true) {
-        curprint(string(nm.str()) + " ");
+        printTypeToken(this, nm.str(), info);
       } else {
 #if DEBUG_UNPARSE_CLASS_TYPE && 0
         curprint(
@@ -2184,7 +2323,7 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
                  "(assuming this is for unparseToString() \n");
 #endif
           if (info.SkipQualifiedNames() || !info.SkipClassDefinition()) {
-            curprint(string(nm.str()) + " ");
+            printTypeToken(this, nm.str(), info);
           } else if (SgTemplateInstantiationDecl
                          *templateInstantiationDeclaration =
                              isSgTemplateInstantiationDecl(decl);
@@ -2203,12 +2342,14 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
             ROSE_ASSERT(ninfo.isTypeSecondPart() == false);
             unp->u_exprStmt->unparseTemplateName(
                 templateInstantiationDeclaration, ninfo);
+            printTrailingTypeSeparator(this, info);
           } else {
             // DQ (3/29/2019): In reviewing where we are using the
             // get_qualified_name() function, this might be OK since it is
             // likely only associated with the unparseToString() function.
             SgName nameQualifierAndType = class_type->get_qualified_name();
-            curprint(nameQualifierAndType.str());
+            curprint(formatQualifiedNameForTypeOutput(
+                nameQualifierAndType.str(), info));
           }
         } else {
           // DQ (6/2/2011): Newest support for name qualification...
@@ -2244,7 +2385,7 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
                           "unp->u_name->generateNameQualifier function) = ") +
                    nameQualifier + " */ \n ");
 #endif
-          curprint(nameQualifier.str());
+          curprint(formatQualifiedNameForTypeOutput(nameQualifier.str(), info));
 
           SgTemplateInstantiationDecl *templateInstantiationDeclaration =
               isSgTemplateInstantiationDecl(decl);
@@ -2270,12 +2411,13 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
             // unp->u_exprStmt->unparseTemplateName(templateInstantiationDeclaration,info);
             unp->u_exprStmt->unparseTemplateName(
                 templateInstantiationDeclaration, ninfo);
+            printTrailingTypeSeparator(this, info);
           } else {
 #if DEBUG_UNPARSE_CLASS_TYPE && 0
             curprint(string("\n/* In unparseClassType: output tag name = ") +
                      nm.str() + " */ \n ");
 #endif
-            curprint(string(nm.str()) + " ");
+            printTypeToken(this, nm.str(), info);
           }
         }
       }
@@ -2294,7 +2436,7 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
       if (info.get_use_generated_name_for_template_arguments() == true) {
         // In this case we need to output the generated name.
         SgName nm = class_type->get_name();
-        curprint(string(nm.str()) + " ");
+        printTypeToken(this, nm.str(), info);
       } else {
         // DQ (10/23/2012): Added support for types of references to un-named
         // class/struct/unions to always include their definitions.
@@ -2432,20 +2574,31 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
           ASSERT_not_null(classdefn_stmt);
         }
 
-        // DQ (1/8/2020): Support for defining declarations with base classes
-        // (called from unparseClassDefnStmt() and unparseClassType()
-        // functions). This supports Cxx_tests/test2020_24.C.
         ASSERT_not_null(classdefn_stmt);
-        unp->u_exprStmt->unparseClassInheritanceList(classdefn_stmt, info);
-
-        ninfo.set_isUnsetAccess();
-        curprint("{");
         if (classdefn_stmt == NULL) {
           printf("Error: In unparseClassType(): classdefn_stmt = NULL decl = "
                  "%p = %s \n",
                  decl, decl->get_name().str());
         }
         ASSERT_not_null(classdefn_stmt);
+#if DEBUG_UNPARSE_CLASS_TYPE
+        printf("In unparseClassType: classdefn_stmt = %p "
+               "classdefn_stmt->get_members().size() = %" PRIuPTR " \n",
+               classdefn_stmt, classdefn_stmt->get_members().size());
+#endif
+        // DQ (1/8/2020): Support for defining declarations with base classes
+        // (called from unparseClassDefnStmt() and unparseClassType()
+        // functions). This supports Cxx_tests/test2020_24.C.
+        unp->u_exprStmt->unparseClassInheritanceList(classdefn_stmt, info);
+
+        ninfo.set_isUnsetAccess();
+        const bool empty_definition = classdefn_stmt->get_members().empty();
+        if (empty_definition) {
+          curprint("{}");
+        } else {
+          curprint("{");
+          unp->cur.format(classdefn_stmt, info, FORMAT_AFTER_BASIC_BLOCK1);
+        }
 #if DEBUG_UNPARSE_CLASS_TYPE
         printf("In unparseClassType: classdefn_stmt = %p "
                "classdefn_stmt->get_members().size() = %" PRIuPTR " \n",
@@ -2491,7 +2644,13 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
 #if DEBUG_UNPARSE_CLASS_TYPE
         curprint(" /* in unparseClassType: output data members */ ");
 #endif
-        curprint("}");
+        if (!empty_definition) {
+          unp->cur.format(classdefn_stmt, info, FORMAT_BEFORE_BASIC_BLOCK2);
+          curprint("}");
+        }
+        if (decl != NULL && decl->get_isAutonomousDeclaration() == false) {
+          printTrailingTypeSeparator(this, info);
+        }
 
         // DQ (6/13/2007): Set to null before resetting to non-null value
         // DQ (11/29/2004): Restore context saved above before unparsing
@@ -2596,9 +2755,9 @@ void Unparse_Type::unparseEnumType(SgType *type, SgUnparse_Info &info) {
       printf("Inside of unparseEnumType(): output enum keyword \n");
       curprint("/* enum from unparseEnumType() */ ");
 #endif
-      // DQ (2/14/2019): Adding support for C++11 scoped enums (syntax is "enum
-      // class ").
-      if (edecl->get_isScopedEnum() == true) {
+      // `enum class` is only valid on the definition itself. Elaborated enum
+      // references still use the `enum` keyword, never `enum class`.
+      if (edecl->get_isScopedEnum() == true && !info.SkipEnumDefinition()) {
         curprint("class ");
       }
     } else {
@@ -2626,9 +2785,7 @@ void Unparse_Type::unparseEnumType(SgType *type, SgUnparse_Info &info) {
       //    {
       curprint("enum ");
 
-      // DQ (2/14/2019): Adding support for C++11 scoped enums (syntax is "enum
-      // class ").
-      if (edecl->get_isScopedEnum() == true) {
+      if (edecl->get_isScopedEnum() == true && !info.SkipEnumDefinition()) {
         curprint("class ");
       }
       //    }
@@ -2638,7 +2795,7 @@ void Unparse_Type::unparseEnumType(SgType *type, SgUnparse_Info &info) {
         SageInterface::is_C99_language() == true) {
       // DQ (10/11/2006): I think that now that we fill in all empty name as a
       // post-processing step, we can assert this now!
-      curprint(enum_type->get_name().getString() + " ");
+      printTypeToken(this, enum_type->get_name().getString(), info);
     } else {
       // DQ (6/25/2011): Fixing name qualifiction to work with
       // unparseToString().  In this case we don't have an associated node to
@@ -2646,7 +2803,7 @@ void Unparse_Type::unparseEnumType(SgType *type, SgUnparse_Info &info) {
       // case we return a fully qualified name.
       if (info.get_reference_node_for_qualification() == NULL) {
         if (info.SkipQualifiedNames() || !info.SkipEnumDefinition()) {
-          curprint(string(edecl->get_name().str()) + " ");
+          printTypeToken(this, edecl->get_name().str(), info);
         } else {
           SgName nameQualifierAndType = enum_type->get_qualified_name();
 #if DEBUG_ENUM_TYPE
@@ -2725,7 +2882,7 @@ void Unparse_Type::unparseEnumType(SgType *type, SgUnparse_Info &info) {
                  "the name = %s \n",
                  nm.str());
 #endif
-          curprint(nm.getString() + " ");
+          printTypeToken(this, nm.getString(), info);
         }
       }
     }
@@ -2915,9 +3072,32 @@ void Unparse_Type::unparseTypedefType(SgType *type, SgUnparse_Info &info) {
       // DQ (10/11/2006): I think that now that we fill in all enmpty name as a
       // post-processing step, we can assert this now!
       ROSE_ASSERT(typedef_type->get_name().getString() != "");
-      curprint(typedef_type->get_name().getString() + " ");
+      printTypeToken(this, typedef_type->get_name().getString(), info);
     } else {
       // The C++ support is more complex and can require qualified names!
+
+      SgClassDeclaration *owner_decl =
+          classDeclarationFromScope(isSgScopeStatement(tdecl->get_parent()));
+      SgClassDeclaration *reference_owner_decl =
+          classDeclarationFromScope(scopeForQualificationReference(
+              info.get_reference_node_for_qualification()));
+      const bool expand_member_typedef_in_template_argument =
+          isSgTemplateArgument(info.get_reference_node_for_qualification()) !=
+              nullptr &&
+          owner_decl != nullptr && owner_decl != reference_owner_decl &&
+          typedef_type->get_base_type() != nullptr;
+      if (expand_member_typedef_in_template_argument) {
+        SgUnparse_Info base_info(info);
+        if (base_info.isTypeFirstPart()) {
+          base_info.unset_isTypeFirstPart();
+        }
+        if (base_info.isTypeSecondPart()) {
+          base_info.unset_isTypeSecondPart();
+        }
+        base_info.unset_SkipBaseType();
+        unparseType(typedef_type->get_base_type(), base_info);
+        return;
+      }
 
       // DQ (6/22/2011): I don't think we can assert this for anything than
       // internal testing.  The unparseToString tests will fail with this
@@ -2955,14 +3135,39 @@ void Unparse_Type::unparseTypedefType(SgType *type, SgUnparse_Info &info) {
             !info.SkipQualifiedNames() &&
             typedefRequiresDependentOwnerTypename(
                 tdecl, info.get_reference_node_for_qualification());
+        const bool stored_qualifier_missing_owner_args =
+            !info.SkipQualifiedNames() &&
+            storedQualifierDropsDependentOwnerTemplateArguments(tdecl,
+                                                                nameQualifier);
+        SgClassDeclaration *owner_decl =
+            classDeclarationFromScope(isSgScopeStatement(tdecl->get_parent()));
         const bool rebuild_owner_qualification =
-            needs_dependent_owner_typename &&
-            (nameQualifier.is_null() ||
-             nameQualifier.str() == std::string("::"));
+            stored_qualifier_missing_owner_args ||
+            (needs_dependent_owner_typename &&
+             (nameQualifier.is_null() ||
+              nameQualifier.str() == std::string("::")));
+        const bool expand_dependent_owner_typedef =
+            rebuild_owner_qualification && owner_decl != nullptr &&
+            std::string(owner_decl->get_qualified_name().str()).find('<') ==
+                std::string::npos &&
+            typedef_type->get_base_type() != nullptr;
+        if (expand_dependent_owner_typedef) {
+          SgUnparse_Info base_info(info);
+          if (base_info.isTypeFirstPart()) {
+            base_info.unset_isTypeFirstPart();
+          }
+          if (base_info.isTypeSecondPart()) {
+            base_info.unset_isTypeSecondPart();
+          }
+          base_info.unset_SkipBaseType();
+          unparseType(typedef_type->get_base_type(), base_info);
+          return;
+        }
         const bool needs_typename =
             (!nameQualifier.is_null() || rebuild_owner_qualification) &&
             (typeDependsOnQualifiedNonrealName(typedef_type->get_base_type()) ||
-             needs_dependent_owner_typename) &&
+             needs_dependent_owner_typename ||
+             stored_qualifier_missing_owner_args) &&
             isSgBaseClass(info.get_reference_node_for_qualification()) ==
                 nullptr &&
             isSgConstructorInitializer(
@@ -2971,8 +3176,6 @@ void Unparse_Type::unparseTypedefType(SgType *type, SgUnparse_Info &info) {
           curprint("typename ");
         }
         if (rebuild_owner_qualification) {
-          SgClassDeclaration *owner_decl = classDeclarationFromScope(
-              isSgScopeStatement(tdecl->get_parent()));
           if (owner_decl != nullptr) {
             curprint(owner_decl->get_qualified_name().str());
             curprint("::");
@@ -3002,7 +3205,7 @@ void Unparse_Type::unparseTypedefType(SgType *type, SgUnparse_Info &info) {
           // curprint ( typedef_type->get_name().str());
           SgName nm = typedef_type->get_name();
           if (nm.getString() != "") {
-            curprint(nm.getString() + " ");
+            printTypeToken(this, nm.getString(), info);
           }
         }
       }
@@ -3025,6 +3228,19 @@ void Unparse_Type::unparseTemplateTypedefName(
   // unparseTemplateArgumentList
   ASSERT_not_null(templateInstantiationTypedefDeclaration);
 
+  const SgTemplateArgumentPtrList &template_arguments =
+      templateInstantiationTypedefDeclaration->get_templateArguments();
+  const bool use_stored_instantiation_name =
+      templateArgumentListUsesNonrealReference(template_arguments);
+  if (use_stored_instantiation_name) {
+    const SgName stored_name =
+        templateInstantiationTypedefDeclaration->get_name();
+    if (stored_name.getString() != "") {
+      printTypeToken(this, stored_name.getString(), info);
+      return;
+    }
+  }
+
   unp->u_exprStmt->curprint(
       templateInstantiationTypedefDeclaration->get_templateName().str());
 
@@ -3046,12 +3262,11 @@ void Unparse_Type::unparseTemplateTypedefName(
   // handled seperately in the near future (in the SgTemplateArgument IR nodes).
   // unparseTemplateArgumentList(templateInstantiationFunctionDeclaration->get_templateArguments(),info);
   if (unparseTemplateArguments == true) {
-    unp->u_exprStmt->unparseTemplateArgumentList(
-        templateInstantiationTypedefDeclaration->get_templateArguments(), info);
+    unp->u_exprStmt->unparseTemplateArgumentList(template_arguments, info);
   }
 }
 
-string Unparse_Type::unparseRestrictKeyword() {
+string Unparse_Type::unparseRestrictKeyword(bool prepend_space) {
   // DQ (12/11/2012): This isolates the logic for the output of the "restrict"
   // keyword for different backend compilers.
   string returnString;
@@ -3076,11 +3291,9 @@ string Unparse_Type::unparseRestrictKeyword() {
 
   if (usingGcc) {
     // GNU uses a string variation on the C99 spelling of the "restrict" keyword
-    // DQ (12/12/2012): We need the white space before and after the keyword.
-    returnString = " __restrict__ ";
+    returnString = string(prepend_space ? " " : "") + "__restrict__ ";
   } else {
-    // DQ (12/12/2012): We need the white space before and after the keyword.
-    returnString = " restrict ";
+    returnString = string(prepend_space ? " " : "") + "restrict ";
   }
 
   return returnString;
@@ -3145,7 +3358,7 @@ void Unparse_Type::unparseModifierType(SgType *type, SgUnparse_Info &info) {
       // the brackets, not here
       if (!isSgArrayType(mod_type->get_base_type())) {
         // DQ (12/11/2012): Newer version of the code refactored.
-        curprint(unparseRestrictKeyword());
+        curprint(unparseRestrictKeyword(!btype_first));
       }
     }
     // Print the base type unless it has been printed up front
@@ -3266,6 +3479,7 @@ void Unparse_Type::unparseFunctionType(SgType *type, SgUnparse_Info &info) {
       }
       // print the arguments
       SgUnparse_Info ninfo2(info);
+      ninfo2.set_inArgList();
       ninfo2.unset_SkipBaseType();
       ninfo2.unset_isTypeSecondPart();
       ninfo2.unset_isTypeFirstPart();
@@ -3343,7 +3557,7 @@ void Unparse_Type::unparseFunctionType(SgType *type, SgUnparse_Info &info) {
                "isTypeFirstPart == true */ \n");
 #endif
       ninfo.set_isTypeFirstPart();
-      curprint(" ");
+      printTrailingTypeSeparator(this, info);
       unparseType(func_type, ninfo);
 
 #if OUTPUT_DEBUGGING_FUNCTION_INTERNALS || DEBUG_FUNCTION_TYPE
@@ -3410,6 +3624,7 @@ void Unparse_Type::unparseMemberFunctionType(SgType *type,
       }
       // print the arguments
       SgUnparse_Info ninfo2(info);
+      ninfo2.set_inArgList();
       ninfo2.unset_SkipBaseType();
       ninfo2.unset_isTypeFirstPart();
       ninfo2.unset_isTypeSecondPart();
@@ -3441,7 +3656,7 @@ void Unparse_Type::unparseMemberFunctionType(SgType *type,
       unparseType(mfunc_type, ninfo);
 
       ninfo.unset_isTypeFirstPart();
-      curprint(" ");
+      printTrailingTypeSeparator(this, info);
       ninfo.set_isTypeSecondPart();
       // DQ (1/13/2014): These should have been setup to be the same.
       ROSE_ASSERT(ninfo.SkipClassDefinition() == ninfo.SkipEnumDefinition());
@@ -3703,7 +3918,7 @@ void Unparse_Type::unparseTemplateType(SgType *type, SgUnparse_Info &info) {
     curprint("...");
   }
 
-  curprint(" ");
+  printTrailingTypeSeparator(this, info);
 }
 
 void Unparse_Type::unparseAutoType(SgType *type, SgUnparse_Info &info) {
@@ -3717,7 +3932,8 @@ void Unparse_Type::unparseAutoType(SgType *type, SgUnparse_Info &info) {
       curprint(constraint);
       curprint(" ");
     }
-    curprint("auto ");
+    curprint("auto");
+    printTrailingTypeSeparator(this, info);
   }
 }
 
@@ -3790,13 +4006,15 @@ void Unparse_Type::unparseNonrealType(SgType *type, SgUnparse_Info &info,
       if (has_global_qualifier)
         curprint("::");
     }
+    SgUnparse_Info parent_info(info);
     if (is_first_in_nonreal_chain && has_global_qualifier) {
-      SgUnparse_Info parent_info(info);
-      parent_info.set_reference_node_for_qualification(NULL);
-      unparseNonrealType(nrparent_nrscope->get_type(), parent_info, false);
-    } else {
-      unparseNonrealType(nrparent_nrscope->get_type(), info, false);
+      parent_info.set_global_qualification_required(false);
     }
+    // Preserve the dependent owner name instead of re-entering through its
+    // alias type. For owners like "__traits_type", the type may be a typedef
+    // to a recursively constrained alias such as "__conditional_t<...>".
+    unparseNonrealDeclChainByName(this, unp, nrparent_nrscope, parent_info,
+                                  false);
     curprint("::");
   } else if (info.get_reference_node_for_qualification() &&
              !info.SkipQualifiedNames() &&
@@ -3808,7 +4026,7 @@ void Unparse_Type::unparseNonrealType(SgType *type, SgUnparse_Info &info,
 #if DEBUG_UNPARSE_NONREAL_TYPE
     printf(" --- nameQualifier = %s\n", nameQualifier.str());
 #endif
-    curprint(nameQualifier.str());
+    curprint(formatQualifiedNameForTypeOutput(nameQualifier.str(), info));
     has_nonreal_parent = true;
   } else if (has_global_qualifier) {
     curprint("::");
@@ -3839,7 +4057,9 @@ void Unparse_Type::unparseNonrealType(SgType *type, SgUnparse_Info &info,
     }
   }
 
-  curprint(" ");
+  if (is_first_in_nonreal_chain) {
+    printTrailingTypeSeparator(this, info);
+  }
 }
 
 // explicit instantiation of Unparse_Type::outputType
@@ -3853,40 +4073,68 @@ void Unparse_Type::outputType(T *referenceNode, SgType *referenceNodeType,
   SgUnparse_Info newInfo(info);
   newInfo.set_isTypeFirstPart();
   SgUnparse_Info ninfo_for_type(newInfo);
+  SgTemplateArgument *templateArgument = isSgTemplateArgument(referenceNode);
+  SgInitializedName *initializedName = isSgInitializedName(referenceNode);
+  const bool reference_requires_qualified_type_output =
+      (templateArgument != NULL &&
+       (templateArgumentQualificationLengthForTypeOutput(templateArgument) >
+            0 ||
+        templateArgumentRequiresGlobalQualificationForTypeOutput(
+            templateArgument) ||
+        templateArgumentRequiresTypeElaborationForTypeOutput(
+            templateArgument))) ||
+      (initializedName != NULL &&
+       (initializedNameQualificationLengthForTypeOutput(initializedName) > 0 ||
+        initializedNameRequiresGlobalQualificationForTypeOutput(
+            initializedName) ||
+        initializedNameRequiresTypeElaborationForTypeOutput(initializedName)));
 
   if (referenceNode->get_requiresGlobalNameQualificationOnType() == true) {
     ninfo_for_type.set_requiresGlobalNameQualification();
   }
 
-  SgTemplateArgument *templateArgument = isSgTemplateArgument(referenceNode);
   if (templateArgument != NULL) {
-    templateArgument->set_name_qualification_length_for_type(
-        templateArgument->get_name_qualification_length());
-    templateArgument->set_global_qualification_required_for_type(
-        templateArgument->get_global_qualification_required());
-    templateArgument->set_type_elaboration_required_for_type(
-        templateArgument->get_type_elaboration_required());
+    ninfo_for_type.set_name_qualification_length(
+        templateArgumentQualificationLengthForTypeOutput(templateArgument));
+    ninfo_for_type.set_global_qualification_required(
+        templateArgumentRequiresGlobalQualificationForTypeOutput(
+            templateArgument));
+    ninfo_for_type.set_type_elaboration_required(
+        templateArgumentRequiresTypeElaborationForTypeOutput(templateArgument));
+  } else if (initializedName != NULL) {
+    ninfo_for_type.set_name_qualification_length(
+        initializedNameQualificationLengthForTypeOutput(initializedName));
+    ninfo_for_type.set_global_qualification_required(
+        initializedNameRequiresGlobalQualificationForTypeOutput(
+            initializedName));
+    ninfo_for_type.set_type_elaboration_required(
+        initializedNameRequiresTypeElaborationForTypeOutput(initializedName));
+  } else {
+    ninfo_for_type.set_name_qualification_length(
+        referenceNode->get_name_qualification_length());
+    ninfo_for_type.set_global_qualification_required(
+        referenceNode->get_global_qualification_required());
+    ninfo_for_type.set_type_elaboration_required(
+        referenceNode->get_type_elaboration_required());
   }
 
-  ninfo_for_type.set_name_qualification_length(
-      referenceNode->get_name_qualification_length());
-  ninfo_for_type.set_global_qualification_required(
-      referenceNode->get_global_qualification_required());
-  ninfo_for_type.set_type_elaboration_required(
-      referenceNode->get_type_elaboration_required());
-
   ninfo_for_type.set_reference_node_for_qualification(referenceNode);
+  if (reference_requires_qualified_type_output) {
+    ninfo_for_type.unset_SkipQualifiedNames();
+    newInfo.unset_SkipQualifiedNames();
+  }
 
   if (ninfo_for_type.requiresGlobalNameQualification()) {
     ninfo_for_type.set_global_qualification_required(true);
-    ninfo_for_type.set_reference_node_for_qualification(NULL);
+    if (templateArgument == NULL) {
+      ninfo_for_type.set_reference_node_for_qualification(NULL);
+    }
   }
   ROSE_ASSERT(ninfo_for_type.SkipClassDefinition() ==
               ninfo_for_type.SkipEnumDefinition());
 
   unp->u_type->unparseType(referenceNodeType, ninfo_for_type);
 
-  SgInitializedName *initializedName = isSgInitializedName(referenceNode);
   if (initializedName != NULL) {
     if (initializedName->get_is_parameter_pack() ||
         initializedName->get_is_pack_element()) {

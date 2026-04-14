@@ -225,6 +225,10 @@ bool rangeHasVisibleText(const std::vector<std::string> &lines, size_t begin,
   return false;
 }
 
+bool isBlankLine(const std::string &line) {
+  return line.find_first_not_of(" \t\r") == std::string::npos;
+}
+
 std::vector<ConditionalDirectiveRecord>
 collectConditionalDirectives(const std::vector<std::string> &lines) {
   std::vector<ConditionalDirectiveRecord> directives;
@@ -269,6 +273,197 @@ bool writeTextFileLines(const std::string &filename,
   }
 
   return output.good();
+}
+
+bool isStandaloneCommentLine(const std::string &line) {
+  const size_t pos = line.find_first_not_of(" \t");
+  return pos != std::string::npos &&
+         (line.compare(pos, 2, "//") == 0 || line.compare(pos, 2, "/*") == 0);
+}
+
+bool isPreprocessorDirectiveLine(const std::string &line) {
+  const std::string trimmed = trimLeadingWhitespace(line);
+  return !trimmed.empty() && trimmed[0] == '#';
+}
+
+void restoreSplitPreprocessorDirectiveLinesInOutput(
+    SgFile *file, const std::string &output_filename) {
+  SgSourceFile *source_file = isSgSourceFile(file);
+  if (source_file == NULL) {
+    return;
+  }
+
+  std::vector<std::string> source_lines;
+  std::vector<std::string> output_lines;
+  if (!readTextFileLines(source_file->get_sourceFileNameWithPath(),
+                         &source_lines) ||
+      !readTextFileLines(output_filename, &output_lines)) {
+    return;
+  }
+
+  std::vector<std::string> rebuilt_output;
+  rebuilt_output.reserve(output_lines.size());
+
+  size_t source_idx = 0;
+  size_t output_idx = 0;
+  bool changed = false;
+
+  while (output_idx < output_lines.size()) {
+    if (source_idx < source_lines.size()) {
+      if (output_lines[output_idx] == source_lines[source_idx]) {
+        rebuilt_output.push_back(output_lines[output_idx]);
+        ++output_idx;
+        ++source_idx;
+        continue;
+      }
+
+      if (output_idx + 1 < output_lines.size() &&
+          isPreprocessorDirectiveLine(output_lines[output_idx]) &&
+          !isPreprocessorDirectiveLine(output_lines[output_idx + 1])) {
+        const std::string merged_line =
+            output_lines[output_idx] + output_lines[output_idx + 1];
+        if (merged_line == source_lines[source_idx]) {
+          rebuilt_output.push_back(merged_line);
+          output_idx += 2;
+          ++source_idx;
+          changed = true;
+          continue;
+        }
+      }
+    }
+
+    rebuilt_output.push_back(output_lines[output_idx]);
+    ++output_idx;
+  }
+
+  if (changed) {
+    (void)writeTextFileLines(output_filename, rebuilt_output);
+  }
+}
+
+void restoreSplitCommentIndentationInOutput(
+    SgFile *file, const std::string &output_filename) {
+  SgSourceFile *source_file = isSgSourceFile(file);
+  if (source_file == NULL) {
+    return;
+  }
+
+  std::vector<std::string> source_lines;
+  std::vector<std::string> output_lines;
+  if (!readTextFileLines(source_file->get_sourceFileNameWithPath(),
+                         &source_lines) ||
+      !readTextFileLines(output_filename, &output_lines)) {
+    return;
+  }
+
+  std::vector<std::string> rebuilt_output;
+  rebuilt_output.reserve(output_lines.size());
+
+  size_t source_idx = 0;
+  size_t output_idx = 0;
+  bool changed = false;
+
+  while (output_idx < output_lines.size()) {
+    if (source_idx < source_lines.size()) {
+      if (output_lines[output_idx] == source_lines[source_idx]) {
+        rebuilt_output.push_back(output_lines[output_idx]);
+        ++output_idx;
+        ++source_idx;
+        continue;
+      }
+
+      if (output_idx + 1 < output_lines.size() &&
+          isStandaloneCommentLine(output_lines[output_idx + 1])) {
+        const std::string merged_line =
+            output_lines[output_idx] + output_lines[output_idx + 1];
+        if (merged_line == source_lines[source_idx]) {
+          rebuilt_output.push_back(merged_line);
+          output_idx += 2;
+          ++source_idx;
+          changed = true;
+          continue;
+        }
+      }
+    }
+
+    rebuilt_output.push_back(output_lines[output_idx]);
+    ++output_idx;
+  }
+
+  if (changed) {
+    (void)writeTextFileLines(output_filename, rebuilt_output);
+  }
+}
+
+void restoreCommentAdjacentSpacingInOutput(SgFile *file,
+                                           const std::string &output_filename) {
+  SgSourceFile *source_file = isSgSourceFile(file);
+  if (source_file == NULL) {
+    return;
+  }
+
+  std::vector<std::string> source_lines;
+  std::vector<std::string> output_lines;
+  if (!readTextFileLines(source_file->get_sourceFileNameWithPath(),
+                         &source_lines) ||
+      !readTextFileLines(output_filename, &output_lines)) {
+    return;
+  }
+
+  std::vector<std::string> rebuilt_output;
+  rebuilt_output.reserve(output_lines.size());
+
+  size_t source_idx = 0;
+  size_t output_idx = 0;
+  bool changed = false;
+
+  while (output_idx < output_lines.size()) {
+    const bool can_remove_spurious_comment_gap =
+        source_idx > 0 && source_idx < source_lines.size() &&
+        output_idx + 1 < output_lines.size() && !rebuilt_output.empty() &&
+        isStandaloneCommentLine(rebuilt_output.back()) &&
+        rebuilt_output.back() == source_lines[source_idx - 1] &&
+        isBlankLine(output_lines[output_idx]) &&
+        !isBlankLine(source_lines[source_idx]) &&
+        output_lines[output_idx + 1] == source_lines[source_idx];
+    if (can_remove_spurious_comment_gap) {
+      ++output_idx;
+      changed = true;
+      continue;
+    }
+
+    if (source_idx < source_lines.size() &&
+        output_lines[output_idx] == source_lines[source_idx]) {
+      rebuilt_output.push_back(output_lines[output_idx]);
+      ++output_idx;
+      ++source_idx;
+      continue;
+    }
+
+    const bool can_restore_comment_spacing =
+        source_idx + 1 < source_lines.size() &&
+        output_idx + 2 < output_lines.size() &&
+        isStandaloneCommentLine(output_lines[output_idx]) &&
+        output_lines[output_idx] == source_lines[source_idx] &&
+        isBlankLine(output_lines[output_idx + 1]) &&
+        !isBlankLine(source_lines[source_idx + 1]) &&
+        output_lines[output_idx + 2] == source_lines[source_idx + 1];
+    if (can_restore_comment_spacing) {
+      rebuilt_output.push_back(output_lines[output_idx]);
+      ++output_idx;
+      ++source_idx;
+      ++output_idx;
+      changed = true;
+      continue;
+    }
+
+    rebuilt_output.push_back(output_lines[output_idx]);
+    ++output_idx;
+  }
+
+  if (changed) {
+    (void)writeTextFileLines(output_filename, rebuilt_output);
+  }
 }
 
 void restoreEmptyConditionalBodiesInOutput(SgFile *file,
@@ -390,8 +585,63 @@ bool copyOriginalHeaderToOutputLocation(const std::string &originalFileName,
   return !ec;
 }
 
-bool fileHasRelevantModifications(SgSourceFile *file) {
+bool isSyntheticCatchAllPlaceholderDeclaration(
+    const SgVariableDeclaration *decl) {
+  if (decl == NULL) {
+    return false;
+  }
 
+  SgCatchOptionStmt *catch_stmt = isSgCatchOptionStmt(decl->get_parent());
+  if (catch_stmt == NULL || catch_stmt->get_condition() != decl) {
+    return false;
+  }
+
+  Sg_File_Info *decl_info = decl->get_file_info();
+  if (decl_info == NULL) {
+    return false;
+  }
+
+  const bool synthetic_location = decl_info->isTransformation() == true ||
+                                  decl_info->get_physical_file_id() ==
+                                      Sg_File_Info::TRANSFORMATION_FILE_ID ||
+                                  decl_info->get_line() <= 0;
+  if (synthetic_location == false) {
+    return false;
+  }
+
+  SgInitializedName *init_name = SageInterface::getFirstInitializedName(
+      const_cast<SgVariableDeclaration *>(decl));
+  if (init_name == NULL ||
+      init_name->get_name().is_null() == false &&
+          init_name->get_name().getString().empty() == false) {
+    return false;
+  }
+
+  return isSgTypeEllipse(init_name->get_type()) != NULL;
+}
+
+bool isSemanticOnlySyntheticOutputNode(const SgLocatedNode *node) {
+  if (node == NULL) {
+    return false;
+  }
+
+  if (const SgVariableDeclaration *decl =
+          isSgVariableDeclaration(const_cast<SgLocatedNode *>(node))) {
+    return isSyntheticCatchAllPlaceholderDeclaration(decl);
+  }
+
+  const SgInitializedName *init_name =
+      isSgInitializedName(const_cast<SgLocatedNode *>(node));
+  if (init_name == NULL) {
+    return false;
+  }
+
+  const SgVariableDeclaration *decl =
+      isSgVariableDeclaration(init_name->get_parent());
+  return isSyntheticCatchAllPlaceholderDeclaration(decl);
+}
+
+bool fileHasRelevantModifications(SgSourceFile *file) {
   if (file == NULL) {
     return true;
   }
@@ -433,6 +683,9 @@ bool fileHasRelevantModifications(SgSourceFile *file) {
     if (stmt == NULL) {
       continue;
     }
+    if (isSemanticOnlySyntheticOutputNode(stmt)) {
+      continue;
+    }
     Sg_File_Info *stmt_info = stmt->get_file_info();
     if (stmt_info == NULL) {
       return true;
@@ -450,6 +703,9 @@ bool fileHasRelevantModifications(SgSourceFile *file) {
       SageInterface::collectModifiedLocatedNodes(file);
   for (SgLocatedNode *node : modifiedNodes) {
     if (node == NULL) {
+      continue;
+    }
+    if (isSemanticOnlySyntheticOutputNode(node)) {
       continue;
     }
     Sg_File_Info *node_info = node->get_file_info();
@@ -517,6 +773,9 @@ collectFilesWithRelevantModifications(SgProject *project) {
     if (statement == NULL) {
       continue;
     }
+    if (isSemanticOnlySyntheticOutputNode(statement)) {
+      continue;
+    }
 
     Sg_File_Info *fileInfo = statement->get_file_info();
     if (fileInfo == NULL || fileInfo->isOutputInCodeGeneration() == false) {
@@ -533,6 +792,9 @@ collectFilesWithRelevantModifications(SgProject *project) {
       SageInterface::collectModifiedLocatedNodes(project);
   for (SgLocatedNode *node : modifiedNodes) {
     if (node == NULL) {
+      continue;
+    }
+    if (isSemanticOnlySyntheticOutputNode(node)) {
       continue;
     }
 
@@ -595,6 +857,9 @@ bool scopeHasRelevantModifications(SgScopeStatement *scope,
 
       SgLocatedNode *locatedNode = isSgLocatedNode(node);
       if (locatedNode == NULL) {
+        return;
+      }
+      if (isSemanticOnlySyntheticOutputNode(locatedNode)) {
         return;
       }
 
@@ -1134,7 +1399,8 @@ void Unparser::unparseFile(SgSourceFile *file, SgUnparse_Info &info,
   // DQ (12/6/2014): This is the part of the token stream support that is
   // required after transformations have been done in the AST.
   if ((isCfile || isCxxFile) && file->get_unparse_tokens() == true) {
-    if (fileHasRelevantModifications(file)) {
+    const bool has_relevant_modifications = fileHasRelevantModifications(file);
+    if (has_relevant_modifications) {
       file->set_unparse_tokens(false);
     }
   }
@@ -3068,28 +3334,10 @@ void unparseFile(SgFile *file, UnparseFormatHelp *unparseHelp,
 
     SgSourceFile *sourceFile = isSgSourceFile(file);
     bool useRawTokenOutput = false;
-    if (sourceFile != NULL && unparseScope == NULL &&
-        file->get_unparse_tokens() == false &&
-        (sourceFile->get_C_only() || sourceFile->get_Cxx_only() ||
-         sourceFile->get_Cuda_only() || sourceFile->get_OpenCL_only())) {
-      // Header-file unparsing needs the full AST/preprocessing unparser so it
-      // can reflect renamed declarations, rewritten include paths, and
-      // scope-targeted output. The raw-token fast path bypasses those updates.
-      const bool allowRawTokenOutput =
-          sourceFile->get_isHeaderFile() == false ||
-          sourceFile->get_unparseHeaderFiles() == false;
-
-      if (allowRawTokenOutput == true &&
-          fileHasRelevantModifications(sourceFile) == false) {
-        ROSEAttributesListContainerPtr filePreprocInfo =
-            sourceFile->get_preprocessorDirectivesAndCommentsList();
-        if (filePreprocInfo != NULL &&
-            filePreprocInfo->getList().find(sourceFile->getFileName()) !=
-                filePreprocInfo->getList().end()) {
-          useRawTokenOutput = true;
-        }
-      }
-    }
+    // The default C/C++ unparse path must continue through the AST-based
+    // unparser, even for unchanged files. Bypassing it with raw token replay
+    // changes long-standing normalization behavior and breaks transformation
+    // tools whose reference output depends on canonical AST formatting.
 
     if (useRawTokenOutput == true) {
       Unparser_Opt dummyOptions;
@@ -3241,6 +3489,9 @@ void unparseFile(SgFile *file, UnparseFormatHelp *unparseHelp,
       // And finally we need to close the file (to flush everything out!)
       ROSE_OutputFile.close();
       restoreEmptyConditionalBodiesInOutput(file, outputFilename);
+      restoreSplitPreprocessorDirectiveLinesInOutput(file, outputFilename);
+      restoreSplitCommentIndentationInOutput(file, outputFilename);
+      restoreCommentAdjacentSpacingInOutput(file, outputFilename);
 
       // Invoke post-output user-defined callbacks if any.  We must pass the
       // absolute output name because the build system may have changed
@@ -5823,11 +6074,19 @@ void unparseProject(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
         traverseHeaderFiles = true;
       }
 
-      // DQ (5/22/2021): We only want to compute the token stream if we will be
-      // using it (must be specified from the command line (or activated
-      // directly by a tool)).
+      // DQ (5/22/2021): We only want to compute the token frontier if the
+      // unparser will consult preserved token mappings. Partial replay for
+      // transformation tracking uses the same frontier even when full-file
+      // `-rose:unparse_tokens` mode is disabled.
+      const bool needs_token_unparse_frontier =
+          sourceFile->get_unparse_tokens() == true ||
+          (sourceFile->get_use_token_stream_to_improve_source_position_info() ==
+               true &&
+           sourceFile
+                   ->get_unparse_using_leading_and_trailing_token_mappings() ==
+               true);
       // buildTokenStreamFrontier(sourceFile,traverseHeaderFiles);
-      if (sourceFile->get_unparse_tokens() == true) {
+      if (needs_token_unparse_frontier) {
         buildTokenStreamFrontier(sourceFile, traverseHeaderFiles);
       }
     } else {

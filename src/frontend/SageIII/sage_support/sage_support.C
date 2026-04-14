@@ -1930,6 +1930,13 @@ int SgProject::parse() {
   if ((get_fileList().empty() == false) && (get_useBackendOnly() == false) &&
       errorCode == 0) {
     AstPostProcessing(this);
+
+    // Some template-instantiation function declaration chains are finalized
+    // only after the broader AST post-processing pipeline completes. Re-run
+    // the targeted template-instantiation repair once the project AST is fully
+    // assembled so defining/nondefining links remain coherent for later AST
+    // copies and consistency checks.
+    fixupTemplateInstantiations(this);
   }
 
   // negara1 (06/23/2011): Collect information about the included files to
@@ -4039,11 +4046,9 @@ int SgFile::compileOutput(vector<string> &argv, int fileNameIndex) {
           returnValueForCompiler = this->compileOutput(argv, fileNameIndex);
         }
       } else {
-        // DQ (2/7/2022): Allow the multi-file handling support to
-        // optionally exit after the first error (important for work
-        // with C/C++ tools).
-        printf("Exiting with an error in the backend compilation! \n");
-        ROSE_ASSERT(false);
+        // Propagate backend compilation failures as a normal nonzero return
+        // value so callers and negative-test harnesses can handle them.
+        this->set_backendCompilerErrorCode(-1);
       }
     }
   } // if (get_skipfinalCompileStep() == false)
@@ -4511,11 +4516,13 @@ int SgProject::link(std::string linkerName) {
     std::string::size_type startingQuote = i->find("\"");
     if (startingQuote != std::string::npos) {
       std::string::size_type endingQuote = i->rfind("\"");
+      if (endingQuote == std::string::npos || endingQuote == startingQuote) {
+        continue;
+      }
 
-      // There should be a double quote on both ends of the string
-      ROSE_ASSERT(endingQuote != std::string::npos);
-
-      std::string quotedSubstring = i->substr(startingQuote, endingQuote);
+      const std::string::size_type quotedLength =
+          endingQuote - startingQuote + 1;
+      std::string quotedSubstring = i->substr(startingQuote, quotedLength);
 
       // DQ (11/1/2012): Robb has suggested using single quote instead of double
       // quotes here. This is a problem for the processing of mutt (large C
@@ -4527,7 +4534,7 @@ int SgProject::link(std::string linkerName) {
           std::string("\\\"") + quotedSubstring + std::string("\\\"");
 
       // Now replace the quotedSubstring with the fixedQuotedSubstring
-      i->replace(startingQuote, endingQuote, fixedQuotedSubstring);
+      i->replace(startingQuote, quotedLength, fixedQuotedSubstring);
 
       printf("Modified argument = %s \n", (*i).c_str());
     }

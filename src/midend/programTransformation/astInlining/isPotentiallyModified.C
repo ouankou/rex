@@ -150,7 +150,10 @@ public:
         SgExpressionPtrList &args = args1->get_expressions();
         SgTypePtrList::iterator pi = params.begin();
         SgExpressionPtrList::iterator ai = args.begin();
-        for (; ai != args.end(); ++ai, ++pi) {
+        // Some call expressions carry more actual arguments than are recorded
+        // on the lowered function type (e.g., hidden/implicit call operands).
+        // Only compare pairs that exist in both lists.
+        for (; ai != args.end() && pi != params.end(); ++ai, ++pi) {
           if (SageInterface::isNonconstReference(*pi))
             result |= containsNonConst(*ai, expr);
         }

@@ -5,6 +5,9 @@
 
 #include "sage3basic.h"
 
+#include <cctype>
+#include <unordered_set>
+
 namespace {
 class MemoryPoolTraversalFilterGuard {
 public:
@@ -21,6 +24,67 @@ public:
 private:
   Rose::MemoryPoolTraversalFilter previous_filter_;
 };
+
+SgProject *projectForMemoryPoolNodeImpl(SgNode *node,
+                                        std::unordered_set<SgNode *> &visited) {
+  if (node == nullptr) {
+    return nullptr;
+  }
+  if (!visited.insert(node).second) {
+    return nullptr;
+  }
+
+  for (SgNode *current = node; current != nullptr;
+       current = current->get_parent()) {
+    if (SgProject *project = isSgProject(current)) {
+      return project;
+    }
+  }
+
+  if (SgSourceFile *file = SageInterface::getEnclosingSourceFile(node)) {
+    return isSgProject(file->get_parent());
+  }
+
+  if (SgDeclarationStatement *decl = isSgDeclarationStatement(node)) {
+    if (SgScopeStatement *scope = decl->get_scope()) {
+      if (SgProject *project = projectForMemoryPoolNodeImpl(scope, visited)) {
+        return project;
+      }
+    }
+    if (SgDeclarationStatement *first_nondef =
+            decl->get_firstNondefiningDeclaration()) {
+      if (SgProject *project =
+              projectForMemoryPoolNodeImpl(first_nondef, visited)) {
+        return project;
+      }
+    }
+    if (SgDeclarationStatement *defining_decl =
+            decl->get_definingDeclaration()) {
+      if (SgProject *project =
+              projectForMemoryPoolNodeImpl(defining_decl, visited)) {
+        return project;
+      }
+    }
+  }
+
+  if (SgClassType *class_type = isSgClassType(node)) {
+    return projectForMemoryPoolNodeImpl(class_type->get_declaration(), visited);
+  }
+
+  if (SgType *type = isSgType(node)) {
+    if (SgClassType *class_type = isSgClassType(type)) {
+      return projectForMemoryPoolNodeImpl(class_type->get_declaration(),
+                                          visited);
+    }
+  }
+
+  return nullptr;
+}
+
+SgProject *projectForMemoryPoolNode(SgNode *node) {
+  std::unordered_set<SgNode *> visited;
+  return projectForMemoryPoolNodeImpl(node, visited);
+}
 
 template <typename InstantiationDeclT, typename TemplateDeclT>
 void recoverTemplateDeclarationLink(InstantiationDeclT *decl) {
@@ -126,10 +190,82 @@ bool scopeContainsStatement(SgScopeStatement *scope, SgStatement *stmt) {
          statements.end();
 }
 
+SgDeclarationStatementPtrList *
+scopeOwnedDeclarationList(SgScopeStatement *scope) {
+  if (scope == nullptr) {
+    return nullptr;
+  }
+
+  if (SgGlobal *global = isSgGlobal(scope)) {
+    return &global->get_declarations();
+  }
+
+  if (SgNamespaceDefinitionStatement *namespace_scope =
+          isSgNamespaceDefinitionStatement(scope)) {
+    return &namespace_scope->get_declarations();
+  }
+
+  if (SgClassDefinition *class_scope = isSgClassDefinition(scope)) {
+    return &class_scope->get_members();
+  }
+
+  if (SgDeclarationScope *declaration_scope = isSgDeclarationScope(scope)) {
+    return &declaration_scope->get_declarations();
+  }
+
+  return nullptr;
+}
+
+bool ensureDeclarationInScopeBeforeTarget(SgScopeStatement *scope,
+                                          SgDeclarationStatement *stmt,
+                                          SgDeclarationStatement *target) {
+  if (scope == nullptr || stmt == nullptr) {
+    return false;
+  }
+
+  SgDeclarationStatementPtrList *declarations =
+      scopeOwnedDeclarationList(scope);
+  if (declarations == nullptr) {
+    return false;
+  }
+
+  if (stmt->get_parent() != nullptr && stmt->get_parent() != scope) {
+    return false;
+  }
+
+  SgDeclarationStatementPtrList::iterator existing =
+      std::find(declarations->begin(), declarations->end(), stmt);
+  if (existing != declarations->end()) {
+    if (stmt->get_parent() != scope) {
+      stmt->set_parent(scope);
+    }
+    return true;
+  }
+
+  SgDeclarationStatementPtrList::iterator insert_position = declarations->end();
+  if (target != nullptr) {
+    SgDeclarationStatementPtrList::iterator target_position =
+        std::find(declarations->begin(), declarations->end(), target);
+    if (target_position != declarations->end()) {
+      insert_position = target_position;
+    }
+  }
+
+  stmt->set_parent(scope);
+  declarations->insert(insert_position, stmt);
+  return true;
+}
+
 void ensureStatementInScopeBeforeTarget(SgScopeStatement *scope,
                                         SgStatement *stmt,
                                         SgStatement *target) {
   if (scope == nullptr || stmt == nullptr) {
+    return;
+  }
+
+  if (ensureDeclarationInScopeBeforeTarget(scope,
+                                           isSgDeclarationStatement(stmt),
+                                           isSgDeclarationStatement(target))) {
     return;
   }
 
@@ -164,6 +300,48 @@ bool haveEquivalentTemplateArguments(const SgTemplateArgumentPtrList &lhs,
   return SageInterface::templateArgumentListEquivalence(lhs, rhs);
 }
 
+SgName templateInstantiationBaseName(SgFunctionDeclaration *decl) {
+  if (decl == nullptr) {
+    return SgName();
+  }
+
+  if (SgTemplateInstantiationFunctionDecl *inst =
+          isSgTemplateInstantiationFunctionDecl(decl)) {
+    if (inst->get_templateName().is_null() == false) {
+      return inst->get_templateName();
+    }
+  }
+
+  if (SgTemplateInstantiationMemberFunctionDecl *inst =
+          isSgTemplateInstantiationMemberFunctionDecl(decl)) {
+    if (inst->get_templateName().is_null() == false) {
+      return inst->get_templateName();
+    }
+  }
+
+  auto strip_template_args = [](const SgName &name) -> SgName {
+    std::string spelled = name.getString();
+    std::string::size_type template_pos = spelled.find('<');
+    if (template_pos == std::string::npos) {
+      return name;
+    }
+
+    std::string base = spelled.substr(0, template_pos);
+    while (!base.empty() &&
+           std::isspace(static_cast<unsigned char>(base.back()))) {
+      base.pop_back();
+    }
+    return SgName(base);
+  };
+
+  if (isSgTemplateInstantiationFunctionDecl(decl) != nullptr ||
+      isSgTemplateInstantiationMemberFunctionDecl(decl) != nullptr) {
+    return strip_template_args(decl->get_name());
+  }
+
+  return decl->get_name();
+}
+
 bool sameTemplateInstantiationMemberFunctionSignature(
     SgTemplateInstantiationMemberFunctionDecl *lhs,
     SgTemplateInstantiationMemberFunctionDecl *rhs) {
@@ -171,7 +349,8 @@ bool sameTemplateInstantiationMemberFunctionSignature(
     return false;
   }
 
-  if (lhs->get_name() != rhs->get_name()) {
+  if (templateInstantiationBaseName(lhs) !=
+      templateInstantiationBaseName(rhs)) {
     return false;
   }
 
@@ -181,6 +360,228 @@ bool sameTemplateInstantiationMemberFunctionSignature(
 
   return haveEquivalentTemplateArguments(lhs->get_templateArguments(),
                                          rhs->get_templateArguments());
+}
+
+bool sameTemplateInstantiationFunctionSignature(
+    SgTemplateInstantiationFunctionDecl *lhs,
+    SgTemplateInstantiationFunctionDecl *rhs) {
+  if (lhs == nullptr || rhs == nullptr) {
+    return false;
+  }
+
+  if (templateInstantiationBaseName(lhs) !=
+      templateInstantiationBaseName(rhs)) {
+    return false;
+  }
+
+  if (!SageInterface::isEquivalentType(lhs->get_type(), rhs->get_type())) {
+    return false;
+  }
+
+  return haveEquivalentTemplateArguments(lhs->get_templateArguments(),
+                                         rhs->get_templateArguments());
+}
+
+SgTemplateInstantiationFunctionDecl *
+canonicalFirstNondefiningFunctionInstantiation(
+    SgTemplateInstantiationFunctionDecl *decl) {
+  if (decl == nullptr) {
+    return nullptr;
+  }
+
+  if (SgTemplateInstantiationFunctionDecl *first_nondef =
+          isSgTemplateInstantiationFunctionDecl(
+              decl->get_firstNondefiningDeclaration())) {
+    return first_nondef;
+  }
+
+  return decl;
+}
+
+SgTemplateInstantiationFunctionDecl *
+findExistingFirstNondefiningFunctionInstantiation(
+    SgTemplateInstantiationFunctionDecl *inst) {
+  if (inst == nullptr) {
+    return nullptr;
+  }
+
+  auto pick_candidate = [&](SgTemplateInstantiationFunctionDecl *candidate)
+      -> SgTemplateInstantiationFunctionDecl * {
+    if (candidate == nullptr || candidate == inst) {
+      return nullptr;
+    }
+    if (!sameTemplateInstantiationFunctionSignature(candidate, inst)) {
+      return nullptr;
+    }
+    if (candidate->get_definingDeclaration() == inst &&
+        candidate->get_definition() == nullptr) {
+      return candidate;
+    }
+    return canonicalFirstNondefiningFunctionInstantiation(candidate);
+  };
+
+  if (SgFunctionSymbol *symbol =
+          isSgFunctionSymbol(inst->get_symbol_from_symbol_table())) {
+    if (SgTemplateInstantiationFunctionDecl *candidate = pick_candidate(
+            isSgTemplateInstantiationFunctionDecl(symbol->get_declaration()))) {
+      return candidate;
+    }
+    if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
+            symbol->get_declaration()->get_firstNondefiningDeclaration())) {
+      if (SgTemplateInstantiationFunctionDecl *candidate = pick_candidate(
+              isSgTemplateInstantiationFunctionDecl(first_nondef))) {
+        return candidate;
+      }
+    }
+  }
+
+  if (SgScopeStatement *scope = selectTemplateLookupScope(inst)) {
+    for (SgStatement *stmt : scope->generateStatementList()) {
+      if (SgTemplateInstantiationFunctionDecl *candidate =
+              pick_candidate(isSgTemplateInstantiationFunctionDecl(stmt))) {
+        return candidate;
+      }
+    }
+  }
+
+  SgProject *target_project = projectForMemoryPoolNode(inst);
+  SgTemplateInstantiationFunctionDecl *fallback = nullptr;
+  class MemoryPoolSearch : public ROSE_VisitTraversal {
+  public:
+    SgTemplateInstantiationFunctionDecl *inst = nullptr;
+    SgProject *target_project = nullptr;
+    SgTemplateInstantiationFunctionDecl *fallback = nullptr;
+    decltype(pick_candidate) &pick_candidate;
+
+    explicit MemoryPoolSearch(decltype(pick_candidate) &pick_candidate)
+        : pick_candidate(pick_candidate) {}
+
+    void visit(SgNode *node) override {
+      if (fallback != nullptr && fallback->get_definingDeclaration() == inst) {
+        return;
+      }
+
+      SgTemplateInstantiationFunctionDecl *candidate =
+          pick_candidate(isSgTemplateInstantiationFunctionDecl(node));
+      if (candidate == nullptr) {
+        return;
+      }
+      if (projectForMemoryPoolNode(candidate) != target_project) {
+        return;
+      }
+
+      if (candidate->get_definingDeclaration() == inst) {
+        fallback = candidate;
+        return;
+      }
+
+      if (fallback == nullptr) {
+        fallback = candidate;
+      }
+    }
+  } search(pick_candidate);
+
+  search.inst = inst;
+  search.target_project = target_project;
+  MemoryPoolTraversalFilterGuard clear_filter(nullptr);
+  SgTemplateInstantiationFunctionDecl::traverseMemoryPoolNodes(search);
+  fallback = search.fallback;
+  if (fallback != nullptr) {
+    return fallback;
+  }
+
+  return nullptr;
+}
+
+void copyTemplateInstantiationFunctionMetadata(
+    SgTemplateInstantiationFunctionDecl *src,
+    SgTemplateInstantiationFunctionDecl *dst) {
+  if (src == nullptr || dst == nullptr) {
+    return;
+  }
+
+  dst->set_templateDeclaration(src->get_templateDeclaration());
+  dst->set_specializedTemplateDeclaration(
+      src->get_specializedTemplateDeclaration());
+  dst->set_template_argument_list_is_explicit(
+      src->get_template_argument_list_is_explicit());
+  dst->set_specialization(src->get_specialization());
+  dst->set_nameResetFromMangledForm(src->get_nameResetFromMangledForm());
+  dst->set_templateName(src->get_templateName());
+
+  SgTemplateArgumentPtrList copied_template_args;
+  for (SgTemplateArgument *arg : src->get_templateArguments()) {
+    copied_template_args.push_back(
+        isSgTemplateArgument(SageInterface::deepCopy(arg)));
+  }
+  SageBuilder::setTemplateArgumentsInDeclaration(dst, &copied_template_args);
+
+  dst->get_deducedTemplateArguments().clear();
+  for (SgTemplateArgument *arg : src->get_deducedTemplateArguments()) {
+    dst->get_deducedTemplateArguments().push_back(
+        isSgTemplateArgument(SageInterface::deepCopy(arg)));
+  }
+
+  SageBuilder::setTemplateArgumentParents(dst);
+}
+
+void ensureTemplateInstantiationFunctionDeclarationChain(
+    SgTemplateInstantiationFunctionDecl *inst) {
+  if (inst == nullptr || inst->get_definingDeclaration() != inst) {
+    return;
+  }
+
+  SgDeclarationStatement *first_nondef_decl =
+      inst->get_firstNondefiningDeclaration();
+  if (first_nondef_decl != nullptr && first_nondef_decl != inst &&
+      first_nondef_decl != inst->get_definingDeclaration()) {
+    return;
+  }
+
+  SgTemplateInstantiationFunctionDecl *first_nondef =
+      findExistingFirstNondefiningFunctionInstantiation(inst);
+
+  if (first_nondef == nullptr) {
+    SgScopeStatement *scope = selectTemplateLookupScope(inst);
+    SgFunctionType *function_type = isSgFunctionType(inst->get_type());
+    if (scope == nullptr || function_type == nullptr ||
+        function_type->get_return_type() == nullptr) {
+      return;
+    }
+
+    SgFunctionParameterList *param_list = cloneParameterList(inst);
+    SgTemplateArgumentPtrList template_args;
+    for (SgTemplateArgument *arg : inst->get_templateArguments()) {
+      template_args.push_back(
+          isSgTemplateArgument(SageInterface::deepCopy(arg)));
+    }
+
+    SgFunctionDeclaration *synthesized_decl =
+        SageBuilder::buildNondefiningFunctionDeclaration(
+            inst->get_name(), function_type->get_return_type(), param_list,
+            scope, /*buildTemplateInstantiation=*/true, &template_args,
+            SgStorageModifier::e_default, /*forceFreeFunctionScope=*/false);
+
+    first_nondef = canonicalFirstNondefiningFunctionInstantiation(
+        isSgTemplateInstantiationFunctionDecl(synthesized_decl));
+    if (first_nondef == nullptr) {
+      return;
+    }
+
+    copyTemplateInstantiationFunctionMetadata(inst, first_nondef);
+    first_nondef->setForward();
+    hideSynthesizedFunctionDeclaration(first_nondef);
+    ensureStatementInScopeBeforeTarget(scope, first_nondef, inst);
+  }
+
+  if (first_nondef == nullptr || first_nondef == inst) {
+    return;
+  }
+
+  first_nondef->set_firstNondefiningDeclaration(first_nondef);
+  first_nondef->set_definingDeclaration(inst);
+  inst->set_definingDeclaration(inst);
+  inst->set_firstNondefiningDeclaration(first_nondef);
 }
 
 SgTemplateInstantiationMemberFunctionDecl *
@@ -285,6 +686,12 @@ void copyTemplateInstantiationMemberFunctionMetadata(
     dst->get_deducedTemplateArguments().push_back(
         isSgTemplateArgument(SageInterface::deepCopy(arg)));
   }
+
+  // The deduced-argument copies are created after
+  // setTemplateArgumentsInDeclaration() has already repaired template-argument
+  // ownership, so re-run the declaration-level parent fix to attach both lists
+  // to the synthesized declaration chain.
+  SageBuilder::setTemplateArgumentParents(dst);
 }
 
 void ensureTemplateInstantiationMemberFunctionDeclarationChain(
@@ -342,10 +749,9 @@ void ensureTemplateInstantiationMemberFunctionDeclarationChain(
     return;
   }
 
-  if (first_nondef->get_firstNondefiningDeclaration() == nullptr) {
-    first_nondef->set_firstNondefiningDeclaration(first_nondef);
-  }
+  first_nondef->set_firstNondefiningDeclaration(first_nondef);
   first_nondef->set_definingDeclaration(inst);
+  inst->set_definingDeclaration(inst);
   inst->set_firstNondefiningDeclaration(first_nondef);
 }
 
@@ -620,6 +1026,8 @@ class RepairTemplateInstantiationLinksOnMemoryPool
     : public ROSE_VisitTraversal {
 public:
   void visit(SgNode *node) override {
+    ensureTemplateInstantiationFunctionDeclarationChain(
+        isSgTemplateInstantiationFunctionDecl(node));
     ensureTemplateInstantiationDeclarationLink(
         isSgTemplateInstantiationDecl(node));
     ensureTemplateInstantiationFunctionDeclarationLink(
@@ -688,14 +1096,15 @@ void fixupTemplateInstantiations(SgNode *node) {
   declarationFixupTraversal.traverse(node, preorder);
 
   repairTemplateInstantiationDeclLinksInMemoryPool();
-  canonicalizeClassTypesInMemoryPool();
+  canonicalizeClassTypesInMemoryPool(node);
 }
 
-void canonicalizeClassTypesInMemoryPool() {
-  // Canonicalize all class types, including stray memory-pool entries that are
-  // intentionally skipped by the general AST post-processing filter. These
-  // detached nodes still participate in AST consistency checks, so their
-  // declaration links must remain coherent.
+void canonicalizeClassTypesInMemoryPool(SgNode *root) {
+  // Canonicalize all class types in the process memory pool. AST consistency
+  // checks traverse the whole pool, including detached helper types whose
+  // project cannot be recovered through parent links, so the repair pass must
+  // cover that same surface area.
+  (void)root;
   MemoryPoolTraversalFilterGuard clear_filter(nullptr);
   CanonicalizeClassTypesOnMemoryPool memory_pool_fixup;
   SgClassType::traverseMemoryPoolNodes(memory_pool_fixup);
@@ -732,6 +1141,7 @@ void FixupTemplateInstantiations::visit(SgNode *node) {
   }
   if (SgTemplateInstantiationFunctionDecl *inst =
           isSgTemplateInstantiationFunctionDecl(node)) {
+    ensureTemplateInstantiationFunctionDeclarationChain(inst);
     ensureTemplateInstantiationFunctionDeclarationLink(inst);
   }
   if (SgTemplateInstantiationMemberFunctionDecl *inst =

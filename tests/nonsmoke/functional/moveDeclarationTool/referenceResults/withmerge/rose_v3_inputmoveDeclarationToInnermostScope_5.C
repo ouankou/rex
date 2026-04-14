@@ -11,18 +11,21 @@
     }                                                                          \
   }
 typedef char Char;
+
 typedef unsigned char Bool;
 typedef unsigned char UChar;
 typedef int Int32;
 typedef unsigned int UInt32;
 typedef short Int16;
 typedef unsigned short UInt16;
+
 typedef unsigned long long UInt64;
 #define BZ_N_RADIX 2
 #define FALLBACK_QSORT_SMALL_THRESH 10
 #define FALLBACK_QSORT_STACK_SIZE 100
 void mainQSort3(UInt32 *ptr, UChar *block, UInt16 *quadrant, Int32 nblock,
                 Int32 loSt, Int32 hiSt, Int32 dSt, Int32 *budget);
+
 void fallbackSimpleSort(UInt32 *fmap, UInt32 *eclass, Int32 lo, Int32 hi);
 
 static void fallbackQSort3(UInt32 *fmap, UInt32 *eclass, Int32 loSt,
@@ -116,12 +119,12 @@ static void fallbackQSort3(UInt32 *fmap, UInt32 *eclass, Int32 loSt,
     } else {
     }
     /* Random partitioning.  Median of 3 sometimes fails to
-           avoid bad cases.  Median of 9 seems to help but
-           looks rather expensive.  This too seems to work but
-           is cheaper.  Guidance for the magic constants
-           7621 and 32768 is taken from Sedgewick's algorithms
-           book, chapter 35.
-           */
+       avoid bad cases.  Median of 9 seems to help but
+       looks rather expensive.  This too seems to work but
+       is cheaper.  Guidance for the magic constants
+       7621 and 32768 is taken from Sedgewick's algorithms
+       book, chapter 35.
+       */
   }
   {
     Int32 lo;
@@ -162,6 +165,7 @@ static void fallbackQSort3(UInt32 *fmap, UInt32 *eclass, Int32 loSt,
   // Naive analysis will find if-stmt is the inner-most common scope.
   // switch
 }
+
 Int32 uInt64_qrm10(UInt64 *n);
 Bool uInt64_isZero(UInt64 *n);
 
@@ -173,7 +177,8 @@ void uInt64_toAscii(char *outbuf, UInt64 *n) {
     Int32 q = uInt64_qrm10(&n_copy);
     buf[nBuf] = q + '0';
     nBuf++;
-  } while (!(uInt64_isZero(&n_copy)));
+  } while (!uInt64_isZero(&n_copy));
+
   outbuf[nBuf] = 0;
   for (Int32 i = 0; i < nBuf; i++)
     outbuf[i] = buf[nBuf - i - 1];

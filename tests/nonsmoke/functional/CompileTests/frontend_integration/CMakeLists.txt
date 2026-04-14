@@ -24,6 +24,8 @@ list(REMOVE_DUPLICATES FRONTEND_INTEGRATION_C_TESTS)
 
 rex_get_registered_compile_source_set(_frontend_negative_c_sources
   REX_C_TESTS_NEGATIVE_SOURCES)
+rex_get_registered_compile_source_set(_frontend_c89_sources
+  REX_C89_TESTS_SOURCES)
 set(_frontend_negative_c_tests)
 foreach(source_rel IN LISTS _frontend_negative_c_sources)
   get_filename_component(_negative_name "${source_rel}" NAME)
@@ -32,6 +34,13 @@ endforeach()
 if(_frontend_negative_c_tests)
   list(REMOVE_ITEM FRONTEND_INTEGRATION_C_TESTS ${_frontend_negative_c_tests})
 endif()
+
+set(_frontend_c89_tests)
+foreach(source_rel IN LISTS _frontend_c89_sources)
+  get_filename_component(_c89_name "${source_rel}" NAME)
+  list(APPEND _frontend_c89_tests "${_c89_name}")
+endforeach()
+list(REMOVE_DUPLICATES _frontend_c89_tests)
 
 # Map of specimen file names to their extra include paths via aligned key/value lists.
 set(_specimen_include_keys
@@ -51,7 +60,11 @@ if(NOT _keys_len EQUAL _values_len)
 endif()
 
 foreach(specimen IN LISTS FRONTEND_INTEGRATION_C_TESTS)
+  set(_frontend_c_flags ${_frontend_flags})
   set(_extra_includes -I${_frontend_c_tests_dir})
+  if(specimen IN_LIST _frontend_c89_tests)
+    list(APPEND _frontend_c_flags -rose:C89)
+  endif()
   if(_keys_len GREATER 0)
     math(EXPR _last_pair_index "${_keys_len} - 1")
     foreach(_pair_index RANGE ${_last_pair_index})
@@ -64,7 +77,7 @@ foreach(specimen IN LISTS FRONTEND_INTEGRATION_C_TESTS)
   endif()
   add_test(
     NAME frontend_integration_c_${specimen}
-    COMMAND frontend_test ${_frontend_flags} ${_extra_includes}
+    COMMAND frontend_test ${_frontend_c_flags} ${_extra_includes}
       -c ${_frontend_c_tests_dir}/${specimen}
   )
 endforeach()

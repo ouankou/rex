@@ -59,7 +59,7 @@ foreach $function (@function_list)
 	print STRESSTESTCMP "\n";
 }
 # create the main and its graph-dump-representation
-print STRESSTEST "int main(int argc,char * argv){\n";
+print STRESSTEST "int main(int argc, char **argv){\n";
 print STRESSTESTCMP "main ->";
 
 

@@ -492,23 +492,30 @@ MacroExpansion *DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(
       // expansions.
 
       if (tokenStreamSequence != nullptr) {
-        startingToken = token_subsequence_start;
-        endingToken = token_subsequence_end;
+        SgTokenPtrList &roseTokenList = sourceFile->get_token_list();
+        bool has_valid_token_subsequence =
+            roseTokenList.empty() == false && token_subsequence_start >= 0 &&
+            token_subsequence_end >= token_subsequence_start &&
+            token_subsequence_end < static_cast<int>(roseTokenList.size());
+
+        if (has_valid_token_subsequence) {
+          startingToken = token_subsequence_start;
+          endingToken = token_subsequence_end;
+        }
 
         // Only the first token will represent the macro name
 
-        SgTokenPtrList &roseTokenList = sourceFile->get_token_list();
-
-        ASSERT_require(roseTokenList.empty() == false);
-
-        SgToken *tokenAssociatedWithMacroCall =
-            roseTokenList[token_subsequence_start];
-        ASSERT_not_null(tokenAssociatedWithMacroCall);
+        SgToken *tokenAssociatedWithMacroCall = nullptr;
+        if (has_valid_token_subsequence) {
+          tokenAssociatedWithMacroCall = roseTokenList[token_subsequence_start];
+          ASSERT_not_null(tokenAssociatedWithMacroCall);
+        }
 
         string macroName =
-            macroNameFromTokens.empty() == false
-                ? macroNameFromTokens
-                : tokenAssociatedWithMacroCall->get_lexeme_string();
+            macroNameFromTokens.empty() == false ? macroNameFromTokens
+            : tokenAssociatedWithMacroCall != nullptr
+                ? tokenAssociatedWithMacroCall->get_lexeme_string()
+                : string();
 #if DEBUG_IS_PART_OF_MACRO_EXPANSION
         printf("   --- macro name = %s \n", macroName.c_str());
 #endif
@@ -517,8 +524,10 @@ MacroExpansion *DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(
 #if USE_STATEMENT_LEVEL_RESOLUTION
         // Statement level resolution does not have this strange constraint.
         macroExpansion = new MacroExpansion(macroName);
-        macroExpansion->token_start = token_subsequence_start;
-        macroExpansion->token_end = token_subsequence_end;
+        if (has_valid_token_subsequence) {
+          macroExpansion->token_start = token_subsequence_start;
+          macroExpansion->token_end = token_subsequence_end;
+        }
 #else
         // Add restriction that size of macro declaration name is greater than 1
         // (this avoids since length characters being interpreted as macros in
@@ -526,8 +535,10 @@ MacroExpansion *DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(
         size_t macro_definition_length = macroName.length();
         if (macro_definition_length > 1) {
           macroExpansion = new MacroExpansion(macroName);
-          macroExpansion->token_start = token_subsequence_start;
-          macroExpansion->token_end = token_subsequence_end;
+          if (has_valid_token_subsequence) {
+            macroExpansion->token_start = token_subsequence_start;
+            macroExpansion->token_end = token_subsequence_end;
+          }
         }
 #endif
 #if DEBUG_IS_PART_OF_MACRO_EXPANSION

@@ -86,8 +86,6 @@ void TaintAnalysis::genInitState(const Function &func, const DataflowNode &node,
   FiniteVarsExprsProductLattice *prodLat = new FiniteVarsExprsProductLattice(
       new TaintLattice, emptyM, (Lattice *)NULL, ldv_analysis, node, state);
   assert(prodLat != NULL);
-  magic_tainted(node.getNode(),
-                prodLat); // certain names are considered to be always tainted
   initLattices.push_back(prodLat);
 }
 
@@ -155,7 +153,7 @@ bool TaintAnalysis::transfer(const Function &func, const DataflowNode &node_,
     result =
         dynamic_cast<TaintLattice *>(prodLat->getVarLattice(SgExpr2Var(xop)));
     if (result)
-      modified = result->set_vertex(TaintLattice::VERTEX_UNTAINTED);
+      modified = result->set_vertex(TaintLattice::VERTEX_UNTAINTED) || modified;
 
   } else if (isSgAddressOfOp(node)) {
     // as in "&x".  The result taintedness has nothing to do with the value in
@@ -177,7 +175,7 @@ bool TaintAnalysis::transfer(const Function &func, const DataflowNode &node_,
     if (isSgAssignOp(node)) { // copy the rhs lattice to the lhs lattice (as
                               // well as the entire '=' expression result)
       assert(in1 && in2);
-      modified = in1->meetUpdate(in2);
+      modified = in1->meetUpdate(in2) || modified;
     }
 
   } else if (isSgUnaryOp(node)) {

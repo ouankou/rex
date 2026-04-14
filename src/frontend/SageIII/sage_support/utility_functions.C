@@ -731,11 +731,12 @@ void enforceTokenUnparseContractForFile(SgSourceFile *sourceFile) {
       }
     }
 
-    // Clang explicit-instantiation directives are wrapped in a
-    // SgTemplateInstantiationDirectiveStatement, but token-subsequence
-    // coverage is tracked on the underlying declaration rather than this
-    // wrapper node.
-    if (isSgTemplateInstantiationDirectiveStatement(decl) != NULL) {
+    // Some frontend wrapper statements do not own an independent token
+    // subsequence. Coverage is tracked on the enclosed declaration(s), while
+    // the unparser reconstructs the wrapper syntax structurally.
+    if (isSgTemplateInstantiationDirectiveStatement(decl) != NULL ||
+        isSgClinkageStartStatement(decl) != NULL ||
+        isSgClinkageEndStatement(decl) != NULL) {
       continue;
     }
 

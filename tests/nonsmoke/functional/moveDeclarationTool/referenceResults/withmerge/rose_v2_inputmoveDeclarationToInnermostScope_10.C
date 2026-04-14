@@ -1,6 +1,6 @@
 
-void foo(int len,int condition)
-{
+
+void foo(int len, int condition) {
   for (int i = 0; i < len; ++i) {
   }
   if (condition) {
@@ -11,15 +11,13 @@ void foo(int len,int condition)
 // A tricky case of if-stmt,
 // move to two bodies, trigger another round of moving: iterative moving
 
-void bar(bool allow)
-{
+void bar(bool allow) {
   for (int i = 0; i < 10; ++i) {
   }
   if (allow) {
     for (int i = 0; i < 4; ++i) {
     }
-  }
-   else {
+  } else {
     for (int i = 0; i < 4; ++i) {
     }
   }
@@ -27,8 +25,7 @@ void bar(bool allow)
 // if statement issue
 // move to two bodies, trigger another round of moving
 
-void foo2(bool allow,int update,int update2)
-{
+void foo2(bool allow, int update, int update2) {
   if (update > 0) {
     for (int i = 0; i < 12; ++i) {
     }
@@ -40,8 +37,7 @@ void foo2(bool allow,int update,int update2)
             int j;
             for ((i = 0 , j = 0); i < 10; (++i , ++j)) {
             }
-          }
-           else {
+          } else {
             int i;
             int j;
             for ((i = 0 , j = 0); i < 10; (++i , ++j)) {
@@ -53,34 +49,26 @@ void foo2(bool allow,int update,int update2)
   }
 }
 
-class foo 
-{
-
+class foo {
 public:
   foo(double val) : m_a(val) {}
-
-public:
   void f1(bool allow, int update, int length, double *b);
 
 private:
   double m_a;
-}
-;
+};
 
-void foo::f1(bool allow,int update,int length,double *b)
-{
+void foo::f1(bool allow, int update, int length, double *b) {
   if (allow) {
     for (int iz = 0; iz < length; ++iz) {
       int dens = m_a / b[iz];
     }
-  }
-   else {
+  } else {
     if (update > 0) {
       for (int iz = 0; iz < length; ++iz) {
         int dens = m_a / b[iz];
       }
-    }
-     else {
+    } else {
       for (int iz = 0; iz < length; ++iz) {
         int dens = m_a / b[iz];
       }

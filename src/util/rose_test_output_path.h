@@ -54,6 +54,34 @@ inline bool isWithinTree(const std::filesystem::path &root,
 
   return root_it == normalized_root.end();
 }
+
+inline std::string defaultOutputDir() {
+  const char *output_dir = std::getenv("ROSE_TEST_OUTPUT_DIR");
+  if (output_dir != nullptr && output_dir[0] != '\0') {
+    return output_dir;
+  }
+
+  std::error_code ec;
+  const std::filesystem::path current_dir =
+      normalizePath(std::filesystem::current_path(ec));
+  if (ec || current_dir.empty()) {
+    return std::string();
+  }
+
+  const std::filesystem::path build_root =
+      normalizePath(std::filesystem::path(ROSE_BUILD_TREE));
+  if (isWithinTree(build_root, current_dir)) {
+    return std::string();
+  }
+
+  const std::filesystem::path source_root =
+      normalizePath(std::filesystem::path(ROSE_SOURCE_TREE));
+  if (!isWithinTree(source_root, current_dir)) {
+    return std::string();
+  }
+
+  return (build_root / "test-artifacts").string();
+}
 } // namespace detail
 
 inline std::string resolvePath(const std::string &filename,
@@ -64,10 +92,7 @@ inline std::string resolvePath(const std::string &filename,
 
   std::string output_dir_storage = output_dir_override;
   if (output_dir_storage.empty()) {
-    const char *output_dir = std::getenv("ROSE_TEST_OUTPUT_DIR");
-    if (output_dir != nullptr && output_dir[0] != '\0') {
-      output_dir_storage = output_dir;
-    }
+    output_dir_storage = detail::defaultOutputDir();
   }
 
   if (output_dir_storage.empty()) {

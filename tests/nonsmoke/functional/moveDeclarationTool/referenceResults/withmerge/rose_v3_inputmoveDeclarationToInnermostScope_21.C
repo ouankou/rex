@@ -1,4 +1,5 @@
 
+
 void func(int k, int m) {
   if (k) {
     switch (m) {

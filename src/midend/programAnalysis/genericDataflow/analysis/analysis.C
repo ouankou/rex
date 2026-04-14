@@ -23,7 +23,7 @@
 
 #include <vector>
 
-int analysisDebugLevel = 1;
+int analysisDebugLevel = 0;
 
 using namespace std;
 using namespace Rose;
@@ -111,8 +111,10 @@ InterProceduralDataflow::InterProceduralDataflow(
   filter = intraDataflowAnalysis
                ->filter; // propagate the CFG filter from intra- to inter-level,
                          // or the default filter will kick in at inter-level.
-  Dbg::dbg << "InterProceduralDataflow() intraAnalysis=" << intraAnalysis
-           << ", intraDataflowAnalysis=" << intraDataflowAnalysis << endl;
+  if (analysisDebugLevel >= 1) {
+    Dbg::dbg << "InterProceduralDataflow() intraAnalysis=" << intraAnalysis
+             << ", intraDataflowAnalysis=" << intraDataflowAnalysis << endl;
+  }
   set<FunctionState *> allFuncs = FunctionState::getAllDefinedFuncs();
 
   // Initialize the dataflow state of all functions with bodies
@@ -153,10 +155,6 @@ InterProceduralDataflow::InterProceduralDataflow(
                       Dbg::dbg << *it << ": " << (*it)->str("    ") << endl;
               }
       */
-      DataflowNode begin(func.get_definition()->cfgForBeginning(), filter);
-      Dbg::dbg << "begin=" << begin.getNode() << " = ["
-               << Dbg::escape(begin.getNode()->unparseToString()) << " | "
-               << begin.getNode()->class_name() << "]" << endl;
       intraDataflowAnalysis->genInitState(
           func, DataflowNode(func.get_definition()->cfgForBeginning(), filter),
           funcS->state, initLats, initFacts);
@@ -176,11 +174,17 @@ InterProceduralDataflow::InterProceduralDataflow(
       }*/
       funcS->state.setLattices((Analysis *)intraAnalysis, initLats);
       funcS->state.setFacts((Analysis *)intraAnalysis, initFacts);
-      Dbg::dbg << "Initialized state of function "
-               << func.get_name().getString()
-               << "(), state=" << (&(funcS->state)) << endl;
-      Dbg::dbg << "    " << funcS->state.str(intraDataflowAnalysis, "    ")
-               << endl;
+      if (analysisDebugLevel >= 1) {
+        DataflowNode begin(func.get_definition()->cfgForBeginning(), filter);
+        Dbg::dbg << "begin=" << begin.getNode() << " = ["
+                 << Dbg::escape(begin.getNode()->unparseToString()) << " | "
+                 << begin.getNode()->class_name() << "]" << endl;
+        Dbg::dbg << "Initialized state of function "
+                 << func.get_name().getString()
+                 << "(), state=" << (&(funcS->state)) << endl;
+        Dbg::dbg << "    " << funcS->state.str(intraDataflowAnalysis, "    ")
+                 << endl;
+      }
 
       // Initialize funcS->retState with initLats.
       // !!!Need to make a copy of initLats first
@@ -284,9 +288,24 @@ void FindAllFunctionCalls::visit(const Function &, const DataflowNode &n,
     // declaration, defining declaration, etc.). Therefore, we need to convert
     // the callee to a unique node the same as we did for the set of Function
     // objects in the funcsToFind data member.
-    SgFunctionDeclaration *callee =
-        Function::getCanonicalDecl(fcall->getAssociatedFunctionDeclaration());
-    assert(callee != NULL);
+    SgFunctionDeclaration *callee_decl =
+        fcall->getAssociatedFunctionDeclaration();
+    if (callee_decl == NULL) {
+      if (SgFunctionSymbol *callee_symbol =
+              fcall->getAssociatedFunctionSymbol()) {
+        callee_decl = callee_symbol->get_declaration();
+      }
+    }
+
+    if (callee_decl == NULL ||
+        isSgTemplateFunctionDeclaration(callee_decl) != NULL) {
+      return;
+    }
+
+    SgFunctionDeclaration *callee = Function::getCanonicalDecl(callee_decl);
+    if (callee == NULL) {
+      return;
+    }
 
     for (set<Function>::const_iterator fi = funcsToFind.begin();
          fi != funcsToFind.end(); ++fi) {
@@ -349,15 +368,19 @@ bool IntraUniDirectionalDataflow::propagateStateToNextNode(
       // (InfiniteLattice*)itN->second->meet(itC->second);
       InfiniteLattice *meetResult =
           dynamic_cast<InfiniteLattice *>((*itN)->copy());
-      Dbg::dbg << "        *itN: "
-               << dynamic_cast<InfiniteLattice *>(*itN)->str("            ")
-               << endl;
-      Dbg::dbg << "        *itC: "
-               << dynamic_cast<InfiniteLattice *>(*itC)->str("            ")
-               << endl;
+      if (analysisDebugLevel >= 1) {
+        Dbg::dbg << "        *itN: "
+                 << dynamic_cast<InfiniteLattice *>(*itN)->str("            ")
+                 << endl;
+        Dbg::dbg << "        *itC: "
+                 << dynamic_cast<InfiniteLattice *>(*itC)->str("            ")
+                 << endl;
+      }
       meetResult->meetUpdate(*itC);
-      Dbg::dbg << "        meetResult: " << meetResult->str("            ")
-               << endl;
+      if (analysisDebugLevel >= 1) {
+        Dbg::dbg << "        meetResult: " << meetResult->str("            ")
+                 << endl;
+      }
 
       // Widen the resulting meet
       modified = dynamic_cast<InfiniteLattice *>(*itN)->widenUpdate(meetResult);
@@ -559,6 +582,11 @@ bool printDataflowInfoPass::transfer(const Function &func,
  *************************************/
 void UnstructuredPassInterDataflow::runAnalysis() {
   set<FunctionState *> allFuncs = FunctionState::getAllDefinedFuncs();
+  const bool trace_progress = []() {
+    const char *env = std::getenv("ROSE_DATAFLOW_PROGRESS");
+    return env != NULL && env[0] != '\0' && std::string(env) != "0";
+  }();
+  size_t func_index = 0;
 
   // iterate over all functions with bodies
   for (set<FunctionState *>::iterator it = allFuncs.begin();
@@ -566,9 +594,21 @@ void UnstructuredPassInterDataflow::runAnalysis() {
     const Function &func = (*it)->func;
     FunctionState *fState = FunctionState::getDefinedFuncState(func);
 
+    if (trace_progress) {
+      std::cerr << "[dataflow] function " << (++func_index) << "/"
+                << allFuncs.size() << " begin " << func.get_name().getString()
+                << std::endl;
+    }
+
     // Call the current intra-procedural dataflow as if it were a generic
     // analysi
     intraAnalysis->runAnalysis(func, &(fState->state));
+
+    if (trace_progress) {
+      std::cerr << "[dataflow] function " << func_index << "/"
+                << allFuncs.size() << " end " << func.get_name().getString()
+                << std::endl;
+    }
   }
 }
 
@@ -735,11 +775,12 @@ bool MergeAllReturnStates::mergeLats(vector<Lattice *> &mergedLat,
   // If this is the first return statement we've observed, initialize mergedLat
   // with its lattices
   if (mergedLat.size() == 0) {
-    if (analysisDebugLevel >= 1) {
+    if (analysisDebugLevel >= 1)
       Dbg::dbg << "    Fresh lattice: \n";
-      for (vector<Lattice *>::const_iterator l = lats.begin(); l != lats.end();
-           l++) {
-        mergedLat.push_back((*l)->copy());
+    for (vector<Lattice *>::const_iterator l = lats.begin(); l != lats.end();
+         l++) {
+      mergedLat.push_back((*l)->copy());
+      if (analysisDebugLevel >= 1) {
         Dbg::dbg << "        " << (*l)->str("        ") << endl;
       }
     }
@@ -819,10 +860,12 @@ ContextInsensitiveInterProceduralDataflow::
                                    (Analysis *)intraDataflowAnalysis),
                                funcS->retState.getLatticeBelowMod(
                                    (Analysis *)intraDataflowAnalysis)));
-      Dbg::dbg << "Return state for function " << funcS << " "
-               << funcS->func.get_name().getString() << endl
-               << "funcS->state" << funcS->state.str(intraDataflowAnalysis)
-               << endl;
+      if (analysisDebugLevel >= 1) {
+        Dbg::dbg << "Return state for function " << funcS << " "
+                 << funcS->func.get_name().getString() << endl
+                 << "funcS->state" << funcS->state.str(intraDataflowAnalysis)
+                 << endl;
+      }
       //                                 << "funcS->retState="<<
       //                                 funcS->retState.str(intraDataflowAnalysis)
       //                                 << endl;
@@ -889,6 +932,10 @@ bool ContextInsensitiveInterProceduralDataflow::transfer(
   Function callee(call);
   ROSE_ASSERT(call);
 
+  if (callee.get_declaration() == NULL) {
+    return modified;
+  }
+
   if (analysisDebugLevel > 0)
     Dbg::dbg << "ContextInsensitiveInterProceduralDataflow::transfer "
              << func.get_name().getString() << "()=>"
@@ -946,8 +993,10 @@ bool ContextInsensitiveInterProceduralDataflow::transfer(
       it->first.str().c_str(), it->second.str().c_str()); }*/
       remappedL->remapVars(argParamMap, callee);
 
-      Dbg::dbg << "      remappedL=[" << calleeL << "] "
-               << remappedL->str("        ") << endl;
+      if (analysisDebugLevel >= 1) {
+        Dbg::dbg << "      remappedL=[" << calleeL << "] "
+                 << remappedL->str("        ") << endl;
+      }
 
       // update the callee's Lattice with the new information at the call site
       modified = calleeL->meetUpdate(remappedL) || modified;
@@ -1021,8 +1070,10 @@ bool ContextInsensitiveInterProceduralDataflow::transfer(
 
       // Dbg::dbg << "      callerL-after=["<<callerL<<"] "<<callerL->str("
       // ")<<endl;
-      Dbg::dbg << "      +remappedL-after=[" << remappedL << "] "
-               << remappedL->str("        ") << endl;
+      if (analysisDebugLevel >= 1) {
+        Dbg::dbg << "      +remappedL-after=[" << remappedL << "] "
+                 << remappedL->str("        ") << endl;
+      }
 
       // update the caller's Lattice with the new information at the call site
       callerL->incorporateVars(remappedL);

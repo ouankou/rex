@@ -458,6 +458,8 @@ SgSourceFile *FlangModuleInfo::createSgSourceFile(const string &moduleName) {
   vector<string> argv;
   SgScopeStatement *saved_scope = SageBuilder::topScopeStack();
   SgSourceFile *saved_source_file = Rose::builder::getSgSourceFile();
+  const auto savedSourcePositionMode =
+      SageBuilder::getSourcePositionClassificationMode();
 
   const string moduleBase = Rose::StringUtility::convertToLowerCase(moduleName);
   string moduleFileName = find_existing_module_file(moduleName);
@@ -522,6 +524,7 @@ SgSourceFile *FlangModuleInfo::createSgSourceFile(const string &moduleName) {
   ROSE_ASSERT(errorCode == 0);
 
   Rose::builder::setSgSourceFile(saved_source_file);
+  SageBuilder::setSourcePositionClassificationMode(savedSourcePositionMode);
 
   if (saved_scope != nullptr) {
     while (SageBuilder::topScopeStack() != saved_scope) {

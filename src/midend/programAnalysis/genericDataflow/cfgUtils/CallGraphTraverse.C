@@ -107,8 +107,18 @@ Function::Function(SgFunctionCallExp *funcCall) {
   // SgFunctionRefExp. The SgFunctionCallExp::getAssociatedFunctionSymbol() will
   // take care of this case and some others. [Robb Matzke 2012-12-28]
   SgFunctionSymbol *fsym = funcCall->getAssociatedFunctionSymbol();
-  assert(fsym != NULL);
-  init(fsym->get_declaration());
+  if (fsym != NULL) {
+    init(fsym->get_declaration());
+    return;
+  }
+
+  if (SgFunctionDeclaration *associated_decl =
+          funcCall->getAssociatedFunctionDeclaration()) {
+    init(associated_decl);
+    return;
+  }
+
+  decl = NULL;
 }
 
 void Function::init(SgFunctionDeclaration *sample) {
@@ -183,6 +193,9 @@ Function::Function(const Function *that) {
 
 SgFunctionDeclaration *
 Function::getCanonicalDecl(SgFunctionDeclaration *sampleDecl) {
+  if (sampleDecl == NULL) {
+    return NULL;
+  }
   assert(!isSgTemplateFunctionDeclaration(sampleDecl));
   SgFunctionDeclaration *canonicalDecl = NULL;
 

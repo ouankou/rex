@@ -3867,6 +3867,7 @@ void supportForLabelStatements(SgScopeStatement *scope,
   // Update the symbol table in SgFunctionDefinition with all the labels in the
   // function.
 
+  SgFunctionDefinition *owningFunction = isSgFunctionDefinition(scope);
   std::vector<SgNode *> labelList =
       NodeQuery::querySubTree(scope, V_SgLabelStatement);
 
@@ -3875,6 +3876,19 @@ void supportForLabelStatements(SgScopeStatement *scope,
     SgLabelStatement *labelStatement = isSgLabelStatement(labelList[i]);
 
     ROSE_ASSERT(labelStatement != NULL);
+
+    if (owningFunction != NULL) {
+      SgFunctionDefinition *structuralOwner =
+          SageInterface::getEnclosingFunctionDefinition(labelStatement, true);
+      if (structuralOwner != NULL && structuralOwner != scope) {
+        continue;
+      }
+
+      if (structuralOwner == scope && labelStatement->get_scope() != scope) {
+        labelStatement->set_scope(scope);
+      }
+    }
+
     ROSE_ASSERT(labelStatement->get_scope() == scope);
 
     SgSymbol *symbol = new SgLabelSymbol(labelStatement);
@@ -4967,6 +4981,12 @@ void SageInterface::fixupReferencesToSymbols(const SgScopeStatement *this_scope,
           copiedNodeMap.find(symbol);
       if (existing != copiedNodeMap.end() &&
           existing->second != associated_symbol) {
+        if (existing->second != NULL && existing->second != symbol) {
+          // Preserve the provisional copied symbol as an alias key so the
+          // later copy-map canonicalization can rewrite every copied edge that
+          // still points at it before the stale symbol is discarded.
+          copiedNodeMap[existing->second] = associated_symbol;
+        }
         help.noteSupersededCopiedNode(existing->second);
       }
       copiedNodeMap[symbol] = associated_symbol;
@@ -6730,10 +6750,17 @@ void SageInterface::setSourcePositionAsTransformation(SgNode *node) {
     //         }
     //         else
 
-    if ((pragma != NULL) && (pragma->get_startOfConstruct() == NULL)) {
-      pragma->set_startOfConstruct(
-          Sg_File_Info::generateDefaultFileInfoForTransformationNode());
-      pragma->get_startOfConstruct()->set_parent(pragma);
+    if (pragma != NULL) {
+      if (pragma->get_startOfConstruct() == NULL) {
+        pragma->set_startOfConstruct(
+            Sg_File_Info::generateDefaultFileInfoForTransformationNode());
+        pragma->get_startOfConstruct()->set_parent(pragma);
+      }
+      if (pragma->get_endOfConstruct() == NULL) {
+        pragma->set_endOfConstruct(
+            Sg_File_Info::generateDefaultFileInfoForTransformationNode());
+        pragma->get_endOfConstruct()->set_parent(pragma);
+      }
     }
   }
 }
@@ -6795,10 +6822,15 @@ void SageInterface::setSourcePositionPointersToNull(SgNode *node) {
       expression->set_operatorPosition(NULL);
     }
   } else {
-    // if ( (pragma != NULL) && (pragma->get_startOfConstruct() == NULL) )
-    if ((pragma != NULL) && (pragma->get_startOfConstruct() != NULL)) {
-      delete pragma->get_startOfConstruct();
-      pragma->set_startOfConstruct(NULL);
+    if (pragma != NULL) {
+      if (pragma->get_startOfConstruct() != NULL) {
+        delete pragma->get_startOfConstruct();
+        pragma->set_startOfConstruct(NULL);
+      }
+      if (pragma->get_endOfConstruct() != NULL) {
+        delete pragma->get_endOfConstruct();
+        pragma->set_endOfConstruct(NULL);
+      }
     }
   }
 }
@@ -7428,6 +7460,28 @@ bool SageInterface::templateArgumentEquivalence(SgTemplateArgument *arg1,
       case V_SgBoolValExp: {
         return static_cast<SgBoolValExp *>(expr1)->get_value() ==
                static_cast<SgBoolValExp *>(expr2)->get_value();
+      }
+      case V_SgEnumVal: {
+        SgEnumVal *enumVal1 = static_cast<SgEnumVal *>(expr1);
+        SgEnumVal *enumVal2 = static_cast<SgEnumVal *>(expr2);
+
+        if (enumVal1->get_value() != enumVal2->get_value()) {
+          return false;
+        }
+
+        if (enumVal1->get_name() != enumVal2->get_name()) {
+          return false;
+        }
+
+        SgEnumDeclaration *enumDecl1 = enumVal1->get_declaration();
+        SgEnumDeclaration *enumDecl2 = enumVal2->get_declaration();
+        if (enumDecl1 == enumDecl2) {
+          return true;
+        }
+
+        return enumDecl1 != nullptr && enumDecl2 != nullptr &&
+               enumDecl1->get_qualified_name().getString() ==
+                   enumDecl2->get_qualified_name().getString();
       }
       default: {
         MLOG_FATAL_CXX("sageInterface")
@@ -15736,6 +15790,27 @@ void SageInterface::fixFunctionDeclaration(SgFunctionDeclaration *stmt,
   // DQ (3/5/2012): Added test.
   ROSE_ASSERT(scope != NULL);
 
+  auto repairDetachedChainDeclaration = [&](SgFunctionDeclaration *chainDecl) {
+    if (chainDecl == NULL || chainDecl == stmt) {
+      return;
+    }
+
+    SgScopeStatement *chainScope = chainDecl->get_scope();
+    if (chainScope == NULL) {
+      chainDecl->set_scope(scope);
+      chainScope = scope;
+    }
+
+    if (chainScope == scope && chainDecl->get_parent() == NULL) {
+      chainDecl->set_parent(scope);
+    }
+  };
+
+  repairDetachedChainDeclaration(
+      isSgFunctionDeclaration(stmt->get_firstNondefiningDeclaration()));
+  repairDetachedChainDeclaration(
+      isSgFunctionDeclaration(stmt->get_definingDeclaration()));
+
   // fix function type table's parent edge
   // Liao 5/4/2010
   SgFunctionTypeTable *fTable = SgNode::get_globalFunctionTypeTable();
@@ -19720,6 +19795,19 @@ void SageInterface::appendStatementWithDependentDeclaration(
         resolveTargetScopeForDeclaration(originalDecl);
     if (targetDeclScope == NULL) {
       return NULL;
+    }
+
+    if (SgFunctionDeclaration *originalFunctionDecl =
+            isSgFunctionDeclaration(originalDecl)) {
+      if (SgFunctionSymbol *existingFunctionSymbol =
+              resolveFunctionSymbolInScope(targetDeclScope,
+                                           originalFunctionDecl)) {
+        if (SgFunctionDeclaration *existingFunctionDecl =
+                isSgFunctionDeclaration(
+                    existingFunctionSymbol->get_declaration())) {
+          return existingFunctionDecl;
+        }
+      }
     }
 
     return findEquivalentDeclarationInScope(targetDeclScope, originalDecl);

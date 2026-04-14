@@ -2,14 +2,9 @@
 int n;
 int m;
 int mits;
-double tol;
-double relax = 1.0;
-double alpha = 0.0543;
-double u[500][500];
-double f[500][500];
-double uold[500][500];
-double dx;
-double dy;
+double tol, relax = 1.0, alpha = 0.0543;
+double u[MSIZE][MSIZE], f[MSIZE][MSIZE], uold[MSIZE][MSIZE];
+double dx, dy;
 
 void initialize() {
   dx = 2.0 / (n - 1);
@@ -29,6 +24,7 @@ void foo(int len, float *compression, float *vnewc, float *delvc,
   /* declared once, used once */
   for (int zidx = 0; zidx < len; ++zidx) {
     compression[zidx] = 0.1 / vnewc[zidx] - 1.0;
+
     float vchalf = vnewc[zidx] - delvc[zidx] * 0.5;
     compHalfStep[zidx] = 1.0 / vchalf - 1.0;
   }

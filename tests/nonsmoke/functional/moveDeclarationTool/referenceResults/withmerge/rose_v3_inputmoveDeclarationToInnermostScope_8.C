@@ -8,7 +8,6 @@
 //      higher level scope instead.
 // used in multiple branches, can be moved
 #include <stdio.h>
-
 void foo(int cond, int *blockx, int loSt) {
   if (cond) {
     int tmp = 6;
@@ -27,6 +26,7 @@ void foo(int cond, int *blockx, int loSt) {
     }
   }
   static int stmp;
+
   if (cond) {
     stmp = 6;
     printf("%d", stmp);

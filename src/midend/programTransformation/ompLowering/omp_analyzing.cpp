@@ -79,6 +79,25 @@ bool shouldSkipImplicitDataSharingVar(const SgInitializedName *init_var) {
          name == "__FUNCTION__";
 }
 
+bool isSharedByDefaultInOrphanedConstruct(const SgInitializedName *init_var) {
+  if (init_var == nullptr) {
+    return false;
+  }
+
+  SgScopeStatement *var_scope = init_var->get_scope();
+  if (isSgGlobal(var_scope) != nullptr ||
+      isSgNamespaceDefinitionStatement(var_scope) != nullptr) {
+    return true;
+  }
+
+  if (SgVariableDeclaration *var_decl =
+          isSgVariableDeclaration(init_var->get_declaration())) {
+    return isStatic(var_decl);
+  }
+
+  return false;
+}
+
 bool scheduleKindUsesImplicitChunkOne(
     SgOmpClause::omp_schedule_kind_enum schedule_kind) {
   return schedule_kind == SgOmpClause::e_omp_schedule_kind_dynamic ||
@@ -331,7 +350,7 @@ static bool isSharedInEnclosingConstructs(SgInitializedName *init_var,
   {
     SgFunctionDefinition *func_def = getEnclosingFunctionDefinition(start_stmt);
     ROSE_ASSERT(func_def != NULL);
-    if (isSgGlobal(var_scope)) {
+    if (isSharedByDefaultInOrphanedConstruct(init_var)) {
       set<SgInitializedName *> tp_vars = collectThreadprivateVariables();
       if (tp_vars.find(init_var) != tp_vars.end())
         result = false; // is threadprivate

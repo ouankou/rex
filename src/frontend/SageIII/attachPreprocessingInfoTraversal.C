@@ -1001,14 +1001,14 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
       // buildTokenStreamMapping().  We might have to look into that seperately.
       // Since it is about as expensive as the cost of the frontend with
       // token-based unparsing. DQ (2/18/2021): We only want to process the
-      // token stream if sourceFile->get_unparse_tokens() is true (specified on
-      // the command line). Currently we have to call this else we get an error
-      // in the unparser.  This should be fixed for performance reasons. We
-      // currently output a message in buildTokenStreamMapping() when
-      // sourceFile->get_unparse_tokens() == false. This code now works and
-      // solves the perfoermance problem that was present for ROSE when used
-      // without the token-based unparsing.
-      if (sourceFile->get_unparse_tokens() == true) {
+      // token stream when the unparser will later consult preserved token
+      // mappings, either for full-file `-rose:unparse_tokens` replay or for
+      // partial replay modes that improve source positions from the token
+      // stream. This avoids the historical cost for runs that never consult the
+      // token map.
+      if (sourceFile->get_unparse_tokens() == true ||
+          sourceFile->get_use_token_stream_to_improve_source_position_info() ==
+              true) {
         // DQ (02/20/2021): Using the performance tracking within ROSE.
         TimingPerformance timer("AST calling buildTokenStreamMapping():");
         // DQ (2/20/2021): This is a pretty expensive operation, about the same

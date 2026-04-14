@@ -2926,7 +2926,7 @@ void Grammar::setUpSupport() {
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   TemplateParameter.setDataPrototype(
       "SgType*", "defaultTypeParameter", "= nullptr", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
   TemplateParameter.setDataPrototype(
       "SgExpression*", "expression", "= nullptr", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);

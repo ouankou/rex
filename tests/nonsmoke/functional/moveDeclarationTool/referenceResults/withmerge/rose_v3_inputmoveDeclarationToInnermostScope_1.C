@@ -1,4 +1,5 @@
 
+
 int main() {
   int k;
   k = 0;
@@ -6,6 +7,7 @@ int main() {
   {
     {
       {
+
         int i = 0;
       }
     }

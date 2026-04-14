@@ -44,6 +44,11 @@ static std::string get_debug_output_dir() {
   return ".";
 }
 
+static bool enable_verbose_analysis_debug() {
+  const char *env = std::getenv("ROSE_PROGRAM_ANALYSIS_DEBUG");
+  return env != nullptr && env[0] != '\0' && std::string(env) != "0";
+}
+
 static void erase_all(std::string &value, const std::string &needle) {
   if (needle.empty()) {
     return;
@@ -136,8 +141,9 @@ int main(int argc, char *argv[]) {
   initAnalysis(project);
   Dbg::init("Divisibility Analysis Test", get_debug_output_dir(), "index.html");
 
-  liveDeadAnalysisDebugLevel = 1;
-  analysisDebugLevel = 1;
+  const bool verbose_debug = enable_verbose_analysis_debug();
+  liveDeadAnalysisDebugLevel = verbose_debug ? 1 : 0;
+  analysisDebugLevel = verbose_debug ? 1 : 0;
   if (liveDeadAnalysisDebugLevel) {
     printf("*******************************************************************"
            "**\n");
@@ -162,7 +168,7 @@ int main(int argc, char *argv[]) {
 
   // use constant propagation within the context insensitive interprocedural
   // dataflow driver
-  analysisDebugLevel = 1;
+  analysisDebugLevel = verbose_debug ? 1 : 0;
   ConstantPropagationAnalysis cpA(&ldva);
   // ConstantPropagationAnalysis cpA(NULL);
   ContextInsensitiveInterProceduralDataflow cpInter(&cpA, graph);
@@ -214,8 +220,11 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  // Liao 1/6/2012, optionally dump dot graph of the analysis result
-  Dbg::dotGraphGenerator(&cpA);
+  // Liao 1/6/2012, optionally dump dot graph of the analysis result.
+  // Keep verbose graph/debug emission opt-in for very large regression inputs.
+  if (verbose_debug) {
+    Dbg::dotGraphGenerator(&cpA);
+  }
   if (numFails == 0 && numPass == eas.total_expectations)
     printf("PASS: %d / %d\n", numPass, eas.total_expectations);
   else

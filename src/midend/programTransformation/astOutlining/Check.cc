@@ -214,6 +214,13 @@ bool Outliner::isOutlineable(const SgStatement *s, bool verbose) {
       cerr << "*** Statement must not be NULL. ***" << endl;
     return false;
   }
+  if (SgLocatedNode *located = isSgLocatedNode(const_cast<SgStatement *>(s))) {
+    if (SageInterface::insideSystemHeader(located)) {
+      if (verbose)
+        cerr << "*** Can't outline statements from system headers. ***" << endl;
+      return false;
+    }
+  }
   if (isSgVariableDeclaration(s)) {
     if (verbose)
       cerr << "*** Can't outline a variable declaration by itself. ***" << endl;
