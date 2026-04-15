@@ -573,4 +573,6 @@ private:
 std::string
 unparse_register_name(SgInitializedName::asm_register_name_enum register_name);
 
+bool isNonFriendMemberFunctionDeclaration(const SgFunctionDeclaration *decl);
+
 #endif

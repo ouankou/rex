@@ -433,10 +433,7 @@ bool isMemberOperatorCall(SgFunctionCallExp *func_call,
     return false;
   }
 
-  SgMemberFunctionDeclaration *member_decl =
-      isSgMemberFunctionDeclaration(decl);
-  if (member_decl == nullptr ||
-      member_decl->get_declarationModifier().isFriend()) {
+  if (!isNonFriendMemberFunctionDeclaration(decl)) {
     return false;
   }
 

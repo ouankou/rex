@@ -1,4 +1,7 @@
 
+#include <algorithm>
+#include <cctype>
+
 #include "unparser.h"
 
 #include "sage3basic.h"
@@ -10,39 +13,50 @@
 #define DEBUG__unparseCtorInit 0
 
 namespace {
+bool isCtorIdentifierWhitespace(char ch) {
+  return std::isspace(static_cast<unsigned char>(ch)) != 0;
+}
+
+bool shouldOmitCtorIdentifierWhitespace(char prev, char next) {
+  if (prev == '\0' || next == '\0') {
+    return true;
+  }
+
+  // Preserve `< ::name>` so compaction does not form the `<::` token.
+  if (prev == '<' && next == ':') {
+    return false;
+  }
+
+  return prev == '<' || next == '>' || next == ',' ||
+         (prev == '>' && next == '>');
+}
+
 std::string compactCtorTemplateIdentifierSpacing(const std::string &text) {
   std::string compacted;
   compacted.reserve(text.size());
 
-  for (size_t i = 0; i < text.size(); ++i) {
-    const char ch = text[i];
-    if (std::isspace(static_cast<unsigned char>(ch)) != 0) {
-      const char prev = compacted.empty() ? '\0' : compacted.back();
-      size_t next_index = i + 1;
-      while (next_index < text.size() &&
-             std::isspace(static_cast<unsigned char>(text[next_index])) != 0) {
-        ++next_index;
-      }
-      const char next = next_index < text.size() ? text[next_index] : '\0';
-
-      const bool preserves_global_template_arg_spacing =
-          prev == '<' && next == ':';
-      const bool template_punctuation_space =
-          !preserves_global_template_arg_spacing &&
-          (prev == '<' || next == '>' || next == ',' ||
-           (prev == '>' && next == '>'));
-      if (template_punctuation_space) {
-        continue;
-      }
-
-      if (!compacted.empty() &&
-          std::isspace(static_cast<unsigned char>(compacted.back())) == 0) {
-        compacted += ' ';
-      }
-      continue;
+  for (auto segment_begin = text.begin(); segment_begin != text.end();) {
+    const auto whitespace_begin =
+        std::find_if(segment_begin, text.end(),
+                     [](char ch) { return isCtorIdentifierWhitespace(ch); });
+    compacted.append(segment_begin, whitespace_begin);
+    if (whitespace_begin == text.end()) {
+      break;
     }
 
-    compacted += ch;
+    const auto next_segment =
+        std::find_if_not(whitespace_begin, text.end(), [](char ch) {
+          return isCtorIdentifierWhitespace(ch);
+        });
+    const char prev = compacted.empty() ? '\0' : compacted.back();
+    const char next = next_segment == text.end() ? '\0' : *next_segment;
+
+    if (!shouldOmitCtorIdentifierWhitespace(prev, next) && !compacted.empty() &&
+        !isCtorIdentifierWhitespace(compacted.back())) {
+      compacted += ' ';
+    }
+
+    segment_begin = next_segment;
   }
 
   return Rose::StringUtility::trim(compacted);
@@ -389,7 +403,7 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
             }
           }
         } else if (tpl_ctor_decl != nullptr &&
-                   !ctor_decl->get_declarationModifier().isFriend()) {
+                   isNonFriendMemberFunctionDeclaration(ctor_decl)) {
           unparseTemplateMemberFunctionName(tpl_ctor_decl, info);
         } else {
           curprint(ctor_decl->get_name());
