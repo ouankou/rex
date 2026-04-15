@@ -1251,9 +1251,15 @@ string SageInterface::generateUniqueName(
 
     case V_SgSymbolTable: {
       const SgSymbolTable *symbolTable = isSgSymbolTable(node);
-      ROSE_ASSERT(symbolTable->get_parent() != NULL);
-      key = generateUniqueName(symbolTable->get_parent(), false);
-      additionalSuffix = "__symbol_table";
+      if (symbolTable->get_parent() != NULL) {
+        key = generateUniqueName(symbolTable->get_parent(), false);
+        additionalSuffix = "__symbol_table";
+      } else {
+        // Detached tables are used to park orphaned symbols that must stay
+        // alive after repair. Give them a standalone stable-in-process name
+        // instead of asserting on missing AST parentage.
+        key = "__detached_symbol_table_" + StringUtility::numberToString(node);
+      }
       break;
     }
 
