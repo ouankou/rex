@@ -1,10 +1,12 @@
+
 namespace std {
 template <typename _CharT> class basic_string;
-typedef class basic_string<char> string;
+typedef basic_string<char> string;
+
 template <typename _CharT> class basic_string {
 public:
-  ~basic_string() {}
   basic_string(const _CharT *__s);
+  ~basic_string() {}
 };
 ;
 
@@ -16,4 +18,3 @@ void foo() {
   }
 }
 } // namespace std
-// closing brace for namespace statement

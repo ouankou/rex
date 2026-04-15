@@ -76,7 +76,7 @@ public:
 
   // DQ (12/11/2012): Refactored function to control output of "restrict"
   // keyword (different for several backend compilers).
-  static std::string unparseRestrictKeyword();
+  static std::string unparseRestrictKeyword(bool prepend_space = true);
 
   // DQ (5/5/2013): Refactored code to support unparsing name qualified types.
   template <class T>

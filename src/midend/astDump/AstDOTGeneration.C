@@ -10,6 +10,8 @@
 
 #include "sage3basic.h"
 
+#include "rose_test_output_path.h"
+
 #include "transformationTracking.h"
 
 // DQ (10/21/2010):  This should only be included by source files that require
@@ -824,6 +826,7 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
 
       string filename =
           string("./") + generatedProjectName + "." + filenamePostfix + ".dot";
+      filename = Rose::TestOutput::resolvePath(filename);
 
       // printf ("generated filename for dot file (from SgProject) = %s
       // \n",filename.c_str());
@@ -850,6 +853,7 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
       string filename = string("./") +
                         Rose::utility_stripPathFromFileName(original_filename) +
                         filenamePostfix + ".dot";
+      filename = Rose::TestOutput::resolvePath(filename);
 
       // printf ("generated filename for dot file (from SgSourceFile) =
       // %s file->get_parent() = %p

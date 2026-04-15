@@ -3,7 +3,11 @@
 
 #include "AnalysisDebuggingUtils.h"
 
+#include "rose_test_output_path.h"
+
 #include <fstream>
+
+#include <filesystem>
 
 #include <iostream>
 
@@ -33,6 +37,19 @@
 
 using namespace std;
 using namespace Rose;
+
+namespace {
+std::string resolveDebugOutputDir(const std::string &workDir,
+                                  const std::string &fileName) {
+  std::filesystem::path requestedPath =
+      workDir.empty() ? std::filesystem::path(fileName)
+                      : std::filesystem::path(workDir) / fileName;
+  std::filesystem::path resolvedPath(
+      Rose::TestOutput::resolvePath(requestedPath.string()));
+  std::filesystem::path resolvedDir = resolvedPath.parent_path();
+  return resolvedDir.empty() ? std::string(".") : resolvedDir.string();
+}
+} // namespace
 
 //------------ function level dot graph output ----------------
 // this is purposely put outside of the namespace scope for simplicity
@@ -771,28 +788,23 @@ void init(string title, string workDir, string fName) {
   if (initialized)
     return;
 
-  {
-    ostringstream cmd;
-    cmd << "mkdir -p " << workDir;
-    int ret = system(cmd.str().c_str());
-    if (ret == -1) {
-      cout << "Dbg::init() ERROR creating directory \"" << workDir << "\"!";
-      exit(-1);
-    }
+  workDir = resolveDebugOutputDir(workDir, fName);
+
+  std::error_code ec;
+  std::filesystem::create_directories(workDir, ec);
+  if (ec) {
+    cout << "Dbg::init() ERROR creating directory \"" << workDir << "\"!";
+    exit(-1);
   }
+
   ostringstream imgPath;
   imgPath << workDir << "/dbg_imgs";
 
-  {
-    ostringstream cmd;
-    cmd << "mkdir -p " << imgPath.str();
-    // cout << "Command \""<<cmd.str()<<"\"\n";
-    int ret = system(cmd.str().c_str());
-    if (ret == -1) {
-      cout << "Dbg::init() ERROR creating directory \"" << imgPath.str()
-           << "\"!";
-      exit(-1);
-    }
+  ec.clear();
+  std::filesystem::create_directories(imgPath.str(), ec);
+  if (ec) {
+    cout << "Dbg::init() ERROR creating directory \"" << imgPath.str() << "\"!";
+    exit(-1);
   }
 
   ostringstream dbgFileName;
@@ -804,13 +816,13 @@ void init(string title, string workDir, string fName) {
 // Indicates that the application has entered or exited a function
 void enterFunc(std::string funcName /*, std::string indent="    "*/) {
   if (!initialized)
-    init("Debug Output", ".", "debug");
+    init("Debug Output", "", "debug");
   dbg.enterFunc(funcName);
 }
 
 void exitFunc(std::string funcName) {
   if (!initialized)
-    init("Debug Output", ".", "debug");
+    init("Debug Output", "", "debug");
   dbg.exitFunc(funcName);
 }
 
@@ -818,7 +830,7 @@ void exitFunc(std::string funcName) {
 // this image so that the caller can write to it.
 std::string addImage(std::string ext) {
   if (!initialized)
-    init("Debug Output", ".", "debug");
+    init("Debug Output", "", "debug");
   return dbg.addImage(ext);
 }
 
@@ -826,7 +838,7 @@ std::string addImage(std::string ext) {
 // add it to the output. Return the path of the image.
 std::string addDOT(dottable &obj) {
   if (!initialized)
-    init("Debug Output", ".", "debug");
+    init("Debug Output", "", "debug");
   return dbg.addDOT(obj);
 }
 
@@ -834,7 +846,7 @@ std::string addDOT(dottable &obj) {
 // return the string that must be added to the output to include this image.
 std::string addDOTStr(dottable &obj) {
   if (!initialized)
-    init("Debug Output", ".", "debug");
+    init("Debug Output", "", "debug");
   return dbg.addDOTStr(obj);
 }
 
@@ -842,7 +854,7 @@ std::string addDOTStr(dottable &obj) {
 // add it to the output. Return the path of the image.
 std::string addDOT(std::string dot) {
   if (!initialized)
-    init("Debug Output", ".", "debug");
+    init("Debug Output", "", "debug");
   return dbg.addDOT(dot);
 }
 

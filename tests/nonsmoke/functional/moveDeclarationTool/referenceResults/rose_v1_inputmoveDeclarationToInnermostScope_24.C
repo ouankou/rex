@@ -5,7 +5,7 @@ int foobar() {
   if (1) {
     int pid;
     pid = foo2();
-    if (pid == - 1) {
+    if (pid == -1) {
     }
   }
   return 0;

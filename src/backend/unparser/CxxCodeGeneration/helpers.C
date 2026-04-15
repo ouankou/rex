@@ -94,3 +94,10 @@ unparse_register_name(SgInitializedName::asm_register_name_enum register_name) {
 
   return returnString;
 }
+
+bool isNonFriendMemberFunctionDeclaration(const SgFunctionDeclaration *decl) {
+  const SgMemberFunctionDeclaration *member_decl =
+      isSgMemberFunctionDeclaration(const_cast<SgFunctionDeclaration *>(decl));
+  return member_decl != nullptr &&
+         !member_decl->get_declarationModifier().isFriend();
+}

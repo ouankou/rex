@@ -1,4 +1,7 @@
 
+#include <algorithm>
+#include <cctype>
+
 #include "unparser.h"
 
 #include "sage3basic.h"
@@ -8,6 +11,123 @@
 #define DEBUG__isAssociatedWithCxx11_initializationList 0
 #define DEBUG__trimCtorNameQual 0
 #define DEBUG__unparseCtorInit 0
+
+namespace {
+bool isCtorIdentifierWhitespace(char ch) {
+  return std::isspace(static_cast<unsigned char>(ch)) != 0;
+}
+
+bool shouldOmitCtorIdentifierWhitespace(char prev, char next) {
+  if (prev == '\0' || next == '\0') {
+    return true;
+  }
+
+  // Preserve `< ::name>` so compaction does not form the `<::` token.
+  if (prev == '<' && next == ':') {
+    return false;
+  }
+
+  return prev == '<' || next == '>' || next == ',' ||
+         (prev == '>' && next == '>');
+}
+
+std::string compactCtorTemplateIdentifierSpacing(const std::string &text) {
+  std::string compacted;
+  compacted.reserve(text.size());
+
+  for (auto segment_begin = text.begin(); segment_begin != text.end();) {
+    const auto whitespace_begin =
+        std::find_if(segment_begin, text.end(),
+                     [](char ch) { return isCtorIdentifierWhitespace(ch); });
+    compacted.append(segment_begin, whitespace_begin);
+    if (whitespace_begin == text.end()) {
+      break;
+    }
+
+    const auto next_segment =
+        std::find_if_not(whitespace_begin, text.end(), [](char ch) {
+          return isCtorIdentifierWhitespace(ch);
+        });
+    const char prev = compacted.empty() ? '\0' : compacted.back();
+    const char next = next_segment == text.end() ? '\0' : *next_segment;
+
+    if (!shouldOmitCtorIdentifierWhitespace(prev, next) && !compacted.empty() &&
+        !isCtorIdentifierWhitespace(compacted.back())) {
+      compacted += ' ';
+    }
+
+    segment_begin = next_segment;
+  }
+
+  return Rose::StringUtility::trim(compacted);
+}
+
+std::string qualifiedCtorTypedefPrefix(SgTypedefType *typedef_type) {
+  if (typedef_type == nullptr) {
+    return std::string();
+  }
+
+  SgTypedefDeclaration *typedef_decl =
+      isSgTypedefDeclaration(typedef_type->get_declaration());
+  if (typedef_decl == nullptr) {
+    return std::string();
+  }
+
+  return compactCtorTemplateIdentifierSpacing(
+      typedef_decl->get_qualified_name_prefix().getString());
+}
+
+std::string ctorTypedefName(SgTypedefType *typedef_type) {
+  if (typedef_type == nullptr) {
+    return std::string();
+  }
+
+  return compactCtorTemplateIdentifierSpacing(
+      typedef_type->get_name().getString());
+}
+
+bool ctorTypeNeedsCompactTemplateSpacing(SgType *type) {
+  if (type == nullptr) {
+    return false;
+  }
+
+  if (SgModifierType *modifier_type = isSgModifierType(type)) {
+    return ctorTypeNeedsCompactTemplateSpacing(modifier_type->get_base_type());
+  }
+  if (SgReferenceType *reference_type = isSgReferenceType(type)) {
+    return ctorTypeNeedsCompactTemplateSpacing(reference_type->get_base_type());
+  }
+  if (SgRvalueReferenceType *reference_type = isSgRvalueReferenceType(type)) {
+    return ctorTypeNeedsCompactTemplateSpacing(reference_type->get_base_type());
+  }
+  if (SgPointerType *pointer_type = isSgPointerType(type)) {
+    return ctorTypeNeedsCompactTemplateSpacing(pointer_type->get_base_type());
+  }
+  if (SgArrayType *array_type = isSgArrayType(type)) {
+    return ctorTypeNeedsCompactTemplateSpacing(array_type->get_base_type());
+  }
+  if (SgTypedefType *typedef_type = isSgTypedefType(type)) {
+    return typedef_type->get_name().getString().find('<') !=
+               std::string::npos ||
+           ctorTypeNeedsCompactTemplateSpacing(typedef_type->get_base_type());
+  }
+  if (isSgTemplateType(type) != nullptr) {
+    return true;
+  }
+  if (SgNonrealType *nonreal_type = isSgNonrealType(type)) {
+    const SgNonrealDecl *decl =
+        isSgNonrealDecl(nonreal_type->get_declaration());
+    return decl != nullptr &&
+           (!decl->get_tpl_args().empty() || decl->get_is_nonreal_template());
+  }
+  if (SgClassType *class_type = isSgClassType(type)) {
+    return isSgTemplateInstantiationDecl(class_type->get_declaration()) !=
+           nullptr;
+  }
+
+  return false;
+}
+} // namespace
 
 static bool
 isAssociatedWithCxx11_initializationList(SgConstructorInitializer *con_init) {
@@ -181,13 +301,25 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
   if (need_name) {
     SgUnparse_Info info_for_typename(info);
     if (ctor_class || ctor_decl) {
+      SgType *type_for_ctor_name =
+          ctor_type != nullptr
+              ? ctor_type
+              : (ctor_class != nullptr ? ctor_class->get_type() : nullptr);
       std::string qualifier = con_init->get_qualified_name_prefix().str();
+      SgTypedefType *typedef_ctor_type = isSgTypedefType(type_for_ctor_name);
+      const bool ctor_spelled_via_typedef = typedef_ctor_type != nullptr;
 #if DEBUG__unparseCtorInit
       printf("  qualifier = %s\n", qualifier.c_str());
 #endif
       bool need_ctor_name = true;
       size_t length = qualifier.size();
-      if (length > 0 && ctor_decl != nullptr) {
+      if (ctor_spelled_via_typedef) {
+        const std::string typedef_qualifier =
+            qualifiedCtorTypedefPrefix(typedef_ctor_type);
+        if (!typedef_qualifier.empty()) {
+          qualifier = typedef_qualifier;
+        }
+      } else if (length > 0 && ctor_decl != nullptr) {
         ROSE_ASSERT(length > 2);
         ROSE_ASSERT(qualifier[length - 1] == ':');
         ROSE_ASSERT(qualifier[length - 2] == ':');
@@ -197,21 +329,27 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
         printf("  qualifier = %s\n", qualifier.c_str());
 #endif
       }
+      qualifier = compactCtorTemplateIdentifierSpacing(qualifier);
       curprint(qualifier.c_str());
 
       if (need_ctor_name) {
         SgTemplateInstantiationMemberFunctionDecl *tpl_ctor_decl =
             isSgTemplateInstantiationMemberFunctionDecl(ctor_decl);
         if (ctor_class) {
-          SgType *type_for_ctor_name =
-              ctor_type != nullptr ? ctor_type : ctor_class->get_type();
           bool handled_typedef_ctor_name = false;
-          if (!qualifier.empty() && ctor_decl == nullptr) {
-            if (SgTypedefType *typedef_type =
-                    isSgTypedefType(type_for_ctor_name)) {
-              curprint(typedef_type->get_name().str());
+          if (typedef_ctor_type != nullptr) {
+            const std::string typedef_name = ctorTypedefName(typedef_ctor_type);
+            if (!typedef_name.empty()) {
+              curprint(typedef_name);
               handled_typedef_ctor_name = true;
             }
+          }
+          if (!handled_typedef_ctor_name &&
+              isSgTypedefType(type_for_ctor_name) != nullptr) {
+            curprint(isSgTypedefType(type_for_ctor_name)
+                         ->get_qualified_name()
+                         .str());
+            handled_typedef_ctor_name = true;
           }
           // Constructor names are emitted as standalone type names here, so
           // they must not inherit declarator-level base-type suppression from
@@ -226,13 +364,46 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
               // arguments still keep their own AST-based qualification.
               type_qualification_reference = type_for_ctor_name;
             }
-            info_for_typename.set_reference_node_for_qualification(
+            SgUnparse_Info type_info(info_for_typename);
+            type_info.set_reference_node_for_qualification(
                 type_qualification_reference);
-            info_for_typename.set_SkipClassSpecifier();
-            unp->u_type->unparseType(type_for_ctor_name, info_for_typename);
+            type_info.set_SkipClassSpecifier();
+            type_info.set_SkipClassDefinition();
+            type_info.set_SkipEnumDefinition();
+            if (ctorTypeNeedsCompactTemplateSpacing(type_for_ctor_name)) {
+              type_info.set_declstatement_ptr(nullptr);
+              type_info.set_current_context(nullptr);
+
+              const std::string type_name =
+                  compactCtorTemplateIdentifierSpacing(
+                      globalUnparseToString(type_for_ctor_name, &type_info));
+              if (!type_name.empty()) {
+                curprint(type_name);
+              } else {
+                SgUnparse_Info type_first(type_info);
+                type_first.unset_isTypeSecondPart();
+                type_first.set_isTypeFirstPart();
+                unp->u_type->unparseType(type_for_ctor_name, type_first);
+
+                SgUnparse_Info type_second(type_info);
+                type_second.unset_isTypeFirstPart();
+                type_second.set_isTypeSecondPart();
+                unp->u_type->unparseType(type_for_ctor_name, type_second);
+              }
+            } else {
+              SgUnparse_Info type_first(type_info);
+              type_first.unset_isTypeSecondPart();
+              type_first.set_isTypeFirstPart();
+              unp->u_type->unparseType(type_for_ctor_name, type_first);
+
+              SgUnparse_Info type_second(type_info);
+              type_second.unset_isTypeFirstPart();
+              type_second.set_isTypeSecondPart();
+              unp->u_type->unparseType(type_for_ctor_name, type_second);
+            }
           }
         } else if (tpl_ctor_decl != nullptr &&
-                   !ctor_decl->get_declarationModifier().isFriend()) {
+                   isNonFriendMemberFunctionDeclaration(ctor_decl)) {
           unparseTemplateMemberFunctionName(tpl_ctor_decl, info);
         } else {
           curprint(ctor_decl->get_name());
@@ -241,8 +412,40 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
     } else {
       info_for_typename.unset_isWithType();
       info_for_typename.unset_SkipBaseType();
-      info_for_typename.set_reference_node_for_qualification(con_init);
-      unp->u_type->unparseType(ctor_type, info_for_typename);
+      SgUnparse_Info type_info(info_for_typename);
+      type_info.set_reference_node_for_qualification(con_init);
+      type_info.set_SkipClassDefinition();
+      type_info.set_SkipEnumDefinition();
+      if (ctorTypeNeedsCompactTemplateSpacing(ctor_type)) {
+        type_info.set_declstatement_ptr(nullptr);
+        type_info.set_current_context(nullptr);
+
+        const std::string type_name = compactCtorTemplateIdentifierSpacing(
+            globalUnparseToString(ctor_type, &type_info));
+        if (!type_name.empty()) {
+          curprint(type_name);
+        } else {
+          SgUnparse_Info type_first(type_info);
+          type_first.unset_isTypeSecondPart();
+          type_first.set_isTypeFirstPart();
+          unp->u_type->unparseType(ctor_type, type_first);
+
+          SgUnparse_Info type_second(type_info);
+          type_second.unset_isTypeFirstPart();
+          type_second.set_isTypeSecondPart();
+          unp->u_type->unparseType(ctor_type, type_second);
+        }
+      } else {
+        SgUnparse_Info type_first(type_info);
+        type_first.unset_isTypeSecondPart();
+        type_first.set_isTypeFirstPart();
+        unp->u_type->unparseType(ctor_type, type_first);
+
+        SgUnparse_Info type_second(type_info);
+        type_second.unset_isTypeFirstPart();
+        type_second.set_isTypeSecondPart();
+        unp->u_type->unparseType(ctor_type, type_second);
+      }
     }
   }
 

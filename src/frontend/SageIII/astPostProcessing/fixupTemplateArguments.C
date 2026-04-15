@@ -20,6 +20,41 @@ using namespace std;
 // bool contains_private_type (SgType* type);
 // bool contains_private_type (SgTemplateArgument* templateArgument);
 
+namespace {
+
+bool aliasesUnnamedClassType(SgType *type) {
+  SgType *current = type;
+  for (size_t depth = 0; current != nullptr && depth < 32; ++depth) {
+    current = current->stripType(
+        SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
+        SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_ARRAY_TYPE);
+
+    if (SgClassType *classType = isSgClassType(current)) {
+      if (SgClassDeclaration *classDeclaration =
+              isSgClassDeclaration(classType->get_declaration())) {
+        return classDeclaration->get_isUnNamed();
+      }
+      return false;
+    }
+
+    SgTypedefType *typedefType = isSgTypedefType(current);
+    if (typedefType == nullptr) {
+      return false;
+    }
+
+    SgType *next = typedefType->get_base_type();
+    if (next == nullptr || next == current) {
+      return false;
+    }
+
+    current = next;
+  }
+
+  return false;
+}
+
+} // namespace
+
 #if DEBUGGING_USING_RECURSIVE_DEPTH
 // For debugging, keep track of the recursive depth.
 static size_t global_depth = 0;
@@ -475,6 +510,13 @@ bool FixupTemplateArguments::contains_private_type(
           }
         }
       }
+    }
+
+    // A visible typedef to an unnamed class/struct is still a valid spelling
+    // for the template argument and must be preserved. Otherwise unparsing can
+    // canonicalize back to the unnamed class type and emit an empty argument.
+    if (returnValue == false && aliasesUnnamedClassType(templateArgumentType)) {
+      returnValue = true;
     }
 
 #if DEBUG_PRIVATE_TYPE

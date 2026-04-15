@@ -77,6 +77,13 @@ int experimental_fortran_main(int argc, char *argv[], SgSourceFile *srcFile) {
 
   status = flang_external_builder_main(argc, argv, srcFile);
 
+  // The Fortran frontend builds source-backed AST in frontend-construction
+  // mode, but all later midend-generated nodes must switch back to
+  // transformation classification so they receive generated file-info instead
+  // of NULL_FILE frontend placeholders.
+  SageBuilder::setSourcePositionClassificationMode(
+      SageBuilder::e_sourcePositionTransformation);
+
   if (SgProject::get_verbose() > 0) {
     cout << "FINISHED parsing with status " << status << "\n";
   }

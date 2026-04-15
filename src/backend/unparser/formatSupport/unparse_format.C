@@ -64,6 +64,30 @@ UnparseFormat::~UnparseFormat() {
 // conjunction with the token based unparsing.
 void UnparseFormat::reset_chars_on_line() { chars_on_line = 0; }
 
+void UnparseFormat::account_for_raw_text(const std::string &text) {
+  for (char ch : text) {
+    if (ch == '\n') {
+      currentIndent = 0;
+      chars_on_line = 0;
+      ++currentLine;
+      continue;
+    }
+
+    if (ch == '\r') {
+      currentIndent = 0;
+      chars_on_line = 0;
+      continue;
+    }
+
+    const bool still_in_indentation =
+        chars_on_line == currentIndent && (ch == ' ' || ch == '\t');
+    ++chars_on_line;
+    if (still_in_indentation) {
+      currentIndent = chars_on_line;
+    }
+  }
+}
+
 //-----------------------------------------------------------------------------------
 //  void Unparser::insert_newline
 //
@@ -457,9 +481,9 @@ void UnparseFormat::format(SgLocatedNode *node, SgUnparse_Info &info,
       break;
     case FORMAT_BEFORE_STMT: {
       switch (v) {
+      // DQ (3/18/2006): Added SgNullStatement as something that should not
+      // generate formatting in this case
       case V_SgBasicBlock:
-        // DQ (3/18/2006): Added SgNullStatement as something that should not
-        // generate formatting in this case
       case V_SgNullStatement:
         break;
       default: {

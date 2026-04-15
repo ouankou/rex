@@ -1519,6 +1519,15 @@ bool declarationHasTranslationUnitScope(const SgDeclarationStatement *decl) {
     ROSE_ASSERT(decl->get_firstNondefiningDeclaration() != NULL);
     declParent = decl->get_firstNondefiningDeclaration()->get_parent();
   }
+
+  // Some declarations can remain semantically scoped even when their
+  // structural parent is unavailable, e.g., compiler-generated declarations
+  // visited after copy/delete cleanup. Translation-unit classification is
+  // fundamentally a scope question, so use the explicit scope as the final
+  // fallback instead of asserting on the missing parent.
+  if (declParent == NULL) {
+    declParent = decl->get_scope();
+  }
   ROSE_ASSERT(declParent != NULL);
 
   VariantT declParentV = declParent->variantT();

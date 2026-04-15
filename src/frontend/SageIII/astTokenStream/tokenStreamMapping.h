@@ -180,6 +180,7 @@ public:
 std::vector<stream_element *> getTokenStream(SgSourceFile *file);
 
 // DQ (1/18/2021): Token stream mapping entry points.
+void buildTokenStreamMappingForSourceFile(SgSourceFile *sourceFile);
 void buildTokenStreamMapping(SgSourceFile *sourceFile,
                              std::vector<stream_element *> &tokenVector);
 void buildTokenStreamMappingForRoot(SgSourceFile *sourceFile,

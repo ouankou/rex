@@ -1,21 +1,19 @@
 
-void func(int k,int m)
-{
+
+void func(int k, int m) {
   if (k) {
-    switch(m){
-      case 0:
-{
-        for (int i = 0; ; ) {
-        }
-        //        break;
+    switch (m) {
+    case 0: {
+      for (int i = 0;;) {
       }
-      case 1:
-{
-        for (int i = 0; ; ) {
-        }
-//        break;
+      //        break;
+    }
+    case 1: {
+      for (int i = 0;;) {
       }
-//      default: break;
+      //        break;
+    }
+      //      default: break;
     }
   }
 }

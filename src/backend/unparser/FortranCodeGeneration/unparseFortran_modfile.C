@@ -6,6 +6,8 @@
 
 #include "unparser_opt.h"
 
+#include "rose_test_output_path.h"
+
 using namespace std;
 using namespace Rose;
 
@@ -15,7 +17,7 @@ string get_rmod_dir(SgFile *sfile) {
 
   if (CommandlineProcessing::isOptionWithParameter(args, "-outputdir", "",
                                                    rmodDir, true) == true)
-    return rmodDir + "/";
+    return rmodDir;
   else
     return "";
 }
@@ -47,11 +49,8 @@ void generateModFile(SgFile *sfile) {
     string outputDir = get_rmod_dir(sfile);
     string lowerModuleName =
         StringUtility::convertToLowerCase(module_stmt->get_name().getString());
-    string outputFilename;
-    if (outputDir != "")
-      outputFilename = outputDir + lowerModuleName + MOD_FILE_SUFFIX;
-    else
-      outputFilename = lowerModuleName + MOD_FILE_SUFFIX;
+    string outputFilename = Rose::TestOutput::resolvePath(
+        lowerModuleName + MOD_FILE_SUFFIX, outputDir);
 
     // Cause the output of a message with verbose level is turned on.
     if (SgProject::get_verbose() > 0) {

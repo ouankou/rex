@@ -65,6 +65,67 @@ size_t numberOfNodeInAST(SgExpression *node) {
   return traversal.nodeCount;
 }
 
+namespace {
+
+struct FunctionSourcePosition {
+  std::string filename;
+  int line = 0;
+  int col = 0;
+
+  bool valid() const { return !filename.empty() && line > 0 && col > 0; }
+};
+
+static FunctionSourcePosition
+directFunctionSourcePosition(SgFunctionDeclaration *decl) {
+  if (decl == nullptr || decl->get_file_info() == nullptr) {
+    return {};
+  }
+
+  Sg_File_Info *fi = decl->get_file_info();
+  FunctionSourcePosition pos;
+  pos.filename = fi->get_filenameString();
+  pos.line = fi->get_line();
+  pos.col = fi->get_col();
+  return pos;
+}
+
+static FunctionSourcePosition
+effectiveFunctionSourcePosition(SgFunctionDeclaration *decl) {
+  FunctionSourcePosition pos = directFunctionSourcePosition(decl);
+  if (pos.valid()) {
+    return pos;
+  }
+
+  for (SgFunctionDeclaration *candidate :
+       {isSgFunctionDeclaration(decl != nullptr
+                                    ? decl->get_firstNondefiningDeclaration()
+                                    : nullptr),
+        isSgFunctionDeclaration(
+            decl != nullptr ? decl->get_definingDeclaration() : nullptr)}) {
+    if (candidate == nullptr || candidate == decl) {
+      continue;
+    }
+
+    pos = directFunctionSourcePosition(candidate);
+    if (pos.valid()) {
+      return pos;
+    }
+  }
+
+  return {};
+}
+
+static bool sameEffectiveSourcePosition(SgFunctionDeclaration *lhs,
+                                        SgFunctionDeclaration *rhs) {
+  FunctionSourcePosition lhs_pos = effectiveFunctionSourcePosition(lhs);
+  FunctionSourcePosition rhs_pos = effectiveFunctionSourcePosition(rhs);
+
+  return lhs_pos.valid() && rhs_pos.valid() && lhs_pos.line == rhs_pos.line &&
+         lhs_pos.col == rhs_pos.col && lhs_pos.filename == rhs_pos.filename;
+}
+
+} // namespace
+
 void fixupFunctionDefaultArguments(SgNode *node) {
   // This function determines the best function declaration where to associate
   // default arguments.
@@ -148,6 +209,18 @@ void fixupFunctionDefaultArguments(SgNode *node) {
             SgFunctionDeclaration *functionDeclarationFromSet = *j;
             if (functionDeclarationFromSet !=
                 bestFunctionDeclarationForDefaultArguments) {
+              // Same-source defining/nondefining pairs represent a single
+              // spelled declaration split across multiple AST nodes. Removing
+              // the default argument from one half breaks users that unparse
+              // the defining declaration directly, notably lambda call
+              // operators.
+              if (sameEffectiveSourcePosition(
+                      functionDeclarationFromSet,
+                      bestFunctionDeclarationForDefaultArguments)) {
+                j++;
+                continue;
+              }
+
 #if USING_PERFORMANCE_TRACING
               TimingPerformance timer(
                   "Fixup function default arguments: processing a function");

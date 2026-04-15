@@ -23,7 +23,10 @@ void ResetTypes::visit(SgNode *node) {
         declaration->get_definingDeclaration();
     SgDeclarationStatement *nondefiningDeclaration =
         declaration->get_firstNondefiningDeclaration();
-    if ((definingDeclaration != NULL) && (nondefiningDeclaration != NULL)) {
+    if (isSgClassType(namedType) != NULL && nondefiningDeclaration != NULL) {
+      namedType->set_declaration(nondefiningDeclaration);
+    } else if ((definingDeclaration != NULL) &&
+               (nondefiningDeclaration != NULL)) {
       // printf ("ResetTypes::visit(): resetting the definition used in
       // namedType = %p = %s \n",namedType,namedType->class_name().c_str());
 #if DEBUG_SAGE_ACCESS_FUNCTIONS || 0

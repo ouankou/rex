@@ -1,6 +1,6 @@
 
-void foo(int length,double *dd,double *x,double *y,double *xx,double *yy)
-{
+
+void foo(int length, double *dd, double *x, double *y, double *xx, double *yy) {
   for (int i = 0; i < length; ++i) {
     int i1 = i + 1;
     int i2 = i1 + 100;

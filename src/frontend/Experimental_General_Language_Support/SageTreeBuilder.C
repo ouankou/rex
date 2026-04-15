@@ -4310,13 +4310,6 @@ void fixUndeclaredResultName(const std::string &result_name,
       existing->set_scope(block);
       return;
     }
-
-    SgVariableDeclaration *var_decl = SageBuilder::buildVariableDeclaration_nfi(
-        result_name, result_type, /*initializer*/ nullptr, block);
-    ASSERT_not_null(var_decl);
-    SageInterface::setSourcePosition(var_decl);
-    SageInterface::appendStatement(var_decl, block);
-    return;
   }
 
   SgInitializedName *init_name = SageBuilder::buildInitializedName_nfi(

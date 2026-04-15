@@ -5,6 +5,7 @@
 
 #include "rose_config.h"
 
+#include <cctype>
 #include <map>
 
 #define DEBUG__unparse_alignas 0
@@ -12,6 +13,31 @@
 #define DEBUG__build_decl_item_name 0
 #define DEBUG__build_decl_item_asm_register 0
 #define DEBUG__unparseVarDeclStmt 0
+
+namespace {
+constexpr int kNormalizedVariableDeclarationWrapColumn = 80;
+
+std::string normalizeVarDeclPreviewWhitespace(const std::string &text) {
+  std::string normalized;
+  normalized.reserve(text.size());
+
+  bool have_pending_space = false;
+  for (char ch : text) {
+    if (std::isspace(static_cast<unsigned char>(ch)) != 0) {
+      have_pending_space = !normalized.empty();
+      continue;
+    }
+
+    if (have_pending_space) {
+      normalized += ' ';
+      have_pending_space = false;
+    }
+    normalized += ch;
+  }
+
+  return normalized;
+}
+} // namespace
 
 void unparse_alignas(SgInitializedName *decl_item, Unparse_ExprStmt &unparser,
                      SgUnparse_Info &info) {
@@ -88,6 +114,12 @@ static bool setup_decl_item_type_unparse_infos(SgUnparse_Info &ninfo_for_type,
   if (vdecl->get_requiresGlobalNameQualificationOnType()) {
     ninfo_for_type.set_requiresGlobalNameQualification();
   }
+  // Variable declarations start a fresh declarator. Do not inherit pointer or
+  // reference nesting from an enclosing statement-level unparse context.
+  ninfo_for_type.unset_isPointerToSomething();
+  ninfo_for_type.unset_isReferenceToSomething();
+  ninfo_for_type.unset_isTypeFirstPart();
+  ninfo_for_type.unset_isTypeSecondPart();
   ninfo_for_type.set_reference_node_for_qualification(decl_item);
   ninfo_for_type.set_isTypeFirstPart();
   ninfo_for_type.set_name_qualification_length(
@@ -332,6 +364,12 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
          vardecl_stmt->get_is_thread_local() ? "true" : "false");
 #endif
 
+  if (info.unparsedPartiallyUsingTokenStream()) {
+    // Variable declarations reach this routine only once the AST path has been
+    // selected. Partial token mode is therefore no longer applicable here and
+    // breaks declaration-specific assumptions about separator and type output.
+    info.unset_unparsedPartiallyUsingTokenStream();
+  }
   ROSE_ASSERT(!info.unparsedPartiallyUsingTokenStream());
   ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
 
@@ -341,6 +379,10 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
          ninfo.SkipBaseType() ? "true" : "false");
 #endif
   ninfo.set_declstatement_ptr(vardecl_stmt);
+  ninfo.unset_isPointerToSomething();
+  ninfo.unset_isReferenceToSomething();
+  ninfo.unset_isTypeFirstPart();
+  ninfo.unset_isTypeSecondPart();
 
   using TemplateParamSubstitution = std::map<std::string, std::string>;
   std::string normalized_static_member_prefix;
@@ -1397,11 +1439,11 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
       }
     }
 
-    SgUnparse_Info ninfo_for_type(ninfo);
+    SgUnparse_Info first_part_type_info(ninfo);
     std::string unparse_str{""};
-    if (setup_decl_item_type_unparse_infos(ninfo_for_type, vardecl_stmt,
+    if (setup_decl_item_type_unparse_infos(first_part_type_info, vardecl_stmt,
                                            decl_item, decl_type, unparse_str)) {
-      unp->u_type->unparseType(decl_type, ninfo_for_type);
+      unp->u_type->unparseType(decl_type, first_part_type_info);
     } else {
       curprint(unparse_str);
     }
@@ -1423,8 +1465,13 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
       }
     }
 
-    ninfo_for_type.set_isTypeSecondPart();
-    unp->u_type->unparseType(decl_type, ninfo_for_type);
+    SgUnparse_Info second_part_type_info(ninfo);
+    std::string ignored_unparse_str;
+    setup_decl_item_type_unparse_infos(second_part_type_info, vardecl_stmt,
+                                       decl_item, decl_type,
+                                       ignored_unparse_str);
+    second_part_type_info.set_isTypeSecondPart();
+    unp->u_type->unparseType(decl_type, second_part_type_info);
 
     curprint(build_decl_item_asm_register(decl_item));
 
@@ -1437,9 +1484,35 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
     need_assign_and_initializer_unparsed(
         decl_item, need_assign, need_initializer, ninfo,
         isSgForInitStatement(vardecl_stmt->get_parent()));
-    if (need_assign)
-      curprint(" = ");
     if (need_initializer) {
+      SgSourceFile *source_file = ninfo.get_current_source_file();
+      if (source_file == nullptr) {
+        source_file = SageInterface::getEnclosingSourceFile(vardecl_stmt, true);
+      }
+      const int linewrap =
+          source_file != nullptr &&
+                  source_file->get_suppress_variable_declaration_normalization()
+              ? kNormalizedVariableDeclarationWrapColumn
+              : unp->cur.get_linewrap();
+      const std::string initializer_preview = normalizeVarDeclPreviewWhitespace(
+          globalUnparseToString(decl_init, NULL));
+      const bool wrap_initializer =
+          need_assign && linewrap > 0 &&
+          (unp->cur.current_col() >= linewrap ||
+           (!initializer_preview.empty() &&
+            unp->cur.current_col() + 3 +
+                    static_cast<int>(initializer_preview.size()) >
+                linewrap));
+      if (need_assign) {
+        if (wrap_initializer) {
+          curprint(" =");
+          unp->cur.insert_newline(1,
+                                  unp->cur.statement_indent() + TABINDENT * 2);
+        } else {
+          curprint(" = ");
+        }
+      }
+
       SgUnparse_Info statementInfo(ninfo);
       statementInfo.set_SkipClassDefinition();
       statementInfo.set_SkipEnumDefinition();
@@ -1448,7 +1521,16 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
       ASSERT_not_null(statementInfo.get_reference_node_for_qualification());
       ROSE_ASSERT(statementInfo.SkipClassDefinition() ==
                   statementInfo.SkipEnumDefinition());
+      const int saved_linewrap = unp->cur.get_linewrap();
+      if (linewrap > 0 && saved_linewrap != linewrap) {
+        unp->cur.set_linewrap(linewrap);
+      }
       unparseExpression(decl_init, statementInfo);
+      if (linewrap > 0 && saved_linewrap != linewrap) {
+        unp->cur.set_linewrap(saved_linewrap);
+      }
+    } else if (need_assign) {
+      curprint(" = ");
     }
 
     vdecl_iname_it++;

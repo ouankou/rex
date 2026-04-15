@@ -136,10 +136,14 @@ void IntraFWDataflow::transferFunctionCall(const Function &func,
     vector<Lattice *>::const_iterator lDF;
     for (lRet = retState->begin(), lDF = dfInfoBelow.begin();
          lRet != retState->end(); lRet++, lDF++) {
-      Dbg::dbg << "    lDF Before=" << (*lDF)->str("        ") << endl;
-      Dbg::dbg << "    lRet Before=" << (*lRet)->str("        ") << endl;
+      if (analysisDebugLevel >= 1) {
+        Dbg::dbg << "    lDF Before=" << (*lDF)->str("        ") << endl;
+        Dbg::dbg << "    lRet Before=" << (*lRet)->str("        ") << endl;
+      }
       (*lDF)->unProject(isSgFunctionCallExp(n.getNode()), *lRet);
-      Dbg::dbg << "    lDF After=" << (*lDF)->str("        ") << endl;
+      if (analysisDebugLevel >= 1) {
+        Dbg::dbg << "    lDF After=" << (*lDF)->str("        ") << endl;
+      }
     }
   }
 }
@@ -237,12 +241,14 @@ bool IntraUniDirectionalDataflow::runAnalysis(const Function &func,
   for (; it != itEnd; it++) {
     DataflowNode n = *it;
     SgNode *sgn = n.getNode();
-    ostringstream nodeNameStr;
-    nodeNameStr << "Current Node " << sgn << "[" << sgn->class_name() << " | "
-                << Dbg::escape(sgn->unparseToString()) << " | " << n.getIndex()
-                << "]";
+    std::string nodeName;
     if (analysisDebugLevel >= 1) {
-      Dbg::enterFunc(nodeNameStr.str());
+      ostringstream nodeNameStr;
+      nodeNameStr << "Current Node " << sgn << "[" << sgn->class_name() << " | "
+                  << Dbg::escape(sgn->unparseToString()) << " | "
+                  << n.getIndex() << "]";
+      nodeName = nodeNameStr.str();
+      Dbg::enterFunc(nodeName);
     }
     bool modified = false;
 
@@ -271,6 +277,15 @@ bool IntraUniDirectionalDataflow::runAnalysis(const Function &func,
         state->setFacts(this, initFacts);
         dfInfoAnte = getLatticeAnte(state);
         dfInfoPost = getLatticePost(state);
+      }
+
+      // Snapshot the previous outgoing state so we only propagate when this
+      // node's final outgoing lattices actually change.
+      vector<Lattice *> oldDfInfoPost;
+      oldDfInfoPost.reserve(dfInfoPost.size());
+      for (vector<Lattice *>::const_iterator oldPost = dfInfoPost.begin();
+           oldPost != dfInfoPost.end(); ++oldPost) {
+        oldDfInfoPost.push_back((*oldPost)->copy());
       }
 
       // Overwrite the Lattices below this node with the lattices above this
@@ -313,7 +328,13 @@ bool IntraUniDirectionalDataflow::runAnalysis(const Function &func,
       std::shared_ptr<IntraDFTransferVisitor> transferVisitor =
           getTransferVisitor(func, n, *state, dfInfoPost);
       sgn->accept(*transferVisitor);
-      modified = transferVisitor->finish() || modified;
+      transferVisitor->finish();
+
+      modified = !NodeState::eqLattices(oldDfInfoPost, dfInfoPost);
+      for (vector<Lattice *>::iterator oldPost = oldDfInfoPost.begin();
+           oldPost != oldDfInfoPost.end(); ++oldPost) {
+        delete *oldPost;
+      }
 
       // =================== TRANSFER FUNCTION ===================
       if (analysisDebugLevel >= 1) {
@@ -341,7 +362,7 @@ bool IntraUniDirectionalDataflow::runAnalysis(const Function &func,
     /*                      // if there has been a change in the dataflow state
      * immediately below this node AND*/
     // If this is not the last node in the function
-    if (/*modified && */ *it != getUltimate(func)) {
+    if (modified && *it != getUltimate(func)) {
       if (analysisDebugLevel >= 1) {
         Dbg::dbg << " ==================================  " << endl;
         Dbg::dbg << " Propagating/Merging the outgoing  Lattice to all "
@@ -381,7 +402,7 @@ bool IntraUniDirectionalDataflow::runAnalysis(const Function &func,
     }
 
     if (analysisDebugLevel >= 1)
-      Dbg::exitFunc(nodeNameStr.str());
+      Dbg::exitFunc(nodeName);
   }
 
   // Test if the Lattices at the end of the function after the analysis are

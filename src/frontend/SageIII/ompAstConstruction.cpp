@@ -3,6 +3,7 @@
 #include "ompAstConstruction.h"
 
 #include "astPostProcessing.h"
+#include "fixupTypes.h"
 
 #include "rose_paths.h"
 
@@ -8698,6 +8699,13 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
     }
   }
 
+  // OpenMP AST construction can introduce or reattach declarations after the
+  // normal frontend postprocessing pass has canonicalized shared named types.
+  // Re-run the type canonicalization here so memory-pool consistency tests see
+  // class and other named types attached to their canonical nondefining
+  // declarations.
+  auto canonicalize_named_types = [&]() { resetTypesInAST(); };
+
   // stop here if only OpenMP AST construction is requested
   if (sageFilePtr->get_openmp_ast_only()) {
     if (SgProject::get_verbose() > 1) {
@@ -8705,6 +8713,7 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
              "sageFilePtr->get_openmp_ast_only() = %s \n",
              sageFilePtr->get_openmp_ast_only() ? "true" : "false");
     }
+    canonicalize_named_types();
     releaseOpenMPParseStateForSourceFile(sageFilePtr);
     mark_processed(sageFilePtr);
     return;
@@ -8720,12 +8729,14 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
              "sageFilePtr->get_openmp_analyzing() = %s \n",
              sageFilePtr->get_openmp_analyzing() ? "true" : "false");
     }
+    canonicalize_named_types();
     releaseOpenMPParseStateForSourceFile(sageFilePtr);
     mark_processed(sageFilePtr);
     return;
   }
 
   lower_omp(sageFilePtr);
+  canonicalize_named_types();
   releaseOpenMPParseStateForSourceFile(sageFilePtr);
   mark_processed(sageFilePtr);
 }

@@ -481,6 +481,18 @@ void FixupAstDefiningAndNondefiningDeclarations::visit(SgNode *node) {
       // special non-defining declaration for these declarations.
 
       if (declaration != definingDeclaration) {
+        if (definingDeclaration != NULL) {
+          fprintf(stderr,
+                  "Unexpected defining declaration in post-fixup for %p = %s = "
+                  "%s\n",
+                  declaration, declaration->class_name().c_str(),
+                  SageInterface::get_name(declaration).c_str());
+          fprintf(stderr, "  definingDeclaration = %p (%s) name=%s\n",
+                  definingDeclaration,
+                  definingDeclaration->class_name().c_str(),
+                  SageInterface::get_name(definingDeclaration).c_str());
+          fflush(stderr);
+        }
         // Make sure it was never previously set
         ROSE_ASSERT(definingDeclaration == NULL);
 

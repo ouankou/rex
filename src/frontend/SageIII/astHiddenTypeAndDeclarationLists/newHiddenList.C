@@ -1160,6 +1160,20 @@ int HiddenListTraversal::nameQualificationDepth(
             // However, if this is a templated class then we have to dig deeper
             // to identify if the template arguments require name qualification.
             printf("symbol = %p = %s \n", symbol, symbol->class_name().c_str());
+            bool includeCurrentScope = true;
+            SgScopeStatement *ambiguityScope = currentScope;
+            if (SgClassDefinition *current_classDefinition =
+                    SageInterface::getEnclosingNode<SgClassDefinition>(
+                        currentScope, includeCurrentScope)) {
+              ambiguityScope = current_classDefinition;
+            }
+            ROSE_ASSERT(ambiguityScope != NULL);
+            if (ambiguityScope->hasAmbiguity(name, symbol) == true) {
+              qualificationDepth =
+                  nameQualificationDepthOfParent(declaration, currentScope,
+                                                 positionStatement) +
+                  1;
+            }
           } else {
             // The name does not match, so the associatedClassDeclaration is
             // hidding the base class declaration.
@@ -1371,6 +1385,20 @@ int HiddenListTraversal::nameQualificationDepth(
               typedefDeclaration->get_firstNondefiningDeclaration()) {
             // This typedef is visible from where it is referenced.
             printf("This typedef IS visible from where it is referenced \n");
+            bool includeCurrentScope = true;
+            SgScopeStatement *ambiguityScope = currentScope;
+            if (SgClassDefinition *current_classDefinition =
+                    SageInterface::getEnclosingNode<SgClassDefinition>(
+                        currentScope, includeCurrentScope)) {
+              ambiguityScope = current_classDefinition;
+            }
+            ROSE_ASSERT(ambiguityScope != NULL);
+            if (ambiguityScope->hasAmbiguity(name, symbol) == true) {
+              qualificationDepth =
+                  nameQualificationDepthOfParent(declaration, currentScope,
+                                                 positionStatement) +
+                  1;
+            }
           } else {
             // The name does not match, so the associatedFunctionDeclaration is
             // hidding the base class declaration.
@@ -1413,6 +1441,20 @@ int HiddenListTraversal::nameQualificationDepth(
               enumDeclaration->get_firstNondefiningDeclaration()) {
             // This class is visible from where it is referenced.
             printf("This enum IS visible from where it is referenced \n");
+            bool includeCurrentScope = true;
+            SgScopeStatement *ambiguityScope = currentScope;
+            if (SgClassDefinition *current_classDefinition =
+                    SageInterface::getEnclosingNode<SgClassDefinition>(
+                        currentScope, includeCurrentScope)) {
+              ambiguityScope = current_classDefinition;
+            }
+            ROSE_ASSERT(ambiguityScope != NULL);
+            if (ambiguityScope->hasAmbiguity(name, symbol) == true) {
+              qualificationDepth =
+                  nameQualificationDepthOfParent(declaration, currentScope,
+                                                 positionStatement) +
+                  1;
+            }
           } else {
             // The name does not match, so the associatedFunctionDeclaration is
             // hidding the base class declaration.

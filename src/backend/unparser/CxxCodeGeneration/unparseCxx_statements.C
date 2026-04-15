@@ -20,8 +20,10 @@
 #include "unparser.h"
 
 #include <cctype>
+#include <fstream>
 #include <functional>
 #include <map>
+#include <set>
 
 // DQ (8/31/2013):  This should only be included by source files that require
 // it. This fixed a reported bug which caused conflicts with configure-time
@@ -60,6 +62,8 @@ using namespace Rose;
 #define ENABLE_unparsedPartiallyUsingTokenStream 1
 
 namespace {
+constexpr int kNormalizedDeclarationWrapColumn = 80;
+
 struct FunctionLikeMacroDirective {
   int line = 0;
   int col = 0;
@@ -70,6 +74,308 @@ struct FunctionLikeMacroDirective {
 
 using FunctionLikeMacroDirectiveMap =
     std::map<std::string, std::vector<FunctionLikeMacroDirective>>;
+
+bool located_nodes_share_source_span(const SgLocatedNode *lhs,
+                                     const SgLocatedNode *rhs) {
+  if (lhs == nullptr || rhs == nullptr) {
+    return false;
+  }
+
+  Sg_File_Info *lhs_start = lhs->get_startOfConstruct();
+  Sg_File_Info *lhs_end = lhs->get_endOfConstruct();
+  Sg_File_Info *rhs_start = rhs->get_startOfConstruct();
+  Sg_File_Info *rhs_end = rhs->get_endOfConstruct();
+  if (lhs_start == nullptr || lhs_end == nullptr || rhs_start == nullptr ||
+      rhs_end == nullptr) {
+    return false;
+  }
+
+  const bool exact_match =
+      lhs_start->get_filenameString() == rhs_start->get_filenameString() &&
+      lhs_end->get_filenameString() == rhs_end->get_filenameString() &&
+      lhs_start->get_line() == rhs_start->get_line() &&
+      lhs_start->get_col() == rhs_start->get_col() &&
+      lhs_end->get_line() == rhs_end->get_line() &&
+      lhs_end->get_col() == rhs_end->get_col();
+  if (exact_match) {
+    return true;
+  }
+
+  SgFunctionDeclaration *lhs_function =
+      isSgFunctionDeclaration(const_cast<SgLocatedNode *>(lhs));
+  SgFunctionDeclaration *rhs_function =
+      isSgFunctionDeclaration(const_cast<SgLocatedNode *>(rhs));
+  return lhs_function != nullptr && rhs_function != nullptr &&
+         lhs_function->get_name() == rhs_function->get_name() &&
+         lhs_start->get_filenameString() == rhs_start->get_filenameString() &&
+         lhs_end->get_filenameString() == rhs_end->get_filenameString() &&
+         lhs_start->get_line() == rhs_start->get_line() &&
+         lhs_end->get_line() == rhs_end->get_line();
+}
+
+bool prefer_wider_token_interval(
+    TokenStreamSequenceToNodeMapping *best_mapping,
+    TokenStreamSequenceToNodeMapping *candidate_mapping) {
+  if (candidate_mapping == nullptr ||
+      candidate_mapping->token_subsequence_start == -1) {
+    return false;
+  }
+  if (best_mapping == nullptr || best_mapping->token_subsequence_start == -1) {
+    return true;
+  }
+
+  if (candidate_mapping->token_subsequence_start !=
+      best_mapping->token_subsequence_start) {
+    return candidate_mapping->token_subsequence_start <
+           best_mapping->token_subsequence_start;
+  }
+
+  return candidate_mapping->token_subsequence_end >
+         best_mapping->token_subsequence_end;
+}
+
+TokenStreamSequenceToNodeMapping *
+synthesize_token_subsequence_mapping_from_source_span(SgSourceFile *source_file,
+                                                      SgLocatedNode *node) {
+  if (source_file == nullptr || node == nullptr) {
+    return nullptr;
+  }
+
+  Sg_File_Info *start_info = node->get_startOfConstruct();
+  Sg_File_Info *end_info = node->get_endOfConstruct();
+  if (start_info == nullptr || end_info == nullptr ||
+      start_info->isTransformation() || end_info->isTransformation() ||
+      start_info->get_filenameString() != source_file->getFileName() ||
+      end_info->get_filenameString() != source_file->getFileName()) {
+    return nullptr;
+  }
+
+  auto position_before = [](int lhs_line, int lhs_column, int rhs_line,
+                            int rhs_column) -> bool {
+    return lhs_line < rhs_line ||
+           (lhs_line == rhs_line && lhs_column < rhs_column);
+  };
+  auto token_ends_before = [&](SgToken *token, int line, int column) -> bool {
+    return token != nullptr && token->get_endOfConstruct() != nullptr &&
+           position_before(token->get_endOfConstruct()->get_line(),
+                           token->get_endOfConstruct()->get_col(), line,
+                           column);
+  };
+  auto token_begins_after = [&](SgToken *token, int line, int column) -> bool {
+    return token != nullptr && token->get_startOfConstruct() != nullptr &&
+           position_before(line, column,
+                           token->get_startOfConstruct()->get_line(),
+                           token->get_startOfConstruct()->get_col());
+  };
+
+  const int start_line = start_info->get_line();
+  const int start_column = start_info->get_col();
+  const int end_line = end_info->get_line();
+  const int end_column = end_info->get_col();
+  if (start_line <= 0 || end_line <= 0 ||
+      position_before(end_line, end_column, start_line, start_column)) {
+    return nullptr;
+  }
+
+  SgTokenPtrList &token_vector = source_file->get_token_list();
+  if (token_vector.empty()) {
+    return nullptr;
+  }
+  auto is_whitespace_or_preprocessing_token = [](SgToken *token) -> bool {
+    if (token == nullptr) {
+      return false;
+    }
+
+    const int classification = token->get_classification_code();
+    return classification == ROSE_token_ids::C_CXX_WHITESPACE ||
+           classification == ROSE_token_ids::C_CXX_PREPROCESSING_INFO;
+  };
+
+  int token_start = -1;
+  for (size_t i = 0; i < token_vector.size(); ++i) {
+    if (!token_ends_before(token_vector[i], start_line, start_column)) {
+      token_start = static_cast<int>(i);
+      break;
+    }
+  }
+
+  if (token_start < 0) {
+    return nullptr;
+  }
+
+  int token_end = -1;
+  for (int i = static_cast<int>(token_vector.size()) - 1; i >= token_start;
+       --i) {
+    if (!token_begins_after(token_vector[i], end_line, end_column)) {
+      token_end = i;
+      break;
+    }
+  }
+
+  if (token_end < token_start) {
+    return nullptr;
+  }
+
+  while (token_start <= token_end && token_vector[token_start] != nullptr &&
+         token_vector[token_start]->get_classification_code() ==
+             ROSE_token_ids::C_CXX_WHITESPACE) {
+    ++token_start;
+  }
+  while (token_end >= token_start && token_vector[token_end] != nullptr &&
+         token_vector[token_end]->get_classification_code() ==
+             ROSE_token_ids::C_CXX_WHITESPACE) {
+    --token_end;
+  }
+
+  if (token_end < token_start) {
+    return nullptr;
+  }
+
+  int leading_whitespace_start = -1;
+  int leading_whitespace_end = -1;
+  if (token_start > 0 &&
+      is_whitespace_or_preprocessing_token(token_vector[token_start - 1])) {
+    leading_whitespace_end = token_start - 1;
+    leading_whitespace_start = leading_whitespace_end;
+    while (leading_whitespace_start > 0 &&
+           is_whitespace_or_preprocessing_token(
+               token_vector[leading_whitespace_start - 1])) {
+      --leading_whitespace_start;
+    }
+  }
+
+  int trailing_whitespace_start = -1;
+  int trailing_whitespace_end = -1;
+  if (token_end + 1 < static_cast<int>(token_vector.size()) &&
+      is_whitespace_or_preprocessing_token(token_vector[token_end + 1])) {
+    trailing_whitespace_start = token_end + 1;
+    trailing_whitespace_end = trailing_whitespace_start;
+    while (trailing_whitespace_end + 1 <
+               static_cast<int>(token_vector.size()) &&
+           is_whitespace_or_preprocessing_token(
+               token_vector[trailing_whitespace_end + 1])) {
+      ++trailing_whitespace_end;
+    }
+  }
+
+  TokenStreamSequenceToNodeMapping *mapping =
+      TokenStreamSequenceToNodeMapping::createTokenInterval(
+          source_file, node, leading_whitespace_start, leading_whitespace_end,
+          token_start, token_end, trailing_whitespace_start,
+          trailing_whitespace_end, -1, -1);
+  mapping->leading_whitespace_start = leading_whitespace_start;
+  mapping->leading_whitespace_end = leading_whitespace_end;
+  mapping->trailing_whitespace_start = trailing_whitespace_start;
+  mapping->trailing_whitespace_end = trailing_whitespace_end;
+  mapping->else_whitespace_start = -1;
+  mapping->else_whitespace_end = -1;
+  source_file->get_tokenSubsequenceMap()[node] = mapping;
+  return mapping;
+}
+
+TokenStreamSequenceToNodeMapping *lookup_token_subsequence_mapping_for_node(
+    SgSourceFile *source_file, SgLocatedNode *node,
+    SgLocatedNode **mapped_node_out = nullptr) {
+  if (mapped_node_out != nullptr) {
+    *mapped_node_out = node;
+  }
+
+  if (source_file == nullptr || node == nullptr) {
+    return nullptr;
+  }
+
+  auto &token_stream_sequence_map = source_file->get_tokenSubsequenceMap();
+  auto lookup_raw =
+      [&](SgLocatedNode *candidate) -> TokenStreamSequenceToNodeMapping * {
+    if (candidate == nullptr) {
+      return nullptr;
+    }
+
+    auto found = token_stream_sequence_map.find(candidate);
+    if (found == token_stream_sequence_map.end() || found->second == nullptr ||
+        found->second->token_subsequence_start == -1) {
+      return nullptr;
+    }
+
+    return found->second;
+  };
+
+  if (SgDeclarationStatement *decl = isSgDeclarationStatement(node)) {
+    TokenStreamSequenceToNodeMapping *best_mapping = nullptr;
+    SgDeclarationStatement *best_decl = nullptr;
+    bool requires_source_span_canonicalization = false;
+    int observed_raw_start = -1;
+    int observed_raw_end = -1;
+    auto visit_equivalent_declarations = [&](auto &&visitor) {
+      std::set<SgDeclarationStatement *> visited_candidates;
+      for (SgDeclarationStatement *candidate_decl :
+           {decl->get_firstNondefiningDeclaration(),
+            decl->get_definingDeclaration(), decl}) {
+        if (candidate_decl == nullptr ||
+            visited_candidates.insert(candidate_decl).second == false ||
+            !located_nodes_share_source_span(decl, candidate_decl)) {
+          continue;
+        }
+        visitor(candidate_decl);
+      }
+    };
+
+    visit_equivalent_declarations([&](SgDeclarationStatement *candidate_decl) {
+      if (TokenStreamSequenceToNodeMapping *raw_mapping =
+              lookup_raw(candidate_decl)) {
+        if (observed_raw_start == -1) {
+          observed_raw_start = raw_mapping->token_subsequence_start;
+          observed_raw_end = raw_mapping->token_subsequence_end;
+        } else if (std::abs(observed_raw_start -
+                            raw_mapping->token_subsequence_start) > 8 ||
+                   std::abs(observed_raw_end -
+                            raw_mapping->token_subsequence_end) > 8) {
+          requires_source_span_canonicalization = true;
+        }
+      }
+
+      TokenStreamSequenceToNodeMapping *candidate_mapping =
+          lookup_raw(candidate_decl);
+      if (!prefer_wider_token_interval(best_mapping, candidate_mapping)) {
+        return;
+      }
+
+      best_mapping = candidate_mapping;
+      best_decl = candidate_decl;
+    });
+
+    if (requires_source_span_canonicalization) {
+      if (TokenStreamSequenceToNodeMapping *synthesized_mapping =
+              synthesize_token_subsequence_mapping_from_source_span(source_file,
+                                                                    decl)) {
+        best_mapping = synthesized_mapping;
+        best_decl = decl;
+      }
+    }
+
+    if (best_mapping == nullptr) {
+      if (TokenStreamSequenceToNodeMapping *synthesized_mapping =
+              synthesize_token_subsequence_mapping_from_source_span(source_file,
+                                                                    decl)) {
+        best_mapping = synthesized_mapping;
+        best_decl = decl;
+      }
+    }
+
+    if (best_mapping != nullptr) {
+      visit_equivalent_declarations(
+          [&](SgDeclarationStatement *candidate_decl) {
+            token_stream_sequence_map[candidate_decl] = best_mapping;
+          });
+
+      if (mapped_node_out != nullptr) {
+        *mapped_node_out = best_decl;
+      }
+      return best_mapping;
+    }
+  }
+  return lookup_raw(node);
+}
 
 bool isMacroIdentifierChar(char ch) {
   return std::isalnum(static_cast<unsigned char>(ch)) != 0 || ch == '_';
@@ -199,8 +505,60 @@ bool declarationNeedsInlineFunctionReturnTypeDefinition(
   return false;
 }
 
+bool nodeHasTransformation(SgNode *node) {
+  SgLocatedNode *located = isSgLocatedNode(node);
+  return located != nullptr &&
+         (located->isTransformation() ||
+          located->get_containsTransformation() ||
+          located->get_containsTransformationToSurroundingWhitespace());
+}
+
+bool declarationRequiresNormalizedScopeFormatting(
+    SgDeclarationStatement *decl) {
+  return decl != nullptr &&
+         (decl->isTransformation() || decl->get_containsTransformation() ||
+          decl->get_containsTransformationToSurroundingWhitespace());
+}
+
+bool subtreeContainsTransformedDeclarationForFormatting(SgNode *node) {
+  if (node == nullptr) {
+    return false;
+  }
+
+  if (SgDeclarationStatement *decl = isSgDeclarationStatement(node)) {
+    if (declarationRequiresNormalizedScopeFormatting(decl)) {
+      return true;
+    }
+  }
+
+  const SgNodePtrList &declarations =
+      NodeQuery::querySubTree(node, V_SgDeclarationStatement);
+  for (SgNode *candidate : declarations) {
+    if (SgDeclarationStatement *decl = isSgDeclarationStatement(candidate)) {
+      if (declarationRequiresNormalizedScopeFormatting(decl)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 bool scopeHasTransformedDeclarations(SgScopeStatement *scope) {
   if (scope == nullptr) {
+    return false;
+  }
+
+  if (SgBasicBlock *basic_block = isSgBasicBlock(scope)) {
+    for (SgStatement *statement : basic_block->get_statements()) {
+      if (statement == nullptr) {
+        continue;
+      }
+      if (nodeHasTransformation(statement) ||
+          subtreeContainsTransformedDeclarationForFormatting(statement)) {
+        return true;
+      }
+    }
     return false;
   }
 
@@ -224,16 +582,9 @@ bool scopeHasTransformedDeclarations(SgScopeStatement *scope) {
     if (decl == nullptr) {
       continue;
     }
-    if (decl->isTransformation() || decl->get_containsTransformation()) {
+    if (decl->isTransformation() || decl->get_containsTransformation() ||
+        decl->get_containsTransformationToSurroundingWhitespace()) {
       return true;
-    }
-    if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
-      if (SgClassDefinition *class_def = class_decl->get_definition()) {
-        if (class_def->isTransformation() ||
-            class_def->get_containsTransformation()) {
-          return true;
-        }
-      }
     }
   }
 
@@ -276,6 +627,899 @@ bool functionReturnTypeNeedsInlineDefinition(SgType *type) {
 
 bool parameterTypeNeedsInlineDefinition(SgType *type) {
   return functionReturnTypeNeedsInlineDefinition(type);
+}
+
+SgSourceFile *resolveTranslationUnitSourceFile(SgSourceFile *source_file) {
+  if (source_file == nullptr || !source_file->get_isHeaderFile()) {
+    return source_file;
+  }
+
+  SgIncludeFile *include_file = source_file->get_associated_include_file();
+  if (include_file == nullptr) {
+    return source_file;
+  }
+
+  SgSourceFile *translation_unit =
+      include_file->get_source_file_of_translation_unit();
+  return translation_unit != nullptr ? translation_unit : source_file;
+}
+
+SgSourceFile *
+resolveNormalizedFormattingSourceFile(const SgNode *node,
+                                      const SgUnparse_Info &info) {
+  SgSourceFile *source_file =
+      resolveTranslationUnitSourceFile(info.get_current_source_file());
+  if (source_file == nullptr && node != nullptr) {
+    source_file = resolveTranslationUnitSourceFile(
+        SageInterface::getEnclosingSourceFile(node, true));
+  }
+
+  if (source_file == nullptr && info.get_declstatement_ptr() != nullptr) {
+    source_file =
+        resolveTranslationUnitSourceFile(SageInterface::getEnclosingSourceFile(
+            info.get_declstatement_ptr(), true));
+  }
+
+  if (source_file == nullptr &&
+      info.get_reference_node_for_qualification() != nullptr) {
+    source_file =
+        resolveTranslationUnitSourceFile(SageInterface::getEnclosingSourceFile(
+            info.get_reference_node_for_qualification(), true));
+  }
+
+  return source_file;
+}
+
+bool sourceRequestsNormalizedDeclarationFormatting(const SgNode *node,
+                                                   const SgUnparse_Info &info) {
+  SgSourceFile *source_file = resolveNormalizedFormattingSourceFile(node, info);
+  return source_file != nullptr &&
+         source_file->get_suppress_variable_declaration_normalization();
+}
+
+bool sourceRequestsNormalizedDeclarationFormatting(const SgUnparse_Info &info) {
+  return sourceRequestsNormalizedDeclarationFormatting(nullptr, info);
+}
+
+bool hasConcreteFileLocation(const Sg_File_Info *file_info) {
+  return file_info != nullptr && !file_info->isCompilerGenerated() &&
+         file_info->get_file_id() >= 0 && file_info->get_line() > 0;
+}
+
+bool locatedNodesOriginallySeparatedByLineBreak(const SgLocatedNode *previous,
+                                                const SgLocatedNode *current) {
+  if (previous == nullptr || current == nullptr) {
+    return false;
+  }
+
+  const Sg_File_Info *previous_start = previous->get_startOfConstruct();
+  const Sg_File_Info *current_start = current->get_startOfConstruct();
+  return hasConcreteFileLocation(previous_start) &&
+         hasConcreteFileLocation(current_start) &&
+         previous_start->isSameFile(*current_start) &&
+         current_start->get_line() > previous_start->get_line();
+}
+
+const std::string &sourceLineText(const Sg_File_Info *file_info) {
+  static const std::string empty_line;
+  static std::map<std::string, std::vector<std::string>> cache;
+
+  if (!hasConcreteFileLocation(file_info)) {
+    return empty_line;
+  }
+
+  auto get_or_load_lines = [&](const std::string &filename)
+      -> std::map<std::string, std::vector<std::string>>::iterator {
+    std::map<std::string, std::vector<std::string>>::iterator found =
+        cache.find(filename);
+    if (found == cache.end()) {
+      std::ifstream input(filename.c_str());
+      std::vector<std::string> lines;
+      std::string line;
+      while (std::getline(input, line)) {
+        lines.push_back(line);
+      }
+      found = cache.emplace(filename, std::move(lines)).first;
+    }
+    return found;
+  };
+
+  std::map<std::string, std::vector<std::string>>::iterator found =
+      get_or_load_lines(file_info->get_filenameString());
+  if (found->second.empty()) {
+    const std::string raw_filename = file_info->get_raw_filename();
+    if (!raw_filename.empty() &&
+        raw_filename != file_info->get_filenameString()) {
+      found = get_or_load_lines(raw_filename);
+    }
+  }
+
+  const int line_number = file_info->get_line();
+  if (line_number <= 0 ||
+      static_cast<size_t>(line_number) > found->second.size()) {
+    return empty_line;
+  }
+
+  return found->second[line_number - 1];
+}
+
+bool sourceLineContainsOpeningBrace(const Sg_File_Info *file_info) {
+  const std::string &line = sourceLineText(file_info);
+  if (line.empty()) {
+    return false;
+  }
+
+  const size_t search_start =
+      file_info != nullptr && file_info->get_col() > 0
+          ? static_cast<size_t>(file_info->get_col() - 1)
+          : 0;
+  return line.find('{', search_start) != std::string::npos;
+}
+
+bool useCompactFunctionFormatting(const SgUnparse_Info &info) {
+  return sourceRequestsNormalizedDeclarationFormatting(info);
+}
+
+bool useCompactFunctionFormatting(const SgNode *node,
+                                  const SgUnparse_Info &info) {
+  return sourceRequestsNormalizedDeclarationFormatting(node, info);
+}
+
+bool useNormalizedDeclarationScopeFormatting(const SgNode *node,
+                                             const SgUnparse_Info &info) {
+  return sourceRequestsNormalizedDeclarationFormatting(node, info) ||
+         isWithinTransformedDeclarationScope(const_cast<SgNode *>(node));
+}
+
+std::string normalizePreviewWhitespace(const std::string &text) {
+  std::string normalized;
+  normalized.reserve(text.size());
+
+  bool have_pending_space = false;
+  for (char ch : text) {
+    if (std::isspace(static_cast<unsigned char>(ch)) != 0) {
+      have_pending_space = !normalized.empty();
+      continue;
+    }
+
+    if (have_pending_space) {
+      normalized += ' ';
+      have_pending_space = false;
+    }
+    normalized += ch;
+  }
+
+  return normalized;
+}
+
+std::string buildBaseClassPreviewString(SgBaseClass *base_class) {
+  if (base_class == nullptr) {
+    return "";
+  }
+
+  std::string preview;
+  const SgBaseClassModifier *modifier = base_class->get_baseClassModifier();
+  if (modifier != nullptr) {
+    if (modifier->isVirtual()) {
+      preview += "virtual ";
+    }
+    if (modifier->get_accessModifier().isPublic()) {
+      preview += "public ";
+    } else if (modifier->get_accessModifier().isPrivate()) {
+      preview += "private ";
+    } else if (modifier->get_accessModifier().isProtected()) {
+      preview += "protected ";
+    }
+  }
+
+  if (SgNonrealBaseClass *nonreal_base = isSgNonrealBaseClass(base_class)) {
+    if (SgNonrealDecl *nonreal_decl = nonreal_base->get_base_class_nonreal()) {
+      if (SgType *nonreal_type = nonreal_decl->get_type()) {
+        preview += normalizePreviewWhitespace(
+            globalUnparseToString(nonreal_type, NULL));
+      } else {
+        preview += nonreal_decl->get_name().getString();
+      }
+    }
+  } else if (SgClassDeclaration *base_decl = base_class->get_base_class()) {
+    if (SgType *base_type = base_decl->get_type()) {
+      preview +=
+          normalizePreviewWhitespace(globalUnparseToString(base_type, NULL));
+    } else {
+      preview += base_decl->get_name().getString();
+    }
+  }
+
+  if (base_class->get_pack_expansion()) {
+    preview += "...";
+  }
+
+  return preview;
+}
+
+std::string
+buildClassInheritancePreviewString(const SgClassDefinition *class_definition) {
+  if (class_definition == nullptr) {
+    return "";
+  }
+
+  std::string preview;
+  bool need_separator = false;
+  for (SgBaseClass *base_class : class_definition->get_inheritances()) {
+    const std::string base_preview = buildBaseClassPreviewString(base_class);
+    if (base_preview.empty()) {
+      return "";
+    }
+
+    if (need_separator) {
+      preview += ", ";
+    }
+    preview += base_preview;
+    need_separator = true;
+  }
+
+  return preview;
+}
+
+std::string buildClassDeclarationPreviewString(
+    const SgClassDeclaration *class_declaration) {
+  if (class_declaration == nullptr) {
+    return "";
+  }
+
+  std::string preview;
+  switch (class_declaration->get_class_type()) {
+  case SgClassDeclaration::e_class:
+    preview = "class ";
+    break;
+  case SgClassDeclaration::e_struct:
+    preview = "struct ";
+    break;
+  case SgClassDeclaration::e_union:
+    preview = "union ";
+    break;
+  case SgClassDeclaration::e_template_parameter:
+    break;
+  default:
+    return "";
+  }
+
+  preview += class_declaration->get_name().getString();
+  if (!class_declaration->isForward() &&
+      class_declaration->get_declarationModifier().isFinal()) {
+    preview += " final";
+  }
+
+  if (const SgClassDefinition *class_definition =
+          class_declaration->get_definition()) {
+    const std::string inheritance_preview =
+        buildClassInheritancePreviewString(class_definition);
+    if (!inheritance_preview.empty()) {
+      preview += " : ";
+      preview += inheritance_preview;
+    }
+  }
+
+  return preview;
+}
+
+std::string buildFunctionParameterPreviewString(SgInitializedName *parameter) {
+  if (parameter == nullptr) {
+    return "";
+  }
+
+  std::string preview;
+  if (parameter->get_type() != nullptr) {
+    preview = normalizePreviewWhitespace(
+        globalUnparseToString(parameter->get_type(), NULL));
+  }
+
+  const std::string name = parameter->get_name().getString();
+  if (!name.empty()) {
+    if (!preview.empty()) {
+      const char last = preview[preview.size() - 1];
+      if (std::isalnum(static_cast<unsigned char>(last)) != 0 || last == '_' ||
+          last == '>' || last == ')' || last == ']') {
+        preview += ' ';
+      }
+    }
+    preview += name;
+  }
+
+  if (parameter->get_initializer() != nullptr) {
+    preview += " = ";
+    preview += normalizePreviewWhitespace(
+        globalUnparseToString(parameter->get_initializer(), NULL));
+  }
+
+  return preview;
+}
+
+bool locatedNodeHasAttachedPreprocessingInfo(const SgLocatedNode *node) {
+  if (node == nullptr) {
+    return false;
+  }
+
+  AttachedPreprocessingInfoType *attached =
+      const_cast<SgLocatedNode *>(node)->getAttachedPreprocessingInfo();
+  return attached != nullptr && !attached->empty();
+}
+
+bool locatedNodeHasInsidePreprocessingInfo(const SgLocatedNode *node) {
+  AttachedPreprocessingInfoType *attached =
+      node != nullptr
+          ? const_cast<SgLocatedNode *>(node)->getAttachedPreprocessingInfo()
+          : nullptr;
+  if (attached == nullptr) {
+    return false;
+  }
+
+  for (PreprocessingInfo *info : *attached) {
+    if (info != nullptr &&
+        info->getRelativePosition() == PreprocessingInfo::inside) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool basicBlockStartsWithLeadingPreprocessingInfo(const SgBasicBlock *block) {
+  if (block == nullptr || block->get_statements().empty()) {
+    return false;
+  }
+
+  SgStatement *first_statement = block->get_statements().front();
+  AttachedPreprocessingInfoType *attached =
+      first_statement != nullptr
+          ? first_statement->getAttachedPreprocessingInfo()
+          : nullptr;
+  if (attached == nullptr) {
+    return false;
+  }
+
+  for (PreprocessingInfo *info : *attached) {
+    if (info != nullptr &&
+        info->getRelativePosition() == PreprocessingInfo::before) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool functionBodyOriginallyUsedSameLineOpeningBrace(const SgBasicBlock *block) {
+  SgFunctionDefinition *function_definition =
+      block != nullptr ? isSgFunctionDefinition(block->get_parent()) : nullptr;
+  SgFunctionDeclaration *function_decl =
+      function_definition != nullptr
+          ? isSgFunctionDeclaration(function_definition->get_declaration())
+          : nullptr;
+  SgFunctionParameterList *parameter_list =
+      function_decl != nullptr ? function_decl->get_parameterList() : nullptr;
+  Sg_File_Info *body_start =
+      block != nullptr ? block->get_startOfConstruct() : nullptr;
+  Sg_File_Info *header_end = parameter_list != nullptr
+                                 ? parameter_list->get_endOfConstruct()
+                                 : nullptr;
+  Sg_File_Info *decl_start = function_decl != nullptr
+                                 ? function_decl->get_startOfConstruct()
+                                 : nullptr;
+  Sg_File_Info *decl_file_info =
+      function_decl != nullptr ? function_decl->get_file_info() : nullptr;
+
+  if (sourceLineContainsOpeningBrace(header_end) ||
+      sourceLineContainsOpeningBrace(decl_start) ||
+      sourceLineContainsOpeningBrace(decl_file_info)) {
+    return true;
+  }
+
+  if (!hasConcreteFileLocation(body_start)) {
+    return false;
+  }
+
+  if (hasConcreteFileLocation(header_end) &&
+      body_start->isSameFile(header_end) &&
+      body_start->get_line() == header_end->get_line()) {
+    return true;
+  }
+
+  return hasConcreteFileLocation(decl_start) &&
+         body_start->isSameFile(decl_start) &&
+         body_start->get_line() == decl_start->get_line();
+}
+
+bool statementUsesCompactFunctionBodyLayout(const SgStatement *statement);
+
+bool functionBodyOriginallyUsedCompactSingleLineLayout(
+    const SgBasicBlock *block) {
+  SgFunctionDefinition *function_definition =
+      block != nullptr ? isSgFunctionDefinition(block->get_parent()) : nullptr;
+  if (block == nullptr || function_definition == nullptr) {
+    return false;
+  }
+
+  const SgStatementPtrList &statements = block->get_statements();
+  if (statements.size() != 1 ||
+      !statementUsesCompactFunctionBodyLayout(statements.front())) {
+    return false;
+  }
+
+  Sg_File_Info *body_start = block->get_startOfConstruct();
+  Sg_File_Info *body_end = block->get_endOfConstruct();
+  Sg_File_Info *stmt_start = statements.front()->get_startOfConstruct();
+  Sg_File_Info *stmt_end = statements.front()->get_endOfConstruct();
+  if (!hasConcreteFileLocation(body_start) ||
+      !hasConcreteFileLocation(body_end) ||
+      !hasConcreteFileLocation(stmt_start) ||
+      !hasConcreteFileLocation(stmt_end) ||
+      !body_start->isSameFile(stmt_start) ||
+      !body_start->isSameFile(stmt_end) || !body_start->isSameFile(body_end)) {
+    return false;
+  }
+
+  return body_start->get_line() == stmt_start->get_line() &&
+         body_start->get_line() == stmt_end->get_line() &&
+         body_start->get_line() == body_end->get_line();
+}
+
+bool functionBodyPrefersSimpleSameLineOpeningBrace(const SgBasicBlock *block) {
+  if (block == nullptr || block->get_statements().empty() ||
+      block->isTransformation() || block->get_containsTransformation() ||
+      block->get_containsTransformationToSurroundingWhitespace() ||
+      locatedNodeHasAttachedPreprocessingInfo(
+          const_cast<SgBasicBlock *>(block)) ||
+      basicBlockStartsWithLeadingPreprocessingInfo(block)) {
+    return false;
+  }
+
+  int top_level_control_statements = 0;
+  for (SgStatement *statement : block->get_statements()) {
+    if (statement == nullptr) {
+      continue;
+    }
+
+    switch (statement->variantT()) {
+    case V_SgIfStmt:
+    case V_SgForStatement:
+    case V_SgRangeBasedForStatement:
+    case V_SgWhileStmt:
+    case V_SgDoWhileStmt:
+    case V_SgSwitchStatement:
+      ++top_level_control_statements;
+      break;
+
+    default:
+      break;
+    }
+  }
+
+  if (top_level_control_statements != 1) {
+    return false;
+  }
+
+  const SgNodePtrList &while_nodes =
+      NodeQuery::querySubTree(const_cast<SgBasicBlock *>(block), V_SgWhileStmt);
+  const SgNodePtrList &switch_nodes = NodeQuery::querySubTree(
+      const_cast<SgBasicBlock *>(block), V_SgSwitchStatement);
+  if (!while_nodes.empty() || !switch_nodes.empty()) {
+    return false;
+  }
+
+  const size_t loop_count =
+      NodeQuery::querySubTree(const_cast<SgBasicBlock *>(block),
+                              V_SgForStatement)
+          .size() +
+      NodeQuery::querySubTree(const_cast<SgBasicBlock *>(block),
+                              V_SgRangeBasedForStatement)
+          .size() +
+      NodeQuery::querySubTree(const_cast<SgBasicBlock *>(block),
+                              V_SgDoWhileStmt)
+          .size();
+  return loop_count <= 1;
+}
+
+bool shouldEmitElseOnSameLine(SgIfStmt *if_stmt) {
+  if (if_stmt == nullptr) {
+    return false;
+  }
+
+  SgStatement *true_body = if_stmt->get_true_body();
+  SgStatement *false_body = if_stmt->get_false_body();
+  if (true_body == nullptr || false_body == nullptr) {
+    return false;
+  }
+
+  if (isSgBasicBlock(true_body) != nullptr) {
+    return true;
+  }
+
+  Sg_File_Info *true_end = true_body->get_endOfConstruct();
+  Sg_File_Info *false_start = false_body->get_startOfConstruct();
+  if (hasConcreteFileLocation(true_end) &&
+      hasConcreteFileLocation(false_start) &&
+      true_end->isSameFile(false_start)) {
+    return true_end->get_line() == false_start->get_line();
+  }
+
+  return false;
+}
+
+bool isClassAccessSpecifierDeclaration(const SgStatement *stmt) {
+  const SgEmptyDeclaration *empty_decl = isSgEmptyDeclaration(stmt);
+  if (empty_decl == nullptr ||
+      isSgClassDefinition(empty_decl->get_parent()) == nullptr) {
+    return false;
+  }
+
+  const SgAccessModifier &access =
+      empty_decl->get_declarationModifier().get_accessModifier();
+  return access.get_is_explicit() &&
+         (access.isPrivate() || access.isProtected() || access.isPublic());
+}
+
+bool declarationPrintsLeadingAccessLabel(
+    const SgDeclarationStatement *decl_stmt, const SgUnparse_Info &info) {
+  if (decl_stmt == nullptr || isSgEmptyDeclaration(decl_stmt) != nullptr) {
+    return false;
+  }
+
+  const SgClassDefinition *parent_class =
+      isSgClassDefinition(decl_stmt->get_parent());
+  if (parent_class == nullptr ||
+      parent_class->get_declaration()->get_class_type() !=
+          SgClassDeclaration::e_class) {
+    return false;
+  }
+
+  const SgAccessModifier &access =
+      decl_stmt->get_declarationModifier().get_accessModifier();
+  if (access.get_modifier() == SgAccessModifier::e_unknown) {
+    return false;
+  }
+
+  bool print_label = access.get_is_explicit();
+  if (info.isPrivateAccess()) {
+    print_label = print_label || !access.isPrivate();
+  } else if (info.isProtectedAccess()) {
+    print_label = print_label || !access.isProtected();
+  } else if (info.isPublicAccess()) {
+    print_label = print_label || !access.isPublic();
+  } else if (info.isDefaultAccess()) {
+    print_label = print_label || !access.isDefault();
+  } else {
+    print_label = print_label || !access.isDefault();
+  }
+
+  return print_label &&
+         (access.isPrivate() || access.isProtected() || access.isPublic());
+}
+
+bool classMemberHasPreviousSibling(const SgStatement *stmt) {
+  if (stmt == nullptr) {
+    return false;
+  }
+
+  const SgClassDefinition *class_definition =
+      isSgClassDefinition(stmt->get_parent());
+  if (class_definition == nullptr) {
+    return false;
+  }
+
+  const SgDeclarationStatementPtrList &members =
+      class_definition->get_members();
+  SgDeclarationStatementPtrList::const_iterator position =
+      std::find(members.begin(), members.end(),
+                isSgDeclarationStatement(const_cast<SgStatement *>(stmt)));
+  return position != members.end() && position != members.begin();
+}
+
+bool isNamespaceOrGlobalScope(const SgNode *node) {
+  return isSgNamespaceDefinitionStatement(node) != nullptr ||
+         isSgGlobal(node) != nullptr;
+}
+
+bool declarationNeedsLeadingBlankLine(const SgStatement *stmt) {
+  const SgClassDeclaration *class_decl = isSgClassDeclaration(stmt);
+  const SgClassDeclaration *defining_decl =
+      class_decl != nullptr
+          ? isSgClassDeclaration(class_decl->get_definingDeclaration())
+          : nullptr;
+  if (class_decl == nullptr || defining_decl == nullptr ||
+      defining_decl != class_decl || class_decl->get_definition() == nullptr) {
+    return false;
+  }
+
+  if (isSgTemplateClassDeclaration(class_decl) != nullptr ||
+      isSgTemplateInstantiationDecl(class_decl) != nullptr) {
+    return false;
+  }
+
+  return isNamespaceOrGlobalScope(class_decl->get_scope());
+}
+
+bool statementUsesCompactFunctionBodyLayout(const SgStatement *statement) {
+  if (statement == nullptr || statement->isTransformation() ||
+      statement->get_containsTransformation() ||
+      statement->get_containsTransformationToSurroundingWhitespace() ||
+      locatedNodeHasAttachedPreprocessingInfo(
+          isSgLocatedNode(const_cast<SgStatement *>(statement)))) {
+    return false;
+  }
+
+  switch (statement->variantT()) {
+  case V_SgExprStatement:
+  case V_SgReturnStmt:
+  case V_SgBreakStmt:
+  case V_SgContinueStmt:
+  case V_SgNullStatement:
+    return true;
+
+  default:
+    return false;
+  }
+}
+
+bool functionBodyUsesInlineSameLineOpeningBrace(const SgBasicBlock *block) {
+  if (block == nullptr || block->isTransformation() ||
+      block->get_containsTransformation() ||
+      block->get_containsTransformationToSurroundingWhitespace() ||
+      locatedNodeHasAttachedPreprocessingInfo(
+          const_cast<SgBasicBlock *>(block)) ||
+      basicBlockStartsWithLeadingPreprocessingInfo(block)) {
+    return false;
+  }
+
+  SgFunctionDefinition *function_definition =
+      isSgFunctionDefinition(block->get_parent());
+  if (function_definition == nullptr) {
+    return false;
+  }
+
+  SgFunctionDeclaration *function_decl =
+      isSgFunctionDeclaration(function_definition->get_declaration());
+  if (function_decl == nullptr) {
+    return false;
+  }
+
+  return isSgMemberFunctionDeclaration(function_decl) != nullptr ||
+         isSgTemplateFunctionDeclaration(function_decl) != nullptr ||
+         isSgTemplateMemberFunctionDeclaration(function_decl) != nullptr;
+}
+
+std::string compactFunctionBodyStatementPreview(SgStatement *statement) {
+  if (statement == nullptr) {
+    return "";
+  }
+
+  switch (statement->variantT()) {
+  case V_SgExprStatement: {
+    SgExprStatement *expr_stmt = isSgExprStatement(statement);
+    ASSERT_not_null(expr_stmt);
+    ASSERT_not_null(expr_stmt->get_expression());
+    return normalizePreviewWhitespace(
+               globalUnparseToString(expr_stmt->get_expression(), NULL)) +
+           ";";
+  }
+
+  case V_SgReturnStmt: {
+    SgReturnStmt *return_stmt = isSgReturnStmt(statement);
+    ASSERT_not_null(return_stmt);
+    SgExpression *expr = return_stmt->get_expression();
+    if (expr == nullptr || isSgNullExpression(expr) != nullptr) {
+      return "return;";
+    }
+    return std::string("return ") +
+           normalizePreviewWhitespace(globalUnparseToString(expr, NULL)) + ";";
+  }
+
+  case V_SgBreakStmt:
+    return "break;";
+
+  case V_SgContinueStmt:
+    return "continue;";
+
+  case V_SgNullStatement:
+    return ";";
+
+  default:
+    return "";
+  }
+}
+
+std::string buildFunctionDeclarationPreviewString(
+    SgFunctionDeclaration *function_declaration);
+
+bool basicBlockUsesCompactFunctionBodyLayout(const SgBasicBlock *block,
+                                             const SgUnparse_Info &info) {
+  (void)info;
+  SgFunctionDefinition *function_definition =
+      block != nullptr ? isSgFunctionDefinition(block->get_parent()) : nullptr;
+  SgFunctionDeclaration *function_declaration =
+      function_definition != nullptr
+          ? isSgFunctionDeclaration(function_definition->get_declaration())
+          : nullptr;
+  const bool preserve_original_compact_layout =
+      functionBodyOriginallyUsedCompactSingleLineLayout(block);
+  if (block == nullptr || function_definition == nullptr ||
+      block->isTransformation() || block->get_containsTransformation() ||
+      block->get_containsTransformationToSurroundingWhitespace() ||
+      locatedNodeHasAttachedPreprocessingInfo(
+          const_cast<SgBasicBlock *>(block)) ||
+      basicBlockStartsWithLeadingPreprocessingInfo(block) ||
+      !block->get_asm_function_body().empty()) {
+    return false;
+  }
+
+  if (function_declaration != nullptr) {
+    const std::string declaration_preview =
+        buildFunctionDeclarationPreviewString(function_declaration);
+    if (!declaration_preview.empty() &&
+        static_cast<int>(declaration_preview.size()) >=
+            kNormalizedDeclarationWrapColumn) {
+      return false;
+    }
+  }
+
+  const SgStatementPtrList &statements = block->get_statements();
+  if (statements.empty()) {
+    Sg_File_Info *body_start = block->get_startOfConstruct();
+    Sg_File_Info *body_end = block->get_endOfConstruct();
+    return hasConcreteFileLocation(body_start) &&
+           hasConcreteFileLocation(body_end) &&
+           body_start->isSameFile(body_end) &&
+           body_start->get_line() == body_end->get_line();
+  }
+  if (statements.size() != 1) {
+    return false;
+  }
+
+  return preserve_original_compact_layout &&
+         statementUsesCompactFunctionBodyLayout(statements.front());
+}
+
+void unparseCompactFunctionBodyStatement(Unparse_ExprStmt *unparser,
+                                         SgStatement *statement,
+                                         SgUnparse_Info &info) {
+  ASSERT_not_null(unparser);
+  ASSERT_not_null(statement);
+
+  switch (statement->variantT()) {
+  case V_SgExprStatement:
+    unparser->unparseExprStmt(statement, info);
+    break;
+
+  case V_SgReturnStmt:
+    unparser->unparseReturnStmt(statement, info);
+    break;
+
+  case V_SgBreakStmt:
+    unparser->unparseBreakStmt(statement, info);
+    break;
+
+  case V_SgContinueStmt:
+    unparser->unparseContinueStmt(statement, info);
+    break;
+
+  case V_SgNullStatement:
+    unparser->unparseNullStatement(statement, info);
+    break;
+
+  default:
+    ROSE_ABORT();
+  }
+}
+
+bool functionCanKeepCompactPartialTokenHeader(
+    const SgFunctionDeclaration *function_decl, const SgUnparse_Info &info) {
+  if (function_decl == nullptr) {
+    return false;
+  }
+
+  if (useNormalizedDeclarationScopeFormatting(function_decl, info)) {
+    return false;
+  }
+
+  if (function_decl->isTransformation() ||
+      function_decl->get_containsTransformationToSurroundingWhitespace()) {
+    return false;
+  }
+
+  if (locatedNodeHasAttachedPreprocessingInfo(function_decl) ||
+      locatedNodeHasAttachedPreprocessingInfo(
+          function_decl->get_parameterList())) {
+    return false;
+  }
+
+  if (nodeHasTransformation(function_decl->get_parameterList())) {
+    return false;
+  }
+
+  return true;
+}
+
+bool useStatementFormattingForStandaloneBasicBlock(
+    const SgBasicBlock *basic_block, const SgUnparse_Info &info) {
+  if (basic_block == nullptr) {
+    return false;
+  }
+
+  SgNode *parent = basic_block->get_parent();
+  const bool parent_owns_block_layout =
+      isSgFunctionDefinition(parent) != nullptr ||
+      isSgForStatement(parent) != nullptr ||
+      isSgRangeBasedForStatement(parent) != nullptr ||
+      isSgWhileStmt(parent) != nullptr || isSgDoWhileStmt(parent) != nullptr ||
+      isSgIfStmt(parent) != nullptr || isSgSwitchStatement(parent) != nullptr ||
+      isSgTryStmt(parent) != nullptr ||
+      isSgCatchOptionStmt(parent) != nullptr ||
+      isSgClassDefinition(parent) != nullptr ||
+      isSgNamespaceDefinitionStatement(parent) != nullptr;
+  if (parent_owns_block_layout || isSgStatement(parent) == nullptr) {
+    return false;
+  }
+
+  if (useCompactFunctionFormatting(basic_block, info)) {
+    return true;
+  }
+
+  return basic_block->isTransformation() == false &&
+         basic_block->get_containsTransformation() == false &&
+         basic_block->get_containsTransformationToSurroundingWhitespace() ==
+             false;
+}
+
+bool classDefinitionHasInsidePreprocessingInfo(
+    const SgClassDefinition *class_defn) {
+  AttachedPreprocessingInfoType *attached =
+      class_defn != nullptr ? const_cast<SgClassDefinition *>(class_defn)
+                                  ->getAttachedPreprocessingInfo()
+                            : nullptr;
+  if (attached == nullptr) {
+    return false;
+  }
+
+  for (PreprocessingInfo *info : *attached) {
+    if (info != nullptr &&
+        info->getRelativePosition() == PreprocessingInfo::inside) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool shouldRenderClassDefinitionInline(const SgClassDefinition *class_defn,
+                                       bool unparsed_using_tokens) {
+  if (class_defn == nullptr || unparsed_using_tokens) {
+    return false;
+  }
+
+  if (!class_defn->get_members().empty() ||
+      classDefinitionHasInsidePreprocessingInfo(class_defn) ||
+      class_defn->get_packingAlignment() != 0) {
+    return false;
+  }
+
+  return class_defn->getAttribute(AstUnparseAttribute::markerName) == nullptr;
+}
+
+bool classDefinitionBodyNeedsLeadingSpace(const SgClassDefinition *class_defn) {
+  if (class_defn == nullptr) {
+    return false;
+  }
+
+  const SgClassDeclaration *decl = class_defn->get_declaration();
+  return decl == nullptr || !decl->get_isUnNamed();
+}
+
+void restoreInheritedPartialTokenState(SgUnparse_Info &info,
+                                       bool inherited_partial_token_state) {
+  if (inherited_partial_token_state) {
+    info.set_unparsedPartiallyUsingTokenStream();
+  } else {
+    info.unset_unparsedPartiallyUsingTokenStream();
+  }
 }
 
 void enableInlineDefinitionForFunctionReturnTypeIfNeeded(SgUnparse_Info &info,
@@ -496,6 +1740,70 @@ bool isNormalizedClassTemplateMemberFunction(
     const SgTemplateMemberFunctionDeclaration *decl) {
   return decl != NULL && decl->get_marked_as_frontend_normalization() &&
          decl->get_associatedClassDeclaration() != NULL;
+}
+
+static bool
+classTemplateRequiresStructuralUnparse(SgTemplateClassDeclaration *decl) {
+  if (decl == NULL) {
+    return false;
+  }
+
+  SgClassDefinition *class_def = decl->get_definition();
+  if (class_def == NULL) {
+    return false;
+  }
+
+  const SgDeclarationStatementPtrList &members = class_def->get_members();
+  for (SgDeclarationStatement *member : members) {
+    if (member == NULL) {
+      continue;
+    }
+
+    if (SgMemberFunctionDeclaration *member_function =
+            isSgMemberFunctionDeclaration(member)) {
+      if (member_function->get_marked_as_frontend_normalization()) {
+        return true;
+      }
+      continue;
+    }
+
+    if (SgTemplateMemberFunctionDeclaration *template_member_function =
+            isSgTemplateMemberFunctionDeclaration(member)) {
+      if (isNormalizedClassTemplateMemberFunction(template_member_function)) {
+        return true;
+      }
+      continue;
+    }
+
+    SgClassDeclaration *nested_class = isSgClassDeclaration(member);
+    if (nested_class == NULL) {
+      continue;
+    }
+
+    if (nested_class->get_definition() != NULL) {
+      continue;
+    }
+
+    SgClassDeclaration *defining_decl =
+        isSgClassDeclaration(nested_class->get_definingDeclaration());
+    if (defining_decl != NULL && defining_decl != nested_class) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static bool
+classTemplateForwardDeclRequiresAstUnparse(SgTemplateClassDeclaration *decl) {
+  if (decl == NULL || decl->get_definition() != NULL) {
+    return false;
+  }
+
+  SgTemplateClassDeclaration *defining_decl =
+      isSgTemplateClassDeclaration(decl->get_definingDeclaration());
+  return defining_decl != NULL && defining_decl != decl &&
+         defining_decl->get_definition() != NULL;
 }
 
 using TemplateParamSubstitution = std::map<std::string, std::string>;
@@ -1087,6 +2395,181 @@ bool requiresTrailingReturnTypeSyntax(const SgType *return_type) {
   return true;
 }
 
+std::string buildFunctionParameterListPreviewString(
+    SgFunctionDeclaration *function_declaration) {
+  if (function_declaration == nullptr) {
+    return "";
+  }
+
+  std::string preview;
+  bool need_separator = false;
+  for (SgInitializedName *parameter : function_declaration->get_args()) {
+    std::string parameter_preview =
+        buildFunctionParameterPreviewString(parameter);
+    if (parameter_preview.empty() && parameter != nullptr) {
+      parameter_preview =
+          normalizePreviewWhitespace(globalUnparseToString(parameter, NULL));
+    }
+
+    if (need_separator) {
+      preview += ", ";
+    }
+    preview += parameter_preview;
+    need_separator = true;
+  }
+
+  return preview;
+}
+
+std::string buildCtorInitializerPreviewString(
+    SgMemberFunctionDeclaration *member_function) {
+  if (member_function == nullptr) {
+    return "";
+  }
+
+  const SgInitializedNamePtrList *ctor_inits = &member_function->get_ctors();
+  if (ctor_inits->empty()) {
+    if (SgMemberFunctionDeclaration *def_decl = isSgMemberFunctionDeclaration(
+            member_function->get_definingDeclaration())) {
+      if (def_decl != member_function && !def_decl->get_ctors().empty()) {
+        ctor_inits = &def_decl->get_ctors();
+      }
+    }
+  }
+  if (ctor_inits->empty()) {
+    return "";
+  }
+
+  std::string preview = " : ";
+  bool need_separator = false;
+  for (SgInitializedName *ctor_init : *ctor_inits) {
+    if (ctor_init == nullptr) {
+      continue;
+    }
+
+    if (need_separator) {
+      preview += ", ";
+    }
+
+    preview += ctor_init->get_name().getString();
+    if (SgExpression *initializer = ctor_init->get_initializer()) {
+      std::string initializer_preview =
+          normalizePreviewWhitespace(globalUnparseToString(initializer, NULL));
+      if (!initializer_preview.empty()) {
+        const char first = initializer_preview.front();
+        if (first == '(' || first == '{') {
+          preview += initializer_preview;
+        } else {
+          preview += "(" + initializer_preview + ")";
+        }
+      } else {
+        preview += "()";
+      }
+    }
+
+    need_separator = true;
+  }
+
+  return preview;
+}
+
+std::string buildFunctionDeclarationPreviewString(
+    SgFunctionDeclaration *function_declaration) {
+  if (function_declaration == nullptr) {
+    return "";
+  }
+
+  std::string preview;
+  if (!(function_declaration->get_specialFunctionModifier().isConstructor() ||
+        function_declaration->get_specialFunctionModifier().isDestructor() ||
+        function_declaration->get_specialFunctionModifier().isConversion()) &&
+      !function_declaration->get_is_deduction_guide()) {
+    if (SgType *return_type = function_declaration->get_orig_return_type()) {
+      if (requiresTrailingReturnTypeSyntax(return_type)) {
+        preview = "auto";
+      } else {
+        preview = normalizePreviewWhitespace(
+            globalUnparseToString(return_type, NULL));
+      }
+    }
+  }
+
+  const std::string function_name =
+      function_declaration->get_name().getString();
+  if (!function_name.empty()) {
+    if (!preview.empty()) {
+      preview += " ";
+    }
+    preview += function_name;
+  }
+
+  preview += "(";
+  preview += buildFunctionParameterListPreviewString(function_declaration);
+  preview += ")";
+
+  if (SgType *return_type = function_declaration->get_orig_return_type()) {
+    if (!function_declaration->get_is_deduction_guide() &&
+        requiresTrailingReturnTypeSyntax(return_type)) {
+      preview += " -> ";
+      preview +=
+          normalizePreviewWhitespace(globalUnparseToString(return_type, NULL));
+    }
+  }
+
+  if (SgMemberFunctionDeclaration *member_function =
+          isSgMemberFunctionDeclaration(function_declaration)) {
+    preview += buildCtorInitializerPreviewString(member_function);
+  }
+
+  return preview;
+}
+
+bool shouldWrapBeforeFunctionDeclarator(
+    SgFunctionDeclaration *function_declaration, const SgUnparse_Info &info,
+    int current_column) {
+  const bool normalized_formatting =
+      function_declaration != nullptr &&
+      useNormalizedDeclarationScopeFormatting(function_declaration, info);
+  if (function_declaration == nullptr || !normalized_formatting ||
+      function_declaration->get_is_deduction_guide()) {
+    return false;
+  }
+
+  const auto &special = function_declaration->get_specialFunctionModifier();
+  if (special.isConstructor() || special.isDestructor() ||
+      special.isConversion()) {
+    return false;
+  }
+
+  SgType *return_type = function_declaration->get_orig_return_type();
+  if (return_type == nullptr || requiresTrailingReturnTypeSyntax(return_type)) {
+    return false;
+  }
+
+  const std::string declaration_preview =
+      buildFunctionDeclarationPreviewString(function_declaration);
+  const bool should_wrap = !declaration_preview.empty() &&
+                           static_cast<int>(declaration_preview.size()) >=
+                               kNormalizedDeclarationWrapColumn &&
+                           current_column >= 45;
+  return should_wrap;
+}
+
+bool shouldWrapBeforeTypedefName(const SgTypedefDeclaration *typedef_decl,
+                                 const SgUnparse_Info &info,
+                                 int current_column) {
+  if (typedef_decl == nullptr ||
+      !useNormalizedDeclarationScopeFormatting(typedef_decl, info)) {
+    return false;
+  }
+
+  const std::string typedef_name = typedef_decl->get_name().getString();
+  return !typedef_name.empty() &&
+         current_column + static_cast<int>(typedef_name.size()) >=
+             kNormalizedDeclarationWrapColumn &&
+         current_column >= 45;
+}
+
 bool isBaseOrDelegatingCtorPreinitializer(const SgInitializedName *ctor_init) {
   if (ctor_init == NULL) {
     return false;
@@ -1210,6 +2693,15 @@ size_t count_enclosing_template_instantiation_levels_for_class_specialization(
   }
 
   return level_count;
+}
+} // namespace
+
+namespace {
+SgUnparse_Info nestedStatementInfo(const SgUnparse_Info &info) {
+  SgUnparse_Info nested(info);
+  nested.unset_SkipSemiColon();
+  nested.unset_unparsedPartiallyUsingTokenStream();
+  return nested;
 }
 } // namespace
 
@@ -1464,6 +2956,70 @@ void UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
   // assert that any element index is less then the tokenVectorSize.
   SgTokenPtrList &tokenVector = sourceFile->get_token_list();
   int tokenVectorSize = tokenVector.size();
+  bool emitted_text_ends_with_newline = unp->cur.line_is_empty();
+  bool awaiting_pragma_suffix = false;
+
+  auto record_emitted_text = [&](const std::string &text) {
+    if (text.empty()) {
+      return;
+    }
+    emitted_text_ends_with_newline = text.back() == '\n' || text.back() == '\r';
+  };
+
+  auto repair_standalone_pragma_boundaries = [](const std::string &text) {
+    std::string repaired_text = text;
+    size_t position = 0;
+    while ((position = repaired_text.find("#pragma", position)) !=
+           std::string::npos) {
+      if (position > 0 && repaired_text[position - 1] != '\n' &&
+          repaired_text[position - 1] != '\r') {
+        repaired_text.insert(position, "\n");
+        position++;
+      }
+      position += std::char_traits<char>::length("#pragma");
+    }
+
+    return repaired_text;
+  };
+
+  auto is_linkage_marker_token_text = [](int classification,
+                                         const std::string &text) {
+    if (classification != ROSE_token_ids::C_CXX_PREPROCESSING_INFO) {
+      return false;
+    }
+
+    const size_t pos = text.find_first_not_of(" \t\f\v\r\n");
+    if (pos == std::string::npos) {
+      return false;
+    }
+
+    return text.compare(pos, 8, "extern \"") == 0 ||
+           text.compare(pos, 1, "}") == 0;
+  };
+
+  auto last_line_is_pragma_prefix = [](const std::string &text) {
+    const size_t last_newline = text.find_last_of("\r\n");
+    std::string last_line = last_newline == std::string::npos
+                                ? text
+                                : text.substr(last_newline + 1);
+    const size_t trim_end = last_line.find_last_not_of(" \t");
+    if (trim_end != std::string::npos) {
+      last_line.erase(trim_end + 1);
+    }
+
+    return last_line == "#pragma";
+  };
+
+  auto previous_token_lacks_line_break = [&](int index) {
+    if (index <= 0) {
+      return false;
+    }
+
+    const std::string &previous_text =
+        tokenVector[index - 1]->get_lexeme_string();
+    return previous_text.find('\n') == std::string::npos &&
+           previous_text.find('\r') == std::string::npos;
+  };
 
   // Note: that there is a single global map that is accessed from the
   // get_tokenSubsequenceMap() function, not one per SgSourceFile. I am not
@@ -1474,16 +3030,10 @@ void UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
   std::map<SgNode *, TokenStreamSequenceToNodeMapping *>
       &tokenStreamSequenceMap = sourceFile->get_tokenSubsequenceMap();
 
-  // TokenStreamSequenceToNodeMapping* tokenSubsequence_1 =
-  // tokenStreamSequenceMap[stmt_1]; ASSERT_not_null(tokenSubsequence_1);
-  TokenStreamSequenceToNodeMapping *tokenSubsequence_1 = NULL;
-
-  // DQ (10/4/2018): This is a essential test to avoid pointers to default
-  // constructed objects from appearing accedentally in the STL map.
-  if (tokenStreamSequenceMap.find(stmt_1) == tokenStreamSequenceMap.end()) {
-  } else {
-    tokenSubsequence_1 = tokenStreamSequenceMap[stmt_1];
-  }
+  SgLocatedNode *mapped_stmt_1 = stmt_1;
+  TokenStreamSequenceToNodeMapping *tokenSubsequence_1 =
+      lookup_token_subsequence_mapping_for_node(sourceFile, stmt_1,
+                                                &mapped_stmt_1);
 
   // DQ (9/25/2018): I think this is an issue for new IR nodes added to the AST
   // (such a SgIncludeDirective IR nodes within the header file unparsing
@@ -1494,21 +3044,10 @@ void UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     // files with the token-based unparsing.
   }
 
-  // DQ (10/4/2018): Move this to be initialized later so that we can understnad
-  // how a bug is happening between where the tokenStreamSequenceMap is accessed
-  // and where it is tested below. TokenStreamSequenceToNodeMapping*
-  // tokenSubsequence_2 = tokenStreamSequenceMap[stmt_2];
-  TokenStreamSequenceToNodeMapping *tokenSubsequence_2 = NULL;
-
-  // tokenSubsequence_2 = tokenStreamSequenceMap[stmt_2];
-  // DQ (10/4/2018): This is a essential test to avoid pointers to default
-  // constructed objects from appearing accedentally in the STL map.
-  if (tokenStreamSequenceMap.find(stmt_2) == tokenStreamSequenceMap.end()) {
-  } else {
-    // DQ (10/26/2018): Bug fix: I think this was a cut and paste error.
-    // tokenSubsequence_2 = tokenStreamSequenceMap[stmt_1];
-    tokenSubsequence_2 = tokenStreamSequenceMap[stmt_2];
-  }
+  SgLocatedNode *mapped_stmt_2 = stmt_2;
+  TokenStreamSequenceToNodeMapping *tokenSubsequence_2 =
+      lookup_token_subsequence_mapping_for_node(sourceFile, stmt_2,
+                                                &mapped_stmt_2);
 
   // DQ (9/25/2018): I think this is an issue for new IR nodes added to the AST
   // (such a SgIncludeDirective IR nodes within the header file unparsing
@@ -1824,7 +3363,6 @@ void UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
              StringUtility::numberToString(start) +
              " to end = " + StringUtility::numberToString(end) + " */ \n");
 #endif
-
     // DQ (6/2/2021): Avoid adjustments to the token bounds (the value of -1 is
     // an acceptable value and it means that there are no associated tokens).
     // ROSE_ASSERT(start >= 0);
@@ -1917,15 +3455,18 @@ void UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 #endif
         SgTokenPtrList::reverse_iterator m = whitespaceTokens.rbegin();
         while (m != whitespaceTokens.rend()) {
+          const std::string emitted_token_text =
+              repair_standalone_pragma_boundaries((*m)->get_lexeme_string());
           // Print token (whitespace).
 #if HIGH_FEDELITY_TOKEN_UNPARSING
-          *(unp->get_output_stream().output_stream())
-              << (*m)->get_lexeme_string();
+          *(unp->get_output_stream().output_stream()) << emitted_token_text;
+          unp->get_output_stream().account_for_raw_text(emitted_token_text);
 #else
           // Note that this will interprete line endings which is not going to
           // provide the precise token based output.
-          curprint((*m)->get_lexeme_string());
+          curprint(emitted_token_text);
 #endif
+          record_emitted_text(emitted_token_text);
           m++;
         }
       } else {
@@ -1943,6 +3484,34 @@ void UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           // DQ (1/10/2014): Make sure that we don't use data that is
           // unavailable.
           ROSE_ASSERT(j < (int)tokenVector.size());
+          std::string emitted_token_text = repair_standalone_pragma_boundaries(
+              tokenVector[j]->get_lexeme_string());
+          const int classification = tokenVector[j]->get_classification_code();
+          if (classification == ROSE_token_ids::C_CXX_COMMENTS && j > start) {
+            const int prev_class =
+                tokenVector[j - 1]->get_classification_code();
+            if (prev_class == ROSE_token_ids::C_CXX_WHITESPACE) {
+              size_t non_newline = 0;
+              while (non_newline < emitted_token_text.size() &&
+                     (emitted_token_text[non_newline] == '\n' ||
+                      emitted_token_text[non_newline] == '\r')) {
+                ++non_newline;
+              }
+              if (non_newline > 0) {
+                emitted_token_text.erase(0, non_newline);
+              }
+            }
+          }
+          const bool starts_preprocessing_directive =
+              (classification == ROSE_token_ids::C_CXX_PREPROCESSING_INFO &&
+               !is_linkage_marker_token_text(classification,
+                                             emitted_token_text)) ||
+              tokenVector[j]->get_lexeme_string().rfind("#pragma", 0) == 0;
+          const bool token_contains_pragma =
+              emitted_token_text.find("#pragma") != std::string::npos;
+          const bool pragma_prefix_continues =
+              last_line_is_pragma_prefix(emitted_token_text);
+          const bool awaiting_suffix_before_token = awaiting_pragma_suffix;
 
 #if DEBUG_USING_CURPRINT && DEBUG_TOKEN_STREAM_UNPARSING
           curprint(string("\n/* In unparseStatementFromTokenStream(): "
@@ -1954,14 +3523,38 @@ void UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
                  "Output tokenVector[j=%d]->get_lexeme_string() = %s \n",
                  j, tokenVector[j]->get_lexeme_string().c_str());
 #endif
+          if (starts_preprocessing_directive &&
+              (!emitted_text_ends_with_newline ||
+               previous_token_lacks_line_break(j))) {
 #if HIGH_FEDELITY_TOKEN_UNPARSING
-          *(unp->get_output_stream().output_stream())
-              << tokenVector[j]->get_lexeme_string();
+            *(unp->get_output_stream().output_stream()) << "\n";
+            unp->get_output_stream().account_for_raw_text("\n");
+#else
+            curprint("\n");
+#endif
+            emitted_text_ends_with_newline = true;
+          }
+#if HIGH_FEDELITY_TOKEN_UNPARSING
+          *(unp->get_output_stream().output_stream()) << emitted_token_text;
+          unp->get_output_stream().account_for_raw_text(emitted_token_text);
 #else
           // Note that this will interprete line endings which is not going to
           // provide the precise token based output.
-          curprint(tokenVector[j]->get_lexeme_string());
+          curprint(emitted_token_text);
 #endif
+          record_emitted_text(emitted_token_text);
+          if (pragma_prefix_continues) {
+            awaiting_pragma_suffix = true;
+          } else if (awaiting_suffix_before_token || token_contains_pragma) {
+#if HIGH_FEDELITY_TOKEN_UNPARSING
+            *(unp->get_output_stream().output_stream()) << "\n";
+            unp->get_output_stream().account_for_raw_text("\n");
+#else
+            curprint("\n");
+#endif
+            emitted_text_ends_with_newline = true;
+            awaiting_pragma_suffix = false;
+          }
         }
       }
     } else {
@@ -2241,6 +3834,40 @@ void Unparse_ExprStmt::unparseFunctionArgs(SgFunctionDeclaration *funcdecl_stmt,
     p_syntax = paramSyntax->get_args().begin();
   }
 
+  std::vector<std::string> parameter_previews;
+  bool can_wrap_parameters =
+      sourceRequestsNormalizedDeclarationFormatting(funcdecl_stmt, info) &&
+      !funcdecl_stmt->get_args().empty() &&
+      !funcdecl_stmt->get_oldStyleDefinition();
+  if (can_wrap_parameters) {
+    SgInitializedNamePtrList::iterator preview_syntax = p_syntax;
+    for (SgInitializedNamePtrList::iterator preview =
+             funcdecl_stmt->get_args().begin();
+         preview != funcdecl_stmt->get_args().end(); ++preview) {
+      SgInitializedName *preview_param =
+          use_param_syntax ? *preview_syntax : *preview;
+      if (preview_param == nullptr ||
+          hasUnsafeParameterPreprocessingInfo(preview_param)) {
+        can_wrap_parameters = false;
+        break;
+      }
+
+      const std::string preview_string =
+          buildFunctionParameterPreviewString(preview_param);
+      if (preview_string.empty()) {
+        can_wrap_parameters = false;
+        break;
+      }
+
+      parameter_previews.push_back(preview_string);
+      if (use_param_syntax) {
+        ++preview_syntax;
+      }
+    }
+  }
+  const int parameter_wrap_indent = unp->cur.current_col();
+  size_t parameter_index = 0;
+
   while (p != funcdecl_stmt->get_args().end()) {
     // Liao 11/9/2010,
     // Skip duplicated unparsing of the attached information for C function
@@ -2282,7 +3909,20 @@ void Unparse_ExprStmt::unparseFunctionArgs(SgFunctionDeclaration *funcdecl_stmt,
     // Check if this is the last argument (output a "," separator if not)
     if (p != funcdecl_stmt->get_args().end()) {
       curprint(",");
+      const bool wrap_before_next =
+          can_wrap_parameters &&
+          parameter_index + 1 < parameter_previews.size() &&
+          unp->cur.current_col() + 1 +
+                  static_cast<int>(
+                      parameter_previews[parameter_index + 1].size()) >=
+              kNormalizedDeclarationWrapColumn;
+      if (wrap_before_next) {
+        unp->cur.insert_newline(1, parameter_wrap_indent);
+      } else if (can_wrap_parameters) {
+        curprint(" ");
+      }
     }
+    ++parameter_index;
   }
 }
 
@@ -2507,7 +4147,8 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
   // (info.unparsedPartiallyUsingTokenStream() == false)
   bool saved_unparsedPartiallyUsingTokenStream =
       info.unparsedPartiallyUsingTokenStream();
-  if (saved_unparsedPartiallyUsingTokenStream == false) {
+  if (saved_unparsedPartiallyUsingTokenStream == false &&
+      !info.SkipFormatting()) {
     // DQ (11/14/2015): If we are unparsing statements in a SgBasicBlock, then
     // we want to know if the SgBasicBlock is being unparsed using the
     // partial_token_sequence so that we can supress the formatting that adds a
@@ -2517,7 +4158,44 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
     if (parentStatementListBeingUnparsedUsingPartialTokenSequence == true) {
       // ROSE_ASSERT(false);
     } else {
-      unp->cur.format(stmt, info, FORMAT_BEFORE_STMT);
+      SgBasicBlock *parent_block = isSgBasicBlock(stmt->get_parent());
+      const bool access_specifier = isClassAccessSpecifierDeclaration(stmt);
+      const bool leading_access_label =
+          !access_specifier && declarationPrintsLeadingAccessLabel(
+                                   isSgDeclarationStatement(stmt), info);
+      const bool compact_switch_label =
+          !access_specifier && !leading_access_label &&
+          useCompactFunctionFormatting(stmt, info) && parent_block != nullptr &&
+          isSgSwitchStatement(parent_block->get_parent()) != nullptr &&
+          (isSgCaseOptionStmt(stmt) != nullptr ||
+           isSgDefaultOptionStmt(stmt) != nullptr);
+      if (compact_switch_label || access_specifier || leading_access_label) {
+        int indent = (access_specifier || leading_access_label)
+                         ? std::max(unp->cur.statement_indent() - TABINDENT, 0)
+                         : unp->cur.statement_indent();
+        if (!access_specifier && !leading_access_label) {
+          ASSERT_not_null(parent_block);
+          const SgStatementPtrList &siblings = parent_block->get_statements();
+          SgStatementPtrList::const_iterator position =
+              std::find(siblings.begin(), siblings.end(), stmt);
+          const bool follows_case_label =
+              position != siblings.begin() &&
+              (isSgCaseOptionStmt(*std::prev(position)) != nullptr ||
+               isSgDefaultOptionStmt(*std::prev(position)) != nullptr);
+          if (!follows_case_label) {
+            indent = std::max(indent - TABINDENT, 0);
+          }
+        }
+        if (unp->cur.line_is_empty()) {
+          if (unp->cur.current_col() < indent) {
+            curprint(std::string(indent - unp->cur.current_col(), ' '));
+          }
+        } else {
+          unp->cur.insert_newline(1, indent);
+        }
+      } else {
+        unp->cur.format(stmt, info, FORMAT_BEFORE_STMT);
+      }
     }
   }
 
@@ -2876,13 +4554,21 @@ void Unparse_ExprStmt::unparseNamespaceDeclarationStatement(
                                       e_token_subsequence_start, info);
 
       SgUnparse_Info ninfo(info);
+      size_t extern_brace_depth = 0;
+      bool extern_brace_active = ninfo.get_extern_C_with_braces();
 
       SgDeclarationStatementPtrList &statementList =
           namespaceDefinition->get_declarations();
       SgDeclarationStatementPtrList::iterator statementIterator =
           statementList.begin();
       while (statementIterator != statementList.end()) {
-        unparseStatement(*statementIterator, ninfo);
+        SgUnparse_Info child_info(ninfo);
+        const bool inherited_partial_token_state =
+            child_info.unparsedPartiallyUsingTokenStream();
+        unparseStatementWithExternBraceTracking(*statementIterator, child_info,
+                                                extern_brace_depth,
+                                                extern_brace_active);
+        restoreInheritedPartialTokenState(ninfo, inherited_partial_token_state);
         statementIterator++;
       }
       unparseStatementFromTokenStream(namespaceDefinition, stmt,
@@ -2955,8 +4641,7 @@ void Unparse_ExprStmt::unparseNamespaceDefinitionStatement(
   bool saved_unparsedPartiallyUsingTokenStream =
       info.unparsedPartiallyUsingTokenStream();
   if (saved_unparsedPartiallyUsingTokenStream == false) {
-    unp->cur.format(namespaceDefinition, info, FORMAT_BEFORE_BASIC_BLOCK2);
-    curprint("{");
+    curprint(" {");
     unp->cur.format(namespaceDefinition, info, FORMAT_AFTER_BASIC_BLOCK2);
   } else {
     unparseStatementFromTokenStream(stmt, e_token_subsequence_start,
@@ -2976,10 +4661,20 @@ void Unparse_ExprStmt::unparseNamespaceDefinitionStatement(
     SgStatement *currentStatement = *statementIterator;
     ASSERT_not_null(currentStatement);
 
+    if (saved_unparsedPartiallyUsingTokenStream == false &&
+        declarationNeedsLeadingBlankLine(currentStatement)) {
+      const int indent = unp->cur.statement_indent();
+      unp->cur.insert_newline(unp->cur.line_is_empty() ? 1 : 2, indent);
+    }
+
     // DQ (11/6/2004): use ninfo instead of info for nested declarations in
     // namespace
+    SgUnparse_Info child_info(ninfo);
+    const bool inherited_partial_token_state =
+        child_info.unparsedPartiallyUsingTokenStream();
     unparseStatementWithExternBraceTracking(
-        currentStatement, ninfo, extern_brace_depth, extern_brace_active);
+        currentStatement, child_info, extern_brace_depth, extern_brace_active);
+    restoreInheritedPartialTokenState(ninfo, inherited_partial_token_state);
 
     // DQ (12/18/2014): Save the last statement so that we can use the
     // trailing token stream if using the token-based unparsing.
@@ -2995,8 +4690,17 @@ void Unparse_ExprStmt::unparseNamespaceDefinitionStatement(
     unparseAttachedPreprocessingInfo(namespaceDefinition, info,
                                      PreprocessingInfo::inside);
 
-    unp->cur.format(namespaceDefinition, info, FORMAT_BEFORE_BASIC_BLOCK2);
-    curprint("}\n");
+    unp->cur.format(namespaceDefinition, info, FORMAT_BEFORE_BASIC_BLOCK1);
+    curprint("}");
+    if (SgNamespaceDeclarationStatement *namespace_decl =
+            namespaceDefinition->get_namespaceDeclaration()) {
+      const std::string namespace_name = namespace_decl->get_name().getString();
+      if (!namespace_name.empty() && statementList.size() > 1) {
+        curprint(" // namespace ");
+        curprint(namespace_name);
+      }
+    }
+    curprint("\n");
     unp->cur.format(namespaceDefinition, info, FORMAT_AFTER_BASIC_BLOCK2);
   } else {
 
@@ -3392,6 +5096,12 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
       isSgTemplateInstantiationDirectiveStatement(stmt);
   ASSERT_not_null(templateInstantiationDirective);
 
+  if (templateInstantiationDirective->get_file_info() != NULL &&
+      templateInstantiationDirective->get_file_info()
+              ->isOutputInCodeGeneration() == false) {
+    return;
+  }
+
   SgDeclarationStatement *declarationStatement =
       templateInstantiationDirective->get_declaration();
   ASSERT_not_null(declarationStatement);
@@ -3416,7 +5126,13 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
         isSgClassDeclaration(declarationStatement);
     ASSERT_not_null(classDeclaration);
 
-    unparseClassDeclStmt(classDeclaration, info);
+    SgUnparse_Info ninfo(info);
+    // Explicit-instantiation directives own the `template` / `extern template`
+    // spelling. Replaying the wrapped declaration in an inherited partial-token
+    // context can reorder it relative to neighboring explicit specializations.
+    ninfo.unset_unparsedPartiallyUsingTokenStream();
+    ninfo.set_AddSemiColonAfterDeclaration();
+    unparseClassDeclStmt(classDeclaration, ninfo);
     break;
   }
 
@@ -3430,6 +5146,7 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
     // Unparse_ExprStmt::outputTemplateSpecializationSpecifier() curprint (
     // string("template ";
     SgUnparse_Info ninfo(info);
+    ninfo.unset_unparsedPartiallyUsingTokenStream();
     ninfo.set_SkipFunctionDefinition();
     if (functionDeclaration->isForward() == false) {
       ninfo.set_AddSemiColonAfterDeclaration();
@@ -3469,6 +5186,7 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
     // directive parent drive the leading `template` / `extern template`
     // syntax.
     SgUnparse_Info ninfo(info);
+    ninfo.unset_unparsedPartiallyUsingTokenStream();
     ninfo.set_SkipFunctionDefinition();
     if (memberFunctionDeclaration->isForward() == false) {
       ninfo.set_AddSemiColonAfterDeclaration();
@@ -3485,7 +5203,9 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
         isSgVariableDeclaration(declarationStatement);
     ASSERT_not_null(variableDeclaration);
 
-    unparseVarDeclStmt(variableDeclaration, info);
+    SgUnparse_Info ninfo(info);
+    ninfo.unset_unparsedPartiallyUsingTokenStream();
+    unparseVarDeclStmt(variableDeclaration, ninfo);
     break;
   }
 
@@ -3512,7 +5232,9 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
         isSgTemplateVariableDeclaration(declarationStatement);
     ASSERT_not_null(variableDeclaration);
 
-    unparseTemplateVariableDeclStmt(variableDeclaration, info);
+    SgUnparse_Info ninfo(info);
+    ninfo.unset_unparsedPartiallyUsingTokenStream();
+    unparseTemplateVariableDeclStmt(variableDeclaration, ninfo);
     break;
   }
 
@@ -4063,7 +5785,7 @@ void Unparse_ExprStmt::unparsePragmaDeclStmt(SgStatement *stmt,
 }
 
 void Unparse_ExprStmt::unparseEmptyDeclaration(SgStatement *stmt,
-                                               SgUnparse_Info & /*info*/) {
+                                               SgUnparse_Info &info) {
   SgEmptyDeclaration *emptyDeclaration = isSgEmptyDeclaration(stmt);
   ASSERT_not_null(emptyDeclaration);
 
@@ -4076,6 +5798,34 @@ void Unparse_ExprStmt::unparseEmptyDeclaration(SgStatement *stmt,
 
   // Nothing to unparse for this case, comment and CPP directives should have
   // been unparsed before getting to this point.
+
+  SgAccessModifier &access =
+      emptyDeclaration->get_declarationModifier().get_accessModifier();
+  if (access.get_is_explicit() &&
+      isSgClassDefinition(emptyDeclaration->get_parent()) != nullptr) {
+    if (classMemberHasPreviousSibling(emptyDeclaration)) {
+      unp->cur.insert_newline(
+          2, std::max(unp->cur.statement_indent() - TABINDENT, 0));
+    }
+    if (access.isPrivate()) {
+      curprint("private:");
+      info.set_isPrivateAccess();
+      unp->u_sage->curprint_newline();
+      return;
+    }
+    if (access.isProtected()) {
+      curprint("protected:");
+      info.set_isProtectedAccess();
+      unp->u_sage->curprint_newline();
+      return;
+    }
+    if (access.isPublic()) {
+      curprint("public:");
+      info.set_isPublicAccess();
+      unp->u_sage->curprint_newline();
+      return;
+    }
+  }
 
   // DQ (10/31/2020): This is already called in the unparseStatement() function.
   // DQ (10/31/2020): We need to unparse any associaated comments and CPP
@@ -4122,20 +5872,137 @@ void Unparse_ExprStmt::unparseBasicBlockStmt(SgStatement *stmt,
   // stream. If so then we don't want to unparse this syntax, if not then we
   // require this syntax. if (info.unparsedPartiallyUsingTokenStream() == false)
   if (saved_unparsedPartiallyUsingTokenStream == false) {
+    const std::string compact_body_preview =
+        compactFunctionBodyStatementPreview(
+            basic_stmt->get_statements().empty()
+                ? nullptr
+                : basic_stmt->get_statements().front());
+    const bool compact_body_fits_line =
+        basic_stmt->get_statements().empty() ||
+        (!compact_body_preview.empty() &&
+         unp->cur.current_col() + 3 +
+                 static_cast<int>(compact_body_preview.size()) + 2 <=
+             kNormalizedDeclarationWrapColumn);
+    if (basicBlockUsesCompactFunctionBodyLayout(basic_stmt, info) &&
+        compact_body_fits_line) {
+      if (unp->cur.current_col() > 0) {
+        if (SgProject::get_verbose() > 0) {
+          curprint(" /* syntax from AST */ {");
+        } else {
+          curprint(" {");
+        }
+      } else {
+        if (SgProject::get_verbose() > 0) {
+          curprint("/* syntax from AST */ {");
+        } else {
+          curprint("{");
+        }
+      }
+
+      const SgStatementPtrList &statements = basic_stmt->get_statements();
+      if (statements.empty()) {
+        curprint("}");
+      } else {
+        const int saved_linewrap = unp->cur.get_linewrap();
+        unp->cur.set_linewrap(-1);
+        curprint(" ");
+        unparseCompactFunctionBodyStatement(this, statements.front(), info);
+        unp->cur.set_linewrap(saved_linewrap);
+        curprint(" }");
+      }
+      return;
+    }
+
+    SgNode *parent = basic_stmt->get_parent();
+    const bool compact_statement_formatting =
+        useNormalizedDeclarationScopeFormatting(basic_stmt, info);
+    const bool parent_owns_block_layout =
+        isSgFunctionDefinition(parent) != NULL ||
+        isSgForStatement(parent) != NULL ||
+        isSgRangeBasedForStatement(parent) != NULL ||
+        isSgWhileStmt(parent) != NULL || isSgDoWhileStmt(parent) != NULL ||
+        isSgTryStmt(parent) != NULL || isSgCatchOptionStmt(parent) != NULL;
+    const bool standalone_statement_block =
+        !parent_owns_block_layout && isSgStatement(parent) != NULL;
+    const bool is_function_body_block = isSgFunctionDefinition(parent) != NULL;
+    const bool compact_case_body_block =
+        compact_statement_formatting && (isSgCaseOptionStmt(parent) != NULL ||
+                                         isSgDefaultOptionStmt(parent) != NULL);
+    bool compact_case_body_follows_case_label = false;
+    if (compact_case_body_block) {
+      SgBasicBlock *switch_body = isSgBasicBlock(parent->get_parent());
+      if (switch_body != NULL) {
+        const SgStatementPtrList &siblings = switch_body->get_statements();
+        SgStatementPtrList::const_iterator position =
+            std::find(siblings.begin(), siblings.end(), isSgStatement(parent));
+        compact_case_body_follows_case_label =
+            position != siblings.begin() &&
+            (isSgCaseOptionStmt(*std::prev(position)) != NULL ||
+             isSgDefaultOptionStmt(*std::prev(position)) != NULL);
+      }
+    }
+    const bool prefer_same_line_open_brace =
+        (is_function_body_block &&
+         sourceRequestsNormalizedDeclarationFormatting(basic_stmt, info)) ||
+        (is_function_body_block &&
+         (functionBodyUsesInlineSameLineOpeningBrace(basic_stmt) ||
+          functionBodyPrefersSimpleSameLineOpeningBrace(basic_stmt) ||
+          functionBodyOriginallyUsedSameLineOpeningBrace(basic_stmt))) ||
+        isSgForStatement(parent) != NULL ||
+        isSgRangeBasedForStatement(parent) != NULL ||
+        isSgIfStmt(parent) != NULL || isSgDoWhileStmt(parent) != NULL ||
+        isSgTryStmt(parent) != NULL || isSgCatchOptionStmt(parent) != NULL ||
+        (compact_statement_formatting &&
+         (isSgWhileStmt(parent) != NULL ||
+          isSgSwitchStatement(parent) != NULL ||
+          isSgCaseOptionStmt(parent) != NULL ||
+          isSgDefaultOptionStmt(parent) != NULL));
+    const bool statement_already_formatted =
+        prefer_same_line_open_brace == false &&
+        useStatementFormattingForStandaloneBasicBlock(basic_stmt, info);
 #if DEBUG_USING_CURPRINT
     curprint("\n/* unparse start of SgBasicBlock: "
              "saved_unparsedPartiallyUsingTokenStream == false: output opening "
              "{ */");
 #endif
 
-    unp->cur.format(basic_stmt, info, FORMAT_BEFORE_BASIC_BLOCK1);
-    // curprint ( string("{"));
-    if (SgProject::get_verbose() > 0)
-      curprint("/* syntax from AST */ {");
-    else
-      curprint("{");
+    if (prefer_same_line_open_brace && unp->cur.current_col() > 0) {
+      if (SgProject::get_verbose() > 0) {
+        curprint(" /* syntax from AST */ {");
+      } else {
+        curprint(" {");
+      }
+    } else if (statement_already_formatted) {
+      const int indent = unp->cur.statement_indent();
+      if (unp->cur.line_is_empty()) {
+        if (unp->cur.current_col() < indent) {
+          curprint(std::string(indent - unp->cur.current_col(), ' '));
+        }
+      } else {
+        unp->cur.insert_newline(1, indent);
+      }
+      if (SgProject::get_verbose() > 0) {
+        curprint("/* syntax from AST */ {");
+      } else {
+        curprint("{");
+      }
+    } else {
+      unp->cur.format(basic_stmt, info, FORMAT_BEFORE_BASIC_BLOCK1);
+      if (SgProject::get_verbose() > 0) {
+        curprint("/* syntax from AST */ {");
+      } else {
+        curprint("{");
+      }
+    }
 
-    unp->cur.format(basic_stmt, info, FORMAT_AFTER_BASIC_BLOCK1);
+    if (!compact_case_body_block || compact_case_body_follows_case_label) {
+      unp->cur.format(basic_stmt, info, FORMAT_AFTER_BASIC_BLOCK1);
+    }
+    if (useCompactFunctionFormatting(basic_stmt, info) &&
+        standalone_statement_block &&
+        basicBlockStartsWithLeadingPreprocessingInfo(basic_stmt)) {
+      unp->cur.insert_newline(1, unp->cur.statement_indent());
+    }
   } else {
 #if DEBUG_USING_CURPRINT
     curprint(
@@ -4268,7 +6135,12 @@ void Unparse_ExprStmt::unparseBasicBlockStmt(SgStatement *stmt,
             .set_parentStatementListBeingUnparsedUsingPartialTokenSequence();
 
         // curprint("\n");
-        bool statement_is_transformation = (*p)->isTransformation();
+        const bool statement_is_transformation =
+            sourceFile != NULL
+                ? canBeUnparsedFromTokenStream(sourceFile, *p) == false
+                : ((*p)->isTransformation() ||
+                   (*p)->get_containsTransformation() ||
+                   (*p)->get_containsTransformationToSurroundingWhitespace());
 #if DEBUG_BASIC_BLOCK || 0
         printf("statement is: %p = %s isTransformation() = %s \n", (*p),
                (*p)->class_name().c_str(),
@@ -4402,7 +6274,21 @@ void Unparse_ExprStmt::unparseBasicBlockStmt(SgStatement *stmt,
   // stream. If so then we don't want to unparse this syntax, if not then we
   // require this syntax. if (info.unparsedPartiallyUsingTokenStream() == false)
   if (saved_unparsedPartiallyUsingTokenStream == false) {
-    unp->cur.format(basic_stmt, info, FORMAT_BEFORE_BASIC_BLOCK2);
+    const bool compact_switch_body_block =
+        useNormalizedDeclarationScopeFormatting(basic_stmt, info) &&
+        isSgSwitchStatement(basic_stmt->get_parent()) != NULL;
+    if (compact_switch_body_block) {
+      const int indent = unp->cur.statement_indent();
+      if (unp->cur.line_is_empty()) {
+        if (unp->cur.current_col() < indent) {
+          curprint(std::string(indent - unp->cur.current_col(), ' '));
+        }
+      } else {
+        unp->cur.insert_newline(1, indent);
+      }
+    } else {
+      unp->cur.format(basic_stmt, info, FORMAT_BEFORE_BASIC_BLOCK2);
+    }
 
 #if DEBUG_USING_CURPRINT
     curprint("\n/* unparse end of SgBasicBlock: "
@@ -4415,7 +6301,9 @@ void Unparse_ExprStmt::unparseBasicBlockStmt(SgStatement *stmt,
     else
       curprint("}");
 
-    unp->cur.format(basic_stmt, info, FORMAT_AFTER_BASIC_BLOCK2);
+    if (!compact_switch_body_block) {
+      unp->cur.format(basic_stmt, info, FORMAT_AFTER_BASIC_BLOCK2);
+    }
   } else {
 #if DEBUG_BASIC_BLOCK
     printf("unparse last token in SgBasicBlock \n");
@@ -4554,7 +6442,7 @@ void Unparse_ExprStmt::unparseIfStmt(SgStatement *stmt, SgUnparse_Info &info) {
       if (SgProject::get_verbose() > 0)
         curprint("/* syntax from AST */ ) ");
       else if (isSgBasicBlock(if_stmt->get_true_body()) != nullptr)
-        curprint(") ");
+        curprint(")");
       else
         curprint(")");
 
@@ -4591,7 +6479,10 @@ void Unparse_ExprStmt::unparseIfStmt(SgStatement *stmt, SgUnparse_Info &info) {
 
       // Unparse using base class function so we get any required comments and
       // CPP directives. unparseStatement(tmp_stmt, info);
-      UnparseLanguageIndependentConstructs::unparseStatement(tmp_stmt, info);
+      SgUnparse_Info nestedInfo(info);
+      nestedInfo.unset_SkipSemiColon();
+      UnparseLanguageIndependentConstructs::unparseStatement(tmp_stmt,
+                                                             nestedInfo);
 
       // DQ (12/6/2014): Test for if we have unparsed partially using the token
       // stream. If so then we don't want to unparse this syntax, if not then we
@@ -4615,7 +6506,9 @@ void Unparse_ExprStmt::unparseIfStmt(SgStatement *stmt, SgUnparse_Info &info) {
       // curprint ( string("else "));
       // if (info.unparsedPartiallyUsingTokenStream() == false)
       if (saved_unparsedPartiallyUsingTokenStream == false) {
-        unp->cur.format(if_stmt, info, FORMAT_BEFORE_STMT);
+        if (!shouldEmitElseOnSameLine(if_stmt)) {
+          unp->cur.format(if_stmt, info, FORMAT_BEFORE_STMT);
+        }
         // curprint ( string("else "));
         if (SgProject::get_verbose() > 0) {
           curprint("/* syntax from AST (part 1) */ else ");
@@ -4624,7 +6517,7 @@ void Unparse_ExprStmt::unparseIfStmt(SgStatement *stmt, SgUnparse_Info &info) {
           // whitespace in token unparsing. We actually need to extra space to
           // avoid unparsing "elseif" by mistake (likely we can address this
           // detail later). curprint(" else ");
-          curprint(" else ");
+          curprint(isSgBasicBlock(tmp_stmt) != nullptr ? " else" : " else ");
         }
       } else {
         // DQ (12/9/2014): Adding more support for unparsing using the token
@@ -4677,7 +6570,10 @@ void Unparse_ExprStmt::unparseIfStmt(SgStatement *stmt, SgUnparse_Info &info) {
         }
         // Unparse using base class function so we get any required comments and
         // CPP directives. unparseStatement(tmp_stmt, info);
-        UnparseLanguageIndependentConstructs::unparseStatement(tmp_stmt, info);
+        SgUnparse_Info nestedInfo(info);
+        nestedInfo.unset_SkipSemiColon();
+        UnparseLanguageIndependentConstructs::unparseStatement(tmp_stmt,
+                                                               nestedInfo);
         // if (info.unparsedPartiallyUsingTokenStream() == false)
         if (saved_unparsedPartiallyUsingTokenStream == false) {
           unp->cur.format(tmp_stmt, info, FORMAT_AFTER_NESTED_STATEMENT);
@@ -5024,7 +6920,12 @@ void Unparse_ExprStmt::unparseForStmt(SgStatement *stmt, SgUnparse_Info &info) {
       ASSERT_not_null(increment_expr);
       if (increment_expr != NULL)
         unparseExpression(increment_expr, info);
-      curprint(") ");
+      if (useCompactFunctionFormatting(for_stmt, info)) {
+        curprint(")");
+      } else {
+        curprint(isSgBasicBlock(for_stmt->get_loop_body()) != NULL ? ")"
+                                                                   : ") ");
+      }
 
       // DQ (9/24/2020): Adding support to unparse attached pragmas.
       unparsePragmaAttribute(for_stmt);
@@ -5095,8 +6996,9 @@ void Unparse_ExprStmt::unparseForStmt(SgStatement *stmt, SgUnparse_Info &info) {
 #endif
       // unparseStatement(tmp_stmt, info);
 
+      SgUnparse_Info bodyInfo = nestedStatementInfo(info);
       unp->cur.format(loopBody, info, FORMAT_BEFORE_NESTED_STATEMENT);
-      unparseStatement(loopBody, info);
+      unparseStatement(loopBody, bodyInfo);
       unp->cur.format(loopBody, info, FORMAT_AFTER_NESTED_STATEMENT);
 #if DEBUG_FOR_STMT
       curprint("/* DONE: Unparse the for loop body */ ");
@@ -5169,8 +7071,9 @@ void Unparse_ExprStmt::unparseRangeBasedForStmt(SgStatement *stmt,
     printf("Unparse the for loop body \n");
     curprint("/* Unparse the for loop body */ ");
 #endif
+    SgUnparse_Info bodyInfo = nestedStatementInfo(info);
     unp->cur.format(loopBody, info, FORMAT_BEFORE_NESTED_STATEMENT);
-    unparseStatement(loopBody, info);
+    unparseStatement(loopBody, bodyInfo);
     unp->cur.format(loopBody, info, FORMAT_AFTER_NESTED_STATEMENT);
 
 #if DEBUG_RANGE_BASED_FOR_STMT
@@ -5366,10 +7269,11 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
   // unparse this syntax, if not then we require this syntax.
   bool saved_unparsedPartiallyUsingTokenStream =
       info.unparsedPartiallyUsingTokenStream();
+  SgUnparse_Info headerInfo(info);
   if (saved_unparsedPartiallyUsingTokenStream &&
-      isWithinTransformedDeclarationScope(funcdecl_stmt)) {
+      !functionCanKeepCompactPartialTokenHeader(funcdecl_stmt, info)) {
     saved_unparsedPartiallyUsingTokenStream = false;
-    info.unset_unparsedPartiallyUsingTokenStream();
+    headerInfo.unset_unparsedPartiallyUsingTokenStream();
   }
   if (saved_unparsedPartiallyUsingTokenStream == true) {
     SgFunctionDefinition *function_definition = funcdecl_stmt->get_definition();
@@ -5377,19 +7281,12 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
     SgStatement *function_body = function_definition->get_body();
     ASSERT_not_null(function_body);
 
-    SgFunctionParameterList *function_parameter_list =
-        funcdecl_stmt->get_parameterList();
-    ASSERT_not_null(function_parameter_list);
-
     if (function_body != NULL) {
-      unparseStatementFromTokenStream(stmt, function_parameter_list,
+      unparseStatementFromTokenStream(stmt, function_body,
                                       e_token_subsequence_start,
-                                      e_token_subsequence_end, info);
-      unparseStatementFromTokenStream(function_definition,
-                                      e_leading_whitespace_start,
-                                      e_leading_whitespace_end, info);
-      SgUnparse_Info ninfo(info);
-      unparseStatement(function_body, info);
+                                      e_leading_whitespace_start, info);
+      SgUnparse_Info bodyInfo(info);
+      unparseStatement(function_body, bodyInfo);
     } else {
       // We need to handle the case of a function prototype.
       printf("We need to handle the case of a function prototype \n");
@@ -5406,18 +7303,18 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
   // for the attribute to be associated with the defining declaration.
   // unp->u_sage->printPrefixAttributes(funcdecl_stmt,info);
   if (funcdecl_stmt->isForward() == true) {
-    unp->u_sage->printPrefixAttributes(funcdecl_stmt, info);
+    unp->u_sage->printPrefixAttributes(funcdecl_stmt, headerInfo);
   }
 
-  SgUnparse_Info ninfo(info);
+  SgUnparse_Info ninfo(headerInfo);
 
   fixupScopeInUnparseInfo(ninfo, funcdecl_stmt);
   const bool is_deduction_guide = funcdecl_stmt->get_is_deduction_guide();
 
   if ((funcdecl_stmt->isForward() == false) &&
       (funcdecl_stmt->get_definition() != NULL) &&
-      (info.SkipFunctionDefinition() == false)) {
-    unparseStatement(funcdecl_stmt->get_definition(), info);
+      (headerInfo.SkipFunctionDefinition() == false)) {
+    unparseStatement(funcdecl_stmt->get_definition(), headerInfo);
   } else {
     SgClassDefinition *cdefn = isSgClassDefinition(funcdecl_stmt->get_parent());
     if (cdefn && cdefn->get_declaration()->get_class_type() ==
@@ -5475,6 +7372,10 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
 
     if (funcdecl_stmt->isForward() == false) {
       unp->u_sage->printAttributes(funcdecl_stmt, info);
+    }
+    if (shouldWrapBeforeFunctionDeclarator(funcdecl_stmt, info,
+                                           unp->cur.current_col())) {
+      unp->cur.insert_newline(1, unp->cur.statement_indent());
     }
     ninfo.set_declstatement_ptr(NULL);
     ninfo.set_declstatement_ptr(funcdecl_stmt);
@@ -5567,6 +7468,12 @@ void Unparse_ExprStmt::unparseTemplateFunctionDefnStmt(SgStatement *stmt_,
   // to parent declaration and unparse it. bad logic and cause recursion.
 
   SgSourceFile *sourcefile = info.get_current_source_file();
+  if (sourcefile == nullptr) {
+    sourcefile = isSgSourceFile(unp->currentFile);
+  }
+  if (sourcefile == nullptr) {
+    sourcefile = resolveNormalizedFormattingSourceFile(stmt, info);
+  }
   // DQ (10/27/2020): Added support to activate unparsing from the AST on a
   // declaration by declaration basis. if (sourcefile != NULL &&
   // sourcefile->get_unparse_template_ast() == true)
@@ -5720,30 +7627,27 @@ void Unparse_ExprStmt::unparseFuncDefnStmt(SgStatement *stmt,
   // require this syntax. if (info.unparsedPartiallyUsingTokenStream() == false)
   bool saved_unparsedPartiallyUsingTokenStream =
       info.unparsedPartiallyUsingTokenStream();
+  SgUnparse_Info headerInfo(info);
   if (saved_unparsedPartiallyUsingTokenStream &&
-      isWithinTransformedDeclarationScope(funcdefn_stmt)) {
+      !functionCanKeepCompactPartialTokenHeader(
+          isSgFunctionDeclaration(declstmt), info)) {
     saved_unparsedPartiallyUsingTokenStream = false;
-    info.unset_unparsedPartiallyUsingTokenStream();
+    headerInfo.unset_unparsedPartiallyUsingTokenStream();
   }
   if (saved_unparsedPartiallyUsingTokenStream == false) {
     if (isSgMemberFunctionDeclaration(declstmt)) {
-      unparseMFuncDeclStmt(declstmt, info);
+      unparseMFuncDeclStmt(declstmt, headerInfo);
     } else {
-      unparseFuncDeclStmt(declstmt, info);
+      unparseFuncDeclStmt(declstmt, headerInfo);
     }
   } else {
     // DQ (12/6/2014): Unparse the equivalent tokens instead.
+    SgStatement *function_body = funcdefn_stmt->get_body();
+    ASSERT_not_null(function_body);
 
-    // unparseStatementFromTokenStream (SgStatement* stmt,
-    // token_sequence_position_enum_type e_leading_whitespace_start,
-    // token_sequence_position_enum_type e_token_subsequence_start)
-    // unparseStatementFromTokenStream (declstmt, e_leading_whitespace_start,
-    // e_token_subsequence_start); unparseStatementFromTokenStream (stmt,
-    // e_leading_whitespace_start, e_token_subsequence_start);
-    // unparseStatementFromTokenStream (declstmt, stmt,
-    // e_token_subsequence_start, e_leading_whitespace_end);
-    unparseStatementFromTokenStream(declstmt, stmt, e_token_subsequence_start,
-                                    e_token_subsequence_start, info);
+    unparseStatementFromTokenStream(declstmt, function_body,
+                                    e_token_subsequence_start,
+                                    e_leading_whitespace_start, info);
   }
 
   // curprint ("/* Inside of Unparse_ExprStmt::unparseFuncDefnStmt: DONE calling
@@ -5970,10 +7874,11 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
   // unparse this syntax, if not then we require this syntax.
   bool saved_unparsedPartiallyUsingTokenStream =
       info.unparsedPartiallyUsingTokenStream();
+  SgUnparse_Info headerInfo(info);
   if (saved_unparsedPartiallyUsingTokenStream &&
-      isWithinTransformedDeclarationScope(mfuncdecl_stmt)) {
+      !functionCanKeepCompactPartialTokenHeader(mfuncdecl_stmt, info)) {
     saved_unparsedPartiallyUsingTokenStream = false;
-    info.unset_unparsedPartiallyUsingTokenStream();
+    headerInfo.unset_unparsedPartiallyUsingTokenStream();
   }
   if (saved_unparsedPartiallyUsingTokenStream == true) {
     SgFunctionDefinition *function_definition =
@@ -5982,29 +7887,17 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
     SgStatement *function_body = function_definition->get_body();
     ASSERT_not_null(function_body);
 
-    SgFunctionParameterList *function_parameter_list =
-        mfuncdecl_stmt->get_parameterList();
-    ASSERT_not_null(function_parameter_list);
-
     if (function_body != NULL) {
-      // Unparse the tokens from the start of the function declaration to just
-      // before the opening "{".
-
-      // DQ (6/5/2021): Note that if the function_definition leading whitespace
-      // is not available (e.g. does not exist) then nothing will be output.  So
-      // we have to break this up into two steps.
-      unparseStatementFromTokenStream(stmt, function_parameter_list,
+      // Unparse the tokens from the start of the member declaration through
+      // any whitespace that precedes the body-opening brace. The body itself
+      // is still emitted by the SgBasicBlock unparser so transformed statements
+      // inside the body can fall back to the AST as needed.
+      unparseStatementFromTokenStream(stmt, function_body,
                                       e_token_subsequence_start,
-                                      e_token_subsequence_end, info);
+                                      e_leading_whitespace_start, info);
 
-      // DQ (6/5/2021): If there is any leading whitespace it is associated with
-      // the function definition, and not the body (SgBasicBlock).
-      unparseStatementFromTokenStream(function_definition,
-                                      e_leading_whitespace_start,
-                                      e_leading_whitespace_end, info);
-
-      SgUnparse_Info ninfo(info);
-      unparseStatement(function_body, info);
+      SgUnparse_Info bodyInfo(info);
+      unparseStatement(function_body, bodyInfo);
     } else {
       printf("We need to handle the case of a function prototype \n");
       ROSE_ABORT();
@@ -6017,7 +7910,7 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
   // protected, private) because the inforamtion change in ninfo is not
   // propogated to info. DQ (11/3/2007): Moved construction of ninfo to start of
   // function!
-  SgUnparse_Info ninfo(info);
+  SgUnparse_Info ninfo(headerInfo);
 
   fixupScopeInUnparseInfo(ninfo, mfuncdecl_stmt);
 
@@ -6163,6 +8056,11 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
     SgType *rtype = NULL;
     unparseReturnType(mfuncdecl_stmt, rtype, ninfo);
     ASSERT_not_null(mfuncdecl_stmt);
+
+    if (shouldWrapBeforeFunctionDeclarator(mfuncdecl_stmt, info,
+                                           unp->cur.current_col())) {
+      unp->cur.insert_newline(1, unp->cur.statement_indent());
+    }
 
     ninfo.set_name_qualification_length(
         mfuncdecl_stmt->get_name_qualification_length());
@@ -6542,6 +8440,10 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
   bool saved_unparsedPartiallyUsingTokenStream =
       info.unparsedPartiallyUsingTokenStream();
   if (saved_unparsedPartiallyUsingTokenStream &&
+      useNormalizedDeclarationScopeFormatting(classdecl_stmt, info)) {
+    saved_unparsedPartiallyUsingTokenStream = false;
+  }
+  if (saved_unparsedPartiallyUsingTokenStream &&
       (classdecl_stmt->isTransformation() ||
        (class_definition != NULL && class_definition->isTransformation()))) {
     // Partial token-sequence mode can be inherited from an enclosing frontier
@@ -6550,6 +8452,30 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
     // token-fragment mode directly and can degrade a defining declaration back
     // into a forward declaration.
     saved_unparsedPartiallyUsingTokenStream = false;
+  }
+  SgSourceFile *current_source_file = info.get_current_source_file();
+  const bool canReplayWholeUntouchedClassDeclaration =
+      saved_unparsedPartiallyUsingTokenStream &&
+      info.SkipClassDefinition() == false && current_source_file != nullptr &&
+      (isSgNamespaceDefinitionStatement(classdecl_stmt->get_parent()) !=
+           nullptr ||
+       isSgClassDefinition(classdecl_stmt->get_parent()) != nullptr) &&
+      classdecl_stmt->isTransformation() == false &&
+      classdecl_stmt->get_containsTransformation() == false &&
+      classdecl_stmt->get_containsTransformationToSurroundingWhitespace() ==
+          false &&
+      (class_definition == nullptr ||
+       (class_definition->isTransformation() == false &&
+        class_definition->get_containsTransformation() == false &&
+        class_definition->get_containsTransformationToSurroundingWhitespace() ==
+            false)) &&
+      frontierRequiresPartialTokenUnparse(current_source_file,
+                                          classdecl_stmt) == false &&
+      canBeUnparsedFromTokenStream(current_source_file, classdecl_stmt);
+  if (canReplayWholeUntouchedClassDeclaration) {
+    unparseStatementFromTokenStream(classdecl_stmt, e_token_subsequence_start,
+                                    e_token_subsequence_end, info);
+    return;
   }
   if (saved_unparsedPartiallyUsingTokenStream == true) {
     // unparseStatementFromTokenStream (stmt, e_token_subsequence_start,
@@ -6587,7 +8513,10 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
           class_definition->get_members().begin();
 
       while (pp != class_definition->get_members().end()) {
+        const bool inherited_partial_token_state =
+            ninfo.unparsedPartiallyUsingTokenStream();
         unparseStatement((*pp), ninfo);
+        restoreInheritedPartialTokenState(ninfo, inherited_partial_token_state);
 
         SgStatement *previousStatement = *pp;
 
@@ -6628,6 +8557,7 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
     // DQ (11/7/2007): Fixup the SgUnparse_Info object to store the correct
     // scope.
     SgUnparse_Info class_info(info);
+    const bool embedded_decl = info.inEmbeddedDecl();
     fixupScopeInUnparseInfo(class_info, classdecl_stmt);
 
     auto unparse_enclosing_template_headers = [&]() {
@@ -6741,7 +8671,14 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
 
       // printf ("Calling unparseStatement(classdecl_stmt->get_definition(),
       // ninfox); for %s \n",classdecl_stmt->get_name().str());
-      unparseStatement(classdecl_stmt->get_definition(), ninfox);
+      if (shouldRenderClassDefinitionInline(
+              classdecl_stmt->get_definition(),
+              ninfox.unparsedPartiallyUsingTokenStream())) {
+        unparseClassDefnStmt(classdecl_stmt->get_definition(), ninfox);
+      } else {
+        ninfox.set_SkipFormatting();
+        unparseStatement(classdecl_stmt->get_definition(), ninfox);
+      }
 
       if (!info.SkipSemiColon()) {
         curprint(";");
@@ -6852,6 +8789,10 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
           info.PrintName() &&
           (isSgTypedefDeclaration(classdecl_stmt->get_parent()) != NULL ||
            isSgVariableDeclaration(classdecl_stmt->get_parent()) != NULL);
+      const bool needs_embedded_name_separator =
+          embedded_decl ||
+          isSgTypedefDeclaration(classdecl_stmt->get_parent()) != NULL ||
+          isSgVariableDeclaration(classdecl_stmt->get_parent()) != NULL;
       // DQ (8/19/2014): Adding code to output the template instantiation with
       // template arguments processed to support name qualification.
       if (templateInstantiation != NULL) {
@@ -6868,6 +8809,9 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
         info.unset_SkipNameQualification();
 
         unparseTemplateName(templateInstantiation, info);
+        if (needs_embedded_name_separator) {
+          curprint(" ");
+        }
       } else {
         // DQ (11/21/2021): I think we can skip the name of the enum here for
         // where this is used in the typedef as a anonymous type.
@@ -6880,14 +8824,45 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
         if (isAnonymousName == false &&
             classdecl_stmt->get_isUnNamed() == false) {
           curprint(nameQualifier.str());
-          curprint(classdecl_stmt->get_name() + " ");
+          if (SgTemplateClassDeclaration *template_class_decl =
+                  isSgTemplateClassDeclaration(classdecl_stmt)) {
+            SgName template_name = template_class_decl->get_templateName();
+            if (template_name.is_null() || template_name.getString().empty()) {
+              template_name = classdecl_stmt->get_name();
+            }
+            curprint(template_name);
+
+            const SgTemplateArgumentPtrList &specialization_args =
+                template_class_decl->get_templateSpecializationArguments();
+            if (!specialization_args.empty() &&
+                template_class_decl->get_specialization() !=
+                    SgDeclarationStatement::e_no_specialization) {
+              SgTemplateArgumentPtrList explicit_args = specialization_args;
+              SgUnparse_Info template_arg_info(info);
+              template_arg_info.set_SkipClassDefinition();
+              template_arg_info.set_SkipEnumDefinition();
+              template_arg_info.set_SkipClassSpecifier();
+              template_arg_info.set_declstatement_ptr(NULL);
+              template_arg_info.set_current_context(NULL);
+              unp->u_exprStmt->unparseTemplateArgumentList(explicit_args,
+                                                           template_arg_info);
+            }
+          } else {
+            curprint(classdecl_stmt->get_name());
+          }
+          if (needs_embedded_name_separator) {
+            curprint(" ");
+          }
         } else {
           // Keep synthesized names available for internal symbol-table use, but
           // only surface them when an unnamed declaration is embedded in a
           // typedef or variable declaration that needs a disambiguating type
           // name.
           if (allowUnnamedInternalName) {
-            curprint(classdecl_stmt->get_name() + " ");
+            curprint(classdecl_stmt->get_name());
+            if (needs_embedded_name_separator) {
+              curprint(" ");
+            }
           }
         }
       }
@@ -6902,7 +8877,7 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
           (classdecl_stmt->get_declarationModifier().isFinal() == true)) {
         // DQ (2/12/2019): Testing, final can't be used on prototypes (I think).
         // curprint(" /* output from test 2 */ ");
-        curprint("final ");
+        curprint(" final");
       }
 
       {
@@ -6938,7 +8913,20 @@ void Unparse_ExprStmt::unparseClassInheritanceList(
 
   SgBaseClassPtrList::iterator p = classdefn_stmt->get_inheritances().begin();
   if (p != classdefn_stmt->get_inheritances().end()) {
-    curprint(string(": "));
+    const std::string inheritance_preview =
+        buildClassInheritancePreviewString(classdefn_stmt);
+    const bool wrap_before_inheritance =
+        useNormalizedDeclarationScopeFormatting(classdefn_stmt, ninfo) &&
+        !inheritance_preview.empty() &&
+        unp->cur.current_col() + 3 +
+                static_cast<int>(inheritance_preview.size()) >=
+            kNormalizedDeclarationWrapColumn;
+    if (wrap_before_inheritance) {
+      unp->cur.insert_newline(1, unp->cur.statement_indent() + 2 * TABINDENT);
+      curprint(": ");
+    } else {
+      curprint(string(" : "));
+    }
 
     std::function<void(SgNonrealDecl *, const SgName &, SgUnparse_Info &)>
         unparse_nonreal_base_decl = [&](SgNonrealDecl *nr_decl,
@@ -7064,7 +9052,7 @@ void Unparse_ExprStmt::unparseClassInheritanceList(
       p++;
 
       if (p != classdefn_stmt->get_inheritances().end()) {
-        curprint(string(","));
+        curprint(string(", "));
       } else {
         break;
       }
@@ -7106,6 +9094,7 @@ void Unparse_ExprStmt::unparseClassDefnStmt(SgStatement *stmt,
 #endif
 
   SgUnparse_Info ninfo(info);
+  ninfo.unset_SkipFormatting();
 
   // curprint ( string("/* Print out class declaration */ \n";
 
@@ -7205,16 +9194,26 @@ void Unparse_ExprStmt::unparseClassDefnStmt(SgStatement *stmt,
                StringUtility::numberToString(packingAlignment) + string(")"));
     }
 
-    ninfo.set_isUnsetAccess();
-    unp->cur.format(classdefn_stmt, info, FORMAT_BEFORE_BASIC_BLOCK1);
-    curprint(string("{"));
-    unp->cur.format(classdefn_stmt, info, FORMAT_AFTER_BASIC_BLOCK1);
-
     // DQ (2/25/2016): Adding support for specification of AstUnparseAttribute
     // for placement inside of a SgClassDefinition. Note that this does not
     // replace any existing declarations in the class definition.
     AstUnparseAttribute *unparseAttribute = dynamic_cast<AstUnparseAttribute *>(
         classdefn_stmt->getAttribute(AstUnparseAttribute::markerName));
+    const bool render_empty_inline = shouldRenderClassDefinitionInline(
+        classdefn_stmt, saved_unparsedPartiallyUsingTokenStream);
+    const bool body_needs_leading_space =
+        classDefinitionBodyNeedsLeadingSpace(classdefn_stmt);
+    const bool inline_body_needs_leading_space =
+        body_needs_leading_space && classdefn_stmt->get_inheritances().empty();
+
+    ninfo.set_isUnsetAccess();
+    if (render_empty_inline) {
+      curprint(inline_body_needs_leading_space ? " {}" : "{}");
+    } else {
+      curprint(body_needs_leading_space ? " {" : "{");
+      unp->cur.format(classdefn_stmt, info, FORMAT_AFTER_BASIC_BLOCK1);
+    }
+
     if (unparseAttribute != NULL) {
       // Note that in most cases unparseLanguageSpecificStatement() will be
       // called, some formatting via "unp->cur.format(stmt, info,
@@ -7236,32 +9235,38 @@ void Unparse_ExprStmt::unparseClassDefnStmt(SgStatement *stmt,
                  ? "true"
                  : "false");
 #endif
+      const bool inherited_partial_token_state =
+          ninfo.unparsedPartiallyUsingTokenStream();
       unparseStatement((*pp), ninfo);
+      restoreInheritedPartialTokenState(ninfo, inherited_partial_token_state);
       pp++;
     }
 
-    // DQ (3/17/2005): This helps handle cases such as class foo { #include
-    // "constant_code.h" }
-    ASSERT_not_null(classdefn_stmt->get_startOfConstruct());
-    ASSERT_not_null(classdefn_stmt->get_endOfConstruct());
+    if (render_empty_inline == false) {
+      // DQ (3/17/2005): This helps handle cases such as class foo { #include
+      // "constant_code.h" }
+      ASSERT_not_null(classdefn_stmt->get_startOfConstruct());
+      ASSERT_not_null(classdefn_stmt->get_endOfConstruct());
 
-    unparseAttachedPreprocessingInfo(classdefn_stmt, info,
-                                     PreprocessingInfo::inside);
+      unparseAttachedPreprocessingInfo(classdefn_stmt, info,
+                                       PreprocessingInfo::inside);
 
-    // DQ (5/28/2021): Fixing the unparseClassDefnStmt() function to support
-    // partial unparsing from the token stream. unp->cur.format(classdefn_stmt,
-    // info, FORMAT_BEFORE_BASIC_BLOCK2); curprint ( string("}"));
-    if (saved_unparsedPartiallyUsingTokenStream == false) {
+      // DQ (5/28/2021): Fixing the unparseClassDefnStmt() function to support
+      // partial unparsing from the token stream.
+      // unp->cur.format(classdefn_stmt, info, FORMAT_BEFORE_BASIC_BLOCK2);
+      // curprint ( string("}"));
+      if (saved_unparsedPartiallyUsingTokenStream == false) {
 #if DEBUG_USING_CURPRINT
-      curprint("\n/* saved_unparsedPartiallyUsingTokenStream == false */\n");
+        curprint("\n/* saved_unparsedPartiallyUsingTokenStream == false */\n");
 #endif
-      unp->cur.format(classdefn_stmt, info, FORMAT_BEFORE_BASIC_BLOCK2);
-      curprint(string("}"));
-    } else {
-      // This should be addressed using the closing part of the token stream, I
-      // think.
-      curprint(
-          "\n/* closing the class definition from the token stream?? */\n");
+        unp->cur.format(classdefn_stmt, info, FORMAT_BEFORE_BASIC_BLOCK2);
+        curprint(string("}"));
+      } else {
+        ASSERT_not_null(classdefn_stmt->get_declaration());
+        unparseStatementFromTokenStream(
+            classdefn_stmt, classdefn_stmt->get_declaration(),
+            e_token_subsequence_end, e_token_subsequence_end, info);
+      }
     }
 
     // DQ (6/14/2006): Add packing pragma support (reset the packing
@@ -7270,7 +9275,9 @@ void Unparse_ExprStmt::unparseClassDefnStmt(SgStatement *stmt,
       curprint(string("\n#pragma pack()"));
     }
 
-    unp->cur.format(classdefn_stmt, info, FORMAT_AFTER_BASIC_BLOCK2);
+    if (render_empty_inline == false && info.SkipSemiColon()) {
+      unp->cur.format(classdefn_stmt, info, FORMAT_AFTER_BASIC_BLOCK2);
+    }
   }
 
   // DQ (6/13/2007): Set to null before resetting to non-null value
@@ -7455,7 +9462,7 @@ void Unparse_ExprStmt::unparseEnumDeclStmt(SgStatement *stmt,
 
   // DQ (6/26/2005): Support for empty enum declarations!
   if (enum_stmt == enum_stmt->get_definingDeclaration()) {
-    curprint("{");
+    curprint(enum_stmt->get_enumerators().empty() ? "{" : "{ ");
   }
 
   // if (!info.SkipDefinition()
@@ -7510,13 +9517,13 @@ void Unparse_ExprStmt::unparseEnumDeclStmt(SgStatement *stmt,
         tmp_init = (*p)->get_initializer();
         curprint(tmp_name.str());
         if (tmp_init != NULL) {
-          curprint("=");
+          curprint(" = ");
           unparseExpression(tmp_init, ninfo);
         }
 
         // if (p != (enum_stmt->get_enumerators().end()))
         if (p != p_last) {
-          curprint(",");
+          curprint(", ");
         }
 
       } // end same file
@@ -7539,7 +9546,7 @@ void Unparse_ExprStmt::unparseEnumDeclStmt(SgStatement *stmt,
 
   // DQ (6/26/2005): Support for empty enum declarations!
   if (enum_stmt == enum_stmt->get_definingDeclaration()) {
-    curprint("} ");
+    curprint(enum_stmt->get_enumerators().empty() ? "}" : " }");
   }
 
   // DQ (6/26/2005): Moved to location after output of closing "}" from enum
@@ -7738,14 +9745,15 @@ void Unparse_ExprStmt::unparseWhileStmt(SgStatement *stmt,
   if (saved_unparsedPartiallyUsingTokenStream == false) {
     // unp->cur.format(namespaceDefinition, info, FORMAT_BEFORE_BASIC_BLOCK2);
     // curprint("/* from AST SgWhileStmt */ while(");
-    curprint("while(");
+    curprint(useCompactFunctionFormatting(while_stmt, info) ? "while ("
+                                                            : "while(");
     // unp->cur.format(namespaceDefinition, info, FORMAT_AFTER_BASIC_BLOCK2);
   } else {
     // SgStatement* body = while_stmt->get_body();
     // curprint("/* partial token sequence SgWhileStmt */ ");
     SgStatement *condition = while_stmt->get_condition();
     unparseStatementFromTokenStream(stmt, condition, e_token_subsequence_start,
-                                    e_token_subsequence_start, info);
+                                    e_leading_whitespace_start, info);
   }
 
   // DQ (10/19/2012): We now want to have more control over where ";" is output.
@@ -7769,9 +9777,10 @@ void Unparse_ExprStmt::unparseWhileStmt(SgStatement *stmt,
     unparsePragmaAttribute(while_stmt);
 
     if (while_stmt->get_body()) {
+      SgUnparse_Info bodyInfo = nestedStatementInfo(info);
       unp->cur.format(while_stmt->get_body(), info,
                       FORMAT_BEFORE_NESTED_STATEMENT);
-      unparseStatement(while_stmt->get_body(), info);
+      unparseStatement(while_stmt->get_body(), bodyInfo);
       unp->cur.format(while_stmt->get_body(), info,
                       FORMAT_AFTER_NESTED_STATEMENT);
     } else {
@@ -7796,7 +9805,8 @@ void Unparse_ExprStmt::unparseWhileStmt(SgStatement *stmt,
     // Output syntax explicitly.
     curprint(")");
 
-    unparseStatement(while_stmt->get_body(), info);
+    SgUnparse_Info bodyInfo = nestedStatementInfo(info);
+    unparseStatement(while_stmt->get_body(), bodyInfo);
   }
 }
 
@@ -7807,9 +9817,10 @@ void Unparse_ExprStmt::unparseDoWhileStmt(SgStatement *stmt,
 
   curprint("do ");
 
+  SgUnparse_Info bodyInfo = nestedStatementInfo(info);
   unp->cur.format(dowhile_stmt->get_body(), info,
                   FORMAT_BEFORE_NESTED_STATEMENT);
-  unparseStatement(dowhile_stmt->get_body(), info);
+  unparseStatement(dowhile_stmt->get_body(), bodyInfo);
   unp->cur.format(dowhile_stmt->get_body(), info,
                   FORMAT_AFTER_NESTED_STATEMENT);
 
@@ -7849,11 +9860,27 @@ void Unparse_ExprStmt::unparseSwitchStmt(SgStatement *stmt,
 
   bool saved_unparsedPartiallyUsingTokenStream =
       info.unparsedPartiallyUsingTokenStream();
+  SgStatement *switch_body = switch_stmt->get_body();
+  const bool switchBodyRequiresAstFallback =
+      saved_unparsedPartiallyUsingTokenStream == true &&
+      ((switch_stmt->isTransformation() ||
+        switch_stmt->get_containsTransformation() ||
+        switch_stmt->get_containsTransformationToSurroundingWhitespace()) ||
+       (switch_body != NULL &&
+        (switch_body->isCompilerGenerated() ||
+         switch_body->isTransformation() ||
+         switch_body->get_containsTransformation() ||
+         switch_body->get_containsTransformationToSurroundingWhitespace())));
+  if (switchBodyRequiresAstFallback) {
+    saved_unparsedPartiallyUsingTokenStream = false;
+    info.unset_unparsedPartiallyUsingTokenStream();
+  }
 
   // DQ (12/28/2014): Test for if we have unparsed partially using the token
   // stream.
   if (saved_unparsedPartiallyUsingTokenStream == false) {
-    curprint("switch(");
+    curprint(useCompactFunctionFormatting(switch_stmt, info) ? "switch ("
+                                                             : "switch(");
   } else {
 
     // SgStatement* item_selector = switch_stmt->get_item_selector();
@@ -7910,7 +9937,8 @@ void Unparse_ExprStmt::unparseSwitchStmt(SgStatement *stmt,
     //                 prefix generation for AST Rewrite Mechanism
     // if(switch_stmt->get_body())
     if ((switch_stmt->get_body() != NULL) && !info.SkipBasicBlock()) {
-      unparseStatement(switch_stmt->get_body(), info);
+      SgUnparse_Info bodyInfo = nestedStatementInfo(info);
+      unparseStatement(switch_stmt->get_body(), bodyInfo);
     }
 
     // DQ (6/4/2021): end of if (saved_unparsedPartiallyUsingTokenStream ==
@@ -7925,6 +9953,20 @@ void Unparse_ExprStmt::unparseCaseStmt(SgStatement *stmt,
 
   bool saved_unparsedPartiallyUsingTokenStream =
       info.unparsedPartiallyUsingTokenStream();
+  SgStatement *case_body = case_stmt->get_body();
+  const bool caseHeaderRequiresAstFallback =
+      saved_unparsedPartiallyUsingTokenStream == true &&
+      ((case_stmt->isTransformation() ||
+        case_stmt->get_containsTransformation() ||
+        case_stmt->get_containsTransformationToSurroundingWhitespace()) ||
+       (case_body != NULL &&
+        (case_body->isCompilerGenerated() || case_body->isTransformation() ||
+         case_body->get_containsTransformation() ||
+         case_body->get_containsTransformationToSurroundingWhitespace())));
+  if (caseHeaderRequiresAstFallback) {
+    saved_unparsedPartiallyUsingTokenStream = false;
+    info.unset_unparsedPartiallyUsingTokenStream();
+  }
 
   // DQ (12/28/2014): Test for if we have unparsed partially using the token
   // stream.
@@ -7944,7 +9986,6 @@ void Unparse_ExprStmt::unparseCaseStmt(SgStatement *stmt,
 
     curprint(":");
   } else {
-    SgStatement *case_body = case_stmt->get_body();
     // unparseStatementFromTokenStream (case_stmt, case_body,
     // e_token_subsequence_start, e_leading_whitespace_start);
     if (case_body->isCompilerGenerated() == true) {
@@ -7978,7 +10019,8 @@ void Unparse_ExprStmt::unparseCaseStmt(SgStatement *stmt,
   // if(case_stmt->get_body())
   // if ( (case_stmt->get_body() != NULL) && !info.SkipBasicBlock())
   if ((case_stmt->get_body() != NULL) && !info.SkipBasicBlock()) {
-    unparseStatement(case_stmt->get_body(), info);
+    SgUnparse_Info bodyInfo = nestedStatementInfo(info);
+    unparseStatement(case_stmt->get_body(), bodyInfo);
   }
 }
 
@@ -7986,11 +10028,79 @@ void Unparse_ExprStmt::unparseTryStmt(SgStatement *stmt, SgUnparse_Info &info) {
   SgTryStmt *try_stmt = isSgTryStmt(stmt);
   ASSERT_not_null(try_stmt);
 
-  curprint(string("try "));
+  bool saved_unparsedPartiallyUsingTokenStream =
+      info.unparsedPartiallyUsingTokenStream();
+  SgStatement *try_body = try_stmt->get_body();
+  ASSERT_not_null(try_body);
 
-  unp->cur.format(try_stmt->get_body(), info, FORMAT_BEFORE_NESTED_STATEMENT);
-  unparseStatement(try_stmt->get_body(), info);
-  unp->cur.format(try_stmt->get_body(), info, FORMAT_AFTER_NESTED_STATEMENT);
+  const bool tryBodyRequiresAstFallback =
+      saved_unparsedPartiallyUsingTokenStream == true &&
+      (try_stmt->isTransformation() ||
+       try_stmt->get_containsTransformationToSurroundingWhitespace());
+  if (tryBodyRequiresAstFallback) {
+    saved_unparsedPartiallyUsingTokenStream = false;
+    info.unset_unparsedPartiallyUsingTokenStream();
+  }
+
+  if (saved_unparsedPartiallyUsingTokenStream == false) {
+    curprint("try ");
+    unp->cur.format(try_body, info, FORMAT_BEFORE_NESTED_STATEMENT);
+    unparseStatement(try_body, info);
+    unp->cur.format(try_body, info, FORMAT_AFTER_NESTED_STATEMENT);
+  } else {
+    const bool inherited_partial_token_state =
+        info.unparsedPartiallyUsingTokenStream();
+    SgSourceFile *current_source_file = info.get_current_source_file();
+    SgStatement *first_catch =
+        try_stmt->get_catch_statement_seq().empty()
+            ? nullptr
+            : try_stmt->get_catch_statement_seq().front();
+    const bool replayTryRegionFromTokens =
+        current_source_file != nullptr && first_catch != nullptr &&
+        try_stmt->isTransformation() == false &&
+        try_body->isTransformation() == false &&
+        try_body->get_containsTransformation() == false &&
+        try_body->get_containsTransformationToSurroundingWhitespace() ==
+            false &&
+        canBeUnparsedFromTokenStream(current_source_file, try_stmt) &&
+        canBeUnparsedFromTokenStream(current_source_file, first_catch);
+    if (replayTryRegionFromTokens) {
+      // Preserve the original try-body token sequence exactly and stop just
+      // before the first catch block, which will be emitted separately.
+      unparseStatementFromTokenStream(
+          try_stmt, first_catch, e_token_subsequence_start,
+          e_leading_whitespace_start, info, false, 0, -1);
+    } else {
+      unparseStatementFromTokenStream(
+          try_stmt, try_body, e_token_subsequence_start,
+          e_leading_whitespace_start, info, false, 0, -1);
+    }
+
+    if (replayTryRegionFromTokens == false) {
+      SgUnparse_Info bodyInfo(info);
+      restoreInheritedPartialTokenState(bodyInfo,
+                                        inherited_partial_token_state);
+      bodyInfo.unset_SkipSemiColon();
+      const bool replayWholeBodyFromTokens =
+          isSgBasicBlock(try_body) != nullptr &&
+          try_body->isTransformation() == false &&
+          try_body->get_containsTransformation() == false &&
+          try_body->get_containsTransformationToSurroundingWhitespace() ==
+              false &&
+          current_source_file != nullptr &&
+          canBeUnparsedFromTokenStream(current_source_file, try_body);
+      if (replayWholeBodyFromTokens) {
+        // The enclosing partial replay already emitted the "try" header. For
+        // an untouched body block, replay the original "{...}" region
+        // directly so inherited frontier state does not degrade its formatting
+        // back to AST layout.
+        unparseStatementFromTokenStream(try_body, e_leading_whitespace_start,
+                                        e_token_subsequence_end, bodyInfo);
+      } else {
+        unparseStatement(try_body, bodyInfo);
+      }
+    }
+  }
 
   SgStatementPtrList::iterator i = try_stmt->get_catch_statement_seq().begin();
   while (i != try_stmt->get_catch_statement_seq().end()) {
@@ -8004,24 +10114,80 @@ void Unparse_ExprStmt::unparseCatchStmt(SgStatement *stmt,
   SgCatchOptionStmt *catch_statement = isSgCatchOptionStmt(stmt);
   ASSERT_not_null(catch_statement);
 
-  curprint(string("catch ") + "(");
-  if (catch_statement->get_condition()) {
-    SgUnparse_Info ninfo(info);
-    ninfo.set_inVarDecl();
-    // DQ (5/6/2004): this does not unparse correctly if the ";" is included
-    ninfo.set_SkipSemiColon();
-    ninfo.set_SkipClassSpecifier();
-    unparseStatement(catch_statement->get_condition(), ninfo);
+  bool saved_unparsedPartiallyUsingTokenStream =
+      info.unparsedPartiallyUsingTokenStream();
+  SgStatement *catch_body = catch_statement->get_body();
+  ASSERT_not_null(catch_body);
+
+  const bool catchHeaderRequiresAstFallback =
+      saved_unparsedPartiallyUsingTokenStream == true &&
+      (catch_statement->isTransformation() ||
+       catch_statement->get_containsTransformationToSurroundingWhitespace());
+  if (catchHeaderRequiresAstFallback) {
+    saved_unparsedPartiallyUsingTokenStream = false;
+    info.unset_unparsedPartiallyUsingTokenStream();
   }
 
-  curprint(string(")"));
-  // if (catch_statement->get_condition() == NULL) prevnode = catch_statement;
+  if (saved_unparsedPartiallyUsingTokenStream == false) {
+    curprint("catch (");
+    if (catch_statement->get_condition()) {
+      SgUnparse_Info ninfo(info);
+      ninfo.set_inVarDecl();
+      // DQ (5/6/2004): this does not unparse correctly if the ";" is included
+      ninfo.set_SkipSemiColon();
+      ninfo.set_SkipClassSpecifier();
+      unparseStatement(catch_statement->get_condition(), ninfo);
+    }
 
-  unp->cur.format(catch_statement->get_body(), info,
-                  FORMAT_BEFORE_NESTED_STATEMENT);
-  unparseStatement(catch_statement->get_body(), info);
-  unp->cur.format(catch_statement->get_body(), info,
-                  FORMAT_AFTER_NESTED_STATEMENT);
+    curprint(")");
+    // if (catch_statement->get_condition() == NULL) prevnode = catch_statement;
+
+    unp->cur.format(catch_body, info, FORMAT_BEFORE_NESTED_STATEMENT);
+    unparseStatement(catch_body, info);
+    unp->cur.format(catch_body, info, FORMAT_AFTER_NESTED_STATEMENT);
+  } else {
+    const bool inherited_partial_token_state =
+        info.unparsedPartiallyUsingTokenStream();
+    SgSourceFile *current_source_file = info.get_current_source_file();
+    const bool replayWholeCatchFromTokens =
+        current_source_file != nullptr &&
+        catch_statement->isTransformation() == false &&
+        catch_body->isTransformation() == false &&
+        canBeUnparsedFromTokenStream(current_source_file, catch_statement);
+    if (replayWholeCatchFromTokens) {
+      // The catch subtree is intact; preserve the original token spelling
+      // instead of reconstructing the header/body split around the body block.
+      unparseStatementFromTokenStream(catch_statement,
+                                      e_token_subsequence_start,
+                                      e_token_subsequence_end, info);
+      return;
+    }
+
+    unparseStatementFromTokenStream(
+        catch_statement, catch_body, e_token_subsequence_start,
+        e_leading_whitespace_start, info, false, 0, -1);
+
+    SgUnparse_Info bodyInfo(info);
+    restoreInheritedPartialTokenState(bodyInfo, inherited_partial_token_state);
+    bodyInfo.unset_SkipSemiColon();
+    const bool replayWholeBodyFromTokens =
+        isSgBasicBlock(catch_body) != nullptr &&
+        catch_body->isTransformation() == false &&
+        catch_body->get_containsTransformation() == false &&
+        catch_body->get_containsTransformationToSurroundingWhitespace() ==
+            false &&
+        info.get_current_source_file() != nullptr &&
+        canBeUnparsedFromTokenStream(info.get_current_source_file(),
+                                     catch_body);
+    if (replayWholeBodyFromTokens) {
+      // The catch header was already replayed above; preserve the original body
+      // block spelling when the block itself is untouched.
+      unparseStatementFromTokenStream(catch_body, e_leading_whitespace_start,
+                                      e_token_subsequence_end, bodyInfo);
+    } else {
+      unparseStatement(catch_body, bodyInfo);
+    }
+  }
 }
 
 void Unparse_ExprStmt::unparseDefaultStmt(SgStatement *stmt,
@@ -8031,13 +10197,27 @@ void Unparse_ExprStmt::unparseDefaultStmt(SgStatement *stmt,
 
   bool saved_unparsedPartiallyUsingTokenStream =
       info.unparsedPartiallyUsingTokenStream();
+  SgStatement *default_body = default_stmt->get_body();
+  const bool defaultHeaderRequiresAstFallback =
+      saved_unparsedPartiallyUsingTokenStream == true &&
+      ((default_stmt->isTransformation() ||
+        default_stmt->get_containsTransformation() ||
+        default_stmt->get_containsTransformationToSurroundingWhitespace()) ||
+       (default_body != NULL &&
+        (default_body->isCompilerGenerated() ||
+         default_body->isTransformation() ||
+         default_body->get_containsTransformation() ||
+         default_body->get_containsTransformationToSurroundingWhitespace())));
+  if (defaultHeaderRequiresAstFallback) {
+    saved_unparsedPartiallyUsingTokenStream = false;
+    info.unset_unparsedPartiallyUsingTokenStream();
+  }
 
   // DQ (12/28/2014): Test for if we have unparsed partially using the token
   // stream.
   if (saved_unparsedPartiallyUsingTokenStream == false) {
     curprint("default:");
   } else {
-    SgStatement *default_body = default_stmt->get_body();
     unparseStatementFromTokenStream(default_stmt, default_body,
                                     e_token_subsequence_start,
                                     e_leading_whitespace_start, info);
@@ -8051,7 +10231,8 @@ void Unparse_ExprStmt::unparseDefaultStmt(SgStatement *stmt,
   // defined bodies later (if that ultimately makes sense).
   // if(default_stmt->get_body())
   if ((default_stmt->get_body() != NULL) && !info.SkipBasicBlock()) {
-    unparseStatement(default_stmt->get_body(), info);
+    SgUnparse_Info bodyInfo = nestedStatementInfo(info);
+    unparseStatement(default_stmt->get_body(), bodyInfo);
   }
 }
 
@@ -8672,6 +10853,30 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
   }
 
   SgUnparse_Info ninfo(info);
+  auto typedef_definition_requires_name_qualification =
+      [&](SgTypedefDeclaration *typedef_decl) -> bool {
+    if (typedef_decl == NULL) {
+      return false;
+    }
+
+    SgDeclarationStatement *declaration = typedef_decl->get_declaration();
+    if (declaration == NULL) {
+      return false;
+    }
+
+    SgScopeStatement *decl_scope = declaration->get_scope();
+    if (decl_scope == NULL) {
+      return false;
+    }
+
+    SgScopeStatement *parent_scope =
+        isSgScopeStatement(declaration->get_parent());
+    if (parent_scope == NULL) {
+      return true;
+    }
+
+    return !SgScopeStatement::isEquivalentScope(parent_scope, decl_scope);
+  };
 
   // DQ (10/10/2006): Do output any qualified names (particularly for
   // non-defining declarations). ninfo.set_forceQualifiedNames();
@@ -8689,7 +10894,9 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
 
     // DQ (10/14/2006): As part of new implementation of qualified names we now
     // default to the generation of all qualified names unless they are skipped.
-    ninfo.set_SkipQualifiedNames();
+    if (!typedef_definition_requires_name_qualification(typedef_stmt)) {
+      ninfo.set_SkipQualifiedNames();
+    }
     // curprint ( string("\n/* Case of typedefs for outputTypeDefinition == true
     // */\n ";
   } else {
@@ -8984,11 +11191,13 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
     // typedef declaration is not appropriate to use with
     // set_reference_node_for_qualification().
     SgDeclarationStatement *declaration = typedef_stmt->get_declaration();
-    if (declaration != NULL && isSgEnumDeclaration(declaration) != NULL &&
-        isSgTemplateInstantiationDecl(declaration) == NULL) {
+    if (declaration != NULL &&
+        ((isSgEnumDeclaration(declaration) != NULL &&
+          isSgTemplateInstantiationDecl(declaration) == NULL) ||
+         isSgClassDeclaration(declaration) != NULL)) {
 #if DEBUG_TYPEDEF_DECLARATIONS
-      printf("Found enum declaration in typedef declaration; using it as "
-             "reference node for qualification.\n");
+      printf("Found class/enum declaration in typedef declaration; using it "
+             "as reference node for qualification.\n");
 #endif
       ninfo_for_type.set_reference_node_for_qualification(declaration);
     } else {
@@ -9038,6 +11247,10 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
 #if DEBUG_TYPEDEF_DECLARATIONS
     curprint("\n/* Done: Output base type (first part) */ \n");
 #endif
+    if (shouldWrapBeforeTypedefName(typedef_stmt, info,
+                                    unp->cur.current_col())) {
+      unp->cur.insert_newline(1, unp->cur.statement_indent() + TABINDENT * 2);
+    }
     curprint(typedef_stmt->get_name().str());
 
     // Now unparse the second part of the typedef
@@ -9285,6 +11498,10 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
 #endif
     // The name of the type (X, in the following example) has to appear after
     // the declaration. Example: struct { int a; } X;
+    if (shouldWrapBeforeTypedefName(typedef_stmt, info,
+                                    unp->cur.current_col())) {
+      unp->cur.insert_newline(1, unp->cur.statement_indent() + TABINDENT * 2);
+    }
     curprint(typedef_stmt->get_name().str());
     // curprint(string("/* before 2nd part */ ") +
     // typedef_stmt->get_name().str());
@@ -9511,6 +11728,7 @@ void Unparse_ExprStmt::unparseTemplateHeader(T *decl, SgUnparse_Info &info) {
 
   if (!tlist.empty()) {
     curprint("template ");
+    const int template_header_start_line = unp->cur.current_line();
     SgUnparse_Info tinfo(info);
     tinfo.set_declstatement_ptr(NULL);
     tinfo.set_declstatement_ptr(decl);
@@ -9523,7 +11741,34 @@ void Unparse_ExprStmt::unparseTemplateHeader(T *decl, SgUnparse_Info &info) {
       unparseRequiresClauseExpression(this, requires_clause, rinfo);
       curprint(" ");
     }
-    curprint("\n");
+    bool wrap_before_declaration =
+        unp->cur.current_line() != template_header_start_line;
+    if (!wrap_before_declaration) {
+      std::string declaration_preview;
+      if (SgTemplateClassDeclaration *class_decl =
+              isSgTemplateClassDeclaration(decl)) {
+        declaration_preview = buildClassDeclarationPreviewString(class_decl);
+      } else if (SgTemplateFunctionDeclaration *function_decl =
+                     isSgTemplateFunctionDeclaration(decl)) {
+        declaration_preview =
+            buildFunctionDeclarationPreviewString(function_decl);
+      } else if (SgTemplateMemberFunctionDeclaration *member_function_decl =
+                     isSgTemplateMemberFunctionDeclaration(decl)) {
+        declaration_preview =
+            buildFunctionDeclarationPreviewString(member_function_decl);
+      }
+
+      wrap_before_declaration =
+          !declaration_preview.empty() &&
+          unp->cur.current_col() + 1 +
+                  static_cast<int>(declaration_preview.size()) >=
+              kNormalizedDeclarationWrapColumn;
+    }
+    if (wrap_before_declaration) {
+      unp->cur.insert_newline(1, unp->cur.statement_indent());
+    } else {
+      curprint(" ");
+    }
   } else {
     bool is_explicit_specialization = false;
     if (SgTemplateClassDeclaration *class_decl =
@@ -9545,7 +11790,8 @@ void Unparse_ExprStmt::unparseTemplateHeader(T *decl, SgUnparse_Info &info) {
     }
 
     if (is_explicit_specialization) {
-      curprint("template <>\n");
+      curprint("template<>");
+      unp->cur.insert_newline(1, unp->cur.statement_indent());
     }
   }
 }
@@ -9568,6 +11814,43 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
 
   T *template_stmt = dynamic_cast<T *>(stmt);
   ASSERT_not_null(template_stmt);
+
+  SgTemplateClassDeclaration *templateClassDeclaration =
+      isSgTemplateClassDeclaration(stmt);
+  SgTemplateFunctionDeclaration *templateFunctionDeclaration =
+      isSgTemplateFunctionDeclaration(stmt);
+  SgTemplateMemberFunctionDeclaration *templateMemberFunctionDeclaration =
+      isSgTemplateMemberFunctionDeclaration(stmt);
+  SgTemplateVariableDeclaration *templateVariableDeclaration =
+      isSgTemplateVariableDeclaration(stmt);
+  SgTemplateTypedefDeclaration *templateTypedefDeclaration =
+      isSgTemplateTypedefDeclaration(stmt);
+
+  ROSE_ASSERT(templateClassDeclaration != nullptr ||
+              templateFunctionDeclaration != nullptr ||
+              templateMemberFunctionDeclaration != nullptr ||
+              templateVariableDeclaration != nullptr ||
+              templateTypedefDeclaration != nullptr);
+
+  SgSourceFile *sourcefile = info.get_current_source_file();
+  if (sourcefile == nullptr) {
+    sourcefile = isSgSourceFile(unp->currentFile);
+  }
+  if (sourcefile == nullptr) {
+    sourcefile = resolveNormalizedFormattingSourceFile(template_stmt, info);
+  }
+  const bool template_needs_structural_unparse =
+      nodeHasTransformation(template_stmt) ||
+      (templateClassDeclaration != NULL &&
+       (nodeHasTransformation(templateClassDeclaration->get_definition()) ||
+        classTemplateRequiresStructuralUnparse(templateClassDeclaration)));
+  const bool template_requires_ast_unparse =
+      template_needs_structural_unparse ||
+      (templateClassDeclaration != NULL &&
+       classTemplateForwardDeclRequiresAstUnparse(templateClassDeclaration));
+  const bool inherited_partial_token_context =
+      info.unparsedPartiallyUsingTokenStream() &&
+      (sourcefile == NULL || sourcefile->get_unparse_tokens() == false);
 
   // DQ (1/28/2013): This helps handle cases such as "#if 1 void foo () #endif {
   // }"
@@ -9594,44 +11877,78 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
   // Five cases to consider: TODO this a template function, don't we already
   // know that?
 
-  SgTemplateClassDeclaration *templateClassDeclaration =
-      isSgTemplateClassDeclaration(stmt);
-  SgTemplateFunctionDeclaration *templateFunctionDeclaration =
-      isSgTemplateFunctionDeclaration(stmt);
-  SgTemplateMemberFunctionDeclaration *templateMemberFunctionDeclaration =
-      isSgTemplateMemberFunctionDeclaration(stmt);
-  SgTemplateVariableDeclaration *templateVariableDeclaration =
-      isSgTemplateVariableDeclaration(stmt);
-  SgTemplateTypedefDeclaration *templateTypedefDeclaration =
-      isSgTemplateTypedefDeclaration(stmt);
-
-  ROSE_ASSERT(templateClassDeclaration != nullptr ||
-              templateFunctionDeclaration != nullptr ||
-              templateMemberFunctionDeclaration != nullptr ||
-              templateVariableDeclaration != nullptr ||
-              templateTypedefDeclaration != nullptr);
-
   // Unparsing template from the AST can be controlled at the sourcefile or
   // declaration level. The declaration-level flag is set on the shared
   // template declaration base and applies to all template declaration kinds.
 
-  SgSourceFile *sourcefile = info.get_current_source_file();
   bool unparse_template_from_ast =
       sourcefile != NULL && sourcefile->get_unparse_template_ast();
   unparse_template_from_ast |=
       template_stmt->get_unparse_template_ast() == true;
-  if (!unparse_template_from_ast) {
-    const SgName saved_template_name = template_stmt->get_string();
-    const char *saved_template_string = saved_template_name.str();
-    const bool missing_saved_template_string = saved_template_name.is_null() ||
-                                               saved_template_string == NULL ||
-                                               saved_template_string[0] == '\0';
-    if (missing_saved_template_string) {
-      // Token-preserving transformation frontiers can force a template
-      // declaration down the AST path even when the legacy saved-string form
-      // was never populated. In that case, emitting from the empty saved string
-      // drops the declaration entirely, so fall back to the structural AST.
-      unparse_template_from_ast = true;
+  unparse_template_from_ast |=
+      useNormalizedDeclarationScopeFormatting(template_stmt, info);
+  unparse_template_from_ast |= template_requires_ast_unparse;
+  unparse_template_from_ast |= inherited_partial_token_context;
+  {
+    std::string template_name;
+    if (templateClassDeclaration != NULL) {
+      template_name = templateClassDeclaration->get_name().getString();
+    } else if (templateFunctionDeclaration != NULL) {
+      template_name = templateFunctionDeclaration->get_name().getString();
+    } else if (templateMemberFunctionDeclaration != NULL) {
+      template_name = templateMemberFunctionDeclaration->get_name().getString();
+    } else if (templateTypedefDeclaration != NULL) {
+      template_name = templateTypedefDeclaration->get_name().getString();
+    } else if (templateVariableDeclaration != NULL &&
+               !templateVariableDeclaration->get_variables().empty()) {
+      template_name = templateVariableDeclaration->get_variables()
+                          .front()
+                          ->get_name()
+                          .getString();
+    }
+
+    const bool can_replay_template_tokens =
+        sourcefile != NULL && !template_stmt->isTransformation() &&
+        !template_stmt->get_containsTransformation() &&
+        !template_stmt->get_containsTransformationToSurroundingWhitespace() &&
+        canBeUnparsedFromTokenStream(sourcefile, template_stmt);
+    SgSourceFile *normalized_sourcefile =
+        resolveNormalizedFormattingSourceFile(template_stmt, info);
+    const bool can_replay_template_tokens_normalized =
+        normalized_sourcefile != NULL && !template_stmt->isTransformation() &&
+        !template_stmt->get_containsTransformation() &&
+        !template_stmt->get_containsTransformationToSurroundingWhitespace() &&
+        canBeUnparsedFromTokenStream(normalized_sourcefile, template_stmt);
+    const bool normalized_forward_template_can_preserve_tokens =
+        unparse_template_from_ast && !inherited_partial_token_context &&
+        !template_requires_ast_unparse &&
+        useNormalizedDeclarationScopeFormatting(template_stmt, info) &&
+        templateFunctionDeclaration != NULL &&
+        templateFunctionDeclaration->isForward() &&
+        can_replay_template_tokens && can_replay_template_tokens_normalized;
+
+    if (normalized_forward_template_can_preserve_tokens) {
+      unparse_template_from_ast = false;
+    }
+
+    if (!unparse_template_from_ast) {
+
+      if (can_replay_template_tokens) {
+        unparseStatementFromTokenStream(stmt, e_token_subsequence_start,
+                                        e_token_subsequence_end, info);
+        return;
+      }
+
+      const SgName saved_template_name = template_stmt->get_string();
+      const char *saved_template_string = saved_template_name.str();
+      const bool missing_saved_template_string =
+          saved_template_name.is_null() || saved_template_string == NULL ||
+          saved_template_string[0] == '\0';
+      if (missing_saved_template_string) {
+        // If there is no saved string and no reusable token subsequence, fall
+        // back to the structural AST so the declaration is still emitted.
+        unparse_template_from_ast = true;
+      }
     }
   }
 
@@ -9811,6 +12128,12 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
     unparseTemplateHeader(template_stmt, info);
 
     SgUnparse_Info ninfo(info);
+    if (ninfo.unparsedPartiallyUsingTokenStream()) {
+      // This template declaration has already committed to AST output.
+      // Keeping an inherited partial-token flag here mixes replayed template
+      // boundary text with AST-emitted class/function bodies.
+      ninfo.unset_unparsedPartiallyUsingTokenStream();
+    }
 
     if (templateClassDeclaration != NULL) {
       ninfo.unset_SkipSemiColon();
@@ -9875,6 +12198,11 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
       ninfo.set_declstatement_ptr(NULL);
       ninfo.set_declstatement_ptr(functionDeclaration);
 
+      if (shouldWrapBeforeFunctionDeclarator(functionDeclaration, info,
+                                             unp->cur.current_col())) {
+        unp->cur.insert_newline(1, unp->cur.statement_indent());
+      }
+
       unparse_helper(functionDeclaration, ninfo);
 
       ninfo.set_declstatement_ptr(NULL);
@@ -9900,6 +12228,18 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
         unparse_member_function_ctor_initializers(
             templateMemberFunctionDeclaration, ninfo);
       } else {
+        if (functionDeclaration->get_declarationModifier().isThrow()) {
+          const SgTypePtrList &exceptionSpecifierList =
+              functionDeclaration->get_exceptionSpecification();
+          ninfo.set_reference_node_for_qualification(functionDeclaration);
+          unparseExceptionSpecification(exceptionSpecifierList, ninfo);
+          ninfo.set_reference_node_for_qualification(NULL);
+        }
+        if (functionDeclaration->get_asm_name().empty() == false) {
+          curprint(" __asm__ (\"");
+          curprint(functionDeclaration->get_asm_name());
+          curprint(string("\")"));
+        }
         unparseTrailingRequiresClauseIfPresent(this, functionDeclaration,
                                                ninfo);
       }

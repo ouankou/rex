@@ -156,6 +156,25 @@ bool isInAnyClauseVariableList(const std::vector<SgOmpMapClause *> &clauses,
   return false;
 }
 
+bool isSharedByDefaultInOrphanedConstruct(const SgInitializedName *init_var) {
+  if (init_var == nullptr) {
+    return false;
+  }
+
+  SgScopeStatement *var_scope = init_var->get_scope();
+  if (isSgGlobal(var_scope) != nullptr ||
+      isSgNamespaceDefinitionStatement(var_scope) != nullptr) {
+    return true;
+  }
+
+  if (SgVariableDeclaration *var_decl =
+          isSgVariableDeclaration(init_var->get_declaration())) {
+    return isStatic(var_decl);
+  }
+
+  return false;
+}
+
 bool isOmpLibUseStatement(const SgStatement *stmt) {
   const SgUseStatement *use_stmt = isSgUseStatement(stmt);
   if (use_stmt == nullptr) {
@@ -4418,6 +4437,10 @@ omp_construct_enum getDataSharingAttribute(SgSymbol *sym, SgNode *anchor_node) {
     */
     if (isThreadprivate(sym)) {
       rt_val = e_threadprivate;
+      return rt_val;
+    }
+    if (isSharedByDefaultInOrphanedConstruct(iname)) {
+      rt_val = e_shared;
       return rt_val;
     } else {
       // find locally declared variables
@@ -13625,15 +13648,36 @@ move_outlined_function(SgFunctionDeclaration *outlined_func,
   // prepare the required information of new file
   SgGlobal *new_scope = new_file->get_globalScope();
 
+  // Build a new prototype in the outlined file and relink the copied
+  // definition to it. A deep-copied defining declaration otherwise retains a
+  // detached first-nondefining declaration that is not attached to any file.
+  SgFunctionParameterList *new_prototype_params =
+      deepCopy<SgFunctionParameterList>(outlined_func->get_parameterList());
+  SgFunctionDeclaration *new_first_nondefining =
+      SageBuilder::buildNondefiningFunctionDeclaration(
+          outlined_func->get_name(),
+          outlined_func->get_type()->get_return_type(), new_prototype_params,
+          new_scope);
+  ROSE_ASSERT(new_first_nondefining != NULL);
+  new_first_nondefining->set_linkage(outlined_func->get_linkage());
+
   // copy the outlined function to the new file and remove the static modifier
   SgFunctionDeclaration *new_outlined_function =
       isSgFunctionDeclaration(deepCopy(outlined_func));
+  ROSE_ASSERT(new_outlined_function != NULL);
   new_outlined_function->get_declarationModifier()
       .get_storageModifier()
       .setUnspecified();
   new_outlined_function->set_scope(new_scope);
-  SageInterface::fixVariableReferences(new_file, false);
+  new_outlined_function->set_type(
+      buildFunctionType(new_outlined_function->get_type()->get_return_type(),
+                        buildFunctionParameterTypeList(
+                            new_outlined_function->get_parameterList())));
+  new_first_nondefining->set_type(new_outlined_function->get_type());
+  new_outlined_function->set_firstNondefiningDeclaration(new_first_nondefining);
+  new_first_nondefining->set_definingDeclaration(new_outlined_function);
   appendStatement(new_outlined_function, new_scope);
+  SageInterface::fixVariableReferences(new_file, false);
 
   // set the function declaration in the original file as extern
   SgFunctionDeclaration *extern_header =

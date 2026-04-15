@@ -2,8 +2,7 @@
 // the correctness of the -rose:merge_decl_assign option.
 double *space;
 
-void foobar()
-{
+void foobar() {
   for (int def = 0; def < 42; def++) {
     double cc;
     if (true) {

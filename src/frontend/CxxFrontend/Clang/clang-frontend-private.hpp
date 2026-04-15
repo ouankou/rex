@@ -234,6 +234,85 @@ typedefDeclarationReferenceShared(SgTypedefDeclaration *typedef_decl) {
   return nullptr;
 }
 
+inline SgClassType *canonicalClassTypeForFirstSeenTracking(SgType *type) {
+  SgClassType *class_type = isSgClassType(type);
+  if (class_type == nullptr) {
+    return nullptr;
+  }
+
+  SgClassDeclaration *class_decl =
+      isSgClassDeclaration(class_type->get_declaration());
+  if (class_decl == nullptr) {
+    return class_type;
+  }
+
+  SgClassDeclaration *first_nondef =
+      isSgClassDeclaration(class_decl->get_firstNondefiningDeclaration());
+  if (first_nondef == nullptr) {
+    return class_type;
+  }
+
+  if (SgClassType *canonical_type = isSgClassType(first_nondef->get_type())) {
+    if (canonical_type->get_declaration() != first_nondef) {
+      canonical_type->set_declaration(first_nondef);
+    }
+    return canonical_type;
+  }
+
+  return class_type;
+}
+
+inline SgEnumType *canonicalEnumTypeForFirstSeenTracking(SgType *type) {
+  SgEnumType *enum_type = isSgEnumType(type);
+  if (enum_type == nullptr) {
+    return nullptr;
+  }
+
+  SgEnumDeclaration *enum_decl =
+      isSgEnumDeclaration(enum_type->get_declaration());
+  if (enum_decl == nullptr) {
+    return enum_type;
+  }
+
+  SgEnumDeclaration *first_nondef =
+      isSgEnumDeclaration(enum_decl->get_firstNondefiningDeclaration());
+  if (first_nondef == nullptr) {
+    return enum_type;
+  }
+
+  if (SgEnumType *canonical_type = isSgEnumType(first_nondef->get_type())) {
+    if (canonical_type->get_declaration() != first_nondef) {
+      canonical_type->set_declaration(first_nondef);
+    }
+    return canonical_type;
+  }
+
+  return enum_type;
+}
+
+inline void rememberClassTypeFirstSeenState(
+    std::map<SgClassType *, bool> &class_type_first_seen_map, SgType *type,
+    bool first_see_in_type) {
+  if (SgClassType *class_type = canonicalClassTypeForFirstSeenTracking(type)) {
+    class_type_first_seen_map.insert(
+        std::make_pair(class_type, first_see_in_type));
+    if (first_see_in_type) {
+      if (SgNamedType *named_type = isSgNamedType(class_type)) {
+        named_type->set_autonomous_declaration(true);
+      }
+    }
+  }
+}
+
+inline void rememberEnumTypeFirstSeenState(
+    std::map<SgEnumType *, bool> &enum_type_first_seen_map, SgType *type,
+    bool first_see_in_type) {
+  if (SgEnumType *enum_type = canonicalEnumTypeForFirstSeenTracking(type)) {
+    enum_type_first_seen_map.insert(
+        std::make_pair(enum_type, first_see_in_type));
+  }
+}
+
 inline void
 repairTypedefDeclarationReferenceShared(SgTypedefDeclaration *typedef_decl) {
   if (typedef_decl == nullptr || typedef_decl->get_declaration() != nullptr) {
@@ -582,10 +661,18 @@ getConstraintSatisfactionAttribute(const SgNode *node) {
 // PP Callbacks to capture pragmas before Clang processes them
 class RoseOpenMPPragmaCallback : public clang::PPCallbacks {
 private:
-  // Use (FileID, line) pair as key to handle pragmas from multiple files
-  // correctly
-  std::map<std::pair<clang::FileID, unsigned>, std::string> line_to_pragma;
-  std::set<std::pair<clang::FileID, unsigned>> openmp_lines;
+  struct CapturedPragmaInfo {
+    std::string text;
+    std::string logical_filename;
+    unsigned logical_line = 0;
+    bool is_openmp = false;
+  };
+
+  // Use the physical (FileID, line) position for source scanning while
+  // retaining the logical filename/line from active line markers for later
+  // AST placement.
+  std::map<std::pair<clang::FileID, unsigned>, CapturedPragmaInfo>
+      line_to_pragma;
   std::set<std::pair<clang::FileID, unsigned>> pragma_continuation_lines;
   clang::SourceManager &p_source_manager;
   clang::Preprocessor &p_preprocessor;
@@ -800,12 +887,29 @@ public:
 
   void PragmaDirective(clang::SourceLocation Loc,
                        clang::PragmaIntroducerKind Introducer) override {
-    // Get the FileID and starting line number where the pragma appears
-    clang::FileID file_id = p_source_manager.getFileID(Loc);
-    unsigned line = p_source_manager.getPresumedLineNumber(Loc);
+    clang::SourceLocation file_loc = p_source_manager.getFileLoc(Loc);
+    if (!file_loc.isValid()) {
+      file_loc = Loc;
+    }
+
+    // Use the physical file/line for later backwards scanning in the lexer
+    // buffer, but track the logical source filename/line separately.
+    clang::FileID file_id = p_source_manager.getFileID(file_loc);
+    unsigned line = p_source_manager.getSpellingLineNumber(file_loc);
+    if (file_id.isInvalid() || line == 0) {
+      return;
+    }
+
+    clang::PresumedLoc presumed = p_source_manager.getPresumedLoc(file_loc);
+    std::string logical_filename;
+    unsigned logical_line = 0;
+    if (presumed.isValid()) {
+      logical_filename = presumed.getFilename();
+      logical_line = presumed.getLine();
+    }
 
     // Capture the full pragma text, including any backslash-continued lines
-    const char *current = p_source_manager.getCharacterData(Loc);
+    const char *current = p_source_manager.getCharacterData(file_loc);
     std::string original_text;
     unsigned line_count = 1;
 
@@ -893,10 +997,8 @@ public:
     }
 
     // Store with (FileID, line) key to handle multi-file TUs
-    line_to_pragma[std::make_pair(file_id, line)] = pragma_text;
-    if (is_openmp) {
-      openmp_lines.insert(std::make_pair(file_id, line));
-    }
+    line_to_pragma[std::make_pair(file_id, line)] = {
+        pragma_text, logical_filename, logical_line, is_openmp};
     for (unsigned offset = 1; offset < line_count; ++offset) {
       pragma_continuation_lines.insert(std::make_pair(file_id, line + offset));
     }
@@ -908,19 +1010,33 @@ public:
                        std::string &result) const {
     auto it = line_to_pragma.find(std::make_pair(file_id, line));
     if (it != line_to_pragma.end()) {
-      result = it->second;
+      result = it->second.text;
       return true;
     }
     return false;
   }
 
+  bool getPragmaLogicalLocation(clang::FileID file_id, unsigned line,
+                                std::string &filename,
+                                unsigned &logical_line) const {
+    auto it = line_to_pragma.find(std::make_pair(file_id, line));
+    if (it == line_to_pragma.end()) {
+      return false;
+    }
+
+    filename = it->second.logical_filename;
+    logical_line = it->second.logical_line;
+    return true;
+  }
+
   size_t getCount() const { return line_to_pragma.size(); }
 
   bool isOpenMPPragmaAtLine(clang::FileID file_id, unsigned line) const {
-    return openmp_lines.count(std::make_pair(file_id, line)) > 0;
+    auto it = line_to_pragma.find(std::make_pair(file_id, line));
+    return it != line_to_pragma.end() && it->second.is_openmp;
   }
 
-  const std::map<std::pair<clang::FileID, unsigned>, std::string> &
+  const std::map<std::pair<clang::FileID, unsigned>, CapturedPragmaInfo> &
   getPragmaMap() const {
     return line_to_pragma;
   }
@@ -1000,8 +1116,12 @@ protected:
   // the specialized template declaration has been translated.
   std::map<SgDeclarationStatement *, clang::Decl *>
       p_pending_specialized_template_links;
+  // Pending nonreal qualifier links for template-related decls encountered
+  // before on-demand translation can materialize the corresponding ROSE decl.
+  std::map<SgNonrealDecl *, clang::Decl *>
+      p_pending_nonreal_template_decl_links;
   struct CapturedPragma {
-    clang::FileID file_id;
+    std::string filename;
     unsigned line;
     std::string text;
     bool is_openmp;
@@ -1121,6 +1241,7 @@ protected:
   void queueSpecializedTemplateLink(SgDeclarationStatement *decl,
                                     clang::Decl *specialized_decl);
   size_t resolvePendingSpecializedTemplateLinks();
+  size_t resolvePendingNonrealTemplateDeclarationLinks();
   SgDeclarationStatement *lookupSgDeclarationForClangDecl(clang::Decl *key,
                                                           bool allow_on_demand);
   SgClassDeclaration *
@@ -1188,6 +1309,7 @@ protected:
       const clang::TemplateArgumentListInfo &arg_info);
   size_t
   countExplicitTemplateArgumentsFromSource(clang::SourceRange range) const;
+  SgType *translateTypeTemplateArgument(const clang::TemplateArgumentLoc &arg);
 
   // Helper: Append translated template argument(s), flattening Clang
   // argument packs (TemplateArgument::Pack) into individual arguments.
@@ -1251,8 +1373,8 @@ protected:
   bool collectPragmas(clang::Stmt *stmt, std::vector<CapturedPragma> &pragmas);
   SgPragmaDeclaration *
   buildCapturedPragmaDeclaration(const std::string &directive,
-                                 clang::FileID file_id, unsigned pragma_line,
-                                 SgScopeStatement *scope);
+                                 const std::string &filename,
+                                 unsigned pragma_line, SgScopeStatement *scope);
   void appendPragmasBefore(clang::Stmt *stmt, SgScopeStatement *scope);
   SgStatement *wrapStatementWithPragmas(clang::Stmt *stmt,
                                         SgStatement *statement);
@@ -1331,6 +1453,12 @@ public:
   }
 
   void appendUnattachedPragmas();
+  SgFunctionDeclaration *
+  lookupTranslatedFunctionDecl(clang::FunctionDecl *decl,
+                               bool allow_on_demand = true) {
+    return isSgFunctionDeclaration(
+        lookupSgDeclarationForClangDecl(decl, allow_on_demand));
+  }
 
   /* ASTConsumer's methods overload */
 
@@ -2119,7 +2247,8 @@ protected:
       p_preprocessor_record_list;
   bool p_preprocessor_record_list_sorted;
   std::set<std::string> p_application_file_paths;
-  std::set<std::string> p_self_referential_macros;
+  std::set<const clang::IdentifierInfo *> p_self_referential_macros;
+  bool p_track_self_referential_macros;
   bool p_saw_self_referential_macro_expansion;
   struct SkippedFileRange {
     clang::FileID file_id;
@@ -2137,7 +2266,8 @@ protected:
 
 public:
   SagePreprocessorRecord(clang::SourceManager *source_manager,
-                         clang::Preprocessor *preprocessor);
+                         clang::Preprocessor *preprocessor,
+                         bool track_self_referential_macros);
   void sortRecordedDirectives();
   bool isApplicationHeaderPath(const std::string &path) const;
   void recordInjectedDirective(clang::SourceLocation loc,

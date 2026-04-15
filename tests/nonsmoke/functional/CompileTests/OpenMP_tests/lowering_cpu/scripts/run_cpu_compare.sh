@@ -34,6 +34,7 @@ compile_flags=(
   -fopenmp=libiomp5
   -O0
   -g
+  -U_OPENMP
   "-D_OPENMP=${openmp_version}"
   "-I${omp_header_dir}"
   "-L${omp_runtime_dir}"

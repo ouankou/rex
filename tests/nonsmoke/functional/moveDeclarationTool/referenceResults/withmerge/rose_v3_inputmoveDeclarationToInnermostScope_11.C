@@ -25,7 +25,6 @@ void bar() {
   }
 }
 // with or without initializer, we cannot move it.
-
 void bar2() {
   for (int j = 10; j > 0; --j) {
     int i;

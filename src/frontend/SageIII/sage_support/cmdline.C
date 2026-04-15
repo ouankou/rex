@@ -22,6 +22,7 @@
 #include "sage3basic.h"
 
 #include "rose_path_resolver.h"
+#include "rose_test_output_path.h"
 
 #include "clang-include-option.h"
 
@@ -919,7 +920,7 @@ void SgProject::processCommandLine(const vector<string> &input_argv) {
                     &tempOutputFilename, 1);
   if (optionCount > 0) {
     // Make our own copy of the filename string
-    p_outputFileName = tempOutputFilename;
+    p_outputFileName = Rose::TestOutput::resolvePath(tempOutputFilename);
   } else {
     // Usual default for output executables (comes from the default name for
     // assembler output a long long time ago, way way back in the 1970's).

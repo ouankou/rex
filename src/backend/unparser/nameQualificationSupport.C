@@ -49,6 +49,43 @@ bool should_preseed_referenced_name_for_untraversed_declaration(
     return true;
   }
 
+  auto physical_filename = [](SgNode *node) -> std::string {
+    SgLocatedNode *located = isSgLocatedNode(node);
+    if (located == NULL) {
+      return "";
+    }
+
+    auto pick_filename = [](Sg_File_Info *fi) -> std::string {
+      if (fi == NULL) {
+        return "";
+      }
+      const std::string filename = fi->get_filenameString();
+      if (filename.empty() || filename == "NULL_FILE") {
+        return "";
+      }
+      return filename;
+    };
+
+    std::string filename = pick_filename(located->get_startOfConstruct());
+    if (!filename.empty()) {
+      return filename;
+    }
+
+    filename = pick_filename(located->get_file_info());
+    if (!filename.empty()) {
+      return filename;
+    }
+
+    return pick_filename(located->get_endOfConstruct());
+  };
+
+  const std::string reference_filename = physical_filename(reference_node);
+  const std::string declaration_filename = physical_filename(declaration);
+  if (!reference_filename.empty() && !declaration_filename.empty() &&
+      reference_filename != declaration_filename) {
+    return true;
+  }
+
   SgSourceFile *reference_file =
       SageInterface::getEnclosingSourceFile(reference_node);
   SgSourceFile *declaration_file =
@@ -113,6 +150,69 @@ bool getExplicitQualifierTokens(const SgNode *node, SgStringList &tokens,
   }
 
   return !tokens.empty() || explicit_global;
+}
+
+bool is_class_like_scope_for_name_qualification(SgScopeStatement *scope) {
+  return isSgClassDefinition(scope) != NULL ||
+         isSgTemplateClassDefinition(scope) != NULL ||
+         isSgTemplateInstantiationDefn(scope) != NULL;
+}
+
+bool declaration_has_real_visible_source(SgDeclarationStatement *decl) {
+  if (decl == NULL) {
+    return false;
+  }
+
+  Sg_File_Info *fi = decl->get_file_info();
+  if (fi == NULL) {
+    return false;
+  }
+
+  if (fi->isCompilerGenerated() || fi->isTransformation() ||
+      fi->isFrontendSpecific()) {
+    return false;
+  }
+
+  return fi->isOutputInCodeGeneration();
+}
+
+bool is_hidden_friend_free_function_decl(SgFunctionDeclaration *decl) {
+  if (decl == NULL) {
+    return false;
+  }
+
+  bool has_lexical_friend_in_class_scope = false;
+  bool has_visible_nonclass_source_decl = false;
+
+  SgFunctionDeclaration *candidates[] = {
+      decl, isSgFunctionDeclaration(decl->get_firstNondefiningDeclaration()),
+      isSgFunctionDeclaration(decl->get_definingDeclaration())};
+
+  for (SgFunctionDeclaration *candidate : candidates) {
+    if (candidate == NULL) {
+      continue;
+    }
+
+    SgScopeStatement *parent_scope =
+        isSgScopeStatement(candidate->get_parent());
+    if (candidate->get_declarationModifier().isFriend() &&
+        is_class_like_scope_for_name_qualification(parent_scope)) {
+      has_lexical_friend_in_class_scope = true;
+    }
+
+    if (declaration_has_real_visible_source(candidate) &&
+        !is_class_like_scope_for_name_qualification(parent_scope)) {
+      has_visible_nonclass_source_decl = true;
+    }
+  }
+
+  return has_lexical_friend_in_class_scope && !has_visible_nonclass_source_decl;
+}
+
+bool scopes_are_equivalent_for_name_qualification(SgScopeStatement *lhs,
+                                                  SgScopeStatement *rhs) {
+  return lhs == rhs || (lhs != NULL && rhs != NULL &&
+                        SgScopeStatement::isEquivalentScope(lhs, rhs));
 }
 
 bool applyExplicitQualifier(const SgNode *node, std::string &qualifier,
@@ -1637,6 +1737,179 @@ int NameQualificationTraversal::nameQualificationDepth(
     // SageInterface::lookupSymbolInParentScopes(name,currentScope);
     SgSymbol *symbol = SageInterface::lookupSymbolInParentScopes(
         name, currentScope, templateParameterList, lookupTemplateArgumentList);
+
+    auto canonical_first_declaration =
+        [](SgDeclarationStatement *decl) -> SgDeclarationStatement * {
+      if (decl == NULL) {
+        return NULL;
+      }
+      if (SgDeclarationStatement *first =
+              decl->get_firstNondefiningDeclaration()) {
+        return first;
+      }
+      return decl;
+    };
+
+    auto declaration_for_symbol =
+        [](SgSymbol *candidate) -> SgDeclarationStatement * {
+      if (candidate == NULL) {
+        return NULL;
+      }
+      if (SgAliasSymbol *alias = isSgAliasSymbol(candidate)) {
+        candidate = alias->get_alias();
+      }
+      if (SgClassSymbol *class_symbol = isSgClassSymbol(candidate)) {
+        return class_symbol->get_declaration();
+      }
+      if (SgTypedefSymbol *typedef_symbol = isSgTypedefSymbol(candidate)) {
+        return typedef_symbol->get_declaration();
+      }
+      if (SgEnumSymbol *enum_symbol = isSgEnumSymbol(candidate)) {
+        return enum_symbol->get_declaration();
+      }
+      return NULL;
+    };
+
+    auto imported_by_prior_using_directive =
+        [&](SgDeclarationStatement *target_declaration) -> bool {
+      if (target_declaration == NULL ||
+          positionStatement->get_file_info() == NULL) {
+        return false;
+      }
+
+      SgDeclarationStatement *target_first_declaration =
+          canonical_first_declaration(target_declaration);
+      unsigned int position_sequence =
+          positionStatement->get_file_info()->get_source_sequence_number();
+
+      auto visit_scope_contents_in_order =
+          [&](SgScopeStatement *scope, const auto &visit_statement) -> bool {
+        auto visit_declarations =
+            [&](SgDeclarationStatementPtrList &declarations) -> bool {
+          for (SgDeclarationStatement *declaration : declarations) {
+            SgStatement *statement = isSgStatement(declaration);
+            if (statement != NULL && visit_statement(statement)) {
+              return true;
+            }
+          }
+          return false;
+        };
+
+        if (SgGlobal *global_scope = isSgGlobal(scope)) {
+          return visit_declarations(global_scope->get_declarations());
+        }
+        if (SgNamespaceDefinitionStatement *namespace_scope =
+                isSgNamespaceDefinitionStatement(scope)) {
+          return visit_declarations(namespace_scope->get_declarations());
+        }
+        if (SgDeclarationScope *declaration_scope =
+                isSgDeclarationScope(scope)) {
+          return visit_declarations(declaration_scope->get_declarations());
+        }
+        if (SgClassDefinition *class_scope = isSgClassDefinition(scope)) {
+          return visit_declarations(class_scope->get_members());
+        }
+        if (SgTemplateClassDefinition *template_class_scope =
+                isSgTemplateClassDefinition(scope)) {
+          return visit_declarations(template_class_scope->get_members());
+        }
+        if (SgTemplateInstantiationDefn *instantiation_scope =
+                isSgTemplateInstantiationDefn(scope)) {
+          return visit_declarations(instantiation_scope->get_members());
+        }
+        if (scope->containsOnlyDeclarations()) {
+          return visit_declarations(scope->getDeclarationList());
+        }
+
+        switch (scope->variantT()) {
+        case V_SgBasicBlock: {
+          const SgStatementPtrList &statements = scope->getStatementList();
+          for (SgStatement *statement : statements) {
+            if (statement != NULL && visit_statement(statement)) {
+              return true;
+            }
+          }
+          return false;
+        }
+        default:
+          // Only basic blocks expose a stable statement list here. Other
+          // control-flow scopes may normalize their bodies into synthetic
+          // blocks when queried via getStatementList(), which mutates the AST
+          // during name-qualification/token-unparse preparation. Nested
+          // statement scopes are reached through their own basic-block scopes
+          // while walking outward from the reference position, so skipping
+          // them here does not hide any branch-local using directives.
+          return false;
+        }
+      };
+
+      for (SgScopeStatement *scope = currentScope; scope != NULL;) {
+        bool found_import = false;
+        visit_scope_contents_in_order(
+            scope, [&](SgStatement *statement) -> bool {
+              if (statement == NULL) {
+                return false;
+              }
+              if (statement == positionStatement) {
+                return true;
+              }
+
+              Sg_File_Info *statement_file_info = statement->get_file_info();
+              if (statement_file_info != NULL && position_sequence != 0) {
+                unsigned int statement_sequence =
+                    statement_file_info->get_source_sequence_number();
+                if (statement_sequence != 0 &&
+                    statement_sequence >= position_sequence) {
+                  return false;
+                }
+              }
+
+              SgUsingDirectiveStatement *using_directive =
+                  isSgUsingDirectiveStatement(statement);
+              if (using_directive == NULL) {
+                return false;
+              }
+
+              SgNamespaceDeclarationStatement *namespace_declaration =
+                  using_directive->get_namespaceDeclaration();
+              if (namespace_declaration == NULL) {
+                return false;
+              }
+
+              SgNamespaceDefinitionStatement *namespace_definition =
+                  namespace_declaration->get_definition();
+              if (namespace_definition == NULL) {
+                return false;
+              }
+
+              SgSymbol *imported_symbol = namespace_definition->lookup_symbol(
+                  name, templateParameterList, lookupTemplateArgumentList);
+              SgDeclarationStatement *imported_declaration =
+                  declaration_for_symbol(imported_symbol);
+              if (imported_declaration == NULL) {
+                return false;
+              }
+
+              if (canonical_first_declaration(imported_declaration) !=
+                  target_first_declaration) {
+                found_import = true;
+                return true;
+              }
+              return false;
+            });
+        if (found_import) {
+          return true;
+        }
+
+        SgScopeStatement *next_scope = scope->get_scope();
+        if (next_scope == scope) {
+          break;
+        }
+        scope = next_scope;
+      }
+
+      return false;
+    };
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || DEBUG_FUNCTION_RESOLUTION
     MLOG_WARN_C(MLOG_UNPARSER, "Initial lookup: symbol = %p = %s \n", symbol,
@@ -3623,41 +3896,29 @@ int NameQualificationTraversal::nameQualificationDepth(
             // size_t numberOfAliasSymbols =
             // scopeOfAssociatedTypedefDeclaration->count_alias_symbol(name);
             bool includeCurrentScope = true;
-            SgClassDefinition *current_classDefinition =
-                SageInterface::getEnclosingNode<SgClassDefinition>(
-                    currentScope, includeCurrentScope);
-            if (current_classDefinition != NULL) {
-              // DQ (2/4/2020): Check if there is an existing class in the
-              // current_classDefinition (which is not an alias), and if so then
-              // we don't need to worry about any ambiguity. See
-              // Cxx11_test/test2020_11.C for an example. SgClassSymbol*
-              // lookupClassSymbol =
-              // current_classDefinition->lookup_class_symbol(name);
-              size_t symbolCount = current_classDefinition->count_symbol(name);
-              size_t numberOfAliasSymbols =
-                  current_classDefinition->count_alias_symbol(name);
-              ROSE_ASSERT(symbolCount >= numberOfAliasSymbols);
-              size_t declarationsInThisScope =
-                  symbolCount - numberOfAliasSymbols;
-              // When all of the declarations are in base classes then there is
-              // an ambiguity to resolve. if (lookupClassSymbol == NULL)
-              if (declarationsInThisScope == 0) {
-                // size_t numberOfAliasSymbols =
-                // current_classDefinition->count_alias_symbol(name);
-                if (numberOfAliasSymbols >= 2) {
-                  // DQ (1/4/2020): Comment out as test for test2020_11.C
-                  // qualificationDepth =
-                  // nameQualificationDepthOfParent(declaration,currentScope,positionStatement)
-                  // + 1;
-                  qualificationDepth += 1;
+            SgScopeStatement *ambiguityScope = currentScope;
+            if (SgClassDefinition *current_classDefinition =
+                    SageInterface::getEnclosingNode<SgClassDefinition>(
+                        currentScope, includeCurrentScope)) {
+              ambiguityScope = current_classDefinition;
+            }
+            ASSERT_not_null(ambiguityScope);
+
+            bool has_scope_ambiguity =
+                ambiguityScope->hasAmbiguity(name, symbol);
+            bool imported_using_directive_conflict =
+                imported_by_prior_using_directive(declaration);
+            if (has_scope_ambiguity == true ||
+                imported_using_directive_conflict == true) {
+              qualificationDepth =
+                  nameQualificationDepthOfParent(declaration, currentScope,
+                                                 positionStatement) +
+                  1;
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-                  MLOG_WARN_C(MLOG_UNPARSER,
-                              "   --- qualificationDepth = %d \n",
-                              qualificationDepth);
+              MLOG_WARN_C(MLOG_UNPARSER, "   --- qualificationDepth = %d \n",
+                          qualificationDepth);
 #endif
-                }
-              }
             }
 
           } else {
@@ -3863,6 +4124,31 @@ int NameQualificationTraversal::nameQualificationDepth(
               functionSymbol->get_declaration();
           ASSERT_not_null(associatedFunctionDeclarationFromSymbol);
 
+          auto canonical_function_declaration =
+              [](SgFunctionDeclaration *decl) -> SgFunctionDeclaration * {
+            if (decl == NULL) {
+              return NULL;
+            }
+
+            SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
+                decl->get_firstNondefiningDeclaration());
+            if (first_nondef != NULL) {
+              return first_nondef;
+            }
+
+            SgFunctionDeclaration *defining_decl =
+                isSgFunctionDeclaration(decl->get_definingDeclaration());
+            if (defining_decl != NULL) {
+              return defining_decl;
+            }
+
+            return decl;
+          };
+          SgFunctionDeclaration *canonicalAssociatedFunctionDeclaration =
+              canonical_function_declaration(
+                  associatedFunctionDeclarationFromSymbol);
+          ASSERT_not_null(canonicalAssociatedFunctionDeclaration);
+
           ASSERT_not_null(functionDeclaration);
 
           // DQ (11/19/2013): This is added to support testing cases where we
@@ -3893,10 +4179,40 @@ int NameQualificationTraversal::nameQualificationDepth(
                 functionDeclaration->get_firstNondefiningDeclaration()
                     ->get_declaration_associated_with_symbol();
           }
-          ASSERT_not_null(declarationFromSymbol);
+          auto is_suppressed_instantiation_placeholder =
+              [&](SgFunctionDeclaration *decl) -> bool {
+            if (decl == NULL) {
+              return false;
+            }
+            if (isSgTemplateInstantiationFunctionDecl(decl) == NULL &&
+                isSgTemplateInstantiationMemberFunctionDecl(decl) == NULL) {
+              return false;
+            }
 
+            auto output_enabled = [](SgLocatedNode *node) -> bool {
+              return node != NULL && node->get_file_info() != NULL &&
+                     node->get_file_info()->isOutputInCodeGeneration();
+            };
+
+            if (!output_enabled(decl)) {
+              return true;
+            }
+
+            SgTemplateInstantiationDirectiveStatement *directive =
+                isSgTemplateInstantiationDirectiveStatement(decl->get_parent());
+            return directive != NULL && !output_enabled(directive);
+          };
+          if (declarationFromSymbol == NULL &&
+              is_suppressed_instantiation_placeholder(functionDeclaration)) {
+            return 0;
+          }
           SgFunctionDeclaration *functionDeclarationFromSymbol =
-              isSgFunctionDeclaration(declarationFromSymbol);
+              canonical_function_declaration(
+                  isSgFunctionDeclaration(declarationFromSymbol));
+          if (functionDeclarationFromSymbol == NULL) {
+            functionDeclarationFromSymbol =
+                canonicalAssociatedFunctionDeclaration;
+          }
           ASSERT_not_null(functionDeclarationFromSymbol);
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -3948,7 +4264,7 @@ int NameQualificationTraversal::nameQualificationDepth(
           // if
           // (associatedFunctionDeclaration->get_firstNondefiningDeclaration()
           // == functionDeclaration->get_firstNondefiningDeclaration())
-          if (associatedFunctionDeclarationFromSymbol ==
+          if (canonicalAssociatedFunctionDeclaration ==
               functionDeclarationFromSymbol) {
             // DQ (4/12/2014): Now we know that it can be found, but we still
             // need to check if there would be another function that could be
@@ -4039,11 +4355,11 @@ int NameQualificationTraversal::nameQualificationDepth(
             SgName functionDeclarationFromSymbol_mangled_name =
                 functionDeclarationFromSymbol->get_mangled_name();
             SgName associatedFunctionDeclarationFromSymbol_mangled_name =
-                associatedFunctionDeclarationFromSymbol->get_mangled_name();
+                canonicalAssociatedFunctionDeclaration->get_mangled_name();
 
             // DQ (4/2/2018): Check the names to see if they could be the same
             // (possible error checking).
-            if (associatedFunctionDeclarationFromSymbol->get_name() ==
+            if (canonicalAssociatedFunctionDeclaration->get_name() ==
                 functionDeclarationFromSymbol->get_name()) {
               // DQ (4/7/2018): I think we can assert this (this fails for
               // Cxx_tests/test2017_29.C).
@@ -4154,24 +4470,25 @@ int NameQualificationTraversal::nameQualificationDepth(
             // size_t numberOfAliasSymbols =
             // scopeOfAssociatedTypedefDeclaration->count_alias_symbol(name);
             bool includeCurrentScope = true;
-            SgClassDefinition *current_classDefinition =
-                SageInterface::getEnclosingNode<SgClassDefinition>(
-                    currentScope, includeCurrentScope);
-            if (current_classDefinition != NULL) {
-              size_t numberOfAliasSymbols =
-                  current_classDefinition->count_alias_symbol(name);
-              if (numberOfAliasSymbols >= 2) {
-                qualificationDepth =
-                    nameQualificationDepthOfParent(declaration, currentScope,
-                                                   positionStatement) +
-                    1;
-                // qualificationDepth += 1;
+            SgScopeStatement *ambiguityScope = currentScope;
+            if (SgClassDefinition *current_classDefinition =
+                    SageInterface::getEnclosingNode<SgClassDefinition>(
+                        currentScope, includeCurrentScope)) {
+              ambiguityScope = current_classDefinition;
+            }
+            ASSERT_not_null(ambiguityScope);
+
+            if (ambiguityScope->hasAmbiguity(name, symbol) == true ||
+                imported_by_prior_using_directive(declaration) == true) {
+              qualificationDepth =
+                  nameQualificationDepthOfParent(declaration, currentScope,
+                                                 positionStatement) +
+                  1;
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-                MLOG_WARN_C(MLOG_UNPARSER, "   --- qualificationDepth = %d \n",
-                            qualificationDepth);
+              MLOG_WARN_C(MLOG_UNPARSER, "   --- qualificationDepth = %d \n",
+                          qualificationDepth);
 #endif
-              }
             }
           } else {
             // The name does not match, so the associatedFunctionDeclaration is
@@ -4264,24 +4581,25 @@ int NameQualificationTraversal::nameQualificationDepth(
             // size_t numberOfAliasSymbols =
             // scopeOfAssociatedTypedefDeclaration->count_alias_symbol(name);
             bool includeCurrentScope = true;
-            SgClassDefinition *current_classDefinition =
-                SageInterface::getEnclosingNode<SgClassDefinition>(
-                    currentScope, includeCurrentScope);
-            if (current_classDefinition != NULL) {
-              size_t numberOfAliasSymbols =
-                  current_classDefinition->count_alias_symbol(name);
-              if (numberOfAliasSymbols >= 2) {
-                qualificationDepth =
-                    nameQualificationDepthOfParent(declaration, currentScope,
-                                                   positionStatement) +
-                    1;
-                // qualificationDepth += 1;
+            SgScopeStatement *ambiguityScope = currentScope;
+            if (SgClassDefinition *current_classDefinition =
+                    SageInterface::getEnclosingNode<SgClassDefinition>(
+                        currentScope, includeCurrentScope)) {
+              ambiguityScope = current_classDefinition;
+            }
+            ASSERT_not_null(ambiguityScope);
+
+            if (ambiguityScope->hasAmbiguity(name, symbol) == true ||
+                imported_by_prior_using_directive(declaration) == true) {
+              qualificationDepth =
+                  nameQualificationDepthOfParent(declaration, currentScope,
+                                                 positionStatement) +
+                  1;
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-                MLOG_WARN_C(MLOG_UNPARSER, "   --- qualificationDepth = %d \n",
-                            qualificationDepth);
+              MLOG_WARN_C(MLOG_UNPARSER, "   --- qualificationDepth = %d \n",
+                          qualificationDepth);
 #endif
-              }
             }
           } else {
             // The name does not match, so the associatedFunctionDeclaration is
@@ -6154,10 +6472,19 @@ void NameQualificationTraversal::traverseType(SgType *type,
     // that are too long come from. string typeNameString =
     // globalUnparseToString(type,unparseInfoPointer);
     string typeNameString;
+    SgType *typeForGeneratedName = type;
+    if (unparseInfoPointer->isTypeFirstPart()) {
+      if (SgArrayType *arrayType = isSgArrayType(type)) {
+        // The cached type string is only reused for the first declarator
+        // fragment. For arrays that fragment is the element type.
+        typeForGeneratedName = arrayType->get_base_type();
+      }
+    }
     // DQ (7/13/2022): Modified code to avoid name qualification in template
     // class instantiations.
     if (isContainedInTemplateInstantiationDefn == false) {
-      typeNameString = globalUnparseToString(type, unparseInfoPointer);
+      typeNameString =
+          globalUnparseToString(typeForGeneratedName, unparseInfoPointer);
     }
 
     // Constructor initializers can carry the leading qualification on the
@@ -7280,7 +7607,8 @@ void NameQualificationTraversal::nameQualificationTypeSupport(
       // more generally?).  Handle template declarations similarly. OR enum
       // declarations (since they can have a forward declaration (except that
       // this is a common languae extension...).
-      if (isSgTemplateInstantiationDecl(declaration) != NULL ||
+      if (isSgClassDeclaration(declaration) != NULL ||
+          isSgTemplateInstantiationDecl(declaration) != NULL ||
           isSgEnumDeclaration(declaration) != NULL ||
           isSgNonrealDecl(declaration) != NULL) {
         // Do the regularly schedule name qualification for these cases.
@@ -8033,16 +8361,22 @@ NameQualificationTraversal::evaluateInheritedAttribute(
           // Cxx11_tests/test2019_107.C where the associated
           // SgTemplateInstantiationDecl is a specialization and does require
           // name qualification.
+          const bool preserve_semantic_outer_qualification =
+              classDeclaration->get_parent() != class_scope &&
+              classDeclaration->get_scope() == class_scope;
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
           MLOG_WARN_C(MLOG_UNPARSER,
                       "This classDeclaration has not been seen before so skip "
                       "the name qualification \n");
 #endif
           // DQ (2/12/2019): If this is a SgTemplateInstantiationDecl, it might
-          // require name qualification.
+          // require name qualification. Non-template named out-of-line
+          // definitions such as `struct N::color` can also require it when the
+          // declaration is emitted from a different lexical scope.
           SgTemplateInstantiationDecl *templateInstantiationDecl =
               isSgTemplateInstantiationDecl(classDeclaration);
-          if (templateInstantiationDecl != NULL) {
+          if (templateInstantiationDecl != NULL ||
+              preserve_semantic_outer_qualification) {
             int amountOfNameQualificationRequired = nameQualificationDepth(
                 classDeclaration, currentScope, classDeclaration);
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -9814,10 +10148,78 @@ NameQualificationTraversal::evaluateInheritedAttribute(
           // scope. Reuse the class's own required depth to avoid overcounting
           // outer namespaces made visible through using directives, but force
           // at least one qualification level so the class name is preserved.
+          auto scope_to_class_decl =
+              [](SgScopeStatement *scope) -> SgClassDeclaration * {
+            if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+              return isSgClassDeclaration(class_def->get_declaration());
+            }
+            if (SgTemplateClassDefinition *template_def =
+                    isSgTemplateClassDefinition(scope)) {
+              return isSgTemplateClassDeclaration(
+                  template_def->get_declaration());
+            }
+            if (SgTemplateInstantiationDefn *inst_def =
+                    isSgTemplateInstantiationDefn(scope)) {
+              return isSgTemplateInstantiationDecl(inst_def->get_declaration());
+            }
+            return nullptr;
+          };
+
+          auto next_enclosing_scope =
+              [&](SgScopeStatement *scope) -> SgScopeStatement * {
+            if (scope == NULL) {
+              return NULL;
+            }
+
+            if (SgClassDeclaration *class_decl = scope_to_class_decl(scope)) {
+              return class_decl->get_scope();
+            }
+
+            if (SgNamespaceDefinitionStatement *namespace_def =
+                    isSgNamespaceDefinitionStatement(scope)) {
+              if (SgNamespaceDeclarationStatement *namespace_decl =
+                      namespace_def->get_namespaceDeclaration()) {
+                return namespace_decl->get_scope();
+              }
+            }
+
+            return isSgScopeStatement(scope->get_parent());
+          };
+
+          auto associated_class_qualification_depth =
+              [&](SgClassDeclaration *class_decl) -> int {
+            if (class_decl == NULL) {
+              return 0;
+            }
+
+            int depth = 1;
+            for (SgScopeStatement *scope = class_decl->get_scope();
+                 scope != NULL &&
+                 !SgScopeStatement::isEquivalentScope(scope, currentScope);
+                 scope = next_enclosing_scope(scope)) {
+              if (scope_to_class_decl(scope) != NULL) {
+                ++depth;
+              } else if (SgNamespaceDefinitionStatement *namespace_def =
+                             isSgNamespaceDefinitionStatement(scope)) {
+                SgNamespaceDeclarationStatement *namespace_decl =
+                    namespace_def->get_namespaceDeclaration();
+                if (namespace_decl == NULL ||
+                    !namespace_decl->get_isUnnamedNamespace()) {
+                  ++depth;
+                }
+              }
+            }
+
+            return depth;
+          };
+
           amountOfNameQualificationRequired =
               std::max(1, nameQualificationDepth(associatedClassDeclaration,
                                                  currentScope,
                                                  memberFunctionDeclaration));
+          amountOfNameQualificationRequired = std::max(
+              amountOfNameQualificationRequired,
+              associated_class_qualification_depth(associatedClassDeclaration));
         }
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
         MLOG_WARN_C(MLOG_UNPARSER,
@@ -12007,11 +12409,12 @@ NameQualificationTraversal::evaluateInheritedAttribute(
 
           if (numberOfAliasSymbols > 1 &&
               amountOfNameQualificationRequired == 0) {
-            // DQ (3/15/2017): Added support to use message streams.
+#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
             MLOG_WARN_C(MLOG_UNPARSER,
                         "WARNING: name qualification can be required when "
                         "there are multiple base classes with the same "
                         "referenced variable via SgAliasSymbol \n");
+#endif
           } else {
             // DQ (12/23/2015): Note that this is not a count of the
             // SgVariableSymbol IR nodes. size_t numberOfSymbolsWithSameName =
@@ -12031,12 +12434,6 @@ NameQualificationTraversal::evaluateInheritedAttribute(
             // amountOfNameQualificationRequired == 0)
             if ((numberOfSymbolsWithSameName - numberOfAliasSymbols) > 1 &&
                 amountOfNameQualificationRequired == 0) {
-              // DQ (3/15/2017): Added support to use message streams.
-              MLOG_WARN_C(MLOG_UNPARSER,
-                          "WARNING: name qualification can be required when "
-                          "there are multiple base classes with the same "
-                          "referenced variable via SgVariableSymbol \n");
-
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
               MLOG_WARN_C(MLOG_UNPARSER,
                           "WARNING: name qualification can be required when "
@@ -12049,13 +12446,6 @@ NameQualificationTraversal::evaluateInheritedAttribute(
             // amountOfNameQualificationRequired == 0)
             if ((numberOfSymbolsWithSameName - numberOfAliasSymbols) > 1 &&
                 amountOfNameQualificationRequired == 0) {
-              // DQ (3/15/2017): Added support to use message streams.
-              MLOG_WARN_C(MLOG_UNPARSER,
-                          "   --- numberOfSymbolsWithSameName       = %d \n",
-                          numberOfSymbolsWithSameName);
-              MLOG_WARN_C(MLOG_UNPARSER,
-                          "   --- amountOfNameQualificationRequired = %d \n",
-                          amountOfNameQualificationRequired);
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
               MLOG_WARN_C(MLOG_UNPARSER,
                           "   --- numberOfSymbolsWithSameName       = %d \n",
@@ -13601,6 +13991,51 @@ void NameQualificationTraversal::setNameQualificationOnClassOf(
       scope, amountOfNameQualificationRequired, outputNameQualificationLength,
       outputGlobalQualification, outputTypeEvaluation);
 
+  auto fileInfoWithinDeclRange = [](Sg_File_Info *target,
+                                    SgDeclarationStatement *owner) -> bool {
+    if (target == nullptr || owner == nullptr) {
+      return false;
+    }
+    if (target->isCompilerGenerated() || target->isTransformation()) {
+      return false;
+    }
+
+    Sg_File_Info *begin = owner->get_startOfConstruct();
+    if (begin == nullptr || begin->isCompilerGenerated() ||
+        begin->isTransformation()) {
+      begin = owner->get_file_info();
+    }
+
+    Sg_File_Info *end = owner->get_endOfConstruct();
+    if (end == nullptr || end->isCompilerGenerated() ||
+        end->isTransformation()) {
+      end = begin;
+    }
+
+    if (begin == nullptr || end == nullptr || begin->isCompilerGenerated() ||
+        begin->isTransformation() || end->isCompilerGenerated() ||
+        end->isTransformation()) {
+      return false;
+    }
+
+    if (target->get_filenameString() != begin->get_filenameString() ||
+        target->get_filenameString() != end->get_filenameString()) {
+      return false;
+    }
+
+    auto lessOrEqual = [](Sg_File_Info *lhs, Sg_File_Info *rhs) {
+      return lhs->get_line() < rhs->get_line() ||
+             (lhs->get_line() == rhs->get_line() &&
+              lhs->get_col() <= rhs->get_col());
+    };
+
+    if (!lessOrEqual(begin, end)) {
+      std::swap(begin, end);
+    }
+
+    return lessOrEqual(begin, target) && lessOrEqual(target, end);
+  };
+
   // DQ (4/19/2019): I would like to not have to add these data members to the
   // SgPointerMemberType IR node (see if we can do this).
   // pointerMemberType->set_global_qualification_required(outputGlobalQualification);
@@ -14154,9 +14589,9 @@ void NameQualificationTraversal::setNameQualification(
   string qualifier = setNameQualificationSupport(
       scope, effectiveNameQualification, outputNameQualificationLength,
       outputGlobalQualification, outputTypeEvaluation);
-  applyExplicitQualifier(functionRefExp, qualifier,
-                         outputNameQualificationLength,
-                         outputGlobalQualification);
+  const bool has_explicit_ref_qualifier = applyExplicitQualifier(
+      functionRefExp, qualifier, outputNameQualificationLength,
+      outputGlobalQualification);
 
   functionRefExp->set_global_qualification_required(outputGlobalQualification);
   functionRefExp->set_name_qualification_length(outputNameQualificationLength);
@@ -14287,10 +14722,20 @@ void NameQualificationTraversal::setNameQualification(
           functionDeclaration->get_definingDeclaration()));
 
   if (isFriend && friend_class_def != NULL) {
-    if (!explicit_global_friend_decl) {
+    if (!explicit_global_friend_decl && !has_explicit_ref_qualifier &&
+        is_hidden_friend_free_function_decl(functionDeclaration)) {
+      // Hidden friends are only reachable through ADL unless a real
+      // namespace/global redeclaration exists. Adding a namespace qualifier to
+      // such calls turns valid source into invalid qualified lookup.
       outputNameQualificationLength = 0;
       outputGlobalQualification = false;
       qualifier = "";
+    } else if (!explicit_global_friend_decl) {
+      if (amountOfNameQualificationRequired == 0) {
+        outputNameQualificationLength = 0;
+        outputGlobalQualification = false;
+        qualifier = "";
+      }
     } else {
       SgScopeStatement *friend_enclosing_scope = friend_class_def->get_scope();
       SgScopeStatement *friend_decl_scope = functionDeclaration->get_scope();
@@ -15679,6 +16124,12 @@ void NameQualificationTraversal::setNameQualificationOnType(
   ASSERT_not_null(declaration);
 
   SgScopeStatement *scope = traverseNonrealDeclForCorrectScope(declaration);
+  const int preservedNameQualificationLength =
+      initializedName->get_name_qualification_length_for_type();
+  const bool preservedGlobalQualification =
+      initializedName->get_global_qualification_required_for_type();
+  const bool preserveWrittenTypeSpelling =
+      preservedNameQualificationLength > 0 || preservedGlobalQualification;
   string qualifier = setNameQualificationSupport(
       scope, amountOfNameQualificationRequired, outputNameQualificationLength,
       outputGlobalQualification, outputTypeEvaluation);
@@ -15808,6 +16259,32 @@ void NameQualificationTraversal::setNameQualificationOnType(
     outputTypeEvaluation = false;
   }
 
+  if (preserveWrittenTypeSpelling) {
+    // Preserve frontend-written type spelling on parameters and other
+    // declarations. The name-qualification pass computes the minimal
+    // semantic qualifier for successful lookup, but source-to-source output
+    // must not discard explicit nested-name/global qualifiers or elaborated
+    // keywords that were present in the original declaration.
+    qualifier = initializedName->get_qualified_name_prefix_for_type().str();
+    if (qualifier.empty()) {
+      int ignoredNameQualificationLength = 0;
+      bool ignoredGlobalQualification = false;
+      bool ignoredTypeEvaluation = false;
+      if (preservedNameQualificationLength > 0) {
+        qualifier = setNameQualificationSupport(
+            scope, preservedNameQualificationLength,
+            ignoredNameQualificationLength, ignoredGlobalQualification,
+            ignoredTypeEvaluation);
+      }
+      if (preservedGlobalQualification && qualifier.rfind("::", 0) != 0) {
+        qualifier = "::" + qualifier;
+      }
+    }
+
+    outputNameQualificationLength = preservedNameQualificationLength;
+    outputGlobalQualification = preservedGlobalQualification;
+  }
+
   initializedName->set_global_qualification_required_for_type(
       outputGlobalQualification);
   initializedName->set_name_qualification_length_for_type(
@@ -15880,6 +16357,18 @@ void NameQualificationTraversal::setNameQualificationOnName(
     int amountOfNameQualificationRequired, bool skipGlobalQualification) {
   // This is used to set the name qualification on the SgInitializedName
   // directly, and not on the type referenced by the SgInitializedName IR node.
+
+  if (initializedName == nullptr) {
+    return;
+  }
+
+  if (initializedName->get_name().getString().empty()) {
+    initializedName->set_global_qualification_required(false);
+    initializedName->set_name_qualification_length(0);
+    initializedName->set_type_elaboration_required(false);
+    qualifiedNameMapForNames.erase(initializedName);
+    return;
+  }
 
   // Setup call to refactored code.
   int outputNameQualificationLength = 0;
@@ -16100,6 +16589,36 @@ void NameQualificationTraversal::setNameQualificationOnBaseType(
   string qualifier = setNameQualificationSupport(
       scope, amountOfNameQualificationRequired, outputNameQualificationLength,
       outputGlobalQualification, outputTypeEvaluation);
+
+  // A typedef can own the written nondefining tag declaration for a C-style
+  // spelling such as `typedef struct A A;`. In that case, and when a sibling
+  // typedef in the same scope reuses the same written tag (`typedef struct A
+  // B;`), the base type spelling is still a declaration in the current scope,
+  // not a qualified reference to an outer declaration. Treating these as
+  // ordinary references injects invalid output like `typedef struct ::A A;`.
+  if ((isSgClassDeclaration(declaration) != nullptr ||
+       isSgEnumDeclaration(declaration) != nullptr) &&
+      isSgTypedefDeclaration(declaration->get_parent()) != nullptr) {
+    SgTypedefDeclaration *owner_typedef =
+        isSgTypedefDeclaration(declaration->get_parent());
+    if (owner_typedef->get_scope() == typedefDeclaration->get_scope()) {
+      outputNameQualificationLength = 0;
+      outputGlobalQualification = false;
+      qualifier.clear();
+    }
+  }
+
+  if ((isSgClassDeclaration(declaration) != nullptr ||
+       isSgEnumDeclaration(declaration) != nullptr) &&
+      scopes_are_equivalent_for_name_qualification(
+          declaration->get_scope(), typedefDeclaration->get_scope())) {
+    // The typedef base type names a tag that already lives in the current
+    // scope. It is never a qualified lookup to an outer declaration, even when
+    // the tag was built structurally and has no meaningful source range.
+    outputNameQualificationLength = 0;
+    outputGlobalQualification = false;
+    qualifier.clear();
+  }
 
   typedefDeclaration->set_global_qualification_required_for_base_type(
       outputGlobalQualification);
@@ -16374,15 +16893,35 @@ void NameQualificationTraversal::setNameQualification(
     outputGlobalQualification = existingGlobalQualification;
     outputTypeEvaluation = existingTypeElaboration;
   }
+  outputTypeEvaluation = outputTypeEvaluation || existingTypeElaboration;
+
+  // Keep the generated qualifier string consistent with the final metadata we
+  // store on the template argument. Frontend-written qualifications can be
+  // preserved by the fields above even when the local name-qualification pass
+  // computes a shorter qualifier, and the unparser reads the string map rather
+  // than the integer depth directly.
+  {
+    int finalizedQualificationLength = 0;
+    bool finalizedGlobalQualification = false;
+    bool finalizedTypeEvaluation = false;
+    qualifier = setNameQualificationSupport(
+        scope, outputNameQualificationLength, finalizedQualificationLength,
+        finalizedGlobalQualification, finalizedTypeEvaluation);
+    if (outputGlobalQualification && qualifier.rfind("::", 0) != 0) {
+      qualifier = "::" + qualifier;
+    }
+  }
+
   templateArgument->set_global_qualification_required(
       outputGlobalQualification);
   templateArgument->set_name_qualification_length(
       outputNameQualificationLength);
   templateArgument->set_type_elaboration_required(outputTypeEvaluation);
 
-  // There should be no type evaluation required for a variable reference, as I
-  // recall.
-  ROSE_ASSERT(outputTypeEvaluation == false);
+  // Preserve an explicitly written elaborated spelling from the frontend.
+  // Name qualification can determine that no extra elaboration is required for
+  // lookup, but it should not erase source-level `struct` / `class` / `enum`
+  // syntax attached to a template type argument.
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) ||                                    \
     DEBUG_TEMPLATE_ARGUMENT_NAME_QUALIFICATION
@@ -17101,12 +17640,141 @@ void NameQualificationTraversal::setNameQualification(
     }
     return lhs_first == rhs_first;
   };
+  auto canonical_class_declaration =
+      [](SgClassDeclaration *decl) -> SgClassDeclaration * {
+    if (decl == NULL) {
+      return NULL;
+    }
+    if (SgClassDeclaration *first =
+            isSgClassDeclaration(decl->get_firstNondefiningDeclaration())) {
+      return first;
+    }
+    if (SgClassDeclaration *def =
+            isSgClassDeclaration(decl->get_definingDeclaration())) {
+      return def;
+    }
+    return decl;
+  };
+  auto class_declaration_from_scope =
+      [&](SgScopeStatement *candidate_scope) -> SgClassDeclaration * {
+    if (candidate_scope == NULL) {
+      return NULL;
+    }
+    if (SgClassDefinition *class_def = isSgClassDefinition(candidate_scope)) {
+      return canonical_class_declaration(class_def->get_declaration());
+    }
+    if (SgTemplateClassDefinition *template_def =
+            isSgTemplateClassDefinition(candidate_scope)) {
+      return canonical_class_declaration(template_def->get_declaration());
+    }
+    if (SgTemplateInstantiationDefn *inst_def =
+            isSgTemplateInstantiationDefn(candidate_scope)) {
+      return canonical_class_declaration(
+          isSgClassDeclaration(inst_def->get_declaration()));
+    }
+    if (SgDeclarationScope *decl_scope =
+            isSgDeclarationScope(candidate_scope)) {
+      return canonical_class_declaration(
+          isSgClassDeclaration(decl_scope->get_parent()));
+    }
+    return NULL;
+  };
+  auto class_decl_has_same_source_typedef_owner =
+      [&](SgClassDeclaration *decl) -> bool {
+    if (decl == NULL) {
+      return false;
+    }
+    if (SgTypedefDeclaration *owner_typedef =
+            isSgTypedefDeclaration(decl->get_parent())) {
+      return owner_typedef->get_scope() == decl->get_scope();
+    }
+
+    SgScopeStatement *decl_scope = isSgScopeStatement(decl->get_parent());
+    if (decl_scope == NULL) {
+      decl_scope = decl->get_scope();
+    }
+    if (decl_scope == NULL) {
+      return false;
+    }
+
+    Sg_File_Info *decl_fi = decl->get_file_info();
+    if (decl_fi == NULL) {
+      return false;
+    }
+
+    SgClassDeclaration *canonical_decl = canonical_class_declaration(decl);
+    auto visit_scope_declarations = [&](SgScopeStatement *scope,
+                                        const auto &visit_declaration) -> bool {
+      if (scope == NULL) {
+        return false;
+      }
+
+      if (scope->containsOnlyDeclarations()) {
+        for (SgDeclarationStatement *candidate : scope->getDeclarationList()) {
+          if (candidate != NULL && visit_declaration(candidate)) {
+            return true;
+          }
+        }
+        return false;
+      }
+
+      if (SgBasicBlock *basic_block = isSgBasicBlock(scope)) {
+        for (SgStatement *statement : basic_block->get_statements()) {
+          if (SgDeclarationStatement *candidate =
+                  isSgDeclarationStatement(statement)) {
+            if (visit_declaration(candidate)) {
+              return true;
+            }
+          }
+        }
+      }
+
+      return false;
+    };
+
+    return visit_scope_declarations(
+        decl_scope, [&](SgDeclarationStatement *candidate) -> bool {
+          SgTypedefDeclaration *typedef_decl =
+              isSgTypedefDeclaration(candidate);
+          if (typedef_decl == NULL || typedef_decl->get_file_info() == NULL) {
+            return false;
+          }
+          if (typedef_decl->get_file_info()->get_filenameString() !=
+                  decl_fi->get_filenameString() ||
+              typedef_decl->get_file_info()->get_line() !=
+                  decl_fi->get_line() ||
+              typedef_decl->get_file_info()->get_col() != decl_fi->get_col()) {
+            return false;
+          }
+
+          SgType *base_type = typedef_decl->get_base_type();
+          if (base_type == NULL) {
+            base_type = typedef_decl->get_type();
+          }
+          SgClassType *class_type = isSgClassType(
+              base_type != NULL ? base_type->findBaseType() : NULL);
+          SgClassDeclaration *type_decl =
+              class_type != NULL
+                  ? canonical_class_declaration(
+                        isSgClassDeclaration(class_type->get_declaration()))
+                  : NULL;
+          return type_decl == canonical_decl;
+        });
+  };
   const bool lexically_in_same_file_scope =
       parent_scope != NULL && scope != NULL &&
       (isSgNamespaceDefinitionStatement(parent_scope) != NULL ||
        isSgGlobal(parent_scope) != NULL) &&
       same_logical_namespace_scope(parent_scope, scope);
-  if (lexically_in_same_file_scope) {
+  const bool lexically_in_same_enclosing_class =
+      parent_scope != NULL && scope != NULL &&
+      class_declaration_from_scope(parent_scope) != NULL &&
+      class_declaration_from_scope(parent_scope) ==
+          class_declaration_from_scope(scope);
+  const bool lexically_in_same_source_typedef =
+      class_decl_has_same_source_typedef_owner(classDeclaration);
+  if (lexically_in_same_file_scope || lexically_in_same_enclosing_class ||
+      lexically_in_same_source_typedef) {
     qualifier = "";
     outputNameQualificationLength = 0;
     outputGlobalQualification = false;
@@ -18354,10 +19022,8 @@ bool SgScopeStatement::hasAmbiguity(SgName &name, SgSymbol *symbol) {
               causalNodeList.end()) {
             causalNodeList.push_back(causalNode);
           }
-        } else {
+        } else if (causalNodeCount > 1) {
           // We have identified an ambiguity.
-
-          ROSE_ASSERT(causalNodeCount > 1);
 #if DEBUG_HAS_AMBIGUITY
           MLOG_WARN_C(MLOG_UNPARSER,
                       " --- We have identified an ambiguity (causalNodeCount > "
@@ -18365,6 +19031,10 @@ bool SgScopeStatement::hasAmbiguity(SgName &name, SgSymbol *symbol) {
                       causalNodeCount);
 #endif
           ambiguityDetected = true;
+        } else {
+          // Some alias symbols do not retain causal-node provenance.
+          // Treat these as non-proven disambiguation evidence and fall back to
+          // the surrounding symbol-count checks below instead of asserting.
         }
       } else {
         // DQ (2/17/2019): This case should be addressed.
@@ -18415,8 +19085,11 @@ bool SgScopeStatement::hasAmbiguity(SgName &name, SgSymbol *symbol) {
     SgAliasSymbol *aliasSymbol = this->lookup_alias_symbol(name, symbol);
     // ASSERT_not_null(aliasSymbol);
     if (aliasSymbol != NULL) {
-      ROSE_ASSERT(aliasSymbol->get_causal_nodes().empty() == false);
-      if (aliasSymbol->get_causal_nodes().size() > 1) {
+      if (aliasSymbol->get_causal_nodes().empty() == true) {
+        if (numberOfSymbols > 1) {
+          ambiguityDetected = true;
+        }
+      } else if (aliasSymbol->get_causal_nodes().size() > 1) {
         // Detected ambiguity that will require some name qualification.
 
 #if DEBUG_HAS_AMBIGUITY

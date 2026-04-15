@@ -333,6 +333,8 @@ SgSourceFile *
 ModuleBuilder::createSgSourceFile(const std::string &module_name) {
   int errorCode = 0;
   std::vector<std::string> argv;
+  const auto savedSourcePositionMode =
+      SageBuilder::getSourcePositionClassificationMode();
 
   // current directory
   std::string module_filename =
@@ -363,6 +365,12 @@ ModuleBuilder::createSgSourceFile(const std::string &module_name) {
 
   // Run the frontend to process the compool file
   newFile->runFrontend(errorCode);
+
+  // Nested module loads run a full frontend recursively. Restore the caller's
+  // classification mode before resuming the outer AST construction so the
+  // enclosing frontend keeps building source-backed nodes instead of leaking
+  // transformation semantics from the nested parse.
+  SageBuilder::setSourcePositionClassificationMode(savedSourcePositionMode);
 
   if (errorCode != 0) {
     MLOG_ERROR_CXX(MLOG_FRONTEND)

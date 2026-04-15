@@ -4,8 +4,7 @@ void foobar(int e) {
   int x;
   if (e) {
     int d = 0;
-  }
-   else {
+  } else {
     int d = 1;
   }
 }

@@ -19,7 +19,7 @@
    specializations that are transformed are output by ROSE.
  */
 void fixupTemplateInstantiations(SgNode *node);
-void canonicalizeClassTypesInMemoryPool();
+void canonicalizeClassTypesInMemoryPool(SgNode *root = nullptr);
 
 class FixupTemplateInstantiations : public SgSimpleProcessing {
 public:

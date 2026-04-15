@@ -210,6 +210,18 @@ void FortranCodeGeneration_locatedNode::unparseLanguageSpecificExpression(
   case V_SgAssignOp:
     unparseAssnOp(expr, info);
     break;
+  case V_SgPlusAssignOp:
+  case V_SgMinusAssignOp:
+  case V_SgMultAssignOp:
+  case V_SgDivAssignOp:
+  case V_SgModAssignOp:
+  case V_SgAndAssignOp:
+  case V_SgIorAssignOp:
+  case V_SgXorAssignOp:
+  case V_SgLshiftAssignOp:
+  case V_SgRshiftAssignOp:
+    unparseCompoundAssignOp(isSgCompoundAssignOp(expr), info);
+    break;
   case V_SgPointerAssignOp:
     unparsePointerAssnOp(expr, info);
     break;
@@ -600,6 +612,80 @@ void FortranCodeGeneration_locatedNode::unparseBinaryOperator(
   SgUnparse_Info ninfo(info);
   ninfo.set_operator_name(op);
   unparseBinaryExpr(expr, ninfo);
+}
+
+void FortranCodeGeneration_locatedNode::unparseCompoundAssignOp(
+    SgCompoundAssignOp *expr, SgUnparse_Info &info) {
+  ASSERT_not_null(expr);
+
+  SgExpression *lhs = expr->get_lhs_operand();
+  SgExpression *rhs = expr->get_rhs_operand();
+  ASSERT_not_null(lhs);
+  ASSERT_not_null(rhs);
+
+  SgUnparse_Info operand_info(info);
+  operand_info.set_nested_expression();
+
+  auto unparse_intrinsic_assign = [&](const char *intrinsic_name) {
+    curprint(intrinsic_name);
+    curprint("(");
+    unparseExpression(lhs, operand_info);
+    curprint(", ");
+    unparseExpression(rhs, operand_info);
+    curprint(")");
+  };
+
+  unparseExpression(lhs, operand_info);
+  curprint(" = ");
+
+  switch (expr->variantT()) {
+  case V_SgPlusAssignOp:
+    unparseExpression(lhs, operand_info);
+    curprint(" + ");
+    unparseExpression(rhs, operand_info);
+    break;
+  case V_SgMinusAssignOp:
+    unparseExpression(lhs, operand_info);
+    curprint(" - ");
+    unparseExpression(rhs, operand_info);
+    break;
+  case V_SgMultAssignOp:
+    unparseExpression(lhs, operand_info);
+    curprint(" * ");
+    unparseExpression(rhs, operand_info);
+    break;
+  case V_SgDivAssignOp:
+    unparseExpression(lhs, operand_info);
+    curprint(" / ");
+    unparseExpression(rhs, operand_info);
+    break;
+  case V_SgModAssignOp:
+    unparse_intrinsic_assign("MOD");
+    break;
+  case V_SgAndAssignOp:
+    unparse_intrinsic_assign("IAND");
+    break;
+  case V_SgIorAssignOp:
+    unparse_intrinsic_assign("IOR");
+    break;
+  case V_SgXorAssignOp:
+    unparse_intrinsic_assign("IEOR");
+    break;
+  case V_SgLshiftAssignOp:
+    unparse_intrinsic_assign("ISHFT");
+    break;
+  case V_SgRshiftAssignOp:
+    curprint("ISHFT(");
+    unparseExpression(lhs, operand_info);
+    curprint(", -(");
+    unparseExpression(rhs, operand_info);
+    curprint("))");
+    break;
+  default:
+    printf("Error: unsupported Fortran compound assignment operator: %s\n",
+           expr->class_name().c_str());
+    ROSE_ABORT();
+  }
 }
 
 void FortranCodeGeneration_locatedNode::unparseAssnOp(SgExpression *expr,
