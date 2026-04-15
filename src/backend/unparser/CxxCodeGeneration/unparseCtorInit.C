@@ -48,6 +48,30 @@ std::string compactCtorTemplateIdentifierSpacing(const std::string &text) {
   return Rose::StringUtility::trim(compacted);
 }
 
+std::string qualifiedCtorTypedefPrefix(SgTypedefType *typedef_type) {
+  if (typedef_type == nullptr) {
+    return std::string();
+  }
+
+  SgTypedefDeclaration *typedef_decl =
+      isSgTypedefDeclaration(typedef_type->get_declaration());
+  if (typedef_decl == nullptr) {
+    return std::string();
+  }
+
+  return compactCtorTemplateIdentifierSpacing(
+      typedef_decl->get_qualified_name_prefix().getString());
+}
+
+std::string ctorTypedefName(SgTypedefType *typedef_type) {
+  if (typedef_type == nullptr) {
+    return std::string();
+  }
+
+  return compactCtorTemplateIdentifierSpacing(
+      typedef_type->get_name().getString());
+}
+
 bool ctorTypeNeedsCompactTemplateSpacing(SgType *type) {
   if (type == nullptr) {
     return false;
@@ -268,15 +292,19 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
               ? ctor_type
               : (ctor_class != nullptr ? ctor_class->get_type() : nullptr);
       std::string qualifier = con_init->get_qualified_name_prefix().str();
-      const bool ctor_spelled_via_typedef =
-          isSgTypedefType(type_for_ctor_name) != nullptr;
+      SgTypedefType *typedef_ctor_type = isSgTypedefType(type_for_ctor_name);
+      const bool ctor_spelled_via_typedef = typedef_ctor_type != nullptr;
 #if DEBUG__unparseCtorInit
       printf("  qualifier = %s\n", qualifier.c_str());
 #endif
       bool need_ctor_name = true;
       size_t length = qualifier.size();
       if (ctor_spelled_via_typedef) {
-        qualifier.clear();
+        const std::string typedef_qualifier =
+            qualifiedCtorTypedefPrefix(typedef_ctor_type);
+        if (!typedef_qualifier.empty()) {
+          qualifier = typedef_qualifier;
+        }
       } else if (length > 0 && ctor_decl != nullptr) {
         ROSE_ASSERT(length > 2);
         ROSE_ASSERT(qualifier[length - 1] == ':');
@@ -295,9 +323,18 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
             isSgTemplateInstantiationMemberFunctionDecl(ctor_decl);
         if (ctor_class) {
           bool handled_typedef_ctor_name = false;
-          if (SgTypedefType *typedef_type =
-                  isSgTypedefType(type_for_ctor_name)) {
-            curprint(typedef_type->get_qualified_name().str());
+          if (typedef_ctor_type != nullptr) {
+            const std::string typedef_name = ctorTypedefName(typedef_ctor_type);
+            if (!typedef_name.empty()) {
+              curprint(typedef_name);
+              handled_typedef_ctor_name = true;
+            }
+          }
+          if (!handled_typedef_ctor_name &&
+              isSgTypedefType(type_for_ctor_name) != nullptr) {
+            curprint(isSgTypedefType(type_for_ctor_name)
+                         ->get_qualified_name()
+                         .str());
             handled_typedef_ctor_name = true;
           }
           // Constructor names are emitted as standalone type names here, so

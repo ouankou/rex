@@ -139,6 +139,57 @@ static std::string getPathSuffix(const std::string &path) {
   return path.substr(dot + 1);
 }
 
+static bool isEscapedDoubleQuote(const std::string &text, size_t pos) {
+  size_t backslash_count = 0;
+  while (pos > backslash_count && text[pos - backslash_count - 1] == '\\') {
+    ++backslash_count;
+  }
+
+  return (backslash_count % 2) != 0;
+}
+
+static std::string::size_type
+findUnescapedDoubleQuote(const std::string &text,
+                         std::string::size_type start) {
+  std::string::size_type quote_pos = text.find('"', start);
+  while (quote_pos != std::string::npos &&
+         isEscapedDoubleQuote(text, quote_pos)) {
+    quote_pos = text.find('"', quote_pos + 1);
+  }
+
+  return quote_pos;
+}
+
+static bool fixQuotedArgumentForWrapperScript(std::string &arg) {
+  bool changed = false;
+  std::string::size_type search_start = 0;
+
+  while (true) {
+    const std::string::size_type startingQuote =
+        findUnescapedDoubleQuote(arg, search_start);
+    if (startingQuote == std::string::npos) {
+      break;
+    }
+
+    const std::string::size_type endingQuote =
+        findUnescapedDoubleQuote(arg, startingQuote + 1);
+    if (endingQuote == std::string::npos) {
+      break;
+    }
+
+    const std::string::size_type quotedLength = endingQuote - startingQuote + 1;
+    const std::string quotedSubstring = arg.substr(startingQuote, quotedLength);
+    const std::string fixedQuotedSubstring =
+        std::string("\\\"") + quotedSubstring + std::string("\\\"");
+
+    arg.replace(startingQuote, quotedLength, fixedQuotedSubstring);
+    search_start = startingQuote + fixedQuotedSubstring.size();
+    changed = true;
+  }
+
+  return changed;
+}
+
 namespace {
 #if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
 bool isFortranSourcePath(const std::string &path) {
@@ -4513,29 +4564,7 @@ int SgProject::link(std::string linkerName) {
   // solution is to add additional escaped quotes.
   for (Rose_STL_Container<string>::iterator i = argcArgvList.begin();
        i != argcArgvList.end(); i++) {
-    std::string::size_type startingQuote = i->find("\"");
-    if (startingQuote != std::string::npos) {
-      std::string::size_type endingQuote = i->rfind("\"");
-      if (endingQuote == std::string::npos || endingQuote == startingQuote) {
-        continue;
-      }
-
-      const std::string::size_type quotedLength =
-          endingQuote - startingQuote + 1;
-      std::string quotedSubstring = i->substr(startingQuote, quotedLength);
-
-      // DQ (11/1/2012): Robb has suggested using single quote instead of double
-      // quotes here. This is a problem for the processing of mutt (large C
-      // application) (but we can figure out the link command after the compile
-      // command). std::string fixedQuotedSubstring = std::string("\\\"") +
-      // quotedSubstring + std::string("\\\""); std::string fixedQuotedSubstring
-      // = std::string("\\\'") + quotedSubstring + std::string("\\\'");
-      std::string fixedQuotedSubstring =
-          std::string("\\\"") + quotedSubstring + std::string("\\\"");
-
-      // Now replace the quotedSubstring with the fixedQuotedSubstring
-      i->replace(startingQuote, quotedLength, fixedQuotedSubstring);
-
+    if (fixQuotedArgumentForWrapperScript(*i)) {
       printf("Modified argument = %s \n", (*i).c_str());
     }
   }

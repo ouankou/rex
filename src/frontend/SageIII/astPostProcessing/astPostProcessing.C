@@ -388,10 +388,76 @@ void rewriteSymbolEdgesInMemoryPool(
   traversal.traverseMemoryPool();
 }
 
+bool functionDeclIsNondefining(SgFunctionDeclaration *decl);
+bool functionDeclOutputsCode(SgFunctionDeclaration *decl);
+bool functionDeclOwnsAssociatedSymbol(SgFunctionDeclaration *decl);
+
+std::string stableFunctionDeclIdentity(SgFunctionDeclaration *decl) {
+  if (decl == nullptr) {
+    return std::string();
+  }
+
+  const std::string mangled_name = decl->get_mangled_name().getString();
+  if (!mangled_name.empty()) {
+    return mangled_name;
+  }
+
+  const std::string qualified_name = decl->get_qualified_name().getString();
+  if (!qualified_name.empty()) {
+    return qualified_name;
+  }
+
+  return decl->get_name().getString();
+}
+
+size_t functionDeclParameterCount(SgFunctionDeclaration *decl) {
+  if (decl == nullptr) {
+    return 0;
+  }
+
+  SgFunctionParameterList *params = decl->get_parameterList();
+  return params != nullptr ? params->get_args().size() : 0;
+}
+
+bool functionDeclStableTieLess(SgFunctionDeclaration *lhs,
+                               SgFunctionDeclaration *rhs) {
+  const std::string lhs_identity = stableFunctionDeclIdentity(lhs);
+  const std::string rhs_identity = stableFunctionDeclIdentity(rhs);
+  if (lhs_identity != rhs_identity) {
+    return lhs_identity < rhs_identity;
+  }
+
+  const size_t lhs_param_count = functionDeclParameterCount(lhs);
+  const size_t rhs_param_count = functionDeclParameterCount(rhs);
+  if (lhs_param_count != rhs_param_count) {
+    return lhs_param_count < rhs_param_count;
+  }
+
+  const bool lhs_nondef = functionDeclIsNondefining(lhs);
+  const bool rhs_nondef = functionDeclIsNondefining(rhs);
+  if (lhs_nondef != rhs_nondef) {
+    return lhs_nondef;
+  }
+
+  const bool lhs_symbol_owner = functionDeclOwnsAssociatedSymbol(lhs);
+  const bool rhs_symbol_owner = functionDeclOwnsAssociatedSymbol(rhs);
+  if (lhs_symbol_owner != rhs_symbol_owner) {
+    return lhs_symbol_owner;
+  }
+
+  const bool lhs_outputs = functionDeclOutputsCode(lhs);
+  const bool rhs_outputs = functionDeclOutputsCode(rhs);
+  if (lhs_outputs != rhs_outputs) {
+    return lhs_outputs;
+  }
+
+  return false;
+}
+
 void repairMalformedSymbolsInMemoryPool() {
   struct RepairPlan {
     std::unordered_map<SgNode *, SgNode *> replacements;
-    std::vector<SgSymbol *> symbolsToDelete;
+    std::vector<SgSymbol *> symbolsToDetach;
     std::vector<std::pair<SgSymbol *, SgScopeStatement *>> symbolsToInsert;
     std::vector<SgSymbol *> symbolsToOrphan;
   } plan;
@@ -424,7 +490,10 @@ void repairMalformedSymbolsInMemoryPool() {
         if (equivalent != nullptr) {
           plan.replacements.emplace(symbol, equivalent);
         }
-        plan.symbolsToDelete.push_back(symbol);
+        if (basis != nullptr) {
+          plan.replacements.emplace(basis, nullptr);
+        }
+        plan.symbolsToDetach.push_back(symbol);
         return;
       }
 
@@ -434,7 +503,7 @@ void repairMalformedSymbolsInMemoryPool() {
 
       if (equivalent != nullptr) {
         plan.replacements.emplace(symbol, equivalent);
-        plan.symbolsToDelete.push_back(symbol);
+        plan.symbolsToDetach.push_back(symbol);
         return;
       }
 
@@ -449,13 +518,15 @@ void repairMalformedSymbolsInMemoryPool() {
   collector.traverseMemoryPool();
   rewriteSymbolEdgesInMemoryPool(plan.replacements);
 
-  for (SgSymbol *symbol : plan.symbolsToDelete) {
+  for (SgSymbol *symbol : plan.symbolsToDetach) {
     if (symbol == nullptr || !SgNode::isLiveNode(symbol)) {
       continue;
     }
 
     removeSymbolFromParentForRepair(symbol);
-    delete symbol;
+    // Keep detached symbols alive in the orphan table after repairing AST
+    // references so external raw symbol pointers do not become dangling.
+    move_symbol_to_orphan_table(symbol);
   }
 
   for (const std::pair<SgSymbol *, SgScopeStatement *> &entry :
@@ -1004,8 +1075,10 @@ bool functionDeclOwnsAssociatedSymbol(SgFunctionDeclaration *decl) {
 std::vector<SgFunctionDeclaration *>
 relatedFunctionDeclarations(SgFunctionDeclaration *decl) {
   std::vector<SgFunctionDeclaration *> related;
+  std::unordered_set<SgFunctionDeclaration *> seen;
   auto append = [&](SgFunctionDeclaration *candidate) {
-    if (candidate == nullptr || candidate == decl) {
+    if (candidate == nullptr || candidate == decl ||
+        !seen.insert(candidate).second) {
       return;
     }
     related.push_back(candidate);
@@ -1017,8 +1090,6 @@ relatedFunctionDeclarations(SgFunctionDeclaration *decl) {
   append(isSgFunctionDeclaration(
       decl != nullptr ? decl->get_definingDeclaration() : nullptr));
 
-  std::sort(related.begin(), related.end());
-  related.erase(std::unique(related.begin(), related.end()), related.end());
   return related;
 }
 
@@ -1028,25 +1099,28 @@ bool functionDeclSourceLess(SgFunctionDeclaration *lhs,
     return false;
   }
   if (lhs == nullptr || rhs == nullptr) {
-    return lhs < rhs;
+    return lhs == nullptr;
   }
 
   Sg_File_Info *lhs_fi = getDeclSortFileInfo(lhs);
   Sg_File_Info *rhs_fi = getDeclSortFileInfo(rhs);
-  if (lhs_fi == nullptr || rhs_fi == nullptr) {
-    return lhs < rhs;
+  if ((lhs_fi != nullptr) != (rhs_fi != nullptr)) {
+    return lhs_fi != nullptr;
   }
-  if (lhs_fi->get_filenameString() != rhs_fi->get_filenameString()) {
+  if (lhs_fi != nullptr && rhs_fi != nullptr &&
+      lhs_fi->get_filenameString() != rhs_fi->get_filenameString()) {
     return lhs_fi->get_filenameString() < rhs_fi->get_filenameString();
   }
-  if (lhs_fi->get_line() != rhs_fi->get_line()) {
+  if (lhs_fi != nullptr && rhs_fi != nullptr &&
+      lhs_fi->get_line() != rhs_fi->get_line()) {
     return lhs_fi->get_line() < rhs_fi->get_line();
   }
-  if (lhs_fi->get_col() != rhs_fi->get_col()) {
+  if (lhs_fi != nullptr && rhs_fi != nullptr &&
+      lhs_fi->get_col() != rhs_fi->get_col()) {
     return lhs_fi->get_col() < rhs_fi->get_col();
   }
 
-  return lhs < rhs;
+  return functionDeclStableTieLess(lhs, rhs);
 }
 
 void suppressFunctionDeclOutput(SgFunctionDeclaration *decl) {
