@@ -53,6 +53,8 @@ public:
                                     SgUnparse_Info &info);
   virtual void unparseBinaryOperator(SgExpression *expr, const char *op,
                                      SgUnparse_Info &info);
+  virtual void unparseCompoundAssignOp(SgCompoundAssignOp *expr,
+                                       SgUnparse_Info &info);
   virtual void unparseExprRoot(SgExpression *expr, SgUnparse_Info &info);
 
   virtual void unparseExprList(SgExpression *expr,

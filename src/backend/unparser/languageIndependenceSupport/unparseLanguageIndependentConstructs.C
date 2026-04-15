@@ -1263,6 +1263,14 @@ bool is_function_body_basic_block(const SgStatement *statement) {
          isSgFunctionDefinition(basic_block->get_parent()) != nullptr;
 }
 
+bool is_preprocessing_comment_directive(
+    PreprocessingInfo::DirectiveType directive_type) {
+  return directive_type == PreprocessingInfo::FortranStyleComment ||
+         directive_type == PreprocessingInfo::F90StyleComment ||
+         directive_type == PreprocessingInfo::C_StyleComment ||
+         directive_type == PreprocessingInfo::CplusplusStyleComment;
+}
+
 bool preprocessing_info_is_within_node_construct(PreprocessingInfo *info,
                                                  SgLocatedNode *node) {
   if (info == nullptr || node == nullptr) {
@@ -1301,6 +1309,34 @@ bool is_inline_block_comment_before_construct(
   return info_fi != nullptr && start_fi != nullptr &&
          start_fi->isSameFile(info_fi) &&
          info_fi->get_line() == start_fi->get_line();
+}
+
+bool preprocessing_infos_share_source_line(PreprocessingInfo *lhs,
+                                           PreprocessingInfo *rhs) {
+  if (lhs == nullptr || rhs == nullptr) {
+    return false;
+  }
+
+  Sg_File_Info *lhs_fi = lhs->get_file_info();
+  Sg_File_Info *rhs_fi = rhs->get_file_info();
+  return lhs_fi != nullptr && rhs_fi != nullptr && lhs_fi->isSameFile(rhs_fi) &&
+         lhs_fi->get_line() == rhs_fi->get_line();
+}
+
+bool is_trailing_comment_after_node(
+    PreprocessingInfo *info, SgLocatedNode *node,
+    PreprocessingInfo::RelativePositionType where_to_unparse) {
+  if (where_to_unparse != PreprocessingInfo::after || info == nullptr ||
+      node == nullptr ||
+      !is_preprocessing_comment_directive(info->getTypeOfDirective())) {
+    return false;
+  }
+
+  Sg_File_Info *info_fi = info->get_file_info();
+  Sg_File_Info *end_fi = node->get_endOfConstruct();
+  return info_fi != nullptr && end_fi != nullptr &&
+         end_fi->isSameFile(info_fi) &&
+         info_fi->get_line() == end_fi->get_line();
 }
 
 bool located_node_has_inline_leading_block_comment(SgLocatedNode *node) {
@@ -6193,24 +6229,6 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           curprint("/* PreprocessingInfo::after: skipOutputOfPreprocessingInfo "
                    "== false (unparse attached comment or directive) */\n");
 #endif
-          bool unparseExtraNewLine =
-              (stmt->getAttachedPreprocessingInfo() != NULL);
-          if (unparseExtraNewLine == true) {
-            bool skip_extra_newline = false;
-            if (sourceFile != nullptr && sourceFile->get_Fortran_only()) {
-              // For Fortran, avoid inserting a blank line before trailing
-              // comments when the statement already ended with a newline.
-              skip_extra_newline = (unp->cur.current_col() == 0);
-            }
-#if DEBUG_USING_CURPRINT || 0
-            curprint("\n /* skipOutputOfPreprocessingInfo == false: "
-                     "PreprocessingInfo::after added CR */\n");
-#endif
-            if (!skip_extra_newline) {
-              emit_forced_newline(unp);
-            }
-          }
-
           unparseAttachedPreprocessingInfo(stmt, info,
                                            PreprocessingInfo::after);
         }
@@ -7265,12 +7283,6 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       }
       return text;
     };
-    auto is_comment_directive = [](PreprocessingInfo::DirectiveType type) {
-      return type == PreprocessingInfo::FortranStyleComment ||
-             type == PreprocessingInfo::F90StyleComment ||
-             type == PreprocessingInfo::C_StyleComment ||
-             type == PreprocessingInfo::CplusplusStyleComment;
-    };
     auto comment_uses_statement_format = [&](AttachedPreprocessingInfoType::
                                                  iterator /*current*/,
                                              PreprocessingInfo *preproc_info) {
@@ -7278,8 +7290,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         return false;
       }
 
-      if (preproc_info == nullptr ||
-          !is_comment_directive(preproc_info->getTypeOfDirective())) {
+      if (preproc_info == nullptr || !is_preprocessing_comment_directive(
+                                         preproc_info->getTypeOfDirective())) {
         return false;
       }
 
@@ -7329,8 +7341,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     };
     auto comment_uses_current_line_indentation = [&](PreprocessingInfo
                                                          *preproc_info) {
-      if (preproc_info == nullptr ||
-          !is_comment_directive(preproc_info->getTypeOfDirective())) {
+      if (preproc_info == nullptr || !is_preprocessing_comment_directive(
+                                         preproc_info->getTypeOfDirective())) {
         return false;
       }
 
@@ -7429,10 +7441,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         return;
       }
 
-      const bool previous_is_comment =
-          is_comment_directive(previous_info->getTypeOfDirective());
-      const bool current_is_comment =
-          is_comment_directive(current_info->getTypeOfDirective());
+      const bool previous_is_comment = is_preprocessing_comment_directive(
+          previous_info->getTypeOfDirective());
+      const bool current_is_comment = is_preprocessing_comment_directive(
+          current_info->getTypeOfDirective());
       if (previous_is_comment != current_is_comment) {
         return;
       }
@@ -7659,6 +7671,12 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         preserve_inter_directive_blank_lines(last_unparsed_preprocessing_info,
                                              *i);
 
+        const bool keep_comment_on_current_line =
+            is_preprocessing_comment_directive((*i)->getTypeOfDirective()) &&
+            (is_trailing_comment_after_node(*i, stmt, whereToUnparse) ||
+             preprocessing_infos_share_source_line(
+                 last_unparsed_preprocessing_info, *i));
+
         const bool is_commented_pragma =
             (((*i)->getTypeOfDirective() ==
               PreprocessingInfo::CplusplusStyleComment) ||
@@ -7671,6 +7689,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
             is_commented_openmp_or_openacc_pragma((*i)->getString());
         if (is_commented_pragma) {
           emit_forced_newline(unp);
+        } else if (keep_comment_on_current_line) {
+          if (!unp->cur.line_is_empty()) {
+            curprint(" ");
+          }
         } else {
           const bool use_current_line_indentation =
               comment_uses_current_line_indentation(*i);
@@ -7752,7 +7774,9 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
                   is_inline_block_comment_before_construct(*i, stmt,
                                                            whereToUnparse);
               std::string comment_text = normalize_preprocessing_comment(
-                  (*i)->getString(), comment_uses_current_line_indentation(*i));
+                  (*i)->getString(),
+                  comment_uses_current_line_indentation(*i) ||
+                      keep_comment_on_current_line);
               if (inline_block_comment) {
                 comment_text = strip_trailing_line_breaks(comment_text);
               }
@@ -7787,7 +7811,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
             if (!info.SkipComments()) {
               curprint(normalize_preprocessing_comment(
                   (*i)->getString(),
-                  comment_uses_current_line_indentation(*i)));
+                  comment_uses_current_line_indentation(*i) ||
+                      keep_comment_on_current_line));
             }
             last_unparsed_preprocessing_info = *i;
             continue;
@@ -7817,7 +7842,9 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
                   is_inline_block_comment_before_construct(*i, stmt,
                                                            whereToUnparse);
               std::string comment_text = normalize_preprocessing_comment(
-                  (*i)->getString(), comment_uses_current_line_indentation(*i));
+                  (*i)->getString(),
+                  comment_uses_current_line_indentation(*i) ||
+                      keep_comment_on_current_line);
               if (inline_block_comment) {
                 comment_text = strip_trailing_line_breaks(comment_text);
               }
