@@ -1621,11 +1621,9 @@ ResetParentPointers::evaluateInheritedAttribute(
     }
     }
   } else {
-    if (SgType *type = isSgType(node)) {
-      if (inheritedAttribute.parentNode != nullptr &&
-          type->get_parent() == nullptr) {
-        type->set_parent(inheritedAttribute.parentNode);
-      }
+    if (isSgType(node) != nullptr) {
+      // Types are shared through the global type tables, so they must not pick
+      // up an arbitrary tree parent from this traversal fallback.
     } else if (SgSymbol *symbol = isSgSymbol(node)) {
       if (inheritedAttribute.parentNode != nullptr &&
           symbol->get_parent() == nullptr &&
