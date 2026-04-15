@@ -1834,7 +1834,8 @@ void AstPostProcessing(SgNode *node) {
   }
   }
 
-  if (ranPostProcessing && SageInterface::is_Fortran_language() == false) {
+  if (ranPostProcessing && SageInterface::is_Fortran_language() == false &&
+      (isSgProject(node) != nullptr || isSgSourceFile(node) != nullptr)) {
     repairMalformedSymbolsInMemoryPool();
   }
 

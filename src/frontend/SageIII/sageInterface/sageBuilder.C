@@ -1049,7 +1049,7 @@ SgName SageBuilder::unparseTemplateArgumentToString(
          isSgReferenceType(type) != NULL ||
          isSgRvalueReferenceType(type) != NULL ||
          isSgArrayType(type) != NULL)) {
-      returnName = Rose::StringUtility::trim(globalUnparseToString(type, NULL));
+      returnName = Rose::StringUtility::trim(globalUnparseToString(type, info));
     }
   }
 
