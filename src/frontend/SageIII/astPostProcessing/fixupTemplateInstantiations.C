@@ -6,6 +6,7 @@
 #include "sage3basic.h"
 
 #include <cctype>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace {
@@ -398,6 +399,79 @@ canonicalFirstNondefiningFunctionInstantiation(
   return decl;
 }
 
+using TemplateInstantiationFunctionBucket =
+    std::vector<SgTemplateInstantiationFunctionDecl *>;
+using TemplateInstantiationFunctionBucketMap =
+    std::unordered_map<std::string, TemplateInstantiationFunctionBucket>;
+using TemplateInstantiationFunctionProjectBuckets =
+    std::unordered_map<SgProject *, TemplateInstantiationFunctionBucketMap>;
+
+TemplateInstantiationFunctionProjectBuckets &
+templateInstantiationFunctionRepairBuckets() {
+  static TemplateInstantiationFunctionProjectBuckets buckets;
+  return buckets;
+}
+
+int &templateInstantiationFunctionRepairCacheDepth() {
+  static int depth = 0;
+  return depth;
+}
+
+void clearTemplateInstantiationFunctionRepairBuckets() {
+  templateInstantiationFunctionRepairBuckets().clear();
+}
+
+void cacheTemplateInstantiationFunctionForRepair(
+    SgTemplateInstantiationFunctionDecl *decl) {
+  if (decl == nullptr) {
+    return;
+  }
+
+  SgProject *project = projectForMemoryPoolNode(decl);
+  if (project == nullptr) {
+    return;
+  }
+
+  TemplateInstantiationFunctionBucket &bucket =
+      templateInstantiationFunctionRepairBuckets()
+          [project][templateInstantiationBaseName(decl).getString()];
+  if (std::find(bucket.begin(), bucket.end(), decl) == bucket.end()) {
+    bucket.push_back(decl);
+  }
+}
+
+void populateTemplateInstantiationFunctionRepairBuckets(SgNode *root) {
+  if (root == nullptr) {
+    return;
+  }
+
+  class Traversal : public AstSimpleProcessing {
+  public:
+    void visit(SgNode *node) override {
+      cacheTemplateInstantiationFunctionForRepair(
+          isSgTemplateInstantiationFunctionDecl(node));
+    }
+  } traversal;
+
+  traversal.traverse(root, preorder);
+}
+
+class TemplateInstantiationFunctionRepairCacheGuard {
+public:
+  explicit TemplateInstantiationFunctionRepairCacheGuard(SgNode *root) {
+    if (templateInstantiationFunctionRepairCacheDepth()++ == 0) {
+      clearTemplateInstantiationFunctionRepairBuckets();
+      populateTemplateInstantiationFunctionRepairBuckets(root);
+    }
+  }
+
+  ~TemplateInstantiationFunctionRepairCacheGuard() {
+    if (--templateInstantiationFunctionRepairCacheDepth() == 0) {
+      clearTemplateInstantiationFunctionRepairBuckets();
+    }
+  }
+};
+
 SgTemplateInstantiationFunctionDecl *
 findExistingFirstNondefiningFunctionInstantiation(
     SgTemplateInstantiationFunctionDecl *inst) {
@@ -445,52 +519,35 @@ findExistingFirstNondefiningFunctionInstantiation(
   }
 
   SgProject *target_project = projectForMemoryPoolNode(inst);
-  SgTemplateInstantiationFunctionDecl *fallback = nullptr;
-  class MemoryPoolSearch : public ROSE_VisitTraversal {
-  public:
-    SgTemplateInstantiationFunctionDecl *inst = nullptr;
-    SgProject *target_project = nullptr;
-    SgTemplateInstantiationFunctionDecl *fallback = nullptr;
-    decltype(pick_candidate) &pick_candidate;
-
-    explicit MemoryPoolSearch(decltype(pick_candidate) &pick_candidate)
-        : pick_candidate(pick_candidate) {}
-
-    void visit(SgNode *node) override {
-      if (fallback != nullptr && fallback->get_definingDeclaration() == inst) {
-        return;
-      }
-
-      SgTemplateInstantiationFunctionDecl *candidate =
-          pick_candidate(isSgTemplateInstantiationFunctionDecl(node));
-      if (candidate == nullptr) {
-        return;
-      }
-      if (projectForMemoryPoolNode(candidate) != target_project) {
-        return;
-      }
-
-      if (candidate->get_definingDeclaration() == inst) {
-        fallback = candidate;
-        return;
-      }
-
-      if (fallback == nullptr) {
-        fallback = candidate;
-      }
-    }
-  } search(pick_candidate);
-
-  search.inst = inst;
-  search.target_project = target_project;
-  MemoryPoolTraversalFilterGuard clear_filter(nullptr);
-  SgTemplateInstantiationFunctionDecl::traverseMemoryPoolNodes(search);
-  fallback = search.fallback;
-  if (fallback != nullptr) {
-    return fallback;
+  TemplateInstantiationFunctionProjectBuckets::const_iterator project_it =
+      templateInstantiationFunctionRepairBuckets().find(target_project);
+  if (project_it == templateInstantiationFunctionRepairBuckets().end()) {
+    return nullptr;
   }
 
-  return nullptr;
+  TemplateInstantiationFunctionBucketMap::const_iterator bucket_it =
+      project_it->second.find(templateInstantiationBaseName(inst).getString());
+  if (bucket_it == project_it->second.end()) {
+    return nullptr;
+  }
+
+  SgTemplateInstantiationFunctionDecl *fallback = nullptr;
+  for (SgTemplateInstantiationFunctionDecl *entry : bucket_it->second) {
+    SgTemplateInstantiationFunctionDecl *candidate = pick_candidate(entry);
+    if (candidate == nullptr) {
+      continue;
+    }
+
+    if (candidate->get_definingDeclaration() == inst) {
+      return candidate;
+    }
+
+    if (fallback == nullptr) {
+      fallback = candidate;
+    }
+  }
+
+  return fallback;
 }
 
 void copyTemplateInstantiationFunctionMetadata(
@@ -572,6 +629,7 @@ void ensureTemplateInstantiationFunctionDeclarationChain(
     first_nondef->setForward();
     hideSynthesizedFunctionDeclaration(first_nondef);
     ensureStatementInScopeBeforeTarget(scope, first_nondef, inst);
+    cacheTemplateInstantiationFunctionForRepair(first_nondef);
   }
 
   if (first_nondef == nullptr || first_nondef == inst) {
@@ -1087,6 +1145,7 @@ void repairTemplateInstantiationDeclLinksInMemoryPool();
 void fixupTemplateInstantiations(SgNode *node) {
   // DQ (7/7/2005): Introduce tracking of performance of ROSE.
   TimingPerformance timer("Fixup template specializations:");
+  TemplateInstantiationFunctionRepairCacheGuard function_cache_guard(node);
 
   // This simplifies how the traversal is called!
   FixupTemplateInstantiations declarationFixupTraversal;

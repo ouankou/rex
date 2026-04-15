@@ -310,13 +310,103 @@ SgSymbol *lookupEquivalentLiveSymbolForRepair(SgSymbol *symbol,
 
   const SgName &name = symbol->get_name();
 
-  if (SgVariableSymbol *existing = scope->lookup_variable_symbol(name)) {
-    return existing;
+  if (isSgVariableSymbol(symbol) != nullptr) {
+    return scope->lookup_variable_symbol(name);
   }
 
-  if (SgClassSymbol *existing = scope->lookup_class_symbol(
-          name, (SgTemplateArgumentPtrList *)nullptr)) {
-    return existing;
+  if (isSgClassSymbol(symbol) != nullptr) {
+    return scope->lookup_class_symbol(name,
+                                      (SgTemplateArgumentPtrList *)nullptr);
+  }
+
+  if (SgFunctionSymbol *function_symbol = isSgFunctionSymbol(symbol)) {
+    if (SgFunctionDeclaration *decl =
+            isSgFunctionDeclaration(function_symbol->get_declaration())) {
+      if (const SgType *type = decl->get_type()) {
+        if (SgFunctionSymbol *existing = scope->lookup_function_symbol(
+                name, type, (SgTemplateArgumentPtrList *)nullptr)) {
+          return existing;
+        }
+      }
+    }
+
+    return scope->lookup_function_symbol(name);
+  }
+
+  if (SgMemberFunctionSymbol *member_symbol =
+          isSgMemberFunctionSymbol(symbol)) {
+    if (SgMemberFunctionDeclaration *decl =
+            isSgMemberFunctionDeclaration(member_symbol->get_declaration())) {
+      if (const SgType *type = decl->get_type()) {
+        return scope->lookup_nontemplate_member_function_symbol(
+            name, type, (SgTemplateArgumentPtrList *)nullptr);
+      }
+    }
+
+    return nullptr;
+  }
+
+  if (SgTemplateFunctionSymbol *template_symbol =
+          isSgTemplateFunctionSymbol(symbol)) {
+    if (SgTemplateFunctionDeclaration *decl = isSgTemplateFunctionDeclaration(
+            template_symbol->get_declaration())) {
+      if (const SgType *type = decl->get_type()) {
+        return scope->lookup_template_function_symbol(
+            name, type, &decl->get_templateParameters());
+      }
+    }
+
+    return nullptr;
+  }
+
+  if (SgTemplateMemberFunctionSymbol *template_symbol =
+          isSgTemplateMemberFunctionSymbol(symbol)) {
+    if (SgTemplateMemberFunctionDeclaration *decl =
+            isSgTemplateMemberFunctionDeclaration(
+                template_symbol->get_declaration())) {
+      if (const SgType *type = decl->get_type()) {
+        return scope->lookup_template_member_function_symbol(
+            name, type, &decl->get_templateParameters());
+      }
+    }
+
+    return nullptr;
+  }
+
+  if (isSgTypedefSymbol(symbol) != nullptr) {
+    return scope->lookup_typedef_symbol(name);
+  }
+
+  if (isSgTemplateTypedefSymbol(symbol) != nullptr) {
+    return scope->lookup_template_typedef_symbol(name);
+  }
+
+  if (isSgEnumSymbol(symbol) != nullptr) {
+    return scope->lookup_enum_symbol(name);
+  }
+
+  if (isSgEnumFieldSymbol(symbol) != nullptr) {
+    return scope->lookup_enum_field_symbol(name);
+  }
+
+  if (isSgLabelSymbol(symbol) != nullptr) {
+    return scope->lookup_label_symbol(name);
+  }
+
+  if (isSgNamespaceSymbol(symbol) != nullptr) {
+    return scope->lookup_namespace_symbol(name);
+  }
+
+  if (SgTemplateClassSymbol *template_symbol =
+          isSgTemplateClassSymbol(symbol)) {
+    if (SgTemplateClassDeclaration *decl =
+            isSgTemplateClassDeclaration(template_symbol->get_declaration())) {
+      return scope->lookup_template_class_symbol(
+          name, &decl->get_templateParameters(),
+          (SgTemplateArgumentPtrList *)nullptr);
+    }
+
+    return nullptr;
   }
 
   return nullptr;
@@ -449,6 +539,16 @@ bool functionDeclStableTieLess(SgFunctionDeclaration *lhs,
   const bool rhs_outputs = functionDeclOutputsCode(rhs);
   if (lhs_outputs != rhs_outputs) {
     return lhs_outputs;
+  }
+
+  const int lhs_source_sequence = lhs->get_source_sequence_value();
+  const int rhs_source_sequence = rhs->get_source_sequence_value();
+  if ((lhs_source_sequence >= 0) != (rhs_source_sequence >= 0)) {
+    return lhs_source_sequence >= 0;
+  }
+  if (lhs_source_sequence >= 0 && rhs_source_sequence >= 0 &&
+      lhs_source_sequence != rhs_source_sequence) {
+    return lhs_source_sequence < rhs_source_sequence;
   }
 
   return false;
@@ -1242,15 +1342,18 @@ void repairBrokenFunctionDeclarationChains(SgNode *node) {
   Rose_STL_Container<SgNode *> function_nodes =
       NodeQuery::querySubTree(node, V_SgFunctionDeclaration);
   std::vector<SgFunctionDeclaration *> all_members;
+  std::unordered_map<SgFunctionDeclaration *, size_t> discovery_order;
   std::unordered_set<SgFunctionDeclaration *> discovered;
+  auto record_member = [&](SgFunctionDeclaration *decl) {
+    if (decl == nullptr || !discovered.insert(decl).second) {
+      return;
+    }
+
+    discovery_order.emplace(decl, discovery_order.size());
+    all_members.push_back(decl);
+  };
   for (SgNode *entry : function_nodes) {
-    SgFunctionDeclaration *decl = isSgFunctionDeclaration(entry);
-    if (decl == nullptr) {
-      continue;
-    }
-    if (discovered.insert(decl).second) {
-      all_members.push_back(decl);
-    }
+    record_member(isSgFunctionDeclaration(entry));
   }
 
   // Follow the declaration-chain links transitively so a broken sequence such
@@ -1259,9 +1362,7 @@ void repairBrokenFunctionDeclarationChains(SgNode *node) {
   for (size_t i = 0; i < all_members.size(); ++i) {
     for (SgFunctionDeclaration *related :
          relatedFunctionDeclarations(all_members[i])) {
-      if (discovered.insert(related).second) {
-        all_members.push_back(related);
-      }
+      record_member(related);
     }
   }
 
@@ -1315,7 +1416,23 @@ void repairBrokenFunctionDeclarationChains(SgNode *node) {
     std::vector<SgFunctionDeclaration *> members = group_entry.second;
     members.erase(std::remove(members.begin(), members.end(), nullptr),
                   members.end());
-    std::sort(members.begin(), members.end(), functionDeclSourceLess);
+    auto member_order = [&](SgFunctionDeclaration *decl) -> size_t {
+      std::unordered_map<SgFunctionDeclaration *, size_t>::const_iterator it =
+          discovery_order.find(decl);
+      return it != discovery_order.end() ? it->second : discovery_order.size();
+    };
+    auto member_less = [&](SgFunctionDeclaration *lhs,
+                           SgFunctionDeclaration *rhs) {
+      if (functionDeclSourceLess(lhs, rhs)) {
+        return true;
+      }
+      if (functionDeclSourceLess(rhs, lhs)) {
+        return false;
+      }
+
+      return member_order(lhs) < member_order(rhs);
+    };
+    std::sort(members.begin(), members.end(), member_less);
     members.erase(std::unique(members.begin(), members.end()), members.end());
     if (members.empty()) {
       continue;
@@ -1398,6 +1515,17 @@ void repairBrokenFunctionDeclarationChains(SgNode *node) {
           defining_decl = decl;
         }
       }
+    }
+
+    if (first_nondef == nullptr) {
+      first_nondef = defining_decl;
+    }
+    if (first_nondef == nullptr) {
+      first_nondef = members.front();
+    }
+    if (defining_decl == nullptr && first_nondef != nullptr &&
+        first_nondef->get_definition() != nullptr) {
+      defining_decl = first_nondef;
     }
 
     if (first_nondef != nullptr) {
