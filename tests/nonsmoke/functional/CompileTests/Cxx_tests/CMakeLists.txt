@@ -3422,7 +3422,7 @@ add_test(
   NAME Cxx_tests_testUsingBadCommandline
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND sh -c
-    "echo \"class A { int x\\; float y\\;}\\; int main() { int x=0\\; return x\\; }\" > roseTestProgram.C && \"$@\""
+    "printf '%s\n' 'class A { int x; float y;}; int main() { int x=0; return x; }' > roseTestProgram.C && \"$@\""
     dummy
     $<TARGET_FILE:${translator}>
     -DthisIsOK -D thisIsAnError -rose:verbose 0
@@ -3434,7 +3434,7 @@ add_test(
   NAME Cxx_tests_testBuildUsingNoPath
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND sh -c
-    "echo \"class A { int x\\; float y\\;}\\; int main() { int x=0\\; return x\\; }\" > roseTestProgram.C && \"$@\""
+    "printf '%s\n' 'class A { int x; float y;}; int main() { int x=0; return x; }' > roseTestProgram.C && \"$@\""
     dummy
     $<TARGET_FILE:${translator}>
     -rose:verbose 0
@@ -3446,7 +3446,7 @@ add_test(
   NAME Cxx_tests_testBuildUsingRelativePath
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND sh -c
-    "echo \"class A { int x\\; float y\\;}\\; int main() { int x=0\\; return x\\; }\" > roseTestProgram.C && \"$@\""
+    "printf '%s\n' 'class A { int x; float y;}; int main() { int x=0; return x; }' > roseTestProgram.C && \"$@\""
     dummy
     $<TARGET_FILE:${translator}>
     -rose:verbose 0
@@ -3458,7 +3458,7 @@ add_test(
   NAME Cxx_tests_testBuildUsingAbsolutePath
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND sh -c
-    "echo \"class A { int x\\; float y\\;}\\; int main() { int x=0\\; return x\\; }\" > roseTestProgram.C && \"$@\" `pwd`/roseTestProgram.C"
+    "printf '%s\n' 'class A { int x; float y;}; int main() { int x=0; return x; }' > roseTestProgram.C && \"$@\" `pwd`/roseTestProgram.C"
     dummy
     $<TARGET_FILE:${translator}>
     -rose:verbose 0
@@ -3485,15 +3485,21 @@ add_test(
 )
 set_tests_properties(Cxx_tests_multipleDeclarationsBug PROPERTIES LABELS Cxx_tests )
 
-add_test(
-  NAME Cxx_tests_test_MPI_LAM
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND $<TARGET_FILE:${translator}>
-    -rose:verbose 0
-    -I/home/dquinlan/ROSE/ROSE_TESTS/MPI_header_tests/MPI_header_tests_64bit/LAM_MPI/include
-    -c /home/dquinlan/ROSE/ROSE_TESTS/MPI_header_tests/MPI_header_tests_64bit/tests/input.C
-)
-set_tests_properties(Cxx_tests_test_MPI_LAM PROPERTIES LABELS Cxx_tests )
+set(_mpi_lam_include_dir
+  /home/dquinlan/ROSE/ROSE_TESTS/MPI_header_tests/MPI_header_tests_64bit/LAM_MPI/include)
+set(_mpi_lam_input
+  /home/dquinlan/ROSE/ROSE_TESTS/MPI_header_tests/MPI_header_tests_64bit/tests/input.C)
+if(EXISTS "${_mpi_lam_include_dir}" AND EXISTS "${_mpi_lam_input}")
+  add_test(
+    NAME Cxx_tests_test_MPI_LAM
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND $<TARGET_FILE:${translator}>
+      -rose:verbose 0
+      -I${_mpi_lam_include_dir}
+      -c ${_mpi_lam_input}
+  )
+  set_tests_properties(Cxx_tests_test_MPI_LAM PROPERTIES LABELS Cxx_tests )
+endif()
 
 add_test(
   NAME Cxx_tests_test_multiple_files

@@ -512,7 +512,7 @@ void Grammar::setUpNodes() {
   // SgMangledNameListPtr","globalMangledNameMap","",
   //        NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
   //        NO_DELETE, NO_COPY_DATA);
-  Node.setDataPrototype("static std::map<SgNode*,std::string>",
+  Node.setDataPrototype("static std::unordered_map<SgNode*,std::string>",
                         "globalMangledNameMap", "", NO_CONSTRUCTOR_PARAMETER,
                         NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
                         NO_COPY_DATA);

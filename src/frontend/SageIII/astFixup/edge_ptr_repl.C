@@ -45,6 +45,10 @@ struct EdgeReplacer : public SimpleReferenceToPointerHandler {
 };
 
 void edgePointerReplacement(replacement_map_t const &rmap) {
+  if (rmap.empty()) {
+    return;
+  }
+
   EdgeMempoolTraversal<EdgeReplacer> traversal(rmap);
   traversal.traverseMemoryPool();
 }

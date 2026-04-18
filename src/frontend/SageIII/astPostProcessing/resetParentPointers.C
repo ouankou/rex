@@ -1594,15 +1594,15 @@ ResetParentPointers::evaluateInheritedAttribute(
 #endif
         declaration->set_parent(directive);
       } else {
-        // DQ (2/9/2014): This was an error, but it only shows up in the use of
-        // the GNU 4.6 header files (and it is not clear that it should be an
-        // error).  So output a message as we debug this issue.
+        // The wrapped declaration is owned structurally by the explicit
+        // instantiation directive, even when other repairs later reattach it to
+        // a lexical scope for ordering/output purposes. Leaving the parent on a
+        // scope node causes the unparser to treat class instantiations like
+        // standalone declarations and emit `template<>` instead of
+        // `template`/`extern template`.
         if (declaration->get_parent() != directive) {
+          declaration->set_parent(directive);
         }
-
-        // DQ (3/15/2006): Why is it an error to have this be a valid pointer?
-        // The parent should be the directive, I think.
-        // ROSE_ASSERT(declaration->get_parent() == directive);
       }
       SgMemberFunctionDeclaration *memberFunctionDeclaration =
           isSgMemberFunctionDeclaration(declaration);
@@ -1807,7 +1807,8 @@ void topLevelResetParentPointer(SgNode *node) {
 
 void resetFileInfoParentPointersInMemoryPool() {
   ResetFileInfoParentPointersInMemoryPool t;
-  t.traverseMemoryPool();
+  SgLocatedNode::traverseMemoryPoolNodes(t);
+  SgSupport::traverseMemoryPoolNodes(t);
 }
 
 void ResetFileInfoParentPointersInMemoryPool::visit(SgNode *node) {

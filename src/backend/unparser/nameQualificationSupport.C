@@ -5,6 +5,8 @@
 #include "nonrealQualificationSupport.h"
 #include "sageGeneric.h"
 
+#include <unordered_map>
+
 using namespace std;
 
 namespace si = SageInterface;
@@ -342,6 +344,169 @@ SgDeclarationStatement *preferAssociatedDefinitionForTemplateInstantiation(
   return (is_explicit_specialization || defining_decl_will_unparse)
              ? static_cast<SgDeclarationStatement *>(def_inst)
              : declaration;
+}
+
+struct ScopeUsingDirectiveOrderEntry {
+  SgUsingDirectiveStatement *directive = NULL;
+  size_t lexical_index = 0;
+  unsigned int source_sequence = 0;
+};
+
+struct ScopeUsingDirectiveOrderCacheEntry {
+  std::unordered_map<const SgStatement *, size_t> direct_child_index_cache;
+  std::vector<ScopeUsingDirectiveOrderEntry> using_directives;
+};
+
+struct ScopeUsingDirectiveOrderCache {
+  uint64_t ast_modification_sequence = 0;
+  std::unordered_map<const SgScopeStatement *,
+                     ScopeUsingDirectiveOrderCacheEntry>
+      entries;
+};
+
+ScopeUsingDirectiveOrderCache &scope_using_directive_order_cache() {
+  static ScopeUsingDirectiveOrderCache cache;
+  const uint64_t ast_modification_sequence =
+      SgNode::get_globalAstModificationSequence();
+  if (cache.ast_modification_sequence != ast_modification_sequence) {
+    cache.ast_modification_sequence = ast_modification_sequence;
+    cache.entries.clear();
+  }
+
+  return cache;
+}
+
+template <typename StatementList>
+void record_scope_using_directive_entries(
+    const StatementList &statements,
+    ScopeUsingDirectiveOrderCacheEntry &entry) {
+  entry.using_directives.reserve(statements.size());
+
+  for (size_t i = 0; i < statements.size(); ++i) {
+    SgStatement *statement = isSgStatement(statements[i]);
+    if (statement == NULL) {
+      continue;
+    }
+
+    SgUsingDirectiveStatement *using_directive =
+        isSgUsingDirectiveStatement(statement);
+    if (using_directive == NULL) {
+      continue;
+    }
+
+    ScopeUsingDirectiveOrderEntry using_entry;
+    using_entry.directive = using_directive;
+    using_entry.lexical_index = i;
+    if (Sg_File_Info *file_info = statement->get_file_info()) {
+      using_entry.source_sequence = file_info->get_source_sequence_number();
+    }
+    entry.using_directives.push_back(using_entry);
+  }
+}
+
+template <typename StatementList>
+size_t find_statement_index_in_list(const StatementList &statements,
+                                    const SgStatement *target) {
+  for (size_t i = 0; i < statements.size(); ++i) {
+    if (statements[i] == target) {
+      return i;
+    }
+  }
+
+  return static_cast<size_t>(-1);
+}
+
+size_t
+lookup_direct_child_statement_index(SgScopeStatement *scope,
+                                    SgStatement *statement,
+                                    ScopeUsingDirectiveOrderCacheEntry &entry) {
+  if (scope == NULL || statement == NULL || statement->get_parent() != scope) {
+    return static_cast<size_t>(-1);
+  }
+
+  auto cached = entry.direct_child_index_cache.find(statement);
+  if (cached != entry.direct_child_index_cache.end()) {
+    return cached->second;
+  }
+
+  size_t index = static_cast<size_t>(-1);
+  if (SgGlobal *global_scope = isSgGlobal(scope)) {
+    index = find_statement_index_in_list(global_scope->get_declarations(),
+                                         statement);
+  } else if (SgNamespaceDefinitionStatement *namespace_scope =
+                 isSgNamespaceDefinitionStatement(scope)) {
+    index = find_statement_index_in_list(namespace_scope->get_declarations(),
+                                         statement);
+  } else if (SgDeclarationScope *declaration_scope =
+                 isSgDeclarationScope(scope)) {
+    index = find_statement_index_in_list(declaration_scope->get_declarations(),
+                                         statement);
+  } else if (SgClassDefinition *class_scope = isSgClassDefinition(scope)) {
+    index = find_statement_index_in_list(class_scope->get_members(), statement);
+  } else if (SgTemplateClassDefinition *template_class_scope =
+                 isSgTemplateClassDefinition(scope)) {
+    index = find_statement_index_in_list(template_class_scope->get_members(),
+                                         statement);
+  } else if (SgTemplateInstantiationDefn *instantiation_scope =
+                 isSgTemplateInstantiationDefn(scope)) {
+    index = find_statement_index_in_list(instantiation_scope->get_members(),
+                                         statement);
+  } else if (scope->containsOnlyDeclarations()) {
+    index =
+        find_statement_index_in_list(scope->getDeclarationList(), statement);
+  } else if (scope->variantT() == V_SgBasicBlock) {
+    index = find_statement_index_in_list(scope->getStatementList(), statement);
+  }
+
+  if (index != static_cast<size_t>(-1)) {
+    entry.direct_child_index_cache.emplace(statement, index);
+  }
+
+  return index;
+}
+
+ScopeUsingDirectiveOrderCacheEntry &
+get_scope_using_directive_order(SgScopeStatement *scope) {
+  static ScopeUsingDirectiveOrderCacheEntry empty_entry;
+  if (scope == NULL) {
+    return empty_entry;
+  }
+
+  ScopeUsingDirectiveOrderCache &cache = scope_using_directive_order_cache();
+  auto found = cache.entries.find(scope);
+  if (found != cache.entries.end()) {
+    return found->second;
+  }
+
+  ScopeUsingDirectiveOrderCacheEntry entry;
+  if (SgGlobal *global_scope = isSgGlobal(scope)) {
+    record_scope_using_directive_entries(global_scope->get_declarations(),
+                                         entry);
+  } else if (SgNamespaceDefinitionStatement *namespace_scope =
+                 isSgNamespaceDefinitionStatement(scope)) {
+    record_scope_using_directive_entries(namespace_scope->get_declarations(),
+                                         entry);
+  } else if (SgDeclarationScope *declaration_scope =
+                 isSgDeclarationScope(scope)) {
+    record_scope_using_directive_entries(declaration_scope->get_declarations(),
+                                         entry);
+  } else if (SgClassDefinition *class_scope = isSgClassDefinition(scope)) {
+    record_scope_using_directive_entries(class_scope->get_members(), entry);
+  } else if (SgTemplateClassDefinition *template_class_scope =
+                 isSgTemplateClassDefinition(scope)) {
+    record_scope_using_directive_entries(template_class_scope->get_members(),
+                                         entry);
+  } else if (SgTemplateInstantiationDefn *instantiation_scope =
+                 isSgTemplateInstantiationDefn(scope)) {
+    record_scope_using_directive_entries(instantiation_scope->get_members(),
+                                         entry);
+  } else if (scope->containsOnlyDeclarations()) {
+    record_scope_using_directive_entries(scope->getDeclarationList(), entry);
+  } else if (scope->variantT() == V_SgBasicBlock) {
+    record_scope_using_directive_entries(scope->getStatementList(), entry);
+  }
+
+  return cache.entries.emplace(scope, std::move(entry)).first->second;
 }
 } // unnamed namespace
 
@@ -1782,123 +1947,50 @@ int NameQualificationTraversal::nameQualificationDepth(
       unsigned int position_sequence =
           positionStatement->get_file_info()->get_source_sequence_number();
 
-      auto visit_scope_contents_in_order =
-          [&](SgScopeStatement *scope, const auto &visit_statement) -> bool {
-        auto visit_declarations =
-            [&](SgDeclarationStatementPtrList &declarations) -> bool {
-          for (SgDeclarationStatement *declaration : declarations) {
-            SgStatement *statement = isSgStatement(declaration);
-            if (statement != NULL && visit_statement(statement)) {
-              return true;
-            }
-          }
-          return false;
-        };
-
-        if (SgGlobal *global_scope = isSgGlobal(scope)) {
-          return visit_declarations(global_scope->get_declarations());
-        }
-        if (SgNamespaceDefinitionStatement *namespace_scope =
-                isSgNamespaceDefinitionStatement(scope)) {
-          return visit_declarations(namespace_scope->get_declarations());
-        }
-        if (SgDeclarationScope *declaration_scope =
-                isSgDeclarationScope(scope)) {
-          return visit_declarations(declaration_scope->get_declarations());
-        }
-        if (SgClassDefinition *class_scope = isSgClassDefinition(scope)) {
-          return visit_declarations(class_scope->get_members());
-        }
-        if (SgTemplateClassDefinition *template_class_scope =
-                isSgTemplateClassDefinition(scope)) {
-          return visit_declarations(template_class_scope->get_members());
-        }
-        if (SgTemplateInstantiationDefn *instantiation_scope =
-                isSgTemplateInstantiationDefn(scope)) {
-          return visit_declarations(instantiation_scope->get_members());
-        }
-        if (scope->containsOnlyDeclarations()) {
-          return visit_declarations(scope->getDeclarationList());
-        }
-
-        switch (scope->variantT()) {
-        case V_SgBasicBlock: {
-          const SgStatementPtrList &statements = scope->getStatementList();
-          for (SgStatement *statement : statements) {
-            if (statement != NULL && visit_statement(statement)) {
-              return true;
-            }
-          }
-          return false;
-        }
-        default:
-          // Only basic blocks expose a stable statement list here. Other
-          // control-flow scopes may normalize their bodies into synthetic
-          // blocks when queried via getStatementList(), which mutates the AST
-          // during name-qualification/token-unparse preparation. Nested
-          // statement scopes are reached through their own basic-block scopes
-          // while walking outward from the reference position, so skipping
-          // them here does not hide any branch-local using directives.
-          return false;
-        }
-      };
-
       for (SgScopeStatement *scope = currentScope; scope != NULL;) {
-        bool found_import = false;
-        visit_scope_contents_in_order(
-            scope, [&](SgStatement *statement) -> bool {
-              if (statement == NULL) {
-                return false;
-              }
-              if (statement == positionStatement) {
-                return true;
-              }
+        ScopeUsingDirectiveOrderCacheEntry &scope_entry =
+            get_scope_using_directive_order(scope);
+        size_t position_lexical_index = lookup_direct_child_statement_index(
+            scope, positionStatement, scope_entry);
 
-              Sg_File_Info *statement_file_info = statement->get_file_info();
-              if (statement_file_info != NULL && position_sequence != 0) {
-                unsigned int statement_sequence =
-                    statement_file_info->get_source_sequence_number();
-                if (statement_sequence != 0 &&
-                    statement_sequence >= position_sequence) {
-                  return false;
-                }
-              }
+        for (const ScopeUsingDirectiveOrderEntry &using_entry :
+             scope_entry.using_directives) {
+          if (using_entry.directive == NULL) {
+            continue;
+          }
+          if (position_lexical_index != static_cast<size_t>(-1) &&
+              using_entry.lexical_index >= position_lexical_index) {
+            break;
+          }
+          if (position_sequence != 0 && using_entry.source_sequence != 0 &&
+              using_entry.source_sequence >= position_sequence) {
+            continue;
+          }
 
-              SgUsingDirectiveStatement *using_directive =
-                  isSgUsingDirectiveStatement(statement);
-              if (using_directive == NULL) {
-                return false;
-              }
+          SgNamespaceDeclarationStatement *namespace_declaration =
+              using_entry.directive->get_namespaceDeclaration();
+          if (namespace_declaration == NULL) {
+            continue;
+          }
 
-              SgNamespaceDeclarationStatement *namespace_declaration =
-                  using_directive->get_namespaceDeclaration();
-              if (namespace_declaration == NULL) {
-                return false;
-              }
+          SgNamespaceDefinitionStatement *namespace_definition =
+              namespace_declaration->get_definition();
+          if (namespace_definition == NULL) {
+            continue;
+          }
 
-              SgNamespaceDefinitionStatement *namespace_definition =
-                  namespace_declaration->get_definition();
-              if (namespace_definition == NULL) {
-                return false;
-              }
+          SgSymbol *imported_symbol = namespace_definition->lookup_symbol(
+              name, templateParameterList, lookupTemplateArgumentList);
+          SgDeclarationStatement *imported_declaration =
+              declaration_for_symbol(imported_symbol);
+          if (imported_declaration == NULL) {
+            continue;
+          }
 
-              SgSymbol *imported_symbol = namespace_definition->lookup_symbol(
-                  name, templateParameterList, lookupTemplateArgumentList);
-              SgDeclarationStatement *imported_declaration =
-                  declaration_for_symbol(imported_symbol);
-              if (imported_declaration == NULL) {
-                return false;
-              }
-
-              if (canonical_first_declaration(imported_declaration) !=
-                  target_first_declaration) {
-                found_import = true;
-                return true;
-              }
-              return false;
-            });
-        if (found_import) {
-          return true;
+          if (canonical_first_declaration(imported_declaration) !=
+              target_first_declaration) {
+            return true;
+          }
         }
 
         SgScopeStatement *next_scope = scope->get_scope();
@@ -14041,8 +14133,8 @@ void NameQualificationTraversal::setNameQualificationOnClassOf(
   // pointerMemberType->set_global_qualification_required(outputGlobalQualification);
   // pointerMemberType->set_name_qualification_length(outputNameQualificationLength);
 
-  // There should be no type evaluation required for a variable reference, as I
-  // recall.
+  // There should be no type evaluation required for a member pointer type, as
+  // far as we know.
   ROSE_ASSERT(outputTypeEvaluation == false);
   // pointerMemberType->set_type_elaboration_required(outputTypeEvaluation);
 
@@ -14170,8 +14262,8 @@ void NameQualificationTraversal::setNameQualificationOnBaseType(
   // pointerMemberType->set_global_qualification_required(outputGlobalQualification);
   // pointerMemberType->set_name_qualification_length(outputNameQualificationLength);
 
-  // There should be no type evaluation required for a variable reference, as I
-  // recall.
+  // There should be no type evaluation required for a pointer member type, as
+  // far as we know.
   ROSE_ASSERT(outputTypeEvaluation == false);
   // pointerMemberType->set_type_elaboration_required(outputTypeEvaluation);
 
@@ -14596,7 +14688,7 @@ void NameQualificationTraversal::setNameQualification(
   functionRefExp->set_global_qualification_required(outputGlobalQualification);
   functionRefExp->set_name_qualification_length(outputNameQualificationLength);
 
-  // There should be no type evaluation required for a variable reference, as I
+  // There should be no type evaluation required for a function reference, as I
   // recall.
   ROSE_ASSERT(outputTypeEvaluation == false);
   functionRefExp->set_type_elaboration_required(outputTypeEvaluation);
@@ -14843,7 +14935,7 @@ void NameQualificationTraversal::setNameQualification(
   functionRefExp->set_global_qualification_required(outputGlobalQualification);
   functionRefExp->set_name_qualification_length(outputNameQualificationLength);
 
-  // There should be no type evaluation required for a variable reference, as I
+  // There should be no type evaluation required for a function reference, as I
   // recall.
   ROSE_ASSERT(outputTypeEvaluation == false);
   functionRefExp->set_type_elaboration_required(outputTypeEvaluation);
@@ -16128,8 +16220,11 @@ void NameQualificationTraversal::setNameQualificationOnType(
       initializedName->get_name_qualification_length_for_type();
   const bool preservedGlobalQualification =
       initializedName->get_global_qualification_required_for_type();
+  const bool preservedTypeElaboration =
+      initializedName->get_type_elaboration_required_for_type();
   const bool preserveWrittenTypeSpelling =
-      preservedNameQualificationLength > 0 || preservedGlobalQualification;
+      preservedNameQualificationLength > 0 || preservedGlobalQualification ||
+      preservedTypeElaboration;
   string qualifier = setNameQualificationSupport(
       scope, amountOfNameQualificationRequired, outputNameQualificationLength,
       outputGlobalQualification, outputTypeEvaluation);
@@ -16163,6 +16258,38 @@ void NameQualificationTraversal::setNameQualificationOnType(
         reference_class_decl != NULL &&
         reference_class_decl == declaration_class_decl;
   }
+
+  auto tag_decl_owned_by_declarator_visible_without_qualification =
+      [&]() -> bool {
+    if (initializedName == NULL || declaration == NULL) {
+      return false;
+    }
+
+    if (isSgClassDeclaration(declaration) == NULL &&
+        isSgEnumDeclaration(declaration) == NULL) {
+      return false;
+    }
+
+    SgDeclarationStatement *decl_owner =
+        isSgDeclarationStatement(declaration->get_parent());
+    if (decl_owner == NULL) {
+      return false;
+    }
+
+    if (isSgVariableDeclaration(decl_owner) == NULL &&
+        isSgTypedefDeclaration(decl_owner) == NULL) {
+      return false;
+    }
+
+    SgScopeStatement *reference_scope = initializedName->get_scope();
+    SgScopeStatement *declaration_scope =
+        traverseNonrealDeclForCorrectScope(declaration);
+    if (reference_scope == NULL || declaration_scope == NULL) {
+      return false;
+    }
+
+    return reference_scope == declaration_scope;
+  };
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
   MLOG_WARN_C(
@@ -16212,8 +16339,14 @@ void NameQualificationTraversal::setNameQualificationOnType(
               sourceSequenceForTypeDeclaration);
 #endif
 
-  bool outputNameQualification =
-      sourceSequenceForTypeDeclaration < sourceSequenceForInitializedName;
+  const bool initializedNameHasStableSourceOrdering =
+      initializedName->get_file_info() != NULL &&
+      initializedName->get_file_info()->isTransformation() == false &&
+      initializedName->get_file_info()->isCompilerGenerated() == false;
+  bool outputNameQualification = initializedNameHasStableSourceOrdering
+                                     ? (sourceSequenceForTypeDeclaration <
+                                        sourceSequenceForInitializedName)
+                                     : (amountOfNameQualificationRequired > 0);
 
   // DQ (5/15/2018): If this is a SgTemplateInstantiationTypedefDeclaration then
   // output the name qualification.
@@ -16283,6 +16416,19 @@ void NameQualificationTraversal::setNameQualificationOnType(
 
     outputNameQualificationLength = preservedNameQualificationLength;
     outputGlobalQualification = preservedGlobalQualification;
+    outputTypeEvaluation = preservedTypeElaboration;
+  }
+
+  if (preserveWrittenTypeSpelling == false &&
+      tag_decl_owned_by_declarator_visible_without_qualification()) {
+    // Declarator-owned tags such as `class A *a;`, `class A a;`, and
+    // later shared-type references to those same-scope surfaces remain
+    // reachable through ordinary lexical lookup. Adding a generated global
+    // qualifier ties the output to a declarator surface instead of the tag's
+    // actual visibility and can produce invalid `::A`.
+    qualifier = "";
+    outputNameQualificationLength = 0;
+    outputGlobalQualification = false;
   }
 
   initializedName->set_global_qualification_required_for_type(
@@ -16291,9 +16437,10 @@ void NameQualificationTraversal::setNameQualificationOnType(
       outputNameQualificationLength);
   initializedName->set_type_elaboration_required_for_type(outputTypeEvaluation);
 
-  // There should be no type evaluation required for a variable reference, as I
-  // recall.
-  ROSE_ASSERT(outputTypeEvaluation == false);
+  // The name-qualification pass normally computes no additional elaborated
+  // type requirement on its own, but it may need to preserve frontend-written
+  // elaboration that was already attached to the declaration.
+  ROSE_ASSERT(outputTypeEvaluation == false || preserveWrittenTypeSpelling);
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
   MLOG_WARN_C(

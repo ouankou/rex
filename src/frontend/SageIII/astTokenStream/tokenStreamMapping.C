@@ -6962,12 +6962,14 @@ InheritedAttribute TokenMappingTraversal::evaluateInheritedAttribute(
         ROSE_ASSERT(scopeStatement != NULL);
         if (representativeWhitespaceStatementMap.find(scopeStatement) !=
             representativeWhitespaceStatementMap.end()) {
-          // DQ (11/28/2015): This is a significant amount of output spew when
-          // running large applications with the move-tool.
-          printf("NOTE: "
-                 "(representativeWhitespaceStatementMap.find(scopeStatement) "
-                 "!= representativeWhitespaceStatementMap.end()): scope "
-                 "revisited \n");
+          // Revisited scopes are expected here for some large inputs; avoid
+          // unconditional hot-path stdout churn.
+          if (SgProject::get_verbose() > 0) {
+            printf("NOTE: "
+                   "(representativeWhitespaceStatementMap.find(scopeStatement) "
+                   "!= representativeWhitespaceStatementMap.end()): scope "
+                   "revisited \n");
+          }
         }
         // Allow this case while we debug this.
         if (representativeWhitespaceStatementMap.find(scopeStatement) ==
@@ -7404,6 +7406,191 @@ void repairTemplateFunctionDeclarationTokenMappings(SgSourceFile *sourceFile) {
   }
 }
 
+int findSemicolonTokenIndexForEmptyDeclaration(
+    const std::vector<stream_element *> &tokenVector,
+    SgEmptyDeclaration *emptyDecl, int lowerBound, int upperBound) {
+  if (emptyDecl == NULL) {
+    return -1;
+  }
+
+  if (tokenVector.empty()) {
+    return -1;
+  }
+
+  lowerBound = std::max(0, lowerBound);
+  upperBound = std::min(static_cast<int>(tokenVector.size()) - 1, upperBound);
+  if (lowerBound > upperBound) {
+    return -1;
+  }
+
+  Sg_File_Info *start = emptyDecl->get_startOfConstruct();
+  if (start == NULL) {
+    start = emptyDecl->get_file_info();
+  }
+
+  Sg_File_Info *end = emptyDecl->get_endOfConstruct();
+  if (end == NULL) {
+    end = start;
+  }
+
+  if (start == NULL || end == NULL || start->isCompilerGenerated() ||
+      end->isCompilerGenerated()) {
+    return -1;
+  }
+
+  const int startLine = start->get_physical_line();
+  const int startCol = start->get_col();
+  const int endLine = end->get_physical_line();
+  const int endCol = end->get_col();
+
+  auto tokenMatchesSourcePosition = [&](stream_element *token) -> bool {
+    if (token == NULL || token->p_tok_elem == NULL ||
+        token->p_tok_elem->token_lexeme != ";") {
+      return false;
+    }
+
+    const bool exactBeginMatch = token->beginning_fpi.line_num == startLine &&
+                                 token->beginning_fpi.column_num == startCol;
+    const bool exactEndMatch = token->ending_fpi.line_num == endLine &&
+                               token->ending_fpi.column_num == endCol;
+    if (exactBeginMatch || exactEndMatch) {
+      return true;
+    }
+
+    const bool containsSourcePosition =
+        token->beginning_fpi.line_num == startLine &&
+        token->ending_fpi.line_num == endLine &&
+        token->beginning_fpi.column_num <= startCol &&
+        token->ending_fpi.column_num >= endCol;
+    return containsSourcePosition;
+  };
+
+  for (int i = lowerBound; i <= upperBound; ++i) {
+    if (tokenMatchesSourcePosition(tokenVector[i])) {
+      return i;
+    }
+  }
+
+  for (int i = lowerBound; i <= upperBound; ++i) {
+    if (tokenVector[i] != NULL && tokenVector[i]->p_tok_elem != NULL &&
+        tokenVector[i]->p_tok_elem->token_lexeme == ";") {
+      return i;
+    }
+  }
+
+  return -1;
+}
+
+int findSharedSemicolonTokenIndexForEmptyDeclaration(
+    const std::vector<stream_element *> &tokenVector,
+    SgEmptyDeclaration *emptyDecl, int candidateIndex) {
+  if (emptyDecl == NULL || candidateIndex < 0 ||
+      static_cast<size_t>(candidateIndex) >= tokenVector.size()) {
+    return -1;
+  }
+
+  stream_element *token = tokenVector[candidateIndex];
+  if (token == NULL || token->p_tok_elem == NULL ||
+      token->p_tok_elem->token_lexeme != ";") {
+    return -1;
+  }
+
+  Sg_File_Info *declInfo = emptyDecl->get_file_info();
+  if (declInfo == NULL || declInfo->isCompilerGenerated()) {
+    return -1;
+  }
+
+  if (token->beginning_fpi.line_num != declInfo->get_physical_line() ||
+      token->beginning_fpi.column_num != declInfo->get_col()) {
+    return -1;
+  }
+
+  return candidateIndex;
+}
+
+void repairTopLevelEmptyDeclarationTokenMappings(
+    SgSourceFile *sourceFile,
+    const std::vector<stream_element *> &tokenVector) {
+  if (sourceFile == NULL) {
+    return;
+  }
+
+  SgGlobal *global = sourceFile->get_globalScope();
+  if (global == NULL) {
+    return;
+  }
+
+  std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap =
+      sourceFile->get_tokenSubsequenceMap();
+
+  const SgDeclarationStatementPtrList &declarations =
+      global->get_declarations();
+  for (size_t index = 0; index < declarations.size(); ++index) {
+    SgDeclarationStatement *decl = declarations[index];
+    SgEmptyDeclaration *emptyDecl = isSgEmptyDeclaration(decl);
+    if (emptyDecl == NULL) {
+      continue;
+    }
+
+    if (tokenMap.find(emptyDecl) != tokenMap.end() &&
+        tokenMap[emptyDecl] != NULL) {
+      continue;
+    }
+
+    Sg_File_Info *declInfo = emptyDecl->get_file_info();
+    if (declInfo == NULL || declInfo->isCompilerGenerated() ||
+        declInfo->isTransformation() ||
+        declInfo->isOutputInCodeGeneration() == false) {
+      continue;
+    }
+
+    if (declInfo->get_filenameString() != sourceFile->getFileName()) {
+      continue;
+    }
+
+    int lowerBound = 0;
+    int previousTokenEnd = -1;
+    for (size_t prev = index; prev-- > 0;) {
+      std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator prevIt =
+          tokenMap.find(declarations[prev]);
+      if (prevIt != tokenMap.end() && prevIt->second != NULL &&
+          prevIt->second->token_subsequence_end >= 0) {
+        previousTokenEnd = prevIt->second->token_subsequence_end;
+        lowerBound = prevIt->second->token_subsequence_end + 1;
+        break;
+      }
+    }
+
+    int upperBound = static_cast<int>(tokenVector.size()) - 1;
+    for (size_t next = index + 1; next < declarations.size(); ++next) {
+      std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator nextIt =
+          tokenMap.find(declarations[next]);
+      if (nextIt != tokenMap.end() && nextIt->second != NULL &&
+          nextIt->second->token_subsequence_start >= 0) {
+        upperBound = nextIt->second->token_subsequence_start - 1;
+        break;
+      }
+    }
+
+    const int tokenIndex = findSemicolonTokenIndexForEmptyDeclaration(
+        tokenVector, emptyDecl, lowerBound, upperBound);
+    int selectedTokenIndex = tokenIndex;
+    if (selectedTokenIndex < 0) {
+      selectedTokenIndex = findSharedSemicolonTokenIndexForEmptyDeclaration(
+          tokenVector, emptyDecl, previousTokenEnd);
+    }
+    if (selectedTokenIndex < 0) {
+      continue;
+    }
+
+    // Top-level empty declarations own only the explicit semicolon token; the
+    // surrounding whitespace stays with neighboring declarations/global scope.
+    tokenMap[emptyDecl] = TokenStreamSequenceToNodeMapping::createTokenInterval(
+        sourceFile, emptyDecl, -1, -1, selectedTokenIndex, selectedTokenIndex,
+        -1, -1, -1, -1);
+  }
+}
+
 } // namespace
 
 void buildTokenStreamMappingForSourceFile(SgSourceFile *sourceFile) {
@@ -7414,6 +7601,7 @@ void buildTokenStreamMappingForSourceFile(SgSourceFile *sourceFile) {
   std::vector<stream_element *> tokenVector = getTokenStream(sourceFile);
   buildTokenStreamMapping(sourceFile, tokenVector);
   repairTemplateFunctionDeclarationTokenMappings(sourceFile);
+  repairTopLevelEmptyDeclarationTokenMappings(sourceFile, tokenVector);
 }
 
 void outputSourceCodeFromTokenStream_globalScope(

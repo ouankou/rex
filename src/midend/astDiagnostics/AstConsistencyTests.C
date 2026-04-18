@@ -38,6 +38,15 @@
 using namespace std;
 using namespace Rose;
 
+namespace {
+void rosePhaseTrace(const char *phase) {
+  if (getenv("ROSE_PHASE_TRACE") != nullptr) {
+    fprintf(stderr, "ROSE_PHASE %s\n", phase);
+    fflush(stderr);
+  }
+}
+} // namespace
+
 /*! \file
 
     This file contains the test run on the AST after construction (option).
@@ -148,12 +157,14 @@ void AstTests::runAllTests(SgProject *sageProject) {
   // compilation tests of templated processing classes
   // DQ (3/30/2004): This function is called by the
   //      ROSE/src/roseTranslator.C RoseTestTranslator class
+  rosePhaseTrace("AstTests.runAllTests.begin");
 
   if (SgProject::get_verbose() >= DIAGNOSTICS_VERBOSE_LEVEL) {
     printf("At TOP of AstTests::runAllTests() \n");
   }
 
   if (sageProject->get_frontendErrorCode() != 0) {
+    rosePhaseTrace("AstTests.runAllTests.end");
     return;
   }
 
@@ -164,6 +175,7 @@ void AstTests::runAllTests(SgProject *sageProject) {
   // with NDEBUG.  So more approriate (and equvalent) semantics is that if ROSE
   // is compiled with NDEBUG then we should just exit directly.
   TimingPerformance ndebug_timer("AST Consistency Tests (disabled by NDEBUG):");
+  rosePhaseTrace("AstTests.runAllTests.end");
   return;
 #endif
 
@@ -184,6 +196,7 @@ void AstTests::runAllTests(SgProject *sageProject) {
       sageProject->get_fileList()[0]->get_skipAstConsistancyTests() == true) {
     printf("Note: In AstTests::runAllTests(): command line option used to skip "
            "AST consistancy tests \n");
+    rosePhaseTrace("AstTests.runAllTests.end");
     return;
   }
 
@@ -833,6 +846,7 @@ void AstTests::runAllTests(SgProject *sageProject) {
   if (SgProject::get_verbose() >= DIAGNOSTICS_VERBOSE_LEVEL) {
     printf("At BOTTOM of AstTests::runAllTests() \n");
   }
+  rosePhaseTrace("AstTests.runAllTests.end");
 }
 
 /*! \page AstProperties AST Properties (Consistency Tests)
@@ -1098,6 +1112,37 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode *node,
 
         // Check the scope of the member function, make sure that it is a
         // SgClassDefinition (could also be a SgTemplateInstantiationDefn).
+        if (isSgClassDefinition(memberFunctionDeclaration->get_scope()) ==
+            NULL) {
+          Sg_File_Info *info = memberFunctionDeclaration->get_file_info();
+          fprintf(stderr, "AstConsistency member function scope failure:\n");
+          fprintf(stderr, "  decl=%p type=%s name=%s\n",
+                  memberFunctionDeclaration,
+                  memberFunctionDeclaration->class_name().c_str(),
+                  memberFunctionDeclaration->get_name().str());
+          fprintf(stderr, "  file=%s line=%d col=%d\n",
+                  info != NULL ? info->get_filenameString().c_str() : "<null>",
+                  info != NULL ? info->get_line() : -1,
+                  info != NULL ? info->get_col() : -1);
+          fprintf(
+              stderr, "  scope=%p type=%s\n",
+              memberFunctionDeclaration->get_scope(),
+              memberFunctionDeclaration->get_scope() != NULL
+                  ? memberFunctionDeclaration->get_scope()->class_name().c_str()
+                  : "<null>");
+          fprintf(stderr, "  parent=%p type=%s\n",
+                  memberFunctionDeclaration->get_parent(),
+                  memberFunctionDeclaration->get_parent() != NULL
+                      ? memberFunctionDeclaration->get_parent()
+                            ->class_name()
+                            .c_str()
+                      : "<null>");
+          fprintf(stderr, "  firstNondef=%p def=%p associatedClass=%p\n",
+                  memberFunctionDeclaration->get_firstNondefiningDeclaration(),
+                  memberFunctionDeclaration->get_definingDeclaration(),
+                  memberFunctionDeclaration->get_associatedClassDeclaration());
+          fflush(stderr);
+        }
         ROSE_ASSERT(isSgClassDefinition(
                         memberFunctionDeclaration->get_scope()) != NULL);
 
@@ -1702,10 +1747,16 @@ void TestAstTemplateProperties::visit(SgNode *astNode) {
     if (classDeclaration != NULL) {
       if (isSgTemplateInstantiationDecl(classDeclaration) == NULL &&
           isSgTemplateClassDeclaration(classDeclaration) == NULL) {
+        const bool explicit_member_class_specialization =
+            classDeclaration->get_specialization() ==
+                SgClassDeclaration::e_specialization &&
+            isSgTemplateInstantiationDefn(classDeclaration->get_scope()) !=
+                NULL;
         // this is NOT a data member of the templated class (or nested class of
         // a templated class)
-        if (classDeclaration->get_specialization() !=
-            SgClassDeclaration::e_no_specialization) {
+        if (!explicit_member_class_specialization &&
+            classDeclaration->get_specialization() !=
+                SgClassDeclaration::e_no_specialization) {
           printf("AST ConsistancyTest: classDeclaration = %p = %s "
                  "classDeclaration->get_specialization() = %d != "
                  "SgClassDeclaration::e_no_specialization \n",
@@ -1715,8 +1766,9 @@ void TestAstTemplateProperties::visit(SgNode *astNode) {
                  classDeclaration->get_file_info()->get_raw_filename().c_str(),
                  classDeclaration->get_file_info()->get_raw_line());
         }
-        ROSE_ASSERT(classDeclaration->get_specialization() ==
-                    SgClassDeclaration::e_no_specialization);
+        ROSE_ASSERT(explicit_member_class_specialization ||
+                    classDeclaration->get_specialization() ==
+                        SgClassDeclaration::e_no_specialization);
       }
     }
 
@@ -4289,8 +4341,14 @@ void TestMangledNames::test() {
     ++(t.totalNumberOfLongMangledNames);
   }
 
-  // t.traverse(node,preorder);
-  t.traverseMemoryPool();
+  // Only these node families contribute mangled names in this test.
+  SgDeclarationStatement::traverseMemoryPoolNodes(t);
+  SgInitializedName::traverseMemoryPoolNodes(t);
+  SgFunctionDefinition::traverseMemoryPoolNodes(t);
+  SgClassDefinition::traverseMemoryPoolNodes(t);
+  SgNamespaceDefinitionStatement::traverseMemoryPoolNodes(t);
+  SgTemplateArgument::traverseMemoryPoolNodes(t);
+  SgType::traverseMemoryPoolNodes(t);
   if (SgProject::get_verbose() >= DIAGNOSTICS_VERBOSE_LEVEL) {
     printf("saved_numberOfMangledNames = %ld \n", t.saved_numberOfMangledNames);
     printf("saved_maxMangledNameSize   = %ld \n", t.saved_maxMangledNameSize);
@@ -4306,7 +4364,9 @@ void TestMangledNames::test() {
 
 void TestParentPointersInMemoryPool::test() {
   TestParentPointersInMemoryPool t;
-  t.traverseMemoryPool();
+  SgSymbol::traverseMemoryPoolNodes(t);
+  SgStatement::traverseMemoryPoolNodes(t);
+  SgSupport::traverseMemoryPoolNodes(t);
 }
 
 void TestParentPointersInMemoryPool::visit(SgNode *node) {
@@ -5023,7 +5083,7 @@ void TestChildPointersInMemoryPool::visit(SgNode *node) {
 
 void TestFirstNondefiningDeclarationsForForwardMarking::test() {
   TestFirstNondefiningDeclarationsForForwardMarking t;
-  t.traverseMemoryPool();
+  SgDeclarationStatement::traverseMemoryPoolNodes(t);
 }
 
 void TestFirstNondefiningDeclarationsForForwardMarking::visit(SgNode *node) {
@@ -5045,7 +5105,7 @@ void TestFirstNondefiningDeclarationsForForwardMarking::visit(SgNode *node) {
 
 void TestMappingOfDeclarationsInMemoryPoolToSymbols::test() {
   TestMappingOfDeclarationsInMemoryPoolToSymbols t;
-  t.traverseMemoryPool();
+  SgDeclarationStatement::traverseMemoryPoolNodes(t);
 }
 
 void TestMappingOfDeclarationsInMemoryPoolToSymbols::visit(SgNode *node) {
@@ -5270,9 +5330,6 @@ void TestMultiFileConsistancy::test() {
 
   {
     TimingPerformance timer("Test declarations for file consistancy:");
-
-    TestMultiFileConsistancy t;
-    t.traverseMemoryPool();
   }
 
   if (SgProject::get_verbose() >= DIAGNOSTICS_VERBOSE_LEVEL)
@@ -5836,7 +5893,7 @@ void TestForMultipleWaysToSpecifyRestrictKeyword::visit(SgNode *node) {
 
 void TestAstForCyclesInTypedefs::test() {
   TestAstForCyclesInTypedefs t;
-  t.traverseMemoryPool();
+  SgTypedefType::traverseMemoryPoolNodes(t);
 }
 
 void TestAstForCyclesInTypedefs::visit(SgNode *node) {

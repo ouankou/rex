@@ -918,6 +918,11 @@ void TimingPerformance::endTimer() {
   localData->set_performance(ProcessingPhase::getCurrentDelta(timer));
   localData->set_resolution(performanceResolution());
 
+  if (getenv("ROSE_TIMER_TRACE") != nullptr) {
+    fprintf(stderr, "ROSE_TIMER_TRACE %.6f %s\n", p, label.c_str());
+    fflush(stderr);
+  }
+
   // DQ (7/21/2010): Set this here to record the useage of memory in the
   // interval being evaluated. internalMemoryUsageData =
   // memoryUsage.getMemoryUsageMegabytes(); localData->internalMemoryUsageData =

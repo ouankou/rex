@@ -16,6 +16,8 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 class TranslationUnitOrderAttribute : public AstAttribute {
@@ -1144,6 +1146,10 @@ protected:
   // Track class definitions already populated to avoid duplicate member
   // insertion during on-demand/re-entrant translation.
   std::set<const SgClassDefinition *> p_record_definitions_populated;
+  // Some on-demand record lookups only need a class-definition shell so
+  // member functions can attach to the correct scope. Allow those lookups to
+  // defer recursive C++ member population until the real class traversal.
+  unsigned p_defer_on_demand_cxx_record_population_depth = 0;
   // Track tag declarations defined inline in declarators (even when Clang does
   // not mark them as embedded) so we can suppress standalone unparsing and
   // attach them to the correct scope.
@@ -1157,6 +1163,19 @@ protected:
   // friend node instead of the proxy chain.
   std::unordered_map<const clang::FunctionDecl *, SgFunctionDeclaration *>
       p_hidden_friend_function_decl_map;
+  struct ReceiverMemberResolutionCacheEntry {
+    bool has_cached_result = false;
+    SgMemberFunctionDeclaration *resolved_decl = nullptr;
+    const SgDeclarationStatementPtrList *member_list = nullptr;
+    size_t member_list_size = 0;
+  };
+  // Member-expression lowering can repeatedly resolve the same Clang method
+  // against the same receiver class scope (for example the generated
+  // `isSg*` helpers in `Cxx_Grammar.C`). Cache those scope-local resolutions
+  // until the class declaration list changes.
+  std::map<std::pair<const clang::Decl *, const SgScopeStatement *>,
+           ReceiverMemberResolutionCacheEntry>
+      p_receiver_member_resolution_cache;
   // Track when we are translating a for-init so we avoid appending decls
   // directly into the enclosing scope statement list.
   bool p_in_for_init_translation = false;
@@ -2240,11 +2259,67 @@ void finishSageAST(ClangToSageTranslator &translator);
 class SagePreprocessorRecord : public clang::PPCallbacks,
                                public clang::CommentHandler {
 protected:
+  struct RecordedDirectiveLineKey {
+    unsigned line = 0;
+
+    bool operator==(const RecordedDirectiveLineKey &other) const {
+      return line == other.line;
+    }
+  };
+
+  struct RecordedDirectiveLineKeyHash {
+    size_t operator()(const RecordedDirectiveLineKey &key) const {
+      return static_cast<size_t>(key.line);
+    }
+  };
+
+  struct RecordedDirectiveLocationKey {
+    unsigned line = 0;
+    unsigned column = 0;
+    int directive_type = 0;
+
+    bool operator==(const RecordedDirectiveLocationKey &other) const {
+      return line == other.line && column == other.column &&
+             directive_type == other.directive_type;
+    }
+  };
+
+  struct RecordedDirectiveLocationKeyHash {
+    size_t operator()(const RecordedDirectiveLocationKey &key) const {
+      size_t hash = static_cast<size_t>(key.line);
+      hash ^= static_cast<size_t>(key.column) + 0x9e3779b9 + (hash << 6) +
+              (hash >> 2);
+      hash ^= static_cast<size_t>(key.directive_type) + 0x9e3779b9 +
+              (hash << 6) + (hash >> 2);
+      return hash;
+    }
+  };
+
+  struct RecordedDirectiveRef {
+    Sg_File_Info *file_info = nullptr;
+    PreprocessingInfo *preprocessing_info = nullptr;
+  };
+
+  struct RecordedDirectiveLineState {
+    std::vector<RecordedDirectiveRef> comment_records;
+    size_t non_comment_count = 0;
+  };
+
   clang::SourceManager *p_source_manager;
   clang::Preprocessor *p_preprocessor;
 
   std::vector<std::pair<Sg_File_Info *, PreprocessingInfo *>>
       p_preprocessor_record_list;
+  std::unordered_map<RecordedDirectiveLocationKey,
+                     std::vector<RecordedDirectiveRef>,
+                     RecordedDirectiveLocationKeyHash>
+      p_preprocessor_records_by_location;
+  std::unordered_map<RecordedDirectiveLineKey, RecordedDirectiveLineState,
+                     RecordedDirectiveLineKeyHash>
+      p_preprocessor_records_by_line;
+  std::unordered_map<PreprocessingInfo *, unsigned>
+      p_preprocessor_record_offsets;
+  std::unordered_set<PreprocessingInfo *> p_removed_preprocessor_records;
   bool p_preprocessor_record_list_sorted;
   std::set<std::string> p_application_file_paths;
   std::set<const clang::IdentifierInfo *> p_self_referential_macros;
@@ -2260,6 +2335,14 @@ protected:
   bool shouldRecordDirective(clang::SourceLocation loc) const;
   std::string getFilenameForLocation(clang::SourceLocation loc) const;
   std::string collectDirectiveText(clang::SourceLocation loc) const;
+  void registerRecordedDirective(Sg_File_Info *file_info,
+                                 PreprocessingInfo *preprocessing_info,
+                                 unsigned file_offset);
+  void unregisterRecordedDirective(Sg_File_Info *file_info,
+                                   PreprocessingInfo *preprocessing_info);
+  void markRecordedDirectiveRemoved(Sg_File_Info *file_info,
+                                    PreprocessingInfo *preprocessing_info);
+  void compactRemovedRecordedDirectives();
   void recordDirective(clang::SourceLocation loc,
                        PreprocessingInfo::DirectiveType directive_type,
                        const std::string &text);
@@ -2348,6 +2431,16 @@ struct NextPreprocessorToInsert {
 
 class PreprocessorInserter
     : public AstTopDownProcessing<NextPreprocessorToInsert *> {
+  struct ClassConditionalAnchorInfo {
+    SgLocatedNode *anchor = nullptr;
+    const SgDeclarationStatementPtrList *members = nullptr;
+    Sg_File_Info *start = nullptr;
+    Sg_File_Info *end = nullptr;
+  };
+
+  SgGlobal *cached_class_conditional_scope_ = nullptr;
+  std::vector<ClassConditionalAnchorInfo> cached_class_conditional_anchors_;
+
 public:
   NextPreprocessorToInsert *
   evaluateInheritedAttribute(SgNode *astNode,

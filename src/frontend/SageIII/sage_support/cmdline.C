@@ -4873,13 +4873,6 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
          StringUtility::listToString(compilerNameString).c_str());
 #endif
 
-  // Since we need to do this often, support is provided in the
-  // utility_functions.C and we can simplify this code.
-  std::string currentDirectory = getWorkingDirectory();
-
-  // printf ("In buildCompilerCommandLineOptions(): currentDirectory = %s
-  // \n",currentDirectory);
-
   if (get_C_only() || get_Cxx_only() || get_Fortran_only()) {
     // specify compilation only option (new style command line processing)
     if (CommandlineProcessing::isOption(backendArgv, "-", "c", false) == true) {
@@ -6127,7 +6120,8 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
         // cout<<"making object file explicit for compilation only mode without
         // -o options"<<endl;
         compilerNameString.push_back("-o");
-        compilerNameString.push_back(currentDirectory + "/" + objectFileName);
+        compilerNameString.push_back(
+            Rose::TestOutput::resolvePath(objectFileName));
 
       } else {
 #if DEBUG_COMPILER_COMMAND_LINE
@@ -6200,7 +6194,8 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
           // argcArgvList.erase(minus_o_string,minus_o_string+2);
           compilerNameString.erase(minus_o_string, minus_o_string + 2);
           compilerNameString.push_back("-o");
-          compilerNameString.push_back(currentDirectory + "/" + objectFileName);
+          compilerNameString.push_back(
+              Rose::TestOutput::resolvePath(objectFileName));
         } else {
           // compilation only, object name is already specified, single file
           // case, nothing else to tweak for the command line
@@ -6237,7 +6232,8 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
       std::string objectFileName = generateOutputFileName();
 
       compilerNameString.push_back("-o");
-      compilerNameString.push_back(currentDirectory + "/" + objectFileName);
+      compilerNameString.push_back(
+          Rose::TestOutput::resolvePath(objectFileName));
     }
   }
 

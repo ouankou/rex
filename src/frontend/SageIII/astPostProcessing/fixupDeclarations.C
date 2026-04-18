@@ -69,7 +69,7 @@ void fixupDeclarations(SgNode *node) {
 
   // This will traverse the whole memory pool
   ResetDefinitionsInNonDefiningClassDeclarationsOnMemoryPool traversal;
-  traversal.traverseMemoryPool();
+  SgClassDeclaration::traverseMemoryPoolNodes(traversal);
 
   DeleteUnreferencedClassDefinitionsInMemoryPool deleteTraversal;
   SgClassDefinition::traverseMemoryPoolNodes(deleteTraversal);

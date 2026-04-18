@@ -6,11 +6,6 @@ SgType *SgPntrArrRefExp::get_type() const {
   // has been removed, we have to compute the appropriate type (IR specific
   // code)
 
-  if (p_expression_type != nullptr) {
-    printf("In SgPntrArrRefExp::get_type(): p_expression_type = %s \n",
-           p_expression_type->class_name().c_str());
-  }
-
   ROSE_ASSERT(get_lhs_operand() != nullptr);
   ROSE_ASSERT(get_rhs_operand() != nullptr);
 

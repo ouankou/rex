@@ -1188,7 +1188,7 @@ void set_isVisited(bool isVisited) ROSE_DEPRECATED_FUNCTION;
 
     This mangle name caching is implemented to support better performance.
  */
-static std::map<SgNode *, std::string> &get_globalMangledNameMap();
+static SgUnorderedMapNodeToString &get_globalMangledNameMap();
 
 /*! \brief Support to clear the performance optimizing global mangled name map.
  */
@@ -1802,7 +1802,7 @@ SgTypeTable *SgNode::p_globalTypeTable = nullptr;
 
 // DQ (3/12/2007): Added mangled name map to improve performance of generating
 // mangled names
-std::map<SgNode *, std::string> SgNode::p_globalMangledNameMap;
+SgUnorderedMapNodeToString SgNode::p_globalMangledNameMap;
 std::map<std::string, uint64_t> SgNode::p_shortMangledNameCache;
 
 // DQ (5/28/2011): Added central location for qualified name maps (for names and
@@ -1886,7 +1886,7 @@ void SgNode::set_globalTypeTable(SgTypeTable *globalTypeTable) {
 
 // DQ (3/17/2007): return reference to the global mangled name map (the use
 // of this map is a performance optimization).
-std::map<SgNode *, std::string> &SgNode::get_globalMangledNameMap() {
+SgUnorderedMapNodeToString &SgNode::get_globalMangledNameMap() {
   return p_globalMangledNameMap;
 }
 

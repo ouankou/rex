@@ -59,6 +59,72 @@ bool is_decl_attached_to_parent_scope(SgDeclarationStatement *decl) {
                    static_cast<SgStatement *>(decl)) != stmts.end();
 }
 
+bool is_explicit_class_access_marker(const SgDeclarationStatement *decl) {
+  const SgEmptyDeclaration *empty_decl =
+      isSgEmptyDeclaration(const_cast<SgDeclarationStatement *>(decl));
+  if (empty_decl == NULL) {
+    return false;
+  }
+
+  const SgAccessModifier &access =
+      empty_decl->get_declarationModifier().get_accessModifier();
+  return access.get_is_explicit() &&
+         (access.isPrivate() || access.isProtected() || access.isPublic());
+}
+
+bool class_scope_has_explicit_access_markers(SgScopeStatement *scope) {
+  if (scope == NULL) {
+    return false;
+  }
+
+  if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+    const SgDeclarationStatementPtrList &members = class_def->get_members();
+    return std::any_of(members.begin(), members.end(),
+                       [](SgDeclarationStatement *member) {
+                         return is_explicit_class_access_marker(member);
+                       });
+  }
+
+  if (SgTemplateClassDefinition *class_def =
+          isSgTemplateClassDefinition(scope)) {
+    const SgDeclarationStatementPtrList &members = class_def->get_members();
+    return std::any_of(members.begin(), members.end(),
+                       [](SgDeclarationStatement *member) {
+                         return is_explicit_class_access_marker(member);
+                       });
+  }
+
+  if (SgTemplateInstantiationDefn *class_def =
+          isSgTemplateInstantiationDefn(scope)) {
+    const SgDeclarationStatementPtrList &members = class_def->get_members();
+    return std::any_of(members.begin(), members.end(),
+                       [](SgDeclarationStatement *member) {
+                         return is_explicit_class_access_marker(member);
+                       });
+  }
+
+  const SgStatementPtrList &stmts = scope->getStatementList();
+  return std::any_of(stmts.begin(), stmts.end(), [](SgStatement *stmt) {
+    return is_explicit_class_access_marker(isSgDeclarationStatement(stmt));
+  });
+}
+
+bool suppress_synthesized_class_access_label(
+    const SgDeclarationStatement *decl_stmt) {
+  if (decl_stmt == NULL) {
+    return false;
+  }
+
+  const SgAccessModifier &access =
+      decl_stmt->get_declarationModifier().get_accessModifier();
+  if (access.get_modifier() == SgAccessModifier::e_unknown) {
+    return false;
+  }
+
+  return class_scope_has_explicit_access_markers(
+      isSgScopeStatement(decl_stmt->get_parent()));
+}
+
 std::vector<std::string> &active_extern_linkage_brace_stack() {
   static std::vector<std::string> stack;
   return stack;
@@ -1184,6 +1250,10 @@ void Unparse_MOD_SAGE::printSpecifier1(SgDeclarationStatement *decl_stmt,
         }
       }
 
+      if (suppress_synthesized_class_access_label(decl_stmt)) {
+        flag = false;
+      }
+
       // Unset the access so it can be reset from an error value below
       info.set_isUnsetAccess();
 
@@ -1379,6 +1449,61 @@ void Unparse_MOD_SAGE::outputExternLinkageSpecifier(
 void Unparse_MOD_SAGE::outputTemplateSpecializationSpecifier(
     SgDeclarationStatement *decl_stmt, SgUnparse_Info &info) {
 
+  auto rex_debug_bad_decl_enabled = []() -> bool {
+    return std::getenv("REX_DEBUG_BAD_DECLS") != nullptr;
+  };
+  auto rex_debug_decl_name = [](SgDeclarationStatement *decl) -> std::string {
+    if (decl == nullptr) {
+      return std::string();
+    }
+    if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
+      return class_decl->get_name().getString();
+    }
+    if (SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(decl)) {
+      return func_decl->get_name().getString();
+    }
+    return SageInterface::get_name(decl);
+  };
+  auto rex_should_debug_decl = [&](SgDeclarationStatement *decl) -> bool {
+    std::string name = rex_debug_decl_name(decl);
+    return name == "allocator<char>" || name == "allocator<wchar_t>" ||
+           name == "basic_string<char>" || name == "basic_string<wchar_t>" ||
+           name == "basic_streambuf<char>" ||
+           name == "basic_streambuf<wchar_t>" || name == "basic_ios<char>" ||
+           name == "basic_ios<wchar_t>" || name == "_M_compare" ||
+           name == "_M_transform" || name == "do_get";
+  };
+  if (rex_debug_bad_decl_enabled() && rex_should_debug_decl(decl_stmt)) {
+    SgNode *parent = decl_stmt != nullptr ? decl_stmt->get_parent() : nullptr;
+    SgScopeStatement *scope =
+        decl_stmt != nullptr ? decl_stmt->get_scope() : nullptr;
+    bool explicit_args = false;
+    if (SgTemplateInstantiationMemberFunctionDecl *inst_member =
+            isSgTemplateInstantiationMemberFunctionDecl(decl_stmt)) {
+      explicit_args = inst_member->get_template_argument_list_is_explicit();
+    }
+    int specialization = -1;
+    if (SgTemplateInstantiationDecl *inst_decl =
+            isSgTemplateInstantiationDecl(decl_stmt)) {
+      specialization = inst_decl->get_specialization();
+    } else if (SgFunctionDeclaration *func_decl =
+                   isSgFunctionDeclaration(decl_stmt)) {
+      specialization = func_decl->get_specialization();
+    } else if (SgTemplateClassDeclaration *tmpl_class_decl =
+                   isSgTemplateClassDeclaration(decl_stmt)) {
+      specialization = tmpl_class_decl->get_specialization();
+    }
+    fprintf(stderr,
+            "[rex-bad-spec] decl=%p kind=%s name=%s parent=%p(%s) scope=%p(%s) "
+            "specialization=%d explicit_args=%d\n",
+            decl_stmt,
+            decl_stmt != nullptr ? decl_stmt->class_name().c_str() : "<null>",
+            rex_debug_decl_name(decl_stmt).c_str(), parent,
+            parent != nullptr ? parent->class_name().c_str() : "<null>", scope,
+            scope != nullptr ? scope->class_name().c_str() : "<null>",
+            specialization, explicit_args ? 1 : 0);
+  }
+
 #define DEBUG_TEMPLATE_SPECIALIZATION 0
 
 #if DEBUG_TEMPLATE_SPECIALIZATION
@@ -1409,6 +1534,40 @@ void Unparse_MOD_SAGE::outputTemplateSpecializationSpecifier(
       curprint("template<> ");
     }
   }
+
+  auto is_plain_explicit_specialization =
+      [](SgDeclarationStatement *decl) -> bool {
+    if (decl == NULL) {
+      return false;
+    }
+
+    if (isSgTemplateInstantiationDecl(decl) != NULL ||
+        isSgTemplateInstantiationFunctionDecl(decl) != NULL ||
+        isSgTemplateInstantiationMemberFunctionDecl(decl) != NULL ||
+        isSgTemplateClassDeclaration(decl) != NULL ||
+        isSgTemplateFunctionDeclaration(decl) != NULL ||
+        isSgTemplateMemberFunctionDeclaration(decl) != NULL ||
+        isSgTemplateVariableDeclaration(decl) != NULL) {
+      return false;
+    }
+
+    if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
+      return class_decl->get_specialization() ==
+             SgDeclarationStatement::e_specialization;
+    }
+
+    if (SgFunctionDeclaration *function_decl = isSgFunctionDeclaration(decl)) {
+      return function_decl->get_specialization() ==
+             SgDeclarationStatement::e_specialization;
+    }
+
+    if (SgVariableDeclaration *variable_decl = isSgVariableDeclaration(decl)) {
+      return variable_decl->get_specialization() ==
+             SgDeclarationStatement::e_specialization;
+    }
+
+    return false;
+  };
 
   if ((isSgTemplateInstantiationDecl(decl_stmt) != NULL) ||
       (isSgTemplateInstantiationFunctionDecl(decl_stmt) != NULL) ||
@@ -1469,6 +1628,19 @@ void Unparse_MOD_SAGE::outputTemplateSpecializationSpecifier(
               (templateInstantiationMemberFunctionDecl
                    ->get_template_argument_list_is_explicit() ||
                templateInstantiationMemberFunctionDecl->isSpecialization());
+          SgClassDefinition *lexical_parent_class =
+              isSgClassDefinition(decl_stmt->get_parent());
+          SgClassDeclaration *associated_class = isSgClassDeclaration(
+              templateInstantiationMemberFunctionDecl != NULL
+                  ? templateInstantiationMemberFunctionDecl
+                        ->get_associatedClassDeclaration()
+                  : NULL);
+          const bool in_class_surface_of_non_template_class =
+              lexical_parent_class != NULL &&
+              decl_stmt->get_scope() == lexical_parent_class &&
+              associated_class != NULL &&
+              isSgTemplateInstantiationDecl(associated_class) == NULL &&
+              isSgTemplateClassDeclaration(associated_class) == NULL;
           // Check for additional rule in the output of "template<>" for member
           // function instantiations.
           SgTemplateInstantiationDefn *templateClassInstatiationDefn =
@@ -1580,6 +1752,12 @@ void Unparse_MOD_SAGE::outputTemplateSpecializationSpecifier(
                   "/* Member function's class instantation WAS output, so we "
                   "need to supress the output of template<> syntax */ ");
 #endif
+            } else if (in_class_surface_of_non_template_class) {
+              // Clang/ROSE can materialize some source-written non-template
+              // class members as template-instantiation member declarations
+              // when they participate in specialization bookkeeping. Their
+              // in-class surface is still a normal member declaration, and
+              // spelling `template<>` there is invalid.
             } else {
 #if DEBUG_TEMPLATE_SPECIALIZATION
               curprint("/* Member function's class instantation was NOT "
@@ -1588,11 +1766,18 @@ void Unparse_MOD_SAGE::outputTemplateSpecializationSpecifier(
               curprint("template<> ");
             }
           } else {
+            if (in_class_surface_of_non_template_class) {
 #if DEBUG_TEMPLATE_SPECIALIZATION
-            curprint("/* Member function instantiations in non-template "
-                     "classes still output template<> syntax */ ");
+              curprint("/* In-class non-template class member surface: "
+                       "suppress template<> syntax */ ");
 #endif
-            curprint("template<> ");
+            } else {
+#if DEBUG_TEMPLATE_SPECIALIZATION
+              curprint("/* Member function instantiations in non-template "
+                       "classes still output template<> syntax */ ");
+#endif
+              curprint("template<> ");
+            }
           }
         } else {
 #if DEBUG_TEMPLATE_SPECIALIZATION
@@ -1657,6 +1842,10 @@ void Unparse_MOD_SAGE::outputTemplateSpecializationSpecifier(
       unp->u_exprStmt->unparseAttachedPreprocessingInfo(
           decl_stmt, info, PreprocessingInfo::inside);
     }
+  } else if (is_plain_explicit_specialization(decl_stmt)) {
+    // Explicit specializations of non-template declarations nested under class
+    // template specializations still require a leading `template<>`.
+    curprint("template<> ");
   }
 
 #if DEBUG_TEMPLATE_SPECIALIZATION

@@ -14,10 +14,16 @@
 
 #include "Outliner.hh"
 
+#include <cctype>
+#include <chrono>
+#include <cstdlib>
 #include <fstream>
 #else
 // #include "sageBuilder.h"
 
+#include <cctype>
+#include <chrono>
+#include <cstdlib>
 #include <fstream>
 #endif
 
@@ -47,6 +53,265 @@ using namespace Rose;
 using namespace SageInterface;
 
 namespace {
+
+inline constexpr char kNonrealDeclarationScopeAttributeName[] =
+    "rex_nonreal_declaration_scope";
+
+class NonrealDeclarationScopeAttribute : public AstAttribute {
+public:
+  explicit NonrealDeclarationScopeAttribute(SgDeclarationScope *scope)
+      : scope_(scope) {}
+
+  SgDeclarationScope *scope() const { return scope_; }
+  void set_scope(SgDeclarationScope *scope) { scope_ = scope; }
+
+  AstAttribute *copy() const override {
+    return new NonrealDeclarationScopeAttribute(*this);
+  }
+
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
+  std::string attribute_class_name() const override {
+    return "NonrealDeclarationScopeAttribute";
+  }
+
+private:
+  SgDeclarationScope *scope_ = nullptr;
+};
+
+SgDeclarationScope *
+getCachedNonrealDeclarationScope(SgScopeStatement *scope_statement) {
+  if (scope_statement == NULL) {
+    return NULL;
+  }
+
+  NonrealDeclarationScopeAttribute *attribute =
+      dynamic_cast<NonrealDeclarationScopeAttribute *>(
+          scope_statement->getAttribute(kNonrealDeclarationScopeAttributeName));
+  return attribute != NULL ? attribute->scope() : NULL;
+}
+
+void cacheNonrealDeclarationScope(SgScopeStatement *scope_statement,
+                                  SgDeclarationScope *decl_scope) {
+  if (scope_statement == NULL || decl_scope == NULL) {
+    return;
+  }
+
+  NonrealDeclarationScopeAttribute *attribute =
+      dynamic_cast<NonrealDeclarationScopeAttribute *>(
+          scope_statement->getAttribute(kNonrealDeclarationScopeAttributeName));
+  if (attribute == NULL) {
+    scope_statement->setAttribute(
+        kNonrealDeclarationScopeAttributeName,
+        new NonrealDeclarationScopeAttribute(decl_scope));
+    return;
+  }
+
+  attribute->set_scope(decl_scope);
+}
+
+void clearFrontendBuiltNodeModifiedFlag(SgNode *node) {
+  if (node != NULL && node->get_isModified() == true) {
+    node->set_isModified(false);
+  }
+}
+
+bool isClassLikeBuilderScope(SgScopeStatement *scope) {
+  return isSgClassDefinition(scope) != NULL ||
+         isSgTemplateClassDefinition(scope) != NULL ||
+         isSgTemplateInstantiationDefn(scope) != NULL;
+}
+
+SgScopeStatement *structuralBuilderOwnerScope(SgDeclarationStatement *decl) {
+  if (decl == NULL) {
+    return NULL;
+  }
+
+  if (SgScopeStatement *scope = isSgScopeStatement(decl->get_parent())) {
+    return scope;
+  }
+
+  return decl->get_scope();
+}
+
+bool declarationChainBelongsToScope(SgDeclarationStatement *decl,
+                                    SgScopeStatement *scope) {
+  if (decl == NULL || scope == NULL) {
+    return false;
+  }
+
+  bool saw_structural_owner = false;
+  SgDeclarationStatement *first_nondef =
+      isSgDeclarationStatement(decl->get_firstNondefiningDeclaration());
+  SgDeclarationStatement *defining_decl =
+      isSgDeclarationStatement(decl->get_definingDeclaration());
+  for (SgDeclarationStatement *candidate :
+       {decl, first_nondef, defining_decl}) {
+    if (candidate == NULL) {
+      continue;
+    }
+
+    SgScopeStatement *candidate_scope = structuralBuilderOwnerScope(candidate);
+    if (candidate_scope == NULL) {
+      continue;
+    }
+
+    saw_structural_owner = true;
+    if (candidate_scope != scope) {
+      return false;
+    }
+  }
+
+  return saw_structural_owner;
+}
+
+SgEnumSymbol *lookupExistingEnumSymbolForBuilder(SgScopeStatement *scope,
+                                                 const SgName &name) {
+  if (scope == NULL) {
+    return NULL;
+  }
+
+  SgEnumSymbol *symbol = scope->lookup_enum_symbol(name);
+  if (symbol == NULL || !isClassLikeBuilderScope(scope)) {
+    return symbol;
+  }
+
+  SgEnumDeclaration *decl = symbol->get_declaration();
+  return declarationChainBelongsToScope(decl, scope) ? symbol : NULL;
+}
+
+SgFunctionSymbol *filterFunctionSymbolForBuilderScope(SgFunctionSymbol *symbol,
+                                                      SgScopeStatement *scope) {
+  if (symbol == NULL || scope == NULL || !isClassLikeBuilderScope(scope)) {
+    return symbol;
+  }
+
+  SgFunctionDeclaration *decl =
+      isSgFunctionDeclaration(symbol->get_symbol_basis());
+  return declarationChainBelongsToScope(decl, scope) ? symbol : NULL;
+}
+
+void clearFrontendBuiltFunctionModifiedFlags(SgFunctionDeclaration *func) {
+  if (func == NULL) {
+    return;
+  }
+
+  auto clear_parameter_list = [&](SgFunctionParameterList *params) {
+    if (params == NULL) {
+      return;
+    }
+
+    clearFrontendBuiltNodeModifiedFlag(params);
+    for (SgInitializedName *param : params->get_args()) {
+      clearFrontendBuiltNodeModifiedFlag(param);
+      clearFrontendBuiltNodeModifiedFlag(
+          param != NULL ? param->get_initializer() : NULL);
+    }
+  };
+
+  auto clear_template_parameters =
+      [&](SgTemplateParameterPtrList &template_parameters) {
+        for (SgTemplateParameter *param : template_parameters) {
+          clearFrontendBuiltNodeModifiedFlag(param);
+          clearFrontendBuiltNodeModifiedFlag(
+              param != NULL ? param->get_initializedName() : NULL);
+          clearFrontendBuiltNodeModifiedFlag(
+              param != NULL ? param->get_typeConstraint() : NULL);
+          clearFrontendBuiltNodeModifiedFlag(
+              param != NULL ? param->get_defaultExpressionParameter() : NULL);
+          clearFrontendBuiltNodeModifiedFlag(
+              param != NULL ? param->get_defaultTemplateDeclarationParameter()
+                            : NULL);
+        }
+      };
+
+  clearFrontendBuiltNodeModifiedFlag(func);
+  clearFrontendBuiltNodeModifiedFlag(func->get_declarationScope());
+  clear_parameter_list(func->get_parameterList());
+  if (SgFunctionParameterList *syntax = func->get_parameterList_syntax();
+      syntax != func->get_parameterList()) {
+    clear_parameter_list(syntax);
+  }
+
+  if (SgTemplateFunctionDeclaration *template_func =
+          isSgTemplateFunctionDeclaration(func)) {
+    clear_template_parameters(template_func->get_templateParameters());
+  }
+  if (SgTemplateMemberFunctionDeclaration *template_member =
+          isSgTemplateMemberFunctionDeclaration(func)) {
+    clear_template_parameters(template_member->get_templateParameters());
+  }
+
+  if (SgTemplateInstantiationFunctionDecl *template_instantiation =
+          isSgTemplateInstantiationFunctionDecl(func)) {
+    for (SgTemplateArgument *arg :
+         template_instantiation->get_templateArguments()) {
+      clearFrontendBuiltNodeModifiedFlag(arg);
+    }
+  }
+  if (SgTemplateInstantiationMemberFunctionDecl *template_instantiation =
+          isSgTemplateInstantiationMemberFunctionDecl(func)) {
+    for (SgTemplateArgument *arg :
+         template_instantiation->get_templateArguments()) {
+      clearFrontendBuiltNodeModifiedFlag(arg);
+    }
+  }
+
+  if (SgMemberFunctionDeclaration *member_func =
+          isSgMemberFunctionDeclaration(func)) {
+    clearFrontendBuiltNodeModifiedFlag(member_func->get_CtorInitializerList());
+  }
+
+  if (SgFunctionDefinition *definition = func->get_definition()) {
+    clearFrontendBuiltNodeModifiedFlag(definition);
+    clearFrontendBuiltNodeModifiedFlag(definition->get_body());
+  }
+}
+
+double roseSlowSageBuilderFunctionTraceThresholdMs() {
+  static const double threshold_ms = []() -> double {
+    const char *value = getenv("ROSE_SLOW_SAGEBUILDER_FUNCTION_TRACE_MS");
+    if (value == NULL || *value == '\0') {
+      return 0.0;
+    }
+
+    char *end = NULL;
+    double parsed = std::strtod(value, &end);
+    if (end == value || parsed <= 0.0) {
+      return 0.0;
+    }
+
+    return parsed;
+  }();
+
+  return threshold_ms;
+}
+
+void roseSlowSageBuilderFunctionTrace(const char *builder, const SgName &name,
+                                      double total_ms,
+                                      long long type_or_setup_elapsed_ms,
+                                      long long symbol_elapsed_ms,
+                                      long long parameter_elapsed_ms,
+                                      long long source_position_elapsed_ms,
+                                      long long clear_modified_elapsed_ms) {
+  const double threshold_ms = roseSlowSageBuilderFunctionTraceThresholdMs();
+  if (threshold_ms <= 0.0 || total_ms < threshold_ms) {
+    return;
+  }
+
+  const std::string label =
+      name.is_null() ? std::string("<anonymous>") : name.str();
+  fprintf(stderr,
+          "ROSE_SLOW_SAGEBUILDER_FUNCTION builder=%s total_ms=%.3f "
+          "setup_ms=%lld symbol_ms=%lld parameter_ms=%lld "
+          "source_position_ms=%lld clear_modified_ms=%lld name=%s\n",
+          builder, total_ms, type_or_setup_elapsed_ms, symbol_elapsed_ms,
+          parameter_elapsed_ms, source_position_elapsed_ms,
+          clear_modified_elapsed_ms, label.c_str());
+  fflush(stderr);
+}
 
 // Ensure newly built declarations always carry a parent/scope from the current
 // scope stack. This is intentionally strict to surface scope plumbing issues
@@ -112,6 +377,74 @@ bool sourceFileHasAttachedPreprocessingInfo(SgSourceFile *sourceFile) {
   AttachedPreprocessingInfoDetector detector;
   detector.traverse(sourceFile, preorder);
   return detector.found;
+}
+
+size_t countSimpleTemplateArgumentTypeWrapperDepth(SgType *type) {
+  size_t depth = 0;
+  while (type != NULL && depth < 4096) {
+    if (SgPointerType *pointer = isSgPointerType(type)) {
+      type = pointer->get_base_type();
+    } else if (SgReferenceType *reference = isSgReferenceType(type)) {
+      type = reference->get_base_type();
+    } else if (SgRvalueReferenceType *rvalueReference =
+                   isSgRvalueReferenceType(type)) {
+      type = rvalueReference->get_base_type();
+    } else if (SgArrayType *array = isSgArrayType(type)) {
+      type = array->get_base_type();
+    } else {
+      break;
+    }
+
+    ++depth;
+  }
+
+  return depth;
+}
+
+std::string renderDeepSimpleTemplateArgumentType(SgType *type,
+                                                 SgUnparse_Info *info) {
+  if (type == NULL || info == NULL) {
+    return "";
+  }
+
+  std::string suffix;
+  size_t depth = 0;
+  while (type != NULL && depth < 4096) {
+    if (SgPointerType *pointer = isSgPointerType(type)) {
+      suffix += " *";
+      type = pointer->get_base_type();
+    } else if (SgReferenceType *reference = isSgReferenceType(type)) {
+      suffix += " &";
+      type = reference->get_base_type();
+    } else if (SgRvalueReferenceType *rvalueReference =
+                   isSgRvalueReferenceType(type)) {
+      suffix += " &&";
+      type = rvalueReference->get_base_type();
+    } else if (SgArrayType *array = isSgArrayType(type)) {
+      SgExpression *index = array->get_index();
+      if (index != NULL) {
+        return "";
+      }
+      suffix += "[]";
+      type = array->get_base_type();
+    } else {
+      break;
+    }
+
+    ++depth;
+  }
+
+  if (depth == 0 || type == NULL) {
+    return "";
+  }
+
+  std::string base =
+      Rose::StringUtility::trim(globalUnparseToString(type, info));
+  if (base.empty()) {
+    return "";
+  }
+
+  return base + suffix;
 }
 
 } // namespace
@@ -1021,6 +1354,95 @@ SgName SageBuilder::appendTemplateArgumentsToName(
   return returnName;
 }
 
+static SgName normalizeTemplateInstantiationBaseName(
+    const SgName &candidate_name,
+    const SgTemplateArgumentPtrList *template_arguments) {
+  if (template_arguments == nullptr || template_arguments->empty()) {
+    return candidate_name;
+  }
+
+  const std::string candidate = candidate_name.getString();
+  if (candidate.empty()) {
+    return candidate_name;
+  }
+
+  auto trim_right_whitespace = [](const std::string &text) {
+    size_t end = text.size();
+    while (end > 0 && std::isspace(static_cast<unsigned char>(text[end - 1]))) {
+      --end;
+    }
+    return text.substr(0, end);
+  };
+
+  auto strip_trailing_template_argument_list = [&](const std::string &text) {
+    size_t suffix_end = text.size();
+    while (suffix_end > 0 &&
+           std::isspace(static_cast<unsigned char>(text[suffix_end - 1]))) {
+      --suffix_end;
+    }
+    if (suffix_end == 0 || text[suffix_end - 1] != '>') {
+      return text;
+    }
+
+    size_t suffix_start = std::string::npos;
+    int depth = 0;
+    for (size_t index = suffix_end; index-- > 0;) {
+      const char ch = text[index];
+      if (ch == '>') {
+        ++depth;
+      } else if (ch == '<') {
+        --depth;
+        if (depth == 0) {
+          suffix_start = index;
+          break;
+        }
+      }
+    }
+
+    if (suffix_start == std::string::npos) {
+      return text;
+    }
+
+    return trim_right_whitespace(text.substr(0, suffix_start));
+  };
+
+  auto strip_whitespace = [](const std::string &text) {
+    std::string stripped;
+    stripped.reserve(text.size());
+    for (unsigned char ch : text) {
+      if (!std::isspace(ch)) {
+        stripped += static_cast<char>(ch);
+      }
+    }
+    return stripped;
+  };
+
+  const std::string rendered_suffix =
+      SageBuilder::appendTemplateArgumentsToName(SgName(""),
+                                                 *template_arguments)
+          .getString();
+  if (rendered_suffix.empty()) {
+    const std::string stripped_candidate =
+        strip_trailing_template_argument_list(candidate);
+    return stripped_candidate == candidate ? candidate_name
+                                           : SgName(stripped_candidate);
+  }
+
+  const std::string stripped_candidate =
+      strip_trailing_template_argument_list(candidate);
+  const std::string candidate_suffix =
+      trim_right_whitespace(candidate.substr(stripped_candidate.size()));
+  if (stripped_candidate == candidate) {
+    return candidate_name;
+  }
+
+  if (strip_whitespace(candidate_suffix) != strip_whitespace(rendered_suffix)) {
+    return SgName(stripped_candidate);
+  }
+
+  return SgName(stripped_candidate);
+}
+
 SgName SageBuilder::unparseTemplateArgumentToString(
     SgTemplateArgument *templateArgument) {
   // DQ (3/10/2018): This is now redundant with
@@ -1044,11 +1466,62 @@ SgName SageBuilder::unparseTemplateArgumentToString(
   if (templateArgument->get_argumentType() ==
       SgTemplateArgument::type_argument) {
     SgType *type = templateArgument->get_type();
-    if (type != NULL &&
+    const size_t wrapperDepth =
+        countSimpleTemplateArgumentTypeWrapperDepth(type);
+    auto strip_modifiers = [](const SgType *current) -> const SgType * {
+      while (const SgModifierType *modifier_type = isSgModifierType(current)) {
+        current = modifier_type->get_base_type();
+      }
+      return current;
+    };
+    auto can_use_compact_pointer_render = [&](const SgType *candidate) -> bool {
+      const SgType *base_type = strip_modifiers(candidate);
+      if (const SgPointerType *pointer_type = isSgPointerType(base_type)) {
+        base_type = strip_modifiers(pointer_type->get_base_type());
+      } else if (const SgPointerMemberType *pointer_member_type =
+                     isSgPointerMemberType(base_type)) {
+        base_type = strip_modifiers(pointer_member_type->get_base_type());
+      } else if (const SgReferenceType *reference_type =
+                     isSgReferenceType(base_type)) {
+        base_type = strip_modifiers(reference_type->get_base_type());
+      } else if (const SgRvalueReferenceType *reference_type =
+                     isSgRvalueReferenceType(base_type)) {
+        base_type = strip_modifiers(reference_type->get_base_type());
+      } else if (const SgArrayType *array_type = isSgArrayType(base_type)) {
+        base_type = strip_modifiers(array_type->get_base_type());
+      }
+
+      // `globalUnparseToString(type, info)` is only safe here for trivial
+      // built-in pointee/element types. Named and structured bases can lose
+      // pointer/reference second-part spelling when this helper is used to
+      // synthesize generated qualified names.
+      return base_type != NULL &&
+             isSgNamedType(const_cast<SgType *>(base_type)) == NULL &&
+             isSgPointerType(base_type) == NULL &&
+             isSgPointerMemberType(base_type) == NULL &&
+             isSgReferenceType(base_type) == NULL &&
+             isSgRvalueReferenceType(base_type) == NULL &&
+             isSgArrayType(base_type) == NULL &&
+             isSgFunctionType(base_type) == NULL &&
+             isSgPartialFunctionType(base_type) == NULL &&
+             isSgMemberFunctionType(base_type) == NULL &&
+             isSgDeclType(base_type) == NULL &&
+             isSgTypeOfType(base_type) == NULL &&
+             isSgAutoType(base_type) == NULL;
+    };
+    if (type != NULL && wrapperDepth > 64) {
+      // Deep pointer/reference template arguments can arise along invalid-code
+      // diagnostic paths. Render simple wrapper chains iteratively here so name
+      // reset does not recurse through every wrapper level via the full type
+      // unparser.
+      returnName = renderDeepSimpleTemplateArgumentType(type, info);
+    }
+    if (returnName.empty() && type != NULL &&
         (isSgPointerType(type) != NULL || isSgPointerMemberType(type) != NULL ||
          isSgReferenceType(type) != NULL ||
          isSgRvalueReferenceType(type) != NULL ||
-         isSgArrayType(type) != NULL)) {
+         isSgArrayType(type) != NULL) &&
+        can_use_compact_pointer_render(type)) {
       returnName = Rose::StringUtility::trim(globalUnparseToString(type, info));
     }
   }
@@ -2996,7 +3469,10 @@ SageBuilder::buildFunctionParameterTypeList(SgFunctionParameterList *paralist) {
   for (i = args.begin(); i != args.end(); i++)
     (typePtrList->get_arguments()).push_back((*i)->get_type());
 
-  setSourcePositionAtRootAndAllChildren(typePtrList);
+  // Only the list node is new here; the parameter types are existing shared
+  // AST nodes owned elsewhere, so rewalking and resetting their source
+  // positions is redundant and becomes pathological on generated sources.
+  setSourcePosition(typePtrList);
 
   return typePtrList;
 }
@@ -3015,7 +3491,9 @@ SageBuilder::buildFunctionParameterTypeList(SgExprListExp *expList) {
     typePtrList->get_arguments().push_back((*i)->get_type());
   }
 
-  setSourcePositionAtRootAndAllChildren(typePtrList);
+  // Only the list node is synthesized here; the expression result types are
+  // preexisting shared nodes and do not need whole-subtree source resets.
+  setSourcePosition(typePtrList);
 
   return typePtrList;
 }
@@ -3426,6 +3904,19 @@ actualFunction *SageBuilder::buildNondefiningFunctionDeclaration_T(
     SgTemplateArgumentPtrList *templateArgumentsList,
     SgTemplateParameterPtrList *templateParameterList,
     SgStorageModifier::storage_modifier_enum sm) {
+  auto builder_start = std::chrono::steady_clock::now();
+  auto elapsed_ms_since =
+      [](std::chrono::steady_clock::time_point start_time) -> long long {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now() - start_time)
+        .count();
+  };
+  long long setup_elapsed_ms = 0;
+  long long symbol_elapsed_ms = 0;
+  long long parameter_elapsed_ms = 0;
+  long long source_position_elapsed_ms = 0;
+  long long clear_modified_elapsed_ms = 0;
+
   // DQ (11/25/2011): This function has been modified to work when used with
   // a SgTemplateFunctionDeclaration as a template argument. It was
   // originally designed to work with only SgFunctionDeclaration and
@@ -3477,6 +3968,8 @@ actualFunction *SageBuilder::buildNondefiningFunctionDeclaration_T(
   // (buildTemplateInstantiation == true || buildTemplateDeclaration == true)
   if (buildTemplateInstantiation == true) {
     ASSERT_not_null(templateArgumentsList);
+    nameWithoutTemplateArguments = normalizeTemplateInstantiationBaseName(
+        nameWithoutTemplateArguments, templateArgumentsList);
     nameWithTemplateArguments = appendTemplateArgumentsToName(
         nameWithoutTemplateArguments, *templateArgumentsList);
   }
@@ -3533,6 +4026,7 @@ actualFunction *SageBuilder::buildNondefiningFunctionDeclaration_T(
   // by all prototypes and defining declarations of a same function!
   // SgFunctionType * func_type = buildFunctionType(return_type,paralist);
 
+  auto setup_start = std::chrono::steady_clock::now();
   SgFunctionType *func_type = nullptr;
   if (isMemberFunction == true) {
     // func_type = buildMemberFunctionType(return_type,paralist,NULL,0);
@@ -3555,6 +4049,7 @@ actualFunction *SageBuilder::buildNondefiningFunctionDeclaration_T(
   }
 
   ASSERT_not_null(func_type);
+  setup_elapsed_ms = elapsed_ms_since(setup_start);
 
   // function declaration
   actualFunction *func = nullptr;
@@ -3572,6 +4067,7 @@ actualFunction *SageBuilder::buildNondefiningFunctionDeclaration_T(
   // *func_symbol = NULL;
   SgFunctionSymbol *func_symbol = NULL;
 
+  auto symbol_start = std::chrono::steady_clock::now();
   if (scope != NULL) {
     // DQ (3/13/2012): Experiment with new function to support only associating
     // the right type of symbol with the function being built.  I don't think I
@@ -3587,6 +4083,7 @@ actualFunction *SageBuilder::buildNondefiningFunctionDeclaration_T(
     func_symbol = scope->find_symbol_by_type_of_function<actualFunction>(
         nameWithTemplateArguments, func_type, templateParameterList,
         templateArgumentsList);
+    func_symbol = filterFunctionSymbolForBuilderScope(func_symbol, scope);
 
     // If not a proper function (or instantiated template function), then check
     // for a template function declaration.
@@ -3597,6 +4094,7 @@ actualFunction *SageBuilder::buildNondefiningFunctionDeclaration_T(
     } else {
     }
   }
+  symbol_elapsed_ms = elapsed_ms_since(symbol_start);
 
   // DQ (3/13/2012): I want to introduce error checking on the symbol matching
   // the template parameter.
@@ -4128,6 +4626,7 @@ actualFunction *SageBuilder::buildNondefiningFunctionDeclaration_T(
   // DQ (11/23/2011): This change allows this to compile for where
   // SgTemplateFunctionDeclarations are used. setParameterList(func, paralist);
   // setParameterList(isSgFunctionDeclaration(func), paralist);
+  auto parameter_start = std::chrono::steady_clock::now();
   setParameterList(func, paralist);
 
   SgInitializedNamePtrList argList = paralist->get_args();
@@ -4139,9 +4638,11 @@ actualFunction *SageBuilder::buildNondefiningFunctionDeclaration_T(
     // DQ (2/23/2009): Also set the declptr (to NULL)
     // (*argi)->set_declptr(NULL);
   }
+  parameter_elapsed_ms = elapsed_ms_since(parameter_start);
 
   // DQ (5/2/2012): Test this to make sure we have SgInitializedNames set
   // properly.
+  auto source_position_start = std::chrono::steady_clock::now();
   SageInterface::setSourcePosition(paralist);
 
 #if BUILDER_MAKE_REDUNDANT_CALLS_TO_DETECT_TRANSFORAMTIONS
@@ -4211,6 +4712,7 @@ actualFunction *SageBuilder::buildNondefiningFunctionDeclaration_T(
       }
     }
   }
+  source_position_elapsed_ms = elapsed_ms_since(source_position_start);
 
   ROSE_ASSERT(func->get_file_info() != NULL);
 
@@ -4309,7 +4811,24 @@ actualFunction *SageBuilder::buildNondefiningFunctionDeclaration_T(
 
   // DQ (4/16/2015): This is replaced with a better implementation.
   // Make sure the isModified boolean is clear for all newly-parsed nodes.
-  unsetNodesMarkedAsModified(func);
+  auto clear_modified_start = std::chrono::steady_clock::now();
+  if (SageBuilder::getSourcePositionClassificationMode() ==
+      SageBuilder::e_sourcePositionFrontendConstruction) {
+    clearFrontendBuiltFunctionModifiedFlags(isSgFunctionDeclaration(func));
+  } else {
+    unsetNodesMarkedAsModified(func);
+  }
+  clear_modified_elapsed_ms = elapsed_ms_since(clear_modified_start);
+
+  const double total_elapsed_ms =
+      std::chrono::duration<double, std::milli>(
+          std::chrono::steady_clock::now() - builder_start)
+          .count();
+  roseSlowSageBuilderFunctionTrace(
+      "buildNondefiningFunctionDeclaration_T", nameWithTemplateArguments,
+      total_elapsed_ms, setup_elapsed_ms, symbol_elapsed_ms,
+      parameter_elapsed_ms, source_position_elapsed_ms,
+      clear_modified_elapsed_ms);
 
   ROSE_ASSERT(paralist->get_parent() != NULL);
   return func;
@@ -4870,6 +5389,19 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
     SgScopeStatement *scope, unsigned int functionConstVolatileFlags,
     actualFunction *first_nondefining_declaration,
     SgTemplateArgumentPtrList *templateArgumentsList) {
+  auto builder_start = std::chrono::steady_clock::now();
+  auto elapsed_ms_since =
+      [](std::chrono::steady_clock::time_point start_time) -> long long {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now() - start_time)
+        .count();
+  };
+  long long setup_elapsed_ms = 0;
+  long long symbol_elapsed_ms = 0;
+  long long parameter_elapsed_ms = 0;
+  long long source_position_elapsed_ms = 0;
+  long long clear_modified_elapsed_ms = 0;
+
   // Note that the semantics of this function now differs from that of the
   // buildDefiningClassDeclaration(). We want to have the non-defining
   // declaration already exist before calling this function. We could still
@@ -4955,6 +5487,8 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
 
   if (buildTemplateInstantiation == true) {
     ROSE_ASSERT(templateArgumentsList != NULL);
+    nameWithoutTemplateArguments = normalizeTemplateInstantiationBaseName(
+        nameWithoutTemplateArguments, templateArgumentsList);
     nameWithTemplateArguments = appendTemplateArgumentsToName(
         nameWithoutTemplateArguments, *templateArgumentsList);
 
@@ -4982,6 +5516,7 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
 
   // build function type, manage function type symbol internally
   // SgFunctionType* func_type = buildFunctionType(return_type,paralist);
+  auto setup_start = std::chrono::steady_clock::now();
   SgFunctionType *func_type = NULL;
 
   // DQ (5/11/2012): Enforce this so that we can avoid building the function
@@ -5022,6 +5557,7 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
   ROSE_ASSERT(func_type == first_nondefining_declaration->get_type());
 
   SgDeclarationStatement *firstNondefiningFunctionDeclaration = NULL;
+  setup_elapsed_ms = elapsed_ms_since(setup_start);
 
   // symbol table and non-defining
   // SgFunctionSymbol *func_symbol =
@@ -5040,10 +5576,13 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
   // scope->find_symbol_by_type_of_function<actualFunction>(nameWithTemplateArguments,func_type);
   // SgSymbol* func_symbol =
   // scope->find_symbol_by_type_of_function<actualFunction>(nameWithTemplateArguments,func_type,NULL,templateArgumentsList);
+  auto symbol_start = std::chrono::steady_clock::now();
   SgSymbol *func_symbol =
       scope->find_symbol_by_type_of_function<actualFunction>(
           nameWithTemplateArguments, func_type, templateParameterList,
           templateArgumentsList);
+  func_symbol = filterFunctionSymbolForBuilderScope(
+      isSgFunctionSymbol(func_symbol), scope);
   auto requireMatchingFunctionSymbol = [&](SgSymbol *symbol) -> SgSymbol * {
     if (symbol == NULL) {
       return NULL;
@@ -5087,26 +5626,48 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
     }
     }
   };
-  func_symbol = requireMatchingFunctionSymbol(func_symbol);
-  if (func_symbol == NULL && first_nondefining_declaration != NULL) {
-    SgSymbol *nondef_symbol = requireMatchingFunctionSymbol(
+  auto symbol_is_attached_to_table = [](SgSymbol *symbol) -> bool {
+    if (symbol == NULL) {
+      return false;
+    }
+    if (SgSymbolTable *table = isSgSymbolTable(symbol->get_parent())) {
+      return table->exists(symbol);
+    }
+    if (SgScopeStatement *symbol_scope =
+            isSgScopeStatement(symbol->get_parent())) {
+      SgSymbolTable *table = symbol_scope->get_symbol_table();
+      return table != NULL && table->exists(symbol);
+    }
+    return false;
+  };
+
+  SgSymbol *symbol_from_first_nondefining_function = NULL;
+  if (first_nondefining_declaration != NULL) {
+    symbol_from_first_nondefining_function = requireMatchingFunctionSymbol(
         first_nondefining_declaration->get_symbol_from_symbol_table());
-    if (nondef_symbol != NULL) {
-      func_symbol = nondef_symbol;
+    if (!symbol_is_attached_to_table(symbol_from_first_nondefining_function)) {
+      symbol_from_first_nondefining_function = NULL;
     }
   }
-  if (func_symbol != NULL && first_nondefining_declaration != NULL) {
+
+  if (symbol_from_first_nondefining_function != NULL) {
+    // The caller already selected the canonical nondefining declaration and
+    // attached its symbol in the target scope. Re-scanning a huge overload set
+    // here is redundant and turns large generated TU bodies into repeated
+    // linear symbol-table searches.
+    func_symbol = symbol_from_first_nondefining_function;
+  } else {
+    func_symbol = requireMatchingFunctionSymbol(func_symbol);
+  }
+
+  if (func_symbol != NULL && symbol_from_first_nondefining_function != NULL) {
     // Preserve the caller-selected declaration chain when it already carries a
     // symbol. Frontends can intentionally rehome or synthesize the canonical
     // first nondefining declaration in the target scope (for example, hidden
     // friend free-function definitions). A fresh lookup may still hit another
     // same-signature declaration, which would incorrectly rewrite the defining
     // declaration to that unrelated chain.
-    SgSymbol *symbol_from_first_nondefining_function =
-        requireMatchingFunctionSymbol(
-            first_nondefining_declaration->get_symbol_from_symbol_table());
-    if (symbol_from_first_nondefining_function != NULL &&
-        func_symbol != symbol_from_first_nondefining_function) {
+    if (func_symbol != symbol_from_first_nondefining_function) {
       func_symbol = symbol_from_first_nondefining_function;
     }
   }
@@ -5169,6 +5730,7 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
     }
     ROSE_ASSERT(firstNondefiningFunctionDeclaration != NULL);
   }
+  symbol_elapsed_ms = elapsed_ms_since(symbol_start);
 
   // defining_func = new actualFunction(name,func_type,NULL);
   defining_func =
@@ -5233,6 +5795,7 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
 
   // parameter list,
   // TODO consider the difference between C++ and Fortran
+  auto parameter_start = std::chrono::steady_clock::now();
   setParameterList(defining_func, paralist);
   // fixup the scope and symbol of arguments,
   SgInitializedNamePtrList &argList = paralist->get_args();
@@ -5296,6 +5859,7 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
       }
     }
   }
+  parameter_elapsed_ms = elapsed_ms_since(parameter_start);
 
   defining_func->set_parent(scope);
   defining_func->set_scope(scope);
@@ -5307,6 +5871,7 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
   checkThatNoTemplateInstantiationIsDeclaredInTemplateDefinitionScope(
       defining_func, scope);
 
+  auto source_position_start = std::chrono::steady_clock::now();
   if (SageBuilder::getSourcePositionClassificationMode() ==
       SageBuilder::e_sourcePositionFrontendConstruction) {
     SageInterface::setSourcePosition(defining_func);
@@ -5322,16 +5887,20 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
   // synthesized definition subtree can still be left without Sg_File_Info.
   // Normalize that here so later outlining/source-position fixups can safely
   // traverse the full function subtree.
-  if (defining_func->get_definition() != NULL &&
-      (defining_func->get_definition()->get_startOfConstruct() == NULL ||
-       defining_func->get_definition()->get_endOfConstruct() == NULL ||
-       defining_func->get_definition()->get_body() == NULL ||
-       defining_func->get_definition()->get_body()->get_startOfConstruct() ==
-           NULL ||
-       defining_func->get_definition()->get_body()->get_endOfConstruct() ==
-           NULL)) {
-    setSourcePositionAtRootAndAllChildren(defining_func);
+  if (SgFunctionDefinition *definition = defining_func->get_definition()) {
+    if (definition->get_startOfConstruct() == NULL ||
+        definition->get_endOfConstruct() == NULL) {
+      SageInterface::setSourcePosition(definition);
+    }
+
+    if (SgBasicBlock *body = definition->get_body()) {
+      if (body->get_startOfConstruct() == NULL ||
+          body->get_endOfConstruct() == NULL) {
+        SageInterface::setSourcePosition(body);
+      }
+    }
   }
+  source_position_elapsed_ms = elapsed_ms_since(source_position_start);
 
   // DQ (2/11/2012): Enforce that the return type matches the specification to
   // build a member function.
@@ -5384,7 +5953,24 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
   // DQ (4/15/2015): We should reset the isModified flags as part of the
   // transforamtion because we have added statements explicitly marked as
   // transformations. checkIsModifiedFlag(defining_func);
-  unsetNodesMarkedAsModified(defining_func);
+  auto clear_modified_start = std::chrono::steady_clock::now();
+  if (SageBuilder::getSourcePositionClassificationMode() ==
+      SageBuilder::e_sourcePositionFrontendConstruction) {
+    clearFrontendBuiltFunctionModifiedFlags(defining_func);
+  } else {
+    unsetNodesMarkedAsModified(defining_func);
+  }
+  clear_modified_elapsed_ms = elapsed_ms_since(clear_modified_start);
+
+  const double total_elapsed_ms =
+      std::chrono::duration<double, std::milli>(
+          std::chrono::steady_clock::now() - builder_start)
+          .count();
+  roseSlowSageBuilderFunctionTrace(
+      "buildDefiningFunctionDeclaration_T", nameWithTemplateArguments,
+      total_elapsed_ms, setup_elapsed_ms, symbol_elapsed_ms,
+      parameter_elapsed_ms, source_position_elapsed_ms,
+      clear_modified_elapsed_ms);
 
   return defining_func;
 }
@@ -5407,14 +5993,20 @@ void SageBuilder::setTemplateNameInTemplateInstantiations(
     // If this is a template instantiation then we need to take care of a few
     // more issues.
 
-    SgName templateNameWithoutArguments = name;
+    bool isMemberFunction = (templateInstantiationMemberFunctionDecl != NULL);
+    SgTemplateArgumentPtrList *templateArgumentsList =
+        isMemberFunction
+            ? &(templateInstantiationMemberFunctionDecl
+                    ->get_templateArguments())
+            : &(templateInstantiationFunctionDecl->get_templateArguments());
+    SgName templateNameWithoutArguments =
+        normalizeTemplateInstantiationBaseName(name, templateArgumentsList);
 
     // DQ (7/27/2012): New semantics is that we want to have the input name be
     // without template arguments and we will add the template arguments instead
     // of trying to remove then (which was problematic for examples such as
     // "X<Y<Z>> operator X&()" and "X<Y<Z>> operator>()".
 
-    bool isMemberFunction = (templateInstantiationMemberFunctionDecl != NULL);
     if (isMemberFunction == true) {
       ROSE_ASSERT(templateInstantiationMemberFunctionDecl != NULL);
       ROSE_ASSERT(templateInstantiationFunctionDecl == NULL);
@@ -5563,6 +6155,7 @@ SgFunctionDeclaration *SageBuilder::buildDefiningFunctionDeclaration(
           ? scope->find_symbol_by_type_of_function<SgFunctionDeclaration>(
                 name, func_type, NULL, NULL)
           : NULL;
+  func_symbol = filterFunctionSymbolForBuilderScope(func_symbol, scope);
   if (func_symbol == NULL && forceFreeFunctionScope == true) {
     SgScopeStatement *lookup_scope = scope;
     while (lookup_scope != NULL) {
@@ -5577,6 +6170,7 @@ SgFunctionDeclaration *SageBuilder::buildDefiningFunctionDeclaration(
       func_symbol =
           parent_scope->find_symbol_by_type_of_function<SgFunctionDeclaration>(
               name, func_type, NULL, NULL);
+      func_symbol = filterFunctionSymbolForBuilderScope(func_symbol, scope);
       if (func_symbol != NULL) {
         lookup_scope = parent_scope;
         break;
@@ -10134,8 +10728,14 @@ SageBuilder::buildNonrealType(const SgName &name, SgScopeStatement *scope,
 
   SgDeclarationScope *decl_scope = isSgDeclarationScope(effective_scope);
   if (decl_scope == NULL) {
-    decl_scope = SageBuilder::buildDeclarationScope();
-    decl_scope->set_parent(effective_scope);
+    decl_scope = getCachedNonrealDeclarationScope(effective_scope);
+    if (decl_scope == NULL) {
+      decl_scope = SageBuilder::buildDeclarationScope();
+      cacheNonrealDeclarationScope(effective_scope, decl_scope);
+    }
+    if (decl_scope->get_parent() != effective_scope) {
+      decl_scope->set_parent(effective_scope);
+    }
   }
 
   SgNonrealDecl *nrdecl = buildNonrealDecl(name, decl_scope);
@@ -10418,6 +11018,14 @@ SageBuilder::buildNamespaceDefinition(SgNamespaceDeclarationStatement *d) {
 //! Build a scope statement. Used to build SgNonrealDecl and SgNonrealType
 SgDeclarationScope *SageBuilder::buildDeclarationScope() {
   SgDeclarationScope *nonreal_decl_scope = new SgDeclarationScope();
+  if (SgSymbolTable *symbol_table = nonreal_decl_scope->get_symbol_table()) {
+    // These synthesized scopes typically hold only a few nonreal declarations,
+    // so avoid paying the default large symbol-table allocation on every build.
+    SgSymbolTable *compact_table = new SgSymbolTable(7);
+    compact_table->set_parent(nonreal_decl_scope);
+    nonreal_decl_scope->set_symbol_table(compact_table);
+    delete symbol_table;
+  }
   SageInterface::setSourcePosition(nonreal_decl_scope);
   nonreal_decl_scope->get_startOfConstruct()->setCompilerGenerated();
   nonreal_decl_scope->get_endOfConstruct()->setCompilerGenerated();
@@ -13642,7 +14250,8 @@ SageBuilder::buildNondefiningEnumDeclaration_nfi(const SgName &name,
   SgEnumDeclaration *first_nondefdecl = NULL;
 
   if (scope != NULL) {
-    SgEnumSymbol *existing_symbol = scope->lookup_enum_symbol(name);
+    SgEnumSymbol *existing_symbol =
+        lookupExistingEnumSymbolForBuilder(scope, name);
     if (existing_symbol != NULL) {
       enumType = isSgEnumType(existing_symbol->get_type());
       first_nondefdecl = existing_symbol->get_declaration();
@@ -13684,7 +14293,8 @@ SageBuilder::buildNondefiningEnumDeclaration_nfi(const SgName &name,
   if (scope != NULL) {
     // DQ (4/22/2013): check for an existing symbol (reuse it if it is found).
     SgEnumSymbol *mysymbol = NULL;
-    SgEnumSymbol *existing_symbol = scope->lookup_enum_symbol(name);
+    SgEnumSymbol *existing_symbol =
+        lookupExistingEnumSymbolForBuilder(scope, name);
     // ROSE_ASSERT(existing_symbol == NULL);
 
     if (existing_symbol != NULL) {
@@ -13741,7 +14351,8 @@ SageBuilder::buildEnumDeclaration_nfi(const SgName &name,
   SgEnumType *enumType = NULL;
 
   if (scope != NULL) {
-    SgEnumSymbol *existing_symbol = scope->lookup_enum_symbol(name);
+    SgEnumSymbol *existing_symbol =
+        lookupExistingEnumSymbolForBuilder(scope, name);
     if (existing_symbol != NULL) {
       enumType = isSgEnumType(existing_symbol->get_type());
     }
@@ -13762,7 +14373,7 @@ SageBuilder::buildEnumDeclaration_nfi(const SgName &name,
   // DQ (4/3/2017): Check for an existing non-defining declaration before
   // building one (to avoid multiple versions). See test2017_13.C.
   ROSE_ASSERT(scope != NULL);
-  SgEnumSymbol *enumSymbol = scope->lookup_enum_symbol(name);
+  SgEnumSymbol *enumSymbol = lookupExistingEnumSymbolForBuilder(scope, name);
   // ROSE_ASSERT(enumSymbol != NULL);
   SgEnumDeclaration *nondefdecl = NULL;
   if (enumSymbol != NULL) {

@@ -69,7 +69,7 @@ void inlineFromRoot(SgFunctionDeclaration *func_decl, int &callSitesConsidered,
                   << callSitesConsidered << std::endl;
 
       if (doInline(call)) {
-        ASSERT_forbid2(!isAstContaining(func_decl, call),
+        ASSERT_forbid2(isAstContaining(func_decl, call),
                        "Inliner says it inlined, but the call expression is "
                        "still present in the AST.");
         inlined_calls.push_back(call);

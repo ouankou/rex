@@ -15,6 +15,12 @@
 using namespace std;
 
 namespace {
+void rosePhaseTrace(const char *phase) {
+  if (getenv("ROSE_PHASE_TRACE") != nullptr) {
+    fprintf(stderr, "ROSE_PHASE %s\n", phase);
+    fflush(stderr);
+  }
+}
 
 struct MisplacedPreprocessingInfoMove {
   AttachedPreprocessingInfoType *source_list = nullptr;
@@ -27,6 +33,17 @@ struct MisplacedPreprocessingInfoMove {
 struct LocatedNodeSourceOrder {
   std::vector<SgLocatedNode *> located_nodes;
   std::map<SgLocatedNode *, size_t> node_order;
+};
+
+struct BracedScopeRangeEntry {
+  size_t node_index = 0;
+  SgLocatedNode *node = nullptr;
+  std::string filename;
+  int source_file_id = -1;
+  int actual_start_line = -1;
+  int actual_end_line = -1;
+  int owned_start_line = -1;
+  int owned_end_line = -1;
 };
 
 static int getPhysicalStartLine(SgLocatedNode *node, int source_file_id) {
@@ -194,29 +211,6 @@ collectSourceLocatedNodes(SgNode *node,
   }
 }
 
-static SgLocatedNode *findInnermostBracedScopeContainingLine(
-    const std::vector<SgLocatedNode *> &located_nodes, size_t current_index,
-    int line, int source_file_id, const std::string &filename) {
-  for (size_t i = current_index; i > 0; --i) {
-    SgLocatedNode *candidate = located_nodes[i - 1];
-    int actual_start_line = -1;
-    int actual_end_line = -1;
-    int owned_start_line = -1;
-    int owned_end_line = -1;
-    if (!getBracedScopePreprocessingRanges(candidate, source_file_id, filename,
-                                           actual_start_line, actual_end_line,
-                                           owned_start_line, owned_end_line)) {
-      continue;
-    }
-
-    if (owned_start_line <= line && line <= owned_end_line) {
-      return candidate;
-    }
-  }
-
-  return nullptr;
-}
-
 static bool preprocessingInfoComesBefore(const PreprocessingInfo *lhs,
                                          const PreprocessingInfo *rhs) {
   ROSE_ASSERT(lhs != nullptr);
@@ -234,6 +228,24 @@ static void insertAttachedPreprocessingInfoInSourceOrder(
     PreprocessingInfo::RelativePositionType position) {
   ROSE_ASSERT(target != nullptr);
   ROSE_ASSERT(info != nullptr);
+
+  if (info->getFilename().find("2008_08") != std::string::npos) {
+    Sg_File_Info *target_info = target->get_startOfConstruct();
+    std::string target_desc = target->class_name();
+    if (SgFunctionDeclaration *decl = isSgFunctionDeclaration(target)) {
+      target_desc += " ";
+      target_desc += decl->get_name().str();
+    } else if (SgClassDeclaration *decl = isSgClassDeclaration(target)) {
+      target_desc += " ";
+      target_desc += decl->get_name().str();
+    }
+
+    fprintf(stderr, "[rex-attach] target=%s line=%d pos=%s text='%s'\n",
+            target_desc.c_str(),
+            target_info != nullptr ? target_info->get_line() : -1,
+            PreprocessingInfo::relativePositionName(position).c_str(),
+            info->getString().c_str());
+  }
 
   AttachedPreprocessingInfoType *attached =
       target->getAttachedPreprocessingInfo();
@@ -489,76 +501,114 @@ static Sg_File_Info *getPreciseEndInfo(SgLocatedNode *node) {
   return nullptr;
 }
 
-static int compareSourceLocationWithFilename(const Sg_File_Info *lhs,
-                                             const Sg_File_Info *rhs) {
-  if (lhs == rhs) {
-    return 0;
-  }
-  if (lhs == nullptr || rhs == nullptr) {
-    return lhs == nullptr ? 1 : -1;
-  }
-
-  if (lhs->get_filenameString() != rhs->get_filenameString()) {
-    return lhs->get_filenameString() < rhs->get_filenameString() ? -1 : 1;
-  }
-
-  return compareSourceLocation(lhs, rhs);
-}
-
-static bool locatedNodeComesBeforeInSource(SgLocatedNode *lhs,
-                                           SgLocatedNode *rhs) {
-  if (lhs == rhs) {
-    return false;
-  }
-  if (lhs == nullptr || rhs == nullptr) {
-    return lhs != nullptr;
-  }
-
-  Sg_File_Info *lhs_start = getEffectiveStartInfo(lhs);
-  Sg_File_Info *rhs_start = getEffectiveStartInfo(rhs);
-  const bool lhs_has_start = hasUsableSourceLocation(lhs_start);
-  const bool rhs_has_start = hasUsableSourceLocation(rhs_start);
-  if (lhs_has_start != rhs_has_start) {
-    return lhs_has_start;
-  }
-  if (lhs_has_start) {
-    const int start_cmp =
-        compareSourceLocationWithFilename(lhs_start, rhs_start);
-    if (start_cmp != 0) {
-      return start_cmp < 0;
-    }
-  }
-
-  Sg_File_Info *lhs_end = getEffectiveEndInfo(lhs);
-  Sg_File_Info *rhs_end = getEffectiveEndInfo(rhs);
-  const bool lhs_has_end = hasUsableSourceLocation(lhs_end);
-  const bool rhs_has_end = hasUsableSourceLocation(rhs_end);
-  if (lhs_has_end != rhs_has_end) {
-    return lhs_has_end;
-  }
-  if (lhs_has_end) {
-    const int end_cmp = compareSourceLocationWithFilename(lhs_end, rhs_end);
-    if (end_cmp != 0) {
-      return end_cmp < 0;
-    }
-  }
-
-  return false;
-}
-
 static void
 buildLocatedNodeOrder(const std::vector<SgLocatedNode *> &located_nodes,
                       std::map<SgLocatedNode *, size_t> &node_order) {
-  std::vector<SgLocatedNode *> ordered_nodes(located_nodes.begin(),
-                                             located_nodes.end());
+  struct CachedSourceLocation {
+    bool has_location = false;
+    const std::string *filename = nullptr;
+    int line = 0;
+    int col = 0;
+  };
+
+  struct CachedLocatedNodeOrder {
+    SgLocatedNode *node = nullptr;
+    CachedSourceLocation start;
+    CachedSourceLocation end;
+  };
+
+  std::unordered_map<const Sg_File_Info *, std::string> filename_cache;
+  filename_cache.reserve(located_nodes.size());
+
+  auto get_cached_filename =
+      [&](const Sg_File_Info *info) -> const std::string * {
+    if (info == nullptr) {
+      return nullptr;
+    }
+    std::pair<std::unordered_map<const Sg_File_Info *, std::string>::iterator,
+              bool>
+        inserted = filename_cache.emplace(info, std::string());
+    if (inserted.second) {
+      inserted.first->second = info->get_filenameString();
+    }
+    return &inserted.first->second;
+  };
+
+  auto build_cached_location = [&](Sg_File_Info *info) -> CachedSourceLocation {
+    CachedSourceLocation cached;
+    cached.has_location = hasUsableSourceLocation(info);
+    if (cached.has_location) {
+      cached.filename = get_cached_filename(info);
+      cached.line = info->get_line();
+      cached.col = info->get_col();
+    }
+    return cached;
+  };
+
+  auto compare_cached_location = [](const CachedSourceLocation &lhs,
+                                    const CachedSourceLocation &rhs) {
+    if (lhs.has_location != rhs.has_location) {
+      return lhs.has_location ? -1 : 1;
+    }
+    if (!lhs.has_location) {
+      return 0;
+    }
+
+    if (lhs.filename == nullptr || rhs.filename == nullptr) {
+      if (lhs.filename != rhs.filename) {
+        return lhs.filename != nullptr ? -1 : 1;
+      }
+    } else if (*lhs.filename != *rhs.filename) {
+      return *lhs.filename < *rhs.filename ? -1 : 1;
+    }
+
+    if (lhs.line != rhs.line) {
+      return lhs.line < rhs.line ? -1 : 1;
+    }
+
+    if (lhs.col != rhs.col) {
+      return lhs.col < rhs.col ? -1 : 1;
+    }
+
+    return 0;
+  };
+
+  std::vector<CachedLocatedNodeOrder> ordered_nodes;
+  ordered_nodes.reserve(located_nodes.size());
+  for (SgLocatedNode *node : located_nodes) {
+    ordered_nodes.push_back(CachedLocatedNodeOrder{
+        node, build_cached_location(getEffectiveStartInfo(node)),
+        build_cached_location(getEffectiveEndInfo(node))});
+  }
+
   std::stable_sort(ordered_nodes.begin(), ordered_nodes.end(),
-                   [](SgLocatedNode *lhs, SgLocatedNode *rhs) {
-                     return locatedNodeComesBeforeInSource(lhs, rhs);
+                   [&](const CachedLocatedNodeOrder &lhs,
+                       const CachedLocatedNodeOrder &rhs) {
+                     if (lhs.node == rhs.node) {
+                       return false;
+                     }
+                     if (lhs.node == nullptr || rhs.node == nullptr) {
+                       return lhs.node != nullptr;
+                     }
+
+                     const int start_cmp =
+                         compare_cached_location(lhs.start, rhs.start);
+                     if (start_cmp != 0) {
+                       return start_cmp < 0;
+                     }
+
+                     const int end_cmp =
+                         compare_cached_location(lhs.end, rhs.end);
+                     if (end_cmp != 0) {
+                       return end_cmp < 0;
+                     }
+
+                     return false;
                    });
 
   node_order.clear();
   for (size_t i = 0; i < ordered_nodes.size(); ++i) {
-    node_order[ordered_nodes[i]] = i;
+    node_order[ordered_nodes[i].node] = i;
   }
 }
 
@@ -907,6 +957,116 @@ static void normalizeMisplacedBracedScopePreprocessingInfo(
       source_order.located_nodes;
   const std::map<SgLocatedNode *, size_t> &node_order = source_order.node_order;
 
+  std::vector<BracedScopeRangeEntry> braced_scopes;
+  braced_scopes.reserve(located_nodes.size());
+  std::unordered_map<SgLocatedNode *, size_t> braced_scope_index_by_node;
+  for (size_t node_index = 0; node_index < located_nodes.size(); ++node_index) {
+    SgLocatedNode *candidate = located_nodes[node_index];
+    Sg_File_Info *candidate_info =
+        candidate != nullptr ? candidate->get_file_info() : nullptr;
+    if (candidate_info == nullptr) {
+      continue;
+    }
+
+    BracedScopeRangeEntry entry;
+    entry.node_index = node_index;
+    entry.node = candidate;
+    entry.filename = candidate_info->get_filenameString();
+    entry.source_file_id = candidate_info->get_file_id();
+    if (!getBracedScopePreprocessingRanges(
+            candidate, entry.source_file_id, entry.filename,
+            entry.actual_start_line, entry.actual_end_line,
+            entry.owned_start_line, entry.owned_end_line)) {
+      continue;
+    }
+
+    braced_scope_index_by_node[candidate] = braced_scopes.size();
+    braced_scopes.push_back(std::move(entry));
+  }
+
+  auto file_key_for = [](const std::string &filename, int source_file_id) {
+    return !filename.empty()
+               ? filename
+               : std::string("#") + std::to_string(source_file_id);
+  };
+
+  using BracedScopeLineMap = std::map<int, const BracedScopeRangeEntry *>;
+  std::unordered_map<std::string, BracedScopeLineMap>
+      active_braced_scopes_by_file;
+
+  auto ensure_line_map_initialized = [](BracedScopeLineMap &line_map) {
+    if (line_map.empty()) {
+      line_map.emplace(std::numeric_limits<int>::min(), nullptr);
+    }
+  };
+
+  auto split_line_map = [&](BracedScopeLineMap &line_map, int line) {
+    ensure_line_map_initialized(line_map);
+    auto it = line_map.lower_bound(line);
+    if (it != line_map.end() && it->first == line) {
+      return it;
+    }
+
+    auto prev = std::prev(it);
+    return line_map.emplace_hint(it, line, prev->second);
+  };
+
+  auto coalesce_line_map = [](BracedScopeLineMap &line_map,
+                              BracedScopeLineMap::iterator it) {
+    if (it == line_map.end()) {
+      return;
+    }
+
+    if (it != line_map.begin()) {
+      auto prev = std::prev(it);
+      if (prev->second == it->second) {
+        line_map.erase(it);
+        it = prev;
+      }
+    }
+
+    auto next = std::next(it);
+    if (next != line_map.end() && next->second == it->second) {
+      line_map.erase(next);
+    }
+  };
+
+  auto assign_braced_scope_range = [&](BracedScopeLineMap &line_map,
+                                       int begin_line, int end_line,
+                                       const BracedScopeRangeEntry *entry) {
+    if (begin_line <= 0 || end_line <= 0 || end_line < begin_line) {
+      return;
+    }
+
+    auto end_it = split_line_map(line_map, end_line + 1);
+    auto begin_it = split_line_map(line_map, begin_line);
+    line_map.erase(begin_it, end_it);
+    auto inserted = line_map.emplace_hint(end_it, begin_line, entry);
+    coalesce_line_map(line_map, inserted);
+  };
+
+  auto query_active_braced_scope =
+      [&](const std::string &filename, int source_file_id,
+          int line) -> const BracedScopeRangeEntry * {
+    if (line <= 0) {
+      return nullptr;
+    }
+
+    auto map_it = active_braced_scopes_by_file.find(
+        file_key_for(filename, source_file_id));
+    if (map_it == active_braced_scopes_by_file.end()) {
+      return nullptr;
+    }
+
+    const BracedScopeLineMap &line_map = map_it->second;
+    auto it = line_map.upper_bound(line);
+    if (it == line_map.begin()) {
+      return nullptr;
+    }
+
+    return std::prev(it)->second;
+  };
+
   std::vector<MisplacedPreprocessingInfoMove> moves;
   moves.reserve(16);
 
@@ -924,9 +1084,15 @@ static void normalizeMisplacedBracedScopePreprocessingInfo(
     }
     const std::string filename = owner_info->get_filenameString();
     const int source_file_id = owner_info->get_file_id();
+    const std::string owner_file_key = file_key_for(filename, source_file_id);
 
     const int owner_start_line = getPhysicalStartLine(owner, source_file_id);
     const int owner_end_line = getPhysicalEndLine(owner, source_file_id);
+    auto owner_range_it = braced_scope_index_by_node.find(owner);
+    const BracedScopeRangeEntry *owner_range =
+        owner_range_it != braced_scope_index_by_node.end()
+            ? &braced_scopes[owner_range_it->second]
+            : nullptr;
 
     for (PreprocessingInfo *info : *attached) {
       if (info == nullptr || info->getFilename() != filename) {
@@ -941,15 +1107,9 @@ static void normalizeMisplacedBracedScopePreprocessingInfo(
       const PreprocessingInfo::RelativePositionType relative_position =
           info->getRelativePosition();
 
-      int owner_actual_start_line = -1;
-      int owner_actual_end_line = -1;
-      int owner_owned_start_line = -1;
-      int owner_owned_end_line = -1;
-      const bool owner_has_extended_scope = getBracedScopePreprocessingRanges(
-          owner, source_file_id, filename, owner_actual_start_line,
-          owner_actual_end_line, owner_owned_start_line, owner_owned_end_line);
-      if (owner_has_extended_scope && owner_owned_start_line <= info_line &&
-          info_line <= owner_owned_end_line) {
+      if (owner_range != nullptr &&
+          owner_range->owned_start_line <= info_line &&
+          info_line <= owner_range->owned_end_line) {
         continue;
       }
 
@@ -964,33 +1124,31 @@ static void normalizeMisplacedBracedScopePreprocessingInfo(
         continue;
       }
 
-      SgLocatedNode *target = findInnermostBracedScopeContainingLine(
-          located_nodes, node_index, info_line, source_file_id, filename);
-      if (target == nullptr || target == owner) {
+      const BracedScopeRangeEntry *target_range =
+          query_active_braced_scope(filename, source_file_id, info_line);
+      if (target_range == nullptr || target_range->node == owner) {
         continue;
       }
 
       MisplacedPreprocessingInfoMove move;
       move.source_list = attached;
       move.info = info;
-      move.target = target;
+      move.target = target_range->node;
       move.target_position = PreprocessingInfo::inside;
 
-      int target_actual_start_line = -1;
-      int target_actual_end_line = -1;
-      int target_owned_start_line = -1;
-      int target_owned_end_line = -1;
-      if (getBracedScopePreprocessingRanges(
-              target, source_file_id, filename, target_actual_start_line,
-              target_actual_end_line, target_owned_start_line,
-              target_owned_end_line)) {
-        if (info_line < target_actual_start_line) {
-          move.target_position = PreprocessingInfo::before;
-        } else if (info_line > target_actual_end_line) {
-          move.target_position = PreprocessingInfo::after;
-        }
+      if (info_line < target_range->actual_start_line) {
+        move.target_position = PreprocessingInfo::before;
+      } else if (info_line > target_range->actual_end_line) {
+        move.target_position = PreprocessingInfo::after;
       }
       moves.push_back(move);
+    }
+
+    if (owner_range != nullptr) {
+      BracedScopeLineMap &line_map =
+          active_braced_scopes_by_file[owner_file_key];
+      assign_braced_scope_range(line_map, owner_range->owned_start_line,
+                                owner_range->owned_end_line, owner_range);
     }
   }
 
@@ -1247,6 +1405,8 @@ static void normalizeClassBodyConditionalPreprocessingInfo(
     SgDeclarationStatement *decl = nullptr;
     Sg_File_Info *start = nullptr;
     Sg_File_Info *end = nullptr;
+    SgLocatedNode *nested_body_target = nullptr;
+    Sg_File_Info *nested_body_end = nullptr;
   };
 
   struct ClassBodyPreprocessingMove {
@@ -1291,12 +1451,40 @@ static void normalizeClassBodyConditionalPreprocessingInfo(
             std::swap(start, end);
           }
 
-          anchors.push_back({decl, start, end});
+          SgLocatedNode *nested_body_target = nullptr;
+          Sg_File_Info *nested_body_end = nullptr;
+          if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
+            nested_body_target = class_decl->get_definition();
+          } else if (SgTemplateClassDeclaration *class_decl =
+                         isSgTemplateClassDeclaration(decl)) {
+            nested_body_target = class_decl->get_definition();
+          } else if (SgTemplateInstantiationDecl *class_decl =
+                         isSgTemplateInstantiationDecl(decl)) {
+            nested_body_target = class_decl->get_definition();
+          }
+
+          if (nested_body_target != nullptr) {
+            nested_body_end = getPreciseEndInfo(nested_body_target);
+            if (!hasUsableSourceLocation(nested_body_end) ||
+                !sameMainFileLocation(end, nested_body_end) ||
+                !sourceLocationPrecedes(end, nested_body_end)) {
+              nested_body_target = nullptr;
+              nested_body_end = nullptr;
+            }
+          }
+
+          anchors.push_back(
+              {decl, start, end, nested_body_target, nested_body_end});
         }
       };
 
   std::vector<ClassBodyPreprocessingMove> moves;
   moves.reserve(32);
+
+  auto anchor_effective_end = [](const DeclAnchor &anchor) -> Sg_File_Info * {
+    return anchor.nested_body_end != nullptr ? anchor.nested_body_end
+                                             : anchor.end;
+  };
 
   for (SgLocatedNode *owner : located_nodes) {
     if (!isSgClassDefinition(owner) && !isSgTemplateClassDefinition(owner)) {
@@ -1340,7 +1528,8 @@ static void normalizeClassBodyConditionalPreprocessingInfo(
         continue;
       }
 
-      if (sourceLocationPrecedes(anchors.back().end, info_loc)) {
+      if (sourceLocationPrecedes(anchor_effective_end(anchors.back()),
+                                 info_loc)) {
         moves.push_back(
             {attached, info, anchors.back().decl, PreprocessingInfo::after});
         continue;
@@ -1357,12 +1546,21 @@ static void normalizeClassBodyConditionalPreprocessingInfo(
           break;
         }
 
+        if (anchor.nested_body_target != nullptr &&
+            sourceLocationPrecedes(anchor.end, info_loc) &&
+            sourceLocationPrecedes(info_loc, anchor.nested_body_end)) {
+          moves.push_back({attached, info, anchor.nested_body_target,
+                           PreprocessingInfo::inside});
+          handled = true;
+          break;
+        }
+
         if (i + 1 >= anchors.size()) {
           continue;
         }
 
         const DeclAnchor &next_anchor = anchors[i + 1];
-        if (sourceLocationPrecedes(anchor.end, info_loc) &&
+        if (sourceLocationPrecedes(anchor_effective_end(anchor), info_loc) &&
             sourceLocationPrecedesOrEqual(info_loc, next_anchor.start)) {
           moves.push_back(
               {attached, info, next_anchor.decl, PreprocessingInfo::before});
@@ -1496,6 +1694,235 @@ getDirectChildDeclarations(SgLocatedNode *owner) {
   return nullptr;
 }
 
+static void normalizeLeadingDeclarationPreprocessingInfo(
+    const LocatedNodeSourceOrder &source_order) {
+  if (source_order.located_nodes.empty()) {
+    return;
+  }
+
+  const std::vector<SgLocatedNode *> &located_nodes =
+      source_order.located_nodes;
+  const std::map<SgLocatedNode *, size_t> &node_order = source_order.node_order;
+
+  struct DeclAnchor {
+    SgDeclarationStatement *decl = nullptr;
+    Sg_File_Info *start = nullptr;
+    Sg_File_Info *end = nullptr;
+    SgLocatedNode *nested_body_target = nullptr;
+    Sg_File_Info *nested_body_end = nullptr;
+    SgLocatedNode *extended_target = nullptr;
+    Sg_File_Info *extended_end = nullptr;
+    PreprocessingInfo::RelativePositionType extended_position =
+        PreprocessingInfo::after;
+  };
+
+  struct LeadingDeclarationMove {
+    AttachedPreprocessingInfoType *source_list = nullptr;
+    PreprocessingInfo *info = nullptr;
+    SgLocatedNode *target = nullptr;
+    PreprocessingInfo::RelativePositionType target_position =
+        PreprocessingInfo::after;
+  };
+
+  std::vector<LeadingDeclarationMove> moves;
+  moves.reserve(32);
+
+  for (SgLocatedNode *owner : located_nodes) {
+    const SgDeclarationStatementPtrList *declarations =
+        getDirectChildDeclarations(owner);
+    if (declarations == nullptr || declarations->size() < 2) {
+      continue;
+    }
+
+    std::vector<DeclAnchor> anchors;
+    anchors.reserve(declarations->size());
+    for (SgDeclarationStatement *decl : *declarations) {
+      if (decl == nullptr || decl->get_parent() != owner) {
+        continue;
+      }
+
+      SgLocatedNode *decl_node = isSgLocatedNode(decl);
+      Sg_File_Info *start = getEffectiveStartInfo(decl_node);
+      Sg_File_Info *end = getPreciseEndInfo(decl_node);
+      if (!hasUsableSourceLocation(start) || !hasUsableSourceLocation(end) ||
+          !sameMainFileLocation(start, end)) {
+        continue;
+      }
+
+      if (!sourceLocationPrecedesOrEqual(start, end)) {
+        std::swap(start, end);
+      }
+
+      SgLocatedNode *extended_target = decl_node;
+      Sg_File_Info *extended_end = end;
+      PreprocessingInfo::RelativePositionType extended_position =
+          PreprocessingInfo::after;
+
+      SgLocatedNode *nested_body_target = nullptr;
+      if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
+        nested_body_target = class_decl->get_definition();
+      } else if (SgTemplateClassDeclaration *class_decl =
+                     isSgTemplateClassDeclaration(decl)) {
+        nested_body_target = class_decl->get_definition();
+      } else if (SgTemplateInstantiationDecl *class_decl =
+                     isSgTemplateInstantiationDecl(decl)) {
+        nested_body_target = class_decl->get_definition();
+      }
+
+      if (nested_body_target != nullptr) {
+        if (Sg_File_Info *nested_body_end =
+                getPreciseEndInfo(nested_body_target)) {
+          if (hasUsableSourceLocation(nested_body_end) &&
+              sameMainFileLocation(end, nested_body_end)) {
+            if (sourceLocationPrecedes(end, nested_body_end)) {
+              extended_target = nested_body_target;
+              extended_end = nested_body_end;
+              extended_position = PreprocessingInfo::inside;
+            }
+
+            anchors.push_back({decl, start, end, nested_body_target,
+                               nested_body_end, extended_target, extended_end,
+                               extended_position});
+            continue;
+          }
+        }
+      }
+
+      anchors.push_back({decl, start, end, nullptr, nullptr, extended_target,
+                         extended_end, extended_position});
+    }
+
+    if (anchors.size() < 2) {
+      continue;
+    }
+
+    if (anchors.front().start != nullptr &&
+        anchors.front().start->get_filenameString().find("2008_08") !=
+            std::string::npos) {
+      for (const DeclAnchor &anchor : anchors) {
+        fprintf(stderr,
+                "[rex-leading] decl=%s start=%d:%d end=%d:%d nestedEnd=%d:%d "
+                "extendedEnd=%d:%d\n",
+                anchor.decl != nullptr ? anchor.decl->class_name().c_str()
+                                       : "<null>",
+                anchor.start != nullptr ? anchor.start->get_line() : -1,
+                anchor.start != nullptr ? anchor.start->get_col() : -1,
+                anchor.end != nullptr ? anchor.end->get_line() : -1,
+                anchor.end != nullptr ? anchor.end->get_col() : -1,
+                anchor.nested_body_end != nullptr
+                    ? anchor.nested_body_end->get_line()
+                    : -1,
+                anchor.nested_body_end != nullptr
+                    ? anchor.nested_body_end->get_col()
+                    : -1,
+                anchor.extended_end != nullptr ? anchor.extended_end->get_line()
+                                               : -1,
+                anchor.extended_end != nullptr ? anchor.extended_end->get_col()
+                                               : -1);
+      }
+    }
+
+    for (size_t i = 1; i < anchors.size(); ++i) {
+      const DeclAnchor &previous = anchors[i - 1];
+      const DeclAnchor &current = anchors[i];
+      if (previous.extended_target == nullptr ||
+          !hasUsableSourceLocation(previous.extended_end)) {
+        continue;
+      }
+
+      AttachedPreprocessingInfoType *attached =
+          current.decl->getAttachedPreprocessingInfo();
+      if (attached == nullptr || attached->empty()) {
+        continue;
+      }
+
+      for (PreprocessingInfo *info : *attached) {
+        if (info == nullptr ||
+            !isMovableDeclarationOwnerPreprocessingPayload(info)) {
+          continue;
+        }
+
+        Sg_File_Info *info_loc = info->get_file_info();
+        if (!hasUsableSourceLocation(info_loc) ||
+            !sameMainFileLocation(info_loc, current.start)) {
+          continue;
+        }
+
+        if (!sourceLocationPrecedes(info_loc, current.start)) {
+          continue;
+        }
+
+        if (current.start->get_filenameString().find("2008_08") !=
+            std::string::npos) {
+          fprintf(stderr,
+                  "[rex-leading] current=%s prev=%s info=%d:%d text='%s'\n",
+                  current.decl->class_name().c_str(),
+                  previous.decl->class_name().c_str(), info_loc->get_line(),
+                  info_loc->get_col(), info->getString().c_str());
+        }
+
+        if (!sourceLocationPrecedesOrEqual(previous.start, info_loc)) {
+          continue;
+        }
+
+        SgLocatedNode *target = nullptr;
+        PreprocessingInfo::RelativePositionType position =
+            PreprocessingInfo::after;
+        if (previous.nested_body_target != nullptr &&
+            hasUsableSourceLocation(previous.nested_body_end) &&
+            sourceLocationPrecedesOrEqual(info_loc, previous.nested_body_end)) {
+          target = previous.nested_body_target;
+          position = PreprocessingInfo::inside;
+        } else if (hasUsableSourceLocation(previous.extended_end) &&
+                   sourceLocationPrecedesOrEqual(info_loc,
+                                                 previous.extended_end)) {
+          target = previous.extended_target;
+          position = previous.extended_position;
+        }
+
+        if (target != nullptr) {
+          if (current.start->get_filenameString().find("2008_08") !=
+              std::string::npos) {
+            fprintf(stderr, "[rex-leading] move target=%s position=%s\n",
+                    target->class_name().c_str(),
+                    PreprocessingInfo::relativePositionName(position).c_str());
+          }
+          moves.push_back({attached, info, target, position});
+        }
+      }
+    }
+  }
+
+  if (moves.empty()) {
+    return;
+  }
+
+  detachMovedPreprocessingInfo(moves);
+
+  std::stable_sort(moves.begin(), moves.end(),
+                   [&](const LeadingDeclarationMove &lhs,
+                       const LeadingDeclarationMove &rhs) {
+                     const size_t lhs_order =
+                         getLocatedNodeOrder(node_order, lhs.target);
+                     const size_t rhs_order =
+                         getLocatedNodeOrder(node_order, rhs.target);
+                     if (lhs_order != rhs_order) {
+                       return lhs_order < rhs_order;
+                     }
+
+                     if (lhs.target_position != rhs.target_position) {
+                       return lhs.target_position < rhs.target_position;
+                     }
+
+                     return preprocessingInfoComesBefore(lhs.info, rhs.info);
+                   });
+
+  for (const LeadingDeclarationMove &move : moves) {
+    insertAttachedPreprocessingInfoInSourceOrder(move.target, move.info,
+                                                 move.target_position);
+  }
+}
+
 static void normalizeDeclarationOwnerPreprocessingInfo(
     const LocatedNodeSourceOrder &source_order) {
   if (source_order.located_nodes.empty()) {
@@ -1510,6 +1937,7 @@ static void normalizeDeclarationOwnerPreprocessingInfo(
     SgDeclarationStatement *decl = nullptr;
     Sg_File_Info *start = nullptr;
     Sg_File_Info *end = nullptr;
+    Sg_File_Info *effective_end = nullptr;
   };
 
   struct OwnerPreprocessingMove {
@@ -1558,7 +1986,30 @@ static void normalizeDeclarationOwnerPreprocessingInfo(
         continue;
       }
 
-      anchors_by_file[filename].push_back({decl, start, end});
+      Sg_File_Info *effective_end = end;
+      SgLocatedNode *nested_body_target = nullptr;
+      if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
+        nested_body_target = class_decl->get_definition();
+      } else if (SgTemplateClassDeclaration *class_decl =
+                     isSgTemplateClassDeclaration(decl)) {
+        nested_body_target = class_decl->get_definition();
+      } else if (SgTemplateInstantiationDecl *class_decl =
+                     isSgTemplateInstantiationDecl(decl)) {
+        nested_body_target = class_decl->get_definition();
+      }
+
+      if (nested_body_target != nullptr) {
+        if (Sg_File_Info *nested_body_end =
+                getPreciseEndInfo(nested_body_target)) {
+          if (hasUsableSourceLocation(nested_body_end) &&
+              sameMainFileLocation(end, nested_body_end) &&
+              sourceLocationPrecedes(end, nested_body_end)) {
+            effective_end = nested_body_end;
+          }
+        }
+      }
+
+      anchors_by_file[filename].push_back({decl, start, end, effective_end});
     }
 
     if (anchors_by_file.empty()) {
@@ -1603,7 +2054,7 @@ static void normalizeDeclarationOwnerPreprocessingInfo(
         continue;
       }
 
-      if (sourceLocationPrecedes(anchors.back().end, info_loc)) {
+      if (sourceLocationPrecedes(anchors.back().effective_end, info_loc)) {
         moves.push_back(
             {attached, info, anchors.back().decl, PreprocessingInfo::after});
         continue;
@@ -1621,7 +2072,7 @@ static void normalizeDeclarationOwnerPreprocessingInfo(
         }
 
         const DeclAnchor &next_anchor = anchors[i + 1];
-        if (sourceLocationPrecedes(anchor.end, info_loc) &&
+        if (sourceLocationPrecedes(anchor.effective_end, info_loc) &&
             sourceLocationPrecedesOrEqual(info_loc, next_anchor.start)) {
           moves.push_back(
               {attached, info, next_anchor.decl, PreprocessingInfo::before});
@@ -1968,9 +2419,11 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr,
   // AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(filename);
   // commentAndCppDirectiveList =
   // AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(sageFilePtr,filename);
+  rosePhaseTrace("attachPreprocessingInfo.buildList.begin");
   commentAndCppDirectiveList =
       AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
           sageFilePtr, filename, new_filename);
+  rosePhaseTrace("attachPreprocessingInfo.buildList.end");
 
   ROSE_ASSERT(commentAndCppDirectiveList != NULL);
 
@@ -2069,7 +2522,9 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr,
     // bool requiresCPP = sageFilePtr->get_requires_C_preprocessor();
 
     // DQ (6/29/2020): This is now a simple traversal over the whole of the AST.
+    rosePhaseTrace("attachPreprocessingInfo.attachTraversal.begin");
     tt.traverse(sageFilePtr, inh);
+    rosePhaseTrace("attachPreprocessingInfo.attachTraversal.end");
   }
 
   // endif for ifndef  CXX_IS_ROSE_CODE_GENERATION
@@ -2085,18 +2540,47 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr,
   ROSE_ASSERT(project != NULL);
 
   // DQ (8/26/2020): Remove the redundent include files for initializers.
+  rosePhaseTrace("attachPreprocessingInfo.normalize.begin");
+  rosePhaseTrace("attachPreprocessingInfo.normalize.fixupInitializers.begin");
   fixupInitializersUsingIncludeFiles(project);
+  rosePhaseTrace("attachPreprocessingInfo.normalize.fixupInitializers.end");
 
   LocatedNodeSourceOrder source_order;
+  rosePhaseTrace("attachPreprocessingInfo.normalize.buildSourceOrder.begin");
   buildLocatedNodeSourceOrder(sageFilePtr, source_order);
+  rosePhaseTrace("attachPreprocessingInfo.normalize.buildSourceOrder.end");
+  rosePhaseTrace("attachPreprocessingInfo.normalize.bracedScopes.begin");
   normalizeMisplacedBracedScopePreprocessingInfo(source_order);
+  rosePhaseTrace("attachPreprocessingInfo.normalize.bracedScopes.end");
+  rosePhaseTrace("attachPreprocessingInfo.normalize.leadingBlocks.begin");
   normalizeLeadingBasicBlockPreprocessingInfo(source_order);
+  rosePhaseTrace("attachPreprocessingInfo.normalize.leadingBlocks.end");
+  rosePhaseTrace("attachPreprocessingInfo.normalize.enumEnumerators.begin");
   normalizeEnumEnumeratorPreprocessingInfo(source_order);
+  rosePhaseTrace("attachPreprocessingInfo.normalize.enumEnumerators.end");
+  rosePhaseTrace("attachPreprocessingInfo.normalize.asm.begin");
   normalizeAsmStatementPreprocessingInfo(source_order);
+  rosePhaseTrace("attachPreprocessingInfo.normalize.asm.end");
+  rosePhaseTrace("attachPreprocessingInfo.normalize.leadingDeclarations.begin");
+  normalizeLeadingDeclarationPreprocessingInfo(source_order);
+  rosePhaseTrace("attachPreprocessingInfo.normalize.leadingDeclarations.end");
+  rosePhaseTrace("attachPreprocessingInfo.normalize.declarationOwners.begin");
   normalizeDeclarationOwnerPreprocessingInfo(source_order);
+  rosePhaseTrace("attachPreprocessingInfo.normalize.declarationOwners.end");
+  rosePhaseTrace(
+      "attachPreprocessingInfo.normalize.astTemplateFunctions.begin");
   normalizeAstUnparsedTemplateFunctionPreprocessingInfo(source_order);
+  rosePhaseTrace("attachPreprocessingInfo.normalize.astTemplateFunctions.end");
+  rosePhaseTrace(
+      "attachPreprocessingInfo.normalize.classBodyConditionals.begin");
   normalizeClassBodyConditionalPreprocessingInfo(source_order);
+  rosePhaseTrace("attachPreprocessingInfo.normalize.classBodyConditionals.end");
+  rosePhaseTrace(
+      "attachPreprocessingInfo.normalize.inlineFunctionConditionals.begin");
   normalizeInlineFunctionConditionalPreprocessingInfo(source_order);
+  rosePhaseTrace(
+      "attachPreprocessingInfo.normalize.inlineFunctionConditionals.end");
+  rosePhaseTrace("attachPreprocessingInfo.normalize.end");
 
   // DQ (11/18/2019): Set the flag that indicates that this SgSourceFile has had
   // its CPP directives and comments added.

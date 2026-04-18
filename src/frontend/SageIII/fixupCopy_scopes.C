@@ -615,7 +615,12 @@ void synchronizeCopiedDeclarationList(
       fflush(stderr);
     }
 
-    canonicalDeclarations.insert(copiedDecl);
+    const bool firstCanonicalOccurrence =
+        canonicalDeclarations.insert(copiedDecl).second;
+    if (!firstCanonicalOccurrence) {
+      continue;
+    }
+
     rebuiltDeclarations.push_back(copiedDecl);
 
     if (copiedDecl->get_parent() == NULL) {
@@ -718,6 +723,18 @@ bool hasMatchingSourceLocation(const SgLocatedNode *original,
          originalInfo->get_col() == candidateInfo->get_col();
 }
 
+bool nodeHasAttachedParentChain(const SgNode *node) {
+  for (const SgNode *cursor = node; cursor != NULL;
+       cursor = cursor->get_parent()) {
+    if (isSgProject(const_cast<SgNode *>(cursor)) != NULL ||
+        isSgFile(const_cast<SgNode *>(cursor)) != NULL) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 bool functionDeclarationsMatch(const SgFunctionDeclaration *originalDecl,
                                SgFunctionDeclaration *candidateDecl) {
   if (originalDecl == NULL || candidateDecl == NULL) {
@@ -740,6 +757,16 @@ bool functionDeclarationsMatch(const SgFunctionDeclaration *originalDecl,
   }
 
   if (hasMatchingSourceLocation(originalDecl, candidateDecl)) {
+    return true;
+  }
+
+  // Detached copied declarations can reach here before their enclosing
+  // namespace/class scopes have been reattached. Mangled-name generation walks
+  // the scope chain and will assert on those transient orphaned parents. At
+  // this point we are already traversing direct defining/nondefining links, so
+  // name + arity are a sufficient fallback until attachment is complete.
+  if (!nodeHasAttachedParentChain(originalDecl) ||
+      !nodeHasAttachedParentChain(candidateDecl)) {
     return true;
   }
 
@@ -2981,9 +3008,16 @@ void finalizeCanonicalCopyLinks(SgCopyHelp &help) {
         ROSE_ASSERT(block != NULL);
 
         SgStatementPtrList &statementList = block->get_statements();
+        std::unordered_set<SgStatement *> seenStatements;
         for (SgStatementPtrList::iterator stmt = statementList.begin();
              stmt != statementList.end();) {
-          SgDeclarationStatement *copyDecl = isSgDeclarationStatement(*stmt);
+          SgStatement *copyStmt = *stmt;
+          if (copyStmt != NULL && !seenStatements.insert(copyStmt).second) {
+            stmt = statementList.erase(stmt);
+            continue;
+          }
+
+          SgDeclarationStatement *copyDecl = isSgDeclarationStatement(copyStmt);
           if (copyDecl != NULL &&
               canonicalCopies.find(copyDecl) == canonicalCopies.end()) {
             if (isTrackedEmptyDeclaration(copyDecl)) {
@@ -3012,9 +3046,14 @@ void finalizeCanonicalCopyLinks(SgCopyHelp &help) {
         ROSE_ASSERT(classDef != NULL);
 
         SgDeclarationStatementPtrList &memberList = classDef->get_members();
+        std::unordered_set<SgDeclarationStatement *> seenDeclarations;
         for (SgDeclarationStatementPtrList::iterator stmt = memberList.begin();
              stmt != memberList.end();) {
           SgDeclarationStatement *copyDecl = *stmt;
+          if (copyDecl != NULL && !seenDeclarations.insert(copyDecl).second) {
+            stmt = memberList.erase(stmt);
+            continue;
+          }
           if (canonicalCopies.find(copyDecl) == canonicalCopies.end()) {
             if (isTrackedEmptyDeclaration(copyDecl)) {
               fprintf(stderr,
@@ -3041,9 +3080,14 @@ void finalizeCanonicalCopyLinks(SgCopyHelp &help) {
         ROSE_ASSERT(global != NULL);
 
         SgDeclarationStatementPtrList &decls = global->get_declarations();
+        std::unordered_set<SgDeclarationStatement *> seenDeclarations;
         for (SgDeclarationStatementPtrList::iterator stmt = decls.begin();
              stmt != decls.end();) {
           SgDeclarationStatement *copyDecl = *stmt;
+          if (copyDecl != NULL && !seenDeclarations.insert(copyDecl).second) {
+            stmt = decls.erase(stmt);
+            continue;
+          }
           if (canonicalCopies.find(copyDecl) == canonicalCopies.end()) {
             if (isTrackedEmptyDeclaration(copyDecl)) {
               fprintf(stderr,
@@ -3071,6 +3115,7 @@ void finalizeCanonicalCopyLinks(SgCopyHelp &help) {
         ROSE_ASSERT(namespaceDef != NULL);
 
         SgDeclarationStatementPtrList &decls = namespaceDef->get_declarations();
+        std::unordered_set<SgDeclarationStatement *> seenDeclarations;
         SgNamespaceDefinitionStatement *globalNamespaceDef =
             namespaceDef->get_global_definition();
         const bool isExtensionNamespaceDef =
@@ -3078,6 +3123,10 @@ void finalizeCanonicalCopyLinks(SgCopyHelp &help) {
         for (SgDeclarationStatementPtrList::iterator stmt = decls.begin();
              stmt != decls.end();) {
           SgDeclarationStatement *copyDecl = *stmt;
+          if (copyDecl != NULL && !seenDeclarations.insert(copyDecl).second) {
+            stmt = decls.erase(stmt);
+            continue;
+          }
           const bool isNonCanonicalDeclaration =
               canonicalCopies.find(copyDecl) == canonicalCopies.end();
           const bool belongsToGlobalNamespaceDef =

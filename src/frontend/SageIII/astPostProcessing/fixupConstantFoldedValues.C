@@ -207,7 +207,7 @@ inline SgExpression *get_parent_if_folded_in(SgExpression *expr) {
 
 void removeConstantFoldedValue(SgProject * /*project*/) {
   CollectExpressionTrees cet;
-  cet.traverseMemoryPool();
+  SgExpression::traverseMemoryPoolNodes(cet);
 
 #if ROSE_GRAPHVIZ_EXPRESSION_TREES
   std::ofstream out("expr_trees.dot");
@@ -369,6 +369,6 @@ void resetConstantFoldedValues(SgNode *node) {
         "Fixup Constant Folded Values (remove the original expression tree, "
         "leaving the constant folded values):");
     RemoveOriginalExpressionTrees astFixupTraversal;
-    astFixupTraversal.traverseMemoryPool();
+    SgExpression::traverseMemoryPoolNodes(astFixupTraversal);
   }
 }

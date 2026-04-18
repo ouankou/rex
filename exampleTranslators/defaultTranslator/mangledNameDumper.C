@@ -44,8 +44,8 @@ int main ( int argc, char** argv )
 
   // Dump mangled map
   cout<<"----------- mangled name map -------------"<<endl;
-  std::map< SgNode *, std::string > & m_map = SgNode::get_globalMangledNameMap ();
-  std::map< SgNode *, std::string >::iterator iter = m_map.begin();
+  SgUnorderedMapNodeToString &m_map = SgNode::get_globalMangledNameMap();
+  SgUnorderedMapNodeToString::iterator iter = m_map.begin();
   for (; iter != m_map.end(); iter++)
   {
     cout<<"SgNode is "<< (*iter).first->class_name()<<"    ";
@@ -59,16 +59,3 @@ int main ( int argc, char** argv )
 
   return backend (project);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

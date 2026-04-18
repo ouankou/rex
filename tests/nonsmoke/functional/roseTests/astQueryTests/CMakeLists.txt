@@ -83,10 +83,9 @@ add_test(
   COMMAND ${_rth}
     "TITLE=test3 Cxx_Grammar.C [test3.passed]"
     "USE_SUBDIR=yes"
-    "CMD=$<TARGET_FILE:testQuery3> -rose:verbose 0 -I${CMAKE_BINARY_DIR} ${_rose_include_flags_str} -c ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_Grammar.C"
+    "CMD=$<TARGET_FILE:testQuery3> -rose:verbose 0 -std=c++${CMAKE_CXX_STANDARD} -I${CMAKE_BINARY_DIR} ${_rose_include_flags_str} -c ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_Grammar.C"
     ${_exit_status}
     test3.passed
 )
 
 install(TARGETS testQuery testQuery2 testQuery3 DESTINATION bin)
-

@@ -64,6 +64,25 @@ static void suppress_unparse_output(SgLocatedNode *n) {
 using llvm::isa; // For LLVM type checking (isa<Type>)
 
 namespace {
+double roseSlowStmtTraceThresholdMs() {
+  static const double threshold_ms = []() -> double {
+    const char *value = getenv("ROSE_SLOW_STMT_TRACE_MS");
+    if (value == nullptr || *value == '\0') {
+      return 0.0;
+    }
+
+    char *end = nullptr;
+    double parsed = std::strtod(value, &end);
+    if (end == value || parsed <= 0.0) {
+      return 0.0;
+    }
+
+    return parsed;
+  }();
+
+  return threshold_ms;
+}
+
 static bool
 type_has_elaborated_spelling_for_type_operand(const clang::Type *type) {
   if (type == nullptr) {
@@ -2016,6 +2035,10 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
     return it->second;
   }
 
+  const double slow_stmt_threshold_ms = roseSlowStmtTraceThresholdMs();
+  const auto slow_stmt_start = slow_stmt_threshold_ms > 0.0
+                                   ? std::chrono::steady_clock::now()
+                                   : std::chrono::steady_clock::time_point();
   SgNode *result = nullptr;
   bool ret_status = false;
 
@@ -2627,6 +2650,33 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
 
   ROSE_ASSERT(result != nullptr);
 
+  if (slow_stmt_threshold_ms > 0.0) {
+    const double elapsed_ms =
+        std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - slow_stmt_start)
+            .count();
+    if (elapsed_ms >= slow_stmt_threshold_ms) {
+      std::string label = stmt->getStmtClassName();
+      if (p_compiler_instance != nullptr) {
+        clang::SourceLocation loc = stmt->getBeginLoc();
+        if (loc.isValid()) {
+          clang::PresumedLoc ploc =
+              p_compiler_instance->getSourceManager().getPresumedLoc(loc);
+          if (ploc.isValid()) {
+            label += " @";
+            label += ploc.getFilename();
+            label += ":";
+            label += std::to_string(ploc.getLine());
+          }
+        }
+      }
+
+      fprintf(stderr, "ROSE_SLOW_STMT elapsed_ms=%.3f label=%s\n", elapsed_ms,
+              label.c_str());
+      fflush(stderr);
+    }
+  }
+
   p_stmt_translation_map.insert(
       std::pair<clang::Stmt *, SgNode *>(stmt, result));
 
@@ -2651,13 +2701,27 @@ bool ClangToSageTranslator::VisitStmt(clang::Stmt *stmt, SgNode **node) {
 
   // TODO Is there anything else todo?
 
-  if (isSgLocatedNode(*node) != nullptr &&
-      (isSgLocatedNode(*node)->get_file_info() == nullptr ||
-       !(isSgLocatedNode(*node)->get_file_info()->isCompilerGenerated()))) {
+  auto has_real_stmt_source_info = [](SgLocatedNode *located) {
+    auto has_real_file_info = [](Sg_File_Info *fi) {
+      return fi != nullptr && fi->get_line() > 0 &&
+             !fi->isCompilerGenerated() && !fi->isFrontendSpecific() &&
+             !fi->isSourcePositionUnavailableInFrontend();
+    };
+
+    return located != nullptr && has_real_file_info(located->get_file_info()) &&
+           has_real_file_info(located->get_startOfConstruct()) &&
+           has_real_file_info(located->get_endOfConstruct());
+  };
+
+  if (SgLocatedNode *located = isSgLocatedNode(*node)) {
     clang::SourceRange range = stmt->getSourceRange();
+    bool should_refresh_existing_range = false;
 
     // Token-stream mapping expects statement extents to cover the full spelled
-    // statement, including terminating semicolons when present.
+    // statement, including terminating semicolons when present. Some Sage
+    // builders manufacture "real enough" statement source info before we reach
+    // VisitStmt, so semicolon-terminated statements need an explicit refresh
+    // here instead of relying only on the "missing source info" path.
     switch (stmt->getStmtClass()) {
     case clang::Stmt::ReturnStmtClass:
     case clang::Stmt::BreakStmtClass:
@@ -2669,13 +2733,22 @@ bool ClangToSageTranslator::VisitStmt(clang::Stmt *stmt, SgNode **node) {
         range = extendSourceRangeWithTrailingSemicolon(
             range, p_compiler_instance->getSourceManager(),
             p_compiler_instance->getLangOpts());
+        should_refresh_existing_range = true;
       }
       break;
     default:
       break;
     }
 
-    applySourceRange(*node, range);
+    // Many expression-specific visitors set an exact source range before
+    // delegating through VisitExpr/VisitStmt. Reapplying here only when the
+    // node still lacks complete real source info, or when we must refresh a
+    // semicolon-terminated statement range, avoids redundant Sg_File_Info
+    // churn on large generated inputs such as Cxx_Grammar.C while still
+    // keeping token-stream boundaries faithful.
+    if (should_refresh_existing_range || !has_real_stmt_source_info(located)) {
+      applySourceRange(*node, range);
+    }
   }
 
   return true;
@@ -3746,14 +3819,36 @@ bool ClangToSageTranslator::VisitCompoundStmt(
       if (!seen_sg_stmts.insert(stmt).second) {
         std::cerr << "VisitCompoundStmt: duplicate sg stmt "
                   << stmt->class_name() << "@" << stmt << std::endl;
+        continue;
       }
       block->append_statement(stmt);
     } else if (expr != nullptr) {
       SgExprStatement *expr_stmt = SageBuilder::buildExprStatement(expr);
       applySourceRangeWithTrailingSemicolon(expr_stmt, child_stmt);
+      if (p_compiler_instance != nullptr) {
+        clang::SourceManager &sm = p_compiler_instance->getSourceManager();
+        clang::SourceLocation begin_loc =
+            sm.getExpansionLoc(child_stmt->getBeginLoc());
+        clang::SourceRange raw_range = child_stmt->getSourceRange();
+        clang::SourceRange semi_range = extendSourceRangeWithTrailingSemicolon(
+            raw_range, sm, p_compiler_instance->getLangOpts());
+        const std::string raw_text = getSourceText(raw_range);
+        const std::string semi_text = getSourceText(semi_range);
+        if (raw_text.find("failbit") != std::string::npos ||
+            raw_text.find("setstate(__err)") != std::string::npos ||
+            raw_text.find("_M_narrow") != std::string::npos) {
+          std::cerr << "[rex-exprstmt-range] line="
+                    << (begin_loc.isValid()
+                            ? sm.getSpellingLineNumber(begin_loc)
+                            : 0)
+                    << " raw=" << raw_text << " semi=" << semi_text
+                    << std::endl;
+        }
+      }
       if (!seen_sg_stmts.insert(expr_stmt).second) {
         std::cerr << "VisitCompoundStmt: duplicate sg expr stmt "
                   << expr_stmt->class_name() << "@" << expr_stmt << std::endl;
+        continue;
       }
       block->append_statement(expr_stmt);
     }
@@ -5574,6 +5669,20 @@ bool ClangToSageTranslator::VisitReturnStmt(clang::ReturnStmt *return_stmt,
               << std::endl;
     res = false;
   }
+  if (SgExprListExp *expr_list = isSgExprListExp(expr)) {
+    const clang::Expr *ret_value = return_stmt->getRetValue();
+    const clang::Expr *written_ret_value =
+        ret_value != nullptr ? ret_value->IgnoreImplicit() : nullptr;
+    if (written_ret_value != nullptr &&
+        (llvm::isa<clang::InitListExpr>(written_ret_value) ||
+         llvm::isa<clang::CXXStdInitializerListExpr>(written_ret_value))) {
+      SgType *ret_type = buildTypeFromQualifiedType(ret_value->getType());
+      SgBracedInitializer *braced_return =
+          SageBuilder::buildBracedInitializer_nfi(expr_list, ret_type);
+      applySourceRange(braced_return, written_ret_value->getSourceRange());
+      expr = braced_return;
+    }
+  }
   if (SgConstructorInitializer *ctor_init = isSgConstructorInitializer(expr)) {
     // Return-by-value construction requires an explicit type name in ROSE's
     // constructor-initializer representation.
@@ -5582,6 +5691,25 @@ bool ClangToSageTranslator::VisitReturnStmt(clang::ReturnStmt *return_stmt,
     ctor_init->set_is_explicit_cast(true);
   }
   *node = SageBuilder::buildReturnStmt(expr);
+
+  if (p_compiler_instance != nullptr) {
+    clang::SourceManager &sm = p_compiler_instance->getSourceManager();
+    clang::SourceLocation begin_loc =
+        sm.getExpansionLoc(return_stmt->getBeginLoc());
+    clang::SourceRange raw_range = return_stmt->getSourceRange();
+    clang::SourceRange semi_range = extendSourceRangeWithTrailingSemicolon(
+        raw_range, sm, p_compiler_instance->getLangOpts());
+    const std::string raw_text = getSourceText(raw_range);
+    const std::string semi_text = getSourceText(semi_range);
+    if (raw_text.find("_S_empty_rep") != std::string::npos ||
+        raw_text.find("_M_narrow") != std::string::npos ||
+        raw_text.find("__t") != std::string::npos) {
+      std::cerr << "[rex-return-range] line="
+                << (begin_loc.isValid() ? sm.getSpellingLineNumber(begin_loc)
+                                        : 0)
+                << " raw=" << raw_text << " semi=" << semi_text << std::endl;
+    }
+  }
 
   return VisitStmt(return_stmt, node) && res;
 }
@@ -9180,7 +9308,26 @@ bool ClangToSageTranslator::VisitImplicitCastExpr(
       ROSE_ASSERT(cast_expr->get_file_info() != nullptr);
       cast_expr->get_file_info()->setImplicitCast();
       *node = cast_expr;
-      return VisitExpr(implicit_cast_expr, node);
+      const bool visit_ok = VisitExpr(implicit_cast_expr, node);
+
+      // VisitExpr reapplies Clang source ranges. Re-mark the existing file-info
+      // objects in place so these implicit casts stay compiler-generated for
+      // unparsing without reallocating file-info storage.
+      auto restore_implicit_cast_flags = [](Sg_File_Info *fi) {
+        if (fi == nullptr) {
+          return;
+        }
+        fi->setCompilerGenerated();
+        fi->setOutputInCodeGeneration();
+        fi->setImplicitCast();
+      };
+
+      restore_implicit_cast_flags(cast_expr->get_file_info());
+      restore_implicit_cast_flags(cast_expr->get_startOfConstruct());
+      restore_implicit_cast_flags(cast_expr->get_endOfConstruct());
+      restore_implicit_cast_flags(cast_expr->get_operatorPosition());
+
+      return visit_ok;
     }
     break;
   }
@@ -14431,12 +14578,13 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
     };
 
     auto resolve_member_template_decl =
-        [&](SgMemberFunctionDeclaration *member_decl)
+        [&](SgMemberFunctionDeclaration *translated_member_decl)
         -> SgTemplateMemberFunctionDeclaration * {
       if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
               recover_instantiation_template_declaration<
                   SgTemplateMemberFunctionDeclaration,
-                  SgTemplateInstantiationMemberFunctionDecl>(member_decl)) {
+                  SgTemplateInstantiationMemberFunctionDecl>(
+                  translated_member_decl)) {
         return tmpl_decl;
       }
 
@@ -14459,14 +14607,46 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
     };
 
     auto resolve_receiver_member_declaration =
-        [&](SgMemberFunctionDeclaration *member_decl)
+        [&](SgMemberFunctionDeclaration *translated_member_decl)
         -> SgMemberFunctionDeclaration * {
       SgScopeStatement *receiver_scope = resolve_receiver_member_scope();
       if (receiver_scope == nullptr) {
         return nullptr;
       }
 
-      SgMemberFunctionDeclaration *normalized_member_decl = member_decl;
+      SgDeclarationStatementPtrList *members =
+          get_scope_declaration_list_for_instantiation_ref(receiver_scope);
+      const size_t member_count = members != nullptr ? members->size() : 0;
+
+      const clang::Decl *cache_decl_key =
+          member_decl != nullptr
+              ? static_cast<const clang::Decl *>(member_decl)
+              : static_cast<const clang::Decl *>(clang_method);
+      ReceiverMemberResolutionCacheEntry *cache_entry = nullptr;
+      auto cache_result = [&](SgMemberFunctionDeclaration *resolved_decl)
+          -> SgMemberFunctionDeclaration * {
+        if (cache_entry != nullptr) {
+          cache_entry->has_cached_result = true;
+          cache_entry->resolved_decl = resolved_decl;
+          cache_entry->member_list = members;
+          cache_entry->member_list_size = member_count;
+        }
+        return resolved_decl;
+      };
+
+      if (cache_decl_key != nullptr) {
+        auto &entry = p_receiver_member_resolution_cache[std::make_pair(
+            cache_decl_key,
+            static_cast<const SgScopeStatement *>(receiver_scope))];
+        if (entry.has_cached_result && entry.member_list == members &&
+            entry.member_list_size == member_count) {
+          return entry.resolved_decl;
+        }
+        cache_entry = &entry;
+      }
+
+      SgMemberFunctionDeclaration *normalized_member_decl =
+          translated_member_decl;
       if (SgMemberFunctionDeclaration *first_nondef =
               isSgMemberFunctionDeclaration(
                   normalized_member_decl != nullptr
@@ -14478,7 +14658,7 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
 
       if (normalized_member_decl != nullptr &&
           normalized_member_decl->get_scope() == receiver_scope) {
-        return normalized_member_decl;
+        return cache_result(normalized_member_decl);
       }
 
       SgName target_name = normalized_member_decl != nullptr
@@ -14493,15 +14673,74 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
       SgTemplateMemberFunctionDeclaration *target_template_decl =
           resolve_member_template_decl(normalized_member_decl);
 
+      auto normalize_resolved_member_decl =
+          [](SgMemberFunctionDeclaration *candidate)
+          -> SgMemberFunctionDeclaration * {
+        if (candidate == nullptr) {
+          return nullptr;
+        }
+        if (SgMemberFunctionDeclaration *first_nondef =
+                isSgMemberFunctionDeclaration(
+                    candidate->get_firstNondefiningDeclaration())) {
+          return first_nondef;
+        }
+        return candidate;
+      };
+
+      auto resolve_member_decl_from_symbol =
+          [&](SgSymbol *candidate_sym) -> SgMemberFunctionDeclaration * {
+        if (candidate_sym == nullptr) {
+          return nullptr;
+        }
+        if (SgMemberFunctionSymbol *member_sym =
+                isSgMemberFunctionSymbol(candidate_sym)) {
+          return normalize_resolved_member_decl(
+              isSgMemberFunctionDeclaration(member_sym->get_declaration()));
+        }
+        if (SgTemplateMemberFunctionSymbol *tmpl_member_sym =
+                isSgTemplateMemberFunctionSymbol(candidate_sym)) {
+          return normalize_resolved_member_decl(
+              isSgTemplateMemberFunctionDeclaration(
+                  tmpl_member_sym->get_declaration()));
+        }
+        if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(candidate_sym)) {
+          return normalize_resolved_member_decl(
+              isSgMemberFunctionDeclaration(func_sym->get_declaration()));
+        }
+        if (SgTemplateFunctionSymbol *tmpl_func_sym =
+                isSgTemplateFunctionSymbol(candidate_sym)) {
+          return normalize_resolved_member_decl(
+              isSgTemplateMemberFunctionDeclaration(
+                  tmpl_func_sym->get_declaration()));
+        }
+        return nullptr;
+      };
+
+      if (target_type != nullptr) {
+        if (SgFunctionType *target_function_type =
+                isSgFunctionType(target_type)) {
+          if (SgMemberFunctionDeclaration *direct_match =
+                  resolve_member_decl_from_symbol(
+                      receiver_scope->lookup_nontemplate_member_function_symbol(
+                          target_name, target_function_type, nullptr))) {
+            return cache_result(direct_match);
+          }
+          if (SgMemberFunctionDeclaration *direct_match =
+                  resolve_member_decl_from_symbol(
+                      receiver_scope->lookup_function_symbol(
+                          target_name, target_function_type))) {
+            return cache_result(direct_match);
+          }
+        }
+      }
+
       SgMemberFunctionDeclaration *template_match = nullptr;
       SgMemberFunctionDeclaration *type_match = nullptr;
       SgMemberFunctionDeclaration *name_match = nullptr;
       size_t name_match_count = 0;
 
-      SgDeclarationStatementPtrList *members =
-          get_scope_declaration_list_for_instantiation_ref(receiver_scope);
       if (members == nullptr) {
-        return nullptr;
+        return cache_result(nullptr);
       }
 
       for (SgDeclarationStatement *member_stmt : *members) {
@@ -14532,7 +14771,7 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
               if (target_type == nullptr ||
                   SageInterface::isEquivalentType(candidate->get_type(),
                                                   target_type)) {
-                return candidate;
+                return cache_result(candidate);
               }
               if (template_match == nullptr) {
                 template_match = candidate;
@@ -14550,16 +14789,16 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
       }
 
       if (template_match != nullptr) {
-        return template_match;
+        return cache_result(template_match);
       }
       if (type_match != nullptr) {
-        return type_match;
+        return cache_result(type_match);
       }
       if (name_match_count == 1) {
-        return name_match;
+        return cache_result(name_match);
       }
 
-      return nullptr;
+      return cache_result(nullptr);
     };
 
     auto resolve_member_symbol = [&](SgMemberFunctionDeclaration *member_decl)

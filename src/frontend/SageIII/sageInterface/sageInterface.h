@@ -1093,6 +1093,11 @@ ROSE_DLL_API void setSourcePositionAtRootAndAllChildren(SgNode *root);
 //! DQ (5/1/2012): New function with improved name.
 void setSourcePositionAsTransformation(SgNode *node);
 
+//! Ensure a located node has the file-info objects required before marking it
+//! as a transformation/output subtree.
+ROSE_DLL_API void
+ensureLocatedNodeFileInfoForTransformation(SgLocatedNode *locatedNode);
+
 // DQ (5/1/2012): Newly renamed function (previous name preserved for backward
 // compatability).
 void setSourcePositionPointersToNull(SgNode *node);

@@ -12,10 +12,11 @@ void fixupAstDefiningAndNondefiningDeclarations(SgNode * /*node*/) {
   // This simplifies how the traversal is called!
   FixupAstDefiningAndNondefiningDeclarations astFixupTraversal;
 
-  // DQ (1/29/2007): This traversal now uses the memory pool (so that we will
-  // visit declaration hidden in types (e.g. SgClassType)
-  // SgClassType::traverseMemoryPoolNodes(v);
-  astFixupTraversal.traverseMemoryPool();
+  // Visit all pooled declarations, plus the non-declaration support nodes that
+  // this visitor explicitly handles, without paying for a whole-pool walk.
+  SgDeclarationStatement::traverseMemoryPoolNodes(astFixupTraversal);
+  SgFunctionParameterList::traverseMemoryPoolNodes(astFixupTraversal);
+  SgVariableDefinition::traverseMemoryPoolNodes(astFixupTraversal);
 }
 
 void FixupAstDefiningAndNondefiningDeclarations::visit(SgNode *node) {

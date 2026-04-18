@@ -1359,8 +1359,7 @@ Outliner::insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
   //   used. since SageInterface::appendStatementWithDependentDeclaration()
   //   depends on it
   // if (SageInterface::is_Fortran_language() == false ) // C/C++ only
-  if (use_dlopen == false &&
-      SageInterface::is_Fortran_language() == false) // C/C++ only
+  if (SageInterface::is_Fortran_language() == false) // C/C++ only
   {
     // This is done in the original file (does not effect the separate file if
     // we outline the function there) Insert a single, global prototype (i.e., a

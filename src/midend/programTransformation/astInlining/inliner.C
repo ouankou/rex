@@ -39,6 +39,97 @@ bool skipHeaders = false;
 bool verbose = false; // if set to true, generate debugging information
 } // namespace Inliner
 
+namespace {
+SgExpression *lambdaCaptureSourceExpression(const SgLambdaCapture *capture) {
+  if (capture == NULL) {
+    return NULL;
+  }
+
+  if (SgExpression *source = capture->get_source_closure_variable()) {
+    return source;
+  }
+
+  return capture->get_capture_variable();
+}
+
+SgLambdaExp *
+lambdaExpressionForClassDeclaration(SgClassDeclaration *classDecl) {
+  if (classDecl == NULL) {
+    return NULL;
+  }
+
+  SgClassDeclaration *candidates[] = {
+      classDecl,
+      isSgClassDeclaration(classDecl->get_firstNondefiningDeclaration()),
+      isSgClassDeclaration(classDecl->get_definingDeclaration())};
+
+  for (SgClassDeclaration *candidate : candidates) {
+    if (candidate == NULL) {
+      continue;
+    }
+
+    if (SgLambdaExp *lambdaExp = isSgLambdaExp(candidate->get_parent())) {
+      return lambdaExp;
+    }
+  }
+
+  return NULL;
+}
+
+SgLambdaExp *
+lambdaExpressionForFunctionDeclaration(SgFunctionDeclaration *functionDecl) {
+  if (functionDecl == NULL) {
+    return NULL;
+  }
+
+  SgFunctionDeclaration *candidates[] = {
+      functionDecl,
+      isSgFunctionDeclaration(functionDecl->get_firstNondefiningDeclaration()),
+      isSgFunctionDeclaration(functionDecl->get_definingDeclaration())};
+  for (SgFunctionDeclaration *candidate : candidates) {
+    if (candidate == NULL) {
+      continue;
+    }
+
+    if (SgLambdaExp *lambdaExp = isSgLambdaExp(candidate->get_parent())) {
+      return lambdaExp;
+    }
+  }
+
+  if (SgMemberFunctionDeclaration *memberDecl =
+          isSgMemberFunctionDeclaration(functionDecl)) {
+    if (SgClassDeclaration *associatedClass = isSgClassDeclaration(
+            memberDecl->get_associatedClassDeclaration())) {
+      if (SgLambdaExp *lambdaExp =
+              lambdaExpressionForClassDeclaration(associatedClass)) {
+        return lambdaExp;
+      }
+    }
+
+    if (SgClassDefinition *classDef =
+            isSgClassDefinition(memberDecl->get_parent())) {
+      if (SgLambdaExp *lambdaExp = lambdaExpressionForClassDeclaration(
+              classDef->get_declaration())) {
+        return lambdaExp;
+      }
+    }
+
+    if (SgMemberFunctionType *memberType =
+            isSgMemberFunctionType(memberDecl->get_type())) {
+      if (SgClassType *classType =
+              isSgClassType(memberType->get_class_type())) {
+        if (SgLambdaExp *lambdaExp = lambdaExpressionForClassDeclaration(
+                isSgClassDeclaration(classType->get_declaration()))) {
+          return lambdaExp;
+        }
+      }
+    }
+  }
+
+  return NULL;
+}
+} // namespace
+
 SgExpression *generateAssignmentMaybe(SgExpression *lhs, SgExpression *rhs) {
   // If lhs is NULL, return rhs without doing an assignment
   // If lhs is not NULL, assign rhs to it
@@ -314,11 +405,10 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
         if (m_func_decl) {
           string q_name = m_func_decl->get_qualified_name().getString();
           string::size_type pos = q_name.find("::operator", 0);
-          string::size_type a_pos = q_name.find(
-              "::__anonymous_",
-              0); // lambda expression is call through an anonymous operator
-          if (pos != string::npos && a_pos != 0) // a non-anonymous operator
-          {
+          const bool isLambdaOperator =
+              lambdaExpressionForFunctionDeclaration(m_func_decl) != NULL;
+
+          if (pos != string::npos && isLambdaOperator == false) {
             //                  if (Inliner::verbose)
             std::cout << "Inline returns false: skip non-anonymous operator "
                          "function named:"
@@ -466,11 +556,10 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
     SgClassDeclaration *classDecl =
         isSgClassDeclaration(isSgClassType(ct)->get_declaration());
     ROSE_ASSERT(classDecl);
-    if (isSgLambdaExp(classDecl->get_parent())) {
+    if (SgLambdaExp *lambdaExp =
+            lambdaExpressionForClassDeclaration(classDecl)) {
       // Pei-Hung (06/12/20) If this is a lambda function call, we try to skip
       // the class declaration.
-      SgLambdaExp *lambdaExp = isSgLambdaExp(classDecl->get_parent());
-      ROSE_ASSERT(lambdaExp);
       isLambdaMemberFuncCall = true;
       // cout << "There is a lambda class" << endl;
       SgLambdaCaptureList *lambdaCaptureList =
@@ -480,13 +569,17 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
       for (SgLambdaCapture *capture : captureList) {
         // get the capture variable
         SgVarRefExp *captureVarRef =
-            isSgVarRefExp(capture->get_capture_variable());
-        ROSE_ASSERT(captureVarRef);
+            isSgVarRefExp(lambdaCaptureSourceExpression(capture));
+        if (captureVarRef == NULL) {
+          continue;
+        }
         SgVariableSymbol *captureVarSym = captureVarRef->get_symbol();
         // get the closure variable
         SgVarRefExp *closureVarRef =
             isSgVarRefExp(capture->get_closure_variable());
-        ROSE_ASSERT(closureVarRef);
+        if (closureVarRef == NULL) {
+          continue;
+        }
         SgVariableSymbol *closureVarSym = closureVarRef->get_symbol();
         // Mapping closure and capture.
         varMap[closureVarSym] = captureVarSym;
@@ -587,6 +680,222 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
 
   ROSE_ASSERT(function_copy);
   SgBasicBlock *funbody_copy = function_copy->get_body();
+
+  class ClearCopiedScopeSymbolTables : public AstSimpleProcessing {
+  public:
+    void visit(SgNode *node) override {
+      if (SgScopeStatement *scope = isSgScopeStatement(node)) {
+        if (SgSymbolTable *symbolTable = scope->get_symbol_table()) {
+          symbolTable->get_table()->clear();
+        }
+      }
+    }
+  };
+
+  ClearCopiedScopeSymbolTables().traverse(funbody_copy, preorder);
+  funbody_raw->fixupCopy_symbols(funbody_copy, tc);
+
+  auto repairScopesLeavingFunctionCopy = [funbody_copy, &tc](SgNode *root) {
+    std::map<const SgDeclarationStatement *, SgDeclarationStatement *>
+        copiedDeclarationByOriginal;
+    std::map<SgDeclarationStatement *, const SgDeclarationStatement *>
+        originalDeclarationByCopy;
+
+    for (SgCopyHelp::copiedNodeMapTypeIterator it =
+             tc.get_copiedNodeMap().begin();
+         it != tc.get_copiedNodeMap().end(); ++it) {
+      const SgDeclarationStatement *originalDecl =
+          isSgDeclarationStatement(const_cast<SgNode *>(it->first));
+      SgDeclarationStatement *copiedDecl = isSgDeclarationStatement(it->second);
+      if (originalDecl == NULL || copiedDecl == NULL) {
+        continue;
+      }
+
+      copiedDeclarationByOriginal[originalDecl] = copiedDecl;
+      originalDeclarationByCopy[copiedDecl] = originalDecl;
+    }
+
+    class RepairCopiedScopes : public AstSimpleProcessing {
+      SgBasicBlock *retainedBody;
+      const std::map<const SgDeclarationStatement *, SgDeclarationStatement *>
+          &copiedDeclarationByOriginal;
+      const std::map<SgDeclarationStatement *, const SgDeclarationStatement *>
+          &originalDeclarationByCopy;
+
+      static bool nodeIsRetained(SgNode *node, SgBasicBlock *retainedBody) {
+        for (SgNode *current = node; current != NULL;
+             current = current->get_parent()) {
+          if (current == retainedBody) {
+            return true;
+          }
+        }
+
+        return false;
+      }
+
+      static bool scopeIsRetained(SgScopeStatement *scope,
+                                  SgBasicBlock *retainedBody) {
+        for (SgNode *node = scope; node != NULL; node = node->get_parent()) {
+          if (node == retainedBody) {
+            return true;
+          }
+        }
+
+        return false;
+      }
+
+      SgDeclarationStatement *
+      findRetainedCopy(const SgDeclarationStatement *originalDecl) const {
+        if (originalDecl == NULL) {
+          return NULL;
+        }
+
+        std::map<const SgDeclarationStatement *,
+                 SgDeclarationStatement *>::const_iterator found =
+            copiedDeclarationByOriginal.find(originalDecl);
+        if (found == copiedDeclarationByOriginal.end() ||
+            nodeIsRetained(found->second, retainedBody) == false) {
+          return NULL;
+        }
+
+        return found->second;
+      }
+
+      static SgScopeStatement *findStructuralScope(SgNode *node) {
+        for (SgNode *parent = node != NULL ? node->get_parent() : NULL;
+             parent != NULL; parent = parent->get_parent()) {
+          if (SgScopeStatement *scope = isSgScopeStatement(parent)) {
+            return scope;
+          }
+        }
+
+        return NULL;
+      }
+
+      void repairDeclarationChain(SgDeclarationStatement *declaration) const {
+        SgDeclarationStatement *currentDefining =
+            declaration->get_definingDeclaration();
+        SgDeclarationStatement *currentFirstNondefining =
+            declaration->get_firstNondefiningDeclaration();
+        const bool definingLeavesRetainedBody =
+            currentDefining != NULL &&
+            nodeIsRetained(currentDefining, retainedBody) == false;
+        const bool firstLeavesRetainedBody =
+            currentFirstNondefining != NULL &&
+            nodeIsRetained(currentFirstNondefining, retainedBody) == false;
+
+        if (!definingLeavesRetainedBody && !firstLeavesRetainedBody) {
+          return;
+        }
+
+        SgDeclarationStatement *replacementDefining = NULL;
+        SgDeclarationStatement *replacementFirstNondefining = NULL;
+
+        std::map<SgDeclarationStatement *,
+                 const SgDeclarationStatement *>::const_iterator original =
+            originalDeclarationByCopy.find(declaration);
+        if (original != originalDeclarationByCopy.end()) {
+          const SgDeclarationStatement *originalDecl = original->second;
+          const SgDeclarationStatement *originalDefining =
+              originalDecl->get_definingDeclaration();
+          const SgDeclarationStatement *originalFirstNondefining =
+              originalDecl->get_firstNondefiningDeclaration();
+
+          replacementDefining = findRetainedCopy(originalDefining);
+          replacementFirstNondefining =
+              findRetainedCopy(originalFirstNondefining);
+
+          if (originalDefining == NULL) {
+            replacementDefining = NULL;
+          } else if (replacementDefining == NULL &&
+                     originalDefining == originalDecl) {
+            replacementDefining = declaration;
+          }
+
+          if (originalFirstNondefining == NULL) {
+            replacementFirstNondefining = NULL;
+          } else if (replacementFirstNondefining == NULL &&
+                     originalFirstNondefining == originalDecl) {
+            replacementFirstNondefining = declaration;
+          }
+        }
+
+        if (definingLeavesRetainedBody && replacementDefining == NULL) {
+          replacementDefining = declaration;
+        }
+
+        if (firstLeavesRetainedBody && replacementFirstNondefining == NULL) {
+          replacementFirstNondefining =
+              replacementDefining != NULL ? replacementDefining : declaration;
+        }
+
+        if (replacementDefining != NULL &&
+            currentDefining != replacementDefining) {
+          declaration->set_definingDeclaration(replacementDefining);
+        }
+
+        if (replacementFirstNondefining != NULL &&
+            currentFirstNondefining != replacementFirstNondefining) {
+          declaration->set_firstNondefiningDeclaration(
+              replacementFirstNondefining);
+        }
+      }
+
+    public:
+      RepairCopiedScopes(
+          SgBasicBlock *retainedBody,
+          const std::map<const SgDeclarationStatement *,
+                         SgDeclarationStatement *> &copiedDeclarationByOriginal,
+          const std::map<SgDeclarationStatement *,
+                         const SgDeclarationStatement *>
+              &originalDeclarationByCopy)
+          : retainedBody(retainedBody),
+            copiedDeclarationByOriginal(copiedDeclarationByOriginal),
+            originalDeclarationByCopy(originalDeclarationByCopy) {}
+
+      void visit(SgNode *node) override {
+        if (SgInitializedName *initializedName = isSgInitializedName(node)) {
+          if (initializedName->get_scope() != NULL &&
+              scopeIsRetained(initializedName->get_scope(), retainedBody) ==
+                  false) {
+            SgScopeStatement *replacementScope =
+                findStructuralScope(initializedName);
+            if (replacementScope == NULL) {
+              replacementScope = retainedBody;
+            }
+
+            initializedName->set_scope(replacementScope);
+          }
+        }
+
+        if (SgDeclarationStatement *declaration =
+                isSgDeclarationStatement(node)) {
+          repairDeclarationChain(declaration);
+
+          const bool isLambdaClosureClass =
+              lambdaExpressionForClassDeclaration(
+                  isSgClassDeclaration(declaration)) != NULL;
+          if (declaration->hasExplicitScope() == true &&
+              ((declaration->get_scope() != NULL &&
+                scopeIsRetained(declaration->get_scope(), retainedBody) ==
+                    false) ||
+               isLambdaClosureClass)) {
+            SgScopeStatement *replacementScope =
+                findStructuralScope(declaration);
+            if (replacementScope == NULL) {
+              replacementScope = retainedBody;
+            }
+
+            declaration->set_scope(replacementScope);
+          }
+        }
+      }
+    };
+
+    RepairCopiedScopes repair(funbody_copy, copiedDeclarationByOriginal,
+                              originalDeclarationByCopy);
+    repair.traverse(root, preorder);
+  };
   // rename labels in an inlined function definition. goto statements to them
   // will be updated.
   renameLabels(funbody_copy, targetFunction);
@@ -631,6 +940,7 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
     function_copy->get_body()->set_parent(NULL);
     function_copy->set_body(NULL);
   }
+  repairScopesLeavingFunctionCopy(funbody_copy);
   delete function_copy;
   function_copy = NULL;
   funbody_copy->set_parent(SageInterface::getScope(funcall));
@@ -658,17 +968,13 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
     // Pei-Hung (06/12/20): need to check if the argument is a class defined for
     // lambda
     SgClassDeclaration *classdecl = NULL;
-    bool hasLambdaFuncArg = false;
+    bool hasLambdaFuncArg = isSgLambdaExp(actualArg) != NULL;
     if (isSgClassType(formalArg->get_typeptr())) {
       SgClassType *classtype = isSgClassType(formalArg->get_typeptr());
       classdecl = isSgClassDeclaration(classtype->get_declaration());
       ROSE_ASSERT(classdecl);
-      // check if the parent of SgClassDeclaration is SgLambdaExp
-      if (isSgLambdaExp(classdecl->get_parent())) {
-        // cout << formalArg->get_name()<< endl;
-        // cout << classdecl->get_name() << endl;
-        hasLambdaFuncArg = true;
-      }
+      hasLambdaFuncArg = hasLambdaFuncArg ||
+                         lambdaExpressionForClassDeclaration(classdecl) != NULL;
     }
     SgVariableDeclaration *vardecl = NULL;
     SgName shadow_name(formalArg->get_name());
@@ -676,7 +982,7 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
     int newStmtCount = 0;
     // Pei-Hung (06/12/20) this will create functor for the inlined code.
     // turn off this by default; turn it on for experimental usage
-    bool retrieveFunctor = true;
+    bool retrieveFunctor = false;
     if (retrieveFunctor && hasLambdaFuncArg) {
       // cout << "new class name = " << shadow_name << endl;
       // Get lambda function, class declaration, and others

@@ -18,6 +18,12 @@ set(REX_FRONTEND_ERROR_TESTS
   # Name-qualification regression tests include one intentionally-invalid C++
   # specimen that still needs backend coverage from Clang's recovered AST.
   testNameQalTypeElab_21.C
+  # C++20 concepts diagnostics should still round-trip through the backend when
+  # Clang recovers a valid AST from an intentionally-invalid input.
+  test2020_47.C
+  # Pointer-to-member comparison diagnostics still leave a usable recovered AST
+  # that must continue through the backend in the mirrored compile suites.
+  test2020_40.C
   # Issue 441: Builtin redeclarations produce diagnostics; keep frontend alive.
   test2017_02.c
   test2018_26.c

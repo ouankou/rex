@@ -1989,24 +1989,47 @@ static unsigned getOpenMPStatementEndLine(SgStatement *statement) {
   return getOpenMPStatementStartLine(statement);
 }
 
-static bool blockContainsOpenMPStatement(const SgBasicBlock *block) {
-  if (block == nullptr) {
-    return false;
+static std::unordered_set<const SgBasicBlock *>
+collectBlocksContainingOpenMPStatements(SgSourceFile *source_file) {
+  std::unordered_set<const SgBasicBlock *> blocks_with_openmp;
+  if (source_file == nullptr) {
+    return blocks_with_openmp;
   }
 
-  std::vector<SgNode *> nested_statements =
-      NodeQuery::querySubTree(const_cast<SgBasicBlock *>(block), V_SgStatement);
-  for (SgNode *node : nested_statements) {
-    SgStatement *statement = isSgStatement(node);
-    if (statement == nullptr || statement == block) {
-      continue;
-    }
-    if (SageInterface::isOmpStatement(statement)) {
-      return true;
-    }
-  }
+  class CollectBlocksTraversal : public AstSimpleProcessing {
+  public:
+    explicit CollectBlocksTraversal(
+        std::unordered_set<const SgBasicBlock *> &blocks_with_openmp)
+        : blocks_with_openmp_(blocks_with_openmp) {}
 
-  return false;
+    void visit(SgNode *node) override {
+      SgStatement *statement = isSgStatement(node);
+      if (statement == nullptr || !SageInterface::isOmpStatement(statement)) {
+        return;
+      }
+
+      for (SgNode *parent = statement->get_parent(); parent != nullptr;
+           parent = parent->get_parent()) {
+        if (const SgBasicBlock *block = isSgBasicBlock(parent)) {
+          blocks_with_openmp_.insert(block);
+        }
+      }
+    }
+
+  private:
+    std::unordered_set<const SgBasicBlock *> &blocks_with_openmp_;
+  };
+
+  CollectBlocksTraversal traversal(blocks_with_openmp);
+  traversal.traverse(source_file, preorder);
+  return blocks_with_openmp;
+}
+
+static bool blockContainsOpenMPStatement(
+    const SgBasicBlock *block,
+    const std::unordered_set<const SgBasicBlock *> &blocks_with_openmp) {
+  return block != nullptr &&
+         blocks_with_openmp.find(block) != blocks_with_openmp.end();
 }
 
 static bool isRelocatableScopeConditionalInfo(const SgBasicBlock *block,
@@ -2052,7 +2075,9 @@ static bool isRelocatableScopeConditionalInfo(const SgBasicBlock *block,
   }
 }
 
-static void relocateScopeConditionalInfoForOpenMP(SgBasicBlock *block) {
+static void relocateScopeConditionalInfoForOpenMP(
+    SgBasicBlock *block,
+    const std::unordered_set<const SgBasicBlock *> &blocks_with_openmp) {
   if (block == nullptr) {
     return;
   }
@@ -2062,12 +2087,12 @@ static void relocateScopeConditionalInfoForOpenMP(SgBasicBlock *block) {
     return;
   }
 
-  if (!blockContainsOpenMPStatement(block)) {
+  AttachedPreprocessingInfoType *infos = block->getAttachedPreprocessingInfo();
+  if (infos == nullptr || infos->empty()) {
     return;
   }
 
-  AttachedPreprocessingInfoType *infos = block->getAttachedPreprocessingInfo();
-  if (infos == nullptr || infos->empty()) {
+  if (!blockContainsOpenMPStatement(block, blocks_with_openmp)) {
     return;
   }
 
@@ -2266,7 +2291,14 @@ void collectCommentedDirectiveRelocations(
     unsigned line = 0;
   };
 
+  struct CommentedDirectiveOwner {
+    SgPragmaDeclaration *owner = nullptr;
+    PreprocessingInfo *info = nullptr;
+  };
+
+  std::vector<CommentedDirectiveOwner> commented_directives;
   std::unordered_set<SgPragmaDeclaration *> pragma_set;
+  std::unordered_set<PreprocessingInfo *> seen_comments;
   std::unordered_map<int, std::vector<StatementPosition>>
       statement_positions_by_file;
   std::unordered_map<std::string, std::vector<StatementPosition>>
@@ -2277,6 +2309,27 @@ void collectCommentedDirectiveRelocations(
       continue;
     }
     pragma_set.insert(pragma_decl);
+
+    AttachedPreprocessingInfoType *attached =
+        pragma_decl->get_attachedPreprocessingInfoPtr();
+    if (attached == nullptr || attached->empty()) {
+      continue;
+    }
+
+    for (PreprocessingInfo *info : *attached) {
+      if (info == nullptr || !isCommentedOutDirective(info)) {
+        continue;
+      }
+      if (!seen_comments.insert(info).second) {
+        continue;
+      }
+      commented_directives.push_back(
+          CommentedDirectiveOwner{pragma_decl, info});
+    }
+  }
+
+  if (commented_directives.empty()) {
+    return;
   }
 
   std::vector<SgNode *> statements =
@@ -2369,184 +2422,160 @@ void collectCommentedDirectiveRelocations(
     return *(found - 1);
   };
 
-  std::unordered_set<PreprocessingInfo *> seen_comments;
-  std::vector<SgNode *> located_nodes =
-      NodeQuery::querySubTree(source_file, V_SgLocatedNode);
-  for (SgNode *node : located_nodes) {
-    SgLocatedNode *owner = isSgLocatedNode(node);
-    if (owner == nullptr) {
+  for (const CommentedDirectiveOwner &commented_directive :
+       commented_directives) {
+    SgPragmaDeclaration *owner = commented_directive.owner;
+    PreprocessingInfo *info = commented_directive.info;
+    if (owner == nullptr || info == nullptr) {
       continue;
     }
 
-    SgPragmaDeclaration *owner_pragma = isSgPragmaDeclaration(owner);
-    if (owner_pragma == nullptr ||
-        pragma_set.find(owner_pragma) == pragma_set.end()) {
-      continue;
+    int comment_line = info->getLineNumber();
+    int file_id = info->getFileId();
+    std::string comment_filename;
+
+    if (comment_line <= 0) {
+      comment_line = static_cast<int>(getLocatedNodeLine(owner));
     }
-
-    AttachedPreprocessingInfoType *attached =
-        owner->get_attachedPreprocessingInfoPtr();
-    if (attached == nullptr || attached->empty()) {
-      continue;
-    }
-
-    AttachedPreprocessingInfoType attached_copy = *attached;
-    for (PreprocessingInfo *info : attached_copy) {
-      if (!isCommentedOutDirective(info)) {
-        continue;
-      }
-      if (!seen_comments.insert(info).second) {
-        continue;
-      }
-
-      int comment_line = info->getLineNumber();
-      int file_id = info->getFileId();
-      std::string comment_filename;
-
-      if (comment_line <= 0) {
-        comment_line = static_cast<int>(getLocatedNodeLine(owner));
-      }
-      if (Sg_File_Info *comment_file_info = info->get_file_info()) {
+    if (Sg_File_Info *comment_file_info = info->get_file_info()) {
+      if (file_id <= 0) {
+        file_id = comment_file_info->get_file_id();
         if (file_id <= 0) {
-          file_id = comment_file_info->get_file_id();
-          if (file_id <= 0) {
-            int physical_file_id = comment_file_info->get_physical_file_id();
-            if (physical_file_id > 0) {
-              file_id = physical_file_id;
-            }
-          }
-        }
-        comment_filename = comment_file_info->get_filenameString();
-      }
-      if (file_id <= 0) {
-        if (const Sg_File_Info *owner_info = owner->get_file_info()) {
-          file_id = owner_info->get_file_id();
-          if (file_id <= 0) {
-            int physical_file_id = owner_info->get_physical_file_id();
-            if (physical_file_id > 0) {
-              file_id = physical_file_id;
-            }
-          }
-          if (comment_filename.empty()) {
-            comment_filename = owner_info->get_filenameString();
+          int physical_file_id = comment_file_info->get_physical_file_id();
+          if (physical_file_id > 0) {
+            file_id = physical_file_id;
           }
         }
       }
-      if (file_id <= 0) {
-        if (const Sg_File_Info *source_info = source_file->get_file_info()) {
-          file_id = source_info->get_file_id();
-          if (file_id <= 0) {
-            int physical_file_id = source_info->get_physical_file_id();
-            if (physical_file_id > 0) {
-              file_id = physical_file_id;
-            }
-          }
-          if (comment_filename.empty()) {
-            comment_filename = source_info->get_filenameString();
-          }
-        }
-      }
-      if (comment_line <= 0) {
-        continue;
-      }
-
-      const std::vector<StatementPosition> *positions = nullptr;
-      if (!comment_filename.empty()) {
-        auto by_name_it =
-            statement_positions_by_filename.find(comment_filename);
-        if (by_name_it != statement_positions_by_filename.end()) {
-          positions = &by_name_it->second;
-        }
-      }
-      if (positions == nullptr && file_id > 0) {
-        auto by_id_it = statement_positions_by_file.find(file_id);
-        if (by_id_it != statement_positions_by_file.end()) {
-          positions = &by_id_it->second;
-        }
-      }
-      if (positions == nullptr && statement_positions_by_filename.size() == 1) {
-        positions = &statement_positions_by_filename.begin()->second;
-      }
-      if (positions == nullptr && statement_positions_by_file.size() == 1) {
-        positions = &statement_positions_by_file.begin()->second;
-      }
-      if (positions == nullptr) {
-        continue;
-      }
-      if (positions->empty()) {
-        continue;
-      }
-
-      auto next_statement_it =
-          std::lower_bound(positions->begin(), positions->end(), comment_line,
-                           [](const StatementPosition &position, int line) {
-                             return static_cast<int>(position.line) < line;
-                           });
-      SgStatement *target_stmt = nullptr;
-      int target_stmt_line = 0;
-      if (next_statement_it != positions->end()) {
-        target_stmt = next_statement_it->statement;
-        target_stmt_line = static_cast<int>(next_statement_it->line);
-      } else {
-        const StatementPosition &last_position = positions->back();
-        target_stmt = last_position.statement;
-        target_stmt_line = static_cast<int>(last_position.line);
-      }
-      if (target_stmt == nullptr) {
-        continue;
-      }
-
-      SgStatement *normalized_target = target_stmt;
-      while (SgStatement *parent_stmt =
-                 isSgStatement(normalized_target->get_parent())) {
-        const unsigned parent_line =
-            getLocatedNodeLine(isSgLocatedNode(parent_stmt));
-        if (comment_line > 0 && parent_line > 0 &&
-            static_cast<int>(parent_line) >= comment_line) {
-          normalized_target = parent_stmt;
-          continue;
-        }
-        break;
-      }
-      target_stmt = normalized_target;
-      target_stmt_line =
-          static_cast<int>(getLocatedNodeLine(isSgLocatedNode(target_stmt)));
-
-      const bool appears_before_target =
-          target_stmt_line == 0 || comment_line <= target_stmt_line;
-      if (appears_before_target && isSgBasicBlock(target_stmt) != nullptr) {
-        if (SgStatement *previous_stmt =
-                find_previous_sibling_statement(target_stmt)) {
-          const int previous_line = static_cast<int>(
-              getLocatedNodeLine(isSgLocatedNode(previous_stmt)));
-          if (previous_line > 0 && previous_line < comment_line) {
-            target_stmt = previous_stmt;
-            target_stmt_line = previous_line;
-          }
-        }
-      }
-      const bool attach_before_target =
-          target_stmt_line == 0 || comment_line <= target_stmt_line;
-      if (SgPragmaDeclaration *target_pragma =
-              isSgPragmaDeclaration(target_stmt)) {
-        if (pragma_set.find(target_pragma) != pragma_set.end()) {
-          g_pending_commented_directive_relocations[target_pragma].push_back(
-              PendingCommentedDirectiveRelocation{owner, info, comment_line});
-          continue;
-        }
-      }
-
-      if (isSgLocatedNode(target_stmt) != owner) {
-        detach_from_owner(owner, info);
-      }
-      if (isSgLocatedNode(target_stmt) == owner) {
-        detach_from_owner(owner, info);
-      }
-      attachPreprocessingInfoInSourceOrder(target_stmt, info,
-                                           attach_before_target
-                                               ? PreprocessingInfo::before
-                                               : PreprocessingInfo::after);
+      comment_filename = comment_file_info->get_filenameString();
     }
+    if (file_id <= 0) {
+      if (const Sg_File_Info *owner_info = owner->get_file_info()) {
+        file_id = owner_info->get_file_id();
+        if (file_id <= 0) {
+          int physical_file_id = owner_info->get_physical_file_id();
+          if (physical_file_id > 0) {
+            file_id = physical_file_id;
+          }
+        }
+        if (comment_filename.empty()) {
+          comment_filename = owner_info->get_filenameString();
+        }
+      }
+    }
+    if (file_id <= 0) {
+      if (const Sg_File_Info *source_info = source_file->get_file_info()) {
+        file_id = source_info->get_file_id();
+        if (file_id <= 0) {
+          int physical_file_id = source_info->get_physical_file_id();
+          if (physical_file_id > 0) {
+            file_id = physical_file_id;
+          }
+        }
+        if (comment_filename.empty()) {
+          comment_filename = source_info->get_filenameString();
+        }
+      }
+    }
+    if (comment_line <= 0) {
+      continue;
+    }
+
+    const std::vector<StatementPosition> *positions = nullptr;
+    if (!comment_filename.empty()) {
+      auto by_name_it = statement_positions_by_filename.find(comment_filename);
+      if (by_name_it != statement_positions_by_filename.end()) {
+        positions = &by_name_it->second;
+      }
+    }
+    if (positions == nullptr && file_id > 0) {
+      auto by_id_it = statement_positions_by_file.find(file_id);
+      if (by_id_it != statement_positions_by_file.end()) {
+        positions = &by_id_it->second;
+      }
+    }
+    if (positions == nullptr && statement_positions_by_filename.size() == 1) {
+      positions = &statement_positions_by_filename.begin()->second;
+    }
+    if (positions == nullptr && statement_positions_by_file.size() == 1) {
+      positions = &statement_positions_by_file.begin()->second;
+    }
+    if (positions == nullptr) {
+      continue;
+    }
+    if (positions->empty()) {
+      continue;
+    }
+
+    auto next_statement_it =
+        std::lower_bound(positions->begin(), positions->end(), comment_line,
+                         [](const StatementPosition &position, int line) {
+                           return static_cast<int>(position.line) < line;
+                         });
+    SgStatement *target_stmt = nullptr;
+    int target_stmt_line = 0;
+    if (next_statement_it != positions->end()) {
+      target_stmt = next_statement_it->statement;
+      target_stmt_line = static_cast<int>(next_statement_it->line);
+    } else {
+      const StatementPosition &last_position = positions->back();
+      target_stmt = last_position.statement;
+      target_stmt_line = static_cast<int>(last_position.line);
+    }
+    if (target_stmt == nullptr) {
+      continue;
+    }
+
+    SgStatement *normalized_target = target_stmt;
+    while (SgStatement *parent_stmt =
+               isSgStatement(normalized_target->get_parent())) {
+      const unsigned parent_line =
+          getLocatedNodeLine(isSgLocatedNode(parent_stmt));
+      if (comment_line > 0 && parent_line > 0 &&
+          static_cast<int>(parent_line) >= comment_line) {
+        normalized_target = parent_stmt;
+        continue;
+      }
+      break;
+    }
+    target_stmt = normalized_target;
+    target_stmt_line =
+        static_cast<int>(getLocatedNodeLine(isSgLocatedNode(target_stmt)));
+
+    const bool appears_before_target =
+        target_stmt_line == 0 || comment_line <= target_stmt_line;
+    if (appears_before_target && isSgBasicBlock(target_stmt) != nullptr) {
+      if (SgStatement *previous_stmt =
+              find_previous_sibling_statement(target_stmt)) {
+        const int previous_line = static_cast<int>(
+            getLocatedNodeLine(isSgLocatedNode(previous_stmt)));
+        if (previous_line > 0 && previous_line < comment_line) {
+          target_stmt = previous_stmt;
+          target_stmt_line = previous_line;
+        }
+      }
+    }
+    const bool attach_before_target =
+        target_stmt_line == 0 || comment_line <= target_stmt_line;
+    if (SgPragmaDeclaration *target_pragma =
+            isSgPragmaDeclaration(target_stmt)) {
+      if (pragma_set.find(target_pragma) != pragma_set.end()) {
+        g_pending_commented_directive_relocations[target_pragma].push_back(
+            PendingCommentedDirectiveRelocation{owner, info, comment_line});
+        continue;
+      }
+    }
+
+    if (isSgLocatedNode(target_stmt) != owner) {
+      detach_from_owner(owner, info);
+    }
+    if (isSgLocatedNode(target_stmt) == owner) {
+      detach_from_owner(owner, info);
+    }
+    attachPreprocessingInfoInSourceOrder(target_stmt, info,
+                                         attach_before_target
+                                             ? PreprocessingInfo::before
+                                             : PreprocessingInfo::after);
   }
 }
 
@@ -3758,6 +3787,33 @@ static bool belongsToSourceFile(SgNode *node, SgSourceFile *source_file) {
   if (node == nullptr || source_file == nullptr) {
     return false;
   }
+
+  if (SgLocatedNode *located = isSgLocatedNode(node)) {
+    const Sg_File_Info *node_info = located->get_file_info();
+    const Sg_File_Info *source_info = source_file->get_file_info();
+    if (node_info != nullptr && source_info != nullptr) {
+      int node_file_id = node_info->get_file_id();
+      if (node_file_id <= 0) {
+        node_file_id = node_info->get_physical_file_id();
+      }
+
+      int source_file_id = source_info->get_file_id();
+      if (source_file_id <= 0) {
+        source_file_id = source_info->get_physical_file_id();
+      }
+
+      if (node_file_id > 0 && source_file_id > 0) {
+        return node_file_id == source_file_id;
+      }
+
+      const std::string node_filename = node_info->get_filenameString();
+      const std::string source_filename = source_info->get_filenameString();
+      if (!node_filename.empty() && !source_filename.empty()) {
+        return node_filename == source_filename;
+      }
+    }
+  }
+
   return getEnclosingSourceFile(node) == source_file;
 }
 
@@ -3770,6 +3826,18 @@ static void releaseOpenMPParseStateForSourceFile(SgSourceFile *source_file) {
 
   std::unordered_set<OpenMPDirective *> omp_directives_to_delete;
   std::unordered_set<OpenACCDirective *> acc_directives_to_delete;
+  std::unordered_map<SgNode *, bool> belongs_to_source_file_cache;
+
+  auto belongs_to_source_file = [&](SgNode *node) -> bool {
+    auto found = belongs_to_source_file_cache.find(node);
+    if (found != belongs_to_source_file_cache.end()) {
+      return found->second;
+    }
+
+    const bool result = belongsToSourceFile(node, source_file);
+    belongs_to_source_file_cache[node] = result;
+    return result;
+  };
 
   auto track_openmp_directive = [&](OpenMPDirective *directive) {
     if (directive != nullptr) {
@@ -3783,7 +3851,7 @@ static void releaseOpenMPParseStateForSourceFile(SgSourceFile *source_file) {
   };
 
   for (auto it = OpenMPIR_list.begin(); it != OpenMPIR_list.end();) {
-    if (belongsToSourceFile(it->first, source_file)) {
+    if (belongs_to_source_file(it->first)) {
       track_openmp_directive(it->second);
       it = OpenMPIR_list.erase(it);
     } else {
@@ -3792,7 +3860,7 @@ static void releaseOpenMPParseStateForSourceFile(SgSourceFile *source_file) {
   }
 
   for (auto it = OpenACCIR_list.begin(); it != OpenACCIR_list.end();) {
-    if (belongsToSourceFile(it->first, source_file)) {
+    if (belongs_to_source_file(it->first)) {
       track_openacc_directive(it->second);
       it = OpenACCIR_list.erase(it);
     } else {
@@ -3803,7 +3871,7 @@ static void releaseOpenMPParseStateForSourceFile(SgSourceFile *source_file) {
   for (auto it = fortran_omp_pragma_list.begin();
        it != fortran_omp_pragma_list.end();) {
     SgLocatedNode *loc = std::get<0>(*it);
-    if (belongsToSourceFile(loc, source_file)) {
+    if (belongs_to_source_file(loc)) {
       track_openmp_directive(std::get<2>(*it));
       it = fortran_omp_pragma_list.erase(it);
     } else {
@@ -3813,7 +3881,7 @@ static void releaseOpenMPParseStateForSourceFile(SgSourceFile *source_file) {
 
   for (auto it = fortran_paired_pragma_dict.begin();
        it != fortran_paired_pragma_dict.end();) {
-    if (belongsToSourceFile(it->first, source_file)) {
+    if (belongs_to_source_file(it->first)) {
       track_openmp_directive(it->second);
       it = fortran_paired_pragma_dict.erase(it);
     } else {
@@ -3823,8 +3891,8 @@ static void releaseOpenMPParseStateForSourceFile(SgSourceFile *source_file) {
 
   for (auto it = fortran_explicit_end_pragma_dict.begin();
        it != fortran_explicit_end_pragma_dict.end();) {
-    if (belongsToSourceFile(it->first, source_file) ||
-        belongsToSourceFile(it->second, source_file)) {
+    if (belongs_to_source_file(it->first) ||
+        belongs_to_source_file(it->second)) {
       it = fortran_explicit_end_pragma_dict.erase(it);
     } else {
       ++it;
@@ -3833,7 +3901,7 @@ static void releaseOpenMPParseStateForSourceFile(SgSourceFile *source_file) {
 
   for (auto it = fortran_acc_paired_pragma_dict.begin();
        it != fortran_acc_paired_pragma_dict.end();) {
-    if (belongsToSourceFile(it->first, source_file)) {
+    if (belongs_to_source_file(it->first)) {
       track_openacc_directive(it->second);
       it = fortran_acc_paired_pragma_dict.erase(it);
     } else {
@@ -3843,8 +3911,8 @@ static void releaseOpenMPParseStateForSourceFile(SgSourceFile *source_file) {
 
   for (auto it = cxx_explicit_end_pragma_dict.begin();
        it != cxx_explicit_end_pragma_dict.end();) {
-    if (belongsToSourceFile(it->first, source_file) ||
-        belongsToSourceFile(it->second, source_file)) {
+    if (belongs_to_source_file(it->first) ||
+        belongs_to_source_file(it->second)) {
       it = cxx_explicit_end_pragma_dict.erase(it);
     } else {
       ++it;
@@ -3852,7 +3920,7 @@ static void releaseOpenMPParseStateForSourceFile(SgSourceFile *source_file) {
   }
 
   for (auto it = omp_pragma_list.begin(); it != omp_pragma_list.end();) {
-    if (belongsToSourceFile(*it, source_file)) {
+    if (belongs_to_source_file(*it)) {
       it = omp_pragma_list.erase(it);
     } else {
       ++it;
@@ -3861,7 +3929,7 @@ static void releaseOpenMPParseStateForSourceFile(SgSourceFile *source_file) {
 
   for (auto it = g_pending_commented_directive_relocations.begin();
        it != g_pending_commented_directive_relocations.end();) {
-    if (belongsToSourceFile(it->first, source_file)) {
+    if (belongs_to_source_file(it->first)) {
       it = g_pending_commented_directive_relocations.erase(it);
     } else {
       ++it;
@@ -3870,7 +3938,7 @@ static void releaseOpenMPParseStateForSourceFile(SgSourceFile *source_file) {
 
   for (auto it = g_omp_directive_source_text_by_pragma.begin();
        it != g_omp_directive_source_text_by_pragma.end();) {
-    if (belongsToSourceFile(it->first, source_file)) {
+    if (belongs_to_source_file(it->first)) {
       it = g_omp_directive_source_text_by_pragma.erase(it);
     } else {
       ++it;
@@ -8692,10 +8760,13 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
     markOpenMPSourceFileAsModified(sageFilePtr);
   }
   if (!isFortran) {
+    const std::unordered_set<const SgBasicBlock *> blocks_with_openmp =
+        collectBlocksContainingOpenMPStatements(sageFilePtr);
     std::vector<SgNode *> basic_blocks =
         NodeQuery::querySubTree(sageFilePtr, V_SgBasicBlock);
     for (SgNode *node : basic_blocks) {
-      relocateScopeConditionalInfoForOpenMP(isSgBasicBlock(node));
+      relocateScopeConditionalInfoForOpenMP(isSgBasicBlock(node),
+                                            blocks_with_openmp);
     }
   }
 

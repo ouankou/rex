@@ -28,8 +28,8 @@ add_test(
   NAME merge_traversal_cxx_grammar
   COMMAND traversalArray -rose:verbose 2 -I${CMAKE_BINARY_DIR}
     ${_rose_include_flags}
+    -std=c++${CMAKE_CXX_STANDARD}
     -c ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_Grammar.C
 )
 
 ########### install files ###############
-

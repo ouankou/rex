@@ -564,6 +564,7 @@ private:
   // Template default-argument emission tracking is scoped to a single unparse
   // task.
   std::set<const SgTemplateParameter *> emitted_default_template_args_;
+  std::set<std::string> emitted_default_template_arg_keys_;
 
   void unparseFunctionTryBlock(SgTryStmt *try_stmt, SgUnparse_Info &ninfo);
 };

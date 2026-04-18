@@ -21,9 +21,35 @@ using namespace std;
 // DQ (8/20/2005): Make this local so that it can't be called externally!
 void postProcessingSupport(SgNode *node);
 
+namespace {
+void rosePhaseTrace(const char *phase) {
+  if (getenv("ROSE_PHASE_TRACE") != nullptr) {
+    fprintf(stderr, "ROSE_PHASE %s\n", phase);
+    fflush(stderr);
+  }
+}
+
+bool orphan_symbol_table_is_live(const SgSymbolTable *table) {
+  if (table == nullptr) {
+    return false;
+  }
+  return SgNode::variantFromPool(table) == V_SgSymbolTable &&
+         SgNode::isLiveNode(table);
+}
+
+struct OrphanSymbolTableDeleter {
+  void operator()(SgSymbolTable *table) const {
+    if (!orphan_symbol_table_is_live(table)) {
+      return;
+    }
+    delete table;
+  }
+};
+} // namespace
+
 SgSymbolTable &get_orphan_symbol_table() {
-  static std::unique_ptr<SgSymbolTable> orphan_table;
-  if (!orphan_table) {
+  static std::unique_ptr<SgSymbolTable, OrphanSymbolTableDeleter> orphan_table;
+  if (!orphan_symbol_table_is_live(orphan_table.get())) {
     orphan_table.reset(new SgSymbolTable());
   }
   return *orphan_table;
@@ -212,12 +238,20 @@ void parkDetachedSymbolsInMemoryPool() {
     }
   } parker;
 
-  parker.traverseMemoryPool();
+  SgSymbol::traverseMemoryPoolNodes(parker);
 }
 
 bool isTrackedStdTemplateDebugName(const std::string &name) {
   return name.find("ctype") != std::string::npos ||
-         name.find("numpunct") != std::string::npos;
+         name.find("numpunct") != std::string::npos ||
+         name.find("istreambuf_iterator") != std::string::npos ||
+         name.find("ostreambuf_iterator") != std::string::npos ||
+         name.find("pair") != std::string::npos ||
+         name.find("allocator") != std::string::npos ||
+         name.find("less") != std::string::npos ||
+         name.find("_Select1st") != std::string::npos ||
+         name.find("_List_node") != std::string::npos ||
+         name.find("_Rb_tree") != std::string::npos;
 }
 
 bool hasRealSourceFileInfo(Sg_File_Info *fi) {
@@ -226,6 +260,264 @@ bool hasRealSourceFileInfo(Sg_File_Info *fi) {
          fi->get_filenameString() != "NULL_FILE" &&
          !fi->isCompilerGenerated() && !fi->isFrontendSpecific() &&
          !fi->isSourcePositionUnavailableInFrontend();
+}
+
+Sg_File_Info *bestRealSourceFileInfo(SgLocatedNode *node) {
+  if (node == nullptr) {
+    return nullptr;
+  }
+
+  if (hasRealSourceFileInfo(node->get_file_info())) {
+    return node->get_file_info();
+  }
+  if (hasRealSourceFileInfo(node->get_startOfConstruct())) {
+    return node->get_startOfConstruct();
+  }
+  if (hasRealSourceFileInfo(node->get_endOfConstruct())) {
+    return node->get_endOfConstruct();
+  }
+
+  return nullptr;
+}
+
+bool fileInfoWithinLocatedNodeRange(Sg_File_Info *target,
+                                    SgLocatedNode *owner) {
+  if (!hasRealSourceFileInfo(target) || owner == nullptr) {
+    return false;
+  }
+
+  Sg_File_Info *begin = owner->get_startOfConstruct();
+  if (!hasRealSourceFileInfo(begin)) {
+    begin = owner->get_file_info();
+  }
+  Sg_File_Info *end = owner->get_endOfConstruct();
+  if (!hasRealSourceFileInfo(end)) {
+    end = begin;
+  }
+  if (!hasRealSourceFileInfo(begin) || !hasRealSourceFileInfo(end)) {
+    return false;
+  }
+
+  if (target->get_filenameString() != begin->get_filenameString() ||
+      target->get_filenameString() != end->get_filenameString()) {
+    return false;
+  }
+
+  auto less_or_equal = [](Sg_File_Info *lhs, Sg_File_Info *rhs) {
+    return lhs->get_line() < rhs->get_line() ||
+           (lhs->get_line() == rhs->get_line() &&
+            lhs->get_col() <= rhs->get_col());
+  };
+
+  if (!less_or_equal(begin, end)) {
+    std::swap(begin, end);
+  }
+
+  return less_or_equal(begin, target) && less_or_equal(target, end);
+}
+
+bool sameDeclChain(SgDeclarationStatement *lhs, SgDeclarationStatement *rhs) {
+  if (lhs == nullptr || rhs == nullptr) {
+    return false;
+  }
+
+  SgDeclarationStatement *lhs_first =
+      lhs->get_firstNondefiningDeclaration() != nullptr
+          ? lhs->get_firstNondefiningDeclaration()
+          : lhs;
+  SgDeclarationStatement *rhs_first =
+      rhs->get_firstNondefiningDeclaration() != nullptr
+          ? rhs->get_firstNondefiningDeclaration()
+          : rhs;
+  return lhs == rhs || lhs == rhs_first || lhs_first == rhs ||
+         lhs_first == rhs_first;
+}
+
+bool tagDeclarationHasAnonymousSurface(SgDeclarationStatement *decl) {
+  auto is_anonymous_name = [](const std::string &name) {
+    return name.empty() || name.rfind("__anonymous_0x", 0) == 0;
+  };
+
+  if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
+    return class_decl->get_isUnNamed() ||
+           is_anonymous_name(class_decl->get_name().getString());
+  }
+  if (SgEnumDeclaration *enum_decl = isSgEnumDeclaration(decl)) {
+    return enum_decl->get_isUnNamed() ||
+           is_anonymous_name(enum_decl->get_name().getString());
+  }
+
+  return false;
+}
+
+bool declarationIsStructurallyInsideOwner(SgDeclarationStatement *decl,
+                                          SgDeclarationStatement *owner) {
+  if (decl == nullptr || owner == nullptr) {
+    return false;
+  }
+
+  for (SgNode *parent = decl->get_parent(); parent != nullptr;
+       parent = parent->get_parent()) {
+    if (parent == owner) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool ownerContainsEquivalentLexicalTagSurface(
+    SgDeclarationStatement *owner, SgDeclarationStatement *candidate) {
+  if (owner == nullptr || candidate == nullptr) {
+    return false;
+  }
+
+  std::function<bool(SgNode *)> visit = [&](SgNode *node) -> bool {
+    if (node == nullptr) {
+      return false;
+    }
+
+    if (SgDeclarationStatement *decl = isSgDeclarationStatement(node)) {
+      if (decl != owner && decl != candidate &&
+          (isSgClassDeclaration(decl) != nullptr ||
+           isSgEnumDeclaration(decl) != nullptr) &&
+          sameDeclChain(decl, candidate) &&
+          declarationIsStructurallyInsideOwner(decl, owner)) {
+        return true;
+      }
+    }
+
+    for (SgNode *child : node->get_traversalSuccessorContainer()) {
+      if (visit(child)) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  return visit(owner);
+}
+
+SgDeclarationStatement *
+findDirectTagSurfaceDeclaration(SgDeclarationStatement *owner_decl) {
+  if (owner_decl == nullptr) {
+    return nullptr;
+  }
+
+  auto find_named_type_decl = [](SgType *type) -> SgDeclarationStatement * {
+    if (type == nullptr) {
+      return nullptr;
+    }
+
+    if (SgNamedType *named_type = isSgNamedType(type->findBaseType())) {
+      return isSgDeclarationStatement(named_type->get_declaration());
+    }
+
+    return nullptr;
+  };
+
+  if (SgTypedefDeclaration *typedef_decl = isSgTypedefDeclaration(owner_decl)) {
+    if (SgDeclarationStatement *base_decl =
+            typedef_decl->get_baseTypeDefiningDeclaration()) {
+      return base_decl;
+    }
+    if (SgDeclarationStatement *base_decl = typedef_decl->get_declaration()) {
+      return base_decl;
+    }
+    return find_named_type_decl(typedef_decl->get_base_type());
+  }
+
+  if (SgVariableDeclaration *variable_decl =
+          isSgVariableDeclaration(owner_decl)) {
+    if (SgDeclarationStatement *base_decl =
+            variable_decl->get_baseTypeDefiningDeclaration()) {
+      return base_decl;
+    }
+
+    for (SgInitializedName *init_name : variable_decl->get_variables()) {
+      if (init_name == nullptr) {
+        continue;
+      }
+      if (SgDeclarationStatement *base_decl =
+              find_named_type_decl(init_name->get_type())) {
+        return base_decl;
+      }
+    }
+  }
+
+  return nullptr;
+}
+
+bool ownerContainsEquivalentLexicalTagReference(
+    SgDeclarationStatement *owner, SgDeclarationStatement *candidate) {
+  if (owner == nullptr || candidate == nullptr) {
+    return false;
+  }
+
+  Sg_File_Info *candidate_loc =
+      bestRealSourceFileInfo(isSgLocatedNode(candidate));
+  if (!hasRealSourceFileInfo(candidate_loc)) {
+    return false;
+  }
+
+  std::function<bool(SgNode *)> visit = [&](SgNode *node) -> bool {
+    if (node == nullptr) {
+      return false;
+    }
+
+    if (SgDeclarationStatement *decl = isSgDeclarationStatement(node)) {
+      if (decl != owner && decl != candidate &&
+          declarationIsStructurallyInsideOwner(decl, owner) &&
+          fileInfoWithinLocatedNodeRange(candidate_loc, decl)) {
+        if (SgDeclarationStatement *tag_surface =
+                findDirectTagSurfaceDeclaration(decl)) {
+          if (sameDeclChain(tag_surface, candidate)) {
+            return true;
+          }
+        }
+      }
+    }
+
+    for (SgNode *child : node->get_traversalSuccessorContainer()) {
+      if (visit(child)) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  return visit(owner);
+}
+
+bool ownerDirectlyOwnsLexicalTagSurface(SgDeclarationStatement *owner_decl,
+                                        SgDeclarationStatement *candidate) {
+  if (owner_decl == nullptr || candidate == nullptr) {
+    return false;
+  }
+
+  if (SgDeclarationStatement *base_decl =
+          findDirectTagSurfaceDeclaration(owner_decl)) {
+    return sameDeclChain(base_decl, candidate);
+  }
+
+  if (isSgClassDeclaration(owner_decl) != nullptr ||
+      isSgEnumDeclaration(owner_decl) != nullptr) {
+    if (ownerContainsEquivalentLexicalTagSurface(owner_decl, candidate) ||
+        ownerContainsEquivalentLexicalTagReference(owner_decl, candidate)) {
+      return true;
+    }
+
+    // Class/enum owners are only reliable range-only owners for anonymous tag
+    // surfaces. Named top-level tags require the same-chain structural check
+    // above; otherwise oversized class ranges can swallow real global tags.
+    if (tagDeclarationHasAnonymousSurface(candidate)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 bool symbolBasisLooksDeleted(SgNode *basis) {
@@ -615,7 +907,7 @@ void repairMalformedSymbolsInMemoryPool() {
     }
   } collector(plan);
 
-  collector.traverseMemoryPool();
+  SgSymbol::traverseMemoryPoolNodes(collector);
   rewriteSymbolEdgesInMemoryPool(plan.replacements);
 
   for (SgSymbol *symbol : plan.symbolsToDetach) {
@@ -980,7 +1272,7 @@ void repairHiddenFunctionDeclarationSurfaces(SgNode *node) {
   traversal.traverse(node, preorder);
 }
 
-void repairTypedefOwnedTagDeclarationSurfaces(SgNode *node) {
+void repairLexicallyOwnedTagDeclarationSurfaces(SgNode *node) {
   if (node == nullptr) {
     return;
   }
@@ -1056,7 +1348,30 @@ void repairTypedefOwnedTagDeclarationSurfaces(SgNode *node) {
       }
 
       SgDeclarationStatementPtrList decls_copy = scope->getDeclarationList();
-      for (SgDeclarationStatement *decl_stmt : decls_copy) {
+
+      std::vector<SgDeclarationStatement *> candidate_decls;
+      std::unordered_set<SgDeclarationStatement *> seen_candidates;
+      std::function<void(SgNode *)> collect_candidate_decls =
+          [&](SgNode *node) {
+            if (node == nullptr) {
+              return;
+            }
+
+            if (SgDeclarationStatement *decl = isSgDeclarationStatement(node)) {
+              if ((isSgClassDeclaration(decl) != nullptr ||
+                   isSgEnumDeclaration(decl) != nullptr) &&
+                  seen_candidates.insert(decl).second) {
+                candidate_decls.push_back(decl);
+              }
+            }
+
+            for (SgNode *child : node->get_traversalSuccessorContainer()) {
+              collect_candidate_decls(child);
+            }
+          };
+      collect_candidate_decls(scope);
+
+      for (SgDeclarationStatement *decl_stmt : candidate_decls) {
         if (decl_stmt == nullptr) {
           continue;
         }
@@ -1067,18 +1382,19 @@ void repairTypedefOwnedTagDeclarationSurfaces(SgNode *node) {
           continue;
         }
 
+        SgScopeStatement *candidate_scope =
+            class_decl != nullptr
+                ? class_decl->get_scope()
+                : (enum_decl != nullptr ? enum_decl->get_scope() : nullptr);
+        if (candidate_scope != scope) {
+          continue;
+        }
+
         if (SgLocatedNode *located = isSgLocatedNode(decl_stmt)) {
           Sg_File_Info *fi = located->get_file_info();
           if (!hasRealSourceFileInfo(fi) || !fi->isOutputInCodeGeneration()) {
             continue;
           }
-        }
-
-        bool autonomous = class_decl != nullptr
-                              ? class_decl->get_isAutonomousDeclaration()
-                              : enum_decl->get_isAutonomousDeclaration();
-        if (!autonomous) {
-          continue;
         }
 
         Sg_File_Info *decl_loc = getDeclSortFileInfo(decl_stmt);
@@ -1087,12 +1403,18 @@ void repairTypedefOwnedTagDeclarationSurfaces(SgNode *node) {
         }
 
         for (SgDeclarationStatement *owner_stmt : decls_copy) {
-          SgTypedefDeclaration *typedef_decl =
-              isSgTypedefDeclaration(owner_stmt);
-          if (typedef_decl == nullptr || typedef_decl == decl_stmt) {
+          const bool can_own_embedded_tag_surface =
+              isSgClassDeclaration(owner_stmt) != nullptr ||
+              isSgTypedefDeclaration(owner_stmt) != nullptr ||
+              isSgVariableDeclaration(owner_stmt) != nullptr ||
+              isSgEnumDeclaration(owner_stmt) != nullptr;
+          if (!can_own_embedded_tag_surface || owner_stmt == decl_stmt) {
             continue;
           }
-          if (!fileInfoWithinDeclRange(decl_loc, typedef_decl)) {
+          if (!fileInfoWithinDeclRange(decl_loc, owner_stmt)) {
+            continue;
+          }
+          if (!ownerDirectlyOwnsLexicalTagSurface(owner_stmt, decl_stmt)) {
             continue;
           }
 
@@ -1101,7 +1423,7 @@ void repairTypedefOwnedTagDeclarationSurfaces(SgNode *node) {
               return;
             }
             Sg_File_Info *candidate_loc = getDeclSortFileInfo(candidate);
-            if (!fileInfoWithinDeclRange(candidate_loc, typedef_decl)) {
+            if (!fileInfoWithinDeclRange(candidate_loc, owner_stmt)) {
               return;
             }
             if (declAttachedToScope(scope, candidate)) {
@@ -1110,7 +1432,7 @@ void repairTypedefOwnedTagDeclarationSurfaces(SgNode *node) {
               decls.erase(std::remove(decls.begin(), decls.end(), candidate),
                           decls.end());
             }
-            candidate->set_parent(typedef_decl);
+            candidate->set_parent(owner_stmt);
             if (SgClassDeclaration *candidate_class =
                     isSgClassDeclaration(candidate)) {
               candidate_class->set_isAutonomousDeclaration(false);
@@ -1561,9 +1883,9 @@ bool isTrackedNamespaceDeclDebugName(SgDeclarationStatement *decl,
 }
 
 void debugDumpTrackedStdTemplateState(const char *phase, SgNode *node) {
-  (void)phase;
-  (void)node;
-  return;
+  if (std::getenv("REX_DEBUG_STD_TEMPLATE_STATE") == nullptr) {
+    return;
+  }
 
   if (node == nullptr) {
     return;
@@ -1796,7 +2118,9 @@ void AstPostProcessing(SgNode *node) {
     // printf ("In AstPostProcessing(): project->get_exit_after_parser() = %s
     // \n",project->get_exit_after_parser() ? "true" : "false");
     if (project->get_exit_after_parser() == false) {
+      rosePhaseTrace("AstPostProcessing.core.begin");
       postProcessingSupport(node);
+      rosePhaseTrace("AstPostProcessing.core.end");
       ranPostProcessing = true;
     }
 
@@ -1820,7 +2144,9 @@ void AstPostProcessing(SgNode *node) {
     // Only postprocess the AST if it was generated, and not were we just did
     // the parsing.
     if (file->get_exit_after_parser() == false) {
+      rosePhaseTrace("AstPostProcessing.core.begin");
       postProcessingSupport(node);
+      rosePhaseTrace("AstPostProcessing.core.end");
       ranPostProcessing = true;
     }
 
@@ -1829,14 +2155,18 @@ void AstPostProcessing(SgNode *node) {
 
   default: {
     // list general post-processing fixup here ...
+    rosePhaseTrace("AstPostProcessing.core.begin");
     postProcessingSupport(node);
+    rosePhaseTrace("AstPostProcessing.core.end");
     ranPostProcessing = true;
   }
   }
 
   if (ranPostProcessing && usesClangFrontend(node) &&
       (isSgProject(node) != nullptr || isSgSourceFile(node) != nullptr)) {
+    rosePhaseTrace("AstPostProcessing.repairMalformedSymbols.begin");
     repairMalformedSymbolsInMemoryPool();
+    rosePhaseTrace("AstPostProcessing.repairMalformedSymbols.end");
   }
 
   // DQ (3/17/2007): Clear the static globalMangledNameMap, likely this is not
@@ -1874,6 +2204,7 @@ void postProcessingSupport(SgNode *node) {
     // pools by the frontend (e.g., Clang system-header artifacts) without
     // relying on path checks.
     MemoryPoolFilterGuard memoryPoolFilter(&isUnreachableFromProject, node);
+    rosePhaseTrace("AstPostProcessing.support.begin");
 
 // DQ (10/27/2015): Added test to detect cycles in typedef types.
 #define DEBUG_TYPEDEF_CYCLES 0
@@ -1895,7 +2226,9 @@ void postProcessingSupport(SgNode *node) {
     // generated file info objects
     if (SageBuilder::SourcePositionClassificationMode !=
         SageBuilder::e_sourcePositionTransformation) {
+      rosePhaseTrace("AstPostProcessing.detectTransformations.initial.begin");
       detectTransformations(node);
+      rosePhaseTrace("AstPostProcessing.detectTransformations.initial.end");
     }
 
 #if DEBUG_TYPEDEF_CYCLES
@@ -1918,6 +2251,7 @@ void postProcessingSupport(SgNode *node) {
 
     // Reset and test and parent pointers so that it matches our definition
     // of the AST (as defined by the AST traversal mechanism).
+    rosePhaseTrace("AstPostProcessing.parentReset.begin");
     topLevelResetParentPointer(node);
     debugDumpTrackedStdTemplateState("after-topLevelResetParentPointer", node);
 
@@ -1942,6 +2276,7 @@ void postProcessingSupport(SgNode *node) {
     resetParentPointersInMemoryPool(node);
     debugDumpTrackedStdTemplateState("after-resetParentPointersInMemoryPool",
                                      node);
+    rosePhaseTrace("AstPostProcessing.parentReset.end");
 
     if (SgProject::get_verbose() > 1) {
       printf("DONE: Calling resetParentPointersInMemoryPool() \n");
@@ -1955,6 +2290,8 @@ void postProcessingSupport(SgNode *node) {
     if (SgProject::get_verbose() > 1) {
       printf("Calling fixupAstDefiningAndNondefiningDeclarations() \n");
     }
+
+    rosePhaseTrace("AstPostProcessing.declarationAndSymbolFixups.begin");
 
     // DQ (6/27/2005): fixup the defining and non-defining declarations
     // referenced at each SgDeclarationStatement This is a more sophisticated
@@ -1998,7 +2335,9 @@ void postProcessingSupport(SgNode *node) {
     fixupAstSymbolTablesToSupportAliasedSymbols(node);
     debugDumpTrackedStdTemplateState(
         "after-fixupAstSymbolTablesToSupportAliasedSymbols", node);
+    rosePhaseTrace("AstPostProcessing.declarationAndSymbolFixups.end");
 
+    rosePhaseTrace("AstPostProcessing.templateOutputFixups.begin");
     if (SgProject::get_verbose() > 1) {
       printf("Calling resetTemplateNames() \n");
     }
@@ -2065,7 +2404,9 @@ void postProcessingSupport(SgNode *node) {
     // DQ (4/29/2012): End of new template fixup support for legacy
     // frontend 4.3 work.
     // **********************************************************************
+    rosePhaseTrace("AstPostProcessing.templateOutputFixups.end");
 
+    rosePhaseTrace("AstPostProcessing.sourcePositionAndTemplateArgs.begin");
     if (SgProject::get_verbose() > 1) {
       printf("Calling fixupSourcePositionConstructs() \n");
     }
@@ -2087,11 +2428,13 @@ void postProcessingSupport(SgNode *node) {
     // type that can be unparsed. fixupTemplateArguments();
     fixupTemplateArguments(node);
     debugDumpTrackedStdTemplateState("after-fixupTemplateArguments", node);
+    rosePhaseTrace("AstPostProcessing.sourcePositionAndTemplateArgs.end");
 
     // DQ (2/12/2012): This is a problem for test2004_35.C (debugging this
     // issue). printf ("Exiting after calling resetTemplateNames() \n");
     // ROSE_ABORT();
 
+    rosePhaseTrace("AstPostProcessing.constantFoldAndFileInfo.begin");
     if (SgProject::get_verbose() > 1) {
       printf("Calling resetConstantFoldedValues() \n");
     }
@@ -2153,16 +2496,24 @@ void postProcessingSupport(SgNode *node) {
     markSharedDeclarationsForOutputInCodeGeneration(node);
     debugDumpTrackedStdTemplateState(
         "after-markSharedDeclarationsForOutputInCodeGeneration", node);
+    rosePhaseTrace("AstPostProcessing.constantFoldAndFileInfo.end");
 
+    rosePhaseTrace("AstPostProcessing.lateRepairs.begin");
     // Prune symbols for constraint-unsatisfied instantiations after all
     // symbol-table fixups have completed.
+    rosePhaseTrace(
+        "AstPostProcessing.lateRepairs.pruneConstraintSymbols.begin");
     pruneSymbolsForConstraintFailures(node);
+    rosePhaseTrace("AstPostProcessing.lateRepairs.pruneConstraintSymbols.end");
 
     // Late declaration fixups can relink class declaration chains after the
     // earlier template-instantiation pass. Re-canonicalize all reachable class
     // types in the memory pool so shared type nodes point back to the first
     // nondefining declaration.
+    rosePhaseTrace(
+        "AstPostProcessing.lateRepairs.canonicalizeClassTypes1.begin");
     canonicalizeClassTypesInMemoryPool(node);
+    rosePhaseTrace("AstPostProcessing.lateRepairs.canonicalizeClassTypes1.end");
 
     debugDumpTrackedStdTemplateState("final", node);
     if (SgProject::get_verbose() > 1) {
@@ -2219,25 +2570,55 @@ void postProcessingSupport(SgNode *node) {
       printf("Calling checkPhysicalSourcePosition() \n");
     }
 
+    rosePhaseTrace(
+        "AstPostProcessing.lateRepairs.checkPhysicalSourcePosition.begin");
     checkPhysicalSourcePosition(node);
+    rosePhaseTrace(
+        "AstPostProcessing.lateRepairs.checkPhysicalSourcePosition.end");
 
     // Final declaration and prototype fixups above can still allocate or relink
     // class types. Re-canonicalize the memory pool at the end of the pipeline
     // so every reachable SgClassType points back to the first nondefining
     // declaration in its class declaration chain.
+    rosePhaseTrace(
+        "AstPostProcessing.lateRepairs.canonicalizeClassTypes2.begin");
     canonicalizeClassTypesInMemoryPool(node);
+    rosePhaseTrace("AstPostProcessing.lateRepairs.canonicalizeClassTypes2.end");
 
     // Late C++ declaration fixups can still leave hidden helper redeclarations
     // or broken first-nondefining chains rooted on non-visible function
     // declarations. Normalize the visible declaration surface before unparsing
     // consults symbol ownership for name qualification.
+    rosePhaseTrace(
+        "AstPostProcessing.lateRepairs.repairHiddenFunctionDecls.begin");
     repairHiddenFunctionDeclarationSurfaces(node);
-    repairTypedefOwnedTagDeclarationSurfaces(node);
+    rosePhaseTrace(
+        "AstPostProcessing.lateRepairs.repairHiddenFunctionDecls.end");
+    rosePhaseTrace(
+        "AstPostProcessing.lateRepairs.repairLexicallyOwnedTags.begin");
+    repairLexicallyOwnedTagDeclarationSurfaces(node);
+    rosePhaseTrace(
+        "AstPostProcessing.lateRepairs.repairLexicallyOwnedTags.end");
+    rosePhaseTrace(
+        "AstPostProcessing.lateRepairs.repairBrokenFunctionChains.begin");
     repairBrokenFunctionDeclarationChains(node);
+    rosePhaseTrace(
+        "AstPostProcessing.lateRepairs.repairBrokenFunctionChains.end");
+    rosePhaseTrace(
+        "AstPostProcessing.lateRepairs.pruneDuplicateFunctionDecls.begin");
     pruneDuplicateFunctionDeclarationSurfaces(node);
+    rosePhaseTrace(
+        "AstPostProcessing.lateRepairs.pruneDuplicateFunctionDecls.end");
+    rosePhaseTrace(
+        "AstPostProcessing.lateRepairs.markNormalizedTemplates.begin");
     markNormalizedTemplateDeclarationSurfaces(node);
+    rosePhaseTrace("AstPostProcessing.lateRepairs.markNormalizedTemplates.end");
 
+    rosePhaseTrace("AstPostProcessing.lateRepairs.parkDetachedSymbols.begin");
     parkDetachedSymbolsInMemoryPool();
+    rosePhaseTrace("AstPostProcessing.lateRepairs.parkDetachedSymbols.end");
+    rosePhaseTrace("AstPostProcessing.lateRepairs.end");
+    rosePhaseTrace("AstPostProcessing.support.end");
 
     return;
   } else {
@@ -2535,7 +2916,7 @@ void postProcessingSupport(SgNode *node) {
     // first declaration they reference. Reinsert the visible declaration by
     // source order so unparsing sees the public surface, not the hidden helper.
     repairHiddenFunctionDeclarationSurfaces(node);
-    repairTypedefOwnedTagDeclarationSurfaces(node);
+    repairLexicallyOwnedTagDeclarationSurfaces(node);
 
     // Friend/template cleanup can leave function declaration chains rooted at
     // a hidden or defining declaration. Normalize the first-nondefining links

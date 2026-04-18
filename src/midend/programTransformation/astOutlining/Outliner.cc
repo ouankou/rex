@@ -186,6 +186,13 @@ void Outliner::validateSettings() {
     // Create such path if not exists
 
     bfs::path my_path(output_path);
+    if (my_path.is_relative()) {
+      my_path = bfs::absolute(my_path).lexically_normal();
+      output_path = my_path.string();
+    }
+    while (output_path.size() > 1 && output_path[output_path.size() - 1] == '/')
+      output_path.erase(output_path.end() - 1);
+    my_path = bfs::path(output_path);
     if (!bfs::exists(my_path)) {
       bfs::create_directory(my_path);
     }

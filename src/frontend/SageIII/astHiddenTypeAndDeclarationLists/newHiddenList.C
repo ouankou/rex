@@ -3430,9 +3430,10 @@ void HiddenListTraversal::setNameQualification(
   varRefExp->set_global_qualification_required(outputGlobalQualification);
   varRefExp->set_name_qualification_length(outputNameQualificationLength);
 
-  // There should be no type evaluation required for a variable reference, as I
-  // recall.
-  ROSE_ASSERT(outputTypeEvaluation == false);
+  // Hidden-list qualification normally does not introduce elaboration on its
+  // own, but it must preserve any frontend-written elaboration already stored
+  // on the declaration.
+  ROSE_ASSERT(outputTypeEvaluation == false || preserveWrittenTypeSpelling);
   varRefExp->set_type_elaboration_required(outputTypeEvaluation);
 
   printf("In HiddenListTraversal::setNameQualification(): "
@@ -4164,6 +4165,12 @@ void HiddenListTraversal::setNameQualification(
       declaration->get_scope(), amountOfNameQualificationRequired,
       outputNameQualificationLength, outputGlobalQualification,
       outputTypeEvaluation);
+
+  if (preserveWrittenTypeSpelling) {
+    outputNameQualificationLength = preservedNameQualificationLength;
+    outputGlobalQualification = preservedGlobalQualification;
+    outputTypeEvaluation = preservedTypeElaboration;
+  }
 
   initializedName->set_global_qualification_required_for_type(
       outputGlobalQualification);
