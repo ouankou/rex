@@ -4138,13 +4138,27 @@ static omp_construct_enum getExplicitDataSharingAttribute(
   static std::map<SgOmpClauseBodyStatement *,
                   std::map<SgInitializedName *, omp_construct_enum>>
       region_to_explicit_data_sharing;
-  static std::map<SgOmpClauseBodyStatement *, bool>
-      region_explicit_data_sharing_analyzed;
+  static uint64_t cache_ast_modification_sequence =
+      SgNode::get_globalAstModificationSequence();
 
-  if (!region_explicit_data_sharing_analyzed[omp_clause_body_stmt]) {
-    region_explicit_data_sharing_analyzed[omp_clause_body_stmt] = true;
+  const uint64_t current_ast_modification_sequence =
+      SgNode::get_globalAstModificationSequence();
+  if (cache_ast_modification_sequence != current_ast_modification_sequence) {
+    region_to_explicit_data_sharing.clear();
+    cache_ast_modification_sequence = current_ast_modification_sequence;
+  }
+
+  std::map<SgOmpClauseBodyStatement *,
+           std::map<SgInitializedName *, omp_construct_enum>>::iterator
+      region_iter = region_to_explicit_data_sharing.find(omp_clause_body_stmt);
+  if (region_iter == region_to_explicit_data_sharing.end()) {
+    region_iter = region_to_explicit_data_sharing
+                      .insert(std::make_pair(
+                          omp_clause_body_stmt,
+                          std::map<SgInitializedName *, omp_construct_enum>()))
+                      .first;
     std::map<SgInitializedName *, omp_construct_enum> &cached_attributes =
-        region_to_explicit_data_sharing[omp_clause_body_stmt];
+        region_iter->second;
 
     for (SgOmpClause *clause : omp_clause_body_stmt->get_clauses()) {
       const omp_construct_enum attribute =
@@ -4182,13 +4196,6 @@ static omp_construct_enum getExplicitDataSharingAttribute(
             std::make_pair(symbol->get_declaration(), attribute));
       }
     }
-  }
-
-  std::map<SgOmpClauseBodyStatement *,
-           std::map<SgInitializedName *, omp_construct_enum>>::const_iterator
-      region_iter = region_to_explicit_data_sharing.find(omp_clause_body_stmt);
-  if (region_iter == region_to_explicit_data_sharing.end()) {
-    return e_unknown;
   }
 
   std::map<SgInitializedName *, omp_construct_enum>::const_iterator attr_iter =
@@ -4295,16 +4302,25 @@ getAffectedForLoopIndexVars(SgOmpClauseBodyStatement *forOrSimd) {
   // use a map to cache results, avoid repetitive analysis of OpenMP regions
   static map<SgOmpClauseBodyStatement *, vector<SgInitializedName *>>
       Region2Index;
-  static map<SgOmpClauseBodyStatement *, bool> RegionAnalyzed;
+  static uint64_t cache_ast_modification_sequence =
+      SgNode::get_globalAstModificationSequence();
 
-  if (!RegionAnalyzed[forOrSimd]) {
-    RegionAnalyzed[forOrSimd] = true;
-    vector<SgForStatement *> loops = getAffectedForLoops(forOrSimd);
-    for (size_t i = 0; i < loops.size(); i++)
-      result.push_back(getLoopIndexVariable(loops[i]));
-    Region2Index[forOrSimd] = result;
-  } else
-    result = Region2Index[forOrSimd];
+  const uint64_t current_ast_modification_sequence =
+      SgNode::get_globalAstModificationSequence();
+  if (cache_ast_modification_sequence != current_ast_modification_sequence) {
+    Region2Index.clear();
+    cache_ast_modification_sequence = current_ast_modification_sequence;
+  }
+
+  map<SgOmpClauseBodyStatement *, vector<SgInitializedName *>>::const_iterator
+      cached_iter = Region2Index.find(forOrSimd);
+  if (cached_iter != Region2Index.end())
+    return cached_iter->second;
+
+  vector<SgForStatement *> loops = getAffectedForLoops(forOrSimd);
+  for (size_t i = 0; i < loops.size(); i++)
+    result.push_back(getLoopIndexVariable(loops[i]));
+  Region2Index[forOrSimd] = result;
 
   return result;
 }
@@ -4327,6 +4343,15 @@ static omp_construct_enum getDataSharingAttributeInClauseBody(
   static std::map<SgOmpClauseBodyStatement *,
                   std::map<SgInitializedName *, omp_construct_enum>>
       region_to_data_sharing_attribute;
+  static uint64_t cache_ast_modification_sequence =
+      SgNode::get_globalAstModificationSequence();
+
+  const uint64_t current_ast_modification_sequence =
+      SgNode::get_globalAstModificationSequence();
+  if (cache_ast_modification_sequence != current_ast_modification_sequence) {
+    region_to_data_sharing_attribute.clear();
+    cache_ast_modification_sequence = current_ast_modification_sequence;
+  }
 
   std::map<SgInitializedName *, omp_construct_enum> &cached_attributes =
       region_to_data_sharing_attribute[omp_clause_body_stmt];

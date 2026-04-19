@@ -69,17 +69,25 @@ constexpr int kNormalizedDeclarationWrapColumn = 80;
 
 struct NormalizedDeclarationFormattingCache {
   SgProject *project = nullptr;
+  uint64_t ast_modification_sequence = 0;
   std::unordered_map<SgNode *, bool> subtree_contains_transformed_declaration;
   std::unordered_map<SgScopeStatement *, bool>
       scope_has_transformed_declarations;
   std::unordered_map<SgNode *, bool> within_transformed_declaration_scope;
 
-  void resetForProject(SgProject *new_project) {
-    if (project == new_project) {
+  void resetForNode(SgNode *node) {
+    SgProject *new_project =
+        node != nullptr ? SageInterface::getProject(node) : nullptr;
+    const uint64_t new_ast_modification_sequence =
+        SgNode::get_globalAstModificationSequence();
+
+    if (project == new_project &&
+        ast_modification_sequence == new_ast_modification_sequence) {
       return;
     }
 
     project = new_project;
+    ast_modification_sequence = new_ast_modification_sequence;
     subtree_contains_transformed_declaration.clear();
     scope_has_transformed_declarations.clear();
     within_transformed_declaration_scope.clear();
@@ -89,8 +97,7 @@ struct NormalizedDeclarationFormattingCache {
 NormalizedDeclarationFormattingCache &
 getNormalizedDeclarationFormattingCache(SgNode *node) {
   static NormalizedDeclarationFormattingCache cache;
-  cache.resetForProject(node != nullptr ? SageInterface::getProject(node)
-                                        : nullptr);
+  cache.resetForNode(node);
   return cache;
 }
 

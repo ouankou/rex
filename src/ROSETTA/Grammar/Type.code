@@ -1181,8 +1181,11 @@ SgType::stripType(unsigned char bit_array) const
      SgPointerMemberType*   pointerMemberType = NULL;
 
      size_t counter = 0;
-     std::set<SgType*> seenTypes;
-     seenTypes.insert(currentType);
+     static const size_t shallowCycleCheckLimit = 20;
+     SgType* shallowSeenTypes[shallowCycleCheckLimit];
+     size_t shallowSeenCount = 0;
+     shallowSeenTypes[shallowSeenCount++] = currentType;
+     std::set<SgType*>* deepSeenTypes = NULL;
      while (true)
         {
 #if DEBUG_SGTYPE_STRIPTYPE
@@ -1254,7 +1257,45 @@ SgType::stripType(unsigned char bit_array) const
 
           ROSE_ASSERT(currentType != NULL);
 
-          if (seenTypes.find(currentType) != seenTypes.end())
+          bool seenType = false;
+          if (deepSeenTypes != NULL)
+             {
+               seenType = deepSeenTypes->find(currentType) != deepSeenTypes->end();
+               if (seenType == false)
+                  {
+                    deepSeenTypes->insert(currentType);
+                  }
+             }
+            else
+             {
+               for (size_t i = 0; i < shallowSeenCount; ++i)
+                  {
+                    if (shallowSeenTypes[i] == currentType)
+                       {
+                         seenType = true;
+                         break;
+                       }
+                  }
+
+               if (seenType == false)
+                  {
+                    if (shallowSeenCount < shallowCycleCheckLimit)
+                       {
+                         shallowSeenTypes[shallowSeenCount++] = currentType;
+                       }
+                      else
+                       {
+                         deepSeenTypes = new std::set<SgType*>();
+                         for (size_t i = 0; i < shallowSeenCount; ++i)
+                            {
+                              deepSeenTypes->insert(shallowSeenTypes[i]);
+                            }
+                         deepSeenTypes->insert(currentType);
+                       }
+                  }
+             }
+
+          if (seenType == true)
              {
                fprintf(stderr,
                        "FATAL: SgType::stripType detected a cycle "
@@ -1264,13 +1305,12 @@ SgType::stripType(unsigned char bit_array) const
                ROSE_ABORT();
              }
 
-          seenTypes.insert(currentType);
-
           counter++;
         }
 
      ROSE_ASSERT(currentType != NULL);
 
+     delete deepSeenTypes;
 
      return currentType;
    }

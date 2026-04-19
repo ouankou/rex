@@ -1328,14 +1328,70 @@ void repairLexicallyOwnedTagDeclarationSurfaces(SgNode *node) {
     }
   };
 
+  auto is_repair_scope = [](SgScopeStatement *scope) {
+    return isSgGlobal(scope) != nullptr ||
+           isSgNamespaceDefinitionStatement(scope) != nullptr;
+  };
+
+  std::unordered_map<SgScopeStatement *, std::vector<SgDeclarationStatement *>>
+      candidate_decls_by_scope;
+  std::unordered_set<SgDeclarationStatement *> seen_candidates;
+
+  struct CandidateDeclCollector : public AstSimpleProcessing {
+    decltype(candidate_decls_by_scope) &candidate_decls_by_scope;
+    decltype(seen_candidates) &seen_candidates;
+    decltype(is_repair_scope) &is_repair_scope;
+
+    CandidateDeclCollector(
+        decltype(candidate_decls_by_scope) &grouped_candidates,
+        decltype(seen_candidates) &seen_candidates,
+        decltype(is_repair_scope) &is_repair_scope)
+        : candidate_decls_by_scope(grouped_candidates),
+          seen_candidates(seen_candidates), is_repair_scope(is_repair_scope) {}
+
+    void visit(SgNode *n) override {
+      SgDeclarationStatement *decl = isSgDeclarationStatement(n);
+      if (decl == nullptr || !seen_candidates.insert(decl).second) {
+        return;
+      }
+
+      if (isSgClassDeclaration(decl) == nullptr &&
+          isSgEnumDeclaration(decl) == nullptr) {
+        return;
+      }
+
+      SgScopeStatement *candidate_scope =
+          isSgClassDeclaration(decl) != nullptr
+              ? isSgClassDeclaration(decl)->get_scope()
+              : isSgEnumDeclaration(decl)->get_scope();
+      if (!is_repair_scope(candidate_scope)) {
+        return;
+      }
+
+      for (SgNode *cursor = decl; cursor != nullptr;
+           cursor = cursor->get_parent()) {
+        if (cursor == candidate_scope) {
+          candidate_decls_by_scope[candidate_scope].push_back(decl);
+          break;
+        }
+      }
+    }
+  } candidate_decl_collector(candidate_decls_by_scope, seen_candidates,
+                             is_repair_scope);
+
+  candidate_decl_collector.traverse(node, preorder);
+
   struct Traversal : public AstSimpleProcessing {
     decltype(fileInfoWithinDeclRange) &fileInfoWithinDeclRange;
     decltype(suppress_decl_output) &suppress_decl_output;
+    decltype(candidate_decls_by_scope) &candidate_decls_by_scope;
 
     Traversal(decltype(fileInfoWithinDeclRange) &range_pred,
-              decltype(suppress_decl_output) &suppress_output)
+              decltype(suppress_decl_output) &suppress_output,
+              decltype(candidate_decls_by_scope) &grouped_candidates)
         : fileInfoWithinDeclRange(range_pred),
-          suppress_decl_output(suppress_output) {}
+          suppress_decl_output(suppress_output),
+          candidate_decls_by_scope(grouped_candidates) {}
 
     void visit(SgNode *n) override {
       SgScopeStatement *scope = isSgScopeStatement(n);
@@ -1349,29 +1405,14 @@ void repairLexicallyOwnedTagDeclarationSurfaces(SgNode *node) {
 
       SgDeclarationStatementPtrList decls_copy = scope->getDeclarationList();
 
-      std::vector<SgDeclarationStatement *> candidate_decls;
-      std::unordered_set<SgDeclarationStatement *> seen_candidates;
-      std::function<void(SgNode *)> collect_candidate_decls =
-          [&](SgNode *node) {
-            if (node == nullptr) {
-              return;
-            }
+      std::unordered_map<SgScopeStatement *,
+                         std::vector<SgDeclarationStatement *>>::const_iterator
+          candidate_iter = candidate_decls_by_scope.find(scope);
+      if (candidate_iter == candidate_decls_by_scope.end()) {
+        return;
+      }
 
-            if (SgDeclarationStatement *decl = isSgDeclarationStatement(node)) {
-              if ((isSgClassDeclaration(decl) != nullptr ||
-                   isSgEnumDeclaration(decl) != nullptr) &&
-                  seen_candidates.insert(decl).second) {
-                candidate_decls.push_back(decl);
-              }
-            }
-
-            for (SgNode *child : node->get_traversalSuccessorContainer()) {
-              collect_candidate_decls(child);
-            }
-          };
-      collect_candidate_decls(scope);
-
-      for (SgDeclarationStatement *decl_stmt : candidate_decls) {
+      for (SgDeclarationStatement *decl_stmt : candidate_iter->second) {
         if (decl_stmt == nullptr) {
           continue;
         }
@@ -1460,7 +1501,8 @@ void repairLexicallyOwnedTagDeclarationSurfaces(SgNode *node) {
         }
       }
     }
-  } traversal(fileInfoWithinDeclRange, suppress_decl_output);
+  } traversal(fileInfoWithinDeclRange, suppress_decl_output,
+              candidate_decls_by_scope);
 
   traversal.traverse(node, preorder);
 }
