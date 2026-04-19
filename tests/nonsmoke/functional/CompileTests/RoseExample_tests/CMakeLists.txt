@@ -26,7 +26,7 @@ foreach(file_to_test ${files_to_test})
   list(APPEND _rose_example_tests "rose_example_${_test_key}")
 endforeach()
 
-set(_rose_example_grammar_flags -w -std=c++14 -rose:verbose 0)
+set(_rose_example_grammar_flags -w -std=c++${CMAKE_CXX_STANDARD} -rose:verbose 0)
 add_test(
   NAME rose_example_src_frontend_SageIII_Cxx_Grammar_C
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -37,4 +37,3 @@ add_test(
     -c ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_Grammar.C
 )
 set_tests_properties(rose_example_src_frontend_SageIII_Cxx_Grammar_C PROPERTIES  LABELS rose_example)
-

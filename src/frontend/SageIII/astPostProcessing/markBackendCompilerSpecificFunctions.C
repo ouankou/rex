@@ -16,7 +16,7 @@ void markBackendSpecificFunctionsAsCompilerGenerated(SgNode *) {
 
   // I think the default should be preorder so that the interfaces would be more
   // uniform astFixupTraversal.traverse(node,preorder);
-  astFixupTraversal.traverseMemoryPool();
+  SgLocatedNode::traverseMemoryPoolNodes(astFixupTraversal);
 
   // printf ("Leaving markBackendSpecificFunctionsAsCompilerGenerated() \n");
 }

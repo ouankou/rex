@@ -24,8 +24,8 @@ void fixupFriendDeclarations() {
 
   FixupFriendDeclarations t2;
 
-  // Traverse all the memory pools for now!
-  t2.traverseMemoryPool();
+  // The visitor only rewrites template-instantiation function declarations.
+  SgTemplateInstantiationFunctionDecl::traverseMemoryPoolNodes(t2);
 }
 
 void FixupFriendTemplateDeclarations::visit(SgNode *node) {

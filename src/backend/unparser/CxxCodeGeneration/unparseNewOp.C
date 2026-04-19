@@ -77,13 +77,7 @@ void Unparse_ExprStmt::unparseNewOp(SgExpression *expr, SgUnparse_Info &info) {
   bool add_parenthesis_around_type = false;
   SgType *new_operator_specified_type = new_op->get_specified_type();
   ASSERT_not_null(new_operator_specified_type);
-  if (new_op->get_constructor_args() != NULL) {
-    if (isSgArrayType(new_operator_specified_type) == NULL) {
-      add_parenthesis_around_type = true;
-    }
-  }
   add_parenthesis_around_type =
-      add_parenthesis_around_type ||
       newTypeIdRequiresParentheses(new_operator_specified_type);
 
 #if DEBUG_unparseNewOp
@@ -102,7 +96,16 @@ void Unparse_ExprStmt::unparseNewOp(SgExpression *expr, SgUnparse_Info &info) {
     curprint(") ");
 
   if (new_op->get_constructor_args() != NULL) {
-    unparseExpression(new_op->get_constructor_args(), newinfo);
+    if (SgExprListExp *expr_list =
+            isSgExprListExp(new_op->get_constructor_args())) {
+      if (expr_list->get_expressions().empty()) {
+        curprint("()");
+      } else {
+        unparseExpression(expr_list, newinfo);
+      }
+    } else {
+      unparseExpression(new_op->get_constructor_args(), newinfo);
+    }
   }
 
   if (new_op->get_builtin_args() != NULL) {

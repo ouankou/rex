@@ -1167,8 +1167,6 @@ SgType::stripType(unsigned char bit_array) const
   // Cast away const of "this" pointer
      SgType* currentType = (SgType*) this;
 
-     SageInterface::detectCycleInType(currentType, "SgType::stripType");
-
 #if DEBUG_SGTYPE_STRIPTYPE
      printf ("Inside of SgType::stripType(bit_array = %u): this = %p = %s \n",bit_array,currentType,currentType->class_name().c_str());
 #endif
@@ -1183,6 +1181,11 @@ SgType::stripType(unsigned char bit_array) const
      SgPointerMemberType*   pointerMemberType = NULL;
 
      size_t counter = 0;
+     static const size_t shallowCycleCheckLimit = 20;
+     SgType* shallowSeenTypes[shallowCycleCheckLimit];
+     size_t shallowSeenCount = 0;
+     shallowSeenTypes[shallowSeenCount++] = currentType;
+     std::set<SgType*>* deepSeenTypes = NULL;
      while (true)
         {
 #if DEBUG_SGTYPE_STRIPTYPE
@@ -1252,19 +1255,53 @@ SgType::stripType(unsigned char bit_array) const
                break;
              }
 
-       // DQ (7/4/2013): This should be a reasonable limit.
-          if (counter >= 80)
+          ROSE_ASSERT(currentType != NULL);
+
+          bool seenType = false;
+          if (deepSeenTypes != NULL)
              {
-               printf ("In loop of SgType::stripType(bit_array = %u): counter = %" PRIuPTR " currentType = %p = %s = %s\n",bit_array,counter,currentType,currentType->class_name().c_str(),currentType->unparseToString().c_str());
+               seenType = deepSeenTypes->find(currentType) != deepSeenTypes->end();
+               if (seenType == false)
+                  {
+                    deepSeenTypes->insert(currentType);
+                  }
+             }
+            else
+             {
+               for (size_t i = 0; i < shallowSeenCount; ++i)
+                  {
+                    if (shallowSeenTypes[i] == currentType)
+                       {
+                         seenType = true;
+                         break;
+                       }
+                  }
+
+               if (seenType == false)
+                  {
+                    if (shallowSeenCount < shallowCycleCheckLimit)
+                       {
+                         shallowSeenTypes[shallowSeenCount++] = currentType;
+                       }
+                      else
+                       {
+                         deepSeenTypes = new std::set<SgType*>();
+                         for (size_t i = 0; i < shallowSeenCount; ++i)
+                            {
+                              deepSeenTypes->insert(shallowSeenTypes[i]);
+                            }
+                         deepSeenTypes->insert(currentType);
+                       }
+                  }
              }
 
-          if (counter >= 100)
+          if (seenType == true)
              {
-               fprintf(stderr,
-                       "FATAL: SgType::stripType exceeded iteration limit "
-                       "(counter=%" PRIuPTR ", bit_array=%u, currentType=%p %s).\n",
-                       counter, bit_array, currentType,
-                       currentType ? currentType->class_name().c_str() : "<null>");
+               MLOG_FATAL_C("ROSETTA",
+                            "SgType::stripType detected a cycle "
+                            "(counter=%" PRIuPTR ", bit_array=%u, currentType=%p %s).\n",
+                            counter, bit_array, currentType,
+                            currentType ? currentType->class_name().c_str() : "<null>");
                ROSE_ABORT();
              }
 
@@ -1273,6 +1310,7 @@ SgType::stripType(unsigned char bit_array) const
 
      ROSE_ASSERT(currentType != NULL);
 
+     delete deepSeenTypes;
 
      return currentType;
    }

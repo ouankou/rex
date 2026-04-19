@@ -231,6 +231,7 @@ SimpleFrontierDetectionForTokenStreamMapping::evaluateInheritedAttribute(
 #endif
         if (allow_transform == true) {
           // Note that both of these must be set.
+          SageInterface::ensureLocatedNodeFileInfoForTransformation(statement);
           statement->setTransformation();
           statement->setOutputInCodeGeneration();
         }

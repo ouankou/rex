@@ -38,6 +38,15 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+
+namespace {
+void rosePhaseTrace(const char *phase) {
+  if (getenv("ROSE_PHASE_TRACE") != nullptr) {
+    fprintf(stderr, "ROSE_PHASE %s\n", phase);
+    fflush(stderr);
+  }
+}
+} // namespace
 #include <fstream>
 #include <functional>
 #include <memory>
@@ -1759,7 +1768,9 @@ int SgProject::parse(const vector<string> &argv) {
   // get_sourceFileNameList().size() = %" PRIuPTR "
   // \n",get_sourceFileNameList().size());
   if (get_sourceFileNameList().size() > 0) {
+    rosePhaseTrace("project.parse.files.begin");
     errorCode = parse();
+    rosePhaseTrace("project.parse.files.end");
   }
 
   // DQ (8/22/2009): We test the parent of SgFunctionTypeTable in the AST post
@@ -1980,14 +1991,18 @@ int SgProject::parse() {
   // the caller as a frontend failure rather than pushed through global fixup.
   if ((get_fileList().empty() == false) && (get_useBackendOnly() == false) &&
       errorCode == 0) {
+    rosePhaseTrace("AstPostProcessing.begin");
     AstPostProcessing(this);
+    rosePhaseTrace("AstPostProcessing.end");
 
     // Some template-instantiation function declaration chains are finalized
     // only after the broader AST post-processing pipeline completes. Re-run
     // the targeted template-instantiation repair once the project AST is fully
     // assembled so defining/nondefining links remain coherent for later AST
     // copies and consistency checks.
+    rosePhaseTrace("fixupTemplateInstantiations.begin");
     fixupTemplateInstantiations(this);
+    rosePhaseTrace("fixupTemplateInstantiations.end");
   }
 
   // negara1 (06/23/2011): Collect information about the included files to
@@ -2069,7 +2084,9 @@ int SgProject::parse() {
       // header file unparsing, optionally support the main file
       // collection of comments and CPP directives, and seperately the
       // header file collection of comments and CPP directives.
+      rosePhaseTrace("secondaryPassOverSourceFile.begin");
       file->secondaryPassOverSourceFile();
+      rosePhaseTrace("secondaryPassOverSourceFile.end");
       ROSE_ASSERT(file->get_header_file_unparsing_optimization_source_file() ==
                   false);
       ROSE_ASSERT(file->get_header_file_unparsing_optimization_header_file() ==
@@ -2590,7 +2607,9 @@ int SgFile::callFrontEnd() {
   case V_SgSourceFile: {
     SgSourceFile *sourceFile = const_cast<SgSourceFile *>(isSgSourceFile(this));
     ASSERT_not_null(sourceFile);
+    rosePhaseTrace("SgSourceFile.buildAST.begin");
     frontendErrorLevel = sourceFile->buildAST(localCopy_argv, inputCommandLine);
+    rosePhaseTrace("SgSourceFile.buildAST.end");
     break;
   }
 
@@ -2817,12 +2836,14 @@ void SgFile::secondaryPassOverSourceFile() {
             sourceFile, sourceFile->class_name().c_str(),
             sourceFile->getFileName().c_str());
 #endif
+        rosePhaseTrace("secondaryPassOverSourceFile.attachPreprocessing.begin");
         if (!using_flang_frontend) {
           attachPreprocessingInfo(sourceFile, "", !preproc_already_attached);
         } else {
           // Flang already attaches Fortran comments during AST construction.
           sourceFile->set_processedToIncludeCppDirectivesAndComments(true);
         }
+        rosePhaseTrace("secondaryPassOverSourceFile.attachPreprocessing.end");
 #if DEBUG_SECONDARY_PASS
         printf("@@@@@@@@@@@@@@ DONE: In SgFile::secondaryPassOverSourceFile(): "
                "Calling attachPreprocessingInfo(): sourceFile = %p = %s \n",
@@ -2845,6 +2866,7 @@ void SgFile::secondaryPassOverSourceFile() {
         // DQ (8/18/2019): Add performance analysis support.
         TimingPerformance timer(
             "legacy frontend-ROSE header file support for tokens:");
+        rosePhaseTrace("secondaryPassOverSourceFile.tokenSupport.begin");
 
         // DQ (7/2/2020): Use this variable for now while debuging this code
         // moved from the parse() function.
@@ -2917,11 +2939,14 @@ void SgFile::secondaryPassOverSourceFile() {
           // DQ (2/24/2021): Adding debugging support for the token-based
           // unparsing.
         }
+        rosePhaseTrace("secondaryPassOverSourceFile.tokenSupport.end");
       }
 
       // Liao, 3/31/2009 Handle OpenMP here to see macro calls within directives
 #ifdef ROSE_BUILD_CPP_LANGUAGE_SUPPORT
+      rosePhaseTrace("secondaryPassOverSourceFile.openmp.begin");
       processOpenMP(sourceFile);
+      rosePhaseTrace("secondaryPassOverSourceFile.openmp.end");
 #endif
       if (sourceFile->get_openacc())
         printf("OpenACC support is turned on\n");

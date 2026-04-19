@@ -6,6 +6,8 @@
 
 #include <filesystem>
 
+#include <map>
+
 #include <optional>
 
 #include <sstream>
@@ -365,5 +367,18 @@ bool rosePathIsWithinTree(const std::string &root,
   if (root.empty() || candidate.empty()) {
     return false;
   }
-  return is_within_tree(path(root), path(candidate));
+
+  using CacheKey = std::pair<std::string, std::string>;
+  static std::map<CacheKey, bool> within_tree_cache;
+
+  const CacheKey cache_key(root, candidate);
+  std::map<CacheKey, bool>::const_iterator found =
+      within_tree_cache.find(cache_key);
+  if (found != within_tree_cache.end()) {
+    return found->second;
+  }
+
+  const bool result = is_within_tree(path(root), path(candidate));
+  within_tree_cache[cache_key] = result;
+  return result;
 }

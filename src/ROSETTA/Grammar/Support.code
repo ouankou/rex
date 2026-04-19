@@ -8295,6 +8295,7 @@ std::vector<SgTemplateParameter*> getTemplateParametersOrArgumentsList<SgTemplat
                break;
              }
        // DQ (8/19/2013): Added case for other symbols (but we only return the empty list for this case).
+          case V_SgLabelSymbol:
           case V_SgClassSymbol:
           case V_SgVariableSymbol:
           case V_SgFunctionSymbol:

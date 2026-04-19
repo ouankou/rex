@@ -47,6 +47,87 @@ const char *templateParameterKeywordSpelling(
   }
 }
 
+std::string
+buildTemplateDefaultArgumentEmissionKey(SgTemplateParameter *template_parameter,
+                                        SgUnparse_Info &info) {
+  if (template_parameter == nullptr) {
+    return std::string();
+  }
+
+  SgTemplateDeclaration *template_decl =
+      isSgTemplateDeclaration(info.get_declstatement_ptr());
+  if (template_decl == nullptr) {
+    return std::string();
+  }
+
+  const SgTemplateParameterPtrList &params =
+      template_decl->get_templateParameters();
+  size_t parameter_index = 0;
+  bool found_parameter = false;
+  for (size_t i = 0; i < params.size(); ++i) {
+    if (params[i] == template_parameter) {
+      parameter_index = i;
+      found_parameter = true;
+      break;
+    }
+  }
+  if (!found_parameter) {
+    return std::string();
+  }
+
+  auto buildStableTemplateDeclarationKey =
+      [](SgTemplateDeclaration *decl) -> std::string {
+    if (decl == nullptr) {
+      return std::string();
+    }
+
+    std::string key = decl->get_mangled_name().getString();
+    if (key.empty()) {
+      key = decl->get_qualified_name().getString();
+    }
+    if (key.empty()) {
+      key = decl->get_name().getString();
+    }
+
+    const Sg_File_Info *file_info = decl->get_file_info();
+    if (file_info != nullptr) {
+      const std::string location = file_info->get_filenameString() + ":" +
+                                   std::to_string(file_info->get_line()) + ":" +
+                                   std::to_string(file_info->get_col());
+      if (key.empty()) {
+        key = location;
+      } else {
+        key += "@" + location;
+      }
+    }
+
+    return key;
+  };
+
+  SgTemplateDeclaration *canonical_decl = template_decl;
+  if (SgTemplateDeclaration *first_nondef = isSgTemplateDeclaration(
+          template_decl->get_firstNondefiningDeclaration())) {
+    canonical_decl = first_nondef;
+  } else if (SgTemplateDeclaration *defining_decl = isSgTemplateDeclaration(
+                 template_decl->get_definingDeclaration())) {
+    canonical_decl = defining_decl;
+  }
+
+  std::string declaration_key =
+      buildStableTemplateDeclarationKey(canonical_decl);
+  if (declaration_key.empty() && template_decl != canonical_decl) {
+    declaration_key = buildStableTemplateDeclarationKey(template_decl);
+  }
+
+  if (declaration_key.empty()) {
+    return std::string();
+  }
+
+  return template_decl->class_name() + "|" +
+         std::to_string(static_cast<int>(template_decl->get_template_kind())) +
+         "|" + declaration_key + "|" + std::to_string(parameter_index);
+}
+
 bool typeEndsWithTemplateIdClose(const SgType *type) {
   if (type == nullptr) {
     return false;
@@ -156,15 +237,58 @@ bool templateArgumentCanUseCompactPointerLikeTypeSpelling(
   }
 
   SgType *type = arg->get_type();
-  return type != nullptr &&
-         (isSgPointerType(type) != nullptr ||
-          isSgPointerMemberType(type) != nullptr ||
-          isSgReferenceType(type) != nullptr ||
-          isSgRvalueReferenceType(type) != nullptr ||
-          isSgArrayType(type) != nullptr) &&
-         templateArgumentQualificationLengthForTypeOutput(arg) == 0 &&
-         !templateArgumentRequiresGlobalQualificationForTypeOutput(arg) &&
-         !templateArgumentRequiresTypeElaborationForTypeOutput(arg);
+  if (type == nullptr ||
+      (isSgPointerType(type) == nullptr &&
+       isSgPointerMemberType(type) == nullptr &&
+       isSgReferenceType(type) == nullptr &&
+       isSgRvalueReferenceType(type) == nullptr &&
+       isSgArrayType(type) == nullptr) ||
+      templateArgumentQualificationLengthForTypeOutput(arg) != 0 ||
+      templateArgumentRequiresGlobalQualificationForTypeOutput(arg) ||
+      templateArgumentRequiresTypeElaborationForTypeOutput(arg)) {
+    return false;
+  }
+
+  auto strip_modifiers = [](const SgType *current) -> const SgType * {
+    while (const SgModifierType *modifier_type = isSgModifierType(current)) {
+      current = modifier_type->get_base_type();
+    }
+    return current;
+  };
+
+  const SgType *base_type = strip_modifiers(type);
+  if (const SgPointerType *pointer_type = isSgPointerType(base_type)) {
+    base_type = strip_modifiers(pointer_type->get_base_type());
+  } else if (const SgPointerMemberType *pointer_member_type =
+                 isSgPointerMemberType(base_type)) {
+    base_type = strip_modifiers(pointer_member_type->get_base_type());
+  } else if (const SgReferenceType *reference_type =
+                 isSgReferenceType(base_type)) {
+    base_type = strip_modifiers(reference_type->get_base_type());
+  } else if (const SgRvalueReferenceType *reference_type =
+                 isSgRvalueReferenceType(base_type)) {
+    base_type = strip_modifiers(reference_type->get_base_type());
+  } else if (const SgArrayType *array_type = isSgArrayType(base_type)) {
+    base_type = strip_modifiers(array_type->get_base_type());
+  }
+
+  // `globalUnparseToString(type, NULL)` is only safe here for trivial
+  // built-in pointee/element types. Named and structured bases can lose
+  // second-part spelling (e.g. `std::map<...>*` -> `std::map<...>`), which
+  // corrupts template arguments.
+  return base_type != nullptr &&
+         isSgNamedType(const_cast<SgType *>(base_type)) == nullptr &&
+         isSgPointerType(base_type) == nullptr &&
+         isSgPointerMemberType(base_type) == nullptr &&
+         isSgReferenceType(base_type) == nullptr &&
+         isSgRvalueReferenceType(base_type) == nullptr &&
+         isSgArrayType(base_type) == nullptr &&
+         isSgFunctionType(base_type) == nullptr &&
+         isSgPartialFunctionType(base_type) == nullptr &&
+         isSgMemberFunctionType(base_type) == nullptr &&
+         isSgDeclType(base_type) == nullptr &&
+         isSgTypeOfType(base_type) == nullptr &&
+         isSgAutoType(base_type) == nullptr;
 }
 
 bool templateArgumentRequiresDirectExpressionUnparse(
@@ -2220,6 +2344,7 @@ void Unparse_ExprStmt::unparseTemplateParameter(
   // redeclarations; once emitted in this unparse task, suppress repeats.
 
   bool emit_default_template_arg = is_template_header;
+  std::string default_template_arg_key;
   if (emit_default_template_arg) {
     SgTemplateDeclaration *template_decl =
         isSgTemplateDeclaration(info.get_declstatement_ptr());
@@ -2253,10 +2378,17 @@ void Unparse_ExprStmt::unparseTemplateParameter(
         emit_default_template_arg = false;
       }
     }
+    default_template_arg_key =
+        buildTemplateDefaultArgumentEmissionKey(templateParameter, info);
   }
   if (emit_default_template_arg &&
       emitted_default_template_args_.find(templateParameter) !=
           emitted_default_template_args_.end()) {
+    emit_default_template_arg = false;
+  }
+  if (emit_default_template_arg && !default_template_arg_key.empty() &&
+      emitted_default_template_arg_keys_.find(default_template_arg_key) !=
+          emitted_default_template_arg_keys_.end()) {
     emit_default_template_arg = false;
   }
 
@@ -2318,6 +2450,9 @@ void Unparse_ExprStmt::unparseTemplateParameter(
       dinfo.set_reference_node_for_qualification(templateParameter);
       unp->u_type->unparseType(default_type, dinfo);
       emitted_default_template_args_.insert(templateParameter);
+      if (!default_template_arg_key.empty()) {
+        emitted_default_template_arg_keys_.insert(default_template_arg_key);
+      }
     }
     break;
   }
@@ -2412,6 +2547,9 @@ void Unparse_ExprStmt::unparseTemplateParameter(
           einfo.set_SkipEnumDefinition();
           unparseExpression(default_expr, einfo);
           emitted_default_template_args_.insert(templateParameter);
+          if (!default_template_arg_key.empty()) {
+            emitted_default_template_arg_keys_.insert(default_template_arg_key);
+          }
         }
       }
     }
@@ -2670,25 +2808,9 @@ void Unparse_ExprStmt::unparseTemplateArgument(
         isSgReferenceType(templateArgumentType) != nullptr ||
         isSgRvalueReferenceType(templateArgumentType) != nullptr ||
         isSgArrayType(templateArgumentType) != nullptr;
-    const bool requires_compact_reference_type_output =
-        isSgReferenceType(templateArgumentType) != nullptr ||
-        isSgRvalueReferenceType(templateArgumentType) != nullptr;
-    const bool can_use_compact_pointer_like_type_output =
-        (isSgPointerType(templateArgumentType) != nullptr ||
-         isSgPointerMemberType(templateArgumentType) != nullptr ||
-         isSgReferenceType(templateArgumentType) != nullptr ||
-         isSgRvalueReferenceType(templateArgumentType) != nullptr ||
-         isSgArrayType(templateArgumentType) != nullptr) &&
-        templateArgumentQualificationLengthForTypeOutput(templateArgument) ==
-            0 &&
-        !templateArgumentRequiresGlobalQualificationForTypeOutput(
-            templateArgument) &&
-        !templateArgumentRequiresTypeElaborationForTypeOutput(templateArgument);
-    if (requires_compact_reference_type_output ||
-        can_use_compact_pointer_like_type_output) {
-      std::string compact_type_text =
-          normalizeTemplateParameterPreviewWhitespace(
-              globalUnparseToString(templateArgumentType, NULL));
+    const std::string compact_type_text =
+        compactTemplateArgumentTypeSpelling(templateArgument);
+    if (!compact_type_text.empty()) {
       curprint(compact_type_text);
     } else if (needs_declaration_style_type_output) {
       unp->u_type->outputType<SgTemplateArgument>(
@@ -5664,7 +5786,7 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
           // DQ (4/24/2013): Moved this to be ahead so that the unparseArg value
           // would be associated with the current argument.
           if (arg != list.begin() && unparseArg == true) {
-            curprint(",");
+            curprint(", ");
           }
 
           if (unparseArg == true) {

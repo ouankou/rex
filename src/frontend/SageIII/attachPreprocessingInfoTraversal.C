@@ -80,6 +80,12 @@ found in the directory ROSE/TESTS/KnownBugs/AttachPreprocessingInfo.
 using namespace std;
 
 namespace {
+void rosePhaseTrace(const char *phase) {
+  if (getenv("ROSE_PHASE_TRACE") != nullptr) {
+    fprintf(stderr, "ROSE_PHASE %s\n", phase);
+    fflush(stderr);
+  }
+}
 
 template <class TemplateDeclT>
 void mirrorTemplateDeclarationTokenMapping(
@@ -923,8 +929,12 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
       // returnListOfAttributes = getListOfAttributes(currentFileNameId);
       // returnListOfAttributes =
       // getPreprocessorDirectives(fileNameForDirectivesAndComments);
+      rosePhaseTrace(
+          "buildCommentAndCppDirectiveList.getPreprocessorDirectives.begin");
       returnListOfAttributes = getPreprocessorDirectives(
           fileNameForDirectivesAndComments, new_filename);
+      rosePhaseTrace(
+          "buildCommentAndCppDirectiveList.getPreprocessorDirectives.end");
 #endif
 #if DEBUG_BUILD_COMMENT_AND_CPP_DIRECTIVE_LIST
       printf("DONE: Generating a new ROSEAttributesList: currentFileNameId = "
@@ -950,47 +960,6 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
       // vector of tokens.  However, I don't see where the list or vector if
       // SgTokens* is used or located.
 
-      // LexTokenStreamType* tokenStream = getTokenStream(sourceFile);
-      LexTokenStreamType *tokenStream =
-          returnListOfAttributes->get_rawTokenStream();
-      ROSE_ASSERT(tokenStream != NULL);
-      // Set this value so that we can generate unique keys for any interval.
-      // I think that a better mehcanism for generating unique keys would be
-      // possible (but this is simple).
-      TokenStreamSequenceToNodeMapping::tokenStreamSize = tokenStream->size();
-
-      // Convert this list to a vectors so that we can use integer indexing
-      // instead of iterators into a list.
-      vector<stream_element *> tokenVector;
-      for (LexTokenStreamType::iterator i = tokenStream->begin();
-           i != tokenStream->end(); i++) {
-        tokenVector.push_back(*i);
-      }
-
-      // DQ (1/30/2014): I have added the corner case for an empty file, with
-      // zero tokens to find. We need to make sure this is not an error (OK it
-      // issue a warning). ROSE_ASSERT(tokenVector.empty() == false);
-      if (tokenVector.empty() == true) {
-        printf(
-            "Warning: this is an empty file (no tokens found): not even a CR "
-            "present! (but not an error using the token stream unparsing) \n");
-      }
-
-      // return tokenVector;
-
-      // typedef std::list<stream_element*> LexTokenStreamType;
-
-      // TokenStreamSequenceToNodeMapping* tokenStreamSequenceToNodeMapping =
-      // token_list_pointer;
-
-      // std::map<SgNode*,TokenStreamSequenceToNodeMapping*> &
-      // tokenStreamSequenceMap = *token_list_pointer;
-      // std::map<SgNode*,TokenStreamSequenceToNodeMapping*> &
-      // tokenStreamSequenceMap = *token_list_pointer;
-      // sourceFile->set_tokenSubsequenceMap(tokenStreamSequenceMap);
-      // DQ (1/18/2021): Only in the most trivial of empty files should the
-      // vector of tokens be empty. ROSE_ASSERT(tokenVector.size() > 0);
-
       ROSE_ASSERT(filePreprocInfo != NULL);
       // ROSEAttributesListContainerPtr filePreprocInfo =
       // file->get_preprocessorDirectivesAndCommentsList();
@@ -1006,15 +975,48 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
       // partial replay modes that improve source positions from the token
       // stream. This avoids the historical cost for runs that never consult the
       // token map.
-      if (sourceFile->get_unparse_tokens() == true ||
+      const bool needs_token_mapping =
+          sourceFile->get_unparse_tokens() == true ||
           sourceFile->get_use_token_stream_to_improve_source_position_info() ==
-              true) {
+              true;
+      if (needs_token_mapping) {
+        rosePhaseTrace(
+            "buildCommentAndCppDirectiveList.tokenMappingSetup.begin");
+        // LexTokenStreamType* tokenStream = getTokenStream(sourceFile);
+        LexTokenStreamType *tokenStream =
+            returnListOfAttributes->get_rawTokenStream();
+        ROSE_ASSERT(tokenStream != NULL);
+        // Set this value so that we can generate unique keys for any interval.
+        // I think that a better mehcanism for generating unique keys would be
+        // possible (but this is simple).
+        TokenStreamSequenceToNodeMapping::tokenStreamSize = tokenStream->size();
+
+        // Convert this list to a vectors so that we can use integer indexing
+        // instead of iterators into a list.
+        vector<stream_element *> tokenVector;
+        tokenVector.reserve(tokenStream->size());
+        for (LexTokenStreamType::iterator i = tokenStream->begin();
+             i != tokenStream->end(); i++) {
+          tokenVector.push_back(*i);
+        }
+
+        // DQ (1/30/2014): I have added the corner case for an empty file, with
+        // zero tokens to find. We need to make sure this is not an error (OK it
+        // issue a warning). ROSE_ASSERT(tokenVector.empty() == false);
+        if (tokenVector.empty() == true) {
+          printf(
+              "Warning: this is an empty file (no tokens found): not even a CR "
+              "present! (but not an error using the token stream unparsing) "
+              "\n");
+        }
+
         // DQ (02/20/2021): Using the performance tracking within ROSE.
         TimingPerformance timer("AST calling buildTokenStreamMapping():");
         // DQ (2/20/2021): This is a pretty expensive operation, about the same
         // cost of the frontend (without the call to this function).
         buildTokenStreamMapping(sourceFile, tokenVector);
         repairTemplateFunctionDeclarationTokenMappings(sourceFile);
+        rosePhaseTrace("buildCommentAndCppDirectiveList.tokenMappingSetup.end");
       } else {
       }
 

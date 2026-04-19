@@ -1708,8 +1708,10 @@ SgFunctionDeclaration *Outliner::generateFunction(
     string output_filename = target_source_file->get_unparse_output_filename();
     printf("output_filename = %s \n", output_filename.c_str());
 
+    Sg_File_Info::addFilenameToMap(output_filename);
     int source_file_physical_file_id =
         Sg_File_Info::getIDFromFilename(output_filename);
+    ROSE_ASSERT(source_file_physical_file_id >= 0);
     printf("source_file_physical_file_id = %d \n",
            source_file_physical_file_id);
 

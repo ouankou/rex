@@ -7,6 +7,7 @@
 
 #include <cctype>
 #include <map>
+#include <unordered_map>
 
 #define DEBUG__unparse_alignas 0
 #define DEBUG__setup_decl_item_type_unparse_infos 0
@@ -16,6 +17,93 @@
 
 namespace {
 constexpr int kNormalizedVariableDeclarationWrapColumn = 80;
+
+SgInitializedName *getFirstInitializedNameIfAny(SgVariableDeclaration *decl) {
+  if (decl == nullptr || decl->get_variables().empty()) {
+    return nullptr;
+  }
+
+  return decl->get_variables().front();
+}
+
+std::vector<SgVariableDeclaration *>
+collectAssociatedDeclarationListItems(SgVariableDeclaration *decl) {
+  if (decl == nullptr || decl->get_parent() == nullptr) {
+    return {};
+  }
+
+  SgInitializedName *decl_init = getFirstInitializedNameIfAny(decl);
+  if (decl_init == nullptr) {
+    return {decl};
+  }
+
+  std::unordered_map<SgInitializedName *, SgVariableDeclaration *> decl_by_init;
+  std::unordered_multimap<SgInitializedName *, SgVariableDeclaration *>
+      decls_by_prev_item;
+
+  Rose_STL_Container<SgNode *> node_list =
+      NodeQuery::querySubTree(decl->get_parent(), V_SgVariableDeclaration);
+  for (SgNode *node : node_list) {
+    SgVariableDeclaration *candidate = isSgVariableDeclaration(node);
+    if (candidate == nullptr || candidate->get_parent() != decl->get_parent()) {
+      continue;
+    }
+
+    SgInitializedName *candidate_init = getFirstInitializedNameIfAny(candidate);
+    if (candidate_init == nullptr) {
+      continue;
+    }
+
+    if (!candidate->get_isAssociatedWithDeclarationList() &&
+        candidate_init->get_prev_decl_item() == nullptr && candidate != decl) {
+      continue;
+    }
+
+    decl_by_init[candidate_init] = candidate;
+    if (candidate_init->get_prev_decl_item() != nullptr) {
+      decls_by_prev_item.emplace(candidate_init->get_prev_decl_item(),
+                                 candidate);
+    }
+  }
+
+  SgVariableDeclaration *head_decl = decl;
+  SgInitializedName *head_init = decl_init;
+  while (head_init->get_prev_decl_item() != nullptr) {
+    auto prev_it = decl_by_init.find(head_init->get_prev_decl_item());
+    if (prev_it == decl_by_init.end()) {
+      break;
+    }
+
+    head_decl = prev_it->second;
+    head_init = prev_it->first;
+  }
+
+  std::vector<SgVariableDeclaration *> list_items;
+  for (SgVariableDeclaration *current_decl = head_decl;
+       current_decl != nullptr;) {
+    list_items.push_back(current_decl);
+
+    SgInitializedName *current_init =
+        getFirstInitializedNameIfAny(current_decl);
+    ROSE_ASSERT(current_init != nullptr);
+
+    auto range = decls_by_prev_item.equal_range(current_init);
+    if (range.first == range.second) {
+      break;
+    }
+
+    auto next_it = range.first;
+    ++next_it;
+    ROSE_ASSERT(next_it == range.second);
+    current_decl = range.first->second;
+  }
+
+  if (list_items.empty()) {
+    list_items.push_back(decl);
+  }
+
+  return list_items;
+}
 
 std::string normalizeVarDeclPreviewWhitespace(const std::string &text) {
   std::string normalized;
@@ -307,13 +395,24 @@ static void need_assign_and_initializer_unparsed(SgInitializedName *decl_item,
           (ctor_init->get_args()->get_expressions().size() == 0);
       bool use_copy_ctor_syntax =
           decl_item->get_using_assignment_copy_constructor_syntax();
+      bool implicit_default_construction =
+          ctor_args_empty && !ctor_init->get_is_braced_initialized();
+      const bool can_suppress_empty_ctor_initializer =
+          implicit_default_construction && !use_copy_ctor_syntax;
       bool might_need_assign_op = ctor_init->get_need_name() ||
                                   ctor_init->get_associated_class_unknown() ||
                                   use_copy_ctor_syntax ||
                                   unparse_info.inConditional();
 
-      if (might_need_assign_op && inside_for_init_stmt &&
-          ctor_init->get_need_name() && ctor_init->get_is_explicit_cast()) {
+      // A variable declaration cannot spell an empty constructor initializer as
+      // bare `()`: `T x();` is a function declaration, not an object
+      // definition. For non-copy syntax, an empty ctor-init in declaration
+      // context must therefore stay implicit and unparse as `T x;`.
+      if (can_suppress_empty_ctor_initializer) {
+        need_initializer = false;
+      } else if (might_need_assign_op && inside_for_init_stmt &&
+                 ctor_init->get_need_name() &&
+                 ctor_init->get_is_explicit_cast()) {
         need_assign_op = true;
       } else if (might_need_assign_op && (ctor_init->get_need_name() &&
                                           ctor_init->get_is_explicit_cast()) ||
@@ -351,6 +450,13 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
   SgVariableDeclaration *vardecl_stmt = isSgVariableDeclaration(stmt);
   ASSERT_not_null(vardecl_stmt);
   ROSE_ASSERT(vardecl_stmt->get_variables().size() > 0);
+
+  std::vector<SgVariableDeclaration *> declaration_list_items =
+      collectAssociatedDeclarationListItems(vardecl_stmt);
+  if (!declaration_list_items.empty() &&
+      declaration_list_items.front() != vardecl_stmt) {
+    return;
+  }
 
 #if DEBUG__unparseVarDeclStmt
   auto &decl_mod = vardecl_stmt->get_declarationModifier();
@@ -1350,12 +1456,33 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
     ninfo.set_isWithType();
   }
 
-  SgInitializedNamePtrList::iterator vdecl_iname_it =
-      vardecl_stmt->get_variables().begin();
-  unparse_alignas(*vdecl_iname_it, *this, info);
+  struct DeclarationListEntry {
+    SgVariableDeclaration *decl = nullptr;
+    SgInitializedName *init = nullptr;
+  };
+  std::vector<DeclarationListEntry> decl_item_entries;
+  if (declaration_list_items.size() > 1) {
+    for (SgVariableDeclaration *decl_item_owner : declaration_list_items) {
+      SgInitializedName *decl_item =
+          getFirstInitializedNameIfAny(decl_item_owner);
+      if (decl_item != nullptr) {
+        decl_item_entries.push_back({decl_item_owner, decl_item});
+      }
+    }
+  } else {
+    for (SgInitializedName *decl_item : vardecl_stmt->get_variables()) {
+      decl_item_entries.push_back({vardecl_stmt, decl_item});
+    }
+  }
+  ROSE_ASSERT(!decl_item_entries.empty());
 
-  while (vdecl_iname_it != vardecl_stmt->get_variables().end()) {
-    SgInitializedName *decl_item = *vdecl_iname_it;
+  unparse_alignas(decl_item_entries.front().init, *this, info);
+
+  for (size_t decl_item_index = 0; decl_item_index < decl_item_entries.size();
+       ++decl_item_index) {
+    SgVariableDeclaration *decl_item_owner =
+        decl_item_entries[decl_item_index].decl;
+    SgInitializedName *decl_item = decl_item_entries[decl_item_index].init;
     ASSERT_not_null(decl_item);
     SgType *decl_type = decl_item->get_type();
     ASSERT_not_null(decl_type);
@@ -1415,8 +1542,7 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
            decl_type->class_name().c_str());
 #endif
 
-    bool is_first_decl_item =
-        vdecl_iname_it == vardecl_stmt->get_variables().begin();
+    bool is_first_decl_item = decl_item_index == 0;
     bool apply_vdecl_attr =
         !ninfo.inEnumDecl() && !ninfo.inArgList() && !ninfo.SkipSemiColon();
 
@@ -1441,8 +1567,9 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
 
     SgUnparse_Info first_part_type_info(ninfo);
     std::string unparse_str{""};
-    if (setup_decl_item_type_unparse_infos(first_part_type_info, vardecl_stmt,
-                                           decl_item, decl_type, unparse_str)) {
+    if (setup_decl_item_type_unparse_infos(first_part_type_info,
+                                           decl_item_owner, decl_item,
+                                           decl_type, unparse_str)) {
       unp->u_type->unparseType(decl_type, first_part_type_info);
     } else {
       curprint(unparse_str);
@@ -1455,7 +1582,7 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
         decl_item,
         is_first_decl_item ? normalized_static_member_prefix : std::string()));
     if (SgTemplateVariableDeclaration *template_var_decl =
-            isSgTemplateVariableDeclaration(vardecl_stmt)) {
+            isSgTemplateVariableDeclaration(decl_item_owner)) {
       const SgTemplateArgumentPtrList &spec_args =
           template_var_decl->get_templateSpecializationArguments();
       if (!spec_args.empty()) {
@@ -1467,7 +1594,7 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
 
     SgUnparse_Info second_part_type_info(ninfo);
     std::string ignored_unparse_str;
-    setup_decl_item_type_unparse_infos(second_part_type_info, vardecl_stmt,
+    setup_decl_item_type_unparse_infos(second_part_type_info, decl_item_owner,
                                        decl_item, decl_type,
                                        ignored_unparse_str);
     second_part_type_info.set_isTypeSecondPart();
@@ -1483,11 +1610,12 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
     bool need_initializer = false;
     need_assign_and_initializer_unparsed(
         decl_item, need_assign, need_initializer, ninfo,
-        isSgForInitStatement(vardecl_stmt->get_parent()));
+        isSgForInitStatement(decl_item_owner->get_parent()));
     if (need_initializer) {
       SgSourceFile *source_file = ninfo.get_current_source_file();
       if (source_file == nullptr) {
-        source_file = SageInterface::getEnclosingSourceFile(vardecl_stmt, true);
+        source_file =
+            SageInterface::getEnclosingSourceFile(decl_item_owner, true);
       }
       const int linewrap =
           source_file != nullptr &&
@@ -1533,12 +1661,10 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
       curprint(" = ");
     }
 
-    vdecl_iname_it++;
-
-    if (vdecl_iname_it != vardecl_stmt->get_variables().end()) {
+    if (decl_item_index + 1 < decl_item_entries.size()) {
       if (!ninfo.inArgList())
         ninfo.set_SkipBaseType();
-      curprint(",");
+      curprint(", ");
     }
     unparseAttachedPreprocessingInfo(decl_item, ninfo,
                                      PreprocessingInfo::after);

@@ -28,6 +28,17 @@ using namespace std;
 using namespace Rose;
 
 namespace {
+TokenStreamSequenceToNodeMapping *
+lookup_statement_token_subsequence_mapping(SgSourceFile *source_file,
+                                           const SgStatement *statement,
+                                           SgStatement **mapped_statement);
+
+std::set<const SgStatement *> &
+statements_with_token_emitted_leading_preprocessing() {
+  static std::set<const SgStatement *> statements;
+  return statements;
+}
+
 void emit_forced_newline(Unparser *unp) {
   if (unp == nullptr) {
     return;
@@ -37,6 +48,102 @@ void emit_forced_newline(Unparser *unp) {
   // introduce an extra blank line.
   if (unp->cur.current_col() > 0) {
     unp->cur.insert_newline(1);
+  }
+}
+
+bool located_node_has_before_preprocessing_info(const SgLocatedNode *node) {
+  AttachedPreprocessingInfoType *attached =
+      node != nullptr
+          ? const_cast<SgLocatedNode *>(node)->getAttachedPreprocessingInfo()
+          : nullptr;
+  if (attached == nullptr) {
+    return false;
+  }
+
+  for (PreprocessingInfo *info : *attached) {
+    if (info != nullptr &&
+        info->getRelativePosition() == PreprocessingInfo::before) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool statement_has_leading_token_gap(SgSourceFile *source_file,
+                                     SgStatement *statement) {
+  if (source_file == nullptr || statement == nullptr) {
+    return false;
+  }
+
+  SgStatement *mapped_statement = statement;
+  TokenStreamSequenceToNodeMapping *mapping =
+      lookup_statement_token_subsequence_mapping(source_file, statement,
+                                                 &mapped_statement);
+  return mapping != nullptr && mapping->leading_whitespace_start != -1 &&
+         mapping->leading_whitespace_end != -1 &&
+         mapping->leading_whitespace_start <= mapping->leading_whitespace_end;
+}
+
+void find_adjacent_statement_in_parent_sequence(SgStatement *target,
+                                                SgStatement *&previous_stmt,
+                                                SgStatement *&next_stmt) {
+  previous_stmt = nullptr;
+  next_stmt = nullptr;
+
+  if (target == nullptr) {
+    return;
+  }
+
+  SgScopeStatement *scope = isSgScopeStatement(target->get_parent());
+  if (scope == nullptr) {
+    return;
+  }
+
+  if (scope->containsOnlyDeclarations()) {
+    SgDeclarationStatement *decl = isSgDeclarationStatement(target);
+    if (decl == nullptr) {
+      return;
+    }
+
+    const SgDeclarationStatementPtrList &decl_list =
+        scope->getDeclarationList();
+    for (size_t idx = 0; idx < decl_list.size(); ++idx) {
+      if (decl_list[idx] != decl) {
+        continue;
+      }
+
+      previous_stmt = idx > 0 ? isSgStatement(decl_list[idx - 1]) : nullptr;
+      next_stmt = idx + 1 < decl_list.size() ? isSgStatement(decl_list[idx + 1])
+                                             : nullptr;
+      return;
+    }
+
+    return;
+  }
+
+  const SgStatementPtrList *statement_list = nullptr;
+  if (SgBasicBlock *basic_block = isSgBasicBlock(scope)) {
+    statement_list = &basic_block->getStatementList();
+  } else if (SgForInitStatement *for_init_stmt = isSgForInitStatement(scope)) {
+    statement_list = &for_init_stmt->get_init_stmt();
+  }
+
+  if (statement_list == nullptr) {
+    return;
+  }
+
+  for (size_t idx = 0; idx < statement_list->size(); ++idx) {
+    if ((*statement_list)[idx] != target) {
+      continue;
+    }
+
+    previous_stmt =
+        idx > 0 ? isSgStatement((*statement_list)[idx - 1]) : nullptr;
+    next_stmt = idx + 1 < statement_list->size()
+                    ? isSgStatement((*statement_list)[idx + 1])
+                    : nullptr;
+    return;
   }
 }
 
@@ -221,6 +328,13 @@ bool is_openmp_or_openacc_pragma_line(const std::string &line) {
 bool declaration_requires_enclosing_scope_ast_fallback(
     SgDeclarationStatement *decl) {
   if (decl == nullptr) {
+    return false;
+  }
+
+  if (isSgFunctionDeclaration(decl) != nullptr) {
+    // Function bodies that contain transformed descendants should still be
+    // unparsed canonically from the AST, not through a token-shell fallback
+    // for the whole function.
     return false;
   }
 
@@ -521,6 +635,12 @@ bool source_supports_partial_token_replay(const SgSourceFile *source_file) {
                ->get_unparse_using_leading_and_trailing_token_mappings()));
 }
 
+bool source_supports_inherited_token_surface_replay(
+    const SgSourceFile *source_file) {
+  return source_file != nullptr && source_file->get_unparse_tokens() &&
+         source_file->get_use_token_stream_to_improve_source_position_info();
+}
+
 bool located_node_has_attached_preprocessing_info(SgLocatedNode *node) {
   if (node == nullptr) {
     return false;
@@ -564,6 +684,228 @@ bool is_declaration_owned_scope_statement(const SgStatement *statement) {
   const SgScopeStatement *scope = isSgScopeStatement(statement);
   return scope != nullptr &&
          isSgDeclarationStatement(statement->get_parent()) != nullptr;
+}
+
+bool statement_prefers_source_span_canonical_token_mapping(
+    const SgStatement *statement) {
+  if (statement == nullptr) {
+    return false;
+  }
+
+  if (isSgDeclarationStatement(const_cast<SgStatement *>(statement)) !=
+          nullptr ||
+      isSgNamespaceDefinitionStatement(const_cast<SgStatement *>(statement)) !=
+          nullptr ||
+      isSgClassDefinition(const_cast<SgStatement *>(statement)) != nullptr ||
+      isSgFunctionDefinition(const_cast<SgStatement *>(statement)) != nullptr ||
+      isSgBasicBlock(const_cast<SgStatement *>(statement)) != nullptr ||
+      isSgTryStmt(const_cast<SgStatement *>(statement)) != nullptr ||
+      isSgCatchOptionStmt(const_cast<SgStatement *>(statement)) != nullptr ||
+      isSgClinkageStartStatement(const_cast<SgStatement *>(statement)) !=
+          nullptr ||
+      isSgClinkageEndStatement(const_cast<SgStatement *>(statement)) !=
+          nullptr) {
+    return true;
+  }
+
+  switch (statement->variantT()) {
+  case V_SgExprStatement:
+  case V_SgReturnStmt:
+  case V_SgBreakStmt:
+  case V_SgContinueStmt:
+  case V_SgGotoStatement:
+  case V_SgIfStmt:
+  case V_SgWhileStmt:
+  case V_SgForStatement:
+  case V_SgRangeBasedForStatement:
+  case V_SgNullStatement:
+  case V_SgDoWhileStmt:
+    return true;
+
+  default:
+    return false;
+  }
+}
+
+bool statement_token_interval_should_claim_trailing_semicolon(
+    const SgStatement *statement) {
+  if (statement == nullptr) {
+    return false;
+  }
+
+  switch (statement->variantT()) {
+  case V_SgExprStatement:
+  case V_SgReturnStmt:
+  case V_SgBreakStmt:
+  case V_SgContinueStmt:
+  case V_SgGotoStatement:
+  case V_SgNullStatement:
+  case V_SgDoWhileStmt:
+    return true;
+
+  default:
+    return false;
+  }
+}
+
+void extend_statement_token_interval_to_trailing_semicolon(
+    SgSourceFile *source_file, const SgStatement *statement,
+    TokenStreamSequenceToNodeMapping *mapping) {
+  if (source_file == nullptr || mapping == nullptr ||
+      !statement_token_interval_should_claim_trailing_semicolon(statement)) {
+    return;
+  }
+
+  SgTokenPtrList &token_vector = source_file->get_token_list();
+  const int token_count = static_cast<int>(token_vector.size());
+  const int current_end = mapping->token_subsequence_end;
+  if (current_end < 0 || current_end + 1 >= token_count) {
+    return;
+  }
+  if (token_vector[current_end] != nullptr &&
+      token_vector[current_end]->get_lexeme_string() == ";") {
+    return;
+  }
+
+  const int semicolon_index = current_end + 1;
+  if (token_vector[semicolon_index] == nullptr ||
+      token_vector[semicolon_index]->get_lexeme_string() != ";") {
+    return;
+  }
+
+  mapping->token_subsequence_end = semicolon_index;
+  auto is_whitespace_or_preprocessing_token = [](SgToken *token) -> bool {
+    if (token == nullptr) {
+      return false;
+    }
+
+    const int classification = token->get_classification_code();
+    return classification == ROSE_token_ids::C_CXX_WHITESPACE ||
+           classification == ROSE_token_ids::C_CXX_PREPROCESSING_INFO;
+  };
+
+  mapping->trailing_whitespace_start = -1;
+  mapping->trailing_whitespace_end = -1;
+  if (semicolon_index + 1 < token_count &&
+      is_whitespace_or_preprocessing_token(token_vector[semicolon_index + 1])) {
+    mapping->trailing_whitespace_start = semicolon_index + 1;
+    mapping->trailing_whitespace_end = semicolon_index + 1;
+    while (mapping->trailing_whitespace_end + 1 < token_count &&
+           is_whitespace_or_preprocessing_token(
+               token_vector[mapping->trailing_whitespace_end + 1])) {
+      ++mapping->trailing_whitespace_end;
+    }
+  }
+}
+
+void extend_statement_token_interval_to_end_of_pragma_line(
+    SgSourceFile *source_file, const SgStatement *statement,
+    TokenStreamSequenceToNodeMapping *mapping) {
+  if (source_file == nullptr || mapping == nullptr ||
+      isSgPragmaDeclaration(const_cast<SgStatement *>(statement)) == nullptr) {
+    return;
+  }
+
+  SgTokenPtrList &token_vector = source_file->get_token_list();
+  const int token_count = static_cast<int>(token_vector.size());
+  if (mapping->token_subsequence_start < 0 ||
+      mapping->token_subsequence_start >= token_count ||
+      mapping->token_subsequence_end < mapping->token_subsequence_start) {
+    return;
+  }
+
+  SgToken *start_token = token_vector[mapping->token_subsequence_start];
+  if (start_token == nullptr ||
+      start_token->get_startOfConstruct() == nullptr) {
+    return;
+  }
+
+  const int directive_line = start_token->get_startOfConstruct()->get_line();
+  int extended_end = mapping->token_subsequence_end;
+  for (int idx = mapping->token_subsequence_end + 1; idx < token_count; ++idx) {
+    SgToken *token = token_vector[idx];
+    if (token == nullptr || token->get_startOfConstruct() == nullptr) {
+      continue;
+    }
+
+    if (token->get_startOfConstruct()->get_line() != directive_line) {
+      break;
+    }
+
+    extended_end = idx;
+  }
+
+  mapping->token_subsequence_end = extended_end;
+
+  auto is_whitespace_or_preprocessing_token = [](SgToken *token) -> bool {
+    if (token == nullptr) {
+      return false;
+    }
+
+    const int classification = token->get_classification_code();
+    return classification == ROSE_token_ids::C_CXX_WHITESPACE ||
+           classification == ROSE_token_ids::C_CXX_PREPROCESSING_INFO;
+  };
+
+  mapping->trailing_whitespace_start = -1;
+  mapping->trailing_whitespace_end = -1;
+  if (extended_end + 1 < token_count &&
+      is_whitespace_or_preprocessing_token(token_vector[extended_end + 1])) {
+    mapping->trailing_whitespace_start = extended_end + 1;
+    mapping->trailing_whitespace_end = extended_end + 1;
+    while (mapping->trailing_whitespace_end + 1 < token_count &&
+           is_whitespace_or_preprocessing_token(
+               token_vector[mapping->trailing_whitespace_end + 1])) {
+      ++mapping->trailing_whitespace_end;
+    }
+  }
+}
+
+void trim_statement_leading_boundary_tokens(
+    SgSourceFile *source_file, const SgStatement *statement,
+    TokenStreamSequenceToNodeMapping *mapping) {
+  if (source_file == nullptr || statement == nullptr || mapping == nullptr) {
+    return;
+  }
+
+  if (isSgDeclarationStatement(const_cast<SgStatement *>(statement)) ==
+          nullptr &&
+      isSgPragmaDeclaration(const_cast<SgStatement *>(statement)) == nullptr &&
+      isSgClinkageStartStatement(const_cast<SgStatement *>(statement)) ==
+          nullptr &&
+      isSgClinkageEndStatement(const_cast<SgStatement *>(statement)) ==
+          nullptr &&
+      !is_declaration_owned_scope_statement(statement)) {
+    return;
+  }
+
+  SgTokenPtrList &token_vector = source_file->get_token_list();
+  const int token_count = static_cast<int>(token_vector.size());
+  int last_boundary_token = -1;
+  for (int idx = mapping->leading_whitespace_start;
+       idx != -1 && idx <= mapping->leading_whitespace_end; ++idx) {
+    if (idx < 0 || idx >= token_count || token_vector[idx] == nullptr) {
+      continue;
+    }
+
+    const int classification = token_vector[idx]->get_classification_code();
+    if (classification == ROSE_token_ids::C_CXX_WHITESPACE ||
+        classification == ROSE_token_ids::C_CXX_COMMENTS) {
+      continue;
+    }
+
+    last_boundary_token = idx;
+  }
+
+  if (last_boundary_token == -1) {
+    return;
+  }
+
+  mapping->leading_whitespace_start = last_boundary_token + 1;
+  if (mapping->leading_whitespace_start > mapping->leading_whitespace_end) {
+    mapping->leading_whitespace_start = -1;
+    mapping->leading_whitespace_end = -1;
+  }
 }
 
 bool declaration_statements_share_source_span(
@@ -639,6 +981,12 @@ TokenStreamSequenceToNodeMapping *lookup_statement_token_subsequence_mapping(
     if (mapped_statement_out != nullptr) {
       *mapped_statement_out = candidate;
     }
+    extend_statement_token_interval_to_trailing_semicolon(
+        source_file, candidate, found->second);
+    extend_statement_token_interval_to_end_of_pragma_line(
+        source_file, candidate, found->second);
+    trim_statement_leading_boundary_tokens(source_file, candidate,
+                                           found->second);
     return found->second;
   };
   auto synthesize_mapping_from_source_span =
@@ -647,17 +995,7 @@ TokenStreamSequenceToNodeMapping *lookup_statement_token_subsequence_mapping(
       return nullptr;
     }
 
-    const bool source_span_mappable_candidate =
-        isSgDeclarationStatement(candidate) != nullptr ||
-        isSgNamespaceDefinitionStatement(candidate) != nullptr ||
-        isSgClassDefinition(candidate) != nullptr ||
-        isSgFunctionDefinition(candidate) != nullptr ||
-        isSgBasicBlock(candidate) != nullptr ||
-        isSgTryStmt(candidate) != nullptr ||
-        isSgCatchOptionStmt(candidate) != nullptr ||
-        isSgClinkageStartStatement(candidate) != nullptr ||
-        isSgClinkageEndStatement(candidate) != nullptr;
-    if (!source_span_mappable_candidate) {
+    if (!statement_prefers_source_span_canonical_token_mapping(candidate)) {
       return nullptr;
     }
 
@@ -802,6 +1140,173 @@ TokenStreamSequenceToNodeMapping *lookup_statement_token_subsequence_mapping(
       }
     }
 
+    if (SgStatement *candidate_stmt = isSgStatement(candidate)) {
+      const bool is_linkage_marker =
+          isSgClinkageStartStatement(candidate_stmt) != nullptr ||
+          isSgClinkageEndStatement(candidate_stmt) != nullptr;
+      if (!is_linkage_marker) {
+        auto token_start_line = [](SgToken *token) -> int {
+          return token != nullptr && token->get_startOfConstruct() != nullptr
+                     ? token->get_startOfConstruct()->get_line()
+                     : -1;
+        };
+        auto trim_leading_preprocessing_tokens = [&]() {
+          int last_leading_preprocessing = -1;
+          for (int idx = leading_whitespace_start;
+               idx != -1 && idx <= leading_whitespace_end; ++idx) {
+            if (token_vector[idx] == nullptr) {
+              continue;
+            }
+
+            const int classification =
+                token_vector[idx]->get_classification_code();
+            if (classification == ROSE_token_ids::C_CXX_PREPROCESSING_INFO) {
+              last_leading_preprocessing = idx;
+              continue;
+            }
+            if (classification != ROSE_token_ids::C_CXX_WHITESPACE) {
+              break;
+            }
+          }
+
+          if (last_leading_preprocessing != -1) {
+            leading_whitespace_start = last_leading_preprocessing + 1;
+          }
+          if (leading_whitespace_start > leading_whitespace_end) {
+            leading_whitespace_start = -1;
+            leading_whitespace_end = -1;
+          }
+        };
+        auto trim_leading_sibling_owned_boundary_tokens = [&]() {
+          int last_boundary_token = -1;
+          for (int idx = leading_whitespace_start;
+               idx != -1 && idx <= leading_whitespace_end; ++idx) {
+            if (token_vector[idx] == nullptr) {
+              continue;
+            }
+
+            const int classification =
+                token_vector[idx]->get_classification_code();
+            if (classification == ROSE_token_ids::C_CXX_WHITESPACE) {
+              continue;
+            }
+            last_boundary_token = idx;
+          }
+
+          if (last_boundary_token != -1) {
+            leading_whitespace_start = last_boundary_token + 1;
+          }
+          if (leading_whitespace_start > leading_whitespace_end) {
+            leading_whitespace_start = -1;
+            leading_whitespace_end = -1;
+          }
+        };
+        auto trim_trailing_sibling_owned_boundary_tokens = [&]() {
+          int first_boundary_token = -1;
+          for (int idx = trailing_whitespace_start;
+               idx != -1 && idx <= trailing_whitespace_end; ++idx) {
+            if (token_vector[idx] == nullptr) {
+              continue;
+            }
+
+            const int classification =
+                token_vector[idx]->get_classification_code();
+            if (classification == ROSE_token_ids::C_CXX_WHITESPACE) {
+              continue;
+            }
+
+            first_boundary_token = idx;
+            break;
+          }
+
+          if (first_boundary_token != -1) {
+            trailing_whitespace_end = first_boundary_token - 1;
+          }
+          if (trailing_whitespace_start > trailing_whitespace_end) {
+            trailing_whitespace_start = -1;
+            trailing_whitespace_end = -1;
+          }
+        };
+        auto trim_trailing_preprocessing_tokens = [&]() {
+          while (trailing_whitespace_start != -1 &&
+                 trailing_whitespace_start <= trailing_whitespace_end &&
+                 token_vector[trailing_whitespace_end] != nullptr &&
+                 token_vector[trailing_whitespace_end]
+                         ->get_classification_code() ==
+                     ROSE_token_ids::C_CXX_PREPROCESSING_INFO) {
+            --trailing_whitespace_end;
+          }
+          if (trailing_whitespace_start > trailing_whitespace_end) {
+            trailing_whitespace_start = -1;
+            trailing_whitespace_end = -1;
+          }
+        };
+        auto trim_standalone_trailing_preprocessing_tokens = [&]() {
+          if (trailing_whitespace_start == -1 ||
+              trailing_whitespace_end < trailing_whitespace_start) {
+            return;
+          }
+
+          int first_standalone_preprocessing = -1;
+          for (int idx = trailing_whitespace_start;
+               idx <= trailing_whitespace_end; ++idx) {
+            SgToken *token = token_vector[idx];
+            if (token == nullptr ||
+                token->get_classification_code() !=
+                    ROSE_token_ids::C_CXX_PREPROCESSING_INFO) {
+              continue;
+            }
+
+            if (token_start_line(token) > end_line) {
+              first_standalone_preprocessing = idx;
+              break;
+            }
+          }
+
+          if (first_standalone_preprocessing == -1) {
+            return;
+          }
+
+          trailing_whitespace_end = first_standalone_preprocessing - 1;
+          while (trailing_whitespace_end >= trailing_whitespace_start &&
+                 token_vector[trailing_whitespace_end] != nullptr &&
+                 token_vector[trailing_whitespace_end]
+                         ->get_classification_code() ==
+                     ROSE_token_ids::C_CXX_WHITESPACE) {
+            --trailing_whitespace_end;
+          }
+          if (trailing_whitespace_start > trailing_whitespace_end) {
+            trailing_whitespace_start = -1;
+            trailing_whitespace_end = -1;
+          }
+        };
+
+        SgStatement *previous_stmt = nullptr;
+        SgStatement *next_stmt = nullptr;
+        find_adjacent_statement_in_parent_sequence(candidate_stmt,
+                                                   previous_stmt, next_stmt);
+        if (isSgClinkageStartStatement(previous_stmt) != nullptr ||
+            isSgClinkageEndStatement(previous_stmt) != nullptr ||
+            isSgPragmaDeclaration(previous_stmt) != nullptr) {
+          trim_leading_sibling_owned_boundary_tokens();
+        }
+        trim_standalone_trailing_preprocessing_tokens();
+        if (isSgClinkageStartStatement(previous_stmt) != nullptr ||
+            isSgClinkageEndStatement(previous_stmt) != nullptr) {
+          trim_leading_preprocessing_tokens();
+        }
+        if (isSgClinkageStartStatement(next_stmt) != nullptr ||
+            isSgClinkageEndStatement(next_stmt) != nullptr ||
+            isSgPragmaDeclaration(next_stmt) != nullptr) {
+          trim_trailing_sibling_owned_boundary_tokens();
+        }
+        if (isSgClinkageStartStatement(next_stmt) != nullptr ||
+            isSgClinkageEndStatement(next_stmt) != nullptr) {
+          trim_trailing_preprocessing_tokens();
+        }
+      }
+    }
+
     TokenStreamSequenceToNodeMapping *mapping =
         TokenStreamSequenceToNodeMapping::createTokenInterval(
             source_file, candidate, leading_whitespace_start,
@@ -813,6 +1318,11 @@ TokenStreamSequenceToNodeMapping *lookup_statement_token_subsequence_mapping(
     mapping->trailing_whitespace_end = trailing_whitespace_end;
     mapping->else_whitespace_start = -1;
     mapping->else_whitespace_end = -1;
+    extend_statement_token_interval_to_trailing_semicolon(source_file,
+                                                          candidate, mapping);
+    extend_statement_token_interval_to_end_of_pragma_line(source_file,
+                                                          candidate, mapping);
+    trim_statement_leading_boundary_tokens(source_file, candidate, mapping);
     token_stream_sequence_map[candidate] = mapping;
     if (mapped_statement_out != nullptr) {
       *mapped_statement_out = candidate;
@@ -821,13 +1331,24 @@ TokenStreamSequenceToNodeMapping *lookup_statement_token_subsequence_mapping(
   };
   auto lookup_or_synthesize =
       [&](SgStatement *candidate) -> TokenStreamSequenceToNodeMapping * {
+    auto statement_has_adjacent_linkage_marker =
+        [&](SgStatement *statement) -> bool {
+      if (statement == nullptr) {
+        return false;
+      }
+
+      SgStatement *previous_stmt = nullptr;
+      SgStatement *next_stmt = nullptr;
+      find_adjacent_statement_in_parent_sequence(statement, previous_stmt,
+                                                 next_stmt);
+      return isSgClinkageStartStatement(previous_stmt) != nullptr ||
+             isSgClinkageEndStatement(previous_stmt) != nullptr ||
+             isSgClinkageStartStatement(next_stmt) != nullptr ||
+             isSgClinkageEndStatement(next_stmt) != nullptr;
+    };
     const bool prefer_source_span_canonical_mapping =
-        isSgFunctionDefinition(candidate) != nullptr ||
-        isSgBasicBlock(candidate) != nullptr ||
-        isSgTryStmt(candidate) != nullptr ||
-        isSgCatchOptionStmt(candidate) != nullptr ||
-        isSgClinkageStartStatement(candidate) != nullptr ||
-        isSgClinkageEndStatement(candidate) != nullptr;
+        statement_prefers_source_span_canonical_token_mapping(candidate) ||
+        statement_has_adjacent_linkage_marker(candidate);
     if (prefer_source_span_canonical_mapping) {
       if (TokenStreamSequenceToNodeMapping *mapping =
               synthesize_mapping_from_source_span(candidate)) {
@@ -1103,10 +1624,30 @@ bool has_token_subsequence_mapping(SgSourceFile *source_file,
          nullptr;
 }
 
+static bool isRexDebuggedProblemClassStatement(const SgStatement *statement) {
+  const SgClassDeclaration *class_decl =
+      isSgClassDeclaration(const_cast<SgStatement *>(statement));
+  if (class_decl == nullptr) {
+    return false;
+  }
+
+  const std::string name = class_decl->get_name().getString();
+  return name == "sentry" || name == "_IO_FILE" || name == "__gconv_step_data";
+}
+
 bool inherited_partial_token_replay_requires_ast_boundary(
     SgSourceFile *source_file, const SgStatement *statement) {
   if (source_file == nullptr || statement == nullptr) {
     return false;
+  }
+
+  if (isSgBasicBlock(const_cast<SgStatement *>(statement)) != nullptr &&
+      isSgFunctionDefinition(statement->get_parent()) != nullptr) {
+    return true;
+  }
+
+  if (isSgFunctionDefinition(const_cast<SgStatement *>(statement)) != nullptr) {
+    return true;
   }
 
   if (isSgBasicBlock(const_cast<SgStatement *>(statement)) != nullptr) {
@@ -1164,10 +1705,18 @@ bool inherited_partial_token_replay_requires_ast_boundary(
       isSgDeclarationStatement(const_cast<SgStatement *>(statement)) !=
           nullptr ||
       is_declaration_owned_scope_statement(statement);
+  SgScopeStatement *parent_scope = isSgScopeStatement(statement->get_parent());
   const bool relax_namespace_or_class_member_boundary =
       declaration_like_statement &&
-      (isSgNamespaceDefinitionStatement(statement->get_parent()) != nullptr ||
-       isSgClassDefinition(statement->get_parent()) != nullptr);
+      (isSgNamespaceDefinitionStatement(parent_scope) != nullptr ||
+       isSgClassDefinition(parent_scope) != nullptr);
+  const bool can_skip_leading_boundary_text_on_inherited_replay =
+      declaration_like_statement && parent_scope != nullptr &&
+      (isSgGlobal(parent_scope) != nullptr ||
+       isSgNamespaceDefinitionStatement(parent_scope) != nullptr ||
+       isSgClassDefinition(parent_scope) != nullptr ||
+       isSgDeclarationScope(parent_scope) != nullptr ||
+       isSgBasicBlock(parent_scope) != nullptr);
 
   SgTokenPtrList &token_vector = source_file->get_token_list();
   auto range_contains_nontrivial_boundary_owner = [&](int start,
@@ -1218,15 +1767,17 @@ bool inherited_partial_token_replay_requires_ast_boundary(
     return false;
   };
 
-  if (relax_namespace_or_class_member_boundary) {
-    if (range_contains_structural_declaration_boundary(
-            token_subsequence->leading_whitespace_start,
-            token_subsequence->leading_whitespace_end)) {
-      return true;
-    }
-  } else if (range_contains_nontrivial_boundary_owner(
-                 token_subsequence->leading_whitespace_start,
-                 token_subsequence->leading_whitespace_end)) {
+  const bool leading_boundary_requires_owner =
+      relax_namespace_or_class_member_boundary
+          ? range_contains_structural_declaration_boundary(
+                token_subsequence->leading_whitespace_start,
+                token_subsequence->leading_whitespace_end)
+          : range_contains_nontrivial_boundary_owner(
+                token_subsequence->leading_whitespace_start,
+                token_subsequence->leading_whitespace_end);
+
+  if (leading_boundary_requires_owner &&
+      !can_skip_leading_boundary_text_on_inherited_replay) {
     return true;
   }
 
@@ -2484,7 +3035,6 @@ bool UnparseLanguageIndependentConstructs::canBeUnparsedFromTokenStream(
     stmt->get_file_info()->display("In canBeUnparsedFromTokenStream(): debug");
 #endif
     canBeUnparsed = (tokenSubsequence->token_subsequence_start != -1);
-
     // DQ (11/29/2013): Added support for the detection of redundantly mapped
     // statements to token sequences. E.g. ROSE normalizations of variable
     // declaration with multiple variables into seperate (multiple)
@@ -2530,7 +3080,6 @@ bool UnparseLanguageIndependentConstructs::canBeUnparsedFromTokenStream(
       k++;
     }
   } else {
-
 #if DEBUG_CAN_BE_UNPARSED
     printf("Note: In canBeUnparsedFromTokenStream(): the requested subsequence "
            "mapping object was not found: stmt = %p = %s \n",
@@ -2821,6 +3370,7 @@ bool UnparseLanguageIndependentConstructs::
   // stream. bool unparseUsingTokenStream = false;
   bool unparseUsingTokenStream = true;
   bool token_stream_available = true;
+  bool has_preprocessing_at_position = false;
 
 #if DEBUG_USING_CURPRINT
   string position =
@@ -2924,6 +3474,7 @@ bool UnparseLanguageIndependentConstructs::
                   (*i)->getRelativePosition() == PreprocessingInfo::after ||
                   (*i)->getRelativePosition() == PreprocessingInfo::inside);
       if ((*i)->getRelativePosition() == whereToUnparse) {
+        has_preprocessing_at_position = true;
         if (token_stream_available) {
           unparseUsingTokenStream = true;
         }
@@ -2976,6 +3527,10 @@ bool UnparseLanguageIndependentConstructs::
              "containsTransformationToSurroundingWhitespace == true: return "
              "false */");
 #endif
+  }
+
+  if (!has_preprocessing_at_position) {
+    unparseUsingTokenStream = false;
   }
 
   return unparseUsingTokenStream;
@@ -3136,6 +3691,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 
   SgTokenPtrList &tokenVector = sourceFile->get_token_list();
   bool emitted_text_ends_with_newline = unp->cur.line_is_empty();
+  bool awaiting_pragma_suffix = false;
 
   auto record_emitted_text = [&](const std::string &text) {
     if (text.empty()) {
@@ -3197,6 +3753,20 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     }
 
     return repaired_text;
+  };
+
+  auto last_line_is_pragma_prefix = [](const std::string &text) {
+    const size_t last_line_start =
+        text.find_last_of("\r\n") == std::string::npos
+            ? 0
+            : text.find_last_of("\r\n") + 1;
+    const size_t pos = text.find_first_not_of(" \t\f\v", last_line_start);
+    if (pos == std::string::npos) {
+      return false;
+    }
+
+    return text.compare(pos, 7, "#pragma") == 0 &&
+           text.find_first_not_of(" \t\f\v", pos + 7) == std::string::npos;
   };
 
 #if OUTPUT_TOKEN_STREAM_FOR_DEBUGGING || 0
@@ -3752,6 +4322,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
                     tokenVector[j]->get_classification_code();
                 const bool comment_like_token =
                     is_comment_like_token_text(emitted_token_text);
+                const bool pragma_prefix_continues =
+                    last_line_is_pragma_prefix(emitted_token_text);
 #if OUTPUT_TOKEN_STREAM_FOR_DEBUGGING || 0
                 printf("Output leading whitespace "
                        "tokenVector[j=%d]->get_lexeme_string() = %s \n",
@@ -3781,9 +4353,18 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
                     !comment_like_token &&
                     emitted_token_text.find('\n') == std::string::npos &&
                     emitted_token_text.find('\r') == std::string::npos) {
-                  *(unp->get_output_stream().output_stream()) << "\n";
-                  unp->get_output_stream().account_for_raw_text("\n");
-                  emitted_text_ends_with_newline = true;
+                  awaiting_pragma_suffix = true;
+                  if (!pragma_prefix_continues) {
+                    *(unp->get_output_stream().output_stream()) << "\n";
+                    unp->get_output_stream().account_for_raw_text("\n");
+                    emitted_text_ends_with_newline = true;
+                    awaiting_pragma_suffix = false;
+                  }
+                } else if (emitted_token_text.find('\n') != std::string::npos ||
+                           emitted_token_text.find('\r') != std::string::npos ||
+                           classification !=
+                               ROSE_token_ids::C_CXX_PREPROCESSING_INFO) {
+                  awaiting_pragma_suffix = false;
                 }
               }
             } else {
@@ -3868,12 +4449,22 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           const bool token_contains_newline =
               emitted_token_text.find('\n') != std::string::npos ||
               emitted_token_text.find('\r') != std::string::npos;
+          const bool token_contains_pragma =
+              emitted_token_text.find("#pragma") != std::string::npos;
+          const bool pragma_prefix_continues =
+              last_line_is_pragma_prefix(emitted_token_text);
+          const bool awaiting_suffix_before_token = awaiting_pragma_suffix;
+          const bool is_pragma_suffix_continuation =
+              awaiting_suffix_before_token &&
+              classification == ROSE_token_ids::C_CXX_PREPROCESSING_INFO &&
+              !token_contains_pragma;
 #if OUTPUT_TOKEN_STREAM_FOR_DEBUGGING
           printf("Output tokenVector[j=%d]->get_lexeme_string() = %s \n", j,
                  tokenVector[j]->get_lexeme_string().c_str());
 #endif
           if (is_preprocessing_token &&
-              emitted_text_ends_with_newline == false) {
+              emitted_text_ends_with_newline == false &&
+              !is_pragma_suffix_continuation) {
 #if HIGH_FEDELITY_TOKEN_UNPARSING
             *(unp->get_output_stream().output_stream()) << "\n";
             unp->get_output_stream().account_for_raw_text("\n");
@@ -3898,7 +4489,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           curprint(emitted_token_text);
 #endif
           record_emitted_text(emitted_token_text);
-          if (is_preprocessing_token && token_contains_newline == false) {
+          if (pragma_prefix_continues) {
+            awaiting_pragma_suffix = true;
+          } else if (is_preprocessing_token &&
+                     token_contains_newline == false) {
 #if HIGH_FEDELITY_TOKEN_UNPARSING
             *(unp->get_output_stream().output_stream()) << "\n";
             unp->get_output_stream().account_for_raw_text("\n");
@@ -3906,6 +4500,9 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
             curprint("\n");
 #endif
             emitted_text_ends_with_newline = true;
+            awaiting_pragma_suffix = false;
+          } else if (token_contains_newline || !is_preprocessing_token) {
+            awaiting_pragma_suffix = false;
           }
         }
 
@@ -4094,6 +4691,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         resolve_translation_unit_source_file(sourceFile);
 
     if (SgDeclarationStatement *decl = isSgDeclarationStatement(candidate)) {
+      if (isSgFunctionDeclaration(decl) != nullptr) {
+        return false;
+      }
+
       Sg_File_Info *fi = decl->get_file_info();
       const bool normalized_declaration_formatting_requested =
           translation_unit_source_file != NULL &&
@@ -4139,6 +4740,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
                    isSgRangeBasedForStatement(statement) != NULL ||
                    isSgIfStmt(statement) != NULL ||
                    isSgSwitchStatement(statement) != NULL ||
+                   isSgFunctionDefinition(statement) != NULL ||
+                   isSgFunctionDeclaration(statement) != NULL ||
                    isSgTryStmt(statement) != NULL ||
                    isSgCatchOptionStmt(statement) != NULL;
           };
@@ -4332,6 +4935,9 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     //   10) then trailing comments and CPP directives are output on the body,
     //   the function definition, and the function declaration (in that order).
     bool skipOutputOfPreprocessingInfo = (isSgFunctionDefinition(stmt) != NULL);
+    if (statements_with_token_emitted_leading_preprocessing().erase(stmt) > 0) {
+      skipOutputOfPreprocessingInfo = true;
+    }
     bool skipStatementNumbers = false;
     if (skipOutputOfPreprocessingInfo == false) {
       if (SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(stmt)) {
@@ -4478,7 +5084,17 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       // statement on the basis of this additional test. Note that
       // loopProcessing tests use a generated statement which are not processed
       // for tokens and in this case the (cur_file == NULL).
-      if (source_supports_partial_token_replay(current_source_file)) {
+      const bool partial_token_replay_enabled =
+          source_supports_partial_token_replay(current_source_file) &&
+          (current_source_file->get_unparse_tokens() == true ||
+           (isSgFunctionDeclaration(stmt) == nullptr &&
+            isSgFunctionDefinition(stmt) == nullptr &&
+            SageInterface::getEnclosingFunctionDefinition(stmt) == nullptr));
+      const bool inherited_token_surface_replay_enabled =
+          source_supports_inherited_token_surface_replay(current_source_file);
+      if (partial_token_replay_enabled ||
+          inherited_token_surface_replay_enabled ||
+          info.unparsedPartiallyUsingTokenStream()) {
         // First we want to restrict this to unparsing the simplest statements,
         // e.g. those that are expression statements (e.g. containing no nested
         // statements).
@@ -4559,31 +5175,152 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
             return false;
           }
 
-          if (is_declaration_owned_scope_statement(candidate)) {
-            SgScopeStatement *scope = isSgScopeStatement(candidate);
-            return candidate->get_containsTransformation() ||
-                   candidate
-                       ->get_containsTransformationToSurroundingWhitespace() ||
-                   scope_has_transformed_declarations(scope);
+          if (candidate->isTransformation() ||
+              candidate->get_containsTransformationToSurroundingWhitespace()) {
+            return true;
           }
 
           if (isSgDeclarationStatement(candidate) != NULL) {
-            return candidate->get_containsTransformation() ||
-                   candidate
-                       ->get_containsTransformationToSurroundingWhitespace();
+            return declaration_requires_enclosing_scope_ast_fallback(
+                isSgDeclarationStatement(candidate));
           }
 
-          return candidate->get_containsTransformation() ||
-                 candidate->get_containsTransformationToSurroundingWhitespace();
+          if (isSgFunctionDefinition(candidate) != NULL) {
+            return false;
+          }
+
+          if (isSgBasicBlock(candidate) != NULL &&
+              isSgFunctionDefinition(candidate->get_parent()) != NULL) {
+            return false;
+          }
+
+          if (SgScopeStatement *scope = isSgScopeStatement(candidate)) {
+            return scope_has_transformed_declarations(scope);
+          }
+
+          return false;
         };
         const bool canReplayDeclarationOwnedScopeTokens =
             info.unparsedPartiallyUsingTokenStream() == true &&
             current_source_file->get_unparse_tokens() == false &&
             is_declaration_owned_scope_statement(stmt) &&
             has_token_subsequence_mapping(current_source_file, stmt);
+        auto function_declaration_body_contains_transformation =
+            [&](SgStatement *candidate) -> bool {
+          SgFunctionDeclaration *function_decl =
+              isSgFunctionDeclaration(candidate);
+          if (function_decl == NULL) {
+            return false;
+          }
+
+          SgFunctionDefinition *definition = function_decl->get_definition();
+          if (definition == NULL) {
+            return false;
+          }
+
+          if (function_decl->get_parameterList() != NULL &&
+              (function_decl->get_parameterList()->isTransformation() ||
+               function_decl->get_parameterList()
+                   ->get_containsTransformationToSurroundingWhitespace())) {
+            return true;
+          }
+
+          SgBasicBlock *body = definition->get_body();
+          if (body == NULL) {
+            return false;
+          }
+
+          auto statement_requires_function_body_ast_replay =
+              [&](SgStatement *statement) -> bool {
+            if (statement == NULL || statement == body ||
+                statement == definition) {
+              return false;
+            }
+
+            if (isSgForInitStatement(statement) != NULL) {
+              return false;
+            }
+
+            auto has_concrete_source_location =
+                [](const SgStatement *candidate_stmt) -> bool {
+              return candidate_stmt != NULL &&
+                     candidate_stmt->get_startOfConstruct() != NULL &&
+                     candidate_stmt->get_startOfConstruct()->get_line() > 0;
+            };
+
+            const bool requires_direct_partial_replay =
+                statement_requires_direct_partial_token_unparse(statement);
+            const bool requires_frontier_partial_replay =
+                frontierRequiresPartialTokenUnparse(current_source_file,
+                                                    statement);
+            const bool requires_ast_boundary_replay =
+                inherited_partial_token_replay_requires_ast_boundary(
+                    current_source_file, statement);
+            const bool synthetic_declaration_only =
+                isSgDeclarationStatement(statement) != NULL &&
+                has_concrete_source_location(statement) == false;
+
+            if (statement->isTransformation()) {
+              if (!synthetic_declaration_only) {
+                return true;
+              }
+            }
+
+            if (statement
+                    ->get_containsTransformationToSurroundingWhitespace()) {
+              return true;
+            }
+
+            if (requires_direct_partial_replay &&
+                synthetic_declaration_only == false) {
+              return true;
+            }
+
+            if (requires_frontier_partial_replay) {
+              return true;
+            }
+
+            if (requires_ast_boundary_replay) {
+              return true;
+            }
+
+            return false;
+          };
+
+          Rose_STL_Container<SgNode *> body_statements =
+              NodeQuery::querySubTree(body, V_SgStatement);
+          for (SgNode *node : body_statements) {
+            if (statement_requires_function_body_ast_replay(
+                    isSgStatement(node))) {
+              return true;
+            }
+          }
+
+          return false;
+        };
+        auto is_function_declaration_definition =
+            [](SgStatement *candidate) -> bool {
+          SgFunctionDeclaration *function_decl =
+              isSgFunctionDeclaration(candidate);
+          return function_decl != NULL &&
+                 function_decl->get_definition() != NULL;
+        };
+        const bool function_decl_can_ignore_broad_contains_transformation =
+            isSgFunctionDeclaration(stmt) != NULL &&
+            function_declaration_body_contains_transformation(stmt) == false &&
+            stmt->get_containsTransformationToSurroundingWhitespace() == false;
+        const bool statement_has_blocking_contains_transformation =
+            stmt->get_containsTransformation() == true &&
+            function_decl_can_ignore_broad_contains_transformation == false;
         bool canReplayInheritedPartialTokenStatement =
             info.unparsedPartiallyUsingTokenStream() == true &&
             stmt->isTransformation() == false &&
+            isSgFunctionDeclaration(stmt) == NULL &&
+            is_declaration_owned_scope_statement(stmt) == false &&
+            statement_has_blocking_contains_transformation == false &&
+            stmt->get_containsTransformationToSurroundingWhitespace() ==
+                false &&
+            function_declaration_body_contains_transformation(stmt) == false &&
             statement_requires_direct_partial_token_unparse(stmt) == false &&
             inherited_partial_token_replay_requires_ast_boundary(
                 current_source_file, stmt) == false &&
@@ -4680,12 +5417,27 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           return frontierRequiresPartialTokenUnparse(current_source_file,
                                                      candidate);
         };
-        auto statement_has_transformation = [](SgStatement *statement) {
-          return statement != NULL &&
-                 (statement->isTransformation() ||
-                  statement->get_containsTransformation() ||
-                  statement
-                      ->get_containsTransformationToSurroundingWhitespace());
+        auto statement_has_output_relevant_transformation =
+            [&](SgStatement *statement) -> bool {
+          if (statement == NULL) {
+            return false;
+          }
+
+          if (statement->isTransformation() ||
+              statement->get_containsTransformationToSurroundingWhitespace()) {
+            return true;
+          }
+
+          if (SgDeclarationStatement *decl =
+                  isSgDeclarationStatement(statement)) {
+            return declaration_requires_scope_ast_fallback(decl);
+          }
+
+          if (SgScopeStatement *scope = isSgScopeStatement(statement)) {
+            return scope_has_transformed_declarations(scope);
+          }
+
+          return false;
         };
         auto control_owned_scope_requires_ast_fallback =
             [&](SgScopeStatement *scope) -> bool {
@@ -4708,7 +5460,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
             return false;
           }
 
-          if (statement_has_transformation(isSgStatement(scope)) ||
+          if (statement_has_output_relevant_transformation(
+                  isSgStatement(scope)) ||
               scope_has_transformed_declarations(scope)) {
             return true;
           }
@@ -4720,7 +5473,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 
           if (stmts != NULL) {
             for (SgStatement *stmt : *stmts) {
-              if (statement_has_transformation(stmt)) {
+              if (statement_has_output_relevant_transformation(stmt)) {
                 return true;
               }
             }
@@ -4751,40 +5504,44 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           }
 
           if (SgIfStmt *if_stmt = isSgIfStmt(candidate)) {
-            return statement_has_transformation(if_stmt->get_true_body()) ||
-                   statement_has_transformation(if_stmt->get_false_body());
+            return statement_has_output_relevant_transformation(
+                       if_stmt->get_true_body()) ||
+                   statement_has_output_relevant_transformation(
+                       if_stmt->get_false_body());
           }
 
           if (SgWhileStmt *while_stmt = isSgWhileStmt(candidate)) {
             SgStatement *body = while_stmt->get_body();
-            return statement_has_transformation(body);
+            return statement_has_output_relevant_transformation(body);
           }
 
           if (SgForStatement *for_stmt = isSgForStatement(candidate)) {
             SgStatement *init_stmt = for_stmt->get_for_init_stmt();
             SgStatement *test_stmt = for_stmt->get_test();
             SgStatement *body = for_stmt->get_loop_body();
-            return statement_has_transformation(init_stmt) ||
-                   statement_has_transformation(test_stmt) ||
-                   statement_has_transformation(body);
+            return statement_has_output_relevant_transformation(init_stmt) ||
+                   statement_has_output_relevant_transformation(test_stmt) ||
+                   statement_has_output_relevant_transformation(body);
           }
 
           if (SgSwitchStatement *switch_stmt = isSgSwitchStatement(candidate)) {
             SgStatement *body = switch_stmt->get_body();
-            return statement_has_transformation(body) ||
+            return statement_has_output_relevant_transformation(body) ||
                    control_owned_scope_requires_ast_fallback(
                        isSgScopeStatement(body));
           }
 
           if (SgCaseOptionStmt *case_stmt = isSgCaseOptionStmt(candidate)) {
-            return statement_has_transformation(case_stmt->get_body()) ||
+            return statement_has_output_relevant_transformation(
+                       case_stmt->get_body()) ||
                    control_owned_scope_requires_ast_fallback(
                        isSgScopeStatement(case_stmt->get_parent()));
           }
 
           if (SgDefaultOptionStmt *default_stmt =
                   isSgDefaultOptionStmt(candidate)) {
-            return statement_has_transformation(default_stmt->get_body()) ||
+            return statement_has_output_relevant_transformation(
+                       default_stmt->get_body()) ||
                    control_owned_scope_requires_ast_fallback(
                        isSgScopeStatement(default_stmt->get_parent()));
           }
@@ -4817,14 +5574,78 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
             return false;
           }
 
+          for (int idx = token_subsequence->leading_whitespace_start;
+               idx <= token_subsequence->leading_whitespace_end; ++idx) {
+            if (idx < 0 ||
+                idx >= static_cast<int>(
+                           current_source_file->get_token_list().size())) {
+              continue;
+            }
+
+            SgToken *token = current_source_file->get_token_list()[idx];
+            if (token == NULL) {
+              continue;
+            }
+
+            const int classification = token->get_classification_code();
+            if (classification != ROSE_token_ids::C_CXX_WHITESPACE &&
+                classification != ROSE_token_ids::C_CXX_COMMENTS &&
+                classification != ROSE_token_ids::C_CXX_PREPROCESSING_INFO) {
+              return false;
+            }
+          }
+
           return isSgGlobal(parent_scope) != NULL ||
                  isSgNamespaceDefinitionStatement(parent_scope) != NULL ||
                  isSgClassDefinition(parent_scope) != NULL ||
                  isSgDeclarationScope(parent_scope) != NULL ||
                  isSgBasicBlock(parent_scope) != NULL;
         };
+        auto inherited_partial_token_replay_needs_ast_preprocessing_prefix =
+            [&](SgStatement *candidate) -> bool {
+          if (candidate == NULL ||
+              located_node_has_before_preprocessing_info(candidate) == false) {
+            return false;
+          }
+
+          if (isSgFunctionDeclaration(candidate) != NULL) {
+            return false;
+          }
+
+          SgStatement *mapped_statement = candidate;
+          TokenStreamSequenceToNodeMapping *token_subsequence =
+              lookup_statement_token_subsequence_mapping(
+                  current_source_file, candidate, &mapped_statement);
+          if (token_subsequence == NULL ||
+              token_subsequence->leading_whitespace_start == -1 ||
+              token_subsequence->leading_whitespace_end == -1) {
+            return true;
+          }
+
+          for (int idx = token_subsequence->leading_whitespace_start;
+               idx <= token_subsequence->leading_whitespace_end; ++idx) {
+            if (idx < 0 ||
+                idx >= static_cast<int>(
+                           current_source_file->get_token_list().size())) {
+              continue;
+            }
+
+            SgToken *token = current_source_file->get_token_list()[idx];
+            if (token == NULL) {
+              continue;
+            }
+
+            const int classification = token->get_classification_code();
+            if (classification == ROSE_token_ids::C_CXX_COMMENTS ||
+                classification == ROSE_token_ids::C_CXX_PREPROCESSING_INFO) {
+              return false;
+            }
+          }
+
+          return true;
+        };
         const bool scope_requires_partial_token_unparse =
-            isSgScopeStatement(stmt) != NULL &&
+            partial_token_replay_enabled && isSgScopeStatement(stmt) != NULL &&
             scope_has_transformed_declarations(isSgScopeStatement(stmt));
 #if DEBUG_UNPARSE_STATEMENT
         printf("In UnparseLanguageIndependentConstructs::unparseStatement(): "
@@ -4972,6 +5793,14 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
                   current_source_file, stmt) == true) {
             statementUnparsedUsingTokenStream =
                 SgUnparse_Info::get_previousStatementUnparsedFromTokenStream();
+          } else if (
+              inherited_partial_token_replay_needs_ast_preprocessing_prefix(
+                  stmt) == true) {
+            unparseAttachedPreprocessingInfo(stmt, info,
+                                             PreprocessingInfo::before);
+            unparseStatementFromTokenStream(stmt, e_token_subsequence_start,
+                                            e_token_subsequence_end, info);
+            statementUnparsedUsingTokenStream = true;
           } else if (inherited_partial_token_replay_needs_leading_boundary_text(
                          stmt) == true) {
             unparseStatementFromTokenStream(stmt, e_leading_whitespace_start,
@@ -5019,7 +5848,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
                  "stmt->get_containsTransformation() = %s \n",
                  stmt->get_containsTransformation() ? "true" : "false");
 #endif
-          if ((statement_requires_direct_partial_token_unparse(stmt) == true ||
+          if (partial_token_replay_enabled &&
+              (statement_requires_direct_partial_token_unparse(stmt) == true ||
                scope_requires_partial_token_unparse == true ||
                frontier_requires_partial_token_unparse(stmt) == true) &&
               direct_partial_control_statement_requires_ast_fallback(stmt) ==
@@ -5149,6 +5979,16 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
                     unparseAttachedPreprocessingInfoUsingTokenStream(
                         stmt, info, PreprocessingInfo::before);
 
+                if (unparseLeadingTokenStream == false &&
+                    located_node_has_before_preprocessing_info(stmt) == false &&
+                    statement_has_leading_token_gap(current_source_file,
+                                                    stmt)) {
+                  // Partial-token statements still need their original gap to
+                  // the previous AST-emitted statement even when there are no
+                  // attached comments or directives in that gap.
+                  unparseLeadingTokenStream = true;
+                }
+
                 if (isSgBasicBlock(stmt) != NULL &&
                     isSgCatchOptionStmt(stmt->get_parent()) != NULL) {
                   // The catch header owns the tokens before the nested body.
@@ -5212,7 +6052,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
               statementUnparsedUsingTokenStream = false;
             }
           } else {
-            ROSE_ASSERT(statement_requires_direct_partial_token_unparse(stmt) ==
+            ROSE_ASSERT(partial_token_replay_enabled == false ||
+                        statement_requires_direct_partial_token_unparse(stmt) ==
                             false ||
                         direct_partial_control_statement_requires_ast_fallback(
                             stmt) == true);
@@ -5239,17 +6080,26 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
               ROSE_ASSERT(stmt->isTransformation() == false);
 
               if (info.unparsedPartiallyUsingTokenStream()) {
-                // This statement is being forced from an inherited partial
-                // token-replay context back to the AST. Clear the inherited
-                // flag before dispatching to construct-specific unparsers so
-                // they do not assume their own delimiters still come from the
-                // token stream.
-                info.unset_unparsedPartiallyUsingTokenStream();
+                if (is_function_declaration_definition(stmt)) {
+                  // Function declarations/definitions have a construct-specific
+                  // split replay path that preserves the original header
+                  // boundary while AST-unparsing the body.  Do not consume the
+                  // inherited partial-token state here or they fall back to a
+                  // fully AST-normalized header.
+                  statementUnparsedUsingTokenStream = true;
+                } else {
+                  // This statement is being forced from an inherited partial
+                  // token-replay context back to the AST. Clear the inherited
+                  // flag before dispatching to construct-specific unparsers so
+                  // they do not assume their own delimiters still come from the
+                  // token stream.
+                  info.unset_unparsedPartiallyUsingTokenStream();
 
-                // Record this as an AST-emitted statement so transition
-                // formatting inserts the required separator when we bounce out
-                // of token replay.
-                statementUnparsedUsingTokenStream = false;
+                  // Record this as an AST-emitted statement so transition
+                  // formatting inserts the required separator when we bounce
+                  // out of token replay.
+                  statementUnparsedUsingTokenStream = false;
+                }
               } else {
                 // DQ (6/5/2021): Save the previous statement that was just
                 // unparsed.
@@ -5334,7 +6184,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           if (parentStatementListBeingUnparsedUsingPartialTokenSequence ==
               true) {
             // ROSE_ABORT();
-          } else {
+          } else if (!info.SkipFormatting()) {
             // Token replay now keeps formatter line state in sync with the raw
             // ostream. Resetting chars_on_line here discards the real boundary
             // context and glues the first AST-emitted preprocessing directive
@@ -5407,6 +6257,16 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 #endif
         // bool skipOutputOfPreprocessingInfo = (isSgFunctionDefinition(stmt) !=
         // NULL);
+        const bool inherited_before_preprocessing_already_emitted =
+            skipOutputOfPreprocessingInfo == false &&
+            located_node_has_before_preprocessing_info(stmt) &&
+            current_source_file != NULL &&
+            (global_previous_unparsed_as == e_unparsed_as_token_stream ||
+             global_previous_unparsed_as ==
+                 e_unparsed_as_partial_token_sequence);
+        if (inherited_before_preprocessing_already_emitted) {
+          skipOutputOfPreprocessingInfo = true;
+        }
         if (skipOutputOfPreprocessingInfo == false) {
 #if DEBUG_USING_CURPRINT
           curprint(
@@ -5437,7 +6297,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
               "unparseAttachedPreprocessingInfoUsingTokenStream test 3 */ \n");
 #endif
           if (cur_file != NULL && cur_file->get_unparse_tokens() == true &&
-              unparseExtraNewLine == true) {
+              unparseExtraNewLine == true && !info.SkipFormatting()) {
 #if DEBUG_UNPARSE_STATEMENT
             // Add a new line.
             printf("##### Adding a new line (previous statement may have been "
@@ -6854,7 +7714,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 
       std::map<SgNode *, TokenStreamSequenceToNodeMapping *>
           &tokenStreamSequenceMap = sourceFile->get_tokenSubsequenceMap();
-      if (sourceFile->get_unparse_tokens() == false) {
+      if (!source_supports_partial_token_replay(sourceFile)) {
       } else {
         // DQ (2/28/2015): This assertion will be false where the input is an
         // empty file. DQ (1/6/2015): If we are calling this function and
@@ -6865,7 +7725,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       // DQ (1/4/2015): Find the first statement so that we can unparse the
       // tokens leading up to it.
       SgStatement *first_statement = NULL;
-      if (sourceFile->get_unparse_tokens() == true) {
+      bool emitted_file_prefix_tokens = false;
+      if (source_supports_partial_token_replay(sourceFile)) {
         // Setup an iterator to go through all the statements in the top scope
         // of the file.
         SgDeclarationStatementPtrList &globalStatementList =
@@ -6895,20 +7756,26 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         }
 
         if (first_statement != NULL) {
-
-          SgDeclarationStatementPtrList::iterator statementIterator =
-              globalScope->get_declarations().begin();
-          SgStatement *firstDeclarationOfGlobalScope = *statementIterator;
+          const bool first_statement_starts_file_region =
+              includeFile != NULL ? first_statement == firstStatement : true;
 
           // DQ (3/15/2021): For a header file the first statment of the global
           // scope has nothing to do when what should be unparsed here. Unparse
           // the leading part of the file's token stream up to the leading
           // whitespace of the first statement to be unparsed.
+          //
+          // When unparsing the main source file, the declaration list can begin
+          // with compiler-generated or hidden declarations that have no token
+          // ownership in the original file. Treat the first token-backed
+          // declaration as the file-prefix anchor so those synthetic front
+          // declarations do not suppress preprocessing replay such as
+          // file-scope #define directives.
           // unparseStatementFromTokenStream(globalScope, first_statement,
           // e_token_subsequence_start, e_leading_whitespace_start, info);
-          if (first_statement == firstDeclarationOfGlobalScope &&
-              unparseAttachedPreprocessingInfoUsingTokenStream(
-                  first_statement, info, PreprocessingInfo::before)) {
+          if (first_statement_starts_file_region &&
+              (unparseAttachedPreprocessingInfoUsingTokenStream(
+                   first_statement, info, PreprocessingInfo::before) ||
+               statement_has_leading_token_gap(sourceFile, first_statement))) {
 #if DEBUG_USING_CURPRINT
             curprint("\n/* In unparseGlobalStmt(): Calling "
                      "unparseStatementFromTokenStream(globalScope,first_"
@@ -6917,6 +7784,9 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
             unparseStatementFromTokenStream(globalScope, first_statement,
                                             e_token_subsequence_start,
                                             e_leading_whitespace_start, info);
+            emitted_file_prefix_tokens = true;
+            statements_with_token_emitted_leading_preprocessing().insert(
+                first_statement);
 #if DEBUG_USING_CURPRINT
             curprint("\n/* DONE: In unparseGlobalStmt(): Calling "
                      "unparseStatementFromTokenStream(globalScope,first_"
@@ -6924,6 +7794,13 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 #endif
           }
         }
+      }
+
+      if (sourceFile->get_unparse_tokens() == false &&
+          emitted_file_prefix_tokens == false &&
+          located_node_has_before_preprocessing_info(globalScope)) {
+        unparseAttachedPreprocessingInfo(globalScope, info,
+                                         PreprocessingInfo::before);
       }
 
       // DQ (12/10/2016): Eliminating a warning that we want to be an error:
@@ -6936,13 +7813,44 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           globalScope->get_declarations();
       SgDeclarationStatementPtrList::iterator statementIterator =
           globalStatementList.begin();
+      bool global_frontier_contains_ast_boundary = false;
+      bool global_statement_contains_transformation = false;
+      if (source_supports_inherited_token_surface_replay(sourceFile)) {
+        std::map<SgStatement *, FrontierNode *> &frontier_nodes =
+            sourceFile->get_token_unparse_frontier();
+        for (const auto &entry : frontier_nodes) {
+          FrontierNode *frontier = entry.second;
+          if (frontier != NULL && frontier->unparseFromTheAST) {
+            global_frontier_contains_ast_boundary = true;
+            break;
+          }
+        }
+        if (global_statement_contains_transformation == false) {
+          Rose_STL_Container<SgNode *> located_nodes =
+              NodeQuery::querySubTree(globalScope, V_SgLocatedNode);
+          for (SgNode *node : located_nodes) {
+            SgLocatedNode *located = isSgLocatedNode(node);
+            if (located != NULL &&
+                (located->isTransformation() ||
+                 located->get_containsTransformation() ||
+                 located
+                     ->get_containsTransformationToSurroundingWhitespace())) {
+              global_statement_contains_transformation = true;
+              break;
+            }
+          }
+        }
+      }
       const bool global_requires_partial_token_context =
-          source_supports_partial_token_replay(sourceFile) &&
+          source_supports_inherited_token_surface_replay(sourceFile) &&
           (globalScope->isTransformation() ||
            globalScope->get_containsTransformation() ||
-           globalScope->get_containsTransformationToSurroundingWhitespace());
+           globalScope->get_containsTransformationToSurroundingWhitespace() ||
+           global_statement_contains_transformation ||
+           global_frontier_contains_ast_boundary);
       size_t extern_brace_depth = 0;
       bool extern_brace_active = info.get_extern_C_with_braces();
+      bool first_emitted_global_statement_seen = false;
       while (statementIterator != globalStatementList.end()) {
         SgStatement *currentStatement = *statementIterator;
         ASSERT_not_null(currentStatement);
@@ -6965,9 +7873,27 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
             !infoLocal.unparsedPartiallyUsingTokenStream()) {
           infoLocal.set_unparsedPartiallyUsingTokenStream();
         }
+        const bool current_statement_will_be_emitted =
+            statementFromFile(currentStatement, getFileName(), infoLocal);
+        if (current_statement_will_be_emitted &&
+            first_emitted_global_statement_seen == false &&
+            located_node_has_before_preprocessing_info(currentStatement) ==
+                false &&
+            (currentStatement->isTransformation() ||
+             currentStatement->get_containsTransformation() ||
+             currentStatement
+                 ->get_containsTransformationToSurroundingWhitespace())) {
+          // A transformed first declaration at file scope keeps the legacy
+          // blank separator before the declaration unless a leading
+          // comment/directive already occupies that boundary.
+          unp->cur.insert_newline(2);
+        }
         unparseStatementWithExternBraceTracking(currentStatement, infoLocal,
                                                 extern_brace_depth,
                                                 extern_brace_active);
+        if (current_statement_will_be_emitted) {
+          first_emitted_global_statement_seen = true;
+        }
 
         // DQ (12/10/2014): Save the last statement.
         // last_statement = currentStatement;
@@ -7225,6 +8151,11 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         };
     auto normalize_preprocessing_comment = [&](const std::string &comment,
                                                bool strip_leading_layout) {
+      SgStatement *statement = isSgStatement(stmt);
+      const bool compact_comment_normalization_enabled =
+          statement != nullptr &&
+          source_requests_compact_declaration_normalization(info) &&
+          is_within_transformed_declaration_scope(statement);
       std::string text = normalize_fortran_comment(comment);
       if (strip_leading_layout) {
         size_t content_pos = text.find_first_not_of(" \t\r\n");
@@ -7252,7 +8183,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         const std::string suffix =
             line_end == std::string::npos ? "" : text.substr(line_end);
 
-        if (source_requests_compact_declaration_normalization(info)) {
+        if (compact_comment_normalization_enabled) {
           const size_t line_trim_end = line.find_last_not_of(" \t");
           if (line_trim_end != std::string::npos) {
             line.erase(line_trim_end + 1);
@@ -7263,7 +8194,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         if (line_pos != std::string::npos &&
             line.compare(line_pos, 2, "//") == 0) {
           const size_t after_slashes = line_pos + 2;
-          if (source_requests_compact_declaration_normalization(info) &&
+          if (compact_comment_normalization_enabled &&
               after_slashes < line.size() &&
               std::isspace(static_cast<unsigned char>(line[after_slashes])) ==
                   0 &&
@@ -7286,16 +8217,20 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     auto comment_uses_statement_format = [&](AttachedPreprocessingInfoType::
                                                  iterator /*current*/,
                                              PreprocessingInfo *preproc_info) {
-      if (!source_requests_compact_declaration_normalization(info)) {
-        return false;
-      }
-
       if (preproc_info == nullptr || !is_preprocessing_comment_directive(
                                          preproc_info->getTypeOfDirective())) {
         return false;
       }
 
       SgStatement *statement = isSgStatement(stmt);
+      const bool compact_comment_normalization_enabled =
+          statement != nullptr &&
+          source_requests_compact_declaration_normalization(info) &&
+          is_within_transformed_declaration_scope(statement);
+      if (!compact_comment_normalization_enabled) {
+        return false;
+      }
+
       if (statement == nullptr) {
         return false;
       }
@@ -7351,12 +8286,16 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         return false;
       }
 
+      const bool compact_comment_normalization_enabled =
+          source_requests_compact_declaration_normalization(info) &&
+          is_within_transformed_declaration_scope(statement);
+
       if (whereToUnparse == PreprocessingInfo::inside &&
           isSgBasicBlock(statement) != nullptr) {
         return true;
       }
 
-      if (!source_requests_compact_declaration_normalization(info)) {
+      if (!compact_comment_normalization_enabled) {
         if (whereToUnparse == PreprocessingInfo::before &&
             isSgBasicBlock(statement->get_parent()) != nullptr &&
             statement->isTransformation() == false &&
@@ -7401,6 +8340,40 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 
       const int number_of_lines = std::max(preproc_info->getNumberOfLines(), 1);
       return start_line + number_of_lines - 1;
+    };
+    auto statement_preserves_original_layout = [&](SgStatement *statement) {
+      if (statement == nullptr) {
+        return true;
+      }
+
+      if (node_has_any_transformation_flags(statement)) {
+        return false;
+      }
+
+      for (SgNode *cursor = statement->get_parent(); cursor != nullptr;
+           cursor = cursor->get_parent()) {
+        SgStatement *parent_statement = isSgStatement(cursor);
+        SgScopeStatement *parent_scope = isSgScopeStatement(cursor);
+        if (parent_statement == nullptr && parent_scope == nullptr) {
+          continue;
+        }
+
+        SgNode *layout_owner = parent_statement != nullptr
+                                   ? static_cast<SgNode *>(parent_statement)
+                                   : static_cast<SgNode *>(parent_scope);
+        if (layout_owner != statement &&
+            node_has_any_transformation_flags(layout_owner)) {
+          return false;
+        }
+
+        if (isSgFunctionDeclaration(cursor) != nullptr ||
+            isSgFunctionDefinition(cursor) != nullptr ||
+            isSgGlobal(cursor) != nullptr) {
+          break;
+        }
+      }
+
+      return true;
     };
     auto preserve_inter_directive_blank_lines = [&](PreprocessingInfo
                                                         *previous_info,
@@ -7495,36 +8468,29 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           }
         };
 
-    auto has_adjacent_marker_in_list =
-        [&](const auto &list, SgStatement *target, bool want_start) -> bool {
-      for (size_t idx = 0; idx < list.size(); ++idx) {
-        if (list[idx] != target) {
-          continue;
-        }
-        if (want_start) {
-          if (idx == 0) {
-            return false;
-          }
-          SgStatement *marker = isSgStatement(list[idx - 1]);
-          return isSgClinkageStartStatement(marker) != NULL &&
-                 marker_output_eligible(marker);
-        }
-        SgStatement *prev_marker =
-            idx > 0 ? isSgStatement(list[idx - 1]) : NULL;
-        SgStatement *next_marker =
-            idx + 1 < list.size() ? isSgStatement(list[idx + 1]) : NULL;
-        return (isSgClinkageEndStatement(prev_marker) != NULL &&
-                marker_output_eligible(prev_marker)) ||
-               (isSgClinkageEndStatement(next_marker) != NULL &&
-                marker_output_eligible(next_marker));
-      }
-      return false;
-    };
-
     auto has_adjacent_clinkage_marker = [&](bool want_start) -> bool {
       SgStatement *statement = isSgStatement(stmt);
       if (statement == NULL) {
         return false;
+      }
+
+      SgStatement *previous_statement = nullptr;
+      SgStatement *next_statement = nullptr;
+      find_adjacent_statement_in_parent_sequence(statement, previous_statement,
+                                                 next_statement);
+
+      if (want_start) {
+        if (isSgClinkageStartStatement(previous_statement) != NULL &&
+            marker_output_eligible(previous_statement)) {
+          return true;
+        }
+      } else {
+        if ((isSgClinkageEndStatement(previous_statement) != NULL &&
+             marker_output_eligible(previous_statement)) ||
+            (isSgClinkageEndStatement(next_statement) != NULL &&
+             marker_output_eligible(next_statement))) {
+          return true;
+        }
       }
 
       if (want_start) {
@@ -7538,23 +8504,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           return true;
         }
       }
-
-      SgScopeStatement *scope = isSgScopeStatement(statement->get_parent());
-      if (scope == NULL) {
-        return false;
-      }
-
-      if (scope->containsOnlyDeclarations()) {
-        SgDeclarationStatement *decl_stmt = isSgDeclarationStatement(statement);
-        if (decl_stmt == NULL) {
-          return false;
-        }
-        return has_adjacent_marker_in_list(scope->getDeclarationList(),
-                                           decl_stmt, want_start);
-      }
-
-      return has_adjacent_marker_in_list(scope->getStatementList(), statement,
-                                         want_start);
+      return false;
     };
 
     // Traverse the container of PreprocessingInfo objects
@@ -7671,8 +8621,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         preserve_inter_directive_blank_lines(last_unparsed_preprocessing_info,
                                              *i);
 
+        SgStatement *statement = isSgStatement(stmt);
         const bool keep_comment_on_current_line =
             is_preprocessing_comment_directive((*i)->getTypeOfDirective()) &&
+            statement_preserves_original_layout(statement) &&
             (is_trailing_comment_after_node(*i, stmt, whereToUnparse) ||
              preprocessing_infos_share_source_line(
                  last_unparsed_preprocessing_info, *i));
@@ -7726,8 +8678,12 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
             SgBasicBlock *parent_block =
                 statement != nullptr ? isSgBasicBlock(statement->get_parent())
                                      : nullptr;
+            const bool compact_comment_normalization_enabled =
+                statement != nullptr &&
+                source_requests_compact_declaration_normalization(info) &&
+                is_within_transformed_declaration_scope(statement);
             const bool compact_leading_block_comment =
-                use_compact_statement_formatting(info) &&
+                compact_comment_normalization_enabled &&
                 whereToUnparse == PreprocessingInfo::before &&
                 statement != nullptr && parent_block != nullptr &&
                 !parent_block->get_statements().empty() &&
@@ -14676,27 +15632,13 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       break;
 
     case V_SgFunctionCallExp: {
-      // DQ (4/17/2013): If this is an overloaded operator then we can't just
-      // treat it like a normal function (must detect if it is an overloaded
-      // operator).
       SgFunctionCallExp *functionCallExp = isSgFunctionCallExp(expr);
       ASSERT_not_null(functionCallExp);
-      if (functionCallExp->get_uses_operator_syntax() == true) {
-        // DQ (3/5/2017): Converted to use message logging, but the mechanism is
-        // not supported here yet.
-        MLOG_WARN_C("languageIndependenceSupport",
-                    "In getPrecedence(): case V_SgFunctionCallExp: If this is "
-                    "an overloaded operator then the precedence should be that "
-                    "of the operator being overloaded (not zero). \n");
-        MLOG_WARN_C("languageIndependenceSupport",
-                    "   --- functionCallExp = %p "
-                    "functionCallExp->get_uses_operator_syntax() = %s \n",
-                    functionCallExp,
-                    functionCallExp->get_uses_operator_syntax() ? "true"
-                                                                : "false");
-      }
-      // ROSE_ASSERT(functionCallExp->get_uses_operator_syntax() == false);
-      // return 16;
+      // Any operator-syntax calls that still reach this branch are ones that
+      // `GetOperatorVariant()` intentionally leaves as `SgFunctionCallExp`
+      // (notably `operator()`). Those use postfix/function-call precedence,
+      // so the normal function-call value is already the correct answer.
+      (void)functionCallExp;
       precedence_value = 16;
       break;
     }

@@ -120,6 +120,7 @@
 #include <queue> // used for a worklist of declarations to be moved
 #include <set>
 #include <stack> // used for a worklist of declarations to be moved , first found, last processing
+#include <unordered_map>
 #include <vector>
 
 // another level of control over transformation tracking code
@@ -323,6 +324,7 @@ void markSubtreeAsTransformation(SgNode *root) {
 
   for (SgNode *node : NodeQuery::querySubTree(root, V_SgNode)) {
     if (SgLocatedNode *located = isSgLocatedNode(node)) {
+      located->setTransformation();
       if (Sg_File_Info *file_info = located->get_file_info()) {
         file_info->setTransformation();
         file_info->setOutputInCodeGeneration();
@@ -383,10 +385,32 @@ void markStatementSurroundingWhitespaceTransformation(SgStatement *statement) {
     return;
   }
 
-  const bool was_modified = statement->get_isModified();
   statement->set_containsTransformationToSurroundingWhitespace(true);
-  if (!was_modified && statement->get_isModified()) {
+  if (statement->get_isModified()) {
     statement->set_isModified(false);
+  }
+}
+
+void restoreNodeModifiedFlagAfterMovedDeclInsertion(SgNode *node,
+                                                    bool node_was_modified) {
+  if (node == nullptr) {
+    return;
+  }
+
+  if (!node->get_isModified()) {
+    return;
+  }
+
+  if (!node_was_modified) {
+    node->set_isModified(false);
+    return;
+  }
+
+  if (SgLocatedNode *located = isSgLocatedNode(node)) {
+    if (located->get_containsTransformation() ||
+        located->get_containsTransformationToSurroundingWhitespace()) {
+      node->set_isModified(false);
+    }
   }
 }
 
@@ -396,6 +420,9 @@ void markStatementStructuralTransformation(SgStatement *statement) {
   }
 
   statement->set_containsTransformation(true);
+  if (statement->get_isModified()) {
+    statement->set_isModified(false);
+  }
 }
 
 void markBasicBlockSubtreeSurroundingWhitespaceTransformation(SgNode *root) {
@@ -552,12 +579,20 @@ bool merge_decl_assign = false;
 // a global variable storing inserted declaration per input file processed
 static std::vector<SgVariableDeclaration *> inserted_decls;
 
+static SgInitializedName *
+getFirstInitializedNameIfAny(SgVariableDeclaration *decl) {
+  if (decl == NULL || decl->get_variables().empty())
+    return NULL;
+
+  return decl->get_variables().front();
+}
+
 static SgVariableSymbol *
 getDeclaredVariableSymbolIfAny(SgVariableDeclaration *decl) {
   if (decl == NULL)
     return NULL;
 
-  SgInitializedName *init_name = SageInterface::getFirstInitializedName(decl);
+  SgInitializedName *init_name = getFirstInitializedNameIfAny(decl);
   if (init_name == NULL)
     return NULL;
 
@@ -565,6 +600,107 @@ getDeclaredVariableSymbolIfAny(SgVariableDeclaration *decl) {
     return NULL;
 
   return SageInterface::getFirstVarSym(decl);
+}
+
+static bool isSupportedSingleVariableDeclaration(SgVariableDeclaration *decl) {
+  return decl != NULL && decl->get_variables().size() == 1 &&
+         getDeclaredVariableSymbolIfAny(decl) != NULL;
+}
+
+static void
+normalizeDeclarationListItemsToStandalone(SgVariableDeclaration *decl) {
+  if (decl == NULL)
+    return;
+
+  SgInitializedName *decl_init = getFirstInitializedNameIfAny(decl);
+  if (decl_init == NULL)
+    return;
+
+  if (!decl->get_isAssociatedWithDeclarationList() &&
+      decl_init->get_prev_decl_item() == NULL) {
+    return;
+  }
+
+  SgNode *container = decl->get_parent();
+  if (container == NULL)
+    return;
+
+  std::unordered_map<SgInitializedName *, SgVariableDeclaration *> decl_by_init;
+  std::unordered_multimap<SgInitializedName *, SgVariableDeclaration *>
+      decls_by_prev_item;
+
+  Rose_STL_Container<SgNode *> nodeList =
+      NodeQuery::querySubTree(container, V_SgVariableDeclaration);
+  for (Rose_STL_Container<SgNode *>::iterator i = nodeList.begin();
+       i != nodeList.end(); ++i) {
+    SgVariableDeclaration *candidate = isSgVariableDeclaration(*i);
+    if (candidate == NULL || candidate->get_parent() != container)
+      continue;
+
+    SgInitializedName *candidate_init = getFirstInitializedNameIfAny(candidate);
+    if (candidate_init == NULL)
+      continue;
+
+    if (!candidate->get_isAssociatedWithDeclarationList() &&
+        candidate_init->get_prev_decl_item() == NULL && candidate != decl) {
+      continue;
+    }
+
+    decl_by_init[candidate_init] = candidate;
+    if (candidate_init->get_prev_decl_item() != NULL) {
+      decls_by_prev_item.emplace(candidate_init->get_prev_decl_item(),
+                                 candidate);
+    }
+  }
+
+  std::vector<SgVariableDeclaration *> list_items;
+  SgVariableDeclaration *head_decl = decl;
+  SgInitializedName *head_init = decl_init;
+
+  while (head_init->get_prev_decl_item() != NULL) {
+    std::unordered_map<SgInitializedName *, SgVariableDeclaration *>::iterator
+        prev_it = decl_by_init.find(head_init->get_prev_decl_item());
+    if (prev_it == decl_by_init.end())
+      break;
+
+    head_decl = prev_it->second;
+    head_init = prev_it->first;
+  }
+
+  for (SgVariableDeclaration *current_decl = head_decl; current_decl != NULL;) {
+    list_items.push_back(current_decl);
+
+    SgInitializedName *current_init =
+        getFirstInitializedNameIfAny(current_decl);
+    ROSE_ASSERT(current_init != NULL);
+
+    std::pair<std::unordered_multimap<SgInitializedName *,
+                                      SgVariableDeclaration *>::iterator,
+              std::unordered_multimap<SgInitializedName *,
+                                      SgVariableDeclaration *>::iterator>
+        range = decls_by_prev_item.equal_range(current_init);
+
+    if (range.first == range.second)
+      break;
+
+    std::unordered_multimap<SgInitializedName *,
+                            SgVariableDeclaration *>::iterator next_it =
+        range.first;
+    ++next_it;
+    ROSE_ASSERT(next_it == range.second);
+
+    current_decl = range.first->second;
+  }
+
+  for (size_t idx = 0; idx < list_items.size(); ++idx) {
+    SgVariableDeclaration *list_item = list_items[idx];
+    SgInitializedName *list_item_init = getFirstInitializedNameIfAny(list_item);
+    if (list_item_init == NULL)
+      continue;
+
+    list_item->set_isAssociatedWithDeclarationList(false);
+    list_item_init->set_prev_decl_item(NULL);
+  }
 }
 
 //! Move a declaration to a scope which is the closest to the declaration's use
@@ -741,6 +877,13 @@ static void collectiveMergeDeclarationAndAssignment(
 }
 
 class visitorTraversal : public AstSimpleProcessing {
+  std::string main_source_filename;
+
+public:
+  void setMainSourceFilename(const std::string &filename) {
+    main_source_filename = filename;
+  }
+
 protected:
   void virtual visit(SgNode *n) {
     //      if (isSgFunctionDeclaration(n)!=NULL)
@@ -757,6 +900,16 @@ protected:
       // TODO: skip things from headers.
       // skip compiler generated codes, mostly from template headers
       if (func->get_file_info()->isCompilerGenerated()) {
+        return;
+      }
+
+      if (!main_source_filename.empty() &&
+          !locatedNodeBelongsToSourceFile(func->get_definition(),
+                                          main_source_filename)) {
+        if (debug) {
+          cout << "Skipping function from non-primary file: "
+               << describeTrackingNode(func) << endl;
+        }
         return;
       }
 
@@ -787,10 +940,20 @@ protected:
         // skip compiler generated (frontend) declarations
         if (decl->get_file_info()->isCompilerGenerated())
           continue;
-        if (getDeclaredVariableSymbolIfAny(decl) == NULL) {
+        if (!main_source_filename.empty() &&
+            !locatedNodeBelongsToSourceFile(decl, main_source_filename)) {
+          if (debug) {
+            cout << "Skipping declaration outside primary file: "
+                 << describeTrackingNode(decl) << endl;
+          }
+          continue;
+        }
+        normalizeDeclarationListItemsToStandalone(decl);
+        if (!isSupportedSingleVariableDeclaration(decl)) {
           if (debug)
-            cout << "Skipping a declaration without a named variable symbol .."
-                 << endl;
+            cout << "Skipping unsupported declaration (normalized "
+                    "declaration-list item or missing symbol): "
+                 << describeTrackingNode(decl) << endl;
           continue;
         }
         worklist.push(decl);
@@ -810,6 +973,11 @@ protected:
         if (SageInterface::isStatic(decl)) {
           if (debug)
             cout << "skipping a static variable declaration .." << endl;
+        } else if (!isSupportedSingleVariableDeclaration(decl)) {
+          if (debug) {
+            cout << "Skipping unsupported declaration from worklist: "
+                 << describeTrackingNode(decl) << endl;
+          }
         } else {
           bool null_initializer = false;
           SgInitializedName *init_name =
@@ -960,19 +1128,9 @@ int main(int argc, char *argv[]) {
         continue;
       }
 
-      // Tracking runs still need variable-declaration normalization
-      // suppression, but template unparsing must stay selective. The Clang
-      // frontend now marks only the template declarations that cannot safely
-      // reuse preserved spellings, and forcing file-wide AST template unparsing
-      // causes large formatting churn in untouched headers.
       source_file->set_suppress_variable_declaration_normalization(
           transTracking);
 
-      // Move-declaration tracking depends on token mappings even when the test
-      // is not using full-file `-rose:unparse_tokens` mode. Without this, a
-      // partially transformed scope falls back to AST unparsing for large
-      // untouched declaration regions and rewrites their original spelling and
-      // layout.
       const bool enable_token_source_positions =
           transTracking || explicit_token_source_positions ||
           explicit_token_unparse;
@@ -1021,6 +1179,7 @@ int main(int argc, char *argv[]) {
       SgSourceFile *s_file = isSgSourceFile(cur_file);
       if (s_file != NULL) {
         inserted_decls.clear(); // For each file, reset this.
+        exampleTraversal.setMainSourceFilename(s_file->getFileName());
         // exampleTraversal.traverseInputFiles(project,preorder);
         exampleTraversal.traverseWithinFile(s_file, preorder);
         if (inserted_decls.size() > 0 && merge_decl_assign) {
@@ -1030,8 +1189,8 @@ int main(int argc, char *argv[]) {
           collectiveMergeDeclarationAndAssignment(inserted_decls);
         }
 
-        if (defer_token_setup &&
-            !sourceFileHasMainFileTransformations(s_file)) {
+        if (inserted_decls.empty()) {
+          s_file->set_skipfinalCompileStep(true);
           passthrough_outputs.push_back(std::make_pair(
               s_file->getFileName(), s_file->get_unparse_output_filename()));
         }
@@ -1751,7 +1910,12 @@ void copyMoveVariableDeclaration(
 
     switch (target_scope->variantT()) {
     case V_SgBasicBlock: {
+      const bool adjusted_scope_was_modified = adjusted_scope->get_isModified();
       SageInterface::prependStatement(decl_copy, adjusted_scope);
+      markStatementSurroundingWhitespaceTransformation(
+          isSgStatement(adjusted_scope));
+      restoreNodeModifiedFlagAfterMovedDeclInsertion(
+          adjusted_scope, adjusted_scope_was_modified);
       inserted_copied_decls.push_back(decl_copy);
       // TODO: this only only useful for algorithm v1. Need better control
       newly_inserted_copied_decls.push_back(decl_copy);
@@ -1760,6 +1924,7 @@ void copyMoveVariableDeclaration(
     case V_SgForStatement: {
       SgForStatement *stmt = isSgForStatement(target_scope);
       ROSE_ASSERT(stmt != NULL);
+      bool adjusted_scope_was_modified = adjusted_scope->get_isModified();
       // target scope is a for loop and the declaration declares its index
       // variable. A better condition is if the variable declared is referenced
       // in the for header, we should insert the decl into the header.
@@ -1800,7 +1965,12 @@ void copyMoveVariableDeclaration(
           // the list else other cases: we simply prepend decl_copy to the front
           // of init_stmt
           // A variant version should be able to handle it
-          SageInterface::prependStatement(decl_copy, stmt->get_for_init_stmt());
+          SgForInitStatement *for_init_stmt = stmt->get_for_init_stmt();
+          const bool for_init_was_modified = for_init_stmt->get_isModified();
+          SageInterface::prependStatement(decl_copy, for_init_stmt);
+          markStatementStructuralTransformation(stmt);
+          restoreNodeModifiedFlagAfterMovedDeclInsertion(for_init_stmt,
+                                                         for_init_was_modified);
           ROSE_ASSERT(decl_copy->get_parent() != NULL);
           // we already merged with assignment, we skip it so it won't be
           // considered again?
@@ -1834,11 +2004,16 @@ void copyMoveVariableDeclaration(
         SgBasicBlock *loop_body =
             SageInterface::ensureBasicBlockAsBodyOfFor(stmt);
         adjusted_scope = loop_body;
+        adjusted_scope_was_modified = adjusted_scope->get_isModified();
         SageInterface::prependStatement(decl_copy, adjusted_scope);
+        markStatementSurroundingWhitespaceTransformation(
+            isSgStatement(adjusted_scope));
         inserted_copied_decls.push_back(decl_copy);
         newly_inserted_copied_decls.push_back(decl_copy);
       }
 
+      restoreNodeModifiedFlagAfterMovedDeclInsertion(
+          adjusted_scope, adjusted_scope_was_modified);
       // DQ (11/2/2015): Added assertion.
       ROSE_ASSERT(adjusted_scope->get_isModified() == false);
 

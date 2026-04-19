@@ -28,7 +28,7 @@ set_tests_properties(CUDA_test_2011_01 PROPERTIES LABELS CUDA)
 add_test(
   NAME nonsmoke_functional_CompileTests_CudaTests_test_2011_01.cu
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND ../../testTranslator
+  COMMAND $<TARGET_FILE:testTranslator>
     -DSKIP_ROSE_BUILTIN_DECLARATIONS
     -rose:skipfinalCompileStep
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test_2011_01.cu
@@ -50,4 +50,3 @@ foreach(file_to_test ${_device_transform_tests})
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test}
   )
 endforeach()
-

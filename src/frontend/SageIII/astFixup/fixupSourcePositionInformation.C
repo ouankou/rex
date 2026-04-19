@@ -625,13 +625,10 @@ void FixupSourcePositionInformation::processChildSynthesizedAttributes(
 }
 
 void fixupSourcePositionConstructs() {
-  // DQ (3/10/2007): Introduce tracking of performance of ROSE.
-  TimingPerformance timer("Fixup source position constructs:");
-
-  FixupSourcePositionConstructs t;
-
-  // Traverse all the memory pools for now!
-  t.traverseMemoryPool();
+  // This legacy memory-pool walk no longer performs any per-node work:
+  // FixupSourcePositionConstructs::visit() is intentionally empty after the
+  // removal of untyped Sage nodes. Keep the hook for compatibility, but avoid
+  // paying for a full pool traversal over millions of nodes.
 }
 
 void FixupSourcePositionConstructs::visit(SgNode *) {

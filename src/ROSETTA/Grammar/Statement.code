@@ -13690,8 +13690,8 @@ void SgSwitchStatement::post_construction_initialization() {
     // Check the scopes of the SgInitializedName objects
     SgInitializedNamePtrList &variableList =
         variableDeclaration->get_variables();
-    SgInitializedNamePtrList::iterator i = variableList.begin();
-    while (i != variableList.end()) {
+    for (SgInitializedNamePtrList::iterator i = variableList.begin();
+         i != variableList.end(); ++i) {
       SgInitializedName *variable = *i;
       ROSE_ASSERT(variable != NULL);
 
@@ -13715,11 +13715,14 @@ void SgSwitchStatement::post_construction_initialization() {
           // properly).
           variable->set_scope(this);
 
-          this->insert_symbol(variable->get_name(), variableSymbol);
+          // Keep detached switches usable as scopes during manual AST
+          // construction while still tolerating later copy-fixup rebuilds.
+          if (get_symbol_table()->exists(variable->get_name(),
+                                         variableSymbol) == false) {
+            this->insert_symbol(variable->get_name(), variableSymbol);
+          }
         }
       }
-
-      i++;
     }
   }
 }

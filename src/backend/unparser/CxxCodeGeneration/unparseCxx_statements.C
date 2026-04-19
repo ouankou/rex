@@ -19,11 +19,14 @@
 
 #include "unparser.h"
 
+#include <algorithm>
 #include <cctype>
 #include <fstream>
 #include <functional>
 #include <map>
 #include <set>
+#include <unordered_map>
+#include <vector>
 
 // DQ (8/31/2013):  This should only be included by source files that require
 // it. This fixed a reported bug which caused conflicts with configure-time
@@ -63,6 +66,40 @@ using namespace Rose;
 
 namespace {
 constexpr int kNormalizedDeclarationWrapColumn = 80;
+
+struct NormalizedDeclarationFormattingCache {
+  SgProject *project = nullptr;
+  uint64_t ast_modification_sequence = 0;
+  std::unordered_map<SgNode *, bool> subtree_contains_transformed_declaration;
+  std::unordered_map<SgScopeStatement *, bool>
+      scope_has_transformed_declarations;
+  std::unordered_map<SgNode *, bool> within_transformed_declaration_scope;
+
+  void resetForNode(SgNode *node) {
+    SgProject *new_project =
+        node != nullptr ? SageInterface::getProject(node) : nullptr;
+    const uint64_t new_ast_modification_sequence =
+        SgNode::get_globalAstModificationSequence();
+
+    if (project == new_project &&
+        ast_modification_sequence == new_ast_modification_sequence) {
+      return;
+    }
+
+    project = new_project;
+    ast_modification_sequence = new_ast_modification_sequence;
+    subtree_contains_transformed_declaration.clear();
+    scope_has_transformed_declarations.clear();
+    within_transformed_declaration_scope.clear();
+  }
+};
+
+NormalizedDeclarationFormattingCache &
+getNormalizedDeclarationFormattingCache(SgNode *node) {
+  static thread_local NormalizedDeclarationFormattingCache cache;
+  cache.resetForNode(node);
+  return cache;
+}
 
 struct FunctionLikeMacroDirective {
   int line = 0;
@@ -113,6 +150,38 @@ bool located_nodes_share_source_span(const SgLocatedNode *lhs,
          lhs_end->get_line() == rhs_end->get_line();
 }
 
+bool should_skip_same_span_nondefining_declaration_surface(
+    const SgDeclarationStatement *decl) {
+  if (decl == nullptr) {
+    return false;
+  }
+
+  SgDeclarationStatement *first_nondef =
+      decl->get_firstNondefiningDeclaration();
+  SgDeclarationStatement *defining = decl->get_definingDeclaration();
+  if (first_nondef == nullptr || defining == nullptr ||
+      first_nondef == defining) {
+    return false;
+  }
+
+  if (decl != first_nondef) {
+    return false;
+  }
+  if (decl->isTransformation() || first_nondef->isTransformation() ||
+      defining->isTransformation()) {
+    return false;
+  }
+
+  const SgLocatedNode *first_located = isSgLocatedNode(first_nondef);
+  const SgLocatedNode *defining_located = isSgLocatedNode(defining);
+  if (!located_nodes_share_source_span(first_located, defining_located)) {
+    return false;
+  }
+
+  return defining->get_file_info() != nullptr &&
+         defining->get_file_info()->isOutputInCodeGeneration();
+}
+
 bool prefer_wider_token_interval(
     TokenStreamSequenceToNodeMapping *best_mapping,
     TokenStreamSequenceToNodeMapping *candidate_mapping) {
@@ -132,6 +201,192 @@ bool prefer_wider_token_interval(
 
   return candidate_mapping->token_subsequence_end >
          best_mapping->token_subsequence_end;
+}
+
+bool statement_token_interval_should_claim_trailing_semicolon(
+    const SgStatement *statement) {
+  if (statement == nullptr) {
+    return false;
+  }
+
+  switch (statement->variantT()) {
+  case V_SgExprStatement:
+  case V_SgReturnStmt:
+  case V_SgBreakStmt:
+  case V_SgContinueStmt:
+  case V_SgGotoStatement:
+  case V_SgIfStmt:
+  case V_SgWhileStmt:
+  case V_SgForStatement:
+  case V_SgRangeBasedForStatement:
+  case V_SgNullStatement:
+  case V_SgDoWhileStmt:
+    return true;
+
+  default:
+    return false;
+  }
+}
+
+void extend_statement_token_interval_to_trailing_semicolon(
+    SgSourceFile *source_file, const SgStatement *statement,
+    TokenStreamSequenceToNodeMapping *mapping) {
+  if (source_file == nullptr || mapping == nullptr ||
+      !statement_token_interval_should_claim_trailing_semicolon(statement)) {
+    return;
+  }
+
+  SgTokenPtrList &token_vector = source_file->get_token_list();
+  const int token_count = static_cast<int>(token_vector.size());
+  const int current_end = mapping->token_subsequence_end;
+  if (current_end < 0 || current_end + 1 >= token_count) {
+    return;
+  }
+  if (token_vector[current_end] != nullptr &&
+      token_vector[current_end]->get_lexeme_string() == ";") {
+    return;
+  }
+
+  const int semicolon_index = current_end + 1;
+  if (token_vector[semicolon_index] == nullptr ||
+      token_vector[semicolon_index]->get_lexeme_string() != ";") {
+    return;
+  }
+
+  mapping->token_subsequence_end = semicolon_index;
+  auto is_whitespace_or_preprocessing_token = [](SgToken *token) -> bool {
+    if (token == nullptr) {
+      return false;
+    }
+
+    const int classification = token->get_classification_code();
+    return classification == ROSE_token_ids::C_CXX_WHITESPACE ||
+           classification == ROSE_token_ids::C_CXX_PREPROCESSING_INFO;
+  };
+
+  mapping->trailing_whitespace_start = -1;
+  mapping->trailing_whitespace_end = -1;
+  if (semicolon_index + 1 < token_count &&
+      is_whitespace_or_preprocessing_token(token_vector[semicolon_index + 1])) {
+    mapping->trailing_whitespace_start = semicolon_index + 1;
+    mapping->trailing_whitespace_end = semicolon_index + 1;
+    while (mapping->trailing_whitespace_end + 1 < token_count &&
+           is_whitespace_or_preprocessing_token(
+               token_vector[mapping->trailing_whitespace_end + 1])) {
+      ++mapping->trailing_whitespace_end;
+    }
+  }
+}
+
+void extend_statement_token_interval_to_end_of_pragma_line(
+    SgSourceFile *source_file, const SgStatement *statement,
+    TokenStreamSequenceToNodeMapping *mapping) {
+  if (source_file == nullptr || mapping == nullptr ||
+      isSgPragmaDeclaration(const_cast<SgStatement *>(statement)) == nullptr) {
+    return;
+  }
+
+  SgTokenPtrList &token_vector = source_file->get_token_list();
+  const int token_count = static_cast<int>(token_vector.size());
+  if (mapping->token_subsequence_start < 0 ||
+      mapping->token_subsequence_start >= token_count ||
+      mapping->token_subsequence_end < mapping->token_subsequence_start) {
+    return;
+  }
+
+  SgToken *start_token = token_vector[mapping->token_subsequence_start];
+  if (start_token == nullptr ||
+      start_token->get_startOfConstruct() == nullptr) {
+    return;
+  }
+
+  const int directive_line = start_token->get_startOfConstruct()->get_line();
+  int extended_end = mapping->token_subsequence_end;
+  for (int idx = mapping->token_subsequence_end + 1; idx < token_count; ++idx) {
+    SgToken *token = token_vector[idx];
+    if (token == nullptr || token->get_startOfConstruct() == nullptr) {
+      continue;
+    }
+
+    if (token->get_startOfConstruct()->get_line() != directive_line) {
+      break;
+    }
+
+    extended_end = idx;
+  }
+
+  mapping->token_subsequence_end = extended_end;
+
+  auto is_whitespace_or_preprocessing_token = [](SgToken *token) -> bool {
+    if (token == nullptr) {
+      return false;
+    }
+
+    const int classification = token->get_classification_code();
+    return classification == ROSE_token_ids::C_CXX_WHITESPACE ||
+           classification == ROSE_token_ids::C_CXX_PREPROCESSING_INFO;
+  };
+
+  mapping->trailing_whitespace_start = -1;
+  mapping->trailing_whitespace_end = -1;
+  if (extended_end + 1 < token_count &&
+      is_whitespace_or_preprocessing_token(token_vector[extended_end + 1])) {
+    mapping->trailing_whitespace_start = extended_end + 1;
+    mapping->trailing_whitespace_end = extended_end + 1;
+    while (mapping->trailing_whitespace_end + 1 < token_count &&
+           is_whitespace_or_preprocessing_token(
+               token_vector[mapping->trailing_whitespace_end + 1])) {
+      ++mapping->trailing_whitespace_end;
+    }
+  }
+}
+
+void trim_statement_leading_boundary_tokens(
+    SgSourceFile *source_file, const SgStatement *statement,
+    TokenStreamSequenceToNodeMapping *mapping) {
+  if (source_file == nullptr || statement == nullptr || mapping == nullptr) {
+    return;
+  }
+
+  if (isSgDeclarationStatement(const_cast<SgStatement *>(statement)) ==
+          nullptr &&
+      isSgPragmaDeclaration(const_cast<SgStatement *>(statement)) == nullptr &&
+      isSgClinkageStartStatement(const_cast<SgStatement *>(statement)) ==
+          nullptr &&
+      isSgClinkageEndStatement(const_cast<SgStatement *>(statement)) ==
+          nullptr &&
+      !isSgNamespaceDefinitionStatement(const_cast<SgStatement *>(statement)) &&
+      !isSgClassDefinition(const_cast<SgStatement *>(statement))) {
+    return;
+  }
+
+  SgTokenPtrList &token_vector = source_file->get_token_list();
+  const int token_count = static_cast<int>(token_vector.size());
+  int last_boundary_token = -1;
+  for (int idx = mapping->leading_whitespace_start;
+       idx != -1 && idx <= mapping->leading_whitespace_end; ++idx) {
+    if (idx < 0 || idx >= token_count || token_vector[idx] == nullptr) {
+      continue;
+    }
+
+    const int classification = token_vector[idx]->get_classification_code();
+    if (classification == ROSE_token_ids::C_CXX_WHITESPACE ||
+        classification == ROSE_token_ids::C_CXX_COMMENTS) {
+      continue;
+    }
+
+    last_boundary_token = idx;
+  }
+
+  if (last_boundary_token == -1) {
+    return;
+  }
+
+  mapping->leading_whitespace_start = last_boundary_token + 1;
+  if (mapping->leading_whitespace_start > mapping->leading_whitespace_end) {
+    mapping->leading_whitespace_start = -1;
+    mapping->leading_whitespace_end = -1;
+  }
 }
 
 TokenStreamSequenceToNodeMapping *
@@ -258,6 +513,245 @@ synthesize_token_subsequence_mapping_from_source_span(SgSourceFile *source_file,
     }
   }
 
+  if (SgStatement *candidate_stmt = isSgStatement(node)) {
+    auto token_start_line = [](SgToken *token) -> int {
+      return token != nullptr && token->get_startOfConstruct() != nullptr
+                 ? token->get_startOfConstruct()->get_line()
+                 : -1;
+    };
+    auto trim_leading_preprocessing_tokens = [&]() {
+      int last_leading_preprocessing = -1;
+      for (int idx = leading_whitespace_start;
+           idx != -1 && idx <= leading_whitespace_end; ++idx) {
+        if (token_vector[idx] == nullptr) {
+          continue;
+        }
+
+        const int classification = token_vector[idx]->get_classification_code();
+        if (classification == ROSE_token_ids::C_CXX_PREPROCESSING_INFO) {
+          last_leading_preprocessing = idx;
+          continue;
+        }
+        if (classification != ROSE_token_ids::C_CXX_WHITESPACE) {
+          break;
+        }
+      }
+
+      if (last_leading_preprocessing != -1) {
+        leading_whitespace_start = last_leading_preprocessing + 1;
+      }
+      if (leading_whitespace_start > leading_whitespace_end) {
+        leading_whitespace_start = -1;
+        leading_whitespace_end = -1;
+      }
+    };
+    auto trim_leading_sibling_owned_boundary_tokens = [&]() {
+      int last_boundary_token = -1;
+      for (int idx = leading_whitespace_start;
+           idx != -1 && idx <= leading_whitespace_end; ++idx) {
+        if (token_vector[idx] == nullptr) {
+          continue;
+        }
+
+        const int classification = token_vector[idx]->get_classification_code();
+        if (classification == ROSE_token_ids::C_CXX_WHITESPACE) {
+          continue;
+        }
+        last_boundary_token = idx;
+      }
+
+      if (last_boundary_token != -1) {
+        leading_whitespace_start = last_boundary_token + 1;
+      }
+      if (leading_whitespace_start > leading_whitespace_end) {
+        leading_whitespace_start = -1;
+        leading_whitespace_end = -1;
+      }
+    };
+    auto trim_trailing_sibling_owned_boundary_tokens = [&]() {
+      int first_boundary_token = -1;
+      for (int idx = trailing_whitespace_start;
+           idx != -1 && idx <= trailing_whitespace_end; ++idx) {
+        if (token_vector[idx] == nullptr) {
+          continue;
+        }
+
+        const int classification = token_vector[idx]->get_classification_code();
+        if (classification == ROSE_token_ids::C_CXX_WHITESPACE) {
+          continue;
+        }
+
+        first_boundary_token = idx;
+        break;
+      }
+
+      if (first_boundary_token != -1) {
+        trailing_whitespace_end = first_boundary_token - 1;
+      }
+      if (trailing_whitespace_start > trailing_whitespace_end) {
+        trailing_whitespace_start = -1;
+        trailing_whitespace_end = -1;
+      }
+    };
+    auto trim_trailing_preprocessing_tokens = [&]() {
+      while (trailing_whitespace_start != -1 &&
+             trailing_whitespace_start <= trailing_whitespace_end &&
+             token_vector[trailing_whitespace_end] != nullptr &&
+             token_vector[trailing_whitespace_end]->get_classification_code() ==
+                 ROSE_token_ids::C_CXX_PREPROCESSING_INFO) {
+        --trailing_whitespace_end;
+      }
+      if (trailing_whitespace_start > trailing_whitespace_end) {
+        trailing_whitespace_start = -1;
+        trailing_whitespace_end = -1;
+      }
+    };
+    auto trim_standalone_trailing_preprocessing_tokens = [&]() {
+      if (trailing_whitespace_start == -1 ||
+          trailing_whitespace_end < trailing_whitespace_start) {
+        return;
+      }
+
+      int first_standalone_preprocessing = -1;
+      for (int idx = trailing_whitespace_start; idx <= trailing_whitespace_end;
+           ++idx) {
+        SgToken *token = token_vector[idx];
+        if (token == nullptr || token->get_classification_code() !=
+                                    ROSE_token_ids::C_CXX_PREPROCESSING_INFO) {
+          continue;
+        }
+
+        if (token_start_line(token) > end_line) {
+          first_standalone_preprocessing = idx;
+          break;
+        }
+      }
+
+      if (first_standalone_preprocessing == -1) {
+        return;
+      }
+
+      trailing_whitespace_end = first_standalone_preprocessing - 1;
+      while (trailing_whitespace_end >= trailing_whitespace_start &&
+             token_vector[trailing_whitespace_end] != nullptr &&
+             token_vector[trailing_whitespace_end]->get_classification_code() ==
+                 ROSE_token_ids::C_CXX_WHITESPACE) {
+        --trailing_whitespace_end;
+      }
+      if (trailing_whitespace_start > trailing_whitespace_end) {
+        trailing_whitespace_start = -1;
+        trailing_whitespace_end = -1;
+      }
+    };
+    auto find_adjacent_statement_in_parent_sequence =
+        [&](SgStatement *target, SgStatement *&previous_stmt,
+            SgStatement *&next_stmt) {
+          previous_stmt = nullptr;
+          next_stmt = nullptr;
+
+          if (target == nullptr) {
+            return;
+          }
+
+          SgScopeStatement *scope = isSgScopeStatement(target->get_parent());
+          if (scope == nullptr) {
+            return;
+          }
+
+          if (SgGlobal *global = isSgGlobal(scope)) {
+            const SgDeclarationStatementPtrList &decls =
+                global->get_declarations();
+            for (size_t idx = 0; idx < decls.size(); ++idx) {
+              if (decls[idx] != target) {
+                continue;
+              }
+              previous_stmt = idx > 0 ? isSgStatement(decls[idx - 1]) : nullptr;
+              next_stmt = idx + 1 < decls.size() ? isSgStatement(decls[idx + 1])
+                                                 : nullptr;
+              return;
+            }
+          }
+
+          if (SgNamespaceDefinitionStatement *ns_def =
+                  isSgNamespaceDefinitionStatement(scope)) {
+            const SgDeclarationStatementPtrList &decls =
+                ns_def->get_declarations();
+            for (size_t idx = 0; idx < decls.size(); ++idx) {
+              if (decls[idx] != target) {
+                continue;
+              }
+              previous_stmt = idx > 0 ? isSgStatement(decls[idx - 1]) : nullptr;
+              next_stmt = idx + 1 < decls.size() ? isSgStatement(decls[idx + 1])
+                                                 : nullptr;
+              return;
+            }
+          }
+
+          if (SgDeclarationScope *decl_scope = isSgDeclarationScope(scope)) {
+            const SgDeclarationStatementPtrList &decls =
+                decl_scope->get_declarations();
+            for (size_t idx = 0; idx < decls.size(); ++idx) {
+              if (decls[idx] != target) {
+                continue;
+              }
+              previous_stmt = idx > 0 ? isSgStatement(decls[idx - 1]) : nullptr;
+              next_stmt = idx + 1 < decls.size() ? isSgStatement(decls[idx + 1])
+                                                 : nullptr;
+              return;
+            }
+          }
+
+          const SgStatementPtrList *stmts = nullptr;
+          if (SgBasicBlock *basic_block = isSgBasicBlock(scope)) {
+            stmts = &basic_block->get_statements();
+          }
+          if (stmts == nullptr) {
+            return;
+          }
+
+          for (size_t idx = 0; idx < stmts->size(); ++idx) {
+            if ((*stmts)[idx] != target) {
+              continue;
+            }
+            previous_stmt =
+                idx > 0 ? isSgStatement((*stmts)[idx - 1]) : nullptr;
+            next_stmt = idx + 1 < stmts->size()
+                            ? isSgStatement((*stmts)[idx + 1])
+                            : nullptr;
+            return;
+          }
+        };
+
+    const bool is_linkage_marker =
+        isSgClinkageStartStatement(candidate_stmt) != nullptr ||
+        isSgClinkageEndStatement(candidate_stmt) != nullptr;
+    if (!is_linkage_marker) {
+      SgStatement *previous_stmt = nullptr;
+      SgStatement *next_stmt = nullptr;
+      find_adjacent_statement_in_parent_sequence(candidate_stmt, previous_stmt,
+                                                 next_stmt);
+      if (isSgClinkageStartStatement(previous_stmt) != nullptr ||
+          isSgClinkageEndStatement(previous_stmt) != nullptr ||
+          isSgPragmaDeclaration(previous_stmt) != nullptr) {
+        trim_leading_sibling_owned_boundary_tokens();
+      }
+      trim_standalone_trailing_preprocessing_tokens();
+      if (isSgClinkageStartStatement(previous_stmt) != nullptr ||
+          isSgClinkageEndStatement(previous_stmt) != nullptr) {
+        trim_leading_preprocessing_tokens();
+      }
+      if (isSgClinkageStartStatement(next_stmt) != nullptr ||
+          isSgClinkageEndStatement(next_stmt) != nullptr ||
+          isSgPragmaDeclaration(next_stmt) != nullptr) {
+        trim_trailing_sibling_owned_boundary_tokens();
+      }
+      if (isSgClinkageStartStatement(next_stmt) != nullptr ||
+          isSgClinkageEndStatement(next_stmt) != nullptr) {
+        trim_trailing_preprocessing_tokens();
+      }
+    }
+  }
+
   TokenStreamSequenceToNodeMapping *mapping =
       TokenStreamSequenceToNodeMapping::createTokenInterval(
           source_file, node, leading_whitespace_start, leading_whitespace_end,
@@ -269,6 +763,12 @@ synthesize_token_subsequence_mapping_from_source_span(SgSourceFile *source_file,
   mapping->trailing_whitespace_end = trailing_whitespace_end;
   mapping->else_whitespace_start = -1;
   mapping->else_whitespace_end = -1;
+  extend_statement_token_interval_to_trailing_semicolon(
+      source_file, isSgStatement(node), mapping);
+  extend_statement_token_interval_to_end_of_pragma_line(
+      source_file, isSgStatement(node), mapping);
+  trim_statement_leading_boundary_tokens(source_file, isSgStatement(node),
+                                         mapping);
   source_file->get_tokenSubsequenceMap()[node] = mapping;
   return mapping;
 }
@@ -298,6 +798,60 @@ TokenStreamSequenceToNodeMapping *lookup_token_subsequence_mapping_for_node(
     }
 
     return found->second;
+  };
+  auto statement_has_adjacent_linkage_marker =
+      [&](SgStatement *statement) -> bool {
+    if (statement == nullptr) {
+      return false;
+    }
+
+    SgScopeStatement *scope = isSgScopeStatement(statement->get_parent());
+    if (scope == nullptr) {
+      return false;
+    }
+
+    auto is_linkage_neighbor = [](SgStatement *candidate) -> bool {
+      return isSgClinkageStartStatement(candidate) != nullptr ||
+             isSgClinkageEndStatement(candidate) != nullptr;
+    };
+    auto check_decl_list =
+        [&](const SgDeclarationStatementPtrList &decls) -> bool {
+      for (size_t idx = 0; idx < decls.size(); ++idx) {
+        if (decls[idx] != statement) {
+          continue;
+        }
+        return (idx > 0 &&
+                is_linkage_neighbor(isSgStatement(decls[idx - 1]))) ||
+               (idx + 1 < decls.size() &&
+                is_linkage_neighbor(isSgStatement(decls[idx + 1])));
+      }
+      return false;
+    };
+
+    if (SgGlobal *global = isSgGlobal(scope)) {
+      return check_decl_list(global->get_declarations());
+    }
+    if (SgNamespaceDefinitionStatement *ns_def =
+            isSgNamespaceDefinitionStatement(scope)) {
+      return check_decl_list(ns_def->get_declarations());
+    }
+    if (SgDeclarationScope *decl_scope = isSgDeclarationScope(scope)) {
+      return check_decl_list(decl_scope->get_declarations());
+    }
+    if (SgBasicBlock *basic_block = isSgBasicBlock(scope)) {
+      const SgStatementPtrList &stmts = basic_block->get_statements();
+      for (size_t idx = 0; idx < stmts.size(); ++idx) {
+        if (stmts[idx] != statement) {
+          continue;
+        }
+        return (idx > 0 &&
+                is_linkage_neighbor(isSgStatement(stmts[idx - 1]))) ||
+               (idx + 1 < stmts.size() &&
+                is_linkage_neighbor(isSgStatement(stmts[idx + 1])));
+      }
+    }
+
+    return false;
   };
 
   if (SgDeclarationStatement *decl = isSgDeclarationStatement(node)) {
@@ -344,6 +898,10 @@ TokenStreamSequenceToNodeMapping *lookup_token_subsequence_mapping_for_node(
       best_decl = candidate_decl;
     });
 
+    if (statement_has_adjacent_linkage_marker(decl)) {
+      requires_source_span_canonicalization = true;
+    }
+
     if (requires_source_span_canonicalization) {
       if (TokenStreamSequenceToNodeMapping *synthesized_mapping =
               synthesize_token_subsequence_mapping_from_source_span(source_file,
@@ -374,7 +932,10 @@ TokenStreamSequenceToNodeMapping *lookup_token_subsequence_mapping_for_node(
       return best_mapping;
     }
   }
-  return lookup_raw(node);
+  TokenStreamSequenceToNodeMapping *mapping = lookup_raw(node);
+  extend_statement_token_interval_to_trailing_semicolon(
+      source_file, isSgStatement(node), mapping);
+  return mapping;
 }
 
 bool isMacroIdentifierChar(char ch) {
@@ -525,23 +1086,37 @@ bool subtreeContainsTransformedDeclarationForFormatting(SgNode *node) {
     return false;
   }
 
+  NormalizedDeclarationFormattingCache &cache =
+      getNormalizedDeclarationFormattingCache(node);
+  std::unordered_map<SgNode *, bool>::iterator cached =
+      cache.subtree_contains_transformed_declaration.find(node);
+  if (cached != cache.subtree_contains_transformed_declaration.end()) {
+    return cached->second;
+  }
+
+  bool contains_transformed_declaration = false;
   if (SgDeclarationStatement *decl = isSgDeclarationStatement(node)) {
     if (declarationRequiresNormalizedScopeFormatting(decl)) {
-      return true;
+      contains_transformed_declaration = true;
     }
   }
 
-  const SgNodePtrList &declarations =
-      NodeQuery::querySubTree(node, V_SgDeclarationStatement);
-  for (SgNode *candidate : declarations) {
-    if (SgDeclarationStatement *decl = isSgDeclarationStatement(candidate)) {
-      if (declarationRequiresNormalizedScopeFormatting(decl)) {
-        return true;
+  if (!contains_transformed_declaration) {
+    const SgNodePtrList &declarations =
+        NodeQuery::querySubTree(node, V_SgDeclarationStatement);
+    for (SgNode *candidate : declarations) {
+      if (SgDeclarationStatement *decl = isSgDeclarationStatement(candidate)) {
+        if (declarationRequiresNormalizedScopeFormatting(decl)) {
+          contains_transformed_declaration = true;
+          break;
+        }
       }
     }
   }
 
-  return false;
+  cache.subtree_contains_transformed_declaration[node] =
+      contains_transformed_declaration;
+  return contains_transformed_declaration;
 }
 
 bool scopeHasTransformedDeclarations(SgScopeStatement *scope) {
@@ -549,6 +1124,15 @@ bool scopeHasTransformedDeclarations(SgScopeStatement *scope) {
     return false;
   }
 
+  NormalizedDeclarationFormattingCache &cache =
+      getNormalizedDeclarationFormattingCache(scope);
+  std::unordered_map<SgScopeStatement *, bool>::iterator cached =
+      cache.scope_has_transformed_declarations.find(scope);
+  if (cached != cache.scope_has_transformed_declarations.end()) {
+    return cached->second;
+  }
+
+  bool has_transformed_declarations = false;
   if (SgBasicBlock *basic_block = isSgBasicBlock(scope)) {
     for (SgStatement *statement : basic_block->get_statements()) {
       if (statement == nullptr) {
@@ -556,10 +1140,13 @@ bool scopeHasTransformedDeclarations(SgScopeStatement *scope) {
       }
       if (nodeHasTransformation(statement) ||
           subtreeContainsTransformedDeclarationForFormatting(statement)) {
-        return true;
+        has_transformed_declarations = true;
+        break;
       }
     }
-    return false;
+    cache.scope_has_transformed_declarations[scope] =
+        has_transformed_declarations;
+    return has_transformed_declarations;
   }
 
   SgDeclarationStatementPtrList *decls = nullptr;
@@ -574,36 +1161,65 @@ bool scopeHasTransformedDeclarations(SgScopeStatement *scope) {
     decls = &decl_scope->get_declarations();
   }
 
-  if (decls == nullptr) {
-    return false;
+  if (decls != nullptr) {
+    for (SgDeclarationStatement *decl : *decls) {
+      if (decl == nullptr) {
+        continue;
+      }
+      if (decl->isTransformation() || decl->get_containsTransformation() ||
+          decl->get_containsTransformationToSurroundingWhitespace()) {
+        has_transformed_declarations = true;
+        break;
+      }
+    }
   }
 
-  for (SgDeclarationStatement *decl : *decls) {
-    if (decl == nullptr) {
-      continue;
-    }
-    if (decl->isTransformation() || decl->get_containsTransformation() ||
-        decl->get_containsTransformationToSurroundingWhitespace()) {
-      return true;
-    }
-  }
-
-  return false;
+  cache.scope_has_transformed_declarations[scope] =
+      has_transformed_declarations;
+  return has_transformed_declarations;
 }
 
 bool isWithinTransformedDeclarationScope(SgNode *node) {
+  if (node == nullptr) {
+    return false;
+  }
+
+  NormalizedDeclarationFormattingCache &cache =
+      getNormalizedDeclarationFormattingCache(node);
+  std::unordered_map<SgNode *, bool>::iterator cached =
+      cache.within_transformed_declaration_scope.find(node);
+  if (cached != cache.within_transformed_declaration_scope.end()) {
+    return cached->second;
+  }
+
+  std::vector<SgNode *> visited_nodes;
+  bool within_transformed_scope = false;
   for (SgNode *cursor = node; cursor != nullptr;
        cursor = cursor->get_parent()) {
+    std::unordered_map<SgNode *, bool>::iterator cursor_cached =
+        cache.within_transformed_declaration_scope.find(cursor);
+    if (cursor_cached != cache.within_transformed_declaration_scope.end()) {
+      within_transformed_scope = cursor_cached->second;
+      break;
+    }
+
+    visited_nodes.push_back(cursor);
     SgScopeStatement *scope = isSgScopeStatement(cursor);
     if (scope == nullptr) {
       continue;
     }
     if (scopeHasTransformedDeclarations(scope)) {
-      return true;
+      within_transformed_scope = true;
+      break;
     }
   }
 
-  return false;
+  for (SgNode *visited_node : visited_nodes) {
+    cache.within_transformed_declaration_scope[visited_node] =
+        within_transformed_scope;
+  }
+
+  return within_transformed_scope;
 }
 
 bool functionReturnTypeNeedsInlineDefinition(SgType *type) {
@@ -945,6 +1561,25 @@ bool locatedNodeHasAttachedPreprocessingInfo(const SgLocatedNode *node) {
   return attached != nullptr && !attached->empty();
 }
 
+bool locatedNodeHasBeforePreprocessingInfo(const SgLocatedNode *node) {
+  AttachedPreprocessingInfoType *attached =
+      node != nullptr
+          ? const_cast<SgLocatedNode *>(node)->getAttachedPreprocessingInfo()
+          : nullptr;
+  if (attached == nullptr) {
+    return false;
+  }
+
+  for (PreprocessingInfo *info : *attached) {
+    if (info != nullptr &&
+        info->getRelativePosition() == PreprocessingInfo::before) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 bool locatedNodeHasInsidePreprocessingInfo(const SgLocatedNode *node) {
   AttachedPreprocessingInfoType *attached =
       node != nullptr
@@ -957,6 +1592,117 @@ bool locatedNodeHasInsidePreprocessingInfo(const SgLocatedNode *node) {
   for (PreprocessingInfo *info : *attached) {
     if (info != nullptr &&
         info->getRelativePosition() == PreprocessingInfo::inside) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool insidePreprocessingInfoContainsStandaloneClosingBrace(
+    const SgLocatedNode *node) {
+  AttachedPreprocessingInfoType *attached =
+      node != nullptr
+          ? const_cast<SgLocatedNode *>(node)->getAttachedPreprocessingInfo()
+          : nullptr;
+  if (attached == nullptr) {
+    return false;
+  }
+
+  const Sg_File_Info *end_info =
+      node != nullptr ? node->get_endOfConstruct() : nullptr;
+  const int end_line = end_info != nullptr && !end_info->isCompilerGenerated()
+                           ? end_info->get_line()
+                           : 0;
+
+  for (PreprocessingInfo *info : *attached) {
+    if (info == nullptr ||
+        info->getRelativePosition() != PreprocessingInfo::inside) {
+      continue;
+    }
+
+    if (end_line > 0) {
+      const int info_start = info->getLineNumber();
+      const int info_end =
+          info_start + std::max(1, info->getNumberOfLines()) - 1;
+      if (info_start <= 0 || end_line < info_start || end_line > info_end) {
+        continue;
+      }
+    }
+
+    const std::string text = info->getString();
+    size_t line_start = 0;
+    while (line_start <= text.size()) {
+      const size_t line_end = text.find('\n', line_start);
+      const std::string line = text.substr(
+          line_start, line_end == std::string::npos ? std::string::npos
+                                                    : line_end - line_start);
+      const std::string trimmed = Rose::StringUtility::trim(line);
+      if (trimmed == "}" || trimmed.rfind("} //", 0) == 0) {
+        return true;
+      }
+
+      if (line_end == std::string::npos) {
+        break;
+      }
+      line_start = line_end + 1;
+    }
+  }
+
+  return false;
+}
+
+bool isConditionalPreprocessingDirective(
+    PreprocessingInfo::DirectiveType type) {
+  switch (type) {
+  case PreprocessingInfo::CpreprocessorIfdefDeclaration:
+  case PreprocessingInfo::CpreprocessorIfndefDeclaration:
+  case PreprocessingInfo::CpreprocessorIfDeclaration:
+  case PreprocessingInfo::CpreprocessorElseDeclaration:
+  case PreprocessingInfo::CpreprocessorElifDeclaration:
+  case PreprocessingInfo::CpreprocessorEndifDeclaration:
+    return true;
+  default:
+    return false;
+  }
+}
+
+bool namespaceCloseBraceIsRepresentedOutsideDefinition(
+    const SgNamespaceDefinitionStatement *namespace_definition) {
+  if (insidePreprocessingInfoContainsStandaloneClosingBrace(
+          namespace_definition)) {
+    return true;
+  }
+
+  const SgNamespaceDeclarationStatement *namespace_decl =
+      namespace_definition != nullptr
+          ? namespace_definition->get_namespaceDeclaration()
+          : nullptr;
+  const Sg_File_Info *end_info =
+      namespace_definition != nullptr
+          ? namespace_definition->get_endOfConstruct()
+          : nullptr;
+  const int end_line = end_info != nullptr && !end_info->isCompilerGenerated()
+                           ? end_info->get_line()
+                           : 0;
+  AttachedPreprocessingInfoType *attached =
+      namespace_decl != nullptr
+          ? const_cast<SgNamespaceDeclarationStatement *>(namespace_decl)
+                ->getAttachedPreprocessingInfo()
+          : nullptr;
+  if (attached == nullptr || end_line <= 0) {
+    return false;
+  }
+
+  for (PreprocessingInfo *info : *attached) {
+    if (info == nullptr ||
+        info->getRelativePosition() != PreprocessingInfo::after ||
+        !isConditionalPreprocessingDirective(info->getTypeOfDirective())) {
+      continue;
+    }
+
+    const int info_line = info->getLineNumber();
+    if (info_line > 0 && info_line <= end_line) {
       return true;
     }
   }
@@ -1416,7 +2162,11 @@ bool functionCanKeepCompactPartialTokenHeader(
     return false;
   }
 
-  if (useNormalizedDeclarationScopeFormatting(function_decl, info)) {
+  SgSourceFile *sourcefile = info.get_current_source_file();
+  if (sourcefile == nullptr) {
+    sourcefile = resolveNormalizedFormattingSourceFile(function_decl, info);
+  }
+  if (sourcefile == nullptr) {
     return false;
   }
 
@@ -1425,14 +2175,27 @@ bool functionCanKeepCompactPartialTokenHeader(
     return false;
   }
 
-  if (locatedNodeHasAttachedPreprocessingInfo(function_decl) ||
-      locatedNodeHasAttachedPreprocessingInfo(
-          function_decl->get_parameterList())) {
+  if (function_decl->get_parameterList() != nullptr &&
+      nodeHasTransformation(function_decl->get_parameterList())) {
     return false;
   }
 
-  if (nodeHasTransformation(function_decl->get_parameterList())) {
-    return false;
+  const SgFunctionDefinition *definition = function_decl->get_definition();
+  if (definition != nullptr) {
+    SgFunctionDefinition *mutable_definition =
+        const_cast<SgFunctionDefinition *>(definition);
+    if (mutable_definition->isTransformation() ||
+        mutable_definition
+            ->get_containsTransformationToSurroundingWhitespace()) {
+      return false;
+    }
+
+    SgBasicBlock *body = mutable_definition->get_body();
+    if (body != nullptr &&
+        (body->isTransformation() ||
+         body->get_containsTransformationToSurroundingWhitespace())) {
+      return false;
+    }
   }
 
   return true;
@@ -1742,6 +2505,36 @@ bool isNormalizedClassTemplateMemberFunction(
          decl->get_associatedClassDeclaration() != NULL;
 }
 
+static bool isSurfacedNormalizedClassTemplateMemberFunction(
+    const SgTemplateMemberFunctionDeclaration *decl) {
+  if (!isNormalizedClassTemplateMemberFunction(decl)) {
+    return false;
+  }
+
+  SgScopeStatement *parent_scope = isSgScopeStatement(decl->get_parent());
+  return parent_scope != NULL && parent_scope != decl->get_scope();
+}
+
+static bool nestedClassDefinitionWasSurfacedOutsideOwner(
+    const SgClassDeclaration *forward_decl,
+    const SgClassDeclaration *defining_decl,
+    const SgClassDefinition *owning_class_def) {
+  if (forward_decl == NULL || defining_decl == NULL ||
+      owning_class_def == NULL || forward_decl == defining_decl) {
+    return false;
+  }
+
+  SgScopeStatement *forward_parent_scope =
+      isSgScopeStatement(forward_decl->get_parent());
+  SgScopeStatement *defining_parent_scope =
+      isSgScopeStatement(defining_decl->get_parent());
+
+  return !(forward_parent_scope == owning_class_def &&
+           defining_parent_scope == owning_class_def &&
+           forward_decl->get_scope() == owning_class_def &&
+           defining_decl->get_scope() == owning_class_def);
+}
+
 static bool
 classTemplateRequiresStructuralUnparse(SgTemplateClassDeclaration *decl) {
   if (decl == NULL) {
@@ -1761,7 +2554,8 @@ classTemplateRequiresStructuralUnparse(SgTemplateClassDeclaration *decl) {
 
     if (SgMemberFunctionDeclaration *member_function =
             isSgMemberFunctionDeclaration(member)) {
-      if (member_function->get_marked_as_frontend_normalization()) {
+      if (member_function->get_marked_as_frontend_normalization() &&
+          member_function->get_parent() != member_function->get_scope()) {
         return true;
       }
       continue;
@@ -1769,7 +2563,8 @@ classTemplateRequiresStructuralUnparse(SgTemplateClassDeclaration *decl) {
 
     if (SgTemplateMemberFunctionDeclaration *template_member_function =
             isSgTemplateMemberFunctionDeclaration(member)) {
-      if (isNormalizedClassTemplateMemberFunction(template_member_function)) {
+      if (isSurfacedNormalizedClassTemplateMemberFunction(
+              template_member_function)) {
         return true;
       }
       continue;
@@ -1786,7 +2581,8 @@ classTemplateRequiresStructuralUnparse(SgTemplateClassDeclaration *decl) {
 
     SgClassDeclaration *defining_decl =
         isSgClassDeclaration(nested_class->get_definingDeclaration());
-    if (defining_decl != NULL && defining_decl != nested_class) {
+    if (nestedClassDefinitionWasSurfacedOutsideOwner(
+            nested_class, defining_decl, class_def)) {
       return true;
     }
   }
@@ -2716,6 +3512,7 @@ Unparse_ExprStmt::~Unparse_ExprStmt() {
 
 void Unparse_ExprStmt::resetTemplateParameterEmissionState() {
   emitted_default_template_args_.clear();
+  emitted_default_template_arg_keys_.clear();
 }
 
 void Unparse_ExprStmt::unparseFunctionTryBlock(SgTryStmt *try_stmt,
@@ -3107,7 +3904,11 @@ void UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       break;
 
     case e_token_subsequence_start:
-      start = tokenSubsequence_1->token_subsequence_start;
+      if (isSgGlobal(stmt_1) != NULL) {
+        start = 0;
+      } else {
+        start = tokenSubsequence_1->token_subsequence_start;
+      }
       ROSE_ASSERT(start >= 0);
 
       // DQ (12/26/2018): We have to make sure that we stay in bounds of the
@@ -3275,7 +4076,11 @@ void UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           // offset. end = tokenSubsequence_2->token_subsequence_start; end =
           // tokenSubsequence_2->token_subsequence_start - 1; end =
           // (tokenSubsequence_2->token_subsequence_start - 1) + end_offset;
-          end = tokenSubsequence_2->token_subsequence_start - 1;
+          if (tokenSubsequence_2->token_subsequence_start > 0) {
+            end = tokenSubsequence_2->token_subsequence_start - 1;
+          } else {
+            end = tokenSubsequence_2->token_subsequence_start;
+          }
         }
         ROSE_ASSERT(end >= 0);
 
@@ -3512,6 +4317,10 @@ void UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           const bool pragma_prefix_continues =
               last_line_is_pragma_prefix(emitted_token_text);
           const bool awaiting_suffix_before_token = awaiting_pragma_suffix;
+          const bool is_pragma_suffix_continuation =
+              awaiting_suffix_before_token &&
+              classification == ROSE_token_ids::C_CXX_PREPROCESSING_INFO &&
+              !token_contains_pragma;
 
 #if DEBUG_USING_CURPRINT && DEBUG_TOKEN_STREAM_UNPARSING
           curprint(string("\n/* In unparseStatementFromTokenStream(): "
@@ -3524,6 +4333,7 @@ void UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
                  j, tokenVector[j]->get_lexeme_string().c_str());
 #endif
           if (starts_preprocessing_directive &&
+              !is_pragma_suffix_continuation &&
               (!emitted_text_ends_with_newline ||
                previous_token_lacks_line_break(j))) {
 #if HIGH_FEDELITY_TOKEN_UNPARSING
@@ -4660,7 +5470,6 @@ void Unparse_ExprStmt::unparseNamespaceDefinitionStatement(
   while (statementIterator != statementList.end()) {
     SgStatement *currentStatement = *statementIterator;
     ASSERT_not_null(currentStatement);
-
     if (saved_unparsedPartiallyUsingTokenStream == false &&
         declarationNeedsLeadingBlankLine(currentStatement)) {
       const int indent = unp->cur.statement_indent();
@@ -4691,13 +5500,17 @@ void Unparse_ExprStmt::unparseNamespaceDefinitionStatement(
                                      PreprocessingInfo::inside);
 
     unp->cur.format(namespaceDefinition, info, FORMAT_BEFORE_BASIC_BLOCK1);
-    curprint("}");
-    if (SgNamespaceDeclarationStatement *namespace_decl =
-            namespaceDefinition->get_namespaceDeclaration()) {
-      const std::string namespace_name = namespace_decl->get_name().getString();
-      if (!namespace_name.empty() && statementList.size() > 1) {
-        curprint(" // namespace ");
-        curprint(namespace_name);
+    if (!namespaceCloseBraceIsRepresentedOutsideDefinition(
+            namespaceDefinition)) {
+      curprint("}");
+      if (SgNamespaceDeclarationStatement *namespace_decl =
+              namespaceDefinition->get_namespaceDeclaration()) {
+        const std::string namespace_name =
+            namespace_decl->get_name().getString();
+        if (!namespace_name.empty() && statementList.size() > 1) {
+          curprint(" // namespace ");
+          curprint(namespace_name);
+        }
       }
     }
     curprint("\n");
@@ -5105,6 +5918,14 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
   SgDeclarationStatement *declarationStatement =
       templateInstantiationDirective->get_declaration();
   ASSERT_not_null(declarationStatement);
+
+  // The explicit-instantiation directive is the structural owner of the wrapped
+  // declaration. Reassert this before unparsing so the nested declaration
+  // emits `template` / `extern template` instead of falling back to
+  // specialization spelling.
+  if (declarationStatement->get_parent() != templateInstantiationDirective) {
+    declarationStatement->set_parent(templateInstantiationDirective);
+  }
 
   // curprint ( string("template ";
 
@@ -5860,6 +6681,14 @@ void Unparse_ExprStmt::unparseBasicBlockStmt(SgStatement *stmt,
   // processing of this function. SgUnparse_Info ninfo(info);
   bool saved_unparsedPartiallyUsingTokenStream =
       info.unparsedPartiallyUsingTokenStream();
+  const bool normalize_function_body_from_partial_boundary =
+      saved_unparsedPartiallyUsingTokenStream == true &&
+      isSgFunctionDefinition(basic_stmt->get_parent()) != NULL &&
+      (info.get_current_source_file() == NULL ||
+       info.get_current_source_file()->get_unparse_tokens() == false);
+  if (normalize_function_body_from_partial_boundary) {
+    saved_unparsedPartiallyUsingTokenStream = false;
+  }
 
 #if DEBUG_BASIC_BLOCK
   printf("In unparseBasicBlock (stmt = %p) "
@@ -5925,6 +6754,15 @@ void Unparse_ExprStmt::unparseBasicBlockStmt(SgStatement *stmt,
     const bool standalone_statement_block =
         !parent_owns_block_layout && isSgStatement(parent) != NULL;
     const bool is_function_body_block = isSgFunctionDefinition(parent) != NULL;
+    const bool enclosing_function_transformed =
+        is_function_body_block &&
+        (isSgStatement(parent)->isTransformation() ||
+         isSgStatement(parent)->get_containsTransformation() ||
+         isSgStatement(parent)
+             ->get_containsTransformationToSurroundingWhitespace());
+    const bool normalized_function_body_formatting =
+        is_function_body_block &&
+        sourceRequestsNormalizedDeclarationFormatting(basic_stmt, info);
     const bool compact_case_body_block =
         compact_statement_formatting && (isSgCaseOptionStmt(parent) != NULL ||
                                          isSgDefaultOptionStmt(parent) != NULL);
@@ -5942,9 +6780,13 @@ void Unparse_ExprStmt::unparseBasicBlockStmt(SgStatement *stmt,
       }
     }
     const bool prefer_same_line_open_brace =
-        (is_function_body_block &&
-         sourceRequestsNormalizedDeclarationFormatting(basic_stmt, info)) ||
-        (is_function_body_block &&
+        (normalized_function_body_formatting &&
+         (enclosing_function_transformed || basic_stmt->isTransformation() ||
+          basic_stmt->get_containsTransformation() ||
+          basic_stmt->get_containsTransformationToSurroundingWhitespace() ||
+          functionBodyUsesInlineSameLineOpeningBrace(basic_stmt) ||
+          functionBodyOriginallyUsedSameLineOpeningBrace(basic_stmt))) ||
+        (is_function_body_block && !normalized_function_body_formatting &&
          (functionBodyUsesInlineSameLineOpeningBrace(basic_stmt) ||
           functionBodyPrefersSimpleSameLineOpeningBrace(basic_stmt) ||
           functionBodyOriginallyUsedSameLineOpeningBrace(basic_stmt))) ||
@@ -6174,6 +7016,42 @@ void Unparse_ExprStmt::unparseBasicBlockStmt(SgStatement *stmt,
         curprint("/* unparse leading white space of first statement: END */");
 #endif
       }
+    }
+
+    const bool normalize_function_body_children =
+        saved_unparsedPartiallyUsingTokenStream == true &&
+        isSgFunctionDefinition(basic_stmt->get_parent()) != NULL &&
+        (sourceFile == NULL || sourceFile->get_unparse_tokens() == false);
+    if (normalize_function_body_children) {
+      local_info.unset_unparsedPartiallyUsingTokenStream();
+      local_info
+          .unset_parentStatementListBeingUnparsedUsingPartialTokenSequence();
+    }
+
+    const bool block_is_first_statement_of_parent_block = [&]() -> bool {
+      SgBasicBlock *parent_block = isSgBasicBlock(basic_stmt->get_parent());
+      return parent_block != nullptr &&
+             !parent_block->get_statements().empty() &&
+             parent_block->get_statements().front() == basic_stmt;
+    }();
+
+    const bool first_transformed_statement_without_leading_preproc =
+        saved_unparsedPartiallyUsingTokenStream == false &&
+        p == basic_stmt->get_statements().begin() &&
+        block_is_first_statement_of_parent_block &&
+        locatedNodeHasBeforePreprocessingInfo(basic_stmt) == false &&
+        isSgDeclarationStatement(*p) != nullptr &&
+        basicBlockStartsWithLeadingPreprocessingInfo(basic_stmt) == false &&
+        (basic_stmt->isTransformation() ||
+         basic_stmt->get_containsTransformation() ||
+         basic_stmt->get_containsTransformationToSurroundingWhitespace()) &&
+        ((*p)->isTransformation() || (*p)->get_containsTransformation() ||
+         (*p)->get_containsTransformationToSurroundingWhitespace());
+    if (first_transformed_statement_without_leading_preproc) {
+      // A transformed block entry without an attached leading comment/directive
+      // needs a full blank separator of its own because the downstream
+      // statement formatter path is suppressed for these transformed entries.
+      unp->cur.insert_newline(unp->cur.current_col() > 0 ? 2 : 3);
     }
 
 #if DEBUG_BASIC_BLOCK || 0
@@ -6758,9 +7636,12 @@ void Unparse_ExprStmt::unparseForStmt(SgStatement *stmt, SgUnparse_Info &info) {
     // defined (value == -1). More of these sorts of modifications should be
     // possible. unparseStatementFromTokenStream (for_stmt, tmp_stmt,
     // e_token_subsequence_start, e_token_subsequence_start);
-    unparseStatementFromTokenStream(for_stmt, tmp_stmt,
-                                    e_token_subsequence_start,
-                                    e_leading_whitespace_start, info);
+    // The initializer's leading-whitespace range belongs to the initializer,
+    // not to the `for (` header.  Replaying it here can inject a newline before
+    // an AST-emitted transformed initializer, producing `for (\nint ...`.
+    unparseStatementFromTokenStream(
+        for_stmt, tmp_stmt, e_token_subsequence_start,
+        e_leading_whitespace_start, info, false, 0, -1);
 #if DEBUG_FOR_STMT
     curprint("/* DONE: unparse start of SgForStatement */");
 #endif
@@ -6772,6 +7653,7 @@ void Unparse_ExprStmt::unparseForStmt(SgStatement *stmt, SgUnparse_Info &info) {
     newinfo.set_SkipSemiColon();
     newinfo.set_inConditional(); // set to prevent printing line and file
                                  // information
+    newinfo.set_SkipFormatting();
 
 #if DEBUG_FOR_STMT
     printf("In unparseForStmt(): unparse the for loop initializer \n");
@@ -6792,7 +7674,21 @@ void Unparse_ExprStmt::unparseForStmt(SgStatement *stmt, SgUnparse_Info &info) {
       printf("In unparseForStmt(): unparse the for loop initializer (by "
              "calling unparseStatement()) \n");
 #endif
-      unparseStatement(tmp_stmt, newinfo);
+      if (isSgVariableDeclaration(tmp_stmt) != NULL) {
+        unparseVarDeclStmt(tmp_stmt, newinfo);
+      } else if (SgForInitStatement *for_init_stmt =
+                     isSgForInitStatement(tmp_stmt)) {
+        SgStatementPtrList &init_stmts = for_init_stmt->get_init_stmt();
+        if (init_stmts.size() == 1 &&
+            isSgVariableDeclaration(init_stmts.front()) != NULL) {
+          unparseVarDeclStmt(init_stmts.front(), newinfo);
+          curprint(";");
+        } else {
+          unparseStatement(tmp_stmt, newinfo);
+        }
+      } else {
+        unparseStatement(tmp_stmt, newinfo);
+      }
 
       if (saved_unparsedPartiallyUsingTokenStream == false) {
         // DQ (11/4/2015): Change the unparsing semantics to for loop
@@ -7201,6 +8097,21 @@ void fixupScopeInUnparseInfo(SgUnparse_Info &ninfo,
         break;
       }
 
+      case V_SgClassDeclaration: {
+        // Canonical/non-canonical tag declaration surfaces can be structurally
+        // owned by another class declaration even though their semantic scope
+        // is the enclosing namespace/global/class scope recorded on the tag
+        // declaration itself. Use that stored scope for name qualification.
+        currentScope = declarationStatement->get_scope();
+        if (currentScope == NULL) {
+          SgClassDeclaration *declaration =
+              isSgClassDeclaration(parentOfFunctionDeclaration);
+          ASSERT_not_null(declaration);
+          currentScope = declaration->get_scope();
+        }
+        break;
+      }
+
       case V_SgLambdaExp: {
         // This happens when calling unparseToString on the function declaration
         // associated with a lambda
@@ -7220,6 +8131,33 @@ void fixupScopeInUnparseInfo(SgUnparse_Info &ninfo,
         printf("     declarationStatement = %p = %s = %s \n",
                declarationStatement, declarationStatement->class_name().c_str(),
                SageInterface::get_name(declarationStatement).c_str());
+        if (SgClassDeclaration *class_decl =
+                isSgClassDeclaration(declarationStatement)) {
+          auto dump_decl = [](const char *label, SgClassDeclaration *decl) {
+            if (decl == NULL) {
+              printf("     %s = <null>\n", label);
+              return;
+            }
+            SgNode *parent = decl->get_parent();
+            SgScopeStatement *scope = decl->get_scope();
+            printf("     %s = %p name=%s parent=%p(%s) scope=%p(%s) def=%p "
+                   "first=%p forward=%d\n",
+                   label, decl, SageInterface::get_name(decl).c_str(), parent,
+                   parent != NULL ? parent->class_name().c_str() : "<null>",
+                   scope,
+                   scope != NULL ? scope->class_name().c_str() : "<null>",
+                   decl->get_definingDeclaration(),
+                   decl->get_firstNondefiningDeclaration(),
+                   decl->isForward() ? 1 : 0);
+          };
+          dump_decl("class_decl", class_decl);
+          dump_decl("class_decl:first",
+                    isSgClassDeclaration(
+                        class_decl->get_firstNondefiningDeclaration()));
+          dump_decl(
+              "class_decl:def",
+              isSgClassDeclaration(class_decl->get_definingDeclaration()));
+        }
         declarationStatement->get_startOfConstruct()->display(
             "default reached: debug");
         ROSE_ABORT();
@@ -7286,6 +8224,8 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
                                       e_token_subsequence_start,
                                       e_leading_whitespace_start, info);
       SgUnparse_Info bodyInfo(info);
+      bodyInfo
+          .unset_parentStatementListBeingUnparsedUsingPartialTokenSequence();
       unparseStatement(function_body, bodyInfo);
     } else {
       // We need to handle the case of a function prototype.
@@ -7663,6 +8603,7 @@ void Unparse_ExprStmt::unparseFuncDefnStmt(SgStatement *stmt,
 
   info.unset_SkipFunctionDefinition();
   SgUnparse_Info ninfo(info);
+  ninfo.unset_parentStatementListBeingUnparsedUsingPartialTokenSequence();
 
   // DQ (10/20/2012): Ouput the comments and CPP directives on the function
   // definition. Note must be outside of SkipFunctionDefinition to be output.
@@ -7897,6 +8838,9 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
                                       e_leading_whitespace_start, info);
 
       SgUnparse_Info bodyInfo(info);
+      bodyInfo.unset_unparsedPartiallyUsingTokenStream();
+      bodyInfo
+          .unset_parentStatementListBeingUnparsedUsingPartialTokenSequence();
       unparseStatement(function_body, bodyInfo);
     } else {
       printf("We need to handle the case of a function prototype \n");
@@ -7916,6 +8860,9 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
 
   auto unparse_enclosing_template_headers = [&]() {
     if (mfuncdecl_stmt->get_parent() == mfuncdecl_stmt->get_scope()) {
+      return;
+    }
+    if (mfuncdecl_stmt->get_declarationModifier().isFriend()) {
       return;
     }
     if (isSgTemplateInstantiationDirectiveStatement(
@@ -7979,7 +8926,14 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
       template_chain.push_back(tmpl);
     };
 
-    for (SgNode *node = assoc_class; node != NULL; node = node->get_parent()) {
+    // Some frontend recovery paths can leave class declaration surfaces in a
+    // local parent cycle (e.g. declaration <-> definition). The enclosing
+    // template-header scan only needs each ancestor once; guard the walk so a
+    // malformed parent chain cannot hang unparsing.
+    std::set<SgNode *> visited_parent_chain;
+    for (SgNode *node = assoc_class;
+         node != NULL && visited_parent_chain.insert(node).second;
+         node = node->get_parent()) {
       add_template(isSgTemplateClassDeclaration(node));
       if (SgTemplateInstantiationDecl *inst =
               isSgTemplateInstantiationDecl(node)) {
@@ -7995,7 +8949,10 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
       }
       curprint("template ");
       SgTemplateParameterPtrList tlist = tmpl->get_templateParameters();
-      Unparse_ExprStmt::unparseTemplateParameterList(tlist, info, true);
+      SgUnparse_Info tinfo(info);
+      tinfo.set_declstatement_ptr(NULL);
+      tinfo.set_declstatement_ptr(tmpl);
+      Unparse_ExprStmt::unparseTemplateParameterList(tlist, tinfo, true);
       curprint("\n");
     }
   };
@@ -8434,6 +9391,32 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
          (info.SkipClassDefinition() == true) ? "true" : "false",
          classdecl_stmt->get_name().str());
 #endif
+  auto inline_type_definition_emitted = [](SgClassDeclaration *decl) -> bool {
+    return decl != NULL &&
+           decl->getAttribute("rose:inline_type_definition_emitted") != NULL;
+  };
+  if (classdecl_stmt->get_isAutonomousDeclaration() == false &&
+      info.inEmbeddedDecl() == false &&
+      (inline_type_definition_emitted(classdecl_stmt) ||
+       inline_type_definition_emitted(isSgClassDeclaration(
+           classdecl_stmt->get_firstNondefiningDeclaration())) ||
+       inline_type_definition_emitted(
+           isSgClassDeclaration(classdecl_stmt->get_definingDeclaration())))) {
+    // Inline type-id/declarator ownership may emit a non-autonomous class
+    // definition before its leaked scope surface is visited. When that happens,
+    // skip the later standalone statement emission instead of duplicating the
+    // definition.
+    return;
+  }
+
+  if (classdecl_stmt->get_file_info() != nullptr &&
+      !classdecl_stmt->get_file_info()->isOutputInCodeGeneration() &&
+      (classdecl_stmt->get_file_info()->isFrontendSpecific() ||
+       !classdecl_stmt->get_isAutonomousDeclaration()) &&
+      isSgTemplateInstantiationDirectiveStatement(
+          classdecl_stmt->get_parent()) == nullptr) {
+    return;
+  }
 
   // DQ (6/2/2021): Adding support for partial token sequence unparsing.
   SgClassDefinition *class_definition = classdecl_stmt->get_definition();
@@ -8509,40 +9492,53 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
       SgUnparse_Info ninfo(info);
       // unparseStatement(class_definition, info);
 
+      SgStatement *last_member_statement = NULL;
+      SgStatement *previous_member_statement = NULL;
       SgDeclarationStatementPtrList::iterator pp =
           class_definition->get_members().begin();
 
       while (pp != class_definition->get_members().end()) {
+        if (previous_member_statement != NULL && current_source_file != NULL &&
+            canBeUnparsedFromTokenStream(current_source_file,
+                                         previous_member_statement) &&
+            canBeUnparsedFromTokenStream(current_source_file, *pp)) {
+          bool unparseOnlyWhitespace = false;
+          int start_offset = 0;
+          int end_offset = -1;
+          unparseStatementFromTokenStream(
+              previous_member_statement, *pp, e_trailing_whitespace_start,
+              e_leading_whitespace_start, info, unparseOnlyWhitespace,
+              start_offset, end_offset);
+        }
+
         const bool inherited_partial_token_state =
             ninfo.unparsedPartiallyUsingTokenStream();
         unparseStatement((*pp), ninfo);
         restoreInheritedPartialTokenState(ninfo, inherited_partial_token_state);
 
         SgStatement *previousStatement = *pp;
+        previous_member_statement = previousStatement;
+        last_member_statement = previousStatement;
 
         pp++;
-
-        // DQ (6/4/2021): Test for the last statement, and unparse it's trailing
-        // whitespace (if it is available).
-        if (pp == class_definition->get_members().end()) {
-          ROSE_ASSERT(previousStatement != NULL);
-          unparseStatementFromTokenStream(previousStatement,
-                                          e_trailing_whitespace_start,
-                                          e_trailing_whitespace_end, info);
-        }
       }
-      // Unparse the tokens from the start of the function declaration to just
-      // befor the opening "{". unparseStatementFromTokenStream (stmt,
-      // function_body, e_token_subsequence_start, e_token_subsequence_start,
-      // info); unparseStatementFromTokenStream (stmt, function_body,
-      // e_token_subsequence_start, e_leading_whitespace_end, info);
-      // unparseStatementFromTokenStream (stmt, function_definition,
-      // e_token_subsequence_start, e_leading_whitespace_end, info);
-      // unparseStatementFromTokenStream (stmt, class_definition,
-      // e_token_subsequence_end, e_leading_whitespace_end, info);
-      unparseStatementFromTokenStream(class_definition, stmt,
-                                      e_token_subsequence_end,
-                                      e_token_subsequence_end, info);
+      if (last_member_statement != NULL) {
+        // Keep the full interval from the final class member through the class
+        // body closer owned by the enclosing class. This preserves inactive
+        // preprocessor branches after the last member without letting the
+        // class closer interleave ahead of them.
+        unparseStatementFromTokenStream(last_member_statement, class_definition,
+                                        e_trailing_whitespace_start,
+                                        e_token_subsequence_end, info);
+        unparseStatementFromTokenStream(stmt, e_token_subsequence_end,
+                                        e_token_subsequence_end, info);
+      } else {
+        // Empty class definitions still need the synthesized `}` and trailing
+        // `;` taken directly from the original token stream.
+        unparseStatementFromTokenStream(class_definition, stmt,
+                                        e_token_subsequence_end,
+                                        e_token_subsequence_end, info);
+      }
     } else {
       // We need to handle the case of a function prototype.
       printf("We need to handle the case of a class declaration prototype that "
@@ -8565,13 +9561,56 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
         return;
       }
 
+      if (classdecl_stmt->get_specialization() ==
+          SgDeclarationStatement::e_specialization) {
+        if (SgTemplateInstantiationDefn *enclosing_inst_def =
+                isSgTemplateInstantiationDefn(classdecl_stmt->get_scope())) {
+          if (SgTemplateInstantiationDecl *enclosing_inst_decl =
+                  isSgTemplateInstantiationDecl(
+                      enclosing_inst_def->get_declaration())) {
+            size_t enclosing_specialized_class_levels =
+                count_template_instantiation_class_chain_levels(
+                    enclosing_inst_decl);
+            // `printSpecifier*` emits the specialization header for the
+            // declaration being unparsed here. For member class template
+            // specializations (`bar<int>` in `A<C>::foo<B>::bar<int>`), that
+            // header belongs to the current class template specialization, so
+            // every specialized enclosing class still needs its own
+            // `template<>`. For a plain member class inside an explicitly
+            // specialized enclosing class
+            // (`RepeatedPtrField<string>::TypeHandler`), the emitted header
+            // already accounts for the immediate enclosing specialization, so
+            // only outer specialized classes remain.
+            size_t extra_headers = enclosing_specialized_class_levels;
+            if (isSgTemplateInstantiationDecl(classdecl_stmt) == nullptr &&
+                extra_headers > 0) {
+              --extra_headers;
+            }
+
+            for (size_t i = 0; i < extra_headers; ++i) {
+              curprint("template<>");
+              curprint("\n");
+            }
+            return;
+          }
+        }
+      }
+
       if (SgTemplateInstantiationDecl *inst_decl =
               isSgTemplateInstantiationDecl(classdecl_stmt)) {
+        if (isSgTemplateInstantiationDirectiveStatement(
+                classdecl_stmt->get_parent()) != nullptr) {
+          return;
+        }
         if (inst_decl->isSpecialization()) {
-          size_t enclosing_template_ids =
-              count_enclosing_template_instantiation_levels_for_class_specialization(
-                  inst_decl);
-          for (size_t i = 0; i < enclosing_template_ids; ++i) {
+          size_t specialized_class_levels =
+              count_template_instantiation_class_chain_levels(inst_decl);
+          // `printSpecifier*` emits the specialization header for this
+          // declaration itself. Only specialized enclosing class levels still
+          // need explicit headers here.
+          size_t extra_headers =
+              specialized_class_levels > 0 ? specialized_class_levels - 1 : 0;
+          for (size_t i = 0; i < extra_headers; ++i) {
             curprint("template<>");
             curprint("\n");
           }
@@ -8624,7 +9663,10 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
         }
         curprint("template ");
         SgTemplateParameterPtrList params = tmpl->get_templateParameters();
-        Unparse_ExprStmt::unparseTemplateParameterList(params, info, true);
+        SgUnparse_Info tinfo(info);
+        tinfo.set_declstatement_ptr(NULL);
+        tinfo.set_declstatement_ptr(tmpl);
+        Unparse_ExprStmt::unparseTemplateParameterList(params, tinfo, true);
         curprint("\n");
       }
     };
@@ -9225,6 +10267,7 @@ void Unparse_ExprStmt::unparseClassDefnStmt(SgStatement *stmt,
 
     SgDeclarationStatementPtrList::iterator pp =
         classdefn_stmt->get_members().begin();
+    SgStatement *last_member_statement = NULL;
 
     while (pp != classdefn_stmt->get_members().end()) {
 #if DEBUG_UNPARSE_CLASS_DEFINITION
@@ -9239,6 +10282,7 @@ void Unparse_ExprStmt::unparseClassDefnStmt(SgStatement *stmt,
           ninfo.unparsedPartiallyUsingTokenStream();
       unparseStatement((*pp), ninfo);
       restoreInheritedPartialTokenState(ninfo, inherited_partial_token_state);
+      last_member_statement = *pp;
       pp++;
     }
 
@@ -9263,9 +10307,20 @@ void Unparse_ExprStmt::unparseClassDefnStmt(SgStatement *stmt,
         curprint(string("}"));
       } else {
         ASSERT_not_null(classdefn_stmt->get_declaration());
-        unparseStatementFromTokenStream(
-            classdefn_stmt, classdefn_stmt->get_declaration(),
-            e_token_subsequence_end, e_token_subsequence_end, info);
+        if (last_member_statement != NULL) {
+          // Preserve any inactive-branch tokens that appear after the final
+          // class member and before the class-closing brace.
+          unparseStatementFromTokenStream(last_member_statement, classdefn_stmt,
+                                          e_trailing_whitespace_start,
+                                          e_token_subsequence_end, info);
+          unparseStatementFromTokenStream(classdefn_stmt->get_declaration(),
+                                          e_token_subsequence_end,
+                                          e_token_subsequence_end, info);
+        } else {
+          unparseStatementFromTokenStream(
+              classdefn_stmt, classdefn_stmt->get_declaration(),
+              e_token_subsequence_end, e_token_subsequence_end, info);
+        }
       }
     }
 
@@ -9566,7 +10621,6 @@ void Unparse_ExprStmt::unparseExprStmt(SgStatement *stmt,
                                        SgUnparse_Info &info) {
   SgExprStatement *expr_stmt = isSgExprStatement(stmt);
   ASSERT_not_null(expr_stmt);
-
   SgUnparse_Info newinfo(info);
 
   // DQ (5/9/2015): Added assertion.
@@ -10775,7 +11829,10 @@ void Unparse_ExprStmt::unparseNonrealDecl(SgStatement *stmt,
     const SgTemplateParameterPtrList &params = nrdecl->get_tpl_params();
     if (!params.empty()) {
       curprint("template ");
-      Unparse_ExprStmt::unparseTemplateParameterList(params, info, true);
+      SgUnparse_Info tinfo(info);
+      tinfo.set_declstatement_ptr(NULL);
+      tinfo.set_declstatement_ptr(nrdecl);
+      Unparse_ExprStmt::unparseTemplateParameterList(params, tinfo, true);
       curprint("\n");
     }
 
@@ -11717,8 +12774,6 @@ void Unparse_ExprStmt::unparseTemplateHeader(T *decl, SgUnparse_Info &info) {
   printf("In unparseTemplateHeader(decl = %p = %s) \n", decl,
          decl->class_name().c_str());
 #endif
-  resetTemplateParameterEmissionState();
-
   SgTemplateParameterPtrList tlist;
   for (SgTemplateParameter *param : decl->get_templateParameters()) {
     if (!SageInterface::isAbbreviatedFunctionTemplateParameter(param)) {
@@ -11831,6 +12886,110 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
               templateMemberFunctionDeclaration != nullptr ||
               templateVariableDeclaration != nullptr ||
               templateTypedefDeclaration != nullptr);
+
+  if (should_skip_same_span_nondefining_declaration_surface(template_stmt)) {
+    return;
+  }
+
+  if (template_stmt->get_file_info() != nullptr &&
+      !template_stmt->get_file_info()->isOutputInCodeGeneration() &&
+      isSgTemplateInstantiationDirectiveStatement(
+          template_stmt->get_parent()) == nullptr) {
+    auto same_source_visible_template_class_peer =
+        [](SgTemplateClassDeclaration *decl) -> bool {
+      if (decl == NULL) {
+        return false;
+      }
+
+      Sg_File_Info *decl_fi = decl->get_file_info();
+      if (decl_fi == NULL || decl_fi->get_line() <= 0) {
+        return false;
+      }
+
+      std::vector<SgScopeStatement *> scopes;
+      if (SgScopeStatement *parent_scope =
+              isSgScopeStatement(decl->get_parent())) {
+        scopes.push_back(parent_scope);
+      }
+      if (decl->get_scope() != NULL &&
+          std::find(scopes.begin(), scopes.end(), decl->get_scope()) ==
+              scopes.end()) {
+        scopes.push_back(decl->get_scope());
+      }
+
+      auto scope_decls =
+          [](SgScopeStatement *scope) -> SgDeclarationStatementPtrList * {
+        if (SgGlobal *global = isSgGlobal(scope)) {
+          return &global->get_declarations();
+        }
+        if (SgNamespaceDefinitionStatement *ns_def =
+                isSgNamespaceDefinitionStatement(scope)) {
+          return &ns_def->get_declarations();
+        }
+        if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+          return &class_def->get_members();
+        }
+        if (SgTemplateClassDefinition *template_def =
+                isSgTemplateClassDefinition(scope)) {
+          return &template_def->get_members();
+        }
+        if (SgDeclarationScope *decl_scope = isSgDeclarationScope(scope)) {
+          return &decl_scope->get_declarations();
+        }
+        return NULL;
+      };
+
+      for (SgScopeStatement *scope : scopes) {
+        SgDeclarationStatementPtrList *decls = scope_decls(scope);
+        if (decls == NULL) {
+          continue;
+        }
+
+        for (SgDeclarationStatement *candidate_stmt : *decls) {
+          SgTemplateClassDeclaration *candidate =
+              isSgTemplateClassDeclaration(candidate_stmt);
+          if (candidate == NULL || candidate == decl ||
+              candidate->get_name() != decl->get_name()) {
+            continue;
+          }
+
+          Sg_File_Info *candidate_fi = candidate->get_file_info();
+          if (candidate_fi == NULL ||
+              !candidate_fi->isOutputInCodeGeneration() ||
+              candidate_fi->get_line() != decl_fi->get_line() ||
+              candidate_fi->get_col() != decl_fi->get_col() ||
+              candidate_fi->get_filenameString() !=
+                  decl_fi->get_filenameString()) {
+            continue;
+          }
+
+          return true;
+        }
+      }
+
+      return false;
+    };
+
+    const bool hidden_template_class =
+        templateClassDeclaration != NULL &&
+        same_source_visible_template_class_peer(templateClassDeclaration);
+    const bool hidden_misplaced_template_class =
+        templateClassDeclaration != NULL &&
+        isSgScopeStatement(templateClassDeclaration->get_parent()) !=
+            templateClassDeclaration->get_scope() &&
+        (isSgTemplateClassDefinition(templateClassDeclaration->get_scope()) !=
+             NULL ||
+         isSgTemplateInstantiationDefn(templateClassDeclaration->get_scope()) !=
+             NULL);
+    const bool hidden_frontend_template =
+        template_stmt->get_file_info()->isFrontendSpecific() ||
+        (templateClassDeclaration != NULL &&
+         !templateClassDeclaration->get_isAutonomousDeclaration());
+    if (hidden_template_class || hidden_misplaced_template_class ||
+        hidden_frontend_template) {
+      return;
+    }
+  }
 
   SgSourceFile *sourcefile = info.get_current_source_file();
   if (sourcefile == nullptr) {

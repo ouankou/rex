@@ -15,7 +15,8 @@ void resetNamesInAST() {
   // Fixup empty names used in declarations containing multiple variables
   // (or types for typedefs). See test2006_150.C.
   ResetEmptyNames t1;
-  t1.traverseMemoryPool();
+  SgClassDeclaration::traverseMemoryPoolNodes(t1);
+  SgEnumDeclaration::traverseMemoryPoolNodes(t1);
 
   // DQ (3/17/2007): This should be empty
   ROSE_ASSERT(SgNode::get_globalMangledNameMap().size() == 0);
@@ -24,7 +25,8 @@ void resetNamesInAST() {
   // for SgClassDeclaration (and test SgFunctionDeclaration for consistancy).
   // This step must be called after any empty names have been reset.
   ResetInconsistantNames t2;
-  t2.traverseMemoryPool();
+  SgClassDeclaration::traverseMemoryPoolNodes(t2);
+  SgFunctionDeclaration::traverseMemoryPoolNodes(t2);
 
   // DQ (3/17/2007): This should be empty
   ROSE_ASSERT(SgNode::get_globalMangledNameMap().size() == 0);

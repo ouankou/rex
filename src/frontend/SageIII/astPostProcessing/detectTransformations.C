@@ -35,13 +35,11 @@ void detectTransformations(SgNode *node) {
   // uniform
   detectTransformationsTraversal.traverse(node, preorder);
 
-  // This will traverse the whole memory pool (it double checks the previous
-  // test by testing every possible IR node, more than just those in the AST).
+  // Only Sg_File_Info nodes carry the transformation bit this visitor checks.
+  // Restrict the memory-pool validation to that node kind instead of walking
+  // every pooled AST node on large generated inputs.
   DetectTransformationsOnMemoryPool traversal;
-  traversal.traverseMemoryPool();
-
-  // This would traverse only the Sg_File_Info IR nodes (a performance
-  // improvement). Sg_File_Info::traverseMemoryPoolNodes(traversal);
+  Sg_File_Info::traverseMemoryPoolNodes(traversal);
 }
 
 void detectTransformations_local(SgNode *node) {

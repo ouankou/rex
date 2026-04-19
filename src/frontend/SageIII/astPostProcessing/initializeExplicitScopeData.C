@@ -12,7 +12,8 @@ void initializeExplicitScopes(SgNode * /*node*/) {
   // DQ (7/26/2007): Modified to use memory pool traversal
   // initializeExplicitScopeSupport (node);
   InitializeExplicitScopes t;
-  t.traverseMemoryPool();
+  SgInitializedName::traverseMemoryPoolNodes(t);
+  SgDeclarationStatement::traverseMemoryPoolNodes(t);
 }
 
 // DQ (11/29/2004): initialize any uninitialized explicitly stored scope data

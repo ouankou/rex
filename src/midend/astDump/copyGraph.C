@@ -5,6 +5,7 @@
 
 #include "sage3basic.h"
 
+#include "rose_test_output_path.h"
 #include "wholeAST_API.h"
 // #include "copyGraph.h"
 // #include "astGraph.h"
@@ -65,8 +66,10 @@ void graphNodesAfterCopy(const set<SgNode *> &oldNodes, string filename) {
   // This is a hack, but it works for now
   // cerr << "Do not run this code in an untrusted directory -- it makes
   // temporary files with constant names" << endl;
-  string temp_filename = filename + "_temp";
-  string old_nodes_filename = filename + "_old_nodes";
+  string temp_filename = Rose::TestOutput::resolvePath(filename + "_temp");
+  string old_nodes_filename =
+      Rose::TestOutput::resolvePath(filename + "_old_nodes");
+  string output_filename = Rose::TestOutput::resolvePath(filename + ".dot");
   // generateWholeGraphOfAST("temp");
   generateWholeGraphOfAST(temp_filename.c_str());
   {
@@ -82,11 +85,16 @@ void graphNodesAfterCopy(const set<SgNode *> &oldNodes, string filename) {
     fs << endl;
   }
 
-  std::string cmd = "tclsh " + std::string(ROSE_SOURCE_TREE) +
-                    "/tests/nonsmoke/functional/CompileTests/"
-                    "copyAST_tests/make_copy_graph.tcl " +
-                    old_nodes_filename + " " + temp_filename + ".dot " +
-                    filename + ".dot";
+  const std::string temp_graph_filename = temp_filename + ".dot";
+  const std::string script_path =
+      std::string(ROSE_SOURCE_TREE) +
+      "/tests/nonsmoke/functional/CompileTests/copyAST_tests/"
+      "make_copy_graph.tcl";
+  std::string cmd =
+      "tclsh " + Rose::StringUtility::bourneEscape(script_path) + " " +
+      Rose::StringUtility::bourneEscape(old_nodes_filename) + " " +
+      Rose::StringUtility::bourneEscape(temp_graph_filename) + " " +
+      Rose::StringUtility::bourneEscape(output_filename);
   if (system(cmd.c_str()))
     MLOG_ERROR_CXX("astDump")
         << "command failed: \"" + Rose::StringUtility::cEscape(cmd) << "\"\n";

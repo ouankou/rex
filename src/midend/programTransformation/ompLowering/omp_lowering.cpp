@@ -4102,41 +4102,138 @@ void gatherReferences(const Rose_STL_Container<SgNode *> &expr,
 
 // Check if a variable is explicitly specified by clauses of
 // omp_clause_body_stmt. Return e_unknown if not.
+static omp_construct_enum
+getExplicitDataSharingAttributeForClause(const SgOmpClause *clause) {
+  if (clause == NULL) {
+    return e_unknown;
+  }
+
+  switch (clause->variantT()) {
+  case V_SgOmpPrivateClause:
+    return e_private;
+  case V_SgOmpSharedClause:
+    return e_shared;
+  case V_SgOmpReductionClause:
+    return e_reduction;
+  case V_SgOmpCopyinClause:
+    return e_copyin;
+  case V_SgOmpCopyprivateClause:
+    return e_copyprivate;
+  case V_SgOmpFirstprivateClause:
+    return e_firstprivate;
+  case V_SgOmpLastprivateClause:
+    return e_lastprivate;
+  case V_SgOmpMapClause:
+    return e_map;
+  default:
+    return e_unknown;
+  }
+}
+
+namespace {
+const std::string kOmpClauseBodyAnalysisCacheAttributeName =
+    "rose:omp_clause_body_analysis_cache";
+
+class OmpClauseBodyAnalysisCache : public AstAttribute {
+public:
+  std::map<SgInitializedName *, omp_construct_enum>
+      explicit_data_sharing_attributes;
+  bool explicit_data_sharing_valid = false;
+  uint64_t explicit_data_sharing_modification_sequence = 0;
+
+  std::vector<SgInitializedName *> affected_for_loop_index_vars;
+  bool affected_for_loop_index_vars_valid = false;
+  uint64_t affected_for_loop_index_vars_modification_sequence = 0;
+
+  std::map<SgInitializedName *, omp_construct_enum> data_sharing_attributes;
+  uint64_t data_sharing_modification_sequence = 0;
+
+  AstAttribute *copy() const override {
+    return new OmpClauseBodyAnalysisCache();
+  }
+
+  std::string attribute_class_name() const override {
+    return "OmpClauseBodyAnalysisCache";
+  }
+
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+};
+
+OmpClauseBodyAnalysisCache &
+getOmpClauseBodyAnalysisCache(SgOmpClauseBodyStatement *omp_clause_body_stmt) {
+  ROSE_ASSERT(omp_clause_body_stmt != NULL);
+
+  if (AstAttribute *attribute = omp_clause_body_stmt->getAttribute(
+          kOmpClauseBodyAnalysisCacheAttributeName)) {
+    OmpClauseBodyAnalysisCache *cache =
+        dynamic_cast<OmpClauseBodyAnalysisCache *>(attribute);
+    ROSE_ASSERT(cache != NULL);
+    return *cache;
+  }
+
+  OmpClauseBodyAnalysisCache *cache = new OmpClauseBodyAnalysisCache();
+  omp_clause_body_stmt->addNewAttribute(
+      kOmpClauseBodyAnalysisCacheAttributeName, cache);
+  return *cache;
+}
+} // namespace
+
 static omp_construct_enum getExplicitDataSharingAttribute(
     SgInitializedName *iname, SgOmpClauseBodyStatement *omp_clause_body_stmt) {
   ROSE_ASSERT(iname != NULL);
   ROSE_ASSERT(omp_clause_body_stmt != NULL);
 
-  omp_construct_enum rt_val = e_unknown;
-  if (isInClauseVariableList(iname, omp_clause_body_stmt,
-                             V_SgOmpPrivateClause)) {
-    rt_val = e_private;
-  } else if (isInClauseVariableList(iname, omp_clause_body_stmt,
-                                    V_SgOmpSharedClause)) {
-    rt_val = e_shared;
-  } else if (isInClauseVariableList(iname, omp_clause_body_stmt,
-                                    V_SgOmpReductionClause)) {
-    rt_val = e_reduction;
+  OmpClauseBodyAnalysisCache &cache =
+      getOmpClauseBodyAnalysisCache(omp_clause_body_stmt);
+  const uint64_t current_ast_modification_sequence =
+      SgNode::get_globalAstModificationSequence();
+  if (!cache.explicit_data_sharing_valid ||
+      cache.explicit_data_sharing_modification_sequence !=
+          current_ast_modification_sequence) {
+    cache.explicit_data_sharing_attributes.clear();
+
+    for (SgOmpClause *clause : omp_clause_body_stmt->get_clauses()) {
+      const omp_construct_enum attribute =
+          getExplicitDataSharingAttributeForClause(clause);
+      if (attribute == e_unknown) {
+        continue;
+      }
+
+      SgOmpVariablesClause *vars_clause = isSgOmpVariablesClause(clause);
+      if (vars_clause == NULL) {
+        continue;
+      }
+
+      SgExprListExp *vars = vars_clause->get_variables();
+      if (vars == NULL) {
+        continue;
+      }
+
+      for (SgExpression *expr : vars->get_expressions()) {
+        SgVariableSymbol *symbol = extractClauseVariableSymbol(expr);
+        if (symbol == NULL) {
+          continue;
+        }
+
+        cache.explicit_data_sharing_attributes.insert(
+            std::make_pair(symbol->get_declaration(), attribute));
+      }
+    }
+
+    cache.explicit_data_sharing_modification_sequence =
+        current_ast_modification_sequence;
+    cache.explicit_data_sharing_valid = true;
   }
 
-  else if (isInClauseVariableList(iname, omp_clause_body_stmt,
-                                  V_SgOmpCopyinClause)) {
-    rt_val = e_copyin;
-  } else if (isInClauseVariableList(iname, omp_clause_body_stmt,
-                                    V_SgOmpCopyprivateClause)) {
-    rt_val = e_copyprivate;
-  } else if (isInClauseVariableList(iname, omp_clause_body_stmt,
-                                    V_SgOmpFirstprivateClause)) {
-    rt_val = e_firstprivate;
-  } else if (isInClauseVariableList(iname, omp_clause_body_stmt,
-                                    V_SgOmpLastprivateClause)) {
-    rt_val = e_lastprivate;
-  } else if (isInClauseVariableList(iname, omp_clause_body_stmt,
-                                    V_SgOmpMapClause)) {
-    rt_val = e_map;
+  std::map<SgInitializedName *, omp_construct_enum>::const_iterator attr_iter =
+      cache.explicit_data_sharing_attributes.find(iname);
+  if (attr_iter == cache.explicit_data_sharing_attributes.end()) {
+    return e_unknown;
   }
 
-  return rt_val;
+  return attr_iter->second;
 }
 
 static bool shouldInheritDataSharingAttributeFromParent(
@@ -4230,22 +4327,26 @@ getAffectedForLoops(SgOmpClauseBodyStatement *forOrSimd) {
 // TODO: expose to header
 vector<SgInitializedName *>
 getAffectedForLoopIndexVars(SgOmpClauseBodyStatement *forOrSimd) {
-  vector<SgInitializedName *> result;
-  // use a map to cache results, avoid repetitive analysis of OpenMP regions
-  static map<SgOmpClauseBodyStatement *, vector<SgInitializedName *>>
-      Region2Index;
-  static map<SgOmpClauseBodyStatement *, bool> RegionAnalyzed;
+  OmpClauseBodyAnalysisCache &cache = getOmpClauseBodyAnalysisCache(forOrSimd);
+  const uint64_t current_ast_modification_sequence =
+      SgNode::get_globalAstModificationSequence();
+  if (!cache.affected_for_loop_index_vars_valid ||
+      cache.affected_for_loop_index_vars_modification_sequence !=
+          current_ast_modification_sequence) {
+    cache.affected_for_loop_index_vars.clear();
 
-  if (!RegionAnalyzed[forOrSimd]) {
-    RegionAnalyzed[forOrSimd] = true;
     vector<SgForStatement *> loops = getAffectedForLoops(forOrSimd);
-    for (size_t i = 0; i < loops.size(); i++)
-      result.push_back(getLoopIndexVariable(loops[i]));
-    Region2Index[forOrSimd] = result;
-  } else
-    result = Region2Index[forOrSimd];
+    for (size_t i = 0; i < loops.size(); i++) {
+      cache.affected_for_loop_index_vars.push_back(
+          getLoopIndexVariable(loops[i]));
+    }
 
-  return result;
+    cache.affected_for_loop_index_vars_modification_sequence =
+        current_ast_modification_sequence;
+    cache.affected_for_loop_index_vars_valid = true;
+  }
+
+  return cache.affected_for_loop_index_vars;
 }
 
 // TODO: expose to header
@@ -4258,6 +4359,87 @@ bool isAffectedForLoopIndexVariable(SgOmpClauseBodyStatement *forOrSimd,
   vector<SgInitializedName *>::iterator where =
       find(loopIndexVars.begin(), loopIndexVars.end(), iname);
   return (where != loopIndexVars.end());
+}
+
+static omp_construct_enum getDataSharingAttributeInClauseBody(
+    SgSymbol *sym, SgInitializedName *iname,
+    SgOmpClauseBodyStatement *omp_clause_body_stmt) {
+  OmpClauseBodyAnalysisCache &cache =
+      getOmpClauseBodyAnalysisCache(omp_clause_body_stmt);
+  const uint64_t current_ast_modification_sequence =
+      SgNode::get_globalAstModificationSequence();
+  if (cache.data_sharing_modification_sequence !=
+      current_ast_modification_sequence) {
+    cache.data_sharing_attributes.clear();
+    cache.data_sharing_modification_sequence =
+        current_ast_modification_sequence;
+  }
+
+  std::map<SgInitializedName *, omp_construct_enum> &cached_attributes =
+      cache.data_sharing_attributes;
+  std::map<SgInitializedName *, omp_construct_enum>::const_iterator
+      cached_iter = cached_attributes.find(iname);
+  if (cached_iter != cached_attributes.end()) {
+    return cached_iter->second;
+  }
+
+  omp_construct_enum rt_val = e_shared;
+
+  omp_construct_enum temp_val =
+      getExplicitDataSharingAttribute(iname, omp_clause_body_stmt);
+  if (temp_val != e_unknown) {
+    rt_val = temp_val;
+    cached_attributes[iname] = rt_val;
+    return rt_val;
+  }
+
+  SgVariableDeclaration *var_decl =
+      isSgVariableDeclaration(iname->get_declaration());
+  if (var_decl && isAncestor(omp_clause_body_stmt, var_decl)) {
+    if (isStatic(var_decl))
+      rt_val = e_shared;
+    else
+      rt_val = e_private;
+    cached_attributes[iname] = rt_val;
+    return rt_val;
+  }
+
+  if (isThreadprivate(sym)) {
+    rt_val = e_threadprivate;
+    cached_attributes[iname] = rt_val;
+    return rt_val;
+  }
+
+  if (isAffectedForLoopIndexVariable(omp_clause_body_stmt, iname)) {
+    if (isSgOmpForStatement(omp_clause_body_stmt)) {
+      rt_val = e_private;
+      cached_attributes[iname] = rt_val;
+      return rt_val;
+    } else if (SgOmpSimdStatement *simd_stmt =
+                   isSgOmpSimdStatement(omp_clause_body_stmt)) {
+      if (hasClause(simd_stmt, V_SgOmpCollapseClause)) {
+        rt_val = e_lastprivate;
+      } else {
+        rt_val = e_linear;
+      }
+      cached_attributes[iname] = rt_val;
+      return rt_val;
+    }
+  }
+
+  if (SgOmpClauseBodyStatement *parent_clause_body_stmt =
+          findEnclosingOmpClauseBodyStatement(
+              getEnclosingStatement(omp_clause_body_stmt->get_parent()))) {
+    if (shouldInheritDataSharingAttributeFromParent(omp_clause_body_stmt)) {
+      rt_val = getDataSharingAttributeInClauseBody(sym, iname,
+                                                   parent_clause_body_stmt);
+      cached_attributes[iname] = rt_val;
+      return rt_val;
+    }
+  }
+
+  cached_attributes[iname] = rt_val;
+  return rt_val;
 }
 
 //! Return the data sharing attribute type of a variable within a context node
@@ -4288,129 +4470,8 @@ omp_construct_enum getDataSharingAttribute(SgSymbol *sym, SgNode *anchor_node) {
       findEnclosingOmpClauseBodyStatement(anchor_stmt);
 
   if (omp_clause_body_stmt != NULL) {
-    omp_construct_enum temp_val =
-        getExplicitDataSharingAttribute(iname, omp_clause_body_stmt);
-    // We assume the input code is correct. So all predetermined variables
-    // listed in clauses are conforming to the spec.
-    if (temp_val != e_unknown) {
-      rt_val = temp_val;
-      return rt_val; // use direct return to avoid messy if-else logic
-    }
-    // not explicitly specified, using the rules for predetermined and
-    // implicitly determined
-    else {
-      // Not in explicit data-sharing attribute clause at this level,
-
-      // Apply implicit rules :
-      // check if it is locally declared  (the declaration is inside of the
-      // omp_clause_body_stmt )
-      SgVariableDeclaration *var_decl =
-          isSgVariableDeclaration(iname->get_declaration());
-      // ROSE_ASSERT (var_decl != NULL);
-      // it could also be SgFunctionParameterList or other declarations
-      // if declared at function parameters, the scope is outside, it should be
-      // shared by default if no other rules apply.
-      if (var_decl && isAncestor(omp_clause_body_stmt, var_decl)) {
-        // declared in a scope inside the construct:
-        // Variables with automatic storage duration are private
-        // Variables with static storage duration are shared.
-        if (isStatic(var_decl))
-          rt_val = e_shared;
-        else
-          rt_val = e_private;
-        return rt_val;
-      }
-
-      if (isThreadprivate(sym))
-      // Variables appearing in threadprivate directives are threadprivate.
-      {
-        rt_val = e_threadprivate;
-        return rt_val;
-      }
-
-      // Check if a SgInitializedName is used as a loop index within a AST
-      // subtree. This function will use a bottom-up traverse starting from the
-      // subtree_root to find all enclosing loops and check if ivar is used as
-      // an index for either of them.
-      //        if (isLoopIndexVariable (iname, anchor_stmt)) // TODO: need more
-      //        work here
-      //  not just any loop variables, but these affected by the OpenMP
-      //  directives
-      if (isAffectedForLoopIndexVariable(omp_clause_body_stmt, iname)) {
-        /*  loop iteration variable
-          private: The loop iteration variable(s) in the associated for-loop(s)
-          of a for, parallel for, taskloop, or distribute construct.
-
-          linear: The loop iteration variable in the associated for-loop of a
-          simd construct with just one associated for-loop is linear with a
-          linear-step that is the increment of the associated for-loop.
-
-          lastprivate: The loop iteration variables in the associated for-loops
-          of a simd construct with multiple associated for-loops are
-          lastprivate.
-        */
-        if (isSgOmpForStatement(omp_clause_body_stmt))
-        // TODO: check other types of constructs here: taskloop, distribute
-        // construct
-        {
-          rt_val = e_private;
-          return rt_val;
-        } else if (SgOmpSimdStatement *simd_stmt =
-                       isSgOmpSimdStatement(omp_clause_body_stmt)) {
-          // if simd+ multiple affected loops:  lastprivate().  We check
-          // collapse() to see if multiple loops are affected.
-          // TODO: we need to check if collapse(val) val >=1
-          if (hasClause(simd_stmt, V_SgOmpCollapseClause)) {
-            rt_val = e_lastprivate;
-          } else
-            rt_val = e_linear;
-          return rt_val;
-        } else {
-          // cerr<<"found a loop index, but enclosing body statement is not omp
-          // for, but "<<omp_clause_body_stmt->class_name() <<endl;
-        }
-      }
-      // Important algorithm step here:
-      // No this logic in the specification, but I split combined constructs
-      // like parallel-for into separate AST nodes. Nested constructs that do
-      // not establish their own data-sharing environment must therefore fall
-      // back to the enclosing OpenMP region when their local rules do not
-      // determine an attribute.
-      //
-      //    #pragma omp parallel private(i,j)
-      //      {
-      //        for (i = 0; i < LOOPCOUNT; i++)
-      //          {
-      //    #pragma omp single copyprivate(j)
-      //            {
-      //              nr_iterations++;
-      //              j = i;   // i should be private, based on enclosing
-      //              parallel region's info.
-      //            }
-      //       }
-      //
-      // If implicit rules do not apply at this level, go to the enclosing
-      // OpenMP clause body statement and reuse its rules.
-      if (SgOmpClauseBodyStatement *parent_clause_body_stmt =
-              findEnclosingOmpClauseBodyStatement(
-                  getEnclosingStatement(omp_clause_body_stmt->get_parent()))) {
-        if (shouldInheritDataSharingAttributeFromParent(omp_clause_body_stmt)) {
-          // Use the parent construct as the new anchor. This keeps the search
-          // moving outward and avoids recursing on the same clause body again.
-          rt_val = getDataSharingAttribute(sym, parent_clause_body_stmt);
-          return rt_val;
-        }
-      }
-
-      // TODO: If an array section is a list item in a map clause on the target
-      // construct and the array section is derived from a variable for which
-      // the type is pointer then that variable is firstprivate.
-    } // end explicit unknown
-
-    // the rest is shared by default
-    // TODO Objects with dynamic storage duration are shared.
-    // TODO Static data members are shared.
-
+    return getDataSharingAttributeInClauseBody(sym, iname,
+                                               omp_clause_body_stmt);
   } // end of has an OpenMP enclosing clause body statement
   else // orphaned code segments
   {
@@ -8137,7 +8198,8 @@ size_t getMapArgumentListCount(SgExprListExp *map_variable_list,
 
 SgExpression *
 buildArraySectionElementIndexExpression(SgExpression *lower_bound,
-                                        SgVariableSymbol *index_symbol) {
+                                        SgVariableSymbol *index_symbol,
+                                        SgScopeStatement *scope) {
   ROSE_ASSERT(index_symbol != nullptr);
 
   SgExpression *index_expr = buildVarRefExp(index_symbol);
@@ -8147,7 +8209,7 @@ buildArraySectionElementIndexExpression(SgExpression *lower_bound,
 
   SgType *lower_type = stripTypeAliasesAndReferences(lower_bound->get_type());
   if (lower_type != nullptr) {
-    index_expr = buildCastExp(index_expr, lower_type);
+    index_expr = buildCastExp(index_expr, buildOpaqueType("long long ", scope));
   }
   return buildAddOp(copyExpression(lower_bound), index_expr);
 }
@@ -8155,15 +8217,16 @@ buildArraySectionElementIndexExpression(SgExpression *lower_bound,
 SgExpression *buildArraySectionElementExpression(
     SgExpression *base_expression,
     const std::vector<std::pair<SgExpression *, SgExpression *>> &dimensions,
-    const std::vector<SgVariableSymbol *> &index_symbols) {
+    const std::vector<SgVariableSymbol *> &index_symbols,
+    SgScopeStatement *scope) {
   ROSE_ASSERT(base_expression != nullptr);
   ROSE_ASSERT(dimensions.size() == index_symbols.size());
 
   SgExpression *result = copyExpression(base_expression);
   for (size_t i = 0; i < dimensions.size(); ++i) {
-    result =
-        buildPntrArrRefExp(result, buildArraySectionElementIndexExpression(
-                                       dimensions[i].first, index_symbols[i]));
+    result = buildPntrArrRefExp(
+        result, buildArraySectionElementIndexExpression(
+                    dimensions[i].first, index_symbols[i], scope));
   }
   return result;
 }
@@ -8326,7 +8389,7 @@ void appendExpandedMapEntryDynamicPass(
     if (dim_index == entry.section_dimensions.size()) {
       SgExpression *element_expr = buildArraySectionElementExpression(
           entry.section_base_expression, entry.section_dimensions,
-          index_symbols);
+          index_symbols, scope);
       std::vector<ExpandedMapEntry> nested_entries;
       std::vector<const SgOmpDeclareMapperStatement *> active_mappers;
       collectExpandedMapEntriesUsingResolvedMapper(
@@ -8353,6 +8416,7 @@ void appendExpandedMapEntryDynamicPass(
     const std::string index_name =
         "__rex_mapper_section_index_" + std::to_string(loop_counter++);
     SgType *index_type = buildOpaqueType("int64_t", scope);
+    SgType *index_cast_type = buildOpaqueType("int64_t ", scope);
     SgVariableDeclaration *index_decl = buildVariableDeclaration(
         index_name, index_type, buildAssignInitializer(buildLongLongIntVal(0)),
         current_block);
@@ -8366,7 +8430,7 @@ void appendExpandedMapEntryDynamicPass(
         index_decl,
         buildExprStatement(buildLessThanOp(
             buildVarRefExp(index_symbol),
-            buildCastExp(copyExpression(length_expr), index_type))),
+            buildCastExp(copyExpression(length_expr), index_cast_type))),
         buildPlusPlusOp(buildVarRefExp(index_symbol), SgUnaryOp::postfix),
         loop_body));
     index_symbols.pop_back();
@@ -11383,22 +11447,9 @@ SgInitializedNamePtrList collectClauseVariables(SgStatement *clause_stmt,
       continue;
     // get initialized name from varRefExp
     SgExpressionPtrList refs = vars->get_expressions();
-    const VariantT clause_variant = p_clause[i]->variantT();
-    const bool allow_designators = clause_variant == V_SgOmpMapClause ||
-                                   clause_variant == V_SgOmpToClause ||
-                                   clause_variant == V_SgOmpFromClause;
     result2.clear();
     for (size_t j = 0; j < refs.size(); j++) {
-      SgVariableSymbol *symbol = NULL;
-      if (allow_designators) {
-        symbol = extractClauseVariableSymbol(refs[j]);
-      } else {
-        SgExpression *expr = stripNoopCastsAndParens(refs[j]);
-        SgVarRefExp *var_ref = isSgVarRefExp(expr);
-        if (var_ref != NULL) {
-          symbol = isSgVariableSymbol(var_ref->get_symbol());
-        }
-      }
+      SgVariableSymbol *symbol = extractClauseVariableSymbol(refs[j]);
       if (symbol == NULL) {
         continue;
       }
@@ -11481,11 +11532,10 @@ getReductionOperationType(SgInitializedName *init_name,
     SgInitializedNamePtrList
         var_list; //= isSgOmpVariablesClause(r_clause)->get_variables();
     for (size_t j = 0; j < refs.size(); j++) {
-      SgExpression *expr = stripNoopCastsAndParens(refs[j]);
-      SgVarRefExp *var_ref = isSgVarRefExp(expr);
-      if (var_ref == NULL || var_ref->get_symbol() == NULL)
+      SgVariableSymbol *symbol = extractClauseVariableSymbol(refs[j]);
+      if (symbol == NULL)
         continue;
-      var_list.push_back(var_ref->get_symbol()->get_declaration());
+      var_list.push_back(symbol->get_declaration());
     }
     SgInitializedNamePtrList::const_iterator iter =
         find(var_list.begin(), var_list.end(), init_name);

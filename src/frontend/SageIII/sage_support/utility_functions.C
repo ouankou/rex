@@ -40,6 +40,15 @@
 using namespace std;
 using namespace Rose;
 
+namespace {
+void rosePhaseTrace(const char *phase) {
+  if (getenv("ROSE_PHASE_TRACE") != nullptr) {
+    fprintf(stderr, "ROSE_PHASE %s\n", phase);
+    fflush(stderr);
+  }
+}
+} // namespace
+
 // global variable for turning on and off internal debugging.
 int ROSE_DEBUG = 0;
 
@@ -404,7 +413,9 @@ SgProject *frontend(const std::vector<std::string> &argv,
 
     // Create the AST by setting command-line options and then parsing all files
     // from the command line
+    rosePhaseTrace("project.parse.begin");
     project->parse(argv2);
+    rosePhaseTrace("project.parse.end");
     int frontend_status = project->get_frontendErrorCode();
     if (!Rose::KeepGoing::g_keep_going && frontend_status != 0) {
       skip_postprocessing = true;
@@ -479,10 +490,14 @@ SgProject *frontend(const std::vector<std::string> &argv,
       // Rose::AST::cmdline::checker.frontend.exec(project);
 
       // Connect to Ast Plugin Mechanism
+      rosePhaseTrace("plugins.begin");
       Rose::obtainAndExecuteActions(project);
+      rosePhaseTrace("plugins.end");
 
       if (SageInterface::isAstTeardownEnabled()) {
+        rosePhaseTrace("ensureSymbolParentPointers.begin");
         SageInterface::ensureSymbolParentPointers(project);
+        rosePhaseTrace("ensureSymbolParentPointers.end");
       }
     }
   }
@@ -644,6 +659,115 @@ void assertTokenSubsequenceWithinBounds(
   }
 }
 
+bool repairMissingTopLevelEmptyDeclarationTokenMapping(
+    SgSourceFile *sourceFile, SgEmptyDeclaration *emptyDecl,
+    const SgDeclarationStatementPtrList &declarations,
+    std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap,
+    const std::vector<stream_element *> &tokenVector) {
+  if (sourceFile == NULL || emptyDecl == NULL || tokenVector.empty()) {
+    return false;
+  }
+
+  Sg_File_Info *declInfo = emptyDecl->get_file_info();
+  if (declInfo == NULL || declInfo->isCompilerGenerated() ||
+      declInfo->isTransformation() ||
+      declInfo->isOutputInCodeGeneration() == false ||
+      !isLocatedNodeInSourceFile(emptyDecl, sourceFile)) {
+    return false;
+  }
+
+  size_t declIndex = declarations.size();
+  for (size_t i = 0; i < declarations.size(); ++i) {
+    if (declarations[i] == emptyDecl) {
+      declIndex = i;
+      break;
+    }
+  }
+  if (declIndex == declarations.size()) {
+    return false;
+  }
+
+  int lowerBound = 0;
+  int previousTokenEnd = -1;
+  for (size_t prev = declIndex; prev-- > 0;) {
+    std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator prevIt =
+        tokenMap.find(declarations[prev]);
+    if (prevIt != tokenMap.end() && prevIt->second != NULL &&
+        prevIt->second->token_subsequence_end >= 0) {
+      previousTokenEnd = prevIt->second->token_subsequence_end;
+      lowerBound = prevIt->second->token_subsequence_end + 1;
+      break;
+    }
+  }
+
+  int upperBound = static_cast<int>(tokenVector.size()) - 1;
+  for (size_t next = declIndex + 1; next < declarations.size(); ++next) {
+    std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator nextIt =
+        tokenMap.find(declarations[next]);
+    if (nextIt != tokenMap.end() && nextIt->second != NULL &&
+        nextIt->second->token_subsequence_start >= 0) {
+      upperBound = nextIt->second->token_subsequence_start - 1;
+      break;
+    }
+  }
+
+  lowerBound = std::max(0, lowerBound);
+  upperBound = std::min(static_cast<int>(tokenVector.size()) - 1, upperBound);
+  if (lowerBound > upperBound) {
+    lowerBound = 0;
+    upperBound = static_cast<int>(tokenVector.size()) - 1;
+  }
+
+  const int targetLine = declInfo->get_physical_line();
+  const int targetCol = declInfo->get_col();
+  int bestTokenIndex = -1;
+  long long bestScore = -1;
+  for (int i = lowerBound; i <= upperBound; ++i) {
+    stream_element *token = tokenVector[i];
+    if (token == NULL || token->p_tok_elem == NULL ||
+        token->p_tok_elem->token_lexeme != ";") {
+      continue;
+    }
+
+    const long long lineDelta =
+        static_cast<long long>(token->beginning_fpi.line_num) - targetLine;
+    const long long colDelta =
+        static_cast<long long>(token->beginning_fpi.column_num) - targetCol;
+    const long long score =
+        (lineDelta < 0 ? -lineDelta : lineDelta) * 1000000LL +
+        (colDelta < 0 ? -colDelta : colDelta);
+
+    if (bestTokenIndex < 0 || score < bestScore) {
+      bestTokenIndex = i;
+      bestScore = score;
+      if (score == 0) {
+        break;
+      }
+    }
+  }
+
+  if (bestTokenIndex < 0) {
+    if (previousTokenEnd >= 0 &&
+        static_cast<size_t>(previousTokenEnd) < tokenVector.size()) {
+      stream_element *token = tokenVector[previousTokenEnd];
+      if (token != NULL && token->p_tok_elem != NULL &&
+          token->p_tok_elem->token_lexeme == ";" &&
+          token->beginning_fpi.line_num == targetLine &&
+          token->beginning_fpi.column_num == targetCol) {
+        bestTokenIndex = previousTokenEnd;
+      }
+    }
+    if (bestTokenIndex < 0) {
+      return false;
+    }
+  }
+
+  tokenMap[emptyDecl] = TokenStreamSequenceToNodeMapping::createTokenInterval(
+      sourceFile, emptyDecl, -1, -1, bestTokenIndex, bestTokenIndex, -1, -1, -1,
+      -1);
+  return true;
+}
+
 void enforceTokenUnparseContractForFile(SgSourceFile *sourceFile) {
   ASSERT_not_null(sourceFile);
 
@@ -744,6 +868,14 @@ void enforceTokenUnparseContractForFile(SgSourceFile *sourceFile) {
 
     std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator declIt =
         tokenMap.find(decl);
+    if ((declIt == tokenMap.end() || declIt->second == NULL) &&
+        isSgEmptyDeclaration(decl) != NULL) {
+      if (repairMissingTopLevelEmptyDeclarationTokenMapping(
+              sourceFile, isSgEmptyDeclaration(decl), declarations, tokenMap,
+              tokenVector)) {
+        declIt = tokenMap.find(decl);
+      }
+    }
     if (declIt == tokenMap.end() || declIt->second == NULL) {
       std::ostringstream detail;
       detail << " parent="
@@ -827,12 +959,14 @@ int backend(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
             UnparseDelegate *unparseDelegate) {
   // DQ (7/12/2005): Introduce tracking of performance of ROSE.
   TimingPerformance timer("AST Object Code Generation (backend):");
+  rosePhaseTrace("backend.begin");
 
   int finalCombinedExitStatus = 0;
 
   const int frontendStatus = frontendExitStatus(project);
   if (frontendStatus != 0) {
     project->set_backendErrorCode(frontendStatus);
+    rosePhaseTrace("backend.end");
     return frontendStatus;
   }
 
@@ -861,8 +995,10 @@ int backend(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
       cout << "Calling project->unparse()\n";
     }
 
+    rosePhaseTrace("backend.unparse.begin");
     enforceTokenUnparseContract(project);
     project->unparse(unparseFormatHelp, unparseDelegate);
+    rosePhaseTrace("backend.unparse.end");
 
     if (SgProject::get_verbose() >= BACKEND_VERBOSE_LEVEL) {
       cout << "source file(s) generated. (from AST)\n" << endl;
@@ -877,7 +1013,9 @@ int backend(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
       cout << "Calling project->compileOutput()\n";
     }
 
+    rosePhaseTrace("backend.compileOutput.begin");
     finalCombinedExitStatus = project->compileOutput();
+    rosePhaseTrace("backend.compileOutput.end");
   } else {
     if (SgProject::get_verbose() >= BACKEND_VERBOSE_LEVEL)
       printf("   project->get_compileOnly() = %s \n",
@@ -920,22 +1058,28 @@ int backend(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
           "Link using the C language linker (when handling C programs) = %s \n",
           BACKEND_C_COMPILER_NAME_WITH_PATH);
       // finalCombinedExitStatus = project->link("gcc");
+      rosePhaseTrace("backend.link.begin");
       finalCombinedExitStatus =
           project->link(BACKEND_C_COMPILER_NAME_WITH_PATH);
+      rosePhaseTrace("backend.link.end");
     } else if (project->get_Fortran_only() == true) {
       printf("Link using the Fortran language linker (when handling Fortran "
              "programs) = %s \n",
              BACKEND_FORTRAN_COMPILER_NAME_WITH_PATH);
+      rosePhaseTrace("backend.link.begin");
       finalCombinedExitStatus =
           project->link(BACKEND_FORTRAN_COMPILER_NAME_WITH_PATH);
+      rosePhaseTrace("backend.link.end");
     } else {
       // Use the default name for C++ compiler (defined at configure time)
       if (SgProject::get_verbose() >= BACKEND_VERBOSE_LEVEL)
         printf("Link using the default linker (when handling non-C programs) = "
                "%s \n",
                BACKEND_CXX_COMPILER_NAME_WITH_PATH);
+      rosePhaseTrace("backend.link.begin");
       finalCombinedExitStatus =
           project->link(BACKEND_CXX_COMPILER_NAME_WITH_PATH);
+      rosePhaseTrace("backend.link.end");
     }
 
     // printf ("DONE with link! \n");
@@ -953,6 +1097,7 @@ int backend(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
   project->set_backendErrorCode(finalCombinedExitStatus);
   int backendStatus = project->get_backendErrorCode();
 
+  rosePhaseTrace("backend.end");
   return backendStatus;
 }
 

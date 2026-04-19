@@ -7,7 +7,9 @@ using namespace std;
 
 void resetTypesInAST() {
   ResetTypes t;
-  t.traverseMemoryPool();
+  SgNamedType::traverseMemoryPoolNodes(t);
+  SgDeclarationStatement::traverseMemoryPoolNodes(t);
+  SgPartialFunctionType::traverseMemoryPoolNodes(t);
 }
 
 void ResetTypes::visit(SgNode *node) {
