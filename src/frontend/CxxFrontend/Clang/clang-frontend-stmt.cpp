@@ -5692,25 +5692,6 @@ bool ClangToSageTranslator::VisitReturnStmt(clang::ReturnStmt *return_stmt,
   }
   *node = SageBuilder::buildReturnStmt(expr);
 
-  if (p_compiler_instance != nullptr) {
-    clang::SourceManager &sm = p_compiler_instance->getSourceManager();
-    clang::SourceLocation begin_loc =
-        sm.getExpansionLoc(return_stmt->getBeginLoc());
-    clang::SourceRange raw_range = return_stmt->getSourceRange();
-    clang::SourceRange semi_range = extendSourceRangeWithTrailingSemicolon(
-        raw_range, sm, p_compiler_instance->getLangOpts());
-    const std::string raw_text = getSourceText(raw_range);
-    const std::string semi_text = getSourceText(semi_range);
-    if (raw_text.find("_S_empty_rep") != std::string::npos ||
-        raw_text.find("_M_narrow") != std::string::npos ||
-        raw_text.find("__t") != std::string::npos) {
-      std::cerr << "[rex-return-range] line="
-                << (begin_loc.isValid() ? sm.getSpellingLineNumber(begin_loc)
-                                        : 0)
-                << " raw=" << raw_text << " semi=" << semi_text << std::endl;
-    }
-  }
-
   return VisitStmt(return_stmt, node) && res;
 }
 

@@ -19,12 +19,14 @@
 
 #include "unparser.h"
 
+#include <algorithm>
 #include <cctype>
 #include <fstream>
 #include <functional>
 #include <map>
 #include <set>
 #include <unordered_map>
+#include <vector>
 
 // DQ (8/31/2013):  This should only be included by source files that require
 // it. This fixed a reported bug which caused conflicts with configure-time
@@ -156,6 +158,10 @@ bool should_skip_same_span_nondefining_declaration_surface(
   }
 
   if (decl != first_nondef) {
+    return false;
+  }
+  if (decl->isTransformation() || first_nondef->isTransformation() ||
+      defining->isTransformation()) {
     return false;
   }
 
@@ -5791,6 +5797,14 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
       templateInstantiationDirective->get_declaration();
   ASSERT_not_null(declarationStatement);
 
+  // The explicit-instantiation directive is the structural owner of the wrapped
+  // declaration. Reassert this before unparsing so the nested declaration
+  // emits `template` / `extern template` instead of falling back to
+  // specialization spelling.
+  if (declarationStatement->get_parent() != templateInstantiationDirective) {
+    declarationStatement->set_parent(templateInstantiationDirective);
+  }
+
   // curprint ( string("template ";
 
   // DQ (8/2/2014): Added support for C++ directive to surpress template
@@ -9273,6 +9287,15 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
     return;
   }
 
+  if (classdecl_stmt->get_file_info() != nullptr &&
+      !classdecl_stmt->get_file_info()->isOutputInCodeGeneration() &&
+      (classdecl_stmt->get_file_info()->isFrontendSpecific() ||
+       !classdecl_stmt->get_isAutonomousDeclaration()) &&
+      isSgTemplateInstantiationDirectiveStatement(
+          classdecl_stmt->get_parent()) == nullptr) {
+    return;
+  }
+
   // DQ (6/2/2021): Adding support for partial token sequence unparsing.
   SgClassDefinition *class_definition = classdecl_stmt->get_definition();
   bool saved_unparsedPartiallyUsingTokenStream =
@@ -12744,6 +12767,106 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
 
   if (should_skip_same_span_nondefining_declaration_surface(template_stmt)) {
     return;
+  }
+
+  if (template_stmt->get_file_info() != nullptr &&
+      !template_stmt->get_file_info()->isOutputInCodeGeneration() &&
+      isSgTemplateInstantiationDirectiveStatement(
+          template_stmt->get_parent()) == nullptr) {
+    auto same_source_visible_template_class_peer =
+        [](SgTemplateClassDeclaration *decl) -> bool {
+      if (decl == NULL) {
+        return false;
+      }
+
+      Sg_File_Info *decl_fi = decl->get_file_info();
+      if (decl_fi == NULL || decl_fi->get_line() <= 0) {
+        return false;
+      }
+
+      std::vector<SgScopeStatement *> scopes;
+      if (SgScopeStatement *parent_scope =
+              isSgScopeStatement(decl->get_parent())) {
+        scopes.push_back(parent_scope);
+      }
+      if (decl->get_scope() != NULL &&
+          std::find(scopes.begin(), scopes.end(), decl->get_scope()) ==
+              scopes.end()) {
+        scopes.push_back(decl->get_scope());
+      }
+
+      auto scope_decls =
+          [](SgScopeStatement *scope) -> SgDeclarationStatementPtrList * {
+        if (SgGlobal *global = isSgGlobal(scope)) {
+          return &global->get_declarations();
+        }
+        if (SgNamespaceDefinitionStatement *ns_def =
+                isSgNamespaceDefinitionStatement(scope)) {
+          return &ns_def->get_declarations();
+        }
+        if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+          return &class_def->get_members();
+        }
+        if (SgTemplateClassDefinition *template_def =
+                isSgTemplateClassDefinition(scope)) {
+          return &template_def->get_members();
+        }
+        if (SgDeclarationScope *decl_scope = isSgDeclarationScope(scope)) {
+          return &decl_scope->get_declarations();
+        }
+        return NULL;
+      };
+
+      for (SgScopeStatement *scope : scopes) {
+        SgDeclarationStatementPtrList *decls = scope_decls(scope);
+        if (decls == NULL) {
+          continue;
+        }
+
+        for (SgDeclarationStatement *candidate_stmt : *decls) {
+          SgTemplateClassDeclaration *candidate =
+              isSgTemplateClassDeclaration(candidate_stmt);
+          if (candidate == NULL || candidate == decl ||
+              candidate->get_name() != decl->get_name()) {
+            continue;
+          }
+
+          Sg_File_Info *candidate_fi = candidate->get_file_info();
+          if (candidate_fi == NULL ||
+              !candidate_fi->isOutputInCodeGeneration() ||
+              candidate_fi->get_line() != decl_fi->get_line() ||
+              candidate_fi->get_col() != decl_fi->get_col() ||
+              candidate_fi->get_filenameString() !=
+                  decl_fi->get_filenameString()) {
+            continue;
+          }
+
+          return true;
+        }
+      }
+
+      return false;
+    };
+
+    const bool hidden_template_class =
+        templateClassDeclaration != NULL &&
+        same_source_visible_template_class_peer(templateClassDeclaration);
+    const bool hidden_misplaced_template_class =
+        templateClassDeclaration != NULL &&
+        isSgScopeStatement(templateClassDeclaration->get_parent()) !=
+            templateClassDeclaration->get_scope() &&
+        (isSgTemplateClassDefinition(templateClassDeclaration->get_scope()) !=
+             NULL ||
+         isSgTemplateInstantiationDefn(templateClassDeclaration->get_scope()) !=
+             NULL);
+    const bool hidden_frontend_template =
+        template_stmt->get_file_info()->isFrontendSpecific() ||
+        (templateClassDeclaration != NULL &&
+         !templateClassDeclaration->get_isAutonomousDeclaration());
+    if (hidden_template_class || hidden_misplaced_template_class ||
+        hidden_frontend_template) {
+      return;
+    }
   }
 
   SgSourceFile *sourcefile = info.get_current_source_file();

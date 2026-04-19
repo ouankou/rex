@@ -8151,7 +8151,8 @@ size_t getMapArgumentListCount(SgExprListExp *map_variable_list,
 
 SgExpression *
 buildArraySectionElementIndexExpression(SgExpression *lower_bound,
-                                        SgVariableSymbol *index_symbol) {
+                                        SgVariableSymbol *index_symbol,
+                                        SgScopeStatement *scope) {
   ROSE_ASSERT(index_symbol != nullptr);
 
   SgExpression *index_expr = buildVarRefExp(index_symbol);
@@ -8161,7 +8162,7 @@ buildArraySectionElementIndexExpression(SgExpression *lower_bound,
 
   SgType *lower_type = stripTypeAliasesAndReferences(lower_bound->get_type());
   if (lower_type != nullptr) {
-    index_expr = buildCastExp(index_expr, lower_type);
+    index_expr = buildCastExp(index_expr, buildOpaqueType("long long ", scope));
   }
   return buildAddOp(copyExpression(lower_bound), index_expr);
 }
@@ -8169,15 +8170,16 @@ buildArraySectionElementIndexExpression(SgExpression *lower_bound,
 SgExpression *buildArraySectionElementExpression(
     SgExpression *base_expression,
     const std::vector<std::pair<SgExpression *, SgExpression *>> &dimensions,
-    const std::vector<SgVariableSymbol *> &index_symbols) {
+    const std::vector<SgVariableSymbol *> &index_symbols,
+    SgScopeStatement *scope) {
   ROSE_ASSERT(base_expression != nullptr);
   ROSE_ASSERT(dimensions.size() == index_symbols.size());
 
   SgExpression *result = copyExpression(base_expression);
   for (size_t i = 0; i < dimensions.size(); ++i) {
-    result =
-        buildPntrArrRefExp(result, buildArraySectionElementIndexExpression(
-                                       dimensions[i].first, index_symbols[i]));
+    result = buildPntrArrRefExp(
+        result, buildArraySectionElementIndexExpression(
+                    dimensions[i].first, index_symbols[i], scope));
   }
   return result;
 }
@@ -8340,7 +8342,7 @@ void appendExpandedMapEntryDynamicPass(
     if (dim_index == entry.section_dimensions.size()) {
       SgExpression *element_expr = buildArraySectionElementExpression(
           entry.section_base_expression, entry.section_dimensions,
-          index_symbols);
+          index_symbols, scope);
       std::vector<ExpandedMapEntry> nested_entries;
       std::vector<const SgOmpDeclareMapperStatement *> active_mappers;
       collectExpandedMapEntriesUsingResolvedMapper(
@@ -8367,6 +8369,7 @@ void appendExpandedMapEntryDynamicPass(
     const std::string index_name =
         "__rex_mapper_section_index_" + std::to_string(loop_counter++);
     SgType *index_type = buildOpaqueType("int64_t", scope);
+    SgType *index_cast_type = buildOpaqueType("int64_t ", scope);
     SgVariableDeclaration *index_decl = buildVariableDeclaration(
         index_name, index_type, buildAssignInitializer(buildLongLongIntVal(0)),
         current_block);
@@ -8380,7 +8383,7 @@ void appendExpandedMapEntryDynamicPass(
         index_decl,
         buildExprStatement(buildLessThanOp(
             buildVarRefExp(index_symbol),
-            buildCastExp(copyExpression(length_expr), index_type))),
+            buildCastExp(copyExpression(length_expr), index_cast_type))),
         buildPlusPlusOp(buildVarRefExp(index_symbol), SgUnaryOp::postfix),
         loop_body));
     index_symbols.pop_back();
