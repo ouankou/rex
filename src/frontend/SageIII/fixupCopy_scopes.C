@@ -767,8 +767,12 @@ bool functionDeclarationsMatch(const SgFunctionDeclaration *originalDecl,
   // fall back to direct name/type identity until attachment is complete.
   if (!nodeHasAttachedParentChain(originalDecl) ||
       !nodeHasAttachedParentChain(candidateDecl)) {
+    const SgType *originalType = originalDecl->get_type();
+    const SgType *candidateType = candidateDecl->get_type();
     return originalDecl->get_name() == candidateDecl->get_name() &&
-           originalDecl->get_type() == candidateDecl->get_type();
+           ((originalType == NULL && candidateType == NULL) ||
+            (originalType != NULL && candidateType != NULL &&
+             SageInterface::isEquivalentType(originalType, candidateType)));
   }
 
   return originalDecl->get_mangled_name() == candidateDecl->get_mangled_name();

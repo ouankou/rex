@@ -298,8 +298,8 @@ bool fileInfoWithinLocatedNodeRange(Sg_File_Info *target,
     return false;
   }
 
-  if (target->get_filenameString() != begin->get_filenameString() ||
-      target->get_filenameString() != end->get_filenameString()) {
+  if (target->get_file_id() != begin->get_file_id() ||
+      target->get_file_id() != end->get_file_id()) {
     return false;
   }
 
@@ -350,22 +350,6 @@ bool tagDeclarationHasAnonymousSurface(SgDeclarationStatement *decl) {
   return false;
 }
 
-bool declarationIsStructurallyInsideOwner(SgDeclarationStatement *decl,
-                                          SgDeclarationStatement *owner) {
-  if (decl == nullptr || owner == nullptr) {
-    return false;
-  }
-
-  for (SgNode *parent = decl->get_parent(); parent != nullptr;
-       parent = parent->get_parent()) {
-    if (parent == owner) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 bool ownerContainsEquivalentLexicalTagSurface(
     SgDeclarationStatement *owner, SgDeclarationStatement *candidate) {
   if (owner == nullptr || candidate == nullptr) {
@@ -381,8 +365,7 @@ bool ownerContainsEquivalentLexicalTagSurface(
       if (decl != owner && decl != candidate &&
           (isSgClassDeclaration(decl) != nullptr ||
            isSgEnumDeclaration(decl) != nullptr) &&
-          sameDeclChain(decl, candidate) &&
-          declarationIsStructurallyInsideOwner(decl, owner)) {
+          sameDeclChain(decl, candidate)) {
         return true;
       }
     }
@@ -468,7 +451,6 @@ bool ownerContainsEquivalentLexicalTagReference(
 
     if (SgDeclarationStatement *decl = isSgDeclarationStatement(node)) {
       if (decl != owner && decl != candidate &&
-          declarationIsStructurallyInsideOwner(decl, owner) &&
           fileInfoWithinLocatedNodeRange(candidate_loc, decl)) {
         if (SgDeclarationStatement *tag_surface =
                 findDirectTagSurfaceDeclaration(decl)) {
@@ -1295,8 +1277,8 @@ void repairLexicallyOwnedTagDeclarationSurfaces(SgNode *node) {
       return false;
     }
 
-    if (target->get_filenameString() != begin->get_filenameString() ||
-        target->get_filenameString() != end->get_filenameString()) {
+    if (target->get_file_id() != begin->get_file_id() ||
+        target->get_file_id() != end->get_file_id()) {
       return false;
     }
 
