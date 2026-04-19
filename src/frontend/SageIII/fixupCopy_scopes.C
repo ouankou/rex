@@ -764,10 +764,11 @@ bool functionDeclarationsMatch(const SgFunctionDeclaration *originalDecl,
   // namespace/class scopes have been reattached. Mangled-name generation walks
   // the scope chain and will assert on those transient orphaned parents. At
   // this point we are already traversing direct defining/nondefining links, so
-  // name + arity are a sufficient fallback until attachment is complete.
+  // fall back to direct name/type identity until attachment is complete.
   if (!nodeHasAttachedParentChain(originalDecl) ||
       !nodeHasAttachedParentChain(candidateDecl)) {
-    return true;
+    return originalDecl->get_name() == candidateDecl->get_name() &&
+           originalDecl->get_type() == candidateDecl->get_type();
   }
 
   return originalDecl->get_mangled_name() == candidateDecl->get_mangled_name();

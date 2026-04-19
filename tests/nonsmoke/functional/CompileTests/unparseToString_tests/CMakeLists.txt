@@ -48,5 +48,5 @@ add_test(
 
 add_test(
   NAME unparseProject_test2017_01
-  COMMAND unparseProject ${CMAKE_CURRENT_SOURCE_DIR}/test2017_01.C
+  COMMAND unparseProject ${TESTCODE_DIR}/test2017_01.C
 )

@@ -17,7 +17,6 @@
 #include "unparser.h"
 
 #include <cctype>
-#include <cstdint>
 #include <limits>
 
 // DQ (2/21/2019): Added to support remove_substring function.
@@ -76,6 +75,35 @@ buildTemplateDefaultArgumentEmissionKey(SgTemplateParameter *template_parameter,
     return std::string();
   }
 
+  auto buildStableTemplateDeclarationKey =
+      [](SgTemplateDeclaration *decl) -> std::string {
+    if (decl == nullptr) {
+      return std::string();
+    }
+
+    std::string key = decl->get_mangled_name().getString();
+    if (key.empty()) {
+      key = decl->get_qualified_name().getString();
+    }
+    if (key.empty()) {
+      key = decl->get_name().getString();
+    }
+
+    const Sg_File_Info *file_info = decl->get_file_info();
+    if (file_info != nullptr) {
+      const std::string location = file_info->get_filenameString() + ":" +
+                                   std::to_string(file_info->get_line()) + ":" +
+                                   std::to_string(file_info->get_col());
+      if (key.empty()) {
+        key = location;
+      } else {
+        key += "@" + location;
+      }
+    }
+
+    return key;
+  };
+
   SgTemplateDeclaration *canonical_decl = template_decl;
   if (SgTemplateDeclaration *first_nondef = isSgTemplateDeclaration(
           template_decl->get_firstNondefiningDeclaration())) {
@@ -85,33 +113,10 @@ buildTemplateDefaultArgumentEmissionKey(SgTemplateParameter *template_parameter,
     canonical_decl = defining_decl;
   }
 
-  std::string declaration_key;
-  if (canonical_decl != nullptr) {
-    declaration_key = canonical_decl->get_mangled_name().getString();
-    if (declaration_key.empty()) {
-      declaration_key = canonical_decl->get_qualified_name().getString();
-    }
-  }
-  if (declaration_key.empty()) {
-    SgSymbol *symbol = nullptr;
-    if (canonical_decl != nullptr) {
-      symbol = canonical_decl->get_symbol_from_symbol_table();
-    }
-    if (symbol == nullptr) {
-      symbol = template_decl->get_symbol_from_symbol_table();
-    }
-    if (symbol != nullptr) {
-      declaration_key = std::to_string(
-          static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(symbol)));
-    }
-  }
-  if (declaration_key.empty()) {
-    const Sg_File_Info *file_info = template_decl->get_file_info();
-    if (file_info != nullptr) {
-      declaration_key = file_info->get_filenameString() + ":" +
-                        std::to_string(file_info->get_line()) + ":" +
-                        std::to_string(file_info->get_col());
-    }
+  std::string declaration_key =
+      buildStableTemplateDeclarationKey(canonical_decl);
+  if (declaration_key.empty() && template_decl != canonical_decl) {
+    declaration_key = buildStableTemplateDeclarationKey(template_decl);
   }
 
   if (declaration_key.empty()) {

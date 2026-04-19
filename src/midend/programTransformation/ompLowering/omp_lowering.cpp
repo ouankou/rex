@@ -4177,17 +4177,8 @@ static omp_construct_enum getExplicitDataSharingAttribute(
         continue;
       }
 
-      const bool allow_designators = clause->variantT() == V_SgOmpMapClause;
       for (SgExpression *expr : vars->get_expressions()) {
-        SgVariableSymbol *symbol = NULL;
-        if (allow_designators) {
-          symbol = extractClauseVariableSymbol(expr);
-        } else {
-          SgExpression *normalized_expr = stripNoopCastsAndParens(expr);
-          if (SgVarRefExp *var_ref = isSgVarRefExp(normalized_expr)) {
-            symbol = isSgVariableSymbol(var_ref->get_symbol());
-          }
-        }
+        SgVariableSymbol *symbol = extractClauseVariableSymbol(expr);
         if (symbol == NULL) {
           continue;
         }
@@ -11425,22 +11416,9 @@ SgInitializedNamePtrList collectClauseVariables(SgStatement *clause_stmt,
       continue;
     // get initialized name from varRefExp
     SgExpressionPtrList refs = vars->get_expressions();
-    const VariantT clause_variant = p_clause[i]->variantT();
-    const bool allow_designators = clause_variant == V_SgOmpMapClause ||
-                                   clause_variant == V_SgOmpToClause ||
-                                   clause_variant == V_SgOmpFromClause;
     result2.clear();
     for (size_t j = 0; j < refs.size(); j++) {
-      SgVariableSymbol *symbol = NULL;
-      if (allow_designators) {
-        symbol = extractClauseVariableSymbol(refs[j]);
-      } else {
-        SgExpression *expr = stripNoopCastsAndParens(refs[j]);
-        SgVarRefExp *var_ref = isSgVarRefExp(expr);
-        if (var_ref != NULL) {
-          symbol = isSgVariableSymbol(var_ref->get_symbol());
-        }
-      }
+      SgVariableSymbol *symbol = extractClauseVariableSymbol(refs[j]);
       if (symbol == NULL) {
         continue;
       }
@@ -11523,11 +11501,10 @@ getReductionOperationType(SgInitializedName *init_name,
     SgInitializedNamePtrList
         var_list; //= isSgOmpVariablesClause(r_clause)->get_variables();
     for (size_t j = 0; j < refs.size(); j++) {
-      SgExpression *expr = stripNoopCastsAndParens(refs[j]);
-      SgVarRefExp *var_ref = isSgVarRefExp(expr);
-      if (var_ref == NULL || var_ref->get_symbol() == NULL)
+      SgVariableSymbol *symbol = extractClauseVariableSymbol(refs[j]);
+      if (symbol == NULL)
         continue;
-      var_list.push_back(var_ref->get_symbol()->get_declaration());
+      var_list.push_back(symbol->get_declaration());
     }
     SgInitializedNamePtrList::const_iterator iter =
         find(var_list.begin(), var_list.end(), init_name);

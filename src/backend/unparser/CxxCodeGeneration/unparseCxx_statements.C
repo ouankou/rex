@@ -96,7 +96,7 @@ struct NormalizedDeclarationFormattingCache {
 
 NormalizedDeclarationFormattingCache &
 getNormalizedDeclarationFormattingCache(SgNode *node) {
-  static NormalizedDeclarationFormattingCache cache;
+  static thread_local NormalizedDeclarationFormattingCache cache;
   cache.resetForNode(node);
   return cache;
 }
@@ -1592,6 +1592,117 @@ bool locatedNodeHasInsidePreprocessingInfo(const SgLocatedNode *node) {
   for (PreprocessingInfo *info : *attached) {
     if (info != nullptr &&
         info->getRelativePosition() == PreprocessingInfo::inside) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool insidePreprocessingInfoContainsStandaloneClosingBrace(
+    const SgLocatedNode *node) {
+  AttachedPreprocessingInfoType *attached =
+      node != nullptr
+          ? const_cast<SgLocatedNode *>(node)->getAttachedPreprocessingInfo()
+          : nullptr;
+  if (attached == nullptr) {
+    return false;
+  }
+
+  const Sg_File_Info *end_info =
+      node != nullptr ? node->get_endOfConstruct() : nullptr;
+  const int end_line = end_info != nullptr && !end_info->isCompilerGenerated()
+                           ? end_info->get_line()
+                           : 0;
+
+  for (PreprocessingInfo *info : *attached) {
+    if (info == nullptr ||
+        info->getRelativePosition() != PreprocessingInfo::inside) {
+      continue;
+    }
+
+    if (end_line > 0) {
+      const int info_start = info->getLineNumber();
+      const int info_end =
+          info_start + std::max(1, info->getNumberOfLines()) - 1;
+      if (info_start <= 0 || end_line < info_start || end_line > info_end) {
+        continue;
+      }
+    }
+
+    const std::string text = info->getString();
+    size_t line_start = 0;
+    while (line_start <= text.size()) {
+      const size_t line_end = text.find('\n', line_start);
+      const std::string line = text.substr(
+          line_start, line_end == std::string::npos ? std::string::npos
+                                                    : line_end - line_start);
+      const std::string trimmed = Rose::StringUtility::trim(line);
+      if (trimmed == "}" || trimmed.rfind("} //", 0) == 0) {
+        return true;
+      }
+
+      if (line_end == std::string::npos) {
+        break;
+      }
+      line_start = line_end + 1;
+    }
+  }
+
+  return false;
+}
+
+bool isConditionalPreprocessingDirective(
+    PreprocessingInfo::DirectiveType type) {
+  switch (type) {
+  case PreprocessingInfo::CpreprocessorIfdefDeclaration:
+  case PreprocessingInfo::CpreprocessorIfndefDeclaration:
+  case PreprocessingInfo::CpreprocessorIfDeclaration:
+  case PreprocessingInfo::CpreprocessorElseDeclaration:
+  case PreprocessingInfo::CpreprocessorElifDeclaration:
+  case PreprocessingInfo::CpreprocessorEndifDeclaration:
+    return true;
+  default:
+    return false;
+  }
+}
+
+bool namespaceCloseBraceIsRepresentedOutsideDefinition(
+    const SgNamespaceDefinitionStatement *namespace_definition) {
+  if (insidePreprocessingInfoContainsStandaloneClosingBrace(
+          namespace_definition)) {
+    return true;
+  }
+
+  const SgNamespaceDeclarationStatement *namespace_decl =
+      namespace_definition != nullptr
+          ? namespace_definition->get_namespaceDeclaration()
+          : nullptr;
+  const Sg_File_Info *end_info =
+      namespace_definition != nullptr
+          ? namespace_definition->get_endOfConstruct()
+          : nullptr;
+  const int end_line = end_info != nullptr && !end_info->isCompilerGenerated()
+                           ? end_info->get_line()
+                           : 0;
+  AttachedPreprocessingInfoType *attached =
+      namespace_decl != nullptr
+          ? const_cast<SgNamespaceDeclarationStatement *>(namespace_decl)
+                ->getAttachedPreprocessingInfo()
+          : nullptr;
+  if (attached == nullptr || end_line <= 0) {
+    return false;
+  }
+
+  for (PreprocessingInfo *info : *attached) {
+    if (info == nullptr ||
+        info->getRelativePosition() != PreprocessingInfo::after ||
+        !isConditionalPreprocessingDirective(info->getTypeOfDirective())) {
+      continue;
+    }
+
+    const int info_line = info->getLineNumber();
+    if (info_line > 0 && info_line <= end_line) {
       return true;
     }
   }
@@ -5389,13 +5500,17 @@ void Unparse_ExprStmt::unparseNamespaceDefinitionStatement(
                                      PreprocessingInfo::inside);
 
     unp->cur.format(namespaceDefinition, info, FORMAT_BEFORE_BASIC_BLOCK1);
-    curprint("}");
-    if (SgNamespaceDeclarationStatement *namespace_decl =
-            namespaceDefinition->get_namespaceDeclaration()) {
-      const std::string namespace_name = namespace_decl->get_name().getString();
-      if (!namespace_name.empty() && statementList.size() > 1) {
-        curprint(" // namespace ");
-        curprint(namespace_name);
+    if (!namespaceCloseBraceIsRepresentedOutsideDefinition(
+            namespaceDefinition)) {
+      curprint("}");
+      if (SgNamespaceDeclarationStatement *namespace_decl =
+              namespaceDefinition->get_namespaceDeclaration()) {
+        const std::string namespace_name =
+            namespace_decl->get_name().getString();
+        if (!namespace_name.empty() && statementList.size() > 1) {
+          curprint(" // namespace ");
+          curprint(namespace_name);
+        }
       }
     }
     curprint("\n");
