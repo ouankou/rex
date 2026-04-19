@@ -17,6 +17,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -1996,32 +1997,32 @@ collectBlocksContainingOpenMPStatements(SgSourceFile *source_file) {
     return blocks_with_openmp;
   }
 
-  class CollectBlocksTraversal : public AstSimpleProcessing {
-  public:
-    explicit CollectBlocksTraversal(
-        std::unordered_set<const SgBasicBlock *> &blocks_with_openmp)
-        : blocks_with_openmp_(blocks_with_openmp) {}
+  std::function<bool(SgNode *)> mark_blocks = [&](SgNode *node) -> bool {
+    if (node == nullptr) {
+      return false;
+    }
 
-    void visit(SgNode *node) override {
-      SgStatement *statement = isSgStatement(node);
-      if (statement == nullptr || !SageInterface::isOmpStatement(statement)) {
-        return;
-      }
+    bool subtree_contains_openmp = false;
+    if (SgStatement *statement = isSgStatement(node)) {
+      subtree_contains_openmp = SageInterface::isOmpStatement(statement);
+    }
 
-      for (SgNode *parent = statement->get_parent(); parent != nullptr;
-           parent = parent->get_parent()) {
-        if (const SgBasicBlock *block = isSgBasicBlock(parent)) {
-          blocks_with_openmp_.insert(block);
-        }
+    for (SgNode *child : node->get_traversalSuccessorContainer()) {
+      if (mark_blocks(child)) {
+        subtree_contains_openmp = true;
       }
     }
 
-  private:
-    std::unordered_set<const SgBasicBlock *> &blocks_with_openmp_;
+    if (subtree_contains_openmp) {
+      if (const SgBasicBlock *block = isSgBasicBlock(node)) {
+        blocks_with_openmp.insert(block);
+      }
+    }
+
+    return subtree_contains_openmp;
   };
 
-  CollectBlocksTraversal traversal(blocks_with_openmp);
-  traversal.traverse(source_file, preorder);
+  mark_blocks(source_file);
   return blocks_with_openmp;
 }
 

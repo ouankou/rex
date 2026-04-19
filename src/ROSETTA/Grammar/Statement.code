@@ -13696,16 +13696,6 @@ void SgSwitchStatement::post_construction_initialization() {
       ROSE_ASSERT(variable != NULL);
 
       if (variable->get_scope() != this) {
-        // Detached copies invoke this constructor hook before the copied switch
-        // is attached to its parent. In that state, any symbol lookup that
-        // walks this switch's scope chain will trip SgStatement::get_scope().
-        // Reset the declaration scope now and let the later copy-fixup passes
-        // rebuild symbol ownership once the copied subtree is attached.
-        if (get_parent() == NULL) {
-          variable->set_scope(this);
-          continue;
-        }
-
         // printf ("In SgSwitchStatement::post_construction_initialization()
         // variable = %p not placed into SgSwitchStatement scope = %p
         // (correcting by moving the symbol) \n",variable,this);
@@ -13725,7 +13715,12 @@ void SgSwitchStatement::post_construction_initialization() {
           // properly).
           variable->set_scope(this);
 
-          this->insert_symbol(variable->get_name(), variableSymbol);
+          // Keep detached switches usable as scopes during manual AST
+          // construction while still tolerating later copy-fixup rebuilds.
+          if (get_symbol_table()->exists(variable->get_name(),
+                                         variableSymbol) == false) {
+            this->insert_symbol(variable->get_name(), variableSymbol);
+          }
         }
       }
     }
