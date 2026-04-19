@@ -1297,11 +1297,11 @@ SgType::stripType(unsigned char bit_array) const
 
           if (seenType == true)
              {
-               fprintf(stderr,
-                       "FATAL: SgType::stripType detected a cycle "
-                       "(counter=%" PRIuPTR ", bit_array=%u, currentType=%p %s).\n",
-                       counter, bit_array, currentType,
-                       currentType ? currentType->class_name().c_str() : "<null>");
+               MLOG_FATAL_C("ROSETTA",
+                            "SgType::stripType detected a cycle "
+                            "(counter=%" PRIuPTR ", bit_array=%u, currentType=%p %s).\n",
+                            counter, bit_array, currentType,
+                            currentType ? currentType->class_name().c_str() : "<null>");
                ROSE_ABORT();
              }
 
