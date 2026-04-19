@@ -229,24 +229,6 @@ static void insertAttachedPreprocessingInfoInSourceOrder(
   ROSE_ASSERT(target != nullptr);
   ROSE_ASSERT(info != nullptr);
 
-  if (info->getFilename().find("2008_08") != std::string::npos) {
-    Sg_File_Info *target_info = target->get_startOfConstruct();
-    std::string target_desc = target->class_name();
-    if (SgFunctionDeclaration *decl = isSgFunctionDeclaration(target)) {
-      target_desc += " ";
-      target_desc += decl->get_name().str();
-    } else if (SgClassDeclaration *decl = isSgClassDeclaration(target)) {
-      target_desc += " ";
-      target_desc += decl->get_name().str();
-    }
-
-    fprintf(stderr, "[rex-attach] target=%s line=%d pos=%s text='%s'\n",
-            target_desc.c_str(),
-            target_info != nullptr ? target_info->get_line() : -1,
-            PreprocessingInfo::relativePositionName(position).c_str(),
-            info->getString().c_str());
-  }
-
   AttachedPreprocessingInfoType *attached =
       target->getAttachedPreprocessingInfo();
   if (attached == nullptr) {
@@ -1796,32 +1778,6 @@ static void normalizeLeadingDeclarationPreprocessingInfo(
       continue;
     }
 
-    if (anchors.front().start != nullptr &&
-        anchors.front().start->get_filenameString().find("2008_08") !=
-            std::string::npos) {
-      for (const DeclAnchor &anchor : anchors) {
-        fprintf(stderr,
-                "[rex-leading] decl=%s start=%d:%d end=%d:%d nestedEnd=%d:%d "
-                "extendedEnd=%d:%d\n",
-                anchor.decl != nullptr ? anchor.decl->class_name().c_str()
-                                       : "<null>",
-                anchor.start != nullptr ? anchor.start->get_line() : -1,
-                anchor.start != nullptr ? anchor.start->get_col() : -1,
-                anchor.end != nullptr ? anchor.end->get_line() : -1,
-                anchor.end != nullptr ? anchor.end->get_col() : -1,
-                anchor.nested_body_end != nullptr
-                    ? anchor.nested_body_end->get_line()
-                    : -1,
-                anchor.nested_body_end != nullptr
-                    ? anchor.nested_body_end->get_col()
-                    : -1,
-                anchor.extended_end != nullptr ? anchor.extended_end->get_line()
-                                               : -1,
-                anchor.extended_end != nullptr ? anchor.extended_end->get_col()
-                                               : -1);
-      }
-    }
-
     for (size_t i = 1; i < anchors.size(); ++i) {
       const DeclAnchor &previous = anchors[i - 1];
       const DeclAnchor &current = anchors[i];
@@ -1852,15 +1808,6 @@ static void normalizeLeadingDeclarationPreprocessingInfo(
           continue;
         }
 
-        if (current.start->get_filenameString().find("2008_08") !=
-            std::string::npos) {
-          fprintf(stderr,
-                  "[rex-leading] current=%s prev=%s info=%d:%d text='%s'\n",
-                  current.decl->class_name().c_str(),
-                  previous.decl->class_name().c_str(), info_loc->get_line(),
-                  info_loc->get_col(), info->getString().c_str());
-        }
-
         if (!sourceLocationPrecedesOrEqual(previous.start, info_loc)) {
           continue;
         }
@@ -1881,12 +1828,6 @@ static void normalizeLeadingDeclarationPreprocessingInfo(
         }
 
         if (target != nullptr) {
-          if (current.start->get_filenameString().find("2008_08") !=
-              std::string::npos) {
-            fprintf(stderr, "[rex-leading] move target=%s position=%s\n",
-                    target->class_name().c_str(),
-                    PreprocessingInfo::relativePositionName(position).c_str());
-          }
           moves.push_back({attached, info, target, position});
         }
       }

@@ -316,21 +316,22 @@ bool fileInfoWithinLocatedNodeRange(Sg_File_Info *target,
   return less_or_equal(begin, target) && less_or_equal(target, end);
 }
 
-bool sameDeclChain(SgDeclarationStatement *lhs, SgDeclarationStatement *rhs) {
-  if (lhs == nullptr || rhs == nullptr) {
-    return false;
+SgDeclarationStatement *declChainRoot(SgDeclarationStatement *decl) {
+  if (decl == nullptr) {
+    return nullptr;
   }
 
-  SgDeclarationStatement *lhs_first =
-      lhs->get_firstNondefiningDeclaration() != nullptr
-          ? lhs->get_firstNondefiningDeclaration()
-          : lhs;
-  SgDeclarationStatement *rhs_first =
-      rhs->get_firstNondefiningDeclaration() != nullptr
-          ? rhs->get_firstNondefiningDeclaration()
-          : rhs;
-  return lhs == rhs || lhs == rhs_first || lhs_first == rhs ||
-         lhs_first == rhs_first;
+  if (SgDeclarationStatement *first_nondef =
+          decl->get_firstNondefiningDeclaration()) {
+    return first_nondef;
+  }
+
+  return decl;
+}
+
+bool sameDeclChain(SgDeclarationStatement *lhs, SgDeclarationStatement *rhs) {
+  return declChainRoot(lhs) != nullptr &&
+         declChainRoot(lhs) == declChainRoot(rhs);
 }
 
 bool tagDeclarationHasAnonymousSurface(SgDeclarationStatement *decl) {
@@ -348,38 +349,6 @@ bool tagDeclarationHasAnonymousSurface(SgDeclarationStatement *decl) {
   }
 
   return false;
-}
-
-bool ownerContainsEquivalentLexicalTagSurface(
-    SgDeclarationStatement *owner, SgDeclarationStatement *candidate) {
-  if (owner == nullptr || candidate == nullptr) {
-    return false;
-  }
-
-  std::function<bool(SgNode *)> visit = [&](SgNode *node) -> bool {
-    if (node == nullptr) {
-      return false;
-    }
-
-    if (SgDeclarationStatement *decl = isSgDeclarationStatement(node)) {
-      if (decl != owner && decl != candidate &&
-          (isSgClassDeclaration(decl) != nullptr ||
-           isSgEnumDeclaration(decl) != nullptr) &&
-          sameDeclChain(decl, candidate)) {
-        return true;
-      }
-    }
-
-    for (SgNode *child : node->get_traversalSuccessorContainer()) {
-      if (visit(child)) {
-        return true;
-      }
-    }
-
-    return false;
-  };
-
-  return visit(owner);
 }
 
 SgDeclarationStatement *
@@ -432,74 +401,93 @@ findDirectTagSurfaceDeclaration(SgDeclarationStatement *owner_decl) {
   return nullptr;
 }
 
-bool ownerContainsEquivalentLexicalTagReference(
-    SgDeclarationStatement *owner, SgDeclarationStatement *candidate) {
-  if (owner == nullptr || candidate == nullptr) {
-    return false;
-  }
+struct OwnerLexicalTagInfo {
+  std::unordered_set<SgDeclarationStatement *> surface_roots;
+  std::unordered_map<SgDeclarationStatement *,
+                     std::vector<SgDeclarationStatement *>>
+      reference_decls_by_surface_root;
+  bool allows_anonymous_surface_range_ownership = false;
+};
 
-  Sg_File_Info *candidate_loc =
-      bestRealSourceFileInfo(isSgLocatedNode(candidate));
-  if (!hasRealSourceFileInfo(candidate_loc)) {
-    return false;
-  }
-
-  std::function<bool(SgNode *)> visit = [&](SgNode *node) -> bool {
-    if (node == nullptr) {
-      return false;
-    }
-
-    if (SgDeclarationStatement *decl = isSgDeclarationStatement(node)) {
-      if (decl != owner && decl != candidate &&
-          fileInfoWithinLocatedNodeRange(candidate_loc, decl)) {
-        if (SgDeclarationStatement *tag_surface =
-                findDirectTagSurfaceDeclaration(decl)) {
-          if (sameDeclChain(tag_surface, candidate)) {
-            return true;
-          }
-        }
-      }
-    }
-
-    for (SgNode *child : node->get_traversalSuccessorContainer()) {
-      if (visit(child)) {
-        return true;
-      }
-    }
-
-    return false;
-  };
-
-  return visit(owner);
-}
-
-bool ownerDirectlyOwnsLexicalTagSurface(SgDeclarationStatement *owner_decl,
-                                        SgDeclarationStatement *candidate) {
-  if (owner_decl == nullptr || candidate == nullptr) {
-    return false;
+void collectOwnerLexicalTagInfo(SgDeclarationStatement *owner_decl,
+                                OwnerLexicalTagInfo &info) {
+  if (owner_decl == nullptr) {
+    return;
   }
 
   if (SgDeclarationStatement *base_decl =
           findDirectTagSurfaceDeclaration(owner_decl)) {
-    return sameDeclChain(base_decl, candidate);
-  }
-
-  if (isSgClassDeclaration(owner_decl) != nullptr ||
-      isSgEnumDeclaration(owner_decl) != nullptr) {
-    if (ownerContainsEquivalentLexicalTagSurface(owner_decl, candidate) ||
-        ownerContainsEquivalentLexicalTagReference(owner_decl, candidate)) {
-      return true;
-    }
-
-    // Class/enum owners are only reliable range-only owners for anonymous tag
-    // surfaces. Named top-level tags require the same-chain structural check
-    // above; otherwise oversized class ranges can swallow real global tags.
-    if (tagDeclarationHasAnonymousSurface(candidate)) {
-      return true;
+    if (SgDeclarationStatement *base_root = declChainRoot(base_decl)) {
+      info.surface_roots.insert(base_root);
     }
   }
 
-  return false;
+  if (isSgClassDeclaration(owner_decl) == nullptr &&
+      isSgEnumDeclaration(owner_decl) == nullptr) {
+    return;
+  }
+
+  info.allows_anonymous_surface_range_ownership = true;
+
+  struct Collector : public AstSimpleProcessing {
+    SgDeclarationStatement *owner_decl;
+    OwnerLexicalTagInfo &info;
+
+    Collector(SgDeclarationStatement *owner_decl, OwnerLexicalTagInfo &info)
+        : owner_decl(owner_decl), info(info) {}
+
+    void visit(SgNode *node) override {
+      SgDeclarationStatement *decl = isSgDeclarationStatement(node);
+      if (decl == nullptr || decl == owner_decl) {
+        return;
+      }
+
+      if ((isSgClassDeclaration(decl) != nullptr ||
+           isSgEnumDeclaration(decl) != nullptr) &&
+          declChainRoot(decl) != nullptr) {
+        info.surface_roots.insert(declChainRoot(decl));
+      }
+
+      if (SgDeclarationStatement *tag_surface =
+              findDirectTagSurfaceDeclaration(decl)) {
+        if (SgDeclarationStatement *surface_root = declChainRoot(tag_surface)) {
+          info.reference_decls_by_surface_root[surface_root].push_back(decl);
+        }
+      }
+    }
+  } collector(owner_decl, info);
+
+  collector.traverse(owner_decl, preorder);
+}
+
+bool ownerDirectlyOwnsLexicalTagSurface(const OwnerLexicalTagInfo &info,
+                                        SgDeclarationStatement *candidate,
+                                        Sg_File_Info *candidate_loc) {
+  if (candidate == nullptr) {
+    return false;
+  }
+
+  SgDeclarationStatement *candidate_root = declChainRoot(candidate);
+  if (candidate_root != nullptr &&
+      info.surface_roots.find(candidate_root) != info.surface_roots.end()) {
+    return true;
+  }
+
+  if (candidate_root != nullptr && hasRealSourceFileInfo(candidate_loc)) {
+    std::unordered_map<SgDeclarationStatement *,
+                       std::vector<SgDeclarationStatement *>>::const_iterator
+        refs = info.reference_decls_by_surface_root.find(candidate_root);
+    if (refs != info.reference_decls_by_surface_root.end()) {
+      for (SgDeclarationStatement *decl : refs->second) {
+        if (fileInfoWithinLocatedNodeRange(candidate_loc, decl)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return info.allows_anonymous_surface_range_ownership &&
+         tagDeclarationHasAnonymousSurface(candidate);
 }
 
 bool symbolBasisLooksDeleted(SgNode *basis) {
@@ -1386,6 +1374,21 @@ void repairLexicallyOwnedTagDeclarationSurfaces(SgNode *node) {
       }
 
       SgDeclarationStatementPtrList decls_copy = scope->getDeclarationList();
+      std::unordered_map<SgDeclarationStatement *, OwnerLexicalTagInfo>
+          owner_lexical_tag_info;
+      for (SgDeclarationStatement *owner_stmt : decls_copy) {
+        const bool can_own_embedded_tag_surface =
+            isSgClassDeclaration(owner_stmt) != nullptr ||
+            isSgTypedefDeclaration(owner_stmt) != nullptr ||
+            isSgVariableDeclaration(owner_stmt) != nullptr ||
+            isSgEnumDeclaration(owner_stmt) != nullptr;
+        if (!can_own_embedded_tag_surface) {
+          continue;
+        }
+
+        OwnerLexicalTagInfo &info = owner_lexical_tag_info[owner_stmt];
+        collectOwnerLexicalTagInfo(owner_stmt, info);
+      }
 
       std::unordered_map<SgScopeStatement *,
                          std::vector<SgDeclarationStatement *>>::const_iterator
@@ -1426,18 +1429,18 @@ void repairLexicallyOwnedTagDeclarationSurfaces(SgNode *node) {
         }
 
         for (SgDeclarationStatement *owner_stmt : decls_copy) {
-          const bool can_own_embedded_tag_surface =
-              isSgClassDeclaration(owner_stmt) != nullptr ||
-              isSgTypedefDeclaration(owner_stmt) != nullptr ||
-              isSgVariableDeclaration(owner_stmt) != nullptr ||
-              isSgEnumDeclaration(owner_stmt) != nullptr;
-          if (!can_own_embedded_tag_surface || owner_stmt == decl_stmt) {
+          std::unordered_map<SgDeclarationStatement *,
+                             OwnerLexicalTagInfo>::const_iterator owner_info =
+              owner_lexical_tag_info.find(owner_stmt);
+          if (owner_info == owner_lexical_tag_info.end() ||
+              owner_stmt == decl_stmt) {
             continue;
           }
           if (!fileInfoWithinDeclRange(decl_loc, owner_stmt)) {
             continue;
           }
-          if (!ownerDirectlyOwnsLexicalTagSurface(owner_stmt, decl_stmt)) {
+          if (!ownerDirectlyOwnsLexicalTagSurface(owner_info->second, decl_stmt,
+                                                  decl_loc)) {
             continue;
           }
 

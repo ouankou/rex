@@ -3825,26 +3825,6 @@ bool ClangToSageTranslator::VisitCompoundStmt(
     } else if (expr != nullptr) {
       SgExprStatement *expr_stmt = SageBuilder::buildExprStatement(expr);
       applySourceRangeWithTrailingSemicolon(expr_stmt, child_stmt);
-      if (p_compiler_instance != nullptr) {
-        clang::SourceManager &sm = p_compiler_instance->getSourceManager();
-        clang::SourceLocation begin_loc =
-            sm.getExpansionLoc(child_stmt->getBeginLoc());
-        clang::SourceRange raw_range = child_stmt->getSourceRange();
-        clang::SourceRange semi_range = extendSourceRangeWithTrailingSemicolon(
-            raw_range, sm, p_compiler_instance->getLangOpts());
-        const std::string raw_text = getSourceText(raw_range);
-        const std::string semi_text = getSourceText(semi_range);
-        if (raw_text.find("failbit") != std::string::npos ||
-            raw_text.find("setstate(__err)") != std::string::npos ||
-            raw_text.find("_M_narrow") != std::string::npos) {
-          std::cerr << "[rex-exprstmt-range] line="
-                    << (begin_loc.isValid()
-                            ? sm.getSpellingLineNumber(begin_loc)
-                            : 0)
-                    << " raw=" << raw_text << " semi=" << semi_text
-                    << std::endl;
-        }
-      }
       if (!seen_sg_stmts.insert(expr_stmt).second) {
         std::cerr << "VisitCompoundStmt: duplicate sg expr stmt "
                   << expr_stmt->class_name() << "@" << expr_stmt << std::endl;
