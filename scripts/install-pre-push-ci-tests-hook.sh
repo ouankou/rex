@@ -50,12 +50,16 @@ run_logged() {
     printf '\n'
   } >>"$log_file"
 
-  if "$@" >>"$log_file" 2>&1; then
+  set +e
+  "$@" >>"$log_file" 2>&1
+  local status=$?
+  set -e
+
+  if (( status == 0 )); then
     echo "  passed; log: $log_file"
     return 0
   fi
 
-  local status=$?
   echo "  failed with exit code $status; log: $log_file" >&2
   echo "  last 200 log lines:" >&2
   tail -n 200 "$log_file" >&2 || true
