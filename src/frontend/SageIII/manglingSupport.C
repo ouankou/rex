@@ -992,6 +992,12 @@ string mangleValueExp(const SgValueExp *expr) {
   case V_SgCharVal:
     mangled_name = mangleSgValueExp<SgCharVal>(isSgCharVal(expr));
     break;
+  case V_SgChar16Val:
+    mangled_name = mangleSgValueExp<SgChar16Val>(isSgChar16Val(expr));
+    break;
+  case V_SgChar32Val:
+    mangled_name = mangleSgValueExp<SgChar32Val>(isSgChar32Val(expr));
+    break;
   case V_SgDoubleVal:
     mangled_name = mangleSgValueExp<SgDoubleVal>(isSgDoubleVal(expr));
     break;

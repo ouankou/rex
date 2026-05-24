@@ -1,23 +1,21 @@
-#define fmin(a,b) ((a) < (b)) ? (a) : (b)
-#define fvswap(zzp1, zzp2, zzn)                                                \
-  {                                                                            \
-    Int32 yyp1 = (zzp1);                                                       \
-    Int32 yyp2 = (zzp2);                                                       \
-    Int32 yyn = (zzn);                                                         \
-    while (yyn > 0) {                                                          \
-      yyp1++;                                                                  \
-      yyp2++;                                                                  \
-      yyn--;                                                                   \
-    }                                                                          \
-  }
-typedef char Char;
 
-typedef unsigned char Bool;
-typedef unsigned char UChar;
-typedef int Int32;
-typedef unsigned int UInt32;
-typedef short Int16;
-typedef unsigned short UInt16;
+#define fmin(a,b) ((a) < (b)) ? (a) : (b)
+#define fvswap(zzp1, zzp2, zzn)       \
+{                                     \
+   Int32 yyp1 = (zzp1);               \
+   Int32 yyp2 = (zzp2);               \
+   Int32 yyn  = (zzn);                \
+   while (yyn > 0) {                  \
+      yyp1++; yyp2++; yyn--;          \
+   }                                  \
+}
+typedef char            Char;
+typedef unsigned char   Bool;
+typedef unsigned char   UChar;
+typedef int             Int32;
+typedef unsigned int    UInt32;
+typedef short           Int16;
+typedef unsigned short  UInt16;
 
 typedef unsigned long long UInt64;
 #define BZ_N_RADIX 2
@@ -25,7 +23,6 @@ typedef unsigned long long UInt64;
 #define FALLBACK_QSORT_STACK_SIZE   100
 void mainQSort3(UInt32 *ptr, UChar *block, UInt16 *quadrant, Int32 nblock,
                 Int32 loSt, Int32 hiSt, Int32 dSt, Int32 *budget);
-
 void fallbackSimpleSort(UInt32 *fmap, UInt32 *eclass, Int32 lo, Int32 hi);
 
 static void fallbackQSort3(UInt32 *fmap, UInt32 *eclass, Int32 loSt,
@@ -45,14 +42,21 @@ static void fallbackQSort3(UInt32 *fmap, UInt32 *eclass, Int32 loSt,
     UInt32 med;
     if (hi - lo < 10) {
       fallbackSimpleSort(fmap, eclass, lo, hi);
-      continue;
+      continue; 
     }
-    r = (r * 7621 + 1) % 32768;
+    /* Random partitioning.  Median of 3 sometimes fails to
+       avoid bad cases.  Median of 9 seems to help but 
+       looks rather expensive.  This too seems to work but
+       is cheaper.  Guidance for the magic constants 
+       7621 and 32768 is taken from Sedgewick's algorithms
+       book, chapter 35.
+       */
+    r = ((r * 7621) + 1) % 32768;
     UInt32 r3 = r % 3;
     if (r3 == 0)
       med = eclass[fmap[lo]];
-    else if (r3 == 1)
-      med = eclass[fmap[lo + hi >> 1]];
+     else if (r3 == 1)
+      med = eclass[fmap[(lo + hi) >> 1]];
      else 
       med = eclass[fmap[hi]];
     Int32 unLo = ltLo = lo;
@@ -65,7 +69,7 @@ static void fallbackQSort3(UInt32 *fmap, UInt32 *eclass, Int32 loSt,
         if (n == 0) {
           ltLo++;
           unLo++;
-          continue;
+          continue; 
         };
         if (n > 0)
           break;
@@ -78,7 +82,7 @@ static void fallbackQSort3(UInt32 *fmap, UInt32 *eclass, Int32 loSt,
         if (n == 0) {
           gtHi--;
           unHi--;
-          continue;
+          continue; 
         };
         if (n < 0)
           break;
@@ -91,10 +95,10 @@ static void fallbackQSort3(UInt32 *fmap, UInt32 *eclass, Int32 loSt,
     }
     if (gtHi < ltLo)
       continue; 
-    n = (ltLo - lo < unLo - ltLo?ltLo - lo : unLo - ltLo);
+    n = (((ltLo - lo) < (unLo - ltLo))?(ltLo - lo) : (unLo - ltLo));
     {
       Int32 yyp1 = lo;
-      Int32 yyp2 = unLo - n;
+      Int32 yyp2 = (unLo - n);
       Int32 yyn = n;
       while (yyn > 0) {
         yyp1++;
@@ -102,10 +106,10 @@ static void fallbackQSort3(UInt32 *fmap, UInt32 *eclass, Int32 loSt,
         yyn--;
       }
     };
-    Int32 m = hi - gtHi < gtHi - unHi?hi - gtHi : gtHi - unHi;
+    Int32 m = ((hi - gtHi) < (gtHi - unHi))?(hi - gtHi) : (gtHi - unHi);
     {
       Int32 yyp1 = unLo;
-      Int32 yyp2 = hi - m + 1;
+      Int32 yyp2 = (hi - m + 1);
       Int32 yyn = m;
       while (yyn > 0) {
         yyp1++;
@@ -118,68 +122,64 @@ static void fallbackQSort3(UInt32 *fmap, UInt32 *eclass, Int32 loSt,
     if (n - lo > hi - m) {
     } else {
     }
-    /* Random partitioning.  Median of 3 sometimes fails to
-       avoid bad cases.  Median of 9 seems to help but
-       looks rather expensive.  This too seems to work but
-       is cheaper.  Guidance for the magic constants
-       7621 and 32768 is taken from Sedgewick's algorithms
-       book, chapter 35.
-       */
   }
-{
-  Int32 lo;
-  Int32 hi;
-  if (hi > lo) {
-    UInt32 *ptr;
-    UChar *block;
-    UInt16 *quadrant;
-    Int32 nblock;
-    Int32 *budget;
-    mainQSort3(ptr, block, quadrant, nblock, lo, hi, 2, budget);
+  // made up another test for if (condition)
+  {
+    Int32 lo;
+    Int32 hi;
+    if (hi > lo) {
+      UInt32 *ptr;
+      UChar *block;
+      UInt16 *quadrant;
+      Int32 nblock;
+      Int32 *budget;
+      mainQSort3(ptr, block, quadrant, nblock, lo, hi, 2, budget);
+    }
   }
-}
-{
-  if (loSt) {
+  // another if-stmt case
+  // variable is used in both true and false body.
+  // Naive analysis will find if-stmt is the inner-most common scope.
+  {
+    if (loSt) {
+      int blockx;
+      blockx++;
+    } else {
+      int blockx;
+      blockx--;
+    }
+  }
+  // switch
+  {
     int blockx;
-    blockx++;
-  } else {
-    int blockx;
-    blockx--;
+    switch (blockx) {
+      int ttt;
+    case 0:
+      ttt++;
+      break;
+    case 1:
+      ttt--;
+      break;
+      }
+    }
   }
-}
-{
-  int blockx;
-  switch (blockx) {
-    int ttt;
-  case 0:
-    ttt++;
-    break;
-  case 1:
-    ttt--;
-    break;
+  Int32 uInt64_qrm10(UInt64 *n);
+  Bool uInt64_isZero(UInt64 *n);
+  
+
+  void uInt64_toAscii(char *outbuf, UInt64 *n) {
+    UChar buf[32];
+    Int32 nBuf = 0;
+    UInt64 n_copy = *n;
+    do  {
+      Int32 q = uInt64_qrm10(&n_copy);
+      buf[nBuf] = q + '0';
+      nBuf++;
+    }while (!(uInt64_isZero(&n_copy)));
+    outbuf[nBuf] = 0;
+    for (Int32 i = 0; i < nBuf; i++)
+      outbuf[i] = buf[nBuf - i - 1];
   }
-}
-// made up another test for if (condition)
-// another if-stmt case
-// variable is used in both true and false body.
-// Naive analysis will find if-stmt is the inner-most common scope.
-// switch
-}
 
-Int32 uInt64_qrm10(UInt64 *n);
-Bool uInt64_isZero(UInt64 *n);
 
-void uInt64_toAscii(char *outbuf, UInt64 *n) {
-  UChar buf[32];
-  Int32 nBuf = 0;
-  UInt64 n_copy = *n;
-  do {
-    Int32 q = uInt64_qrm10(&n_copy);
-    buf[nBuf] = q + '0';
-    nBuf++;
-  } while (!uInt64_isZero(&n_copy));
 
-  outbuf[nBuf] = 0;
-  for (Int32 i = 0; i < nBuf; i++)
-    outbuf[i] = buf[nBuf - i - 1];
-}
+

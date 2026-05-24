@@ -16,6 +16,30 @@
 
 namespace {
 
+SgVariableSymbol *
+findCopiedVariableSymbolInLocalScope(SgInitializedName *initializedNameCopy,
+                                     SgVariableSymbol *originalSymbol,
+                                     SgCopyHelp &help) {
+  if (initializedNameCopy != NULL) {
+    if (SgScopeStatement *scope = initializedNameCopy->get_scope()) {
+      if (SgVariableSymbol *symbol = isSgVariableSymbol(
+              scope->find_symbol_from_declaration(initializedNameCopy))) {
+        return symbol;
+      }
+    }
+  }
+
+  if (originalSymbol != NULL) {
+    SgCopyHelp::copiedNodeMapTypeIterator symbolCopy =
+        help.get_copiedNodeMap().find(originalSymbol);
+    if (symbolCopy != help.get_copiedNodeMap().end()) {
+      return isSgVariableSymbol(symbolCopy->second);
+    }
+  }
+
+  return NULL;
+}
+
 void fixupCanonicalStatementCopiesForReferences(
     const SgStatementPtrList &statementList_original,
     SgScopeStatement *copyScopeStatement, SgCopyHelp &help) {
@@ -158,8 +182,9 @@ void SgLocatedNode::fixupCopy_references(SgNode *copy, SgCopyHelp &help) const {
             SgInitializedName *initializedName_copy =
                 isSgInitializedName(i->second);
             ROSE_ASSERT(initializedName_copy != NULL);
-            SgVariableSymbol *symbol_copy = isSgVariableSymbol(
-                initializedName_copy->get_symbol_from_symbol_table());
+            SgVariableSymbol *symbol_copy =
+                findCopiedVariableSymbolInLocalScope(
+                    initializedName_copy, variableSymbol_original, helpSupport);
             if (symbol_copy) {
               // printf ("Inside of SgStatement::fixupCopy_references():
               // symbol_copy = %p \n",symbol_copy);

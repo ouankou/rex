@@ -67,6 +67,33 @@ size_t fixupFileInfoInconsistanties(SgNode *ast) {
           target->set_parent(parent);
         };
 
+        auto repair_missing_physical_source = [](Sg_File_Info *fi) {
+          if (fi == NULL) {
+            return;
+          }
+
+          int *physical_file_id = fi->get_physical_file_id_reference();
+          if (physical_file_id != NULL && *physical_file_id >= 0) {
+            return;
+          }
+
+          if (fi->isTransformation() || fi->isCompilerGenerated() ||
+              fi->isFrontendSpecific() ||
+              fi->isSourcePositionUnavailableInFrontend()) {
+            return;
+          }
+
+          const int file_id = fi->get_file_id();
+          if (file_id < 0) {
+            return;
+          }
+
+          fi->set_physical_file_id(file_id);
+          if (fi->get_physical_line() <= 0 && fi->get_line() > 0) {
+            fi->set_physical_line(fi->get_line());
+          }
+        };
+
         auto synchronize_with_anchor = [&](Sg_File_Info *target,
                                            const Sg_File_Info *anchor,
                                            SgNode *parent) {
@@ -132,6 +159,12 @@ size_t fixupFileInfoInconsistanties(SgNode *ast) {
         // This test is only looking at the consistancy of the setting of
         // transforamtions across all of the Sg_File_Info objects in a
         // SgLocatedNode (and the extra one in a SgExpression).
+        repair_missing_physical_source(located->get_file_info());
+        repair_missing_physical_source(located->get_startOfConstruct());
+        repair_missing_physical_source(located->get_endOfConstruct());
+        if (SgExpression *expression = isSgExpression(located)) {
+          repair_missing_physical_source(expression->get_operatorPosition());
+        }
 
         bool result = located->get_startOfConstruct()->isTransformation();
 

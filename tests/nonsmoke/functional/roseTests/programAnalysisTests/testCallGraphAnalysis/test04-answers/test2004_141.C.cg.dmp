@@ -1,3 +1,4 @@
 SwigValueWrapper < X > ::operator X & ->
-SwigValueWrapper < Y< Y< X > > > ::operator Y<Y<X>> & ->
-foo -> SwigValueWrapper < X > ::operator X & SwigValueWrapper < Y< Y< X > > > ::operator Y<Y<X>> &
+SwigValueWrapper < Y < Y < X >  >  > ::operator Y<Y<X>> & ->
+Y < Y < X >  > ::Y ->
+foo -> SwigValueWrapper < X > ::operator X & SwigValueWrapper < Y < Y < X >  >  > ::operator Y<Y<X>> & Y < Y < X >  > ::Y

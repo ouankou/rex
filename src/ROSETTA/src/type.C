@@ -738,6 +738,9 @@ void Grammar::setUpTypes() {
   DeclType.setDataPrototype("SgType*", "base_type", "= NULL",
                             CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                             NO_TRAVERSAL, NO_DELETE);
+  DeclType.setDataPrototype("bool", "is_gnu_decltype", "= false",
+                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                            NO_TRAVERSAL, NO_DELETE);
 
   DeclType.setFunctionPrototype("HEADER_GET_BASE_TYPE", "../Grammar/Type.code");
 

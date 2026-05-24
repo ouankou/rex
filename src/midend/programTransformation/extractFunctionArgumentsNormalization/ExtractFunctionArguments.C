@@ -8,6 +8,37 @@ using namespace std;
 
 namespace {
 
+bool invokesOverloadedOperator(SgFunctionCallExp *functionCall) {
+  if (functionCall == NULL) {
+    return false;
+  }
+
+  if (functionCall->get_uses_operator_syntax()) {
+    return true;
+  }
+
+  SgFunctionDeclaration *functionDeclaration =
+      SageInterface::getFunctionDeclaration(functionCall);
+  return functionDeclaration != NULL &&
+         functionDeclaration->get_specialFunctionModifier().isOperator();
+}
+
+bool containsOverloadedOperatorCall(SgExpression *expression) {
+  if (expression == NULL) {
+    return false;
+  }
+
+  Rose_STL_Container<SgNode *> functionCalls =
+      NodeQuery::querySubTree(expression, V_SgFunctionCallExp);
+  for (SgNode *node : functionCalls) {
+    if (invokesOverloadedOperator(isSgFunctionCallExp(node))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 std::pair<SgVariableDeclaration *, SgExpression *>
 createTempVariableAndReferenceByMovingExpression(SgExpression *expression,
                                                  SgScopeStatement *scope) {
@@ -244,7 +275,10 @@ void ExtractFunctionArguments::RewriteFunctionCallArguments(
 
   // We also normalize the caller if the function called is a member function.
   if (SgBinaryOp *binExp = isSgBinaryOp(functionCall->get_function())) {
-    argumentList.push_back(binExp->get_lhs_operand());
+    SgExpression *receiver = binExp->get_lhs_operand();
+    if (!containsOverloadedOperatorCall(receiver)) {
+      argumentList.push_back(receiver);
+    }
   }
 
   // Go over all the function arguments, pull them out
@@ -318,14 +352,10 @@ void ExtractFunctionArguments::RewriteFunctionCallArguments(
 // If we have a limitation in normalizing the function return false
 bool ExtractFunctionArguments::FunctionArgumentCanBeNormalized(
     SgExpression *argument) {
-  // Strip casts/address-of for the chain check, but keep deref nodes.
-  SgExpression *arrowCheckExpr = argument;
-  while (isSgCastExp(arrowCheckExpr) || isSgAddressOfOp(arrowCheckExpr)) {
-    arrowCheckExpr = isSgUnaryOp(arrowCheckExpr)->get_operand();
-  }
-  if (SageInterface::isOverloadedArrowOperatorChain(arrowCheckExpr)) {
+  if (containsOverloadedOperatorCall(argument)) {
     return false;
   }
+
   while ((isSgPointerDerefExp(argument) || isSgCastExp(argument) ||
           isSgAddressOfOp(argument))) {
     argument = isSgUnaryOp(argument)->get_operand();

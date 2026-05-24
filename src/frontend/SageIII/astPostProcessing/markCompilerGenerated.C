@@ -28,6 +28,35 @@ SgDeclarationStatement *templateDeclarationStatement(SgNode *node) {
   }
 }
 
+bool hasRealSourceFileInfo(SgLocatedNode *node) {
+  if (node == NULL || node->get_file_info() == NULL) {
+    return false;
+  }
+
+  Sg_File_Info *fi = node->get_file_info();
+  return fi->get_line() > 0 && fi->isCompilerGenerated() == false &&
+         fi->isFrontendSpecific() == false &&
+         fi->isSourcePositionUnavailableInFrontend() == false;
+}
+
+bool isInSourceBackedLambdaFunction(SgNode *node) {
+  for (SgNode *current = node; current != NULL;
+       current = current->get_parent()) {
+    SgFunctionDeclaration *function_decl = isSgFunctionDeclaration(current);
+    if (function_decl == NULL) {
+      continue;
+    }
+
+    if (function_decl->get_parent() != NULL &&
+        SageInterface::isLambdaFunction(function_decl) &&
+        hasRealSourceFileInfo(function_decl)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 } // namespace
 
 void markAsCompilerGenerated(SgNode *node) {
@@ -141,7 +170,9 @@ void MarkAsCompilerGenerated::visit(SgNode *node) {
       // of a transformation. If it were part of a transformation the the
       // unparser would be forced to output the associated code. if
       // (markAsCompilerGenerated == true)
-      if (couldBeCompilerGenerated == true) {
+      if (couldBeCompilerGenerated == true &&
+          hasRealSourceFileInfo(statement) == false &&
+          isInSourceBackedLambdaFunction(statement) == false) {
         // DQ (12/21/2006): Modified to make the settings uniform over all
         // possible source position (there are two for statements).
         // fileInfo->setCompilerGenerated();
@@ -158,7 +189,10 @@ void MarkAsCompilerGenerated::visit(SgNode *node) {
         // Mark the file info object as being compiler generated instead of part
         // of a transformation. If it were part of a transformation the the
         // unparser would be forced to output the associated code.
-        fileInfo->setCompilerGenerated();
+        if (hasRealSourceFileInfo(initializedName) == false &&
+            isInSourceBackedLambdaFunction(initializedName) == false) {
+          fileInfo->setCompilerGenerated();
+        }
       }
     }
   }

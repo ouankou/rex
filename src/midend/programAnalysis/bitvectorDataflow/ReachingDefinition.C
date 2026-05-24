@@ -77,7 +77,8 @@ void ReachingDefinitionBase::collect_refs(AstInterface &fa, const AstNodePtr &h,
       [&collect](AstNodePtr first, AstNodePtr second) {
         return collect(first, second);
       };
-  StmtSideEffectCollect op(fa, a);
+  StmtSideEffectCollect op(
+      fa, a, StmtSideEffectCollect::UnknownFunctionEffectPolicy::ReportOnly);
   op.set_modify_collect(collect_f);
   op(h);
 }
@@ -190,7 +191,8 @@ void ReachingDefNode::finalize(AstInterface &fa,
       [&collectkill](AstNodePtr first, AstNodePtr second) {
         return collectkill(first, second);
       };
-  StmtSideEffectCollect op(fa, a);
+  StmtSideEffectCollect op(
+      fa, a, StmtSideEffectCollect::UnknownFunctionEffectPolicy::ReportOnly);
   op.set_modify_collect(collectgen_f);
   op.set_kill_collect(collectkill_f);
   std::list<AstNodePtr> &stmts = GetStmts();

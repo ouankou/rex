@@ -51,7 +51,7 @@ static std::string toStringForRTI(const std::vector<T> &x) {
        ++i) {
     if (i != x.begin())
       ss << ", ";
-    ss << (*i);
+    ss << toStringForRTI(*i);
   }
   ss << "]";
   return ss.str();

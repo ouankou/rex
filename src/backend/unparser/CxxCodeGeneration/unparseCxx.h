@@ -399,6 +399,10 @@ public:
 
   // DQ (9/9/2014): Refactoring support for member function modifiers (so that
   // they can be used to unparse template membr functions).
+  virtual void unparseMemberFunctionParametersAndQualifiers(
+      SgMemberFunctionDeclaration *mfuncdecl_stmt, SgUnparse_Info &info);
+  virtual void unparseMemberFunctionPostDeclaratorModifiers(
+      SgMemberFunctionDeclaration *mfuncdecl_stmt, SgUnparse_Info &info);
   virtual void
   unparseTrailingFunctionModifiers(SgMemberFunctionDeclaration *mfuncdecl_stmt,
                                    SgUnparse_Info &info);
@@ -450,6 +454,8 @@ public:
                                                          SgUnparse_Info &info);
 
   virtual void unparsePragmaDeclStmt(SgStatement *stmt, SgUnparse_Info &info);
+
+  virtual void unparseImportStatement(SgStatement *stmt, SgUnparse_Info &info);
 
   // DQ (3/22/2019): Adding EmptyDeclaration to support addition of comments and
   // CPP directives that will permit token-based unparsing to work with greater

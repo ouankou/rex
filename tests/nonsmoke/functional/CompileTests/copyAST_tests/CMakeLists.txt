@@ -178,6 +178,26 @@ list(APPEND COPYAST_CXX_TESTCODES
   test2006_92.C
 )
 
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _rex_copyast_processor)
+set(REX_COPYAST_HOST_IS_X86 FALSE)
+if(_rex_copyast_processor MATCHES "^(x86_64|amd64|i[3-6]86)$")
+  set(REX_COPYAST_HOST_IS_X86 TRUE)
+endif()
+
+set(COPYAST_CXX_TESTCODES_X86_ONLY
+  test2007_97.C
+  test2007_102.C
+  test2007_106.C
+  test2008_15.C
+  test2009_02.C
+  test2017_69.C
+)
+
+if(NOT REX_COPYAST_HOST_IS_X86)
+  list(REMOVE_ITEM COPYAST_CXX_TESTCODES ${COPYAST_CXX_TESTCODES_X86_ONLY})
+  list(REMOVE_ITEM _copyast_additional_cxx_tests ${COPYAST_CXX_TESTCODES_X86_ONLY})
+endif()
+
 set(ROSE_FLAGS  -rose:verbose 0 )
 
 set(ROSE_TEST_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/rose_output)

@@ -475,6 +475,27 @@ bool isCopiedNodeValue(SgCopyHelp &help, const SgNode *candidate) {
   return false;
 }
 
+SgDeclarationStatement *
+originalDeclarationForCopiedValue(SgCopyHelp &help,
+                                  SgDeclarationStatement *candidate) {
+  if (candidate == NULL) {
+    return NULL;
+  }
+
+  for (SgCopyHelp::copiedNodeMapTypeIterator it =
+           help.get_copiedNodeMap().begin();
+       it != help.get_copiedNodeMap().end(); ++it) {
+    if (it->second == candidate) {
+      if (SgDeclarationStatement *originalDecl =
+              isSgDeclarationStatement(const_cast<SgNode *>(it->first))) {
+        return originalDecl;
+      }
+    }
+  }
+
+  return candidate;
+}
+
 bool scopeDirectlyContainsStatement(SgScopeStatement *scope,
                                     SgStatement *statement) {
   if (scope == NULL || statement == NULL) {
@@ -696,6 +717,113 @@ SgDeclarationStatement *scopeOwningDeclaration(SgScopeStatement *scope) {
   }
 
   return NULL;
+}
+
+bool isClassLikeScope(SgScopeStatement *scope) {
+  return isSgClassDefinition(scope) != NULL ||
+         isSgTemplateClassDefinition(scope) != NULL ||
+         isSgTemplateInstantiationDefn(scope) != NULL;
+}
+
+bool isNamespaceLikeScope(SgScopeStatement *scope) {
+  return isSgNamespaceDefinitionStatement(scope) != NULL ||
+         isSgGlobal(scope) != NULL;
+}
+
+bool namespaceLikeScopesMatch(SgScopeStatement *lhs, SgScopeStatement *rhs) {
+  if (lhs == NULL || rhs == NULL) {
+    return false;
+  }
+  if (lhs == rhs) {
+    return true;
+  }
+  if (isSgGlobal(lhs) != NULL && isSgGlobal(rhs) != NULL) {
+    return true;
+  }
+
+  SgNamespaceDefinitionStatement *lhsNamespace =
+      isSgNamespaceDefinitionStatement(lhs);
+  SgNamespaceDefinitionStatement *rhsNamespace =
+      isSgNamespaceDefinitionStatement(rhs);
+  if (lhsNamespace == NULL || rhsNamespace == NULL) {
+    return false;
+  }
+
+  SgNamespaceDeclarationStatement *lhsDeclaration =
+      lhsNamespace->get_namespaceDeclaration();
+  SgNamespaceDeclarationStatement *rhsDeclaration =
+      rhsNamespace->get_namespaceDeclaration();
+  if (lhsDeclaration != NULL && rhsDeclaration != NULL &&
+      lhsDeclaration->get_firstNondefiningDeclaration() ==
+          rhsDeclaration->get_firstNondefiningDeclaration()) {
+    return true;
+  }
+
+  return lhsNamespace->isSameNamespace(rhsNamespace) ||
+         (lhsNamespace->get_global_definition() != NULL &&
+          lhsNamespace->get_global_definition() ==
+              rhsNamespace->get_global_definition());
+}
+
+SgScopeStatement *enclosingNamespaceLikeScope(SgScopeStatement *scope) {
+  std::unordered_set<SgScopeStatement *> visitedScopes;
+  while (scope != NULL) {
+    if (!visitedScopes.insert(scope).second) {
+      return NULL;
+    }
+    if (isNamespaceLikeScope(scope)) {
+      return scope;
+    }
+
+    if (SgDeclarationStatement *owner = scopeOwningDeclaration(scope)) {
+      SgScopeStatement *ownerScope = owner->get_scope();
+      if (ownerScope != NULL && ownerScope != scope) {
+        scope = ownerScope;
+        continue;
+      }
+    }
+
+    scope = isSgScopeStatement(scope->get_parent());
+  }
+
+  return NULL;
+}
+
+bool isHiddenFriendLexicalSemanticScopePair(SgDeclarationStatement *lhs,
+                                            SgDeclarationStatement *rhs) {
+  SgFunctionDeclaration *lhsFunction = isSgFunctionDeclaration(lhs);
+  SgFunctionDeclaration *rhsFunction = isSgFunctionDeclaration(rhs);
+  if (lhsFunction == NULL || rhsFunction == NULL) {
+    return false;
+  }
+  if (!lhsFunction->get_declarationModifier().isFriend() &&
+      !rhsFunction->get_declarationModifier().isFriend()) {
+    return false;
+  }
+  if (lhsFunction->get_name() != rhsFunction->get_name()) {
+    return false;
+  }
+
+  SgScopeStatement *lhsScope = lhsFunction->get_scope();
+  SgScopeStatement *rhsScope = rhsFunction->get_scope();
+  if (lhsScope == NULL || rhsScope == NULL) {
+    return false;
+  }
+
+  SgScopeStatement *lexicalClassScope = NULL;
+  SgScopeStatement *semanticNamespaceScope = NULL;
+  if (isClassLikeScope(lhsScope) && isNamespaceLikeScope(rhsScope)) {
+    lexicalClassScope = lhsScope;
+    semanticNamespaceScope = rhsScope;
+  } else if (isClassLikeScope(rhsScope) && isNamespaceLikeScope(lhsScope)) {
+    lexicalClassScope = rhsScope;
+    semanticNamespaceScope = lhsScope;
+  } else {
+    return false;
+  }
+
+  return namespaceLikeScopesMatch(
+      enclosingNamespaceLikeScope(lexicalClassScope), semanticNamespaceScope);
 }
 
 bool hasMatchingSourceLocation(const SgLocatedNode *original,
@@ -2232,6 +2360,43 @@ void restoreOriginalClassTypes(SgCopyHelp &help) {
     SgClassDeclaration *definingDecl =
         canonicalDefiningClassDeclaration(originalClassDecl);
 
+    auto is_embedded_base_type_definition =
+        [](SgClassDeclaration *decl) -> bool {
+      if (decl == NULL) {
+        return false;
+      }
+
+      if (SgVariableDeclaration *varDecl =
+              isSgVariableDeclaration(decl->get_parent())) {
+        return varDecl->get_baseTypeDefiningDeclaration() == decl;
+      }
+
+      if (SgTypedefDeclaration *typedefDecl =
+              isSgTypedefDeclaration(decl->get_parent())) {
+        return typedefDecl->get_baseTypeDefiningDeclaration() == decl;
+      }
+
+      return false;
+    };
+
+    if (definingDecl == NULL) {
+      SgClassType *currentType = isSgClassType(originalClassDecl->get_type());
+      SgClassDeclaration *currentTypeDeclaration =
+          currentType != NULL
+              ? isSgClassDeclaration(currentType->get_declaration())
+              : NULL;
+      currentTypeDeclaration = isSgClassDeclaration(
+          originalDeclarationForCopiedValue(help, currentTypeDeclaration));
+      if (is_embedded_base_type_definition(currentTypeDeclaration)) {
+        SgClassDeclaration *embeddedFirst =
+            canonicalFirstNondefiningClassDeclaration(currentTypeDeclaration);
+        if (embeddedFirst != NULL && embeddedFirst != originalClassDecl) {
+          currentType->set_declaration(embeddedFirst);
+          continue;
+        }
+      }
+    }
+
     auto typeBelongsToOriginalChain = [&](SgClassType *candidateType) {
       if (candidateType == NULL) {
         return false;
@@ -2239,6 +2404,8 @@ void restoreOriginalClassTypes(SgCopyHelp &help) {
 
       SgClassDeclaration *typeDecl =
           isSgClassDeclaration(candidateType->get_declaration());
+      typeDecl = isSgClassDeclaration(
+          originalDeclarationForCopiedValue(help, typeDecl));
       return classDeclarationsShareCopyChain(typeDecl, firstNondefining,
                                              definingDecl);
     };
@@ -2273,6 +2440,44 @@ void restoreOriginalClassTypes(SgCopyHelp &help) {
     if (canonicalType->get_declaration() != firstNondefining) {
       canonicalType->set_declaration(firstNondefining);
     }
+  }
+
+  auto restoreEmbeddedVariableType = [](SgClassDeclaration *definingDecl) {
+    if (definingDecl == NULL) {
+      return;
+    }
+
+    SgVariableDeclaration *varDecl =
+        isSgVariableDeclaration(definingDecl->get_parent());
+    if (varDecl == NULL ||
+        varDecl->get_baseTypeDefiningDeclaration() != definingDecl) {
+      return;
+    }
+
+    SgClassDeclaration *typeDecl = definingDecl;
+    if (SgClassDeclaration *firstNondef = isSgClassDeclaration(
+            definingDecl->get_firstNondefiningDeclaration())) {
+      if (firstNondef->get_definingDeclaration() == definingDecl) {
+        typeDecl = firstNondef;
+      }
+    }
+
+    for (SgInitializedName *initName : varDecl->get_variables()) {
+      if (initName == NULL || initName->get_type() == NULL) {
+        continue;
+      }
+
+      SgClassType *classType =
+          isSgClassType(initName->get_type()->findBaseType());
+      if (classType != NULL && classType->get_declaration() != typeDecl) {
+        classType->set_declaration(typeDecl);
+      }
+    }
+  };
+
+  for (SgClassDeclaration *originalClassDecl : originalClassDecls) {
+    restoreEmbeddedVariableType(canonicalDefiningClassDeclaration(
+        originalClassDecl != NULL ? originalClassDecl : NULL));
   }
 }
 
@@ -4477,8 +4682,15 @@ void SgDeclarationStatement::fixupCopy_scopes(SgNode *copy,
       // since they might be in different files (instead of in the same file).
       // ROSE_ASSERT(this->get_definingDeclaration()->get_scope() ==
       // this->get_firstNondefiningDeclaration()->get_scope() );
-      if (this->get_definingDeclaration()->get_scope()->variantT() !=
-          this->get_firstNondefiningDeclaration()->get_scope()->variantT()) {
+      const bool hiddenFriendLexicalSemanticScopePair =
+          isHiddenFriendLexicalSemanticScopePair(
+              this->get_definingDeclaration(),
+              this->get_firstNondefiningDeclaration());
+      if (!hiddenFriendLexicalSemanticScopePair &&
+          this->get_definingDeclaration()->get_scope()->variantT() !=
+              this->get_firstNondefiningDeclaration()
+                  ->get_scope()
+                  ->variantT()) {
         printf("SCOPE VARIANT MISMATCH: this = %p = %s = %s \n", this,
                this->class_name().c_str(),
                SageInterface::get_name(this).c_str());
@@ -4501,8 +4713,9 @@ void SgDeclarationStatement::fixupCopy_scopes(SgNode *copy,
             this->get_firstNondefiningDeclaration()->get_scope()->variantT());
       }
       ROSE_ASSERT(
+          hiddenFriendLexicalSemanticScopePair ||
           this->get_definingDeclaration()->get_scope()->variantT() ==
-          this->get_firstNondefiningDeclaration()->get_scope()->variantT());
+              this->get_firstNondefiningDeclaration()->get_scope()->variantT());
     }
 
     // ROSE_ASSERT(this->get_definingDeclaration()->get_scope() ==
@@ -4833,9 +5046,14 @@ void SgTemplateInstantiationMemberFunctionDecl::fixupCopy_scopes(
   SgMemberFunctionDeclaration::fixupCopy_scopes(copy, help);
 
   if (this->get_templateDeclaration() == NULL) {
-    printf("this = %p templateMemberFunctionDeclaration_copy = %p name = %s \n",
-           this, templateMemberFunctionDeclaration_copy,
-           this->get_name().str());
+    // A SgTemplateInstantiationMemberFunctionDecl can also represent a
+    // non-template member function of a class-template specialization. In that
+    // case there is no SgTemplateMemberFunctionDeclaration for the function
+    // itself; class-template arguments remain on the instantiation node.
+    templateMemberFunctionDeclaration_copy->set_templateDeclaration(NULL);
+    templateMemberFunctionDeclaration_copy->set_specializedTemplateDeclaration(
+        NULL);
+    return;
   }
   ROSE_ASSERT(this->get_templateDeclaration() != NULL);
   ROSE_ASSERT(

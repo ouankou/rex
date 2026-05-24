@@ -20,6 +20,56 @@ using namespace std;
 using namespace AstQueryNamespace;
 
 #include "queryVariant.C"
+
+namespace {
+
+bool containsVariant(const VariantVector &variants, VariantT target) {
+  return std::find(variants.begin(), variants.end(), target) != variants.end();
+}
+
+bool hasAncestorInParentChain(SgNode *node, SgNode *ancestor) {
+  for (SgNode *current = node; current != nullptr;
+       current = current->get_parent()) {
+    if (current == ancestor) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool containsNode(const NodeQuerySynthesizedAttributeType &nodes,
+                  SgNode *target) {
+  return std::find(nodes.begin(), nodes.end(), target) != nodes.end();
+}
+
+void appendDetachedTemplateInstantiationsInSubtree(
+    SgNode *subTree, NodeQuerySynthesizedAttributeType &returnList) {
+  struct Traversal : public ROSE_VisitTraversal {
+    SgNode *subTree;
+    NodeQuerySynthesizedAttributeType &returnList;
+
+    Traversal(SgNode *root, NodeQuerySynthesizedAttributeType &nodes)
+        : subTree(root), returnList(nodes) {}
+
+    void visit(SgNode *node) override {
+      SgTemplateInstantiationDecl *decl = isSgTemplateInstantiationDecl(node);
+      if (decl == nullptr) {
+        return;
+      }
+      if (!hasAncestorInParentChain(decl, subTree)) {
+        return;
+      }
+      if (!containsNode(returnList, decl)) {
+        returnList.push_back(decl);
+      }
+    }
+  } traversal(subTree, returnList);
+
+  SgTemplateInstantiationDecl::traverseMemoryPoolNodes(traversal);
+}
+
+} // namespace
+
 std::function<Rose_STL_Container<SgNode *>(SgNode *)>
 NodeQuery::getFunction(TypeOfQueryTypeOneParameter oneParam) {
   Rose_STL_Container<SgNode *> (*__x)(SgNode *);
@@ -805,6 +855,14 @@ NodeQuery::querySubTree(SgNode *subTree,
                 std::placeholders::_1, std::cref(targetVariantVector),
                 &returnList),
       defineQueryType);
+
+  if (defineQueryType == AstQueryNamespace::AllNodes &&
+      !targetVariantVector.empty() &&
+      targetVariantVector.front() == V_SgTemplateInstantiationDecl &&
+      containsVariant(targetVariantVector, V_SgTemplateInstantiationDecl)) {
+    appendDetachedTemplateInstantiationsInSubtree(subTree, returnList);
+  }
+
   return returnList;
 }
 

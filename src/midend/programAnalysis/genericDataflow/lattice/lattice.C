@@ -232,6 +232,11 @@ ProductLattice::ProductLattice(const vector<Lattice *> &lattices) {
   init(lattices);
 }
 
+ProductLattice::ProductLattice(const ProductLattice &that) {
+  level = that.level;
+  that.copy_lattices(lattices);
+}
+
 ProductLattice::~ProductLattice() {
   // Deallocate all the lattices
   for (vector<Lattice *>::iterator lat = lattices.begin();

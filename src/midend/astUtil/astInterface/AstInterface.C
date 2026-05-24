@@ -1954,7 +1954,7 @@ bool AstInterface::IsConstInt(const AstNodePtr &_exp, int *val) {
 
 bool AstInterface::IsConstant(const AstNodePtr &_exp, string *valtype,
                               string *val) {
-  SgNode *exp = SkipCasting(AstNodePtrImpl(_exp).get_ptr());
+  SgNode *exp = AstNodePtrImpl(_exp).get_ptr();
   if (exp == 0)
     return false;
   switch (exp->variantT()) {
@@ -3498,12 +3498,6 @@ bool AstInterface::IsExpression(const AstNodePtr &_s, AstNodeType *exptype,
   AstNodePtrImpl s(_s);
   if (s.get_ptr() == 0)
     return false;
-  {
-    SgExprStatement *is_expstmt = isSgExprStatement(s.get_ptr());
-    if (is_expstmt != 0) {
-      s = AstNodePtrImpl(is_expstmt->get_expression());
-    }
-  }
   if (IsVarRef(s, exptype)) {
     if (strip_exp != 0)
       *strip_exp = s;

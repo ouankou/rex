@@ -1960,6 +1960,10 @@ void Grammar::setUpStatements() {
       "SgDeclarationStatement::template_specialization_enum", "specialization",
       "= SgDeclarationStatement::e_no_specialization", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  VariableDeclaration.setDataPrototype(
+      "unsigned int", "explicitTemplateSpecializationHeaderCount", "= 0",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
 
   // DQ (11/15/2004): class declarations for nested classes can appear
   // outside the scope of the class to which they belong, thus the parent
@@ -2427,6 +2431,17 @@ void Grammar::setUpStatements() {
   TemplateClassDeclaration.setDataPrototype(
       "SgName", "templateName", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  TemplateClassDeclaration.setDataPrototype(
+      "SgTemplateClassDeclaration::template_class_owner_scope_kind_enum",
+      "templateClassOwnerScopeKind",
+      "= SgTemplateClassDeclaration::"
+      "e_template_class_owner_scope_semantic",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateClassDeclaration.setDataPrototype(
+      "SgClassDeclaration*", "sourceSpelledTemplateClassOwner", "= NULL",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
 
   // **************************************************************************************************
   // **************************************************************************************************
@@ -3890,6 +3905,15 @@ void Grammar::setUpStatements() {
   // DQ (4/16/2011): This is the Fortran-specific import statement IR node.
   ImportStatement.setFunctionPrototype("HEADER_IMPORT_STATEMENT",
                                        "../Grammar/Statement.code");
+  ImportStatement.setDataPrototype(
+      "SgName", "module_name", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  ImportStatement.setDataPrototype(
+      "bool", "is_cxx_module_import", "= false", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  ImportStatement.setDataPrototype(
+      "bool", "is_cxx_header_unit_import", "= false", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   // Implement this as a list of strings for now, since it is not clear that it
   // is limited to variables. If it is limited to variable then use an
   // expression list of variable references, or a list of initialized name

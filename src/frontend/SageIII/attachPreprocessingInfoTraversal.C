@@ -87,6 +87,62 @@ void rosePhaseTrace(const char *phase) {
   }
 }
 
+bool isCommentPreprocessingInfo(const PreprocessingInfo *info) {
+  if (info == NULL) {
+    return false;
+  }
+
+  switch (info->getTypeOfDirective()) {
+  case PreprocessingInfo::C_StyleComment:
+  case PreprocessingInfo::CplusplusStyleComment:
+  case PreprocessingInfo::FortranStyleComment:
+  case PreprocessingInfo::F90StyleComment:
+    return true;
+
+  default:
+    return false;
+  }
+}
+
+bool isSameLineNamespaceClosingComment(SgLocatedNode *locatedNode,
+                                       const PreprocessingInfo *info,
+                                       int source_file_id) {
+  if (!isCommentPreprocessingInfo(info)) {
+    return false;
+  }
+
+  SgNamespaceDeclarationStatement *namespace_decl =
+      isSgNamespaceDeclarationStatement(locatedNode);
+  if (namespace_decl == NULL) {
+    return false;
+  }
+
+  Sg_File_Info *namespace_end = namespace_decl->get_endOfConstruct();
+  if (namespace_end == NULL || namespace_end->get_line() <= 0) {
+    if (SgNamespaceDefinitionStatement *namespace_def =
+            namespace_decl->get_definition()) {
+      namespace_end = namespace_def->get_endOfConstruct();
+    }
+  }
+  if (namespace_end == NULL || namespace_end->get_line() <= 0) {
+    return false;
+  }
+
+  int namespace_end_line = namespace_end->get_physical_line(source_file_id);
+  if (namespace_end_line <= 0) {
+    namespace_end_line = namespace_end->get_line();
+  }
+
+  if (namespace_end_line != info->getLineNumber()) {
+    return false;
+  }
+
+  const int namespace_end_col = namespace_end->get_col();
+  const int comment_col = info->getColumnNumber();
+  return namespace_end_col <= 0 || comment_col <= 0 ||
+         namespace_end_col < comment_col;
+}
+
 template <class TemplateDeclT>
 void mirrorTemplateDeclarationTokenMapping(
     SgSourceFile *sourceFile, TemplateDeclT *decl,
@@ -656,7 +712,13 @@ void AttachPreprocessingInfoTreeTrav::
         // Mark the location relative to the current node where the
         // PreprocessingInfo object should be unparsed (before or after)
         // relative to the current locatedNode
-        currentPreprocessingInfoPtr->setRelativePosition(location);
+        PreprocessingInfo::RelativePositionType effectiveLocation = location;
+        if (location == PreprocessingInfo::after &&
+            isSameLineNamespaceClosingComment(
+                locatedNode, currentPreprocessingInfoPtr, source_file_id)) {
+          effectiveLocation = PreprocessingInfo::after_syntax;
+        }
+        currentPreprocessingInfoPtr->setRelativePosition(effectiveLocation);
 #if DEBUG_IterateOverList
         printf("Attaching CPP directives %s to IR nodes as attributes "
                "(location = %s) \n",
@@ -1023,17 +1085,20 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
       // DQ (1/9/2021): This adds the token list and the comments and CPP
       // directives to the list of such things. DQ (11/2/2019): Add the new
       // attributes to the list.
+      const std::string attributes_filename =
+          new_filename.empty() ? sourceFile->get_file_info()->get_filename()
+                               : new_filename;
       auto &filePreprocInfoList = filePreprocInfo->getList();
-      filePreprocInfoList[sourceFile->get_file_info()->get_filename()] =
-          returnListOfAttributes;
+      filePreprocInfoList[attributes_filename] = returnListOfAttributes;
 
     } else {
-      returnListOfAttributes =
-          filePreprocInfo
-              ->getList()[sourceFile->get_file_info()->get_filename()];
-      // DQ (1/9/2021): Debugging.
-      printf("Exiting as a test! \n");
-      ROSE_ABORT();
+      std::map<std::string, ROSEAttributesList *> &attributeLists =
+          filePreprocInfo->getList();
+      std::map<std::string, ROSEAttributesList *>::iterator existing =
+          attributeLists.find(sourceFile->get_file_info()->get_filename());
+      ROSE_ASSERT(existing != attributeLists.end());
+      ROSE_ASSERT(existing->second != NULL);
+      returnListOfAttributes = existing->second;
     }
   } else {
   }
@@ -1298,10 +1363,12 @@ AttachPreprocessingInfoTreeTrav::evaluateInheritedAttribute(
     // DQ (11/2/2019): Commenting out this assertion so that we can support
     // attaching comments to header files. ROSE_ASSERT(sourceFile ==
     // currentFilePtr);
+#if DEBUG_ATTACH_PREPROCESSING_INFO
     if (sourceFile != currentFilePtr) {
       printf("NOTE: sourceFile = %p currentFilePtr = %p \n", sourceFile,
              currentFilePtr);
     }
+#endif
 
     // DQ (10/25/2019): This is not a correct assertion for Fortran code.
     // DQ (9/23/2019): For C/C++ code this should be false (including all

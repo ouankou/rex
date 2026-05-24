@@ -6,6 +6,8 @@
 
 #include <map>
 
+#include <memory>
+
 #include <sstream>
 
 #include <unordered_map>
@@ -123,6 +125,19 @@ SgType *resolveNonrealType(SgNonrealType *nonreal_type) {
             resolvedTypeFromSymbol(nonreal_symbol, nonreal_decl)) {
       return resolved;
     }
+  }
+
+  return NULL;
+}
+
+SgType *resolveConcreteTemplateType(SgTemplateType *template_type) {
+  if (template_type == NULL) {
+    return NULL;
+  }
+
+  SgType *class_type = template_type->get_class_type();
+  if (class_type != NULL && class_type != template_type) {
+    return class_type;
   }
 
   return NULL;
@@ -788,7 +803,16 @@ bool isDefaultConstructible(SgType *type) {
     return false;
   } break;
 
+  case V_SgTemplateType: {
+    if (SgType *resolved =
+            resolveConcreteTemplateType(isSgTemplateType(type))) {
+      return isDefaultConstructible(resolved);
+    }
+    return false;
+  } break;
+
   case V_SgReferenceType:
+  case V_SgRvalueReferenceType:
     return false;
     break;
 
@@ -950,12 +974,21 @@ bool isCopyConstructible(SgType *type) {
     return false;
   } break;
 
+  case V_SgTemplateType: {
+    if (SgType *resolved =
+            resolveConcreteTemplateType(isSgTemplateType(type))) {
+      return isCopyConstructible(resolved);
+    }
+    return false;
+  } break;
+
     // DQ (9/7/2016): Added support for new type now referenced as a result of
     // using new automated generation of builtin functions for ROSE.
   case V_SgTypeSigned128bitInteger:
   case V_SgTypeUnsigned128bitInteger:
 
   case V_SgReferenceType:
+  case V_SgRvalueReferenceType:
     // DQ (8/27/2006): Changed name of SgComplex to make it more consistent with
     // other type names and added SgTypeImaginary IR node (for C99 complex
     // support).
@@ -1021,6 +1054,7 @@ bool isAssignable(SgType *type) {
   case V_SgFunctionType:
   case V_SgMemberFunctionType:
   case V_SgReferenceType: // I think C++ reference types cannot be reassigned.
+  case V_SgRvalueReferenceType:
   case V_SgTypeEllipse:
   case V_SgDeclType:
     return false;
@@ -1085,6 +1119,14 @@ bool isAssignable(SgType *type) {
 
   case V_SgNonrealType: {
     if (SgType *resolved = resolveNonrealType(isSgNonrealType(type))) {
+      return isAssignable(resolved);
+    }
+    return false;
+  } break;
+
+  case V_SgTemplateType: {
+    if (SgType *resolved =
+            resolveConcreteTemplateType(isSgTemplateType(type))) {
       return isAssignable(resolved);
     }
     return false;
@@ -1585,15 +1627,8 @@ bool isPureVirtualClass(SgType *type,
     }                                                                          \
   } while (0)
 
-// Walks over the call hierarchy and collects all member function in a vector.
-vector<SgMemberFunctionDeclaration *>
-GetAllMemberFunctionsInClassHierarchy(SgType *type) {
-#if DEBUG_QUADRATIC_BEHAVIOR
-  printf("In GetAllMemberFunctionsInClassHierarchy(): type = %p = %s \n", type,
-         type->class_name().c_str());
-#endif
-  vector<SgMemberFunctionDeclaration *> allMemberFunctions;
-
+namespace {
+SgClassDefinition *completeClassDefinitionForType(SgType *type) {
   SgClassType *sgClassType = isSgClassType(type);
   if (!sgClassType) {
     ROSE_ASSERT(0 && "Requires a complete class type");
@@ -1607,16 +1642,66 @@ GetAllMemberFunctionsInClassHierarchy(SgType *type) {
   ROSE_ASSERT(definingDeclaration && "Requires a complete class type");
   SgClassDefinition *classDef = definingDeclaration->get_definition();
   ROSE_ASSERT(classDef && "Requires a complete class type");
+  return classDef;
+}
 
-  // Find all superclasses
-  ClassHierarchyWrapper classHierarchy(getProject());
+struct TypeTraitClassHierarchyCache {
+  SgProject *project = NULL;
+  std::unique_ptr<ClassHierarchyWrapper> hierarchy;
+  std::unordered_map<SgClassDefinition *, vector<SgMemberFunctionDeclaration *>>
+      memberFunctions;
+  std::unordered_map<SgClassDefinition *, vector<SgVariableDeclaration *>>
+      ancestorVariables;
+
+  void reset(SgProject *currentProject) {
+    project = currentProject;
+    hierarchy.reset();
+    memberFunctions.clear();
+    ancestorVariables.clear();
+  }
+};
+
+TypeTraitClassHierarchyCache &typeTraitClassHierarchyCache() {
+  static thread_local TypeTraitClassHierarchyCache cache;
+  return cache;
+}
+
+ClassHierarchyWrapper &cachedTypeTraitClassHierarchy() {
+  SgProject *project = getProject();
+  ROSE_ASSERT(project != NULL);
+
+  TypeTraitClassHierarchyCache &cache = typeTraitClassHierarchyCache();
+  if (cache.project != project) {
+    cache.reset(project);
+  }
+
+  if (!cache.hierarchy) {
+    cache.hierarchy.reset(new ClassHierarchyWrapper(project));
+  }
+
+  return *cache.hierarchy;
+}
+
+const vector<SgMemberFunctionDeclaration *> &
+cachedMemberFunctionsInClassHierarchy(SgClassDefinition *classDef) {
+  ClassHierarchyWrapper &classHierarchy = cachedTypeTraitClassHierarchy();
+  TypeTraitClassHierarchyCache &cache = typeTraitClassHierarchyCache();
+
+  std::unordered_map<SgClassDefinition *,
+                     vector<SgMemberFunctionDeclaration *>>::iterator found =
+      cache.memberFunctions.find(classDef);
+  if (found != cache.memberFunctions.end()) {
+    return found->second;
+  }
+
+  vector<SgMemberFunctionDeclaration *> &allMemberFunctions =
+      cache.memberFunctions[classDef];
   const ClassHierarchyWrapper::ClassDefSet &ancestors =
       classHierarchy.getAncestorClasses(classDef);
   set<SgClassDefinition *> inclusiveAncestors(ancestors.begin(),
                                               ancestors.end());
   inclusiveAncestors.insert(classDef);
 
-  // Find all member functions
   for (SgClassDefinition *c : inclusiveAncestors) {
     for (SgDeclarationStatement *memberDeclaration : c->get_members()) {
       if (SgMemberFunctionDeclaration *memberFunction =
@@ -1629,33 +1714,25 @@ GetAllMemberFunctionsInClassHierarchy(SgType *type) {
   return allMemberFunctions;
 }
 
-// Walks over the call hierarchy and collects all data members in a vector.
-vector<SgVariableDeclaration *>
-GetAllVariableDeclarationsInAncestors(SgType *type) {
-  vector<SgVariableDeclaration *> allVariableDeclarations;
+const vector<SgVariableDeclaration *> &
+cachedVariableDeclarationsInAncestors(SgClassDefinition *classDef) {
+  ClassHierarchyWrapper &classHierarchy = cachedTypeTraitClassHierarchy();
+  TypeTraitClassHierarchyCache &cache = typeTraitClassHierarchyCache();
 
-  SgClassType *sgClassType = isSgClassType(type);
-  if (!sgClassType) {
-    ROSE_ASSERT(0 && "Requires a complete class type");
+  std::unordered_map<SgClassDefinition *,
+                     vector<SgVariableDeclaration *>>::iterator found =
+      cache.ancestorVariables.find(classDef);
+  if (found != cache.ancestorVariables.end()) {
+    return found->second;
   }
 
-  SgClassDeclaration *decl =
-      isSgClassDeclaration(sgClassType->get_declaration());
-  ROSE_ASSERT(decl && "Requires a complete class type");
-  SgClassDeclaration *definingDeclaration =
-      isSgClassDeclaration(decl->get_definingDeclaration());
-  ROSE_ASSERT(definingDeclaration && "Requires a complete class type");
-  SgClassDefinition *classDef = definingDeclaration->get_definition();
-  ROSE_ASSERT(classDef && "Requires a complete class type");
-
-  // Find all superclasses
-  ClassHierarchyWrapper classHierarchy(getProject());
+  vector<SgVariableDeclaration *> &allVariableDeclarations =
+      cache.ancestorVariables[classDef];
   const ClassHierarchyWrapper::ClassDefSet &ancestors =
       classHierarchy.getAncestorClasses(classDef);
   set<SgClassDefinition *> exclusiveAncestors(ancestors.begin(),
                                               ancestors.end());
 
-  // Find all data members
   for (SgClassDefinition *c : exclusiveAncestors) {
     for (SgDeclarationStatement *memberDeclaration : c->get_members()) {
       if (SgVariableDeclaration *sgVariableDeclaration =
@@ -1666,6 +1743,25 @@ GetAllVariableDeclarationsInAncestors(SgType *type) {
   }
 
   return allVariableDeclarations;
+}
+} // namespace
+
+// Walks over the call hierarchy and collects all member function in a vector.
+vector<SgMemberFunctionDeclaration *>
+GetAllMemberFunctionsInClassHierarchy(SgType *type) {
+#if DEBUG_QUADRATIC_BEHAVIOR
+  printf("In GetAllMemberFunctionsInClassHierarchy(): type = %p = %s \n", type,
+         type->class_name().c_str());
+#endif
+  return cachedMemberFunctionsInClassHierarchy(
+      completeClassDefinitionForType(type));
+}
+
+// Walks over the call hierarchy and collects all data members in a vector.
+vector<SgVariableDeclaration *>
+GetAllVariableDeclarationsInAncestors(SgType *type) {
+  return cachedVariableDeclarationsInAncestors(
+      completeClassDefinitionForType(type));
 }
 
 // Checks if the given member function accepts the given argument.
@@ -2037,7 +2133,7 @@ bool IsAbstract(const SgType *const inputType) {
     return false;
   }
   return SageInterface::isPureVirtualClass(type,
-                                           ClassHierarchyWrapper(getProject()));
+                                           cachedTypeTraitClassHierarchy());
 }
 
 /*
@@ -2083,9 +2179,8 @@ bool IsBaseOf(const SgType *const inputBaseType,
   ROSE_ASSERT(classDef);
 
   // Find all superclasses
-  ClassHierarchyWrapper classHierarchy(getProject());
   const ClassHierarchyWrapper::ClassDefSet &ancestors =
-      classHierarchy.getAncestorClasses(classDef);
+      cachedTypeTraitClassHierarchy().getAncestorClasses(classDef);
   set<SgClassDefinition *> inclusiveAncestors(ancestors.begin(),
                                               ancestors.end());
   inclusiveAncestors.insert(classDef);
@@ -2441,10 +2536,8 @@ bool IsStandardLayout(const SgType *const inputType) {
     // no non-static data members in the most derived class and at most one base
     // class with non-static data members
     // Find all superclasses
-    ClassHierarchyWrapper classHierarchy(getProject());
-
     const ClassHierarchyWrapper::ClassDefSet &ancestors =
-        classHierarchy.getAncestorClasses(classDef);
+        cachedTypeTraitClassHierarchy().getAncestorClasses(classDef);
     set<SgClassDefinition *> exclusiveAncestors(ancestors.begin(),
                                                 ancestors.end());
 
@@ -2481,10 +2574,8 @@ bool IsStandardLayout(const SgType *const inputType) {
   // There should be no base classes of the same type as its first non-static
   // data member
   if (firstNonStaticDataMember) {
-    // Find all superclasses
-    ClassHierarchyWrapper classHierarchy(getProject());
     const ClassHierarchyWrapper::ClassDefSet &ancestors =
-        classHierarchy.getAncestorClasses(classDef);
+        cachedTypeTraitClassHierarchy().getAncestorClasses(classDef);
     set<SgClassDefinition *> exclusiveAncestors(ancestors.begin(),
                                                 ancestors.end());
 

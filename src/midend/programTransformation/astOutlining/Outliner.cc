@@ -215,7 +215,6 @@ void Outliner::validateSettings() {
     // also use parameter wrapper to simplify the call
     useParameterWrapper = true;
     temp_variable = true;
-    exclude_headers = true;
     if (output_path.empty()) {
       output_path = "/tmp";
     }

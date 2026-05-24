@@ -113,6 +113,11 @@ set(_test04_spec_dir
 foreach(answer_file IN LISTS _test04_answer_files)
   get_filename_component(_answer_name ${answer_file} NAME)
   string(REPLACE ".cg.dmp" "" _specimen ${_answer_name})
+  if(NOT EXISTS "${_test04_spec_dir}/${_specimen}")
+    message(STATUS
+      "Skipping callgraph test04 answer without source: ${_specimen}")
+    continue()
+  endif()
   string(REPLACE "." "_" _name ${_specimen})
   get_filename_component(_base ${_specimen} NAME_WE)
   add_test(

@@ -66,6 +66,16 @@ static void assertFunctionSymbolPresent(SgScopeStatement *scope,
   ROSE_ASSERT(!"Missing function symbol for outlined function");
 }
 
+static bool isNonFortranGlobalArray(const SgInitializedName *name) {
+  if (name == NULL || SageInterface::is_Fortran_language() ||
+      isSgGlobal(name->get_scope()) == NULL) {
+    return false;
+  }
+
+  return isSgArrayType(
+             name->get_type()->stripType(SgType::STRIP_TYPEDEF_TYPE)) != NULL;
+}
+
 static std::string extractIncludeKey(const std::string &text) {
   std::string trimmed = Rose::StringUtility::trim(text);
   if (trimmed.empty())
@@ -81,6 +91,143 @@ static std::string extractIncludeKey(const std::string &text) {
   }
 
   return trimmed;
+}
+
+static bool hasHeaderInCallSiteFile(SgScopeStatement *scope,
+                                    const std::string &header) {
+  ROSE_ASSERT(scope != NULL);
+  ROSE_ASSERT(scope->get_file_info() != NULL);
+
+  SgSourceFile *sourceFile = SageInterface::getEnclosingSourceFile(scope);
+  ROSE_ASSERT(sourceFile != NULL);
+  SgGlobal *globalScope = sourceFile->get_globalScope();
+  ROSE_ASSERT(globalScope != NULL);
+
+  std::vector<SgLocatedNode *> candidates;
+  candidates.push_back(globalScope);
+  SgDeclarationStatementPtrList &decls = globalScope->get_declarations();
+  candidates.insert(candidates.end(), decls.begin(), decls.end());
+
+  const int callSitePhysicalId = scope->get_file_info()->get_physical_file_id();
+  for (SgLocatedNode *candidate : candidates) {
+    if (candidate == NULL || candidate->get_file_info() == NULL)
+      continue;
+
+    const bool samePhysicalFile =
+        candidate->get_file_info()->get_physical_file_id() ==
+        callSitePhysicalId;
+    const bool sameNamedFile =
+        candidate->get_file_info()->isSameFile(scope->get_file_info());
+    if (!samePhysicalFile && !sameNamedFile)
+      continue;
+
+    AttachedPreprocessingInfoType *infos =
+        candidate->getAttachedPreprocessingInfo();
+    if (infos == NULL)
+      continue;
+
+    for (PreprocessingInfo *info : *infos) {
+      if (info == NULL)
+        continue;
+      PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
+      if (type != PreprocessingInfo::CpreprocessorIncludeDeclaration &&
+          type != PreprocessingInfo::CpreprocessorIncludeNextDeclaration) {
+        continue;
+      }
+      if (extractIncludeKey(info->getString()) == header)
+        return true;
+    }
+  }
+
+  return false;
+}
+
+static void ensureDlopenSupportHeaderInCallSite(SgScopeStatement *scope) {
+  ROSE_ASSERT(scope != NULL);
+  if (Outliner::suppress_autotuning_header)
+    return;
+
+  if (!hasHeaderInCallSiteFile(scope, Outliner::AUTOTUNING_LIB_HEADER)) {
+    SageInterface::insertHeader(Outliner::AUTOTUNING_LIB_HEADER,
+                                PreprocessingInfo::after, false, scope);
+  }
+}
+
+static int callSitePhysicalFileId(SgStatement *anchor) {
+  if (anchor != NULL && anchor->get_file_info() != NULL) {
+    int physical_file_id = anchor->get_file_info()->get_physical_file_id();
+    if (physical_file_id >= 0)
+      return physical_file_id;
+  }
+
+  SgSourceFile *sourceFile = SageInterface::getEnclosingSourceFile(anchor);
+  if (sourceFile != NULL && sourceFile->get_file_info() != NULL)
+    return sourceFile->get_file_info()->get_physical_file_id();
+
+  return Sg_File_Info::NULL_FILE_ID;
+}
+
+static void assignGeneratedNodeToCallSiteFile(SgNode *node,
+                                              SgStatement *anchor) {
+  ROSE_ASSERT(node != NULL);
+  int physical_file_id = callSitePhysicalFileId(anchor);
+  if (physical_file_id >= 0)
+    ASTtools::assignGeneratedSubtreeToPhysicalFile(node, physical_file_id);
+}
+
+static SgScopeStatement *scopeForInsertedStatement(SgStatement *target) {
+  ROSE_ASSERT(target != NULL);
+
+  if (SgScopeStatement *parent_scope = isSgScopeStatement(target->get_parent()))
+    return parent_scope;
+
+  for (SgNode *current = target->get_parent(); current != NULL;
+       current = current->get_parent()) {
+    if (SgScopeStatement *scope = isSgScopeStatement(current))
+      return scope;
+  }
+
+  return target->get_scope();
+}
+
+static SgScopeStatement *actualDeclarationScope(SgVariableDeclaration *decl,
+                                                SgScopeStatement *fallback) {
+  ROSE_ASSERT(decl != NULL);
+
+  if (SgScopeStatement *decl_scope = decl->get_scope())
+    return decl_scope;
+  if (SgScopeStatement *parent_scope = isSgScopeStatement(decl->get_parent()))
+    return parent_scope;
+
+  ROSE_ASSERT(fallback != NULL);
+  return fallback;
+}
+
+static SgScopeStatement *
+setGeneratedVariableDeclarationScope(SgVariableDeclaration *decl,
+                                     SgScopeStatement *scope) {
+  ROSE_ASSERT(decl != NULL);
+  ROSE_ASSERT(scope != NULL);
+
+  scope = actualDeclarationScope(decl, scope);
+  decl->set_scope(scope);
+  for (SgInitializedName *name : decl->get_variables()) {
+    if (name == NULL)
+      continue;
+
+    name->set_scope(scope);
+    if (name->get_parent() == NULL)
+      name->set_parent(decl);
+
+    if (!name->get_name().is_null() && name->get_name().getString() != "" &&
+        scope->lookup_variable_symbol(name->get_name()) == NULL) {
+      SgVariableSymbol *symbol = new SgVariableSymbol(name);
+      ROSE_ASSERT(symbol != NULL);
+      scope->insert_symbol(name->get_name(), symbol);
+    }
+  }
+
+  return scope;
 }
 
 static void
@@ -279,7 +426,6 @@ static void dedupeIncludeDirectives(SgGlobal *glob_scope) {
       if (is_include) {
         std::string key = extractIncludeKey(info->getString());
         if (!key.empty() && seen.count(key) != 0) {
-          delete info;
           continue;
         }
         if (!key.empty())
@@ -528,6 +674,17 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
 
   //---------step 1. Preparations-----------------------------------
   // new file, cut preprocessing information, collect variables
+  SgSourceFile *original_source_file = SageInterface::getEnclosingSourceFile(s);
+  int original_physical_file_id = -1;
+  if (s != NULL && s->get_file_info() != NULL) {
+    original_physical_file_id = s->get_file_info()->get_physical_file_id();
+  }
+  if (original_physical_file_id < 0 && original_source_file != NULL &&
+      original_source_file->get_file_info() != NULL) {
+    original_physical_file_id =
+        original_source_file->get_file_info()->get_physical_file_id();
+  }
+
   // Generate a new source file for the outlined function, if requested
   SgSourceFile *new_file = NULL;
   if (Outliner::useNewFile) {
@@ -724,7 +881,6 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
         if (is_include) {
           std::string key = extractIncludeKey(info->getString());
           if (!key.empty() && include_keys.count(key) != 0) {
-            delete info;
             continue;
           }
           if (!key.empty())
@@ -775,7 +931,7 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
   }
 
   // Generate a call to the outlined function.
-  SgScopeStatement *p_scope = s->get_scope();
+  SgScopeStatement *p_scope = scopeForInsertedStatement(s);
   ROSE_ASSERT(p_scope);
 
   // Retest this...
@@ -834,7 +990,9 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
       (tlist->get_arguments())
           .push_back(buildPointerType(buildPointerType(buildVoidType())));
 
-      SgFunctionType *ftype_return = buildFunctionType(buildVoidType(), tlist);
+      SgFunctionType *outlinedFunctionType =
+          buildFunctionType(buildVoidType(), tlist);
+      SgType *findFunctionReturnType = buildPointerType(outlinedFunctionType);
       // build the argument list
       // the new option copy_origFile will ask the outliner to generate
       // rose_input_lib.c/cxx and compile to a .so later
@@ -844,9 +1002,10 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
       SgExprListExp *arg_list = buildExprListExp(buildStringVal(func_name_str),
                                                  buildStringVal(lib_name));
       SgFunctionCallExp *dlopen_call = buildFunctionCallExp(
-          SgName(FIND_FUNCP_DLOPEN), ftype_return, arg_list, p_scope);
+          SgName(FIND_FUNCP_DLOPEN), findFunctionReturnType, arg_list, p_scope);
       SgExprStatement *assign_stmt = buildAssignStatement(
           buildVarRefExp(func_name_str + "p", p_scope), dlopen_call);
+      assignGeneratedNodeToCallSiteFile(assign_stmt, s);
       SageInterface::insertStatementBefore(s, assign_stmt);
       // Generate a function call using the func pointer
       // e.g. (*OUT__2__8888__p)(__out_argv2__1527__);
@@ -880,6 +1039,9 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
   }
 
   ROSE_ASSERT(func_call != NULL);
+  if (use_dlopen) {
+    assignGeneratedNodeToCallSiteFile(func_call, s);
+  }
 
   // Retest this...
   ROSE_ASSERT(func->get_definition()->get_body()->get_parent() ==
@@ -889,6 +1051,9 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
   //  cout<<"Debug before replacement(s, func_call), s is\n "<< s<<endl;
   //     SageInterface::insertStatementAfter(s,func_call);
   SageInterface::replaceStatement(s, func_call);
+  if (use_dlopen) {
+    ensureDlopenSupportHeaderInCallSite(p_scope);
+  }
 
   ROSE_ASSERT(s != NULL);
   ROSE_ASSERT(s->get_statements().empty() == true);
@@ -961,8 +1126,14 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
     // reconstruct any dependent statements (and #include CPP directives).
     SgFunctionDeclaration *func_orig = const_cast<SgFunctionDeclaration *>(
         SageInterface::getEnclosingFunctionDeclaration(s));
+    SgStatement *dependency_context = s;
+    if (dependency_context == NULL ||
+        dependency_context->get_file_info() == NULL) {
+      dependency_context = func_orig;
+    }
     SageInterface::appendStatementWithDependentDeclaration(
-        func, glob_scope, func_orig, exclude_headers);
+        func, glob_scope, dependency_context, exclude_headers,
+        original_source_file, original_physical_file_id);
     // printf ("DONE: Now calling
     // SageInterface::appendStatementWithDependentDeclaration() \n");
   }
@@ -1052,14 +1223,17 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
 static SgStatement *build_array_packing_statement(SgExpression *lhs,
                                                   SgExpression *&rhs,
                                                   SgStatement *target) {
-  SgScopeStatement *scope = target->get_scope();
+  SgScopeStatement *scope = scopeForInsertedStatement(target);
+  ROSE_ASSERT(scope != NULL);
 
   // Loop initializer
   std::string loop_index_name =
       SageInterface::generateUniqueVariableName(scope, "i");
   SgVariableDeclaration *loop_index = buildVariableDeclaration(
       loop_index_name, buildIntType(), NULL /* initializer */, scope);
+  setGeneratedVariableDeclarationScope(loop_index, scope);
   SageInterface::insertStatementBefore(target, loop_index);
+  scope = setGeneratedVariableDeclarationScope(loop_index, scope);
   SgStatement *loop_init = buildAssignStatement(
       buildVarRefExp(loop_index_name, scope), buildIntVal(0));
 
@@ -1124,7 +1298,7 @@ std::string Outliner::generatePackingStatements(
   // We still need to generate the declaration for the wrapper variable.
   if (var_count == 0)
     return wrapper_name;
-  SgScopeStatement *cur_scope = target->get_scope();
+  SgScopeStatement *cur_scope = scopeForInsertedStatement(target);
   ROSE_ASSERT(cur_scope != NULL);
 
   // void * __out_argv[count];
@@ -1141,11 +1315,14 @@ std::string Outliner::generatePackingStatements(
 
   SgVariableDeclaration *out_argv =
       buildVariableDeclaration(wrapper_name, my_type, NULL, cur_scope);
+  setGeneratedVariableDeclarationScope(out_argv, cur_scope);
+  assignGeneratedNodeToCallSiteFile(out_argv, target);
 
   // Since we have moved the outlined block to be the outlined function's body,
   // and removed it from its location in the original location where it was
   // outlined, we can't insert new statements relative to "target".
   SageInterface::insertStatementBefore(target, out_argv);
+  cur_scope = setGeneratedVariableDeclarationScope(out_argv, cur_scope);
 
   SgVariableSymbol *wrapper_symbol = getFirstVarSym(out_argv);
   ROSE_ASSERT(wrapper_symbol->get_parent() != NULL);
@@ -1204,13 +1381,17 @@ std::string Outliner::generatePackingStatements(
       lhs = buildPntrArrRefExp(buildVarRefExp(wrapper_symbol),
                                buildIntVal(counter));
       SgVarRefExp *rhsvar = buildVarRefExp((*i)->get_declaration(), cur_scope);
-      rhs = buildCastExp(buildAddressOfOp(rhsvar),
-                         buildPointerType(buildVoidType()),
+      SgExpression *value_to_pass =
+          isNonFortranGlobalArray((*i)->get_declaration())
+              ? isSgExpression(rhsvar)
+              : buildAddressOfOp(rhsvar);
+      rhs = buildCastExp(value_to_pass, buildPointerType(buildVoidType()),
                          SgCastExp::e_C_style_cast);
 
       assignment = buildAssignStatement(lhs, rhs);
     }
 
+    assignGeneratedNodeToCallSiteFile(assignment, target);
     SageInterface::insertStatementBefore(target, assignment);
     counter++;
   }

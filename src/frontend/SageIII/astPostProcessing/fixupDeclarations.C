@@ -87,6 +87,12 @@ void FixupDeclarations::visit(SgNode *node) {
 
   SgDeclarationStatement *declaration = isSgDeclarationStatement(node);
   if (declaration != NULL) {
+    if (isSgProgramHeaderStatement(declaration) != NULL) {
+      // A Fortran main program has no separate non-defining declaration.
+      ROSE_ASSERT(declaration->get_definingDeclaration() == NULL ||
+                  declaration->get_definingDeclaration() == declaration);
+      return;
+    }
 
     SgDeclarationStatement *firstDeclaration = NULL;
 

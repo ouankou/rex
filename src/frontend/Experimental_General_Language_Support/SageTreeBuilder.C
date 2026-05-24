@@ -1313,6 +1313,7 @@ void SageTreeBuilder::Enter(SgProgramHeaderStatement *&program_decl,
   // A Fortran program has no non-defining declaration (assume same for other
   // languages)
   program_decl->set_definingDeclaration(program_decl);
+  program_decl->set_firstNondefiningDeclaration(nullptr);
 
   program_decl->set_scope(scope);
   program_decl->set_parent(scope);

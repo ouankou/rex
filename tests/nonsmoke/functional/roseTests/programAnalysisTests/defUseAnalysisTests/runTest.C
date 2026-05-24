@@ -631,9 +631,9 @@ int main(int argc, char *argv[]) {
       argvList[1] = srcdir + "tests/test25.C";
       results.clear();
       useresults.clear();
-      results.insert(pair<string, int>("x", 22));
-      results.insert(pair<string, int>("y", 26));
-      useresults.insert(pair<string, int>("x", 25));
+      results.insert(pair<string, int>("x", 20));
+      results.insert(pair<string, int>("y", 27));
+      useresults.insert(pair<string, int>("x", 26));
       testOneFunction("::foo", argvList, debug, 34, results, useresults);
     }
   }

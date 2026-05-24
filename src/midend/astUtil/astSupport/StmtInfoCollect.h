@@ -78,8 +78,14 @@ class StmtSideEffectCollect : public StmtInfoCollect,
   using SideEffectAnalysisInterface::varcollect;
 
 public:
-  StmtSideEffectCollect(AstInterface &fa, FunctionSideEffectInterface *a = 0)
-      : fa_(fa), modunknown(false), readunknown(false), funcanal(a) {}
+  enum class UnknownFunctionEffectPolicy { CollectSyntheticRefs, ReportOnly };
+
+  StmtSideEffectCollect(
+      AstInterface &fa, FunctionSideEffectInterface *a = 0,
+      UnknownFunctionEffectPolicy unknownFunctionEffectPolicy =
+          UnknownFunctionEffectPolicy::CollectSyntheticRefs)
+      : fa_(fa), modunknown(false), readunknown(false), funcanal(a),
+        unknownFunctionEffectPolicy(unknownFunctionEffectPolicy) {}
 
   typedef typename SideEffectAnalysisInterface::CollectObject CollectObject;
 
@@ -118,6 +124,7 @@ private:
   using StmtInfoCollect::curstmt;
   bool modunknown, readunknown;
   FunctionSideEffectInterface *funcanal;
+  UnknownFunctionEffectPolicy unknownFunctionEffectPolicy;
 };
 
 class Ast2StringMap {

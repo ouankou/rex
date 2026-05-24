@@ -144,6 +144,11 @@ ROSE_DLL_API void setSourcePositionAsTransformation(SgNode *node);
 ROSE_DLL_API void
 setSourcePositionAtRootAndAllChildrenAsTransformation(SgNode *node);
 
+//! Assign a generated subtree to the physical source file that should receive
+//! it.
+ROSE_DLL_API void assignGeneratedSubtreeToPhysicalFile(SgNode *node,
+                                                       int physical_file_id);
+
 } // namespace ASTtools
 
 #endif // !defined(INC_ASTTOOLS_HH)

@@ -1,12 +1,12 @@
-A < A< int > > ::A ->
-A < A< int > > ::A ->
-A < A< int > > ::A ->
-A < A< int > > ::operator new ->
-A < A< int > > ::operator new ->
-A < A< int > > ::operator& ->
-A < A< int > > ::operator* ->
-A < A< int > > ::operator-> ->
-A < A< int > > ::operator[] ->
+A < A < int >  > ::A ->
+A < A < int >  > ::A ->
+A < A < int >  > ::A ->
+A < A < int >  > ::operator new ->
+A < A < int >  > ::operator new ->
+A < A < int >  > ::operator& ->
+A < A < int >  > ::operator* ->
+A < A < int >  > ::operator-> ->
+A < A < int >  > ::operator[] ->
 A < int > ::A ->
 A < int > ::A ->
 A < int > ::A ->
@@ -16,6 +16,6 @@ A < int > ::operator& ->
 A < int > ::operator* ->
 A < int > ::operator-> ->
 A < int > ::operator[] ->
-fooError -> A < A< int > > ::A
 fooError -> A < int > ::A
 fooError -> A < int > ::A
+fooError -> A < A < int >  > ::A

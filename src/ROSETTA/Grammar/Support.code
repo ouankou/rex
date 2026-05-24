@@ -1118,6 +1118,10 @@ HEADER_FUNCTION_MODIFIER_START
               unsigned long int x, y, z;
              };
 
+             typedef std::vector<unsigned> gnu_attribute_parameter_index_list_t;
+             typedef std::vector<gnu_attribute_parameter_index_list_t>
+                 gnu_attribute_parameter_index_list_list_t;
+
        // Copy constructor
           $CLASSNAME ( const $CLASSNAME & X );
 
@@ -2611,12 +2615,30 @@ SOURCE_FUNCTION_MODIFIER_START
 SgFunctionModifier::$CLASSNAME ( const SgFunctionModifier & X )
    {
      p_modifierVector = X.p_modifierVector;
+     p_gnu_attribute_constructor_destructor_priority =
+         X.p_gnu_attribute_constructor_destructor_priority;
+     p_gnu_attribute_named_weak_reference =
+         X.p_gnu_attribute_named_weak_reference;
+     p_gnu_attribute_named_alias = X.p_gnu_attribute_named_alias;
+     p_gnu_attribute_nonnull_parameter_index_lists =
+         X.p_gnu_attribute_nonnull_parameter_index_lists;
+     p_opencl_vec_type = X.p_opencl_vec_type;
+     p_opencl_work_group_size = X.p_opencl_work_group_size;
    }
 
 SgFunctionModifier &
 SgFunctionModifier::operator= ( const $CLASSNAME & X )
    {
      p_modifierVector = X.p_modifierVector;
+     p_gnu_attribute_constructor_destructor_priority =
+         X.p_gnu_attribute_constructor_destructor_priority;
+     p_gnu_attribute_named_weak_reference =
+         X.p_gnu_attribute_named_weak_reference;
+     p_gnu_attribute_named_alias = X.p_gnu_attribute_named_alias;
+     p_gnu_attribute_nonnull_parameter_index_lists =
+         X.p_gnu_attribute_nonnull_parameter_index_lists;
+     p_opencl_vec_type = X.p_opencl_vec_type;
+     p_opencl_work_group_size = X.p_opencl_work_group_size;
      return *this;
    }
 
@@ -2822,6 +2844,10 @@ SgFunctionModifier::displayString() const
      s += std::string("isGnuAttributeAlwaysInline() = ")         + std::string(isGnuAttributeAlwaysInline() ? "true " : "false ");
      s += std::string("isGnuAttributeNoThrow() = ")              + std::string(isGnuAttributeNoThrow() ? "true " : "false ");
      s += std::string("isGnuAttributeWeakReference() = ")        + std::string(isGnuAttributeWeakReference() ? "true " : "false ");
+     s += std::string("gnuAttributeNonnullArgumentSetCount() = ") +
+          Rose::StringUtility::numberToString(
+              get_gnu_attribute_nonnull_parameter_index_lists().size()) +
+          " ";
 
      s += ")";
      return s;
@@ -2881,6 +2907,8 @@ bool operator== (const $CLASSNAME& lhs, const $CLASSNAME& rhs)
 	       (lhs.isGnuAttributeAlwaysInline()       == rhs.isGnuAttributeAlwaysInline()      ) &&
 	       (lhs.isGnuAttributeNoThrow()            == rhs.isGnuAttributeNoThrow()           ) &&
 	       (lhs.isGnuAttributeWeakReference()      == rhs.isGnuAttributeWeakReference()     ) &&
+	       (lhs.get_gnu_attribute_nonnull_parameter_index_lists() ==
+	        rhs.get_gnu_attribute_nonnull_parameter_index_lists()) &&
 	       // Cuda specific
 	       (lhs.isCudaDevice()         == rhs.isCudaDevice()) &&
 	       (lhs.isCudaKernel()         == rhs.isCudaKernel()) &&
@@ -7669,15 +7697,32 @@ SgSymbolTable::remove( const SgSymbol* symbol )
           it++;
         }
 
+     if (elementToDelete == get_table()->end())
+        {
+       // The symbol's own name can legitimately change before the symbol table
+       // key is updated, for example while resetTemplateNameSupport rewrites a
+       // template instantiation name.  In that case remove the exact symbol
+       // pointer from the table key where it actually lives.
+          for (rose_hash_multimap::iterator scan = get_table()->begin();
+               scan != get_table()->end(); ++scan)
+             {
+               if (scan->second == symbol)
+                  {
+                    elementToDelete = scan;
+                    break;
+                  }
+             }
+        }
 
   // DQ (8/15/2020): Original code before the chagne below.
      ROSE_ASSERT(elementToDelete != get_table()->end());
+     SgName storedName = elementToDelete->first;
      SgSymbol* storedSymbol = elementToDelete->second;
 
   // DQ (5/9/2007): Moved to after the call to "p_symbolSet.erase(elementToDelete->second);"
   // get_table()->erase(elementToDelete);
 
-     eraseFunctionSymbolFromExactLookup(this, name, storedSymbol);
+     eraseFunctionSymbolFromExactLookup(this, storedName, storedSymbol);
 
   // DQ (3/10/2007): Remove the symbol from the symbol set used to test for if the symbol exists
   // p_symbolSet.erase(symbol);

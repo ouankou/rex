@@ -161,6 +161,8 @@ set(_additional_source_position_tests
 )
 
 function(add_source_position_test test_file)
+  rex_get_cxx_specimen_extra_flags(_source_position_extra_flags ${test_file})
+
   configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${test_file}
     ${CMAKE_CURRENT_BINARY_DIR}/${test_file}
@@ -168,7 +170,7 @@ function(add_source_position_test test_file)
 
   add_test(
     NAME SOURCEPOSITIONTEST_${test_file}
-    COMMAND statements ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
+    COMMAND statements ${ROSE_FLAGS} ${_source_position_extra_flags} ${TESTCODE_INCLUDES}
       -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests
       -c ${CMAKE_CURRENT_BINARY_DIR}/${test_file})
 

@@ -119,6 +119,8 @@ nodeColor( SgStatement* statement )
                case V_SgVariableDeclaration:
                case V_SgVariableDefinition:
                case V_SgEmptyDeclaration:
+               case V_SgClinkageStartStatement:
+               case V_SgClinkageEndStatement:
                     returnString = "lightred";
                     break;
 
@@ -199,7 +201,6 @@ nodeColor( SgStatement* statement )
           case V_SgCatchStatementSeq:
           case V_SgContinueStmt:
           case V_SgDefaultOptionStmt:
-          case V_SgClinkageStartStatement:
           case V_SgForInitStatement:
           case V_SgFunctionTypeTable:
           case V_SgGotoStatement:

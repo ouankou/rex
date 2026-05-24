@@ -327,6 +327,53 @@ bool templateArgumentListUsesNonrealReference(
   return false;
 }
 
+bool outputIsSuppressed(const SgLocatedNode *node) {
+  if (node == nullptr) {
+    return false;
+  }
+
+  auto is_suppressed = [](const Sg_File_Info *file_info) {
+    return file_info != nullptr && !file_info->isOutputInCodeGeneration();
+  };
+
+  return is_suppressed(node->get_file_info()) ||
+         is_suppressed(node->get_startOfConstruct()) ||
+         is_suppressed(node->get_endOfConstruct());
+}
+
+bool classDeclarationChainHasHiddenElaboratedTagIntro(
+    const SgClassDeclaration *decl) {
+  if (decl == nullptr) {
+    return false;
+  }
+
+  const SgClassDeclaration *candidates[] = {
+      decl, isSgClassDeclaration(decl->get_firstNondefiningDeclaration()),
+      isSgClassDeclaration(decl->get_definingDeclaration())};
+
+  for (const SgClassDeclaration *candidate : candidates) {
+    if (candidate != nullptr && !candidate->get_isAutonomousDeclaration() &&
+        outputIsSuppressed(candidate)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool suppressQualifierForHiddenElaboratedTagIntro(
+    const SgClassDeclaration *type_decl, const SgClassDeclaration *print_decl,
+    const SgUnparse_Info &info, bool emitted_elaborated_keyword,
+    const SgName &name_qualifier) {
+  if (!emitted_elaborated_keyword || info.SkipQualifiedNames() ||
+      name_qualifier.is_null() || std::string(name_qualifier.str()) != "::") {
+    return false;
+  }
+
+  return classDeclarationChainHasHiddenElaboratedTagIntro(type_decl) ||
+         classDeclarationChainHasHiddenElaboratedTagIntro(print_decl);
+}
+
 std::string formatQualifiedNameForTypeOutput(const std::string &name,
                                              const SgUnparse_Info &info);
 
@@ -639,7 +686,9 @@ string get_type_name(SgType *t) {
       return get_type_name(decltype_node->get_base_type());
     }
 
-    return string("decltype(") + base_expression->unparseToString() + ")";
+    return string(decltype_node->get_is_gnu_decltype() ? "__decltype("
+                                                       : "decltype(") +
+           base_expression->unparseToString() + ")";
   }
     // DQ (3/24/2014): Added support for 128-bit integers.
   case T_SIGNED_128BIT_INTEGER:
@@ -790,6 +839,13 @@ string get_type_name(SgType *t) {
       std::ostringstream outstr;
       outstr << mod_type->get_typeModifier().get_address_space_value();
       res = res + "__attribute__((address_space(" + outstr.str() + ")))";
+    }
+    if (mod_type->get_typeModifier().isVectorType()) {
+      std::ostringstream outstr;
+      outstr << "__attribute__((__vector_size__(sizeof("
+             << get_type_name(mod_type->get_base_type()) << ") * "
+             << mod_type->get_typeModifier().get_vector_size() << "))) ";
+      res = res + outstr.str();
     }
 
     // DQ (1/20/2019): By design this is handling the casse of the combination
@@ -1285,8 +1341,7 @@ void Unparse_Type::unparseDeclType(SgType *type, SgUnparse_Info &info) {
   if (!info.isTypeSecondPart()) {
     SgExpression *base_expression = decltype_node->get_base_expression();
     const bool use_underlying_type =
-        (isSgFunctionParameterRefExp(base_expression) != NULL ||
-         isSgVarRefExp(base_expression) != NULL) &&
+        isSgFunctionParameterRefExp(base_expression) != NULL &&
         decltype_node->get_base_type() != NULL &&
         isSgAutoType(decltype_node->get_base_type()) == NULL;
     if (use_underlying_type) {
@@ -1294,7 +1349,8 @@ void Unparse_Type::unparseDeclType(SgType *type, SgUnparse_Info &info) {
       ASSERT_not_null(decltype_node->get_base_type());
       unparseType(decltype_node->get_base_type(), info);
     } else {
-      curprint("decltype(");
+      curprint(decltype_node->get_is_gnu_decltype() ? "__decltype("
+                                                    : "decltype(");
       unp->u_exprStmt->unparseExpression(base_expression, info);
       curprint(")");
       printTrailingTypeSeparator(this, info);
@@ -1663,6 +1719,7 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
   // type with name:  int P::* pmi = &X::a;
   // use: obj.*pmi=7;
   SgType *btype = mpointer_type->get_base_type();
+  SgArrayType *member_pointer_array_base = isSgArrayType(btype);
   SgMemberFunctionType *mfnType = nullptr;
 
 #if DEBUG_MEMBER_POINTER_TYPE
@@ -1883,6 +1940,9 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
       // DQ (5/19/2019): If there was name qualification, then we didn't need
       // the class specifier (and it would be put in the wrong place anyway).
       SgUnparse_Info ninfo(info);
+      if (member_pointer_array_base != NULL) {
+        ninfo.set_isPointerToSomething();
+      }
       // I don't like that we are checking the name qualificaiton string here.
       if (nameQualifierForBaseType.is_null() == false) {
         // DQ (5/18/2019): when in the SgAggregateInitializer, don't output the
@@ -1896,7 +1956,7 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
       // Not clear yet where this was required in the first place.
       // curprint ( "(");
       // if ( info.inTypedefDecl() == true)
-      if (info.inTypedefDecl() == true) {
+      if (info.inTypedefDecl() == true && member_pointer_array_base == NULL) {
         curprint("(");
       }
 
@@ -1923,25 +1983,17 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
         printf("In unparseMemberPointerType(): pointer to member data: second "
                "part of type \n");
 #endif
+        if (member_pointer_array_base != NULL) {
+          SgUnparse_Info ninfo(info);
+          ninfo.set_isPointerToSomething();
+          unparseType(member_pointer_array_base, ninfo);
+        }
         // DQ (2/3/2019): Suppress parenthesis (see Cxx11_tests/test2019_76.C)
         // curprint(")");
         // if ( info.inTypedefDecl() == true)
         // if ( info.inTypedefDecl() == true || info.inArgList() == true)
-        if (info.inTypedefDecl() == true) {
+        else if (info.inTypedefDecl() == true) {
           curprint(")");
-        } else {
-        }
-
-        // DQ (8/19/2014): Handle array types (see test2014_129.C).
-        SgArrayType *arrayType = isSgArrayType(btype);
-        if (arrayType != NULL) {
-#if DEBUG_MEMBER_POINTER_TYPE
-          printf("In unparseMemberPointerType(): Handling the array type \n");
-#endif
-          SgUnparse_Info ninfo(info);
-          curprint("[");
-          unp->u_exprStmt->unparseExpression(arrayType->get_index(), ninfo);
-          curprint("]");
         }
       } else {
         // printf ("What is this 3rd case of neither 1st part nor 2nd part \n");
@@ -2056,8 +2108,9 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
   // DQ (6/22/2006): test2006_76.C demonstrates a problem with this code
   // SgClassDeclaration *cdecl =
   // isSgClassDeclaration(class_type->get_declaration());
-  SgClassDeclaration *decl =
+  SgClassDeclaration *type_decl =
       isSgClassDeclaration(class_type->get_declaration());
+  SgClassDeclaration *decl = type_decl;
   ASSERT_not_null(decl);
 
   SgTemplateClassDeclaration *tpldecl = isSgTemplateClassDeclaration(decl);
@@ -2145,6 +2198,7 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
   // if (info.isTypeFirstPart() == true)
   // if (info.isTypeFirstPart() == true || (SageInterface::is_C_language() ||
   // SageInterface::is_C99_language()) )
+  bool emitted_elaborated_keyword = false;
   if ((info.isTypeFirstPart() == true) || (info.isTypeSecondPart() == false)) {
     /* print the class specifiers */
     // printf ("I think that for C++ we can skip the class specifier, where for
@@ -2169,6 +2223,7 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
         // DQ (6/6/2007): Type elaboration goes here.
         bool useElaboratedType = generateElaboratedType(decl, info);
         if (useElaboratedType == true) {
+          emitted_elaborated_keyword = true;
           SgClassDeclaration::class_types elaborated_type_kind =
               decl->get_class_type();
           if (isSgTemplateInstantiationDecl(decl) != nullptr &&
@@ -2368,6 +2423,11 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
           if (!info.SkipQualifiedNames()) {
             nameQualifier = unp->u_name->lookup_generated_qualified_name(
                 info.get_reference_node_for_qualification());
+          }
+          if (suppressQualifierForHiddenElaboratedTagIntro(
+                  type_decl, decl, info, emitted_elaborated_keyword,
+                  nameQualifier)) {
+            nameQualifier = SgName();
           }
 #if DEBUG_UNPARSE_CLASS_TYPE
           printf("nameQualifier (from "
@@ -3390,6 +3450,13 @@ void Unparse_Type::unparseModifierType(SgType *type, SgUnparse_Info &info) {
              << mod_type->get_typeModifier().get_address_space_value() << ")))";
       curprint(outstr.str().c_str());
     }
+    if (mod_type->get_typeModifier().isVectorType()) {
+      std::ostringstream outstr;
+      outstr << "__attribute__((__vector_size__(sizeof("
+             << get_type_name(mod_type->get_base_type()) << ") * "
+             << mod_type->get_typeModifier().get_vector_size() << "))) ";
+      curprint(outstr.str().c_str());
+    }
 
     if (mod_type->get_typeModifier().get_constVolatileModifier().isConst()) {
       curprint("const ");
@@ -3588,8 +3655,10 @@ void Unparse_Type::unparseFunctionType(SgType *type, SgUnparse_Info &info) {
       curprint(
           "\n/* In unparseFunctionType(): AFTER parenthesis are output */ \n");
 #endif
+      SgUnparse_Info return_type_info(info);
+      return_type_info.unset_inTypedefDecl();
       unparseType(func_type->get_return_type(),
-                  info); // catch the 2nd part of the rtype
+                  return_type_info); // catch the 2nd part of the rtype
 
 #if OUTPUT_DEBUGGING_FUNCTION_INTERNALS || DEBUG_FUNCTION_TYPE
       curprint(
@@ -3687,8 +3756,10 @@ void Unparse_Type::unparseMemberFunctionType(SgType *type,
       // DQ (1/13/2014): These should have been setup to be the same.
       ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
 
+      SgUnparse_Info return_type_info(info);
+      return_type_info.unset_inTypedefDecl();
       unparseType(mfunc_type->get_return_type(),
-                  info); // catch the 2nd part of the rtype
+                  return_type_info); // catch the 2nd part of the rtype
       // add member function type qualifiers (&, &&, const, volatile)
       for (auto qual : memberFunctionQualifiers(mfunc_type))
         curprint(qual);
@@ -4050,8 +4121,11 @@ void Unparse_Type::unparseNonrealType(SgType *type, SgUnparse_Info &info,
       if (!suppress_typename) {
         curprint("typename ");
       }
-      if (has_global_qualifier)
-        curprint("::");
+      if (has_global_qualifier) {
+        curprint(suppress_typename
+                     ? formatQualifiedNameForTypeOutput("::", info)
+                     : "::");
+      }
     }
     SgUnparse_Info parent_info(info);
     if (is_first_in_nonreal_chain && has_global_qualifier) {
@@ -4076,7 +4150,7 @@ void Unparse_Type::unparseNonrealType(SgType *type, SgUnparse_Info &info,
     curprint(formatQualifiedNameForTypeOutput(nameQualifier.str(), info));
     has_nonreal_parent = true;
   } else if (has_global_qualifier) {
-    curprint("::");
+    curprint(formatQualifiedNameForTypeOutput("::", info));
   }
 
   SgTemplateArgumentPtrList &tpl_args = nrdecl->get_tpl_args();

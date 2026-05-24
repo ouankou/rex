@@ -27,6 +27,7 @@ bool is_frontend_suppressed_template_instantiation(
 
   Sg_File_Info *file_info = decl->get_file_info();
   return file_info->isCompilerGenerated() == true &&
+         file_info->isFrontendSpecific() == true &&
          file_info->isOutputInCodeGeneration() == false;
 }
 } // namespace
@@ -182,6 +183,11 @@ void MarkTemplateInstantiationsForOutput::
     SgTemplateInstantiationMemberFunctionDecl *memberFunctionInstantiation =
         isSgTemplateInstantiationMemberFunctionDecl(*i);
     if (memberFunctionInstantiation != NULL) {
+      if (is_frontend_suppressed_template_instantiation(
+              memberFunctionInstantiation)) {
+        continue;
+      }
+
       // At least one of these should be true!
       ROSE_ASSERT(isfirstNondefiningDeclaration == true ||
                   isDefiningDeclaration == true);
@@ -658,6 +664,11 @@ void MarkTemplateInstantiationsForOutput::ProcessFunctionTemplateDeclarations(
     SgTemplateInstantiationFunctionDecl *functionInstantiation =
         isSgTemplateInstantiationFunctionDecl(*i);
     if (functionInstantiation != NULL) {
+      if (is_frontend_suppressed_template_instantiation(
+              functionInstantiation)) {
+        continue;
+      }
+
       // At least one of these should be true!
       ROSE_ASSERT(isfirstNondefiningDeclaration == true ||
                   isDefiningDeclaration == true);
@@ -719,6 +730,10 @@ void MarkTemplateInstantiationsForOutput::ProcessClassTemplateDeclarations(
     SgTemplateInstantiationDecl *classInstantiation =
         isSgTemplateInstantiationDecl(*i);
     if (classInstantiation != NULL) {
+      if (is_frontend_suppressed_template_instantiation(classInstantiation)) {
+        continue;
+      }
+
       // At least one of these should be true!
       ROSE_ASSERT(isfirstNondefiningDeclaration == true ||
                   isDefiningDeclaration == true);

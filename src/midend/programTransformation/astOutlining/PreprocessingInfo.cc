@@ -107,6 +107,36 @@ bool ASTtools::isIfDirectiveEnd(const PreprocessingInfo *info) {
 
 // =====================================================================
 
+static bool shouldMovePreprocInfoUp(const PreprocessingInfo *info) {
+  if (info == NULL)
+    return false;
+
+  switch (info->getTypeOfDirective()) {
+  case PreprocessingInfo::CpreprocessorIncludeDeclaration:
+  case PreprocessingInfo::CpreprocessorDefineDeclaration:
+  case PreprocessingInfo::CpreprocessorUndefDeclaration:
+  case PreprocessingInfo::CpreprocessorIfdefDeclaration:
+  case PreprocessingInfo::CpreprocessorIfndefDeclaration:
+  case PreprocessingInfo::CpreprocessorIfDeclaration:
+  case PreprocessingInfo::CpreprocessorElseDeclaration:
+  case PreprocessingInfo::CpreprocessorElifDeclaration:
+  case PreprocessingInfo::CpreprocessorEndifDeclaration:
+  case PreprocessingInfo::CpreprocessorDeadIfDeclaration:
+  case PreprocessingInfo::CSkippedToken:
+  case PreprocessingInfo::C_StyleComment:
+  case PreprocessingInfo::CplusplusStyleComment:
+  case PreprocessingInfo::FortranStyleComment:
+  case PreprocessingInfo::F90StyleComment:
+    return true;
+  default:
+    break;
+  }
+
+  return false;
+}
+
+// =====================================================================
+
 void ASTtools::attachComment(const char *comment, SgStatement *s) {
   attachComment(string(comment), s);
 }
@@ -380,28 +410,10 @@ void ASTtools::moveUpPreprocInfo(SgStatement *stmt1, SgStatement *stmt2) {
     PreprocessingInfo *info = dynamic_cast<PreprocessingInfo *>(*i);
     ROSE_ASSERT(info != NULL);
 
-    if ((info->getTypeOfDirective() ==
-         PreprocessingInfo::CpreprocessorIncludeDeclaration) ||
-        (info->getTypeOfDirective() ==
-         PreprocessingInfo::CpreprocessorDefineDeclaration) ||
-        (info->getTypeOfDirective() ==
-         PreprocessingInfo::CpreprocessorUndefDeclaration) ||
-        (info->getTypeOfDirective() ==
-         PreprocessingInfo::CpreprocessorIfdefDeclaration) ||
-        (info->getTypeOfDirective() ==
-         PreprocessingInfo::CpreprocessorIfndefDeclaration) ||
-        (info->getTypeOfDirective() ==
-         PreprocessingInfo::CpreprocessorIfDeclaration) ||
-        (info->getTypeOfDirective() ==
-         PreprocessingInfo::CpreprocessorElseDeclaration) ||
-        (info->getTypeOfDirective() ==
-         PreprocessingInfo::CpreprocessorElifDeclaration) ||
-        (info->getTypeOfDirective() == PreprocessingInfo::C_StyleComment) ||
-        (info->getTypeOfDirective() ==
-         PreprocessingInfo::CpreprocessorEndifDeclaration)) {
+    if (shouldMovePreprocInfoUp(info)) {
       stmt1->addToAttachedPreprocessingInfo(info, PreprocessingInfo::after);
       infoToRemoveList.push_back(*i);
-    } // end if
+    }
   } // end for
 
   // Remove the element from the list of comments at the current astNode

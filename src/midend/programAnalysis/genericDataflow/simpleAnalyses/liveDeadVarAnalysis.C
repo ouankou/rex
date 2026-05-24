@@ -295,13 +295,15 @@ public:
 
     // The placement arguments are used
     // check for NULL before adding to used set
-    // not sure if this check is required for get_constructor_args()
-    exprList = sgn->get_constructor_args()->get_args();
-    if (exprList) {
-      for (SgExpressionPtrList::iterator expr =
-               exprList->get_expressions().begin();
-           expr != exprList->get_expressions().end(); expr++)
-        ldva.used(*expr);
+    if (SgConstructorInitializer *constructorArgs =
+            sgn->get_constructor_args()) {
+      exprList = constructorArgs->get_args();
+      if (exprList) {
+        for (SgExpressionPtrList::iterator expr =
+                 exprList->get_expressions().begin();
+             expr != exprList->get_expressions().end(); expr++)
+          ldva.used(*expr);
+      }
     }
 
     // The built-in arguments are used (DON'T KNOW WHAT THESE ARE!)
@@ -1074,15 +1076,16 @@ void VarsExprsProductLattice::remapVars(const map<varID, varID> &varNameMap,
         varID oldVar = itR->first;
 
         Lattice *l = getVarLattice(oldVar);
-        ROSE_ASSERT(l);
-        newLattices.push_back(l);
-        newVarLatticeIndex[newVar] = idx;
-        idx++;
+        if (l) {
+          newLattices.push_back(l);
+          newVarLatticeIndex[newVar] = idx;
+          idx++;
 
-        // Erase the mapping of oldVar in varLatticeIndex
-        varLatticeIndex.erase(oldVar);
+          // Erase the mapping of oldVar in varLatticeIndex
+          varLatticeIndex.erase(oldVar);
 
-        found = true;
+          found = true;
+        }
       }
     }
 
@@ -1299,9 +1302,10 @@ bool VarsExprsProductLattice::remVar(const varID &var) {
 //   var is mapped to lat->copy()
 // Returns true if this causes this Lattice to change and false otherwise.
 bool VarsExprsProductLattice::addVar(const varID &var, Lattice *lat) {
+  ROSE_ASSERT(lat);
   if (varLatticeIndex.find(var) == varLatticeIndex.end()) {
     varLatticeIndex.insert(make_pair(var, lattices.size()));
-    lattices.push_back(lat);
+    lattices.push_back(lat->copy());
     return true;
   } else {
     ROSE_ASSERT(lattices[varLatticeIndex[var]]);

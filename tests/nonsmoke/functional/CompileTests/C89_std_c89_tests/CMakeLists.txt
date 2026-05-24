@@ -79,6 +79,26 @@ set(ROSE_GNU89_TESTCODES
   ../C_tests/test2015_28.c
   ../C_tests/test2017_03.c
 )
+
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _rex_c89_tests_processor)
+set(REX_C89_TESTS_HOST_IS_X86 FALSE)
+if(_rex_c89_tests_processor MATCHES "^(x86_64|amd64|i[3-6]86)$")
+  set(REX_C89_TESTS_HOST_IS_X86 TRUE)
+endif()
+
+set(C89_TESTCODES_X86_ONLY
+  test2012_175.c
+  test2013_72.c
+  ../C_tests/test2012_173.c
+  ../C_tests/test2012_173_redhat_rel6.c
+  ../C_tests/test2017_03.c
+)
+if(NOT REX_C89_TESTS_HOST_IS_X86)
+  rex_register_compile_source_set(REX_C89_X86_ONLY_SOURCES
+    ${C89_TESTCODES_X86_ONLY})
+  list(REMOVE_ITEM files_to_test ${C89_TESTCODES_X86_ONLY})
+  list(REMOVE_ITEM ROSE_GNU89_TESTCODES ${C89_TESTCODES_X86_ONLY})
+endif()
 rex_register_compile_source_set(REX_C89_GNU89_SOURCES ${ROSE_GNU89_TESTCODES})
 
 # test2013_06.c is invalid even for stock C compilers because its header uses
@@ -115,5 +135,5 @@ list(REMOVE_DUPLICATES _c89_test_names)
 
 rex_verify_compile_test_source_coverage(
   DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  PROPERTIES REX_C89_TESTS_SOURCES
+  PROPERTIES REX_C89_TESTS_SOURCES REX_C89_X86_ONLY_SOURCES
 )

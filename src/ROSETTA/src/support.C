@@ -2656,6 +2656,11 @@ void Grammar::setUpSupport() {
                                     "=\"\"", NO_CONSTRUCTOR_PARAMETER,
                                     BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
                                     NO_DELETE);
+  FunctionModifier.setDataPrototype(
+      "SgFunctionModifier::gnu_attribute_parameter_index_list_list_t",
+      "gnu_attribute_nonnull_parameter_index_lists", "",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
   // TV (05/03/2010):
   FunctionModifier.setDataPrototype(
       "SgType *", "opencl_vec_type", "= nullptr", NO_CONSTRUCTOR_PARAMETER,

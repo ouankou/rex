@@ -1205,6 +1205,11 @@ endforeach()
 #-------------------------------------------------------------------------------
 # C constant propagation tests from CXX test directory
 foreach(specimen IN LISTS C_CONSTPROP_SPECIMENS)
+  if(NOT EXISTS "${_cxx_test_dir}/${specimen}")
+    message(STATUS "Skipping C constant propagation test without source: ${specimen}")
+    continue()
+  endif()
+
   string(REPLACE "." "_" _name ${specimen})
   get_filename_component(_name_we ${specimen} NAME_WE)
   set(_c_specimen "${_name_we}.c")
@@ -1225,6 +1230,11 @@ set(_c_constprop_additional_specimens
   ${C_CONSTPROP_EXTENDED_SPECIMENS}
 )
 foreach(specimen IN LISTS _c_constprop_additional_specimens)
+  if(NOT EXISTS "${_cxx_test_dir}/${specimen}")
+    message(STATUS "Skipping C constant propagation test without source: ${specimen}")
+    continue()
+  endif()
+
   string(REPLACE "." "_" _name ${specimen})
   get_filename_component(_name_we ${specimen} NAME_WE)
   set(_c_specimen "${_name_we}.c")
@@ -1346,7 +1356,7 @@ foreach(specimen IN LISTS CXX_POINTER_ALIAS_SPECIMENS)
     NAME gdf_pointer_alias_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="\"$<TARGET_FILE:pointerAliasAnalysisTest>\" -c \"${CMAKE_CURRENT_SOURCE_DIR}/${specimen}\""
+      CMD="\"$<TARGET_FILE:pointerAliasAnalysisTest>\" -ffreestanding -c \"${CMAKE_CURRENT_SOURCE_DIR}/${specimen}\""
       ${_exit_status}
       cxxpa_${specimen}.passed
   )
@@ -1360,4 +1370,3 @@ if(_gdfa_registered_tests)
   set_property(TEST ${_gdfa_registered_tests} APPEND PROPERTY ENVIRONMENT
                "ROSE_TEST_OUTPUT_DIR=${_gdfa_debug_output_dir}")
 endif()
-

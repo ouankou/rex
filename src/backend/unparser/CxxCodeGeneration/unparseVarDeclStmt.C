@@ -18,6 +18,18 @@
 namespace {
 constexpr int kNormalizedVariableDeclarationWrapColumn = 80;
 
+const char *templateParameterKeywordSpellingForVarDecl(
+    SgTemplateParameter::template_parameter_keyword_enum keyword) {
+  switch (keyword) {
+  case SgTemplateParameter::keyword_class:
+    return "class";
+  case SgTemplateParameter::keyword_typename:
+  case SgTemplateParameter::keyword_unspecified:
+  default:
+    return "typename";
+  }
+}
+
 SgInitializedName *getFirstInitializedNameIfAny(SgVariableDeclaration *decl) {
   if (decl == nullptr || decl->get_variables().empty()) {
     return nullptr;
@@ -26,10 +38,62 @@ SgInitializedName *getFirstInitializedNameIfAny(SgVariableDeclaration *decl) {
   return decl->get_variables().front();
 }
 
+template <typename StatementList>
+void appendDirectVariableDeclarations(
+    const StatementList &statements,
+    std::vector<SgVariableDeclaration *> &declarations) {
+  for (SgStatement *statement : statements) {
+    if (SgVariableDeclaration *var_decl = isSgVariableDeclaration(statement)) {
+      declarations.push_back(var_decl);
+    }
+  }
+}
+
+std::vector<SgVariableDeclaration *>
+collectSiblingVariableDeclarations(SgNode *parent) {
+  std::vector<SgVariableDeclaration *> declarations;
+  SgScopeStatement *scope = isSgScopeStatement(parent);
+  if (scope == nullptr) {
+    return declarations;
+  }
+
+  if (SgGlobal *global_scope = isSgGlobal(scope)) {
+    appendDirectVariableDeclarations(global_scope->get_declarations(),
+                                     declarations);
+  } else if (SgNamespaceDefinitionStatement *namespace_scope =
+                 isSgNamespaceDefinitionStatement(scope)) {
+    appendDirectVariableDeclarations(namespace_scope->get_declarations(),
+                                     declarations);
+  } else if (SgDeclarationScope *declaration_scope =
+                 isSgDeclarationScope(scope)) {
+    appendDirectVariableDeclarations(declaration_scope->get_declarations(),
+                                     declarations);
+  } else if (SgClassDefinition *class_scope = isSgClassDefinition(scope)) {
+    appendDirectVariableDeclarations(class_scope->get_members(), declarations);
+  } else if (SgTemplateClassDefinition *template_class_scope =
+                 isSgTemplateClassDefinition(scope)) {
+    appendDirectVariableDeclarations(template_class_scope->get_members(),
+                                     declarations);
+  } else if (SgTemplateInstantiationDefn *instantiation_scope =
+                 isSgTemplateInstantiationDefn(scope)) {
+    appendDirectVariableDeclarations(instantiation_scope->get_members(),
+                                     declarations);
+  } else if (scope->containsOnlyDeclarations()) {
+    appendDirectVariableDeclarations(scope->getDeclarationList(), declarations);
+  } else if (scope->variantT() == V_SgBasicBlock) {
+    appendDirectVariableDeclarations(scope->getStatementList(), declarations);
+  }
+
+  return declarations;
+}
+
 std::vector<SgVariableDeclaration *>
 collectAssociatedDeclarationListItems(SgVariableDeclaration *decl) {
   if (decl == nullptr || decl->get_parent() == nullptr) {
     return {};
+  }
+  if (!decl->get_isAssociatedWithDeclarationList()) {
+    return {decl};
   }
 
   SgInitializedName *decl_init = getFirstInitializedNameIfAny(decl);
@@ -41,10 +105,8 @@ collectAssociatedDeclarationListItems(SgVariableDeclaration *decl) {
   std::unordered_multimap<SgInitializedName *, SgVariableDeclaration *>
       decls_by_prev_item;
 
-  Rose_STL_Container<SgNode *> node_list =
-      NodeQuery::querySubTree(decl->get_parent(), V_SgVariableDeclaration);
-  for (SgNode *node : node_list) {
-    SgVariableDeclaration *candidate = isSgVariableDeclaration(node);
+  for (SgVariableDeclaration *candidate :
+       collectSiblingVariableDeclarations(decl->get_parent())) {
     if (candidate == nullptr || candidate->get_parent() != decl->get_parent()) {
       continue;
     }
@@ -60,7 +122,8 @@ collectAssociatedDeclarationListItems(SgVariableDeclaration *decl) {
     }
 
     decl_by_init[candidate_init] = candidate;
-    if (candidate_init->get_prev_decl_item() != nullptr) {
+    if (candidate->get_isAssociatedWithDeclarationList() &&
+        candidate_init->get_prev_decl_item() != nullptr) {
       decls_by_prev_item.emplace(candidate_init->get_prev_decl_item(),
                                  candidate);
     }
@@ -94,8 +157,22 @@ collectAssociatedDeclarationListItems(SgVariableDeclaration *decl) {
 
     auto next_it = range.first;
     ++next_it;
-    ROSE_ASSERT(next_it == range.second);
-    current_decl = range.first->second;
+    if (next_it != range.second) {
+      // prev_decl_item is also used to link ordinary redeclarations to their
+      // prior symbol.  A branched graph is not a comma-separated declaration
+      // list, so unparse this declaration independently.
+      return {decl};
+    }
+    SgVariableDeclaration *next_decl = range.first->second;
+    SgInitializedName *next_init = getFirstInitializedNameIfAny(next_decl);
+    if (next_init != nullptr &&
+        current_init->get_name() == next_init->get_name()) {
+      // prev_decl_item also links ordinary redeclarations.  Repeated names are
+      // not valid comma-list declarators, but they are common in separate
+      // lexical substatements such as if/else branches.
+      return {decl};
+    }
+    current_decl = next_decl;
   }
 
   if (list_items.empty()) {
@@ -589,11 +666,22 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
       if (param_name.empty()) {
         continue;
       }
+      bool is_pack = param->get_is_parameter_pack();
+      if (SgInitializedName *init_name = param->get_initializedName()) {
+        is_pack = is_pack || init_name->get_is_parameter_pack() ||
+                  init_name->get_is_pack_element();
+      }
+      if (SgTemplateType *template_type = isSgTemplateType(param->get_type())) {
+        is_pack = is_pack || template_type->get_packed();
+      }
 
       if (need_separator) {
         result += ",";
       }
       result += param_name;
+      if (is_pack) {
+        result += "...";
+      }
       need_separator = true;
     }
 
@@ -621,9 +709,18 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
 
       switch (param->get_parameterType()) {
       case SgTemplateParameter::type_parameter: {
-        result += "class";
+        result += templateParameterKeywordSpellingForVarDecl(
+            SageInterface::getTemplateParameterKeyword(param));
         std::string param_name = substitute_template_parameter_name(
             get_template_parameter_name(param));
+        bool is_pack = param->get_is_parameter_pack();
+        if (SgTemplateType *template_type =
+                isSgTemplateType(param->get_type())) {
+          is_pack = is_pack || template_type->get_packed();
+        }
+        if (is_pack) {
+          result += "...";
+        }
         if (!param_name.empty()) {
           result += " ";
           result += param_name;
@@ -638,10 +735,20 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
               build_substituted_type_string(init_name->get_type());
           if (!param_type.empty()) {
             result += param_type;
-            result += " ";
           }
-          result += substitute_template_parameter_name(
+          if (param->get_is_parameter_pack() ||
+              init_name->get_is_parameter_pack() ||
+              init_name->get_is_pack_element()) {
+            result += "...";
+          }
+          std::string param_name = substitute_template_parameter_name(
               init_name->get_name().getString());
+          if (!param_name.empty()) {
+            if (!result.empty()) {
+              result += " ";
+            }
+            result += param_name;
+          }
         } else {
           result += globalUnparseToString(param, NULL);
         }
@@ -688,7 +795,7 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
       return build_substituted_type_string(modifier_type->get_base_type());
     }
     if (SgTypedefType *typedef_type = isSgTypedefType(type)) {
-      return build_substituted_type_string(typedef_type->get_base_type());
+      return globalUnparseToString(typedef_type, NULL);
     }
     if (SgPointerType *pointer_type = isSgPointerType(type)) {
       return build_substituted_type_string(pointer_type->get_base_type()) +

@@ -6934,9 +6934,14 @@ void transOmpParallel(SgNode *node) {
           isSgOmpExecStatement(new_directives[i]);
       ROSE_ASSERT(old_directive != NULL);
       ROSE_ASSERT(new_directive != NULL);
-      clause_variable_renaming_record[new_directive] =
-          clause_variable_renaming_record[old_directive];
-      clause_variable_renaming_record.erase(old_directive);
+      std::map<SgOmpExecStatement *,
+               std::map<SgInitializedName *, SgExpression *> *>::iterator
+          old_mapping = clause_variable_renaming_record.find(old_directive);
+      if (old_mapping != clause_variable_renaming_record.end()) {
+        ROSE_ASSERT(old_mapping->second != NULL);
+        clause_variable_renaming_record[new_directive] = old_mapping->second;
+        clause_variable_renaming_record.erase(old_mapping);
+      }
     }
   }
 }

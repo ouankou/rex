@@ -5,6 +5,102 @@
 
 #include "rose_config.h"
 
+namespace {
+
+bool isClassLikeScope(SgScopeStatement *scope) {
+  return isSgClassDefinition(scope) != NULL ||
+         isSgTemplateClassDefinition(scope) != NULL ||
+         isSgTemplateInstantiationDefn(scope) != NULL;
+}
+
+SgClassDeclaration *
+classDeclarationFromClassLikeScope(SgScopeStatement *scope) {
+  if (SgClassDefinition *classDef = isSgClassDefinition(scope)) {
+    return classDef->get_declaration();
+  }
+  if (SgTemplateClassDefinition *templateDef =
+          isSgTemplateClassDefinition(scope)) {
+    return templateDef->get_declaration();
+  }
+  if (SgTemplateInstantiationDefn *instDef =
+          isSgTemplateInstantiationDefn(scope)) {
+    return instDef->get_declaration();
+  }
+  return NULL;
+}
+
+size_t templateParameterCount(SgClassDeclaration *decl) {
+  if (SgTemplateClassDeclaration *templateDecl =
+          isSgTemplateClassDeclaration(decl)) {
+    return templateDecl->get_templateParameters().size();
+  }
+  if (SgTemplateInstantiationDecl *instDecl =
+          isSgTemplateInstantiationDecl(decl)) {
+    if (SgTemplateClassDeclaration *templateDecl =
+            isSgTemplateClassDeclaration(instDecl->get_templateDeclaration())) {
+      return templateDecl->get_templateParameters().size();
+    }
+  }
+  return 0;
+}
+
+bool classDeclarationsHaveSameOwnerShape(SgClassDeclaration *lhs,
+                                         SgClassDeclaration *rhs) {
+  return lhs != NULL && rhs != NULL && lhs->get_name() == rhs->get_name() &&
+         lhs->get_class_type() == rhs->get_class_type() &&
+         templateParameterCount(lhs) == templateParameterCount(rhs);
+}
+
+SgClassDeclaration *classDeclarationFromOwnerScope(SgScopeStatement *scope) {
+  if (SgDeclarationScope *declarationScope = isSgDeclarationScope(scope)) {
+    return isSgClassDeclaration(declarationScope->get_parent());
+  }
+
+  if (isClassLikeScope(scope)) {
+    return classDeclarationFromClassLikeScope(scope);
+  }
+
+  return NULL;
+}
+
+bool shouldPreserveOutOfLineClassDefinitionScope(
+    SgDeclarationStatement *declaration,
+    SgDeclarationStatement *firstNondefiningDeclaration) {
+  SgClassDeclaration *classDeclaration = isSgClassDeclaration(declaration);
+  SgClassDeclaration *firstClassDeclaration =
+      isSgClassDeclaration(firstNondefiningDeclaration);
+  if (classDeclaration == NULL || firstClassDeclaration == NULL ||
+      declaration->get_definingDeclaration() != declaration) {
+    return false;
+  }
+  SgTemplateClassDeclaration *templateClassDeclaration =
+      isSgTemplateClassDeclaration(declaration);
+  if (templateClassDeclaration == NULL ||
+      templateClassDeclaration->get_templateClassOwnerScopeKind() !=
+          SgTemplateClassDeclaration::
+              e_template_class_owner_scope_source_spelled ||
+      templateClassDeclaration->get_sourceSpelledTemplateClassOwner() == NULL) {
+    return false;
+  }
+
+  SgScopeStatement *definingScope = declaration->get_scope();
+  SgScopeStatement *firstScope = firstNondefiningDeclaration->get_scope();
+  if (definingScope == NULL || firstScope == NULL ||
+      definingScope == firstScope || !isClassLikeScope(firstScope)) {
+    return false;
+  }
+
+  if (declaration->get_parent() == definingScope) {
+    return false;
+  }
+
+  return classDeclarationsHaveSameOwnerShape(
+      classDeclarationFromOwnerScope(definingScope),
+      classDeclarationFromClassLikeScope(firstScope));
+}
+
+} // namespace
+
 void fixupAstDefiningAndNondefiningDeclarations(SgNode * /*node*/) {
   // DQ (7/7/2005): Introduce tracking of performance of ROSE.
   TimingPerformance timer("Fixup defining and non-defining declarations:");
@@ -15,6 +111,7 @@ void fixupAstDefiningAndNondefiningDeclarations(SgNode * /*node*/) {
   // Visit all pooled declarations, plus the non-declaration support nodes that
   // this visitor explicitly handles, without paying for a whole-pool walk.
   SgDeclarationStatement::traverseMemoryPoolNodes(astFixupTraversal);
+  SgVariableDeclaration::traverseMemoryPoolNodes(astFixupTraversal);
   SgFunctionParameterList::traverseMemoryPoolNodes(astFixupTraversal);
   SgVariableDefinition::traverseMemoryPoolNodes(astFixupTraversal);
 }
@@ -174,6 +271,11 @@ void FixupAstDefiningAndNondefiningDeclarations::visit(SgNode *node) {
         // symbol must stay in the owning class scope even though the defining
         // declaration is lexically outside that class.
         if (nondefining_is_member_class && defining_is_outside_class_scope) {
+          equivalent_scopes = true;
+        }
+        if (equivalent_scopes == false &&
+            shouldPreserveOutOfLineClassDefinitionScope(
+                definingDeclaration, firstNondefiningDeclaration)) {
           equivalent_scopes = true;
         }
       }
@@ -418,7 +520,9 @@ void FixupAstDefiningAndNondefiningDeclarations::visit(SgNode *node) {
       nondefiningScope = firstNondefiningDeclaration->get_scope();
       equivalent_scopes =
           (definingScope == nondefiningScope) ||
-          (isSgGlobal(nondefiningScope) && isSgGlobal(definingScope));
+          (isSgGlobal(nondefiningScope) && isSgGlobal(definingScope)) ||
+          shouldPreserveOutOfLineClassDefinitionScope(
+              definingDeclaration, firstNondefiningDeclaration);
       ROSE_ASSERT(equivalent_scopes);
     }
   }
@@ -536,13 +640,17 @@ void FixupAstDefiningAndNondefiningDeclarations::visit(SgNode *node) {
                   declaration->get_scope() == definingDeclaration->get_scope());
 
       if (firstNondefiningDeclaration != NULL) {
+        const bool preserveOutOfLineClassDefinitionScope =
+            shouldPreserveOutOfLineClassDefinitionScope(
+                declaration, firstNondefiningDeclaration);
         // DQ (2/12/2006): Set the scope to match the
         // firstNondefiningDeclaration required for test2006_08.C to work:
         // friend declarations should have matching scopes. DQ (2/16/2006):
         // Let's only call set_scope if there is an explicit scope to set! So I
         // added a virtual hasExplicitScope() member function so that we can
         // know which IR nodes have an explicit scope data member.
-        if (declaration->hasExplicitScope() == true) {
+        if (declaration->hasExplicitScope() == true &&
+            preserveOutOfLineClassDefinitionScope == false) {
           MLOG_WARN_C(
               "astPostProcessing",
               "Resetting scope (declaration->hasExplicitScope() == true) of "
@@ -561,6 +669,7 @@ void FixupAstDefiningAndNondefiningDeclarations::visit(SgNode *node) {
         // get_scope function! \n"); ROSE_ASSERT(declaration->get_scope() ==
         // firstNondefiningDeclaration->get_scope());
         ROSE_ASSERT(declaration->hasExplicitScope() == false ||
+                    preserveOutOfLineClassDefinitionScope == true ||
                     declaration->get_scope() ==
                         firstNondefiningDeclaration->get_scope());
         // firstNondefiningDeclaration->set_scope();

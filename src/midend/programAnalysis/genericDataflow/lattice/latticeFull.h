@@ -167,6 +167,7 @@ protected:
 public:
   ProductLattice();
   ProductLattice(const std::vector<Lattice *> &lattices);
+  ProductLattice(const ProductLattice &that);
   ~ProductLattice();
 
   void init(const std::vector<Lattice *> &lattices);
@@ -220,7 +221,7 @@ public:
   }
 
   FiniteProductLattice(const FiniteProductLattice &that)
-      : ProductLattice(that.lattices), FiniteLattice() {
+      : ProductLattice(that), FiniteLattice() {
     verifyFinite();
   }
 
@@ -243,7 +244,7 @@ public:
       : ProductLattice(lattices), InfiniteLattice() {}
 
   InfiniteProductLattice(const InfiniteProductLattice &that)
-      : ProductLattice(that.lattices), InfiniteLattice() {}
+      : ProductLattice(that), InfiniteLattice() {}
 
   // returns a copy of this lattice
   Lattice *copy() const { return new InfiniteProductLattice(*this); }

@@ -10,7 +10,8 @@ add_test(
 add_test(
   NAME nonsmoke_functional_CompilerOptionsTests_testIncludeOptions_test_include.c
   COMMAND $<TARGET_FILE:testTranslator> -rose:verbose 0
+    -isystem ${CMAKE_CURRENT_SOURCE_DIR}/system_include
+    -I${CMAKE_CURRENT_SOURCE_DIR}/include
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test_include.c
 )
 set_tests_properties(nonsmoke_functional_CompilerOptionsTests_testIncludeOptions_test_include.c PROPERTIES DEPENDS compiler_options_include_options)
-

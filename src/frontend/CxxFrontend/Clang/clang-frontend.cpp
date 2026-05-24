@@ -60,6 +60,357 @@ void roseClangPhaseTrace(const char *phase) {
   }
 }
 
+bool isSplitClangTargetOption(llvm::StringRef arg) {
+  return arg == "-target" || arg == "--target" || arg == "-march" ||
+         arg == "-mcpu" || arg == "-mtune" || arg == "-mabi" ||
+         arg == "-mfpu" || arg == "-isysroot" || arg == "--sysroot";
+}
+
+bool isJoinedClangTargetOption(llvm::StringRef arg) {
+  return arg.starts_with("-target=") || arg.starts_with("--target=") ||
+         arg.starts_with("-march=") || arg.starts_with("-mcpu=") ||
+         arg.starts_with("-mtune=") || arg.starts_with("-mabi=") ||
+         arg.starts_with("-mfpu=") || arg.starts_with("-mfloat-abi=") ||
+         arg.starts_with("-isysroot") || arg.starts_with("--sysroot=") ||
+         arg == "-m32" || arg == "-m64" || arg == "-mx32" ||
+         arg == "-msoft-float" || arg == "-mhard-float" ||
+         arg == "-mlittle-endian" || arg == "-mbig-endian";
+}
+
+bool isX86OnlyDriverOption(llvm::StringRef arg) {
+  if (arg == "-mrtd" || arg == "-mno-rtd" || arg == "-msseregparm" ||
+      arg == "-mstackrealign" || arg == "-mno-red-zone" ||
+      arg == "-mred-zone") {
+    return true;
+  }
+  if (arg.starts_with("-fdefault-calling-conv=")) {
+    llvm::StringRef value =
+        arg.drop_front(std::strlen("-fdefault-calling-conv="));
+    return value == "cdecl" || value == "stdcall" || value == "fastcall" ||
+           value == "thiscall" || value == "vectorcall" || value == "regcall";
+  }
+  return arg.starts_with("-mregparm") || arg.starts_with("-masm=") ||
+         arg.starts_with("-msse") || arg.starts_with("-mno-sse") ||
+         arg.starts_with("-mavx") || arg.starts_with("-mno-avx") ||
+         arg.starts_with("-mavx512") || arg.starts_with("-mmmx") ||
+         arg.starts_with("-mno-mmx") || arg.starts_with("-m3dnow") ||
+         arg.starts_with("-mfma") || arg.starts_with("-maes") ||
+         arg.starts_with("-mpclmul") || arg.starts_with("-mpopcnt") ||
+         arg.starts_with("-mbmi") || arg.starts_with("-mbmi2") ||
+         arg.starts_with("-mf16c") || arg.starts_with("-mfsgsbase") ||
+         arg.starts_with("-mxsave");
+}
+
+SgDeclarationStatementPtrList *
+scopeDeclarationListForDirectiveOwnershipRepair(SgScopeStatement *scope) {
+  if (scope == nullptr) {
+    return nullptr;
+  }
+  if (SgGlobal *global = isSgGlobal(scope)) {
+    return &global->get_declarations();
+  }
+  if (SgNamespaceDefinitionStatement *ns_def =
+          isSgNamespaceDefinitionStatement(scope)) {
+    return &ns_def->get_declarations();
+  }
+  if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+    return &class_def->get_members();
+  }
+  if (SgTemplateClassDefinition *template_def =
+          isSgTemplateClassDefinition(scope)) {
+    return &template_def->get_members();
+  }
+  if (SgTemplateInstantiationDefn *inst_def =
+          isSgTemplateInstantiationDefn(scope)) {
+    return &inst_def->get_members();
+  }
+  if (scope->containsOnlyDeclarations()) {
+    return &scope->getDeclarationList();
+  }
+  return nullptr;
+}
+
+bool eraseDeclarationFromList(SgDeclarationStatementPtrList &list,
+                              SgDeclarationStatement *decl) {
+  bool removed = false;
+  for (SgDeclarationStatementPtrList::iterator it = list.begin();
+       it != list.end();) {
+    if (*it == decl) {
+      it = list.erase(it);
+      removed = true;
+    } else {
+      ++it;
+    }
+  }
+  return removed;
+}
+
+bool sourceBackedTemplateInstantiationDirective(
+    SgTemplateInstantiationDirectiveStatement *directive) {
+  if (directive == nullptr) {
+    return false;
+  }
+
+  Sg_File_Info *info = directive->get_file_info();
+  if (info == nullptr || info->get_line() <= 0 || info->isCompilerGenerated() ||
+      info->isFrontendSpecific() ||
+      info->isSourcePositionUnavailableInFrontend()) {
+    return false;
+  }
+
+  SgDeclarationStatement *decl = directive->get_declaration();
+  if (SgTemplateInstantiationFunctionDecl *function_inst =
+          isSgTemplateInstantiationFunctionDecl(decl)) {
+    return function_inst->isSpecialization();
+  }
+  if (SgTemplateInstantiationMemberFunctionDecl *member_inst =
+          isSgTemplateInstantiationMemberFunctionDecl(decl)) {
+    return member_inst->isSpecialization();
+  }
+  if (SgTemplateInstantiationDecl *class_inst =
+          isSgTemplateInstantiationDecl(decl)) {
+    return class_inst->isSpecialization();
+  }
+
+  return false;
+}
+
+void restoreLocatedNodeOutput(SgLocatedNode *node) {
+  if (node == nullptr) {
+    return;
+  }
+  if (Sg_File_Info *info = node->get_file_info()) {
+    info->setOutputInCodeGeneration();
+  }
+  if (Sg_File_Info *info = node->get_startOfConstruct()) {
+    info->setOutputInCodeGeneration();
+  }
+  if (Sg_File_Info *info = node->get_endOfConstruct()) {
+    info->setOutputInCodeGeneration();
+  }
+}
+
+void repairTemplateInstantiationDirectiveOwnership(SgGlobal *global_scope) {
+  if (global_scope == nullptr) {
+    return;
+  }
+
+  struct Collector : public AstSimpleProcessing {
+    std::vector<SgScopeStatement *> scopes;
+    std::vector<SgTemplateInstantiationDirectiveStatement *> directives;
+    std::set<SgScopeStatement *> seen_scopes;
+    std::set<SgTemplateInstantiationDirectiveStatement *> seen_directives;
+
+    void visit(SgNode *node) override {
+      if (SgScopeStatement *scope = isSgScopeStatement(node)) {
+        if (seen_scopes.insert(scope).second) {
+          scopes.push_back(scope);
+        }
+      }
+      if (SgTemplateInstantiationDirectiveStatement *directive =
+              isSgTemplateInstantiationDirectiveStatement(node)) {
+        if (seen_directives.insert(directive).second) {
+          directives.push_back(directive);
+        }
+      }
+    }
+  } collector;
+
+  collector.traverse(global_scope, preorder);
+
+  for (SgTemplateInstantiationDirectiveStatement *directive :
+       collector.directives) {
+    if (directive == nullptr) {
+      continue;
+    }
+    SgDeclarationStatement *decl = directive->get_declaration();
+    if (decl == nullptr) {
+      continue;
+    }
+
+    for (SgScopeStatement *scope : collector.scopes) {
+      if (SgDeclarationStatementPtrList *list =
+              scopeDeclarationListForDirectiveOwnershipRepair(scope)) {
+        eraseDeclarationFromList(*list, decl);
+      }
+    }
+
+    if (decl->get_parent() != directive) {
+      decl->set_parent(directive);
+    }
+    if (directive->get_declaration() != decl) {
+      directive->set_declaration(decl);
+    }
+
+    if (sourceBackedTemplateInstantiationDirective(directive)) {
+      restoreLocatedNodeOutput(directive);
+      restoreLocatedNodeOutput(decl);
+    }
+  }
+}
+
+SgDeclarationStatementPtrList *
+scopeMemberDeclarationListForRefSymbolRepair(SgScopeStatement *scope) {
+  if (scope == nullptr) {
+    return nullptr;
+  }
+  if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+    return &class_def->get_members();
+  }
+  if (SgTemplateClassDefinition *template_def =
+          isSgTemplateClassDefinition(scope)) {
+    return &template_def->get_members();
+  }
+  if (SgTemplateInstantiationDefn *inst_def =
+          isSgTemplateInstantiationDefn(scope)) {
+    return &inst_def->get_members();
+  }
+  return nullptr;
+}
+
+SgScopeStatement *enclosingMemberScopeForRefSymbolRepair(SgNode *node) {
+  for (SgNode *cursor = node; cursor != nullptr;
+       cursor = cursor->get_parent()) {
+    if (SgScopeStatement *scope = isSgScopeStatement(cursor)) {
+      if (scopeMemberDeclarationListForRefSymbolRepair(scope) != nullptr) {
+        return scope;
+      }
+    }
+  }
+  return nullptr;
+}
+
+SgMemberFunctionDeclaration *canonicalMemberFunctionDeclForRefSymbolRepair(
+    SgMemberFunctionDeclaration *decl) {
+  if (decl == nullptr) {
+    return nullptr;
+  }
+  if (SgMemberFunctionDeclaration *first_nondef = isSgMemberFunctionDeclaration(
+          decl->get_firstNondefiningDeclaration())) {
+    return first_nondef;
+  }
+  return decl;
+}
+
+bool memberFunctionDeclMatchesRefType(SgMemberFunctionDeclaration *decl,
+                                      SgMemberFunctionRefExp *ref) {
+  if (decl == nullptr || ref == nullptr) {
+    return false;
+  }
+  SgType *decl_type = decl->get_type();
+  SgType *ref_type = ref->get_type();
+  if (decl_type == nullptr || ref_type == nullptr) {
+    return false;
+  }
+  return decl_type == ref_type ||
+         SageInterface::isEquivalentType(decl_type, ref_type);
+}
+
+SgMemberFunctionDeclaration *
+resolveMemberFunctionDeclForNullRefSymbol(SgMemberFunctionRefExp *ref) {
+  if (ref == nullptr || ref->get_symbol() == nullptr) {
+    return nullptr;
+  }
+
+  SgScopeStatement *member_scope = enclosingMemberScopeForRefSymbolRepair(ref);
+  SgDeclarationStatementPtrList *members =
+      scopeMemberDeclarationListForRefSymbolRepair(member_scope);
+  if (members == nullptr) {
+    return nullptr;
+  }
+
+  const SgName target_name = ref->get_symbol()->get_name();
+  std::vector<SgMemberFunctionDeclaration *> name_matches;
+  std::vector<SgMemberFunctionDeclaration *> type_matches;
+  std::set<SgMemberFunctionDeclaration *> seen;
+
+  for (SgDeclarationStatement *stmt : *members) {
+    SgMemberFunctionDeclaration *member_decl =
+        canonicalMemberFunctionDeclForRefSymbolRepair(
+            isSgMemberFunctionDeclaration(stmt));
+    if (member_decl == nullptr || member_decl->get_name() != target_name ||
+        !seen.insert(member_decl).second) {
+      continue;
+    }
+
+    name_matches.push_back(member_decl);
+    if (memberFunctionDeclMatchesRefType(member_decl, ref)) {
+      type_matches.push_back(member_decl);
+    }
+  }
+
+  if (type_matches.size() == 1) {
+    return type_matches.front();
+  }
+  if (name_matches.size() == 1) {
+    return name_matches.front();
+  }
+  return nullptr;
+}
+
+SgMemberFunctionSymbol *
+memberFunctionSymbolForRefSymbolRepair(SgMemberFunctionDeclaration *decl) {
+  decl = canonicalMemberFunctionDeclForRefSymbolRepair(decl);
+  if (decl == nullptr) {
+    return nullptr;
+  }
+
+  if (SgMemberFunctionSymbol *symbol =
+          isSgMemberFunctionSymbol(decl->get_symbol_from_symbol_table())) {
+    if (symbol->get_declaration() == nullptr) {
+      symbol->set_declaration(decl);
+    }
+    return symbol;
+  }
+
+  SgScopeStatement *scope = decl->get_scope();
+  SgMemberFunctionSymbol *symbol = nullptr;
+  if (scope != nullptr) {
+    symbol = scope->lookup_nontemplate_member_function_symbol(
+        decl->get_name(), decl->get_type(), nullptr);
+    if (symbol != nullptr && symbol->get_declaration() == nullptr) {
+      symbol->set_declaration(decl);
+    }
+  }
+
+  if (symbol == nullptr) {
+    symbol = new SgMemberFunctionSymbol(decl);
+    if (scope != nullptr) {
+      scope->insert_symbol(symbol->get_name(), symbol);
+    }
+  }
+
+  return symbol;
+}
+
+void repairNullMemberFunctionRefSymbols(SgGlobal *global_scope) {
+  if (global_scope == nullptr) {
+    return;
+  }
+
+  Rose_STL_Container<SgNode *> refs =
+      NodeQuery::querySubTree(global_scope, V_SgMemberFunctionRefExp);
+  for (SgNode *node : refs) {
+    SgMemberFunctionRefExp *ref = isSgMemberFunctionRefExp(node);
+    if (ref == nullptr) {
+      continue;
+    }
+
+    SgMemberFunctionSymbol *symbol = ref->get_symbol();
+    if (symbol == nullptr || symbol->get_declaration() != nullptr) {
+      continue;
+    }
+
+    SgMemberFunctionDeclaration *decl =
+        resolveMemberFunctionDeclForNullRefSymbol(ref);
+    SgMemberFunctionSymbol *resolved_symbol =
+        memberFunctionSymbolForRefSymbolRepair(decl);
+    if (resolved_symbol != nullptr) {
+      ref->set_symbol(resolved_symbol);
+    }
+  }
+}
+
 class RoseDiagnosticConsumer : public clang::DiagnosticConsumer {
   std::unique_ptr<clang::DiagnosticConsumer> delegate_;
   SagePreprocessorRecord *preprocessor_recorder_ = nullptr;
@@ -501,6 +852,88 @@ static bool isUnsafeDirectiveForRoundtrip(const PreprocessingInfo *info) {
   default:
     return true;
   }
+}
+
+static bool isCommentPreprocessingInfo(const PreprocessingInfo *info) {
+  if (info == NULL) {
+    return false;
+  }
+
+  switch (info->getTypeOfDirective()) {
+  case PreprocessingInfo::C_StyleComment:
+  case PreprocessingInfo::CplusplusStyleComment:
+  case PreprocessingInfo::FortranStyleComment:
+  case PreprocessingInfo::F90StyleComment:
+    return true;
+
+  default:
+    return false;
+  }
+}
+
+static bool samePreprocessingSourceFile(const Sg_File_Info *lhs,
+                                        const Sg_File_Info *rhs) {
+  if (lhs == NULL || rhs == NULL) {
+    return false;
+  }
+
+  const int lhs_file_id = lhs->get_file_id();
+  const int rhs_file_id = rhs->get_file_id();
+  if (lhs_file_id >= 0 && lhs_file_id == rhs_file_id) {
+    return true;
+  }
+
+  return !lhs->get_filenameString().empty() &&
+         lhs->get_filenameString() == rhs->get_filenameString();
+}
+
+static Sg_File_Info *
+namespaceDeclarationSyntaxEnd(SgNamespaceDeclarationStatement *namespace_decl) {
+  if (namespace_decl == NULL) {
+    return NULL;
+  }
+
+  if (Sg_File_Info *end = namespace_decl->get_endOfConstruct()) {
+    if (end->get_line() > 0) {
+      return end;
+    }
+  }
+
+  if (SgNamespaceDefinitionStatement *namespace_def =
+          namespace_decl->get_definition()) {
+    if (Sg_File_Info *end = namespace_def->get_endOfConstruct()) {
+      if (end->get_line() > 0) {
+        return end;
+      }
+    }
+  }
+
+  return NULL;
+}
+
+static bool isSameLineNamespaceClosingComment(SgLocatedNode *node,
+                                              Sg_File_Info *comment_location,
+                                              const PreprocessingInfo *info) {
+  if (!isCommentPreprocessingInfo(info) || comment_location == NULL) {
+    return false;
+  }
+
+  SgNamespaceDeclarationStatement *namespace_decl =
+      isSgNamespaceDeclarationStatement(node);
+  if (namespace_decl == NULL) {
+    return false;
+  }
+
+  Sg_File_Info *namespace_end = namespaceDeclarationSyntaxEnd(namespace_decl);
+  if (namespace_end == NULL || namespace_end->get_line() <= 0 ||
+      namespace_end->get_col() <= 0 || comment_location->get_line() <= 0 ||
+      comment_location->get_col() <= 0 ||
+      !samePreprocessingSourceFile(namespace_end, comment_location)) {
+    return false;
+  }
+
+  return namespace_end->get_line() == comment_location->get_line() &&
+         namespace_end->get_col() < comment_location->get_col();
 }
 
 static bool functionDefinitionHasUnsafeDeclaratorPreprocessingInfo(
@@ -1586,6 +2019,15 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   bool saw_explicit_rtti_flag = false;
   bool explicit_rtti_enabled = true;
 
+  auto add_include_dir_if_missing = [&](const std::string &dir) {
+    if (dir.empty())
+      return;
+    if (std::find(inc_dirs_list.begin(), inc_dirs_list.end(), dir) ==
+        inc_dirs_list.end()) {
+      inc_dirs_list.push_back(dir);
+    }
+  };
+
   for (int i = 0; i < argc; i++) {
     std::string current_arg(argv[i]);
     Rose::Cmdline::IncludeOptionParseResult include_parse_result =
@@ -1604,11 +2046,11 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
 
     if (current_arg.find("-I") == 0) {
       if (current_arg.length() > 2) {
-        inc_dirs_list.push_back(current_arg.substr(2));
+        add_include_dir_if_missing(current_arg.substr(2));
       } else {
         i++;
         if (i < argc)
-          inc_dirs_list.push_back(current_arg);
+          add_include_dir_if_missing(argv[i]);
         else
           break;
       }
@@ -1681,6 +2123,16 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
         if (i >= argc)
           break;
       }
+    } else if (isSplitClangTargetOption(current_arg)) {
+      passthrough_args.push_back(current_arg);
+      ++i;
+      if (i < argc)
+        passthrough_args.push_back(argv[i]);
+      else
+        break;
+    } else if (isJoinedClangTargetOption(current_arg) ||
+               isX86OnlyDriverOption(current_arg)) {
+      passthrough_args.push_back(current_arg);
     } else if (current_arg.rfind("-fopenmp", 0) == 0) {
       // Don't pass -fopenmp to Clang - REX captures OpenMP pragmas as plain
       // text
@@ -1748,6 +2200,12 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     }
   }
   roseClangPhaseTrace("clang_main.argscan.end");
+
+  if (sageFile.get_unparseHeaderFiles() && !input_file.empty()) {
+    std::string input_directory =
+        llvm::sys::path::parent_path(input_file).str();
+    add_include_dir_if_missing(input_directory);
+  }
 
   // Detect if this is a secondary parse during lowering/outlining
   // Check if this file is being re-parsed (project already has a file with same
@@ -1907,8 +2365,14 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       return false;
     }
   };
+  auto is_cxx11_or_later = [&](SgFile::standard_enum std) {
+    return std == SgFile::e_cxx11_standard || std == SgFile::e_cxx14_standard ||
+           is_cxx17_or_later(std);
+  };
   bool relax_register_diag = false;
   bool relax_dynamic_exception_diag = false;
+  bool relax_legacy_c_implicit_diag = false;
+  bool relax_invalid_constexpr_diag = false;
   auto has_passthrough_flag = [&](const std::string &flag) {
     return std::find(passthrough_args.begin(), passthrough_args.end(), flag) !=
            passthrough_args.end();
@@ -1917,6 +2381,14 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     if (!has_passthrough_flag(flag)) {
       passthrough_args.push_back(flag);
     }
+  };
+  auto has_user_standard_arg = [&]() {
+    const std::vector<std::string> &original_args =
+        sageFile.get_originalCommandLineArgumentList();
+    return std::any_of(
+        original_args.begin(), original_args.end(), [](const std::string &arg) {
+          return arg == "-std" || arg.rfind("-std=", 0) == 0 || arg == "-ansi";
+        });
   };
   auto has_passthrough_optimization_flag = [&]() {
     return std::any_of(passthrough_args.begin(), passthrough_args.end(),
@@ -1934,6 +2406,27 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     add_passthrough_flag_if_missing("-DUSE_ROSE");
   }
 
+  if (language == ClangToSageTranslator::C && !has_user_standard_arg()) {
+    // Preserve Clang's default C dialect, but keep long-standing GNU C
+    // compatibility for unannotated legacy C inputs. Explicit -std requests
+    // remain strict.
+    add_passthrough_flag_if_missing("-Wno-implicit-function-declaration");
+    add_passthrough_flag_if_missing("-Wno-implicit-int");
+    add_passthrough_flag_if_missing("-Wno-error=implicit-function-declaration");
+    add_passthrough_flag_if_missing("-Wno-error=implicit-int");
+    relax_legacy_c_implicit_diag = true;
+  }
+
+  if ((language == ClangToSageTranslator::CPLUSPLUS ||
+       language == ClangToSageTranslator::CUDA) &&
+      !has_user_standard_arg()) {
+    // Unannotated legacy ROSE/REX C++ specimens are compatibility inputs, not
+    // strict conformance tests. Clang can build a usable AST for constructs
+    // such as pointer-to-smaller-integer casts when extension parsing is
+    // enabled; keep explicit -std requests strict.
+    add_passthrough_flag_if_missing("-fms-extensions");
+  }
+
   if ((language == ClangToSageTranslator::CPLUSPLUS ||
        language == ClangToSageTranslator::CUDA) &&
       is_cxx17_or_later(sageFile.get_standard())) {
@@ -1948,6 +2441,19 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       add_passthrough_flag_if_missing("-Wno-error=dynamic-exception-spec");
       add_passthrough_flag_if_missing("-Wno-dynamic-exception-spec");
       relax_dynamic_exception_diag = true;
+    }
+  }
+
+  if ((language == ClangToSageTranslator::CPLUSPLUS ||
+       language == ClangToSageTranslator::CUDA) &&
+      is_cxx11_or_later(sageFile.get_standard())) {
+    // Preprocessed C++ standard-library inputs often lose system-header line
+    // markers. Keep Clang's invalid-constexpr diagnostic visible, but do not
+    // escalate that system-header compatibility diagnostic into a frontend
+    // failure unless the user explicitly requests it.
+    if (!has_passthrough_flag("-Werror=invalid-constexpr")) {
+      add_passthrough_flag_if_missing("-Wno-error=invalid-constexpr");
+      relax_invalid_constexpr_diag = true;
     }
   }
 
@@ -2167,31 +2673,43 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   if (const char *llvm_dir_env = std::getenv("LLVM_DIR")) {
     llvm_root = normalize_llvm_root(llvm_dir_env);
   }
-  auto find_clang_in_root = [&](const std::string &root) -> std::string {
+  const bool prefer_cxx_driver = language == ClangToSageTranslator::CPLUSPLUS ||
+                                 language == ClangToSageTranslator::CUDA;
+  const std::string clang_version_suffix = std::to_string(LLVM_VERSION_MAJOR);
+  auto clang_driver_candidate_names =
+      [&](bool cxx_driver) -> std::vector<std::string> {
+    if (cxx_driver) {
+      return {"clang++-" + clang_version_suffix, "clang++",
+              "clang-" + clang_version_suffix, "clang"};
+    }
+    return {"clang-" + clang_version_suffix, "clang",
+            "clang++-" + clang_version_suffix, "clang++"};
+  };
+  const std::vector<std::string> clang_driver_names =
+      clang_driver_candidate_names(prefer_cxx_driver);
+  auto find_clang_in_root =
+      [&](const std::string &root,
+          const std::vector<std::string> &driver_names) -> std::string {
     if (root.empty()) {
       return std::string();
     }
-    std::string candidate =
-        root + "/bin/clang-" + std::to_string(LLVM_VERSION_MAJOR);
-    if (llvm::sys::fs::exists(candidate)) {
-      return candidate;
-    }
-    candidate = root + "/bin/clang";
-    if (llvm::sys::fs::exists(candidate)) {
-      return candidate;
+    for (const std::string &driver_name : driver_names) {
+      std::string candidate = root + "/bin/" + driver_name;
+      if (llvm::sys::fs::exists(candidate)) {
+        return candidate;
+      }
     }
     return std::string();
   };
   std::string clang_driver_path;
   {
-    const std::string versioned_clang =
-        "clang-" + std::to_string(LLVM_VERSION_MAJOR);
-    clang_driver_path = find_clang_in_root(llvm_root);
+    clang_driver_path = find_clang_in_root(llvm_root, clang_driver_names);
     if (clang_driver_path.empty()) {
-      if (auto clang_path = llvm::sys::findProgramByName(versioned_clang)) {
-        clang_driver_path = clang_path.get();
-      } else if (auto clang_path = llvm::sys::findProgramByName("clang")) {
-        clang_driver_path = clang_path.get();
+      for (const std::string &driver_name : clang_driver_names) {
+        if (auto clang_path = llvm::sys::findProgramByName(driver_name)) {
+          clang_driver_path = clang_path.get();
+          break;
+        }
       }
     }
     if (!clang_driver_path.empty()) {
@@ -2200,7 +2718,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     } else if (driver_argv0 && *driver_argv0 != '\0') {
       driver_executable = driver_argv0;
     } else {
-      driver_executable = "clang";
+      driver_executable = prefer_cxx_driver ? "clang++" : "clang";
     }
   }
 
@@ -2217,16 +2735,18 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   clang::driver::Driver driver(driver_executable, default_triple,
                                compiler_instance->getDiagnostics());
   driver.setCheckInputsExist(false);
-  driver.setTitle("clang");
+  driver.setTitle(prefer_cxx_driver ? "clang++" : "clang");
   std::string resource_dir_candidate;
   if (!clang_driver_path.empty()) {
     resource_dir_candidate =
         clang::GetResourcesPath(clang_driver_path.c_str(), (void *)&clang_main);
   } else if (!llvm_root.empty()) {
     const std::string llvm_fallback =
-        llvm_root + "/bin/clang-" + std::to_string(LLVM_VERSION_MAJOR);
-    resource_dir_candidate =
-        clang::GetResourcesPath(llvm_fallback.c_str(), (void *)&clang_main);
+        find_clang_in_root(llvm_root, clang_driver_names);
+    if (!llvm_fallback.empty()) {
+      resource_dir_candidate =
+          clang::GetResourcesPath(llvm_fallback.c_str(), (void *)&clang_main);
+    }
   } else if (resolved_clang_driver) {
     resource_dir_candidate =
         clang::GetResourcesPath(driver_executable.c_str(), (void *)&clang_main);
@@ -2487,6 +3007,16 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   ensureX86BaselineTargetFeatures(target_opts);
 
   clang::DiagnosticsEngine &diags = compiler_instance->getDiagnostics();
+  if (language == ClangToSageTranslator::C && relax_legacy_c_implicit_diag) {
+    diags.setSeverityForGroup(clang::diag::Flavor::WarningOrError,
+                              "implicit-function-declaration",
+                              clang::diag::Severity::Ignored);
+    diags.setDiagnosticGroupWarningAsError("implicit-function-declaration",
+                                           false);
+    diags.setSeverityForGroup(clang::diag::Flavor::WarningOrError,
+                              "implicit-int", clang::diag::Severity::Ignored);
+    diags.setDiagnosticGroupWarningAsError("implicit-int", false);
+  }
   if ((language == ClangToSageTranslator::CPLUSPLUS ||
        language == ClangToSageTranslator::CUDA) &&
       is_cxx17_or_later(sageFile.get_standard())) {
@@ -2501,6 +3031,14 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
                                 clang::diag::Severity::Warning);
       diags.setDiagnosticGroupWarningAsError("dynamic-exception-spec", false);
     }
+  }
+  if ((language == ClangToSageTranslator::CPLUSPLUS ||
+       language == ClangToSageTranslator::CUDA) &&
+      relax_invalid_constexpr_diag) {
+    diags.setSeverityForGroup(clang::diag::Flavor::WarningOrError,
+                              "invalid-constexpr",
+                              clang::diag::Severity::Warning);
+    diags.setDiagnosticGroupWarningAsError("invalid-constexpr", false);
   }
   // LLVM 22 rejects remapping these hard alignment errors into warnings.
   // Preserve the frontend's native severity and record valid alignments from
@@ -2981,6 +3519,20 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   if (numErrors > 0) {
     printf("Clang found %d diagnostic errors during parsing\n", numErrors);
   }
+  const unsigned numOpenMPPragmaErrors =
+      omp_callback != nullptr ? omp_callback->getInvalidOpenMPPragmaCount() : 0;
+  if (numOpenMPPragmaErrors > 0) {
+    printf("REX OpenMP parser rejected %u invalid pragma directive(s)\n",
+           numOpenMPPragmaErrors);
+    for (const auto &failure : omp_callback->getInvalidOpenMPPragmas()) {
+      printf("%s:%u: error: invalid OpenMP pragma: %s\n",
+             failure.logical_filename.empty()
+                 ? input_file.c_str()
+                 : failure.logical_filename.c_str(),
+             failure.logical_line, failure.text.c_str());
+    }
+  }
+  const unsigned numFrontendErrors = numErrors + numOpenMPPragmaErrors;
 
   const bool saw_self_referential_macro_expansion =
       is_c_roundtrip_language && preprocessor_recorder != nullptr &&
@@ -3016,7 +3568,6 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     SgGlobal *old_global_scope = sageFile.get_globalScope();
     sageFile.set_globalScope(nullptr);
     old_global_scope->set_parent(nullptr);
-    SageInterface::deleteAST(old_global_scope);
     auto map_it = Rose::tokenSubsequenceMapOfMapsBySourceFile.find(&sageFile);
     if (map_it != Rose::tokenSubsequenceMapOfMapsBySourceFile.end() &&
         map_it->second != NULL) {
@@ -3024,6 +3575,9 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       // dangling SgNode* references on re-parse.
       map_it->second->clear();
     }
+    SageInterface::deleteAST(
+        old_global_scope,
+        SageInterface::DeleteAstMode::kSkipExternalReferences);
   }
 
   sageFile.set_globalScope(global_scope);
@@ -3237,19 +3791,19 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   // ROSE to analyze/unparse rather than produce backend object code.
   if (global_scope == NULL) {
     printf("Error: Failed to build AST - global_scope is NULL\n");
-    return (numErrors > 0) ? numErrors : 1; // Failure - no AST
+    return (numFrontendErrors > 0) ? numFrontendErrors : 1; // Failure - no AST
   }
 
   const bool translation_only_recovery =
       canRecoverWithConstructedAst && sageFile.get_skipfinalCompileStep() &&
       language == ClangToSageTranslator::CUDA;
 
-  if (numErrors > 0) {
+  if (numFrontendErrors > 0) {
     if (continue_on_error || translation_only_recovery) {
       sageFile.set_skipfinalCompileStep(true);
-      printf("Note: Proceeding despite %d Clang diagnostic error(s) because "
+      printf("Note: Proceeding despite %d frontend diagnostic error(s) because "
              "AST was successfully constructed",
-             numErrors);
+             numFrontendErrors);
       if (translation_only_recovery && !continue_on_error) {
         printf(" and translation-only processing was requested");
       }
@@ -3257,14 +3811,24 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       return 0; // Success - AST was built
     }
     sageFile.set_skipfinalCompileStep(true);
-    printf("Error: Clang reported %d diagnostic error(s); refusing to run "
-           "backend",
-           numErrors);
+    if (numOpenMPPragmaErrors == 0) {
+      printf("Error: Clang reported %d diagnostic error(s); refusing to run "
+             "backend",
+             numErrors);
+    } else if (numErrors == 0) {
+      printf("Error: REX OpenMP parser reported %d diagnostic error(s); "
+             "refusing to run backend",
+             numOpenMPPragmaErrors);
+    } else {
+      printf("Error: frontend reported %d diagnostic error(s); refusing to run "
+             "backend",
+             numFrontendErrors);
+    }
     if (canRecoverWithConstructedAst) {
       printf(" even though AST construction succeeded");
     }
     printf(" (use -rex:clang:continue-on-error to override)\n");
-    return numErrors;
+    return numFrontendErrors;
   }
 
   roseClangPhaseTrace("clang_main.end");
@@ -3284,6 +3848,15 @@ void finishSageAST(ClangToSageTranslator &translator) {
   // translation (e.g., standalone directives or file-scope pragmas).
   roseClangPhaseTrace("clang_main.finishSageAST.appendUnattachedPragmas.begin");
   translator.appendUnattachedPragmas();
+
+  roseClangPhaseTrace(
+      "clang_main.finishSageAST.repairTemplateInstantiationDirectiveOwnership."
+      "preprocessor.begin");
+  repairTemplateInstantiationDirectiveOwnership(global_scope);
+  roseClangPhaseTrace(
+      "clang_main.finishSageAST.repairNullMemberFunctionRefSymbols."
+      "preprocessor.begin");
+  repairNullMemberFunctionRefSymbols(global_scope);
 
   // 1 - Label Statements: Move sub-statement after the label statement.
 
@@ -3660,6 +4233,14 @@ void finishSageAST(ClangToSageTranslator &translator) {
       return type == PreprocessingInfo::C_StyleComment ||
              type == PreprocessingInfo::CplusplusStyleComment;
     };
+    auto is_legacy_clinkage_directive = [](const PreprocessingInfo *info) {
+      if (info == nullptr) {
+        return false;
+      }
+      PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
+      return type == PreprocessingInfo::ClinkageSpecificationStart ||
+             type == PreprocessingInfo::ClinkageSpecificationEnd;
+    };
     auto find_sibling_anchor_after_cursor =
         [&](SgLocatedNode *anchor, Sg_File_Info *cursor) -> SgLocatedNode * {
       if (anchor == nullptr || cursor == nullptr) {
@@ -3763,6 +4344,9 @@ void finishSageAST(ClangToSageTranslator &translator) {
       std::pair<Sg_File_Info *, PreprocessingInfo *> entry =
           translator.preprocessor_top();
       if (entry.second != nullptr) {
+        if (is_legacy_clinkage_directive(entry.second)) {
+          goto inserted_preproc;
+        }
         Sg_File_Info *cursor = entry.first;
         const bool is_include = is_include_directive(entry.second);
         SgLocatedNode *anchor = nullptr;
@@ -3792,7 +4376,10 @@ void finishSageAST(ClangToSageTranslator &translator) {
                   !location_leq(cursor, last_end)) {
                 anchor = last_loc;
                 has_forced_anchor = true;
-                forced_relative_position = PreprocessingInfo::after;
+                forced_relative_position = isSameLineNamespaceClosingComment(
+                                               last_loc, cursor, entry.second)
+                                               ? PreprocessingInfo::after_syntax
+                                               : PreprocessingInfo::after;
               }
             }
           }
@@ -3837,6 +4424,10 @@ void finishSageAST(ClangToSageTranslator &translator) {
               entry.second->setRelativePosition(PreprocessingInfo::inside);
             } else if (start != nullptr && location_leq(entry.first, start)) {
               entry.second->setRelativePosition(PreprocessingInfo::before);
+            } else if (isSameLineNamespaceClosingComment(anchor, entry.first,
+                                                         entry.second)) {
+              entry.second->setRelativePosition(
+                  PreprocessingInfo::after_syntax);
             } else {
               entry.second->setRelativePosition(PreprocessingInfo::after);
             }
@@ -5598,6 +6189,10 @@ void finishSageAST(ClangToSageTranslator &translator) {
     struct ConditionalRange {
       Sg_File_Info *begin = nullptr;
       Sg_File_Info *end = nullptr;
+      int begin_line = 0;
+      int begin_col = 0;
+      int end_line = 0;
+      int end_col = 0;
       bool suppress_directives = false;
     };
 
@@ -5610,6 +6205,24 @@ void finishSageAST(ClangToSageTranslator &translator) {
         return filename;
       }
       return std::string("#") + std::to_string(info->get_file_id());
+    };
+
+    auto source_position_before_or_equal = [](int lhs_line, int lhs_col,
+                                              int rhs_line, int rhs_col) {
+      if (lhs_line <= 0 || rhs_line <= 0) {
+        return false;
+      }
+      if (lhs_line != rhs_line) {
+        return lhs_line < rhs_line;
+      }
+      return lhs_col <= rhs_col;
+    };
+
+    auto source_position_after = [&](int lhs_line, int lhs_col, int rhs_line,
+                                     int rhs_col) {
+      return source_position_before_or_equal(rhs_line, rhs_col, lhs_line,
+                                             lhs_col) &&
+             !(lhs_line == rhs_line && lhs_col == rhs_col);
     };
 
     std::vector<PreprocessingInfo *> recorded_conditionals;
@@ -5693,8 +6306,26 @@ void finishSageAST(ClangToSageTranslator &translator) {
           continue;
         }
 
-        conditional_ranges[file_key].push_back({open_fi, fi, false});
+        conditional_ranges[file_key].push_back(
+            {open_fi, fi, open_fi->get_line(), open_fi->get_col(),
+             fi->get_line(), fi->get_col(), false});
       }
+    }
+    for (auto &file_ranges : conditional_ranges) {
+      std::stable_sort(
+          file_ranges.second.begin(), file_ranges.second.end(),
+          [&](const ConditionalRange &lhs, const ConditionalRange &rhs) {
+            if (lhs.begin_line != rhs.begin_line) {
+              return lhs.begin_line < rhs.begin_line;
+            }
+            if (lhs.begin_col != rhs.begin_col) {
+              return lhs.begin_col < rhs.begin_col;
+            }
+            if (lhs.end_line != rhs.end_line) {
+              return lhs.end_line < rhs.end_line;
+            }
+            return lhs.end_col < rhs.end_col;
+          });
     }
     roseClangPhaseTrace(
         "clang_main.finishSageAST.globalScopePass2.conditionalRanges.end");
@@ -5725,6 +6356,10 @@ void finishSageAST(ClangToSageTranslator &translator) {
           end->get_line() <= 0 || !same_source_file(start, end)) {
         return false;
       }
+      const int start_line = start->get_line();
+      const int start_col = start->get_col();
+      const int end_line = end->get_line();
+      const int end_col = end->get_col();
 
       const std::string file_key = source_file_key(start);
       auto ranges_it = conditional_ranges.find(file_key);
@@ -5733,13 +6368,17 @@ void finishSageAST(ClangToSageTranslator &translator) {
       }
 
       for (const ConditionalRange &range : ranges_it->second) {
-        if (range.begin == nullptr || range.end == nullptr ||
-            !same_source_file(start, range.begin) ||
-            !same_source_file(end, range.end)) {
+        if (range.begin == nullptr || range.end == nullptr) {
           continue;
         }
-        if (source_before_or_equal(range.begin, start) &&
-            source_before_or_equal(end, range.end)) {
+        if (source_position_after(range.begin_line, range.begin_col, start_line,
+                                  start_col)) {
+          break;
+        }
+        if (source_position_before_or_equal(range.begin_line, range.begin_col,
+                                            start_line, start_col) &&
+            source_position_before_or_equal(end_line, end_col, range.end_line,
+                                            range.end_col)) {
           return true;
         }
       }
@@ -5758,6 +6397,10 @@ void finishSageAST(ClangToSageTranslator &translator) {
           end->get_line() <= 0 || !same_source_file(start, end)) {
         return;
       }
+      const int start_line = start->get_line();
+      const int start_col = start->get_col();
+      const int end_line = end->get_line();
+      const int end_col = end->get_col();
 
       const std::string file_key = source_file_key(start);
       auto ranges_it = conditional_ranges.find(file_key);
@@ -5766,13 +6409,17 @@ void finishSageAST(ClangToSageTranslator &translator) {
       }
 
       for (ConditionalRange &range : ranges_it->second) {
-        if (range.begin == nullptr || range.end == nullptr ||
-            !same_source_file(start, range.begin) ||
-            !same_source_file(end, range.end)) {
+        if (range.begin == nullptr || range.end == nullptr) {
           continue;
         }
-        if (source_before_or_equal(range.begin, start) &&
-            source_before_or_equal(end, range.end)) {
+        if (source_position_after(range.begin_line, range.begin_col, start_line,
+                                  start_col)) {
+          break;
+        }
+        if (source_position_before_or_equal(range.begin_line, range.begin_col,
+                                            start_line, start_col) &&
+            source_position_before_or_equal(end_line, end_col, range.end_line,
+                                            range.end_col)) {
           range.suppress_directives = true;
         }
       }
@@ -5966,6 +6613,10 @@ void finishSageAST(ClangToSageTranslator &translator) {
           !source_before_or_equal(decl_start, body_start)) {
         continue;
       }
+      const int decl_line = decl_start->get_line();
+      const int decl_col = decl_start->get_col();
+      const int body_line = body_start->get_line();
+      const int body_col = body_start->get_col();
 
       reanchor_function_prefix_conditionals_from_body(
           definition, definition->get_body(), decl_start, body_start);
@@ -5990,13 +6641,17 @@ void finishSageAST(ClangToSageTranslator &translator) {
 
       if (!declaration_side_still_owns_prefix_conditionals) {
         for (ConditionalRange &range : ranges_it->second) {
-          if (range.begin == nullptr || range.end == nullptr ||
-              !same_source_file(range.begin, decl_start) ||
-              !same_source_file(range.end, body_start)) {
+          if (range.begin == nullptr || range.end == nullptr) {
             continue;
           }
-          if (source_before_or_equal(decl_start, range.begin) &&
-              source_before_or_equal(range.end, body_start)) {
+          if (source_position_after(range.begin_line, range.begin_col,
+                                    body_line, body_col)) {
+            break;
+          }
+          if (source_position_before_or_equal(
+                  decl_line, decl_col, range.begin_line, range.begin_col) &&
+              source_position_before_or_equal(range.end_line, range.end_col,
+                                              body_line, body_col)) {
             range.suppress_directives = true;
             auto extend_end_of_construct = [&](SgLocatedNode *node) {
               if (node == nullptr) {
@@ -6054,6 +6709,8 @@ void finishSageAST(ClangToSageTranslator &translator) {
       if (fi == nullptr || fi->get_line() <= 0) {
         return false;
       }
+      const int info_line = fi->get_line();
+      const int info_col = fi->get_col();
 
       const std::string file_key = source_file_key(fi);
       auto ranges_it = conditional_ranges.find(file_key);
@@ -6063,12 +6720,17 @@ void finishSageAST(ClangToSageTranslator &translator) {
 
       for (const ConditionalRange &range : ranges_it->second) {
         if (!range.suppress_directives || range.begin == nullptr ||
-            range.end == nullptr || !same_source_file(fi, range.begin) ||
-            !same_source_file(fi, range.end)) {
+            range.end == nullptr) {
           continue;
         }
-        if (source_before_or_equal(range.begin, fi) &&
-            source_before_or_equal(fi, range.end)) {
+        if (source_position_after(range.begin_line, range.begin_col, info_line,
+                                  info_col)) {
+          break;
+        }
+        if (source_position_before_or_equal(range.begin_line, range.begin_col,
+                                            info_line, info_col) &&
+            source_position_before_or_equal(info_line, info_col, range.end_line,
+                                            range.end_col)) {
           return true;
         }
       }
@@ -6108,13 +6770,37 @@ void finishSageAST(ClangToSageTranslator &translator) {
 
   if (global_scope != nullptr) {
     roseClangPhaseTrace("clang_main.finishSageAST.globalScopePass3.begin");
-    auto is_include_directive = [](const PreprocessingInfo *info) -> bool {
+    auto is_file_prefix_preprocessing =
+        [](const PreprocessingInfo *info) -> bool {
       if (info == nullptr) {
         return false;
       }
       PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
-      return type == PreprocessingInfo::CpreprocessorIncludeDeclaration ||
-             type == PreprocessingInfo::CpreprocessorIncludeNextDeclaration;
+      switch (type) {
+      case PreprocessingInfo::C_StyleComment:
+      case PreprocessingInfo::CplusplusStyleComment:
+      case PreprocessingInfo::FortranStyleComment:
+      case PreprocessingInfo::F90StyleComment:
+      case PreprocessingInfo::CpreprocessorBlankLine:
+      case PreprocessingInfo::CpreprocessorIncludeDeclaration:
+      case PreprocessingInfo::CpreprocessorIncludeNextDeclaration:
+      case PreprocessingInfo::CpreprocessorDefineDeclaration:
+      case PreprocessingInfo::CpreprocessorUndefDeclaration:
+      case PreprocessingInfo::CpreprocessorIfdefDeclaration:
+      case PreprocessingInfo::CpreprocessorIfndefDeclaration:
+      case PreprocessingInfo::CpreprocessorIfDeclaration:
+      case PreprocessingInfo::CpreprocessorDeadIfDeclaration:
+      case PreprocessingInfo::CpreprocessorElseDeclaration:
+      case PreprocessingInfo::CpreprocessorElifDeclaration:
+      case PreprocessingInfo::CpreprocessorEndifDeclaration:
+      case PreprocessingInfo::CpreprocessorLineDeclaration:
+      case PreprocessingInfo::CpreprocessorErrorDeclaration:
+      case PreprocessingInfo::CpreprocessorWarningDeclaration:
+      case PreprocessingInfo::CpreprocessorEmptyDeclaration:
+        return true;
+      default:
+        return false;
+      }
     };
     auto is_same_file = [](const Sg_File_Info *a,
                            const Sg_File_Info *b) -> bool {
@@ -6182,17 +6868,39 @@ void finishSageAST(ClangToSageTranslator &translator) {
     }();
 
     Sg_File_Info *first_output_info = effective_info(first_output_stmt);
+    Sg_File_Info *main_source_info =
+        first_output_info != nullptr ? first_output_info : global_main_info;
+    auto preproc_by_location = [](const PreprocessingInfo *lhs,
+                                  const PreprocessingInfo *rhs) {
+      if (lhs == nullptr || rhs == nullptr) {
+        return lhs < rhs;
+      }
+      const Sg_File_Info *lhs_info = lhs->get_file_info();
+      const Sg_File_Info *rhs_info = rhs->get_file_info();
+      if (lhs_info == nullptr || rhs_info == nullptr) {
+        return lhs_info < rhs_info;
+      }
+      if (lhs_info->get_line() != rhs_info->get_line()) {
+        return lhs_info->get_line() < rhs_info->get_line();
+      }
+      if (lhs_info->get_col() != rhs_info->get_col()) {
+        return lhs_info->get_col() < rhs_info->get_col();
+      }
+      return lhs < rhs;
+    };
     std::vector<std::pair<Sg_File_Info *, PreprocessingInfo *>>
-        includes_to_move;
-    std::vector<SgLocatedNode *> include_owners;
-    include_owners.reserve(global_scope->get_declarations().size() + 1);
-    include_owners.push_back(global_scope);
-    for (SgDeclarationStatement *decl : global_scope->get_declarations()) {
-      if (SgLocatedNode *located_decl = isSgLocatedNode(decl)) {
-        include_owners.push_back(located_decl);
+        prefix_preprocessing_to_move;
+    std::vector<SgLocatedNode *> prefix_preprocessing_owners;
+    Rose_STL_Container<SgNode *> located_nodes =
+        NodeQuery::querySubTree(global_scope, V_SgLocatedNode);
+    prefix_preprocessing_owners.reserve(located_nodes.size() + 1);
+    prefix_preprocessing_owners.push_back(global_scope);
+    for (SgNode *node : located_nodes) {
+      if (SgLocatedNode *located = isSgLocatedNode(node)) {
+        prefix_preprocessing_owners.push_back(located);
       }
     }
-    for (SgLocatedNode *loc : include_owners) {
+    for (SgLocatedNode *loc : prefix_preprocessing_owners) {
       if (loc == nullptr) {
         continue;
       }
@@ -6201,16 +6909,13 @@ void finishSageAST(ClangToSageTranslator &translator) {
       if (attached == nullptr || attached->empty()) {
         continue;
       }
-      Sg_File_Info *owner_info = effective_info(loc);
       for (auto it = attached->begin(); it != attached->end();) {
         PreprocessingInfo *pp = *it;
-        if (!is_include_directive(pp)) {
+        if (!is_file_prefix_preprocessing(pp)) {
           ++it;
           continue;
         }
         Sg_File_Info *pp_info = pp->get_file_info();
-        Sg_File_Info *main_source_info =
-            global_main_info != nullptr ? global_main_info : first_output_info;
         bool same_main_file = main_source_info != nullptr &&
                               is_same_file(pp_info, main_source_info);
         bool should_hoist_before_first_output =
@@ -6219,7 +6924,7 @@ void finishSageAST(ClangToSageTranslator &translator) {
             first_output_info->get_line() > 0 &&
             pp_info->get_line() < first_output_info->get_line();
         if (should_hoist_before_first_output) {
-          includes_to_move.emplace_back(pp_info, pp);
+          prefix_preprocessing_to_move.emplace_back(pp_info, pp);
           it = attached->erase(it);
           continue;
         }
@@ -6227,7 +6932,7 @@ void finishSageAST(ClangToSageTranslator &translator) {
       }
     }
 
-    if (first_output_stmt != nullptr && !includes_to_move.empty()) {
+    if (first_output_stmt != nullptr && !prefix_preprocessing_to_move.empty()) {
       auto by_location =
           [](const std::pair<Sg_File_Info *, PreprocessingInfo *> &lhs,
              const std::pair<Sg_File_Info *, PreprocessingInfo *> &rhs) {
@@ -6241,35 +6946,18 @@ void finishSageAST(ClangToSageTranslator &translator) {
             }
             return lhs_info->get_col() < rhs_info->get_col();
           };
-      std::stable_sort(includes_to_move.begin(), includes_to_move.end(),
-                       by_location);
-      for (const auto &entry : includes_to_move) {
+      std::stable_sort(prefix_preprocessing_to_move.begin(),
+                       prefix_preprocessing_to_move.end(), by_location);
+      for (const auto &entry : prefix_preprocessing_to_move) {
         if (entry.second == nullptr) {
           continue;
         }
         entry.second->setRelativePosition(PreprocessingInfo::before);
         first_output_stmt->addToAttachedPreprocessingInfo(entry.second);
       }
+    }
 
-      auto preproc_by_location = [](const PreprocessingInfo *lhs,
-                                    const PreprocessingInfo *rhs) {
-        if (lhs == nullptr || rhs == nullptr) {
-          return lhs < rhs;
-        }
-        const Sg_File_Info *lhs_info = lhs->get_file_info();
-        const Sg_File_Info *rhs_info = rhs->get_file_info();
-        if (lhs_info == nullptr || rhs_info == nullptr) {
-          return lhs_info < rhs_info;
-        }
-        if (lhs_info->get_line() != rhs_info->get_line()) {
-          return lhs_info->get_line() < rhs_info->get_line();
-        }
-        if (lhs_info->get_col() != rhs_info->get_col()) {
-          return lhs_info->get_col() < rhs_info->get_col();
-        }
-        return lhs < rhs;
-      };
-
+    if (first_output_stmt != nullptr && !prefix_preprocessing_to_move.empty()) {
       if (AttachedPreprocessingInfoType *attached =
               first_output_stmt->getAttachedPreprocessingInfo()) {
         std::stable_sort(attached->begin(), attached->end(),
@@ -6836,7 +7524,7 @@ void finishSageAST(ClangToSageTranslator &translator) {
         break;
       }
     }
-    if (has_omp || has_acc) {
+    if (source_file->get_openmp() && has_acc) {
       bool openmp_explicitly_disabled = false;
       const std::vector<std::string> &args =
           source_file->get_originalCommandLineArgumentList();
@@ -6854,21 +7542,8 @@ void finishSageAST(ClangToSageTranslator &translator) {
         }
       }
 
-      if (has_omp && !source_file->get_openmp() &&
+      if (has_acc && !source_file->get_openacc() &&
           !openmp_explicitly_disabled) {
-        source_file->set_openmp(true);
-        bool has_explicit_processing_flag =
-            source_file->get_openmp_ast_only() ||
-            source_file->get_openmp_lowering() ||
-            source_file->get_openmp_analyzing();
-        if (!has_explicit_processing_flag &&
-            source_file->get_openmp_parse_only()) {
-          source_file->set_openmp_parse_only(false);
-          source_file->set_openmp_ast_only(true);
-        }
-      }
-
-      if (has_acc && !source_file->get_openacc()) {
         source_file->set_openacc(true);
         if (!source_file->get_openacc_ast_only()) {
           source_file->set_openacc_parse_only(false);
@@ -7283,6 +7958,15 @@ void finishSageAST(ClangToSageTranslator &translator) {
       }
     }
   }
+
+  roseClangPhaseTrace(
+      "clang_main.finishSageAST.repairTemplateInstantiationDirectiveOwnership."
+      "final.begin");
+  repairTemplateInstantiationDirectiveOwnership(global_scope);
+  roseClangPhaseTrace(
+      "clang_main.finishSageAST.repairNullMemberFunctionRefSymbols.final."
+      "begin");
+  repairNullMemberFunctionRefSymbols(global_scope);
 }
 
 SgGlobal *ClangToSageTranslator::getGlobalScope() const {
@@ -7773,9 +8457,8 @@ void ClangToSageTranslator::applySourceRange(SgNode *node,
   }
 
   if (node != nullptr && has_translation_unit_order) {
-    node->setAttribute(
-        kTranslationUnitOrderAttributeName,
-        new TranslationUnitOrderAttribute(translation_unit_order));
+    setClangTranslationUnitSourceOrder(isSgStatement(node),
+                                       translation_unit_order);
   }
 }
 
@@ -7820,6 +8503,18 @@ void ClangToSageTranslator::setCompilerGeneratedFileInfo(SgNode *node,
       delete fi;
 
     setFileInfosWithParent(located_node, start_fi, end_fi);
+
+    // Keep all source-position accessors classified consistently. Some
+    // statement nodes consult get_file_info() directly instead of start/end.
+    if (isSgExpression(located_node) == NULL) {
+      if (Sg_File_Info *node_fi = located_node->get_file_info();
+          node_fi != NULL && node_fi != start_fi && node_fi != end_fi) {
+        delete node_fi;
+      }
+      Sg_File_Info *file_copy = new Sg_File_Info(*start_fi);
+      located_node->set_file_info(file_copy);
+      file_copy->set_parent(located_node);
+    }
 
     // Pei-Hung (07/12/2023) Ensure SgExpression file info is set so
     // get_file_info() doesn't return null for compiler-generated nodes.
@@ -8035,6 +8730,28 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
   if (loc_node == NULL)
     return inheritedValue;
 
+  auto is_legacy_clinkage_directive = [](const PreprocessingInfo *info) {
+    if (info == nullptr) {
+      return false;
+    }
+    PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
+    return type == PreprocessingInfo::ClinkageSpecificationStart ||
+           type == PreprocessingInfo::ClinkageSpecificationEnd;
+  };
+  auto skip_legacy_clinkage_directives = [&]() -> bool {
+    while (inheritedValue->cursor != nullptr &&
+           is_legacy_clinkage_directive(inheritedValue->next_to_insert)) {
+      if (!inheritedValue->advance()) {
+        return false;
+      }
+    }
+    return inheritedValue->cursor != nullptr;
+  };
+
+  if (!skip_legacy_clinkage_directives()) {
+    return NULL;
+  }
+
   Sg_File_Info *current_pos = loc_node->get_startOfConstruct();
   if (current_pos == NULL) {
     return inheritedValue;
@@ -8065,6 +8782,29 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
     }
     return node->get_endOfConstruct();
   };
+  auto file_id_for_preprocessor_compare = [](Sg_File_Info *info) -> int {
+    if (info == nullptr) {
+      return Sg_File_Info::NULL_FILE_ID;
+    }
+    int *physical_file_id = info->get_physical_file_id_reference();
+    if (physical_file_id != nullptr && *physical_file_id >= 0) {
+      return *physical_file_id;
+    }
+    return info->get_file_id();
+  };
+  auto is_same_file = [&](Sg_File_Info *a, Sg_File_Info *b) -> bool {
+    if (a == nullptr || b == nullptr) {
+      return false;
+    }
+    if (file_id_for_preprocessor_compare(a) ==
+        file_id_for_preprocessor_compare(b)) {
+      return true;
+    }
+    if (!a->get_filenameString().empty() && !b->get_filenameString().empty()) {
+      return a->get_filenameString() == b->get_filenameString();
+    }
+    return false;
+  };
   auto should_attach_preproc = [&](SgLocatedNode *node) -> bool {
     // Keep in sync with SgLocatedNode::addToAttachedPreprocessingInfo() hard
     // restrictions: these node kinds are not valid preprocessing anchors.
@@ -8092,19 +8832,6 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
   // range so conditionals do not migrate into preceding expressions.
   auto should_attach_preproc_target =
       [&](SgLocatedNode *node, Sg_File_Info *directive_info) -> bool {
-    auto same_file = [](Sg_File_Info *lhs, Sg_File_Info *rhs) -> bool {
-      if (lhs == nullptr || rhs == nullptr) {
-        return false;
-      }
-      if (lhs->get_file_id() == rhs->get_file_id()) {
-        return true;
-      }
-      if (!lhs->get_filenameString().empty() &&
-          !rhs->get_filenameString().empty()) {
-        return lhs->get_filenameString() == rhs->get_filenameString();
-      }
-      return false;
-    };
     auto location_leq_local = [](Sg_File_Info *lhs, Sg_File_Info *rhs) -> bool {
       if (lhs == nullptr || rhs == nullptr) {
         return false;
@@ -8161,7 +8888,7 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
     if (info == nullptr || info->get_line() <= 0) {
       return false;
     }
-    if (!same_file(info, directive_info)) {
+    if (!is_same_file(info, directive_info)) {
       return false;
     }
 
@@ -8178,7 +8905,7 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
       if (start == nullptr || end == nullptr || start->get_line() <= 0) {
         return false;
       }
-      if (!same_file(end, directive_info)) {
+      if (!is_same_file(end, directive_info)) {
         end = start;
       }
       if (!location_leq_local(start, end)) {
@@ -8230,7 +8957,7 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
       if (located_info == nullptr || located_info->get_line() == 0) {
         continue;
       }
-      if (!directive_info->isSameFile(located_info)) {
+      if (!is_same_file(located_info, directive_info)) {
         continue;
       }
       if (!should_attach_preproc(located)) {
@@ -8241,18 +8968,6 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
     }
 
     return best;
-  };
-  auto is_same_file = [](Sg_File_Info *a, Sg_File_Info *b) -> bool {
-    if (a == nullptr || b == nullptr) {
-      return false;
-    }
-    if (a->get_file_id() == b->get_file_id()) {
-      return true;
-    }
-    if (!a->get_filenameString().empty() && !b->get_filenameString().empty()) {
-      return a->get_filenameString() == b->get_filenameString();
-    }
-    return false;
   };
   auto should_attach_include_target =
       [&](SgLocatedNode *node, Sg_File_Info *directive_info) -> bool {
@@ -9338,8 +10053,14 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
             candidate_end->get_col() > 0 &&
             candidate_end->get_col() < inheritedValue->cursor->get_col()) {
           attach_node = candidate_node;
+          const PreprocessingInfo::RelativePositionType relative_position =
+              isSameLineNamespaceClosingComment(candidate_node,
+                                                inheritedValue->cursor,
+                                                inheritedValue->next_to_insert)
+                  ? PreprocessingInfo::after_syntax
+                  : PreprocessingInfo::after;
           inheritedValue->next_to_insert->setRelativePosition(
-              PreprocessingInfo::after);
+              relative_position);
         }
       }
       bool is_include = is_include_directive(inheritedValue->next_to_insert);
@@ -9362,6 +10083,9 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
           inheritedValue->next_to_insert);
     }
     if (!inheritedValue->advance()) {
+      return NULL;
+    }
+    if (!skip_legacy_clinkage_directives()) {
       return NULL;
     }
 
@@ -9474,14 +10198,15 @@ SagePreprocessorRecord::SagePreprocessorRecord(
     : p_source_manager(source_manager), p_preprocessor(preprocessor),
       p_preprocessor_record_list(), p_preprocessor_records_by_location(),
       p_preprocessor_records_by_line(), p_preprocessor_record_offsets(),
-      p_removed_preprocessor_records(), p_preprocessor_record_list_sorted(true),
-      p_application_file_paths(), p_self_referential_macros(),
+      p_removed_preprocessor_records(), p_preprocessor_record_cursor(0),
+      p_preprocessor_record_list_sorted(true), p_application_file_paths(),
+      p_self_referential_macros(),
       p_track_self_referential_macros(track_self_referential_macros),
       p_saw_self_referential_macro_expansion(false) {}
 
 void SagePreprocessorRecord::sortRecordedDirectives() {
   compactRemovedRecordedDirectives();
-  if (p_preprocessor_record_list_sorted || p_preprocessor_record_list.empty()) {
+  if (p_preprocessor_record_list_sorted || size() == 0) {
     return;
   }
   auto by_location =
@@ -9498,7 +10223,8 @@ void SagePreprocessorRecord::sortRecordedDirectives() {
         return lhs_info->get_col() < rhs_info->get_col();
       };
 
-  std::stable_sort(p_preprocessor_record_list.begin(),
+  std::stable_sort(p_preprocessor_record_list.begin() +
+                       p_preprocessor_record_cursor,
                    p_preprocessor_record_list.end(), by_location);
   p_preprocessor_record_list_sorted = true;
 }
@@ -9736,6 +10462,14 @@ void SagePreprocessorRecord::markRecordedDirectiveRemoved(
 void SagePreprocessorRecord::compactRemovedRecordedDirectives() {
   if (p_removed_preprocessor_records.empty()) {
     return;
+  }
+  if (p_preprocessor_record_cursor > 0) {
+    const size_t erase_count = std::min(p_preprocessor_record_cursor,
+                                        p_preprocessor_record_list.size());
+    p_preprocessor_record_list.erase(p_preprocessor_record_list.begin(),
+                                     p_preprocessor_record_list.begin() +
+                                         erase_count);
+    p_preprocessor_record_cursor = 0;
   }
 
   for (auto it = p_preprocessor_record_list.begin();
@@ -10175,7 +10909,8 @@ void SagePreprocessorRecord::InclusionDirective(
       normalize_path(getFilenameForLocation(HashLoc));
   const bool including_application_file =
       including_main_file || isApplicationHeaderPath(including_path);
-  if (including_application_file && !IsAngled && !included_path.empty()) {
+  if (including_application_file && !included_path.empty() &&
+      (FileType == clang::SrcMgr::C_User || !IsAngled)) {
     p_application_file_paths.insert(included_path);
   }
 
@@ -10802,10 +11537,13 @@ void SagePreprocessorRecord::Endif(clang::SourceLocation Loc,
 
 std::pair<Sg_File_Info *, PreprocessingInfo *> SagePreprocessorRecord::top() {
   sortRecordedDirectives();
-  return p_preprocessor_record_list.front();
+  ROSE_ASSERT(p_preprocessor_record_cursor < p_preprocessor_record_list.size());
+  return p_preprocessor_record_list[p_preprocessor_record_cursor];
 }
 
 bool SagePreprocessorRecord::pop() {
-  p_preprocessor_record_list.erase(p_preprocessor_record_list.begin());
-  return !p_preprocessor_record_list.empty();
+  if (p_preprocessor_record_cursor < p_preprocessor_record_list.size()) {
+    ++p_preprocessor_record_cursor;
+  }
+  return size() > 0;
 }

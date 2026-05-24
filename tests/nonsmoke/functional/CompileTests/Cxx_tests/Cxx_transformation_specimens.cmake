@@ -1355,3 +1355,23 @@ set(REX_CXX_TRANSFORMATION_TEST_SOURCES
   rex_test2026_std_variant_visit.cpp
   rex_test2026_namespace_qualification.cpp
 )
+
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _rex_cxx_transform_processor)
+set(REX_CXX_TRANSFORMATION_HOST_IS_X86 FALSE)
+if(_rex_cxx_transform_processor MATCHES "^(x86_64|amd64|i[3-6]86)$")
+  set(REX_CXX_TRANSFORMATION_HOST_IS_X86 TRUE)
+endif()
+
+set(REX_CXX_TRANSFORMATION_X86_ONLY
+  test2007_97.C
+  test2007_102.C
+  test2007_106.C
+  test2008_15.C
+  test2009_02.C
+  test2017_69.C
+)
+
+if(NOT REX_CXX_TRANSFORMATION_HOST_IS_X86)
+  list(REMOVE_ITEM REX_CXX_TRANSFORMATION_TEST_SOURCES
+    ${REX_CXX_TRANSFORMATION_X86_ONLY})
+endif()

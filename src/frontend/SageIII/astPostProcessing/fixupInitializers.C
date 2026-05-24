@@ -48,6 +48,122 @@ FixupInitializersUsingIncludeFilesSynthesizedAttribute::
 FixupInitializersUsingIncludeFilesTraversal::
     FixupInitializersUsingIncludeFilesTraversal() {}
 
+namespace {
+
+std::string baseName(const std::string &path) {
+  const std::string::size_type pos = path.find_last_of("/\\");
+  return pos == std::string::npos ? path : path.substr(pos + 1);
+}
+
+std::string normalizePathSeparators(std::string path) {
+  std::replace(path.begin(), path.end(), '\\', '/');
+  return path;
+}
+
+bool pathEndsWithComponentSequence(const std::string &path,
+                                   const std::string &suffix) {
+  if (path == suffix) {
+    return true;
+  }
+
+  return path.size() > suffix.size() &&
+         path.compare(path.size() - suffix.size(), suffix.size(), suffix) ==
+             0 &&
+         path[path.size() - suffix.size() - 1] == '/';
+}
+
+bool fileNameMatchesInclude(const std::string &filename,
+                            const std::string &include_name) {
+  if (filename.empty() || include_name.empty()) {
+    return false;
+  }
+
+  const std::string normalized_filename = normalizePathSeparators(filename);
+  const std::string normalized_include = normalizePathSeparators(include_name);
+  return pathEndsWithComponentSequence(normalized_filename,
+                                       normalized_include) ||
+         baseName(normalized_filename) == baseName(normalized_include);
+}
+
+bool fileInfoMatchesInclude(Sg_File_Info *file_info,
+                            const std::string &include_name) {
+  if (file_info == nullptr) {
+    return false;
+  }
+
+  return fileNameMatchesInclude(file_info->get_filename(), include_name) ||
+         fileNameMatchesInclude(file_info->get_filenameString(),
+                                include_name) ||
+         fileNameMatchesInclude(file_info->get_physical_filename(),
+                                include_name);
+}
+
+bool expressionSubtreeReferencesInclude(SgNode *node,
+                                        const std::string &include_name) {
+  if (node == nullptr) {
+    return false;
+  }
+
+  if (SgLocatedNode *located = isSgLocatedNode(node)) {
+    if (fileInfoMatchesInclude(located->get_file_info(), include_name) ||
+        fileInfoMatchesInclude(located->get_startOfConstruct(), include_name) ||
+        fileInfoMatchesInclude(located->get_endOfConstruct(), include_name)) {
+      return true;
+    }
+  }
+
+  for (SgNode *child : node->get_traversalSuccessorContainer()) {
+    if (expressionSubtreeReferencesInclude(child, include_name)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void removeInitializerIncludeDirectivesFromExpression(
+    SgExpression *expression) {
+  if (expression == nullptr) {
+    return;
+  }
+
+  AttachedPreprocessingInfoType *comments =
+      expression->getAttachedPreprocessingInfo();
+  if (comments == nullptr) {
+    return;
+  }
+
+  AttachedPreprocessingInfoType includeDirectiveToRemove;
+  for (PreprocessingInfo *info : *comments) {
+    if (info == nullptr ||
+        info->getTypeOfDirective() !=
+            PreprocessingInfo::CpreprocessorIncludeDeclaration) {
+      continue;
+    }
+
+    const std::string include_name =
+        info->get_filename_from_include_directive();
+    if (expressionSubtreeReferencesInclude(expression, include_name)) {
+      includeDirectiveToRemove.push_back(info);
+    }
+  }
+
+  for (PreprocessingInfo *info : includeDirectiveToRemove) {
+    AttachedPreprocessingInfoType::iterator position =
+        std::find(comments->begin(), comments->end(), info);
+    if (position != comments->end()) {
+      comments->erase(position);
+    }
+  }
+
+  if (comments->empty()) {
+    delete comments;
+    expression->set_attachedPreprocessingInfoPtr(nullptr);
+  }
+}
+
+} // namespace
+
 void FixupInitializersUsingIncludeFilesTraversal::findAndRemoveMatchingInclude(
     SgStatement *statement, SgExpression *expression,
     PreprocessingInfo::RelativePositionType location_to_search) {
@@ -236,6 +352,7 @@ FixupInitializersUsingIncludeFilesTraversal::evaluateInheritedAttribute(
 
   if (inheritedAttribute.isInsideInitializer == true) {
     SgExpression *expression = isSgExpression(node);
+    removeInitializerIncludeDirectivesFromExpression(expression);
 
     // DQ (8/26/2020): Ignore the initailizer since what we want in at least one
     // level deeper. also the initializer is always compiler generated, so it

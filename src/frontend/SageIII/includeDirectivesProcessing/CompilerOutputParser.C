@@ -16,6 +16,56 @@ using namespace std;
 
 const string CompilerOutputParser::topLevelParsePrefix = ". ";
 
+namespace {
+
+bool hasIncludeDirectoryOption(const vector<string> &argv, const string &dir) {
+  for (size_t i = 0; i < argv.size(); ++i) {
+    const string &arg = argv[i];
+    if (arg == "-I") {
+      if (i + 1 < argv.size() &&
+          FileHelper::normalizePathIfPossible(argv[i + 1]) == dir) {
+        return true;
+      }
+      ++i;
+      continue;
+    }
+    if (arg.compare(0, 2, "-I") == 0 &&
+        FileHelper::normalizePathIfPossible(arg.substr(2)) == dir) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void addHeaderUnparseSourceDirectoryInclude(SgFile *inputFile,
+                                            vector<string> &argv) {
+  ASSERT_not_null(inputFile);
+
+  if (inputFile->get_unparseHeaderFiles() == false) {
+    return;
+  }
+
+  const string sourcePath = FileHelper::normalizePathIfPossible(
+      inputFile->get_sourceFileNameWithPath());
+  if (sourcePath.empty()) {
+    return;
+  }
+
+  string sourceDirectory = Rose::getPathFromFileName(sourcePath);
+  if (sourceDirectory.empty() || sourceDirectory == ".") {
+    return;
+  }
+  sourceDirectory = FileHelper::normalizePathIfPossible(sourceDirectory);
+  if (sourceDirectory.empty() ||
+      hasIncludeDirectoryOption(argv, sourceDirectory)) {
+    return;
+  }
+
+  argv.push_back("-I" + sourceDirectory);
+}
+
+} // namespace
+
 CompilerOutputParser::CompilerOutputParser(SgProject *projectNode) {
   this->projectNode = projectNode;
 }
@@ -211,6 +261,7 @@ void CompilerOutputParser::processFile(SgFile *inputFile, bool isVerbose) {
       inputFile->stripFortranCommandLineOptions(argv);
     }
   }
+  addHeaderUnparseSourceDirectoryInclude(inputFile, argv);
 
   // This part is from int SgFile::compileOutput ( vector<string>& argv, int
   // fileNameIndex )

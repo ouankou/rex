@@ -54,6 +54,7 @@ generated
 
 #include "general_token_defs.h"
 #include "rose_test_output_path.h"
+#include "unparser.h"
 
 // DQ (10/9/2013): Required mods:
 //    1) The edges of subtress need to be trimmed back to avoid overlap.
@@ -1303,6 +1304,8 @@ void TokenMappingTraversal::trimTrailingWhiteSpaceFromRight(
   // DQ (12/5/2016): Eliminate warning that we want to consider an error:
   // -Wsign-compare if (trailing_whitespace_end > tokenStream.size()-1)
   if ((size_t)trailing_whitespace_end >= tokenStream.size()) {
+    mappingInfo->trailing_whitespace_start = -1;
+    mappingInfo->trailing_whitespace_end = -1;
     return;
   }
   ROSE_ASSERT(trailing_whitespace_end >= 0);
@@ -1896,9 +1899,43 @@ SynthesizedAttribute TokenMappingTraversal::evaluateSynthesizedAttribute(
               // DQ (2/10/2021): If this is the first statement in a class
               // definition (or any scope using brace syntax), then we need to
               // inclrement past the syntax (brace).
-              if (tokenStream
-                      [better_start_of_function_prototype_token_subsequence]
-                          ->p_tok_elem->token_id == C_CXX_SYNTAX) {
+              auto tokenPrecedesFunctionStart = [&](int tokenIndex) -> bool {
+                if (tokenIndex < 0 ||
+                    static_cast<size_t>(tokenIndex) >= tokenStream.size()) {
+                  return false;
+                }
+
+                stream_element *token = tokenStream[tokenIndex];
+                if (token == NULL || token->p_tok_elem == NULL) {
+                  return false;
+                }
+
+                Sg_File_Info *functionStart =
+                    functionDeclaration->get_startOfConstruct();
+                if (functionStart == NULL ||
+                    functionStart->isCompilerGenerated()) {
+                  return false;
+                }
+
+                const int functionStartLine =
+                    functionStart->get_physical_line();
+                const int functionStartColumn = functionStart->get_col();
+                if (functionStartLine <= 0 || functionStartColumn < 0) {
+                  return false;
+                }
+
+                const int tokenEndLine = token->ending_fpi.line_num;
+                const int tokenEndColumn = token->ending_fpi.column_num;
+                return tokenEndLine < functionStartLine ||
+                       (tokenEndLine == functionStartLine &&
+                        tokenEndColumn < functionStartColumn);
+              };
+
+              while (
+                  better_start_of_function_prototype_token_subsequence <
+                      function_protype_end &&
+                  tokenPrecedesFunctionStart(
+                      better_start_of_function_prototype_token_subsequence)) {
                 better_start_of_function_prototype_token_subsequence++;
               }
             }
@@ -4854,88 +4891,91 @@ SynthesizedAttribute TokenMappingTraversal::evaluateSynthesizedAttribute(
                  "%d else_whitespace_end      = %d \n",
                  else_whitespace_start, else_whitespace_end);
 #endif
-          size_t sizeBeforeNewTokenStreamSequenceToNodeMapping =
-              tokenStreamSequenceVector.size();
+          if (start_of_token_subsequence >= 0 &&
+              end_of_token_subsequence >= 0) {
+            size_t sizeBeforeNewTokenStreamSequenceToNodeMapping =
+                tokenStreamSequenceVector.size();
 
-          // In this case we should know that this is a new
-          // TokenStreamSequenceToNodeMapping, so maybe we should call new
-          // directly.
-          TokenStreamSequenceToNodeMapping *element =
-              // TokenStreamSequenceToNodeMapping::createTokenInterval(starting_node,
-              TokenStreamSequenceToNodeMapping::createTokenInterval(
-                  currentSourceFile(), starting_node, leading_whitespace_start,
-                  leading_whitespace_end, start_of_token_subsequence,
-                  end_of_token_subsequence, trailing_whitespace_start,
-                  trailing_whitespace_end, else_whitespace_start,
-                  else_whitespace_end);
+            // In this case we should know that this is a new
+            // TokenStreamSequenceToNodeMapping, so maybe we should call new
+            // directly.
+            TokenStreamSequenceToNodeMapping *element =
+                // TokenStreamSequenceToNodeMapping::createTokenInterval(starting_node,
+                TokenStreamSequenceToNodeMapping::createTokenInterval(
+                    currentSourceFile(), starting_node,
+                    leading_whitespace_start, leading_whitespace_end,
+                    start_of_token_subsequence, end_of_token_subsequence,
+                    trailing_whitespace_start, trailing_whitespace_end,
+                    else_whitespace_start, else_whitespace_end);
 
-          element->constructedInEvaluationOfSynthesizedAttribute = true;
-
-#if DEBUG_EVALUATE_SYNTHESIZED_ATTRIBUTE
-          printf("EVALUATE_SYNTHESIZED_ATTRIBUTE: test 1: Calling push_back on "
-                 "tokenStreamSequenceVector \n");
-#endif
-          // Add to vector (so that we can be the last element).  Note that we
-          // might be able to just lookup the element that we need instead of
-          // using the last element in the vector.
-          tokenStreamSequenceVector.push_back(element);
-
-          // Add to the map so that we have the final desired data structure (to
-          // attach to the SgSourceFile).
-          tokenStreamSequenceMap[starting_node] = element;
-          size_t sizeAfterNewTokenStreamSequenceToNodeMapping =
-              tokenStreamSequenceVector.size();
-
-          // Make sure that this has been added to the collections.
-          ROSE_ASSERT(sizeAfterNewTokenStreamSequenceToNodeMapping >
-                      sizeBeforeNewTokenStreamSequenceToNodeMapping);
+            element->constructedInEvaluationOfSynthesizedAttribute = true;
 
 #if DEBUG_EVALUATE_SYNTHESIZED_ATTRIBUTE
-          // DQ (12/3/2014): Make this an error message (failes for
-          // amr/Coarsen_particles.cc).
-          // ROSE_ASSERT(sizeAfterNewTokenStreamSequenceToNodeMapping ==
-          // tokenStreamSequenceMap.size());
-          if (tokenStreamSequenceMap.size() !=
-              sizeAfterNewTokenStreamSequenceToNodeMapping) {
-            printf("ERROR: TokenMappingTraversal::createTokenInterval(): "
-                   "tokenStreamSequenceMap.size() != "
-                   "tokenStreamSequenceVector.size() \n");
-            printf("   --- tokenStreamSequenceMap.size() = %zu \n",
-                   tokenStreamSequenceMap.size());
-            printf(
-                "   --- sizeAfterNewTokenStreamSequenceToNodeMapping = %zu \n",
-                sizeAfterNewTokenStreamSequenceToNodeMapping);
-          }
+            printf("EVALUATE_SYNTHESIZED_ATTRIBUTE: test 1: Calling push_back "
+                   "on tokenStreamSequenceVector \n");
 #endif
-#if DEBUG_EVALUATE_SYNTHESIZED_ATTRIBUTE
-          printf("starting_NodeSequenceWithoutTokenMapping = %zu "
-                 "ending_NodeSequenceWithoutTokenMapping = %zu \n",
-                 starting_NodeSequenceWithoutTokenMapping,
-                 ending_NodeSequenceWithoutTokenMapping);
-#endif
-          // for (int k = starting_NodeSequenceWithoutTokenMapping; k <
-          // ending_NodeSequenceWithoutTokenMapping; k++) for (int k =
-          // starting_NodeSequenceWithoutTokenMapping; k <=
-          // ending_NodeSequenceWithoutTokenMapping; k++)
+            // Add to vector (so that we can be the last element).  Note that we
+            // might be able to just lookup the element that we need instead of
+            // using the last element in the vector.
+            tokenStreamSequenceVector.push_back(element);
 
-          // DQ (12/6/2016): Eliminate warning that we want to consider an
-          // error: -Wsign-compare
-          for (size_t k = starting_NodeSequenceWithoutTokenMapping;
-               k < ending_NodeSequenceWithoutTokenMapping; k++) {
-            // Mark this shared and add the associated IR nodes sharing this
-            // token sequence.
-            element->shared = true;
+            // Add to the map so that we have the final desired data structure
+            // (to attach to the SgSourceFile).
+            tokenStreamSequenceMap[starting_node] = element;
+            size_t sizeAfterNewTokenStreamSequenceToNodeMapping =
+                tokenStreamSequenceVector.size();
+
+            // Make sure that this has been added to the collections.
+            ROSE_ASSERT(sizeAfterNewTokenStreamSequenceToNodeMapping >
+                        sizeBeforeNewTokenStreamSequenceToNodeMapping);
+
 #if DEBUG_EVALUATE_SYNTHESIZED_ATTRIBUTE
-            printf("Mark as shared and add node childAttributes[k=%zu].node = "
-                   "%p = %s \n",
-                   k, childAttributes[k].node,
-                   childAttributes[k].node->class_name().c_str());
+            // DQ (12/3/2014): Make this an error message (failes for
+            // amr/Coarsen_particles.cc).
+            // ROSE_ASSERT(sizeAfterNewTokenStreamSequenceToNodeMapping ==
+            // tokenStreamSequenceMap.size());
+            if (tokenStreamSequenceMap.size() !=
+                sizeAfterNewTokenStreamSequenceToNodeMapping) {
+              printf("ERROR: TokenMappingTraversal::createTokenInterval(): "
+                     "tokenStreamSequenceMap.size() != "
+                     "tokenStreamSequenceVector.size() \n");
+              printf("   --- tokenStreamSequenceMap.size() = %zu \n",
+                     tokenStreamSequenceMap.size());
+              printf("   --- sizeAfterNewTokenStreamSequenceToNodeMapping = "
+                     "%zu \n",
+                     sizeAfterNewTokenStreamSequenceToNodeMapping);
+            }
 #endif
-            element->nodeVector.push_back(childAttributes[k].node);
 #if DEBUG_EVALUATE_SYNTHESIZED_ATTRIBUTE
-            printf("element->nodeVector.size() = %zu \n",
-                   element->nodeVector.size());
+            printf("starting_NodeSequenceWithoutTokenMapping = %zu "
+                   "ending_NodeSequenceWithoutTokenMapping = %zu \n",
+                   starting_NodeSequenceWithoutTokenMapping,
+                   ending_NodeSequenceWithoutTokenMapping);
 #endif
+            // for (int k = starting_NodeSequenceWithoutTokenMapping; k <
+            // ending_NodeSequenceWithoutTokenMapping; k++) for (int k =
+            // starting_NodeSequenceWithoutTokenMapping; k <=
+            // ending_NodeSequenceWithoutTokenMapping; k++)
+
+            // DQ (12/6/2016): Eliminate warning that we want to consider an
+            // error: -Wsign-compare
+            for (size_t k = starting_NodeSequenceWithoutTokenMapping;
+                 k < ending_NodeSequenceWithoutTokenMapping; k++) {
+              // Mark this shared and add the associated IR nodes sharing this
+              // token sequence.
+              element->shared = true;
+#if DEBUG_EVALUATE_SYNTHESIZED_ATTRIBUTE
+              printf("Mark as shared and add node childAttributes[k=%zu].node "
+                     "= %p = %s \n",
+                     k, childAttributes[k].node,
+                     childAttributes[k].node->class_name().c_str());
+#endif
+              element->nodeVector.push_back(childAttributes[k].node);
+#if DEBUG_EVALUATE_SYNTHESIZED_ATTRIBUTE
+              printf("element->nodeVector.size() = %zu \n",
+                     element->nodeVector.size());
+#endif
+            }
           }
 #if DEBUG_EVALUATE_SYNTHESIZED_ATTRIBUTE
           printf(
@@ -6668,7 +6708,8 @@ InheritedAttribute TokenMappingTraversal::evaluateInheritedAttribute(
               isSgFunctionParameterList(n) == NULL) ||
              forStatementIncrementExpression != NULL)) {
           // Disallow the default value: -1
-          if (start_of_token_subsequence >= 0) {
+          if (start_of_token_subsequence >= 0 &&
+              end_of_token_subsequence >= 0) {
             int leading_whitespace_start = -1;
             int leading_whitespace_end = -1;
             int trailing_whitespace_start = -1;
@@ -7406,6 +7447,256 @@ void repairTemplateFunctionDeclarationTokenMappings(SgSourceFile *sourceFile) {
   }
 }
 
+void repairTopLevelSharedDeclarationTokenMappings(SgSourceFile *sourceFile) {
+  if (sourceFile == NULL) {
+    return;
+  }
+
+  SgGlobal *global = sourceFile->get_globalScope();
+  if (global == NULL) {
+    return;
+  }
+
+  std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap =
+      sourceFile->get_tokenSubsequenceMap();
+
+  const SgDeclarationStatementPtrList &declarations =
+      global->get_declarations();
+  for (SgDeclarationStatement *decl : declarations) {
+    if (decl == NULL) {
+      continue;
+    }
+
+    if (tokenMap.find(decl) != tokenMap.end() && tokenMap[decl] != NULL) {
+      continue;
+    }
+
+    Sg_File_Info *declInfo = decl->get_file_info();
+    if (declInfo == NULL || declInfo->isCompilerGenerated() ||
+        declInfo->isTransformation() ||
+        declInfo->get_filenameString() != sourceFile->getFileName()) {
+      continue;
+    }
+
+    for (const auto &entry : tokenMap) {
+      TokenStreamSequenceToNodeMapping *mapping = entry.second;
+      if (mapping == NULL || !mapping->shared) {
+        continue;
+      }
+
+      if (std::find(mapping->nodeVector.begin(), mapping->nodeVector.end(),
+                    decl) != mapping->nodeVector.end()) {
+        tokenMap[decl] = mapping;
+        break;
+      }
+    }
+  }
+}
+
+bool tokenPrecedesSourcePosition(stream_element *token, int line, int column) {
+  if (token == NULL) {
+    return true;
+  }
+  if (token->ending_fpi.line_num < line) {
+    return true;
+  }
+  if (token->ending_fpi.line_num == line &&
+      token->ending_fpi.column_num < column) {
+    return true;
+  }
+  return false;
+}
+
+bool tokenFollowsSourcePosition(stream_element *token, int line, int column) {
+  if (token == NULL) {
+    return true;
+  }
+  if (token->beginning_fpi.line_num > line) {
+    return true;
+  }
+  if (token->beginning_fpi.line_num == line &&
+      token->beginning_fpi.column_num > column) {
+    return true;
+  }
+  return false;
+}
+
+bool isIgnorableToken(stream_element *token) {
+  return token == NULL || token->p_tok_elem == NULL ||
+         token->p_tok_elem->token_id == C_CXX_WHITESPACE ||
+         token->p_tok_elem->token_id == C_CXX_PREPROCESSING_INFO;
+}
+
+int findFirstTokenAtOrAfterSourcePosition(
+    const std::vector<stream_element *> &tokenVector, int lowerBound,
+    int upperBound, int line, int column) {
+  lowerBound = std::max(0, lowerBound);
+  upperBound = std::min(static_cast<int>(tokenVector.size()) - 1, upperBound);
+  for (int i = lowerBound; i <= upperBound; ++i) {
+    if (isIgnorableToken(tokenVector[i])) {
+      continue;
+    }
+    if (!tokenPrecedesSourcePosition(tokenVector[i], line, column)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+int findLastTokenAtOrBeforeSourcePosition(
+    const std::vector<stream_element *> &tokenVector, int lowerBound,
+    int upperBound, int line, int column) {
+  lowerBound = std::max(0, lowerBound);
+  upperBound = std::min(static_cast<int>(tokenVector.size()) - 1, upperBound);
+  for (int i = upperBound; i >= lowerBound; --i) {
+    if (isIgnorableToken(tokenVector[i])) {
+      continue;
+    }
+    if (!tokenFollowsSourcePosition(tokenVector[i], line, column)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+int findTrailingSemicolonTokenIndex(
+    const std::vector<stream_element *> &tokenVector, int lowerBound,
+    int upperBound) {
+  lowerBound = std::max(0, lowerBound);
+  upperBound = std::min(static_cast<int>(tokenVector.size()) - 1, upperBound);
+  for (int i = lowerBound; i <= upperBound; ++i) {
+    if (tokenVector[i] != NULL && tokenVector[i]->p_tok_elem != NULL &&
+        tokenVector[i]->p_tok_elem->token_lexeme == ";") {
+      return i;
+    }
+  }
+  return -1;
+}
+
+bool locatedNodeHasTokenReplayBlockingTransformation(SgLocatedNode *node) {
+  return node == NULL || node->get_isModified() || node->isTransformation() ||
+         node->get_containsTransformation() ||
+         node->get_containsTransformationToSurroundingWhitespace();
+}
+
+bool fileInfoIsPhysicalSourceRangeInFile(Sg_File_Info *info,
+                                         SgSourceFile *sourceFile) {
+  return info != NULL && sourceFile != NULL && !info->isCompilerGenerated() &&
+         !info->isFrontendSpecific() && !info->isTransformation() &&
+         info->get_physical_line() > 0 &&
+         info->get_filenameString() == sourceFile->getFileName();
+}
+
+bool statementTokenIntervalShouldClaimTrailingSemicolon(SgStatement *stmt) {
+  if (stmt == NULL) {
+    return false;
+  }
+
+  if (isSgClassDeclaration(stmt) != NULL || isSgEnumDeclaration(stmt) != NULL ||
+      isSgVariableDeclaration(stmt) != NULL ||
+      isSgTypedefDeclaration(stmt) != NULL || isSgExprStatement(stmt) != NULL ||
+      isSgReturnStmt(stmt) != NULL || isSgBreakStmt(stmt) != NULL ||
+      isSgContinueStmt(stmt) != NULL || isSgGotoStatement(stmt) != NULL) {
+    return true;
+  }
+
+  if (SgFunctionDeclaration *functionDecl = isSgFunctionDeclaration(stmt)) {
+    return functionDecl->get_definition() == NULL;
+  }
+
+  return false;
+}
+
+void repairTopLevelTemplateVariableDeclarationTokenMappings(
+    SgSourceFile *sourceFile,
+    const std::vector<stream_element *> &tokenVector) {
+  if (sourceFile == NULL || tokenVector.empty()) {
+    return;
+  }
+
+  SgGlobal *global = sourceFile->get_globalScope();
+  if (global == NULL) {
+    return;
+  }
+
+  std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap =
+      sourceFile->get_tokenSubsequenceMap();
+  const SgDeclarationStatementPtrList &declarations =
+      global->get_declarations();
+
+  for (size_t index = 0; index < declarations.size(); ++index) {
+    SgTemplateVariableDeclaration *decl =
+        isSgTemplateVariableDeclaration(declarations[index]);
+    if (decl == NULL) {
+      continue;
+    }
+
+    if (tokenMap.find(decl) != tokenMap.end() && tokenMap[decl] != NULL) {
+      continue;
+    }
+
+    Sg_File_Info *start = decl->get_startOfConstruct();
+    Sg_File_Info *end = decl->get_endOfConstruct();
+    if (start == NULL || end == NULL || start->isCompilerGenerated() ||
+        end->isCompilerGenerated() || start->isFrontendSpecific() ||
+        end->isFrontendSpecific() ||
+        start->get_filenameString() != sourceFile->getFileName()) {
+      continue;
+    }
+
+    int lowerBound = 0;
+    for (size_t prev = index; prev-- > 0;) {
+      std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator prevIt =
+          tokenMap.find(declarations[prev]);
+      if (prevIt != tokenMap.end() && prevIt->second != NULL &&
+          prevIt->second->token_subsequence_end >= 0) {
+        lowerBound = prevIt->second->token_subsequence_end + 1;
+        break;
+      }
+    }
+
+    int upperBound = static_cast<int>(tokenVector.size()) - 1;
+    for (size_t next = index + 1; next < declarations.size(); ++next) {
+      std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator nextIt =
+          tokenMap.find(declarations[next]);
+      if (nextIt != tokenMap.end() && nextIt->second != NULL &&
+          nextIt->second->token_subsequence_start >= 0) {
+        upperBound = nextIt->second->token_subsequence_start - 1;
+        break;
+      }
+    }
+
+    lowerBound = std::max(0, lowerBound);
+    upperBound = std::min(static_cast<int>(tokenVector.size()) - 1, upperBound);
+    if (lowerBound > upperBound) {
+      continue;
+    }
+
+    const int startIndex = findFirstTokenAtOrAfterSourcePosition(
+        tokenVector, lowerBound, upperBound, start->get_physical_line(),
+        start->get_col());
+    if (startIndex < 0) {
+      continue;
+    }
+
+    int endIndex = findLastTokenAtOrBeforeSourcePosition(
+        tokenVector, startIndex, upperBound, end->get_physical_line(),
+        end->get_col());
+    if (endIndex < startIndex) {
+      continue;
+    }
+
+    int semicolonIndex =
+        findTrailingSemicolonTokenIndex(tokenVector, endIndex, upperBound);
+    if (semicolonIndex >= 0) {
+      endIndex = semicolonIndex;
+    }
+
+    tokenMap[decl] = TokenStreamSequenceToNodeMapping::createTokenInterval(
+        sourceFile, decl, -1, -1, startIndex, endIndex, -1, -1, -1, -1);
+  }
+}
+
 int findSemicolonTokenIndexForEmptyDeclaration(
     const std::vector<stream_element *> &tokenVector,
     SgEmptyDeclaration *emptyDecl, int lowerBound, int upperBound) {
@@ -7601,6 +7892,9 @@ void buildTokenStreamMappingForSourceFile(SgSourceFile *sourceFile) {
   std::vector<stream_element *> tokenVector = getTokenStream(sourceFile);
   buildTokenStreamMapping(sourceFile, tokenVector);
   repairTemplateFunctionDeclarationTokenMappings(sourceFile);
+  repairTopLevelSharedDeclarationTokenMappings(sourceFile);
+  repairTopLevelTemplateVariableDeclarationTokenMappings(sourceFile,
+                                                         tokenVector);
   repairTopLevelEmptyDeclarationTokenMappings(sourceFile, tokenVector);
 }
 
@@ -7680,7 +7974,129 @@ void outputSourceCodeFromTokenStream_globalScope(
 
       lastOutputTokenIndex = end;
     };
+    auto fileInfoBelongsToOutputSourceFile = [&](const Sg_File_Info *fileInfo) {
+      if (fileInfo == NULL || fileInfo->isCompilerGenerated() ||
+          fileInfo->isFrontendSpecific() ||
+          fileInfo->isSourcePositionUnavailableInFrontend()) {
+        return false;
+      }
+      return fileInfo->isSameFile(sourceFile);
+    };
+    auto declarationBelongsToOutputSourceFile =
+        [&](SgDeclarationStatement *decl) -> bool {
+      if (decl == NULL) {
+        return false;
+      }
 
+      bool hasConcreteSourceFile = false;
+      for (const Sg_File_Info *fileInfo :
+           {decl->get_file_info(), decl->get_startOfConstruct(),
+            decl->get_endOfConstruct()}) {
+        if (fileInfo == NULL || fileInfo->isCompilerGenerated() ||
+            fileInfo->isFrontendSpecific() ||
+            fileInfo->isSourcePositionUnavailableInFrontend()) {
+          continue;
+        }
+        hasConcreteSourceFile = true;
+        if (fileInfoBelongsToOutputSourceFile(fileInfo)) {
+          return true;
+        }
+      }
+
+      return hasConcreteSourceFile == false;
+    };
+    auto isVisibleAstOnlyDeclaration =
+        [&](SgDeclarationStatement *decl) -> bool {
+      if (decl == NULL || decl->isOutputInCodeGeneration() == false) {
+        return false;
+      }
+      if (declarationBelongsToOutputSourceFile(decl) == false) {
+        return false;
+      }
+      Sg_File_Info *fileInfo = decl->get_file_info();
+      if (fileInfo != NULL &&
+          (fileInfo->isCompilerGenerated() || fileInfo->isFrontendSpecific())) {
+        return false;
+      }
+      return true;
+    };
+    auto shouldEmitAstOnlyDeclaration =
+        [&](SgDeclarationStatement *decl) -> bool {
+      SgFunctionDeclaration *functionDecl = isSgFunctionDeclaration(decl);
+      return isVisibleAstOnlyDeclaration(decl) &&
+             (decl->get_isModified() || decl->isTransformation() ||
+              (functionDecl != NULL &&
+               functionDecl->get_is_implicit_function()));
+    };
+    auto hasRealTokenBackedSourceLocation =
+        [](SgDeclarationStatement *decl) -> bool {
+      auto isRealFileInfo = [](const Sg_File_Info *fileInfo) -> bool {
+        if (fileInfo == NULL || fileInfo->isCompilerGenerated() ||
+            fileInfo->isFrontendSpecific() ||
+            fileInfo->isSourcePositionUnavailableInFrontend()) {
+          return false;
+        }
+        return fileInfo->get_line() > 0 && fileInfo->get_file_id() >= 0;
+      };
+
+      return decl != NULL && (isRealFileInfo(decl->get_file_info()) ||
+                              isRealFileInfo(decl->get_startOfConstruct()) ||
+                              isRealFileInfo(decl->get_endOfConstruct()));
+    };
+    auto declarationSourceLine = [](SgDeclarationStatement *decl) -> int {
+      if (decl == NULL) {
+        return 0;
+      }
+      Sg_File_Info *fileInfo = decl->get_startOfConstruct();
+      if (fileInfo == NULL) {
+        fileInfo = decl->get_file_info();
+      }
+      if (fileInfo == NULL) {
+        return 0;
+      }
+      return fileInfo->get_physical_line() > 0 ? fileInfo->get_physical_line()
+                                               : fileInfo->get_line();
+    };
+    auto tokenRangeCoversDeclarationSource =
+        [&](SgDeclarationStatement *decl,
+            TokenStreamSequenceToNodeMapping *map) -> bool {
+      if (decl == NULL || map == NULL || map->token_subsequence_start < 0 ||
+          map->token_subsequence_end < map->token_subsequence_start) {
+        return false;
+      }
+      if (static_cast<size_t>(map->token_subsequence_end) >=
+          tokenVector.size()) {
+        return false;
+      }
+
+      const int declLine = declarationSourceLine(decl);
+      if (declLine <= 0) {
+        return false;
+      }
+
+      const int startLine =
+          tokenVector[map->token_subsequence_start]->beginning_fpi.line_num;
+      const int endLine =
+          tokenVector[map->token_subsequence_end]->ending_fpi.line_num;
+      return std::min(startLine, endLine) <= declLine &&
+             declLine <= std::max(startLine, endLine);
+    };
+    auto emitAstOnlyDeclaration = [&](SgDeclarationStatement *decl,
+                                      bool requireAstChange = true) {
+      if (requireAstChange ? !shouldEmitAstOnlyDeclaration(decl)
+                           : !isVisibleAstOnlyDeclaration(decl)) {
+        return;
+      }
+      std::string declarationString =
+          unparseDeclarationToString(decl, /*unparseAsDeclaration=*/true);
+      if (declarationString.empty()) {
+        return;
+      }
+      file << declarationString;
+      if (declarationString.back() != '\n') {
+        file << '\n';
+      }
+    };
     for (size_t i = 0; i < declarationList.size(); i++) {
       // ROSE_ASSERT(tokenStreamSequenceMap.find(declarationList[i]) !=
       // tokenStreamSequenceMap.end());
@@ -7689,6 +8105,22 @@ void outputSourceCodeFromTokenStream_globalScope(
         TokenStreamSequenceToNodeMapping *tokenSubsequence =
             tokenStreamSequenceMap[declarationList[i]];
         ROSE_ASSERT(tokenSubsequence != NULL);
+        const bool hasConcreteTokenRange =
+            tokenSubsequence->token_subsequence_start >= 0 &&
+            tokenSubsequence->token_subsequence_end >=
+                tokenSubsequence->token_subsequence_start;
+        if (isVisibleAstOnlyDeclaration(declarationList[i]) &&
+            (hasConcreteTokenRange == false ||
+             hasRealTokenBackedSourceLocation(declarationList[i]) == false ||
+             tokenRangeCoversDeclarationSource(declarationList[i],
+                                               tokenSubsequence) == false)) {
+          emitAstOnlyDeclaration(declarationList[i],
+                                 /*requireAstChange=*/false);
+          if (ignore_firstDeclarationOutput == false) {
+            firstDeclarationOutput++;
+          }
+          continue;
+        }
         // The first declaration is not alwasy the first tokenSubsequence.
         // if (i == 0)
         if (i == firstDeclarationOutput) {
@@ -7750,6 +8182,8 @@ void outputSourceCodeFromTokenStream_globalScope(
           }
         }
       } else {
+        emitAstOnlyDeclaration(declarationList[i]);
+
         // We want to ignore the first declaration after we have output its
         // associate leading tokens sequence.
         if (ignore_firstDeclarationOutput == false) {
@@ -7757,6 +8191,16 @@ void outputSourceCodeFromTokenStream_globalScope(
         }
       }
     }
+
+    int finalTokenIndex =
+        tokenVector.empty() ? -1 : static_cast<int>(tokenVector.size()) - 1;
+    auto sourceFileMappingIt = tokenStreamSequenceMap.find(sourceFile);
+    if (sourceFileMappingIt != tokenStreamSequenceMap.end() &&
+        sourceFileMappingIt->second != NULL &&
+        sourceFileMappingIt->second->token_subsequence_end >= 0) {
+      finalTokenIndex = sourceFileMappingIt->second->token_subsequence_end;
+    }
+    emitTokenRange(lastOutputTokenIndex + 1, finalTokenIndex);
   }
 
   // Close off the generated file.
@@ -8299,6 +8743,12 @@ void buildTokenStreamMappingForRoot(SgSourceFile *sourceFile,
     tokenMappingTraversal.traverse(traversalRootNode, inheritedAttribute);
   }
 
+  repairTemplateFunctionDeclarationTokenMappings(sourceFile);
+  repairTopLevelSharedDeclarationTokenMappings(sourceFile);
+  repairTopLevelTemplateVariableDeclarationTokenMappings(sourceFile,
+                                                         tokenVector);
+  repairTopLevelEmptyDeclarationTokenMappings(sourceFile, tokenVector);
+
 #if DEBUG_TOKEN_STREAM_MAPPING || 0
   printf("@@@@@@@@@@@@@@@@@@@@ In buildTokenStreamMapping(): (after "
          "traversal): sourceFile->getFileName() = %s \n",
@@ -8430,6 +8880,9 @@ void buildTokenStreamMappingForRoot(SgSourceFile *sourceFile,
   // I/O.
   // sourceFile->set_tokenSubsequenceMap(tokenMappingTraversal.tokenStreamSequenceMap);
   sourceFile->set_tokenSubsequenceMap(tokenStreamSequenceMapPointer);
+  repairTemplateFunctionDeclarationTokenMappings(sourceFile);
+  repairTopLevelSharedDeclarationTokenMappings(sourceFile);
+  repairTopLevelEmptyDeclarationTokenMappings(sourceFile, tokenVector);
 
 #if DEBUG_TOKEN_STREAM_MAPPING
   // DQ (1/19/2021): This is redundant so that we don't have to call the

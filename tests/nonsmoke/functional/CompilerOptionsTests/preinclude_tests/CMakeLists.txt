@@ -12,9 +12,9 @@ add_test(
 add_test(
   NAME nonsmoke_functional_CompilerOptionsTests_preinclude_tests_test_preinclude.C
   COMMAND $<TARGET_FILE:testTranslator> -rose:verbose 0
+    -include ${CMAKE_CURRENT_SOURCE_DIR}/test_preinclude_1.h
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test_preinclude.C
 )
 set_tests_properties(nonsmoke_functional_CompilerOptionsTests_preinclude_tests_test_preinclude.C PROPERTIES DEPENDS compiler_options_preinclude)
 
 ########### install files ###############
-

@@ -41,6 +41,7 @@ using namespace std;
 using namespace Rose;
 
 namespace {
+
 void rosePhaseTrace(const char *phase) {
   if (getenv("ROSE_PHASE_TRACE") != nullptr) {
     fprintf(stderr, "ROSE_PHASE %s\n", phase);
@@ -659,6 +660,187 @@ void assertTokenSubsequenceWithinBounds(
   }
 }
 
+bool tokenIsIgnorableForDeclarationMapping(stream_element *token) {
+  return token == NULL || token->p_tok_elem == NULL ||
+         token->p_tok_elem->token_id == ROSE_token_ids::C_CXX_WHITESPACE ||
+         token->p_tok_elem->token_id ==
+             ROSE_token_ids::C_CXX_PREPROCESSING_INFO;
+}
+
+bool tokenEndsBeforeSourcePosition(stream_element *token, int line,
+                                   int column) {
+  if (token == NULL) {
+    return true;
+  }
+  if (token->ending_fpi.line_num < line) {
+    return true;
+  }
+  return token->ending_fpi.line_num == line &&
+         token->ending_fpi.column_num < column;
+}
+
+bool tokenBeginsAfterSourcePosition(stream_element *token, int line,
+                                    int column) {
+  if (token == NULL) {
+    return true;
+  }
+  if (token->beginning_fpi.line_num > line) {
+    return true;
+  }
+  return token->beginning_fpi.line_num == line &&
+         token->beginning_fpi.column_num > column;
+}
+
+int findDeclarationStartTokenIndex(
+    const std::vector<stream_element *> &tokenVector, int lowerBound,
+    int upperBound, const Sg_File_Info *start) {
+  if (start == NULL) {
+    return -1;
+  }
+
+  lowerBound = std::max(0, lowerBound);
+  upperBound = std::min(static_cast<int>(tokenVector.size()) - 1, upperBound);
+  const int line = start->get_physical_line();
+  const int column = start->get_col();
+  for (int i = lowerBound; i <= upperBound; ++i) {
+    if (tokenIsIgnorableForDeclarationMapping(tokenVector[i])) {
+      continue;
+    }
+    if (!tokenEndsBeforeSourcePosition(tokenVector[i], line, column)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+int findDeclarationEndTokenIndex(
+    const std::vector<stream_element *> &tokenVector, int lowerBound,
+    int upperBound, const Sg_File_Info *end) {
+  if (end == NULL) {
+    return -1;
+  }
+
+  lowerBound = std::max(0, lowerBound);
+  upperBound = std::min(static_cast<int>(tokenVector.size()) - 1, upperBound);
+  const int line = end->get_physical_line();
+  const int column = end->get_col();
+  for (int i = upperBound; i >= lowerBound; --i) {
+    if (tokenIsIgnorableForDeclarationMapping(tokenVector[i])) {
+      continue;
+    }
+    if (!tokenBeginsAfterSourcePosition(tokenVector[i], line, column)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+int findDeclarationTrailingSemicolonTokenIndex(
+    const std::vector<stream_element *> &tokenVector, int lowerBound,
+    int upperBound) {
+  lowerBound = std::max(0, lowerBound);
+  upperBound = std::min(static_cast<int>(tokenVector.size()) - 1, upperBound);
+  for (int i = lowerBound; i <= upperBound; ++i) {
+    if (tokenVector[i] != NULL && tokenVector[i]->p_tok_elem != NULL &&
+        tokenVector[i]->p_tok_elem->token_lexeme == ";") {
+      return i;
+    }
+  }
+  return -1;
+}
+
+bool repairMissingTopLevelTemplateVariableTokenMapping(
+    SgSourceFile *sourceFile, SgTemplateVariableDeclaration *decl,
+    const SgDeclarationStatementPtrList &declarations,
+    std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap,
+    const std::vector<stream_element *> &tokenVector) {
+  if (sourceFile == NULL || decl == NULL || tokenVector.empty()) {
+    return false;
+  }
+
+  Sg_File_Info *declInfo = decl->get_file_info();
+  Sg_File_Info *start = decl->get_startOfConstruct();
+  Sg_File_Info *end = decl->get_endOfConstruct();
+  if (declInfo == NULL || start == NULL || end == NULL ||
+      declInfo->isCompilerGenerated() || start->isCompilerGenerated() ||
+      end->isCompilerGenerated() || declInfo->isTransformation() ||
+      declInfo->isOutputInCodeGeneration() == false ||
+      !isLocatedNodeInSourceFile(decl, sourceFile)) {
+    return false;
+  }
+
+  size_t declIndex = declarations.size();
+  for (size_t i = 0; i < declarations.size(); ++i) {
+    if (declarations[i] == decl) {
+      declIndex = i;
+      break;
+    }
+  }
+  if (declIndex == declarations.size()) {
+    return false;
+  }
+
+  int lowerBound = 0;
+  for (size_t prev = declIndex; prev-- > 0;) {
+    std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator prevIt =
+        tokenMap.find(declarations[prev]);
+    if (prevIt != tokenMap.end() && prevIt->second != NULL &&
+        prevIt->second->token_subsequence_end >= 0) {
+      lowerBound = prevIt->second->token_subsequence_end + 1;
+      break;
+    }
+  }
+
+  int upperBound = static_cast<int>(tokenVector.size()) - 1;
+  for (size_t next = declIndex + 1; next < declarations.size(); ++next) {
+    std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator nextIt =
+        tokenMap.find(declarations[next]);
+    if (nextIt != tokenMap.end() && nextIt->second != NULL &&
+        nextIt->second->token_subsequence_start >= 0) {
+      upperBound = nextIt->second->token_subsequence_start - 1;
+      break;
+    }
+  }
+
+  lowerBound = std::max(0, lowerBound);
+  upperBound = std::min(static_cast<int>(tokenVector.size()) - 1, upperBound);
+
+  auto mapWithinBounds = [&](int searchLowerBound,
+                             int searchUpperBound) -> bool {
+    if (searchLowerBound > searchUpperBound) {
+      return false;
+    }
+
+    const int startIndex = findDeclarationStartTokenIndex(
+        tokenVector, searchLowerBound, searchUpperBound, start);
+    if (startIndex < 0) {
+      return false;
+    }
+
+    int endIndex = findDeclarationEndTokenIndex(tokenVector, startIndex,
+                                                searchUpperBound, end);
+    if (endIndex < startIndex) {
+      return false;
+    }
+
+    const int semicolonIndex = findDeclarationTrailingSemicolonTokenIndex(
+        tokenVector, endIndex, searchUpperBound);
+    if (semicolonIndex >= 0) {
+      endIndex = semicolonIndex;
+    }
+
+    tokenMap[decl] = TokenStreamSequenceToNodeMapping::createTokenInterval(
+        sourceFile, decl, -1, -1, startIndex, endIndex, -1, -1, -1, -1);
+    return true;
+  };
+
+  if (mapWithinBounds(lowerBound, upperBound)) {
+    return true;
+  }
+
+  return mapWithinBounds(0, static_cast<int>(tokenVector.size()) - 1);
+}
+
 bool repairMissingTopLevelEmptyDeclarationTokenMapping(
     SgSourceFile *sourceFile, SgEmptyDeclaration *emptyDecl,
     const SgDeclarationStatementPtrList &declarations,
@@ -864,6 +1046,14 @@ void enforceTokenUnparseContractForFile(SgSourceFile *sourceFile) {
       continue;
     }
 
+    // Declarations synthesized or structurally changed by ROSE are emitted from
+    // the AST instead of replaying an original token subsequence.
+    SgFunctionDeclaration *functionDecl = isSgFunctionDeclaration(decl);
+    if (decl->get_isModified() || decl->isTransformation() ||
+        (functionDecl != NULL && functionDecl->get_is_implicit_function())) {
+      continue;
+    }
+
     requiredTopLevelMappings += 1;
 
     std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator declIt =
@@ -873,6 +1063,14 @@ void enforceTokenUnparseContractForFile(SgSourceFile *sourceFile) {
       if (repairMissingTopLevelEmptyDeclarationTokenMapping(
               sourceFile, isSgEmptyDeclaration(decl), declarations, tokenMap,
               tokenVector)) {
+        declIt = tokenMap.find(decl);
+      }
+    }
+    if ((declIt == tokenMap.end() || declIt->second == NULL) &&
+        isSgTemplateVariableDeclaration(decl) != NULL) {
+      if (repairMissingTopLevelTemplateVariableTokenMapping(
+              sourceFile, isSgTemplateVariableDeclaration(decl), declarations,
+              tokenMap, tokenVector)) {
         declIt = tokenMap.find(decl);
       }
     }
@@ -1637,10 +1835,17 @@ SgStatement *Rose::getNextStatement(SgStatement *currentStatement) {
   // itself (which *is* in that list) to preserve linear statement iteration.
   if (SgLabelStatement *label_parent =
           isSgLabelStatement(currentStatement->get_parent())) {
-    SgScopeStatement *label_scope = label_parent->get_scope();
+    SgScopeStatement *label_scope =
+        isSgScopeStatement(label_parent->get_parent());
+    if (label_scope == nullptr ||
+        label_scope->containsOnlyDeclarations() == true ||
+        isSgDeclarationScope(label_scope) != nullptr) {
+      label_scope = scope;
+    }
     ROSE_ASSERT(label_scope != NULL);
 
-    // Labels are statements, so they should only occur in statement lists.
+    // C/C++ labels have function scope semantically, but the label statement is
+    // threaded through its enclosing statement-list scope.
     if (!isSgDeclarationScope(label_scope) &&
         label_scope->containsOnlyDeclarations() == false) {
       SgStatementPtrList &statementList = label_scope->getStatementList();

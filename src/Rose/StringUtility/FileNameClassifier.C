@@ -64,6 +64,24 @@ bool endsWith(const string &str, const string &substr) {
   return (result == 0);
 }
 
+vector<string> splitPathComponents(const string &path) {
+  vector<string> components;
+  Rose::StringUtility::splitStringIntoStrings(path, '/', components);
+  return components;
+}
+
+void trimTrailingSeparatorComponents(vector<string> &components) {
+  while (!components.empty() && components.back().empty())
+    components.pop_back();
+}
+
+bool componentPathStartsWith(const vector<string> &path,
+                             const vector<string> &prefix) {
+  if (prefix.size() > path.size())
+    return false;
+  return std::equal(prefix.begin(), prefix.end(), path.begin());
+}
+
 // TODO can we static initialize stl structures?
 // if so it'd be better to create these as sets
 // test for existance, which would be *much* faster (and safer)
@@ -200,16 +218,18 @@ Rose::StringUtility::FileNameLibrary classifyLibrary(const string &fileName) {
 
 int Rose::StringUtility::directoryDistance(const string &left,
                                            const string &right) {
-  vector<string> lvec;
-  splitStringIntoStrings(left, '/', lvec);
-  vector<string> rvec;
-  splitStringIntoStrings(right, '/', rvec);
+  vector<string> lvec = splitPathComponents(left);
+  vector<string> rvec = splitPathComponents(right);
 
   assert(!lvec.empty());
   assert(!rvec.empty());
 
-  lvec.erase(lvec.end());
-  rvec.erase(rvec.end());
+  lvec.pop_back();
+  trimTrailingSeparatorComponents(lvec);
+  trimTrailingSeparatorComponents(rvec);
+
+  if (componentPathStartsWith(lvec, rvec))
+    return 0;
 
   vector<string>::iterator l = lvec.begin();
   vector<string>::iterator r = rvec.begin();

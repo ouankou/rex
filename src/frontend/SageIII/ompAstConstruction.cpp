@@ -1555,6 +1555,34 @@ ensureOpenMPStatementVisibleForCodeGeneration(SgStatement *statement) {
   located->setOutputInCodeGeneration();
 }
 
+static void setOpenMPWrapperFileInfoCompilerGenerated(SgStatement *statement) {
+  SgLocatedNode *located = isSgLocatedNode(statement);
+  if (located == nullptr) {
+    return;
+  }
+
+  if (hasUsableSourceLocation(located->get_file_info()) ||
+      hasUsableSourceLocation(located->get_startOfConstruct()) ||
+      hasUsableSourceLocation(located->get_endOfConstruct()) ||
+      findOpenMPDirectiveLocationInfo(statement) != nullptr) {
+    return;
+  }
+
+  Sg_File_Info *old_file_info = located->get_file_info();
+  if (old_file_info != nullptr &&
+      old_file_info != located->get_startOfConstruct() &&
+      old_file_info != located->get_endOfConstruct()) {
+    delete old_file_info;
+  }
+
+  Sg_File_Info *file_info =
+      Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode();
+  file_info->setCompilerGenerated();
+  file_info->setOutputInCodeGeneration();
+  located->set_file_info(file_info);
+  file_info->set_parent(located);
+}
+
 static bool isConditionalBeginDirective(const PreprocessingInfo *info) {
   if (info == nullptr) {
     return false;
@@ -8541,22 +8569,6 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
   bool isFortran = sageFilePtr->get_Fortran_only() ||
                    sageFilePtr->get_F77_only() || sageFilePtr->get_F90_only() ||
                    sageFilePtr->get_F95_only() || sageFilePtr->get_F2003_only();
-  if (!isFortran && (wantsOpenMP || wantsOpenACC)) {
-    // OpenMP/OpenACC pragma declarations are converted into directive AST
-    // nodes. Replaying original C/C++ tokens after that conversion preserves
-    // stale pragma spelling, spacing, and continuations instead of the
-    // directive AST we just built.
-    sageFilePtr->set_unparse_tokens(false);
-    if (SgProject *project = sageFilePtr->get_project()) {
-      if (SgFileList *file_list = project->get_fileList_ptr()) {
-        for (SgFile *file : file_list->get_listOfFiles()) {
-          if (SgSourceFile *source_file = isSgSourceFile(file)) {
-            source_file->set_unparse_tokens(false);
-          }
-        }
-      }
-    }
-  }
   bool parsed_fortran_pragmas = false;
 
   // ==================================================================================================================//
@@ -8753,6 +8765,7 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
         backfillOpenMPWrapperStartFromBody(stmt);
         normalizeOpenMPStatementSourceLocation(stmt);
         ensureOpenMPStatementVisibleForCodeGeneration(stmt);
+        setOpenMPWrapperFileInfoCompilerGenerated(stmt);
       }
     }
   };

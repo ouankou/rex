@@ -1,6 +1,6 @@
 // This test code is testing both only formatting, and
 // the correctness of the -rose:merge_decl_assign option.
-double *space;
+double* space;
 
 void foobar() {
   for (int def = 0; def < 42; def++) {
@@ -16,3 +16,5 @@ void foobar() {
     }
   }
 }
+
+

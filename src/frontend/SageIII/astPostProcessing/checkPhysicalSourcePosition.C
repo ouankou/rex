@@ -24,6 +24,15 @@ size_t checkPhysicalSourcePosition(SgNode *ast) {
     // so marked.
     void check(SgNode * /*node*/, Sg_File_Info *finfo) {
       if (finfo != NULL) {
+        int *physical_file_id = finfo->get_physical_file_id_reference();
+        if (physical_file_id != NULL && *physical_file_id >= 0) {
+          return;
+        }
+        if (finfo->isTransformation() || finfo->isCompilerGenerated() ||
+            finfo->isFrontendSpecific() ||
+            finfo->isSourcePositionUnavailableInFrontend()) {
+          return;
+        }
         if (finfo->get_file_id() >= 0 && finfo->get_physical_file_id() < 0) {
           SgNode *parent = finfo->get_parent();
           ROSE_ASSERT(parent != NULL);

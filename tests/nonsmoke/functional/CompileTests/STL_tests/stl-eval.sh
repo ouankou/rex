@@ -7,9 +7,7 @@
 : ${CPP98_STL_TESTS:="yes"}
 : ${CPP11_STL_TESTS:="yes"}
 
-# DQ (3/12/2017): restore this setting for before checkin.
-# CLEANUP_ON_SUCCESS="yes"
-CLEANUP_ON_SUCCESS="no"
+CLEANUP_ON_SUCCESS="yes"
 
 CLEANUP_AND_EXIT="no"
 ASAN_USED="no"
@@ -78,6 +76,7 @@ function check {
 local STL_HEADERS=$1
 local LANG_STANDARD=$2
 local COMMENT=$3
+local BACKEND_CHECK=${4:-yes}
 
 T0_PASS=0
 T0_FAIL=0
@@ -85,6 +84,7 @@ T1_PASS=0
 T1_FAIL=0
 T2_PASS=0
 T2_FAIL=0
+T2_SKIP=0
 TOTAL_FAIL=0
 
 for header in ${STL_HEADERS}; do
@@ -127,31 +127,36 @@ for header in ${STL_HEADERS}; do
             then
                 echo -n "PASS" # 1
                 ((T1_PASS+=1) )
-                # now run back end compiler (TOOL1) on rose-tool (TOOL2) generated output
-                echo "${TOOL1} -std=$LANG_STANDARD ${ROSE_TEST_HEADER_PP_C} -w -Wfatal-errors" >> $LOGFILE
-                ${TOOL1} -std=$LANG_STANDARD ${ROSE_TEST_HEADER_PP_C} -w -Wfatal-errors >> $LOGFILE 2>&1
-                if [ $? -eq 0 ]; then
-                    if [ "$PERL_AVAILABLE" == "yes" ]; then
-                        echo -n " PASS : 100.00%" # 2
+                if [ "$BACKEND_CHECK" == "yes" ]; then
+                    # now run back end compiler (TOOL1) on rose-tool (TOOL2) generated output
+                    echo "${TOOL1} -std=$LANG_STANDARD ${ROSE_TEST_HEADER_PP_C} -w -Wfatal-errors" >> $LOGFILE
+                    ${TOOL1} -std=$LANG_STANDARD ${ROSE_TEST_HEADER_PP_C} -w -Wfatal-errors >> $LOGFILE 2>&1
+                    if [ $? -eq 0 ]; then
+                        if [ "$PERL_AVAILABLE" == "yes" ]; then
+                            echo -n " PASS : 100.00%" # 2
+                        else
+                            echo -n " PASS :    100%" # 2
+                        fi
+                        ((T2_PASS+=1))
                     else
-                        echo -n " PASS :    100%" # 2
-                    fi
-                    ((T2_PASS+=1))
-                else
-                    # determine line number of error when compiling rose-tool generated output
-                    ERROR_LINE=`${TOOL1} -std=${LANG_STANDARD} ${ROSE_TEST_HEADER_PP_C} -w -Wfatal-errors 2>&1 | egrep ${ROSE_TEST_HEADER_PP_C}:[0-9] | cut -f2 -d:`
-                    if [ "$PERL_AVAILABLE" == "yes" ]; then
+                        # determine line number of error when compiling rose-tool generated output
+                        ERROR_LINE=`${TOOL1} -std=${LANG_STANDARD} ${ROSE_TEST_HEADER_PP_C} -w -Wfatal-errors 2>&1 | egrep ${ROSE_TEST_HEADER_PP_C}:[0-9] | cut -f2 -d:`
+                        if [ "$PERL_AVAILABLE" == "yes" ]; then
 
-                        #ERROR_PERCENTAGE=`echo "scale=2; ${ERROR_LINE}*100/${LOC}" | bc`
-                        ERROR_PERCENTAGE=`perl -e "printf '%0.2f', ${ERROR_LINE} * 100 / ${LOC}"`
-                    else
-                        ERROR_PERCENTAGE=$[ ERROR_LINE * 100 / LOC ]
+                            #ERROR_PERCENTAGE=`echo "scale=2; ${ERROR_LINE}*100/${LOC}" | bc`
+                            ERROR_PERCENTAGE=`perl -e "printf '%0.2f', ${ERROR_LINE} * 100 / ${LOC}"`
+                        else
+                            ERROR_PERCENTAGE=$[ ERROR_LINE * 100 / LOC ]
+                        fi
+                        echo -en " ${RED}FAIL${COLOREND}"
+                        printf " : %6s%% (LINE:%s)" "$ERROR_PERCENTAGE" "$ERROR_LINE"  # 2
+                        ((T2_FAIL+=1))
+                        # this line reproduces the error message of the back end compiler (it does not reproduce the output file)
+                        echo -en " [ ${TOOL1} -std=$LANG_STANDARD ${ROSE_TEST_HEADER_PP_C} -w -Wfatal-errors ]"
                     fi
-                    echo -en " ${RED}FAIL${COLOREND}"
-                    printf " : %6s%% (LINE:%s)" "$ERROR_PERCENTAGE" "$ERROR_LINE"  # 2
-                    ((T2_FAIL+=1))
-                    # this line reproduces the error message of the back end compiler (it does not reproduce the output file)
-                    echo -en " [ ${TOOL1} -std=$LANG_STANDARD ${ROSE_TEST_HEADER_PP_C} -w -Wfatal-errors ]"
+                else
+                    echo -n " SKIP : frontend-only"
+                    ((T2_SKIP+=1))
                 fi
             else
                 echo -en " ${RED}FAIL${COLOREND} "
@@ -180,7 +185,7 @@ else
     ((TOTAL_FAIL=T0_FAIL+T1_FAIL+T2_FAIL))
     # present statistics
     echo "-----------------------------------------------------------------"
-    echo -e "PASS/FAIL                                $T0_PASS/${RED}$T0_FAIL${COLOREND} $T1_PASS/${RED}$T1_FAIL${COLOREND} $T2_PASS/${RED}$T2_FAIL${COLOREND} : TOTAL: ${T2_PASS}/${RED}${TOTAL_FAIL}${COLOREND}"
+    echo -e "PASS/FAIL/SKIP                           $T0_PASS/${RED}$T0_FAIL${COLOREND}/0 $T1_PASS/${RED}$T1_FAIL${COLOREND}/0 $T2_PASS/${RED}$T2_FAIL${COLOREND}/$T2_SKIP : TOTAL: ${T2_PASS}/${RED}${TOTAL_FAIL}${COLOREND}/$T2_SKIP"
     echo "-----------------------------------------------------------------"
 fi
 
@@ -224,7 +229,7 @@ if [ "$CPP98_STL_TESTS" == "yes" ]; then
     echo "-----------------------------------------------------------------"
     echo "STL C++98 FRONTEND+BACKEND CHECK         COMP FE   BE   : SUCCESS"
     echo "-----------------------------------------------------------------"
-    check "$STL_CPP98_HEADERS_FAILING" "c++98" ""
+    check "$STL_CPP98_HEADERS_FAILING" "c++98" "" no
 
     # for headers known to fail, only the generated code fails (T2_FAIL)
     # therefore we only check that the front end does not fail for any
@@ -248,7 +253,7 @@ echo "STL C++11 FRONTEND+BACKEND CHECK         COMP FE   BE   : SUCCESS"
 echo "-----------------------------------------------------------------"
 
 if [ "$CPP11_STL_TESTS" == "yes" ]; then
-    check "$STL_CPP11_HEADERS_PASSING" "c++11" ""
+    check "$STL_CPP11_HEADERS_PASSING" "c++11" "" no
     FAILING_FRONTEND_TESTS_WITH_ASAN=6
     # code generation not correct for any C++11 header. We only check the front end.
     ((CPP11_FAIL=T0_FAIL+T1_FAIL))

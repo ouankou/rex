@@ -226,6 +226,29 @@ bool templateArgumentEndsWithTemplateIdClose(const SgTemplateArgument *arg) {
   }
 }
 
+bool sourceFileRequiresSeparatedTemplateClosers(
+    const SgSourceFile *source_file) {
+  return source_file != nullptr &&
+         (source_file->get_Cxx98_only() || source_file->get_Cxx98_gnu_only() ||
+          source_file->get_Cxx03_only() || source_file->get_Cxx03_gnu_only());
+}
+
+bool templateParameterEndsWithTemplateIdClose(
+    const SgTemplateParameter *template_parameter) {
+  if (template_parameter == nullptr) {
+    return false;
+  }
+
+  switch (template_parameter->get_parameterType()) {
+  case SgTemplateParameter::type_parameter:
+    return typeEndsWithTemplateIdClose(
+        template_parameter->get_defaultTypeParameter());
+
+  default:
+    return false;
+  }
+}
+
 std::string
 normalizeTemplateParameterPreviewWhitespace(const std::string &text);
 
@@ -2023,8 +2046,7 @@ void Unparse_ExprStmt::unparseTemplateArgumentList(
     source_file = SageInterface::getEnclosingSourceFile(
         info.get_reference_node_for_qualification(), true);
   }
-  if (source_file != nullptr &&
-      (source_file->get_Cxx03_only() || source_file->get_Cxx03_gnu_only())) {
+  if (sourceFileRequiresSeparatedTemplateClosers(source_file)) {
     use_compact_template_brackets = false;
   }
 
@@ -2286,6 +2308,20 @@ void Unparse_ExprStmt::unparseTemplateParameterList(
     SgUnparse_Info &info, bool is_template_header) {
 
   if (templateParameterList.empty() == false) {
+    bool use_compact_template_brackets = true;
+    SgSourceFile *source_file = nullptr;
+    if (info.get_reference_node_for_qualification() != nullptr) {
+      source_file = SageInterface::getEnclosingSourceFile(
+          info.get_reference_node_for_qualification(), true);
+    }
+    if (source_file == nullptr && info.get_declstatement_ptr() != nullptr) {
+      source_file = SageInterface::getEnclosingSourceFile(
+          info.get_declstatement_ptr(), true);
+    }
+    if (sourceFileRequiresSeparatedTemplateClosers(source_file)) {
+      use_compact_template_brackets = false;
+    }
+
     curprint("<");
     const int parameter_wrap_indent = unp->cur.current_col();
     std::vector<std::string> parameter_previews;
@@ -2330,7 +2366,10 @@ void Unparse_ExprStmt::unparseTemplateParameterList(
       ++parameter_index;
     }
 
-    curprint(">");
+    const bool needs_space_before_close =
+        !use_compact_template_brackets &&
+        templateParameterEndsWithTemplateIdClose(templateParameterList.back());
+    curprint(needs_space_before_close ? " >" : ">");
   }
 }
 
@@ -2850,9 +2889,8 @@ void Unparse_ExprStmt::unparseTemplateArgument(
       // DQ (1/5/2007): test2007_01.C demonstrated where this expression
       // argument requires qualification.
       SgExpression *template_arg_expr = templateArgument->get_expression();
-      bool need_paren = isSgBinaryOp(template_arg_expr) != NULL ||
-                        isSgConditionalExp(template_arg_expr) != NULL ||
-                        isSgCommaOpExp(template_arg_expr) != NULL;
+      const bool need_paren = template_arg_expr->get_need_paren() ||
+                              isSgCommaOpExp(template_arg_expr) != NULL;
       if (need_paren) {
         curprint("(");
       }

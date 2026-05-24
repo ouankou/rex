@@ -1363,13 +1363,33 @@ void Unparse_MOD_SAGE::outputExternLinkageSpecifier(
         Unparse_MOD_SAGE::getActiveExternLinkageBraceLanguage();
     const bool inside_matching_linkage_braces =
         !active_linkage.empty() && active_linkage == decl_stmt->get_linkage();
+    auto declaration_is_in_local_scope =
+        [](SgDeclarationStatement *decl) -> bool {
+      SgScopeStatement *lexical_scope = isSgScopeStatement(decl->get_parent());
+      if (lexical_scope == NULL)
+        return false;
+
+      return isSgGlobal(lexical_scope) == NULL &&
+             isSgNamespaceDefinitionStatement(lexical_scope) == NULL &&
+             isSgClassDefinition(lexical_scope) == NULL;
+    };
+    const bool local_scope_declaration =
+        declaration_is_in_local_scope(decl_stmt);
 
 #if DEBUG_EXTERN
     printf("/* output extern keyword */ \n");
 #endif
     if (inside_matching_linkage_braces == false) {
       // curprint( "extern \"" + decl_stmt->get_linkage() + "\" ");
-      if (decl_stmt->isExternBrace() == true) {
+      if (local_scope_declaration == true) {
+#if DEBUG_EXTERN
+        printf("/* local-scope extern declaration: output extern keyword "
+               "only */ \n");
+#endif
+        if (decl_stmt->get_declarationModifier().isFriend() == false) {
+          curprint("extern ");
+        }
+      } else if (decl_stmt->isExternBrace() == true) {
 #if DEBUG_EXTERN
         printf("/* output extern brace */ \n");
 #endif
@@ -1518,6 +1538,15 @@ void Unparse_MOD_SAGE::outputTemplateSpecializationSpecifier(
     return;
   }
 
+  auto output_explicit_template_headers = [&](unsigned int count) {
+    if (count == 0) {
+      count = 1;
+    }
+    for (unsigned int i = 0; i < count; ++i) {
+      curprint("template<> ");
+    }
+  };
+
   // DQ (1/3/2016): Adding support for template variable declarations.
   // TV (03/31/2022): FIXME that is broken: we need to find a predicate for
   // template variable instantiation in the absence of specialized node
@@ -1531,7 +1560,8 @@ void Unparse_MOD_SAGE::outputTemplateSpecializationSpecifier(
     unparse_template_from_ast |= tvdecl->get_unparse_template_ast() == true;
 
     if (!unparse_template_from_ast) {
-      curprint("template<> ");
+      output_explicit_template_headers(
+          tvdecl->get_explicitTemplateSpecializationHeaderCount());
     }
   }
 
@@ -1843,9 +1873,15 @@ void Unparse_MOD_SAGE::outputTemplateSpecializationSpecifier(
           decl_stmt, info, PreprocessingInfo::inside);
     }
   } else if (is_plain_explicit_specialization(decl_stmt)) {
-    // Explicit specializations of non-template declarations nested under class
-    // template specializations still require a leading `template<>`.
-    curprint("template<> ");
+    if (SgVariableDeclaration *variable_decl =
+            isSgVariableDeclaration(decl_stmt)) {
+      output_explicit_template_headers(
+          variable_decl->get_explicitTemplateSpecializationHeaderCount());
+    } else {
+      // Explicit specializations of non-template declarations nested under
+      // class template specializations still require a leading `template<>`.
+      output_explicit_template_headers(1);
+    }
   }
 
 #if DEBUG_TEMPLATE_SPECIALIZATION
@@ -2364,11 +2400,51 @@ void Unparse_MOD_SAGE::printAttributesForType(SgDeclarationStatement *decl_stmt,
       curprint(" __attribute__((noreturn))");
     }
 
+    if (functionDeclaration->get_declarationModifier()
+            .get_typeModifier()
+            .isGnuAttributeConst() == true) {
+      curprint(" __attribute__((const))");
+    }
+
+    if (functionDeclaration->get_declarationModifier()
+            .get_typeModifier()
+            .isGnuAttributeWarnUnusedResult() == true) {
+      curprint(" __attribute__((warn_unused_result))");
+    }
+
+    const SgFunctionModifier::gnu_attribute_parameter_index_list_list_t
+        &nonnullParameterIndexLists =
+            functionDeclaration->get_functionModifier()
+                .get_gnu_attribute_nonnull_parameter_index_lists();
+    if (nonnullParameterIndexLists.empty() == false) {
+      for (const SgFunctionModifier::gnu_attribute_parameter_index_list_t
+               &indices : nonnullParameterIndexLists) {
+        curprint(" __attribute__((nonnull");
+        if (indices.empty() == false) {
+          curprint("(");
+          for (size_t i = 0; i < indices.size(); ++i) {
+            if (i != 0) {
+              curprint(", ");
+            }
+            curprint(StringUtility::numberToString(indices[i]));
+          }
+          curprint(")");
+        }
+        curprint("))");
+      }
+    } else if (functionDeclaration->get_declarationModifier()
+                   .get_typeModifier()
+                   .isGnuAttributeNonnull() == true) {
+      curprint(" __attribute__((nonnull))");
+    }
+
     // DQ (2/7/2014): attribute set using:
     // decl->get_functionModifier().set_gnu_attribute_named_alias(alias_name);
     if (functionDeclaration->get_functionModifier()
-            .get_gnu_attribute_named_alias()
-            .empty() == false) {
+                .get_gnu_attribute_named_alias()
+                .empty() == false &&
+        functionDeclaration->get_functionModifier()
+                .isGnuAttributeWeakReference() == false) {
       string alias = functionDeclaration->get_functionModifier()
                          .get_gnu_attribute_named_alias();
       // curprint(" __attribute__((noreturn))");
@@ -2502,7 +2578,15 @@ void Unparse_MOD_SAGE::printAttributes(SgDeclarationStatement *decl_stmt,
 
     if (functionDeclaration->get_functionModifier()
             .isGnuAttributeWeakReference() == true) {
-      curprint(" __attribute__((weakref)) ");
+      const string alias = functionDeclaration->get_functionModifier()
+                               .get_gnu_attribute_named_alias();
+      if (alias.empty()) {
+        curprint(" __attribute__((weakref)) ");
+      } else {
+        curprint(" __attribute__((weakref(\"");
+        curprint(alias);
+        curprint("\"))) ");
+      }
     }
 
     // DQ (1/5/2014): Adding support for gnu visibility attributes.

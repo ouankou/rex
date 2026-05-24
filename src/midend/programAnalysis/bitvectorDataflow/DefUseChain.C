@@ -53,7 +53,8 @@ void DefUseChain<Node>::build(AstInterface &fa, ReachingDefinitionAnalysis &r,
                               FunctionSideEffectInterface *f) {
   std::vector<Node *> defvec;
   const ReachingDefinitionGenerator *g = r.get_generator();
-  StmtSideEffectCollect collect(fa, f);
+  StmtSideEffectCollect collect(
+      fa, f, StmtSideEffectCollect::UnknownFunctionEffectPolicy::ReportOnly);
 
   std::map<AstNodePtr, Node *> defmap;
   const ReachingDefinitionBase &base = g->get_base();

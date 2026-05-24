@@ -41,7 +41,17 @@ $Header:
 1.3 2008/01/08 02:56:44 dquinlan Exp $
 */
 
+#if defined(__has_include)
+#if __has_include("rosedll.h")
 #include "rosedll.h"
+#elif __has_include("../../frontend/SageIII/rosedll.h")
+#include "../../frontend/SageIII/rosedll.h"
+#else
+#include "rosedll.h"
+#endif
+#else
+#include "rosedll.h"
+#endif
 
 #ifdef __cplusplus
 #include <string>

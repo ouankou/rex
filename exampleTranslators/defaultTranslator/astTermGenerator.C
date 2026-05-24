@@ -3,33 +3,14 @@
 #include "rose.h"
 
 #include "AstTerm.h"
+#include "rose_test_output_path.h"
 
 #include <iostream>
 
 #include <fstream>
 
-#include <cstdlib>
-#include <filesystem>
 #include <stdlib.h>
 using namespace std;
-
-namespace {
-std::string resolveTestOutputPath(const std::string &filename) {
-  const char *output_dir = std::getenv("ROSE_TEST_OUTPUT_DIR");
-  if (output_dir == nullptr || output_dir[0] == '\0') {
-    return filename;
-  }
-
-  std::filesystem::path output_dir_path(output_dir);
-  std::error_code ec;
-  std::filesystem::create_directories(output_dir_path, ec);
-  if (ec) {
-    return filename;
-  }
-
-  return (output_dir_path / filename).string();
-}
-} // namespace
 
 class visitorTraversal : public AstSimpleProcessing {
 public:
@@ -69,7 +50,7 @@ int main(int argc, char *argv[]) {
         Rose::StringUtility::stripPathFromFileName(file_list[0]->getFileName());
 
     ofstream out;
-    out.open(resolveTestOutputPath(firstFileName + ".astTerm.txt"));
+    out.open(Rose::TestOutput::resolvePath(firstFileName + ".astTerm.txt"));
     // out<< AstTerm::astTermWithNullValuesToString(project)<<endl; // too much
     // from headers
     SgGlobal *global = isSgSourceFile(file_list[0])->get_globalScope();

@@ -190,6 +190,15 @@ private:
   // We map each function to the corresponding graph node
   typedef std::unordered_map<SgFunctionDeclaration *, SgGraphNode *> GraphNodes;
   GraphNodes graphNodes;
+  SgGraphNode *getGraphNodeForConstruction(SgFunctionDeclaration *fdecl) const;
+  bool shouldMaterializeImplicitCallTarget(SgFunctionDeclaration *fdecl) const;
+  bool shouldMaterializeResolvedCallTarget(SgFunctionDeclaration *fdecl) const;
+  SgGraphNode *
+  ensureGraphNodeForImplicitCallTarget(SgFunctionDeclaration *fdecl);
+  SgGraphNode *
+  ensureGraphNodeForResolvedCallTarget(SgFunctionDeclaration *fdecl);
+  void materializeNonFunctionImplicitCallTargets(
+      ClassHierarchyWrapper *classHierarchy);
 };
 //! Generate a dot graph named 'fileName' from a call graph
 // TODO this function is    not defined? If so, need to be removed.
@@ -203,9 +212,7 @@ struct GetOneFuncDeclarationPerFunction {
 };
 
 static inline SgFunctionDeclaration *
-canonicalFunctionDeclForCallGraph(SgFunctionDeclaration *fdecl) {
-  ROSE_ASSERT(fdecl != NULL);
-
+callGraphCanonicalDeclarationChain(SgFunctionDeclaration *fdecl) {
   if (SgFunctionDeclaration *defDecl =
           isSgFunctionDeclaration(fdecl->get_definingDeclaration())) {
     return defDecl;
@@ -217,6 +224,152 @@ canonicalFunctionDeclForCallGraph(SgFunctionDeclaration *fdecl) {
   }
 
   return fdecl;
+}
+
+static inline bool
+callGraphDeclIsBlockScopePrototype(SgFunctionDeclaration *fdecl) {
+  if (fdecl == NULL || fdecl->get_definition() != NULL ||
+      fdecl->get_definingDeclaration() != NULL ||
+      isSgMemberFunctionDeclaration(fdecl) != NULL ||
+      isSgTemplateFunctionDeclaration(fdecl) != NULL ||
+      isSgTemplateMemberFunctionDeclaration(fdecl) != NULL) {
+    return false;
+  }
+
+  for (SgNode *cursor = fdecl->get_parent(); cursor != NULL;
+       cursor = cursor->get_parent()) {
+    if (isSgFunctionDefinition(cursor) != NULL) {
+      return true;
+    }
+    if (isSgGlobal(cursor) != NULL ||
+        isSgNamespaceDefinitionStatement(cursor) != NULL ||
+        isSgClassDefinition(cursor) != NULL ||
+        isSgTemplateClassDefinition(cursor) != NULL ||
+        isSgTemplateInstantiationDefn(cursor) != NULL) {
+      return false;
+    }
+  }
+
+  return false;
+}
+
+static inline SgFunctionDeclaration *
+callGraphLookupNamespaceFunctionForBlockPrototype(
+    SgFunctionDeclaration *fdecl) {
+  if (!callGraphDeclIsBlockScopePrototype(fdecl)) {
+    return NULL;
+  }
+
+  for (SgNode *cursor = fdecl->get_parent(); cursor != NULL;
+       cursor = cursor->get_parent()) {
+    SgScopeStatement *scope = isSgScopeStatement(cursor);
+    if (scope == NULL || (isSgGlobal(scope) == NULL &&
+                          isSgNamespaceDefinitionStatement(scope) == NULL)) {
+      continue;
+    }
+
+    SgFunctionSymbol *symbol = scope->lookup_nontemplate_function_symbol(
+        fdecl->get_name(), fdecl->get_type(), NULL);
+    if (symbol == NULL) {
+      symbol = isSgFunctionSymbol(
+          scope->lookup_function_symbol(fdecl->get_name(), fdecl->get_type()));
+    }
+    if (symbol == NULL) {
+      continue;
+    }
+
+    SgFunctionDeclaration *decl =
+        isSgFunctionDeclaration(symbol->get_declaration());
+    if (decl != NULL && decl != fdecl) {
+      return callGraphCanonicalDeclarationChain(decl);
+    }
+  }
+
+  return NULL;
+}
+
+static inline SgFunctionDeclaration *
+canonicalFunctionDeclForCallGraph(SgFunctionDeclaration *fdecl) {
+  ROSE_ASSERT(fdecl != NULL);
+
+  SgFunctionDeclaration *canonical = callGraphCanonicalDeclarationChain(fdecl);
+  if (canonical != fdecl) {
+    return canonical;
+  }
+
+  if (SgFunctionDeclaration *namespace_decl =
+          callGraphLookupNamespaceFunctionForBlockPrototype(fdecl)) {
+    return namespace_decl;
+  }
+
+  return fdecl;
+}
+
+static inline bool
+callGraphDeclHasUsableFilename(SgFunctionDeclaration *fdecl) {
+  if (fdecl == NULL || fdecl->get_file_info() == NULL) {
+    return false;
+  }
+
+  const std::string filename = fdecl->get_file_info()->get_filename();
+  return !filename.empty() && filename != "NULL_FILE" &&
+         filename != "compilerGenerated";
+}
+
+static inline SgFunctionDeclaration *
+predicateFunctionDeclForCallGraph(SgFunctionDeclaration *fdecl) {
+  ROSE_ASSERT(fdecl != NULL);
+
+  SgFunctionDeclaration *canonical = canonicalFunctionDeclForCallGraph(fdecl);
+  if (callGraphDeclHasUsableFilename(canonical)) {
+    return canonical;
+  }
+
+  if (SgFunctionDeclaration *firstNondef = isSgFunctionDeclaration(
+          canonical->get_firstNondefiningDeclaration())) {
+    if (callGraphDeclHasUsableFilename(firstNondef)) {
+      return firstNondef;
+    }
+  }
+
+  if (SgFunctionDeclaration *def =
+          isSgFunctionDeclaration(canonical->get_definingDeclaration())) {
+    if (callGraphDeclHasUsableFilename(def)) {
+      return def;
+    }
+  }
+
+  return canonical;
+}
+
+static inline bool
+callGraphDeclHasDefinitionOrDefiningDeclaration(SgFunctionDeclaration *fdecl) {
+  if (fdecl == NULL) {
+    return false;
+  }
+
+  if (fdecl->get_definition() != NULL) {
+    return true;
+  }
+
+  SgFunctionDeclaration *def_decl =
+      isSgFunctionDeclaration(fdecl->get_definingDeclaration());
+  return def_decl != NULL && def_decl->get_definition() != NULL;
+}
+
+static inline bool callGraphInstantiatedMemberHasClassTemplateArguments(
+    SgTemplateInstantiationMemberFunctionDecl *inst_member) {
+  if (inst_member == NULL) {
+    return false;
+  }
+
+  SgTemplateInstantiationDecl *associated_class = isSgTemplateInstantiationDecl(
+      inst_member->get_associatedClassDeclaration());
+  if (associated_class == NULL) {
+    return false;
+  }
+
+  return !associated_class->get_templateArguments().empty();
 }
 
 template <typename Predicate>
@@ -237,7 +390,7 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
         return false;
       }
 
-      SgFunctionDeclaration *pred_decl = canonicalFunctionDeclForCallGraph(f);
+      SgFunctionDeclaration *pred_decl = predicateFunctionDeclForCallGraph(f);
 
       SgFunctionDeclaration *def_decl =
           isSgFunctionDeclaration(pred_decl->get_definingDeclaration());
@@ -257,7 +410,9 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
                      isSgTemplateInstantiationMemberFunctionDecl(f)) {
         if (inst_member->get_templateArguments().empty() &&
             inst_member->get_deducedTemplateArguments().empty() &&
-            !has_definition) {
+            !has_definition &&
+            !callGraphInstantiatedMemberHasClassTemplateArguments(
+                inst_member)) {
           return false;
         }
       }
@@ -280,7 +435,8 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
   for (SgNode *node : fdecl_nodes) {
     SgFunctionDeclaration *fdecl = isSgFunctionDeclaration(node);
     SgFunctionDeclaration *unique = canonicalFunctionDeclForCallGraph(fdecl);
-    if (isSelected(pred)(unique) && hasGraphNodeFor(unique) == NULL) {
+    if (isSelected(pred)(unique) &&
+        getGraphNodeForConstruction(unique) == NULL) {
       FunctionData fdata(
           unique, project,
           &classHierarchy); // computes functions called by unique
@@ -294,6 +450,8 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
     }
   }
 
+  materializeNonFunctionImplicitCallTargets(&classHierarchy);
+
   // Add edges to the graph
   for (FunctionData &currentFunction : callGraphData) {
     SgFunctionDeclaration *curFuncDecl = currentFunction.functionDeclaration;
@@ -305,13 +463,18 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
     for (SgFunctionDeclaration *callee : callees) {
       SgFunctionDeclaration *callee_unique =
           canonicalFunctionDeclForCallGraph(callee);
-      if (isSelected(pred)(callee_unique)) {
-        SgGraphNode *dstNode = getGraphNodeFor(
-            callee_unique); // getGraphNode here, see function comment
-        ROSE_ASSERT(dstNode != NULL);
-        if (graph->checkIfDirectedGraphEdgeExists(srcNode, dstNode) == false)
-          graph->addDirectedEdge(srcNode, dstNode);
+      SgGraphNode *dstNode = getGraphNodeFor(
+          callee_unique); // getGraphNode here, see function comment
+      if (dstNode == NULL) {
+        dstNode = ensureGraphNodeForImplicitCallTarget(callee_unique);
       }
+      if (dstNode == NULL) {
+        dstNode = ensureGraphNodeForResolvedCallTarget(callee_unique);
+      }
+      if (dstNode == NULL)
+        continue;
+      if (graph->checkIfDirectedGraphEdgeExists(srcNode, dstNode) == false)
+        graph->addDirectedEdge(srcNode, dstNode);
     }
   }
 }

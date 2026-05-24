@@ -1030,6 +1030,48 @@ set(C_TESTCODES_C89_ONLY
   test2018_63.c
   test2020_06.c
 )
+
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _rex_c_tests_processor)
+set(REX_C_TESTS_HOST_IS_X86 FALSE)
+if(_rex_c_tests_processor MATCHES "^(x86_64|amd64|i[3-6]86)$")
+  set(REX_C_TESTS_HOST_IS_X86 TRUE)
+endif()
+
+set(C_TESTCODES_X86_ONLY
+  test2012_82.c
+  test2012_173.c
+  test2012_173_redhat_rel6.c
+  test2012_174.c
+  test2012_175.c
+  test2013_72.c
+  test2014_36.c
+  test2014_39.c
+  test2014_40.c
+  test2014_41.c
+  test2014_42.c
+  test2014_43.c
+  test2014_44.c
+  test2014_83.c
+  test2014_84.c
+  test2014_85.c
+  test2014_86.c
+  test2014_87.c
+  test2014_91.c
+  test2015_88.c
+  test2015_89.c
+  test2015_141.c
+  test2015_142.c
+  test2015_154.c
+  test2015_155.c
+  test2017_03.c
+)
+if(NOT REX_C_TESTS_HOST_IS_X86)
+  rex_register_compile_source_set(REX_C_TESTS_X86_ONLY_SOURCES
+    ${C_TESTCODES_X86_ONLY})
+  list(REMOVE_ITEM C_TESTCODES ${C_TESTCODES_X86_ONLY})
+  list(REMOVE_ITEM C_TESTCODES_C89_ONLY ${C_TESTCODES_X86_ONLY})
+endif()
+
 rex_register_compile_source_set(REX_C89_TESTS_SOURCES ${C_TESTCODES_C89_ONLY})
 list(REMOVE_ITEM C_TESTCODES ${C_TESTCODES_C89_ONLY})
 
@@ -1107,6 +1149,7 @@ set(C_TESTCODES_NEGATIVE
   test2014_90.c
   test2015_42.c
   test2015_46.c
+  test2015_106.c
   test2015_87.c
   test2015_93.c
   test2016_21.c
@@ -1241,13 +1284,15 @@ add_test(
 )
 set_tests_properties(C_tests_else_case_disambiguation PROPERTIES LABELS C_tests)
 
-add_test(
-  NAME C_tests_link_using_asm_symbol_injection
-  WORKING_DIRECTORY ${_c_tests_special_dir}
-  COMMAND ${C_TEST_TRANSLATOR} -o test2014_83
-          ${CMAKE_CURRENT_SOURCE_DIR}/test2014_83.c
-)
-set_tests_properties(C_tests_link_using_asm_symbol_injection PROPERTIES LABELS C_tests)
+if(REX_C_TESTS_HOST_IS_X86)
+  add_test(
+    NAME C_tests_link_using_asm_symbol_injection
+    WORKING_DIRECTORY ${_c_tests_special_dir}
+    COMMAND ${C_TEST_TRANSLATOR} -o test2014_83
+            ${CMAKE_CURRENT_SOURCE_DIR}/test2014_83.c
+  )
+  set_tests_properties(C_tests_link_using_asm_symbol_injection PROPERTIES LABELS C_tests)
+endif()
 
 add_test(
   NAME C_tests_link_using_alias_attribute
@@ -1273,13 +1318,15 @@ add_test(
 )
 set_tests_properties(C_tests_using_implicit_output_file_option PROPERTIES LABELS C_tests RESOURCE_LOCK c_tests_output_file_option)
 
-add_test(
-  NAME C_tests_rtd_use
-  WORKING_DIRECTORY ${_c_tests_special_dir}
-  COMMAND ${C_TEST_TRANSLATOR} -m32 -mrtd -rose:C89 -c
-          ${CMAKE_CURRENT_SOURCE_DIR}/test2015_89.c
-)
-set_tests_properties(C_tests_rtd_use PROPERTIES LABELS C_tests)
+if(REX_C_TESTS_HOST_IS_X86)
+  add_test(
+    NAME C_tests_rtd_use
+    WORKING_DIRECTORY ${_c_tests_special_dir}
+    COMMAND ${C_TEST_TRANSLATOR} -m32 -mrtd -rose:C89 -c
+            ${CMAKE_CURRENT_SOURCE_DIR}/test2015_89.c
+  )
+  set_tests_properties(C_tests_rtd_use PROPERTIES LABELS C_tests)
+endif()
 
 add_test(
   NAME C_tests_optimization_specifier_O
@@ -1313,13 +1360,15 @@ add_test(
 )
 set_tests_properties(C_tests_optimization_specifier_O2 PROPERTIES LABELS C_tests)
 
-add_test(
-  NAME C_tests_mregparm_m32_use
-  WORKING_DIRECTORY ${_c_tests_special_dir}
-  COMMAND ${C_TEST_TRANSLATOR} -mregparm=3 -m32 -rose:C89 -c
-          ${CMAKE_CURRENT_SOURCE_DIR}/test2015_154.c
-)
-set_tests_properties(C_tests_mregparm_m32_use PROPERTIES LABELS C_tests)
+if(REX_C_TESTS_HOST_IS_X86)
+  add_test(
+    NAME C_tests_mregparm_m32_use
+    WORKING_DIRECTORY ${_c_tests_special_dir}
+    COMMAND ${C_TEST_TRANSLATOR} -mregparm=3 -m32 -rose:C89 -c
+            ${CMAKE_CURRENT_SOURCE_DIR}/test2015_154.c
+  )
+  set_tests_properties(C_tests_mregparm_m32_use PROPERTIES LABELS C_tests)
+endif()
 
 add_test(
   NAME C_tests_compile_and_link_with_NDEBUG
@@ -1363,13 +1412,15 @@ add_test(
 )
 set_tests_properties(C_tests_token_mapping PROPERTIES  LABELS C_tests)
 
-add_test(
-  NAME C_tests_gnu_S_option
-  WORKING_DIRECTORY ${_c_tests_special_dir}
-  COMMAND ${C_TEST_TRANSLATOR} -S -o test2014_41.s
-          ${CMAKE_CURRENT_SOURCE_DIR}/test2014_41.c
-)
-set_tests_properties(C_tests_gnu_S_option PROPERTIES  LABELS C_tests)
+if(REX_C_TESTS_HOST_IS_X86)
+  add_test(
+    NAME C_tests_gnu_S_option
+    WORKING_DIRECTORY ${_c_tests_special_dir}
+    COMMAND ${C_TEST_TRANSLATOR} -S -o test2014_41.s
+            ${CMAKE_CURRENT_SOURCE_DIR}/test2014_41.c
+  )
+  set_tests_properties(C_tests_gnu_S_option PROPERTIES  LABELS C_tests)
+endif()
 
 add_test(
   NAME C_tests_m32_use
@@ -1389,7 +1440,10 @@ set_tests_properties(C_tests_file_suffix PROPERTIES  LABELS C_tests)
 
 rex_verify_compile_test_source_coverage(
   DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  PROPERTIES REX_C_TESTS_SOURCES REX_C89_TESTS_SOURCES
+  PROPERTIES
+    REX_C_TESTS_SOURCES
+    REX_C89_TESTS_SOURCES
+    REX_C_TESTS_X86_ONLY_SOURCES
   IGNORE
     test2014_20_inc.c
     test2014_27_inc.c

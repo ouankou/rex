@@ -395,6 +395,10 @@ void Grammar::setUpExpressions() {
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(BitComplementOp, "BitComplementOp", "BIT_COMPLEMENT_OP");
+  BitComplementOp.setDataPrototype("SgExpression*", "originalExpressionTree",
+                                   "= NULL", NO_CONSTRUCTOR_PARAMETER,
+                                   BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                   NO_DELETE);
   // DQ (1/20/2019): This should be a prefix operator and so it can't use the
   // default automatically generated version of the
   // post_construction_initialization function.
@@ -1891,6 +1895,10 @@ void Grammar::setUpExpressions() {
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(MinusMinusOp, "MinusMinusOp", "MINUSMINUS_OP");
+  MinusMinusOp.setDataPrototype("SgExpression*", "originalExpressionTree",
+                                "= NULL", NO_CONSTRUCTOR_PARAMETER,
+                                BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                NO_DELETE);
   MinusMinusOp.editSubstitute("PRECEDENCE_VALUE", "15");
   MinusMinusOp.setFunctionPrototype("HEADER_MINUS_MINUS_OPERATOR",
                                     "../Grammar/Expression.code");
@@ -1899,6 +1907,9 @@ void Grammar::setUpExpressions() {
   NEW_TERMINAL_MACRO(MinusOp, "MinusOp", "UNARY_MINUS_OP");
   MinusOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                             "../Grammar/Expression.code");
+  MinusOp.setDataPrototype("SgExpression*", "originalExpressionTree", "= NULL",
+                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                           NO_TRAVERSAL, NO_DELETE);
   MinusOp.editSubstitute("PRECEDENCE_VALUE", "15");
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1954,6 +1965,9 @@ void Grammar::setUpExpressions() {
                           DEF_TRAVERSAL, NO_DELETE);
   NewExp.setDataPrototype("short", "need_global_specifier", "= 0",
                           CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                          NO_TRAVERSAL, NO_DELETE);
+  NewExp.setDataPrototype("bool", "type_id_is_parenthesized", "= false",
+                          NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                           NO_TRAVERSAL, NO_DELETE);
   // DQ (8/21/2006): Added pointer to new operator being used (there could be
   // many implemented) This is NULL if the new operator is compiler generated
@@ -2083,6 +2097,9 @@ void Grammar::setUpExpressions() {
   NEW_TERMINAL_MACRO(NotOp, "NotOp", "NOT_OP");
   NotOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                           "../Grammar/Expression.code");
+  NotOp.setDataPrototype("SgExpression*", "originalExpressionTree", "= NULL",
+                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                         NO_TRAVERSAL, NO_DELETE);
   NotOp.editSubstitute("PRECEDENCE_VALUE", "15");
   NotOp.setFunctionPrototype("HEADER_NOT_OPERATOR",
                              "../Grammar/Expression.code");
@@ -2160,6 +2177,9 @@ void Grammar::setUpExpressions() {
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(PlusPlusOp, "PlusPlusOp", "PLUSPLUS_OP");
+  PlusPlusOp.setDataPrototype("SgExpression*", "originalExpressionTree",
+                              "= NULL", NO_CONSTRUCTOR_PARAMETER,
+                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   PlusPlusOp.editSubstitute("PRECEDENCE_VALUE", "15");
   PlusPlusOp.setFunctionPrototype("HEADER_PLUS_PLUS_OPERATOR",
                                   "../Grammar/Expression.code");
@@ -2872,6 +2892,9 @@ void Grammar::setUpExpressions() {
   NEW_TERMINAL_MACRO(UnaryAddOp, "UnaryAddOp", "UNARY_ADD_OP");
   UnaryAddOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                "../Grammar/Expression.code");
+  UnaryAddOp.setDataPrototype("SgExpression*", "originalExpressionTree",
+                              "= NULL", NO_CONSTRUCTOR_PARAMETER,
+                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   UnaryAddOp.editSubstitute("PRECEDENCE_VALUE", "15");
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

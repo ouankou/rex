@@ -13,6 +13,8 @@
 
 #include <list>
 
+#include <set>
+
 #include <sstream>
 
 #include <string>
@@ -43,6 +45,186 @@ using namespace Outliner;
 // =====================================================================
 
 //! Creates a 'prototype' (forward declaration) for a function.
+static std::string getTemplateParameterName(SgTemplateParameter *param) {
+  if (param == NULL)
+    return "";
+
+  if (SgTemplateType *template_type = isSgTemplateType(param->get_type())) {
+    std::string name = template_type->get_name().getString();
+    if (!name.empty())
+      return name;
+  }
+  if (SgNonrealType *nonreal_type = isSgNonrealType(param->get_type())) {
+    std::string name = nonreal_type->get_name().getString();
+    if (!name.empty())
+      return name;
+  }
+  if (SgInitializedName *init_name = param->get_initializedName()) {
+    std::string name = init_name->get_name().getString();
+    if (!name.empty())
+      return name;
+  }
+  if (SgNonrealDecl *nonreal_decl =
+          isSgNonrealDecl(param->get_templateDeclaration())) {
+    std::string name = nonreal_decl->get_name().getString();
+    if (!name.empty())
+      return name;
+  }
+
+  return "";
+}
+
+static void
+collectTemplateParameterNames(const SgTemplateParameterPtrList &params,
+                              std::set<std::string> &names) {
+  for (SgTemplateParameter *param : params) {
+    std::string name = getTemplateParameterName(param);
+    if (!name.empty())
+      names.insert(name);
+  }
+}
+
+static void
+collectTemplateParameterNamesFromClassDecl(SgClassDeclaration *class_decl,
+                                           std::set<std::string> &names) {
+  if (class_decl == NULL)
+    return;
+
+  if (SgTemplateClassDeclaration *template_decl =
+          isSgTemplateClassDeclaration(class_decl)) {
+    collectTemplateParameterNames(template_decl->get_templateParameters(),
+                                  names);
+    return;
+  }
+
+  if (SgTemplateInstantiationDecl *inst_decl =
+          isSgTemplateInstantiationDecl(class_decl)) {
+    if (SgTemplateClassDeclaration *template_decl =
+            inst_decl->get_templateDeclaration()) {
+      collectTemplateParameterNames(template_decl->get_templateParameters(),
+                                    names);
+    }
+  }
+}
+
+static std::set<std::string>
+collectEnclosingTemplateParameterNames(SgScopeStatement *scope) {
+  std::set<std::string> names;
+  std::set<SgScopeStatement *> visited;
+  for (SgScopeStatement *current = scope;
+       current != NULL && visited.insert(current).second;
+       current = current->get_scope()) {
+    if (SgClassDefinition *class_def = isSgClassDefinition(current)) {
+      collectTemplateParameterNamesFromClassDecl(class_def->get_declaration(),
+                                                 names);
+      continue;
+    }
+    if (SgTemplateClassDefinition *template_def =
+            isSgTemplateClassDefinition(current)) {
+      collectTemplateParameterNamesFromClassDecl(
+          template_def->get_declaration(), names);
+      continue;
+    }
+    if (SgTemplateInstantiationDefn *inst_def =
+            isSgTemplateInstantiationDefn(current)) {
+      collectTemplateParameterNamesFromClassDecl(inst_def->get_declaration(),
+                                                 names);
+    }
+  }
+
+  return names;
+}
+
+static bool isClassLikeScope(SgScopeStatement *scope) {
+  return isSgClassDefinition(scope) != NULL ||
+         isSgTemplateClassDefinition(scope) != NULL ||
+         isSgTemplateInstantiationDefn(scope) != NULL;
+}
+
+static std::string
+makeAvailableTemplateParameterName(size_t index,
+                                   std::set<std::string> &unavailable) {
+  std::string candidate = "rose_out_tparam_" + std::to_string(index);
+  for (size_t suffix = 0; unavailable.count(candidate) != 0; ++suffix) {
+    candidate = "rose_out_tparam_" + std::to_string(index) + "_" +
+                std::to_string(suffix);
+  }
+  unavailable.insert(candidate);
+  return candidate;
+}
+
+static void copyTemplateParameterFlags(const SgTemplateParameter *source,
+                                       SgTemplateParameter *target) {
+  ROSE_ASSERT(source != NULL);
+  ROSE_ASSERT(target != NULL);
+
+  target->set_templateParameterKeyword(source->get_templateParameterKeyword());
+  target->set_isAbbreviatedFunctionTemplateParameter(
+      source->get_isAbbreviatedFunctionTemplateParameter());
+  target->set_is_parameter_pack(source->get_is_parameter_pack());
+}
+
+static SgTemplateParameter *
+buildIndependentTemplateParameter(const SgTemplateParameter *source,
+                                  const std::string &name,
+                                  SgScopeStatement *scope) {
+  ROSE_ASSERT(source != NULL);
+  ROSE_ASSERT(!name.empty());
+
+  SgTemplateParameter *result = NULL;
+  const SgName sage_name(name);
+  switch (source->get_parameterType()) {
+  case SgTemplateParameter::type_parameter: {
+    SgTemplateType *template_type = SageBuilder::buildTemplateType(sage_name);
+    ROSE_ASSERT(template_type != NULL);
+    result = SageBuilder::buildTemplateParameter(
+        SgTemplateParameter::type_parameter, template_type, sage_name, scope);
+    break;
+  }
+  case SgTemplateParameter::nontype_parameter: {
+    SgType *parameter_type = source->get_type();
+    if (parameter_type == NULL && source->get_initializedName() != NULL)
+      parameter_type = source->get_initializedName()->get_type();
+    ROSE_ASSERT(parameter_type != NULL);
+    result = SageBuilder::buildTemplateParameter(
+        SgTemplateParameter::nontype_parameter, parameter_type, sage_name,
+        scope);
+    break;
+  }
+  default:
+    break;
+  }
+
+  if (result != NULL)
+    copyTemplateParameterFlags(source, result);
+
+  return result;
+}
+
+static SgTemplateParameter *copyTemplateParameterForPrototype(
+    SgTemplateParameter *source, SgScopeStatement *scope,
+    std::set<std::string> *unavailable, size_t index) {
+  ROSE_ASSERT(source != NULL);
+
+  std::string source_name = getTemplateParameterName(source);
+  if (unavailable != NULL && !source_name.empty() &&
+      unavailable->count(source_name) != 0) {
+    std::string replacement_name =
+        makeAvailableTemplateParameterName(index, *unavailable);
+    SgTemplateParameter *independent_param =
+        buildIndependentTemplateParameter(source, replacement_name, scope);
+    if (independent_param != NULL)
+      return independent_param;
+  } else if (unavailable != NULL && !source_name.empty()) {
+    unavailable->insert(source_name);
+  }
+
+  SgTemplateParameter *param_copy =
+      isSgTemplateParameter(ASTtools::deepCopy(source));
+  ROSE_ASSERT(param_copy != NULL);
+  return param_copy;
+}
+
 static SgFunctionDeclaration *
 generatePrototype(const SgFunctionDeclaration *full_decl,
                   SgScopeStatement *scope, bool forceFreeFunctionScope) {
@@ -58,14 +240,22 @@ generatePrototype(const SgFunctionDeclaration *full_decl,
         deepCopy<SgFunctionParameterList>(template_decl->get_parameterList());
     SgTemplateParameterPtrList *template_params =
         new SgTemplateParameterPtrList();
+    std::set<std::string> unavailable_template_names;
+    std::set<std::string> *unavailable_template_name_ptr = NULL;
+    if (isClassLikeScope(scope)) {
+      unavailable_template_names =
+          collectEnclosingTemplateParameterNames(scope);
+      unavailable_template_name_ptr = &unavailable_template_names;
+    }
+    size_t template_param_index = 0;
     for (SgTemplateParameterPtrList::const_iterator it =
              template_decl->get_templateParameters().begin();
-         it != template_decl->get_templateParameters().end(); ++it) {
+         it != template_decl->get_templateParameters().end();
+         ++it, ++template_param_index) {
       if (*it == NULL)
         continue;
-      SgTemplateParameter *param_copy =
-          isSgTemplateParameter(ASTtools::deepCopy(*it));
-      ROSE_ASSERT(param_copy != NULL);
+      SgTemplateParameter *param_copy = copyTemplateParameterForPrototype(
+          *it, scope, unavailable_template_name_ptr, template_param_index);
       template_params->push_back(param_copy);
     }
 
@@ -246,6 +436,89 @@ findClosestGlobalInsertPoint(SgDeclarationStatement *f) {
   return isSgGlobal(cur_parent) ? closest : 0;
 }
 
+static bool declarationAppearsNoLaterThan(SgGlobal *scope,
+                                          SgDeclarationStatement *candidate,
+                                          SgDeclarationStatement *limit) {
+  ROSE_ASSERT(scope != NULL);
+  ROSE_ASSERT(candidate != NULL);
+  if (limit == NULL || candidate == limit)
+    return true;
+
+  const SgDeclarationStatementPtrList &declarations =
+      scope->getDeclarationList();
+  for (SgDeclarationStatementPtrList::const_iterator it = declarations.begin();
+       it != declarations.end(); ++it) {
+    if (*it == candidate)
+      return true;
+    if (*it == limit)
+      return false;
+  }
+
+  ROSE_ASSERT(!"candidate or limit declaration is not in the requested scope");
+  return false;
+}
+
+static bool
+isPureCommentOrBlankPreprocessingInfo(const PreprocessingInfo *info) {
+  if (info == NULL)
+    return false;
+
+  switch (info->getTypeOfDirective()) {
+  case PreprocessingInfo::C_StyleComment:
+  case PreprocessingInfo::CplusplusStyleComment:
+  case PreprocessingInfo::FortranStyleComment:
+  case PreprocessingInfo::F90StyleComment:
+  case PreprocessingInfo::CpreprocessorBlankLine:
+    return true;
+  default:
+    break;
+  }
+
+  return false;
+}
+
+static void moveLeadingPreprocessorPrefixForPrototype(SgStatement *src,
+                                                      SgStatement *dest) {
+  ROSE_ASSERT(src != NULL);
+  ROSE_ASSERT(dest != NULL);
+
+  AttachedPreprocessingInfoType *src_info =
+      src->get_attachedPreprocessingInfoPtr();
+  if (src_info == NULL || src_info->empty())
+    return;
+
+  AttachedPreprocessingInfoType::size_type last_directive = src_info->size();
+  for (AttachedPreprocessingInfoType::size_type i = 0; i < src_info->size();
+       ++i) {
+    PreprocessingInfo *info = (*src_info)[i];
+    if (info != NULL &&
+        info->getRelativePosition() == PreprocessingInfo::before &&
+        !isPureCommentOrBlankPreprocessingInfo(info)) {
+      last_directive = i;
+    }
+  }
+
+  if (last_directive == src_info->size())
+    return;
+
+  AttachedPreprocessingInfoType moved;
+  AttachedPreprocessingInfoType kept;
+  for (AttachedPreprocessingInfoType::size_type i = 0; i < src_info->size();
+       ++i) {
+    PreprocessingInfo *info = (*src_info)[i];
+    if (i <= last_directive && info != NULL &&
+        info->getRelativePosition() == PreprocessingInfo::before) {
+      moved.push_back(info);
+    } else {
+      kept.push_back(info);
+    }
+  }
+
+  AttachedPreprocessingInfoType *dest_info = ASTtools::createInfoList(dest);
+  dest_info->insert(dest_info->begin(), moved.begin(), moved.end());
+  src_info->swap(kept);
+}
+
 /*!
  *  Traversal to insert a new global prototype.
  *
@@ -263,8 +536,12 @@ findClosestGlobalInsertPoint(SgDeclarationStatement *f) {
  */
 class GlobalProtoInserter : public AstSimpleProcessing {
 public:
-  GlobalProtoInserter(SgFunctionDeclaration *def, SgGlobal *scope)
-      : def_decl_(def), glob_scope_(scope), proto_(0) {}
+  struct TraversalDone {};
+
+  GlobalProtoInserter(SgFunctionDeclaration *def, SgGlobal *scope,
+                      SgDeclarationStatement *latest_insert_point)
+      : def_decl_(def), glob_scope_(scope),
+        latest_insert_point_(latest_insert_point), proto_(0) {}
 
   virtual void visit(SgNode *cur_node) {
     SgFunctionDeclaration *cur_decl = isSgFunctionDeclaration(cur_node);
@@ -272,8 +549,15 @@ public:
         !isSgGlobal(cur_decl->get_parent()))
     //        && isSgGlobal (cur_decl->get_parent ()) != glob_scope_)
     {
+      SgDeclarationStatement *insert_point =
+          findClosestGlobalInsertPoint(cur_decl);
+      ROSE_ASSERT(insert_point != NULL);
+      if (!declarationAppearsNoLaterThan(glob_scope_, insert_point,
+                                         latest_insert_point_))
+        return;
+
       proto_ = insertManually(def_decl_, glob_scope_, cur_decl);
-      throw string("done");
+      throw TraversalDone();
     }
   }
 
@@ -290,7 +574,7 @@ public:
     SgDeclarationStatement *insert_point = findClosestGlobalInsertPoint(target);
     ROSE_ASSERT(insert_point);
 
-    ASTtools::moveBeforePreprocInfo(insert_point, proto);
+    moveLeadingPreprocessorPrefixForPrototype(insert_point, proto);
     // ROSE_ASSERT(insert_point->get_scope() == scope);
     ROSE_ASSERT(find(scope->getDeclarationList().begin(),
                      scope->getDeclarationList().end(),
@@ -326,6 +610,9 @@ private:
   //! Global scope.
   SgGlobal *glob_scope_;
 
+  //! Last global declaration point where the prototype is still visible at use.
+  SgDeclarationStatement *latest_insert_point_;
+
   //! New global prototype (i.e., new first non-defining declaration).
   SgFunctionDeclaration *proto_;
 };
@@ -340,13 +627,15 @@ static SgFunctionDeclaration *insertGlobalPrototype(
   SgFunctionDeclaration *prototype = NULL;
 
   if (def && scope) {
+    SgDeclarationStatement *latest_insert_point =
+        default_target != NULL ? findClosestGlobalInsertPoint(default_target)
+                               : NULL;
     // DQ (3/3/2009): Why does this code use try .. catch blocks (exception
     // handling)?
-    GlobalProtoInserter ins(def, scope);
+    GlobalProtoInserter ins(def, scope, latest_insert_point);
     try {
       ins.traverse(scope, preorder);
-    } catch (string &s) {
-      ROSE_ASSERT(s == "done");
+    } catch (GlobalProtoInserter::TraversalDone &) {
     }
     prototype = ins.getProto();
 
@@ -368,8 +657,21 @@ static SgFunctionDeclaration *insertGlobalPrototype(
         vector<SgDeclarationStatement *> sortedFriends =
             SageInterface::sortSgNodeListBasedOnAppearanceOrderInSource(
                 origFriends);
-        prototype =
-            GlobalProtoInserter::insertManually(def, scope, sortedFriends[0]);
+
+        SgDeclarationStatement *target = default_target;
+        for (vector<SgDeclarationStatement *>::iterator it =
+                 sortedFriends.begin();
+             it != sortedFriends.end(); ++it) {
+          SgDeclarationStatement *friend_insert_point =
+              findClosestGlobalInsertPoint(*it);
+          ROSE_ASSERT(friend_insert_point != NULL);
+          if (declarationAppearsNoLaterThan(scope, friend_insert_point,
+                                            latest_insert_point)) {
+            target = *it;
+            break;
+          }
+        }
+        prototype = GlobalProtoInserter::insertManually(def, scope, target);
       } else
         prototype =
             GlobalProtoInserter::insertManually(def, scope, default_target);
@@ -677,9 +979,11 @@ insertFriendDecl(const SgFunctionDeclaration *func,
               // Initially we can test this by making a copy of the pointer, but
               // later it should be deep copy.
               // SgFunctionDeclaration* friendFunction = friend_proto;
+              SgGlobal *alternativeGlobalScope =
+                  alternativeSourceFile->get_globalScope();
+              ROSE_ASSERT(alternativeGlobalScope != NULL);
               SgFunctionDeclaration *friendFunction = generateFriendPrototype(
-                  func, matchingClassDefinition,
-                  matchingClassDeclaration->get_scope());
+                  func, matchingClassDefinition, alternativeGlobalScope);
               ;
 
               matchingClassDefinition->get_members().insert(i2, friendFunction);
@@ -689,7 +993,7 @@ insertFriendDecl(const SgFunctionDeclaration *func,
               ROSE_ASSERT(orig_count + 1 ==
                           matchingClassDefinition->get_members().size());
               friendFunction->set_parent(matchingClassDefinition);
-              friendFunction->set_scope(matchingClassDeclaration->get_scope());
+              friendFunction->set_scope(alternativeGlobalScope);
               friendFunction->get_startOfConstruct()->set_physical_filename(
                   alternativeSourceFile->getFileName().c_str());
               friendFunction->get_endOfConstruct()->set_physical_filename(
@@ -1349,6 +1653,16 @@ Outliner::insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
     SgVariableDeclaration *ptofunc =
         buildVariableDeclaration(var_name, buildPointerType(ftype), NULL,
                                  target_outlined_code->get_scope());
+    int callSitePhysicalFileId =
+        target_outlined_code->get_file_info()->get_physical_file_id();
+    if (callSitePhysicalFileId < 0 && target_func->get_file_info() != NULL) {
+      callSitePhysicalFileId =
+          target_func->get_file_info()->get_physical_file_id();
+    }
+    if (callSitePhysicalFileId >= 0) {
+      ASTtools::assignGeneratedSubtreeToPhysicalFile(ptofunc,
+                                                     callSitePhysicalFileId);
+    }
 
     // prependStatement(ptofunc,target_outlined_code);
     SageInterface::insertStatementBefore(target_outlined_code, ptofunc);

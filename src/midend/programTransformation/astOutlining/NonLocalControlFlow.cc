@@ -39,6 +39,23 @@ using namespace std;
 
 // =====================================================================
 
+namespace {
+
+void assignGeneratedNodeToScopeFile(SgNode *node, SgScopeStatement *scope) {
+  if (node == NULL || scope == NULL || scope->get_file_info() == NULL) {
+    return;
+  }
+
+  int physical_file_id = scope->get_file_info()->get_physical_file_id();
+  if (physical_file_id >= 0) {
+    ASTtools::assignGeneratedSubtreeToPhysicalFile(node, physical_file_id);
+  }
+}
+
+} // namespace
+
+// =====================================================================
+
 //! Make sure jumps have a unique id.
 static void renumberJumps(ASTtools::JumpMap_t &J) {
   size_t next_id = 0;
@@ -295,6 +312,7 @@ private:
       SgVariableDeclaration *temp_decl = buildVariableDeclaration(
           SgName(temp_name), stmt->get_expression()->get_type(), NULL, scope);
       prependStatement(temp_decl, scope);
+      assignGeneratedNodeToScopeFile(temp_decl, scope);
 
       //
       // for the return statement, we change it two be two statements:
@@ -355,6 +373,7 @@ Outliner::Preprocess::transformNonLocalControlFlow(SgBasicBlock *b_orig) {
   ROSE_ASSERT(var_exit);
   b_orig->prepend_statement(var_exit);
   var_exit->set_parent(b_orig);
+  assignGeneratedNodeToScopeFile(var_exit, b_orig);
 
   // Retrieve a symbol for 'EXIT_TAKEN__' for future use.
   SgVariableSymbol *jump_var = b_orig->lookup_var_symbol(var_exit_name);
@@ -386,6 +405,7 @@ Outliner::Preprocess::transformNonLocalControlFlow(SgBasicBlock *b_orig) {
   SgIfStmt *jump_table = createJumpTable(jump_var, jumps.begin(), jumps.end());
   ROSE_ASSERT(jump_table);
   b_orig->append_statement(jump_table);
+  assignGeneratedNodeToScopeFile(jump_table, b_orig);
 
   return b_gotos;
 }

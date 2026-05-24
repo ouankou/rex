@@ -247,7 +247,7 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
          is_top_of_init_within_ctor ? "true" : "false");
 #endif
 
-  bool is_ctor_within_new = false;
+  bool is_ctor_within_new = isSgNewExp(pnode) != nullptr;
   if (isSgConstructorInitializer(ppnode)) {
     SgConstructorInitializer *pp_con_init = (SgConstructorInitializer *)ppnode;
     if (pp_con_init->get_declaration() != nullptr) {
@@ -258,7 +258,6 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
     ppnode = nullptr;
   }
   while (ppnode != nullptr) {
-    ppnode = ppnode->get_parent();
 #if DEBUG__unparseCtorInit
     printf("  ppnode = %p = %s\n", ppnode,
            ppnode ? ppnode->class_name().c_str() : "");
@@ -278,6 +277,7 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
     } else if (stop_now) {
       break;
     }
+    ppnode = ppnode->get_parent();
   }
 #if DEBUG__unparseCtorInit
   printf("  is_ctor_within_new = %s\n", is_ctor_within_new ? "true" : "false");
