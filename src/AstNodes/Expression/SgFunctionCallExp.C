@@ -24,6 +24,14 @@ SgType *resolveStoredCallResultType(SgType *type) {
     return returnType;
   }
 
+  SgType *strippedType = type->stripType(
+      SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
+      SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_POINTER_TYPE |
+      SgType::STRIP_ARRAY_TYPE | SgType::STRIP_TYPEDEF_TYPE);
+  if (SgType *returnType = returnFromFunctionLikeType(strippedType)) {
+    return returnType;
+  }
+
   return type;
 }
 

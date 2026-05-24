@@ -6,11 +6,30 @@ SgType *resolveStoredCallResultType(SgType *type) {
     return NULL;
   }
 
-  if (SgFunctionType *functionType = isSgFunctionType(type)) {
-    return functionType->get_return_type();
+  auto returnFromFunctionLikeType = [](SgType *candidate) -> SgType * {
+    if (candidate == NULL) {
+      return NULL;
+    }
+    if (SgFunctionType *functionType = isSgFunctionType(candidate)) {
+      return functionType->get_return_type();
+    }
+    if (SgMemberFunctionType *memberFunctionType =
+            isSgMemberFunctionType(candidate)) {
+      return memberFunctionType->get_return_type();
+    }
+    return NULL;
+  };
+
+  if (SgType *returnType = returnFromFunctionLikeType(type)) {
+    return returnType;
   }
-  if (SgMemberFunctionType *memberFunctionType = isSgMemberFunctionType(type)) {
-    return memberFunctionType->get_return_type();
+
+  SgType *strippedType = type->stripType(
+      SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
+      SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_POINTER_TYPE |
+      SgType::STRIP_ARRAY_TYPE | SgType::STRIP_TYPEDEF_TYPE);
+  if (SgType *returnType = returnFromFunctionLikeType(strippedType)) {
+    return returnType;
   }
 
   return type;
