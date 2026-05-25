@@ -5,8 +5,9 @@ from __future__ import annotations
 
 import csv
 import fnmatch
-import sys
+import shlex
 import subprocess
+import sys
 from pathlib import Path
 from typing import Iterable
 
@@ -81,7 +82,8 @@ def run_git(args: list[str], repo: Path = Path("."), check: bool = True) -> str:
         check=False,
     )
     if check and result.returncode != 0:
-        raise SystemExit(result.stderr.strip() or result.stdout.strip())
+        msg = result.stderr.strip() or result.stdout.strip() or f"exit code {result.returncode}"
+        raise SystemExit(f"error running git {shlex.join(args)}: {msg}")
     return result.stdout
 
 
@@ -101,13 +103,13 @@ def existing_sync_logs(log_dir: Path) -> list[Path]:
 def read_rows(csv_path: Path) -> list[dict[str, str]]:
     if not csv_path.exists():
         return []
-    with csv_path.open(newline="") as stream:
+    with csv_path.open(newline="", encoding="utf-8") as stream:
         return list(csv.DictReader(stream))
 
 
 def write_rows(csv_path: Path, rows: list[dict[str, str]]) -> None:
     csv_path.parent.mkdir(parents=True, exist_ok=True)
-    with csv_path.open("w", newline="") as stream:
+    with csv_path.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=CSV_HEADER)
         writer.writeheader()
         for row in rows:
@@ -166,11 +168,18 @@ def is_release_subject(subject: str) -> bool:
 
 
 def encode_rose_version(version: str) -> int:
-    parts = [int(part) for part in version.strip().split(".")]
+    raw_parts = version.strip().split(".")
+    if len(raw_parts) not in (3, 4) or not all(part.isascii() and part.isdigit() for part in raw_parts):
+        raise ValueError(f"unsupported ROSE version format: {version!r}")
+
+    parts = [int(part) for part in raw_parts]
     if len(parts) == 4:
         major, minor, patch, build = parts
+        if major >= 10 or minor >= 100 or patch >= 1000 or build >= 10000:
+            raise ValueError(f"ROSE 4-component version out of range: {version}")
         return (((major * 100 + minor) * 1000 + patch) * 10000 + build)
     if len(parts) == 3:
         major, minor, patch = parts
+        if minor >= 100000 or patch >= 100:
+            raise ValueError(f"ROSE 3-component version out of range: {version}")
         return major * 10000000 + minor * 100 + patch
-    raise ValueError(f"unsupported ROSE version format: {version!r}")
