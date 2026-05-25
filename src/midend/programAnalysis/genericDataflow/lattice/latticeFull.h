@@ -221,7 +221,7 @@ public:
   }
 
   FiniteProductLattice(const FiniteProductLattice &that)
-      : ProductLattice(that), FiniteLattice() {
+      : Lattice(that), ProductLattice(that), FiniteLattice() {
     verifyFinite();
   }
 
@@ -244,7 +244,7 @@ public:
       : ProductLattice(lattices), InfiniteLattice() {}
 
   InfiniteProductLattice(const InfiniteProductLattice &that)
-      : ProductLattice(that), InfiniteLattice() {}
+      : Lattice(that), ProductLattice(that), InfiniteLattice() {}
 
   // returns a copy of this lattice
   Lattice *copy() const { return new InfiniteProductLattice(*this); }

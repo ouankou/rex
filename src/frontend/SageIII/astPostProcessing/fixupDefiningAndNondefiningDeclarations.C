@@ -108,8 +108,8 @@ void fixupAstDefiningAndNondefiningDeclarations(SgNode * /*node*/) {
   // This simplifies how the traversal is called!
   FixupAstDefiningAndNondefiningDeclarations astFixupTraversal;
 
-  // Visit all pooled declarations, plus the non-declaration support nodes that
-  // this visitor explicitly handles, without paying for a whole-pool walk.
+  // ROSETTA memory pools are per concrete IR class; the base declaration pass
+  // does not visit SgVariableDeclaration nodes.
   SgDeclarationStatement::traverseMemoryPoolNodes(astFixupTraversal);
   SgVariableDeclaration::traverseMemoryPoolNodes(astFixupTraversal);
   SgFunctionParameterList::traverseMemoryPoolNodes(astFixupTraversal);

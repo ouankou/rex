@@ -232,7 +232,7 @@ ProductLattice::ProductLattice(const vector<Lattice *> &lattices) {
   init(lattices);
 }
 
-ProductLattice::ProductLattice(const ProductLattice &that) {
+ProductLattice::ProductLattice(const ProductLattice &that) : Lattice(that) {
   level = that.level;
   that.copy_lattices(lattices);
 }
