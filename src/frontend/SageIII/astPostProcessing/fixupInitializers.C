@@ -172,6 +172,7 @@ void removeInitializerIncludeDirectivesFromExpression(
     AttachedPreprocessingInfoType::iterator position =
         std::find(comments->begin(), comments->end(), info);
     if (position != comments->end()) {
+      delete *position;
       comments->erase(position);
     }
   }
@@ -334,6 +335,7 @@ void FixupInitializersUsingIncludeFilesTraversal::findAndRemoveMatchingInclude(
       AttachedPreprocessingInfoType::iterator position =
           std::find(comments->begin(), comments->end(), *i);
       if (position != comments->end()) {
+        delete *position;
         comments->erase(position);
       }
     }

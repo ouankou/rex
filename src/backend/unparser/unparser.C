@@ -381,12 +381,8 @@ bool copyOriginalHeaderToOutputLocation(const std::string &originalFileName,
     return false;
   }
 
-  if (std::filesystem::exists(outputFileNamePath)) {
-    return true;
-  }
-
   std::filesystem::copy_file(originalFileNamePath, outputFileNamePath,
-                             std::filesystem::copy_options::none, ec);
+                             std::filesystem::copy_options::skip_existing, ec);
   return !ec;
 }
 
@@ -4948,13 +4944,8 @@ void unparseIncludedFiles(SgProject *project,
       const string copiedOutputFileName =
           includedFilesUnparser.getCopiedFileOutputPath(originalFileName);
       if (!copiedOutputFileName.empty()) {
-        std::filesystem::path originalFileNamePath(originalFileName);
-        std::filesystem::path newFileNamePath(copiedOutputFileName);
-        create_directories(newFileNamePath.parent_path());
-        if (exists(newFileNamePath) == false) {
-          copy_file(originalFileNamePath, newFileNamePath,
-                    std::filesystem::copy_options::none);
-        }
+        ROSE_ASSERT(copyOriginalHeaderToOutputLocation(originalFileName,
+                                                       copiedOutputFileName));
         copySetInterator++;
         continue;
       }
@@ -5017,17 +5008,8 @@ void unparseIncludedFiles(SgProject *project,
         string newFileName =
             adjusted_header_file_directory + filenameWithOutPath;
 
-        std::filesystem::path pathPrefix(adjusted_header_file_directory);
-        create_directories(pathPrefix);
-
-        std::filesystem::path originalFileNamePath(originalFileName);
-        std::filesystem::path newFileNamePath(newFileName);
-        if (exists(newFileNamePath) == false) {
-          // syntax: copy_file(from, to, copy_option::fail_if_exists);
-          copy_file(originalFileNamePath, newFileNamePath,
-                    std::filesystem::copy_options::none);
-        } else {
-        }
+        ROSE_ASSERT(
+            copyOriginalHeaderToOutputLocation(originalFileName, newFileName));
       } else {
         ROSE_ASSERT(unparseSourceFileMap.find(originalFileName) !=
                     unparseSourceFileMap.end());
@@ -5077,24 +5059,18 @@ void unparseIncludedFiles(SgProject *project,
                    originalFileName.find(applicationRootDirectory) == 0);
 
         if (isApplicationFile == true) {
-          std::filesystem::path pathPrefix(adjusted_header_file_directory);
-          create_directories(pathPrefix);
-
-          std::filesystem::path originalFileNamePath(originalFileName);
           std::filesystem::path newFileNamePath(newFileName);
-
-          if (exists(newFileNamePath) == true) {
+          std::error_code existsError;
+          if (std::filesystem::exists(newFileNamePath, existsError) == true) {
             // Handle error.
             // We might want to report this but not stop processing, since
             // multiple files will trigger the same header files the be copied.
             printf("Note: this file already exists: no need to re-copy it: "
                    "newFileName = %s \n",
                    newFileName.c_str());
-          } else {
-            // syntax: copy_file(from, to, copy_option::fail_if_exists);
-            copy_file(originalFileNamePath, newFileNamePath,
-                      std::filesystem::copy_options::none);
           }
+          ROSE_ASSERT(copyOriginalHeaderToOutputLocation(originalFileName,
+                                                         newFileName));
         } else {
         }
       }

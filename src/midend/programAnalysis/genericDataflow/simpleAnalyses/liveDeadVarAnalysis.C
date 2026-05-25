@@ -1008,6 +1008,8 @@ void VarsExprsProductLattice::remapVars(const map<varID, varID> &varNameMap,
   // lattices and varLatticeIndex will be replaced with these objects.
   vector<Lattice *> newLattices;
   map<varID, int> newVarLatticeIndex;
+  const vector<Lattice *> oldLattices = lattices;
+  set<Lattice *> retainedLattices;
 
   // Fill newLattices with lattices associated with variables in the new
   // function
@@ -1078,6 +1080,7 @@ void VarsExprsProductLattice::remapVars(const map<varID, varID> &varNameMap,
         Lattice *l = getVarLattice(oldVar);
         if (l) {
           newLattices.push_back(l);
+          retainedLattices.insert(l);
           newVarLatticeIndex[newVar] = idx;
           idx++;
 
@@ -1102,6 +1105,7 @@ void VarsExprsProductLattice::remapVars(const map<varID, varID> &varNameMap,
         // "<< l->str("") << endl; newLattices[getVarIndex(newFunc, newVar)] =
         // l;
         newLattices.push_back(l);
+        retainedLattices.insert(l);
         // Erase the original mapping of newVar in varLatticeIndex
         newVarLatticeIndex[newVar] = idx;
         idx++;
@@ -1123,12 +1127,15 @@ void VarsExprsProductLattice::remapVars(const map<varID, varID> &varNameMap,
     // newVarLatticeIndex[newVar] = idx;
   }
 
-  // Deallocate the lattices of all the variables that do not exist in newFunc
-  // are are not remapped into its set of variables
-  for (map<varID, int>::iterator varIdx = varLatticeIndex.begin();
-       varIdx != varLatticeIndex.end(); varIdx++) {
-    ROSE_ASSERT(lattices[varIdx->second]);
-    delete lattices[varIdx->second];
+  // Deallocate every old lattice not retained in the remapped product.
+  set<Lattice *> deletedLattices;
+  for (vector<Lattice *>::const_iterator lattice = oldLattices.begin();
+       lattice != oldLattices.end(); ++lattice) {
+    if (*lattice != NULL &&
+        retainedLattices.find(*lattice) == retainedLattices.end() &&
+        deletedLattices.insert(*lattice).second) {
+      delete *lattice;
+    }
   }
 
   Dbg::dbg << "Index :" << idx;
