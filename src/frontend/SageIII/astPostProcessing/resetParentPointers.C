@@ -25,6 +25,34 @@ using namespace std;
 namespace {
 thread_local unsigned resetParentPointersTraversalDepth = 0;
 thread_local std::set<SgNode *> resetParentPointersNestedRoots;
+
+class ResetParentPointersTraversalGuard {
+  bool outermostTraversal;
+
+public:
+  ResetParentPointersTraversalGuard()
+      : outermostTraversal(resetParentPointersTraversalDepth == 0) {
+    if (outermostTraversal) {
+      resetParentPointersNestedRoots.clear();
+    }
+    ++resetParentPointersTraversalDepth;
+  }
+
+  ~ResetParentPointersTraversalGuard() {
+    ROSE_ASSERT(resetParentPointersTraversalDepth > 0);
+    --resetParentPointersTraversalDepth;
+    if (outermostTraversal) {
+      resetParentPointersNestedRoots.clear();
+    }
+  }
+
+  ResetParentPointersTraversalGuard(const ResetParentPointersTraversalGuard &) =
+      delete;
+  ResetParentPointersTraversalGuard &
+  operator=(const ResetParentPointersTraversalGuard &) = delete;
+
+  bool isOutermostTraversal() const { return outermostTraversal; }
+};
 } // namespace
 
 // [DQ]
@@ -1702,15 +1730,10 @@ void resetParentPointers(SgNode *node, SgNode *parent) {
 
   // printf ("Resetting the parent pointers ... (starting at node = %s)
   // \n",node->sage_class_name());
-  const bool outermostTraversal = resetParentPointersTraversalDepth == 0;
-  if (outermostTraversal) {
-    resetParentPointersNestedRoots.clear();
-  }
-
-  ++resetParentPointersTraversalDepth;
+  ResetParentPointersTraversalGuard traversalGuard;
 
   const bool shouldTraverse =
-      outermostTraversal || node == nullptr ||
+      traversalGuard.isOutermostTraversal() || node == nullptr ||
       resetParentPointersNestedRoots.insert(node).second;
 
   if (shouldTraverse) {
@@ -1720,11 +1743,6 @@ void resetParentPointers(SgNode *node, SgNode *parent) {
 
     ResetParentPointers setParentPointerTraversal;
     setParentPointerTraversal.traverse(node, inheritedAttribute);
-  }
-
-  --resetParentPointersTraversalDepth;
-  if (outermostTraversal) {
-    resetParentPointersNestedRoots.clear();
   }
 }
 

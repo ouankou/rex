@@ -61,6 +61,36 @@ AliasSymbolIdentity buildAliasSymbolIdentity(const SgName &name,
 }
 } // namespace
 
+struct FixupAstSymbolTablesToSupportAliasedSymbols::CurrentScopeAliasIndex {
+  std::unordered_set<AliasSymbolIdentity, AliasSymbolIdentityHash>
+      symbolIdentities;
+  std::unordered_map<AliasSymbolIdentity, SgAliasSymbol *,
+                     AliasSymbolIdentityHash>
+      aliasSymbols;
+
+  explicit CurrentScopeAliasIndex(SgScopeStatement *currentScope) {
+    ROSE_ASSERT(currentScope != NULL);
+    SgSymbolTable *currentSymbolTable = currentScope->get_symbol_table();
+    ROSE_ASSERT(currentSymbolTable != NULL);
+    SgSymbolTable::BaseHashType *currentInternalTable =
+        currentSymbolTable->get_table();
+    ROSE_ASSERT(currentInternalTable != NULL);
+
+    symbolIdentities.reserve(currentInternalTable->size() * 2 + 1);
+    aliasSymbols.reserve(currentInternalTable->size());
+    for (const std::pair<const SgName, SgSymbol *> &entry :
+         *currentInternalTable) {
+      ROSE_ASSERT(entry.second != NULL);
+      AliasSymbolIdentity identity =
+          buildAliasSymbolIdentity(entry.first, entry.second);
+      symbolIdentities.insert(identity);
+      if (SgAliasSymbol *aliasSymbol = isSgAliasSymbol(entry.second)) {
+        aliasSymbols.emplace(std::move(identity), aliasSymbol);
+      }
+    }
+  }
+};
+
 void fixupAstSymbolTablesToSupportAliasedSymbols(SgNode *node) {
   // DQ (8/16/2020): This function is called for Fortran, and yet it has been
   // modified to be more specific to C++ rules.
@@ -153,6 +183,18 @@ void FixupAstSymbolTablesToSupportAliasedSymbols::
         SgScopeStatement *referencedScope, SgScopeStatement *currentScope,
         SgNode *causalNode, SgAccessModifier::access_modifier_enum accessLevel,
         bool calledFromUsingDirective) {
+  CurrentScopeAliasIndex currentScopeAliasIndex(currentScope);
+  injectSymbolsFromReferencedScopeIntoCurrentScope(
+      referencedScope, currentScope, causalNode, accessLevel,
+      calledFromUsingDirective, currentScopeAliasIndex);
+}
+
+void FixupAstSymbolTablesToSupportAliasedSymbols::
+    injectSymbolsFromReferencedScopeIntoCurrentScope(
+        SgScopeStatement *referencedScope, SgScopeStatement *currentScope,
+        SgNode *causalNode, SgAccessModifier::access_modifier_enum accessLevel,
+        bool calledFromUsingDirective,
+        CurrentScopeAliasIndex &currentScopeAliasIndex) {
 #if USING_PERFORMANCE_TRACING
   TimingPerformance timer1(
       "Fixup symbol tables: injectSymbolsFromReferencedScopeIntoCurrentScope: "
@@ -246,12 +288,6 @@ void FixupAstSymbolTablesToSupportAliasedSymbols::
   SgSymbolTable::BaseHashType *internalTable = symbolTable->get_table();
   ROSE_ASSERT(internalTable != NULL);
 
-  SgSymbolTable *currentSymbolTable = currentScope->get_symbol_table();
-  ROSE_ASSERT(currentSymbolTable != NULL);
-  SgSymbolTable::BaseHashType *currentInternalTable =
-      currentSymbolTable->get_table();
-  ROSE_ASSERT(currentInternalTable != NULL);
-
   SgBaseClass *causalBaseClass = isSgBaseClass(causalNode);
   SgScopeStatement *causalBaseScope = NULL;
   if (causalBaseClass != NULL) {
@@ -271,24 +307,6 @@ void FixupAstSymbolTablesToSupportAliasedSymbols::
       causalBaseScope = definingBaseClassDeclaration->get_definition();
     }
     ROSE_ASSERT(causalBaseScope != NULL);
-  }
-
-  std::unordered_set<AliasSymbolIdentity, AliasSymbolIdentityHash>
-      currentScopeSymbolIdentities;
-  currentScopeSymbolIdentities.reserve(currentInternalTable->size() * 2 + 1);
-  std::unordered_map<AliasSymbolIdentity, SgAliasSymbol *,
-                     AliasSymbolIdentityHash>
-      currentScopeAliasSymbols;
-  currentScopeAliasSymbols.reserve(currentInternalTable->size());
-  for (const std::pair<const SgName, SgSymbol *> &entry :
-       *currentInternalTable) {
-    ROSE_ASSERT(entry.second != NULL);
-    AliasSymbolIdentity identity =
-        buildAliasSymbolIdentity(entry.first, entry.second);
-    currentScopeSymbolIdentities.insert(identity);
-    if (SgAliasSymbol *aliasSymbol = isSgAliasSymbol(entry.second)) {
-      currentScopeAliasSymbols.emplace(std::move(identity), aliasSymbol);
-    }
   }
 
   // DQ (7/14/2025): Adding timers to support Matt's tool.
@@ -891,8 +909,8 @@ void FixupAstSymbolTablesToSupportAliasedSymbols::
           symbolIdentity.basis = symbolBasis;
           symbolIdentity.variant = static_cast<int>(symbol->variantT());
           bool alreadyExists =
-              currentScopeSymbolIdentities.find(symbolIdentity) !=
-              currentScopeSymbolIdentities.end();
+              currentScopeAliasIndex.symbolIdentities.find(symbolIdentity) !=
+              currentScopeAliasIndex.symbolIdentities.end();
 
           if (alreadyExists == true) {
             AstPerformance::
@@ -946,8 +964,8 @@ void FixupAstSymbolTablesToSupportAliasedSymbols::
 #endif
             // Use the current name and the alias to the symbol
             currentScope->insert_symbol(name, aliasSymbol);
-            currentScopeSymbolIdentities.insert(symbolIdentity);
-            currentScopeAliasSymbols[symbolIdentity] = aliasSymbol;
+            currentScopeAliasIndex.symbolIdentities.insert(symbolIdentity);
+            currentScopeAliasIndex.aliasSymbols[symbolIdentity] = aliasSymbol;
 
 #if ALIAS_SYMBOL_DEBUGGING || 0
             printf("In injectSymbolsFromReferencedScopeIntoCurrentScope(): "
@@ -988,10 +1006,12 @@ void FixupAstSymbolTablesToSupportAliasedSymbols::
                    classDeclaration->get_name().str());
 #endif
 
-            auto alias_it = currentScopeAliasSymbols.find(symbolIdentity);
+            auto alias_it =
+                currentScopeAliasIndex.aliasSymbols.find(symbolIdentity);
             SgAliasSymbol *aliasSymbol =
-                alias_it != currentScopeAliasSymbols.end() ? alias_it->second
-                                                           : NULL;
+                alias_it != currentScopeAliasIndex.aliasSymbols.end()
+                    ? alias_it->second
+                    : NULL;
 
             // If lookup by (name, symbol) misses, fall back to creating the
             // alias now so injected members remain visible in the current
@@ -1011,8 +1031,8 @@ void FixupAstSymbolTablesToSupportAliasedSymbols::
               ROSE_ASSERT(aliasSymbol->get_causal_nodes().empty() == true);
               aliasSymbol->get_causal_nodes().push_back(causalNode);
               currentScope->insert_symbol(name, aliasSymbol);
-              currentScopeSymbolIdentities.insert(symbolIdentity);
-              currentScopeAliasSymbols[symbolIdentity] = aliasSymbol;
+              currentScopeAliasIndex.symbolIdentities.insert(symbolIdentity);
+              currentScopeAliasIndex.aliasSymbols[symbolIdentity] = aliasSymbol;
             }
 
             ROSE_ASSERT(aliasSymbol != NULL);
@@ -1240,6 +1260,7 @@ void FixupAstSymbolTablesToSupportAliasedSymbols::visit(SgNode *node) {
 
       // Handle any derived classes.
       SgBaseClassPtrList &baseClassList = classDefinition->get_inheritances();
+      CurrentScopeAliasIndex currentScopeAliasIndex(classDefinition);
       SgBaseClassPtrList::iterator i = baseClassList.begin();
       for (; i != baseClassList.end(); ++i) {
         // Check each base class.
@@ -1307,7 +1328,7 @@ void FixupAstSymbolTablesToSupportAliasedSymbols::visit(SgNode *node) {
           bool calledFromUsingDirective = false;
           injectSymbolsFromReferencedScopeIntoCurrentScope(
               referencedScope, classDefinition, baseClass, accessLevel,
-              calledFromUsingDirective);
+              calledFromUsingDirective, currentScopeAliasIndex);
         }
       }
     }

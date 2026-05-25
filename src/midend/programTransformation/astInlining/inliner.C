@@ -8,6 +8,8 @@
 
 #include <iostream>
 
+#include <set>
+
 #include <string>
 // PP(14/10/20) PRE->legacy::PRE #include "pre.h"
 
@@ -209,6 +211,42 @@ bool sameClassDefinition(SgClassDefinition *lhs, SgClassDefinition *rhs) {
   return lhs == rhs;
 }
 
+bool classDerivesFrom(SgClassDefinition *derivedClass,
+                      SgClassDefinition *baseClass,
+                      std::set<SgClassDefinition *> &visitedClasses) {
+  if (derivedClass == NULL || baseClass == NULL ||
+      visitedClasses.insert(derivedClass).second == false) {
+    return false;
+  }
+
+  for (SgBaseClass *baseSpecifier : derivedClass->get_inheritances()) {
+    if (baseSpecifier == NULL) {
+      continue;
+    }
+
+    SgClassDeclaration *baseDecl =
+        isSgClassDeclaration(baseSpecifier->get_base_class());
+    if (baseDecl == NULL) {
+      continue;
+    }
+
+    SgClassDefinition *directBaseClass =
+        classDefinitionForDeclaration(baseDecl);
+    if (sameClassDefinition(directBaseClass, baseClass) ||
+        classDerivesFrom(directBaseClass, baseClass, visitedClasses)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool classDerivesFrom(SgClassDefinition *derivedClass,
+                      SgClassDefinition *baseClass) {
+  std::set<SgClassDefinition *> visitedClasses;
+  return classDerivesFrom(derivedClass, baseClass, visitedClasses);
+}
+
 bool accessModifierRequiresPrivilegedContext(
     const SgAccessModifier &accessModifier) {
   return accessModifier.isPrivate() || accessModifier.isProtected();
@@ -229,17 +267,23 @@ nonPublicClassOwningDeclaration(SgDeclarationStatement *decl) {
 }
 
 bool functionContextHasClassAccess(SgFunctionDeclaration *functionDecl,
-                                   SgClassDefinition *classDef) {
+                                   SgClassDefinition *classDef,
+                                   bool allowDerivedAccess) {
   if (functionDecl == NULL || classDef == NULL) {
     return false;
   }
 
+  SgClassDefinition *functionClassDef = NULL;
   if (SgMemberFunctionDeclaration *memberDecl =
           isSgMemberFunctionDeclaration(functionDecl)) {
-    if (sameClassDefinition(classDefinitionForMemberFunction(memberDecl),
-                            classDef)) {
+    functionClassDef = classDefinitionForMemberFunction(memberDecl);
+    if (sameClassDefinition(functionClassDef, classDef)) {
       return true;
     }
+  }
+
+  if (allowDerivedAccess && classDerivesFrom(functionClassDef, classDef)) {
+    return true;
   }
 
   if (functionDecl->get_declarationModifier().isFriend()) {
@@ -266,14 +310,16 @@ bool functionContextHasClassAccess(SgFunctionDeclaration *functionDecl,
 }
 
 bool callSiteHasClassAccess(SgFunctionCallExp *funcall,
-                            SgClassDefinition *classDef) {
+                            SgClassDefinition *classDef,
+                            const SgAccessModifier &accessModifier) {
   SgFunctionDeclaration *targetDecl =
       SageInterface::getEnclosingFunctionDeclaration(funcall, false);
   if (targetDecl != NULL) {
     targetDecl = isSgFunctionDeclaration(targetDecl->get_definingDeclaration());
   }
 
-  return functionContextHasClassAccess(targetDecl, classDef);
+  return functionContextHasClassAccess(targetDecl, classDef,
+                                       accessModifier.isProtected());
 }
 
 bool functionBodyNeedsUnavailableClassAccess(SgFunctionDefinition *fundef,
@@ -304,7 +350,9 @@ bool functionBodyNeedsUnavailableClassAccess(SgFunctionDefinition *fundef,
 
       SgClassDefinition *owningClass = nonPublicClassOwningDeclaration(decl);
       if (owningClass != NULL &&
-          !callSiteHasClassAccess(funcall, owningClass)) {
+          !callSiteHasClassAccess(
+              funcall, owningClass,
+              decl->get_declarationModifier().get_accessModifier())) {
         unavailableAccess = true;
       }
     }
@@ -314,6 +362,17 @@ bool functionBodyNeedsUnavailableClassAccess(SgFunctionDefinition *fundef,
 
   NonPublicMemberAccessTraversal traversal(funcall);
   traversal.traverse(fundef->get_body(), preorder);
+
+  if (SgMemberFunctionDeclaration *memberDecl =
+          isSgMemberFunctionDeclaration(fundef->get_declaration())) {
+    if (memberDecl->get_specialFunctionModifier().isConstructor()) {
+      if (SgCtorInitializerList *ctorInitializers =
+              memberDecl->get_CtorInitializerList()) {
+        traversal.traverse(ctorInitializers, preorder);
+      }
+    }
+  }
+
   return traversal.foundUnavailableAccess();
 }
 } // namespace
