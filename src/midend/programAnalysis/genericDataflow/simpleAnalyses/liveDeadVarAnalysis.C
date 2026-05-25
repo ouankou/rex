@@ -1268,7 +1268,7 @@ bool VarsExprsProductLattice::unProject(SgExpression *expr,
     // Else, if This lattice has no mapping for exprVar, simply copy it from
     // exprState to This
   } else {
-    addVar(exprVar, thatLattice);
+    addVar(exprVar, *thatLattice);
     return true;
   }
 }
@@ -1302,24 +1302,24 @@ bool VarsExprsProductLattice::remVar(const varID &var) {
   }
 }
 
-// Sets the lattice of the given var to be lat.
+// Sets the lattice of the given var to a copy of lat.
 // If the variable is already mapped to some other Lattice,
-//   If *(the current lattice) == *lat, the mapping is not changed
-//   If *(the current lattice) != *lat, the current lattice is deallocated and
-//   var is mapped to lat->copy()
+//   If *(the current lattice) == lat, the mapping is not changed
+//   If *(the current lattice) != lat, the current lattice is deallocated and
+//   var is mapped to lat.copy()
+// The caller retains ownership of lat.
 // Returns true if this causes this Lattice to change and false otherwise.
-bool VarsExprsProductLattice::addVar(const varID &var, Lattice *lat) {
-  ROSE_ASSERT(lat);
+bool VarsExprsProductLattice::addVar(const varID &var, Lattice &lat) {
   if (varLatticeIndex.find(var) == varLatticeIndex.end()) {
     varLatticeIndex.insert(make_pair(var, lattices.size()));
-    lattices.push_back(lat->copy());
+    lattices.push_back(lat.copy());
     return true;
   } else {
     ROSE_ASSERT(lattices[varLatticeIndex[var]]);
-    bool modified = (*(lattices[varLatticeIndex[var]]) != *lat);
+    bool modified = (*(lattices[varLatticeIndex[var]]) != lat);
     if (modified) {
       delete lattices[varLatticeIndex[var]];
-      lattices[varLatticeIndex[var]] = lat->copy();
+      lattices[varLatticeIndex[var]] = lat.copy();
     }
     return modified;
   }

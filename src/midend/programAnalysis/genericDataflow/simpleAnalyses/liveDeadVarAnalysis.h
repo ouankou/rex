@@ -391,13 +391,14 @@ public:
   bool addVar(const varID &var);
   bool remVar(const varID &var);
 
-  // Sets the lattice of the given var to be lat.
+  // Sets the lattice of the given var to a copy of lat.
   // If the variable is already mapped to some other Lattice,
-  //   If *(the current lattice) == *lat, the mapping is not changed
-  //   If *(the current lattice) != *lat, the current lattice is deallocated and
-  //   var is mapped to lat->copy()
+  //   If *(the current lattice) == lat, the mapping is not changed
+  //   If *(the current lattice) != lat, the current lattice is deallocated and
+  //   var is mapped to lat.copy()
+  // The caller retains ownership of lat.
   // Returns true if this causes this Lattice to change and false otherwise.
-  bool addVar(const varID &var, Lattice *lat);
+  bool addVar(const varID &var, Lattice &lat);
 
   // The string that represents this object
   // If indent!="", every line of this string must be prefixed by indent
