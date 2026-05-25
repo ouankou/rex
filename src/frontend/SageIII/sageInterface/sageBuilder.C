@@ -18,6 +18,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
+#include <map>
 #else
 // #include "sageBuilder.h"
 
@@ -25,6 +26,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
+#include <map>
 #endif
 
 // DQ (4/3/2012): Added so that I can enforce some rules as the AST is
@@ -81,6 +83,41 @@ private:
   SgDeclarationScope *scope_ = nullptr;
 };
 
+struct SimpleNonrealDeclCacheKey {
+  std::string name;
+  bool explicit_empty_template_id = false;
+
+  bool operator<(const SimpleNonrealDeclCacheKey &other) const {
+    if (name != other.name) {
+      return name < other.name;
+    }
+    return explicit_empty_template_id < other.explicit_empty_template_id;
+  }
+};
+
+class SimpleNonrealDeclCache {
+public:
+  SgNonrealDecl *lookup(const SgName &name,
+                        bool explicit_empty_template_id) const {
+    SimpleNonrealDeclCacheKey key{name.getString(), explicit_empty_template_id};
+    auto it = declarations_.find(key);
+    return it != declarations_.end() ? it->second : nullptr;
+  }
+
+  void remember(const SgName &name, bool explicit_empty_template_id,
+                SgNonrealDecl *decl) {
+    if (decl == nullptr) {
+      return;
+    }
+
+    SimpleNonrealDeclCacheKey key{name.getString(), explicit_empty_template_id};
+    declarations_[key] = decl;
+  }
+
+private:
+  std::map<SimpleNonrealDeclCacheKey, SgNonrealDecl *> declarations_;
+};
+
 SgDeclarationScope *
 getCachedNonrealDeclarationScope(SgScopeStatement *scope_statement) {
   if (scope_statement == NULL) {
@@ -110,6 +147,537 @@ void cacheNonrealDeclarationScope(SgScopeStatement *scope_statement,
   }
 
   attribute->set_scope(decl_scope);
+}
+
+std::map<SgDeclarationScope *, SimpleNonrealDeclCache> &
+simpleNonrealDeclCaches() {
+  static std::map<SgDeclarationScope *, SimpleNonrealDeclCache> caches;
+  return caches;
+}
+
+SimpleNonrealDeclCache *
+getSimpleNonrealDeclCache(SgDeclarationScope *decl_scope, bool create) {
+  if (decl_scope == nullptr) {
+    return nullptr;
+  }
+
+  std::map<SgDeclarationScope *, SimpleNonrealDeclCache> &caches =
+      simpleNonrealDeclCaches();
+  auto found = caches.find(decl_scope);
+  if (found != caches.end()) {
+    return &found->second;
+  }
+
+  if (!create) {
+    return nullptr;
+  }
+
+  return &caches[decl_scope];
+}
+
+bool simpleNonrealDeclMatches(SgNonrealDecl *decl, const SgName &name,
+                              bool explicit_empty_template_id) {
+  return decl != nullptr && decl->get_name() == name &&
+         decl->get_tpl_args().empty() &&
+         decl->get_is_nonreal_template() == explicit_empty_template_id;
+}
+
+SgNonrealDecl *lookupSimpleNonrealDecl(SgDeclarationScope *decl_scope,
+                                       const SgName &name,
+                                       bool explicit_empty_template_id) {
+  if (decl_scope == nullptr) {
+    return nullptr;
+  }
+
+  if (SimpleNonrealDeclCache *cache =
+          getSimpleNonrealDeclCache(decl_scope, false)) {
+    if (SgNonrealDecl *cached =
+            cache->lookup(name, explicit_empty_template_id)) {
+      return cached;
+    }
+  }
+
+  SgTemplateArgumentPtrList empty_args;
+  SgNonrealSymbol *symbol =
+      decl_scope->lookup_nonreal_symbol(name, nullptr, &empty_args);
+  if (symbol != nullptr &&
+      simpleNonrealDeclMatches(symbol->get_declaration(), name,
+                               explicit_empty_template_id)) {
+    getSimpleNonrealDeclCache(decl_scope, true)
+        ->remember(name, explicit_empty_template_id, symbol->get_declaration());
+    return symbol->get_declaration();
+  }
+
+  for (SgDeclarationStatement *decl : decl_scope->getDeclarationList()) {
+    SgNonrealDecl *nonreal_decl = isSgNonrealDecl(decl);
+    if (simpleNonrealDeclMatches(nonreal_decl, name,
+                                 explicit_empty_template_id)) {
+      getSimpleNonrealDeclCache(decl_scope, true)
+          ->remember(name, explicit_empty_template_id, nonreal_decl);
+      return nonreal_decl;
+    }
+  }
+
+  return nullptr;
+}
+
+void rememberSimpleNonrealDecl(SgDeclarationScope *decl_scope,
+                               const SgName &name,
+                               bool explicit_empty_template_id,
+                               SgNonrealDecl *decl) {
+  if (decl_scope == nullptr || decl == nullptr) {
+    return;
+  }
+
+  getSimpleNonrealDeclCache(decl_scope, true)
+      ->remember(name, explicit_empty_template_id, decl);
+}
+
+bool nonrealTemplateTypesEquivalent(const SgType *lhs, const SgType *rhs) {
+  if (lhs == rhs) {
+    return true;
+  }
+
+  if (lhs == nullptr || rhs == nullptr) {
+    return false;
+  }
+
+  return SageInterface::isEquivalentType(lhs, rhs);
+}
+
+bool nonrealTemplateInitializedNamesEquivalent(const SgInitializedName *lhs,
+                                               const SgInitializedName *rhs) {
+  if (lhs == rhs) {
+    return true;
+  }
+
+  if (lhs == nullptr || rhs == nullptr) {
+    return false;
+  }
+
+  return lhs->get_name() == rhs->get_name() &&
+         nonrealTemplateTypesEquivalent(lhs->get_type(), rhs->get_type());
+}
+
+bool nonrealTemplateArgumentListsEquivalent(
+    const SgTemplateArgumentPtrList &lhs, const SgTemplateArgumentPtrList &rhs);
+
+bool nonrealTemplateDeclarationsEquivalent(const SgDeclarationStatement *lhs,
+                                           const SgDeclarationStatement *rhs,
+                                           unsigned depth = 0);
+
+bool nonrealTemplateDeclarationScopesEquivalent(const SgDeclarationScope *lhs,
+                                                const SgDeclarationScope *rhs,
+                                                unsigned depth) {
+  if (lhs == rhs) {
+    return true;
+  }
+
+  if (lhs == nullptr || rhs == nullptr || depth > 128) {
+    return false;
+  }
+
+  const SgNode *lhs_parent = lhs->get_parent();
+  const SgNode *rhs_parent = rhs->get_parent();
+  if (lhs_parent == rhs_parent) {
+    return true;
+  }
+
+  const SgDeclarationStatement *lhs_owner =
+      isSgDeclarationStatement(lhs_parent);
+  const SgDeclarationStatement *rhs_owner =
+      isSgDeclarationStatement(rhs_parent);
+  if (lhs_owner != nullptr || rhs_owner != nullptr) {
+    return nonrealTemplateDeclarationsEquivalent(lhs_owner, rhs_owner,
+                                                 depth + 1);
+  }
+
+  return false;
+}
+
+bool nonrealTemplateDeclarationsEquivalent(const SgDeclarationStatement *lhs,
+                                           const SgDeclarationStatement *rhs,
+                                           unsigned depth) {
+  if (lhs == rhs) {
+    return true;
+  }
+
+  if (lhs == nullptr || rhs == nullptr || depth > 128 ||
+      lhs->variantT() != rhs->variantT()) {
+    return false;
+  }
+
+  const SgDeclarationStatement *lhs_first =
+      lhs->get_firstNondefiningDeclaration();
+  const SgDeclarationStatement *rhs_first =
+      rhs->get_firstNondefiningDeclaration();
+  if (lhs_first != nullptr && lhs_first == rhs_first) {
+    return true;
+  }
+
+  if (const SgNonrealDecl *lhs_nonreal = isSgNonrealDecl(lhs)) {
+    const SgNonrealDecl *rhs_nonreal = isSgNonrealDecl(rhs);
+    const SgDeclarationStatement *lhs_template =
+        lhs_nonreal->get_templateDeclaration();
+    const SgDeclarationStatement *rhs_template =
+        rhs_nonreal != nullptr ? rhs_nonreal->get_templateDeclaration()
+                               : nullptr;
+    if (lhs_template != nullptr && rhs_template != nullptr &&
+        lhs_template != lhs_nonreal && rhs_template != rhs_nonreal &&
+        !nonrealTemplateDeclarationsEquivalent(lhs_template, rhs_template,
+                                               depth + 1)) {
+      return false;
+    }
+
+    return rhs_nonreal != nullptr &&
+           lhs_nonreal->get_name() == rhs_nonreal->get_name() &&
+           nonrealTemplateArgumentListsEquivalent(
+               lhs_nonreal->get_tpl_args(), rhs_nonreal->get_tpl_args()) &&
+           nonrealTemplateDeclarationScopesEquivalent(
+               isSgDeclarationScope(lhs_nonreal->get_parent()),
+               isSgDeclarationScope(rhs_nonreal->get_parent()), depth + 1);
+  }
+
+  return false;
+}
+
+bool nonrealTemplateSymbolsEquivalent(const SgSymbol *lhs, const SgSymbol *rhs,
+                                      unsigned depth = 0) {
+  if (lhs == rhs) {
+    return true;
+  }
+
+  if (lhs == nullptr || rhs == nullptr || depth > 128 ||
+      lhs->variantT() != rhs->variantT()) {
+    return false;
+  }
+
+  if (lhs->get_name() != rhs->get_name()) {
+    return false;
+  }
+
+  if (const SgNonrealSymbol *lhs_nonreal = isSgNonrealSymbol(lhs)) {
+    const SgNonrealSymbol *rhs_nonreal = isSgNonrealSymbol(rhs);
+    return rhs_nonreal != nullptr &&
+           nonrealTemplateDeclarationsEquivalent(lhs_nonreal->get_declaration(),
+                                                 rhs_nonreal->get_declaration(),
+                                                 depth + 1);
+  }
+
+  const SgNode *lhs_basis = lhs->get_symbol_basis();
+  const SgNode *rhs_basis = rhs->get_symbol_basis();
+  if (lhs_basis == rhs_basis) {
+    return true;
+  }
+
+  if (lhs_basis != nullptr || rhs_basis != nullptr) {
+    if (const SgInitializedName *lhs_name = isSgInitializedName(lhs_basis)) {
+      return nonrealTemplateInitializedNamesEquivalent(
+          lhs_name, isSgInitializedName(rhs_basis));
+    }
+
+    if (const SgDeclarationStatement *lhs_decl =
+            isSgDeclarationStatement(lhs_basis)) {
+      return nonrealTemplateDeclarationsEquivalent(
+          lhs_decl, isSgDeclarationStatement(rhs_basis));
+    }
+
+    return false;
+  }
+
+  return nonrealTemplateTypesEquivalent(lhs->get_type(), rhs->get_type());
+}
+
+bool nonrealTemplateExprListsEquivalent(const SgExprListExp *lhs,
+                                        const SgExprListExp *rhs,
+                                        unsigned depth);
+
+bool nonrealTemplateNonrealRefsEquivalent(const SgNonrealRefExp *lhs,
+                                          const SgNonrealRefExp *rhs) {
+  if (lhs == rhs) {
+    return true;
+  }
+
+  if (lhs == nullptr || rhs == nullptr) {
+    return false;
+  }
+
+  const bool same_explicit_qualification =
+      lhs->get_explicit_global_qualification() ==
+          rhs->get_explicit_global_qualification() &&
+      lhs->get_explicit_name_qualification_length() ==
+          rhs->get_explicit_name_qualification_length() &&
+      lhs->get_explicit_name_qualification_tokens() ==
+          rhs->get_explicit_name_qualification_tokens();
+  if (!same_explicit_qualification && lhs->get_symbol() == rhs->get_symbol()) {
+    return false;
+  }
+
+  return nonrealTemplateSymbolsEquivalent(lhs->get_symbol(), rhs->get_symbol());
+}
+
+bool nonrealTemplateExpressionsEquivalent(const SgExpression *lhs,
+                                          const SgExpression *rhs,
+                                          unsigned depth = 0) {
+  if (lhs == rhs) {
+    return true;
+  }
+
+  if (lhs == nullptr || rhs == nullptr || depth > 128 ||
+      lhs->variantT() != rhs->variantT()) {
+    return false;
+  }
+
+  switch (lhs->variantT()) {
+  case V_SgBoolValExp:
+    return isSgBoolValExp(lhs)->get_value() == isSgBoolValExp(rhs)->get_value();
+  case V_SgIntVal:
+    return isSgIntVal(lhs)->get_value() == isSgIntVal(rhs)->get_value();
+  case V_SgShortVal:
+    return isSgShortVal(lhs)->get_value() == isSgShortVal(rhs)->get_value();
+  case V_SgUnsignedShortVal:
+    return isSgUnsignedShortVal(lhs)->get_value() ==
+           isSgUnsignedShortVal(rhs)->get_value();
+  case V_SgLongIntVal:
+    return isSgLongIntVal(lhs)->get_value() == isSgLongIntVal(rhs)->get_value();
+  case V_SgUnsignedLongVal:
+    return isSgUnsignedLongVal(lhs)->get_value() ==
+           isSgUnsignedLongVal(rhs)->get_value();
+  case V_SgLongLongIntVal:
+    return isSgLongLongIntVal(lhs)->get_value() ==
+           isSgLongLongIntVal(rhs)->get_value();
+  case V_SgUnsignedLongLongIntVal:
+    return isSgUnsignedLongLongIntVal(lhs)->get_value() ==
+           isSgUnsignedLongLongIntVal(rhs)->get_value();
+  case V_SgUnsignedIntVal:
+    return isSgUnsignedIntVal(lhs)->get_value() ==
+           isSgUnsignedIntVal(rhs)->get_value();
+  case V_SgCharVal:
+    return isSgCharVal(lhs)->get_value() == isSgCharVal(rhs)->get_value();
+  case V_SgSignedCharVal:
+    return isSgSignedCharVal(lhs)->get_value() ==
+           isSgSignedCharVal(rhs)->get_value();
+  case V_SgUnsignedCharVal:
+    return isSgUnsignedCharVal(lhs)->get_value() ==
+           isSgUnsignedCharVal(rhs)->get_value();
+  case V_SgWcharVal:
+    return isSgWcharVal(lhs)->get_value() == isSgWcharVal(rhs)->get_value();
+  case V_SgChar16Val:
+    return isSgChar16Val(lhs)->get_value() == isSgChar16Val(rhs)->get_value();
+  case V_SgChar32Val:
+    return isSgChar32Val(lhs)->get_value() == isSgChar32Val(rhs)->get_value();
+  case V_SgFloatVal:
+    return isSgFloatVal(lhs)->get_value() == isSgFloatVal(rhs)->get_value();
+  case V_SgDoubleVal:
+    return isSgDoubleVal(lhs)->get_value() == isSgDoubleVal(rhs)->get_value();
+  case V_SgLongDoubleVal:
+    return isSgLongDoubleVal(lhs)->get_value() ==
+           isSgLongDoubleVal(rhs)->get_value();
+  case V_SgEnumVal: {
+    const SgEnumVal *lhs_enum = isSgEnumVal(lhs);
+    const SgEnumVal *rhs_enum = isSgEnumVal(rhs);
+    if (lhs_enum->get_value() != rhs_enum->get_value() ||
+        lhs_enum->get_name() != rhs_enum->get_name()) {
+      return false;
+    }
+
+    SgEnumDeclaration *lhs_decl = lhs_enum->get_declaration();
+    SgEnumDeclaration *rhs_decl = rhs_enum->get_declaration();
+    if (lhs_decl == rhs_decl) {
+      return true;
+    }
+
+    return lhs_decl != nullptr && rhs_decl != nullptr &&
+           lhs_decl->get_qualified_name() == rhs_decl->get_qualified_name();
+  }
+  case V_SgVarRefExp:
+    return nonrealTemplateSymbolsEquivalent(isSgVarRefExp(lhs)->get_symbol(),
+                                            isSgVarRefExp(rhs)->get_symbol());
+  case V_SgFunctionRefExp:
+    return nonrealTemplateSymbolsEquivalent(
+        isSgFunctionRefExp(lhs)->get_symbol(),
+        isSgFunctionRefExp(rhs)->get_symbol());
+  case V_SgMemberFunctionRefExp:
+    return nonrealTemplateSymbolsEquivalent(
+        isSgMemberFunctionRefExp(lhs)->get_symbol(),
+        isSgMemberFunctionRefExp(rhs)->get_symbol());
+  case V_SgTemplateFunctionRefExp:
+    return nonrealTemplateSymbolsEquivalent(
+        isSgTemplateFunctionRefExp(lhs)->get_symbol(),
+        isSgTemplateFunctionRefExp(rhs)->get_symbol());
+  case V_SgTemplateMemberFunctionRefExp:
+    return nonrealTemplateSymbolsEquivalent(
+        isSgTemplateMemberFunctionRefExp(lhs)->get_symbol(),
+        isSgTemplateMemberFunctionRefExp(rhs)->get_symbol());
+  case V_SgNonrealRefExp:
+    return nonrealTemplateNonrealRefsEquivalent(isSgNonrealRefExp(lhs),
+                                                isSgNonrealRefExp(rhs));
+  case V_SgTemplateParameterVal: {
+    const SgTemplateParameterVal *lhs_param = isSgTemplateParameterVal(lhs);
+    const SgTemplateParameterVal *rhs_param = isSgTemplateParameterVal(rhs);
+    return lhs_param->get_template_parameter_position() ==
+               rhs_param->get_template_parameter_position() &&
+           lhs_param->get_valueString() == rhs_param->get_valueString() &&
+           nonrealTemplateTypesEquivalent(lhs_param->get_valueType(),
+                                          rhs_param->get_valueType());
+  }
+  default:
+    break;
+  }
+
+  if (const SgExprListExp *lhs_list = isSgExprListExp(lhs)) {
+    return nonrealTemplateExprListsEquivalent(lhs_list, isSgExprListExp(rhs),
+                                              depth + 1);
+  }
+
+  if (const SgCastExp *lhs_cast = isSgCastExp(lhs)) {
+    const SgCastExp *rhs_cast = isSgCastExp(rhs);
+    return rhs_cast != nullptr &&
+           nonrealTemplateTypesEquivalent(lhs_cast->get_type(),
+                                          rhs_cast->get_type()) &&
+           nonrealTemplateExpressionsEquivalent(
+               lhs_cast->get_operand(), rhs_cast->get_operand(), depth + 1);
+  }
+
+  if (const SgFunctionCallExp *lhs_call = isSgFunctionCallExp(lhs)) {
+    const SgFunctionCallExp *rhs_call = isSgFunctionCallExp(rhs);
+    return rhs_call != nullptr &&
+           nonrealTemplateExpressionsEquivalent(
+               lhs_call->get_function(), rhs_call->get_function(), depth + 1) &&
+           nonrealTemplateExprListsEquivalent(lhs_call->get_args(),
+                                              rhs_call->get_args(), depth + 1);
+  }
+
+  if (const SgUnaryOp *lhs_unary = isSgUnaryOp(lhs)) {
+    const SgUnaryOp *rhs_unary = isSgUnaryOp(rhs);
+    return rhs_unary != nullptr &&
+           nonrealTemplateExpressionsEquivalent(
+               lhs_unary->get_operand(), rhs_unary->get_operand(), depth + 1);
+  }
+
+  if (const SgBinaryOp *lhs_binary = isSgBinaryOp(lhs)) {
+    const SgBinaryOp *rhs_binary = isSgBinaryOp(rhs);
+    return rhs_binary != nullptr &&
+           nonrealTemplateExpressionsEquivalent(lhs_binary->get_lhs_operand(),
+                                                rhs_binary->get_lhs_operand(),
+                                                depth + 1) &&
+           nonrealTemplateExpressionsEquivalent(lhs_binary->get_rhs_operand(),
+                                                rhs_binary->get_rhs_operand(),
+                                                depth + 1);
+  }
+
+  return false;
+}
+
+bool nonrealTemplateExprListsEquivalent(const SgExprListExp *lhs,
+                                        const SgExprListExp *rhs,
+                                        unsigned depth) {
+  if (lhs == rhs) {
+    return true;
+  }
+
+  if (lhs == nullptr || rhs == nullptr) {
+    return false;
+  }
+
+  const SgExpressionPtrList &lhs_exprs = lhs->get_expressions();
+  const SgExpressionPtrList &rhs_exprs = rhs->get_expressions();
+  if (lhs_exprs.size() != rhs_exprs.size()) {
+    return false;
+  }
+
+  for (size_t i = 0; i < lhs_exprs.size(); ++i) {
+    if (!nonrealTemplateExpressionsEquivalent(lhs_exprs[i], rhs_exprs[i],
+                                              depth + 1)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool nonrealTemplateArgumentsEquivalent(const SgTemplateArgument *lhs,
+                                        const SgTemplateArgument *rhs) {
+  if (lhs == rhs) {
+    return true;
+  }
+
+  if (lhs == nullptr || rhs == nullptr ||
+      lhs->get_argumentType() != rhs->get_argumentType()) {
+    return false;
+  }
+
+  switch (lhs->get_argumentType()) {
+  case SgTemplateArgument::type_argument:
+    return nonrealTemplateTypesEquivalent(lhs->get_type(), rhs->get_type());
+  case SgTemplateArgument::nontype_argument:
+    if (lhs->get_expression() != nullptr || rhs->get_expression() != nullptr) {
+      return nonrealTemplateExpressionsEquivalent(lhs->get_expression(),
+                                                  rhs->get_expression());
+    }
+
+    return nonrealTemplateInitializedNamesEquivalent(
+        lhs->get_initializedName(), rhs->get_initializedName());
+  case SgTemplateArgument::template_template_argument:
+    return lhs->get_templateDeclaration() == rhs->get_templateDeclaration();
+  case SgTemplateArgument::start_of_pack_expansion_argument:
+    return true;
+  case SgTemplateArgument::argument_undefined:
+  default:
+    return false;
+  }
+}
+
+bool nonrealTemplateArgumentListsEquivalent(
+    const SgTemplateArgumentPtrList &lhs,
+    const SgTemplateArgumentPtrList &rhs) {
+  if (lhs.size() != rhs.size()) {
+    return false;
+  }
+
+  if (lhs == rhs) {
+    return true;
+  }
+
+  for (size_t i = 0; i < lhs.size(); ++i) {
+    if (!nonrealTemplateArgumentsEquivalent(lhs[i], rhs[i])) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool specializedNonrealDeclMatches(SgNonrealDecl *decl, const SgName &name,
+                                   const SgTemplateArgumentPtrList *tpl_args) {
+  return decl != nullptr && tpl_args != nullptr && !tpl_args->empty() &&
+         decl->get_name() == name && !decl->get_tpl_args().empty() &&
+         nonrealTemplateArgumentListsEquivalent(decl->get_tpl_args(),
+                                                *tpl_args);
+}
+
+SgNonrealDecl *
+lookupSpecializedNonrealDecl(SgDeclarationScope *decl_scope, const SgName &name,
+                             const SgTemplateArgumentPtrList *tpl_args) {
+  if (decl_scope == nullptr || tpl_args == nullptr || tpl_args->empty()) {
+    return nullptr;
+  }
+
+  SgNonrealSymbol *symbol = decl_scope->lookup_nonreal_symbol(
+      name, nullptr, const_cast<SgTemplateArgumentPtrList *>(tpl_args));
+  SgNonrealDecl *decl = symbol != nullptr ? symbol->get_declaration() : nullptr;
+  if (specializedNonrealDeclMatches(decl, name, tpl_args)) {
+    return decl;
+  }
+
+  for (SgDeclarationStatement *candidate : decl_scope->getDeclarationList()) {
+    SgNonrealDecl *nonreal_decl = isSgNonrealDecl(candidate);
+    if (specializedNonrealDeclMatches(nonreal_decl, name, tpl_args)) {
+      return nonreal_decl;
+    }
+  }
+
+  return nullptr;
 }
 
 void clearFrontendBuiltNodeModifiedFlag(SgNode *node) {
@@ -933,6 +1501,119 @@ bool SageBuilder::inSwitchScope() {
   return returnVar;
 }
 
+static bool templateArgumentRequiresExplicitGlobalQualification(
+    const SgTemplateArgument *argument) {
+  if (argument == NULL) {
+    return false;
+  }
+
+  return argument->get_global_qualification_required() ||
+         argument->get_global_qualification_required_for_type() ||
+         argument->get_requiresGlobalNameQualificationOnType();
+}
+
+static SgName scopeNameForTemplateArgumentDeclaration(SgScopeStatement *scope) {
+  if (scope == NULL || isSgGlobal(scope) != NULL) {
+    return SgName();
+  }
+
+  switch (scope->variantT()) {
+  case V_SgClassDefinition:
+  case V_SgTemplateClassDefinition:
+  case V_SgTemplateInstantiationDefn:
+  case V_SgNamespaceDefinitionStatement:
+  case V_SgBasicBlock:
+  case V_SgDeclarationScope:
+    if (scope->isNamedScope()) {
+      return scope->associatedScopeName();
+    }
+    break;
+  default:
+    break;
+  }
+
+  return SgName();
+}
+
+static SgName qualifiedNameForTemplateArgumentDeclaration(
+    SgDeclarationStatement *declaration) {
+  ROSE_ASSERT(declaration != NULL);
+
+  if (SgClassDeclaration *classDeclaration =
+          isSgClassDeclaration(declaration)) {
+    return classDeclaration->get_qualified_name();
+  }
+  if (SgTypedefDeclaration *typedefDeclaration =
+          isSgTypedefDeclaration(declaration)) {
+    return typedefDeclaration->get_qualified_name();
+  }
+  if (SgEnumDeclaration *enumDeclaration = isSgEnumDeclaration(declaration)) {
+    return enumDeclaration->get_qualified_name();
+  }
+
+  return SgName();
+}
+
+static SgName
+localNameForTemplateArgumentDeclaration(SgDeclarationStatement *declaration) {
+  ROSE_ASSERT(declaration != NULL);
+
+  if (SgClassDeclaration *classDeclaration =
+          isSgClassDeclaration(declaration)) {
+    return classDeclaration->get_name();
+  }
+  if (SgTypedefDeclaration *typedefDeclaration =
+          isSgTypedefDeclaration(declaration)) {
+    return typedefDeclaration->get_name();
+  }
+  if (SgEnumDeclaration *enumDeclaration = isSgEnumDeclaration(declaration)) {
+    return enumDeclaration->get_name();
+  }
+
+  return SgName();
+}
+
+static std::string
+declarationNameForTemplateArgument(SgDeclarationStatement *declaration,
+                                   const SgTemplateArgument *argument) {
+  ROSE_ASSERT(declaration != NULL);
+
+  if (templateArgumentRequiresExplicitGlobalQualification(argument)) {
+    return qualifiedNameForTemplateArgumentDeclaration(declaration).getString();
+  }
+
+  std::vector<std::string> components;
+  for (SgScopeStatement *scope = declaration->get_scope();
+       scope != NULL && isSgGlobal(scope) == NULL; scope = scope->get_scope()) {
+    SgName scopeName = scopeNameForTemplateArgumentDeclaration(scope);
+    if (!scopeName.is_null() && scopeName.getString().empty() == false) {
+      components.push_back(scopeName.getString());
+    }
+  }
+
+  std::string declarationName =
+      localNameForTemplateArgumentDeclaration(declaration).getString();
+  if (declarationName.empty()) {
+    return qualifiedNameForTemplateArgumentDeclaration(declaration).getString();
+  }
+  std::string result;
+  for (std::vector<std::string>::const_reverse_iterator it =
+           components.rbegin();
+       it != components.rend(); ++it) {
+    if (!result.empty()) {
+      result += "::";
+    }
+    result += *it;
+  }
+
+  if (!result.empty()) {
+    result += "::";
+  }
+  result += declarationName;
+
+  return result;
+}
+
 // *******************************************************************************
 // *******************************  Build Functions
 // *****************************
@@ -1121,7 +1802,8 @@ SgName SageBuilder::appendTemplateArgumentsToName(
         case V_SgClassDeclaration: {
           SgClassDeclaration *classDeclaration =
               isSgClassDeclaration(declaration);
-          string fully_qualified_name = classDeclaration->get_qualified_name();
+          string fully_qualified_name = declarationNameForTemplateArgument(
+              classDeclaration, templateArgument);
 #if DEBUG_TEMPLATE_ARGUMENT_NAMES
           printf("fully_qualified_name = %s \n", fully_qualified_name.c_str());
 #endif
@@ -1135,8 +1817,8 @@ SgName SageBuilder::appendTemplateArgumentsToName(
         case V_SgTypedefDeclaration: {
           SgTypedefDeclaration *typedefDeclaration =
               isSgTypedefDeclaration(declaration);
-          string fully_qualified_name =
-              typedefDeclaration->get_qualified_name();
+          string fully_qualified_name = declarationNameForTemplateArgument(
+              typedefDeclaration, templateArgument);
 #if DEBUG_TEMPLATE_ARGUMENT_NAMES
           printf("fully_qualified_name = %s \n", fully_qualified_name.c_str());
 #endif
@@ -1147,7 +1829,8 @@ SgName SageBuilder::appendTemplateArgumentsToName(
 
         case V_SgEnumDeclaration: {
           SgEnumDeclaration *enumDeclaration = isSgEnumDeclaration(declaration);
-          string fully_qualified_name = enumDeclaration->get_qualified_name();
+          string fully_qualified_name = declarationNameForTemplateArgument(
+              enumDeclaration, templateArgument);
 #if DEBUG_TEMPLATE_ARGUMENT_NAMES
           printf("fully_qualified_name = %s \n", fully_qualified_name.c_str());
 #endif
@@ -1450,6 +2133,15 @@ SgName SageBuilder::unparseTemplateArgumentToString(
   // to support debugging.
 
   ROSE_ASSERT(templateArgument != NULL);
+
+  if (templateArgument->get_argumentType() ==
+      SgTemplateArgument::nontype_argument) {
+    if (SgExpression *expression = templateArgument->get_expression()) {
+      if (SgBoolValExp *boolValue = isSgBoolValExp(expression)) {
+        return boolValue->get_value() ? "true" : "false";
+      }
+    }
+  }
 
   SgUnparse_Info *info = new SgUnparse_Info();
   ROSE_ASSERT(info != NULL);
@@ -7115,7 +7807,11 @@ SgNonrealDecl *SageBuilder::buildNonrealDecl(const SgName &name,
                        "SageBuilder::buildNonrealDecl");
 
   if (effective_scope != nullptr &&
-      !effective_scope->statementExistsInScope(nrdecl)) {
+      effective_scope->containsOnlyDeclarations()) {
+    effective_scope->getDeclarationList().push_back(nrdecl);
+    nrdecl->set_parent(effective_scope);
+  } else if (effective_scope != nullptr &&
+             !effective_scope->statementExistsInScope(nrdecl)) {
     effective_scope->insertStatementInScope(nrdecl, false);
     nrdecl->set_parent(effective_scope);
   }
@@ -10738,6 +11434,13 @@ SageBuilder::buildNonrealType(const SgName &name, SgScopeStatement *scope,
     }
   }
 
+  if (tplArgs == NULL || tplArgs->empty()) {
+    if (SgNonrealDecl *existing_decl =
+            lookupSimpleNonrealDecl(decl_scope, name, tplArgs != NULL)) {
+      return existing_decl->get_type();
+    }
+  }
+
   SgNonrealDecl *nrdecl = buildNonrealDecl(name, decl_scope);
   ROSE_ASSERT(nrdecl != NULL);
 
@@ -10752,6 +11455,10 @@ SageBuilder::buildNonrealType(const SgName &name, SgScopeStatement *scope,
         arg->set_parent(nrdecl);
       }
     }
+  }
+
+  if (tplArgs == NULL || tplArgs->empty()) {
+    rememberSimpleNonrealDecl(decl_scope, name, tplArgs != NULL, nrdecl);
   }
 
   return nrdecl->get_type();
@@ -15237,22 +15944,32 @@ SgSourceFile *SageBuilder::buildSourceFile(
     }
   }
 
+  // The copied source is parsed from inputFileName but later unparsed as
+  // outputFileName.  Align source positions before collecting preprocessing
+  // info so token mappings are built against the same physical filename that
+  // the unparser will query.
+  fixupSourcePositionFileSpecification(sourceFile, outputFileName);
+
   // DQ (1/11/2021): I think we should be calling secondaryPassOverSourceFile()
   // instead of attachPreprocessingInfo() because we need to support the
   // token-based unparsing. DQ (1/11/2021): Call the
   // secondaryPassOverSourceFile() instead of attachPreprocessingInfo() because
   // we need to support the token-based unparsing.
   // file->secondaryPassOverSourceFile();
-  if (sourceFileHasAttachedPreprocessingInfo(sourceFile)) {
-    sourceFile->set_processedToIncludeCppDirectivesAndComments(true);
+  const bool has_attached_preprocessing_info =
+      sourceFileHasAttachedPreprocessingInfo(sourceFile);
+  if (has_attached_preprocessing_info) {
+    ROSEAttributesListContainer *preproc_container =
+        sourceFile->get_preprocessorDirectivesAndCommentsList();
+    if (preproc_container == NULL || preproc_container->getList().empty()) {
+      attachPreprocessingInfo(sourceFile, outputFileName,
+                              /*attach_to_ast=*/false);
+    } else {
+      sourceFile->set_processedToIncludeCppDirectivesAndComments(true);
+    }
   } else {
-    attachPreprocessingInfo(sourceFile);
+    attachPreprocessingInfo(sourceFile, outputFileName);
   }
-
-  // DQ (11/8/2019): This is not working and breaks the current work at present.
-  // DQ (11/8/2019): Support function to change the name in each of the IR
-  // node's source position info objects.
-  fixupSourcePositionFileSpecification(sourceFile, outputFileName);
 
   // DQ (1/8/2021): Set the filename used in the generated SgSourceFile to be
   // the output file. This appears to be important so that we can get either key

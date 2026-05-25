@@ -22,6 +22,39 @@ using namespace std;
 // Declaration matching static member data
 // list<string> ResetParentPointers::modifiedNodeInformationList;
 
+namespace {
+thread_local unsigned resetParentPointersTraversalDepth = 0;
+thread_local std::set<SgNode *> resetParentPointersNestedRoots;
+
+class ResetParentPointersTraversalGuard {
+  bool outermostTraversal;
+
+public:
+  ResetParentPointersTraversalGuard()
+      : outermostTraversal(resetParentPointersTraversalDepth == 0) {
+    if (outermostTraversal) {
+      resetParentPointersNestedRoots.clear();
+    }
+    ++resetParentPointersTraversalDepth;
+  }
+
+  ~ResetParentPointersTraversalGuard() {
+    ROSE_ASSERT(resetParentPointersTraversalDepth > 0);
+    --resetParentPointersTraversalDepth;
+    if (outermostTraversal) {
+      resetParentPointersNestedRoots.clear();
+    }
+  }
+
+  ResetParentPointersTraversalGuard(const ResetParentPointersTraversalGuard &) =
+      delete;
+  ResetParentPointersTraversalGuard &
+  operator=(const ResetParentPointersTraversalGuard &) = delete;
+
+  bool isOutermostTraversal() const { return outermostTraversal; }
+};
+} // namespace
+
 // [DQ]
 void ResetParentPointers::traceBackToRoot(SgNode *node) {
   // DQ (9/24/2007): Put this back since it is insifnicant to the performance.
@@ -702,6 +735,19 @@ SgClassDeclaration *canonicalClassSymbolDeclaration(SgClassDeclaration *decl) {
   return decl;
 }
 
+SgEnumDeclaration *canonicalEnumSymbolDeclaration(SgEnumDeclaration *decl) {
+  if (decl == nullptr) {
+    return nullptr;
+  }
+
+  if (SgEnumDeclaration *first =
+          isSgEnumDeclaration(decl->get_firstNondefiningDeclaration())) {
+    return first;
+  }
+
+  return decl;
+}
+
 void repairSymbolTableParents(SgScopeStatement *scope) {
   if (scope == nullptr)
     return;
@@ -786,9 +832,12 @@ void repairSymbolTableParents(SgScopeStatement *scope) {
         return false;
       }
       if (SgEnumSymbol *sym = scope->lookup_enum_symbol(name)) {
-        return sym->get_declaration() == decl;
+        return canonicalEnumSymbolDeclaration(sym->get_declaration()) == decl;
       }
       return false;
+    };
+    auto enum_symbol_belongs_to_scope = [&](SgEnumDeclaration *decl) -> bool {
+      return decl != nullptr && decl->get_scope() == scope;
     };
     auto class_symbol_belongs_to_scope = [&](SgClassDeclaration *decl) -> bool {
       if (scope == nullptr || decl == nullptr) {
@@ -861,13 +910,18 @@ void repairSymbolTableParents(SgScopeStatement *scope) {
       }
 
       if (SgEnumDeclaration *ed = isSgEnumDeclaration(decl)) {
-        if (ed->get_name().getString().empty())
+        SgEnumDeclaration *symbol_decl = canonicalEnumSymbolDeclaration(ed);
+        if (symbol_decl == nullptr)
           continue;
-        if (scope_has_enum_symbol(ed))
+        if (symbol_decl->get_name().getString().empty())
           continue;
-        SgEnumSymbol *sym = new SgEnumSymbol(ed);
+        if (!enum_symbol_belongs_to_scope(symbol_decl))
+          continue;
+        if (scope_has_enum_symbol(symbol_decl))
+          continue;
+        SgEnumSymbol *sym = new SgEnumSymbol(symbol_decl);
         if (table != nullptr) {
-          table->insert(ed->get_name(), sym);
+          table->insert(symbol_decl->get_name(), sym);
           sym->set_parent(table);
         }
         continue;
@@ -1676,12 +1730,20 @@ void resetParentPointers(SgNode *node, SgNode *parent) {
 
   // printf ("Resetting the parent pointers ... (starting at node = %s)
   // \n",node->sage_class_name());
-  ResetParentPointersInheritedAttribute inheritedAttribute;
+  ResetParentPointersTraversalGuard traversalGuard;
 
-  inheritedAttribute.parentNode = parent;
+  const bool shouldTraverse =
+      traversalGuard.isOutermostTraversal() || node == nullptr ||
+      resetParentPointersNestedRoots.insert(node).second;
 
-  ResetParentPointers setParentPointerTraversal;
-  setParentPointerTraversal.traverse(node, inheritedAttribute);
+  if (shouldTraverse) {
+    ResetParentPointersInheritedAttribute inheritedAttribute;
+
+    inheritedAttribute.parentNode = parent;
+
+    ResetParentPointers setParentPointerTraversal;
+    setParentPointerTraversal.traverse(node, inheritedAttribute);
+  }
 }
 
 void ResetParentPointersOfClassAndNamespaceDeclarations::visit(SgNode *node) {

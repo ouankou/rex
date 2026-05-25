@@ -182,6 +182,44 @@ bool should_skip_same_span_nondefining_declaration_surface(
          defining->get_file_info()->isOutputInCodeGeneration();
 }
 
+bool is_source_backed_scope_owned_definition(
+    const SgDeclarationStatement *decl) {
+  if (decl == nullptr) {
+    return false;
+  }
+
+  Sg_File_Info *fi = decl->get_file_info();
+  if (fi == nullptr || fi->get_line() <= 0 || fi->isFrontendSpecific() ||
+      fi->isCompilerGenerated()) {
+    return false;
+  }
+
+  if (decl->get_definingDeclaration() != decl) {
+    return false;
+  }
+
+  SgScopeStatement *parent_scope =
+      isSgScopeStatement(const_cast<SgNode *>(decl->get_parent()));
+  SgScopeStatement *semantic_scope = decl->get_scope();
+  const bool directly_scope_owned = parent_scope == semantic_scope;
+  const bool same_logical_namespace =
+      parent_scope != nullptr && semantic_scope != nullptr &&
+      isSgNamespaceDefinitionStatement(parent_scope) != nullptr &&
+      isSgNamespaceDefinitionStatement(semantic_scope) != nullptr &&
+      isSgNamespaceDefinitionStatement(parent_scope)
+          ->isSameNamespace(isSgNamespaceDefinitionStatement(semantic_scope));
+  if (!directly_scope_owned && !same_logical_namespace) {
+    return false;
+  }
+
+  if (const SgClassDeclaration *class_decl =
+          isSgClassDeclaration(const_cast<SgDeclarationStatement *>(decl))) {
+    return class_decl->get_definition() != nullptr;
+  }
+
+  return false;
+}
+
 bool prefer_wider_token_interval(
     TokenStreamSequenceToNodeMapping *best_mapping,
     TokenStreamSequenceToNodeMapping *candidate_mapping) {
@@ -207,6 +245,18 @@ bool statement_token_interval_should_claim_trailing_semicolon(
     const SgStatement *statement) {
   if (statement == nullptr) {
     return false;
+  }
+
+  if (SgDeclarationStatement *decl =
+          isSgDeclarationStatement(const_cast<SgStatement *>(statement))) {
+    if (isSgClinkageStartStatement(decl) != nullptr ||
+        isSgClinkageEndStatement(decl) != nullptr) {
+      return false;
+    }
+    if (SgFunctionDeclaration *function_decl = isSgFunctionDeclaration(decl)) {
+      return function_decl->get_definition() == nullptr;
+    }
+    return true;
   }
 
   switch (statement->variantT()) {
@@ -242,13 +292,27 @@ void extend_statement_token_interval_to_trailing_semicolon(
   if (current_end < 0 || current_end + 1 >= token_count) {
     return;
   }
+  auto is_whitespace_or_comment_token = [](SgToken *token) -> bool {
+    if (token == nullptr) {
+      return false;
+    }
+
+    const int classification = token->get_classification_code();
+    return classification == ROSE_token_ids::C_CXX_WHITESPACE ||
+           classification == ROSE_token_ids::C_CXX_COMMENTS;
+  };
   if (token_vector[current_end] != nullptr &&
       token_vector[current_end]->get_lexeme_string() == ";") {
     return;
   }
 
-  const int semicolon_index = current_end + 1;
-  if (token_vector[semicolon_index] == nullptr ||
+  int semicolon_index = current_end + 1;
+  while (semicolon_index < token_count &&
+         is_whitespace_or_comment_token(token_vector[semicolon_index])) {
+    ++semicolon_index;
+  }
+  if (semicolon_index >= token_count ||
+      token_vector[semicolon_index] == nullptr ||
       token_vector[semicolon_index]->get_lexeme_string() != ";") {
     return;
   }
@@ -1669,45 +1733,42 @@ bool isConditionalPreprocessingDirective(
 
 bool namespaceCloseBraceIsRepresentedOutsideDefinition(
     const SgNamespaceDefinitionStatement *namespace_definition) {
-  if (insidePreprocessingInfoContainsStandaloneClosingBrace(
-          namespace_definition)) {
-    return true;
-  }
+  return insidePreprocessingInfoContainsStandaloneClosingBrace(
+      namespace_definition);
+}
 
-  const SgNamespaceDeclarationStatement *namespace_decl =
-      namespace_definition != nullptr
-          ? namespace_definition->get_namespaceDeclaration()
-          : nullptr;
-  const Sg_File_Info *end_info =
-      namespace_definition != nullptr
-          ? namespace_definition->get_endOfConstruct()
-          : nullptr;
-  const int end_line = end_info != nullptr && !end_info->isCompilerGenerated()
-                           ? end_info->get_line()
-                           : 0;
-  AttachedPreprocessingInfoType *attached =
-      namespace_decl != nullptr
-          ? const_cast<SgNamespaceDeclarationStatement *>(namespace_decl)
-                ->getAttachedPreprocessingInfo()
-          : nullptr;
-  if (attached == nullptr || end_line <= 0) {
+bool namespaceDeclarationClosesInCurrentFileOnly(
+    const SgNamespaceDeclarationStatement *namespace_declaration,
+    const SgUnparse_Info &info) {
+  if (namespace_declaration == nullptr) {
     return false;
   }
 
-  for (PreprocessingInfo *info : *attached) {
-    if (info == nullptr ||
-        info->getRelativePosition() != PreprocessingInfo::after ||
-        !isConditionalPreprocessingDirective(info->getTypeOfDirective())) {
-      continue;
-    }
-
-    const int info_line = info->getLineNumber();
-    if (info_line > 0 && info_line <= end_line) {
-      return true;
-    }
+  const SgNamespaceDefinitionStatement *namespace_definition =
+      namespace_declaration->get_definition();
+  const Sg_File_Info *start =
+      namespace_definition != nullptr
+          ? namespace_definition->get_startOfConstruct()
+          : namespace_declaration->get_startOfConstruct();
+  const Sg_File_Info *end = namespace_definition != nullptr
+                                ? namespace_definition->get_endOfConstruct()
+                                : namespace_declaration->get_endOfConstruct();
+  const SgSourceFile *current_source_file = info.get_current_source_file();
+  const Sg_File_Info *current_file_info =
+      current_source_file != nullptr ? current_source_file->get_file_info()
+                                     : nullptr;
+  if (start == nullptr || end == nullptr || current_file_info == nullptr ||
+      start->isCompilerGenerated() || end->isCompilerGenerated() ||
+      start->get_line() <= 0 || end->get_line() <= 0) {
+    return false;
   }
 
-  return false;
+  const int start_file = start->get_physical_file_id();
+  const int end_file = end->get_physical_file_id();
+  const int current_file = current_file_info->get_physical_file_id();
+  return start_file >= 0 && end_file >= 0 && current_file >= 0 &&
+         start_file != end_file && start_file != current_file &&
+         end_file == current_file;
 }
 
 bool basicBlockStartsWithLeadingPreprocessingInfo(const SgBasicBlock *block) {
@@ -3191,6 +3252,21 @@ bool requiresTrailingReturnTypeSyntax(const SgType *return_type) {
   return true;
 }
 
+bool functionUsesTrailingReturnTypeSyntax(
+    const SgFunctionDeclaration *function_declaration,
+    const SgType *return_type = NULL) {
+  if (function_declaration != NULL &&
+      function_declaration->get_using_new_function_return_type_syntax()) {
+    return true;
+  }
+
+  if (return_type == NULL && function_declaration != NULL) {
+    return_type = function_declaration->get_orig_return_type();
+  }
+
+  return requiresTrailingReturnTypeSyntax(return_type);
+}
+
 std::string buildFunctionParameterListPreviewString(
     SgFunctionDeclaration *function_declaration) {
   if (function_declaration == nullptr) {
@@ -3281,7 +3357,8 @@ std::string buildFunctionDeclarationPreviewString(
         function_declaration->get_specialFunctionModifier().isConversion()) &&
       !function_declaration->get_is_deduction_guide()) {
     if (SgType *return_type = function_declaration->get_orig_return_type()) {
-      if (requiresTrailingReturnTypeSyntax(return_type)) {
+      if (functionUsesTrailingReturnTypeSyntax(function_declaration,
+                                               return_type)) {
         preview = "auto";
       } else {
         preview = normalizePreviewWhitespace(
@@ -3305,7 +3382,8 @@ std::string buildFunctionDeclarationPreviewString(
 
   if (SgType *return_type = function_declaration->get_orig_return_type()) {
     if (!function_declaration->get_is_deduction_guide() &&
-        requiresTrailingReturnTypeSyntax(return_type)) {
+        functionUsesTrailingReturnTypeSyntax(function_declaration,
+                                             return_type)) {
       preview += " -> ";
       preview +=
           normalizePreviewWhitespace(globalUnparseToString(return_type, NULL));
@@ -3338,7 +3416,8 @@ bool shouldWrapBeforeFunctionDeclarator(
   }
 
   SgType *return_type = function_declaration->get_orig_return_type();
-  if (return_type == nullptr || requiresTrailingReturnTypeSyntax(return_type)) {
+  if (return_type == nullptr ||
+      functionUsesTrailingReturnTypeSyntax(function_declaration, return_type)) {
     return false;
   }
 
@@ -3762,6 +3841,28 @@ void UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     }
     emitted_text_ends_with_newline = text.back() == '\n' || text.back() == '\r';
   };
+  auto token_source_start_line = [](SgToken *token) {
+    Sg_File_Info *start =
+        token != nullptr ? token->get_startOfConstruct() : nullptr;
+    return start != nullptr ? start->get_line() : -1;
+  };
+  auto token_source_end_line = [](SgToken *token,
+                                  const std::string &token_text) {
+    Sg_File_Info *end =
+        token != nullptr ? token->get_endOfConstruct() : nullptr;
+    if (end != nullptr && end->get_line() > 0) {
+      return end->get_line();
+    }
+
+    Sg_File_Info *start =
+        token != nullptr ? token->get_startOfConstruct() : nullptr;
+    if (start == nullptr || start->get_line() <= 0) {
+      return -1;
+    }
+
+    return start->get_line() + static_cast<int>(std::count(
+                                   token_text.begin(), token_text.end(), '\n'));
+  };
 
   auto repair_standalone_pragma_boundaries = [](const std::string &text) {
     std::string repaired_text = text;
@@ -3777,6 +3878,15 @@ void UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     }
 
     return repaired_text;
+  };
+
+  auto is_comment_like_token_text = [](const std::string &text) {
+    const size_t pos = text.find_first_not_of(" \t\f\v\r\n");
+    if (pos == std::string::npos) {
+      return false;
+    }
+
+    return text.compare(pos, 2, "//") == 0 || text.compare(pos, 2, "/*") == 0;
   };
 
   auto is_linkage_marker_token_text = [](int classification,
@@ -4064,7 +4174,13 @@ void UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         // DQ (6/6/2021): We need the offset so that when the next statement is
         // unparsed, we can always unparse the the full leading whitespace. end
         // = tokenSubsequence_2->leading_whitespace_start;
-        end = tokenSubsequence_2->leading_whitespace_start + end_offset;
+        end = tokenSubsequence_2->leading_whitespace_start;
+        if (end != -1) {
+          end += end_offset;
+          if (end < 0) {
+            break;
+          }
+        }
         // DQ (6/2/2021): Avoid adjustments to the token bounds.
         // DQ (12/28/2014): Note that white space is not always available.
         if (end == -1) {
@@ -4309,6 +4425,7 @@ void UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           }
           const bool starts_preprocessing_directive =
               (classification == ROSE_token_ids::C_CXX_PREPROCESSING_INFO &&
+               !is_comment_like_token_text(emitted_token_text) &&
                !is_linkage_marker_token_text(classification,
                                              emitted_token_text)) ||
               tokenVector[j]->get_lexeme_string().rfind("#pragma", 0) == 0;
@@ -4353,6 +4470,74 @@ void UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           curprint(emitted_token_text);
 #endif
           record_emitted_text(emitted_token_text);
+          const bool comment_like_token =
+              classification == ROSE_token_ids::C_CXX_COMMENTS ||
+              is_comment_like_token_text(emitted_token_text);
+          if (comment_like_token && emitted_text_ends_with_newline == false &&
+              j <= end) {
+            bool intervening_newline_token = false;
+            int next_non_whitespace = j + 1;
+            while (next_non_whitespace <= end) {
+              SgToken *next_token = tokenVector[next_non_whitespace];
+              if (next_token == nullptr) {
+                ++next_non_whitespace;
+                continue;
+              }
+
+              const int next_classification =
+                  next_token->get_classification_code();
+              if (next_classification != ROSE_token_ids::C_CXX_WHITESPACE) {
+                break;
+              }
+
+              const std::string &next_text = next_token->get_lexeme_string();
+              if (next_text.find('\n') != std::string::npos ||
+                  next_text.find('\r') != std::string::npos) {
+                intervening_newline_token = true;
+                break;
+              }
+
+              ++next_non_whitespace;
+            }
+
+            if (!intervening_newline_token && next_non_whitespace <= end) {
+              const int comment_end_line =
+                  token_source_end_line(tokenVector[j], emitted_token_text);
+              const int next_start_line =
+                  token_source_start_line(tokenVector[next_non_whitespace]);
+              if (comment_end_line > 0 && next_start_line > 0 &&
+                  comment_end_line < next_start_line) {
+#if HIGH_FEDELITY_TOKEN_UNPARSING
+                *(unp->get_output_stream().output_stream()) << "\n";
+                unp->get_output_stream().account_for_raw_text("\n");
+#else
+                curprint("\n");
+#endif
+                emitted_text_ends_with_newline = true;
+              }
+            } else if (next_non_whitespace > end) {
+              const int comment_end_line =
+                  token_source_end_line(tokenVector[j], emitted_token_text);
+              Sg_File_Info *comment_start =
+                  tokenVector[j] != nullptr
+                      ? tokenVector[j]->get_startOfConstruct()
+                      : nullptr;
+              Sg_File_Info *next_ast_start =
+                  stmt_2 != nullptr ? stmt_2->get_startOfConstruct() : nullptr;
+              if (comment_start != nullptr && next_ast_start != nullptr &&
+                  next_ast_start->isSameFile(comment_start) &&
+                  comment_end_line > 0 &&
+                  next_ast_start->get_line() > comment_end_line) {
+#if HIGH_FEDELITY_TOKEN_UNPARSING
+                *(unp->get_output_stream().output_stream()) << "\n";
+                unp->get_output_stream().account_for_raw_text("\n");
+#else
+                curprint("\n");
+#endif
+                emitted_text_ends_with_newline = true;
+              }
+            }
+          }
           if (pragma_prefix_continues) {
             awaiting_pragma_suffix = true;
           } else if (awaiting_suffix_before_token || token_contains_pragma) {
@@ -5091,6 +5276,10 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
     unparsePragmaDeclStmt(stmt, info);
     break;
 
+  case V_SgImportStatement:
+    unparseImportStatement(stmt, info);
+    break;
+
     // DQ (3/22/2019): Adding EmptyDeclaration to support addition of comments
     // and CPP directives that will permit token-based unparsing to work with
     // greater precision. For example, used to add an include directive with
@@ -5340,6 +5529,13 @@ void Unparse_ExprStmt::unparseNamespaceDeclarationStatement(
   bool saved_unparsedPartiallyUsingTokenStream =
       info.unparsedPartiallyUsingTokenStream();
   if (saved_unparsedPartiallyUsingTokenStream == false) {
+    if (namespaceDeclarationClosesInCurrentFileOnly(namespaceDeclaration,
+                                                    info)) {
+      curprint("}");
+      curprint("\n");
+      return;
+    }
+
     // DQ (8/12/2014): Adding support for inlined namespaces (C++11 support).
     if (namespaceDeclaration->get_isInlinedNamespace() == true) {
       curprint("inline ");
@@ -5511,6 +5707,8 @@ void Unparse_ExprStmt::unparseNamespaceDefinitionStatement(
           curprint(" // namespace ");
           curprint(namespace_name);
         }
+        unparseAttachedPreprocessingInfo(namespace_decl, info,
+                                         PreprocessingInfo::after_syntax);
       }
     }
     curprint("\n");
@@ -6117,7 +6315,7 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDeclStmt(
   // template name and template arguments so that we can support the use of any
   // qualified names that might be associated with these.
 
-  bool outputClassTemplateInstantiation = true;
+  bool outputClassTemplateInstantiation = false;
 
   if (isTransformed(templateInstantiationDeclaration) == true) {
     // If the template has been transformed then we have to output the special
@@ -6605,6 +6803,21 @@ void Unparse_ExprStmt::unparsePragmaDeclStmt(SgStatement *stmt,
   // ROSE_ASSERT (0);
 }
 
+void Unparse_ExprStmt::unparseImportStatement(SgStatement *stmt,
+                                              SgUnparse_Info &info) {
+  (void)info;
+  SgImportStatement *import_stmt = isSgImportStatement(stmt);
+  ASSERT_not_null(import_stmt);
+  ROSE_ASSERT(import_stmt->get_is_cxx_module_import());
+
+  const std::string module_name = import_stmt->get_module_name().getString();
+  ROSE_ASSERT(!module_name.empty());
+
+  curprint("import ");
+  curprint(module_name);
+  curprint(";");
+}
+
 void Unparse_ExprStmt::unparseEmptyDeclaration(SgStatement *stmt,
                                                SgUnparse_Info &info) {
   SgEmptyDeclaration *emptyDeclaration = isSgEmptyDeclaration(stmt);
@@ -6907,8 +7120,6 @@ void Unparse_ExprStmt::unparseBasicBlockStmt(SgStatement *stmt,
   // can use the correct map from the map of maps in the modified implementation
   // that supports multiple files for token based unparsing. SgSourceFile*
   // sourceFile = TransformationSupport::getSourceFile(basic_stmt);
-  SgSourceFile *sourceFile = info.get_current_source_file();
-
   // DQ (10/31/2018): This is not always non-null (e.g. when used with the
   // unparseToString() function). ASSERT_not_null(sourceFile);
 
@@ -6919,6 +7130,8 @@ void Unparse_ExprStmt::unparseBasicBlockStmt(SgStatement *stmt,
   // DQ (9/28/2018): We need to get the SgSourceFile so that we can use the
   // correct map from the map of maps in the modified implementation that
   // supports multiple files for token based unparsing.
+  SgSourceFile *sourceFile = info.get_current_source_file();
+
   SgStatement *representativeStatementForWhitespace = NULL;
   // if
   // (SgSourceFile::get_representativeWhitespaceStatementMap().find(basic_stmt)
@@ -8282,7 +8495,8 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
     //   and from type() otherwise.
     SgType *rtype = funcdecl_stmt->get_orig_return_type();
     bool use_trailing_return_type_syntax =
-        !is_deduction_guide && requiresTrailingReturnTypeSyntax(rtype);
+        !is_deduction_guide &&
+        functionUsesTrailingReturnTypeSyntax(funcdecl_stmt, rtype);
 
     SgUnparse_Info ninfo_for_type(ninfo);
     if (funcdecl_stmt->get_requiresNameQualificationOnReturnType() == true) {
@@ -8719,7 +8933,7 @@ void Unparse_ExprStmt::unparseReturnType(SgFunctionDeclaration *funcdecl_stmt,
     ASSERT_not_null(rtype);
 
     bool use_trailing_return_type_syntax =
-        requiresTrailingReturnTypeSyntax(rtype);
+        functionUsesTrailingReturnTypeSyntax(funcdecl_stmt, rtype);
     if (use_trailing_return_type_syntax) {
       curprint("auto ");
     } else {
@@ -8880,11 +9094,22 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
           return;
         }
 
+        const bool function_template_specialization =
+            inst->get_templateDeclaration() != NULL ||
+            inst->get_specializedTemplateDeclaration() != NULL ||
+            (inst->get_template_argument_list_is_explicit() &&
+             !inst->get_templateArguments().empty());
+
         // The declaration-level specialization specifier emitted via
-        // printSpecifier contributes one `template<>`. Emit only the remaining
-        // headers required by enclosing specialized class scopes.
-        size_t extra_headers =
-            template_id_count > 0 ? template_id_count - 1 : 0;
+        // printSpecifier contributes one `template<>`. For a member function
+        // template specialization that header belongs to the function template,
+        // so every enclosing specialized class still needs its own header. For
+        // a non-template member of a specialized class, the same emitted header
+        // belongs to the innermost class specialization.
+        size_t extra_headers = template_id_count;
+        if (!function_template_specialization && extra_headers > 0) {
+          --extra_headers;
+        }
 
         for (size_t i = 0; i < extra_headers; ++i) {
           curprint("template<>");
@@ -9048,8 +9273,15 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
     unparseFunctionArgs(mfuncdecl_stmt, ninfo2);
     curprint(string(")"));
 
+    const bool use_trailing_return_type_syntax =
+        rtype != NULL &&
+        functionUsesTrailingReturnTypeSyntax(mfuncdecl_stmt, rtype);
+    if (use_trailing_return_type_syntax) {
+      unparseMemberFunctionParametersAndQualifiers(mfuncdecl_stmt, info);
+    }
+
     if (rtype != NULL) {
-      if (requiresTrailingReturnTypeSyntax(rtype)) {
+      if (use_trailing_return_type_syntax) {
         curprint(" -> ");
         SgUnparse_Info trailing_type_info(ninfo);
         trailing_type_info.set_isTypeFirstPart();
@@ -9063,7 +9295,11 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
       }
     }
 
-    unparseTrailingFunctionModifiers(mfuncdecl_stmt, info);
+    if (use_trailing_return_type_syntax) {
+      unparseMemberFunctionPostDeclaratorModifiers(mfuncdecl_stmt, info);
+    } else {
+      unparseTrailingFunctionModifiers(mfuncdecl_stmt, info);
+    }
 
     const bool is_function_try_block =
         info.SkipFunctionDefinition() && !mfuncdecl_stmt->isForward() &&
@@ -9163,9 +9399,8 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
 #endif
 }
 
-void Unparse_ExprStmt::unparseTrailingFunctionModifiers(
+void Unparse_ExprStmt::unparseMemberFunctionParametersAndQualifiers(
     SgMemberFunctionDeclaration *mfuncdecl_stmt, SgUnparse_Info &info) {
-  // DQ (9/9/2014): Refactored support for function modifiers.
   bool outputRestrictKeyword = false;
   SgMemberFunctionType *mftype =
       isSgMemberFunctionType(mfuncdecl_stmt->get_type());
@@ -9261,7 +9496,10 @@ void Unparse_ExprStmt::unparseTrailingFunctionModifiers(
     // unparseExceptionSpecification(exceptionSpecifierList,ninfo);
     unparseExceptionSpecification(exceptionSpecifierList, info);
   }
+}
 
+void Unparse_ExprStmt::unparseMemberFunctionPostDeclaratorModifiers(
+    SgMemberFunctionDeclaration *mfuncdecl_stmt, SgUnparse_Info &info) {
   if (SgExpression *requires_clause =
           mfuncdecl_stmt->get_trailingRequiresClause()) {
     SgUnparse_Info rinfo(info);
@@ -9322,6 +9560,13 @@ void Unparse_ExprStmt::unparseTrailingFunctionModifiers(
   if (mfuncdecl_stmt->get_functionModifier().isMarkedDelete() == true) {
     curprint(" = delete");
   }
+}
+
+void Unparse_ExprStmt::unparseTrailingFunctionModifiers(
+    SgMemberFunctionDeclaration *mfuncdecl_stmt, SgUnparse_Info &info) {
+  // DQ (9/9/2014): Refactored support for function modifiers.
+  unparseMemberFunctionParametersAndQualifiers(mfuncdecl_stmt, info);
+  unparseMemberFunctionPostDeclaratorModifiers(mfuncdecl_stmt, info);
 }
 
 void Unparse_ExprStmt::unparseVarDefnStmt(SgStatement *stmt,
@@ -9413,6 +9658,7 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
       !classdecl_stmt->get_file_info()->isOutputInCodeGeneration() &&
       (classdecl_stmt->get_file_info()->isFrontendSpecific() ||
        !classdecl_stmt->get_isAutonomousDeclaration()) &&
+      !is_source_backed_scope_owned_definition(classdecl_stmt) &&
       isSgTemplateInstantiationDirectiveStatement(
           classdecl_stmt->get_parent()) == nullptr) {
     return;
@@ -11989,6 +12235,9 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
     }
 
     SgDeclarationStatement *declaration = typedef_stmt->get_declaration();
+    if (outputTypeDefinition) {
+      ninfo_for_type.set_isTypeFirstPart();
+    }
     if (declaration != NULL && isSgEnumDeclaration(declaration) != NULL &&
         isSgTemplateInstantiationDecl(declaration) == NULL) {
       ninfo_for_type.set_reference_node_for_qualification(declaration);
@@ -12005,7 +12254,9 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
     // Alias declarations should preserve canonical spelling without forcing
     // struct/class elaboration keywords.
     ninfo_for_type.set_type_elaboration_required(false);
-    ninfo_for_type.set_SkipClassSpecifier();
+    if (!outputTypeDefinition) {
+      ninfo_for_type.set_SkipClassSpecifier();
+    }
 
     unp->u_type->unparseType(btype, ninfo_for_type);
 
@@ -12257,6 +12508,25 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
              "as reference node for qualification.\n");
 #endif
       ninfo_for_type.set_reference_node_for_qualification(declaration);
+      if (outputTypeDefinition) {
+        if (SgEnumDeclaration *enumDeclaration =
+                isSgEnumDeclaration(declaration)) {
+          ninfo_for_type.set_name_qualification_length(
+              enumDeclaration->get_name_qualification_length());
+          ninfo_for_type.set_global_qualification_required(
+              enumDeclaration->get_global_qualification_required());
+          ninfo_for_type.set_type_elaboration_required(
+              enumDeclaration->get_type_elaboration_required());
+        } else if (SgClassDeclaration *classDeclaration =
+                       isSgClassDeclaration(declaration)) {
+          ninfo_for_type.set_name_qualification_length(
+              classDeclaration->get_name_qualification_length());
+          ninfo_for_type.set_global_qualification_required(
+              classDeclaration->get_global_qualification_required());
+          ninfo_for_type.set_type_elaboration_required(
+              classDeclaration->get_type_elaboration_required());
+        }
+      }
     } else {
       // Qualify typedef base types relative to the typedef declaration context.
       // This preserves required global qualification when local declarations
@@ -12887,11 +13157,22 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
               templateVariableDeclaration != nullptr ||
               templateTypedefDeclaration != nullptr);
 
-  if (should_skip_same_span_nondefining_declaration_surface(template_stmt)) {
+  const bool class_scope_friend_template_class =
+      templateClassDeclaration != NULL &&
+      templateClassDeclaration->get_declarationModifier().isFriend() &&
+      (isSgClassDefinition(templateClassDeclaration->get_parent()) != NULL ||
+       isSgTemplateClassDefinition(templateClassDeclaration->get_parent()) !=
+           NULL ||
+       isSgTemplateInstantiationDefn(templateClassDeclaration->get_parent()) !=
+           NULL);
+
+  if (!class_scope_friend_template_class &&
+      should_skip_same_span_nondefining_declaration_surface(template_stmt)) {
     return;
   }
 
-  if (template_stmt->get_file_info() != nullptr &&
+  if (!class_scope_friend_template_class &&
+      template_stmt->get_file_info() != nullptr &&
       !template_stmt->get_file_info()->isOutputInCodeGeneration() &&
       isSgTemplateInstantiationDirectiveStatement(
           template_stmt->get_parent()) == nullptr) {
@@ -12910,10 +13191,7 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
       if (SgScopeStatement *parent_scope =
               isSgScopeStatement(decl->get_parent())) {
         scopes.push_back(parent_scope);
-      }
-      if (decl->get_scope() != NULL &&
-          std::find(scopes.begin(), scopes.end(), decl->get_scope()) ==
-              scopes.end()) {
+      } else if (decl->get_scope() != NULL) {
         scopes.push_back(decl->get_scope());
       }
 
@@ -12986,7 +13264,8 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
         (templateClassDeclaration != NULL &&
          !templateClassDeclaration->get_isAutonomousDeclaration());
     if (hidden_template_class || hidden_misplaced_template_class ||
-        hidden_frontend_template) {
+        (hidden_frontend_template &&
+         !is_source_backed_scope_owned_definition(templateClassDeclaration))) {
       return;
     }
   }
@@ -13044,6 +13323,7 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
       sourcefile != NULL && sourcefile->get_unparse_template_ast();
   unparse_template_from_ast |=
       template_stmt->get_unparse_template_ast() == true;
+  unparse_template_from_ast |= class_scope_friend_template_class;
   unparse_template_from_ast |=
       useNormalizedDeclarationScopeFormatting(template_stmt, info);
   unparse_template_from_ast |= template_requires_ast_unparse;
@@ -13366,8 +13646,18 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
 
       ninfo.set_declstatement_ptr(NULL);
 
+      const bool use_trailing_return_type_syntax =
+          rtype != NULL &&
+          (is_deduction_guide ||
+           functionUsesTrailingReturnTypeSyntax(functionDeclaration, rtype));
+      if (use_trailing_return_type_syntax &&
+          templateMemberFunctionDeclaration != NULL) {
+        unparseMemberFunctionParametersAndQualifiers(
+            templateMemberFunctionDeclaration, ninfo);
+      }
+
       if (rtype != NULL) {
-        if (is_deduction_guide || requiresTrailingReturnTypeSyntax(rtype)) {
+        if (use_trailing_return_type_syntax) {
           curprint(" -> ");
           SgUnparse_Info trailing_type_info(ninfo);
           trailing_type_info.set_isTypeFirstPart();
@@ -13382,8 +13672,13 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
       }
 
       if (templateMemberFunctionDeclaration != NULL) {
-        unparseTrailingFunctionModifiers(templateMemberFunctionDeclaration,
-                                         ninfo);
+        if (use_trailing_return_type_syntax) {
+          unparseMemberFunctionPostDeclaratorModifiers(
+              templateMemberFunctionDeclaration, ninfo);
+        } else {
+          unparseTrailingFunctionModifiers(templateMemberFunctionDeclaration,
+                                           ninfo);
+        }
         unparse_member_function_ctor_initializers(
             templateMemberFunctionDeclaration, ninfo);
       } else {
@@ -13527,8 +13822,16 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
 
       ninfo.set_declstatement_ptr(NULL);
 
+      const bool use_trailing_return_type_syntax =
+          rtype != NULL &&
+          functionUsesTrailingReturnTypeSyntax(functionDeclaration, rtype);
+      if (use_trailing_return_type_syntax) {
+        unparseMemberFunctionParametersAndQualifiers(
+            templateMemberFunctionDeclaration, ninfo);
+      }
+
       if (rtype != NULL) {
-        if (requiresTrailingReturnTypeSyntax(rtype)) {
+        if (use_trailing_return_type_syntax) {
           curprint(" -> ");
           SgUnparse_Info trailing_type_info(ninfo);
           trailing_type_info.set_isTypeFirstPart();
@@ -13542,8 +13845,13 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
         }
       }
 
-      unparseTrailingFunctionModifiers(templateMemberFunctionDeclaration,
-                                       ninfo);
+      if (use_trailing_return_type_syntax) {
+        unparseMemberFunctionPostDeclaratorModifiers(
+            templateMemberFunctionDeclaration, ninfo);
+      } else {
+        unparseTrailingFunctionModifiers(templateMemberFunctionDeclaration,
+                                         ninfo);
+      }
       unparse_member_function_ctor_initializers(
           templateMemberFunctionDeclaration, ninfo);
 

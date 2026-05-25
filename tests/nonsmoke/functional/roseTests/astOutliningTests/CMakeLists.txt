@@ -128,6 +128,16 @@ set(OUTLINE_FORTRAN_TESTS
   write.f
 )
 
+# This checked-in specimen is already transformed/malformed Fortran and is
+# rejected by flang before ROSE outlining runs.
+set(OUTLINE_INVALID_FORTRAN_TESTS
+  column80.f
+)
+list(REMOVE_ITEM OUTLINE_FORTRAN_TESTS ${OUTLINE_INVALID_FORTRAN_TESTS})
+foreach(specimen IN LISTS OUTLINE_INVALID_FORTRAN_TESTS)
+  message(STATUS "Skipping outlining Fortran specimen rejected by flang: ${specimen}")
+endforeach()
+
 set(OUTLINE_OPENMP_C_TESTS
   jacobi.c
 )
@@ -624,6 +634,26 @@ set(OUTLINE_EXTERNAL_CXX_TESTS
   test2006_165.C
 )
 
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _rex_outline_processor)
+set(REX_OUTLINE_HOST_IS_X86 FALSE)
+if(_rex_outline_processor MATCHES "^(x86_64|amd64|i[3-6]86)$")
+  set(REX_OUTLINE_HOST_IS_X86 TRUE)
+endif()
+
+set(OUTLINE_EXTERNAL_CXX_TESTS_X86_ONLY
+  test2007_97.C
+  test2007_102.C
+  test2007_106.C
+  test2008_15.C
+  test2009_02.C
+  test2017_69.C
+)
+
+if(NOT REX_OUTLINE_HOST_IS_X86)
+  list(REMOVE_ITEM OUTLINE_EXTERNAL_CXX_TESTS
+    ${OUTLINE_EXTERNAL_CXX_TESTS_X86_ONLY})
+endif()
+
 set(_rth ${CMAKE_SOURCE_DIR}/scripts/rth_run.pl)
 set(_exit_status ${CMAKE_SOURCE_DIR}/scripts/test_exit_status)
 
@@ -804,7 +834,7 @@ foreach(specimen IN LISTS OUTLINE_EXTERNAL_CXX_TESTS)
     COMMAND ${_rth}
       TITLE="outlineSelection seq7 ${specimen} [${_target}]"
       USE_SUBDIR=yes
-      CMD="$<TARGET_FILE:outlineSelection> ${_outline_includes_str} -rose:outline:seq 7 ${_outline_flags_str} -c ${_outline_external_dir}/${specimen}"
+      CMD="$<TARGET_FILE:outlineSelection> ${_outline_includes_str} -DTEST_STRING_MACRO=\\\"test\\\" -rose:outline:seq 7 ${_outline_flags_str} -c ${_outline_external_dir}/${specimen}"
       ${_exit_status}
       ${_target}
   )
@@ -1019,4 +1049,3 @@ add_test(
   COMMAND bash -c
     "${CMAKE_CXX_COMPILER} -c ${CMAKE_CURRENT_SOURCE_DIR}/test_class_ODR_violation_main.C && ${CMAKE_CXX_COMPILER} -c ${CMAKE_CURRENT_SOURCE_DIR}/test_class_ODR_violation_outlined.C && ${CMAKE_CXX_COMPILER} test_class_ODR_violation_main.o test_class_ODR_violation_outlined.o -o test_class_ODR_violation"
 )
-

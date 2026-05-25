@@ -47,6 +47,15 @@ public:
   static bool
   isDefinedThroughPrivateBaseClass(SgClassDeclaration *classDeclaration,
                                    SgSymbol *symbol);
+
+private:
+  struct CurrentScopeAliasIndex;
+
+  static void injectSymbolsFromReferencedScopeIntoCurrentScope(
+      SgScopeStatement *referencedScope, SgScopeStatement *currentScope,
+      SgNode *causalNode, SgAccessModifier::access_modifier_enum accessLevel,
+      bool calledFromUsingDirective,
+      CurrentScopeAliasIndex &currentScopeAliasIndex);
 };
 
 // endif for FIXUP_CXX_TO_USE_ALIASING_SYMBOLS_H

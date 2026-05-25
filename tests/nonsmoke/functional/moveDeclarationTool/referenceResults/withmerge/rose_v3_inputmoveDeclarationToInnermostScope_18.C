@@ -5,3 +5,4 @@ int foobar() {
     i = 7;
   return 0;
 }
+

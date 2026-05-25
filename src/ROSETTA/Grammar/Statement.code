@@ -2819,6 +2819,12 @@ HEADER_TEMPLATE_CLASS_DECLARATION_STATEMENT_START
 
 typedef SgTemplateInstantiationDecl instantiation_kind_t;
 
+/*! Which class scope owns the template declaration for postprocessing. */
+enum template_class_owner_scope_kind_enum {
+  e_template_class_owner_scope_semantic = 0,
+  e_template_class_owner_scope_source_spelled = 1
+};
+
 /*! A template declaration can be of either class, struct, or union */
 enum class_types {
   e_class,             /*!< class declaration (default) */
@@ -7158,7 +7164,7 @@ bool SgScopeStatement::isNamedScope() {
   }
 
   case V_SgDeclarationScope: {
-    result = true;
+    result = isSgDeclarationStatement(this->get_parent()) != NULL;
     break;
   }
 
@@ -7205,7 +7211,9 @@ SgName SgScopeStatement::associatedScopeName() {
     case V_SgNamespaceDeclarationStatement: {
       SgNamespaceDeclarationStatement *namedDeclaration =
           isSgNamespaceDeclarationStatement(declaration);
-      name = namedDeclaration->get_name();
+      if (namedDeclaration->get_isUnnamedNamespace() == false) {
+        name = namedDeclaration->get_name();
+      }
       break;
     }
 
@@ -8501,12 +8509,20 @@ void SgDeclarationStatement::resetTemplateNameSupport(
           symbolScopeForReset->symbol_exists(symbol->get_name(), symbol) ==
               false) {
         SgSymbolTable *symbolTable = isSgSymbolTable(symbol->get_parent());
+        SgScopeStatement *scopeFromSymbolTable = NULL;
         if (symbolTable != NULL) {
-          SgScopeStatement *scopeFromSymbolTable =
-              isSgScopeStatement(symbolTable->get_parent());
+          scopeFromSymbolTable = isSgScopeStatement(symbolTable->get_parent());
           if (scopeFromSymbolTable != NULL) {
             symbolScopeForReset = scopeFromSymbolTable;
           }
+        }
+
+        if (symbolScopeForReset != NULL &&
+            symbolScopeForReset->symbol_exists(symbol->get_name(), symbol) ==
+                false &&
+            scopeFromSymbolTable == NULL) {
+          symbol = NULL;
+          symbolScopeForReset = NULL;
         }
       }
 
@@ -11640,6 +11656,7 @@ void SgVariableDeclaration::initializeData(Sg_File_Info *info,
 
   // DQ(10/10/2007): Added initialization of another data member.
   p_specialization = SgDeclarationStatement::e_no_specialization;
+  p_explicitTemplateSpecializationHeaderCount = 0;
 
   // DQ(10/10/2007): Added initialization of another data member.
   p_requiresGlobalNameQualificationOnType = false;
@@ -13700,6 +13717,10 @@ void SgSwitchStatement::post_construction_initialization() {
         // variable = %p not placed into SgSwitchStatement scope = %p
         // (correcting by moving the symbol) \n",variable,this);
 
+        if (get_parent() == NULL) {
+          continue;
+        }
+
         // Remove the SgVariableSymbol from the switch body and put it into the
         // SgSwitchStatement scope!
         SgVariableSymbol *variableSymbol =
@@ -15032,7 +15053,26 @@ SgName SgTemplateFunctionDefinition::get_mangled_name(void) const {
 SOURCE_TEMPLATE_FUNCTION_DEFINITION_STATEMENT_END
 
 SOURCE_PRAGMA_STATEMENT_START
-void SgPragmaDeclaration::post_construction_initialization() {}
+void SgPragmaDeclaration::post_construction_initialization() {
+  if (get_startOfConstruct() != NULL && get_endOfConstruct() == NULL) {
+    Sg_File_Info *end = new Sg_File_Info(*(get_startOfConstruct()));
+    set_endOfConstruct(end);
+    end->set_parent(this);
+  }
+
+  if (get_pragma() != NULL) {
+    if (get_pragma()->get_parent() == NULL) {
+      get_pragma()->set_parent(this);
+    }
+    if (get_pragma()->get_startOfConstruct() != NULL &&
+        get_pragma()->get_endOfConstruct() == NULL) {
+      Sg_File_Info *pragma_end =
+          new Sg_File_Info(*(get_pragma()->get_startOfConstruct()));
+      get_pragma()->set_endOfConstruct(pragma_end);
+      pragma_end->set_parent(get_pragma());
+    }
+  }
+}
 
 // DQ (2/18/2006): Added general name mangling for all declarations (and some
 // other IR nodes).
@@ -15114,7 +15154,7 @@ SgName SgNamespaceDeclarationStatement::get_qualified_name() const {
   // the extra "::" that would be generated in this case! returnName =
   // scope->get_qualified_name() << "::" << get_name().str(); returnName =
   // SgName::assembleQualifiedName(scope->get_qualified_name(),get_name());
-  if (get_name().is_null() == true) {
+  if (get_isUnnamedNamespace() == true || get_name().is_null() == true) {
     // DQ (10/12/2006): Return and empty name instead of the qualified name
     // of the current scope (see test2004_33.C using un-named namespaces).
 

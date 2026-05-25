@@ -13,6 +13,59 @@
 
 using namespace std;
 
+static bool isConditionalPreprocessingPayload(const PreprocessingInfo *info) {
+  if (info == nullptr) {
+    return false;
+  }
+
+  switch (info->getTypeOfDirective()) {
+  case PreprocessingInfo::CpreprocessorIfDeclaration:
+  case PreprocessingInfo::CpreprocessorIfdefDeclaration:
+  case PreprocessingInfo::CpreprocessorIfndefDeclaration:
+  case PreprocessingInfo::CpreprocessorElseDeclaration:
+  case PreprocessingInfo::CpreprocessorElifDeclaration:
+  case PreprocessingInfo::CpreprocessorEndifDeclaration:
+  case PreprocessingInfo::CpreprocessorDeadIfDeclaration:
+  case PreprocessingInfo::CSkippedToken:
+    return true;
+
+  default:
+    return false;
+  }
+}
+
+static bool hasAttachedConditionalPreprocessing(SgLocatedNode *node) {
+  AttachedPreprocessingInfoType *attached =
+      node != nullptr ? node->getAttachedPreprocessingInfo() : nullptr;
+  if (attached == nullptr) {
+    return false;
+  }
+
+  for (PreprocessingInfo *info : *attached) {
+    if (isConditionalPreprocessingPayload(info)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static bool isIfFalseBodyAcrossConditionalBoundary(SgStatement *stmt) {
+  SgIfStmt *parent_if =
+      stmt != nullptr ? isSgIfStmt(stmt->get_parent()) : nullptr;
+  if (parent_if == nullptr || parent_if->get_false_body() != stmt) {
+    return false;
+  }
+
+  return hasAttachedConditionalPreprocessing(
+      isSgLocatedNode(parent_if->get_true_body()));
+}
+
+static bool bodyStatementHasPreprocessingBoundary(SgStatement *stmt) {
+  return hasAttachedConditionalPreprocessing(isSgLocatedNode(stmt)) ||
+         isIfFalseBodyAcrossConditionalBoundary(stmt);
+}
+
 class SingleStatementToBlockVisitor : public ROSE_VisitorPatternDefaultBase {
 private:
   vector<SgStatement *> singleStatementBlocks;
@@ -26,6 +79,9 @@ public:
       SgStatement *stmt = *it;
       if (stmt == nullptr || isSgBasicBlock(stmt) != nullptr ||
           !SageInterface::isBodyStatement(stmt)) {
+        continue;
+      }
+      if (bodyStatementHasPreprocessingBoundary(stmt)) {
         continue;
       }
       SageInterface::makeSingleStatementBodyToBlock(stmt);

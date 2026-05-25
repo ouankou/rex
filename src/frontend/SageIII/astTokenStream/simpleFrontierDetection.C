@@ -5,6 +5,33 @@
 #include "tokenStreamMapping.h"
 using namespace std;
 
+namespace {
+bool suppressedCompilerGeneratedNode(SgLocatedNode *node) {
+  if (node == nullptr || node->isOutputInCodeGeneration()) {
+    return false;
+  }
+
+  Sg_File_Info *fileInfo = node->get_file_info();
+  if (fileInfo == nullptr) {
+    return false;
+  }
+
+  return fileInfo->isCompilerGenerated() || fileInfo->isFrontendSpecific();
+}
+
+bool contributesVisibleTransformation(SgLocatedNode *node) {
+  if (node == nullptr) {
+    return false;
+  }
+
+  if (!node->isTransformation() && !node->get_containsTransformation()) {
+    return false;
+  }
+
+  return !suppressedCompilerGeneratedNode(node);
+}
+} // namespace
+
 SimpleFrontierDetectionForTokenStreamMapping_InheritedAttribute::
     SimpleFrontierDetectionForTokenStreamMapping_InheritedAttribute() {
   sourceFile = nullptr;
@@ -340,8 +367,7 @@ SimpleFrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
       // statement->get_containsTransformation() == true)
       if (currentStatement != nullptr &&
           currentStatement->isTransformation() == false &&
-          (statement->isTransformation() == true ||
-           statement->get_containsTransformation() == true)) {
+          contributesVisibleTransformation(statement)) {
 
         // DQ (11/13/2018): When header file unparsing is used, then we need to
         // check if this currentStatement that might be a transformation (or the
@@ -395,8 +421,7 @@ SimpleFrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
       SgStatement *currentStatement = isSgStatement(n);
       if (currentStatement != nullptr &&
           currentStatement->isTransformation() == false &&
-          (initializedName->isTransformation() == true ||
-           initializedName->get_containsTransformation() == true)) {
+          contributesVisibleTransformation(initializedName)) {
         n->set_containsTransformation(true);
       }
     }

@@ -458,4 +458,54 @@ void ASTtools::setSourcePositionAtRootAndAllChildrenAsTransformation(
   }
 }
 
+namespace {
+void assignFileInfoToPhysicalFile(Sg_File_Info *info, int physical_file_id) {
+  if (info == NULL || physical_file_id < 0)
+    return;
+
+  info->set_file_id(physical_file_id);
+  info->set_physical_file_id(physical_file_id);
+  info->setTransformation();
+  info->setOutputInCodeGeneration();
+}
+} // namespace
+
+void ASTtools::assignGeneratedSubtreeToPhysicalFile(SgNode *root,
+                                                    int physical_file_id) {
+  ROSE_ASSERT(root != NULL);
+  ROSE_ASSERT(physical_file_id >= 0);
+
+  Rose_STL_Container<SgNode *> nodeList =
+      NodeQuery::querySubTree(root, V_SgNode);
+  for (Rose_STL_Container<SgNode *>::iterator i = nodeList.begin();
+       i != nodeList.end(); ++i) {
+    SgNode *node = *i;
+    if (SgLocatedNode *locatedNode = isSgLocatedNode(node)) {
+      locatedNode->setTransformation();
+      locatedNode->setOutputInCodeGeneration();
+      assignFileInfoToPhysicalFile(locatedNode->get_file_info(),
+                                   physical_file_id);
+      assignFileInfoToPhysicalFile(locatedNode->get_startOfConstruct(),
+                                   physical_file_id);
+      assignFileInfoToPhysicalFile(locatedNode->get_endOfConstruct(),
+                                   physical_file_id);
+
+      if (SgExpression *expression = isSgExpression(locatedNode)) {
+        assignFileInfoToPhysicalFile(expression->get_operatorPosition(),
+                                     physical_file_id);
+      }
+    } else if (SgInitializedName *initializedName = isSgInitializedName(node)) {
+      assignFileInfoToPhysicalFile(initializedName->get_file_info(),
+                                   physical_file_id);
+      assignFileInfoToPhysicalFile(initializedName->get_startOfConstruct(),
+                                   physical_file_id);
+      assignFileInfoToPhysicalFile(initializedName->get_endOfConstruct(),
+                                   physical_file_id);
+    } else if (SgPragma *pragma = isSgPragma(node)) {
+      assignFileInfoToPhysicalFile(pragma->get_startOfConstruct(),
+                                   physical_file_id);
+    }
+  }
+}
+
 // eof

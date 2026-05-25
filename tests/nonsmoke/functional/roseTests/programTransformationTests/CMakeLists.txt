@@ -88,6 +88,7 @@ add_test(
   NAME finiteDifferencingDemo_finitediff_test1.C
   COMMAND finiteDifferencingDemo
     -c ${CMAKE_CURRENT_SOURCE_DIR}/finitediff_test1.C
+    -rose:output rose_finiteDifferencingDemo_finitediff_test1.C
 )
 
 #-------------------------------------------------------------------------------
@@ -158,4 +159,3 @@ add_test(
   COMMAND implicitCodeGenerationTest ${icg_SWITCHES}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/inputCode_implicitCodeGenerationTest.C
 )
-

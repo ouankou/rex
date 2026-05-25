@@ -23,6 +23,8 @@ set(_specimens
   test12 test13 test14 test15 test16 test17 test18 test19 test21 test22)
 
 foreach(spec IN LISTS _specimens)
+  set(_fixture "unparse_tokens_${spec}_clean_tree")
+
   add_test(
     NAME unparse_tokens_prepare_${spec}
     COMMAND /bin/sh -c
@@ -43,8 +45,15 @@ foreach(spec IN LISTS _specimens)
       ${spec}.passed
   )
 
-  set_tests_properties(unparse_tokens_prepare_${spec} PROPERTIES LABELS UNPARSEHEADERTOKEN)
-  set_tests_properties(unparse_tokens_${spec} PROPERTIES DEPENDS unparse_tokens_prepare_${spec} LABELS UNPARSEHEADERTOKEN)
+  set_tests_properties(unparse_tokens_prepare_${spec}
+    PROPERTIES
+      FIXTURES_SETUP ${_fixture}
+      LABELS UNPARSEHEADERTOKEN)
+  set_tests_properties(unparse_tokens_${spec}
+    PROPERTIES
+      DEPENDS unparse_tokens_prepare_${spec}
+      FIXTURES_REQUIRED ${_fixture}
+      LABELS UNPARSEHEADERTOKEN)
 endforeach()
 
 add_test(
@@ -56,4 +65,3 @@ add_test(
   NAME unparse_tokens_transformVariable2
   COMMAND transformVariable -rose:unparse_tokens -c ${CMAKE_CURRENT_SOURCE_DIR}/badInput2.c
 )
-

@@ -39,6 +39,18 @@ struct FunctionStateCleanupAtExit {
 };
 
 FunctionStateCleanupAtExit functionStateCleanupAtExit;
+
+bool allOmittedParametersHaveDefaults(
+    const SgInitializedNamePtrList &params,
+    SgExpressionPtrList::size_type firstOmittedIndex) {
+  ROSE_ASSERT(firstOmittedIndex <= params.size());
+  for (SgInitializedNamePtrList::size_type i = firstOmittedIndex;
+       i < params.size(); ++i) {
+    if (params[i]->get_initializer() == NULL)
+      return false;
+  }
+  return true;
+}
 } // namespace
 
 // returns a set of all the functions whose bodies are in the project
@@ -102,7 +114,15 @@ void FunctionState::setArgParamMap(SgFunctionCallExp *call,
   SgExpressionPtrList args = call->get_args()->get_expressions();
   // SgInitializedNamePtrList params = funcArgToParamByRef(call);
   SgInitializedNamePtrList params = func.get_params();
-  ROSE_ASSERT(args.size() == params.size());
+  SgFunctionType *funcType =
+      func.get_declaration() ? func.get_declaration()->get_type() : NULL;
+  bool hasEllipses = funcType && funcType->get_has_ellipses();
+  bool variadicCallWithSurplus = hasEllipses && args.size() >= params.size();
+  bool callOmitsOnlyDefaultedParams =
+      args.size() < params.size() &&
+      allOmittedParametersHaveDefaults(params, args.size());
+  ROSE_ASSERT(args.size() == params.size() || variadicCallWithSurplus ||
+              callOmitsOnlyDefaultedParams);
 
   // cout << "setArgParamMap() #args="<<args.size()<<"
   // #params="<<params.size()<<"\n";

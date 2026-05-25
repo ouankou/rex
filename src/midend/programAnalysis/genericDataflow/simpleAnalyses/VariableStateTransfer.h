@@ -138,12 +138,26 @@ public:
   // abstraction to treat each element individually.
   void visit(SgAggregateInitializer *sgn) {
     LatticeType *res = getLattice(sgn);
+    if (!res)
+      return;
+
     SgExpressionPtrList &inits = sgn->get_initializers()->get_expressions();
-    if (inits.size() > 0) {
-      res->copy(getLattice(inits[0]));
+    LatticeType *firstInit = NULL;
+    size_t firstInitIndex = 0;
+    for (; firstInitIndex < inits.size(); ++firstInitIndex) {
+      firstInit = getLattice(inits[firstInitIndex]);
+      if (firstInit)
+        break;
+    }
+
+    if (firstInit != NULL) {
+      res->copy(firstInit);
       modified = true;
-      for (size_t i = 1; i < inits.size(); ++i)
-        res->meetUpdate(getLattice(inits[i]));
+      for (size_t i = firstInitIndex + 1; i < inits.size(); ++i) {
+        LatticeType *initLat = getLattice(inits[i]);
+        if (initLat)
+          res->meetUpdate(initLat);
+      }
     }
   }
 

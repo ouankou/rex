@@ -116,6 +116,8 @@ public:
   std::map<std::string, SgSourceFile *> getUnparseSourceFileMap();
 
   std::set<std::string> getFilesToCopy();
+  std::string
+  getCopiedFileOutputPath(const std::string &absoluteFileName) const;
 
   // DQ (2/22/2021): Make these static so that we can refer to them within tools
   // to support diffs.

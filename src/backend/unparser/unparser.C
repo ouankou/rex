@@ -381,12 +381,8 @@ bool copyOriginalHeaderToOutputLocation(const std::string &originalFileName,
     return false;
   }
 
-  if (std::filesystem::exists(outputFileNamePath)) {
-    return true;
-  }
-
   std::filesystem::copy_file(originalFileNamePath, outputFileNamePath,
-                             std::filesystem::copy_options::none, ec);
+                             std::filesystem::copy_options::skip_existing, ec);
   return !ec;
 }
 
@@ -448,10 +444,6 @@ bool isSemanticOnlySyntheticOutputNode(const SgLocatedNode *node) {
 
 bool fileHasRelevantModifications(SgSourceFile *file) {
   if (file == NULL) {
-    return true;
-  }
-
-  if (fileContainsOpenMPOrOpenACCStatements(file) == true) {
     return true;
   }
 
@@ -1122,11 +1114,13 @@ void Unparser::unparseFile(SgSourceFile *file, SgUnparse_Info &info,
   // false.
   // ROSE_ASSERT(file->get_header_file_unparsing_optimization_header_file() ==
   // false);
+#if DEBUG_UNPARSE_FILE
   if (file->get_header_file_unparsing_optimization_header_file() == true) {
     printf("Found case of "
            "file->get_header_file_unparsing_optimization_header_file() == true "
            "\n");
   }
+#endif
 
   {
     SgGlobal *tmp_globalScope = isSgGlobal(file->get_globalScope());
@@ -3399,22 +3393,104 @@ void unparseFile(SgFile *file, UnparseFormatHelp *unparseHelp,
   }
 }
 
-void prependIncludeOptionsToCommandLine(
+namespace {
+bool isSeparateIncludeSearchPathOption(const string &argument) {
+  return argument == "-I" || argument == "-iquote" || argument == "-isystem" ||
+         argument == "-idirafter" || argument == "-F" ||
+         argument == "-iframework" || argument == "--include-directory";
+}
+
+bool isJoinedIncludeSearchPathOption(const string &argument) {
+  return (argument.rfind("-I", 0) == 0 && argument.size() > 2) ||
+         (argument.rfind("-iquote", 0) == 0 && argument.size() > 7) ||
+         (argument.rfind("-isystem", 0) == 0 && argument.size() > 8) ||
+         (argument.rfind("-idirafter", 0) == 0 && argument.size() > 10) ||
+         (argument.rfind("-F", 0) == 0 && argument.size() > 2) ||
+         (argument.rfind("-iframework", 0) == 0 && argument.size() > 11) ||
+         (argument.rfind("--include-directory=", 0) == 0);
+}
+
+bool isSeparateQuoteSearchPathOption(const string &argument) {
+  return argument == "-iquote";
+}
+
+bool isJoinedQuoteSearchPathOption(const string &argument) {
+  return argument.rfind("-iquote", 0) == 0 && argument.size() > 7;
+}
+
+list<string>
+buildQuoteIncludeOptions(const list<string> &includeCompilerOptions) {
+  list<string> quoteIncludeOptions;
+  for (list<string>::const_iterator option = includeCompilerOptions.begin();
+       option != includeCompilerOptions.end(); ++option) {
+    if (option->rfind("-I", 0) == 0 && option->size() > 2) {
+      quoteIncludeOptions.push_back("-iquote" + option->substr(2));
+    }
+  }
+  return quoteIncludeOptions;
+}
+
+void insertAfterQuoteSearchPathOptions(
+    SgStringList &argumentList, const list<string> &quoteIncludeOptions) {
+  if (quoteIncludeOptions.empty())
+    return;
+
+  size_t insertionIndex = argumentList.empty() ? 0 : 1;
+  for (size_t i = 1; i < argumentList.size(); ++i) {
+    if (isSeparateQuoteSearchPathOption(argumentList[i])) {
+      insertionIndex = i + 1;
+      if (insertionIndex < argumentList.size()) {
+        ++insertionIndex;
+        ++i;
+      }
+    } else if (isJoinedQuoteSearchPathOption(argumentList[i])) {
+      insertionIndex = i + 1;
+    }
+  }
+
+  argumentList.insert(argumentList.begin() + insertionIndex,
+                      quoteIncludeOptions.begin(), quoteIncludeOptions.end());
+}
+
+void insertHeaderUnparseIncludeOptions(
+    SgStringList &argumentList, const list<string> &includeCompilerOptions) {
+  if (includeCompilerOptions.empty())
+    return;
+
+  insertAfterQuoteSearchPathOptions(
+      argumentList, buildQuoteIncludeOptions(includeCompilerOptions));
+
+  size_t insertionIndex = argumentList.empty() ? 0 : 1;
+  for (size_t i = 1; i < argumentList.size(); ++i) {
+    if (isSeparateIncludeSearchPathOption(argumentList[i])) {
+      insertionIndex = i + 1;
+      if (insertionIndex < argumentList.size()) {
+        ++insertionIndex;
+        ++i;
+      }
+    } else if (isJoinedIncludeSearchPathOption(argumentList[i])) {
+      insertionIndex = i + 1;
+    }
+  }
+
+  argumentList.insert(argumentList.begin() + insertionIndex,
+                      includeCompilerOptions.begin(),
+                      includeCompilerOptions.end());
+}
+} // namespace
+
+void insertHeaderUnparseIncludeOptionsIntoCommandLine(
     SgProject *project, const list<string> &includeCompilerOptions) {
   SgStringList argumentList = project->get_originalCommandLineArgumentList();
 
-  // Note: Insert -I options starting from the second argument, because the
-  // first argument is the name of the executable.
-  argumentList.insert(++argumentList.begin(), includeCompilerOptions.begin(),
-                      includeCompilerOptions.end());
+  insertHeaderUnparseIncludeOptions(argumentList, includeCompilerOptions);
 
   project->get_originalCommandLineArgumentList() = argumentList;
   const SgFilePtrList &fileList = project->get_fileList();
   for (SgFilePtrList::const_iterator sgFilePtr = fileList.begin();
        sgFilePtr != fileList.end(); sgFilePtr++) {
     argumentList = (*sgFilePtr)->get_originalCommandLineArgumentList();
-    argumentList.insert(++argumentList.begin(), includeCompilerOptions.begin(),
-                        includeCompilerOptions.end());
+    insertHeaderUnparseIncludeOptions(argumentList, includeCompilerOptions);
     (*sgFilePtr)->get_originalCommandLineArgumentList() = argumentList;
   }
 }
@@ -4823,7 +4899,7 @@ void unparseIncludedFiles(SgProject *project,
         includedFilesUnparser.getUnparseScopesMap();
     const std::set<std::string> filesWithRelevantModifications =
         collectFilesWithRelevantModifications(project);
-    prependIncludeOptionsToCommandLine(
+    insertHeaderUnparseIncludeOptionsIntoCommandLine(
         project, includedFilesUnparser.getIncludeCompilerOptions());
 
     // #if DEBUG_UNPARSE_INCLUDE_FILES
@@ -4864,6 +4940,15 @@ void unparseIncludedFiles(SgProject *project,
                originalFileName.c_str());
       }
       // #endif
+
+      const string copiedOutputFileName =
+          includedFilesUnparser.getCopiedFileOutputPath(originalFileName);
+      if (!copiedOutputFileName.empty()) {
+        ROSE_ASSERT(copyOriginalHeaderToOutputLocation(originalFileName,
+                                                       copiedOutputFileName));
+        copySetInterator++;
+        continue;
+      }
 
       // DQ (11/19/2018): Retrieve the original SgSourceFile constructed within
       // the frontend processing.
@@ -4923,17 +5008,8 @@ void unparseIncludedFiles(SgProject *project,
         string newFileName =
             adjusted_header_file_directory + filenameWithOutPath;
 
-        std::filesystem::path pathPrefix(adjusted_header_file_directory);
-        create_directories(pathPrefix);
-
-        std::filesystem::path originalFileNamePath(originalFileName);
-        std::filesystem::path newFileNamePath(newFileName);
-        if (exists(newFileNamePath) == false) {
-          // syntax: copy_file(from, to, copy_option::fail_if_exists);
-          copy_file(originalFileNamePath, newFileNamePath,
-                    std::filesystem::copy_options::none);
-        } else {
-        }
+        ROSE_ASSERT(
+            copyOriginalHeaderToOutputLocation(originalFileName, newFileName));
       } else {
         ROSE_ASSERT(unparseSourceFileMap.find(originalFileName) !=
                     unparseSourceFileMap.end());
@@ -4983,24 +5059,18 @@ void unparseIncludedFiles(SgProject *project,
                    originalFileName.find(applicationRootDirectory) == 0);
 
         if (isApplicationFile == true) {
-          std::filesystem::path pathPrefix(adjusted_header_file_directory);
-          create_directories(pathPrefix);
-
-          std::filesystem::path originalFileNamePath(originalFileName);
           std::filesystem::path newFileNamePath(newFileName);
-
-          if (exists(newFileNamePath) == true) {
+          std::error_code existsError;
+          if (std::filesystem::exists(newFileNamePath, existsError) == true) {
             // Handle error.
             // We might want to report this but not stop processing, since
             // multiple files will trigger the same header files the be copied.
             printf("Note: this file already exists: no need to re-copy it: "
                    "newFileName = %s \n",
                    newFileName.c_str());
-          } else {
-            // syntax: copy_file(from, to, copy_option::fail_if_exists);
-            copy_file(originalFileNamePath, newFileNamePath,
-                      std::filesystem::copy_options::none);
           }
+          ROSE_ASSERT(copyOriginalHeaderToOutputLocation(originalFileName,
+                                                         newFileName));
         } else {
         }
       }

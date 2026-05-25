@@ -24,13 +24,47 @@ set(ELSA_TESTCODES_CONTINUE_ON_ERROR
   t0482.cc
 )
 
+set(ELSA_TESTCODES_NEGATIVE
+  # Clang 22 rejects these original ELSA specimens in GNU++03 mode. Keep them
+  # registered as hard negative frontend coverage instead of continuing past
+  # diagnostics and compiling a partial AST.
+  d0064.cc
+  d0091.cc
+  d0112.cc
+  k0005.cc
+  k0005a.cc
+  k0001.cc
+  k0010.cc
+  k0033.cc
+  k0042.cc
+  k0046a.cc
+  t0243.cc
+  t0244.cc
+  t0429.cc
+  t0466.cc
+  t0516.cc
+  t0519.cc
+  t0539_9.cc
+  t0546.cc
+  t0558.cc
+  t0568.cc
+  t0578.cc
+)
+
 function(elsa_compile_test input_file)
   set(_rose_flags ${ROSE_FLAGS})
   if(input_file IN_LIST ELSA_TESTCODES_CONTINUE_ON_ERROR)
     list(APPEND _rose_flags -rex:clang:continue-on-error)
   endif()
   set(ROSE_FLAGS ${_rose_flags})
-  compile_test(${input_file} ELSATEST)
+  if(input_file STREQUAL "k0001.cc")
+    set(REX_COMPILE_TEST_NAME_PREFIX ELSATEST_ROOT)
+  endif()
+  if(input_file IN_LIST ELSA_TESTCODES_NEGATIVE)
+    compile_negative_test(${input_file} ELSATEST)
+  else()
+    compile_test(${input_file} ELSATEST)
+  endif()
 endfunction()
 
 foreach(file_to_test ${ELSA_TESTCODES})

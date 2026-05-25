@@ -723,7 +723,7 @@ bool IntraProcAliasAnalysis::addVirtualFunction(SgType *type,
     ;
     toNode->set_SgNode(functionDeclaration);
     callGraph->addNode(toNode);
-    (cgBuilder->getGraphNodesMapping())[functionDeclaration] = toNode;
+    cgBuilder->addGraphNodeMapping(functionDeclaration, toNode);
 
   } else {
     toNode = (cgBuilder->getGraphNodesMapping())[functionDeclaration];

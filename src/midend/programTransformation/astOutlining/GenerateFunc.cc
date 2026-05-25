@@ -30,6 +30,8 @@
 
 #include <unordered_map>
 
+#include <vector>
+
 #include "ASTtools.hh"
 
 #include "Copy.hh"
@@ -97,6 +99,80 @@ createFuncSkeleton(const string &name, SgType *ret_type,
   return func;
 }
 
+static bool collectNamedNamespaceQualifierTokens(SgScopeStatement *scope,
+                                                 SgStringList &tokens) {
+  tokens.clear();
+
+  std::vector<std::string> reversed_tokens;
+  std::set<SgScopeStatement *> visited;
+  for (SgScopeStatement *current = scope; current != NULL;
+       current = current->get_scope()) {
+    if (!visited.insert(current).second)
+      break;
+
+    if (isSgGlobal(current) != NULL)
+      break;
+
+    SgNamespaceDefinitionStatement *namespace_definition =
+        isSgNamespaceDefinitionStatement(current);
+    if (namespace_definition == NULL)
+      continue;
+
+    SgNamespaceDeclarationStatement *namespace_declaration =
+        namespace_definition->get_namespaceDeclaration();
+    ROSE_ASSERT(namespace_declaration != NULL);
+
+    const std::string name = namespace_declaration->get_name().getString();
+    if (name.empty())
+      return false;
+
+    reversed_tokens.push_back(name);
+  }
+
+  if (reversed_tokens.empty())
+    return false;
+
+  for (std::vector<std::string>::reverse_iterator it = reversed_tokens.rbegin();
+       it != reversed_tokens.rend(); ++it) {
+    tokens.push_back(*it);
+  }
+  return true;
+}
+
+static void preserveMovedNamespaceFunctionBindings(SgBasicBlock *func_body) {
+  ROSE_ASSERT(func_body != NULL);
+
+  RoseAst ast(func_body);
+  for (RoseAst::iterator it = ast.begin(); it != ast.end(); ++it) {
+    SgFunctionRefExp *function_ref = isSgFunctionRefExp(*it);
+    if (function_ref == NULL)
+      continue;
+
+    SgFunctionSymbol *function_symbol = function_ref->get_symbol();
+    if (function_symbol == NULL)
+      continue;
+
+    SgFunctionDeclaration *function_declaration =
+        function_symbol->get_declaration();
+    if (function_declaration == NULL)
+      continue;
+
+    SgStringList qualifier_tokens;
+    if (!collectNamedNamespaceQualifierTokens(function_declaration->get_scope(),
+                                              qualifier_tokens))
+      continue;
+
+    function_ref->set_explicit_global_qualification(true);
+    function_ref->set_explicit_name_qualification_tokens(qualifier_tokens);
+    function_ref->set_explicit_name_qualification_length(
+        static_cast<int>(qualifier_tokens.size()));
+    function_ref->set_global_qualification_required(true);
+    function_ref->set_name_qualification_length(
+        static_cast<int>(qualifier_tokens.size()));
+    function_ref->markAsModified();
+  }
+}
+
 static SgTemplateParameterPtrList *
 copyTemplateParameterList(const SgTemplateParameterPtrList &params) {
   SgTemplateParameterPtrList *copy = new SgTemplateParameterPtrList();
@@ -125,8 +201,46 @@ static void setTemplateParameterParents(SgTemplateDeclaration *decl) {
   }
 }
 
+static std::string getTemplateParameterName(const SgTemplateParameter *param) {
+  if (param == NULL)
+    return "";
+
+  if (SgInitializedName *init_name = param->get_initializedName())
+    return init_name->get_name().getString();
+
+  if (SgNonrealType *nonreal_type = isSgNonrealType(param->get_type()))
+    return nonreal_type->get_name().getString();
+
+  if (SgTemplateType *template_type = isSgTemplateType(param->get_type()))
+    return template_type->get_name().getString();
+
+  if (SgNonrealDecl *nonreal_decl =
+          isSgNonrealDecl(param->get_templateDeclaration()))
+    return nonreal_decl->get_name().getString();
+
+  if (SgTemplateDeclaration *template_decl =
+          isSgTemplateDeclaration(param->get_templateDeclaration()))
+    return template_decl->get_name().getString();
+
+  return "";
+}
+
+static bool hasTemplateParameterName(const SgTemplateParameterPtrList &params,
+                                     const SgTemplateParameter *candidate) {
+  std::string candidate_name = getTemplateParameterName(candidate);
+  if (candidate_name.empty())
+    return false;
+
+  for (SgTemplateParameter *param : params) {
+    if (getTemplateParameterName(param) == candidate_name)
+      return true;
+  }
+
+  return false;
+}
+
 static const SgTemplateParameterPtrList *
-getTemplateParametersFromDecl(const SgFunctionDeclaration *decl) {
+getDirectTemplateParametersFromDecl(const SgFunctionDeclaration *decl) {
   if (decl == NULL)
     return NULL;
 
@@ -180,6 +294,97 @@ getTemplateParametersFromDecl(const SgFunctionDeclaration *decl) {
   return NULL;
 }
 
+static const SgTemplateParameterPtrList *
+getTemplateParametersFromClassDecl(const SgClassDeclaration *class_decl) {
+  if (class_decl == NULL)
+    return NULL;
+
+  if (const SgTemplateClassDeclaration *tmpl_decl =
+          isSgTemplateClassDeclaration(class_decl)) {
+    return &(tmpl_decl->get_templateParameters());
+  }
+
+  if (const SgTemplateInstantiationDecl *tmpl_inst =
+          isSgTemplateInstantiationDecl(class_decl)) {
+    if (const SgTemplateClassDeclaration *tmpl_decl =
+            tmpl_inst->get_templateDeclaration()) {
+      return &(tmpl_decl->get_templateParameters());
+    }
+  }
+
+  if (const SgClassDeclaration *first =
+          isSgClassDeclaration(class_decl->get_firstNondefiningDeclaration())) {
+    if (const SgTemplateClassDeclaration *tmpl_decl =
+            isSgTemplateClassDeclaration(first)) {
+      return &(tmpl_decl->get_templateParameters());
+    }
+  }
+
+  if (const SgClassDeclaration *def =
+          isSgClassDeclaration(class_decl->get_definingDeclaration())) {
+    if (const SgTemplateClassDeclaration *tmpl_decl =
+            isSgTemplateClassDeclaration(def)) {
+      return &(tmpl_decl->get_templateParameters());
+    }
+  }
+
+  return NULL;
+}
+
+static const SgTemplateParameterPtrList *
+getTemplateParametersFromMemberClass(const SgFunctionDeclaration *decl) {
+  if (decl == NULL)
+    return NULL;
+
+  if (const SgTemplateMemberFunctionDeclaration *template_member_decl =
+          isSgTemplateMemberFunctionDeclaration(decl)) {
+    if (const SgClassDeclaration *class_decl = isSgClassDeclaration(
+            template_member_decl->get_associatedClassDeclaration())) {
+      return getTemplateParametersFromClassDecl(class_decl);
+    }
+  }
+
+  const SgMemberFunctionDeclaration *member_decl =
+      isSgMemberFunctionDeclaration(decl);
+  if (member_decl == NULL)
+    return NULL;
+
+  if (const SgClassDeclaration *class_decl =
+          isSgClassDeclaration(member_decl->get_associatedClassDeclaration())) {
+    return getTemplateParametersFromClassDecl(class_decl);
+  }
+
+  if (const SgClassDefinition *class_def =
+          isSgClassDefinition(member_decl->get_class_scope())) {
+    return getTemplateParametersFromClassDecl(class_def->get_declaration());
+  }
+
+  return NULL;
+}
+
+static void appendTemplateParameters(const SgTemplateParameterPtrList *source,
+                                     SgTemplateParameterPtrList &destination) {
+  if (source == NULL)
+    return;
+
+  for (SgTemplateParameter *param : *source) {
+    if (param != NULL && !hasTemplateParameterName(destination, param))
+      destination.push_back(param);
+  }
+}
+
+static void collectTemplateParametersForOutlinedFunction(
+    const SgFunctionDeclaration *decl,
+    SgTemplateParameterPtrList &template_params) {
+  if (decl == NULL)
+    return;
+
+  appendTemplateParameters(getTemplateParametersFromMemberClass(decl),
+                           template_params);
+  appendTemplateParameters(getDirectTemplateParametersFromDecl(decl),
+                           template_params);
+}
+
 static SgFunctionDeclaration *
 createTemplateFuncSkeleton(const string &name, SgType *ret_type,
                            SgFunctionParameterList *params,
@@ -231,6 +436,222 @@ static void assertFunctionSymbolPresent(SgScopeStatement *scope,
   }
 
   ROSE_ASSERT(!"Missing function symbol for outlined function");
+}
+
+static SgTypedefDeclaration *
+canonicalTypedefDeclaration(SgDeclarationStatement *decl) {
+  SgTypedefDeclaration *typedef_decl = isSgTypedefDeclaration(decl);
+  if (typedef_decl == NULL)
+    return NULL;
+
+  if (SgTypedefDeclaration *defining_decl =
+          isSgTypedefDeclaration(typedef_decl->get_definingDeclaration())) {
+    return defining_decl;
+  }
+
+  return typedef_decl;
+}
+
+static SgClassDefinition *classDefinitionFromDeclaration(SgNode *node) {
+  SgClassDeclaration *class_decl = isSgClassDeclaration(node);
+  if (class_decl == NULL)
+    return NULL;
+
+  if (SgClassDefinition *definition = class_decl->get_definition())
+    return definition;
+
+  if (SgClassDeclaration *defining_decl =
+          isSgClassDeclaration(class_decl->get_definingDeclaration())) {
+    return defining_decl->get_definition();
+  }
+
+  return NULL;
+}
+
+static SgTypedefDeclaration *
+lookupTypedefDeclarationInScope(const SgName &name, SgScopeStatement *scope) {
+  if (scope == NULL)
+    return NULL;
+
+  if (SgTypedefSymbol *symbol = scope->lookup_typedef_symbol(name)) {
+    if (SgTypedefDeclaration *typedef_decl =
+            canonicalTypedefDeclaration(symbol->get_declaration())) {
+      return typedef_decl;
+    }
+  }
+
+  if (SgDeclarationScope *declaration_scope = isSgDeclarationScope(scope)) {
+    if (SgClassDefinition *class_definition =
+            classDefinitionFromDeclaration(declaration_scope->get_parent())) {
+      if (SgTypedefSymbol *symbol =
+              class_definition->lookup_typedef_symbol(name)) {
+        return canonicalTypedefDeclaration(symbol->get_declaration());
+      }
+    }
+  }
+
+  return NULL;
+}
+
+static SgTypedefDeclaration *
+typedefDeclarationFromNonrealType(SgNonrealType *nonreal_type) {
+  if (nonreal_type == NULL)
+    return NULL;
+
+  SgNonrealDecl *nonreal_decl =
+      isSgNonrealDecl(nonreal_type->get_declaration());
+  if (nonreal_decl == NULL)
+    return NULL;
+
+  if (SgTypedefDeclaration *typedef_decl = canonicalTypedefDeclaration(
+          nonreal_decl->get_templateDeclaration())) {
+    return typedef_decl;
+  }
+
+  return lookupTypedefDeclarationInScope(nonreal_decl->get_name(),
+                                         nonreal_decl->get_scope());
+}
+
+static void
+collectTypedefsFromType(SgType *type,
+                        std::vector<SgTypedefDeclaration *> &typedefs,
+                        std::set<SgTypedefDeclaration *> &seen) {
+  if (type == NULL)
+    return;
+
+  if (SgModifierType *modifier_type = isSgModifierType(type)) {
+    collectTypedefsFromType(modifier_type->get_base_type(), typedefs, seen);
+    return;
+  }
+  if (SgPointerType *pointer_type = isSgPointerType(type)) {
+    collectTypedefsFromType(pointer_type->get_base_type(), typedefs, seen);
+    return;
+  }
+  if (SgReferenceType *reference_type = isSgReferenceType(type)) {
+    collectTypedefsFromType(reference_type->get_base_type(), typedefs, seen);
+    return;
+  }
+  if (SgRvalueReferenceType *reference_type = isSgRvalueReferenceType(type)) {
+    collectTypedefsFromType(reference_type->get_base_type(), typedefs, seen);
+    return;
+  }
+  if (SgArrayType *array_type = isSgArrayType(type)) {
+    collectTypedefsFromType(array_type->get_base_type(), typedefs, seen);
+    return;
+  }
+
+  if (SgTypedefType *typedef_type = isSgTypedefType(type)) {
+    SgTypedefDeclaration *typedef_decl =
+        canonicalTypedefDeclaration(typedef_type->get_declaration());
+    if (typedef_decl == NULL)
+      return;
+
+    collectTypedefsFromType(typedef_type->get_base_type(), typedefs, seen);
+
+    if (seen.insert(typedef_decl).second)
+      typedefs.push_back(typedef_decl);
+  } else if (SgNonrealType *nonreal_type = isSgNonrealType(type)) {
+    SgTypedefDeclaration *typedef_decl =
+        typedefDeclarationFromNonrealType(nonreal_type);
+    if (typedef_decl == NULL)
+      return;
+
+    collectTypedefsFromType(typedef_decl->get_base_type(), typedefs, seen);
+    if (seen.insert(typedef_decl).second)
+      typedefs.push_back(typedef_decl);
+  }
+}
+
+static void
+collectExplicitTypeReferences(SgBasicBlock *body,
+                              std::vector<SgTypedefDeclaration *> &typedefs) {
+  std::set<SgTypedefDeclaration *> seen;
+  RoseAst ast(body);
+  for (RoseAst::iterator i = ast.begin(); i != ast.end(); ++i) {
+    SgNode *node = *i;
+    if (SgInitializedName *initialized_name = isSgInitializedName(node))
+      collectTypedefsFromType(initialized_name->get_type(), typedefs, seen);
+
+    if (SgConstructorInitializer *ctor_init =
+            isSgConstructorInitializer(node)) {
+      collectTypedefsFromType(ctor_init->get_expression_type(), typedefs, seen);
+    }
+
+    if (SgExpression *expression = isSgExpression(node)) {
+      if (expression->hasExplicitType())
+        collectTypedefsFromType(expression->get_type(), typedefs, seen);
+    }
+  }
+}
+
+static bool isScopeVisibleFromScope(SgScopeStatement *decl_scope,
+                                    SgScopeStatement *scope) {
+  if (decl_scope == NULL || scope == NULL)
+    return false;
+
+  for (SgScopeStatement *current = scope; current != NULL;) {
+    if (current == decl_scope)
+      return true;
+
+    if (current->get_parent() == NULL || isSgGlobal(current) != NULL)
+      break;
+    current = current->get_scope();
+  }
+
+  return false;
+}
+
+static bool isTypedefVisibleFromScope(SgTypedefDeclaration *typedef_decl,
+                                      SgScopeStatement *scope) {
+  if (typedef_decl == NULL || scope == NULL)
+    return true;
+
+  return isScopeVisibleFromScope(typedef_decl->get_scope(), scope);
+}
+
+static SgArrayType *
+getNonFortranGlobalArrayType(const SgInitializedName *name) {
+  if (name == NULL || SageInterface::is_Fortran_language() ||
+      isSgGlobal(name->get_scope()) == NULL) {
+    return NULL;
+  }
+
+  return isSgArrayType(name->get_type()->stripType(SgType::STRIP_TYPEDEF_TYPE));
+}
+
+static SgType *buildCArrayDecayPointerType(SgArrayType *array_type) {
+  ROSE_ASSERT(array_type != NULL);
+  return SageBuilder::buildPointerType(array_type->get_base_type());
+}
+
+static void addMissingLocalTypedefAliases(SgBasicBlock *func_body) {
+  ROSE_ASSERT(func_body != NULL);
+
+  std::vector<SgTypedefDeclaration *> typedefs;
+  collectExplicitTypeReferences(func_body, typedefs);
+
+  std::vector<SgStatement *> aliases;
+  std::set<std::string> alias_names;
+  for (SgTypedefDeclaration *typedef_decl : typedefs) {
+    if (typedef_decl == NULL || typedef_decl->get_base_type() == NULL)
+      continue;
+    if (isTypedefVisibleFromScope(typedef_decl, func_body))
+      continue;
+
+    std::string name = typedef_decl->get_name().getString();
+    if (name.empty() || !alias_names.insert(name).second)
+      continue;
+
+    SgTypedefDeclaration *alias = SageBuilder::buildTypedefDeclaration_nfi(
+        name, typedef_decl->get_base_type(), func_body,
+        typedef_decl->get_typedefBaseTypeContainsDefiningDeclaration());
+    ROSE_ASSERT(alias != NULL);
+    aliases.push_back(alias);
+  }
+
+  for (std::vector<SgStatement *>::reverse_iterator i = aliases.rbegin();
+       i != aliases.rend(); ++i)
+    SageInterface::prependStatement(*i, func_body);
 }
 
 // ===========================================================
@@ -351,7 +772,9 @@ createParam(const SgInitializedName
   // C++ reference type: use base type since we want to have uniform way to
   // generate a pointer to the original type
   SgType *param_base_type = 0;
-  if (isBaseTypePrimitive(init_type) || Outliner::enable_classic)
+  if (SageInterface::is_Fortran_language()) {
+    param_base_type = init_type;
+  } else if (isBaseTypePrimitive(init_type) || Outliner::enable_classic)
   // for classic translation, there is no additional unpacking statement to
   // convert void* type to non-primitive type of the parameter
   // So we don't convert the type to void* here
@@ -367,14 +790,10 @@ createParam(const SgInitializedName
     // called the auto type conversion for function or array typed variables
     // that are passed as function parameters
     // Liao 4/24/2009
-    if (!SageInterface::is_Fortran_language()) // Only apply to C/C++, not
-                                               // Fortran!
-    {
-      if (isSgArrayType(param_base_type))
-        if (isSgFunctionDefinition(i_name->get_scope()))
-          param_base_type = SageBuilder::buildPointerType(
-              isSgArrayType(param_base_type)->get_base_type());
-    }
+    if (isSgArrayType(param_base_type))
+      if (isSgFunctionDefinition(i_name->get_scope()))
+        param_base_type = SageBuilder::buildPointerType(
+            isSgArrayType(param_base_type)->get_base_type());
 
     // For C++ reference type, we use its base type since pointer to a reference
     // type is not allowed Liao, 8/14/2009
@@ -591,6 +1010,7 @@ static SgVariableDeclaration *createUnpackDecl(
   // decide on the type : local_type
   // the original data type of the variable passed via parameter
   SgType *orig_var_type = i_name->get_type();
+  SgArrayType *global_array_type = getNonFortranGlobalArrayType(i_name);
   bool is_array_parameter = false;
   if (!SageInterface::is_Fortran_language()) {
     // Convert an array type parameter's first dimension to a pointer type
@@ -605,18 +1025,29 @@ static SgVariableDeclaration *createUnpackDecl(
       }
   }
 
+  const bool use_cxx_reference_for_pointer_deref =
+      SageInterface::is_Cxx_language() && Outliner::temp_variable &&
+      !Outliner::useStructureWrapper && isPointerDeref &&
+      global_array_type == NULL;
+
   SgType *local_type = NULL;
   if (SageInterface::is_Fortran_language())
     local_type = orig_var_type;
   else if (Outliner::temp_variable || Outliner::useStructureWrapper)
   // unique processing for C/C++ if temp variables are used
   {
-    if (isPointerDeref || (!isPointerDeref && is_array_parameter)) {
+    if (use_cxx_reference_for_pointer_deref) {
+      local_type = isSgReferenceType(orig_var_type)
+                       ? orig_var_type
+                       : SgReferenceType::createType(orig_var_type);
+    } else if (isPointerDeref || (!isPointerDeref && is_array_parameter)) {
       // Liao 3/11/2015. For a parameter of a reference type, we have to
       // specially tweak the unpacking statement It is not allowed to create a
       // pointer to a reference type. So we use a pointer to its raw type
       // (stripped reference type) instead. use pointer dereferencing for some
-      if (SgReferenceType *rtype = isSgReferenceType(orig_var_type))
+      if (global_array_type != NULL)
+        local_type = buildCArrayDecayPointerType(global_array_type);
+      else if (SgReferenceType *rtype = isSgReferenceType(orig_var_type))
         local_type = buildPointerType(rtype->get_base_type());
       else
         local_type = buildPointerType(orig_var_type);
@@ -629,7 +1060,9 @@ static SgVariableDeclaration *createUnpackDecl(
       // the classic outlining will not use unpacking statement, but use the
       // parameters directly. So we can safely always use pointer dereferences
       // here
-      local_type = buildPointerType(orig_var_type);
+      local_type = global_array_type != NULL
+                       ? buildCArrayDecayPointerType(global_array_type)
+                       : buildPointerType(orig_var_type);
     } else // C++ language
            // Rich's idea was to leverage C++'s reference type: two cases:
            //  a) for variables of reference type: no additional work
@@ -735,7 +1168,10 @@ static SgVariableDeclaration *createUnpackDecl(
     //  baseType*
     SgReferenceType *ref = isSgReferenceType(orig_var_type);
     SgType *local_var_type_ptr =
-        SgPointerType::createType(ref ? ref->get_base_type() : orig_var_type);
+        global_array_type != NULL
+            ? local_type
+            : SgPointerType::createType(ref ? ref->get_base_type()
+                                            : orig_var_type);
     ROSE_ASSERT(local_var_type_ptr);
     SgCastExp *cast_expr =
         buildCastExp(param_ref, local_var_type_ptr, SgCastExp::e_C_style_cast);
@@ -744,7 +1180,7 @@ static SgVariableDeclaration *createUnpackDecl(
     {
       // int* ip = (int *)(__out_argv[1]); // isPointerDeref == true
       // int i = *(int *)(__out_argv[1]);
-      if (isPointerDeref) {
+      if (isPointerDeref && !use_cxx_reference_for_pointer_deref) {
         local_val = buildAssignInitializer(
             cast_expr); // casting is enough for pointer types
       } else // temp variable need additional dereferencing from the parameter
@@ -1083,6 +1519,236 @@ static void remapVarSyms(
   if (vsym_remap.empty() && private_remap.empty())
     return;
 
+  std::map<const SgInitializedName *, SgVariableSymbol *> remap_by_decl;
+  std::map<std::string, SgVariableSymbol *> remap_by_global_name;
+  std::map<std::string, SgVariableSymbol *> remap_by_name;
+  std::set<const SgInitializedName *> pointer_deref_decls;
+  std::set<std::string> pointer_deref_global_names;
+  std::set<std::string> pointer_deref_names;
+  for (ASTtools::VarSymSet_t::const_iterator i = pdSyms.begin();
+       i != pdSyms.end(); ++i) {
+    const SgVariableSymbol *sym = *i;
+    if (sym == NULL)
+      continue;
+
+    const SgInitializedName *decl = sym->get_declaration();
+    if (decl == NULL)
+      continue;
+
+    pointer_deref_decls.insert(decl);
+    pointer_deref_names.insert(decl->get_name().getString());
+    if (Outliner::useNewFile && isSgGlobal(decl->get_scope()) != NULL)
+      pointer_deref_global_names.insert(decl->get_name().getString());
+  }
+  for (VarSymRemap_t::const_iterator i = vsym_remap.begin();
+       i != vsym_remap.end(); ++i) {
+    const SgVariableSymbol *orig_sym = i->first;
+    SgVariableSymbol *new_sym = i->second;
+    if (orig_sym == NULL || new_sym == NULL)
+      continue;
+
+    const SgInitializedName *orig_decl = orig_sym->get_declaration();
+    if (orig_decl == NULL)
+      continue;
+
+    remap_by_decl[orig_decl] = new_sym;
+    remap_by_name[orig_decl->get_name().getString()] = new_sym;
+
+    if (isSgGlobal(orig_decl->get_scope()) != NULL)
+      remap_by_global_name[orig_decl->get_name().getString()] = new_sym;
+  }
+
+  auto findRegularRemap = [&](SgVarRefExp *ref_orig) -> SgVariableSymbol * {
+    ROSE_ASSERT(ref_orig != NULL);
+    SgVariableSymbol *ref_sym = ref_orig->get_symbol();
+    if (ref_sym == NULL)
+      return NULL;
+
+    VarSymRemap_t::const_iterator ref_new = vsym_remap.find(ref_sym);
+    if (ref_new != vsym_remap.end())
+      return ref_new->second;
+
+    SgInitializedName *ref_decl = ref_sym->get_declaration();
+    if (ref_decl == NULL)
+      return NULL;
+
+    std::map<const SgInitializedName *, SgVariableSymbol *>::const_iterator
+        decl_match = remap_by_decl.find(ref_decl);
+    if (decl_match != remap_by_decl.end())
+      return decl_match->second;
+
+    if (Outliner::useNewFile && isSgGlobal(ref_decl->get_scope()) != NULL) {
+      std::map<std::string, SgVariableSymbol *>::const_iterator name_match =
+          remap_by_global_name.find(ref_decl->get_name().getString());
+      if (name_match != remap_by_global_name.end())
+        return name_match->second;
+    }
+
+    if (!SageInterface::isAncestor(b, ref_decl)) {
+      std::map<std::string, SgVariableSymbol *>::const_iterator name_match =
+          remap_by_name.find(ref_decl->get_name().getString());
+      if (name_match != remap_by_name.end())
+        return name_match->second;
+    }
+
+    return NULL;
+  };
+
+  auto mustUsePointerDeref = [&](SgVarRefExp *ref_orig) -> bool {
+    ROSE_ASSERT(ref_orig != NULL);
+    SgVariableSymbol *ref_sym = ref_orig->get_symbol();
+    if (ref_sym == NULL)
+      return false;
+
+    if (pdSyms.find(ref_sym) != pdSyms.end())
+      return true;
+
+    SgInitializedName *ref_decl = ref_sym->get_declaration();
+    if (ref_decl == NULL)
+      return false;
+
+    if (pointer_deref_decls.find(ref_decl) != pointer_deref_decls.end())
+      return true;
+
+    if (Outliner::useNewFile && isSgGlobal(ref_decl->get_scope()) != NULL &&
+        pointer_deref_global_names.find(ref_decl->get_name().getString()) !=
+            pointer_deref_global_names.end())
+      return true;
+
+    if (!SageInterface::isAncestor(b, ref_decl) &&
+        pointer_deref_names.find(ref_decl->get_name().getString()) !=
+            pointer_deref_names.end())
+      return true;
+
+    return false;
+  };
+
+  auto clearQualification = [](SgVarRefExp *var_ref) {
+    ROSE_ASSERT(var_ref != NULL);
+    var_ref->set_name_qualification_length(0);
+    var_ref->set_global_qualification_required(false);
+    var_ref->set_explicit_name_qualification_length(0);
+    var_ref->set_explicit_global_qualification(false);
+    var_ref->set_explicit_name_qualification_tokens(SgStringList());
+    SgNode::get_globalQualifiedNameMapForNames().erase(var_ref);
+  };
+
+  auto propagateTransformationToStatementAncestors = [](SgStatement *stmt) {
+    for (SgNode *node = stmt; node != NULL; node = node->get_parent()) {
+      SgStatement *ancestor = isSgStatement(node);
+      if (ancestor == NULL)
+        continue;
+
+      ancestor->set_containsTransformation(true);
+      ancestor->set_containsTransformationToSurroundingWhitespace(true);
+      ancestor->markAsModified();
+      ancestor->setTransformation();
+
+      if (isSgFunctionDeclaration(ancestor) != NULL)
+        break;
+    }
+  };
+
+  auto dropOriginalExpressionTreesInAncestors = [](SgNode *node) {
+    for (SgNode *ancestor = node; ancestor != NULL;
+         ancestor = ancestor->get_parent()) {
+      if (SgExpression *expr = isSgExpression(ancestor)) {
+        if (expr->get_originalExpressionTree() != NULL) {
+          expr->set_originalExpressionTree(NULL);
+          expr->markAsModified();
+          expr->setTransformation();
+        }
+      }
+
+      if (isSgStatement(ancestor) != NULL)
+        break;
+    }
+  };
+
+  auto markVarRefRewrite = [&](SgVarRefExp *ref) {
+    ROSE_ASSERT(ref != NULL);
+    dropOriginalExpressionTreesInAncestors(ref);
+    ref->markAsModified();
+    ref->setTransformation();
+    if (SgStatement *stmt = SageInterface::getEnclosingStatement(ref)) {
+      stmt->markAsModified();
+      stmt->setTransformation();
+      stmt->set_containsTransformationToSurroundingWhitespace(true);
+      propagateTransformationToStatementAncestors(stmt);
+      SageInterface::setSourcePositionForTransformation(stmt);
+    }
+  };
+
+  auto clearLocalVarRefQualification = [&](SgVarRefExp *ref) {
+    ROSE_ASSERT(ref != NULL);
+
+    SgVariableSymbol *symbol = ref->get_symbol();
+    if (symbol == NULL || symbol->get_declaration() == NULL)
+      return;
+
+    SgInitializedName *decl = symbol->get_declaration();
+    if (!SageInterface::isAncestor(b, decl))
+      return;
+
+    SgVariableDeclaration *var_decl =
+        isSgVariableDeclaration(decl->get_parent());
+    if (var_decl == NULL)
+      return;
+
+    SgScopeStatement *scope = var_decl->get_scope();
+    if (scope == NULL || isSgGlobal(scope) != NULL ||
+        isSgNamespaceDefinitionStatement(scope) != NULL ||
+        isSgClassDefinition(scope) != NULL)
+      return;
+
+    clearQualification(ref);
+    markVarRefRewrite(ref);
+  };
+
+  auto retargetVarRefToSymbol = [&](SgVarRefExp *ref,
+                                    SgVariableSymbol *symbol) {
+    ROSE_ASSERT(ref != NULL);
+    ROSE_ASSERT(symbol != NULL);
+
+    SgStatement *stmt = SageInterface::getEnclosingStatement(ref);
+    const bool can_replace_expression =
+        ref->get_parent() != NULL &&
+        getEnclosingNode<SgOmpClause>(ref, true) == NULL &&
+        getEnclosingNode<SgOmpFlushStatement>(ref, true) == NULL;
+
+    if (can_replace_expression) {
+      SgVarRefExp *replacement = SageBuilder::buildVarRefExp(symbol);
+      replacement->set_need_paren(ref->get_need_paren());
+      dropOriginalExpressionTreesInAncestors(ref);
+      clearQualification(ref);
+      clearQualification(replacement);
+      replacement->markAsModified();
+      replacement->setTransformation();
+      if (stmt != NULL) {
+        stmt->markAsModified();
+        stmt->setTransformation();
+        stmt->set_containsTransformationToSurroundingWhitespace(true);
+        propagateTransformationToStatementAncestors(stmt);
+        SageInterface::setSourcePositionForTransformation(stmt);
+      }
+      SgNode::get_globalQualifiedNameMapForNames().erase(ref);
+      SageInterface::replaceExpression(isSgExpression(ref),
+                                       isSgExpression(replacement), true);
+      return;
+    }
+
+    ref->set_symbol(symbol);
+    clearQualification(ref);
+    markVarRefRewrite(ref);
+  };
+
+  auto remapUsesReferenceLocal = [](const SgVariableSymbol *symbol) -> bool {
+    if (symbol == NULL || symbol->get_declaration() == NULL)
+      return false;
+
+    return isSgReferenceType(symbol->get_declaration()->get_type()) != NULL;
+  };
+
   auto remapToPointerDeref = [&](SgVarRefExp *ref_orig,
                                  SgVariableSymbol *sym_new) {
     ROSE_ASSERT(ref_orig != NULL);
@@ -1130,10 +1796,10 @@ static void remapVarSyms(
     // Reference possibly in need of fix-up.
     SgVarRefExp *ref_orig = isSgVarRefExp(*i);
     ROSE_ASSERT(ref_orig);
+    clearLocalVarRefQualification(ref_orig);
 
     // Search for a symbol which need to be replaced.
-    VarSymRemap_t::const_iterator ref_new =
-        vsym_remap.find(ref_orig->get_symbol());
+    SgVariableSymbol *regular_remap = findRegularRemap(ref_orig);
     VarSymRemap_t::const_iterator ref_private =
         private_remap.find(ref_orig->get_symbol());
 
@@ -1145,20 +1811,25 @@ static void remapVarSyms(
       // get the replacement variable
       SgVariableSymbol *sym_new = ref_private->second;
       // Do the replacement
-      ref_orig->set_symbol(sym_new);
-    } else if (ref_new !=
-               vsym_remap.end()) // Needs replacement, regular shared variables
+      retargetVarRefToSymbol(ref_orig, sym_new);
+    } else if (regular_remap !=
+               NULL) // Needs replacement, regular shared variables
     {
-      SgVariableSymbol *sym_new = ref_new->second;
+      SgVariableSymbol *sym_new = regular_remap;
       if (Outliner::temp_variable || Outliner::useStructureWrapper)
       // uniform handling if temp variables of the same type are used
       { // two cases: variable using temp vs. variables using pointer
         // dereferencing!
 
-        if (pdSyms.find(ref_orig->get_symbol()) == pdSyms.end()) // using temp
-          ref_orig->set_symbol(sym_new);
+        if (!mustUsePointerDeref(ref_orig) ||
+            remapUsesReferenceLocal(sym_new)) // using temp or a C++ alias
+          retargetVarRefToSymbol(ref_orig, sym_new);
         else {
-          remapToPointerDeref(ref_orig, sym_new);
+          if (getNonFortranGlobalArrayType(
+                  ref_orig->get_symbol()->get_declaration()) != NULL)
+            retargetVarRefToSymbol(ref_orig, sym_new);
+          else
+            remapToPointerDeref(ref_orig, sym_new);
         }
       } else // no variable cloning is used
       {
@@ -1168,9 +1839,13 @@ static void remapVarSyms(
         // TODO compare the orig and new type, use pointer dereferencing only
         // when necessary
         {
-          remapToPointerDeref(ref_orig, sym_new);
+          if (getNonFortranGlobalArrayType(
+                  ref_orig->get_symbol()->get_declaration()) != NULL)
+            retargetVarRefToSymbol(ref_orig, sym_new);
+          else
+            remapToPointerDeref(ref_orig, sym_new);
         } else
-          ref_orig->set_symbol(sym_new);
+          retargetVarRefToSymbol(ref_orig, sym_new);
       }
     } // find an entry
   } // for every refs
@@ -1429,8 +2104,11 @@ static void variableHandling(
     // function body
     // ----------------------------------------
     SgInitializedName *local_var_init = NULL;
-    if (local_var_decl != NULL)
-      local_var_init = local_var_decl->get_decl_item(SgName(name_str.c_str()));
+    if (local_var_decl != NULL) {
+      SgInitializedNamePtrList &local_vars = local_var_decl->get_variables();
+      ROSE_ASSERT(local_vars.size() == 1);
+      local_var_init = local_vars.front();
+    }
 
     if (!SageInterface::is_Fortran_language() && !Outliner::enable_classic)
       ROSE_ASSERT(local_var_init != NULL);
@@ -1628,17 +2306,16 @@ SgFunctionDeclaration *Outliner::generateFunction(
   SgFunctionDeclaration *enclosing_func = getEnclosingFunctionDeclaration(s);
   ROSE_ASSERT(enclosing_func != NULL);
 
-  const SgTemplateParameterPtrList *template_params =
-      getTemplateParametersFromDecl(enclosing_func);
+  SgTemplateParameterPtrList template_params;
+  collectTemplateParametersForOutlinedFunction(enclosing_func, template_params);
   bool is_template_instantiation =
       isSgTemplateInstantiationFunctionDecl(enclosing_func) != NULL ||
       isSgTemplateInstantiationMemberFunctionDecl(enclosing_func) != NULL;
 
   SgFunctionDeclaration *func = NULL;
-  if (template_params != NULL && !template_params->empty() &&
-      !is_template_instantiation) {
+  if (!template_params.empty() && !is_template_instantiation) {
     func = createTemplateFuncSkeleton(func_name, SgTypeVoid::createType(),
-                                      parameterList, scope, *template_params);
+                                      parameterList, scope, template_params);
   } else {
     func = createFuncSkeleton(func_name, SgTypeVoid::createType(),
                               parameterList, scope);
@@ -1681,6 +2358,8 @@ SgFunctionDeclaration *Outliner::generateFunction(
   // outlined function.
   ROSE_ASSERT(func_body->get_statements().empty() == true);
   SageInterface::moveStatementsBetweenBlocks(s, func_body);
+  addMissingLocalTypedefAliases(func_body);
+  preserveMovedNamespaceFunctionBindings(func_body);
 
   // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing
   // Outliner::generateFunction(): 2") == false);

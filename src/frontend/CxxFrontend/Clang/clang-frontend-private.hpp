@@ -6,7 +6,13 @@
 
 #include "AstAttributeMechanism.h"
 #include "Cxx_Grammar.h"
+#include "OpenMPIR.h"
 #include "astPostProcessing.h"
+
+#include <clang/AST/ASTContext.h>
+#include <clang/AST/DeclCXX.h>
+#include <clang/AST/PrettyPrinter.h>
+#include <clang/AST/Type.h>
 
 #include <algorithm>
 #include <cctype>
@@ -20,32 +26,26 @@
 #include <unordered_set>
 #include <vector>
 
-class TranslationUnitOrderAttribute : public AstAttribute {
-public:
-  explicit TranslationUnitOrderAttribute(unsigned long long order)
-      : order_(order) {}
-
-  unsigned long long order() const { return order_; }
-
-  AstAttribute *copy() const override {
-    return new TranslationUnitOrderAttribute(*this);
+inline bool setClangTranslationUnitSourceOrder(SgStatement *stmt,
+                                               unsigned long long order) {
+  if (stmt == nullptr || order > static_cast<unsigned long long>(
+                                     std::numeric_limits<int>::max())) {
+    return false;
   }
 
-  OwnershipPolicy getOwnershipPolicy() const override {
-    return CONTAINER_OWNERSHIP;
+  stmt->set_source_sequence_value(static_cast<int>(order));
+  return true;
+}
+
+inline bool getClangTranslationUnitSourceOrder(const SgStatement *stmt,
+                                               unsigned long long &order) {
+  if (stmt == nullptr || stmt->get_source_sequence_value() < 0) {
+    return false;
   }
 
-  std::string attribute_class_name() const override {
-    return "TranslationUnitOrderAttribute";
-  }
-
-  std::string toString() override { return std::to_string(order_); }
-
-private:
-  unsigned long long order_;
-};
-
-inline constexpr char kTranslationUnitOrderAttributeName[] = "clang-tu-order";
+  order = static_cast<unsigned long long>(stmt->get_source_sequence_value());
+  return true;
+}
 
 inline bool
 isImplicitAutoPlaceholderTemplateParamName(const std::string &name) {
@@ -159,6 +159,50 @@ inline bool parseTemplateParamDepthAndIndex(const std::string &name,
          parse_with_prefix("value_parameter_", '_') ||
          parse_with_prefix("template_parameter_", '_') ||
          parse_with_prefix("template_type_param_", '_');
+}
+
+inline std::string trimClangFrontendString(std::string text) {
+  auto is_space = [](unsigned char ch) { return std::isspace(ch); };
+  text.erase(text.begin(),
+             std::find_if(text.begin(), text.end(),
+                          [&](unsigned char ch) { return !is_space(ch); }));
+  text.erase(std::find_if(text.rbegin(), text.rend(),
+                          [&](unsigned char ch) { return !is_space(ch); })
+                 .base(),
+             text.end());
+  return text;
+}
+
+inline bool isConcreteClangQualType(clang::QualType type) {
+  const clang::Type *type_ptr = type.getTypePtrOrNull();
+  return type_ptr != nullptr && !type_ptr->isDependentType() &&
+         !type_ptr->isInstantiationDependentType();
+}
+
+inline bool
+isInstantiatedConversionOperatorDecl(const clang::CXXConversionDecl *decl) {
+  if (decl == nullptr) {
+    return false;
+  }
+
+  return decl->getTemplateSpecializationArgs() != nullptr ||
+         decl->getTemplateInstantiationPattern() != nullptr ||
+         decl->getInstantiatedFromMemberFunction() != nullptr;
+}
+
+inline std::string
+concreteClangConversionTypeName(const clang::CXXConversionDecl *decl) {
+  if (decl == nullptr) {
+    return "";
+  }
+
+  clang::QualType conversion_type = decl->getConversionType();
+  if (!isConcreteClangQualType(conversion_type)) {
+    return "";
+  }
+
+  clang::PrintingPolicy policy(decl->getASTContext().getLangOpts());
+  return trimClangFrontendString(conversion_type.getAsString(policy));
 }
 
 inline const SgTemplateParameterPtrList *
@@ -669,12 +713,18 @@ private:
     unsigned logical_line = 0;
     bool is_openmp = false;
   };
+  struct InvalidOpenMPPragmaInfo {
+    std::string text;
+    std::string logical_filename;
+    unsigned logical_line = 0;
+  };
 
   // Use the physical (FileID, line) position for source scanning while
   // retaining the logical filename/line from active line markers for later
   // AST placement.
   std::map<std::pair<clang::FileID, unsigned>, CapturedPragmaInfo>
       line_to_pragma;
+  std::vector<InvalidOpenMPPragmaInfo> invalid_openmp_pragmas;
   std::set<std::pair<clang::FileID, unsigned>> pragma_continuation_lines;
   clang::SourceManager &p_source_manager;
   clang::Preprocessor &p_preprocessor;
@@ -701,6 +751,60 @@ private:
       return true;
     }
     return (pos + 3 <= text.size() && text.compare(pos, 3, "acc") == 0);
+  }
+
+  static bool isOmpPragmaText(const std::string &text) {
+    size_t pos = 0;
+    auto skipWS = [](const std::string &s, size_t p) {
+      while (p < s.size() && (s[p] == ' ' || s[p] == '\t'))
+        ++p;
+      return p;
+    };
+    if (pos >= text.size() || text[pos] != '#')
+      return false;
+    pos = skipWS(text, pos + 1);
+    if (pos + 6 > text.size() || text.compare(pos, 6, "pragma") != 0)
+      return false;
+    pos = skipWS(text, pos + 6);
+    if (pos + 3 > text.size() || text.compare(pos, 3, "omp") != 0)
+      return false;
+    pos += 3;
+    return pos == text.size() || isWhitespace(text[pos]);
+  }
+
+  static std::string
+  canonicalPragmaIntroducerForParser(const std::string &text) {
+    size_t pos = 0;
+    auto skipWS = [](const std::string &s, size_t p) {
+      while (p < s.size() && (s[p] == ' ' || s[p] == '\t'))
+        ++p;
+      return p;
+    };
+    if (pos >= text.size() || text[pos] != '#') {
+      return text;
+    }
+    pos = skipWS(text, pos + 1);
+    if (pos + 6 > text.size() || text.compare(pos, 6, "pragma") != 0) {
+      return text;
+    }
+    return "#" + text.substr(pos);
+  }
+
+  bool validateOpenMPPragmaText(const std::string &text) const {
+    if (!isOmpPragmaText(text)) {
+      return true;
+    }
+
+    const std::string parser_text = canonicalPragmaIntroducerForParser(text);
+    setLang(p_preprocessor.getLangOpts().CPlusPlus ? Lang_Cplusplus : Lang_C);
+    OpenMPDirective *directive =
+        parseOpenMP(parser_text.c_str(), nullptr, nullptr);
+    setLang(Lang_unknown);
+    if (directive == nullptr) {
+      return false;
+    }
+    delete directive;
+    return true;
   }
 
   const clang::IdentifierInfo *
@@ -997,6 +1101,11 @@ public:
     if (is_openmp) {
       pragma_text = expandObjectLikeMacros(original_text);
     }
+    if (isOmpPragmaText(pragma_text) &&
+        !validateOpenMPPragmaText(pragma_text)) {
+      invalid_openmp_pragmas.push_back(
+          {pragma_text, logical_filename, logical_line});
+    }
 
     // Store with (FileID, line) key to handle multi-file TUs
     line_to_pragma[std::make_pair(file_id, line)] = {
@@ -1032,6 +1141,14 @@ public:
   }
 
   size_t getCount() const { return line_to_pragma.size(); }
+
+  size_t getInvalidOpenMPPragmaCount() const {
+    return invalid_openmp_pragmas.size();
+  }
+
+  const std::vector<InvalidOpenMPPragmaInfo> &getInvalidOpenMPPragmas() const {
+    return invalid_openmp_pragmas;
+  }
 
   bool isOpenMPPragmaAtLine(clang::FileID file_id, unsigned line) const {
     auto it = line_to_pragma.find(std::make_pair(file_id, line));
@@ -1084,11 +1201,11 @@ public:
   std::string getSourceText(clang::SourceRange range) const;
 
 protected:
-  std::map<clang::Decl *, SgNode *> p_decl_translation_map;
+  std::unordered_map<clang::Decl *, SgNode *> p_decl_translation_map;
   std::map<clang::NamespaceDecl *, SgNamespaceDeclarationStatement *>
       p_namespace_canonical_decl_map;
-  std::map<clang::Stmt *, SgNode *> p_stmt_translation_map;
-  std::map<const clang::Type *, SgNode *> p_type_translation_map;
+  std::unordered_map<clang::Stmt *, SgNode *> p_stmt_translation_map;
+  std::unordered_map<const clang::Type *, SgNode *> p_type_translation_map;
   std::map<uintptr_t, SgType *> p_qualified_type_translation_map;
   std::map<clang::RecordDecl *, SgType *> p_record_decl_type_map;
   std::map<clang::RecordDecl *, SgClassDeclaration *>
@@ -1191,6 +1308,11 @@ protected:
   // preserve an explicitly written template-id even when it names the same
   // specialization as a defaulted or injected form.
   unsigned p_force_written_template_specialization_depth = 0;
+  // Default template type arguments have no separate per-reference
+  // qualification fields. Preserve explicitly written qualified tag names in
+  // the type subtree for those contexts instead of lowering them to the
+  // unqualified semantic declaration type.
+  unsigned p_force_written_tag_type_qualification_depth = 0;
   // Preserve explicitly written qualification while lowering out-of-line
   // member signatures. These translations intentionally use the enclosing
   // class scope for template-parameter lookup, but that should not erase the
@@ -1261,8 +1383,12 @@ protected:
                                     clang::Decl *specialized_decl);
   size_t resolvePendingSpecializedTemplateLinks();
   size_t resolvePendingNonrealTemplateDeclarationLinks();
+  SgDeclarationStatement *
+  lookupExactSgDeclarationForClangDecl(clang::Decl *key, bool allow_on_demand);
   SgDeclarationStatement *lookupSgDeclarationForClangDecl(clang::Decl *key,
                                                           bool allow_on_demand);
+  SgFunctionDeclaration *
+  buildInProgressMemberFunctionPlaceholder(clang::FunctionDecl *function_decl);
   SgClassDeclaration *
   lookupRecordTypePlaceholderDecl(clang::RecordDecl *record_decl) const;
   void cacheRecordTypePlaceholderDecl(clang::RecordDecl *record_decl,
@@ -1382,6 +1508,15 @@ protected:
       SgScopeStatement *override_symbol_scope,
       SgScopeStatement *override_lexical_parent,
       const clang::Decl *source_decl_for_matching = nullptr);
+  bool isHiddenSystemOrBuiltinDecl(const clang::Decl *decl) const;
+  bool shouldQueueImplicitClassTemplateSpecialization(
+      clang::ClassTemplateSpecializationDecl *spec,
+      bool allow_hidden_system) const;
+  void queuePendingImplicitClassTemplateSpecialization(
+      clang::ClassTemplateSpecializationDecl *spec,
+      bool allow_hidden_system = false);
+  bool shouldDropPendingNonrealTemplateDeclarationLink(SgNonrealDecl *nrdecl,
+                                                       clang::Decl *decl) const;
 
   bool translateFunctionDeclCommon(clang::FunctionDecl *function_decl,
                                    clang::FunctionTemplateDecl *template_decl,
@@ -2320,6 +2455,7 @@ protected:
   std::unordered_map<PreprocessingInfo *, unsigned>
       p_preprocessor_record_offsets;
   std::unordered_set<PreprocessingInfo *> p_removed_preprocessor_records;
+  size_t p_preprocessor_record_cursor;
   bool p_preprocessor_record_list_sorted;
   std::set<std::string> p_application_file_paths;
   std::set<const clang::IdentifierInfo *> p_self_referential_macros;
@@ -2412,7 +2548,12 @@ public:
 
   std::pair<Sg_File_Info *, PreprocessingInfo *> top();
   bool pop();
-  size_t size() const { return p_preprocessor_record_list.size(); }
+  size_t size() const {
+    return p_preprocessor_record_cursor < p_preprocessor_record_list.size()
+               ? p_preprocessor_record_list.size() -
+                     p_preprocessor_record_cursor
+               : 0;
+  }
   bool sawSelfReferentialMacroExpansion() const {
     return p_saw_self_referential_macro_expansion;
   }

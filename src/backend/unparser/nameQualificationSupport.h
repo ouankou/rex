@@ -37,6 +37,8 @@
 
 #include <string>
 
+#include <tuple>
+
 #include <vector>
 
 namespace SageInterface {
@@ -218,6 +220,38 @@ private:
   // qualification retricted to just the input source file (instead of the whole
   // translation unit).
   bool suppressNameQualificationAcrossWholeTranslationUnit;
+
+  struct TemplateArgumentListEvaluationKey {
+    const SgTemplateArgumentPtrList *templateArgumentList;
+    SgScopeStatement *scope;
+    SgStatement *positionStatement;
+
+    bool operator<(const TemplateArgumentListEvaluationKey &rhs) const {
+      return std::tie(templateArgumentList, scope, positionStatement) <
+             std::tie(rhs.templateArgumentList, rhs.scope,
+                      rhs.positionStatement);
+    }
+  };
+
+  struct TemplateDeclarationEvaluationKey {
+    SgDeclarationStatement *declaration;
+    SgScopeStatement *scope;
+    SgStatement *positionStatement;
+
+    bool operator<(const TemplateDeclarationEvaluationKey &rhs) const {
+      return std::tie(declaration, scope, positionStatement) <
+             std::tie(rhs.declaration, rhs.scope, rhs.positionStatement);
+    }
+  };
+
+  std::set<TemplateArgumentListEvaluationKey>
+      activeTemplateArgumentListEvaluations;
+  std::set<TemplateArgumentListEvaluationKey>
+      completedTemplateArgumentListEvaluations;
+  std::set<TemplateDeclarationEvaluationKey>
+      activeTemplateDeclarationEvaluations;
+  std::set<TemplateDeclarationEvaluationKey>
+      completedTemplateDeclarationEvaluations;
 
 public:
   // DQ (4/3/2014): This map of sets is build once and then used to resolve when

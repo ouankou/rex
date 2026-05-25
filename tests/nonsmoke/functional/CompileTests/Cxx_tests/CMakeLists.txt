@@ -3034,6 +3034,24 @@ list(APPEND CXX_TESTCODES
   test2013_09.C)
 list(REMOVE_DUPLICATES CXX_TESTCODES)
 
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _rex_cxx_tests_processor)
+set(REX_CXX_TESTS_HOST_IS_X86 FALSE)
+if(_rex_cxx_tests_processor MATCHES "^(x86_64|amd64|i[3-6]86)$")
+  set(REX_CXX_TESTS_HOST_IS_X86 TRUE)
+endif()
+
+set(CXX_TESTCODES_X86_ONLY
+  test2007_97.C
+  test2007_102.C
+  test2007_106.C
+  test2008_15.C
+  test2009_02.C
+  test2017_69.C
+)
+if(NOT REX_CXX_TESTS_HOST_IS_X86)
+  list(REMOVE_ITEM CXX_TESTCODES ${CXX_TESTCODES_X86_ONLY})
+endif()
+
 set(CXX_TESTCODES_GNUXX03
   # Legacy access declarations (e.g., A::foo;) require pre-C++11 mode.
   test2020_31.C
@@ -3607,17 +3625,22 @@ add_test(
 set_tests_properties(Cxx_tests_test_pdf_generation PROPERTIES LABELS Cxx_tests)
 rex_lock_test_for_input(Cxx_tests_test_pdf_generation test2004_77.C)
 
-add_test(
-  NAME Cxx_tests_hpctoolkit
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND hpcrun -e WALLCLOCK --
-    $<TARGET_FILE:${translator}>
-    -w -rose:verbose 0 -rose:skip_unparse_asm_commands
-    -rose:skipAstConsistancyTests -rose:skip_commentsAndDirectives
-    -rose:skip_unparse -I${CMAKE_CURRENT_SOURCE_DIR}
-    -c ${CMAKE_CURRENT_SOURCE_DIR}/testPerformance.C
-)
-set_tests_properties(Cxx_tests_hpctoolkit PROPERTIES LABELS Cxx_tests )
+find_program(HPCRUN_EXECUTABLE hpcrun)
+if(HPCRUN_EXECUTABLE)
+  add_test(
+    NAME Cxx_tests_hpctoolkit
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${HPCRUN_EXECUTABLE} -e WALLCLOCK --
+      $<TARGET_FILE:${translator}>
+      -w -rose:verbose 0 -rose:skip_unparse_asm_commands
+      -rose:skipAstConsistancyTests -rose:skip_commentsAndDirectives
+      -rose:skip_unparse -I${CMAKE_CURRENT_SOURCE_DIR}
+      -c ${CMAKE_CURRENT_SOURCE_DIR}/testPerformance.C
+  )
+  set_tests_properties(Cxx_tests_hpctoolkit PROPERTIES LABELS Cxx_tests )
+else()
+  message(STATUS "Skipping Cxx_tests_hpctoolkit because hpcrun was not found")
+endif()
 
 # Extra Issue 99 coverage beyond the default compile test.
 add_test(

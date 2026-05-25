@@ -8,6 +8,13 @@
 
 #include <string>
 
+inline std::string graph_trim_trailing_spaces(std::string text) {
+  while (!text.empty() && text.back() == ' ') {
+    text.pop_back();
+  }
+  return text;
+}
+
 template <class Graph>
 void read_graph(Graph &g, std::istream &in, const std::string &hint) {
   std::string cur;
@@ -36,13 +43,19 @@ void write_graph(const Graph &g, OUTPUT &out, const std::string &hint) {
     typename Graph::EdgeIterator edges =
         g.GetNodeEdgeIterator(curnode, GraphAccess::EdgeOut);
     if (edges.ReachEnd())
-      out << hint << ":" << curnode->toString() << std::endl;
+      out << hint << ":" << graph_trim_trailing_spaces(curnode->toString())
+          << std::endl;
     else
       for (; !edges.ReachEnd(); ++edges) {
         typename Graph::Edge *e = (*edges);
         typename Graph::Node *n = g.GetEdgeEndPoint(e, GraphAccess::EdgeIn);
+        std::string edge_text = e->toString();
         out << hint << ":" << curnode->toString() << "->" << n->toString()
-            << " : " << e->toString() << std::endl;
+            << " :";
+        if (!edge_text.empty()) {
+          out << " " << edge_text;
+        }
+        out << std::endl;
       }
   }
 }

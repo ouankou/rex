@@ -25,3 +25,4 @@ void foo(int length, double *dd, double *x, double *y, double *xx, double *yy) {
     dd[i1] = 0.5 * (a1 + a2);
   }
 }
+

@@ -7,6 +7,7 @@
 /*-----------------------------------------------------------------------------
  *  Dependencies
  *---------------------------------------------------------------------------*/
+#include <cstring>
 #include <filesystem>
 
 #include "Rose/StringUtility/FileUtility.h"
@@ -35,6 +36,60 @@ using namespace Rose; // temporary, until this file lives in namespace Rose
 const char *licenseText =
 #include <license_string.h>
     ;
+
+static bool startsWith(const std::string &value, const char *prefix) {
+  return value.rfind(prefix, 0) == 0;
+}
+
+static bool isSplitClangTargetOption(const std::string &arg) {
+  return arg == "-target" || arg == "--target" || arg == "-march" ||
+         arg == "-mcpu" || arg == "-mtune" || arg == "-mabi" ||
+         arg == "-mfpu" || arg == "-isysroot" || arg == "--sysroot";
+}
+
+static bool isJoinedClangTargetOption(const std::string &arg) {
+  static const char *prefixes[] = {
+      "-target=", "--target=", "-march=",      "-mcpu=",    "-mtune=",
+      "-mabi=",   "-mfpu=",    "-mfloat-abi=", "-isysroot", "--sysroot="};
+  for (const char *prefix : prefixes) {
+    if (startsWith(arg, prefix)) {
+      return true;
+    }
+  }
+
+  return arg == "-m32" || arg == "-m64" || arg == "-mx32" ||
+         arg == "-msoft-float" || arg == "-mhard-float" ||
+         arg == "-mlittle-endian" || arg == "-mbig-endian";
+}
+
+static bool isX86OnlyDriverOption(const std::string &arg) {
+  static const char *prefixes[] = {
+      "-mregparm", "-masm=",   "-msse",      "-mno-sse", "-mavx",
+      "-mno-avx",  "-mavx512", "-mmmx",      "-mno-mmx", "-m3dnow",
+      "-mfma",     "-maes",    "-mpclmul",   "-mpopcnt", "-mbmi",
+      "-mbmi2",    "-mf16c",   "-mfsgsbase", "-mxsave"};
+  if (arg == "-mrtd" || arg == "-mno-rtd" || arg == "-msseregparm" ||
+      arg == "-mstackrealign" || arg == "-mno-red-zone" ||
+      arg == "-mred-zone") {
+    return true;
+  }
+  if (startsWith(arg, "-fdefault-calling-conv=")) {
+    const std::string value =
+        arg.substr(std::strlen("-fdefault-calling-conv="));
+    return value == "cdecl" || value == "stdcall" || value == "fastcall" ||
+           value == "thiscall" || value == "vectorcall" || value == "regcall";
+  }
+  for (const char *prefix : prefixes) {
+    if (startsWith(arg, prefix)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool isClangFrontendDriverOption(const std::string &arg) {
+  return arg == "-ffreestanding" || arg == "-fhosted" || arg == "-fno-builtin";
+}
 
 /*-----------------------------------------------------------------------------
  *  Variable Definitions
@@ -3848,6 +3903,7 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   // DQ (6/17/2005): Added support for AST merging (sharing common parts of the
   // AST most often represented in common header files of a project)
   optionCount = sla(argv, "-rose:", "($)", "(astMerge)", 1);
+  optionCount = sla(argv, "-rose:ast:", "($)", "(merge)", 1);
   char *filename = NULL;
   optionCount =
       sla(argv, "-rose:", "($)^", "(astMergeCommandFile)", filename, 1);
@@ -4265,6 +4321,17 @@ void SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine,
         if (i >= argv.size())
           break;
       }
+    } else if (isSplitClangTargetOption(current_arg)) {
+      clang_frontend_args.push_back(current_arg);
+      ++i;
+      if (i < argv.size()) {
+        clang_frontend_args.push_back(argv[i]);
+      } else {
+        break;
+      }
+    } else if (isJoinedClangTargetOption(current_arg) ||
+               isX86OnlyDriverOption(current_arg)) {
+      clang_frontend_args.push_back(current_arg);
     } else if (current_arg.find("-rose") == 0) {
     }
     // Filter out OpenMP flags - REX captures pragmas as plain text, not via
@@ -4275,6 +4342,8 @@ void SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine,
     } else if (current_arg.find("--rex-omp-") == 0) {
     } else if (current_arg == "-fexceptions" ||
                current_arg == "-fcxx-exceptions" || current_arg == "-frtti") {
+      clang_frontend_args.push_back(current_arg);
+    } else if (isClangFrontendDriverOption(current_arg)) {
       clang_frontend_args.push_back(current_arg);
     } else if (current_arg == "-fno-rtti") {
       // Keep -fno-rtti backend-only unless frontend enforcement is explicitly
@@ -4359,6 +4428,9 @@ void SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine,
   }
   if (!standard_flag.empty()) {
     clang_frontend_args.push_back(standard_flag);
+  }
+  if (get_strict_language_handling()) {
+    clang_frontend_args.push_back("-ansi");
   }
 
   std::vector<std::string>::iterator it_str;
@@ -4476,6 +4548,19 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
            compilerName.c_str());
   }
 
+  const std::vector<std::string> originalCommandLineArgs =
+      get_originalCommandLineArgumentList();
+  const bool userSpecifiedDialect = std::any_of(
+      originalCommandLineArgs.begin(), originalCommandLineArgs.end(),
+      [](const std::string &arg) {
+        return arg == "-std" || arg.rfind("-std=", 0) == 0 || arg == "-ansi";
+      });
+  const bool useBackendDelayedTemplateParsing =
+      get_Cxx_only() &&
+      std::find(originalCommandLineArgs.begin(), originalCommandLineArgs.end(),
+                "-rex:clang:delayed-template-parsing") !=
+          originalCommandLineArgs.end();
+
   std::vector<std::string> backendArgv = argv;
   SgFile::stripRoseCommandLineOptions(backendArgv);
   if (get_Fortran_only() == true) {
@@ -4487,6 +4572,13 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
   // the default value of "originalCompilerName" is "CC"
   vector<string> compilerNameString;
   compilerNameString.push_back(compilerName);
+#if defined(BACKEND_CXX_IS_CLANG_COMPILER)
+  if (useBackendDelayedTemplateParsing &&
+      std::find(backendArgv.begin(), backendArgv.end(),
+                "-fdelayed-template-parsing") == backendArgv.end()) {
+    compilerNameString.push_back("-fdelayed-template-parsing");
+  }
+#endif
 
   // DQ (1/17/2006): test this
   // ROSE_ASSERT(get_fileInfo() != NULL);
@@ -4780,6 +4872,24 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
     ROSE_ABORT();
   }
   }
+
+#if defined(BACKEND_CXX_IS_CLANG_COMPILER) ||                                  \
+    defined(BACKEND_CXX_IS_GNU_COMPILER)
+  const bool backendOutputsCxx =
+      get_outputLanguage() == SgFile::e_Cxx_language ||
+      get_standard() == e_cxx98_standard ||
+      get_standard() == e_cxx03_standard ||
+      get_standard() == e_cxx11_standard ||
+      get_standard() == e_cxx14_standard ||
+      get_standard() == e_cxx17_standard ||
+      get_standard() == e_cxx20_standard ||
+      get_standard() == e_cxx23_standard || get_standard() == e_cxx26_standard;
+  if (backendOutputsCxx && !userSpecifiedDialect &&
+      std::find(backendArgv.begin(), backendArgv.end(), "-fms-extensions") ==
+          backendArgv.end()) {
+    compilerNameString.push_back("-fms-extensions");
+  }
+#endif
 
 #if defined(BACKEND_CXX_IS_CLANG_COMPILER)
   if (get_C_only() || get_C89_only() || get_C90_only() || get_C99_only() ||
@@ -5382,11 +5492,33 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
     // Fortran_tests/test2020_use_iso_c_binding.f90
     // ROSE_ASSERT(positionForIncludes != argcArgvList.end());
 
+    // Header-unparse extra directories must participate in quote-include lookup
+    // without changing normal angle-include precedence. Add -iquote entries for
+    // the generated directories, then keep the existing -I entries available as
+    // fallback include roots.
+    Rose_STL_Container<string> expandedExtraIncludeDirectorySpecifierBeforeList;
+    for (size_t includePathIndex = 0;
+         includePathIndex <
+         project->get_extraIncludeDirectorySpecifierBeforeList().size();
+         ++includePathIndex) {
+      const string &includePath =
+          project->get_extraIncludeDirectorySpecifierBeforeList()
+              [includePathIndex];
+      if (includePath.rfind("-I", 0) == 0 && includePath.size() > 2) {
+        expandedExtraIncludeDirectorySpecifierBeforeList.push_back(
+            "-iquote" + includePath.substr(2));
+      }
+    }
+    expandedExtraIncludeDirectorySpecifierBeforeList.insert(
+        expandedExtraIncludeDirectorySpecifierBeforeList.end(),
+        project->get_extraIncludeDirectorySpecifierBeforeList().begin(),
+        project->get_extraIncludeDirectorySpecifierBeforeList().end());
+
     // argcArgvList.insert(positionForIncludes,project->get_extraIncludeDirectorySpecifierList().begin(),project->get_extraIncludeDirectorySpecifierList().end());
     argcArgvList.insert(
         positionForIncludes,
-        project->get_extraIncludeDirectorySpecifierBeforeList().begin(),
-        project->get_extraIncludeDirectorySpecifierBeforeList().end());
+        expandedExtraIncludeDirectorySpecifierBeforeList.begin(),
+        expandedExtraIncludeDirectorySpecifierBeforeList.end());
 
     // DQ (10/10/2020): Insert the after list at the end of the comment line
     // (could be after the last include, which might be more elegant).

@@ -320,7 +320,22 @@ set(TOKEN_C_ADDITIONAL_TESTCODES
   test2012_163.c
 )
 
-set(TOKEN_C_C89_RECOVERY_TESTCODES
+set(TOKEN_C_GNU89_VALIDATION_TESTCODES
+  testCvsCpp.c
+  testAnsiC.c
+  test2003_12.c
+  test2012_21.c
+  test2012_27.c
+  test2012_32.c
+  test2012_116.c
+  test2012_131.c
+  test2012_141.c
+  test2013_25.c
+  test2013_46.c
+  test2013_79.c
+)
+
+set(TOKEN_C_CLANG_RECOVERY_TESTCODES
   test2013_46.c
 )
 
@@ -1121,6 +1136,63 @@ set(TOKEN_CXX_TOKEN_UNPARSER_TESTCODES
   input_test2021_03.C
 )
 
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _rex_token_tests_processor)
+set(REX_TOKEN_TESTS_HOST_IS_X86 FALSE)
+if(_rex_token_tests_processor MATCHES "^(x86_64|amd64|i[3-6]86)$")
+  set(REX_TOKEN_TESTS_HOST_IS_X86 TRUE)
+endif()
+
+set(TOKEN_C_TESTCODES_X86_ONLY
+  test2012_82.c
+  test2012_173.c
+  test2012_173_redhat_rel6.c
+  test2012_174.c
+  test2012_175.c
+  test2013_41.c
+  test2013_42.c
+  test2013_72.c
+  test2014_36.c
+  test2014_39.c
+  test2014_40.c
+  test2014_41.c
+  test2014_42.c
+  test2014_43.c
+  test2014_44.c
+  test2014_83.c
+  test2014_84.c
+  test2014_85.c
+  test2014_86.c
+  test2014_87.c
+  test2014_91.c
+  test2015_88.c
+  test2015_89.c
+  test2015_141.c
+  test2015_142.c
+  test2015_154.c
+  test2015_155.c
+  test2017_03.c
+)
+
+set(TOKEN_CXX_TESTCODES_X86_ONLY
+  test2007_97.C
+  test2007_102.C
+  test2007_106.C
+  test2008_15.C
+  test2009_02.C
+  test2017_69.C
+)
+
+if(NOT REX_TOKEN_TESTS_HOST_IS_X86)
+  list(REMOVE_ITEM TOKEN_C_TESTCODES_REQUIRED ${TOKEN_C_TESTCODES_X86_ONLY})
+  list(REMOVE_ITEM TOKEN_C_ADDITIONAL_TESTCODES ${TOKEN_C_TESTCODES_X86_ONLY})
+  list(REMOVE_ITEM TOKEN_C_GNU89_VALIDATION_TESTCODES ${TOKEN_C_TESTCODES_X86_ONLY})
+  list(REMOVE_ITEM TOKEN_C_CLANG_RECOVERY_TESTCODES ${TOKEN_C_TESTCODES_X86_ONLY})
+  list(REMOVE_ITEM TOKEN_CXX_TESTCODES_REQUIRED ${TOKEN_CXX_TESTCODES_X86_ONLY})
+  list(REMOVE_ITEM TOKEN_CXX_ADDITIONAL_TESTCODES ${TOKEN_CXX_TESTCODES_X86_ONLY})
+  list(REMOVE_ITEM TOKEN_CXX_GNU48_ADDITIONAL_TESTCODES ${TOKEN_CXX_TESTCODES_X86_ONLY})
+  list(REMOVE_ITEM TOKEN_CXX_TOKEN_UNPARSER_TESTCODES ${TOKEN_CXX_TESTCODES_X86_ONLY})
+endif()
+
 string(JOIN " " _rose_flags_str ${ROSE_FLAGS})
 
 set(_c_test_dir
@@ -1181,9 +1253,11 @@ foreach(file_to_test IN LISTS TOKEN_C_TESTCODES_REQUIRED)
       ${_ast_token_stream_output_dir}/token_trailing_${file_to_test})
   set(_trailing_object
       ${_ast_token_stream_output_dir}/token_trailing_${_name}.o)
-  if(file_to_test IN_LIST TOKEN_C_C89_RECOVERY_TESTCODES)
-    set(_token_mapping_extra_flags -rex:clang:continue-on-error)
+  if(file_to_test IN_LIST TOKEN_C_GNU89_VALIDATION_TESTCODES)
     set(_token_mapping_c_std_flags -std=gnu89)
+  endif()
+  if(file_to_test IN_LIST TOKEN_C_CLANG_RECOVERY_TESTCODES)
+    set(_token_mapping_extra_flags -rex:clang:continue-on-error)
   endif()
   add_test(
     NAME tokenStreamMapping_${_name}

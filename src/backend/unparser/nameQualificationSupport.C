@@ -278,10 +278,6 @@ bool getExplicitQualifierLength(const SgNode *node, int &length) {
   }
 
   int effective_length = explicit_length + (explicit_global ? 1 : 0);
-  if (effective_length <= 0) {
-    return false;
-  }
-
   length = effective_length;
   return true;
 }
@@ -358,7 +354,6 @@ struct ScopeUsingDirectiveOrderCacheEntry {
 };
 
 struct ScopeUsingDirectiveOrderCache {
-  uint64_t ast_modification_sequence = 0;
   std::unordered_map<const SgScopeStatement *,
                      ScopeUsingDirectiveOrderCacheEntry>
       entries;
@@ -366,14 +361,11 @@ struct ScopeUsingDirectiveOrderCache {
 
 ScopeUsingDirectiveOrderCache &scope_using_directive_order_cache() {
   static ScopeUsingDirectiveOrderCache cache;
-  const uint64_t ast_modification_sequence =
-      SgNode::get_globalAstModificationSequence();
-  if (cache.ast_modification_sequence != ast_modification_sequence) {
-    cache.ast_modification_sequence = ast_modification_sequence;
-    cache.entries.clear();
-  }
-
   return cache;
+}
+
+void clear_scope_using_directive_order_cache() {
+  scope_using_directive_order_cache().entries.clear();
 }
 
 template <typename StatementList>
@@ -531,6 +523,7 @@ void generateNameQualificationSupport(SgNode *node,
   // the NameQualificationTraversal class.
 
   TimingPerformance timer("Name qualification support:");
+  clear_scope_using_directive_order_cache();
 
   // DQ (5/28/2011): Initialize the local maps to the static maps in SgNode.
   // This is requires so the types used in template arguments can call the
@@ -1107,6 +1100,16 @@ void NameQualificationTraversal::evaluateTemplateInstantiationDeclaration(
     qualificationScope = positionScope;
   }
 
+  TemplateDeclarationEvaluationKey evaluationKey = {
+      declaration, qualificationScope, positionStatement};
+  if (completedTemplateDeclarationEvaluations.find(evaluationKey) !=
+      completedTemplateDeclarationEvaluations.end()) {
+    return;
+  }
+  if (!activeTemplateDeclarationEvaluations.insert(evaluationKey).second) {
+    return;
+  }
+
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
   MLOG_WARN_C(MLOG_UNPARSER, "1111111111111111111111111111111111111111111111111"
                              "1111111111111111111 \n");
@@ -1168,6 +1171,8 @@ void NameQualificationTraversal::evaluateTemplateInstantiationDeclaration(
       MangledNameSupport::visitedTemplateDefinitions.find(nonconst_def) !=
           MangledNameSupport::visitedTemplateDefinitions.end()) {
     // Skip the call that would result in infinte recursion.
+    activeTemplateDeclarationEvaluations.erase(evaluationKey);
+    return;
   } else {
     // Only handle the case of a SgTemplateInstantiationDecl.
     SgClassDefinition *templateInstantiationDefinition =
@@ -1328,6 +1333,9 @@ void NameQualificationTraversal::evaluateTemplateInstantiationDeclaration(
       MangledNameSupport::visitedTemplateDefinitions.erase(nonconst_def);
     }
   }
+
+  activeTemplateDeclarationEvaluations.erase(evaluationKey);
+  completedTemplateDeclarationEvaluations.insert(evaluationKey);
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
   MLOG_WARN_C(MLOG_UNPARSER,
@@ -1749,6 +1757,24 @@ int NameQualificationTraversal::nameQualificationDepth(
 
   // DQ (4/4/2014): Added assertion.
   ASSERT_not_null(positionStatement);
+
+  if (SgUsingDeclarationStatement *usingDeclaration =
+          isSgUsingDeclarationStatement(declaration)) {
+    if (SgDeclarationStatement *associatedDeclaration =
+            usingDeclaration->get_declaration()) {
+      if (associatedDeclaration != declaration) {
+        return nameQualificationDepth(associatedDeclaration, currentScope,
+                                      positionStatement,
+                                      forceMoreNameQualification);
+      }
+    }
+
+    if (SgInitializedName *associatedInitializedName =
+            usingDeclaration->get_initializedName()) {
+      return nameQualificationDepth(associatedInitializedName, currentScope,
+                                    positionStatement);
+    }
+  }
 
   int qualificationDepth = 0;
 
@@ -4966,6 +4992,16 @@ void NameQualificationTraversal::
     }
   }
 
+  TemplateArgumentListEvaluationKey evaluationKey = {
+      &templateArgumentList, effectiveScope, positionStatement};
+  if (completedTemplateArgumentListEvaluations.find(evaluationKey) !=
+      completedTemplateArgumentListEvaluations.end()) {
+    return;
+  }
+  if (!activeTemplateArgumentListEvaluations.insert(evaluationKey).second) {
+    return;
+  }
+
   SgTemplateArgumentPtrList::iterator i = templateArgumentList.begin();
   while (i != templateArgumentList.end()) {
     SgTemplateArgument *templateArgument = *i;
@@ -5445,6 +5481,9 @@ void NameQualificationTraversal::
       "************************************************************************"
       "*****************************************************\n\n");
 #endif
+
+  activeTemplateArgumentListEvaluations.erase(evaluationKey);
+  completedTemplateArgumentListEvaluations.insert(evaluationKey);
 }
 
 #define DEBUG_NAME_QUALIFICATION_LEVEL_FOR_NAME_QUALIFICATION_DEPTH 0
@@ -15391,6 +15430,20 @@ void NameQualificationTraversal::setNameQualification(
       functionDeclaration->get_firstNondefiningDeclaration());
 #endif
 
+  const int existingNameQualificationLength =
+      functionDeclaration->get_name_qualification_length();
+  const bool existingGlobalQualification =
+      functionDeclaration->get_global_qualification_required();
+  SgUnorderedMapNodeToString::iterator existingQualifier =
+      qualifiedNameMapForNames.find(functionDeclaration);
+  const bool preserveExplicitSourceQualifier =
+      existingQualifier != qualifiedNameMapForNames.end() &&
+      !existingQualifier->second.empty() &&
+      (existingNameQualificationLength > 0 || existingGlobalQualification) &&
+      declaration_has_real_visible_source(functionDeclaration);
+  const std::string explicitSourceQualifier =
+      preserveExplicitSourceQualifier ? existingQualifier->second : "";
+
   SgScopeStatement *scope =
       traverseNonrealDeclForCorrectScope(functionDeclaration);
   ROSE_ASSERT(scope != NULL);
@@ -15677,6 +15730,13 @@ void NameQualificationTraversal::setNameQualification(
         qualifier = "";
       }
     }
+  }
+
+  if (preserveExplicitSourceQualifier) {
+    outputNameQualificationLength = existingNameQualificationLength;
+    outputGlobalQualification = existingGlobalQualification;
+    outputTypeEvaluation = false;
+    qualifier = explicitSourceQualifier;
   }
 
   functionDeclaration->set_global_qualification_required(
@@ -16748,7 +16808,9 @@ void NameQualificationTraversal::setNameQualificationOnBaseType(
       isSgTypedefDeclaration(declaration->get_parent()) != nullptr) {
     SgTypedefDeclaration *owner_typedef =
         isSgTypedefDeclaration(declaration->get_parent());
-    if (owner_typedef->get_scope() == typedefDeclaration->get_scope()) {
+    if (owner_typedef->get_scope() == typedefDeclaration->get_scope() &&
+        scopes_are_equivalent_for_name_qualification(
+            declaration->get_scope(), typedefDeclaration->get_scope())) {
       outputNameQualificationLength = 0;
       outputGlobalQualification = false;
       qualifier.clear();
@@ -16772,7 +16834,8 @@ void NameQualificationTraversal::setNameQualificationOnBaseType(
   typedefDeclaration->set_name_qualification_length_for_base_type(
       outputNameQualificationLength);
   typedefDeclaration->set_type_elaboration_required_for_base_type(
-      outputTypeEvaluation);
+      outputTypeEvaluation ||
+      typedefDeclaration->get_type_elaboration_required_for_base_type());
 
   // There should be no type evaluation required for a variable reference, as I
   // recall.
@@ -18010,10 +18073,31 @@ void NameQualificationTraversal::setNameQualification(
   // DQ (2/22/2019): Adding assertion to debug GNU 4.9.3 issue.
   ASSERT_not_null(enumDeclaration);
 
+  const int existingNameQualificationLength =
+      enumDeclaration->get_name_qualification_length();
+  const bool existingGlobalQualification =
+      enumDeclaration->get_global_qualification_required();
+  SgUnorderedMapNodeToString::iterator existingQualifier =
+      qualifiedNameMapForNames.find(enumDeclaration);
+  const bool preserveExplicitSourceQualifier =
+      existingQualifier != qualifiedNameMapForNames.end() &&
+      !existingQualifier->second.empty() &&
+      (existingNameQualificationLength > 0 || existingGlobalQualification);
+
   SgScopeStatement *scope = traverseNonrealDeclForCorrectScope(enumDeclaration);
   string qualifier = setNameQualificationSupport(
       scope, amountOfNameQualificationRequired, outputNameQualificationLength,
       outputGlobalQualification, outputTypeEvaluation);
+
+  if (preserveExplicitSourceQualifier && outputNameQualificationLength == 0 &&
+      !outputGlobalQualification) {
+    enumDeclaration->set_global_qualification_required(
+        existingGlobalQualification);
+    enumDeclaration->set_name_qualification_length(
+        existingNameQualificationLength);
+    enumDeclaration->set_type_elaboration_required(outputTypeEvaluation);
+    return;
+  }
 
   enumDeclaration->set_global_qualification_required(outputGlobalQualification);
   enumDeclaration->set_name_qualification_length(outputNameQualificationLength);

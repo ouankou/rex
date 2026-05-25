@@ -4218,6 +4218,24 @@ void SageInterface::rebuildSymbolTable(SgScopeStatement *scope) {
           // derivedDeclaration->get_templateDeclaration();
           SgTemplateMemberFunctionDeclaration *templateDeclaration =
               derivedDeclaration->get_templateDeclaration();
+          if (templateDeclaration == NULL) {
+            // Non-template members of class-template specializations are still
+            // represented with SgTemplateInstantiationMemberFunctionDecl, but
+            // they do not have an underlying
+            // SgTemplateMemberFunctionDeclaration.
+            SgMemberFunctionSymbol *existingSymbol =
+                derivedDeclarationScope
+                    ->lookup_nontemplate_member_function_symbol(
+                        derivedDeclaration->get_name(),
+                        derivedDeclaration->get_type());
+            if (existingSymbol == NULL) {
+              SgSymbol *symbol = new SgMemberFunctionSymbol(derivedDeclaration);
+              ROSE_ASSERT(symbol != NULL);
+              derivedDeclarationScope->insert_symbol(
+                  derivedDeclaration->get_name(), symbol);
+            }
+            break;
+          }
           ROSE_ASSERT(templateDeclaration != NULL);
           // SgTemplateSymbol* templateSymbol =
           // derivedDeclarationScope->lookup_template_symbol(templateDeclaration->get_name());
@@ -18484,7 +18502,7 @@ void CollectDependentDeclarationsTraversal::visit(SgNode *astNode) {
         // mapped to their new symbols.
         ROSE_ASSERT(classDeclaration->hasAssociatedSymbol() == true);
         SgSymbol *classSymbol =
-            classDeclaration->get_symbol_from_symbol_table();
+            classDeclaration->search_for_symbol_from_symbol_table();
         ROSE_ASSERT(classSymbol != NULL);
 
         // printf ("Saving classSymbol = %p \n",classSymbol);
@@ -18507,6 +18525,25 @@ void CollectDependentDeclarationsTraversal::visit(SgNode *astNode) {
       }
     } // end if namedType
   } // end if (initializedname)
+
+  SgBaseClass *baseClass = isSgBaseClass(astNode);
+  if (baseClass != NULL) {
+    SgClassDeclaration *baseClassDeclaration = baseClass->get_base_class();
+    ROSE_ASSERT(baseClassDeclaration != NULL);
+
+    SgDeclarationStatement *baseDeclaration =
+        baseClassDeclaration->get_definingDeclaration();
+    if (baseDeclaration == NULL) {
+      baseDeclaration = baseClassDeclaration;
+    }
+    addDeclaration(baseDeclaration);
+
+    ROSE_ASSERT(baseClassDeclaration->hasAssociatedSymbol() == true);
+    SgSymbol *baseClassSymbol =
+        baseClassDeclaration->search_for_symbol_from_symbol_table();
+    ROSE_ASSERT(baseClassSymbol != NULL);
+    symbolList.push_back(baseClassSymbol);
+  }
 
   // 2) ------------------------------------------------------------------
   // Collect declarations associated with function calls.
@@ -18561,17 +18598,15 @@ static std::map<const SgStatement *, bool>
 // Used to separate a function to a new source file and add necessary type
 // declarations into the new file. NOTICE: each call to this function has to
 // have call visitedDeclMap.clear() first!!
-static void getDependentDeclarations(
-    SgStatement *stmt, vector<SgDeclarationStatement *> &declarationList,
-    vector<SgSymbol *> &symbolList, bool includeHeaderDecls) {
+static void
+getDependentDeclarations(SgStatement *stmt,
+                         vector<SgDeclarationStatement *> &declarationList,
+                         vector<SgSymbol *> &symbolList,
+                         bool includeHeaderDecls, int target_physical_file_id) {
   // This function returns a list of the dependent declaration for any input
   // statement. Dependent declaration are functions called, types referenced in
   // variable declarations, etc.
   visitedDeclMap[stmt] = true;
-  int target_physical_file_id = -1;
-  if (stmt != NULL && stmt->get_file_info() != NULL) {
-    target_physical_file_id = stmt->get_file_info()->get_physical_file_id();
-  }
   CollectDependentDeclarationsTraversal t(target_physical_file_id,
                                           includeHeaderDecls);
   t.traverse(stmt, preorder);
@@ -18598,11 +18633,50 @@ static void getDependentDeclarations(
     SgDeclarationStatement *decl = *iter;
     SgType *base_type = NULL;
     SgStatement *body_stmt = NULL;
+    auto add_base_class_declaration =
+        [&](SgClassDeclaration *baseClassDeclaration) {
+          if (baseClassDeclaration == NULL) {
+            return;
+          }
+
+          SgDeclarationStatement *baseDeclaration =
+              baseClassDeclaration->get_definingDeclaration();
+          if (baseDeclaration == NULL) {
+            baseDeclaration = baseClassDeclaration;
+          }
+
+          if (std::find(declarationList.begin(), declarationList.end(),
+                        baseDeclaration) == declarationList.end()) {
+            declarationList.push_back(baseDeclaration);
+          }
+
+          SgSymbol *baseClassSymbol =
+              baseClassDeclaration->get_symbol_from_symbol_table();
+          if (baseClassSymbol != NULL &&
+              std::find(symbolList.begin(), symbolList.end(),
+                        baseClassSymbol) == symbolList.end()) {
+            symbolList.push_back(baseClassSymbol);
+          }
+
+          if (!visitedDeclMap[baseDeclaration]) {
+            getDependentDeclarations(baseDeclaration, declarationList,
+                                     symbolList, includeHeaderDecls,
+                                     target_physical_file_id);
+          }
+        };
 
     // grab base type for a declaration
     // For class declaration: grab their
-    if (isSgClassDeclaration(decl)) {
-      base_type = isSgClassDeclaration(decl)->get_type();
+    if (SgClassDeclaration *classDeclaration = isSgClassDeclaration(decl)) {
+      base_type = classDeclaration->get_type();
+      if (SgClassDefinition *classDefinition =
+              classDeclaration->get_definition()) {
+        for (SgBaseClass *baseClass : classDefinition->get_inheritances()) {
+          if (baseClass != NULL) {
+            add_base_class_declaration(baseClass->get_base_class());
+          }
+        }
+      }
     } else if (isSgTypedefDeclaration(decl)) {
 
       // we don't want to strip of nested typedef declarations
@@ -18630,10 +18704,21 @@ static void getDependentDeclarations(
     if ((body_stmt != NULL) &&
         (!visitedDeclMap[body_stmt])) { // avoid infinite recursion
       getDependentDeclarations(body_stmt, declarationList, symbolList,
-                               includeHeaderDecls);
+                               includeHeaderDecls, target_physical_file_id);
     }
   }
 } // end void getDependentDeclarations()
+
+static void getDependentDeclarations(
+    SgStatement *stmt, vector<SgDeclarationStatement *> &declarationList,
+    vector<SgSymbol *> &symbolList, bool includeHeaderDecls) {
+  int target_physical_file_id = -1;
+  if (stmt != NULL && stmt->get_file_info() != NULL) {
+    target_physical_file_id = stmt->get_file_info()->get_physical_file_id();
+  }
+  getDependentDeclarations(stmt, declarationList, symbolList,
+                           includeHeaderDecls, target_physical_file_id);
+}
 
 // Reorder a list of declaration statements based on their appearance order in
 // source files This is essential to insert their copies into a new file in a
@@ -18738,6 +18823,59 @@ getDependentDeclarations(SgStatement *stmt,
                          vector<SgSymbol *> &symbolList) {
   getDependentDeclarations(stmt, declarationList, symbolList,
                            /*includeHeaderDecls=*/false);
+}
+
+static bool functionSymbolIsInScope(SgFunctionSymbol *functionSymbol,
+                                    SgScopeStatement *scope) {
+  if (functionSymbol == NULL || scope == NULL) {
+    return false;
+  }
+
+  SgFunctionDeclaration *functionDeclaration =
+      isSgFunctionDeclaration(functionSymbol->get_declaration());
+  return functionDeclaration != NULL &&
+         functionDeclaration->get_scope() == scope;
+}
+
+static SgFunctionSymbol *
+resolveFunctionSymbolInScope(SgScopeStatement *scope,
+                             SgFunctionDeclaration *functionDeclaration) {
+  if (scope == NULL || functionDeclaration == NULL) {
+    return NULL;
+  }
+
+  SgFunctionDeclaration *firstNondefiningDeclaration = isSgFunctionDeclaration(
+      functionDeclaration->get_firstNondefiningDeclaration());
+  if (firstNondefiningDeclaration == NULL) {
+    firstNondefiningDeclaration = functionDeclaration;
+  }
+
+  SgFunctionSymbol *functionSymbol =
+      scope->lookup_function_symbol(firstNondefiningDeclaration->get_name(),
+                                    firstNondefiningDeclaration->get_type());
+  if (functionSymbolIsInScope(functionSymbol, scope)) {
+    return functionSymbol;
+  }
+
+  functionSymbol =
+      scope->lookup_function_symbol(firstNondefiningDeclaration->get_name());
+  if (functionSymbolIsInScope(functionSymbol, scope)) {
+    return functionSymbol;
+  }
+
+  functionSymbol = isSgFunctionSymbol(
+      scope->find_symbol_from_declaration(firstNondefiningDeclaration));
+  if (functionSymbolIsInScope(functionSymbol, scope)) {
+    return functionSymbol;
+  }
+
+  functionSymbol = isSgFunctionSymbol(
+      firstNondefiningDeclaration->get_symbol_from_symbol_table());
+  if (functionSymbolIsInScope(functionSymbol, scope)) {
+    return functionSymbol;
+  }
+
+  return NULL;
 }
 
 //! Please call this instead of calling getDependentDeclarations ( SgStatement*
@@ -19184,39 +19322,6 @@ vector<SgDeclarationStatement *> generateCopiesOfDependentDeclarations(
   // at least.
   ROSE_ASSERT(isSgGlobal(targetScope) != NULL);
 
-  auto resolveFunctionSymbolInScope =
-      [](SgScopeStatement *scope,
-         SgFunctionDeclaration *functionDeclaration) -> SgFunctionSymbol * {
-    if (scope == NULL || functionDeclaration == NULL) {
-      return NULL;
-    }
-
-    SgFunctionDeclaration *firstNondefiningDeclaration =
-        isSgFunctionDeclaration(
-            functionDeclaration->get_firstNondefiningDeclaration());
-    if (firstNondefiningDeclaration == NULL) {
-      firstNondefiningDeclaration = functionDeclaration;
-    }
-
-    SgFunctionSymbol *functionSymbol =
-        scope->lookup_function_symbol(firstNondefiningDeclaration->get_name(),
-                                      firstNondefiningDeclaration->get_type());
-    if (functionSymbol == NULL) {
-      functionSymbol = scope->lookup_function_symbol(
-          firstNondefiningDeclaration->get_name());
-    }
-    if (functionSymbol == NULL) {
-      functionSymbol = isSgFunctionSymbol(
-          scope->find_symbol_from_declaration(firstNondefiningDeclaration));
-    }
-    if (functionSymbol == NULL) {
-      functionSymbol = isSgFunctionSymbol(
-          firstNondefiningDeclaration->get_symbol_from_symbol_table());
-    }
-
-    return functionSymbol;
-  };
-
   for (vector<SgDeclarationStatement *>::const_iterator i =
            dependentDeclarations.begin();
        i != dependentDeclarations.end(); i++) {
@@ -19326,6 +19431,12 @@ vector<SgDeclarationStatement *> generateCopiesOfDependentDeclarations(
               isSgClassDeclaration(copy_declaration)) {
         copyClassDeclaration->set_scope(targetScope);
         copyClassDeclaration->set_isAutonomousDeclaration(true);
+
+        if (SgClassDefinition *copyClassDefinition =
+                copyClassDeclaration->get_definition()) {
+          copyClassDefinition->set_declaration(copyClassDeclaration);
+          copyClassDefinition->set_parent(copyClassDeclaration);
+        }
 
         if (SgClassDeclaration *copyDefiningDeclaration = isSgClassDeclaration(
                 copyClassDeclaration->get_definingDeclaration())) {
@@ -19536,7 +19647,8 @@ void SageInterface::addMessageStatement(SgStatement *stmt, string message) {
 // excludeHeaderFiles is set to true (the new file will not have any headers)
 void SageInterface::appendStatementWithDependentDeclaration(
     SgDeclarationStatement *decl, SgGlobal *scope,
-    SgStatement *original_statement, bool excludeHeaderFiles) {
+    SgStatement *original_statement, bool excludeHeaderFiles,
+    SgSourceFile *original_source_file, int original_physical_file_id) {
   // New function to support outlining of functions into separate files (with
   // their required declarations).
 
@@ -19584,9 +19696,14 @@ void SageInterface::appendStatementWithDependentDeclaration(
     // declarations from non-system headers to remain self-contained.
     visitedDeclMap.clear();
     vector<SgSymbol *> unusedSymbols;
-    getDependentDeclarations(decl, dependentDeclarationList_inOriginalFile,
-                             unusedSymbols,
-                             /*includeHeaderDecls=*/excludeHeaderFiles);
+    if (original_physical_file_id < 0 && original_statement != NULL &&
+        original_statement->get_file_info() != NULL) {
+      original_physical_file_id =
+          original_statement->get_file_info()->get_physical_file_id();
+    }
+    getDependentDeclarations(
+        decl, dependentDeclarationList_inOriginalFile, unusedSymbols,
+        /*includeHeaderDecls=*/excludeHeaderFiles, original_physical_file_id);
     dependentDeclarationList_inOriginalFile =
         sortSgNodeListBasedOnAppearanceOrderInSource(
             dependentDeclarationList_inOriginalFile);
@@ -19771,39 +19888,6 @@ void SageInterface::appendStatementWithDependentDeclaration(
     return targetScope;
   };
 
-  auto resolveFunctionSymbolInScope =
-      [](SgScopeStatement *scope,
-         SgFunctionDeclaration *functionDeclaration) -> SgFunctionSymbol * {
-    if (scope == NULL || functionDeclaration == NULL) {
-      return NULL;
-    }
-
-    SgFunctionDeclaration *firstNondefiningDeclaration =
-        isSgFunctionDeclaration(
-            functionDeclaration->get_firstNondefiningDeclaration());
-    if (firstNondefiningDeclaration == NULL) {
-      firstNondefiningDeclaration = functionDeclaration;
-    }
-
-    SgFunctionSymbol *functionSymbol =
-        scope->lookup_function_symbol(firstNondefiningDeclaration->get_name(),
-                                      firstNondefiningDeclaration->get_type());
-    if (functionSymbol == NULL) {
-      functionSymbol = scope->lookup_function_symbol(
-          firstNondefiningDeclaration->get_name());
-    }
-    if (functionSymbol == NULL) {
-      functionSymbol = isSgFunctionSymbol(
-          scope->find_symbol_from_declaration(firstNondefiningDeclaration));
-    }
-    if (functionSymbol == NULL) {
-      functionSymbol = isSgFunctionSymbol(
-          firstNondefiningDeclaration->get_symbol_from_symbol_table());
-    }
-
-    return functionSymbol;
-  };
-
   auto lookupExistingDeclarationInTargetFile =
       [&](SgDeclarationStatement *originalDecl) -> SgDeclarationStatement * {
     SgScopeStatement *targetDeclScope =
@@ -19829,7 +19913,9 @@ void SageInterface::appendStatementWithDependentDeclaration(
   };
 
   SgSourceFile *originalStatementFile =
-      SageInterface::getEnclosingSourceFile(original_statement);
+      original_source_file != NULL
+          ? original_source_file
+          : SageInterface::getEnclosingSourceFile(original_statement);
   const std::string outlinedDeclarationFilename =
       original_statement != NULL && original_statement->get_file_info() != NULL
           ? original_statement->get_file_info()->get_filenameString()
@@ -19949,8 +20035,51 @@ void SageInterface::appendStatementWithDependentDeclaration(
   // DQ (2/22/2009): We need all the declarations! (moreTest3.cpp demonstrates
   // this, since it drops the "#define SIMPLE 1" which causes it to be treated a
   // "0" (causing errors in the generated code).
+  auto resolveOriginalSourceFile =
+      [](SgStatement *statement,
+         SgSourceFile *preferredSourceFile) -> SgSourceFile * {
+    if (preferredSourceFile != NULL) {
+      return preferredSourceFile;
+    }
+
+    SgSourceFile *enclosingSourceFile =
+        SageInterface::getEnclosingSourceFile(statement);
+    if (statement == NULL || statement->get_file_info() == NULL) {
+      return enclosingSourceFile;
+    }
+
+    const std::string originalFilename =
+        statement->get_file_info()->get_filenameString();
+    if (originalFilename.empty()) {
+      return enclosingSourceFile;
+    }
+
+    SgProject *project = SageInterface::getProject(statement);
+    if (project == NULL) {
+      project = SageInterface::getProject();
+    }
+    if (project == NULL) {
+      return enclosingSourceFile;
+    }
+
+    SgFilePtrList &files = project->get_fileList();
+    for (SgFile *file : files) {
+      SgSourceFile *sourceFile = isSgSourceFile(file);
+      if (sourceFile == NULL) {
+        continue;
+      }
+
+      if (sourceFile->get_sourceFileNameWithPath() == originalFilename ||
+          sourceFile->getFileName() == originalFilename) {
+        return sourceFile;
+      }
+    }
+
+    return enclosingSourceFile;
+  };
+
   SgSourceFile *sourceFile =
-      SageInterface::getEnclosingSourceFile(original_statement);
+      resolveOriginalSourceFile(original_statement, original_source_file);
   vector<PreprocessingInfo *> requiredDirectivesList =
       collectCppDirectives(sourceFile);
   auto keepDirectiveWhenExcludingHeaders = [](PreprocessingInfo *info) -> bool {
@@ -20000,7 +20129,9 @@ void SageInterface::appendStatementWithDependentDeclaration(
           outlinedFunctionDeclaration->get_firstNondefiningDeclaration());
   ROSE_ASSERT(outlinedFunctionFirstNondefiningDeclaration != NULL);
 
-  SgGlobal *originalFileGlobalScope = getGlobalScope(original_statement);
+  SgGlobal *originalFileGlobalScope =
+      originalStatementFile != NULL ? originalStatementFile->get_globalScope()
+                                    : getGlobalScope(original_statement);
   ROSE_ASSERT(originalFileGlobalScope != NULL);
   if (SgProject::get_verbose() >= 1)
     printf(
@@ -20057,6 +20188,17 @@ void SageInterface::appendStatementWithDependentDeclaration(
       return;
     }
 
+    auto mark_generated_file_info =
+        [outlined_physical_file_id](Sg_File_Info *fileInfo) {
+          if (fileInfo == NULL) {
+            return;
+          }
+
+          fileInfo->setTransformation();
+          fileInfo->setOutputInCodeGeneration();
+          fileInfo->set_physical_file_id(outlined_physical_file_id);
+        };
+
     RoseAst ast(root);
     for (RoseAst::iterator node = ast.begin(); node != ast.end(); ++node) {
       SgLocatedNode *locatedNode = isSgLocatedNode(*node);
@@ -20064,13 +20206,31 @@ void SageInterface::appendStatementWithDependentDeclaration(
         continue;
       }
 
-      Sg_File_Info *fileInfo = locatedNode->get_file_info();
-      if (fileInfo != NULL) {
-        fileInfo->set_physical_file_id(outlined_physical_file_id);
+      mark_generated_file_info(locatedNode->get_file_info());
+      mark_generated_file_info(locatedNode->get_startOfConstruct());
+      mark_generated_file_info(locatedNode->get_endOfConstruct());
+
+      if (SgExpression *expression = isSgExpression(locatedNode)) {
+        mark_generated_file_info(expression->get_operatorPosition());
       }
     }
   };
-  auto cloneAttachedPreprocessingInfo = [](SgNode *root) {
+  auto markPreprocessingInfoForOutlinedFile =
+      [outlined_physical_file_id](PreprocessingInfo *info) {
+        if (info == NULL) {
+          return;
+        }
+
+        info->setAsTransformation();
+        Sg_File_Info *fileInfo = info->get_file_info();
+        if (fileInfo != NULL) {
+          fileInfo->setTransformation();
+          fileInfo->setOutputInCodeGeneration();
+          fileInfo->set_physical_file_id(outlined_physical_file_id);
+        }
+      };
+  auto cloneAttachedPreprocessingInfo = [&markPreprocessingInfoForOutlinedFile](
+                                            SgNode *root) {
     if (root == NULL) {
       return;
     }
@@ -20093,7 +20253,9 @@ void SageInterface::appendStatementWithDependentDeclaration(
       for (AttachedPreprocessingInfoType::const_iterator info = infos->begin();
            info != infos->end(); ++info) {
         if (*info != NULL) {
-          clonedInfos->push_back(new PreprocessingInfo(**info));
+          PreprocessingInfo *clonedInfo = new PreprocessingInfo(**info);
+          markPreprocessingInfoForOutlinedFile(clonedInfo);
+          clonedInfos->push_back(clonedInfo);
         }
       }
 
@@ -20136,6 +20298,43 @@ void SageInterface::appendStatementWithDependentDeclaration(
                                          targetScope);
         }
       };
+  auto ensureCopiedDependentDeclarationSymbols =
+      [](SgDeclarationStatement *declaration, SgScopeStatement *targetScope) {
+        if (declaration == NULL || targetScope == NULL) {
+          return;
+        }
+
+        if (SgClassDeclaration *classDeclaration =
+                isSgClassDeclaration(declaration)) {
+          SgClassDeclaration *symbolDeclaration = isSgClassDeclaration(
+              classDeclaration->get_firstNondefiningDeclaration());
+          if (symbolDeclaration == NULL) {
+            symbolDeclaration = classDeclaration;
+          }
+
+          SgScopeStatement *symbolScope = symbolDeclaration->get_scope();
+          if (symbolScope == NULL) {
+            symbolScope = targetScope;
+            symbolDeclaration->set_scope(symbolScope);
+          }
+          if (classDeclaration->get_scope() == NULL) {
+            classDeclaration->set_scope(symbolScope);
+          }
+          if (SgClassDeclaration *definingDeclaration = isSgClassDeclaration(
+                  symbolDeclaration->get_definingDeclaration())) {
+            if (definingDeclaration->get_scope() == NULL) {
+              definingDeclaration->set_scope(symbolScope);
+            }
+          }
+
+          if (symbolScope->find_symbol_from_declaration(symbolDeclaration) ==
+              NULL) {
+            SgClassSymbol *classSymbol = new SgClassSymbol(symbolDeclaration);
+            symbolScope->insert_symbol(symbolDeclaration->get_name(),
+                                       classSymbol);
+          }
+        }
+      };
 
   for (size_t i = 0; i < dependentDeclarationList.size(); i++) {
     SgDeclarationStatement *d =
@@ -20166,6 +20365,7 @@ void SageInterface::appendStatementWithDependentDeclaration(
       appendDependentDeclarationToScope(d, insertionScope);
     }
 
+    ensureCopiedDependentDeclarationSymbols(d, insertionScope);
     retargetPhysicalFileId(d);
 
     // For whatever type of declaration we add to the global scope in the new
@@ -20215,28 +20415,6 @@ void SageInterface::appendStatementWithDependentDeclaration(
       ROSE_ABORT();
     }
 
-    // Collect include directives that are already attached to this dependent
-    // declaration.
-    vector<PreprocessingInfo *>
-        cppDirectivesAlreadyAttachedToDependentDeclarations =
-            collectCppDirectives(d);
-
-    // Remove these include directives from the requiredDirectivesList (to
-    // prevent redundant output in the generated file)
-    vector<PreprocessingInfo *>::iterator j =
-        cppDirectivesAlreadyAttachedToDependentDeclarations.begin();
-    while (j != cppDirectivesAlreadyAttachedToDependentDeclarations.end()) {
-      // Remove this directive from the requiredDirectivesList (to avoid having
-      // them output redundently).
-      vector<PreprocessingInfo *>::iterator entry = find(
-          requiredDirectivesList.begin(), requiredDirectivesList.end(), *j);
-      ROSE_ASSERT(entry != requiredDirectivesList.end());
-
-      requiredDirectivesList.erase(entry);
-
-      j++;
-    }
-
     cloneAttachedPreprocessingInfo(d);
   }
 
@@ -20278,8 +20456,10 @@ void SageInterface::appendStatementWithDependentDeclaration(
     vector<PreprocessingInfo *>::reverse_iterator j =
         directivesToAttach.rbegin();
     while (j != directivesToAttach.rend()) {
+      PreprocessingInfo *directive = new PreprocessingInfo(**j);
+      markPreprocessingInfoForOutlinedFile(directive);
       firstStatmentInFile->addToAttachedPreprocessingInfo(
-          *j, PreprocessingInfo::before);
+          directive, PreprocessingInfo::before);
       j++;
     }
   }
@@ -23953,9 +24133,10 @@ SgExprListExp *SageInterface::loopCollapsing(SgForStatement *loop,
   if (insert_target != NULL)
     insert_target = getNextStatement(insert_target);
   else
-    insert_target = getFirstStatement(scope);
+    insert_target = target_loop;
 
   ROSE_ASSERT(scope != NULL);
+  ROSE_ASSERT(insert_target != NULL);
 
   for (size_t i = 0; i < collapsing_factor; i++) {
     temp_target_loop = loops[i];
@@ -25852,12 +26033,67 @@ bool SageInterface::insideSystemHeader(SgLocatedNode *node) {
   ROSE_ASSERT(node != NULL);
   Sg_File_Info *finfo = node->get_file_info();
   if (finfo != NULL) {
-    string fname = finfo->get_filenameString();
+    std::vector<std::string> candidate_filenames;
+    auto add_candidate = [&](const std::string &filename) {
+      if (!filename.empty() &&
+          std::find(candidate_filenames.begin(), candidate_filenames.end(),
+                    filename) == candidate_filenames.end()) {
+        candidate_filenames.push_back(filename);
+      }
+    };
+    add_candidate(finfo->get_filenameString());
+    add_candidate(finfo->get_raw_filename());
+    add_candidate(finfo->get_physical_filename());
+
+    SgSourceFile *source_file = getEnclosingSourceFile(node);
+    std::string source_directory;
+    if (source_file != NULL) {
+      source_directory = StringUtility::getPathFromFileName(
+          source_file->get_sourceFileNameWithPath());
+      SgIncludeFile *include_root = source_file->get_associated_include_file();
+      if (include_root != NULL) {
+        static std::mutex populated_include_roots_mutex;
+        static std::set<SgIncludeFile *> populated_include_roots;
+        std::lock_guard<std::mutex> lock(populated_include_roots_mutex);
+        if (populated_include_roots.insert(include_root).second) {
+          populateIncludeFileMapForUnparsingFromIncludeTree(include_root);
+        }
+      }
+    }
+
     static const RosePathRoots roots = resolveRosePaths(nullptr);
-    if (rosePathIsWithinTree(roots.compiler_header_root, fname) ||
-        rosePathIsWithinTree(roots.builtin_header_root, fname) ||
-        rosePathIsWithinTree("/usr/include", fname)) {
-      rtval = true;
+    for (std::vector<std::string>::const_iterator i =
+             candidate_filenames.begin();
+         i != candidate_filenames.end(); ++i) {
+      const std::string fname = normalizeOwnershipPath(*i);
+      if (fname.empty())
+        continue;
+
+      SgIncludeFile *include_file = lookupIncludeFileInUnparseMap(fname);
+      if (include_file == NULL)
+        include_file = lookupIncludeFileInUnparseMap(*i);
+      if (include_file != NULL && include_file->get_isSystemInclude()) {
+        rtval = true;
+        break;
+      }
+
+      if (rosePathIsWithinTree(roots.compiler_header_root, fname) ||
+          rosePathIsWithinTree(roots.builtin_header_root, fname) ||
+          rosePathIsWithinTree("/usr/include", fname)) {
+        rtval = true;
+        break;
+      }
+
+      if (!source_directory.empty()) {
+        StringUtility::FileNameClassification classification =
+            StringUtility::classifyFileName(fname, source_directory,
+                                            StringUtility::getOSType());
+        if (classification.getLocation() ==
+            StringUtility::FILENAME_LOCATION_LIBRARY) {
+          rtval = true;
+          break;
+        }
+      }
     }
   }
   return rtval;
@@ -27470,7 +27706,8 @@ void SageInterface::preOrderCollectPreprocessingInfo(
         data.depth = depth;
 
         // put directives with before location into the infoList
-        if (info->getRelativePosition() == PreprocessingInfo::before) {
+        if (info->getRelativePosition() == PreprocessingInfo::before ||
+            info->getRelativePosition() == PreprocessingInfo::before_syntax) {
           infoList.push_back(info);
           infoMap[info] = data;
         }
@@ -27480,7 +27717,9 @@ void SageInterface::preOrderCollectPreprocessingInfo(
         // all of them, it should have been attached to the first stmt's before
         // location instead!
         else if (info->getRelativePosition() == PreprocessingInfo::after ||
-                 info->getRelativePosition() == PreprocessingInfo::inside) {
+                 info->getRelativePosition() == PreprocessingInfo::inside ||
+                 info->getRelativePosition() ==
+                     PreprocessingInfo::after_syntax) {
           afterList.push_back(
               info); // if attached to be after, save to afterList
           infoMap[info] = data;

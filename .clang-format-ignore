@@ -2,3 +2,7 @@ src/frontend/SageIII/omp_lib.h
 src/frontend/SageIII/omp_lib_kinds.h
 tests/nonsmoke/functional/CompileTests/Cxx_tests/Makefile-fail.inc
 tests/nonsmoke/functional/CompileTests/frontend_integration/Cxx-tests.inc
+
+# Byte-for-byte regression fixtures; formatting them changes expected output.
+tests/nonsmoke/functional/CompileTests/sourcePosition_tests/statements.C
+tests/nonsmoke/functional/moveDeclarationTool/referenceResults/**

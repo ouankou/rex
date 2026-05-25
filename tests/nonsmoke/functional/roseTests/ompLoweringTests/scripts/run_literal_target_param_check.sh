@@ -40,7 +40,7 @@ if [[ ! -f "${rose_file}" ]]; then
 fi
 [[ -f "${rose_file}" ]] || fail "missing lowered output for '${source_name}'"
 
-grep -Fq 'rex_pack_literal_arg_bytes(&n,sizeof(int ))' "${rose_file}" || \
+grep -Eq 'rex_pack_literal_arg_bytes\(&n,[[:space:]]*sizeof\(int[[:space:]]*\)\)' "${rose_file}" || \
   fail "missing packed literal target parameter for n"
 grep -Fq '__arg_types[] = {288' "${rose_file}" || \
   fail "missing literal map flag for explicit map(to:n)"

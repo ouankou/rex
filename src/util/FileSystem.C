@@ -42,27 +42,31 @@ bool isNotSymbolicLink(const Path &path) {
 }
 
 Path createTemporaryDirectory() {
-  // Generate a unique name based on timestamp and random number
-  auto now = std::chrono::system_clock::now();
-  std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-
-  // Convert time to a string
-  std::string timeStr = std::to_string(now_c);
-
-  // Generate a random number
   std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> dis(0, 10000);
-  std::string randomStr = std::to_string(dis(gen));
+  std::mt19937_64 gen(rd());
+  std::uniform_int_distribution<unsigned long long> dis;
 
-  // Combine time and random number into the directory name
-  std::string dirNameStr = "temp_" + timeStr + "_" + randomStr;
+  const Path tempBase = std::filesystem::temp_directory_path();
+  for (int attempt = 0; attempt < 100; ++attempt) {
+    const auto now =
+        std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::string dirNameStr =
+        "rose-" + std::to_string(now) + "-" + std::to_string(dis(gen));
+    const Path dirName = tempBase / dirNameStr;
 
-  std::filesystem::path dirName =
-      std::filesystem::temp_directory_path() / dirNameStr;
-  std::filesystem::create_directory(dirName);
+    std::error_code ec;
+    if (std::filesystem::create_directory(dirName, ec)) {
+      return dirName;
+    }
+    if (ec) {
+      throw std::filesystem::filesystem_error(
+          "failed to create temporary directory", dirName, ec);
+    }
+  }
 
-  return dirName;
+  throw std::filesystem::filesystem_error(
+      "failed to create unique temporary directory", tempBase,
+      std::make_error_code(std::errc::file_exists));
 }
 
 Path makeNormal(const Path &path) {

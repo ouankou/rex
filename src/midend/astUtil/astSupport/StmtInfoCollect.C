@@ -367,7 +367,7 @@ void StmtSideEffectCollect::AppendModLoc(AstInterface &, const AstNodePtr &mod,
   if (killcollect != 0 && rhs != 0)
     (*killcollect)(mod, rhs);
   if (modcollect != 0)
-    (*modcollect)(mod, rhs);
+    (*modcollect)(mod, curstmt);
 }
 void StmtSideEffectCollect::AppendReadLoc(AstInterface & /*fa*/,
                                           const AstNodePtr &read,
@@ -399,7 +399,10 @@ void StmtSideEffectCollect::AppendFuncCall(AstInterface &fa,
       return "no interprecedural read info for : " +
              AstInterface::AstToString(fc) + "adding function call arguments.";
     });
-    AppendReadLoc(fa, AST_UNKNOWN);
+    if (unknownFunctionEffectPolicy ==
+        UnknownFunctionEffectPolicy::CollectSyntheticRefs) {
+      AppendReadLoc(fa, AST_UNKNOWN);
+    }
     callee.set_is_unknown_function_call();
   }
   CollectModRefWrap mod(fa, funcanal, curstmt, readcollect, modcollect);
@@ -410,7 +413,10 @@ void StmtSideEffectCollect::AppendFuncCall(AstInterface &fa,
     });
     AppendFuncCallWrite(fa, fc);
     modunknown = true;
-    AppendModLoc(fa, AST_UNKNOWN);
+    if (unknownFunctionEffectPolicy ==
+        UnknownFunctionEffectPolicy::CollectSyntheticRefs) {
+      AppendModLoc(fa, AST_UNKNOWN);
+    }
     callee.set_is_unknown_function_call();
   }
   if (callcollect != 0) {

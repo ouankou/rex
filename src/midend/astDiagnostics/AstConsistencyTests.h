@@ -7,6 +7,8 @@
 // DQ (12/7/2003): use platform independent macro defined in config.h
 // #include IOSTREAM_HEADER_FILE
 #include <iostream>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "AstStatistics.h"
 
@@ -327,6 +329,8 @@ public:
    traverses the whole AST using the memory pool traversal.
  */
 class TestChildPointersInMemoryPool : public ROSE_VisitTraversal {
+  std::unordered_map<SgNode *, std::unordered_set<SgNode *>> childMap;
+
 public:
   virtual ~TestChildPointersInMemoryPool() {};
   //! static function to do test on any IR node

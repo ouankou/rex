@@ -1,5 +1,9 @@
 
-int foobar(int n) { return 42; }
+
+int foobar(int n)
+{
+  return 42;
+}
 
 void foo() {
   const int size = 10;
@@ -28,3 +32,5 @@ void foo() {
   }
   }
 }
+
+

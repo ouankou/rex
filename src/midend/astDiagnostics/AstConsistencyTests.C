@@ -45,6 +45,77 @@ void rosePhaseTrace(const char *phase) {
     fflush(stderr);
   }
 }
+
+struct ChildPointerCollector : SimpleReferenceToPointerHandler {
+  explicit ChildPointerCollector(std::unordered_set<SgNode *> &children)
+      : children(children) {}
+
+  void operator()(SgNode *&child, const SgName &, bool) override {
+    if (child != nullptr) {
+      children.insert(child);
+    }
+  }
+
+  std::unordered_set<SgNode *> &children;
+};
+
+bool symbolTableEntryMatchesNode(SgSymbolTable *symbolTable,
+                                 const SgName &entryName, SgSymbol *symbol,
+                                 const SgNode *node) {
+  if (symbolTable == nullptr || symbolTable->get_table() == nullptr ||
+      symbol == nullptr || node == nullptr || isSgAliasSymbol(symbol)) {
+    return false;
+  }
+
+  if (symbol->get_symbol_basis() != node) {
+    return false;
+  }
+
+  const SgName lookupName = symbolTable->get_name(node);
+  return symbolTable->get_table()->key_eq()(entryName, lookupName);
+}
+
+SgSymbol *localSymbolForCurrentEntry(SgSymbolTable *symbolTable,
+                                     const SgName &entryName, SgSymbol *symbol,
+                                     SgDeclarationStatement *declaration,
+                                     SgScopeStatement *scope) {
+  if (declaration != nullptr && declaration->get_scope() == scope &&
+      symbolTableEntryMatchesNode(symbolTable, entryName, symbol,
+                                  declaration)) {
+    return symbol;
+  }
+
+  return declaration != nullptr ? declaration->get_symbol_from_symbol_table()
+                                : nullptr;
+}
+
+SgSymbol *localSymbolForCurrentEntry(SgSymbolTable *symbolTable,
+                                     const SgName &entryName, SgSymbol *symbol,
+                                     SgInitializedName *initializedName) {
+  if (initializedName != nullptr &&
+      symbolTableEntryMatchesNode(symbolTable, entryName, symbol,
+                                  initializedName)) {
+    return symbol;
+  }
+
+  return initializedName != nullptr
+             ? initializedName->get_symbol_from_symbol_table()
+             : nullptr;
+}
+
+SgSymbol *localSymbolForCurrentEntry(SgSymbolTable *symbolTable,
+                                     const SgName &entryName, SgSymbol *symbol,
+                                     SgLabelStatement *labelStatement) {
+  if (labelStatement != nullptr &&
+      symbolTableEntryMatchesNode(symbolTable, entryName, symbol,
+                                  labelStatement)) {
+    return symbol;
+  }
+
+  return labelStatement != nullptr
+             ? labelStatement->get_symbol_from_symbol_table()
+             : nullptr;
+}
 } // namespace
 
 /*! \file
@@ -1255,6 +1326,7 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode *node,
     }
 
     case V_SgTypeBool:
+    case V_SgTypeChar:
     case V_SgTypeLongLong: {
       break;
     }
@@ -2910,8 +2982,8 @@ void TestAstSymbolTables::visit(SgNode *node) {
         // ROSE_ASSERT(declarationStatement->get_firstNondefiningDeclaration()
         // == declarationStatement);
 
-        SgSymbol *local_symbol =
-            declarationStatement->get_symbol_from_symbol_table();
+        SgSymbol *local_symbol = localSymbolForCurrentEntry(
+            symbolTable, (*i).first, symbol, declarationStatement, scope);
         SgMemberFunctionDeclaration *memberFunctionDeclaration =
             isSgMemberFunctionDeclaration(declarationStatement);
         if (memberFunctionDeclaration != NULL &&
@@ -2993,8 +3065,8 @@ void TestAstSymbolTables::visit(SgNode *node) {
         SgInitializedName *initializedName =
             isSgInitializedName(declarationNode);
         if (initializedName != NULL) {
-          SgSymbol *local_symbol =
-              initializedName->get_symbol_from_symbol_table();
+          SgSymbol *local_symbol = localSymbolForCurrentEntry(
+              symbolTable, (*i).first, symbol, initializedName);
           if (local_symbol == nullptr) {
             printf("Error: initializedName->get_symbol_from_symbol_table() == "
                    "NULL initializedName = %p = %s \n",
@@ -3043,8 +3115,8 @@ void TestAstSymbolTables::visit(SgNode *node) {
           if (isSgLabelStatement(declarationNode)) {
             SgLabelStatement *labelStatement =
                 (SgLabelStatement *)declarationNode;
-            SgSymbol *local_symbol =
-                labelStatement->get_symbol_from_symbol_table();
+            SgSymbol *local_symbol = localSymbolForCurrentEntry(
+                symbolTable, (*i).first, symbol, labelStatement);
             if (local_symbol == nullptr) {
               printf("Error: labelStatement->get_symbol_from_symbol_table() == "
                      "NULL labelStatement = %p = %s \n",
@@ -4577,6 +4649,7 @@ void TestParentPointersInMemoryPool::visit(SgNode *node) {
 // each node, it appears in its parent's list of children.
 void TestChildPointersInMemoryPool::test() {
   TestChildPointersInMemoryPool t;
+  t.childMap.reserve(numberOfNodes());
   t.traverseMemoryPool();
 }
 
@@ -4584,8 +4657,6 @@ void TestChildPointersInMemoryPool::test() {
 // each node, it appears in its parent's list of children.
 // This is a test requested by Jeremiah.
 void TestChildPointersInMemoryPool::visit(SgNode *node) {
-  static std::map<SgNode *, std::set<SgNode *>> childMap;
-
   ROSE_ASSERT(node != NULL);
 
   if (!SgNode::isLiveNode(node)) {
@@ -4605,36 +4676,21 @@ void TestChildPointersInMemoryPool::visit(SgNode *node) {
     bool nodeFound = false;
 
     // DQ (3/12/2007): This is the latest implementation, here we look for the
-    // child set in a statically defined childMap. This should be a more
-    // efficient implementation. Since it uses a static map it is a problem when
-    // the function is called twice.
-    std::map<SgNode *, std::set<SgNode *>>::iterator it = childMap.find(parent);
+    // child set in a childMap. Building the map once per traversal keeps the
+    // consistency check exact while avoiding repeated linear scans of large
+    // declaration lists.
+    auto it = childMap.find(parent);
 
     if (it != childMap.end()) {
       // Reuse the set that was built the first time
       nodeFound = it->second.find(node) != it->second.end();
-
-      // DQ (7/1/2008): When this function is called a second time, (typically
-      // as part of calling AstTests::runAllTests (SgProject*); with a modified
-      // AST, the childMap has already been set and any new declaration that was
-      // added and which generated a symbol is not in the previously defined
-      // static childMap. So the test above fails and we need to use the more
-      // expensive dynamic test. George Vulov (4/22/2011): Restrict this test to
-      // only memory pool entries that are valid
-      if (nodeFound == false && SgNode::isLiveNode(parent))
-        nodeFound = parent->isChild(node);
     } else {
       // DQ (6/6/2010): Restrict this test to only memory pool entries that are
       // valid
       if (SgNode::isLiveNode(parent)) {
         // build the set (and do the test)
-        childMap[parent] = std::set<SgNode *>();
-        it = childMap.find(parent);
-        ROSE_ASSERT(it != childMap.end());
+        it = childMap.emplace(parent, std::unordered_set<SgNode *>()).first;
 
-        // Later we can make this more efficient by building a set directly
-        // This style is quite inefficient since we are not making use of
-        // the string type date in the pair<SgNode*,string>
 #if ROSE_USE_VALGRIND
         if (VALGRIND_CHECK_MEM_IS_ADDRESSABLE(parent, sizeof(SgNode))) {
           fprintf(stderr, "Parent %p of child %p (a %s) has been deleted.\n",
@@ -4642,20 +4698,10 @@ void TestChildPointersInMemoryPool::visit(SgNode *node) {
         }
 #endif
 
-        vector<pair<SgNode *, string>> v = parent->returnDataMemberPointers();
-
-        for (unsigned long i = 0; i < v.size(); i++) {
-          // Add the child to the set in the map
-          it->second.insert(v[i].first);
-
-          // DQ (10/2/2010): Debugging SgType :: type_kind  data member.
-          ROSE_ASSERT(node != NULL);
-          // ROSE_ASSERT(v[i].first != NULL);
-
-          if (v[i].first == node) {
-            nodeFound = true;
-          }
-        }
+        it->second.reserve(parent->get_numberOfTraversalSuccessors() + 8);
+        ChildPointerCollector collector(it->second);
+        parent->processDataMemberReferenceToPointers(&collector);
+        nodeFound = it->second.find(node) != it->second.end();
       }
     }
 

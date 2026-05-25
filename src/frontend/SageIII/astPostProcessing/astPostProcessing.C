@@ -255,11 +255,13 @@ bool isTrackedStdTemplateDebugName(const std::string &name) {
 }
 
 bool hasRealSourceFileInfo(Sg_File_Info *fi) {
-  return fi != nullptr && fi->get_line() > 0 &&
-         !fi->get_filenameString().empty() &&
-         fi->get_filenameString() != "NULL_FILE" &&
-         !fi->isCompilerGenerated() && !fi->isFrontendSpecific() &&
-         !fi->isSourcePositionUnavailableInFrontend();
+  if (fi == nullptr || fi->get_line() <= 0 || fi->isCompilerGenerated() ||
+      fi->isFrontendSpecific() || fi->isSourcePositionUnavailableInFrontend()) {
+    return false;
+  }
+
+  const std::string filename = fi->get_filenameString();
+  return !filename.empty() && filename != "NULL_FILE";
 }
 
 Sg_File_Info *bestRealSourceFileInfo(SgLocatedNode *node) {
@@ -349,6 +351,17 @@ bool tagDeclarationHasAnonymousSurface(SgDeclarationStatement *decl) {
   }
 
   return false;
+}
+
+bool tagDeclarationIsAutonomous(SgDeclarationStatement *decl) {
+  if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
+    return class_decl->get_isAutonomousDeclaration();
+  }
+  if (SgEnumDeclaration *enum_decl = isSgEnumDeclaration(decl)) {
+    return enum_decl->get_isAutonomousDeclaration();
+  }
+
+  return true;
 }
 
 SgDeclarationStatement *
@@ -487,6 +500,7 @@ bool ownerDirectlyOwnsLexicalTagSurface(const OwnerLexicalTagInfo &info,
   }
 
   return info.allows_anonymous_surface_range_ownership &&
+         !tagDeclarationIsAutonomous(candidate) &&
          tagDeclarationHasAnonymousSurface(candidate);
 }
 
@@ -674,6 +688,169 @@ SgSymbol *lookupEquivalentLiveSymbolForRepair(SgSymbol *symbol,
   return nullptr;
 }
 
+SgDeclarationStatementPtrList *
+scopeMemberDeclarationListForFunctionRefRepair(SgScopeStatement *scope) {
+  if (scope == nullptr) {
+    return nullptr;
+  }
+  if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+    return &class_def->get_members();
+  }
+  if (SgTemplateClassDefinition *template_def =
+          isSgTemplateClassDefinition(scope)) {
+    return &template_def->get_members();
+  }
+  if (SgTemplateInstantiationDefn *inst_def =
+          isSgTemplateInstantiationDefn(scope)) {
+    return &inst_def->get_members();
+  }
+  return nullptr;
+}
+
+SgScopeStatement *enclosingMemberScopeForFunctionRefRepair(SgNode *node) {
+  for (SgNode *cursor = node; cursor != nullptr;
+       cursor = cursor->get_parent()) {
+    if (SgScopeStatement *scope = isSgScopeStatement(cursor)) {
+      if (scopeMemberDeclarationListForFunctionRefRepair(scope) != nullptr) {
+        return scope;
+      }
+    }
+  }
+  return nullptr;
+}
+
+SgMemberFunctionDeclaration *canonicalMemberFunctionDeclForFunctionRefRepair(
+    SgMemberFunctionDeclaration *decl) {
+  if (decl == nullptr) {
+    return nullptr;
+  }
+  if (SgMemberFunctionDeclaration *first_nondef = isSgMemberFunctionDeclaration(
+          decl->get_firstNondefiningDeclaration())) {
+    return first_nondef;
+  }
+  return decl;
+}
+
+bool memberFunctionDeclMatchesFunctionRefType(SgMemberFunctionDeclaration *decl,
+                                              SgMemberFunctionRefExp *ref) {
+  if (decl == nullptr || ref == nullptr) {
+    return false;
+  }
+  SgType *decl_type = decl->get_type();
+  SgType *ref_type = ref->get_type();
+  if (decl_type == nullptr || ref_type == nullptr) {
+    return false;
+  }
+  return decl_type == ref_type ||
+         SageInterface::isEquivalentType(decl_type, ref_type);
+}
+
+SgMemberFunctionDeclaration *
+resolveMemberFunctionDeclForNullRefSymbol(SgMemberFunctionRefExp *ref) {
+  if (ref == nullptr || ref->get_symbol() == nullptr) {
+    return nullptr;
+  }
+
+  SgScopeStatement *member_scope =
+      enclosingMemberScopeForFunctionRefRepair(ref);
+  SgDeclarationStatementPtrList *members =
+      scopeMemberDeclarationListForFunctionRefRepair(member_scope);
+  if (members == nullptr) {
+    return nullptr;
+  }
+
+  const SgName target_name = ref->get_symbol()->get_name();
+  std::vector<SgMemberFunctionDeclaration *> name_matches;
+  std::vector<SgMemberFunctionDeclaration *> type_matches;
+  std::unordered_set<SgMemberFunctionDeclaration *> seen;
+
+  for (SgDeclarationStatement *stmt : *members) {
+    SgMemberFunctionDeclaration *member_decl =
+        canonicalMemberFunctionDeclForFunctionRefRepair(
+            isSgMemberFunctionDeclaration(stmt));
+    if (member_decl == nullptr || member_decl->get_name() != target_name ||
+        !seen.insert(member_decl).second) {
+      continue;
+    }
+
+    name_matches.push_back(member_decl);
+    if (memberFunctionDeclMatchesFunctionRefType(member_decl, ref)) {
+      type_matches.push_back(member_decl);
+    }
+  }
+
+  if (type_matches.size() == 1) {
+    return type_matches.front();
+  }
+  if (name_matches.size() == 1) {
+    return name_matches.front();
+  }
+  return nullptr;
+}
+
+SgMemberFunctionSymbol *
+memberFunctionSymbolForFunctionRefRepair(SgMemberFunctionDeclaration *decl) {
+  decl = canonicalMemberFunctionDeclForFunctionRefRepair(decl);
+  if (decl == nullptr) {
+    return nullptr;
+  }
+
+  if (SgMemberFunctionSymbol *symbol =
+          isSgMemberFunctionSymbol(decl->get_symbol_from_symbol_table())) {
+    if (symbol->get_declaration() == nullptr) {
+      symbol->set_declaration(decl);
+    }
+    return symbol;
+  }
+
+  SgScopeStatement *scope = decl->get_scope();
+  SgMemberFunctionSymbol *symbol = nullptr;
+  if (scope != nullptr) {
+    symbol = scope->lookup_nontemplate_member_function_symbol(
+        decl->get_name(), decl->get_type(), nullptr);
+    if (symbol != nullptr && symbol->get_declaration() == nullptr) {
+      symbol->set_declaration(decl);
+    }
+  }
+
+  if (symbol == nullptr) {
+    symbol = new SgMemberFunctionSymbol(decl);
+    if (scope != nullptr) {
+      scope->insert_symbol(symbol->get_name(), symbol);
+    }
+  }
+
+  return symbol;
+}
+
+void repairNullMemberFunctionRefSymbols(SgNode *node) {
+  if (node == nullptr) {
+    return;
+  }
+
+  Rose_STL_Container<SgNode *> refs =
+      NodeQuery::querySubTree(node, V_SgMemberFunctionRefExp);
+  for (SgNode *ref_node : refs) {
+    SgMemberFunctionRefExp *ref = isSgMemberFunctionRefExp(ref_node);
+    if (ref == nullptr) {
+      continue;
+    }
+
+    SgMemberFunctionSymbol *symbol = ref->get_symbol();
+    if (symbol == nullptr || symbol->get_declaration() != nullptr) {
+      continue;
+    }
+
+    SgMemberFunctionDeclaration *decl =
+        resolveMemberFunctionDeclForNullRefSymbol(ref);
+    SgMemberFunctionSymbol *resolved_symbol =
+        memberFunctionSymbolForFunctionRefRepair(decl);
+    if (resolved_symbol != nullptr) {
+      ref->set_symbol(resolved_symbol);
+    }
+  }
+}
+
 void removeSymbolFromParentForRepair(SgSymbol *symbol) {
   if (symbol == nullptr) {
     return;
@@ -743,6 +920,8 @@ void rewriteSymbolEdgesInMemoryPool(
 bool functionDeclIsNondefining(SgFunctionDeclaration *decl);
 bool functionDeclOutputsCode(SgFunctionDeclaration *decl);
 bool functionDeclOwnsAssociatedSymbol(SgFunctionDeclaration *decl);
+bool functionDeclSourceLess(SgFunctionDeclaration *lhs,
+                            SgFunctionDeclaration *rhs);
 
 std::string stableFunctionDeclIdentity(SgFunctionDeclaration *decl) {
   if (decl == nullptr) {
@@ -1242,14 +1421,161 @@ void repairHiddenFunctionDeclarationSurfaces(SgNode *node) {
   traversal.traverse(node, preorder);
 }
 
+void repairImplicitCFunctionAstOnlyDeclarationOrdering(SgNode *node) {
+  if (node == nullptr) {
+    return;
+  }
+
+  auto same_file_info = [](Sg_File_Info *lhs, Sg_File_Info *rhs) -> bool {
+    if (!hasRealSourceFileInfo(lhs) || !hasRealSourceFileInfo(rhs)) {
+      return false;
+    }
+    if (lhs->get_file_id() >= 0 && rhs->get_file_id() >= 0) {
+      return lhs->get_file_id() == rhs->get_file_id();
+    }
+    return lhs->get_filenameString() == rhs->get_filenameString();
+  };
+
+  auto source_range_contains = [&](SgDeclarationStatement *existing,
+                                   Sg_File_Info *decl_fi) -> bool {
+    if (existing == nullptr || !hasRealSourceFileInfo(decl_fi)) {
+      return false;
+    }
+
+    Sg_File_Info *start = getDeclSortFileInfo(existing);
+    Sg_File_Info *end = existing->get_endOfConstruct();
+    if (!hasRealSourceFileInfo(end)) {
+      end = start;
+    }
+    if (!same_file_info(start, decl_fi) || !same_file_info(end, decl_fi)) {
+      return false;
+    }
+
+    const int start_line = start->get_line();
+    const int end_line = end->get_line();
+    const int decl_line = decl_fi->get_line();
+    return std::min(start_line, end_line) <= decl_line &&
+           decl_line <= std::max(start_line, end_line);
+  };
+
+  auto insert_ast_only_decl_by_use_position =
+      [&](SgScopeStatement *scope, SgDeclarationStatement *decl) {
+        SgDeclarationStatementPtrList &decls = scope->getDeclarationList();
+        Sg_File_Info *decl_fi = getDeclSortFileInfo(decl);
+        if (!hasRealSourceFileInfo(decl_fi)) {
+          decls.push_back(decl);
+          return;
+        }
+
+        auto insert_it = decls.end();
+        for (auto it = decls.begin(); it != decls.end(); ++it) {
+          SgDeclarationStatement *existing = *it;
+          if (existing == nullptr || existing == decl) {
+            continue;
+          }
+
+          Sg_File_Info *existing_fi = getDeclSortFileInfo(existing);
+          if (!same_file_info(existing_fi, decl_fi)) {
+            continue;
+          }
+
+          if (source_range_contains(existing, decl_fi) ||
+              existing_fi->get_line() > decl_fi->get_line() ||
+              (existing_fi->get_line() == decl_fi->get_line() &&
+               existing_fi->get_col() > decl_fi->get_col())) {
+            insert_it = it;
+            break;
+          }
+        }
+
+        decls.insert(insert_it, decl);
+      };
+
+  struct Traversal : public AstSimpleProcessing {
+    decltype(insert_ast_only_decl_by_use_position) &insert_decl;
+
+    explicit Traversal(decltype(insert_ast_only_decl_by_use_position) &fn)
+        : insert_decl(fn) {}
+
+    void visit(SgNode *n) override {
+      SgScopeStatement *scope = isSgScopeStatement(n);
+      if (scope == nullptr) {
+        return;
+      }
+      if (isSgGlobal(scope) == nullptr &&
+          isSgNamespaceDefinitionStatement(scope) == nullptr) {
+        return;
+      }
+
+      SgDeclarationStatementPtrList &decls = scope->getDeclarationList();
+      std::vector<SgDeclarationStatement *> ast_only_decls;
+      for (SgDeclarationStatement *decl : decls) {
+        SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(decl);
+        if (func_decl == nullptr || !func_decl->get_is_implicit_function()) {
+          continue;
+        }
+        ast_only_decls.push_back(decl);
+      }
+      if (ast_only_decls.empty()) {
+        return;
+      }
+
+      for (SgDeclarationStatement *decl : ast_only_decls) {
+        decls.erase(std::remove(decls.begin(), decls.end(), decl), decls.end());
+      }
+      for (SgDeclarationStatement *decl : ast_only_decls) {
+        if (decl->get_parent() != scope) {
+          decl->set_parent(scope);
+        }
+        if (SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(decl)) {
+          if (func_decl->get_scope() == nullptr ||
+              !namespaceLikeScopeEquals(func_decl->get_scope(), scope)) {
+            func_decl->set_scope(scope);
+          }
+        }
+        insert_decl(scope, decl);
+      }
+    }
+  } traversal(insert_ast_only_decl_by_use_position);
+
+  traversal.traverse(node, preorder);
+}
+
 void repairLexicallyOwnedTagDeclarationSurfaces(SgNode *node) {
   if (node == nullptr) {
     return;
   }
 
-  auto fileInfoWithinDeclRange = [](Sg_File_Info *target,
-                                    SgDeclarationStatement *owner) -> bool {
-    if (!hasRealSourceFileInfo(target) || owner == nullptr) {
+  struct SourcePoint {
+    int file_id = -1;
+    int line = 0;
+    int col = 0;
+  };
+
+  struct SourceRange {
+    bool valid = false;
+    SourcePoint begin;
+    SourcePoint end;
+  };
+
+  auto less_or_equal = [](const SourcePoint &lhs, const SourcePoint &rhs) {
+    return lhs.line < rhs.line || (lhs.line == rhs.line && lhs.col <= rhs.col);
+  };
+
+  auto make_source_point = [](Sg_File_Info *fi, SourcePoint &point) -> bool {
+    if (!hasRealSourceFileInfo(fi)) {
+      return false;
+    }
+
+    point.file_id = fi->get_file_id();
+    point.line = fi->get_line();
+    point.col = fi->get_col();
+    return true;
+  };
+
+  auto make_decl_range = [&](SgDeclarationStatement *owner,
+                             SourceRange &range) -> bool {
+    if (owner == nullptr) {
       return false;
     }
 
@@ -1265,22 +1591,31 @@ void repairLexicallyOwnedTagDeclarationSurfaces(SgNode *node) {
       return false;
     }
 
-    if (target->get_file_id() != begin->get_file_id() ||
-        target->get_file_id() != end->get_file_id()) {
+    SourcePoint begin_point;
+    SourcePoint end_point;
+    if (!make_source_point(begin, begin_point) ||
+        !make_source_point(end, end_point)) {
       return false;
     }
 
-    auto less_or_equal = [](Sg_File_Info *lhs, Sg_File_Info *rhs) {
-      return lhs->get_line() < rhs->get_line() ||
-             (lhs->get_line() == rhs->get_line() &&
-              lhs->get_col() <= rhs->get_col());
-    };
-
-    if (!less_or_equal(begin, end)) {
-      std::swap(begin, end);
+    if (begin_point.file_id != end_point.file_id) {
+      return false;
     }
 
-    return less_or_equal(begin, target) && less_or_equal(target, end);
+    if (!less_or_equal(begin_point, end_point)) {
+      std::swap(begin_point, end_point);
+    }
+
+    range.valid = true;
+    range.begin = begin_point;
+    range.end = end_point;
+    return true;
+  };
+
+  auto source_point_within_range = [&](const SourcePoint &point,
+                                       const SourceRange &range) {
+    return range.valid && point.file_id == range.begin.file_id &&
+           less_or_equal(range.begin, point) && less_or_equal(point, range.end);
   };
 
   auto suppress_decl_output = [](SgDeclarationStatement *decl) {
@@ -1351,15 +1686,27 @@ void repairLexicallyOwnedTagDeclarationSurfaces(SgNode *node) {
 
   candidate_decl_collector.traverse(node, preorder);
 
+  struct OwnerEntry {
+    SgDeclarationStatement *stmt = nullptr;
+    OwnerLexicalTagInfo info;
+    SourceRange range;
+  };
+
   struct Traversal : public AstSimpleProcessing {
-    decltype(fileInfoWithinDeclRange) &fileInfoWithinDeclRange;
+    decltype(make_source_point) &make_source_point;
+    decltype(make_decl_range) &make_decl_range;
+    decltype(source_point_within_range) &source_point_within_range;
     decltype(suppress_decl_output) &suppress_decl_output;
     decltype(candidate_decls_by_scope) &candidate_decls_by_scope;
 
-    Traversal(decltype(fileInfoWithinDeclRange) &range_pred,
+    Traversal(decltype(make_source_point) &source_point_factory,
+              decltype(make_decl_range) &decl_range_factory,
+              decltype(source_point_within_range) &range_pred,
               decltype(suppress_decl_output) &suppress_output,
               decltype(candidate_decls_by_scope) &grouped_candidates)
-        : fileInfoWithinDeclRange(range_pred),
+        : make_source_point(source_point_factory),
+          make_decl_range(decl_range_factory),
+          source_point_within_range(range_pred),
           suppress_decl_output(suppress_output),
           candidate_decls_by_scope(grouped_candidates) {}
 
@@ -1374,8 +1721,9 @@ void repairLexicallyOwnedTagDeclarationSurfaces(SgNode *node) {
       }
 
       SgDeclarationStatementPtrList decls_copy = scope->getDeclarationList();
-      std::unordered_map<SgDeclarationStatement *, OwnerLexicalTagInfo>
-          owner_lexical_tag_info;
+      std::vector<OwnerEntry> owners;
+      owners.reserve(decls_copy.size());
+      std::unordered_map<int, std::vector<size_t>> owners_by_file;
       for (SgDeclarationStatement *owner_stmt : decls_copy) {
         const bool can_own_embedded_tag_surface =
             isSgClassDeclaration(owner_stmt) != nullptr ||
@@ -1386,8 +1734,19 @@ void repairLexicallyOwnedTagDeclarationSurfaces(SgNode *node) {
           continue;
         }
 
-        OwnerLexicalTagInfo &info = owner_lexical_tag_info[owner_stmt];
-        collectOwnerLexicalTagInfo(owner_stmt, info);
+        SourceRange range;
+        if (!make_decl_range(owner_stmt, range)) {
+          continue;
+        }
+
+        OwnerEntry entry;
+        entry.stmt = owner_stmt;
+        entry.range = range;
+        collectOwnerLexicalTagInfo(owner_stmt, entry.info);
+
+        const size_t owner_index = owners.size();
+        owners_by_file[range.begin.file_id].push_back(owner_index);
+        owners.push_back(entry);
       }
 
       std::unordered_map<SgScopeStatement *,
@@ -1424,22 +1783,27 @@ void repairLexicallyOwnedTagDeclarationSurfaces(SgNode *node) {
         }
 
         Sg_File_Info *decl_loc = getDeclSortFileInfo(decl_stmt);
-        if (!hasRealSourceFileInfo(decl_loc)) {
+        SourcePoint decl_point;
+        if (!make_source_point(decl_loc, decl_point)) {
           continue;
         }
 
-        for (SgDeclarationStatement *owner_stmt : decls_copy) {
-          std::unordered_map<SgDeclarationStatement *,
-                             OwnerLexicalTagInfo>::const_iterator owner_info =
-              owner_lexical_tag_info.find(owner_stmt);
-          if (owner_info == owner_lexical_tag_info.end() ||
-              owner_stmt == decl_stmt) {
+        std::unordered_map<int, std::vector<size_t>>::const_iterator
+            matching_owners = owners_by_file.find(decl_point.file_id);
+        if (matching_owners == owners_by_file.end()) {
+          continue;
+        }
+
+        for (size_t owner_index : matching_owners->second) {
+          const OwnerEntry &owner = owners[owner_index];
+          SgDeclarationStatement *owner_stmt = owner.stmt;
+          if (owner_stmt == decl_stmt) {
             continue;
           }
-          if (!fileInfoWithinDeclRange(decl_loc, owner_stmt)) {
+          if (!source_point_within_range(decl_point, owner.range)) {
             continue;
           }
-          if (!ownerDirectlyOwnsLexicalTagSurface(owner_info->second, decl_stmt,
+          if (!ownerDirectlyOwnsLexicalTagSurface(owner.info, decl_stmt,
                                                   decl_loc)) {
             continue;
           }
@@ -1448,8 +1812,13 @@ void repairLexicallyOwnedTagDeclarationSurfaces(SgNode *node) {
             if (candidate == nullptr) {
               return;
             }
+            if (candidate == owner_stmt) {
+              return;
+            }
             Sg_File_Info *candidate_loc = getDeclSortFileInfo(candidate);
-            if (!fileInfoWithinDeclRange(candidate_loc, owner_stmt)) {
+            SourcePoint candidate_point;
+            if (!make_source_point(candidate_loc, candidate_point) ||
+                !source_point_within_range(candidate_point, owner.range)) {
               return;
             }
             if (declAttachedToScope(scope, candidate)) {
@@ -1486,8 +1855,296 @@ void repairLexicallyOwnedTagDeclarationSurfaces(SgNode *node) {
         }
       }
     }
-  } traversal(fileInfoWithinDeclRange, suppress_decl_output,
-              candidate_decls_by_scope);
+  } traversal(make_source_point, make_decl_range, source_point_within_range,
+              suppress_decl_output, candidate_decls_by_scope);
+
+  traversal.traverse(node, preorder);
+}
+
+bool hiddenGeneratedClassDeclaration(SgClassDeclaration *decl) {
+  if (decl == nullptr) {
+    return false;
+  }
+
+  if (bestRealSourceFileInfo(decl) != nullptr) {
+    return false;
+  }
+  if (bestRealSourceFileInfo(decl->get_definition()) != nullptr) {
+    return false;
+  }
+
+  Sg_File_Info *fi = decl->get_file_info();
+  const bool hidden_surface =
+      !decl->get_isAutonomousDeclaration() || fi == nullptr ||
+      !fi->isOutputInCodeGeneration() || fi->isCompilerGenerated() ||
+      fi->isFrontendSpecific() || fi->isSourcePositionUnavailableInFrontend();
+
+  return hidden_surface;
+}
+
+SgDeclarationStatementPtrList *scopeDeclarationList(SgScopeStatement *scope) {
+  if (scope == nullptr) {
+    return nullptr;
+  }
+  if (SgGlobal *global = isSgGlobal(scope)) {
+    return &global->get_declarations();
+  }
+  if (SgNamespaceDefinitionStatement *ns =
+          isSgNamespaceDefinitionStatement(scope)) {
+    return &ns->get_declarations();
+  }
+  if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+    return &class_def->get_members();
+  }
+  if (SgTemplateClassDefinition *class_def =
+          isSgTemplateClassDefinition(scope)) {
+    return &class_def->get_members();
+  }
+  if (SgTemplateInstantiationDefn *inst_def =
+          isSgTemplateInstantiationDefn(scope)) {
+    return &inst_def->get_members();
+  }
+  if (SgDeclarationScope *decl_scope = isSgDeclarationScope(scope)) {
+    return &decl_scope->get_declarations();
+  }
+  if (scope->containsOnlyDeclarations()) {
+    return &scope->getDeclarationList();
+  }
+  return nullptr;
+}
+
+void detachDeclarationFromScopeList(SgDeclarationStatement *decl,
+                                    SgScopeStatement *scope) {
+  SgDeclarationStatementPtrList *decls = scopeDeclarationList(scope);
+  if (decls == nullptr) {
+    return;
+  }
+
+  decls->erase(std::remove(decls->begin(), decls->end(), decl), decls->end());
+}
+
+void moveClassSymbolToScope(SgClassDeclaration *decl,
+                            SgScopeStatement *target_scope) {
+  if (decl == nullptr || target_scope == nullptr) {
+    return;
+  }
+
+  SgSymbol *symbol = decl->get_symbol_from_symbol_table();
+  SgScopeStatement *old_scope = decl->get_scope();
+
+  if (symbol != nullptr && old_scope != nullptr && old_scope != target_scope) {
+    if (old_scope->symbol_exists(symbol)) {
+      old_scope->remove_symbol(symbol);
+    }
+  }
+
+  if (old_scope != target_scope) {
+    decl->set_scope(target_scope);
+  }
+
+  if (symbol == nullptr) {
+    return;
+  }
+
+  if (!target_scope->symbol_exists(symbol)) {
+    target_scope->insert_symbol(symbol->get_name(), symbol);
+  } else if (symbol->get_parent() != target_scope->get_symbol_table()) {
+    symbol->set_parent(target_scope->get_symbol_table());
+  }
+}
+
+void repairHiddenGeneratedClassDeclarationChains(SgNode *node) {
+  if (node == nullptr) {
+    return;
+  }
+
+  struct Traversal : public AstSimpleProcessing {
+    std::unordered_set<SgClassDeclaration *> normalized;
+
+    void visit(SgNode *n) override {
+      SgClassDeclaration *decl = isSgClassDeclaration(n);
+      if (decl == nullptr) {
+        return;
+      }
+
+      SgClassDeclaration *defining_decl =
+          isSgClassDeclaration(decl->get_definingDeclaration());
+      SgClassDeclaration *first_nondef =
+          isSgClassDeclaration(decl->get_firstNondefiningDeclaration());
+      if (defining_decl == nullptr || first_nondef == nullptr ||
+          defining_decl == first_nondef) {
+        return;
+      }
+
+      SgScopeStatement *target_scope = defining_decl->get_scope();
+      if (target_scope == nullptr ||
+          first_nondef->get_scope() == target_scope ||
+          !hiddenGeneratedClassDeclaration(defining_decl) ||
+          !hiddenGeneratedClassDeclaration(first_nondef)) {
+        return;
+      }
+
+      std::vector<SgClassDeclaration *> worklist;
+      std::unordered_set<SgClassDeclaration *> seen;
+      auto enqueue = [&](SgClassDeclaration *candidate) {
+        if (candidate != nullptr && seen.insert(candidate).second) {
+          worklist.push_back(candidate);
+        }
+      };
+
+      enqueue(decl);
+      enqueue(defining_decl);
+      enqueue(first_nondef);
+      for (size_t i = 0; i < worklist.size(); ++i) {
+        SgClassDeclaration *current = worklist[i];
+        enqueue(isSgClassDeclaration(current->get_definingDeclaration()));
+        enqueue(
+            isSgClassDeclaration(current->get_firstNondefiningDeclaration()));
+      }
+
+      for (SgClassDeclaration *current : worklist) {
+        if (!hiddenGeneratedClassDeclaration(current) ||
+            !normalized.insert(current).second) {
+          continue;
+        }
+
+        SgScopeStatement *old_scope = current->get_scope();
+        if (old_scope != nullptr && old_scope != target_scope) {
+          detachDeclarationFromScopeList(current, old_scope);
+        }
+        moveClassSymbolToScope(current, target_scope);
+      }
+    }
+  } traversal;
+
+  traversal.traverse(node, preorder);
+}
+
+SgScopeStatement *classLikeScope(SgNode *node) {
+  if (SgScopeStatement *scope = isSgScopeStatement(node)) {
+    if (isSgClassDefinition(scope) != nullptr ||
+        isSgTemplateClassDefinition(scope) != nullptr ||
+        isSgTemplateInstantiationDefn(scope) != nullptr) {
+      return scope;
+    }
+  }
+
+  if (SgClassDeclaration *decl = isSgClassDeclaration(node)) {
+    return classLikeScope(decl->get_definition());
+  }
+
+  return nullptr;
+}
+
+SgClassDeclaration *
+classDeclarationFromClassLikeScope(SgScopeStatement *scope) {
+  if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+    return class_def->get_declaration();
+  }
+  if (SgTemplateClassDefinition *template_def =
+          isSgTemplateClassDefinition(scope)) {
+    return template_def->get_declaration();
+  }
+  if (SgTemplateInstantiationDefn *inst_def =
+          isSgTemplateInstantiationDefn(scope)) {
+    return inst_def->get_declaration();
+  }
+  return nullptr;
+}
+
+size_t classTemplateParameterCount(SgClassDeclaration *decl) {
+  if (SgTemplateClassDeclaration *template_decl =
+          isSgTemplateClassDeclaration(decl)) {
+    return template_decl->get_templateParameters().size();
+  }
+  if (SgTemplateInstantiationDecl *inst_decl =
+          isSgTemplateInstantiationDecl(decl)) {
+    if (SgTemplateClassDeclaration *template_decl =
+            isSgTemplateClassDeclaration(
+                inst_decl->get_templateDeclaration())) {
+      return template_decl->get_templateParameters().size();
+    }
+  }
+  return 0;
+}
+
+SgName classOwnerBaseName(SgClassDeclaration *decl) {
+  if (decl == nullptr) {
+    return SgName();
+  }
+  if (SgTemplateClassDeclaration *template_decl =
+          isSgTemplateClassDeclaration(decl)) {
+    SgName template_name = template_decl->get_templateName();
+    if (!template_name.is_null() && !template_name.getString().empty()) {
+      return template_name;
+    }
+  }
+  if (SgTemplateInstantiationDecl *inst_decl =
+          isSgTemplateInstantiationDecl(decl)) {
+    if (SgTemplateClassDeclaration *template_decl =
+            isSgTemplateClassDeclaration(
+                inst_decl->get_templateDeclaration())) {
+      SgName template_name = template_decl->get_templateName();
+      if (!template_name.is_null() && !template_name.getString().empty()) {
+        return template_name;
+      }
+      return template_decl->get_name();
+    }
+    SgName template_name = inst_decl->get_templateName();
+    if (!template_name.is_null() && !template_name.getString().empty()) {
+      return template_name;
+    }
+  }
+  return decl->get_name();
+}
+
+bool classScopesHaveSameOwnerShape(SgScopeStatement *lhs,
+                                   SgScopeStatement *rhs) {
+  SgClassDeclaration *lhs_decl = classDeclarationFromClassLikeScope(lhs);
+  SgClassDeclaration *rhs_decl = classDeclarationFromClassLikeScope(rhs);
+  return lhs_decl != nullptr && rhs_decl != nullptr &&
+         classOwnerBaseName(lhs_decl) == classOwnerBaseName(rhs_decl) &&
+         lhs_decl->get_class_type() == rhs_decl->get_class_type() &&
+         classTemplateParameterCount(lhs_decl) ==
+             classTemplateParameterCount(rhs_decl);
+}
+
+void repairOutOfLineTemplateClassDefinitionScopes(SgNode *node) {
+  if (node == nullptr) {
+    return;
+  }
+
+  struct Traversal : public AstSimpleProcessing {
+    void visit(SgNode *n) override {
+      SgTemplateClassDeclaration *decl = isSgTemplateClassDeclaration(n);
+      if (decl == nullptr || decl->get_definition() == nullptr ||
+          decl->get_definingDeclaration() != decl) {
+        return;
+      }
+
+      SgScopeStatement *parent_scope = isSgScopeStatement(decl->get_parent());
+      SgScopeStatement *current_scope = classLikeScope(decl->get_scope());
+      if (current_scope == nullptr || parent_scope == current_scope) {
+        return;
+      }
+
+      if (decl->get_templateClassOwnerScopeKind() !=
+          SgTemplateClassDeclaration::
+              e_template_class_owner_scope_source_spelled) {
+        return;
+      }
+
+      SgClassDeclaration *associated_class =
+          decl->get_sourceSpelledTemplateClassOwner();
+      SgScopeStatement *associated_scope = classLikeScope(associated_class);
+      if (associated_scope == nullptr || associated_scope == current_scope ||
+          !classScopesHaveSameOwnerShape(current_scope, associated_scope)) {
+        return;
+      }
+
+      decl->set_scope(associated_scope);
+    }
+  } traversal;
 
   traversal.traverse(node, preorder);
 }
@@ -1496,6 +2153,11 @@ bool functionDeclIsNondefining(SgFunctionDeclaration *decl) {
   return decl != nullptr &&
          (decl->get_definition() == nullptr ||
           decl != isSgFunctionDeclaration(decl->get_definingDeclaration()));
+}
+
+bool functionDeclParticipatesInDeclarationChainRepair(
+    SgFunctionDeclaration *decl) {
+  return decl != nullptr && isSgProgramHeaderStatement(decl) == nullptr;
 }
 
 bool functionDeclOutputsCode(SgFunctionDeclaration *decl) {
@@ -1517,12 +2179,139 @@ associatedFunctionSymbolDeclaration(SgFunctionDeclaration *decl) {
                          : nullptr;
 }
 
+class FunctionSymbolLookupCache {
+public:
+  SgFunctionDeclaration *
+  associatedFunctionSymbolDeclaration(SgFunctionDeclaration *decl) {
+    if (decl == nullptr) {
+      return nullptr;
+    }
+
+    auto cached = associated_declarations_.find(decl);
+    if (cached != associated_declarations_.end()) {
+      return cached->second;
+    }
+
+    SgFunctionDeclaration *associated = computeAssociatedDeclaration(decl);
+    associated_declarations_[decl] = associated;
+    return associated;
+  }
+
+private:
+  using DeclarationSymbolMap = std::unordered_map<SgNode *, SgSymbol *>;
+
+  DeclarationSymbolMap &symbolsByDeclaration(SgSymbolTable *table) {
+    auto found = symbols_by_table_.find(table);
+    if (found != symbols_by_table_.end()) {
+      return found->second;
+    }
+
+    DeclarationSymbolMap symbols;
+    if (table != nullptr) {
+      if (SgSymbolTable::BaseHashType *entries = table->get_table()) {
+        symbols.reserve(entries->size() * 2 + 1);
+        for (const std::pair<const SgName, SgSymbol *> &entry : *entries) {
+          SgSymbol *symbol = entry.second;
+          if (symbol == nullptr) {
+            continue;
+          }
+          if (SgAliasSymbol *alias = isSgAliasSymbol(symbol)) {
+            symbol = alias->get_alias();
+            if (symbol == nullptr || isSgAliasSymbol(symbol) != nullptr) {
+              continue;
+            }
+          }
+          SgNode *basis = symbol->get_symbol_basis();
+          if (basis != nullptr) {
+            symbols.emplace(basis, symbol);
+          }
+        }
+      }
+    }
+
+    auto inserted = symbols_by_table_.emplace(table, std::move(symbols));
+    return inserted.first->second;
+  }
+
+  SgSymbol *findInTable(SgSymbolTable *table, SgNode *decl) {
+    if (table == nullptr || decl == nullptr) {
+      return nullptr;
+    }
+
+    DeclarationSymbolMap &symbols = symbolsByDeclaration(table);
+    auto found = symbols.find(decl);
+    return found != symbols.end() ? found->second : nullptr;
+  }
+
+  SgSymbol *findSymbolFromDeclaration(SgFunctionDeclaration *decl) {
+    if (decl == nullptr) {
+      return nullptr;
+    }
+
+    SgScopeStatement *scope = decl->get_scope();
+    if (scope == nullptr) {
+      return nullptr;
+    }
+
+    if (SgSymbol *symbol = findInTable(scope->get_symbol_table(), decl)) {
+      return symbol;
+    }
+
+    if (SgNamespaceDefinitionStatement *namespace_definition =
+            isSgNamespaceDefinitionStatement(scope)) {
+      if (SgNamespaceDefinitionStatement *global_namespace =
+              namespace_definition->get_global_definition()) {
+        if (SgSymbol *symbol =
+                findInTable(global_namespace->get_symbol_table(), decl)) {
+          return symbol;
+        }
+      }
+    }
+
+    if (SgGlobal *global_scope = isSgGlobal(scope)) {
+      if (SgProject *project = SageInterface::getProject(global_scope)) {
+        if (SgGlobal *global_across_files =
+                project->get_globalScopeAcrossFiles()) {
+          if (SgSymbol *symbol =
+                  findInTable(global_across_files->get_symbol_table(), decl)) {
+            return symbol;
+          }
+        }
+      }
+    }
+
+    return nullptr;
+  }
+
+  SgFunctionDeclaration *
+  computeAssociatedDeclaration(SgFunctionDeclaration *decl) {
+    SgFunctionDeclaration *candidate = isSgFunctionDeclaration(
+        decl != nullptr ? decl->get_firstNondefiningDeclaration() : nullptr);
+    if (findSymbolFromDeclaration(candidate) == nullptr) {
+      candidate = isSgFunctionDeclaration(
+          decl != nullptr ? decl->get_definingDeclaration() : nullptr);
+    }
+    if (findSymbolFromDeclaration(candidate) == nullptr) {
+      candidate = decl;
+    }
+    if (findSymbolFromDeclaration(candidate) == nullptr) {
+      candidate = nullptr;
+    }
+    return candidate;
+  }
+
+  std::unordered_map<SgSymbolTable *, DeclarationSymbolMap> symbols_by_table_;
+  std::unordered_map<SgFunctionDeclaration *, SgFunctionDeclaration *>
+      associated_declarations_;
+};
+
 bool functionDeclOwnsAssociatedSymbol(SgFunctionDeclaration *decl) {
   return decl != nullptr && associatedFunctionSymbolDeclaration(decl) == decl;
 }
 
 std::vector<SgFunctionDeclaration *>
-relatedFunctionDeclarations(SgFunctionDeclaration *decl) {
+relatedFunctionDeclarations(SgFunctionDeclaration *decl,
+                            FunctionSymbolLookupCache *symbol_cache = nullptr) {
   std::vector<SgFunctionDeclaration *> related;
   std::unordered_set<SgFunctionDeclaration *> seen;
   auto append = [&](SgFunctionDeclaration *candidate) {
@@ -1533,13 +2322,68 @@ relatedFunctionDeclarations(SgFunctionDeclaration *decl) {
     related.push_back(candidate);
   };
 
-  append(associatedFunctionSymbolDeclaration(decl));
+  append(symbol_cache != nullptr
+             ? symbol_cache->associatedFunctionSymbolDeclaration(decl)
+             : associatedFunctionSymbolDeclaration(decl));
   append(isSgFunctionDeclaration(
       decl != nullptr ? decl->get_firstNondefiningDeclaration() : nullptr));
   append(isSgFunctionDeclaration(
       decl != nullptr ? decl->get_definingDeclaration() : nullptr));
 
   return related;
+}
+
+std::vector<SgFunctionDeclaration *>
+collectFunctionDeclarationsForChainRepair(SgNode *node) {
+  std::vector<SgFunctionDeclaration *> function_decls;
+  std::unordered_set<SgFunctionDeclaration *> seen;
+
+  auto record = [&](SgFunctionDeclaration *decl) {
+    if (!functionDeclParticipatesInDeclarationChainRepair(decl) ||
+        !seen.insert(decl).second) {
+      return;
+    }
+    function_decls.push_back(decl);
+  };
+
+  if (s_reachableNodes != NULL) {
+    for (SgNode *reachable : *s_reachableNodes) {
+      record(isSgFunctionDeclaration(reachable));
+    }
+  } else {
+    struct Traversal : AstSimpleProcessing {
+      std::vector<SgFunctionDeclaration *> &functionDecls;
+      std::unordered_set<SgFunctionDeclaration *> &seenDecls;
+
+      Traversal(std::vector<SgFunctionDeclaration *> &decls,
+                std::unordered_set<SgFunctionDeclaration *> &seen)
+          : functionDecls(decls), seenDecls(seen) {}
+
+      void visit(SgNode *n) override {
+        SgFunctionDeclaration *decl = isSgFunctionDeclaration(n);
+        if (!functionDeclParticipatesInDeclarationChainRepair(decl) ||
+            !seenDecls.insert(decl).second) {
+          return;
+        }
+        functionDecls.push_back(decl);
+      }
+    } traversal(function_decls, seen);
+
+    traversal.traverse(node, preorder);
+  }
+
+  std::sort(function_decls.begin(), function_decls.end(),
+            [](SgFunctionDeclaration *lhs, SgFunctionDeclaration *rhs) {
+              if (functionDeclSourceLess(lhs, rhs)) {
+                return true;
+              }
+              if (functionDeclSourceLess(rhs, lhs)) {
+                return false;
+              }
+              return false;
+            });
+
+  return function_decls;
 }
 
 bool functionDeclSourceLess(SgFunctionDeclaration *lhs,
@@ -1636,7 +2480,20 @@ void pruneDuplicateFunctionDeclarationSurfaces(SgNode *node) {
         return;
       }
 
-      SgDeclarationStatementPtrList &decls = scope->getDeclarationList();
+      SgDeclarationStatementPtrList *scope_decls = scopeDeclarationList(scope);
+      if (scope_decls == nullptr) {
+        return;
+      }
+      SgDeclarationStatementPtrList &decls = *scope_decls;
+
+      std::unordered_set<SgDeclarationStatement *> seen_decls;
+      decls.erase(std::remove_if(decls.begin(), decls.end(),
+                                 [&](SgDeclarationStatement *decl_stmt) {
+                                   return decl_stmt != nullptr &&
+                                          !seen_decls.insert(decl_stmt).second;
+                                 }),
+                  decls.end());
+
       std::unordered_map<std::string, SgFunctionDeclaration *> canonical_by_key;
       std::unordered_set<SgFunctionDeclaration *> duplicates;
 
@@ -1688,8 +2545,6 @@ void repairBrokenFunctionDeclarationChains(SgNode *node) {
     return;
   }
 
-  Rose_STL_Container<SgNode *> function_nodes =
-      NodeQuery::querySubTree(node, V_SgFunctionDeclaration);
   std::vector<SgFunctionDeclaration *> all_members;
   std::unordered_map<SgFunctionDeclaration *, size_t> discovery_order;
   std::unordered_set<SgFunctionDeclaration *> discovered;
@@ -1701,16 +2556,19 @@ void repairBrokenFunctionDeclarationChains(SgNode *node) {
     discovery_order.emplace(decl, discovery_order.size());
     all_members.push_back(decl);
   };
-  for (SgNode *entry : function_nodes) {
-    record_member(isSgFunctionDeclaration(entry));
+  for (SgFunctionDeclaration *entry :
+       collectFunctionDeclarationsForChainRepair(node)) {
+    record_member(entry);
   }
+
+  FunctionSymbolLookupCache symbol_cache;
 
   // Follow the declaration-chain links transitively so a broken sequence such
   // as visible-decl -> visible-decl -> hidden-def still lands in one repair
   // component even when the immediate symbol owner differs across members.
   for (size_t i = 0; i < all_members.size(); ++i) {
     for (SgFunctionDeclaration *related :
-         relatedFunctionDeclarations(all_members[i])) {
+         relatedFunctionDeclarations(all_members[i], &symbol_cache)) {
       record_member(related);
     }
   }
@@ -1749,7 +2607,8 @@ void repairBrokenFunctionDeclarationChains(SgNode *node) {
   };
 
   for (SgFunctionDeclaration *decl : all_members) {
-    for (SgFunctionDeclaration *related : relatedFunctionDeclarations(decl)) {
+    for (SgFunctionDeclaration *related :
+         relatedFunctionDeclarations(decl, &symbol_cache)) {
       unite(decl, related);
     }
   }
@@ -2362,6 +3221,7 @@ void postProcessingSupport(SgNode *node) {
     fixupAstSymbolTablesToSupportAliasedSymbols(node);
     debugDumpTrackedStdTemplateState(
         "after-fixupAstSymbolTablesToSupportAliasedSymbols", node);
+    repairNullMemberFunctionRefSymbols(node);
     rosePhaseTrace("AstPostProcessing.declarationAndSymbolFixups.end");
 
     rosePhaseTrace("AstPostProcessing.templateOutputFixups.begin");
@@ -2622,10 +3482,25 @@ void postProcessingSupport(SgNode *node) {
     rosePhaseTrace(
         "AstPostProcessing.lateRepairs.repairHiddenFunctionDecls.end");
     rosePhaseTrace(
+        "AstPostProcessing.lateRepairs.repairImplicitCAstOnlyDecls.begin");
+    repairImplicitCFunctionAstOnlyDeclarationOrdering(node);
+    rosePhaseTrace(
+        "AstPostProcessing.lateRepairs.repairImplicitCAstOnlyDecls.end");
+    rosePhaseTrace(
         "AstPostProcessing.lateRepairs.repairLexicallyOwnedTags.begin");
     repairLexicallyOwnedTagDeclarationSurfaces(node);
     rosePhaseTrace(
         "AstPostProcessing.lateRepairs.repairLexicallyOwnedTags.end");
+    rosePhaseTrace(
+        "AstPostProcessing.lateRepairs.repairHiddenGeneratedClassChains.begin");
+    repairHiddenGeneratedClassDeclarationChains(node);
+    rosePhaseTrace(
+        "AstPostProcessing.lateRepairs.repairHiddenGeneratedClassChains.end");
+    rosePhaseTrace("AstPostProcessing.lateRepairs."
+                   "repairOutOfLineTemplateClassScopes.begin");
+    repairOutOfLineTemplateClassDefinitionScopes(node);
+    rosePhaseTrace("AstPostProcessing.lateRepairs."
+                   "repairOutOfLineTemplateClassScopes.end");
     rosePhaseTrace(
         "AstPostProcessing.lateRepairs.repairBrokenFunctionChains.begin");
     repairBrokenFunctionDeclarationChains(node);
@@ -2943,12 +3818,14 @@ void postProcessingSupport(SgNode *node) {
     // first declaration they reference. Reinsert the visible declaration by
     // source order so unparsing sees the public surface, not the hidden helper.
     repairHiddenFunctionDeclarationSurfaces(node);
+    repairImplicitCFunctionAstOnlyDeclarationOrdering(node);
     repairLexicallyOwnedTagDeclarationSurfaces(node);
 
     // Friend/template cleanup can leave function declaration chains rooted at
     // a hidden or defining declaration. Normalize the first-nondefining links
     // before name-qualification traversals consult symbol ownership.
     repairBrokenFunctionDeclarationChains(node);
+    repairNullMemberFunctionRefSymbols(node);
     pruneDuplicateFunctionDeclarationSurfaces(node);
 
     // Late declaration/symbol-table normalization can re-self-link template

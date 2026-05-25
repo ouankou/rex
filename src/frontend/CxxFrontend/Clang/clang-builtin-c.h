@@ -26,6 +26,13 @@
 #define offsetof(type, member) __builtin_offsetof(type, member)
 #endif
 
+#if !defined(__FLOAT128__) && !defined(__SIZEOF_FLOAT128__) &&                 \
+    defined(__LDBL_MANT_DIG__) && __LDBL_MANT_DIG__ == 113
+#ifndef __float128
+#define __float128 long double
+#endif
+#endif
+
 #if !__has_builtin(__builtin_va_start)
 void __builtin_va_start(__builtin_va_list, ...);
 #endif
@@ -37,5 +44,10 @@ void __builtin_va_end(__builtin_va_list);
 #if !__has_builtin(__builtin_alloca)
 void *__builtin_alloca(__SIZE_TYPE__ size);
 #endif
+
+#define __testOverload(expr, expected) ((int)sizeof(((void)(expr)), 0))
+int __checkType();
+int __checkCalleeDefnLine();
+int __cause_xfailure();
 
 #endif

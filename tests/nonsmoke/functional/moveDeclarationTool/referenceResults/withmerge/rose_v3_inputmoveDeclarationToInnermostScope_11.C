@@ -1,10 +1,8 @@
 // A test case showing the need for liveness analysis
-// Straightline analysis will say it is safe to move int offset into the loop
-// body.
-//  definition --> use.
-// HOwever, offset is redefined in the end of the loop. There another def-use
-// live path involved. The move should not alter the meet points of two live
-// paths.
+// Straightline analysis will say it is safe to move int offset into the loop body.
+//  definition --> use. 
+// HOwever, offset is redefined in the end of the loop. There another def-use live path involved.
+// The move should not alter the meet points of two live paths.
 #include <stdio.h>
 
 void foo(int *test, int *array, int length) {
@@ -24,7 +22,10 @@ void bar() {
     ++i;
   }
 }
-// with or without initializer, we cannot move it.
+
+
+// with or without initializer, we cannot move it. 
+
 void bar2() {
   for (int j = 10; j > 0; --j) {
     int i;
@@ -32,3 +33,5 @@ void bar2() {
     ++i;
   }
 }
+
+

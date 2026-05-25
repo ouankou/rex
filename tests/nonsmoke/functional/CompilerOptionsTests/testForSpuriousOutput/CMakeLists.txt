@@ -18,7 +18,7 @@ function(_add_spurious_output_test name command)
     NAME ${name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${BASH_EXECUTABLE} -c
-      "rm -f outputFile; ${ROSE_TEST_TRANSLATOR} -rose:verbose 0 ${command} > outputFile 2>&1; outputLines=$(wc -l < outputFile); if [ \"$outputLines\" -eq 0 ]; then exit 0; else cat outputFile; exit 1; fi"
+      "outputFile='${name}.output'; rm -f \"$outputFile\"; ${ROSE_TEST_TRANSLATOR} -rose:verbose 0 ${command} > \"$outputFile\" 2>&1; outputLines=$(wc -l < \"$outputFile\"); if [ \"$outputLines\" -eq 0 ]; then exit 0; else cat \"$outputFile\"; exit 1; fi"
   )
 endfunction()
 
@@ -54,4 +54,3 @@ if(enable-fortran)
     )
   endforeach()
 endif()
-

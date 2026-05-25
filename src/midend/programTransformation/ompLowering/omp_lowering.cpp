@@ -38,6 +38,26 @@ namespace {
 std::map<const SgOmpClauseBodyStatement *, std::set<const SgInitializedName *>>
     implicit_target_map_variables;
 
+void markStatementSubtreeForOutput(SgNode *root) {
+  if (root == nullptr)
+    return;
+
+  Rose_STL_Container<SgNode *> statements =
+      NodeQuery::querySubTree(root, V_SgStatement);
+  for (SgNode *node : statements) {
+    SgLocatedNode *located = isSgLocatedNode(node);
+    if (located == nullptr)
+      continue;
+
+    if (Sg_File_Info *info = located->get_file_info())
+      info->setOutputInCodeGeneration();
+    if (Sg_File_Info *start = located->get_startOfConstruct())
+      start->setOutputInCodeGeneration();
+    if (Sg_File_Info *end = located->get_endOfConstruct())
+      end->setOutputInCodeGeneration();
+  }
+}
+
 SgVarRefExp *extractVarRefFromExpression(SgExpression *expr) {
   if (expr == nullptr) {
     return nullptr;
@@ -6578,6 +6598,7 @@ SgFunctionDeclaration *generateOutlinedTask(SgNode *node,
     normalize_fortran_external_subroutine_declarations(body);
     SgFortranIncludeLine *inc_line = buildFortranIncludeLine("omp_lib.h");
     prependStatement(inc_line, body);
+    markStatementSubtreeForOutput(result);
   }
   return result;
 }
@@ -6934,9 +6955,14 @@ void transOmpParallel(SgNode *node) {
           isSgOmpExecStatement(new_directives[i]);
       ROSE_ASSERT(old_directive != NULL);
       ROSE_ASSERT(new_directive != NULL);
-      clause_variable_renaming_record[new_directive] =
-          clause_variable_renaming_record[old_directive];
-      clause_variable_renaming_record.erase(old_directive);
+      std::map<SgOmpExecStatement *,
+               std::map<SgInitializedName *, SgExpression *> *>::iterator
+          old_mapping = clause_variable_renaming_record.find(old_directive);
+      if (old_mapping != clause_variable_renaming_record.end()) {
+        ROSE_ASSERT(old_mapping->second != NULL);
+        clause_variable_renaming_record[new_directive] = old_mapping->second;
+        clause_variable_renaming_record.erase(old_mapping);
+      }
     }
   }
 }

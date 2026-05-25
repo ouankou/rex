@@ -181,6 +181,91 @@ void hideSynthesizedFunctionDeclaration(SgFunctionDeclaration *decl) {
   }
 }
 
+bool isLambdaClosureClassDeclaration(SgDeclarationStatement *declaration) {
+  SgClassDeclaration *class_decl = isSgClassDeclaration(declaration);
+  if (class_decl == nullptr) {
+    return false;
+  }
+
+  auto source_backed = [](SgLocatedNode *node) {
+    if (node == nullptr || node->get_file_info() == nullptr) {
+      return false;
+    }
+
+    Sg_File_Info *fi = node->get_file_info();
+    return fi->get_line() > 0 && !fi->isCompilerGenerated() &&
+           !fi->isFrontendSpecific() &&
+           !fi->isSourcePositionUnavailableInFrontend();
+  };
+
+  auto is_lambda_closure = [](SgClassDeclaration *candidate) {
+    if (candidate == nullptr) {
+      return false;
+    }
+
+    SgLambdaExp *lambda = isSgLambdaExp(candidate->get_parent());
+    return lambda != nullptr && lambda->get_lambda_closure_class() == candidate;
+  };
+
+  auto has_source_backed_call_operator = [&](SgClassDeclaration *candidate) {
+    if (candidate == nullptr) {
+      return false;
+    }
+
+    SgClassDeclaration *defining_decl =
+        isSgClassDeclaration(candidate->get_definingDeclaration());
+    if (defining_decl == nullptr) {
+      defining_decl = candidate;
+    }
+
+    SgClassDefinition *class_def = defining_decl->get_definition();
+    if (class_def == nullptr) {
+      class_def = candidate->get_definition();
+    }
+    if (class_def == nullptr) {
+      return false;
+    }
+
+    for (SgDeclarationStatement *member : class_def->get_members()) {
+      SgMemberFunctionDeclaration *member_func =
+          isSgMemberFunctionDeclaration(member);
+      if (member_func == nullptr ||
+          member_func->get_name().getString() != "operator()") {
+        continue;
+      }
+
+      if (source_backed(member_func)) {
+        return true;
+      }
+      if (SgFunctionDeclaration *def_decl =
+              isSgFunctionDeclaration(member_func->get_definingDeclaration())) {
+        if (source_backed(def_decl)) {
+          return true;
+        }
+        if (SgFunctionDefinition *func_def = def_decl->get_definition()) {
+          if (source_backed(func_def) || source_backed(func_def->get_body())) {
+            return true;
+          }
+        }
+      }
+      if (SgFunctionDefinition *func_def = member_func->get_definition()) {
+        if (source_backed(func_def) || source_backed(func_def->get_body())) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  };
+
+  return is_lambda_closure(class_decl) ||
+         is_lambda_closure(isSgClassDeclaration(
+             class_decl->get_firstNondefiningDeclaration())) ||
+         is_lambda_closure(
+             isSgClassDeclaration(class_decl->get_definingDeclaration())) ||
+         has_source_backed_call_operator(class_decl);
+}
+
 bool scopeContainsStatement(SgScopeStatement *scope, SgStatement *stmt) {
   if (scope == nullptr || stmt == nullptr) {
     return false;
@@ -1040,6 +1125,16 @@ void ensureTemplateInstantiationFunctionDeclarationLink(
 
 void ensureTemplateInstantiationMemberFunctionDeclarationLink(
     SgTemplateInstantiationMemberFunctionDecl *inst) {
+  if (inst != nullptr &&
+      inst->get_specialization() == SgDeclarationStatement::e_specialization &&
+      !inst->get_template_argument_list_is_explicit() &&
+      inst->get_templateArguments().empty() &&
+      inst->get_deducedTemplateArguments().empty()) {
+    inst->set_templateDeclaration(nullptr);
+    inst->set_specializedTemplateDeclaration(nullptr);
+    return;
+  }
+
   recoverTemplateDeclarationLink<SgTemplateInstantiationMemberFunctionDecl,
                                  SgTemplateMemberFunctionDeclaration>(inst);
 
@@ -1237,7 +1332,8 @@ void FixupTemplateInstantiations::visit(SgNode *node) {
     // the whole subtree as compiler generated when just the declaration
     // is detected as having been marked in the legacy frontend/Sage III
     // translation.
-    if (declaration->get_file_info()->isCompilerGenerated() == true) {
+    if (declaration->get_file_info()->isCompilerGenerated() == true &&
+        !isLambdaClosureClassDeclaration(declaration)) {
 
       // DQ (8/10/2005): We should never mark a template declaration as compiler
       // generated (though perhaps partial specializations could be marked as

@@ -295,13 +295,15 @@ public:
 
     // The placement arguments are used
     // check for NULL before adding to used set
-    // not sure if this check is required for get_constructor_args()
-    exprList = sgn->get_constructor_args()->get_args();
-    if (exprList) {
-      for (SgExpressionPtrList::iterator expr =
-               exprList->get_expressions().begin();
-           expr != exprList->get_expressions().end(); expr++)
-        ldva.used(*expr);
+    if (SgConstructorInitializer *constructorArgs =
+            sgn->get_constructor_args()) {
+      exprList = constructorArgs->get_args();
+      if (exprList) {
+        for (SgExpressionPtrList::iterator expr =
+                 exprList->get_expressions().begin();
+             expr != exprList->get_expressions().end(); expr++)
+          ldva.used(*expr);
+      }
     }
 
     // The built-in arguments are used (DON'T KNOW WHAT THESE ARE!)
@@ -1006,6 +1008,8 @@ void VarsExprsProductLattice::remapVars(const map<varID, varID> &varNameMap,
   // lattices and varLatticeIndex will be replaced with these objects.
   vector<Lattice *> newLattices;
   map<varID, int> newVarLatticeIndex;
+  const vector<Lattice *> oldLattices = lattices;
+  set<Lattice *> retainedLattices;
 
   // Fill newLattices with lattices associated with variables in the new
   // function
@@ -1074,15 +1078,17 @@ void VarsExprsProductLattice::remapVars(const map<varID, varID> &varNameMap,
         varID oldVar = itR->first;
 
         Lattice *l = getVarLattice(oldVar);
-        ROSE_ASSERT(l);
-        newLattices.push_back(l);
-        newVarLatticeIndex[newVar] = idx;
-        idx++;
+        if (l) {
+          newLattices.push_back(l);
+          retainedLattices.insert(l);
+          newVarLatticeIndex[newVar] = idx;
+          idx++;
 
-        // Erase the mapping of oldVar in varLatticeIndex
-        varLatticeIndex.erase(oldVar);
+          // Erase the mapping of oldVar in varLatticeIndex
+          varLatticeIndex.erase(oldVar);
 
-        found = true;
+          found = true;
+        }
       }
     }
 
@@ -1099,6 +1105,7 @@ void VarsExprsProductLattice::remapVars(const map<varID, varID> &varNameMap,
         // "<< l->str("") << endl; newLattices[getVarIndex(newFunc, newVar)] =
         // l;
         newLattices.push_back(l);
+        retainedLattices.insert(l);
         // Erase the original mapping of newVar in varLatticeIndex
         newVarLatticeIndex[newVar] = idx;
         idx++;
@@ -1120,12 +1127,15 @@ void VarsExprsProductLattice::remapVars(const map<varID, varID> &varNameMap,
     // newVarLatticeIndex[newVar] = idx;
   }
 
-  // Deallocate the lattices of all the variables that do not exist in newFunc
-  // are are not remapped into its set of variables
-  for (map<varID, int>::iterator varIdx = varLatticeIndex.begin();
-       varIdx != varLatticeIndex.end(); varIdx++) {
-    ROSE_ASSERT(lattices[varIdx->second]);
-    delete lattices[varIdx->second];
+  // Deallocate every old lattice not retained in the remapped product.
+  set<Lattice *> deletedLattices;
+  for (vector<Lattice *>::const_iterator lattice = oldLattices.begin();
+       lattice != oldLattices.end(); ++lattice) {
+    if (*lattice != NULL &&
+        retainedLattices.find(*lattice) == retainedLattices.end() &&
+        deletedLattices.insert(*lattice).second) {
+      delete *lattice;
+    }
   }
 
   Dbg::dbg << "Index :" << idx;
@@ -1258,7 +1268,7 @@ bool VarsExprsProductLattice::unProject(SgExpression *expr,
     // Else, if This lattice has no mapping for exprVar, simply copy it from
     // exprState to This
   } else {
-    addVar(exprVar, thatLattice);
+    addVar(exprVar, *thatLattice);
     return true;
   }
 }
@@ -1292,23 +1302,24 @@ bool VarsExprsProductLattice::remVar(const varID &var) {
   }
 }
 
-// Sets the lattice of the given var to be lat.
+// Sets the lattice of the given var to a copy of lat.
 // If the variable is already mapped to some other Lattice,
-//   If *(the current lattice) == *lat, the mapping is not changed
-//   If *(the current lattice) != *lat, the current lattice is deallocated and
-//   var is mapped to lat->copy()
+//   If *(the current lattice) == lat, the mapping is not changed
+//   If *(the current lattice) != lat, the current lattice is deallocated and
+//   var is mapped to lat.copy()
+// The caller retains ownership of lat.
 // Returns true if this causes this Lattice to change and false otherwise.
-bool VarsExprsProductLattice::addVar(const varID &var, Lattice *lat) {
+bool VarsExprsProductLattice::addVar(const varID &var, Lattice &lat) {
   if (varLatticeIndex.find(var) == varLatticeIndex.end()) {
     varLatticeIndex.insert(make_pair(var, lattices.size()));
-    lattices.push_back(lat);
+    lattices.push_back(lat.copy());
     return true;
   } else {
     ROSE_ASSERT(lattices[varLatticeIndex[var]]);
-    bool modified = (*(lattices[varLatticeIndex[var]]) != *lat);
+    bool modified = (*(lattices[varLatticeIndex[var]]) != lat);
     if (modified) {
       delete lattices[varLatticeIndex[var]];
-      lattices[varLatticeIndex[var]] = lat->copy();
+      lattices[varLatticeIndex[var]] = lat.copy();
     }
     return modified;
   }

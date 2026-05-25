@@ -41,6 +41,7 @@ foreach(spec IN LISTS _test_specs)
   string(JOIN " " _extra_frontend_switches ${_extra_frontend_flags})
   set(_rose_switches
     "${_rose_switches_base} ${_extra_frontend_switches} ${_outliner_switches} -rose:applicationRootDirectory ${CMAKE_CURRENT_SOURCE_DIR}/${spec}")
+  set(_fixture "unparse_headers_${spec}_clean_tree")
 
   add_test(
     NAME unparse_headers_prepare_${spec}
@@ -62,6 +63,13 @@ foreach(spec IN LISTS _test_specs)
       ${spec}.passed
   )
 
-  set_tests_properties(unparse_headers_prepare_${spec} PROPERTIES LABELS UNPARSEHEADERTEST)
-  set_tests_properties(unparse_headers_${spec} PROPERTIES DEPENDS unparse_headers_prepare_${spec} LABELS UNPARSEHEADERTEST)
+  set_tests_properties(unparse_headers_prepare_${spec}
+    PROPERTIES
+      FIXTURES_SETUP ${_fixture}
+      LABELS UNPARSEHEADERTEST)
+  set_tests_properties(unparse_headers_${spec}
+    PROPERTIES
+      DEPENDS unparse_headers_prepare_${spec}
+      FIXTURES_REQUIRED ${_fixture}
+      LABELS UNPARSEHEADERTEST)
 endforeach()

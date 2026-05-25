@@ -15,6 +15,11 @@ set(REX_FRONTEND_ERROR_TESTS
   # continue-on-error path and should still be part of the default CTest run.
   test2006_131.C
   test2014_22.C
+  # ELSA overload-resolution specimens contain intentional semantic
+  # diagnostics under Clang but still build a recoverable AST for backend
+  # coverage.
+  t0127.cc
+  t0132.cc
   # Name-qualification regression tests include one intentionally-invalid C++
   # specimen that still needs backend coverage from Clang's recovered AST.
   testNameQalTypeElab_21.C
@@ -130,6 +135,10 @@ endif()
 if(ROSE_BUILD_C_LANGUAGE_SUPPORT)
   string(CONCAT _rex_install_cfe_command
     "set -e;"
+    " install_dir=;"
+    " run_dir=;"
+    " cleanup_rex_install_tree() { rm -rf \"$install_dir\" \"$run_dir\"; };"
+    " trap cleanup_rex_install_tree EXIT;"
     " install_dir=$(mktemp -d \"${CMAKE_CURRENT_BINARY_DIR}/rex-install-XXXXXX\");"
     " run_dir=$(mktemp -d \"${CMAKE_CURRENT_BINARY_DIR}/rex-install-run-XXXXXX\");"
     " cmake --install \"${CMAKE_BINARY_DIR}\" --prefix \"$install_dir\";"
@@ -147,6 +156,10 @@ if(ROSE_BUILD_C_LANGUAGE_SUPPORT)
     ${CMAKE_CURRENT_SOURCE_DIR}/roseTests/astQueryTests/input1.C)
   string(CONCAT _rex_install_astquery_command
     "set -e;"
+    " install_dir=;"
+    " run_dir=;"
+    " cleanup_rex_install_tree() { rm -rf \"$install_dir\" \"$run_dir\"; };"
+    " trap cleanup_rex_install_tree EXIT;"
     " install_dir=$(mktemp -d \"${CMAKE_CURRENT_BINARY_DIR}/rex-install-XXXXXX\");"
     " run_dir=$(mktemp -d \"${CMAKE_CURRENT_BINARY_DIR}/rex-install-run-XXXXXX\");"
     " cmake --install \"${CMAKE_BINARY_DIR}\" --prefix \"$install_dir\";"
@@ -164,6 +177,10 @@ if(ROSE_BUILD_C_LANGUAGE_SUPPORT)
     ${CMAKE_CURRENT_SOURCE_DIR}/roseTests/astInterfaceTests/inputloopInterchange.C)
   string(CONCAT _rex_install_astinterface_command
     "set -e;"
+    " install_dir=;"
+    " run_dir=;"
+    " cleanup_rex_install_tree() { rm -rf \"$install_dir\" \"$run_dir\"; };"
+    " trap cleanup_rex_install_tree EXIT;"
     " install_dir=$(mktemp -d \"${CMAKE_CURRENT_BINARY_DIR}/rex-install-XXXXXX\");"
     " run_dir=$(mktemp -d \"${CMAKE_CURRENT_BINARY_DIR}/rex-install-run-XXXXXX\");"
     " cmake --install \"${CMAKE_BINARY_DIR}\" --prefix \"$install_dir\";"

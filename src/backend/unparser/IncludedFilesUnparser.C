@@ -1,5 +1,6 @@
 #include "sage3basic.h"
 
+#include <filesystem>
 #include <iostream>
 
 #include "CollectionHelper.h"
@@ -11,6 +12,8 @@
 #include "IncludeDirective.h"
 
 #include "IncludedFilesUnparser.h"
+
+#include "rose_test_output_path.h"
 
 #include "unparser.h"
 
@@ -96,6 +99,73 @@ void buildIncludeTreeParentMap(
         includedToIncludingFiles[includedFileName].insert(includingFileName);
     }
   }
+}
+
+bool isParentRelativeToRoot(const std::filesystem::path &relativePath) {
+  if (relativePath.empty())
+    return false;
+
+  for (const std::filesystem::path &component : relativePath) {
+    if (component == "..")
+      return false;
+  }
+
+  return true;
+}
+
+bool isPathUnderRoot(const string &path, const string &root) {
+  const string normalizedPath = FileHelper::normalizePathIfPossible(path);
+  const string normalizedRoot = FileHelper::normalizePathIfPossible(root);
+  if (normalizedPath.empty() || normalizedRoot.empty())
+    return false;
+
+  error_code ec;
+  std::filesystem::path canonicalRoot = std::filesystem::weakly_canonical(
+      std::filesystem::path(normalizedRoot), ec);
+  if (ec)
+    return false;
+
+  std::filesystem::path canonicalPath = std::filesystem::weakly_canonical(
+      std::filesystem::path(normalizedPath), ec);
+  if (ec)
+    return false;
+
+  return isParentRelativeToRoot(
+             std::filesystem::relative(canonicalPath, canonicalRoot, ec)) &&
+         !ec;
+}
+
+bool includeResolvesRelativeToContainingFile(
+    const string &includedFile, PreprocessingInfo *includingPreprocessingInfo) {
+  if (includingPreprocessingInfo == nullptr)
+    return false;
+
+  IncludeDirective includeDirective(includingPreprocessingInfo->getString());
+  if (includeDirective.isQuotedInclude() ||
+      FileHelper::isAbsolutePath(includeDirective.getIncludedPath()))
+    return false;
+
+  const string containingFile =
+      FileHelper::getNormalizedContainingFileName(includingPreprocessingInfo);
+  if (containingFile.empty())
+    return false;
+
+  const string containingDirectory =
+      FileHelper::getParentFolder(containingFile);
+  const string candidatePath =
+      FileHelper::normalizePathIfPossible(FileHelper::concatenatePaths(
+          containingDirectory, includeDirective.getIncludedPath()));
+  const string normalizedIncludedFile =
+      FileHelper::normalizePathIfPossible(includedFile);
+  return !candidatePath.empty() && !normalizedIncludedFile.empty() &&
+         candidatePath == normalizedIncludedFile;
+}
+
+string makeRelativeOutputPath(const string &directory, const string &fileName) {
+  if (directory.empty() || directory == ".")
+    return fileName;
+
+  return FileHelper::concatenatePaths(directory, fileName);
 }
 } // namespace
 
@@ -198,8 +268,9 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
       projectNode->get_unparseHeaderFilesRootFolder();
   if (userSpecifiedUnparseRootFolder.empty() == true) {
     // No folder specified, use the default location.
-    unparseRootPath = FileHelper::concatenatePaths(workingDirectory,
-                                                   defaultUnparseFolderName);
+    unparseRootPath =
+        Rose::TestOutput::resolvePath(FileHelper::concatenatePaths(
+            workingDirectory, defaultUnparseFolderName));
   } else {
     if (FileHelper::isAbsolutePath(userSpecifiedUnparseRootFolder)) {
       unparseRootPath = userSpecifiedUnparseRootFolder;
@@ -611,6 +682,91 @@ bool IncludedFilesUnparser::isInputFile(const string &absoluteFileName) {
   return false;
 }
 
+string IncludedFilesUnparser::getCopiedFileOutputPath(
+    const string &absoluteFileName) const {
+  if (filesToCopy.find(absoluteFileName) == filesToCopy.end())
+    return "";
+
+  string relativeDirectory;
+  map<string, SgSourceFile *>::const_iterator sourceFileEntry =
+      unparseSourceFileMap.find(absoluteFileName);
+  if (sourceFileEntry != unparseSourceFileMap.end() &&
+      sourceFileEntry->second != nullptr) {
+    SgIncludeFile *associatedIncludeFile =
+        sourceFileEntry->second->get_associated_include_file();
+    if (associatedIncludeFile != nullptr) {
+      relativeDirectory = Rose::getPathFromFileName(
+          associatedIncludeFile->get_name_used_in_include_directive()
+              .getString());
+      SgIncludeFile *parentIncludeFile =
+          associatedIncludeFile->get_parent_include_file();
+      if (parentIncludeFile != nullptr) {
+        const string parentFileName = FileHelper::normalizePathIfPossible(
+            parentIncludeFile->get_filename());
+        const map<string, string>::const_iterator parentUnparseMapEntry =
+            unparseMap.find(parentFileName);
+        const string nameUsedInIncludeDirective =
+            associatedIncludeFile->get_name_used_in_include_directive()
+                .getString();
+        if (parentUnparseMapEntry != unparseMap.end() &&
+            !nameUsedInIncludeDirective.empty() &&
+            !FileHelper::isAbsolutePath(nameUsedInIncludeDirective)) {
+          string parentOutputDirectory =
+              Rose::getPathFromFileName(parentUnparseMapEntry->second);
+          if (parentOutputDirectory == ".")
+            parentOutputDirectory.clear();
+
+          const std::filesystem::path relativeOutputPath =
+              std::filesystem::path(
+                  makeRelativeOutputPath(parentOutputDirectory,
+                                         nameUsedInIncludeDirective))
+                  .lexically_normal();
+          if (isParentRelativeToRoot(relativeOutputPath)) {
+            return FileHelper::concatenatePaths(
+                unparseRootPath,
+                Rose::FileSystem::toString(relativeOutputPath));
+          }
+        }
+      }
+
+      const std::filesystem::path directiveDirectory =
+          std::filesystem::path(relativeDirectory).lexically_normal();
+      if (!relativeDirectory.empty() &&
+          !isParentRelativeToRoot(directiveDirectory)) {
+        relativeDirectory.clear();
+      }
+    }
+  }
+
+  if (relativeDirectory.empty()) {
+    ASSERT_not_null(projectNode);
+    const string applicationRootDirectory = FileHelper::normalizePathIfPossible(
+        projectNode->get_applicationRootDirectory());
+    const string originalDirectory = FileHelper::normalizePathIfPossible(
+        Rose::getPathFromFileName(absoluteFileName));
+
+    if (!applicationRootDirectory.empty()) {
+      error_code ec;
+      std::filesystem::path relativePath = std::filesystem::relative(
+          std::filesystem::path(originalDirectory),
+          std::filesystem::path(applicationRootDirectory), ec);
+      if (!ec && isParentRelativeToRoot(relativePath))
+        relativeDirectory = Rose::FileSystem::toString(relativePath);
+    }
+
+    if (relativeDirectory.empty())
+      relativeDirectory = originalDirectory;
+  }
+
+  if (relativeDirectory == ".")
+    relativeDirectory.clear();
+
+  return FileHelper::concatenatePaths(
+      unparseRootPath,
+      makeRelativeOutputPath(relativeDirectory,
+                             FileHelper::getFileName(absoluteFileName)));
+}
+
 void IncludedFilesUnparser::
     collectNotUnparsedFilesThatRequireUnparsingToAvoidFileNameCollisions() {
   newFilesToUnparse.clear();
@@ -801,35 +957,33 @@ void IncludedFilesUnparser::updatePreprocessingInfoPaths(
           "<" + includedFileUnparseMapEntry->second + ">";
     } else {
       // Included file is not unparsed, make the include directive quoted and
-      // relative to the unparsed including file's containing folder.
+      // relative to the unparsed including file's containing folder. If the
+      // included file is copied into the generated header tree, target that
+      // copy so transformed headers in the same include graph remain visible.
       string includingFileUnparseFolder;
-      if (isInputFile(normalizedIncludingFileName)) {
-        // TODO: Currently, all input files are unparsed into the working
-        // directory regardless of where they come from. If this is changed
-        // (e.g. input files are unparsed in the folders of the original files),
-        // use the commented part.
-        includingFileUnparseFolder = workingDirectory;
-
-        //                //Unparsed and original input files are in the same
-        //                folder, so reuse the initial path: the file name of
-        //                the unparsed
-        //                //input file would be different, but this does not
-        //                matter since we get its parent folder, which would be
-        //                the same. includingFileUnparsePath =
-        //                FileHelper::getParentFolder(normalizedIncludingFileName);
-      } else {
-        map<string, string>::const_iterator includingFileUnparseMapEntry =
-            unparseMap.find(normalizedIncludingFileName);
+      map<string, string>::const_iterator includingFileUnparseMapEntry =
+          unparseMap.find(normalizedIncludingFileName);
+      if (includingFileUnparseMapEntry != unparseMap.end()) {
         ROSE_ASSERT(includingFileUnparseMapEntry != unparseMap.end());
         includingFileUnparseFolder =
             FileHelper::getParentFolder(FileHelper::concatenatePaths(
                 unparseRootPath, includingFileUnparseMapEntry->second));
+      } else {
+        ROSE_ASSERT(isInputFile(normalizedIncludingFileName));
+        includingFileUnparseFolder = workingDirectory;
       }
 
-      replacementIncludeString = "\"" +
-                                 FileHelper::getRelativePath(
-                                     includingFileUnparseFolder, includedFile) +
-                                 "\"";
+      const string copiedIncludedFilePath =
+          getCopiedFileOutputPath(includedFile);
+      const string &includedFilePath = copiedIncludedFilePath.empty()
+                                           ? includedFile
+                                           : copiedIncludedFilePath;
+
+      replacementIncludeString =
+          "\"" +
+          FileHelper::getRelativePath(includingFileUnparseFolder,
+                                      includedFilePath) +
+          "\"";
     }
 
     string includeString = includingPreprocessingInfo->getString();
@@ -976,7 +1130,7 @@ void IncludedFilesUnparser::initializeFilesToUnparse() {
          file->get_header_file_unparsing_optimization() ? "true" : "false");
 #endif
 
-  if (file->get_header_file_unparsing_optimization() == true) {
+  if (file->get_unparseHeaderFiles() == true) {
     // DQ (4/24/2021): Debugging header file optimization.
     // file->set_header_file_unparsing_optimization_header_file(true);
 
@@ -1049,14 +1203,17 @@ void IncludedFilesUnparser::initializeFilesToUnparse() {
                "modifiedIncludeFiles list \n");
 #endif
         if (sourceFile->get_isHeaderFile() == true) {
+          SgIncludeFile *includeFile =
+              sourceFile->get_associated_include_file();
           SgNode *parent2 = sourceFile->get_parent();
-          ASSERT_not_null(parent2);
 #if DEBUG_INITIALIZER_FILES_TO_UNPARSE
+          ASSERT_not_null(parent2);
           printf("parent2 = %p = %s \n", parent2,
                  parent2->class_name().c_str());
 #endif
-          SgIncludeFile *includeFile =
-              isSgIncludeFile(sourceFile->get_parent());
+          if (includeFile == NULL) {
+            includeFile = isSgIncludeFile(parent2);
+          }
           ASSERT_not_null(includeFile);
 
           modifiedIncludeFiles.insert(includeFile);
@@ -1304,7 +1461,11 @@ void IncludedFilesUnparser::collectAdditionalListOfHeaderFilesToCopy() {
   ASSERT_not_null(projectNode);
   string applicationRootDirectory = projectNode->get_applicationRootDirectory();
 
-  ROSE_ASSERT(filesToCopy.empty() == true);
+  // filesToCopy is derived from the current filesToUnparse set. Path-collision
+  // discovery can add new files to unparse and force another iteration, so
+  // rebuild the copy set for the expanded state instead of carrying stale
+  // entries from the previous iteration.
+  filesToCopy.clear();
 
   set<string>::iterator n = setOfPathsForFilesToUnparse.begin();
   while (n != setOfPathsForFilesToUnparse.end()) {
@@ -1330,6 +1491,57 @@ void IncludedFilesUnparser::collectAdditionalListOfHeaderFilesToCopy() {
 
     n++;
   }
+
+  set<string> copiedClosureWorkSet = filesToUnparse;
+  copiedClosureWorkSet.insert(filesToCopy.begin(), filesToCopy.end());
+  while (!copiedClosureWorkSet.empty()) {
+    set<string> newlyCopiedFiles;
+    const map<string, set<PreprocessingInfo *>> &includingPreprocessingInfos =
+        projectNode->get_includingPreprocessingInfosMap();
+    for (map<string, set<PreprocessingInfo *>>::const_iterator mapEntry =
+             includingPreprocessingInfos.begin();
+         mapEntry != includingPreprocessingInfos.end(); ++mapEntry) {
+      const string includedFile =
+          FileHelper::normalizePathIfPossible(mapEntry->first);
+      if (includedFile.empty() || FileHelper::fileExists(includedFile) == false)
+        continue;
+      if (filesToUnparse.find(includedFile) != filesToUnparse.end() ||
+          filesToCopy.find(includedFile) != filesToCopy.end())
+        continue;
+      if (FileHelper::getFileName(includedFile) ==
+          "rose_required_macros_and_functions.h")
+        continue;
+
+      const set<PreprocessingInfo *> &preprocessingInfos = mapEntry->second;
+      for (set<PreprocessingInfo *>::const_iterator preprocessingInfo =
+               preprocessingInfos.begin();
+           preprocessingInfo != preprocessingInfos.end(); ++preprocessingInfo) {
+        if (*preprocessingInfo == NULL)
+          continue;
+
+        IncludeDirective includeDirective((*preprocessingInfo)->getString());
+        if (includeDirective.isQuotedInclude() == false &&
+            FileHelper::isAbsolutePath(includeDirective.getIncludedPath()) ==
+                false &&
+            isPathUnderRoot(includedFile, applicationRootDirectory) == false &&
+            includeResolvesRelativeToContainingFile(
+                includedFile, *preprocessingInfo) == false)
+          continue;
+
+        const string includingFile =
+            FileHelper::getNormalizedContainingFileName(*preprocessingInfo);
+        if (copiedClosureWorkSet.find(includingFile) ==
+            copiedClosureWorkSet.end())
+          continue;
+
+        filesToCopy.insert(includedFile);
+        newlyCopiedFiles.insert(includedFile);
+        break;
+      }
+    }
+
+    copiedClosureWorkSet.swap(newlyCopiedFiles);
+  }
 }
 
 void IncludedFilesUnparser::collectNewFilesToCopy(
@@ -1337,7 +1549,11 @@ void IncludedFilesUnparser::collectNewFilesToCopy(
 
   IncludeDirective includeDirective(includingPreprocessingInfo->getString());
   if (includeDirective.isQuotedInclude() ||
-      FileHelper::isAbsolutePath(includeDirective.getIncludedPath())) {
+      FileHelper::isAbsolutePath(includeDirective.getIncludedPath()) ||
+      isPathUnderRoot(includedFile,
+                      projectNode->get_applicationRootDirectory()) ||
+      includeResolvesRelativeToContainingFile(includedFile,
+                                              includingPreprocessingInfo)) {
     string normalizedIncludingFileName =
         FileHelper::getNormalizedContainingFileName(includingPreprocessingInfo);
     if (filesToCopy.find(normalizedIncludingFileName) == filesToCopy.end()) {

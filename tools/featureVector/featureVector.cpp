@@ -1,4 +1,5 @@
 #include "rose.h"
+#include "rose_test_output_path.h"
 using namespace std;
 
 bool enable_debug = false;
@@ -306,7 +307,8 @@ int main(int argc, char *argv[]) {
   nodeTraversal travese;
   travese.setSourceFile(inputfilename);
   travese.traverseInputFiles(project,preorder);
-  std::string outfilename = SageInterface::generateProjectName(project)+".FV.txt";
+  std::string outfilename = Rose::TestOutput::resolvePath(
+      SageInterface::generateProjectName(project) + ".FV.txt");
   ofstream output_file(outfilename);
 
 /* Use the debug mode as default
@@ -321,17 +323,18 @@ int main(int argc, char *argv[]) {
   ostream_iterator<string> debug_iterator(output_file, "\n");
   copy(debugFeatureVector.begin(), debugFeatureVector.end(), debug_iterator);
   output_file.close();
-/* 
-  if(enable_debug)
-  {
-    std::string debugfilename = SageInterface::generateProjectName(project)+".FVDebug.txt";
-    const vector<string>& debugFeatureVector = travese.getDebugVector();
-    
-    ofstream debug_file(debugfilename);
-    ostream_iterator<string> debug_iterator(debug_file, "\n");
-    copy(debugFeatureVector.begin(), debugFeatureVector.end(), debug_iterator);
-    debug_file.close();
-  }
-*/
+  /*
+    if(enable_debug)
+    {
+      std::string debugfilename = Rose::TestOutput::resolvePath(
+          SageInterface::generateProjectName(project) + ".FVDebug.txt");
+      const vector<string>& debugFeatureVector = travese.getDebugVector();
+
+      ofstream debug_file(debugfilename);
+      ostream_iterator<string> debug_iterator(debug_file, "\n");
+      copy(debugFeatureVector.begin(), debugFeatureVector.end(),
+    debug_iterator); debug_file.close();
+    }
+  */
   return 0;
 }

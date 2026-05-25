@@ -151,8 +151,8 @@ bool iterator::eq(const iterator &other_it) const {
 
     // the current node in remainingNodes was not found in
     // other_it.remainingNodes
-    if (it2 != other_it.remainingNodes.end()) {
-      // printf("              it2!=other_it.remainingNodes.end()\n");
+    if (it2 == other_it.remainingNodes.end()) {
+      // printf("              it2==other_it.remainingNodes.end()\n");
       return false;
     }
 
@@ -306,6 +306,7 @@ void back_iterator::operator++(int) {
 
 dataflow::dataflow(const DataflowNode &terminator_arg)
     : terminator(terminator_arg) {
+  initialized = true;
   // Record that the terminator has been visited to ensure that it is never
   // analyzed
   visited.insert(terminator);

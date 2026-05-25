@@ -10,6 +10,7 @@ set(_elsa_notcompilable_std_roots
   ${CMAKE_CURRENT_SOURCE_DIR}/../..
 )
 
+set(REX_COMPILE_TEST_NAME_PREFIX ELSATEST_NOTCOMPILABLE_STD)
 foreach(file_to_test ${ELSATEST_NOTCOMPILABLE_STD_ALL_TESTCODES})
   elsa_not_compilable_test(${file_to_test} ELSATEST
     ${_elsa_notcompilable_std_roots})

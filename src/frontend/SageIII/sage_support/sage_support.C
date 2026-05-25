@@ -627,11 +627,53 @@ synthesizeIncludeFile(SgProject *project, SgSourceFile *includingSourceFile,
 
   std::string nameUsedInIncludeDirective =
       FileHelper::getFileName(normalizedIncludedPath);
-  bool isSystemInclude = false;
+  bool isSystemInclude =
+      parentIncludeFile != NULL && parentIncludeFile->get_isSystemInclude();
+  bool includedPathIsUnderApplicationRoot = false;
+  const std::string normalizedApplicationRoot =
+      FileHelper::normalizePathIfPossible(
+          project->get_applicationRootDirectory());
+  if (!normalizedApplicationRoot.empty()) {
+    std::filesystem::path rootPath(normalizedApplicationRoot);
+    std::filesystem::path includedPath(normalizedIncludedPath);
+    std::error_code ec;
+    rootPath = std::filesystem::weakly_canonical(rootPath, ec);
+    if (!ec) {
+      includedPath = std::filesystem::weakly_canonical(includedPath, ec);
+    }
+    if (!ec) {
+      std::string root = rootPath.string();
+      std::string included = includedPath.string();
+      if (!root.empty() &&
+          root.back() != std::filesystem::path::preferred_separator) {
+        root += std::filesystem::path::preferred_separator;
+      }
+      includedPathIsUnderApplicationRoot =
+          included == rootPath.string() || included.rfind(root, 0) == 0;
+    }
+  }
   if (preprocessingInfo != NULL) {
     IncludeDirective includeDirective(preprocessingInfo->getString());
     nameUsedInIncludeDirective = includeDirective.getIncludedPath();
-    isSystemInclude = includeDirective.isQuotedInclude() == false;
+    bool includedPathResolvesFromIncludingFile = false;
+    if (includeDirective.isQuotedInclude() == false &&
+        FileHelper::isAbsolutePath(includeDirective.getIncludedPath()) ==
+            false &&
+        preprocessingInfo->get_file_info() != NULL) {
+      const std::string includingFileName =
+          preprocessingInfo->get_file_info()->get_filenameString();
+      const std::string includingDirectory =
+          FileHelper::getParentFolder(includingFileName);
+      const std::string candidatePath =
+          FileHelper::normalizePathIfPossible(FileHelper::concatenatePaths(
+              includingDirectory, includeDirective.getIncludedPath()));
+      includedPathResolvesFromIncludingFile =
+          !candidatePath.empty() && candidatePath == normalizedIncludedPath;
+    }
+    isSystemInclude =
+        isSystemInclude || (includeDirective.isQuotedInclude() == false &&
+                            !includedPathIsUnderApplicationRoot &&
+                            !includedPathResolvesFromIncludingFile);
   }
   includeFile->set_name_used_in_include_directive(nameUsedInIncludeDirective);
 
@@ -3873,6 +3915,8 @@ int SgFile::compileOutput(vector<string> &argv, int fileNameIndex) {
   // backend.
   string sourceFilename = this->getFileName();
   string filenameExtension = StringUtility::fileNameSuffix(sourceFilename);
+  const bool isAssemblerSource =
+      CommandlineProcessing::isAssemblerFileNameSuffix(filenameExtension);
   if (get_C_only() == true &&
       CommandlineProcessing::isCppFileNameSuffix(filenameExtension) == true) {
     compilerCmdLine.insert(compilerCmdLine.begin() + 1, "-x");
@@ -3880,7 +3924,8 @@ int SgFile::compileOutput(vector<string> &argv, int fileNameIndex) {
   }
 
 #if defined(ROSE_USE_CLANG_FRONTEND)
-  if (get_C_only() || get_Cxx_only() || get_Cuda_only() || get_OpenCL_only()) {
+  if (!isAssemblerSource && (get_C_only() || get_Cxx_only() ||
+                             get_Cuda_only() || get_OpenCL_only())) {
     std::string clang_include_root = ROSE_BUILD_CLANG_INCLUDE_STAGING_DIR;
     if (!clang_include_root.empty()) {
       std::filesystem::path build_root(clang_include_root);

@@ -12,6 +12,11 @@ using namespace VirtualCFG;
 struct IsDFAFilter {
   bool operator()(CFGNode cfgn) const {
     SgNode *n = cfgn.getNode();
+    if (SgCastExp *cast = isSgCastExp(n)) {
+      if (cast->get_file_info() && cast->get_file_info()->isImplicitCast())
+        return false;
+    }
+
     // get rid of all beginning nodes
     if (!cfgn.isInteresting() &&
         !(isSgFunctionCallExp(cfgn.getNode()) && cfgn.getIndex() >= 2))

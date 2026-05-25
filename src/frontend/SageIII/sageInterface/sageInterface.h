@@ -2323,7 +2323,9 @@ ROSE_DLL_API void appendStatementList(const std::vector<SgStatement *> &stmt,
 //! (the new file will not have any headers).
 ROSE_DLL_API void appendStatementWithDependentDeclaration(
     SgDeclarationStatement *decl, SgGlobal *scope,
-    SgStatement *original_statement, bool excludeHeaderFiles);
+    SgStatement *original_statement, bool excludeHeaderFiles,
+    SgSourceFile *original_source_file = NULL,
+    int original_physical_file_id = -1);
 
 //! Prepend a statement to the beginning of the current scope, handling side
 //! effects as appropriate

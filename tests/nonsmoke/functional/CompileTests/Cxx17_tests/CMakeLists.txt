@@ -78,6 +78,18 @@ set(ROSE_FLAGS -w -rose:verbose 0 -std=c++17)
 
 rex_register_compile_source_set(REX_CXX17_TESTS_SOURCES ${CXX17_TESTCODES})
 
-foreach(file_to_test ${CXX17_TESTCODES})
+set(CXX17_NEGATIVE_TESTCODES
+  # Clang 22 rejects the original because the inherited constructor use is
+  # ambiguous. Keep it registered as negative C++17 frontend coverage.
+  test2018_67.C
+)
+set(CXX17_POSITIVE_TESTCODES ${CXX17_TESTCODES})
+list(REMOVE_ITEM CXX17_POSITIVE_TESTCODES ${CXX17_NEGATIVE_TESTCODES})
+
+foreach(file_to_test ${CXX17_POSITIVE_TESTCODES})
   compile_test(${file_to_test} "Cxx17_tests")
+endforeach()
+
+foreach(file_to_test ${CXX17_NEGATIVE_TESTCODES})
+  compile_negative_test(${file_to_test} "Cxx17_tests")
 endforeach()

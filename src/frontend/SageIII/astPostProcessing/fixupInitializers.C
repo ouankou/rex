@@ -3,6 +3,10 @@
 #include "sage3basic.h"
 
 #include "rose_config.h"
+
+#include <algorithm>
+#include <map>
+
 using namespace std;
 
 void fixupInitializersUsingIncludeFiles(SgProject *node) {
@@ -47,6 +51,139 @@ FixupInitializersUsingIncludeFilesSynthesizedAttribute::
 
 FixupInitializersUsingIncludeFilesTraversal::
     FixupInitializersUsingIncludeFilesTraversal() {}
+
+namespace {
+
+std::string baseName(const std::string &path) {
+  const std::string::size_type pos = path.find_last_of("/\\");
+  return pos == std::string::npos ? path : path.substr(pos + 1);
+}
+
+std::string normalizePathSeparators(std::string path) {
+  std::replace(path.begin(), path.end(), '\\', '/');
+  return path;
+}
+
+bool pathEndsWithComponentSequence(const std::string &path,
+                                   const std::string &suffix) {
+  if (path == suffix) {
+    return true;
+  }
+
+  return path.size() > suffix.size() &&
+         path.compare(path.size() - suffix.size(), suffix.size(), suffix) ==
+             0 &&
+         path[path.size() - suffix.size() - 1] == '/';
+}
+
+class IncludePathMatcher {
+public:
+  explicit IncludePathMatcher(const std::string &include_name)
+      : normalizedInclude(normalizePathSeparators(include_name)),
+        includeBaseName(baseName(normalizedInclude)) {}
+
+  bool matchesFileName(const std::string &filename) const {
+    if (filename.empty() || normalizedInclude.empty()) {
+      return false;
+    }
+
+    std::map<std::string, bool>::const_iterator cached =
+        filenameMatchCache.find(filename);
+    if (cached != filenameMatchCache.end()) {
+      return cached->second;
+    }
+
+    const std::string normalized_filename = normalizePathSeparators(filename);
+    const bool matches =
+        pathEndsWithComponentSequence(normalized_filename, normalizedInclude) ||
+        baseName(normalized_filename) == includeBaseName;
+    filenameMatchCache[filename] = matches;
+    return matches;
+  }
+
+  bool matchesFileInfo(Sg_File_Info *file_info) const {
+    if (file_info == nullptr) {
+      return false;
+    }
+
+    return matchesFileName(file_info->get_filename()) ||
+           matchesFileName(file_info->get_filenameString()) ||
+           matchesFileName(file_info->get_physical_filename());
+  }
+
+private:
+  const std::string normalizedInclude;
+  const std::string includeBaseName;
+  mutable std::map<std::string, bool> filenameMatchCache;
+};
+
+bool expressionSubtreeReferencesInclude(SgNode *node,
+                                        const IncludePathMatcher &matcher) {
+  if (node == nullptr) {
+    return false;
+  }
+
+  if (SgLocatedNode *located = isSgLocatedNode(node)) {
+    if (matcher.matchesFileInfo(located->get_file_info()) ||
+        matcher.matchesFileInfo(located->get_startOfConstruct()) ||
+        matcher.matchesFileInfo(located->get_endOfConstruct())) {
+      return true;
+    }
+  }
+
+  for (SgNode *child : node->get_traversalSuccessorContainer()) {
+    if (expressionSubtreeReferencesInclude(child, matcher)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void removeInitializerIncludeDirectivesFromExpression(
+    SgExpression *expression) {
+  if (expression == nullptr) {
+    return;
+  }
+
+  AttachedPreprocessingInfoType *comments =
+      expression->getAttachedPreprocessingInfo();
+  if (comments == nullptr) {
+    return;
+  }
+
+  AttachedPreprocessingInfoType includeDirectiveToRemove;
+  for (PreprocessingInfo *info : *comments) {
+    if (info == nullptr ||
+        info->getTypeOfDirective() !=
+            PreprocessingInfo::CpreprocessorIncludeDeclaration) {
+      continue;
+    }
+
+    const std::string include_name =
+        info->get_filename_from_include_directive();
+    const IncludePathMatcher matcher(include_name);
+    if (expressionSubtreeReferencesInclude(expression, matcher)) {
+      includeDirectiveToRemove.push_back(info);
+    }
+  }
+
+  for (PreprocessingInfo *info : includeDirectiveToRemove) {
+    AttachedPreprocessingInfoType::iterator position =
+        std::find(comments->begin(), comments->end(), info);
+    if (position != comments->end()) {
+      delete *position;
+      comments->erase(position);
+    }
+  }
+
+  if (comments->empty()) {
+    delete comments;
+    expression->set_attachedPreprocessingInfoPtr(nullptr);
+  }
+}
+
+} // namespace
 
 void FixupInitializersUsingIncludeFilesTraversal::findAndRemoveMatchingInclude(
     SgStatement *statement, SgExpression *expression,
@@ -198,6 +335,7 @@ void FixupInitializersUsingIncludeFilesTraversal::findAndRemoveMatchingInclude(
       AttachedPreprocessingInfoType::iterator position =
           std::find(comments->begin(), comments->end(), *i);
       if (position != comments->end()) {
+        delete *position;
         comments->erase(position);
       }
     }
@@ -236,6 +374,7 @@ FixupInitializersUsingIncludeFilesTraversal::evaluateInheritedAttribute(
 
   if (inheritedAttribute.isInsideInitializer == true) {
     SgExpression *expression = isSgExpression(node);
+    removeInitializerIncludeDirectivesFromExpression(expression);
 
     // DQ (8/26/2020): Ignore the initailizer since what we want in at least one
     // level deeper. also the initializer is always compiler generated, so it

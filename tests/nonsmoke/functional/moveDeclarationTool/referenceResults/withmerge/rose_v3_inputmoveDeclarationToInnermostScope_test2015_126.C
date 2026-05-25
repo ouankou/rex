@@ -1,5 +1,6 @@
 
 
+
 void foo() {
   const int size = 10;
   foo();
@@ -22,3 +23,4 @@ void foo() {
   }
   }
 }
+

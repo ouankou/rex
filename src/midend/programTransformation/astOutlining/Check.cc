@@ -10,6 +10,8 @@
 
 #include <list>
 
+#include <set>
+
 #include <string>
 
 #include "ASTtools.hh"
@@ -194,6 +196,125 @@ static bool isForInitOrTest(const SgStatement *s) {
   return false;
 }
 
+static bool nodeIsWithinSubtree(const SgNode *root, const SgNode *node) {
+  for (const SgNode *cursor = node; cursor != NULL;
+       cursor = cursor->get_parent()) {
+    if (cursor == root) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static const SgStatement *targetStatementForLabelRef(const SgLabelRefExp *ref) {
+  if (ref == NULL || ref->get_symbol() == NULL) {
+    return NULL;
+  }
+
+  if (const SgStatement *stmt = ref->get_symbol()->get_fortran_statement()) {
+    return stmt;
+  }
+
+  return ref->get_symbol()->get_declaration();
+}
+
+typedef std::set<const SgLabelRefExp *> LabelRefSet_t;
+
+static void addLabelRef(SgNode *node, LabelRefSet_t &refs) {
+  if (const SgLabelRefExp *ref = isSgLabelRefExp(node)) {
+    refs.insert(ref);
+  }
+}
+
+static void addDirectStatementLabelRefs(const SgStatement *stmt,
+                                        LabelRefSet_t &refs) {
+  if (stmt == NULL) {
+    return;
+  }
+
+  const std::vector<std::pair<SgNode *, std::string>> members =
+      stmt->returnDataMemberPointers();
+  for (std::vector<std::pair<SgNode *, std::string>>::const_iterator i =
+           members.begin();
+       i != members.end(); ++i) {
+    addLabelRef(i->first, refs);
+  }
+}
+
+static LabelRefSet_t collectFortranLabelRefs(const SgStatement *root) {
+  LabelRefSet_t refs;
+  if (root == NULL) {
+    return refs;
+  }
+
+  typedef Rose_STL_Container<SgNode *> NodeList_t;
+  NodeList_t traversal_refs =
+      NodeQuery::querySubTree(const_cast<SgStatement *>(root), V_SgLabelRefExp);
+  for (NodeList_t::const_iterator i = traversal_refs.begin();
+       i != traversal_refs.end(); ++i) {
+    addLabelRef(*i, refs);
+  }
+
+  NodeList_t statements =
+      NodeQuery::querySubTree(const_cast<SgStatement *>(root), V_SgStatement);
+  for (NodeList_t::const_iterator i = statements.begin(); i != statements.end();
+       ++i) {
+    addDirectStatementLabelRefs(isSgStatement(*i), refs);
+  }
+
+  return refs;
+}
+
+static bool fortranLabelReferencesStayWithinCandidate(const SgStatement *s,
+                                                      bool verbose) {
+  if (!SageInterface::is_Fortran_language()) {
+    return true;
+  }
+
+  LabelRefSet_t local_refs = collectFortranLabelRefs(s);
+  for (LabelRefSet_t::const_iterator i = local_refs.begin();
+       i != local_refs.end(); ++i) {
+    const SgLabelRefExp *ref = *i;
+    const SgStatement *target = targetStatementForLabelRef(ref);
+    if (target != NULL && !nodeIsWithinSubtree(s, target)) {
+      if (verbose) {
+        cerr << "*** Can't outline Fortran statement with a label reference "
+                "to a statement outside the outline candidate. ***"
+             << endl;
+      }
+      return false;
+    }
+  }
+
+  const SgFunctionDefinition *function =
+      SageInterface::getEnclosingFunctionDefinition(
+          const_cast<SgStatement *>(s), true);
+  if (function == NULL) {
+    return true;
+  }
+
+  LabelRefSet_t enclosing_refs = collectFortranLabelRefs(function);
+  for (LabelRefSet_t::const_iterator i = enclosing_refs.begin();
+       i != enclosing_refs.end(); ++i) {
+    const SgLabelRefExp *ref = *i;
+    if (nodeIsWithinSubtree(s, ref)) {
+      continue;
+    }
+
+    const SgStatement *target = targetStatementForLabelRef(ref);
+    if (target != NULL && nodeIsWithinSubtree(s, target)) {
+      if (verbose) {
+        cerr << "*** Can't outline Fortran statement with a numeric label "
+                "targeted from outside the outline candidate. ***"
+             << endl;
+      }
+      return false;
+    }
+  }
+
+  return true;
+}
+
 // =====================================================================
 
 /*!
@@ -333,6 +454,11 @@ bool Outliner::isOutlineable(const SgStatement *s, bool verbose) {
            << endl;
     return false;
   }
+
+  if (!fortranLabelReferencesStayWithinCandidate(s, verbose)) {
+    return false;
+  }
+
   // Liao, 12/26/2007, Masked array assignment in Fortran 90 and later is not
   // outlineable SgWhereStatement-> SgBasicBlock->SgExprStatement ->SgAssignOp
   // SgElseWhereStatement-> SgBasicBlock->SgExprStatement ->SgAssignOp

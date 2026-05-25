@@ -8,6 +8,7 @@ void foo(int len, int condition) {
     }
   }
 }
+
 // A tricky case of if-stmt,
 // move to two bodies, trigger another round of moving: iterative moving
 
@@ -22,6 +23,8 @@ void bar(bool allow) {
     }
   }
 }
+
+
 // if statement issue
 // move to two bodies, trigger another round of moving
 
@@ -49,14 +52,14 @@ void foo2(bool allow, int update, int update2) {
   }
 }
 
+
 class foo {
 public:
-  foo(double val) : m_a(val) {}
-  void f1(bool allow, int update, int length, double *b);
-
+   foo(double val) : m_a(val) {}
+   void f1(bool allow, int update, int length, double *b) ;
 private:
-  double m_a;
-};
+   double m_a ;
+} ;
 
 void foo::f1(bool allow, int update, int length, double *b) {
   if (allow) {
@@ -78,3 +81,6 @@ void foo::f1(bool allow, int update, int length, double *b) {
     }
   }
 }
+
+
+ 

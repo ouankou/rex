@@ -8,6 +8,8 @@
 
 #include <iostream>
 
+#include <set>
+
 #include <string>
 // PP(14/10/20) PRE->legacy::PRE #include "pre.h"
 
@@ -76,6 +78,38 @@ lambdaExpressionForClassDeclaration(SgClassDeclaration *classDecl) {
   return NULL;
 }
 
+SgType *buildAutoShadowTypeForFormal(SgType *formalType) {
+  SgAutoType *autoType = SageBuilder::buildAutoType();
+  SgType *referencedType = NULL;
+  bool useRvalueReference = false;
+
+  if (SgReferenceType *referenceType = isSgReferenceType(formalType)) {
+    referencedType = referenceType->get_base_type();
+  } else if (SgRvalueReferenceType *rvalueReferenceType =
+                 isSgRvalueReferenceType(formalType)) {
+    referencedType = rvalueReferenceType->get_base_type();
+    useRvalueReference = true;
+  }
+
+  if (referencedType == NULL) {
+    return autoType;
+  }
+
+  SgType *autoReferentType = autoType;
+  if (SageInterface::isConstType(referencedType)) {
+    autoReferentType = SageBuilder::buildConstType(autoReferentType);
+  }
+  if (SageInterface::isVolatileType(referencedType)) {
+    autoReferentType = SageBuilder::buildVolatileType(autoReferentType);
+  }
+
+  return useRvalueReference
+             ? static_cast<SgType *>(
+                   SageBuilder::buildRvalueReferenceType(autoReferentType))
+             : static_cast<SgType *>(
+                   SageBuilder::buildReferenceType(autoReferentType));
+}
+
 SgLambdaExp *
 lambdaExpressionForFunctionDeclaration(SgFunctionDeclaration *functionDecl) {
   if (functionDecl == NULL) {
@@ -127,6 +161,251 @@ lambdaExpressionForFunctionDeclaration(SgFunctionDeclaration *functionDecl) {
   }
 
   return NULL;
+}
+
+SgClassDefinition *classDefinitionForDeclaration(SgClassDeclaration *decl) {
+  if (decl == NULL) {
+    return NULL;
+  }
+
+  SgClassDeclaration *definingDecl =
+      isSgClassDeclaration(decl->get_definingDeclaration());
+  if (definingDecl != NULL && definingDecl->get_definition() != NULL) {
+    return definingDecl->get_definition();
+  }
+
+  return decl->get_definition();
+}
+
+SgClassDefinition *
+classDefinitionForMemberFunction(SgMemberFunctionDeclaration *memberDecl) {
+  if (memberDecl == NULL) {
+    return NULL;
+  }
+
+  if (SgClassDeclaration *classDecl =
+          isSgClassDeclaration(memberDecl->get_associatedClassDeclaration())) {
+    if (SgClassDefinition *classDef =
+            classDefinitionForDeclaration(classDecl)) {
+      return classDef;
+    }
+  }
+
+  if (SgMemberFunctionType *memberType =
+          isSgMemberFunctionType(memberDecl->get_type())) {
+    if (SgClassType *classType = isSgClassType(memberType->get_class_type())) {
+      if (SgClassDeclaration *classDecl =
+              isSgClassDeclaration(classType->get_declaration())) {
+        if (SgClassDefinition *classDef =
+                classDefinitionForDeclaration(classDecl)) {
+          return classDef;
+        }
+      }
+    }
+  }
+
+  return SageInterface::getEnclosingClassDefinition(memberDecl, true);
+}
+
+SgClassDefinition *
+classDefinitionForDeclarationContext(SgDeclarationStatement *decl) {
+  if (decl == NULL) {
+    return NULL;
+  }
+
+  if (SgInitializedName *initializedName = isSgInitializedName(decl)) {
+    return classDefinitionForDeclarationContext(
+        initializedName->get_declaration());
+  }
+
+  if (SgClassDefinition *scopeClass = isSgClassDefinition(decl->get_scope())) {
+    return scopeClass;
+  }
+
+  return SageInterface::getEnclosingClassDefinition(decl, false);
+}
+
+bool sameClassDefinition(SgClassDefinition *lhs, SgClassDefinition *rhs) {
+  if (lhs == NULL || rhs == NULL) {
+    return false;
+  }
+
+  SgClassDeclaration *lhsDecl = lhs->get_declaration();
+  SgClassDeclaration *rhsDecl = rhs->get_declaration();
+  if (lhsDecl != NULL && rhsDecl != NULL) {
+    lhsDecl = isSgClassDeclaration(lhsDecl->get_definingDeclaration());
+    rhsDecl = isSgClassDeclaration(rhsDecl->get_definingDeclaration());
+    if (lhsDecl != NULL && rhsDecl != NULL) {
+      return lhsDecl == rhsDecl;
+    }
+  }
+
+  return lhs == rhs;
+}
+
+bool classDerivesFrom(SgClassDefinition *derivedClass,
+                      SgClassDefinition *baseClass,
+                      std::set<SgClassDefinition *> &visitedClasses) {
+  if (derivedClass == NULL || baseClass == NULL ||
+      visitedClasses.insert(derivedClass).second == false) {
+    return false;
+  }
+
+  for (SgBaseClass *baseSpecifier : derivedClass->get_inheritances()) {
+    if (baseSpecifier == NULL) {
+      continue;
+    }
+
+    SgClassDeclaration *baseDecl =
+        isSgClassDeclaration(baseSpecifier->get_base_class());
+    if (baseDecl == NULL) {
+      continue;
+    }
+
+    SgClassDefinition *directBaseClass =
+        classDefinitionForDeclaration(baseDecl);
+    if (sameClassDefinition(directBaseClass, baseClass) ||
+        classDerivesFrom(directBaseClass, baseClass, visitedClasses)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool classDerivesFrom(SgClassDefinition *derivedClass,
+                      SgClassDefinition *baseClass) {
+  std::set<SgClassDefinition *> visitedClasses;
+  return classDerivesFrom(derivedClass, baseClass, visitedClasses);
+}
+
+bool accessModifierRequiresPrivilegedContext(
+    const SgAccessModifier &accessModifier) {
+  return accessModifier.isPrivate() || accessModifier.isProtected();
+}
+
+SgClassDefinition *
+nonPublicClassOwningDeclaration(SgDeclarationStatement *decl) {
+  if (decl == NULL) {
+    return NULL;
+  }
+
+  if (!accessModifierRequiresPrivilegedContext(
+          decl->get_declarationModifier().get_accessModifier())) {
+    return NULL;
+  }
+
+  return classDefinitionForDeclarationContext(decl);
+}
+
+bool functionContextHasClassAccess(SgFunctionDeclaration *functionDecl,
+                                   SgClassDefinition *classDef,
+                                   bool allowDerivedAccess) {
+  if (functionDecl == NULL || classDef == NULL) {
+    return false;
+  }
+
+  SgClassDefinition *functionClassDef = NULL;
+  if (SgMemberFunctionDeclaration *memberDecl =
+          isSgMemberFunctionDeclaration(functionDecl)) {
+    functionClassDef = classDefinitionForMemberFunction(memberDecl);
+    if (sameClassDefinition(functionClassDef, classDef)) {
+      return true;
+    }
+  }
+
+  if (allowDerivedAccess && classDerivesFrom(functionClassDef, classDef)) {
+    return true;
+  }
+
+  if (functionDecl->get_declarationModifier().isFriend()) {
+    if (sameClassDefinition(
+            SageInterface::getEnclosingClassDefinition(functionDecl, false),
+            classDef)) {
+      return true;
+    }
+  }
+
+  if (SgFunctionDeclaration *nondef = isSgFunctionDeclaration(
+          functionDecl->get_firstNondefiningDeclaration())) {
+    if (nondef != functionDecl &&
+        nondef->get_declarationModifier().isFriend()) {
+      if (sameClassDefinition(
+              SageInterface::getEnclosingClassDefinition(nondef, false),
+              classDef)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+bool callSiteHasClassAccess(SgFunctionCallExp *funcall,
+                            SgClassDefinition *classDef,
+                            const SgAccessModifier &accessModifier) {
+  SgFunctionDeclaration *targetDecl =
+      SageInterface::getEnclosingFunctionDeclaration(funcall, false);
+  if (targetDecl != NULL) {
+    targetDecl = isSgFunctionDeclaration(targetDecl->get_definingDeclaration());
+  }
+
+  return functionContextHasClassAccess(targetDecl, classDef,
+                                       accessModifier.isProtected());
+}
+
+bool functionBodyNeedsUnavailableClassAccess(SgFunctionDefinition *fundef,
+                                             SgFunctionCallExp *funcall) {
+  class NonPublicMemberAccessTraversal : public AstSimpleProcessing {
+    SgFunctionCallExp *funcall;
+    bool unavailableAccess = false;
+
+  public:
+    explicit NonPublicMemberAccessTraversal(SgFunctionCallExp *funcall)
+        : funcall(funcall) {}
+
+    void visit(SgNode *node) override {
+      SgDeclarationStatement *decl = NULL;
+
+      if (SgVarRefExp *varRef = isSgVarRefExp(node)) {
+        if (SgVariableSymbol *symbol = varRef->get_symbol()) {
+          if (SgInitializedName *initializedName = symbol->get_declaration()) {
+            decl = initializedName->get_declaration();
+          }
+        }
+      } else if (SgMemberFunctionRefExp *memberFunctionRef =
+                     isSgMemberFunctionRefExp(node)) {
+        if (SgMemberFunctionSymbol *symbol = memberFunctionRef->get_symbol()) {
+          decl = symbol->get_declaration();
+        }
+      }
+
+      SgClassDefinition *owningClass = nonPublicClassOwningDeclaration(decl);
+      if (owningClass != NULL &&
+          !callSiteHasClassAccess(
+              funcall, owningClass,
+              decl->get_declarationModifier().get_accessModifier())) {
+        unavailableAccess = true;
+      }
+    }
+
+    bool foundUnavailableAccess() const { return unavailableAccess; }
+  };
+
+  NonPublicMemberAccessTraversal traversal(funcall);
+  traversal.traverse(fundef->get_body(), preorder);
+
+  if (SgMemberFunctionDeclaration *memberDecl =
+          isSgMemberFunctionDeclaration(fundef->get_declaration())) {
+    if (memberDecl->get_specialFunctionModifier().isConstructor()) {
+      if (SgCtorInitializerList *ctorInitializers =
+              memberDecl->get_CtorInitializerList()) {
+        traversal.traverse(ctorInitializers, preorder);
+      }
+    }
+  }
+
+  return traversal.foundUnavailableAccess();
 }
 } // namespace
 
@@ -317,9 +596,29 @@ void removeRedundantCopyInConstruction(SgInitializedName *in) {
 
 // Mark AST as being a transformation
 static void markAsTransformation(SgNode *ast) {
-  struct FixFileInfo : AstSimpleProcessing {
-    void visit(SgNode *node) {
+  struct FixFileInfo : AstTopDownProcessing<bool> {
+    static bool isSuppressedFrontendInfo(Sg_File_Info *info) {
+      return info != NULL && info->isFrontendSpecific() &&
+             !info->isOutputInCodeGeneration();
+    }
+
+    static bool isSuppressedFrontendNode(SgLocatedNode *node) {
+      return node != NULL &&
+             (isSuppressedFrontendInfo(node->get_file_info()) ||
+              isSuppressedFrontendInfo(node->get_startOfConstruct()) ||
+              isSuppressedFrontendInfo(node->get_endOfConstruct()));
+    }
+
+    bool evaluateInheritedAttribute(SgNode *node, bool suppressOutput) {
+      if (suppressOutput) {
+        return true;
+      }
+
       if (SgLocatedNode *loc = isSgLocatedNode(node)) {
+        if (isSuppressedFrontendNode(loc)) {
+          return true;
+        }
+
         // DQ (3/1/2015): This is now being caught in the DOT file generation,
         // so I think we need to use this better version. DQ (4/14/2014): This
         // should be a more complete version to set all of the Sg_File_Info
@@ -341,9 +640,11 @@ static void markAsTransformation(SgNode *ast) {
           }
         }
       }
+
+      return false;
     }
   };
-  FixFileInfo().traverse(ast, preorder);
+  FixFileInfo().traverse(ast, false);
 }
 // Main inliner code.  Accepts a function call as a parameter, and inlines
 // only that single function call.  Returns true if it succeeded, and false
@@ -499,6 +800,14 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
       std::cout << "Inline returns false: no function definition is visible"
                 << std::endl;
     return false; // No definition of the function is visible
+  }
+
+  if (functionBodyNeedsUnavailableClassAccess(fundef, funcall)) {
+    if (Inliner::verbose)
+      std::cout << "Inline returns false: inlined body would require "
+                   "non-public class access not available at the call site"
+                << std::endl;
+    return false;
   }
 
   // check for direct recursion call
@@ -1140,11 +1449,13 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
           SgNULL_FILE, actualArg, formalArg->get_type());
       ASSERT_not_null(assignInitializer);
       initializer = isSgInitializer(assignInitializer);
+      SgType *autoShadowType =
+          buildAutoShadowTypeForFormal(formalArg->get_type());
       vardecl = new SgVariableDeclaration(SgNULL_FILE, shadow_name,
-                                          formalArg->get_type(), initializer);
+                                          autoShadowType, initializer);
       SgInitializedName *vardeclInitializedName =
           vardecl->get_decl_item(shadow_name);
-      vardeclInitializedName->set_auto_decltype(SageBuilder::buildAutoType());
+      vardeclInitializedName->set_auto_decltype(autoShadowType);
     } else {
       SgAssignInitializer *assignInitializer = new SgAssignInitializer(
           SgNULL_FILE, actualArg, formalArg->get_type());

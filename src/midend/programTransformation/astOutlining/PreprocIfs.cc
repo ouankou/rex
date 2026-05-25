@@ -74,11 +74,14 @@ SgBasicBlock *Outliner::Preprocess::transformPreprocIfs(SgBasicBlock *b) {
   SgBasicBlock *b_new = ASTtools::transformToBlockShell(b);
   ROSE_ASSERT(b_new);
 
-  closeContext(top, e_beforeBlock, b_new);
+  const bool target_stays_in_same_context = top != NULL && top == bottom;
+  if (!target_stays_in_same_context)
+    closeContext(top, e_beforeBlock, b_new);
   openContext(top, e_firstInBlock, b_new);
 
   closeContext(bottom, e_lastInBlock, b_new);
-  openContext(bottom, e_beforeLastInBlock, b);
+  if (!target_stays_in_same_context)
+    openContext(bottom, e_beforeLastInBlock, b);
 
   return b_new;
 }

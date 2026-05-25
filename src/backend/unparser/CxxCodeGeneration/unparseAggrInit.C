@@ -62,8 +62,12 @@ static bool sharesSameStatement(SgExpression *, SgType *expressionType) {
 
 static bool
 compoundLiteralContainsBaseTypeDefinition(SgAggregateInitializer *aggr_init,
-                                          bool &known) {
+                                          bool &known,
+                                          SgVariableDeclaration **owner_decl) {
   known = false;
+  if (owner_decl != NULL) {
+    *owner_decl = NULL;
+  }
 
   SgInitializedName *initialized_name =
       isSgInitializedName(aggr_init->get_parent());
@@ -75,6 +79,9 @@ compoundLiteralContainsBaseTypeDefinition(SgAggregateInitializer *aggr_init,
       isSgVariableDeclaration(initialized_name->get_parent());
   if (variable_declaration == NULL) {
     return false;
+  }
+  if (owner_decl != NULL) {
+    *owner_decl = variable_declaration;
   }
 
   // Compound literals are backed by a hidden compiler-generated declaration.
@@ -349,8 +356,9 @@ void Unparse_ExprStmt::unparseAggrInit(SgExpression *expr,
 #endif
 
     bool known_compound_literal_layout = false;
+    SgVariableDeclaration *compound_literal_var_decl = NULL;
     bool shares = compoundLiteralContainsBaseTypeDefinition(
-        aggr_init, known_compound_literal_layout);
+        aggr_init, known_compound_literal_layout, &compound_literal_var_decl);
     if (!known_compound_literal_layout) {
       shares = sharesSameStatement(aggr_init, aggr_init->get_type());
     }
@@ -360,6 +368,20 @@ void Unparse_ExprStmt::unparseAggrInit(SgExpression *expr,
     if (shares) {
       newinfo2.unset_SkipClassDefinition();
       newinfo2.unset_SkipEnumDefinition();
+      if (compound_literal_var_decl != NULL) {
+        newinfo2.set_declstatement_ptr(compound_literal_var_decl);
+        if (SgDeclarationStatement *base_type_defn_decl =
+                compound_literal_var_decl->get_baseTypeDefiningDeclaration()) {
+          if (isSgClassDeclaration(base_type_defn_decl) != NULL) {
+            newinfo2.set_useAlternativeDefiningDeclaration();
+            newinfo2.set_declstatement_associated_with_type(
+                base_type_defn_decl);
+          } else if (SgEnumDeclaration *enum_decl =
+                         isSgEnumDeclaration(base_type_defn_decl)) {
+            newinfo2.set_declaration_of_context(enum_decl);
+          }
+        }
+      }
     } else {
       newinfo2.set_SkipClassDefinition();
       newinfo2.set_SkipEnumDefinition();

@@ -1,7 +1,7 @@
 #include "sage3basic.h"
 
 namespace {
-SgType *resolveStoredCallType(SgType *type) {
+SgType *resolveStoredCallResultType(SgType *type) {
   if (type == NULL) {
     return NULL;
   }
@@ -100,7 +100,7 @@ int SgCallExpression::replace_expression(SgExpression *o, SgExpression *n) {
 }
 
 SgType *SgCallExpression::get_type() const {
-  if (SgType *storedType = resolveStoredCallType(p_expression_type)) {
+  if (SgType *storedType = resolveStoredCallResultType(p_expression_type)) {
     return storedType;
   }
   return SageBuilder::buildVoidType();

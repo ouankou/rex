@@ -77,6 +77,19 @@ static bool isBuiltinFunctionMacroName(const std::string &name) {
          name == "__func__";
 }
 
+static const SgFunctionDeclaration *
+getParameterOwnerFunctionDeclaration(const SgInitializedName *name) {
+  if (name == NULL)
+    return NULL;
+
+  const SgFunctionParameterList *param_list =
+      isSgFunctionParameterList(name->get_parent());
+  if (param_list == NULL)
+    return NULL;
+
+  return isSgFunctionDeclaration(param_list->get_parent());
+}
+
 //! Converts a set of variable symbols into a string for debugging.
 string ASTtools::toString(const VarSymSet_t &syms) {
   stringstream s;
@@ -405,12 +418,18 @@ void ASTtools::collectLocalVisibleVarSyms(const SgStatement *root,
   class Collector : public AstSimpleProcessing {
   public:
     Collector(const SgStatement *target, VarSymSet_t &syms)
-        : target_(target), syms_(syms) {}
+        : target_(target), syms_(syms), root_function_decl_(NULL) {}
+
+    void setRoot(const SgStatement *root) {
+      root_function_decl_ = isSgFunctionDeclaration(root);
+    }
 
     virtual void visit(SgNode *n) {
       // Stop the traversal once target node is met.
       if (isSgStatement(n) == target_)
         throw string("done");
+      if (isParameterOfNestedFunctionDeclaration(n))
+        return;
       getVarSyms(n, &syms_);
       // Liao, 12/18/2007
       // for Fortran, variables without declarations are legal,but easy to miss
@@ -429,12 +448,24 @@ void ASTtools::collectLocalVisibleVarSyms(const SgStatement *root,
     }
 
   private:
+    bool isParameterOfNestedFunctionDeclaration(const SgNode *n) const {
+      const SgInitializedName *name = isSgInitializedName(n);
+      if (name == NULL)
+        return false;
+
+      const SgFunctionDeclaration *owner =
+          getParameterOwnerFunctionDeclaration(name);
+      return owner != NULL && owner != root_function_decl_;
+    }
+
     const SgStatement *target_; //!< Node at which to stop search.
     VarSymSet_t &syms_;         //!< Container in which to collect symbols.
+    const SgFunctionDeclaration *root_function_decl_;
   };
 
   // Do collection
   Collector collector(target, syms);
+  collector.setRoot(root);
   try {
     collector.traverse(const_cast<SgStatement *>(root), preorder);
   } catch (string &stopped_early) {

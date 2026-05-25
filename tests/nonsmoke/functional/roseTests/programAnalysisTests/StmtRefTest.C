@@ -21,10 +21,14 @@ class TestVarRefCollect {
 
 public:
   virtual bool operator()(AstNodePtr var_first, AstNodePtr var_second) {
+    if (var_first.is_unknown() || var_first.is_unknown_reference() ||
+        var_first.is_unknown_function_call())
+      return true;
     refs = refs + " " + AstNodePtrImpl(var_first)->unparseToString();
     return true;
   }
   void DumpOut(ostream &out) { out << refs; }
+  bool Empty() const { return refs.empty(); }
   void Clear() { refs = ""; }
 };
 
@@ -42,8 +46,18 @@ public:
   bool ProcessTree(AstInterface &fa, const AstNodePtr &s,
                    AstInterface::TraversalVisitType t) {
     if (t == AstInterface::PreVisit && fa.IsExecutableStmt(s)) {
-      std::function<bool(AstNodePtr, AstNodePtr)> mod_f(mod), use_f(use),
-          kill_f(kill);
+      std::function<bool(AstNodePtr, AstNodePtr)> mod_f =
+          [this](AstNodePtr var_first, AstNodePtr var_second) {
+            return mod(var_first, var_second);
+          };
+      std::function<bool(AstNodePtr, AstNodePtr)> use_f =
+          [this](AstNodePtr var_first, AstNodePtr var_second) {
+            return use(var_first, var_second);
+          };
+      std::function<bool(AstNodePtr, AstNodePtr)> kill_f =
+          [this](AstNodePtr var_first, AstNodePtr var_second) {
+            return kill(var_first, var_second);
+          };
       std::cout << AstNodePtrImpl(s)->unparseToString();
       std::cout << "\n";
       op.set_modify_collect(mod_f);
@@ -54,11 +68,13 @@ public:
       mod.DumpOut(std::cout);
       std::cout << " ;  readref: ";
       use.DumpOut(std::cout);
-      std::cout << " ;  killref: ";
+      std::cout << " ;  killref:";
+      if (!kill.Empty())
+        std::cout << " ";
       kill.DumpOut(std::cout);
       std::cout << "\n";
       if (!r)
-        std::cout << "Unknown \n";
+        std::cout << "Unknown\n";
       Clear();
     }
     return true;
