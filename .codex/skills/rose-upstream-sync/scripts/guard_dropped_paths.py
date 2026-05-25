@@ -16,11 +16,11 @@ def changed_paths(repo: Path, staged: bool, ref_range: str | None, stdin: bool) 
     if stdin:
         return [line.strip() for line in sys.stdin if line.strip()]
     if ref_range:
-        output = run_git(["diff", "--name-only", ref_range], repo)
+        output = run_git(["diff", "--name-only", "--diff-filter=d", ref_range], repo)
     elif staged:
-        output = run_git(["diff", "--cached", "--name-only"], repo)
+        output = run_git(["diff", "--cached", "--name-only", "--diff-filter=d"], repo)
     else:
-        output = run_git(["diff", "--name-only"], repo)
+        output = run_git(["diff", "--name-only", "--diff-filter=d"], repo)
     return [line.strip() for line in output.splitlines() if line.strip()]
 
 
