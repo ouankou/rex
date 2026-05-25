@@ -78,6 +78,38 @@ lambdaExpressionForClassDeclaration(SgClassDeclaration *classDecl) {
   return NULL;
 }
 
+SgType *buildAutoShadowTypeForFormal(SgType *formalType) {
+  SgAutoType *autoType = SageBuilder::buildAutoType();
+  SgType *referencedType = NULL;
+  bool useRvalueReference = false;
+
+  if (SgReferenceType *referenceType = isSgReferenceType(formalType)) {
+    referencedType = referenceType->get_base_type();
+  } else if (SgRvalueReferenceType *rvalueReferenceType =
+                 isSgRvalueReferenceType(formalType)) {
+    referencedType = rvalueReferenceType->get_base_type();
+    useRvalueReference = true;
+  }
+
+  if (referencedType == NULL) {
+    return autoType;
+  }
+
+  SgType *autoReferentType = autoType;
+  if (SageInterface::isConstType(referencedType)) {
+    autoReferentType = SageBuilder::buildConstType(autoReferentType);
+  }
+  if (SageInterface::isVolatileType(referencedType)) {
+    autoReferentType = SageBuilder::buildVolatileType(autoReferentType);
+  }
+
+  return useRvalueReference
+             ? static_cast<SgType *>(
+                   SageBuilder::buildRvalueReferenceType(autoReferentType))
+             : static_cast<SgType *>(
+                   SageBuilder::buildReferenceType(autoReferentType));
+}
+
 SgLambdaExp *
 lambdaExpressionForFunctionDeclaration(SgFunctionDeclaration *functionDecl) {
   if (functionDecl == NULL) {
@@ -1417,12 +1449,13 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
           SgNULL_FILE, actualArg, formalArg->get_type());
       ASSERT_not_null(assignInitializer);
       initializer = isSgInitializer(assignInitializer);
-      SgType *autoType = SageBuilder::buildAutoType();
-      vardecl = new SgVariableDeclaration(SgNULL_FILE, shadow_name, autoType,
-                                          initializer);
+      SgType *autoShadowType =
+          buildAutoShadowTypeForFormal(formalArg->get_type());
+      vardecl = new SgVariableDeclaration(SgNULL_FILE, shadow_name,
+                                          autoShadowType, initializer);
       SgInitializedName *vardeclInitializedName =
           vardecl->get_decl_item(shadow_name);
-      vardeclInitializedName->set_auto_decltype(autoType);
+      vardeclInitializedName->set_auto_decltype(autoShadowType);
     } else {
       SgAssignInitializer *assignInitializer = new SgAssignInitializer(
           SgNULL_FILE, actualArg, formalArg->get_type());
