@@ -2221,7 +2221,7 @@ SgGraphNode *CallGraphBuilder::ensureGraphNodeForImplicitCallTarget(
   std::string functionName = unique->get_qualified_name().getString();
   SgGraphNode *graphNode = new SgGraphNode(functionName);
   graphNode->set_SgNode(unique);
-  graphNodes[unique] = graphNode;
+  registerGraphNode(unique, graphNode);
   graph->addNode(graphNode);
   return graphNode;
 }
@@ -2244,7 +2244,7 @@ SgGraphNode *CallGraphBuilder::ensureGraphNodeForResolvedCallTarget(
   std::string functionName = unique->get_qualified_name().getString();
   SgGraphNode *graphNode = new SgGraphNode(functionName);
   graphNode->set_SgNode(unique);
-  graphNodes[unique] = graphNode;
+  registerGraphNode(unique, graphNode);
   graph->addNode(graphNode);
   return graphNode;
 }
@@ -3615,6 +3615,46 @@ callGraphDeclarationsShareSourceIdentity(SgFunctionDeclaration *lhs,
          lhsFileInfo->get_filenameString() == rhsFileInfo->get_filenameString();
 }
 
+void CallGraphBuilder::registerGraphNode(SgFunctionDeclaration *fdecl,
+                                         SgGraphNode *graphNode) {
+  ASSERT_not_null(fdecl);
+  ASSERT_not_null(graphNode);
+
+  graphNodes[fdecl] = graphNode;
+  graphNodesByMangledName[fdecl->get_mangled_name()].push_back(
+      std::make_pair(fdecl, graphNode));
+}
+
+void CallGraphBuilder::addGraphNodeMapping(SgFunctionDeclaration *fdecl,
+                                           SgGraphNode *graphNode) {
+  registerGraphNode(fdecl, graphNode);
+}
+
+SgGraphNode *
+CallGraphBuilder::getGraphNodeForMangledName(SgFunctionDeclaration *fdecl,
+                                             bool requireSourceIdentity) const {
+  if (fdecl == NULL) {
+    return NULL;
+  }
+
+  GraphNodesByMangledName::const_iterator lookedup =
+      graphNodesByMangledName.find(fdecl->get_mangled_name());
+  if (lookedup == graphNodesByMangledName.end()) {
+    return NULL;
+  }
+
+  const GraphNodesByMangledNameList &candidates = lookedup->second;
+  for (GraphNodesByMangledNameList::const_iterator it = candidates.begin();
+       it != candidates.end(); ++it) {
+    if (!requireSourceIdentity ||
+        callGraphDeclarationsShareSourceIdentity(it->first, fdecl)) {
+      return it->second;
+    }
+  }
+
+  return NULL;
+}
+
 SgGraphNode *CallGraphBuilder::getGraphNodeForConstruction(
     SgFunctionDeclaration *fdecl) const {
   SgFunctionDeclaration *unique = canonicalFunctionDeclForCallGraph(fdecl);
@@ -3623,16 +3663,7 @@ SgGraphNode *CallGraphBuilder::getGraphNodeForConstruction(
     return lookedup->second;
   }
 
-  const std::string fname = unique->get_mangled_name();
-  for (GraphNodes::const_iterator it = graphNodes.begin();
-       it != graphNodes.end(); ++it) {
-    if (it->first->get_mangled_name() == fname &&
-        callGraphDeclarationsShareSourceIdentity(it->first, unique)) {
-      return it->second;
-    }
-  }
-
-  return NULL;
+  return getGraphNodeForMangledName(unique, true);
 }
 
 /**
@@ -3656,13 +3687,7 @@ CallGraphBuilder::getGraphNodeFor(SgFunctionDeclaration *fdecl) const {
     return lookedup->second;
   }
 
-  // Fall back on old slow method (When putting multiple
-  std::string fname = fdecl->get_mangled_name();
-  for (GraphNodes::const_iterator it = graphNodes.begin();
-       it != graphNodes.end(); ++it)
-    if (it->first->get_mangled_name() == fname)
-      return it->second;
-  return NULL;
+  return getGraphNodeForMangledName(fdecl, false);
 }
 
 GetOneFuncDeclarationPerFunction::result_type

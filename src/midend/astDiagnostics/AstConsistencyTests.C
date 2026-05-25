@@ -1326,6 +1326,7 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode *node,
     }
 
     case V_SgTypeBool:
+    case V_SgTypeChar:
     case V_SgTypeLongLong: {
       break;
     }

@@ -22,6 +22,10 @@
 
 #include <unordered_map>
 
+#include <utility>
+
+#include <vector>
+
 class FunctionData;
 
 // DQ (1/31/2006): Changed name and made global function type symbol table a
@@ -176,6 +180,8 @@ public:
   getGraphNodesMapping() {
     return graphNodes;
   }
+  void addGraphNodeMapping(SgFunctionDeclaration *fdecl,
+                           SgGraphNode *graphNode);
 
   //! Retrieve the node matching a function declaration using
   //! firstNondefiningDeclaration (does not work across translation units)
@@ -190,6 +196,14 @@ private:
   // We map each function to the corresponding graph node
   typedef std::unordered_map<SgFunctionDeclaration *, SgGraphNode *> GraphNodes;
   GraphNodes graphNodes;
+  typedef std::vector<std::pair<SgFunctionDeclaration *, SgGraphNode *>>
+      GraphNodesByMangledNameList;
+  typedef std::unordered_map<std::string, GraphNodesByMangledNameList>
+      GraphNodesByMangledName;
+  GraphNodesByMangledName graphNodesByMangledName;
+  void registerGraphNode(SgFunctionDeclaration *fdecl, SgGraphNode *graphNode);
+  SgGraphNode *getGraphNodeForMangledName(SgFunctionDeclaration *fdecl,
+                                          bool requireSourceIdentity) const;
   SgGraphNode *getGraphNodeForConstruction(SgFunctionDeclaration *fdecl) const;
   bool shouldMaterializeImplicitCallTarget(SgFunctionDeclaration *fdecl) const;
   bool shouldMaterializeResolvedCallTarget(SgFunctionDeclaration *fdecl) const;
@@ -429,6 +443,7 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
   std::vector<FunctionData> callGraphData;
   ClassHierarchyWrapper classHierarchy(project);
   graphNodes.clear();
+  graphNodesByMangledName.clear();
   VariantVector vv(V_SgFunctionDeclaration);
   GetOneFuncDeclarationPerFunction defFunc;
   std::vector<SgNode *> fdecl_nodes = NodeQuery::queryMemoryPool(defFunc, &vv);
@@ -444,7 +459,7 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
       std::string functionName = unique->get_qualified_name().getString();
       SgGraphNode *graphNode = new SgGraphNode(functionName);
       graphNode->set_SgNode(unique);
-      graphNodes[unique] = graphNode;
+      registerGraphNode(unique, graphNode);
       graph->addNode(graphNode);
     } else {
     }

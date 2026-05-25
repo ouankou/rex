@@ -250,6 +250,18 @@ bool functionContextHasClassAccess(SgFunctionDeclaration *functionDecl,
     }
   }
 
+  if (SgFunctionDeclaration *nondef = isSgFunctionDeclaration(
+          functionDecl->get_firstNondefiningDeclaration())) {
+    if (nondef != functionDecl &&
+        nondef->get_declarationModifier().isFriend()) {
+      if (sameClassDefinition(
+              SageInterface::getEnclosingClassDefinition(nondef, false),
+              classDef)) {
+        return true;
+      }
+    }
+  }
+
   return false;
 }
 

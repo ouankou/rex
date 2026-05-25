@@ -3,6 +3,10 @@
 #include "sage3basic.h"
 
 #include "rose_config.h"
+
+#include <algorithm>
+#include <map>
+
 using namespace std;
 
 void fixupInitializersUsingIncludeFiles(SgProject *node) {
@@ -72,48 +76,63 @@ bool pathEndsWithComponentSequence(const std::string &path,
          path[path.size() - suffix.size() - 1] == '/';
 }
 
-bool fileNameMatchesInclude(const std::string &filename,
-                            const std::string &include_name) {
-  if (filename.empty() || include_name.empty()) {
-    return false;
+class IncludePathMatcher {
+public:
+  explicit IncludePathMatcher(const std::string &include_name)
+      : normalizedInclude(normalizePathSeparators(include_name)),
+        includeBaseName(baseName(normalizedInclude)) {}
+
+  bool matchesFileName(const std::string &filename) const {
+    if (filename.empty() || normalizedInclude.empty()) {
+      return false;
+    }
+
+    std::map<std::string, bool>::const_iterator cached =
+        filenameMatchCache.find(filename);
+    if (cached != filenameMatchCache.end()) {
+      return cached->second;
+    }
+
+    const std::string normalized_filename = normalizePathSeparators(filename);
+    const bool matches =
+        pathEndsWithComponentSequence(normalized_filename, normalizedInclude) ||
+        baseName(normalized_filename) == includeBaseName;
+    filenameMatchCache[filename] = matches;
+    return matches;
   }
 
-  const std::string normalized_filename = normalizePathSeparators(filename);
-  const std::string normalized_include = normalizePathSeparators(include_name);
-  return pathEndsWithComponentSequence(normalized_filename,
-                                       normalized_include) ||
-         baseName(normalized_filename) == baseName(normalized_include);
-}
+  bool matchesFileInfo(Sg_File_Info *file_info) const {
+    if (file_info == nullptr) {
+      return false;
+    }
 
-bool fileInfoMatchesInclude(Sg_File_Info *file_info,
-                            const std::string &include_name) {
-  if (file_info == nullptr) {
-    return false;
+    return matchesFileName(file_info->get_filename()) ||
+           matchesFileName(file_info->get_filenameString()) ||
+           matchesFileName(file_info->get_physical_filename());
   }
 
-  return fileNameMatchesInclude(file_info->get_filename(), include_name) ||
-         fileNameMatchesInclude(file_info->get_filenameString(),
-                                include_name) ||
-         fileNameMatchesInclude(file_info->get_physical_filename(),
-                                include_name);
-}
+private:
+  const std::string normalizedInclude;
+  const std::string includeBaseName;
+  mutable std::map<std::string, bool> filenameMatchCache;
+};
 
 bool expressionSubtreeReferencesInclude(SgNode *node,
-                                        const std::string &include_name) {
+                                        const IncludePathMatcher &matcher) {
   if (node == nullptr) {
     return false;
   }
 
   if (SgLocatedNode *located = isSgLocatedNode(node)) {
-    if (fileInfoMatchesInclude(located->get_file_info(), include_name) ||
-        fileInfoMatchesInclude(located->get_startOfConstruct(), include_name) ||
-        fileInfoMatchesInclude(located->get_endOfConstruct(), include_name)) {
+    if (matcher.matchesFileInfo(located->get_file_info()) ||
+        matcher.matchesFileInfo(located->get_startOfConstruct()) ||
+        matcher.matchesFileInfo(located->get_endOfConstruct())) {
       return true;
     }
   }
 
   for (SgNode *child : node->get_traversalSuccessorContainer()) {
-    if (expressionSubtreeReferencesInclude(child, include_name)) {
+    if (expressionSubtreeReferencesInclude(child, matcher)) {
       return true;
     }
   }
@@ -143,7 +162,8 @@ void removeInitializerIncludeDirectivesFromExpression(
 
     const std::string include_name =
         info->get_filename_from_include_directive();
-    if (expressionSubtreeReferencesInclude(expression, include_name)) {
+    const IncludePathMatcher matcher(include_name);
+    if (expressionSubtreeReferencesInclude(expression, matcher)) {
       includeDirectiveToRemove.push_back(info);
     }
   }
