@@ -2542,24 +2542,28 @@ AttachPreprocessingInfoTreeTrav::evaluateSynthesizedAttribute(
         // statement instead of remaining attached to the case/if/loop/switch.
       case V_SgIfStmt: {
         previousLocatedNode = locatedNode;
+        break;
       }
 
       case V_SgForStatement:
       case V_SgWhileStmt:
       case V_SgDoWhileStmt: {
         previousLocatedNode = locatedNode;
+        break;
       }
 
       case V_SgSwitchStatement:
       case V_SgCaseOptionStmt:
       case V_SgDefaultOptionStmt: {
         previousLocatedNode = locatedNode;
+        break;
       }
 
         // DQ (3/30/2021): Adding to support comments after statements which
         // contain SgBasicBlock nodes.
       case V_SgFortranDo: {
         previousLocatedNode = locatedNode;
+        break;
       }
 
       default: {

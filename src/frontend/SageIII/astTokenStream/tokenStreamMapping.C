@@ -1140,8 +1140,9 @@ void TokenMappingTraversal::trimLeadingWhiteSpaceFromLeft(
                ? "true"
                : "false");
 
-    ROSE_ASSERT((size_t)leading_whitespace_start - 1 >= 0);
-    ROSE_ASSERT((size_t)leading_whitespace_start - 1 < tokenStream.size());
+    ROSE_ASSERT(leading_whitespace_start > 0);
+    ROSE_ASSERT(static_cast<size_t>(leading_whitespace_start - 1) <
+                tokenStream.size());
 
     printf("tokenStream[leading_whitespace_start-1]->p_tok_elem->token_id == "
            "C_CXX_WHITESPACE         = %s \n",
@@ -1161,8 +1162,9 @@ void TokenMappingTraversal::trimLeadingWhiteSpaceFromLeft(
                ->p_tok_elem->token_lexeme.c_str());
 #endif
 
-    ROSE_ASSERT((size_t)leading_whitespace_start - 1 >= 0);
-    ROSE_ASSERT((size_t)leading_whitespace_start - 1 < tokenStream.size());
+    ROSE_ASSERT(leading_whitespace_start > 0);
+    ROSE_ASSERT(static_cast<size_t>(leading_whitespace_start - 1) <
+                tokenStream.size());
 
     // DQ (5/4/2021): We need to bew able to iterate to zero, but we can't with
     // this logic. while ( leading_whitespace_start >
