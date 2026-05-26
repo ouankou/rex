@@ -25,6 +25,9 @@ enum OperatorSideEffect {
   Kill,
   Alias,
   Call,
+  CallUnknown,
+  ModifyUnknown,
+  ReadUnknown,
   Decl,
   Allocate,
   Free,
@@ -41,6 +44,12 @@ inline std::string OperatorSideEffectName(OperatorSideEffect what) {
     return "kill";
   case OperatorSideEffect::Call:
     return "call";
+  case OperatorSideEffect::CallUnknown:
+    return "call_unknown";
+  case OperatorSideEffect::ModifyUnknown:
+    return "modify_unknown";
+  case OperatorSideEffect::ReadUnknown:
+    return "read_unknown";
   case OperatorSideEffect::Parameter:
     return "parameter";
   case OperatorSideEffect::Return:
@@ -94,8 +103,17 @@ public:
         readp->push_back(varref);
       break;
     case OperatorSideEffect::Call:
+    case OperatorSideEffect::CallUnknown:
       if (callp != 0)
         callp->push_back(varref);
+      break;
+    case OperatorSideEffect::ModifyUnknown:
+      if (writep != 0)
+        writep->push_back(varref);
+      break;
+    case OperatorSideEffect::ReadUnknown:
+      if (readp != 0)
+        readp->push_back(varref);
       break;
     default:
       break;

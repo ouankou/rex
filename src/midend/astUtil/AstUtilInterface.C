@@ -23,6 +23,7 @@
 DebugLog DebugAstUtil("-debugastutil");
 
 namespace AstUtilInterface {
+
 class VariableSignatureDictionary {
 private:
   static DependenceTable *dict;
@@ -59,10 +60,11 @@ void AstUtilInterface::ComputeAstSideEffects(
   OperatorSideEffectAnnotation *funcAnnot =
       OperatorSideEffectAnnotation::get_inst();
   assert(funcAnnot != 0);
+  const bool do_annot = funcAnnot != nullptr;
   DebugAstUtil([&ast]() {
     return "ComputeAstSideEffect: " + AstInterface::AstToString(ast);
   });
-  bool do_annot = false;
+  bool is_function = false;
   bool done_annot_mod = false;
   bool done_annot_read = false;
   bool done_annot_call = false;
@@ -78,6 +80,7 @@ void AstUtilInterface::ComputeAstSideEffects(
       return "Saving side effects for :" + AstInterface::AstToString(ast) +
              "\n";
     });
+    is_function = true;
     if (add_to_dep_analysis != 0) {
       add_to_dep_analysis->ClearOperatorSideEffect(ast);
       assert(ast_params.size() == ast_param_types.size());
@@ -88,7 +91,6 @@ void AstUtilInterface::ComputeAstSideEffects(
         pt++;
       }
     }
-    do_annot = true;
   }
 
   StmtSideEffectCollect collect_operator(fa, funcAnnot);
@@ -105,70 +107,68 @@ void AstUtilInterface::ComputeAstSideEffects(
         }
         return true;
       };
-  auto save_memory_ref = [&alias_map, &collect, &ast, do_annot, &body,
-                          add_to_dep_analysis](AstNodePtr ref,
-                                               AstNodePtr details,
-                                               OperatorSideEffect what) {
-    bool done_annot = false;
-    AstNodeList subrefs;
-    if (!ref.is_unknown() && !AstInterface::IsMemoryAccess(ref, &subrefs)) {
-      DebugAstUtil([&ref]() {
-        return "Do not save non-memory-access ref:" +
-               AstInterface::AstToString(ref);
-      });
-      return false;
-    }
-    if (subrefs.empty()) {
-      subrefs.push_back(ref);
-    }
-    for (AstNodePtr &subref : subrefs) {
-      AstNodePtr memory_ref = subref;
-      AstNodePtr array;
-      bool is_unknown_ref = false;
-      bool is_local_ref =
-          (do_annot)
-              ? AstInterface::IsLocalRef(memory_ref, body, &is_unknown_ref)
-              : true;
-      if (AstInterface::IsArrayAccess(memory_ref, &array)) {
-        memory_ref = array;
-        is_local_ref = false;
-        DebugAstUtil([&memory_ref]() {
-          return "Finding array reference:" +
-                 AstInterface::AstToString(memory_ref);
-        });
-      }
-      auto ref_aliased =
-          alias_map.find(AstInterface::GetVariableSignature(memory_ref));
-      if (ref_aliased != alias_map.end()) {
-        memory_ref = AstNodePtr((*ref_aliased).second);
-        is_local_ref = false;
-        DebugAstUtil([&memory_ref]() {
-          return "Finding aliased reference:" +
-                 AstInterface::AstToString(memory_ref);
-        });
-      } else {
-        if (is_unknown_ref) {
-          memory_ref.set_is_unknown_reference();
+  auto save_memory_ref =
+      [&alias_map, &collect, &ast, &body, &do_annot, add_to_dep_analysis](
+          AstNodePtr ref, AstNodePtr details, OperatorSideEffect what) {
+        bool done_annot = false;
+        AstNodeList subrefs;
+        if (!ref.is_unknown() && !AstInterface::IsMemoryAccess(ref, &subrefs)) {
+          DebugAstUtil([&ref]() {
+            return "Do not save non-memory-access ref:" +
+                   AstInterface::AstToString(ref);
+          });
+          return false;
         }
-      }
-      if (collect != 0) {
-        (*collect)(memory_ref, details, what);
-      }
-      if (do_annot &&
-          (memory_ref.is_unknown() || is_unknown_ref || !is_local_ref)) {
-        DebugAstUtil([&memory_ref]() {
-          return "save annotation:" + AstInterface::AstToString(memory_ref);
-        });
-        if (add_to_dep_analysis != 0) {
-          add_to_dep_analysis->SaveOperatorSideEffect(ast, memory_ref, what,
-                                                      details.get_ptr());
+        if (subrefs.empty()) {
+          subrefs.push_back(ref);
         }
-        AddOperatorSideEffectAnnotation(ast, memory_ref, what);
-        done_annot = true;
-      }
-    }
-    return done_annot;
-  };
+        for (AstNodePtr &subref : subrefs) {
+          AstNodePtr memory_ref = subref;
+          AstNodePtr array;
+          bool is_unknown_ref = false;
+          bool is_local_ref =
+              AstInterface::IsLocalRef(memory_ref, body, &is_unknown_ref);
+          if (AstInterface::IsArrayAccess(memory_ref, &array)) {
+            memory_ref = array;
+            is_local_ref = false;
+            DebugAstUtil([&memory_ref]() {
+              return "Finding array reference:" +
+                     AstInterface::AstToString(memory_ref);
+            });
+          }
+          auto ref_aliased =
+              alias_map.find(AstInterface::GetVariableSignature(memory_ref));
+          if (ref_aliased != alias_map.end()) {
+            memory_ref = AstNodePtr((*ref_aliased).second);
+            is_local_ref = false;
+            DebugAstUtil([&memory_ref]() {
+              return "Finding aliased reference:" +
+                     AstInterface::AstToString(memory_ref);
+            });
+          } else {
+            if (is_unknown_ref) {
+              memory_ref.set_is_unknown_reference();
+            }
+          }
+          if (collect != 0) {
+            (*collect)(memory_ref, details, what);
+          }
+          if (memory_ref.is_unknown() || is_unknown_ref || !is_local_ref) {
+            DebugAstUtil([&memory_ref]() {
+              return "save non-local:" + AstInterface::AstToString(memory_ref);
+            });
+            if (add_to_dep_analysis != 0) {
+              add_to_dep_analysis->SaveOperatorSideEffect(ast, memory_ref, what,
+                                                          details.get_ptr());
+            }
+            if (do_annot) {
+              AddOperatorSideEffectAnnotation(ast, memory_ref, what);
+            }
+            done_annot = true;
+          }
+        }
+        return done_annot;
+      };
   std::function<bool(AstNodePtr, AstNodePtr)> save_mod =
       [&done_annot_mod, &save_memory_ref](AstNodePtr first, AstNodePtr second) {
         if (save_memory_ref(first, second, OperatorSideEffect::Modify)) {
@@ -194,17 +194,33 @@ void AstUtilInterface::ComputeAstSideEffects(
         return true;
       };
   std::function<bool(AstNodePtr, AstNodePtr)> save_call =
-      [&collect, &ast, do_annot, &done_annot_call, &body,
+      [&collect, &ast, &done_annot_call, &done_annot_mod, &done_annot_read,
+       &body, &do_annot,
        add_to_dep_analysis](AstNodePtr first, AstNodePtr second) {
-        if (do_annot &&
-            (first.is_unknown() || !AstInterface::IsLocalRef(first, body))) {
+        if (!AstInterface::IsLocalRef(first, body)) {
           done_annot_call = true;
           if (add_to_dep_analysis != 0) {
             add_to_dep_analysis->SaveOperatorSideEffect(
                 ast, GetVariableSignature(first), OperatorSideEffect::Call,
                 second.get_ptr());
           }
-          AddOperatorSideEffectAnnotation(ast, first, OperatorSideEffect::Call);
+          if (do_annot) {
+            AddOperatorSideEffectAnnotation(ast, first,
+                                            OperatorSideEffect::Call);
+          }
+          if (first.is_unknown()) {
+            done_annot_mod = true;
+            done_annot_read = true;
+            if (add_to_dep_analysis != 0) {
+              add_to_dep_analysis->SaveOperatorSideEffect(
+                  ast, GetVariableSignature(first),
+                  OperatorSideEffect::CallUnknown, second.get_ptr());
+            }
+            if (do_annot) {
+              AddOperatorSideEffectAnnotation(ast, first,
+                                              OperatorSideEffect::CallUnknown);
+            }
+          }
         }
         DebugAstUtil([&first]() {
           return "save call:" + AstInterface::AstToString(first);
@@ -256,28 +272,36 @@ void AstUtilInterface::ComputeAstSideEffects(
   collect_operator.set_allocate_collect(save_allocate);
   collect_operator.set_free_collect(save_free);
   collect_operator(ast);
-  if (do_annot) {
+  if (is_function) {
     if (!done_annot_mod) {
       if (add_to_dep_analysis != 0) {
         add_to_dep_analysis->SaveOperatorSideEffect(
             ast, AST_NULL, OperatorSideEffect::Modify, 0);
       }
-      AddOperatorSideEffectAnnotation(ast, AST_NULL,
-                                      OperatorSideEffect::Modify);
+      if (do_annot) {
+        AddOperatorSideEffectAnnotation(ast, AST_NULL,
+                                        OperatorSideEffect::Modify);
+      }
     }
     if (!done_annot_read) {
       if (add_to_dep_analysis != 0) {
         add_to_dep_analysis->SaveOperatorSideEffect(
             ast, AST_NULL, OperatorSideEffect::Read, 0);
       }
-      AddOperatorSideEffectAnnotation(ast, AST_NULL, OperatorSideEffect::Read);
+      if (do_annot) {
+        AddOperatorSideEffectAnnotation(ast, AST_NULL,
+                                        OperatorSideEffect::Read);
+      }
     }
     if (!done_annot_call) {
       if (add_to_dep_analysis != 0) {
         add_to_dep_analysis->SaveOperatorSideEffect(
             ast, AST_NULL, OperatorSideEffect::Call, 0);
       }
-      AddOperatorSideEffectAnnotation(ast, AST_NULL, OperatorSideEffect::Call);
+      if (do_annot) {
+        AddOperatorSideEffectAnnotation(ast, AST_NULL,
+                                        OperatorSideEffect::Call);
+      }
     }
   }
 }
@@ -330,12 +354,15 @@ void AstUtilInterface::AddOperatorSideEffectAnnotation(
   OperatorSideEffectDescriptor *desc = 0;
   switch (relation) {
   case OperatorSideEffect::Modify:
+  case OperatorSideEffect::ModifyUnknown:
     desc = funcAnnot->get_modify_descriptor(fa, op_ast, true);
     break;
   case OperatorSideEffect::Read:
+  case OperatorSideEffect::ReadUnknown:
     desc = funcAnnot->get_read_descriptor(fa, op_ast, true);
     break;
   case OperatorSideEffect::Call:
+  case OperatorSideEffect::CallUnknown:
     desc = funcAnnot->get_call_descriptor(fa, op_ast, true);
     break;
   case OperatorSideEffect::Kill:
