@@ -1140,6 +1140,7 @@ void NameQualificationTraversal::evaluateTemplateInstantiationDeclaration(
   // DQ (5/22/2024): Count the number of function invocations so that we can
   // turn on forceSkip selectively.
   static size_t functionCallCounter = 0;
+  (void)functionCallCounter;
 
   functionCallCounter++;
 
