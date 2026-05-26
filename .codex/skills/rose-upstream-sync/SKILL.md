@@ -66,6 +66,12 @@ Use this skill for any request mentioning ROSE upstream sync, LLNL ROSE sync, `r
    cmake --build build -j32
    ctest --test-dir build --output-on-failure -j32
    ```
+12. If final full CTest finds regressions after all upstream commits have been processed:
+   - save the exact failing test list from that full run;
+   - identify the first offending REX sync commit using that frozen failing subset;
+   - amend the offending commit instead of adding a new fixup commit;
+   - rebase later sync commits, refresh affected CSV `REX commit` mappings, and rerun the frozen failing subset, focused/core gates, and final full CTest.
+   Only proven unrelated environmental flakes may be documented without rewriting a sync commit.
 
 ## Commit Trailers
 
@@ -80,3 +86,5 @@ Sync-Log: docs/upstream-sync/rose-2026-commits.csv
 If one REX commit adapts multiple upstream commits, include one `Upstream-ROSE:` trailer per upstream SHA and record each upstream row with the same REX commit SHA.
 
 Do not add `fixup` or `follow-up` sync commits for problems caused by an earlier sync commit. Rewrite the responsible REX sync commit before the branch is published, then update the sync CSV to the rewritten SHA.
+
+Final full-CTest regressions follow the same rule: freeze the failing tests, find the culprit sync commit, amend it, rebase later commits, and rerun validation until the final branch has no separate regression-fix commits.
