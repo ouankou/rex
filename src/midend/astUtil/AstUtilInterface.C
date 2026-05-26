@@ -43,6 +43,19 @@ public:
 
 DependenceTable *VariableSignatureDictionary::dict = 0;
 bool VariableSignatureDictionary::do_save = false;
+
+static OperatorSideEffect unknownSideEffect(OperatorSideEffect relation) {
+  switch (relation) {
+  case OperatorSideEffect::Modify:
+    return OperatorSideEffect::ModifyUnknown;
+  case OperatorSideEffect::Read:
+    return OperatorSideEffect::ReadUnknown;
+  case OperatorSideEffect::Call:
+    return OperatorSideEffect::CallUnknown;
+  default:
+    return relation;
+  }
+}
 } // namespace AstUtilInterface
 
 void AstUtilInterface::SetSaveVariableDictionary(bool doit) {
@@ -151,8 +164,13 @@ void AstUtilInterface::ComputeAstSideEffects(
               memory_ref.set_is_unknown_reference();
             }
           }
+          OperatorSideEffect current_what = what;
+          if (memory_ref.is_unknown() || memory_ref.is_unknown_reference() ||
+              memory_ref.is_unknown_function_call()) {
+            current_what = unknownSideEffect(current_what);
+          }
           if (collect != 0) {
-            (*collect)(memory_ref, details, what);
+            (*collect)(memory_ref, details, current_what);
           }
           if (is_function &&
               (memory_ref.is_unknown() || is_unknown_ref || !is_local_ref)) {
@@ -160,11 +178,11 @@ void AstUtilInterface::ComputeAstSideEffects(
               return "save non-local:" + AstInterface::AstToString(memory_ref);
             });
             if (add_to_dep_analysis != 0) {
-              add_to_dep_analysis->SaveOperatorSideEffect(ast, memory_ref, what,
-                                                          details.get_ptr());
+              add_to_dep_analysis->SaveOperatorSideEffect(
+                  ast, memory_ref, current_what, details.get_ptr());
             }
             if (do_annot) {
-              AddOperatorSideEffectAnnotation(ast, memory_ref, what);
+              AddOperatorSideEffectAnnotation(ast, memory_ref, current_what);
             }
             done_annot = true;
           }
@@ -199,36 +217,28 @@ void AstUtilInterface::ComputeAstSideEffects(
       [&collect, &ast, &is_function, &done_annot_call, &done_annot_mod,
        &done_annot_read, &body, &do_annot,
        add_to_dep_analysis](AstNodePtr first, AstNodePtr second) {
+        OperatorSideEffect relation = first.is_unknown()
+                                          ? OperatorSideEffect::CallUnknown
+                                          : OperatorSideEffect::Call;
         if (is_function && !AstInterface::IsLocalRef(first, body)) {
           done_annot_call = true;
           if (add_to_dep_analysis != 0) {
             add_to_dep_analysis->SaveOperatorSideEffect(
-                ast, GetVariableSignature(first), OperatorSideEffect::Call,
-                second.get_ptr());
+                ast, GetVariableSignature(first), relation, second.get_ptr());
           }
           if (do_annot) {
-            AddOperatorSideEffectAnnotation(ast, first,
-                                            OperatorSideEffect::Call);
+            AddOperatorSideEffectAnnotation(ast, first, relation);
           }
           if (first.is_unknown()) {
             done_annot_mod = true;
             done_annot_read = true;
-            if (add_to_dep_analysis != 0) {
-              add_to_dep_analysis->SaveOperatorSideEffect(
-                  ast, GetVariableSignature(first),
-                  OperatorSideEffect::CallUnknown, second.get_ptr());
-            }
-            if (do_annot) {
-              AddOperatorSideEffectAnnotation(ast, first,
-                                              OperatorSideEffect::CallUnknown);
-            }
           }
         }
         DebugAstUtil([&first]() {
           return "save call:" + AstInterface::AstToString(first);
         });
         if (collect != 0) {
-          (*collect)(first, second, OperatorSideEffect::Call);
+          (*collect)(first, second, relation);
         }
         return true;
       };

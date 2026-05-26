@@ -27,6 +27,22 @@ std::string wrap_string(const std::string &s) {
   }
   return new_string;
 }
+
+std::pair<std::string, std::string>
+dependenceLabel(AstUtilInterface::OperatorSideEffect relation) {
+  using AstUtilInterface::OperatorSideEffect;
+
+  switch (relation) {
+  case OperatorSideEffect::ModifyUnknown:
+    return {"modify", "unknown"};
+  case OperatorSideEffect::ReadUnknown:
+    return {"read", "unknown"};
+  case OperatorSideEffect::CallUnknown:
+    return {"call", "unknown"};
+  default:
+    return {AstUtilInterface::OperatorSideEffectName(relation), ""};
+  }
+}
 } // namespace
 
 namespace AstUtilInterface {
@@ -497,10 +513,9 @@ bool DependenceTable::SaveOperatorSideEffect(
     // attr = AstUtilInterface::GetVariableSignature(details);
   }
   const std::string op_sig = AstUtilInterface::GetVariableSignature(op);
-  const std::string rel_sig =
-      AstUtilInterface::OperatorSideEffectName(relation);
+  const auto label = dependenceLabel(relation);
   DependenceEntry e(op_sig, AstUtilInterface::GetVariableSignature(varref),
-                    rel_sig, attr);
+                    label.first, label.second.empty() ? attr : label.second);
   Log.push("saving dependence: " + e.to_string());
   SaveDependence(e);
   return true;
