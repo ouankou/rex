@@ -1029,7 +1029,6 @@ set_property(CACHE ROSE_ALLOC_MEMSET PROPERTY STRINGS 0 1 2 3)
 if(NOT ROSE_ALLOC_MEMSET MATCHES "^[0-3]$")
   message(FATAL_ERROR "ROSE_ALLOC_MEMSET must be one of 0, 1, 2, or 3. Current value: ${ROSE_ALLOC_MEMSET}")
 endif()
-add_compile_definitions(ROSE_ALLOC_MEMSET=${ROSE_ALLOC_MEMSET})
 
 set(WITH-VALGRIND "" CACHE PATH "Valgrind installation prefix (empty to disable)")
 set(WITH-VALGRIND-BIN "" CACHE PATH "Valgrind bin directory")
