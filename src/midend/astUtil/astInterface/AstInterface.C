@@ -2726,7 +2726,7 @@ bool AstInterface::IsMemoryFree(const AstNodePtr &s, AstNodeType *exptype,
   return false;
 }
 
-bool AstInterface::IsMemoryAccess(const AstNodePtr &_s) {
+bool AstInterface::IsMemoryAccess(const AstNodePtr &_s, AstNodeList *subrefs) {
   if (_s.is_unknown())
     return true;
   SgNode *s = AstNodePtrImpl(_s).get_ptr();
@@ -2738,6 +2738,32 @@ bool AstInterface::IsMemoryAccess(const AstNodePtr &_s) {
   case V_SgPntrArrRefExp:
   case V_SgPointerDerefExp:
     break;
+  case V_SgCommaOpExp: {
+    SgCommaOpExp *comma = isSgCommaOpExp(s);
+    AstNodePtr lhs = comma->get_lhs_operand();
+    AstNodePtr rhs = comma->get_rhs_operand();
+    if (IsMemoryAccess(lhs) && IsMemoryAccess(rhs)) {
+      if (subrefs != 0) {
+        subrefs->push_back(lhs);
+        subrefs->push_back(rhs);
+      }
+      return true;
+    }
+    return false;
+  }
+  case V_SgConditionalExp: {
+    SgConditionalExp *conditional = isSgConditionalExp(s);
+    AstNodePtr true_exp = conditional->get_true_exp();
+    AstNodePtr false_exp = conditional->get_false_exp();
+    if (IsMemoryAccess(true_exp) && IsMemoryAccess(false_exp)) {
+      if (subrefs != 0) {
+        subrefs->push_back(true_exp);
+        subrefs->push_back(false_exp);
+      }
+      return true;
+    }
+    return false;
+  }
   case V_SgDotExp:
   case V_SgArrowExp: {
     if (isSgBinaryOp(s)->get_rhs_operand()->variantT() == V_SgVarRefExp) {
