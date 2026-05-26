@@ -114,7 +114,7 @@ def write_rows(csv_path: Path, rows: list[dict[str, str]]) -> None:
         writer = csv.DictWriter(stream, fieldnames=CSV_HEADER)
         writer.writeheader()
         for row in rows:
-            writer.writerow({key: row.get(key, "") for key in CSV_HEADER})
+            writer.writerow({key: (row.get(key) or "") for key in CSV_HEADER})
 
 
 def commit_exists(repo: Path, sha: str) -> bool:
@@ -135,11 +135,14 @@ def latest_recorded_upstream_sha(repo: Path, log_dir: Path) -> str:
     latest_date = ""
     for csv_path in existing_sync_logs(log_dir):
         for row in read_rows(csv_path):
-            sha = row.get("Upstream commit", "").strip()
-            date = (row.get("Upstream date", "") or row.get("Date", "")).strip()
-            if sha and sha != "N/A" and date >= latest_date:
-                latest = sha
-                latest_date = date
+            sha = (row.get("Upstream commit") or "").strip()
+            date = (row.get("Upstream date") or row.get("Date") or "").strip()
+            if sha and sha != "N/A":
+                if not date and commit_exists(repo, sha):
+                    date = commit_date(repo, sha)
+                if date >= latest_date:
+                    latest = sha
+                    latest_date = date
     if latest and not commit_exists(repo, latest):
         raise SystemExit(f"latest recorded upstream SHA is not present locally: {latest}")
     return latest

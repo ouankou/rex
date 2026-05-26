@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 
-from rose_sync_common import UPSTREAM_REF, commit_exists, existing_sync_logs, read_rows, run_git
+from rose_sync_common import UPSTREAM_REF, commit_date, commit_exists, existing_sync_logs, read_rows, run_git
 
 ALLOWED_DECISIONS = {
     "already-present",
@@ -30,11 +30,14 @@ def latest_recorded_upstream_sha_excluding(repo: Path, log_dir: Path, excluded_c
         if csv_path.resolve() == excluded:
             continue
         for row in read_rows(csv_path):
-            sha = row.get("Upstream commit", "").strip()
-            date = (row.get("Upstream date", "") or row.get("Date", "")).strip()
-            if sha and sha != "N/A" and date >= latest_date:
-                latest = sha
-                latest_date = date
+            sha = (row.get("Upstream commit") or "").strip()
+            date = (row.get("Upstream date") or row.get("Date") or "").strip()
+            if sha and sha != "N/A":
+                if not date and commit_exists(repo, sha):
+                    date = commit_date(repo, sha)
+                if date >= latest_date:
+                    latest = sha
+                    latest_date = date
     if latest and not commit_exists(repo, latest):
         raise SystemExit(f"latest recorded upstream SHA is not present locally: {latest}")
     return latest
@@ -64,25 +67,25 @@ def main() -> int:
     expected = upstream_range(repo, base, args.to_ref)
     expected_set = set(expected)
     rows = read_rows(csv_path)
-    by_sha = {row.get("Upstream commit", "").strip(): row for row in rows if row.get("Upstream commit", "").strip()}
+    by_sha = {(row.get("Upstream commit") or "").strip(): row for row in rows if (row.get("Upstream commit") or "").strip()}
     recorded_set = set(by_sha)
 
     missing = [sha for sha in expected if sha not in recorded_set]
     extra = sorted(recorded_set - expected_set)
-    blank_decision = [sha for sha in expected if sha in by_sha and not by_sha[sha].get("Decision", "").strip()]
+    blank_decision = [sha for sha in expected if sha in by_sha and not (by_sha[sha].get("Decision") or "").strip()]
     invalid_decision = [
         sha
         for sha in expected
         if sha in by_sha
-        and by_sha[sha].get("Decision", "").strip()
-        and by_sha[sha].get("Decision", "").strip() not in ALLOWED_DECISIONS
+        and (by_sha[sha].get("Decision") or "").strip()
+        and (by_sha[sha].get("Decision") or "").strip() not in ALLOWED_DECISIONS
     ]
     missing_rex_commit = [
         sha
         for sha in expected
         if sha in by_sha
-        and by_sha[sha].get("Decision", "").strip() in PICK_DECISIONS
-        and not by_sha[sha].get("REX commit", "").strip()
+        and (by_sha[sha].get("Decision") or "").strip() in PICK_DECISIONS
+        and not (by_sha[sha].get("REX commit") or "").strip()
     ]
 
     failures = False

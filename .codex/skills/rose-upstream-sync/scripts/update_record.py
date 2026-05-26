@@ -40,9 +40,9 @@ def main() -> int:
     rows = read_rows(args.csv)
     replaced = False
     for index, existing in enumerate(rows):
-        if existing.get("Upstream commit") == args.upstream:
+        if (existing.get("Upstream commit") or "") == args.upstream:
             rows[index] = {
-                key: (row[key] if row.get(key) is not None else existing.get(key, ""))
+                key: (row[key] if row.get(key) is not None else (existing.get(key) or ""))
                 for key in CSV_HEADER
             }
             replaced = True
