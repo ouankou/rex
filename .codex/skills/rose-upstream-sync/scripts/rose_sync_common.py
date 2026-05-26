@@ -184,6 +184,6 @@ def encode_rose_version(version: str) -> int:
         return (((major * 100 + minor) * 1000 + patch) * 10000 + build)
     if len(parts) == 3:
         major, minor, patch = parts
-        if minor >= 100000 or patch >= 100:
+        if minor >= 10000 or patch >= 1000:
             raise ValueError(f"ROSE 3-component version out of range: {version}")
-        return major * 10000000 + minor * 100 + patch
+        return major * 10000000 + minor * 1000 + patch

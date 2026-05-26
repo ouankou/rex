@@ -344,7 +344,7 @@ message(STATUS "ROSE OpenMP version: ${ROSE_OPENMP_VERSION}")
 
 # The ROSE version string was already read from ROSE_VERSION file before the project() command.
 # REX accepts both the historical four-component ROSE encoding (A.B.C.D -> ABBCCCDDDD)
-# and the newer upstream three-component encoding (A.B.C -> A*10000000 + B*100 + C).
+# and the newer upstream three-component encoding (A.B.C -> A*10000000 + B*1000 + C).
 set(ROSE_SCM_DATE_FILE "${PROJECT_SOURCE_DIR}/config/SCM_DATE")
 if(NOT EXISTS "${ROSE_SCM_DATE_FILE}")
   message(FATAL_ERROR "ROSE SCM Date file not found: ${ROSE_SCM_DATE_FILE}")
@@ -391,14 +391,14 @@ if(ROSE_VERSION_HAS_BUILD)
     "(((${ROSE_VERSION_MAJOR} * 100 + ${ROSE_VERSION_MINOR}) * 1000 + ${ROSE_VERSION_PATCH}) * 10000 + ${ROSE_VERSION_BUILD})")
 else()
   set(ROSE_VERSION_BUILD 0)
-  if(ROSE_VERSION_MINOR GREATER 99999)
-    message(FATAL_ERROR "ROSE version minor component must be < 100000: ${ROSE_VERSION_MINOR}")
+  if(ROSE_VERSION_MINOR GREATER 9999)
+    message(FATAL_ERROR "ROSE version minor component must be < 10000: ${ROSE_VERSION_MINOR}")
   endif()
-  if(ROSE_VERSION_PATCH GREATER 99)
-    message(FATAL_ERROR "ROSE version patch component must be < 100: ${ROSE_VERSION_PATCH}")
+  if(ROSE_VERSION_PATCH GREATER 999)
+    message(FATAL_ERROR "ROSE version patch component must be < 1000: ${ROSE_VERSION_PATCH}")
   endif()
   math(EXPR ROSE_VERSION_ENCODED
-    "${ROSE_VERSION_MAJOR} * 10000000 + ${ROSE_VERSION_MINOR} * 100 + ${ROSE_VERSION_PATCH}")
+    "${ROSE_VERSION_MAJOR} * 10000000 + ${ROSE_VERSION_MINOR} * 1000 + ${ROSE_VERSION_PATCH}")
 endif()
 
 file(READ ${ROSE_SCM_DATE_FILE} ROSE_VERSION_FROM_SCM_DATE)
