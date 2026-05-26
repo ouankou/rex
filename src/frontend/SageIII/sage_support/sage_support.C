@@ -979,6 +979,15 @@ std::string SgValueExp::get_constant_folded_value_as_string() const {
     break;
   }
 
+  case V_SgFloat128Val: {
+    const SgFloat128Val *floatValueExpression = isSgFloat128Val(this);
+    ASSERT_not_null(floatValueExpression);
+    long double numericValue = floatValueExpression->get_value();
+    snprintf(buffer, max_buffer_size, "%Lf", numericValue);
+    s = buffer;
+    break;
+  }
+
     // DQ (10/4/2010): Added case
   case V_SgEnumVal: {
     const SgEnumVal *enumValueExpression = isSgEnumVal(this);
