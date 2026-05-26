@@ -503,11 +503,6 @@ bool DependenceTable::SaveOperatorSideEffect(
                     rel_sig, attr);
   Log.push("saving dependence: " + e.to_string());
   SaveDependence(e);
-  if (varref.is_unknown()) {
-    DependenceEntry e1(op_sig, "_UNKNOWN_", rel_sig, attr);
-    Log.push("saving dependence: " + e1.to_string());
-    SaveDependence(e1);
-  }
   return true;
 }
 

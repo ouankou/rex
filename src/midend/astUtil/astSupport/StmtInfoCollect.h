@@ -83,7 +83,7 @@ public:
   StmtSideEffectCollect(
       AstInterface &fa, FunctionSideEffectInterface *a = 0,
       UnknownFunctionEffectPolicy unknownFunctionEffectPolicy =
-          UnknownFunctionEffectPolicy::CollectSyntheticRefs)
+          UnknownFunctionEffectPolicy::ReportOnly)
       : fa_(fa), modunknown(false), readunknown(false), funcanal(a),
         unknownFunctionEffectPolicy(unknownFunctionEffectPolicy) {}
 
