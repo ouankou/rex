@@ -1875,7 +1875,53 @@ bool AstInterface::IsAliasingDecl(const AstNodePtr &_s, AstNodeList *vars,
   SgNode *s = AstNodePtrImpl(_s).get_ptr();
   if (s == 0)
     return false;
+  DebugVariable(
+      [&_s]() { return "IsAliasingDecl:" + AstInterface::AstToString(_s); });
   switch (s->variantT()) {
+  case V_SgVariableDeclaration: {
+    bool has_alias = false;
+    SgInitializedNamePtrList &names =
+        isSgVariableDeclaration(s)->get_variables();
+    for (SgInitializedNamePtrList::iterator p = names.begin(); p != names.end();
+         ++p) {
+      has_alias = IsAliasingDecl(*p, vars, aliases) || has_alias;
+    }
+    return has_alias;
+  }
+  case V_SgInitializedName: {
+    SgInitializedName *var = isSgInitializedName(s);
+    SgType *type = var->get_type();
+    if (type == 0) {
+      return false;
+    }
+    type = type->stripType(SgType::STRIP_MODIFIER_TYPE |
+                           SgType::STRIP_TYPEDEF_TYPE);
+    if (type == 0) {
+      return false;
+    }
+    switch (type->variantT()) {
+    case V_SgPointerType:
+    case V_SgReferenceType: {
+      SgExpression *def = var->get_initializer();
+      if (def != 0 && def->variantT() == V_SgAssignInitializer) {
+        def = isSgAssignInitializer(def)->get_operand();
+        if (def->variantT() == V_SgAddressOfOp) {
+          def = isSgAddressOfOp(def)->get_operand();
+        }
+        if (vars != 0) {
+          vars->push_back(var);
+        }
+        if (aliases != 0) {
+          aliases->push_back(def);
+        }
+        return true;
+      }
+      return false;
+    }
+    default:
+      return false;
+    }
+  }
   case V_SgCommonBlockObject: {
     if (vars != 0 || aliases != 0) {
       SgCommonBlockObject *comm = isSgCommonBlockObject(s);
@@ -2176,12 +2222,11 @@ bool AstInterfaceImpl::IsVarRef(SgNode *exp, SgType **vartype,
     scope = AstInterfaceImpl::GetScope(var);
   } break;
   case V_SgPointerDerefExp:
+    if (has_ptr_deref != 0) {
+      *has_ptr_deref = true;
+    }
     if (IsVarRef(isSgPointerDerefExp(exp)->get_operand(), vartype, varname,
-                 _scope, defined_in_global, use_global_unique_name,
-                 has_ptr_deref)) {
-      if (has_ptr_deref != 0) {
-        *has_ptr_deref = true;
-      }
+                 _scope, defined_in_global, use_global_unique_name)) {
       if (varname != 0) {
         (*varname) = "_deref_" + (*varname);
       }
@@ -2803,7 +2848,23 @@ bool AstInterface::IsArrayAccess(const AstNodePtr &_s, AstNodePtr *array,
       return false;
     s = dot->get_lhs_operand();
   }
-  if (s->variantT() == V_SgPntrArrRefExp) {
+  if (s == nullptr) {
+    return false;
+  }
+  switch (s->variantT()) {
+  case V_SgPointerDerefExp: {
+    if (index != 0 || array != 0) {
+      SgPointerDerefExp *ref = isSgPointerDerefExp(s);
+      if (array != 0) {
+        *array = ref->get_operand();
+      }
+      if (index != 0) {
+        index->push_back(CreateConstInt(0));
+      }
+    }
+    return true;
+  }
+  case V_SgPntrArrRefExp:
     if (index != 0 || array != 0) {
       SgNode *n = s;
       while (true) {
@@ -2838,6 +2899,8 @@ bool AstInterface::IsArrayAccess(const AstNodePtr &_s, AstNodePtr *array,
       }
     }
     return true;
+  default:
+    break;
   }
   return false;
 }
