@@ -1023,6 +1023,14 @@ endif()
 option(ENABLE-SMALLER-GENERATED-FILES "Build smaller generated Sage III IR files" OFF)
 set(enable-smaller-generated-files ${ENABLE-SMALLER-GENERATED-FILES})
 
+set(ROSE_ALLOC_MEMSET "0" CACHE STRING
+    "Memory pool protection: 0=none, 1=command-line (not implemented), 2=zero new/delete, 3=aggressive different values")
+set_property(CACHE ROSE_ALLOC_MEMSET PROPERTY STRINGS 0 1 2 3)
+if(NOT ROSE_ALLOC_MEMSET MATCHES "^[0-3]$")
+  message(FATAL_ERROR "ROSE_ALLOC_MEMSET must be one of 0, 1, 2, or 3. Current value: ${ROSE_ALLOC_MEMSET}")
+endif()
+add_compile_definitions(ROSE_ALLOC_MEMSET=${ROSE_ALLOC_MEMSET})
+
 set(WITH-VALGRIND "" CACHE PATH "Valgrind installation prefix (empty to disable)")
 set(WITH-VALGRIND-BIN "" CACHE PATH "Valgrind bin directory")
 set(WITH-VALGRIND-INCLUDE "" CACHE PATH "Valgrind include directory")
