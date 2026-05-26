@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 
-from rose_sync_common import UPSTREAM_REF, commit_date, commit_exists, existing_sync_logs, read_rows, run_git
+from rose_sync_common import UPSTREAM_REF, latest_recorded_upstream_sha, read_rows, run_git
 
 ALLOWED_DECISIONS = {
     "already-present",
@@ -23,24 +23,7 @@ PICK_DECISIONS = {"pick", "pick-partial", "version-tracker"}
 
 
 def latest_recorded_upstream_sha_excluding(repo: Path, log_dir: Path, excluded_csv: Path) -> str:
-    latest = ""
-    latest_date = ""
-    excluded = excluded_csv.resolve()
-    for csv_path in existing_sync_logs(log_dir):
-        if csv_path.resolve() == excluded:
-            continue
-        for row in read_rows(csv_path):
-            sha = (row.get("Upstream commit") or "").strip()
-            date = (row.get("Upstream date") or row.get("Date") or "").strip()
-            if sha and sha != "N/A":
-                if not date and commit_exists(repo, sha):
-                    date = commit_date(repo, sha)
-                if date >= latest_date:
-                    latest = sha
-                    latest_date = date
-    if latest and not commit_exists(repo, latest):
-        raise SystemExit(f"latest recorded upstream SHA is not present locally: {latest}")
-    return latest
+    return latest_recorded_upstream_sha(repo, log_dir, exclude_path=excluded_csv)
 
 
 def upstream_range(repo: Path, base: str, tip: str) -> list[str]:

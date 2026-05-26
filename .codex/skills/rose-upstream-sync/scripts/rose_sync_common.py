@@ -130,10 +130,13 @@ def commit_exists(repo: Path, sha: str) -> bool:
     return result.returncode == 0
 
 
-def latest_recorded_upstream_sha(repo: Path, log_dir: Path) -> str:
+def latest_recorded_upstream_sha(repo: Path, log_dir: Path, exclude_path: Path | None = None) -> str:
     latest = ""
     latest_date = ""
+    excluded = exclude_path.resolve() if exclude_path else None
     for csv_path in existing_sync_logs(log_dir):
+        if excluded and csv_path.resolve() == excluded:
+            continue
         for row in read_rows(csv_path):
             sha = (row.get("Upstream commit") or "").strip()
             date = (row.get("Upstream date") or row.get("Date") or "").strip()
