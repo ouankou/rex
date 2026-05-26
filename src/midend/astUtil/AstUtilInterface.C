@@ -108,8 +108,9 @@ void AstUtilInterface::ComputeAstSideEffects(
         return true;
       };
   auto save_memory_ref =
-      [&alias_map, &collect, &ast, &body, &do_annot, add_to_dep_analysis](
-          AstNodePtr ref, AstNodePtr details, OperatorSideEffect what) {
+      [&alias_map, &is_function, &collect, &ast, &body, &do_annot,
+       add_to_dep_analysis](AstNodePtr ref, AstNodePtr details,
+                            OperatorSideEffect what) {
         bool done_annot = false;
         AstNodeList subrefs;
         if (!ref.is_unknown() && !AstInterface::IsMemoryAccess(ref, &subrefs)) {
@@ -153,7 +154,8 @@ void AstUtilInterface::ComputeAstSideEffects(
           if (collect != 0) {
             (*collect)(memory_ref, details, what);
           }
-          if (memory_ref.is_unknown() || is_unknown_ref || !is_local_ref) {
+          if (is_function &&
+              (memory_ref.is_unknown() || is_unknown_ref || !is_local_ref)) {
             DebugAstUtil([&memory_ref]() {
               return "save non-local:" + AstInterface::AstToString(memory_ref);
             });
@@ -194,10 +196,10 @@ void AstUtilInterface::ComputeAstSideEffects(
         return true;
       };
   std::function<bool(AstNodePtr, AstNodePtr)> save_call =
-      [&collect, &ast, &done_annot_call, &done_annot_mod, &done_annot_read,
-       &body, &do_annot,
+      [&collect, &ast, &is_function, &done_annot_call, &done_annot_mod,
+       &done_annot_read, &body, &do_annot,
        add_to_dep_analysis](AstNodePtr first, AstNodePtr second) {
-        if (!AstInterface::IsLocalRef(first, body)) {
+        if (is_function && !AstInterface::IsLocalRef(first, body)) {
           done_annot_call = true;
           if (add_to_dep_analysis != 0) {
             add_to_dep_analysis->SaveOperatorSideEffect(

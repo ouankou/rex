@@ -362,7 +362,9 @@ DepCompCopyArrayCollect::ComputeCommonRoot(CopyArrayUnit::NodeSet &refs) {
   for (++rp; !rp.ReachEnd(); ++rp) {
     const DepCompAstRefGraphNode *n = *rp;
     LoopTreeNode *nroot =
-        GetCommonLoop(looptreeInterface, curroot, n->GetInfo().stmt);
+        (curroot == 0)
+            ? GetEnclosingLoop(n->GetInfo().stmt, looptreeInterface)
+            : GetCommonLoop(looptreeInterface, curroot, n->GetInfo().stmt);
     if (nroot == 0) {
       curroot = get_stmtref_info().get_tree_root();
       break;
