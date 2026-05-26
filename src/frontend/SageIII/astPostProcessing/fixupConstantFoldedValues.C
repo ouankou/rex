@@ -226,6 +226,29 @@ detach_from_original_expression_parent(SgExpression *expr) {
   return parent;
 }
 
+bool exprIsUnfoldable(SgExpression *folded, SgExpression *child,
+                      const std::set<SgExpression *> &delete_set) {
+  if (folded == NULL) {
+    return false;
+  }
+
+  bool result = delete_set.count(folded) == 0;
+
+  // Enum folded values can carry source-only declarations in their original
+  // tree. Replacing them may change C++ type correctness.
+  result &= !isSgEnumVal(folded);
+
+  // Some lambda original trees intentionally remain attached to folded nodes.
+  result &= !isSgLambdaExp(child);
+
+  // ROSE public issue #103: do not unfold an aggregate initializer inside a
+  // designated initializer when the original tree is not itself an initializer.
+  result &= !(isSgAggregateInitializer(folded) && !isSgInitializer(child) &&
+              isSgDesignatedInitializer(folded->get_parent()));
+
+  return result;
+}
+
 void removeConstantFoldedValue(SgProject * /*project*/) {
   CollectExpressionTrees cet;
   SgExpression::traverseMemoryPoolNodes(cet);
@@ -310,31 +333,8 @@ void removeConstantFoldedValue(SgProject * /*project*/) {
         folded->set_originalExpressionTree(NULL);
       }
 
-      bool replace_folded_by_child = true;
-
-      // Folded already marked for delete
-      if (delete_set.find(folded) != delete_set.end()) {
-        replace_folded_by_child = false; // Child will be deleted too
-      }
-
-      if (isSgEnumVal(folded)) {
-        // TODO 1st issue: the initializer of a variable using enum-value
-        // (`X::enum_e e = X::none`):
-        //        -> the value is in the original tree of the enum-value
-        //        -> this replacement create a type error in C++
-        // TODO 2nd issue: `enum { s = sizeof(struct X {  } };` definition of X
-        // would not be unparsed
-        //        -> not an issue if struct is anonymous
-        //        -> I cannot find a correct predicate would probably need to
-        //        save more info in legacy frontend
-        replace_folded_by_child = false;
-      }
-
-      // DQ (7/23/2020): Only required now for C++11 code using legacy
-      // frontend 6.0 and GNU 10.1 (see Cxx11_tests/test2015_02.C). DQ
-      // (7/18/2020): Added support to permit Cxx11_tests/test2020_69.C to pass.
-      // TV: moved that to not break the pattern
-      replace_folded_by_child &= !isSgLambdaExp(child);
+      const bool replace_folded_by_child =
+          exprIsUnfoldable(folded, child, delete_set);
 
       if (replace_folded_by_child) {
         child->set_parent(
@@ -397,16 +397,8 @@ void preserveConstantFoldedValue(SgProject * /*project*/) {
         folded->set_originalExpressionTree(NULL);
       }
 
-      bool replace_folded_by_child =
-          delete_set.find(folded) == delete_set.end();
-
-      if (isSgEnumVal(folded)) {
-        // Enum folded values can carry source-only declarations in their
-        // original tree. Replacing them may change C++ type correctness.
-        replace_folded_by_child = false;
-      }
-
-      replace_folded_by_child &= !isSgLambdaExp(child);
+      const bool replace_folded_by_child =
+          exprIsUnfoldable(folded, child, delete_set);
 
       if (replace_folded_by_child) {
         child->set_parent(folded->get_parent());
