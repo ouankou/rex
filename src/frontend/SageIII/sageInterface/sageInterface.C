@@ -20586,6 +20586,42 @@ static void clearTokenSubsequenceMapsForProject(SgProject *project) {
   }
 }
 
+static void removeDeletedStatementsFromMacroExpansionMap(
+    SgSourceFile *sourceFile,
+    const std::unordered_set<SgStatement *> &deletedStatements) {
+  if (sourceFile == nullptr || deletedStatements.empty()) {
+    return;
+  }
+
+  std::map<SgStatement *, MacroExpansion *> &macroExpansionMap =
+      sourceFile->get_macroExpansionMap();
+  std::unordered_set<MacroExpansion *> affectedExpansions;
+
+  for (auto it = macroExpansionMap.begin(); it != macroExpansionMap.end();) {
+    MacroExpansion *macroExpansion = it->second;
+    if (macroExpansion != nullptr) {
+      affectedExpansions.insert(macroExpansion);
+    }
+
+    if (deletedStatements.find(it->first) != deletedStatements.end()) {
+      it = macroExpansionMap.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  for (MacroExpansion *macroExpansion : affectedExpansions) {
+    std::vector<SgStatement *> &statements =
+        macroExpansion->associatedStatementVector;
+    statements.erase(std::remove_if(statements.begin(), statements.end(),
+                                    [&deletedStatements](SgStatement *stmt) {
+                                      return deletedStatements.find(stmt) !=
+                                             deletedStatements.end();
+                                    }),
+                     statements.end());
+  }
+}
+
 namespace {
 bool g_skipSymbolTableLookupsForDeleteAst = false;
 bool g_astTeardownComplete = false;
@@ -20712,6 +20748,21 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
       }
       nodes.clear();
       seen.clear();
+    }
+
+    std::unordered_set<SgStatement *> collectQueuedStatementsSkipping(
+        const std::unordered_set<SgNode *> *protected_nodes) const {
+      std::unordered_set<SgStatement *> statements;
+      for (SgNode *node : nodes) {
+        if (protected_nodes != nullptr &&
+            protected_nodes->find(node) != protected_nodes->end()) {
+          continue;
+        }
+        if (SgStatement *stmt = isSgStatement(node)) {
+          statements.insert(stmt);
+        }
+      }
+      return statements;
     }
   };
 
@@ -21845,6 +21896,7 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
 
   std::unordered_set<SgNode *> protected_nodes;
 
+  SgSourceFile *sourceFile = SageInterface::getEnclosingSourceFile(n, true);
   DeleteAST deleteTree;
 
   // Deletion must happen in post-order to avoid traversal of
@@ -21893,6 +21945,10 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
   }
   deleteTree.setProtectedNodes(protected_nodes.empty() ? nullptr
                                                        : &protected_nodes);
+  std::unordered_set<SgStatement *> deletedStatements =
+      deleteTree.node_deletions.collectQueuedStatementsSkipping(
+          protected_nodes.empty() ? nullptr : &protected_nodes);
+  removeDeletedStatementsFromMacroExpansionMap(sourceFile, deletedStatements);
   deleteTree.deleteQueuedNodesSkipping(
       protected_nodes.empty() ? nullptr : &protected_nodes);
   deleteTree.deleteDeferredSymbols();
