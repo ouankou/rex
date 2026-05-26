@@ -76,6 +76,8 @@ found in the directory ROSE/TESTS/KnownBugs/AttachPreprocessingInfo.
 // TokenStreamSequenceToNodeMapping (for debugging).
 #include "tokenStreamMapping.h"
 
+#include "ROSE_UNUSED.h"
+
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 
@@ -324,6 +326,8 @@ void AttachPreprocessingInfoTreeTrav::handleBracedScopes(
     SgLocatedNode *previousLocatedNode, SgStatement *bracedScope,
     int lineOfClosingBrace, bool reset_start_index,
     ROSEAttributesList *currentListOfAttributes) {
+  ROSE_UNUSED(reset_start_index);
+
   // DQ (2/16/2021): This function supports
   // iterateOverListAndInsertPreviouslyUninsertedElementsAppearingBeforeLineNumber().
   // It seperates the case where comments and CPP directives are put in the
@@ -1242,6 +1246,8 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
 
 ROSEAttributesList *
 AttachPreprocessingInfoTreeTrav::getListOfAttributes(int currentFileNameId) {
+  ROSE_UNUSED(currentFileNameId);
+
   // This function will get the list of CPP directives and comments if it
   // exists, or build it if required.  The function is called each time we come
   // to a IR node as part of the traversal. If it is a new IR node (from a file

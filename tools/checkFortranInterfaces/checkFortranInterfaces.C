@@ -2,6 +2,7 @@
 // have matching interfaces based on functions arguments.
 //
 
+#include "ROSE_UNUSED.h"
 #include "checkFortranInterfaces.h"
 
 #define PRINT_TRAVERSAL 0
@@ -416,7 +417,11 @@ SynthesizedAttribute Traversal::evaluateSynthesizedAttribute(SgNode* astNode, In
    SynthesizedAttribute localResult;
 #if PRINT_TRAVERSAL
    std::cout << "SynthesizedAttribute(): astNode = " << astNode << " = " << astNode->class_name() << std::endl;
+#else
+   ROSE_UNUSED(astNode);
 #endif
+   ROSE_UNUSED(inheritedAttribute);
+   ROSE_UNUSED(childAttributes);
 
    return localResult;
 }
