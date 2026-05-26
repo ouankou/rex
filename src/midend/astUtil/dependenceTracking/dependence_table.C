@@ -127,6 +127,7 @@ void CollectDependences::CollectFromFile(std::istream &input_file) {
     std::string next_string;
     std::string source;
     std::string dep_type;
+    std::vector<std::string> dep_types;
     std::string attr;
     // Read and process all the components that `dest' depends on immediately.
     while (!(next_string = local_read_string(input_file)).empty()) {
@@ -144,17 +145,25 @@ void CollectDependences::CollectFromFile(std::istream &input_file) {
         Log.push("Setting dest = " + dest);
       } else if (next_string == ":") {
         source = local_read_string(input_file);
-        if (source == "[") {
+        dep_type.clear();
+        dep_types.clear();
+        while (source == "[") {
+          std::string current_dep_type;
           while ((next_string = local_read_string(input_file)) != "]") {
-            dep_type += next_string;
             if (next_string.empty()) {
               Log.fatal("Expecting \"]\" but get " + next_string);
             }
+            current_dep_type += next_string;
           }
+          dep_types.push_back(current_dep_type);
           source = local_read_string(input_file);
         }
+        if (!dep_types.empty()) {
+          dep_type = dep_types.front();
+        }
         if (source == ";") {
-          Log.push("Warning: Skipping empty dependence for " + dest + "!");
+          Log.push("Creating node with attributes for " + dest);
+          save_node_attributes(dest, dep_types);
           next_string = ";";
           source.clear();
           break;
@@ -287,6 +296,7 @@ class ClusterDependences {
   std::map<std::string, std::set<DependenceEntry>> in_edge_map;
   std::set<std::string> functions;
   int cluster_index_ = 0;
+  const DependenceTable &deptable_;
 
   bool setupNamespace(const std::string &s) {
     auto namespace_pos = s.rfind("::");
@@ -299,6 +309,9 @@ class ClusterDependences {
   }
 
 public:
+  explicit ClusterDependences(const DependenceTable &deptable)
+      : deptable_(deptable) {}
+
   void setupNode(const std::string &s) {
     assert(!s.empty());
     if (cluster_map.find(s) != cluster_map.end()) {
@@ -408,11 +421,14 @@ public:
     }
     for (const auto &cluster_member : clusters[cluster_name]) {
       if (functions.find(cluster_member) != functions.end()) {
-        output << "\"" << wrap_string(cluster_member) << "\" [shape=box] ; \n";
+        output << "\"" << wrap_string(cluster_member) << "\" [shape=box]";
       } else {
-        output << "\"" << wrap_string(cluster_member)
-               << "\" [shape=diamond] ; \n";
+        output << "\"" << wrap_string(cluster_member) << "\" [shape=diamond]";
       }
+      for (const auto &attr : deptable_.get_nodeInfo(cluster_member)) {
+        output << " [ " << attr << " ]";
+      }
+      output << " ; \n";
     }
     if (do_cluster) {
       output << "}\n";
@@ -439,7 +455,9 @@ public:
 void DependenceTable ::OutputDependencesInGUI(std::ostream &output) {
   Log.push("Output dependence analysis GUI");
 
-  ClusterDependences clusters;
+  ClusterDependences clusters(*this);
+  CollectNodes(
+      [&clusters](const std::string &node) { clusters.setupNode(node); });
   for (auto op : saved_dependences_sig_) {
     for (auto e : saved_dependences_relation_[op]) {
       clusters.setupNode(e.first_entry());
@@ -449,6 +467,12 @@ void DependenceTable ::OutputDependencesInGUI(std::ostream &output) {
   }
   clusters.setupClusters();
   clusters.output(output);
+}
+
+void DependenceTable::save_node_attributes(
+    const std::string &sig, const std::vector<std::string> &attributes) {
+  InsertNode(sig);
+  get_nodeInfo(sig) = attributes;
 }
 
 void DependenceTable::save_dependence(const DependenceEntry &e) {
