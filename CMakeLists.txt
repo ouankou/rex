@@ -374,7 +374,7 @@ endforeach()
 unset(_rose_version_component)
 
 # Compute the encoded numeric version and enforce consistency with SCM_DATE.
-if(ROSE_VERSION_HAS_BUILD)
+if(NOT "${ROSE_VERSION_HAS_BUILD}" STREQUAL "")
   if(ROSE_VERSION_MAJOR GREATER 9)
     message(FATAL_ERROR "ROSE version major component must be < 10: ${ROSE_VERSION_MAJOR}")
   endif()

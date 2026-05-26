@@ -141,6 +141,8 @@ def commit_exists(repo: Path, sha: str) -> bool:
 def resolve_sha(repo: Path, sha: str) -> str:
     if not sha or sha == "N/A":
         return sha
+    if len(sha) == 40 and all(c in "0123456789abcdefABCDEF" for c in sha):
+        return sha
     result = subprocess.run(
         ["git", "rev-parse", "--verify", f"{sha}^{{commit}}"],
         cwd=repo,
