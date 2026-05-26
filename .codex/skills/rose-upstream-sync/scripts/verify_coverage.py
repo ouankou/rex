@@ -50,7 +50,11 @@ def main() -> int:
     expected = upstream_range(repo, base, args.to_ref)
     expected_set = set(expected)
     rows = read_rows(csv_path)
-    by_sha = {(row.get("Upstream commit") or "").strip(): row for row in rows if (row.get("Upstream commit") or "").strip()}
+    by_sha = {}
+    for row in rows:
+        sha = (row.get("Upstream commit") or "").strip()
+        if sha and sha != "N/A":
+            by_sha[sha] = row
     recorded_set = set(by_sha)
 
     missing = [sha for sha in expected if sha not in recorded_set]
