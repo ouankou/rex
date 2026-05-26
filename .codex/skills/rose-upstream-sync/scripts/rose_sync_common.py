@@ -104,7 +104,7 @@ def existing_sync_logs(log_dir: Path) -> list[Path]:
 def read_rows(csv_path: Path) -> list[dict[str, str]]:
     if not csv_path.exists():
         return []
-    with csv_path.open(newline="", encoding="utf-8") as stream:
+    with csv_path.open(newline="", encoding="utf-8-sig") as stream:
         return list(csv.DictReader(stream))
 
 
