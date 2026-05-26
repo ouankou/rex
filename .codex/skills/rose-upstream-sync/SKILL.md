@@ -88,3 +88,14 @@ If one REX commit adapts multiple upstream commits, include one `Upstream-ROSE:`
 Do not add `fixup` or `follow-up` sync commits for problems caused by an earlier sync commit. Rewrite the responsible REX sync commit before the branch is published, then update the sync CSV to the rewritten SHA.
 
 Final full-CTest regressions follow the same rule: freeze the failing tests, find the culprit sync commit, amend it, rebase later commits, and rerun validation until the final branch has no separate regression-fix commits.
+
+## PR Review Rounds
+
+Review comments on a sync PR must be mapped back to ownership before editing, even when the reviewer only names files or symptoms.
+
+- For comments on synced code behavior, identify which REX sync commit introduced the affected lines or behavior using tools such as `git blame`, `git log --follow`, `git show <commit> -- <path>`, `git range-diff origin/main...HEAD`, and targeted reproduction.
+- If one sync commit owns the problem, amend that commit, rebase later sync commits, refresh affected CSV `REX commit` mappings, rerun relevant validation, and force-push with lease.
+- If several files in one review round map to different sync commits, split the fixes by culprit commit and amend each responsible commit. Do not collapse unrelated sync fixes into a generic review-fix commit.
+- If a comment is cross-cutting and cannot honestly be assigned to one upstream sync commit, create a separate REX integration/review commit only when it is independent of any single upstream change.
+- Comments about sync scripts, docs, ledger format, validation evidence, or PR text may use a separate review-fix commit.
+- Repeat this classification for every review round. New rounds do not weaken the one-commit policy, and repeated comments are not a reason to accumulate fixup commits for sync-caused issues.
