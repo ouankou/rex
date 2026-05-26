@@ -20,6 +20,9 @@ Upstream ROSE is read-only evidence for REX. Agents may fetch, inspect logs, sho
 - If a commit is marked `pick`, apply the code change immediately (before moving on).
 - If a `pick` is already present in REX, record that in the Notes column and set the REX commit column to the existing REX commit when known.
 - Decision order is strict: verify upstream SHA -> decide pick/drop -> apply (if pick) -> validate -> commit -> update commit log immediately.
+- One-commit policy is strict: every applied upstream commit or tightly related upstream series maps to one final REX commit. That commit contains both the useful upstream content and any required REX-specific adaptation.
+- Do not add later fixup commits for sync-caused build or test regressions. Find the offending REX sync commit, amend it, rebase later sync commits, rerun gates, and refresh CSV `REX commit` mappings to the rewritten final SHAs.
+- Do not advance past a code/build/test-affecting `pick` or `pick-partial` with unbuilt code. Build after each such commit, run focused CTest gates after risky commits or small related batches, and run full CTest before PR.
 - Keep list below is authoritative; only those paths are eligible for sync.
 - Drop list below is authoritative; never reintroduce dropped paths or platforms.
 - Autotools/Tup are inventory only: do not port into CMake.

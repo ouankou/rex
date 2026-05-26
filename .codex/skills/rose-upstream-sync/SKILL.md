@@ -13,6 +13,8 @@ Use this skill for any request mentioning ROSE upstream sync, LLNL ROSE sync, `r
 - PRs are only for `ouankou/rex`.
 - Never restore abandoned REX components: EDG, OFP/old Fortran parser, binary analysis, Sawyer, CodeThorn, Rosebud source tree, Ada, Jovial, Java/ECJ, PHP, JavaScript, Python, UPC, X10, Csharp, Matlab, YAML/mini-yaml, legacy autotools/Tup paths, or dropped OpenMP designs.
 - Process upstream commits in chronological order and record every upstream SHA before moving on.
+- Use one final REX commit for each applied upstream commit or tightly related upstream series. That commit includes both the useful upstream change and all required REX adaptation.
+- Do not add later fixup commits for sync-caused build or test regressions. Identify the offending REX sync commit, amend it, rebase later sync commits, and refresh CSV mappings to the final SHAs.
 - The sync is not complete until the build, focused gates, and full CTest pass without regressions.
 - Helper scripts disable normal `.pyc` writes. If you run `py_compile`, use a temp `pycache_prefix` outside the source tree.
 
@@ -39,25 +41,27 @@ Use this skill for any request mentioning ROSE upstream sync, LLNL ROSE sync, `r
    ```bash
    python3 .codex/skills/rose-upstream-sync/scripts/classify_commit.py <upstream-sha>
    ```
-5. Apply exactly one upstream commit or tightly related series at a time:
+5. Apply exactly one upstream commit or tightly related series at a time, producing one final REX commit:
    - Clean useful commit: `git cherry-pick -x <sha>`.
-   - Partially useful commit: `git cherry-pick -n <sha>`, remove dropped hunks, adapt to REX, then commit.
+   - Partially useful commit: `git cherry-pick -n <sha>`, remove dropped hunks, adapt to REX, then commit the upstream content and REX adaptation together.
    - Dropped commit: do not edit code; record the drop reason.
 6. Before every local commit and before PR, run:
    ```bash
    python3 .codex/skills/rose-upstream-sync/scripts/guard_dropped_paths.py --staged
    python3 .codex/skills/rose-upstream-sync/scripts/verify_version.py
    ```
-7. Record each decision in the current year sync CSV. Picked commits must map to the REX commit SHA.
-8. For release/version commits:
+   For code/build/test-affecting picks, also run `cmake --build build -j32` before advancing to unrelated upstream work. Use focused CTest gates after risky commits or small related batches.
+7. Record each decision in the current year sync CSV. Picked commits must map to the final REX commit SHA.
+8. If a later build or test gate fails, identify the offending REX sync commit, amend that commit, rebase later sync commits, rerun the relevant gates, and update affected CSV `REX commit` entries. Do not create a separate regression-fix commit.
+9. For release/version commits:
    - record intermediate version-only commits as `drop-superseded`;
    - after the synced range is otherwise complete, apply only the latest upstream version marker to `ROSE_VERSION` and `config/SCM_DATE`;
    - never restore upstream `configure.ac` or `src/frontend/CxxFrontend/EDG_VERSION`.
-9. Before final validation, prove that no upstream commit in the sync range was overlooked:
+10. Before final validation, prove that no upstream commit in the sync range was overlooked:
    ```bash
    python3 .codex/skills/rose-upstream-sync/scripts/verify_coverage.py --csv docs/upstream-sync/rose-2026-commits.csv
    ```
-10. Validate before PR:
+11. Validate before PR:
    ```bash
    cmake --build build -j32
    ctest --test-dir build --output-on-failure -j32
@@ -74,3 +78,5 @@ Sync-Log: docs/upstream-sync/rose-2026-commits.csv
 ```
 
 If one REX commit adapts multiple upstream commits, include one `Upstream-ROSE:` trailer per upstream SHA and record each upstream row with the same REX commit SHA.
+
+Do not add `fixup` or `follow-up` sync commits for problems caused by an earlier sync commit. Rewrite the responsible REX sync commit before the branch is published, then update the sync CSV to the rewritten SHA.
