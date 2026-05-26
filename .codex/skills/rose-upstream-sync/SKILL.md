@@ -17,6 +17,7 @@ Use this skill for any request mentioning ROSE upstream sync, LLNL ROSE sync, `r
 - Use one final REX commit for each applied upstream commit or tightly related upstream series. That commit includes both the useful upstream change and all required REX adaptation.
 - Do not add later fixup commits for sync-caused build or test regressions. Identify the offending REX sync commit, amend it, rebase later sync commits, and refresh CSV mappings to the final SHAs.
 - Never update tests, generated outputs, or reference files to mask a REX bug. Such files may change only when the synced semantics require it and the new output is verified as stable/correct.
+- Let the REX pre-commit hook format staged code for applied sync commits. Do not run broad formatting sweeps, and do not format test/reference files unless a verified semantic sync requires it.
 - The sync is not complete until the build, focused gates, and full CTest pass without regressions.
 - Helper scripts disable normal `.pyc` writes. If you run `py_compile`, use a temp `pycache_prefix` outside the source tree.
 
@@ -46,8 +47,8 @@ Use this skill for any request mentioning ROSE upstream sync, LLNL ROSE sync, `r
    ```
 5. Apply exactly one upstream commit or tightly related series at a time, producing one final REX commit:
    - Start each item from a clean worktree. If cherry-pick conflicts occur, finish them into this one adapted commit or abort before moving on.
-   - Clean useful commit: `git cherry-pick -x <sha>`.
-   - Partially useful commit: `git cherry-pick -n <sha>`, remove dropped hunks, adapt to REX, then commit the upstream content and REX adaptation together.
+   - Clean useful commit: `git cherry-pick -n <sha>`, inspect the staged diff, then commit manually so normal REX hooks format staged code.
+   - Partially useful commit: `git cherry-pick -n <sha>`, remove dropped hunks, adapt to REX, inspect the staged diff, then commit the upstream content and REX adaptation together.
    - Already present or empty change: record `already-present`, map the existing REX commit when known, and create no new commit.
    - Dropped commit: do not edit code; record the drop reason.
    - Merge commit: never cherry-pick blindly. Usually record integration-only merges as `drop`; manually port only proven unique retained changes.
@@ -57,11 +58,12 @@ Use this skill for any request mentioning ROSE upstream sync, LLNL ROSE sync, `r
    python3 .codex/skills/rose-upstream-sync/scripts/verify_version.py
    ```
    For code/build/test-affecting picks, also run `cmake --build build -j32` before advancing to unrelated upstream work. Use focused CTest gates after risky commits or small related batches.
-7. Record each decision in the current year sync CSV. Picked commits must map to the final REX commit SHA. If the frozen range crosses a year boundary, create/use `docs/upstream-sync/rose-YYYY-commits.csv` for that year's rows.
+7. Record each decision in an untracked scratch ledger under `build/upstream-sync/<sync-name>/` while the branch is still being rewritten. Picked commits must map to their current REX commit SHA. After all code decisions are complete and SHAs are stable, write the tracked `docs/upstream-sync/rose-YYYY-commits.csv` rows in one final ledger commit. If the frozen range crosses a year boundary, create/use the appropriate year CSV for each upstream row.
 8. If a later build or test gate fails, identify the offending REX sync commit, amend that commit, rebase later sync commits, rerun the relevant gates, and update affected CSV `REX commit` entries. Do not create a separate regression-fix commit.
 9. For release/version commits:
    - record intermediate version-only commits as `drop-superseded`;
    - after the synced range is otherwise complete, apply only the latest upstream version marker to `ROSE_VERSION` and `config/SCM_DATE`;
+   - keep all REX version encoding and validation sites consistent with upstream ROSE's current version-numbering rule, without manual post-adjustment;
    - never restore upstream `configure.ac` or `src/frontend/CxxFrontend/EDG_VERSION`.
 10. Before final validation, prove that no upstream commit in the sync range was overlooked:
    ```bash
@@ -86,7 +88,7 @@ Use these trailers on every REX commit that applies upstream content:
 
 ```text
 Upstream-ROSE: <sha>
-Sync-Decision: pick|pick-partial
+Sync-Decision: pick|pick-partial|version-tracker
 Sync-Log: docs/upstream-sync/rose-2026-commits.csv
 ```
 

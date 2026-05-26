@@ -29,6 +29,9 @@ Upstream ROSE is read-only evidence for REX. Agents may fetch, inspect logs, sho
 - Preserve REX pruning decisions; do not reintroduce Boost-only subsystems or removed frontends.
 - Preserve REX modernizations that removed deprecated C++ template patterns; do not reintroduce those warning-prone constructs.
 - Release/version commits update only `ROSE_VERSION` and `config/SCM_DATE`, and only for the latest version marker in a completed sync range. Never restore `configure.ac` or `src/frontend/CxxFrontend/EDG_VERSION`.
+- Version numbering must follow upstream ROSE consistently in every REX encoding/validation site. For current three-component ROSE versions, the encoded `SCM_DATE` is `major * 10000000 + minor * 100 + patch` (for example, `2.1.0 -> 20000100`), not a hand-adjusted local value.
+- Applied sync commits should be created with `git cherry-pick -n` plus manual `git commit` so REX hooks run normal staged formatting. Do not run broad formatting sweeps or touch tests/reference files for formatting-only churn.
+- Keep an untracked scratch ledger under `build/upstream-sync/` while rewriting sync commits. Write the tracked `docs/upstream-sync/rose-YYYY-commits.csv` only after final REX commit SHAs are stable.
 - Helper scripts must not leave Python cache files in the source tree. Use a temporary `pycache_prefix` for explicit compile checks.
 - Flang parse-tree snapshots are upstream-generated and may contain host-specific `#line` markers (e.g., `apple-darwin`); keep them unchanged since they are not platform-support code.
 
