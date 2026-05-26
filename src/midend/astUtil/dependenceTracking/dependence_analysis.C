@@ -79,9 +79,7 @@ void WholeProgramDependenceAnalysis::OutputDependences(std::ostream &output) {
 }
 
 void WholeProgramDependenceAnalysis::OutputAnnotations(std::ostream &output) {
-  if (CmdOptions::GetInstance()->HasOption("-annot")) {
-    annot_table.OutputDependences(output);
-  }
+  annot_table.OutputDependences(output);
 }
 
 void WholeProgramDependenceAnalysis::ComputeDependences(SgNode *input,
