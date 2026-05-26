@@ -125,7 +125,7 @@ def read_rows(csv_path: Path) -> list[dict[str, str]]:
 def write_rows(csv_path: Path, rows: list[dict[str, str]]) -> None:
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     with csv_path.open("w", newline="", encoding="utf-8") as stream:
-        writer = csv.DictWriter(stream, fieldnames=CSV_HEADER)
+        writer = csv.DictWriter(stream, fieldnames=CSV_HEADER, lineterminator="\n")
         writer.writeheader()
         for row in rows:
             writer.writerow({key: (row.get(key) or "") for key in CSV_HEADER})

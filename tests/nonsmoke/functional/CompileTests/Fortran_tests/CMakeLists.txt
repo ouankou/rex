@@ -178,6 +178,17 @@ foreach(testcode IN LISTS _fortran_mpi_type_tests)
   )
 endforeach()
 
+# These tests share the Fortran output directory and generated module files.
+# Keep duplicate-source checks and module consumers out of parallel writers.
+set_tests_properties(fortran_testMPItypes_ISO_C_BINDING_f03
+  PROPERTIES DEPENDS FORTRANTEST_ISO_C_BINDING.f03_token_generation)
+set_tests_properties(fortran_testMPItypes_mpi_f08_types_f03
+  PROPERTIES DEPENDS FORTRANTEST_mpi_f08_types.f03_token_generation)
+set_tests_properties(FORTRANTEST_mpi_f08_interfaces_test.f03_translation
+  PROPERTIES DEPENDS fortran_testMPItypes_mpi_f08_types_f03)
+set_tests_properties(fortran_testMPItypes_mpi_f08_interfaces_test_f03
+  PROPERTIES DEPENDS FORTRANTEST_mpi_f08_interfaces_test.f03_token_generation)
+
 add_test(
   NAME fortran_testMultipleFortranFiles
   WORKING_DIRECTORY ${_fortran_output_dir}
