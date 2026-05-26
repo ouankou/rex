@@ -12,9 +12,11 @@ Use this skill for any request mentioning ROSE upstream sync, LLNL ROSE sync, `r
 - Upstream ROSE is read-only evidence. Allowed: `git fetch`, `git log`, `git show`, `git diff`, local comparisons. Forbidden: pushing, opening PRs/issues/comments, review requests, or mentioning upstream maintainers.
 - PRs are only for `ouankou/rex`.
 - Never restore abandoned REX components: EDG, OFP/old Fortran parser, binary analysis, Sawyer, CodeThorn, Rosebud source tree, Ada, Jovial, Java/ECJ, PHP, JavaScript, Python, UPC, X10, Csharp, Matlab, YAML/mini-yaml, legacy autotools/Tup paths, or dropped OpenMP designs.
+- Freeze the upstream target SHA at sync start; process only that frozen range. Newer upstream commits wait for the next sync.
 - Process upstream commits in chronological order and record every upstream SHA before moving on.
 - Use one final REX commit for each applied upstream commit or tightly related upstream series. That commit includes both the useful upstream change and all required REX adaptation.
 - Do not add later fixup commits for sync-caused build or test regressions. Identify the offending REX sync commit, amend it, rebase later sync commits, and refresh CSV mappings to the final SHAs.
+- Never update tests, generated outputs, or reference files to mask a REX bug. Such files may change only when the synced semantics require it and the new output is verified as stable/correct.
 - The sync is not complete until the build, focused gates, and full CTest pass without regressions.
 - Helper scripts disable normal `.pyc` writes. If you run `py_compile`, use a temp `pycache_prefix` outside the source tree.
 
@@ -27,31 +29,35 @@ Use this skill for any request mentioning ROSE upstream sync, LLNL ROSE sync, `r
 ## Standard Workflow
 
 1. Start from a clean REX branch based on `origin/main`.
-2. Ensure the read-only upstream remote exists:
+2. Ensure the read-only upstream remote exists, fetch it, and freeze the target tip:
    ```bash
    git remote add rose https://github.com/llnl/rose.git 2>/dev/null || true
    git remote set-url --push rose DISABLED_READ_ONLY_UPSTREAM
    git fetch rose weekly --prune
+   UPSTREAM_TIP=$(git rev-parse rose/weekly)
    ```
 3. Inspect pending commits:
    ```bash
-   python3 .codex/skills/rose-upstream-sync/scripts/list_pending.py
+   python3 .codex/skills/rose-upstream-sync/scripts/list_pending.py --upstream-ref "$UPSTREAM_TIP"
    ```
 4. For each upstream commit, classify it:
    ```bash
    python3 .codex/skills/rose-upstream-sync/scripts/classify_commit.py <upstream-sha>
    ```
 5. Apply exactly one upstream commit or tightly related series at a time, producing one final REX commit:
+   - Start each item from a clean worktree. If cherry-pick conflicts occur, finish them into this one adapted commit or abort before moving on.
    - Clean useful commit: `git cherry-pick -x <sha>`.
    - Partially useful commit: `git cherry-pick -n <sha>`, remove dropped hunks, adapt to REX, then commit the upstream content and REX adaptation together.
+   - Already present or empty change: record `already-present`, map the existing REX commit when known, and create no new commit.
    - Dropped commit: do not edit code; record the drop reason.
+   - Merge commit: never cherry-pick blindly. Usually record integration-only merges as `drop`; manually port only proven unique retained changes.
 6. Before every local commit and before PR, run:
    ```bash
    python3 .codex/skills/rose-upstream-sync/scripts/guard_dropped_paths.py --staged
    python3 .codex/skills/rose-upstream-sync/scripts/verify_version.py
    ```
    For code/build/test-affecting picks, also run `cmake --build build -j32` before advancing to unrelated upstream work. Use focused CTest gates after risky commits or small related batches.
-7. Record each decision in the current year sync CSV. Picked commits must map to the final REX commit SHA.
+7. Record each decision in the current year sync CSV. Picked commits must map to the final REX commit SHA. If the frozen range crosses a year boundary, create/use `docs/upstream-sync/rose-YYYY-commits.csv` for that year's rows.
 8. If a later build or test gate fails, identify the offending REX sync commit, amend that commit, rebase later sync commits, rerun the relevant gates, and update affected CSV `REX commit` entries. Do not create a separate regression-fix commit.
 9. For release/version commits:
    - record intermediate version-only commits as `drop-superseded`;
@@ -59,7 +65,7 @@ Use this skill for any request mentioning ROSE upstream sync, LLNL ROSE sync, `r
    - never restore upstream `configure.ac` or `src/frontend/CxxFrontend/EDG_VERSION`.
 10. Before final validation, prove that no upstream commit in the sync range was overlooked:
    ```bash
-   python3 .codex/skills/rose-upstream-sync/scripts/verify_coverage.py --csv docs/upstream-sync/rose-2026-commits.csv
+   python3 .codex/skills/rose-upstream-sync/scripts/verify_coverage.py --csv docs/upstream-sync/rose-2026-commits.csv --to-ref "$UPSTREAM_TIP"
    ```
 11. Validate before PR:
    ```bash
@@ -98,4 +104,5 @@ Review comments on a sync PR must be mapped back to ownership before editing, ev
 - If several files in one review round map to different sync commits, split the fixes by culprit commit and amend each responsible commit. Do not collapse unrelated sync fixes into a generic review-fix commit.
 - If a comment is cross-cutting and cannot honestly be assigned to one upstream sync commit, create a separate REX integration/review commit only when it is independent of any single upstream change.
 - Comments about sync scripts, docs, ledger format, validation evidence, or PR text may use a separate review-fix commit.
+- PR CI failures are handled like review comments: inspect logs, reproduce locally when possible, map the failure to the owning sync commit, amend/rebase/refresh mappings, and force-push with lease. Use a separate commit only for independent CI infrastructure or documentation fixes.
 - Repeat this classification for every review round. New rounds do not weaken the one-commit policy, and repeated comments are not a reason to accumulate fixup commits for sync-caused issues.
