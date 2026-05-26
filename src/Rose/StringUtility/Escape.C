@@ -216,7 +216,45 @@ std::string bourneEscape(const std::string &s) {
   return s;
 }
 
-std::string jsonEscape(const std::string &s) { return cEscape(s); }
+std::string jsonEscape(const std::string &s) {
+  std::string result;
+  result.reserve(s.size());
+  for (unsigned char ch : s) {
+    switch (ch) {
+    case '"':
+      result += "\\\"";
+      break;
+    case '\\':
+      result += "\\\\";
+      break;
+    case '\b':
+      result += "\\b";
+      break;
+    case '\f':
+      result += "\\f";
+      break;
+    case '\n':
+      result += "\\n";
+      break;
+    case '\r':
+      result += "\\r";
+      break;
+    case '\t':
+      result += "\\t";
+      break;
+    default:
+      if (ch < 0x20) {
+        char buffer[7];
+        snprintf(buffer, sizeof(buffer), "\\u%04x", ch);
+        result += buffer;
+      } else {
+        result += ch;
+      }
+      break;
+    }
+  }
+  return result;
+}
 
 std::string csvEscape(const std::string &s) {
   const std::string quote =
