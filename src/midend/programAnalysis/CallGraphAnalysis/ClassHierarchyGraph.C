@@ -6,7 +6,7 @@
 using namespace std;
 
 ClassHierarchyWrapper::ClassHierarchyWrapper(SgNode *node) {
-  ROSE_ASSERT(isSgProject(node));
+  ASSERT_not_null(isSgProject(node));
 
   Rose_STL_Container<SgNode *> allCls;
   allCls = NodeQuery::querySubTree(node, V_SgClassDefinition);
