@@ -3690,6 +3690,10 @@ void Grammar::setUpExpressions() {
                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                               NO_TRAVERSAL, DEF_DELETE, CLONE_PTR);
 
+  Expression.setDataPrototype("SgExpression*", "alternativeExpr", "= nullptr",
+                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                              NO_TRAVERSAL, DEF_DELETE, CLONE_TREE);
+
   Expression.setSubTreeFunctionPrototype("HEADER_GET_TYPE",
                                          "../Grammar/Expression.code");
 

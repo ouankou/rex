@@ -2416,9 +2416,10 @@ void Grammar::setUpSupport() {
                            "= \"\"", NO_CONSTRUCTOR_PARAMETER,
                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  Project.setDataPrototype("bool", "frontendConstantFolding", "= false",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                           NO_TRAVERSAL, NO_DELETE);
+  Project.setDataPrototype(
+      "SgProject::constant_folding_enum", "frontendConstantFolding",
+      "= SgProject::e_original_expressions_only", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   // DQ (6/12/2013): Added a global scope spanning files for multi-file
   // handling.

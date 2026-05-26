@@ -376,16 +376,30 @@ void outputPredefinedMacros() {
    SgProject object.
  */
 
-// #include "sageCommonSourceHeader.h"
-// extern an_il_header il_header;
-//
+static SgProject::constant_folding_enum
+legacyConstantFoldingChoice(bool frontendConstantFolding) {
+  return frontendConstantFolding ? SgProject::e_folded_values_only
+                                 : SgProject::e_original_expressions_only;
+}
+
 SgProject *frontend(int argc, char **argv, bool frontendConstantFolding) {
+  return frontend(std::vector<std::string>(argv, argv + argc),
+                  legacyConstantFoldingChoice(frontendConstantFolding));
+}
+
+SgProject *frontend(const std::vector<std::string> &argv,
+                    bool frontendConstantFolding) {
+  return frontend(argv, legacyConstantFoldingChoice(frontendConstantFolding));
+}
+
+SgProject *frontend(int argc, char **argv,
+                    SgProject::constant_folding_enum frontendConstantFolding) {
   return frontend(std::vector<std::string>(argv, argv + argc),
                   frontendConstantFolding);
 }
 
 SgProject *frontend(const std::vector<std::string> &argv,
-                    bool frontendConstantFolding) {
+                    SgProject::constant_folding_enum frontendConstantFolding) {
   // DQ (6/14/2007): Added support for timing of high level frontend function.
   SgProject *project = nullptr;
   bool skip_postprocessing = false;
