@@ -125,6 +125,21 @@ bool StmtInfoCollect ::ProcessTree(AstInterface &fa,
       }
     }
 
+    AstInterface::AstNodeList alias_vars;
+    AstInterface::AstNodeList alias_args;
+    if (fa.IsAliasingDecl(s, &alias_vars, &alias_args)) {
+      ROSE_ASSERT(alias_vars.size() == alias_args.size());
+      AstInterface::AstNodeList::const_iterator pv = alias_vars.begin();
+      AstInterface::AstNodeList::const_iterator pa = alias_args.begin();
+      while (pv != alias_vars.end()) {
+        AstNodePtr ast = *pv;
+        AstNodePtr read_ast = *pa;
+        AppendAliasDecl(fa, ast, read_ast);
+        ++pv;
+        ++pa;
+      }
+    }
+
     if (fa.IsAssignment(s, &lhs, &rhs, /*read_lhs=*/&additional)) {
       DebugLocalInfoCollect([]() { return "Is assignment"; });
       ModMap *mp = modstack.size() ? &modstack.back().modmap : 0;
@@ -151,8 +166,7 @@ bool StmtInfoCollect ::ProcessTree(AstInterface &fa,
       default:
         break;
       }
-    } else if (fa.IsVariableDecl(s, &vars, &args) ||
-               (additional = fa.IsAliasingDecl(s, &vars, &args))) {
+    } else if (fa.IsVariableDecl(s, &vars, &args)) {
       DebugLocalInfoCollect([]() { return "Is variable declaration."; });
       AstInterface::AstNodeList::const_iterator pv = vars.begin();
       AstInterface::AstNodeList::const_iterator pa = args.begin();
@@ -163,10 +177,8 @@ bool StmtInfoCollect ::ProcessTree(AstInterface &fa,
         if (read_ast != 0) {
           operator()(fa, read_ast);
         }
-        if (!additional) {
+        if (!fa.IsAliasingDecl(ast)) {
           AppendVariableDecl(fa, ast, read_ast);
-        } else {
-          AppendAliasDecl(fa, ast, read_ast);
         }
         ++pv;
         if (pa != args.end())
