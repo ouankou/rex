@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 
-from rose_sync_common import UPSTREAM_REF, latest_recorded_upstream_sha, read_rows, run_git
+from rose_sync_common import UPSTREAM_REF, commit_exists, latest_recorded_upstream_sha, read_rows, resolve_sha, run_git
 
 ALLOWED_DECISIONS = {
     "already-present",
@@ -54,7 +54,7 @@ def main() -> int:
     for row in rows:
         sha = (row.get("Upstream commit") or "").strip()
         if sha and sha != "N/A":
-            by_sha[sha] = row
+            by_sha[resolve_sha(repo, sha)] = row
     recorded_set = set(by_sha)
 
     missing = [sha for sha in expected if sha not in recorded_set]
@@ -74,6 +74,13 @@ def main() -> int:
         and (by_sha[sha].get("Decision") or "").strip() in PICK_DECISIONS
         and not (by_sha[sha].get("REX commit") or "").strip()
     ]
+    invalid_rex_commit = []
+    for sha in expected:
+        if sha not in by_sha:
+            continue
+        rex_sha = (by_sha[sha].get("REX commit") or "").strip()
+        if rex_sha and rex_sha != "N/A" and not commit_exists(repo, rex_sha):
+            invalid_rex_commit.append((sha, rex_sha))
 
     failures = False
     if missing:
@@ -101,6 +108,11 @@ def main() -> int:
         print("picked rows without REX commit mapping:")
         for sha in missing_rex_commit:
             print(sha)
+    if invalid_rex_commit:
+        failures = True
+        print("rows with non-existent REX commit SHA:")
+        for sha, rex_sha in invalid_rex_commit:
+            print(f"{sha} -> {rex_sha}")
 
     if failures:
         return 1

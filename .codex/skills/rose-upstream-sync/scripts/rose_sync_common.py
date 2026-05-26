@@ -138,6 +138,24 @@ def commit_exists(repo: Path, sha: str) -> bool:
     return result.returncode == 0
 
 
+def resolve_sha(repo: Path, sha: str) -> str:
+    if not sha or sha == "N/A":
+        return sha
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", f"{sha}^{{commit}}"],
+        cwd=repo,
+        text=True,
+        errors="replace",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    resolved = result.stdout.strip()
+    if result.returncode == 0 and len(resolved) == 40:
+        return resolved
+    return sha
+
+
 def latest_recorded_upstream_sha(repo: Path, log_dir: Path, exclude_path: Path | None = None) -> str:
     latest = ""
     excluded = exclude_path.resolve() if exclude_path else None
