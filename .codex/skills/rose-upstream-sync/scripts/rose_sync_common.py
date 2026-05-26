@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import csv
 import fnmatch
+import re
 import shlex
 import subprocess
 import sys
@@ -97,8 +98,15 @@ def dropped_paths(paths: Iterable[str]) -> list[str]:
     return sorted({path for path in paths if path and is_dropped_path(path)})
 
 
+def sync_log_sort_key(csv_path: Path) -> tuple[int, int, str]:
+    years = [int(match.group(0)) for match in re.finditer(r"(?:19|20)\d{2}", csv_path.name)]
+    if years:
+        return (years[0], years[-1], csv_path.name)
+    return (9999, 9999, csv_path.name)
+
+
 def existing_sync_logs(log_dir: Path) -> list[Path]:
-    return sorted(log_dir.glob("rose-*-commits.csv"))
+    return sorted(log_dir.glob("rose-*-commits.csv"), key=sync_log_sort_key)
 
 
 def read_rows(csv_path: Path) -> list[dict[str, str]]:
@@ -132,20 +140,14 @@ def commit_exists(repo: Path, sha: str) -> bool:
 
 def latest_recorded_upstream_sha(repo: Path, log_dir: Path, exclude_path: Path | None = None) -> str:
     latest = ""
-    latest_date = ""
     excluded = exclude_path.resolve() if exclude_path else None
     for csv_path in existing_sync_logs(log_dir):
         if excluded and csv_path.resolve() == excluded:
             continue
         for row in read_rows(csv_path):
             sha = (row.get("Upstream commit") or "").strip()
-            date = (row.get("Upstream date") or row.get("Date") or "").strip()
             if sha and sha != "N/A":
-                if not date and commit_exists(repo, sha):
-                    date = commit_date(repo, sha)
-                if date >= latest_date:
-                    latest = sha
-                    latest_date = date
+                latest = sha
     if latest and not commit_exists(repo, latest):
         raise SystemExit(f"latest recorded upstream SHA is not present locally: {latest}")
     return latest
