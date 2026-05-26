@@ -5088,6 +5088,17 @@ std::string AstInterface::GetVariableSignature(const AstNodePtr &_variable) {
                           ->get_namespaceDeclaration()
                           ->get_name()
                           .getString();
+  case V_SgEnumDeclaration: {
+    SgEnumDeclaration *enum_decl = isSgEnumDeclaration(variable);
+    std::string name = enum_decl->get_name();
+    if (name.empty()) {
+      SgInitializedNamePtrList &enumerators = enum_decl->get_enumerators();
+      if (!enumerators.empty()) {
+        name = enumerators.front()->get_name();
+      }
+    }
+    return "enum_" + name;
+  }
   case V_SgTypedefDeclaration:
   case V_SgTemplateTypedefDeclaration:
     return "typedef_" +
