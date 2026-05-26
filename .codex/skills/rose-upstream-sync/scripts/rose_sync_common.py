@@ -38,6 +38,7 @@ DROPPED_PATH_PATTERNS = [
     "*/Tupfile",
     "configure.ac",
     "acmacros/*",
+    "config/*.m4",
     "config/support-rose.m4",
     "config/support-yamlcpp.m4",
     "src/AstNodes/BinaryAnalysis/*",
@@ -51,6 +52,8 @@ DROPPED_PATH_PATTERNS = [
     "src/Rosebud/*",
     "src/Sawyer/*",
     "src/util/Sawyer/*",
+    "src/backend/unparser/AdaCodeGeneration/*",
+    "src/backend/unparser/JovialCodeGeneration/*",
     "src/frontend/BinaryFormats/*",
     "src/frontend/Disassemblers/*",
     "src/frontend/CxxFrontend/EDG/*",
@@ -90,7 +93,9 @@ def run_git(args: list[str], repo: Path = Path("."), check: bool = True) -> str:
 
 
 def is_dropped_path(path: str) -> bool:
-    normalized = path.strip().lstrip("./")
+    normalized = path.strip()
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
     return any(fnmatch.fnmatch(normalized, pattern) for pattern in DROPPED_PATH_PATTERNS)
 
 
@@ -209,6 +214,6 @@ def encode_rose_version(version: str) -> int:
         return (((major * 100 + minor) * 1000 + patch) * 10000 + build)
     if len(parts) == 3:
         major, minor, patch = parts
-        if minor >= 10000 or patch >= 1000:
+        if minor >= 100000 or patch >= 100:
             raise ValueError(f"ROSE 3-component version out of range: {version}")
-        return major * 10000000 + minor * 1000 + patch
+        return major * 10000000 + minor * 100 + patch
