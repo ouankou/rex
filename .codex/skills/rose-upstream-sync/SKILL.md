@@ -65,8 +65,9 @@ Use this skill for any request mentioning ROSE upstream sync, LLNL ROSE sync, `r
    - never restore upstream `configure.ac` or `src/frontend/CxxFrontend/EDG_VERSION`.
 10. Before final validation, prove that no upstream commit in the sync range was overlooked:
    ```bash
-   python3 .codex/skills/rose-upstream-sync/scripts/verify_coverage.py --csv docs/upstream-sync/rose-2026-commits.csv --to-ref "$UPSTREAM_TIP"
+   python3 .codex/skills/rose-upstream-sync/scripts/verify_coverage.py --csv <current-sync-csv> --to-ref "$UPSTREAM_TIP"
    ```
+   If the frozen range spans multiple CSV files, verify each touched CSV with explicit range arguments.
 11. Validate before PR:
    ```bash
    cmake --build build -j32
