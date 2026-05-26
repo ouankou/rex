@@ -3436,6 +3436,7 @@ SgSourceFile_processCppLinemarkers::LinemarkerTraversal::LinemarkerTraversal(
 
 void SgSourceFile_processCppLinemarkers::LinemarkerTraversal::visit(
     SgNode *astNode) {
+  (void)astNode;
 #ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
 
   // DXN (02/21/2011): Consider the case of SgInterfaceBody.
