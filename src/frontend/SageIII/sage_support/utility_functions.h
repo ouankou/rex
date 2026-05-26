@@ -23,12 +23,22 @@ std::string version_number();
 //! Output at least some of the predefined macro settings.
 void outputPredefinedMacros();
 
-// Simple interface for ROSE (error codes are in SgProject.frontendErrorCode(),
-// backendErrorCode() ) tps : Need to make this function (DLL) public
+//! Simple APIs for ROSE (error codes are in SgProject.frontendErrorCode(),
+//! backendErrorCode()).
+//! @{
 ROSE_DLL_API SgProject *frontend(int argc, char **argv,
-                                 bool frontendConstantFolding = false);
+                                 bool frontendConstantFolding);
 ROSE_DLL_API SgProject *frontend(const std::vector<std::string> &argv,
-                                 bool frontendConstantFolding = false);
+                                 bool frontendConstantFolding);
+ROSE_DLL_API SgProject *
+frontend(int argc, char **argv,
+         SgProject::constant_folding_enum frontendConstantFolding =
+             SgProject::e_original_expressions_only);
+ROSE_DLL_API SgProject *
+frontend(const std::vector<std::string> &argv,
+         SgProject::constant_folding_enum frontendConstantFolding =
+             SgProject::e_original_expressions_only);
+//! @}
 ROSE_DLL_API int frontendExitStatus(const SgProject *project);
 
 // DQ (4/17/2015): After discussion with Liao, Markus, and Pei-Hung, we have

@@ -5727,9 +5727,17 @@ HEADER_APPLICATION_PROJECT_START
                e_last          /*!< last value (used for error checking) */
              };
 
+          enum constant_folding_enum : std::uint8_t
+             {
+               e_original_expressions_only              = 0,
+               e_folded_values_only                     = 1,
+               e_original_expressions_and_folded_values = 2,
+               e_skip_post_processing                   = 3,
+             };
+
       //! The only useful constructors (constant folding in the frontend is false by default).
-          SgProject ( const std::vector<std::string>& argv, bool frontendConstantFolding = false);
-          SgProject ( int argc, char** argv, bool frontendConstantFolding = false);
+          SgProject ( const std::vector<std::string>& argv, constant_folding_enum frontendConstantFolding = e_original_expressions_only);
+          SgProject ( int argc, char** argv, constant_folding_enum frontendConstantFolding = e_original_expressions_only);
 
 
       //! process command line and store options in the SgProject object. This options are used by parse und unparse.
@@ -15734,7 +15742,7 @@ SgProject::SgProject( const SgProject & project )
    }
 
 //! constructor invokes legacy frontend front end and creates AST. Use frontend() instead.
-SgProject::SgProject ( int argc, char** argv, bool frontendConstantFolding)
+SgProject::SgProject ( int argc, char** argv, constant_folding_enum frontendConstantFolding)
    {
   // DQ (11/4/2015): Added assertion.
      ASSERT_this();
@@ -15754,7 +15762,7 @@ SgProject::SgProject ( int argc, char** argv, bool frontendConstantFolding)
    }
 
 //! constructor invokes legacy frontend front end and creates AST. Use frontend() instead.
-SgProject::SgProject ( const std::vector<std::string>& argv, bool frontendConstantFolding )
+SgProject::SgProject ( const std::vector<std::string>& argv, constant_folding_enum frontendConstantFolding )
    {
   // DQ (11/4/2015): Added assertion.
      ASSERT_this();
@@ -15865,7 +15873,7 @@ SgProject::initialization()
      p_addCppDirectivesToAST   = false;
 
   // DQ (9/18/2011): Added support for using more constant AST to select to use or not use frontend specific constant folding.
-     p_frontendConstantFolding = false;
+     p_frontendConstantFolding = e_original_expressions_only;
 
   // TV (07/18/2013): Initialise the global GlobalScope for multiple flie handeling
      Sg_File_Info * fi_gsaf = Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode();
@@ -16866,7 +16874,28 @@ SgProject::display ( const std::string & label ) const
   // DQ (2/4/2009): Moved from SgFile to SgProject.
 
   // DQ (9/15/2013): Added debugging support for a previously missed data member.
-     printf ("   p_frontendConstantFolding                 = %s \n",(p_frontendConstantFolding == true) ? "true" : "false");
+     switch (p_frontendConstantFolding)
+        {
+          case e_original_expressions_only:
+             printf ("   p_frontendConstantFolding                 = e_original_expressions_only");
+             break;
+
+          case e_folded_values_only:
+             printf ("   p_frontendConstantFolding                 = e_folded_values_only");
+             break;
+
+          case e_original_expressions_and_folded_values:
+             printf ("   p_frontendConstantFolding                 = e_original_expressions_and_folded_values");
+             break;
+
+          case e_skip_post_processing:
+             printf ("   p_frontendConstantFolding                 = e_skip_post_processing");
+             break;
+
+          default:
+             printf ("   p_frontendConstantFolding                 = unknown");
+        }
+     printf ("\n");
 
   // DQ (9/15/2013): Added debugging support for a new data member.
      printf ("   p_unparse_in_same_directory_as_input_file = %s \n",(p_unparse_in_same_directory_as_input_file == true) ? "true" : "false");

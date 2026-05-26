@@ -36,6 +36,11 @@ static void deleteExpressionAndOriginalExpressionTree(SgNode *node) {
     deleteExpressionAndOriginalExpressionTree(
         exp->get_originalExpressionTree());
   }
+  if (exp != NULL && exp->get_alternativeExpr() != NULL) {
+    SgExpression *alternative_expr = exp->get_alternativeExpr();
+    exp->set_alternativeExpr(NULL);
+    deleteExpressionAndOriginalExpressionTree(alternative_expr);
+  }
 
   // Traverse the AST and delete successors
   std::vector<SgNode *> successors = node->get_traversalSuccessorContainer();
@@ -116,6 +121,10 @@ struct CollectExpressionTrees : public ROSE_VisitTraversal {
 
       if (expr_parent->get_originalExpressionTree() == expr) {
         originals.insert(expr);
+        return;
+      }
+
+      if (expr_parent->get_alternativeExpr() == expr) {
         return;
       }
 
@@ -203,6 +212,18 @@ inline SgExpression *get_parent_if_folded_in(SgExpression *expr) {
   } else {
     return NULL;
   }
+}
+
+static SgExpression *
+detach_from_original_expression_parent(SgExpression *expr) {
+  SgExpression *parent = get_parent_if_folded_in(expr);
+  if (parent != NULL) {
+    parent->set_originalExpressionTree(NULL);
+    if (expr->get_parent() == parent) {
+      expr->set_parent(NULL);
+    }
+  }
+  return parent;
 }
 
 void removeConstantFoldedValue(SgProject * /*project*/) {
@@ -336,6 +357,104 @@ void removeConstantFoldedValue(SgProject * /*project*/) {
   }
 }
 
+void preserveConstantFoldedValue(SgProject * /*project*/) {
+  CollectExpressionTrees cet;
+  SgExpression::traverseMemoryPoolNodes(cet);
+
+  std::map<SgNode *, SgNode *> replace_map;
+  std::vector<std::pair<SgExpression *, SgExpression *>> folded_mapping;
+  std::set<SgExpression *> delete_set;
+
+  delete_set.insert(cet.disconnected.begin(), cet.disconnected.end());
+  delete_set.insert(cet.orphans.begin(), cet.orphans.end());
+
+  // We cut the chain as we process it starting from the latest element.
+  // Some visited links could be seen as last element of a chain that has been
+  // cut by mistake.
+  std::set<SgExpression *> seen_in_ot_chain;
+
+  for (auto child : cet.originals) {
+    if (child->get_originalExpressionTree() == NULL &&
+        seen_in_ot_chain.find(child) == seen_in_ot_chain.end()) {
+      seen_in_ot_chain.insert(child);
+
+      SgExpression *folded = get_parent_if_folded_in(child);
+      ASSERT_not_null(folded);
+      ASSERT_require(folded != child);
+
+      folded->set_originalExpressionTree(NULL);
+      seen_in_ot_chain.insert(folded);
+
+      SgExpression *folded_value = folded;
+      SgExpression *tmp = get_parent_if_folded_in(folded);
+      while (tmp != NULL) {
+        folded = tmp;
+        seen_in_ot_chain.insert(folded);
+        tmp = get_parent_if_folded_in(folded);
+      }
+
+      if (folded->get_originalExpressionTree() != NULL) {
+        folded->set_originalExpressionTree(NULL);
+      }
+
+      bool replace_folded_by_child =
+          delete_set.find(folded) == delete_set.end();
+
+      if (isSgEnumVal(folded)) {
+        // Enum folded values can carry source-only declarations in their
+        // original tree. Replacing them may change C++ type correctness.
+        replace_folded_by_child = false;
+      }
+
+      replace_folded_by_child &= !isSgLambdaExp(child);
+
+      if (replace_folded_by_child) {
+        child->set_parent(folded->get_parent());
+        replace_map[folded] = child;
+        folded_mapping.emplace_back(child, folded_value);
+
+        SgExpression *discard_root =
+            detach_from_original_expression_parent(folded_value);
+        SgExpression *tmp2 = discard_root;
+        while (tmp2 != NULL) {
+          discard_root = tmp2;
+          tmp2 = get_parent_if_folded_in(discard_root);
+        }
+        ASSERT_require(get_parent_if_folded_in(folded_value) == NULL);
+        if (folded != folded_value) {
+          delete_set.insert(folded);
+        }
+        if (discard_root != NULL && discard_root != folded &&
+            discard_root != folded_value) {
+          delete_set.insert(discard_root);
+        }
+      } else {
+        delete_set.insert(child);
+      }
+    }
+  }
+
+  edgePointerReplacement(replace_map);
+
+  for (auto repl : folded_mapping) {
+    SgExpression *original = repl.first;
+    SgExpression *folded = repl.second;
+
+    ASSERT_not_null(folded);
+    ASSERT_not_null(original);
+
+    original->set_alternativeExpr(folded);
+    folded->set_parent(original);
+
+    ASSERT_require(delete_set.count(folded) == 0);
+    ASSERT_require(delete_set.count(original) == 0);
+  }
+
+  for (auto expr : delete_set) {
+    deleteExpressionAndOriginalExpressionTree(expr);
+  }
+}
+
 struct RemoveOriginalExpressionTrees : public ROSE_VisitTraversal {
   void visit(SgNode *node) {
     ROSE_ASSERT(node != nullptr);
@@ -351,24 +470,40 @@ struct RemoveOriginalExpressionTrees : public ROSE_VisitTraversal {
   }
 };
 
-//! This removes the original expression tree from value expressions where it
-//! has been constant folded by legacy frontend.
 void resetConstantFoldedValues(SgNode *node) {
+  SgProject *const project = isSgProject(node);
+  SgProject::constant_folding_enum const choice =
+      project ? project->get_frontendConstantFolding()
+              : SgProject::e_folded_values_only;
 
-  if (!isSgProject(node) ||
-      !((SgProject *)node)->get_frontendConstantFolding()) {
-    TimingPerformance timer1("Fixup Constant Folded Values (replace with "
-                             "original expression trees):");
-
-    SgProject *project = isSgProject(node);
-    ROSE_ASSERT(project != NULL);
+  switch (choice) {
+  case SgProject::e_original_expressions_only: {
+    TimingPerformance timer("resetConstantFoldedValues (original expression "
+                            "tree only):");
     removeConstantFoldedValue(project);
+    break;
+  }
 
-  } else {
-    TimingPerformance timer1(
-        "Fixup Constant Folded Values (remove the original expression tree, "
-        "leaving the constant folded values):");
+  case SgProject::e_folded_values_only: {
+    TimingPerformance timer("resetConstantFoldedValues (folded values only):");
     RemoveOriginalExpressionTrees astFixupTraversal;
     SgExpression::traverseMemoryPoolNodes(astFixupTraversal);
+    break;
+  }
+
+  case SgProject::e_original_expressions_and_folded_values: {
+    TimingPerformance timer("resetConstantFoldedValues (original expressions "
+                            "and folded values):");
+    preserveConstantFoldedValue(project);
+    break;
+  }
+
+  case SgProject::e_skip_post_processing:
+    break;
+
+  default:
+    std::cerr << "resetConstantFoldedValues: unknown frontend constant "
+                 "folding policy"
+              << std::endl;
   }
 }
