@@ -1780,6 +1780,19 @@ bool AstInterfaceImpl::IsAssignment(const SgNode *s, SgNode **lhs, SgNode **rhs,
                                     bool *readlhs) {
   if (s == 0)
     return false;
+  if (s->variantT() == V_SgInitializedName) {
+    const SgNode *parent = s->get_parent();
+    if (parent != 0 && parent->variantT() == V_SgCtorInitializerList) {
+      if (rhs != 0) {
+        *rhs = isSgInitializedName(s)->get_initializer();
+      }
+      if (lhs != 0) {
+        *lhs = const_cast<SgNode *>(s);
+      }
+      return true;
+    }
+    return false;
+  }
   const SgExprStatement *n = isSgExprStatement(s);
   const SgExpression *exp = (n != 0) ? n->get_expression() : isSgExpression(s);
   if (exp != 0) {
@@ -1903,16 +1916,17 @@ bool AstInterface::IsAliasingDecl(const AstNodePtr &_s, AstNodeList *vars,
     case V_SgPointerType:
     case V_SgReferenceType: {
       SgExpression *def = var->get_initializer();
-      if (def != 0 && def->variantT() == V_SgAssignInitializer) {
-        def = isSgAssignInitializer(def)->get_operand();
-        if (def->variantT() == V_SgAddressOfOp) {
-          def = isSgAddressOfOp(def)->get_operand();
-        }
+      size_t alias_count_before = aliases != 0 ? aliases->size() : 0;
+      if (def != 0 && IsMemoryAccess(def, aliases)) {
         if (vars != 0) {
-          vars->push_back(var);
-        }
-        if (aliases != 0) {
-          aliases->push_back(def);
+          size_t alias_count = 1;
+          if (aliases != 0) {
+            ROSE_ASSERT(aliases->size() > alias_count_before);
+            alias_count = aliases->size() - alias_count_before;
+          }
+          for (size_t i = 0; i < alias_count; ++i) {
+            vars->push_back(var);
+          }
         }
         return true;
       }
@@ -2772,17 +2786,36 @@ bool AstInterface::IsMemoryFree(const AstNodePtr &s, AstNodeType *exptype,
 }
 
 bool AstInterface::IsMemoryAccess(const AstNodePtr &_s, AstNodeList *subrefs) {
-  if (_s.is_unknown())
+  if (_s.is_unknown()) {
+    if (subrefs != 0) {
+      subrefs->push_back(_s);
+    }
     return true;
+  }
   SgNode *s = AstNodePtrImpl(_s).get_ptr();
   if (s == 0)
     return false;
-  if (IsVarRef(_s) || IsArrayAccess(_s))
+  if (IsVarRef(_s) || IsArrayAccess(_s)) {
+    if (subrefs != 0) {
+      subrefs->push_back(s);
+    }
     return true;
+  }
   switch (s->variantT()) {
+  case V_SgConstructorInitializer:
+    return false;
+  case V_SgAssignInitializer:
+    return IsMemoryAccess(isSgAssignInitializer(s)->get_operand(), subrefs);
+  case V_SgAddressOfOp:
+  case V_SgCastExp:
+    return IsMemoryAccess(isSgUnaryOp(s)->get_operand(), subrefs);
   case V_SgPntrArrRefExp:
-  case V_SgPointerDerefExp:
-    break;
+  case V_SgPointerDerefExp: {
+    if (subrefs != 0) {
+      subrefs->push_back(s);
+    }
+    return true;
+  }
   case V_SgCommaOpExp: {
     SgCommaOpExp *comma = isSgCommaOpExp(s);
     AstNodePtr lhs = comma->get_lhs_operand();
@@ -2811,8 +2844,12 @@ bool AstInterface::IsMemoryAccess(const AstNodePtr &_s, AstNodeList *subrefs) {
   }
   case V_SgDotExp:
   case V_SgArrowExp: {
-    if (isSgBinaryOp(s)->get_rhs_operand()->variantT() == V_SgVarRefExp) {
-      break;
+    SgNode *rhs = isSgBinaryOp(s)->get_rhs_operand();
+    if (rhs != nullptr && rhs->variantT() == V_SgVarRefExp) {
+      if (subrefs != 0) {
+        subrefs->push_back(s);
+      }
+      return true;
     }
   }
     ROSE_FALLTHROUGH;
@@ -2825,13 +2862,16 @@ bool AstInterface::IsMemoryAccess(const AstNodePtr &_s, AstNodeList *subrefs) {
       assert(base_type != 0);
       while (isSgTypedefType(base_type))
         base_type = isSgTypedefType(base_type)->get_base_type();
-      if (base_type->variantT() == V_SgReferenceType)
-        break;
+      if (base_type->variantT() == V_SgReferenceType) {
+        if (subrefs != 0) {
+          subrefs->push_back(s);
+        }
+        return true;
+      }
     }
     return false;
   }
   } // end switch
-  return true;
 }
 
 //! Check if _s is an array access.
@@ -2842,28 +2882,23 @@ bool AstInterface::IsArrayAccess(const AstNodePtr &_s, AstNodePtr *array,
   if (s == nullptr) {
     return false;
   }
-  if (s->variantT() == V_SgDotExp) {
-    SgDotExp *dot = isSgDotExp(s);
-    if (!IsVarRef(AstNodePtrImpl(dot->get_rhs_operand())))
+  switch (s->variantT()) {
+  case V_SgDotExp:
+  case V_SgArrowExp: {
+    SgBinaryOp *dot = isSgBinaryOp(s);
+    if (!IsVarRef(AstNodePtrImpl(dot->get_rhs_operand()))) {
       return false;
+    }
     s = dot->get_lhs_operand();
+    break;
+  }
+  default:
+    break;
   }
   if (s == nullptr) {
     return false;
   }
   switch (s->variantT()) {
-  case V_SgPointerDerefExp: {
-    if (index != 0 || array != 0) {
-      SgPointerDerefExp *ref = isSgPointerDerefExp(s);
-      if (array != 0) {
-        *array = ref->get_operand();
-      }
-      if (index != 0) {
-        index->push_back(CreateConstInt(0));
-      }
-    }
-    return true;
-  }
   case V_SgPntrArrRefExp:
     if (index != 0 || array != 0) {
       SgNode *n = s;
@@ -5146,15 +5181,6 @@ bool AstInterface::IsLocalRef(const AstNodePtr &ref, const AstNodePtr &scope,
   });
   AstNodePtr cur_scope;
   if (!AstInterface::IsVarRef(ref, 0, 0, &cur_scope, 0, false, has_ptr_deref)) {
-    switch (ref->variantT()) {
-    case V_SgCastExp:
-      DebugScope([&ref]() {
-        return "reference is local:" + AstInterface::AstToString(ref);
-      });
-      return true;
-    default:
-      break;
-    }
     return false;
   }
   std::string cur_scope_name;
