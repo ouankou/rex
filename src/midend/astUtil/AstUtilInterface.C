@@ -236,12 +236,13 @@ void AstUtilInterface::ComputeAstSideEffects(
         return true;
       };
   std::function<bool(AstNodePtr, AstNodePtr)> save_free =
-      [&collect](AstNodePtr var, AstNodePtr init) {
+      [&collect, &save_mod](AstNodePtr var, AstNodePtr init) {
         DebugAstUtil(
             [&var]() { return "save free:" + AstInterface::AstToString(var); });
         if (collect != 0) {
           (*collect)(var, init, OperatorSideEffect::Free);
         }
+        save_mod(var, init);
         return true;
       };
   collect_operator.set_modify_collect(save_mod);
