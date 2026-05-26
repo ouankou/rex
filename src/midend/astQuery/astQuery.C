@@ -27,12 +27,9 @@ VariantVector::VariantVector(const VariantT &X) {
   // ROSE_ABORT();
 }
 
-VariantVector::VariantVector(const VariantVector &X) {
+VariantVector::VariantVector(const VariantVector &X) : vector<VariantT>(X) {
   // printf ("Top of AstQuery<AstQuerySynthesizedAttributeType>::VariantVector
   // copy constructor \n"); printVariantVector(*this);
-
-  // if (X.size() > 0)
-  insert(end(), X.begin(), X.end());
 
   // printf ("Bottom of
   // AstQuery<AstQuerySynthesizedAttributeType>::VariantVector copy constructor

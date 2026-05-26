@@ -11,6 +11,8 @@
 
 #include "defaultFunctionGenerator.h"
 
+#include "ROSE_UNUSED.h"
+
 #include "unparser.h"
 
 // driscoll6 (01/29/2011) defaultFunctionGenerator prints a lot of debug info
@@ -2299,6 +2301,7 @@ DefaultFunctionGenerator::generateDefaultFunctionDeclaration(
   // PP (9/16/25): move orig_return type into declaration
   // was: func_type->set_orig_return_type(func_return_type); //unparser will
   // complain otherwise,reason?
+  ROSE_UNUSED(func_return_type);
 
   if (isSgTemplateInstantiationDefn(parentClassDef1)) {
     SgTemplateInstantiationDecl *classDecl =
