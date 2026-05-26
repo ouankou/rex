@@ -69,6 +69,8 @@ std::ostream &operator<<(std::ostream &output, const DependenceEntry &e);
 class CollectDependences {
 protected:
   virtual void save_dependence(const DependenceEntry &e) = 0;
+  virtual void save_node_attributes(const std::string &,
+                                    const std::vector<std::string> &) {}
   std::string local_read_string(std::istream &input_file);
 
 public:
@@ -179,6 +181,17 @@ private:
 //! Stores dependence entries in a table.
 class DependenceTable : public CollectDependences,
                         public SaveOperatorSideEffectInterface {
+private:
+  // Saves information about each node.
+  struct NodeInfo {
+    // Number of outgoing and incoming edges.
+    int out_no = 0, in_no = 0;
+    // Length of the longest chain.
+    int rank = 0;
+    std::vector<std::string> attributes;
+    NodeInfo() : out_no(0), in_no(0), rank(0) {}
+  };
+
 public:
   DependenceTable(bool update_annotations)
       : update_annotations_(update_annotations) {}
@@ -205,24 +218,29 @@ public:
       }
     }
     saved_dependences_relation_[e.first_entry()].push_back(e);
-    node_map_[e.first_entry()].out_no++;
-    node_map_[e.second_entry()].in_no++;
-    int lower_rank = 0;
-    if (node_map_.find(e.second_entry()) == node_map_.end()) {
-      node_map_[e.second_entry()].rank = 0; // no incoming dependence yet.
-    } else {
-      lower_rank = node_map_[e.second_entry()].rank;
+    NodeInfo &from_node = node_map_[e.first_entry()];
+    NodeInfo &to_node = node_map_[e.second_entry()];
+
+    from_node.out_no++;
+    to_node.in_no++;
+
+    int higher_rank = to_node.rank + 1;
+    if (from_node.rank < higher_rank) {
+      from_node.rank = higher_rank;
     }
-    int higher_rank = lower_rank + 1;
-    if (node_map_.find(e.first_entry()) == node_map_.end()) {
-      node_map_[e.first_entry()].rank =
-          higher_rank; // one outgoing dependence so far .
-    } else {
-      int current_rank = node_map_[e.first_entry()].rank;
-      if (current_rank < higher_rank) {
-        node_map_[e.first_entry()].rank =
-            higher_rank; // increase existing rank.
-      }
+  }
+  bool InsertNode(const std::string &sig) {
+    return node_map_.emplace(sig, NodeInfo()).second;
+  }
+  const std::vector<std::string> &get_nodeInfo(const std::string &sig) const {
+    return node_map_.at(sig).attributes;
+  }
+  std::vector<std::string> &get_nodeInfo(const std::string &sig) {
+    return node_map_.at(sig).attributes;
+  }
+  void CollectNodes(const std::function<void(const std::string &)> &op) const {
+    for (const auto &node : node_map_) {
+      op(node.first);
     }
   }
 
@@ -242,18 +260,13 @@ private:
   std::vector<std::string> saved_dependences_sig_;
   std::map<std::string, std::vector<DependenceEntry>>
       saved_dependences_relation_;
-  // Saves information about each node.
-  struct NodeInfo {
-    // Number of outgoing and incoming edges.
-    int out_no = 0, in_no = 0;
-    // Length of the longest chain.
-    int rank = 0;
-    NodeInfo() : out_no(0), in_no(0), rank(0) {}
-  };
   std::map<std::string, NodeInfo> node_map_;
 
 protected:
   virtual void save_dependence(const DependenceEntry &e) override;
+  virtual void
+  save_node_attributes(const std::string &sig,
+                       const std::vector<std::string> &attributes) override;
 };
 
 }; // namespace AstUtilInterface
