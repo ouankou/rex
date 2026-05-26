@@ -222,6 +222,14 @@ static void test_escapes() {
   check(cEscape("\t\t") == "\\t\\t");
   check(cEscape("-\t-") == "-\\t-");
 
+  // JSON escape
+  check(jsonEscape("") == "");
+  check(jsonEscape("\"\\") == "\\\"\\\\");
+  check(jsonEscape("\b\f\n\r\t") == "\\b\\f\\n\\r\\t");
+  check(jsonEscape(std::string("a") + '\x01' + "b") == "a\\u0001b");
+  const std::string utf8Dash = std::string("a") + "\xe2\x80\x93" + "b";
+  check(jsonEscape(utf8Dash) == utf8Dash);
+
   // C++ unescape
   check(cUnescape("") == "");
   check(cUnescape("a") == "a");
