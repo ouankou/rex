@@ -154,10 +154,9 @@ Traversal::evaluateInheritedAttribute ( SgNode* astNode, InheritedAttribute inhe
      return inheritedAttribute;
    }
 
-
-SynthesizedAttribute
-Traversal::evaluateSynthesizedAttribute ( SgNode* astNode, InheritedAttribute inheritedAttribute, SynthesizedAttributesList childAttributes )
-   {
+   SynthesizedAttribute Traversal::evaluateSynthesizedAttribute(
+       SgNode *astNode, InheritedAttribute /* inheritedAttribute */,
+       SynthesizedAttributesList /* childAttributes */) {
      SynthesizedAttribute localResult;
 
   // printf ("evaluateSynthesizedAttribute(): astNode = %p = %s \n",astNode,astNode->class_name().c_str());
@@ -183,7 +182,6 @@ Traversal::evaluateSynthesizedAttribute ( SgNode* astNode, InheritedAttribute in
 
      return localResult;
    }
-
 
 Traversal::Traversal()
    {
@@ -221,5 +219,3 @@ main ( int argc, char* argv[] )
   // return 0;
      return backendCompilesUsingOriginalInputFile(project);
    }
-
-

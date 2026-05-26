@@ -532,7 +532,9 @@ std::vector<std::vector<int>> SgGraphTraversal<CFG>::mergePathSegments(
           }
           if (good) {
             newpath.insert(newpath.end(), pq.begin(), pq.end());
+#ifdef _OPENMP
 #pragma omp critical
+#endif
             {
               npts.push_back(newpath);
             }
@@ -540,7 +542,9 @@ std::vector<std::vector<int>> SgGraphTraversal<CFG>::mergePathSegments(
         }
       } else {
         std::vector<int> ppq = pq;
+#ifdef _OPENMP
 #pragma omp critical
+#endif
         {
           finnpts.push_back(ppq);
         }
@@ -780,10 +784,14 @@ std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
         return loopPaths;
       }
 
+#ifdef _OPENMP
 #pragma omp parallel
+#endif
       {
         std::set<std::vector<int>> local_loop_paths;
+#ifdef _OPENMP
 #pragma omp for schedule(guided)
+#endif
         for (unsigned int qqq = 0; qqq < paths.size(); qqq++) {
           std::set<std::vector<int>> movepaths;
           std::vector<int> path; // = paths[qqq];
@@ -799,9 +807,13 @@ std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
 
           unsigned long long eval_increment =
               static_cast<unsigned long long>(boxpaths.size());
+#ifdef _OPENMP
 #pragma omp atomic
+#endif
           evaledpaths += eval_increment;
+#ifdef _OPENMP
 #pragma omp critical
+#endif
           {
             if (evaledpaths > newmil * 100000ull) {
               newmil++;
@@ -815,7 +827,9 @@ std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
               if (needssafety) {
                 // Some analyzePath implementations are not thread-safe;
                 // serialize in this mode to avoid data races.
+#ifdef _OPENMP
 #pragma omp critical
+#endif
                 {
                   analyzePath(verts);
                 }
@@ -828,7 +842,9 @@ std::set<std::vector<int>> SgGraphTraversal<CFG>::uTraversePath(
           }
         }
         if (loop && !local_loop_paths.empty()) {
+#ifdef _OPENMP
 #pragma omp critical
+#endif
           {
             loopPaths.insert(local_loop_paths.begin(), local_loop_paths.end());
           }
