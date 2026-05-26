@@ -90,7 +90,7 @@ public:
       Attach();
     }
     UpdateStmtIterator(const UpdateStmtIterator &that)
-        : ConstStmtIterator(that) {
+        : ConstStmtIterator(that), LoopTreeObserver() {
       Attach();
     }
     ~UpdateStmtIterator() { Detach(); }

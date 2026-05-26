@@ -10,6 +10,8 @@
 
 #include "OperatorAnnotation.h"
 
+#include "ROSE_FALLTHROUGH.h"
+
 #include "astPostProcessing.h"
 
 #include "unparser.h"
@@ -2213,6 +2215,7 @@ bool AstInterfaceImpl::IsVarRef(SgNode *exp, SgType **vartype,
         !isSgThisExp(isSgBinaryOp(exp)->get_lhs_operand())) {
       *has_ptr_deref = true;
     }
+    ROSE_FALLTHROUGH;
   case V_SgDotExp: {
     const SgBinaryOp *exp1 = isSgBinaryOp(exp);
     SgNode *lhs = exp1->get_lhs_operand();
@@ -2741,6 +2744,7 @@ bool AstInterface::IsMemoryAccess(const AstNodePtr &_s) {
       break;
     }
   }
+    ROSE_FALLTHROUGH;
   default: { // Function call returning C++ reference type is a memory access
     AstNodeTypeImpl t;
     if (s->variantT() == V_SgFunctionCallExp && IsExpression(_s, &t)) {

@@ -165,7 +165,8 @@ bool DepInfo::operator*=(const DepInfo &info2) {
   if (commLevel1 > commLevel2)
     commLevel1 = commLevel2;
   *this = DepInfoGenerator::GetDepInfo(info1.rows(), info2.cols(),
-                                       (bool)DEPTYPE_TRANS, commLevel1);
+                                       static_cast<int>(DEPTYPE_TRANS) != 0,
+                                       commLevel1);
   for (int i = 0; i < info1.rows(); i++) {
     for (int j = 0; j < info2.cols(); j++) {
       for (int k = 0; k < info1.cols(); k++) {

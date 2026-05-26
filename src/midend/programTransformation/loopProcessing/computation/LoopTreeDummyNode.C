@@ -159,8 +159,7 @@ public:
       return true;
     if (n->LoopTreeGetClassName() != node->LoopTreeGetClassName())
       return false;
-    LoopTreeRestrLoopRange *that =
-        static_cast<LoopTreeRestrLoopRange *const>(n);
+    LoopTreeRestrLoopRange *that = static_cast<LoopTreeRestrLoopRange *>(n);
     return that->GetRestrLoop() == node->GetRestrLoop();
   }
 };
