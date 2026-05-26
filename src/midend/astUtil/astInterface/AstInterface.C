@@ -4940,14 +4940,12 @@ std::string AstInterface::GetVariableSignature(const AstNodePtr &_variable) {
   if (_variable.get_type() == AstNodePtr::SpecialAstType::GLOBAL_SIGNATURE) {
     return _variable.get_signature();
   }
-  std::string res = AstInterface::AstTypeToString(_variable);
   SgNode *variable = _variable.get_ptr();
   if (variable == 0)
-    return res;
+    return AstInterface::AstTypeToString(_variable);
   AstInterfaceImpl astImpl(variable);
   AstInterface fa(&astImpl);
-  if (res != "")
-    res = res + "::";
+  std::string res;
   SgType *variable_is_type = isSgType(variable);
   if (variable_is_type != 0) {
     std::string variable_name;
