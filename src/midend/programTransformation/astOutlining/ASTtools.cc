@@ -22,6 +22,8 @@
 
 #include <sstream>
 
+#include "ROSE_FALLTHROUGH.h"
+
 #include "ASTtools.hh"
 
 // =====================================================================
@@ -379,6 +381,7 @@ string ASTtools::toStringFileLoc(const SgLocatedNode *n) {
       ROSE_ASSERT(sym);
       s << "'" << sym->get_name().getString() << '\'';
     }
+      ROSE_FALLTHROUGH;
     default:
       sep = "";
       break;
