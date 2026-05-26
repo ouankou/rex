@@ -23,6 +23,9 @@
 /* Define user-friendly ROSE version */
 #cmakedefine ROSE_PACKAGE_VERSION "@ROSE_PACKAGE_VERSION@"
 
+/* Memory pool protection, can be 0-3. */
+#define ROSE_ALLOC_MEMSET @ROSE_ALLOC_MEMSET@
+
 /* Define to 1 if you have the `argz_append' function. */
 #cmakedefine HAVE_ARGZ_APPEND 1
 /* Define to 1 if you have the `argz_create_sep' function. */
