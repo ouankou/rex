@@ -1,28 +1,32 @@
-# rose manual sync (full REX scope)
+# ROSE upstream sync for REX
 
-rose upstream github repo: https://github.com/rose-compiler/rose
+Canonical upstream source: https://github.com/llnl/rose.git
+
+Upstream ROSE is read-only evidence for REX. Agents may fetch, inspect logs, show commits, and compare diffs. Agents must never push to upstream ROSE, open upstream PRs/issues/comments, request upstream reviews, or mention upstream maintainers. Any sync PR is a REX PR only.
 
 ## Support target (REX)
 - Platform: Linux only (non-Linux platforms dropped).
 - Languages/features: C/C++, Fortran, OpenMP, OpenACC, OpenCL, CUDA.
-- Frontend: Clang/LLVM for C/C++ (LLVM 21); Fortran via Flang (imported; keep synced).
-- Hard dropped: PHP, JavaScript, Python, Ada, Jovial, EDG, Java (source language), UPC, YAML/mini-yaml, binary analysis, Sawyer, CodeThorn, and other legacy frontends/tools.
-- Rosebud: keep the generator engine if present, but drop Rosebud inputs tied to dropped subsystems (e.g., binary analysis, Jovial).
+- Frontend: Clang/LLVM for C/C++ (LLVM 22); Fortran via Flang.
+- Hard dropped: PHP, JavaScript, Python, Ada, Jovial, EDG, OFP/old Fortran parser, Java/ECJ, UPC, X10, Csharp, Matlab, YAML/mini-yaml, binary analysis, Sawyer, CodeThorn, Rosebud source tree, legacy autotools/Tup paths, dropped OpenMP designs, and other legacy frontends/tools.
+- Rosebud: do not restore `src/Rosebud`. If an upstream Rosebud commit contains an idea useful to existing REX ROSETTA code, port only that retained-scope logic manually.
 - Legacy array test suites are dropped from CompileTests and CompilerOptionsTests inventories.
 
 ## Non-negotiable rules
-- Top rule: do not pause for any reason until the PR is created.
-- Manual per-commit review only. No scripts, no batch triage, no bulk patch application.
+- For sync tasks, use `.codex/skills/rose-upstream-sync/SKILL.md`.
+- Scripts may inventory, classify, guard, and update records. They must not be used to bulk-apply code without per-commit review.
 - Commit log must only reference upstream `rose/weekly` history; never use local REX history for log entries (always run `git log rose/weekly ...` when enumerating commits).
 - Before logging any commit, verify the SHA exists in `rose/weekly` (e.g., `git merge-base --is-ancestor <sha> rose/weekly`); if not, do not log it.
 - If a commit is marked `pick`, apply the code change immediately (before moving on).
-- If a `pick` is already present in REX, record that in the Notes column and leave the REX commit column blank.
-- Decision order is strict: verify upstream SHA -> decide pick/drop -> apply (if pick) -> update commit log immediately.
+- If a `pick` is already present in REX, record that in the Notes column and set the REX commit column to the existing REX commit when known.
+- Decision order is strict: verify upstream SHA -> decide pick/drop -> apply (if pick) -> validate -> commit -> update commit log immediately.
 - Keep list below is authoritative; only those paths are eligible for sync.
 - Drop list below is authoritative; never reintroduce dropped paths or platforms.
 - Autotools/Tup are inventory only: do not port into CMake.
 - Preserve REX pruning decisions; do not reintroduce Boost-only subsystems or removed frontends.
 - Preserve REX modernizations that removed deprecated C++ template patterns; do not reintroduce those warning-prone constructs.
+- Release/version commits update only `ROSE_VERSION` and `config/SCM_DATE`, and only for the latest version marker in a completed sync range. Never restore `configure.ac` or `src/frontend/CxxFrontend/EDG_VERSION`.
+- Helper scripts must not leave Python cache files in the source tree. Use a temporary `pycache_prefix` for explicit compile checks.
 - Flang parse-tree snapshots are upstream-generated and may contain host-specific `#line` markers (e.g., `apple-darwin`); keep them unchanged since they are not platform-support code.
 
 ## Root files (keep list + sync status)
@@ -569,26 +573,31 @@ Dropped languages/platforms (any upstream paths related to these are dropped by 
 - PHP, JavaScript, Python, Java, UPC, Ada, Jovial, Matlab, X10, C#, YAML/mini-yaml.
 - Non-Linux platform-specific code or tests.
 
-## Manual sync workflow (no batch processing)
-1) Start from `origin/main` with a clean working tree, then `git fetch rose` to ensure the upstream range is local.
-2) Verify keep/drop lists (and supported languages/platforms) before touching code. Update this doc first if anything changed.
-3) For each top-level directory in the inventory:
-   - Collect the upstream commits that touch the directory (2019-01-01 → 2023-10-26).
-   - Walk the commits in chronological order. For each commit:
-     - Inspect with `git show <commit>`.
-     - Decide pick/drop/pending based on keep/drop lists and REX rules.
-     - If a file contains mixed hunks, apply only the relevant hunks manually (no batch application).
-     - Record the decision immediately in the commit log below.
-   - Mark the directory status as `synced` only after all its commits are handled.
-4) While applying changes:
-   - Never reintroduce dropped subsystems or platforms (EDG, Sawyer, etc.).
-   - Preserve REX C++ modernization work (no deprecated template reintroductions).
-   - Treat Autotools/Tup edits as inventory only (record in notes, do not port).
-5) After each logical chunk (e.g., a directory or feature area), build and spot-check the affected tests if applicable.
-6) When the full sync is complete, run the required validations:
+## Automated per-commit sync workflow
+1) Start from `origin/main` with a clean working tree. Ensure `rose` points at `https://github.com/llnl/rose.git`, disable its push URL, then fetch `rose/weekly`.
+2) Use the repo-local skill and helper scripts:
    ```bash
-   cmake --build build -j32
-   ctest --test-dir build --output-on-failure -R astInterface
-   ctest --test-dir build --output-on-failure -R rex
+   python3 .codex/skills/rose-upstream-sync/scripts/list_pending.py
+   python3 .codex/skills/rose-upstream-sync/scripts/classify_commit.py <upstream-sha>
    ```
-7) Commit the changes with a message referencing the upstream commit(s), update the REX commit column in the log, and proceed to PR.
+3) Walk pending upstream commits in chronological order from the latest recorded upstream SHA in the newest non-empty sync CSV.
+4) For each upstream commit:
+   - inspect with `git show <commit>`;
+   - decide `drop`, `pick`, `pick-partial`, `drop-superseded`, or `already-present`;
+   - apply only retained REX scope;
+   - run `guard_dropped_paths.py --staged` before committing;
+   - validate the touched subsystem;
+   - commit with `Upstream-ROSE`, `Sync-Decision`, and `Sync-Log` trailers;
+   - update the current sync CSV immediately, including the REX commit SHA.
+5) For version-only upstream commits:
+   - record intermediate release bumps as `drop-superseded`;
+   - after the useful sync range is otherwise complete, apply the latest upstream version marker to `ROSE_VERSION` and `config/SCM_DATE`;
+   - run `verify_version.py`;
+   - never restore `configure.ac` or `src/frontend/CxxFrontend/EDG_VERSION`.
+6) When the sync range is complete, run the required validations:
+   ```bash
+   python3 .codex/skills/rose-upstream-sync/scripts/verify_coverage.py --csv docs/upstream-sync/rose-2026-commits.csv
+   cmake --build build -j32
+   ctest --test-dir build --output-on-failure -j32
+   ```
+7) The sync is not complete until `verify_coverage.py` proves every upstream commit in the range has a CSV row, every picked upstream SHA maps to a REX commit, and full CTest passes without regressions.

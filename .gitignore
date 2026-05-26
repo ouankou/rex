@@ -9,6 +9,8 @@
 *.swp
 *.dump2
 *.o
+__pycache__/
+*.py[cod]
 
 # C/C++/Fortran compiled and temporary files
 # Executables

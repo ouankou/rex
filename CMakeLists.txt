@@ -175,6 +175,7 @@ if(NOT EXISTS "${ROSE_SCM_VERSION_FILE}")
   message(FATAL_ERROR "ROSE version file not found: ${ROSE_SCM_VERSION_FILE}")
 endif()
 file(STRINGS ${ROSE_SCM_VERSION_FILE} ROSE_PACKAGE_VERSION LIMIT_COUNT 1)
+string(STRIP "${ROSE_PACKAGE_VERSION}" ROSE_PACKAGE_VERSION)
 
 project(ROSE
   VERSION ${ROSE_PACKAGE_VERSION}
@@ -342,7 +343,8 @@ message(STATUS "ROSE OpenMP version: ${ROSE_OPENMP_VERSION}")
 ########################################################################################################################
 
 # The ROSE version string was already read from ROSE_VERSION file before the project() command.
-# The numerical version is encoded in SCM_DATE as ABBCCCDDDD.
+# REX accepts both the historical four-component ROSE encoding (A.B.C.D -> ABBCCCDDDD)
+# and the newer upstream three-component encoding (A.B.C -> A*10000000 + B*1000 + C).
 set(ROSE_SCM_DATE_FILE "${PROJECT_SOURCE_DIR}/config/SCM_DATE")
 if(NOT EXISTS "${ROSE_SCM_DATE_FILE}")
   message(FATAL_ERROR "ROSE SCM Date file not found: ${ROSE_SCM_DATE_FILE}")
@@ -350,32 +352,54 @@ endif()
 
 file(STRINGS ${ROSE_SCM_VERSION_FILE} ROSE_SCM_VERSION_ID LIMIT_COUNT 1)
 
-# Parse version into components for package configuration
-# Note: PROJECT_VERSION_MAJOR, PROJECT_VERSION_MINOR, etc. are also set by project() command
-string(REGEX MATCH "^([0-9]+)\\.([0-9]+)\\.([0-9]+)\\.([0-9]+)" _version_match "${ROSE_PACKAGE_VERSION}")
+# Parse version into components for package configuration.
+# Note: PROJECT_VERSION_MAJOR, PROJECT_VERSION_MINOR, etc. are also set by project() command.
+string(REGEX MATCH "^([0-9]+)\\.([0-9]+)\\.([0-9]+)(\\.([0-9]+))?$" _version_match "${ROSE_PACKAGE_VERSION}")
 if(NOT _version_match)
   message(FATAL_ERROR "Invalid ROSE version string: ${ROSE_PACKAGE_VERSION}")
 endif()
 set(ROSE_VERSION_MAJOR "${CMAKE_MATCH_1}")
 set(ROSE_VERSION_MINOR "${CMAKE_MATCH_2}")
 set(ROSE_VERSION_PATCH "${CMAKE_MATCH_3}")
-set(ROSE_VERSION_BUILD "${CMAKE_MATCH_4}")
+set(ROSE_VERSION_HAS_BUILD "${CMAKE_MATCH_4}")
+set(ROSE_VERSION_BUILD "${CMAKE_MATCH_5}")
+foreach(_rose_version_component ROSE_VERSION_MAJOR ROSE_VERSION_MINOR ROSE_VERSION_PATCH ROSE_VERSION_BUILD)
+  if(NOT "${${_rose_version_component}}" STREQUAL "")
+    string(REGEX REPLACE "^0+" "" ${_rose_version_component} "${${_rose_version_component}}")
+    if("${${_rose_version_component}}" STREQUAL "")
+      set(${_rose_version_component} 0)
+    endif()
+  endif()
+endforeach()
+unset(_rose_version_component)
 
 # Compute the encoded numeric version and enforce consistency with SCM_DATE.
-if(ROSE_VERSION_MAJOR GREATER 9)
-  message(FATAL_ERROR "ROSE version major component must be < 10: ${ROSE_VERSION_MAJOR}")
+if(NOT "${ROSE_VERSION_HAS_BUILD}" STREQUAL "")
+  if(ROSE_VERSION_MAJOR GREATER 9)
+    message(FATAL_ERROR "ROSE version major component must be < 10: ${ROSE_VERSION_MAJOR}")
+  endif()
+  if(ROSE_VERSION_MINOR GREATER 99)
+    message(FATAL_ERROR "ROSE version minor component must be < 100: ${ROSE_VERSION_MINOR}")
+  endif()
+  if(ROSE_VERSION_PATCH GREATER 999)
+    message(FATAL_ERROR "ROSE version patch component must be < 1000: ${ROSE_VERSION_PATCH}")
+  endif()
+  if(ROSE_VERSION_BUILD GREATER 9999)
+    message(FATAL_ERROR "ROSE version build component must be < 10000: ${ROSE_VERSION_BUILD}")
+  endif()
+  math(EXPR ROSE_VERSION_ENCODED
+    "(((${ROSE_VERSION_MAJOR} * 100 + ${ROSE_VERSION_MINOR}) * 1000 + ${ROSE_VERSION_PATCH}) * 10000 + ${ROSE_VERSION_BUILD})")
+else()
+  set(ROSE_VERSION_BUILD 0)
+  if(ROSE_VERSION_MINOR GREATER 9999)
+    message(FATAL_ERROR "ROSE version minor component must be < 10000: ${ROSE_VERSION_MINOR}")
+  endif()
+  if(ROSE_VERSION_PATCH GREATER 999)
+    message(FATAL_ERROR "ROSE version patch component must be < 1000: ${ROSE_VERSION_PATCH}")
+  endif()
+  math(EXPR ROSE_VERSION_ENCODED
+    "${ROSE_VERSION_MAJOR} * 10000000 + ${ROSE_VERSION_MINOR} * 1000 + ${ROSE_VERSION_PATCH}")
 endif()
-if(ROSE_VERSION_MINOR GREATER 99)
-  message(FATAL_ERROR "ROSE version minor component must be < 100: ${ROSE_VERSION_MINOR}")
-endif()
-if(ROSE_VERSION_PATCH GREATER 999)
-  message(FATAL_ERROR "ROSE version patch component must be < 1000: ${ROSE_VERSION_PATCH}")
-endif()
-if(ROSE_VERSION_BUILD GREATER 9999)
-  message(FATAL_ERROR "ROSE version build component must be < 10000: ${ROSE_VERSION_BUILD}")
-endif()
-math(EXPR ROSE_VERSION_ENCODED
-  "(((${ROSE_VERSION_MAJOR} * 100 + ${ROSE_VERSION_MINOR}) * 1000 + ${ROSE_VERSION_PATCH}) * 10000 + ${ROSE_VERSION_BUILD})")
 
 file(READ ${ROSE_SCM_DATE_FILE} ROSE_VERSION_FROM_SCM_DATE)
 string(STRIP "${ROSE_VERSION_FROM_SCM_DATE}" ROSE_VERSION_FROM_SCM_DATE)
