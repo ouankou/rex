@@ -1150,7 +1150,8 @@ AstInterfaceImpl ::NewMemberFunc(SgClassDeclaration *classDecl,
 AstNodePtr GetFunctionDecl(const AstNodePtr &_s);
 
 std::string AstInterface::GetGlobalUniqueName(const AstNodePtr &_scope,
-                                              std::string expname) {
+                                              std::string expname,
+                                              bool do_not_add_file_name) {
   SgNode *scope = AstNodePtrImpl(_scope).get_ptr();
   assert(scope != 0);
   std::string result = expname;
@@ -1195,13 +1196,18 @@ std::string AstInterface::GetGlobalUniqueName(const AstNodePtr &_scope,
     }
     scope = AstInterfaceImpl::GetScope(scope);
   }
-  if (scopename == "main") {
-    std::string filename = scope->get_file_info()->get_filenameString();
-    auto location = filename.rfind("/");
-    if (location < filename.size()) {
-      filename = filename.substr(location + 1);
+  if (!do_not_add_file_name) {
+    if (scopename == "main" ||
+        CmdOptions::GetInstance()->HasOption("-global_via_filename")) {
+      std::string filename = scope->get_file_info()->get_filenameString();
+      auto location = filename.rfind("/");
+      if (location < filename.size()) {
+        filename = filename.substr(location + 1);
+      }
+      if (result.find(filename) >= result.size()) {
+        result = filename + "::" + result;
+      }
     }
-    result = filename + "::" + result;
   }
   result.erase(std::remove_if(result.begin(), result.end(), ::isspace),
                result.end());
@@ -1218,22 +1224,45 @@ bool AstInterface::IsExprStmt(const AstNodePtr &n, AstNodePtr *exp) {
 }
 
 std::string AstInterface::toString(OperatorEnum op) {
-  const char *nameList[] = {"OP_NONE",        "UOP_MINUS",
-                            "UOP_ADDR",       "UOP_DEREF",
-                            "UOP_ALLOCATE",   "UOP_NOT",
-                            "UOP_CAST",       "UOP_INCR1",
-                            "UOP_DECR1",      "UOP_BIT_COMPLEMENT",
-                            "BOP_DOT_ACCESS", "BOP_ARROW_ACCESS",
-                            "BOP_TIMES",      "BOP_DIVIDE",
-                            "BOP_MOD",        "BOP_PLUS",
-                            "BOP_MINUS",      "BOP_EQ",
-                            "BOP_LE",         "BOP_LT",
-                            "BOP_NE",         "BOP_GT",
-                            "BOP_GE",         "BOP_AND",
-                            "BOP_OR",         "BOP_BIT_AND",
-                            "BOP_BIT_OR",     "BOP_BIT_RSHIFT",
-                            "BOP_BIT_LSHIFT", "OP_ARRAY_ACCESS",
-                            "OP_ASSIGN",      "OP_UNKNOWN"};
+  const char *nameList[] = {"OP_NONE",
+                            "UOP_MINUS",
+                            "UOP_ADDR",
+                            "UOP_DEREF",
+                            "UOP_ALLOCATE",
+                            "UOP_NOT",
+                            "UOP_CAST_C",
+                            "UOP_CAST_CONST",
+                            "UOP_CAST_STATIC",
+                            "UOP_CAST_DYNAMIC",
+                            "UOP_CAST_REINTERP",
+                            "UOP_CAST_SAFE",
+                            "UOP_INCR1",
+                            "UOP_INCR1_POST",
+                            "UOP_DECR1",
+                            "UOP_DECR1_POST",
+                            "UOP_BIT_COMPLEMENT",
+                            "BOP_DOT_ACCESS",
+                            "BOP_ARROW_ACCESS",
+                            "BOP_TIMES",
+                            "BOP_DIVIDE",
+                            "BOP_MOD",
+                            "BOP_PLUS",
+                            "BOP_MINUS",
+                            "BOP_EQ",
+                            "BOP_LE",
+                            "BOP_LT",
+                            "BOP_NE",
+                            "BOP_GT",
+                            "BOP_GE",
+                            "BOP_AND",
+                            "BOP_OR",
+                            "BOP_BIT_AND",
+                            "BOP_BIT_OR",
+                            "BOP_BIT_RSHIFT",
+                            "BOP_BIT_LSHIFT",
+                            "OP_ARRAY_ACCESS",
+                            "OP_ASSIGN",
+                            "OP_UNKNOWN"};
   return std::string(nameList[op]);
 }
 
@@ -1597,6 +1626,7 @@ AstNodePtr GetFunctionDecl(const AstNodePtr &_s) {
     return AstNodePtrImpl(isSgTemplateFunctionDefinition(s)->get_declaration());
   case V_SgFunctionDeclaration:
   case V_SgMemberFunctionDeclaration:
+  case V_SgTemplateMemberFunctionDeclaration:
     return _s;
   case V_SgMemberFunctionRefExp:
     return AstNodePtrImpl(
@@ -2151,7 +2181,7 @@ bool AstInterfaceImpl::IsVarRef(SgNode *exp, SgType **vartype,
         *has_ptr_deref = true;
       }
       if (varname != 0) {
-        (*varname) = "*" + (*varname);
+        (*varname) = "_deref_" + (*varname);
       }
       if (vartype != 0) {
         SgPointerType *ptype =
@@ -2909,20 +2939,47 @@ bool AstInterface::IsUnaryOp(const AstNodePtr &_exp, OperatorEnum *opr,
       *opd = AstNodePtrImpl(isSgNewExp(exp)->get_constructor_args());
     return true;
   case V_SgCastExp:
-    if (opr != 0)
-      *opr = UOP_CAST;
+    if (opr != 0) {
+      switch (isSgCastExp(exp)->cast_type()) {
+      case SgCastExp::cast_type_enum::e_C_style_cast:
+        *opr = UOP_CAST_C;
+        break;
+      case SgCastExp::cast_type_enum::e_const_cast:
+        *opr = UOP_CAST_CONST;
+        break;
+      case SgCastExp::cast_type_enum::e_static_cast:
+        *opr = UOP_CAST_STATIC;
+        break;
+      case SgCastExp::cast_type_enum::e_dynamic_cast:
+        *opr = UOP_CAST_DYNAMIC;
+        break;
+      case SgCastExp::cast_type_enum::e_reinterpret_cast:
+        *opr = UOP_CAST_REINTERP;
+        break;
+      case SgCastExp::cast_type_enum::e_safe_cast:
+        *opr = UOP_CAST_SAFE;
+        break;
+      default:
+        std::cerr << "Error: unexpected type cast enum.\n";
+        ROSE_ABORT();
+      }
+    }
     if (opd != 0)
       *opd = AstNodePtrImpl(isSgCastExp(exp)->get_operand());
     return true;
   case V_SgMinusMinusOp:
     if (opr != 0)
-      *opr = UOP_DECR1;
+      *opr = (isSgMinusMinusOp(exp)->get_mode() == SgUnaryOp::Sgop_mode::prefix)
+                 ? UOP_DECR1
+                 : UOP_DECR1_POST;
     if (opd != 0)
       *opd = AstNodePtrImpl(isSgMinusMinusOp(exp)->get_operand());
     return true;
   case V_SgPlusPlusOp:
     if (opr != 0)
-      *opr = UOP_INCR1;
+      *opr = (isSgPlusPlusOp(exp)->get_mode() == SgUnaryOp::Sgop_mode::prefix)
+                 ? UOP_INCR1
+                 : UOP_INCR1_POST;
     if (opd != 0)
       *opd = AstNodePtrImpl(isSgPlusPlusOp(exp)->get_operand());
     return true;
@@ -3333,7 +3390,7 @@ void AstInterfaceImpl::GetTypeInfo(SgType *t, std::string *tname,
       GetTypeInfo(pointer_type->get_base_type(), tname, stripname, size,
                   use_global_name);
       if (tname != 0) {
-        *tname = (*tname) + "*";
+        *tname = (*tname) + "_ptr_";
       }
       return;
     }
@@ -3346,7 +3403,9 @@ void AstInterfaceImpl::GetTypeInfo(SgType *t, std::string *tname,
     if (insDecl) {
       typeName = insDecl->get_templateDeclaration()->get_qualified_name();
     } else if (use_global_name) {
-      typeName = AstInterface::GetGlobalUniqueName(decl, typeName);
+      typeName =
+          AstInterface::GetGlobalUniqueName(decl, typeName,
+                                            /*do_not_add_file_name=*/true);
     }
   }
 
@@ -3354,8 +3413,12 @@ void AstInterfaceImpl::GetTypeInfo(SgType *t, std::string *tname,
   std::string result = "";
   for (size_t i = 0; i < r1.size(); ++i) {
     if (r1[i] == '[' || r1[i] == ']' || r1[i] == '{' || r1[i] == '}' ||
-        r1[i] == ',') {
+        r1[i] == ',' || r1[i] == '.') {
       result.push_back('_');
+    } else if (r1[i] == '&') {
+      result += "_ref_";
+    } else if (r1[i] == '*') {
+      result += "_deref_";
     } else if (r1[i] != ' ')
       result.push_back(r1[i]);
     else if (i + 2 < r1.size() && r1[i + 1] == ':' && r1[i + 2] == ':') {
@@ -4133,7 +4196,12 @@ AstNodePtr AstInterface::CreateUnaryOP(OperatorEnum op, const AstNodePtr &_a0) {
   case UOP_DEREF:
     result = new SgPointerDerefExp(GetFileInfo(), e, e->get_type());
     break;
-  case UOP_CAST:
+  case UOP_CAST_C:
+  case UOP_CAST_CONST:
+  case UOP_CAST_STATIC:
+  case UOP_CAST_DYNAMIC:
+  case UOP_CAST_REINTERP:
+  case UOP_CAST_SAFE:
     result = new SgCastExp(GetFileInfo(), e, e->get_type());
     break;
   default:
@@ -4899,9 +4967,17 @@ std::string AstInterface::GetVariableSignature(const AstNodePtr &_variable) {
     return "typedef_" +
            AstInterface::GetGlobalUniqueName(
                variable->get_parent(),
-               isSgTypedefDeclaration(variable)->get_name().getString());
+               isSgTypedefDeclaration(variable)->get_name().getString(),
+               /*do_not_add_file_name=*/true);
   case V_SgStaticAssertionDeclaration:
     return OperatorDeclaration::operator_signature(fa, variable);
+  case V_SgClassDefinition:
+    return GetVariableSignature(
+        isSgClassDefinition(variable)->get_declaration());
+  case V_SgClassDeclaration:
+  case V_SgTemplateClassDeclaration:
+    return "class_" +
+           std::string(isSgClassDeclaration(variable)->get_name().str());
   default:
     break;
   }
@@ -4942,7 +5018,8 @@ std::string AstInterface::GetVariableSignature(const AstNodePtr &_variable) {
     AstNodeType alloc_type;
     if (IsMemoryAllocation(variable, &alloc_type)) {
       return res + "new_" +
-             GetGlobalUniqueName(variable, GetTypeName(alloc_type));
+             GetGlobalUniqueName(variable, GetTypeName(alloc_type),
+                                 /*do_not_add_file_name=*/true);
     }
   }
   {
