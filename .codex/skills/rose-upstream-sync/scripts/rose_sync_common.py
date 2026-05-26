@@ -77,6 +77,7 @@ def run_git(args: list[str], repo: Path = Path("."), check: bool = True) -> str:
         ["git", *args],
         cwd=repo,
         text=True,
+        errors="replace",
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         check=False,
