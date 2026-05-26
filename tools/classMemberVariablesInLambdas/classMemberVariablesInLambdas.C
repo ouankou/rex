@@ -1,110 +1,93 @@
 // Author: Dan Quinlan
 
-// Example program to report use of class member variables in lambda capture list.
-// It is using the InheritedAttribute and SynthesizedAttribute to permit the next version 
-// to support the required transformation to fix the problem that this current version 
-// only detects.
+// Example program to report use of class member variables in lambda capture
+// list. It is using the InheritedAttribute and SynthesizedAttribute to permit
+// the next version to support the required transformation to fix the problem
+// that this current version only detects.
 
 #include "rose.h"
 
 // Inherited attribute (see ROSE Tutorial (Chapter 9)).
-class InheritedAttribute
-   {
-     public:
-          InheritedAttribute();
-   };
+struct InheritedAttribute {
+  InheritedAttribute();
+};
 
 // Constructor (not really needed)
-InheritedAttribute::InheritedAttribute()
-   {
-   }
+InheritedAttribute::InheritedAttribute() {}
 
 // Synthesized attribute (see ROSE Tutorial (Chapter 9)).
-class SynthesizedAttribute
-   {
-     public:
-          SynthesizedAttribute();
-   };
+struct SynthesizedAttribute {
+  SynthesizedAttribute();
+};
 
 // Constructor
-SynthesizedAttribute::SynthesizedAttribute()
-   {
-   }
+SynthesizedAttribute::SynthesizedAttribute() {}
 
-class Traversal : public SgTopDownBottomUpProcessing<InheritedAttribute,SynthesizedAttribute>
-   {
-     public:
-          Traversal();
+struct Traversal : public SgTopDownBottomUpProcessing<InheritedAttribute,
+                                                      SynthesizedAttribute> {
+  Traversal();
 
-       // Functions required
-          InheritedAttribute   evaluateInheritedAttribute   ( SgNode* astNode, InheritedAttribute inheritedAttribute );
-          SynthesizedAttribute evaluateSynthesizedAttribute ( SgNode* astNode, InheritedAttribute inheritedAttribute, SubTreeSynthesizedAttributes synthesizedAttributeList );
-   };
-
+  // Functions required
+  InheritedAttribute
+  evaluateInheritedAttribute(SgNode *astNode,
+                             InheritedAttribute inheritedAttribute);
+  SynthesizedAttribute evaluateSynthesizedAttribute(
+      SgNode *astNode, InheritedAttribute inheritedAttribute,
+      SubTreeSynthesizedAttributes synthesizedAttributeList);
+};
 
 InheritedAttribute
-Traversal::evaluateInheritedAttribute ( SgNode* astNode, InheritedAttribute inheritedAttribute )
-   {
-     SgLambdaCapture* lambdaCapture = isSgLambdaCapture(astNode);
-     if (lambdaCapture != NULL)
-        {
-          SgExpression* captureVariable = lambdaCapture->get_capture_variable();
-          if (captureVariable != NULL)
-             {
-               SgThisExp* thisExp = isSgThisExp(captureVariable);
-               if (thisExp != NULL)
-                  {
-                    printf ("Identified use of C++ \"this\" expression in lambda capture list: \n");
+Traversal::evaluateInheritedAttribute(SgNode *astNode,
+                                      InheritedAttribute inheritedAttribute) {
+  SgLambdaCapture *lambdaCapture = isSgLambdaCapture(astNode);
+  if (lambdaCapture != nullptr) {
+    SgExpression *captureVariable = lambdaCapture->get_capture_variable();
+    if (captureVariable != nullptr) {
+      if (isSgThisExp(captureVariable) != nullptr) {
+        printf("Identified use of C++ \"this\" expression in lambda capture "
+               "list: \n");
 
-                    std::string filename  = lambdaCapture->get_file_info()->get_filenameString();
-                    int lineNumber   = lambdaCapture->get_file_info()->get_line();
-                    int columnNumber = lambdaCapture->get_file_info()->get_col();
+        std::string filename =
+            lambdaCapture->get_file_info()->get_filenameString();
+        int lineNumber = lambdaCapture->get_file_info()->get_line();
+        int columnNumber = lambdaCapture->get_file_info()->get_col();
 
-                    printf ("   --- location: \n");
-                    printf ("   --- --- file = %s \n",filename.c_str());
-                    printf ("   --- --- line = %d column = %d \n",lineNumber,columnNumber);
-                  }
-             }
-        }
+        printf("   --- location: \n");
+        printf("   --- --- file = %s \n", filename.c_str());
+        printf("   --- --- line = %d column = %d \n", lineNumber, columnNumber);
+      }
+    }
+  }
 
   // This will call the default copy constructor for InheritedAttribute.
-     return inheritedAttribute;
-   }
+  return inheritedAttribute;
+}
 
+SynthesizedAttribute Traversal::evaluateSynthesizedAttribute(
+    SgNode * /*astNode*/, InheritedAttribute /*inheritedAttribute*/,
+    SynthesizedAttributesList /*childAttributes*/) {
+  return SynthesizedAttribute{};
+}
 
-SynthesizedAttribute
-Traversal::evaluateSynthesizedAttribute ( SgNode* astNode, InheritedAttribute inheritedAttribute, SynthesizedAttributesList childAttributes )
-   {
-     SynthesizedAttribute localResult;
+Traversal::Traversal() {}
 
-  // printf ("evaluateSynthesizedAttribute(): astNode = %p = %s \n",astNode,astNode->class_name().c_str());
-
-     return localResult;
-   }
-
-
-Traversal::Traversal()
-   {
-   }
-
-int
-main ( int argc, char* argv[] )
-   {
+int main(int argc, char *argv[]) {
   // Get the command line so that we can add an option.
-     std::vector<std::string> commandLine = CommandlineProcessing::generateArgListFromArgcArgv(argc, argv);
+  std::vector<std::string> commandLine =
+      CommandlineProcessing::generateArgListFromArgcArgv(argc, argv);
 
-     SgProject* project = frontend(commandLine);
-     ROSE_ASSERT (project != NULL);
+  SgProject *project = frontend(commandLine);
+  ASSERT_not_null(project);
 
   // Build the inherited attribute
-     InheritedAttribute inheritedAttribute;
+  InheritedAttribute inheritedAttribute;
 
   // Define the traversal
-     Traversal astTraversal;
+  Traversal astTraversal;
 
   // Call the traversal starting at the project (root) node of the AST
-     astTraversal.traverseInputFiles(project,inheritedAttribute);
+  astTraversal.traverseInputFiles(project, inheritedAttribute);
 
   // This tool only does analysis so we can compile the original source code.
-     return backendCompilesUsingOriginalInputFile(project);
-   }
+  return backendCompilesUsingOriginalInputFile(project);
+}
