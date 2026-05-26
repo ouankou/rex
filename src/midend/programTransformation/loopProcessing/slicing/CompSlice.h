@@ -118,7 +118,7 @@ public:
       Attach();
     }
     UpdateLoopIterator(const CompSlice::UpdateLoopIterator &that)
-        : ConstLoopIterator(that) {
+        : LoopTreeObserver(), ConstLoopIterator(that) {
       Attach();
     }
     ~UpdateLoopIterator() { Detach(); }
