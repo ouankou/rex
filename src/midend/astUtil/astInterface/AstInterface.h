@@ -400,7 +400,9 @@ public:
   bool IsIOOutputStmt(const AstNodePtr &s, AstList *explist = 0);
 
   bool IsAddressOfOp(const AstNodePtr &_s);
-  static bool IsMemoryAccess(const AstNodePtr &s);
+  // Returns whether s references memory stores and appends concrete stores to
+  // subrefs when provided.
+  static bool IsMemoryAccess(const AstNodePtr &s, AstNodeList *subrefs = 0);
   static bool IsMemoryAllocation(const AstNodePtr &s,
                                  AstNodeType *allocType = 0,
                                  AstNodePtr *init = 0);
