@@ -205,9 +205,16 @@ public:
     UOP_DEREF,
     UOP_ALLOCATE,
     UOP_NOT,
-    UOP_CAST,
+    UOP_CAST_C,
+    UOP_CAST_CONST,
+    UOP_CAST_STATIC,
+    UOP_CAST_DYNAMIC,
+    UOP_CAST_REINTERP,
+    UOP_CAST_SAFE,
     UOP_INCR1,
+    UOP_INCR1_POST,
     UOP_DECR1,
+    UOP_DECR1_POST,
     UOP_BIT_COMPLEMENT,
     BOP_DOT_ACCESS,
     BOP_ARROW_ACCESS,
@@ -415,7 +422,8 @@ public:
   AstNodePtr CreateConstant(const std::string &valtype, const std::string &val);
 
   static std::string GetGlobalUniqueName(const AstNodePtr &exp,
-                                         std::string expname);
+                                         std::string expname,
+                                         bool do_not_add_file_name = false);
   //! If there is a case, extract the operand and return it, otherwise return
   //! exp
   static SgNode *SkipCasting(SgNode *exp);
