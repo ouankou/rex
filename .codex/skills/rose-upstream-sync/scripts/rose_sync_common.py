@@ -67,9 +67,7 @@ DROPPED_PATH_PATTERNS = [
     "src/frontend/PHPFrontend/*",
     "src/frontend/PythonFrontend/*",
     "src/frontend/X10_ROSE_Connection/*",
-    "src/3rdPartyLibraries/MSTL/*",
-    "src/3rdPartyLibraries/fortran-parser/*",
-    "src/3rdPartyLibraries/qrose/*",
+    "src/3rdPartyLibraries/*",
     "tools/BinaryAnalysis/*",
     "tools/CodeThorn/*",
 ]

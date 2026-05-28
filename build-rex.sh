@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# REX Build Script with Clang Frontend (LLVM 22)
+# REX Build Script with Clang Frontend
 # This script automates the build process for REX compiler
 # with the experimental Clang frontend enabled.
 #
@@ -23,6 +23,11 @@ NC='\033[0m' # No Color
 INSTALL_PREFIX="${1:-$HOME/rex-install}"
 BUILD_TYPE="${2:-RelWithDebInfo}"
 BUILD_DIR="build"
+LLVM_REQUIRED_MAJOR="${LLVM_REQUIRED_MAJOR:-22}"
+if ! [[ "$LLVM_REQUIRED_MAJOR" =~ ^[0-9]+$ ]]; then
+    echo -e "${RED}Error: LLVM_REQUIRED_MAJOR must be a numeric major version, got '$LLVM_REQUIRED_MAJOR'.${NC}"
+    exit 1
+fi
 NUM_JOBS="${NUM_JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
 if ! [[ "$NUM_JOBS" =~ ^[0-9]+$ ]] || [ "$NUM_JOBS" -lt 1 ]; then
     NUM_JOBS=4
@@ -124,13 +129,13 @@ find_llvm_config() {
     local root
     for root in "${candidate_roots[@]}"; do
         append_candidate "$root/bin/llvm-config"
-        append_candidate "$root/bin/llvm-config-22"
+        append_candidate "$root/bin/llvm-config-$LLVM_REQUIRED_MAJOR"
     done
     if command -v llvm-config >/dev/null 2>&1; then
         append_candidate "$(command -v llvm-config)"
     fi
-    if command -v llvm-config-22 >/dev/null 2>&1; then
-        append_candidate "$(command -v llvm-config-22)"
+    if command -v "llvm-config-$LLVM_REQUIRED_MAJOR" >/dev/null 2>&1; then
+        append_candidate "$(command -v "llvm-config-$LLVM_REQUIRED_MAJOR")"
     fi
 
     local seen=""
@@ -144,11 +149,11 @@ find_llvm_config() {
         version=$("$candidate" --version 2>/dev/null || true)
         major=$(echo "$version" | sed -nE 's/^([0-9]+).*/\1/p')
         bindir=$("$candidate" --bindir 2>/dev/null || true)
-        if [ -n "$major" ] && [ "$major" -ge 22 ] &&
+        if [ -n "$major" ] && [ "$major" -ge "$LLVM_REQUIRED_MAJOR" ] &&
            [ -n "$bindir" ] &&
            [ -x "$bindir/llvm-ar" ] &&
-           [ -x "$(find_first_executable "$bindir" clang-22 clang || true)" ] &&
-           [ -x "$(find_first_executable "$bindir" clang++-22 clang++ || true)" ]; then
+           [ -x "$(find_first_executable "$bindir" "clang-$LLVM_REQUIRED_MAJOR" clang || true)" ] &&
+           [ -x "$(find_first_executable "$bindir" "clang++-$LLVM_REQUIRED_MAJOR" clang++ || true)" ]; then
             printf '%s\n' "$candidate"
             return 0
         fi
@@ -190,21 +195,21 @@ echo ""
 echo -e "${YELLOW}[2/5] Checking for LLVM/Clang installation...${NC}"
 LLVM_CONFIG_CMD="$(find_llvm_config || true)"
 if [ -z "$LLVM_CONFIG_CMD" ]; then
-    echo -e "${RED}Error: llvm-config not found. Please install LLVM/Clang 22 or later.${NC}"
-    echo "On Ubuntu/Debian: sudo apt-get install llvm-22 clang-22 libclang-22-dev"
+    echo -e "${RED}Error: llvm-config not found. Please install LLVM/Clang $LLVM_REQUIRED_MAJOR or later.${NC}"
+    echo "On Ubuntu/Debian: sudo apt-get install llvm-$LLVM_REQUIRED_MAJOR clang-$LLVM_REQUIRED_MAJOR libclang-$LLVM_REQUIRED_MAJOR-dev lld-$LLVM_REQUIRED_MAJOR mold"
     exit 1
 fi
 
 LLVM_VERSION=$($LLVM_CONFIG_CMD --version)
 LLVM_MAJOR=$(echo "$LLVM_VERSION" | sed -nE 's/^([0-9]+).*/\1/p')
-if [ -z "$LLVM_MAJOR" ] || [ "$LLVM_MAJOR" -lt 22 ]; then
-    echo -e "${RED}Error: detected LLVM version $LLVM_VERSION using '$LLVM_CONFIG_CMD'. REX requires LLVM/Clang 22 or later.${NC}"
+if [ -z "$LLVM_MAJOR" ] || [ "$LLVM_MAJOR" -lt "$LLVM_REQUIRED_MAJOR" ]; then
+    echo -e "${RED}Error: detected LLVM version $LLVM_VERSION using '$LLVM_CONFIG_CMD'. REX requires LLVM/Clang $LLVM_REQUIRED_MAJOR or later.${NC}"
     exit 1
 fi
 LLVM_BINDIR=$($LLVM_CONFIG_CMD --bindir)
 LLVM_PREFIX=$($LLVM_CONFIG_CMD --prefix)
-AUTO_C_COMPILER="$(find_first_executable "$LLVM_BINDIR" clang-22 clang || true)"
-AUTO_CXX_COMPILER="$(find_first_executable "$LLVM_BINDIR" clang++-22 clang++ || true)"
+AUTO_C_COMPILER="$(find_first_executable "$LLVM_BINDIR" "clang-$LLVM_REQUIRED_MAJOR" clang || true)"
+AUTO_CXX_COMPILER="$(find_first_executable "$LLVM_BINDIR" "clang++-$LLVM_REQUIRED_MAJOR" clang++ || true)"
 AUTO_LLVM_AR="$(find_first_executable "$LLVM_BINDIR" llvm-ar || true)"
 AUTO_LLVM_RANLIB="$(find_first_executable "$LLVM_BINDIR" llvm-ranlib || true)"
 AUTO_LLVM_NM="$(find_first_executable "$LLVM_BINDIR" llvm-nm || true)"
@@ -212,7 +217,7 @@ AUTO_LLVM_OBJCOPY="$(find_first_executable "$LLVM_BINDIR" llvm-objcopy || true)"
 AUTO_LLVM_OBJDUMP="$(find_first_executable "$LLVM_BINDIR" llvm-objdump || true)"
 AUTO_LLVM_READELF="$(find_first_executable "$LLVM_BINDIR" llvm-readelf || true)"
 AUTO_LLVM_STRIP="$(find_first_executable "$LLVM_BINDIR" llvm-strip || true)"
-AUTO_LINKER="$(find_first_executable "$LLVM_BINDIR" ld.lld lld || true)"
+AUTO_LLD_LINKER="$(find_first_executable "$LLVM_BINDIR" ld.lld lld || true)"
 
 if [ -z "$AUTO_C_COMPILER" ] || [ -z "$AUTO_CXX_COMPILER" ]; then
     echo -e "${RED}Error: coherent Clang compiler pair not found under $LLVM_BINDIR.${NC}"
@@ -236,6 +241,67 @@ echo "C++ compiler:   ${CXX:-$AUTO_CXX_COMPILER}"
 echo "Archiver:       $AUTO_LLVM_AR"
 echo "Ranlib:         $AUTO_LLVM_RANLIB"
 
+SELECTED_LINKER=""
+SELECTED_LINKER_DRIVER_FLAG=""
+REX_LINKER="${REX_LINKER:-auto}"
+
+case "$REX_LINKER" in
+    auto)
+        if [ -n "$AUTO_LLD_LINKER" ]; then
+            SELECTED_LINKER="$AUTO_LLD_LINKER"
+        # mold 2.41 misrelaxes LoongArch GOT loads; do not auto-select it there.
+        elif [ "$(uname -m)" != "loongarch64" ] && command -v mold >/dev/null 2>&1; then
+            SELECTED_LINKER="$(command -v mold)"
+        elif command -v mold >/dev/null 2>&1; then
+            echo -e "${YELLOW}ld.lld not found; mold is available but skipped on loongarch64.${NC}"
+            echo -e "${YELLOW}Using the system default linker.${NC}"
+        else
+            echo -e "${YELLOW}ld.lld and mold not found; using the system default linker.${NC}"
+        fi
+        ;;
+    system|none)
+        echo "Linker:         system default"
+        ;;
+    lld)
+        if [ -n "$AUTO_LLD_LINKER" ]; then
+            SELECTED_LINKER="$AUTO_LLD_LINKER"
+        else
+            echo -e "${RED}Error: REX_LINKER=lld was requested, but ld.lld was not found under $LLVM_BINDIR.${NC}"
+            exit 1
+        fi
+        ;;
+    mold)
+        if command -v mold >/dev/null 2>&1; then
+            SELECTED_LINKER="$(command -v mold)"
+        else
+            echo -e "${RED}Error: REX_LINKER=mold was requested, but mold was not found in PATH.${NC}"
+            exit 1
+        fi
+        ;;
+    *)
+        echo -e "${RED}Error: unsupported REX_LINKER='$REX_LINKER'. Use auto, mold, lld, or system.${NC}"
+        exit 1
+        ;;
+esac
+
+if [ -n "$SELECTED_LINKER" ]; then
+    SELECTED_LINKER_DRIVER_FLAG="-fuse-ld=$SELECTED_LINKER"
+    echo "Linker:         $SELECTED_LINKER"
+fi
+
+CMAKE_GENERATOR_ARGS=()
+if [ -n "${REX_CMAKE_GENERATOR:-}" ]; then
+    CMAKE_GENERATOR_ARGS=(-G "$REX_CMAKE_GENERATOR")
+elif command -v ninja >/dev/null 2>&1; then
+    CMAKE_GENERATOR_ARGS=(-G Ninja)
+fi
+
+if [ "${#CMAKE_GENERATOR_ARGS[@]}" -gt 0 ]; then
+    echo "CMake generator: ${CMAKE_GENERATOR_ARGS[1]}"
+else
+    echo "CMake generator: CMake default"
+fi
+
 ENABLE_FORTRAN_CMAKE=ON
 ENABLE_FORTRAN_FLANG_CMAKE=ON
 RESOLVED_FLANG_ROOT="${FLANG_ROOT:-$LLVM_PREFIX}"
@@ -253,7 +319,7 @@ else
     RESOLVED_FLANG_ROOT=""
     echo -e "${YELLOW}Flang libraries not found under $LLVM_PREFIX.${NC}"
     echo "Fortran support will be disabled for this build."
-    echo "Set FLANG_ROOT to an LLVM 22 installation with libFortran* libraries to enable Fortran."
+    echo "Set FLANG_ROOT to an LLVM $LLVM_REQUIRED_MAJOR installation with libFortran* libraries to enable Fortran."
 fi
 
 echo "Fortran support: ${ENABLE_FORTRAN_CMAKE}"
@@ -282,6 +348,7 @@ CMAKE_ARGS=(
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
     -DLLVM_ROOT="$LLVM_PREFIX"
     -DClang_ROOT="$LLVM_PREFIX"
+    -DLLVM_REQUIRED_MAJOR="$LLVM_REQUIRED_MAJOR"
     -DCMAKE_AR="$AUTO_LLVM_AR"
     -DCMAKE_RANLIB="$AUTO_LLVM_RANLIB"
     -DCMAKE_C_COMPILER_AR="$AUTO_LLVM_AR"
@@ -310,8 +377,13 @@ if [ -n "$AUTO_LLVM_STRIP" ]; then
     CMAKE_ARGS+=(-DCMAKE_STRIP="$AUTO_LLVM_STRIP")
 fi
 
-if [ -n "$AUTO_LINKER" ]; then
-    CMAKE_ARGS+=(-DCMAKE_LINKER="$AUTO_LINKER")
+if [ -n "$SELECTED_LINKER" ]; then
+    CMAKE_ARGS+=(
+        -DCMAKE_LINKER="$SELECTED_LINKER"
+        -DCMAKE_EXE_LINKER_FLAGS_INIT="$SELECTED_LINKER_DRIVER_FLAG"
+        -DCMAKE_SHARED_LINKER_FLAGS_INIT="$SELECTED_LINKER_DRIVER_FLAG"
+        -DCMAKE_MODULE_LINKER_FLAGS_INIT="$SELECTED_LINKER_DRIVER_FLAG"
+    )
 fi
 
 if [ -n "$RESOLVED_FLANG_ROOT" ]; then
@@ -327,7 +399,7 @@ else
     echo "Respecting explicit compiler environment: CC=${CC:-<unset>} CXX=${CXX:-<unset>}"
 fi
 
-cmake .. "${CMAKE_ARGS[@]}"
+cmake "${CMAKE_GENERATOR_ARGS[@]}" .. "${CMAKE_ARGS[@]}"
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}CMake configuration failed!${NC}"

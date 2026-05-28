@@ -19,6 +19,7 @@ RUN apt-get update \
       ghostscript \
       git \
       graphviz \
+      lld-${LLVM_VERSION} \
       libantlr4-runtime-dev \
       libclang-${LLVM_VERSION}-dev \
       libclang-cpp${LLVM_VERSION}-dev \
@@ -29,6 +30,7 @@ RUN apt-get update \
       lldb-${LLVM_VERSION} \
       llvm-${LLVM_VERSION} \
       llvm-${LLVM_VERSION}-dev \
+      mold \
       openjdk-21-jdk-headless \
       pkg-config \
     && rm -rf /var/lib/apt/lists/*

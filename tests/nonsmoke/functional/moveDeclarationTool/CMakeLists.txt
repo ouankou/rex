@@ -271,9 +271,14 @@ include_directories(
   ${CMAKE_SOURCE_DIR}/src/midend/programTransformation/transformationTracking
 )
 
-add_executable(moveDeclarationToInnermostScope
-  ${CMAKE_SOURCE_DIR}/tools/moveDeclarationToInnermostScope.C)
-target_link_libraries(moveDeclarationToInnermostScope ROSE_DLL ${link_with_libraries})
+if(TARGET tools_moveDeclarationToInnermostScope_exe)
+  set(_move_decl_tool_target tools_moveDeclarationToInnermostScope_exe)
+else()
+  add_executable(moveDeclarationToInnermostScope_test_tool
+    ${CMAKE_SOURCE_DIR}/tools/moveDeclarationToInnermostScope.C)
+  target_link_libraries(moveDeclarationToInnermostScope_test_tool ROSE_DLL ${link_with_libraries})
+  set(_move_decl_tool_target moveDeclarationToInnermostScope_test_tool)
+endif()
 
 set(_reference_root
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/moveDeclarationTool/referenceResults)
@@ -301,7 +306,7 @@ foreach(specimen IN LISTS MOVE_DECLS_TESTCODES_ALL)
   add_test(
     NAME moveDecl_v1_${_name}
     WORKING_DIRECTORY ${_move_output_dir}
-    COMMAND $<TARGET_FILE:moveDeclarationToInnermostScope>
+    COMMAND $<TARGET_FILE:${_move_decl_tool_target}>
       ${_move_flags}
       -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}
       -rose:output ${_output_v1_path}
@@ -318,7 +323,7 @@ foreach(specimen IN LISTS MOVE_DECLS_TESTCODES_ALL)
   add_test(
     NAME moveDecl_v2_${_name}
     WORKING_DIRECTORY ${_move_output_dir}
-    COMMAND $<TARGET_FILE:moveDeclarationToInnermostScope>
+    COMMAND $<TARGET_FILE:${_move_decl_tool_target}>
       ${_move_flags}
       -rose:merge_decl_assign
       -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}
@@ -336,7 +341,7 @@ foreach(specimen IN LISTS MOVE_DECLS_TESTCODES_ALL)
   add_test(
     NAME moveDecl_v3_${_name}
     WORKING_DIRECTORY ${_move_output_dir}
-    COMMAND $<TARGET_FILE:moveDeclarationToInnermostScope>
+    COMMAND $<TARGET_FILE:${_move_decl_tool_target}>
       ${_move_flags}
       -rose:merge_decl_assign
       -rose:suppress_variable_declaration_normalization
@@ -364,7 +369,7 @@ foreach(specimen IN LISTS MOVE_DECLS_TESTCODES_WITH_TOKEN_UNPARSING_ALL)
   add_test(
     NAME moveDecl_token_${_name}
     WORKING_DIRECTORY ${_move_output_dir}
-    COMMAND $<TARGET_FILE:moveDeclarationToInnermostScope>
+    COMMAND $<TARGET_FILE:${_move_decl_tool_target}>
       ${_move_flags}
       -rose:unparse_tokens
       -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}
@@ -374,7 +379,7 @@ foreach(specimen IN LISTS MOVE_DECLS_TESTCODES_WITH_TOKEN_UNPARSING_ALL)
   add_test(
     NAME moveDecl_token_v2_${_name}
     WORKING_DIRECTORY ${_move_output_dir}
-    COMMAND $<TARGET_FILE:moveDeclarationToInnermostScope>
+    COMMAND $<TARGET_FILE:${_move_decl_tool_target}>
       ${_move_flags}
       -rose:unparse_tokens
       -rose:merge_decl_assign

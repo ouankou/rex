@@ -43,6 +43,7 @@ jobs:
             cmake \
             curl \
             flex \
+            lld-${LLVM_VERSION} \
             libflang-${LLVM_VERSION}-dev \
             libclang-${LLVM_VERSION}-dev \
             libomp-${LLVM_VERSION}-dev \
@@ -50,6 +51,7 @@ jobs:
             libhpdf-dev \
             llvm-${LLVM_VERSION} \
             llvm-${LLVM_VERSION}-dev \
+            mold \
             perl \
             asciidoctor \
             pkg-config

@@ -34,6 +34,11 @@
 
 cmake_minimum_required(VERSION 3.15)
 
+set(LLVM_REQUIRED_MAJOR "22" CACHE STRING "Minimum LLVM/Clang major version required by REX")
+if(NOT LLVM_REQUIRED_MAJOR MATCHES "^[0-9]+$")
+  message(FATAL_ERROR "LLVM_REQUIRED_MAJOR must be a numeric major version, got '${LLVM_REQUIRED_MAJOR}'.")
+endif()
+
 #-----------------------------------------------------------------------------------------------------------------------
 # Enable ccache if not already enabled by symlink masquerading and if no other compiler launchers are already defined
 #-----------------------------------------------------------------------------------------------------------------------
@@ -92,7 +97,7 @@ endfunction()
 
 # Helper function to detect and set compiler with preference order:
 # 1. Use environment variable if set
-# 2. Try preferred version (e.g., clang-22)
+# 2. Try preferred version (e.g., clang-${LLVM_REQUIRED_MAJOR})
 # 3. Try fallback versions (e.g., clang, flang)
 # 4. Let CMake use system default
 function(detect_compiler LANG CMAKE_VAR ENV_VAR LANG_NAME PREFERRED_NAMES FALLBACK_NAMES)
@@ -125,25 +130,25 @@ endfunction()
 # Detect C and C++ compilers
 if((NOT DEFINED CMAKE_C_COMPILER OR "${CMAKE_C_COMPILER}" STREQUAL "") AND
    DEFINED CMAKE_CXX_COMPILER AND NOT "${CMAKE_CXX_COMPILER}" STREQUAL "")
-  find_sibling_compiler(_C_COMPILER_FROM_CXX "${CMAKE_CXX_COMPILER}" "clang-22" "clang")
+  find_sibling_compiler(_C_COMPILER_FROM_CXX "${CMAKE_CXX_COMPILER}" "clang-${LLVM_REQUIRED_MAJOR}" "clang")
   if(_C_COMPILER_FROM_CXX)
     set(CMAKE_C_COMPILER "${_C_COMPILER_FROM_CXX}")
     message(STATUS "Auto-detected C compiler next to C++ compiler: ${_C_COMPILER_FROM_CXX}")
   endif()
   unset(_C_COMPILER_FROM_CXX)
 endif()
-detect_compiler(C CMAKE_C_COMPILER CC "C" "clang-22" "clang")
+detect_compiler(C CMAKE_C_COMPILER CC "C" "clang-${LLVM_REQUIRED_MAJOR}" "clang")
 
 if((NOT DEFINED CMAKE_CXX_COMPILER OR "${CMAKE_CXX_COMPILER}" STREQUAL "") AND
    DEFINED CMAKE_C_COMPILER AND NOT "${CMAKE_C_COMPILER}" STREQUAL "")
-  find_sibling_compiler(_CXX_COMPILER_FROM_C "${CMAKE_C_COMPILER}" "clang++-22" "clang++")
+  find_sibling_compiler(_CXX_COMPILER_FROM_C "${CMAKE_C_COMPILER}" "clang++-${LLVM_REQUIRED_MAJOR}" "clang++")
   if(_CXX_COMPILER_FROM_C)
     set(CMAKE_CXX_COMPILER "${_CXX_COMPILER_FROM_C}")
     message(STATUS "Auto-detected C++ compiler next to C compiler: ${_CXX_COMPILER_FROM_C}")
   endif()
   unset(_CXX_COMPILER_FROM_C)
 endif()
-detect_compiler(CXX CMAKE_CXX_COMPILER CXX "C++" "clang++-22" "clang++")
+detect_compiler(CXX CMAKE_CXX_COMPILER CXX "C++" "clang++-${LLVM_REQUIRED_MAJOR}" "clang++")
 
 if((NOT DEFINED LLVM_ROOT OR "${LLVM_ROOT}" STREQUAL "") AND
    DEFINED CMAKE_C_COMPILER AND NOT "${CMAKE_C_COMPILER}" STREQUAL "")
@@ -514,8 +519,8 @@ endif()
 # Fortran (disabled by default to avoid requiring a Fortran toolchain for basic builds)
 option(ENABLE-FORTRAN "Enable Fortran analysis." OFF)
 
-# Flang frontend (LLVM 22)
-option(ENABLE-FORTRAN-FLANG "Enable Flang frontend support (LLVM 22)." ON)
+# Flang frontend
+option(ENABLE-FORTRAN-FLANG "Enable Flang frontend support." ON)
 set(FLANG_ROOT "" CACHE PATH "Path to Flang installation (lib/, include/).")
 
 # Legacy tests still reference enable-fortran (lowercase).
@@ -566,6 +571,20 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
   endif()
   list(REMOVE_DUPLICATES FLANG_INCLUDE_DIRS)
   set(FLANG_INCLUDE_DIRS "${FLANG_INCLUDE_DIRS}" CACHE INTERNAL "Flang include dirs")
+  set(FLANG_INTRINSIC_INCLUDE_DIR "")
+  foreach(_flang_include_dir IN LISTS FLANG_INCLUDE_DIRS)
+    if(EXISTS "${_flang_include_dir}/flang")
+      set(FLANG_INTRINSIC_INCLUDE_DIR "${_flang_include_dir}/flang")
+      break()
+    endif()
+  endforeach()
+  if(NOT FLANG_INTRINSIC_INCLUDE_DIR)
+    message(FATAL_ERROR
+      "Flang intrinsic include directory not found under FLANG_INCLUDE_DIRS: "
+      "${FLANG_INCLUDE_DIRS}")
+  endif()
+  set(FLANG_INTRINSIC_INCLUDE_DIR "${FLANG_INTRINSIC_INCLUDE_DIR}" CACHE INTERNAL
+      "Flang intrinsic module/header include dir")
 
   if(NOT DEFINED LLVM_VERSION_MAJOR)
     if(LLVM_PACKAGE_VERSION)
@@ -575,8 +594,8 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
     endif()
   endif()
 
-  if(DEFINED LLVM_VERSION_MAJOR AND LLVM_VERSION_MAJOR LESS 22)
-    message(FATAL_ERROR "REX requires LLVM 22 or newer. Found LLVM ${LLVM_VERSION_MAJOR}.")
+  if(DEFINED LLVM_VERSION_MAJOR AND LLVM_VERSION_MAJOR LESS LLVM_REQUIRED_MAJOR)
+    message(FATAL_ERROR "REX requires LLVM ${LLVM_REQUIRED_MAJOR} or newer. Found LLVM ${LLVM_VERSION_MAJOR}.")
   endif()
 
   set(_flang_lib_names FortranParser FortranSemantics
@@ -629,7 +648,7 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
     set(ROSE_FLANG_ENDIAN_DEFINES FLANG_LITTLE_ENDIAN=1)
   endif()
 
-  add_compile_definitions(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+  add_compile_definitions(ROSE_FLANG_FRONTEND)
 
   if(NOT ENABLE-C AND (NOT DEFINED LLVM_LIBS OR "${LLVM_LIBS}" STREQUAL ""))
     if("LLVM" IN_LIST LLVM_AVAILABLE_LIBS)
@@ -661,7 +680,7 @@ endif()
 # Fortran
 if(ENABLE-FORTRAN)
   # Detect Fortran compiler using the same helper function
-  detect_compiler(Fortran CMAKE_Fortran_COMPILER FC "Fortran" "flang-22" "flang")
+  detect_compiler(Fortran CMAKE_Fortran_COMPILER FC "Fortran" "flang-${LLVM_REQUIRED_MAJOR}" "flang")
   set(ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT 1)
   enable_language(Fortran)
   set(BACKEND_FORTRAN_COMPILER "${CMAKE_Fortran_COMPILER}")
@@ -716,8 +735,8 @@ if(NOT CLANG_VERSION_MAJOR)
   set(CLANG_VERSION_MAJOR 0)
 endif()
 
-if(CLANG_VERSION_MAJOR LESS 22)
-  message(FATAL_ERROR "REX requires LLVM/Clang 22 or newer. Found Clang ${CLANG_VERSION_MAJOR}.")
+if(CLANG_VERSION_MAJOR LESS LLVM_REQUIRED_MAJOR)
+  message(FATAL_ERROR "REX requires LLVM/Clang ${LLVM_REQUIRED_MAJOR} or newer. Found Clang ${CLANG_VERSION_MAJOR}.")
 endif()
 
 # LLVM/Clang headers are added to the specific targets that need them.
@@ -1186,7 +1205,79 @@ set(ROSE_CTEST_MEMCHECK_SUPPRESSIONS "")
 if(_rose_memcheck_valgrind)
   set(ROSE_CTEST_MEMCHECK_COMMAND "${_rose_memcheck_valgrind}")
   set(ROSE_CTEST_MEMCHECK_SUPPRESSIONS "${CMAKE_SOURCE_DIR}/scripts/rex-suppressions-for-valgrind")
-  set(ROSE_CTEST_MEMCHECK_OPTIONS "--leak-check=full --show-leak-kinds=all --error-exitcode=1 --max-stackframe=2047456 --num-callers=32 --trace-children=yes --trace-children-skip=/usr/bin/clang++-22,/usr/bin/clang-22,/usr/bin/flang-22,/usr/lib/llvm-22/bin/clang++-22,/usr/lib/llvm-22/bin/clang-22,/usr/lib/llvm-22/bin/flang-22,/usr/lib/llvm-22/bin/flang,clang++-22,clang-22,flang-22,flang,clang++,clang,g++,gcc,c++,cc,/usr/bin/grep,/bin/grep,grep,/usr/bin/cmp,/bin/cmp,cmp,/usr/bin/mktemp,/bin/mktemp,mktemp,/usr/bin/dash,/bin/dash,dash,/usr/bin/bash,/bin/bash,bash,egrep,fgrep,diff,sed,awk,tr,cut,sort,uniq,head,tail,cmake,ctest,make,ninja,sh,perl,python,python3,tar,gzip,bzip2,xz,zip,unzip,cp,mv,rm,install --trace-children-skip-by-arg=*gtest_internal_run_death_test*")
+  set(_rose_memcheck_toolchain_major "${LLVM_REQUIRED_MAJOR}")
+  if(DEFINED CLANG_VERSION_MAJOR AND CLANG_VERSION_MAJOR AND NOT CLANG_VERSION_MAJOR STREQUAL "0")
+    set(_rose_memcheck_toolchain_major "${CLANG_VERSION_MAJOR}")
+  elseif(DEFINED LLVM_VERSION_MAJOR AND LLVM_VERSION_MAJOR)
+    set(_rose_memcheck_toolchain_major "${LLVM_VERSION_MAJOR}")
+  endif()
+  set(_rose_memcheck_trace_children_skip
+      "/usr/bin/clang++-${_rose_memcheck_toolchain_major}"
+      "/usr/bin/clang-${_rose_memcheck_toolchain_major}"
+      "/usr/bin/flang-${_rose_memcheck_toolchain_major}"
+      "/usr/lib/llvm-${_rose_memcheck_toolchain_major}/bin/clang++-${_rose_memcheck_toolchain_major}"
+      "/usr/lib/llvm-${_rose_memcheck_toolchain_major}/bin/clang-${_rose_memcheck_toolchain_major}"
+      "/usr/lib/llvm-${_rose_memcheck_toolchain_major}/bin/flang-${_rose_memcheck_toolchain_major}"
+      "/usr/lib/llvm-${_rose_memcheck_toolchain_major}/bin/flang"
+      "clang++-${_rose_memcheck_toolchain_major}"
+      "clang-${_rose_memcheck_toolchain_major}"
+      "flang-${_rose_memcheck_toolchain_major}"
+      "flang"
+      "clang++"
+      "clang"
+      "g++"
+      "gcc"
+      "c++"
+      "cc"
+      "/usr/bin/grep"
+      "/bin/grep"
+      "grep"
+      "/usr/bin/cmp"
+      "/bin/cmp"
+      "cmp"
+      "/usr/bin/mktemp"
+      "/bin/mktemp"
+      "mktemp"
+      "/usr/bin/dash"
+      "/bin/dash"
+      "dash"
+      "/usr/bin/bash"
+      "/bin/bash"
+      "bash"
+      "egrep"
+      "fgrep"
+      "diff"
+      "sed"
+      "awk"
+      "tr"
+      "cut"
+      "sort"
+      "uniq"
+      "head"
+      "tail"
+      "cmake"
+      "ctest"
+      "make"
+      "ninja"
+      "sh"
+      "perl"
+      "python"
+      "python3"
+      "tar"
+      "gzip"
+      "bzip2"
+      "xz"
+      "zip"
+      "unzip"
+      "cp"
+      "mv"
+      "rm"
+      "install")
+  list(JOIN _rose_memcheck_trace_children_skip "," _rose_memcheck_trace_children_skip_arg)
+  set(ROSE_CTEST_MEMCHECK_OPTIONS "--leak-check=full --show-leak-kinds=all --error-exitcode=1 --max-stackframe=2047456 --num-callers=32 --trace-children=yes --trace-children-skip=${_rose_memcheck_trace_children_skip_arg} --trace-children-skip-by-arg=*gtest_internal_run_death_test*")
+  unset(_rose_memcheck_trace_children_skip_arg)
+  unset(_rose_memcheck_trace_children_skip)
+  unset(_rose_memcheck_toolchain_major)
   if(NOT EXISTS "${ROSE_CTEST_MEMCHECK_SUPPRESSIONS}")
     message(WARNING "Valgrind suppressions file not found: ${ROSE_CTEST_MEMCHECK_SUPPRESSIONS}")
     set(ROSE_CTEST_MEMCHECK_SUPPRESSIONS "")
@@ -1844,8 +1935,8 @@ set(ROSE_SOURCE_INCLUDES
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/virtualCFG
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/astTokenStream
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/astHiddenTypeAndDeclarationLists
-  ${ROSE_TOP_SRC_DIR}/src/frontend/Experimental_Flang_ROSE_Connection
-  ${ROSE_TOP_SRC_DIR}/src/frontend/Experimental_General_Language_Support
+  ${ROSE_TOP_SRC_DIR}/src/frontend/Flang
+  ${ROSE_TOP_SRC_DIR}/src/frontend/Flang/builder
   ${ROSE_TOP_SRC_DIR}/src/frontend
   ${ROSE_TOP_SRC_DIR}/src/backend/unparser
   ${ROSE_TOP_SRC_DIR}/src/backend/unparser/formatSupport

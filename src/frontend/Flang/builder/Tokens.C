@@ -1,4 +1,4 @@
-//===-- src/frontend/Experimental_General_Language_Support/Tokens.C ----*- C++
+//===-- src/frontend/Flang/builder/Tokens.C ---------------------------*- C++
 //-*-===//
 //
 // Supports reading tokens from files (for now)

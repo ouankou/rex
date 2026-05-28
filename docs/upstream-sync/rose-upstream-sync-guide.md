@@ -8,7 +8,7 @@ Upstream ROSE is read-only evidence for REX. Agents may fetch, inspect logs, sho
 - Platform: Linux only (non-Linux platforms dropped).
 - Languages/features: C/C++, Fortran, OpenMP, OpenACC, OpenCL, CUDA.
 - Frontend: Clang/LLVM for C/C++ (LLVM 22); Fortran via Flang.
-- Hard dropped: PHP, JavaScript, Python, Ada, Jovial, EDG, OFP/old Fortran parser, Java/ECJ, UPC, X10, Csharp, Matlab, YAML/mini-yaml, binary analysis, Sawyer, CodeThorn, Rosebud source tree, legacy autotools/Tup paths, dropped OpenMP designs, and other legacy frontends/tools.
+- Hard dropped: PHP, JavaScript, Python, Ada, Jovial, EDG, OFP/old Fortran parser, Java/ECJ, UPC, X10, Csharp, Matlab, YAML/mini-yaml, binary analysis, Sawyer, CodeThorn, Rosebud source tree, legacy autotools/Tup paths, dropped OpenMP designs, `src/3rdPartyLibraries`, and other legacy frontends/tools.
 - Rosebud: do not restore `src/Rosebud`. If an upstream Rosebud commit contains an idea useful to existing REX ROSETTA code, port only that retained-scope logic manually.
 - Legacy array test suites are dropped from CompileTests and CompilerOptionsTests inventories.
 
@@ -114,37 +114,7 @@ in-progress src/AstNodes
 in-progress src/AstNodes/Expression
 skip src/AstNodes/BinaryAnalysis
 skip src/AstNodes/Jovial
-in-progress src/3rdPartyLibraries
-pending src/3rdPartyLibraries/antlr-jars
-synced src/3rdPartyLibraries/flang-parser
-in-progress src/3rdPartyLibraries/fortran-parser
-synced src/3rdPartyLibraries/libharu-2.1.0
-skip src/3rdPartyLibraries/libharu-2.1.0/demo
-skip src/3rdPartyLibraries/libharu-2.1.0/demo/images
-skip src/3rdPartyLibraries/libharu-2.1.0/demo/mbtext
-skip src/3rdPartyLibraries/libharu-2.1.0/demo/pngsuite
-skip src/3rdPartyLibraries/libharu-2.1.0/demo/rawimage
-skip src/3rdPartyLibraries/libharu-2.1.0/demo/ttfont
-skip src/3rdPartyLibraries/libharu-2.1.0/demo/type1
-synced src/3rdPartyLibraries/libharu-2.1.0/doc
-skip src/3rdPartyLibraries/libharu-2.1.0/if
-skip src/3rdPartyLibraries/libharu-2.1.0/if/c#
-skip src/3rdPartyLibraries/libharu-2.1.0/if/c#/demo
-skip src/3rdPartyLibraries/libharu-2.1.0/if/c#/demo/pngsuite
-skip src/3rdPartyLibraries/libharu-2.1.0/if/c#/demo/rawimage
-skip src/3rdPartyLibraries/libharu-2.1.0/if/delphi
-skip src/3rdPartyLibraries/libharu-2.1.0/if/freebasic
-skip src/3rdPartyLibraries/libharu-2.1.0/if/ruby
-skip src/3rdPartyLibraries/libharu-2.1.0/if/ruby/demo
-skip src/3rdPartyLibraries/libharu-2.1.0/if/vb6
-synced src/3rdPartyLibraries/libharu-2.1.0/include
-skip src/3rdPartyLibraries/libharu-2.1.0/script
-synced src/3rdPartyLibraries/libharu-2.1.0/src
-skip src/3rdPartyLibraries/libharu-2.1.0/win32
-skip src/3rdPartyLibraries/libharu-2.1.0/win32/bcc32
-skip src/3rdPartyLibraries/libharu-2.1.0/win32/include
-skip src/3rdPartyLibraries/libharu-2.1.0/win32/mingw
-skip src/3rdPartyLibraries/libharu-2.1.0/win32/msvc
+skip src/3rdPartyLibraries
 in-progress src/ROSETTA
 in-progress src/ROSETTA/Grammar
 in-progress src/ROSETTA/src
@@ -157,10 +127,11 @@ pending src/backend/unparser/FortranCodeGeneration
 in-progress src/backend/unparser/formatSupport
 in-progress src/backend/unparser/languageIndependenceSupport
 in-progress src/frontend
-pending src/frontend/CxxFrontend
-in-progress src/frontend/CxxFrontend/Clang
-synced src/frontend/Experimental_Flang_ROSE_Connection
-in-progress src/frontend/Experimental_General_Language_Support
+in-progress src/frontend/Clang
+in-progress src/frontend/Flang
+in-progress src/frontend/Flang/builder
+in-progress src/frontend/Flang/driver
+synced src/frontend/Flang/intrinsics
 in-progress src/frontend/SageIII
 pending src/frontend/SageIII/GENERATED_CODE_DIRECTORY_Cxx_Grammar
 pending src/frontend/SageIII/accparser
@@ -499,6 +470,7 @@ Top-level upstream-only directories:
 - winspecific/
 
 Core source subtrees dropped in REX:
+- src/3rdPartyLibraries/
 - src/3rdPartyLibraries/MSTL/
 - src/3rdPartyLibraries/POET/
 - src/3rdPartyLibraries/experimental-cplusplus-parser/

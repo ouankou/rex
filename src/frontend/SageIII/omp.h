@@ -244,7 +244,7 @@ void omp_free(void *ptr, omp_allocator_handle_t allocator);
 
 /*
  * FORTRAN Execution Environment Function Wrappers
- * Fortran stuff should be handled in omp_lib.h
+ * Fortran interfaces are supplied by Flang's omp_lib.h/omp_lib.mod.
 void omp_set_num_threads_(int *num);
 int omp_get_num_threads_(void);
 int omp_get_max_threads_(void);

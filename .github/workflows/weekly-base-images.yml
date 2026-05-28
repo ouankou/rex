@@ -22,6 +22,7 @@ jobs:
         shell: bash
 
     env:
+      LLVM_VERSION: 22
       IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
       BASE_TAG: base
       LOCAL_IMAGE_REPO: rex-local
@@ -55,6 +56,8 @@ jobs:
         context: .
         file: ci/docker/rex-riscv64.Dockerfile
         platforms: linux/riscv64
+        build-args: |
+          LLVM_VERSION=${{ env.LLVM_VERSION }}
         pull: true
         provenance: false
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
@@ -66,6 +69,8 @@ jobs:
         context: .
         file: ci/docker/rex-riscv64.Dockerfile
         platforms: linux/riscv64
+        build-args: |
+          LLVM_VERSION=${{ env.LLVM_VERSION }}
         pull: true
         provenance: false
         load: true
@@ -79,6 +84,8 @@ jobs:
         context: .
         file: ci/docker/rex-loongarch64.Dockerfile
         platforms: linux/loong64
+        build-args: |
+          LLVM_VERSION=${{ env.LLVM_VERSION }}
         pull: true
         provenance: false
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
@@ -90,6 +97,8 @@ jobs:
         context: .
         file: ci/docker/rex-loongarch64.Dockerfile
         platforms: linux/loong64
+        build-args: |
+          LLVM_VERSION=${{ env.LLVM_VERSION }}
         pull: true
         provenance: false
         load: true
@@ -110,16 +119,18 @@ jobs:
       run: |
         set -euo pipefail
         docker run --rm --platform=linux/riscv64 \
+          -e LLVM_VERSION="${LLVM_VERSION}" \
           "${LOCAL_IMAGE_REPO}:base-riscv64-local" \
           bash -lc '
             set -euo pipefail
             javac -version
-            dpkg-query -W openjdk-25-jdk-headless antlr4 clang-22
+            dpkg-query -W openjdk-25-jdk-headless antlr4 clang-${LLVM_VERSION} lld-${LLVM_VERSION} mold
           '
         docker run --rm --platform=linux/loong64 \
+          -e LLVM_VERSION="${LLVM_VERSION}" \
           "${LOCAL_IMAGE_REPO}:base-loong64-local" \
           bash -lc '
             set -euo pipefail
             javac -version
-            dpkg-query -W openjdk-21-jdk-headless antlr4 clang-22
+            dpkg-query -W openjdk-21-jdk-headless antlr4 clang-${LLVM_VERSION} lld-${LLVM_VERSION} mold
           '

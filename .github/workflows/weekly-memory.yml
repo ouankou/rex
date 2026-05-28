@@ -52,6 +52,7 @@ jobs:
           ghostscript \
           git \
           graphviz \
+          lld-${LLVM_VERSION} \
           libantlr4-runtime-dev \
           libclang-${LLVM_VERSION}-dev \
           libclang-cpp${LLVM_VERSION}-dev \
@@ -60,6 +61,7 @@ jobs:
           libomp-${LLVM_VERSION}-dev \
           llvm-${LLVM_VERSION} \
           llvm-${LLVM_VERSION}-dev \
+          mold \
           openjdk-25-jdk \
           pkg-config
 
@@ -141,6 +143,7 @@ jobs:
           ghostscript \
           git \
           graphviz \
+          lld-${LLVM_VERSION} \
           libantlr4-runtime-dev \
           libclang-${LLVM_VERSION}-dev \
           libclang-cpp${LLVM_VERSION}-dev \
@@ -149,6 +152,7 @@ jobs:
           libomp-${LLVM_VERSION}-dev \
           llvm-${LLVM_VERSION} \
           llvm-${LLVM_VERSION}-dev \
+          mold \
           openjdk-25-jdk \
           pkg-config \
           valgrind
@@ -229,6 +233,7 @@ jobs:
           ghostscript \
           git \
           graphviz \
+          lld-${LLVM_VERSION} \
           libantlr4-runtime-dev \
           libclang-${LLVM_VERSION}-dev \
           libclang-cpp${LLVM_VERSION}-dev \
@@ -237,6 +242,7 @@ jobs:
           libomp-${LLVM_VERSION}-dev \
           llvm-${LLVM_VERSION} \
           llvm-${LLVM_VERSION}-dev \
+          mold \
           openjdk-25-jdk \
           pkg-config
 

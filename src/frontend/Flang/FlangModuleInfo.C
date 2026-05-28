@@ -137,6 +137,11 @@ bool is_compiler_builtin_module_name_lower(const std::string &name_lower) {
          name_lower.rfind("__fortran_", 0) == 0;
 }
 
+bool should_prefer_flang_intrinsic_module_lower(const std::string &name_lower) {
+  return name_lower == "iso_c_binding" || name_lower == "omp_lib" ||
+         name_lower == "omp_lib_kinds";
+}
+
 bool is_fixed_form_source(const std::filesystem::path &path) {
   std::string ext = path.extension().string();
   return equals_case_insensitive(ext, ".f");
@@ -147,15 +152,14 @@ bool module_source_index_built = false;
 
 std::string find_flang_intrinsic_module_dir() {
   std::string include_dir;
-#ifdef ROSE_FLANG_INCLUDEDIR_HINT
-  include_dir = ROSE_FLANG_INCLUDEDIR_HINT;
+#ifdef ROSE_FLANG_INTRINSIC_INCLUDEDIR
+  include_dir = ROSE_FLANG_INTRINSIC_INCLUDEDIR;
 #endif
   if (include_dir.empty()) {
     return "";
   }
 
-  std::filesystem::path flang_dir =
-      std::filesystem::path(include_dir) / "flang";
+  std::filesystem::path flang_dir = include_dir;
   std::error_code ec;
   if (std::filesystem::exists(flang_dir, ec) &&
       std::filesystem::is_directory(flang_dir, ec)) {
@@ -283,10 +287,9 @@ string FlangModuleInfo::find_file_from_inputDirs(const string &basename) {
   std::string module_name = Rose::StringUtility::convertToLowerCase(
       std::filesystem::path(basename).filename().string());
 
-  // Prefer the compiler-provided intrinsic module for ISO_C_BINDING when
-  // available. The bundled ROSE fallback hardcodes target-specific kind values
-  // that can be invalid on non-x86 targets (e.g., loong64/riscv64).
-  if (module_name == "iso_c_binding") {
+  // Prefer compiler-provided intrinsic modules when available. These modules
+  // carry target-specific ABI and OpenMP runtime details from the Flang build.
+  if (should_prefer_flang_intrinsic_module_lower(module_name)) {
     const std::string flang_intrinsic_dir = find_flang_intrinsic_module_dir();
     if (!flang_intrinsic_dir.empty()) {
       const std::string flang_candidate = find_existing_module_file(
@@ -336,14 +339,14 @@ void FlangModuleInfo::set_inputDirs(SgProject *project) {
     }
   };
 
-  // Add path to intrinsic modules (ISO_C_BINDING, OMP_LIB, etc.).
-  const std::string intrinsic_src_path =
-      findRoseSupportPathFromSource("src/3rdPartyLibraries/fortran-intrinsics",
-                                    "src/3rdPartyLibraries/fortran-intrinsics");
+  // Add bundled intrinsic modules that LLVM Flang does not provide, currently
+  // OpenACC.
+  const std::string intrinsic_src_path = findRoseSupportPathFromSource(
+      "src/frontend/Flang/intrinsics", "src/frontend/Flang/intrinsics");
   const std::string intrinsic_build_path = findRoseSupportPathFromBuild(
-      "src/3rdPartyLibraries/fortran-intrinsics", "share/rose");
+      "src/frontend/Flang/intrinsics", "share/rose");
   const std::string intrinsic_install_path = findRoseSupportPathFromSource(
-      "src/3rdPartyLibraries/fortran-intrinsics", "share/rose");
+      "src/frontend/Flang/intrinsics", "share/rose");
   addInputDir(inputDirs, intrinsic_src_path);
   addInputDir(inputDirs, intrinsic_build_path);
   addInputDir(inputDirs, intrinsic_install_path);

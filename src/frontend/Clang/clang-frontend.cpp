@@ -2933,7 +2933,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     std::string openmp_compat_include_dir;
     const std::vector<std::string> openmp_compat_candidates = {
         ROSE_BUILD_CLANG_INCLUDE_STAGING_DIR + "/openmp-compat",
-        ROSE_SOURCE_TREE + "/src/frontend/CxxFrontend/Clang/openmp-compat",
+        ROSE_SOURCE_TREE + "/src/frontend/Clang/openmp-compat",
         ROSE_INSTALL_PREFIX + "/" + ROSE_INSTALL_CLANG_INCLUDE_DIR +
             "/openmp-compat"};
 

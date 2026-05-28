@@ -22,7 +22,7 @@
 using namespace std;
 using namespace Rose;
 
-#ifdef ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION
+#ifdef ROSE_FLANG_FRONTEND
 constexpr bool flangParser{true};
 constexpr bool keywordsAreUpperCase{false}; // should be a command-line option
 #else

@@ -107,7 +107,6 @@ set(ROSE_DOC_HEADERS
 add_subdirectory(util)
 add_subdirectory(Rose)
 add_subdirectory(ROSETTA)
-add_subdirectory(3rdPartyLibraries)
 
 add_definitions(-DROSE_DLL_EXPORTS)
 
@@ -167,9 +166,7 @@ endif()
 
 if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
   list(APPEND rose_LIB_SRCS
-    $<TARGET_OBJECTS:general_language_support>
-    $<TARGET_OBJECTS:flang_frontend>
-    $<TARGET_OBJECTS:flang_parser>)
+    $<TARGET_OBJECTS:libroseFlangFrontend>)
 endif()
 
 ########################################################################################################################

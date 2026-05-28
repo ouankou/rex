@@ -6,7 +6,7 @@
 #include "rose_paths.h"
 #include "sageBuilder.h"
 
-#include "flang-external-builder-main.h"
+#include "flang-parser-driver.h"
 
 #include "fortran_flang_support.h"
 
@@ -75,7 +75,7 @@ int experimental_fortran_main(int argc, char *argv[], SgSourceFile *srcFile) {
     }
   }
 
-  status = flang_external_builder_main(argc, argv, srcFile);
+  status = flang_parser_driver_main(argc, argv, srcFile);
 
   // The Fortran frontend builds source-backed AST in frontend-construction
   // mode, but all later midend-generated nodes must switch back to
@@ -93,10 +93,10 @@ int experimental_fortran_main(int argc, char *argv[], SgSourceFile *srcFile) {
 
 void set_flang_include_temp_dir(const std::string &path) {
   if (path.empty()) {
-    flang_external_builder_set_include_tmpdir(nullptr);
+    flang_parser_driver_set_include_tmpdir(nullptr);
     return;
   }
-  flang_external_builder_set_include_tmpdir(path.c_str());
+  flang_parser_driver_set_include_tmpdir(path.c_str());
 }
 
 SgScopeStatement *getTopOfScopeStack() {
