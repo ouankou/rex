@@ -14,18 +14,20 @@
 
 #include <flang/Semantics/symbol.h>
 
-#include <iostream>
-
+#include <cstdint>
+#include <list>
 #include <optional>
+#include <string>
+#include <tuple>
 
-#include <typeinfo>
+#include "general_language_translation.h"
 
-#include "sage3basic.h"
-
-// Testing building everything from flang unparser
-#include "unparse-sage.h"
-
-#include "../Experimental_General_Language_Support/general_language_translation.h"
+class SgBasicBlock;
+class SgExpression;
+class SgIfStmt;
+class SgSourceFile;
+class SgStatement;
+class SgType;
 using OptLabel = std::optional<unsigned long long>;
 using EntityDeclTuple = std::tuple<std::string, SgType *, SgExpression *>;
 

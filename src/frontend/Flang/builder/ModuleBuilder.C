@@ -45,14 +45,13 @@ void ModuleBuilder::setInputDirs(SgProject *project) {
       project->get_originalCommandLineArgumentList();
   std::string rmodDir;
 
-  // Add path to iso_c_binding.rmod. The intrinsic modules have been placed in
-  // the 3rdPartyLibraries because they could be compiler dependent. If placed
-  // there we could reasonable have multiple versions at some point.
+  // Add path to bundled Fortran intrinsic support modules that are not supplied
+  // by LLVM Flang.
   //
   // WARNING - this is for Fortran.
   //
   std::string intrinsic_mod_path = findRoseSupportPathFromSource(
-      "src/3rdPartyLibraries/fortran-intrinsics", "share/rose");
+      "src/frontend/Flang/intrinsics", "share/rose");
   inputDirs.push_back(intrinsic_mod_path);
 
   int sizeArgs = args.size();

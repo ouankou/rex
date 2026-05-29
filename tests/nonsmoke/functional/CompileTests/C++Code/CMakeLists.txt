@@ -74,6 +74,7 @@ add_test(
           -I${CMAKE_CURRENT_SOURCE_DIR}
           ${CMAKE_CURRENT_SOURCE_DIR}/gconv_info.c
 )
+rex_lock_test_for_input(gconv_info_Cpp gconv_info.c)
 
 add_test(
   NAME gconv_info_C
@@ -81,6 +82,7 @@ add_test(
           -I${CMAKE_CURRENT_SOURCE_DIR}
           ${CMAKE_CURRENT_SOURCE_DIR}/gconv_info.c
 )
+rex_lock_test_for_input(gconv_info_C gconv_info.c)
 
 add_test(
   NAME gconv_info_C99
@@ -88,24 +90,28 @@ add_test(
           -I${CMAKE_CURRENT_SOURCE_DIR}
           ${CMAKE_CURRENT_SOURCE_DIR}/gconv_info.c
 )
+rex_lock_test_for_input(gconv_info_C99 gconv_info.c)
 
 add_test(
   NAME stdio_Cpp
   COMMAND testTranslator ${ROSE_FLAGS} -rose:verbose 0
           -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/stdio.c
 )
+rex_lock_test_for_input(stdio_Cpp stdio.c)
 
 add_test(
   NAME stdio_C
   COMMAND testTranslator ${ROSE_FLAGS} -rose:verbose 0 -rose:C
           -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/stdio.c
 )
+rex_lock_test_for_input(stdio_C stdio.c)
 
 add_test(
   NAME stdio_C99
   COMMAND testTranslator ${ROSE_FLAGS} -rose:verbose 0 -rose:C99_only
           -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/stdio.c
 )
+rex_lock_test_for_input(stdio_C99 stdio.c)
 
 add_test(
   NAME test_CplusplusMacro_Cpp

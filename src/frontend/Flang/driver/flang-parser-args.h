@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+
 #include <cstring>
 
 #include <cstdio>
@@ -34,6 +36,8 @@
 
 #include <fstream>
 
+#include <filesystem>
+
 #include <list>
 
 #include <memory>
@@ -43,6 +47,8 @@
 #include <stdlib.h>
 
 #include <string>
+
+#include <system_error>
 
 #include <time.h>
 
@@ -80,6 +86,51 @@ struct DriverContext {
   std::vector<std::string> relocatables;
   bool anyFiles{false};
 };
+
+inline void AddExistingSearchDirectory(std::vector<std::string> &dirs,
+                                       const std::string &dir) {
+  if (dir.empty()) {
+    return;
+  }
+  std::filesystem::path path(dir);
+  std::error_code ec;
+  if (!std::filesystem::exists(path, ec) || ec) {
+    return;
+  }
+  std::string normalized = path.lexically_normal().string();
+  if (std::find(dirs.begin(), dirs.end(), normalized) == dirs.end()) {
+    dirs.push_back(normalized);
+  }
+}
+
+inline bool HasIncludeArg(const std::vector<std::string> &args,
+                          const std::string &dir) {
+  for (size_t i = 0; i < args.size(); ++i) {
+    if (args[i] == "-I" && i + 1 < args.size() && args[i + 1] == dir) {
+      return true;
+    }
+    if (args[i] == "-I" + dir) {
+      return true;
+    }
+  }
+  return false;
+}
+
+inline void AddFlangIntrinsicSearchDirectory(DriverOptions &driver) {
+#ifdef ROSE_FLANG_INTRINSIC_INCLUDEDIR
+  const std::filesystem::path flang_intrinsic_dir =
+      std::filesystem::path(ROSE_FLANG_INTRINSIC_INCLUDEDIR);
+  const std::string normalized_dir =
+      flang_intrinsic_dir.lexically_normal().string();
+  AddExistingSearchDirectory(driver.searchDirectories, normalized_dir);
+  std::error_code ec;
+  if (std::filesystem::exists(flang_intrinsic_dir, ec) && !ec &&
+      !HasIncludeArg(driver.fcArgs, normalized_dir)) {
+    driver.fcArgs.push_back("-I");
+    driver.fcArgs.push_back(normalized_dir);
+  }
+#endif
+}
 
 inline int ParseFlangArgs(int argc, char *const argv[], DriverContext &ctx) {
   int exitStatus{EXIT_SUCCESS};
@@ -250,6 +301,7 @@ inline int ParseFlangArgs(int argc, char *const argv[], DriverContext &ctx) {
           Fortran::common::LanguageFeature::BackslashEscapes)) {
     ctx.driver.fcArgs.push_back("-fno-backslash"); // PGI "-Mbackslash"
   }
+  AddFlangIntrinsicSearchDirectory(ctx.driver);
 
   return exitStatus;
 }

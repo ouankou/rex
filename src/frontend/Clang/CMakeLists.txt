@@ -1,5 +1,5 @@
 # CMakeLists.txt for Clang Frontend
-# Clang/LLVM-based frontend for C language analysis (experimental)
+# Clang/LLVM-based frontend for C and C++ language analysis.
 
 message(STATUS "Configuring Clang frontend...")
 

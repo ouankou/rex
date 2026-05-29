@@ -39,6 +39,6 @@
 - Add regression coverage: run `rose-compiler -fopenmp` and verify that the emitted pragmas and loop headers remain canonical.
 
 ### Practical Notes
-- The current passthrough path allows the user to recompile the generated file with `clang-22 -fopenmp` successfully.
+- The current passthrough path allows the user to recompile the generated file with `clang-${LLVM_VERSION} -fopenmp` successfully.
 - When no OpenMP flags are supplied, pragmas remain untouched but Clang also does not attempt to parse them as structured directives, matching legacy frontend’s historical behaviour.
 - Mode selection logic lives entirely in `clang-frontend.cpp`; no build-system changes are required.

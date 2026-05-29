@@ -42,7 +42,10 @@ REX has transitioned from the proprietary legacy frontend frontend to an experim
 4. **LLVM/Clang 22.x**
    ```bash
    # Ubuntu/Debian
-   sudo apt-get install llvm-22 clang-22 libclang-22-dev
+   LLVM_VERSION=22
+   sudo apt-get install \
+     llvm-${LLVM_VERSION} clang-${LLVM_VERSION} libclang-${LLVM_VERSION}-dev \
+     lld-${LLVM_VERSION} mold
 
    # Fedora/RHEL
    sudo dnf install llvm clang clang-devel
@@ -81,9 +84,11 @@ REX has transitioned from the proprietary legacy frontend frontend to an experim
 
 For Ubuntu/Debian, install all dependencies at once:
 ```bash
+LLVM_VERSION=22
 sudo apt-get update && sudo apt-get install -y \
     build-essential git cmake perl flex bison \
-    llvm-22 clang-22 libclang-22-dev \
+    llvm-${LLVM_VERSION} clang-${LLVM_VERSION} libclang-${LLVM_VERSION}-dev \
+    lld-${LLVM_VERSION} mold \
     zlib1g-dev libzstd-dev \
     libxml2-dev \
     ocl-icd-opencl-dev
@@ -239,7 +244,8 @@ rose-compiler -c hello.c
 **Solution**:
 ```bash
 # Specify LLVM installation directory
-cmake .. -DLLVM_DIR=/usr/lib/llvm-22/lib/cmake/llvm
+LLVM_VERSION=22
+cmake .. -DLLVM_DIR=/usr/lib/llvm-${LLVM_VERSION}/lib/cmake/llvm
 ```
 
 ### Compilation Errors in Clang Frontend

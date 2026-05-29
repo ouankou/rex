@@ -59,10 +59,6 @@ set(SAGE3_SOURCES
 
 configure_file(sage3basic.h.in ${CMAKE_CURRENT_BINARY_DIR}/sage3basic.h @ONLY)
 
-if(ENABLE-FORTRAN)
-  configure_file(omp_lib.f90.in ${CMAKE_CURRENT_BINARY_DIR}/omp_lib.f90 @ONLY)
-endif()
-
 #GENERATING the license_string.h file
 add_custom_command(
   OUTPUT ${CMAKE_BINARY_DIR}/src/frontend/SageIII/license_string.h
@@ -112,6 +108,10 @@ set(SAGE3_SOURCES ${SAGE3_SOURCES}
 ########### next target ###############
 add_library(sage3 OBJECT ${SAGE3_SOURCES})
 add_dependencies(sage3 rosetta_generated)
+if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG AND FLANG_INTRINSIC_INCLUDE_DIR)
+  target_compile_definitions(sage3 PRIVATE
+    "ROSE_FLANG_INTRINSIC_INCLUDEDIR=\"${FLANG_INTRINSIC_INCLUDE_DIR}\"")
+endif()
 
 ########### install files ###############
 
@@ -121,7 +121,7 @@ install(
     attachPreprocessingInfoTraversal.h attach_all_info.h manglingSupport.h
     C++_include_files.h fixupCopy.h general_token_defs.h rtiHelpers.h
     ompAstConstruction.h omp.h ompSupport.h
-    omp_lib_kinds.h omp_lib.h rosedll.h fileoffsetbits.h rosedefs.h
+    rosedll.h fileoffsetbits.h rosedefs.h
     sage3basic.hhh sage_support/cmdline.h sage_support/sage_support.h
     sage_support/utility_functions.h sage_support/utility_functionsImpl.C
     memory-pool-snapshot.h

@@ -1,4 +1,5 @@
 add_subdirectory(SageIII)
-add_subdirectory(CxxFrontend)
-add_subdirectory(Experimental_General_Language_Support)
-add_subdirectory(Experimental_Flang_ROSE_Connection)
+if(ENABLE-C)
+  add_subdirectory(Clang)
+endif()
+add_subdirectory(Flang)

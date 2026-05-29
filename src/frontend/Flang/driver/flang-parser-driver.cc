@@ -1,4 +1,4 @@
-//===-- tools/f18/f18-parse-demo.cpp --------------------------------------===//
+//===-- src/frontend/Flang/driver/flang-parser-driver.cc ------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -30,9 +30,9 @@
 
 #include "sage3basic.h"
 
-#include "FlangParseArgs.hh"
+#include "flang-parser-args.h"
 
-#include "../../frontend/Experimental_Flang_ROSE_Connection/sage-build.h"
+#include "../sage-build.h"
 
 #include <algorithm>
 #include <cctype>
@@ -192,7 +192,7 @@ bool WriteIncludeFixedCopy(const std::string &path, std::string &fixedPath) {
 }
 } // namespace
 
-void flang_external_builder_set_include_tmpdir(const char *path) {
+void flang_parser_driver_set_include_tmpdir(const char *path) {
   if (path == nullptr || *path == '\0') {
     includeTempDir.clear();
     return;
@@ -459,8 +459,8 @@ void Link(const std::vector<std::string> &relocatables,
   Exec(argv, driver.verbose);
 }
 
-int flang_external_builder_main(int argc, char *const argv[],
-                                SgSourceFile *roseSourceFile) {
+int flang_parser_driver_main(int argc, char *const argv[],
+                             SgSourceFile *roseSourceFile) {
   atexit(CleanUpAtExit);
 
   // The SageTreeBuilder must be initialized before using it.

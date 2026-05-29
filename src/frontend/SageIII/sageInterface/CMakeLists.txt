@@ -1,4 +1,4 @@
-include_directories( ${CMAKE_SOURCE_DIR}/src/frontend/Experimental_General_Language_Support )
+include_directories( ${CMAKE_SOURCE_DIR}/src/frontend/Flang/builder )
 
 add_library(sageInterface OBJECT
   sageInterface.C

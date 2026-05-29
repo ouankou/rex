@@ -11,7 +11,7 @@ Use this skill for any request mentioning ROSE upstream sync, LLNL ROSE sync, `r
 
 - Upstream ROSE is read-only evidence. Allowed: `git fetch`, `git log`, `git show`, `git diff`, local comparisons. Forbidden: pushing, opening PRs/issues/comments, review requests, or mentioning upstream maintainers.
 - PRs are only for `ouankou/rex`.
-- Never restore abandoned REX components: EDG, OFP/old Fortran parser, binary analysis, Sawyer, CodeThorn, Rosebud source tree, Ada, Jovial, Java/ECJ, PHP, JavaScript, Python, UPC, X10, Csharp, Matlab, YAML/mini-yaml, MSTL, legacy autotools/Tup paths, or dropped OpenMP designs.
+- Never restore abandoned REX components: EDG, OFP/old Fortran parser, binary analysis, Sawyer, CodeThorn, Rosebud source tree, Ada, Jovial, Java/ECJ, PHP, JavaScript, Python, UPC, X10, Csharp, Matlab, YAML/mini-yaml, MSTL, `src/3rdPartyLibraries`, legacy autotools/Tup paths, or dropped OpenMP designs.
 - Freeze the upstream target SHA at sync start; process only that frozen range. Newer upstream commits wait for the next sync.
 - Process upstream commits in chronological order and record every upstream SHA before moving on.
 - Use one final REX commit for each applied upstream commit or tightly related upstream series. That commit includes both the useful upstream change and all required REX adaptation.

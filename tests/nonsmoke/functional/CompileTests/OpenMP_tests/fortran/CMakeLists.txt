@@ -4,7 +4,7 @@ file(GLOB OPENMP_FORTRAN_TESTCODES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
 list(SORT OPENMP_FORTRAN_TESTCODES)
 
 set(ROSE_FLAGS -rose:openmp:ast_only -w -rose:verbose 0)
-set(TESTCODE_INCLUDES -I${CMAKE_SOURCE_DIR}/src/frontend/SageIII)
+set(TESTCODE_INCLUDES)
 set(_omp_fortran_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
 file(MAKE_DIRECTORY ${_omp_fortran_output_dir})
 

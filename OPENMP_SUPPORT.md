@@ -255,16 +255,16 @@ Note: Output is identical to source, but internally the pragma was converted to 
 
 ### Core Implementation
 
-1. **src/frontend/CxxFrontend/Clang/clang-frontend-stmt.cpp**
+1. **src/frontend/Clang/clang-frontend-stmt.cpp**
    - Added pragma capture in `VisitCompoundStmt()` (lines 1012-1077)
    - Insert pragma into body block using `prependStatement()`
 
-2. **src/frontend/CxxFrontend/Clang/clang-frontend.cpp**
+2. **src/frontend/Clang/clang-frontend.cpp**
    - Added OpenMP flag override logic (lines 455-469)
    - Removed manual `processOpenMP()` call
    - Added explanatory comments
 
-3. **src/frontend/CxxFrontend/Clang/clang-frontend-decl.cpp**
+3. **src/frontend/Clang/clang-frontend-decl.cpp**
    - Added pragma passthrough for non-OpenMP mode (lines 100-164)
    - Attach pragmas as PreprocessingInfo for verbatim unparsing
 

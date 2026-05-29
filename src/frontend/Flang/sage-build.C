@@ -6,8 +6,6 @@
 
 #include "flang-sage.h"
 
-#include "unparse-sage.h"
-
 #include "BuildExprVisitor.h"
 
 #include "BuildVisitor.h"
@@ -48,23 +46,9 @@
 
 #define DO_TODO 0
 #define DEPRECATED 0
-#define DEBUG_FLANG_UNPARSE 0
-
-namespace Fortran::parser {
-
-void UnparseSage(llvm::raw_ostream &out,
-                 const Fortran::parser::Program &program,
-                 Fortran::parser::Encoding encoding, bool capitalizeKeywords,
-                 bool backslashEscapes,
-                 Fortran::parser::preStatementType
-                     *preStatement /*, AnalyzedObjectsAsFortran* */) {
-
-  std::cerr << "UnparseSage:: found it \n";
-  ABORT_NO_IMPL;
-}
-
 // NOTE: This is in a holding pattern as pattern for Replace
 #if REPLACE
+namespace Fortran::parser {
 void Replace(Fortran::parser::IntLiteralConstant &x, const SgExpression *sg) {
   ASSERT_not_null(isSgLongLongIntVal(sg));
 
@@ -83,9 +67,8 @@ void Replace(Fortran::parser::IntLiteralConstant &x, const SgExpression *sg) {
 
   x.t = std::move(tup);
 }
-#endif
-
 } // namespace Fortran::parser
+#endif
 
 // Dump debug information
 template <class T> static void info(const T &x) {
@@ -4267,16 +4250,7 @@ void Build(parser::Program &x, parser::AllCookedSources &cooked) {
   // TODO: make go away
   CookedSourcesGuard cooked_guard{cooked_, &cooked};
   BuildVisitorGuard visitor_guard{current_build_visitor, &visitor};
-  // TODO: make go away
-  common::LangOptions langOpts{};
-
   InitializeCommentTokens();
-
-#if DEBUG_FLANG_UNPARSE
-  parser::Encoding encoding{Fortran::parser::Encoding::LATIN_1};
-  parser::Unparse(llvm::outs(), x, langOpts, encoding, true /*capitalize*/,
-                  false, nullptr, cooked_);
-#endif
 
   // Initialize SageBuilder global scope
   SgScopeStatement *scope{nullptr};
@@ -7404,9 +7378,6 @@ void Build(parser::FunctionStmt &x, std::list<std::string> &dummy_arg_name_list,
 
 void BuildVisitor::Build(parser::PrintStmt &x) {
   // std::tuple<Format, std::list<OutputItem>> t;
-
-  // TODO: get unparse to work (may need const)
-  // Fortran::parser::Unparse(llvm::errs(), x, /*encoding=*/true);
 
   SgPrintStatement *stmt{nullptr};
   SgExpression *format{nullptr};

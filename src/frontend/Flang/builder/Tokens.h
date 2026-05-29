@@ -1,12 +1,12 @@
-//===-- src/frontend/Experimental_General_Language_Support/Tokens.h ----*- C++
+//===-- src/frontend/Flang/builder/Tokens.h ---------------------------*- C++
 //-*-===//
 //
 // Reads tokens from a file into a TokenStream (vector)
 //
 //===-----------------------------------------------------------------------------===//
 
-#ifndef ROSE_EXPERIMENTAL_GENERAL_TOKENS_H_
-#define ROSE_EXPERIMENTAL_GENERAL_TOKENS_H_
+#ifndef ROSE_FLANG_BUILDER_TOKENS_H_
+#define ROSE_FLANG_BUILDER_TOKENS_H_
 
 #include <fstream>
 
@@ -91,4 +91,4 @@ private:
 } // namespace builder
 } // namespace Rose
 
-#endif // ROSE_EXPERIMENTAL_GENERAL_TOKENS_H_
+#endif // ROSE_FLANG_BUILDER_TOKENS_H_

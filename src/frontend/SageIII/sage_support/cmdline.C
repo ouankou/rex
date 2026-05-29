@@ -3509,7 +3509,7 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
   }
 
   // Default to the Flang frontend when available.
-#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+#if defined(ROSE_FLANG_FRONTEND)
   set_experimental_flang_frontend(true);
 #endif
 
@@ -3531,7 +3531,7 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     std::string frontend =
         Rose::StringUtility::convertToLowerCase(fortranFrontendOption);
     if (frontend == "flang") {
-#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+#if defined(ROSE_FLANG_FRONTEND)
       if (SgProject::get_verbose() > 0) {
         std::cout << "Using Flang Fortran frontend (explicitly set: ON)\n";
       }

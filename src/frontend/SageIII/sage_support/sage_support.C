@@ -29,7 +29,7 @@
 
 #include "rose_paths.h"
 
-#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+#if defined(ROSE_FLANG_FRONTEND)
 #include "FlangModuleInfo.h"
 #include "fortran_flang_support.h"
 #include "unparseFortran_modfile.h"
@@ -51,6 +51,7 @@ void rosePhaseTrace(const char *phase) {
 #include <functional>
 #include <memory>
 #include <set>
+#include <system_error>
 
 // DQ (12/22/2019): I don't need this now, and it is an issue for some compilers
 // (e.g. GNU 4.9.4). DQ (12/21/2019): Require hash table support for determining
@@ -200,7 +201,7 @@ static bool fixQuotedArgumentForWrapperScript(std::string &arg) {
 }
 
 namespace {
-#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+#if defined(ROSE_FLANG_FRONTEND)
 bool isFortranSourcePath(const std::string &path) {
   std::string ext = getPathSuffix(path);
   if (ext.empty())
@@ -377,6 +378,18 @@ static bool hasIncludeDir(const std::vector<std::string> &args,
     }
   }
   return false;
+}
+
+static void addFlangIntrinsicIncludeDir(std::vector<std::string> &args) {
+#if defined(ROSE_FLANG_INTRINSIC_INCLUDEDIR)
+  const std::string include_dir = ROSE_FLANG_INTRINSIC_INCLUDEDIR;
+  std::error_code ec;
+  if (!include_dir.empty() && std::filesystem::exists(include_dir, ec) && !ec &&
+      !hasIncludeDir(args, include_dir)) {
+    args.push_back("-I");
+    args.push_back(include_dir);
+  }
+#endif
 }
 
 static void copyLanguageSettings(SgSourceFile *target,
@@ -1939,7 +1952,7 @@ int SgProject::parse() {
 
   // ROSE_ASSERT (p_fileList != NULL);
 
-#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+#if defined(ROSE_FLANG_FRONTEND)
   FlangModuleInfo::setCurrentProject(this);
   FlangModuleInfo::set_inputDirs(this);
 #endif
@@ -2708,7 +2721,7 @@ int SgFile::callFrontEnd() {
   // traversals.
   // AstPostProcessing(this);
 
-#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+#if defined(ROSE_FLANG_FRONTEND)
   // FMZ: 05/30/2008.  Do not generate module files for nested module loads.
   if (get_Fortran_only() == true && frontendErrorLevel == 0) {
     bool isModuleFile = false;
@@ -3132,15 +3145,12 @@ void SgSourceFile::fixupASTSourcePositionsBasedOnDetectedLineDirectives(
 int SgSourceFile::build_Fortran_AST(vector<string> argv,
                                     vector<string> inputCommandLine) {
   // Rasmussen (1/24/2022): Transitioning to using Flang as the Fortran parser.
-  // The variable ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION will be defined at
+  // The variable ROSE_FLANG_FRONTEND will be defined at
   // configuration but not ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT.  Unfortunately
   // the latter variable is too tightly coupled with JVM usage at the moment.
   // The Flang parser doesn't require the JVM.
   if (get_experimental_flang_frontend() == true) {
     int status{-1};
-
-#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
-#endif
 
     vector<string> flangCommandLine;
     flangCommandLine.push_back("f18-parse-demo");
@@ -3238,13 +3248,15 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
       return temp_path.string();
     };
 
-#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+#if defined(ROSE_FLANG_FRONTEND)
     {
       const std::filesystem::path include_temp_dir = ensure_temp_dir();
       set_flang_include_temp_dir(include_temp_dir.string());
       include_temp_dir_set = true;
     }
 #endif
+
+    addFlangIntrinsicIncludeDir(flangCommandLine);
 
     if (flangArgs.size() > 1) {
       for (size_t i = 1; i < flangArgs.size(); ++i) {
@@ -3267,7 +3279,7 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
     // here.
     SageBuilder::symbol_table_case_insensitive_semantics = true;
 
-#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+#if defined(ROSE_FLANG_FRONTEND)
     status = experimental_fortran_main(flangArgc, flangArgv,
                                        const_cast<SgSourceFile *>(this));
     set_flang_include_temp_dir(std::string());
@@ -3639,8 +3651,7 @@ int SgSourceFile::buildAST(vector<string> argv,
   int frontendErrorLevel = 0;
   bool frontend_failed = false;
   if (get_Fortran_only() == true) {
-#if defined(ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT) ||                            \
-    defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+#if defined(ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT) || defined(ROSE_FLANG_FRONTEND)
     frontendErrorLevel = build_Fortran_AST(argv, inputCommandLine);
     frontend_failed = (frontendErrorLevel != 0);
 #else
@@ -3933,6 +3944,10 @@ int SgFile::compileOutput(vector<string> &argv, int fileNameIndex) {
     compilerCmdLine.insert(compilerCmdLine.begin() + 2, "c");
   }
 
+  if (get_Fortran_only() == true && get_experimental_flang_frontend() == true) {
+    addFlangIntrinsicIncludeDir(compilerCmdLine);
+  }
+
 #if defined(ROSE_USE_CLANG_FRONTEND)
   if (!isAssemblerSource && (get_C_only() || get_Cxx_only() ||
                              get_Cuda_only() || get_OpenCL_only())) {
@@ -4076,7 +4091,7 @@ int SgFile::compileOutput(vector<string> &argv, int fileNameIndex) {
                  .c_str());
     }
 
-#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+#if defined(ROSE_FLANG_FRONTEND)
     if (get_Fortran_only() == true &&
         get_experimental_flang_frontend() == true) {
       std::vector<std::string> module_sources;
