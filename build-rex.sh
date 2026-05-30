@@ -175,6 +175,22 @@ prepend_path_if_dir() {
     export "$var_name"
 }
 
+detect_system_multiarch() {
+    local machine
+
+    if command -v dpkg-architecture >/dev/null 2>&1; then
+        dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null && return 0
+    fi
+
+    machine="$(uname -m)"
+    case "$machine" in
+        loong64)
+            machine="loongarch64"
+            ;;
+    esac
+    printf '%s-linux-gnu\n' "$machine"
+}
+
 # Prefer the packaged GCC/stdlib headers/libs that match the active machine
 # when driving Clang.
 if [ -z "${GCC_VERSION:-}" ] && command -v g++ >/dev/null 2>&1; then
@@ -182,13 +198,14 @@ if [ -z "${GCC_VERSION:-}" ] && command -v g++ >/dev/null 2>&1; then
 fi
 GCC_VERSION="${GCC_VERSION:-14}"
 GCC_MULTIARCH="$(gcc -print-multiarch 2>/dev/null || true)"
+GCC_MULTIARCH="${GCC_MULTIARCH:-$(detect_system_multiarch)}"
 GCC_LIBGCC_PATH="$(gcc -print-libgcc-file-name 2>/dev/null || true)"
 if [ -n "$GCC_LIBGCC_PATH" ] && [ "${GCC_LIBGCC_PATH#/}" != "$GCC_LIBGCC_PATH" ]; then
     GCC_PREFIX="$(dirname "$GCC_LIBGCC_PATH")"
 elif [ -n "$GCC_MULTIARCH" ]; then
     GCC_PREFIX="/usr/lib/gcc/${GCC_MULTIARCH}/${GCC_VERSION}"
 else
-    GCC_PREFIX="/usr/lib/gcc/x86_64-linux-gnu/${GCC_VERSION}"
+    GCC_PREFIX="/usr/lib/gcc/$(detect_system_multiarch)/${GCC_VERSION}"
 fi
 prepend_path_if_dir CPLUS_INCLUDE_PATH "/usr/include/c++/${GCC_VERSION}"
 if [ -n "$GCC_MULTIARCH" ]; then

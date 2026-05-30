@@ -30,8 +30,8 @@ COPY . ${REX_SOURCE_DIR}
 RUN set -eux; \
     ./build-rex.sh "${REX_INSTALL_DIR}" Debug; \
     if [ "${REX_LINKER}" = "lld" ]; then \
-      grep -Eq '^CMAKE_LINKER:FILEPATH=.*/ld\.lld(-[0-9]+)?$' "${REX_BUILD_DIR}/CMakeCache.txt"; \
-      grep -REq --include=link.txt -- '-fuse-ld=.*/ld\.lld(-[0-9]+)?' "${REX_BUILD_DIR}"; \
+      grep -Eq '^CMAKE_LINKER:FILEPATH=.*/(ld\.)?lld(-[0-9]+)?$' "${REX_BUILD_DIR}/CMakeCache.txt"; \
+      grep -REq --include=link.txt -- '-fuse-ld=.*/(ld\.)?lld(-[0-9]+)?' "${REX_BUILD_DIR}"; \
     fi
 
 FROM rex-base AS runtime
