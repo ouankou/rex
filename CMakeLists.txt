@@ -216,15 +216,14 @@ if(NOT REX_LINKER STREQUAL "system")
     get_filename_component(_ROSE_COMPILER_BINDIR "${_ROSE_CXX_COMPILER_PATH}" DIRECTORY)
   endif()
 
+  set(_ROSE_LINKER_HINTS)
   if(_ROSE_COMPILER_BINDIR)
-    find_program(_ROSE_LLD_LINKER
-      NAMES "ld.lld-${LLVM_REQUIRED_MAJOR}" ld.lld lld
-      HINTS "${_ROSE_COMPILER_BINDIR}"
-      NO_DEFAULT_PATH)
+    list(APPEND _ROSE_LINKER_HINTS "${_ROSE_COMPILER_BINDIR}")
   endif()
-  if(NOT _ROSE_LLD_LINKER)
-    find_program(_ROSE_LLD_LINKER NAMES "ld.lld-${LLVM_REQUIRED_MAJOR}" ld.lld lld)
-  endif()
+  find_program(_ROSE_LLD_LINKER
+    NAMES "ld.lld-${LLVM_REQUIRED_MAJOR}" ld.lld lld
+    HINTS ${_ROSE_LINKER_HINTS}
+    NAMES_PER_DIR)
   find_program(_ROSE_MOLD_LINKER NAMES mold)
   find_program(_ROSE_BFD_LINKER NAMES ld.bfd)
 
@@ -267,6 +266,7 @@ if(NOT REX_LINKER STREQUAL "system")
 
   unset(_ROSE_CXX_COMPILER_PATH)
   unset(_ROSE_COMPILER_BINDIR)
+  unset(_ROSE_LINKER_HINTS)
   unset(_ROSE_LLD_LINKER CACHE)
   unset(_ROSE_MOLD_LINKER CACHE)
   unset(_ROSE_BFD_LINKER CACHE)
