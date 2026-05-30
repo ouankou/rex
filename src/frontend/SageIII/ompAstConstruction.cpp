@@ -13678,10 +13678,9 @@ static void copyOmpClauseOriginalOrder(SgOmpClause *sg_clause,
 }
 
 static SgOmpFirstprivateClause *buildFirstprivateClauseFromVariableRange(
-    SgStatement *directive, OpenMPClause *omp_clause, size_t first_index,
-    size_t last_index, bool has_directive_name_modifier,
+    OpenMPClause *omp_clause, size_t first_index, size_t last_index,
+    bool has_directive_name_modifier,
     OpenMPDirectiveKind directive_name_modifier) {
-  ROSE_ASSERT(directive != NULL);
   ROSE_ASSERT(omp_clause != NULL);
   ROSE_ASSERT(first_index <= last_index);
   ROSE_ASSERT(last_index <= omp_variable_list.size());
@@ -13702,8 +13701,6 @@ static SgOmpFirstprivateClause *buildFirstprivateClauseFromVariableRange(
   if (omp_clause->getKind() == OMPC_firstprivate) {
     copyOmpClauseOriginalOrder(result, omp_clause);
   }
-  addOmpClause(directive, result);
-  result->set_parent(directive);
   return result;
 }
 
@@ -13723,6 +13720,7 @@ static bool hasFirstprivateExpressionDirectiveNameModifier(
 
 static SgOmpFirstprivateClause *convertFirstprivateClauseWithModifiers(
     SgStatement *directive, OpenMPFirstprivateClause *firstprivate_clause) {
+  ROSE_ASSERT(directive != NULL);
   ROSE_ASSERT(firstprivate_clause != NULL);
   std::vector<const char *> *expressions =
       firstprivate_clause->getExpressions();
@@ -13748,8 +13746,10 @@ static SgOmpFirstprivateClause *convertFirstprivateClauseWithModifiers(
 
     SgOmpFirstprivateClause *group_clause =
         buildFirstprivateClauseFromVariableRange(
-            directive, firstprivate_clause, group_begin, group_end,
-            group_has_modifier, group_modifier);
+            firstprivate_clause, group_begin, group_end, group_has_modifier,
+            group_modifier);
+    addOmpClause(directive, group_clause);
+    group_clause->set_parent(directive);
     if (first_result == NULL) {
       first_result = group_clause;
     }
@@ -13757,6 +13757,7 @@ static SgOmpFirstprivateClause *convertFirstprivateClauseWithModifiers(
   }
 
   omp_variable_list.clear();
+  ROSE_ASSERT(first_result != NULL);
   return first_result;
 }
 

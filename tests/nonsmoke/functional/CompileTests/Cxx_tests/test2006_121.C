@@ -1,7 +1,7 @@
-// Example of unnamed namespace.
-// Use of "_1" used to unparse to boost::lambda::::_1
+// Regression for qualifying a name from an unnamed namespace nested inside
+// another namespace.
 
-namespace boost {
+namespace sample {
 namespace lambda {
 
 namespace {
@@ -11,14 +11,14 @@ int _1;
 } // namespace
 
 } // namespace lambda
-} // namespace boost
+} // namespace sample
 
 int _1;
 
 void foo() {
   _1 = 1;
-  boost::lambda::_1 = 1;
+  sample::lambda::_1 = 1;
 
   int x;
-  boost::lambda::Integer y;
+  sample::lambda::Integer y;
 }
