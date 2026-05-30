@@ -39,6 +39,15 @@ if(NOT LLVM_REQUIRED_MAJOR MATCHES "^[0-9]+$")
   message(FATAL_ERROR "LLVM_REQUIRED_MAJOR must be a numeric major version, got '${LLVM_REQUIRED_MAJOR}'.")
 endif()
 
+set(REX_LINKER "auto" CACHE STRING "Linker policy for REX builds: auto, lld, mold, bfd, or system")
+set_property(CACHE REX_LINKER PROPERTY STRINGS auto lld mold bfd system)
+if(REX_LINKER STREQUAL "none")
+  set(REX_LINKER "system" CACHE STRING "Linker policy for REX builds: auto, lld, mold, bfd, or system" FORCE)
+endif()
+if(NOT REX_LINKER MATCHES "^(auto|lld|mold|bfd|system)$")
+  message(FATAL_ERROR "REX_LINKER must be one of auto, lld, mold, bfd, or system; got '${REX_LINKER}'.")
+endif()
+
 #-----------------------------------------------------------------------------------------------------------------------
 # Enable ccache if not already enabled by symlink masquerading and if no other compiler launchers are already defined
 #-----------------------------------------------------------------------------------------------------------------------
@@ -93,6 +102,30 @@ function(find_llvm_root_from_compiler OUT_VAR COMPILER)
   endif()
   set(${OUT_VAR} "${_llvm_root}" PARENT_SCOPE)
   unset(_llvm_root)
+endfunction()
+
+function(resolve_program_path OUT_VAR PROGRAM_NAME)
+  set(_resolved_program "")
+  if(PROGRAM_NAME)
+    if(IS_ABSOLUTE "${PROGRAM_NAME}" AND EXISTS "${PROGRAM_NAME}")
+      set(_resolved_program "${PROGRAM_NAME}")
+    else()
+      find_program(_found_program NAMES "${PROGRAM_NAME}")
+      if(_found_program)
+        set(_resolved_program "${_found_program}")
+      endif()
+      unset(_found_program CACHE)
+    endif()
+  endif()
+  set(${OUT_VAR} "${_resolved_program}" PARENT_SCOPE)
+  unset(_resolved_program)
+endfunction()
+
+function(append_linker_driver_flag VAR_NAME FLAG)
+  if(NOT "${${VAR_NAME}}" MATCHES "(^| )-fuse-ld=")
+    string(APPEND ${VAR_NAME} " ${FLAG}")
+    set(${VAR_NAME} "${${VAR_NAME}}" PARENT_SCOPE)
+  endif()
 endfunction()
 
 # Helper function to detect and set compiler with preference order:
@@ -172,6 +205,85 @@ endif()
 message(STATUS "Compiler selection: Using ${_C_COMPILER_DISPLAY} and ${_CXX_COMPILER_DISPLAY}")
 
 #-----------------------------------------------------------------------------------------------------------------------
+# Linker selection
+#-----------------------------------------------------------------------------------------------------------------------
+set(ROSE_SELECTED_LINKER "")
+set(ROSE_SELECTED_LINKER_DRIVER_FLAG "")
+
+if(NOT REX_LINKER STREQUAL "system")
+  resolve_program_path(_ROSE_CXX_COMPILER_PATH "${CMAKE_CXX_COMPILER}")
+  if(_ROSE_CXX_COMPILER_PATH)
+    get_filename_component(_ROSE_COMPILER_BINDIR "${_ROSE_CXX_COMPILER_PATH}" DIRECTORY)
+  endif()
+
+  if(_ROSE_COMPILER_BINDIR)
+    find_program(_ROSE_LLD_LINKER
+      NAMES "ld.lld-${LLVM_REQUIRED_MAJOR}" ld.lld lld
+      HINTS "${_ROSE_COMPILER_BINDIR}"
+      NO_DEFAULT_PATH)
+  endif()
+  if(NOT _ROSE_LLD_LINKER)
+    find_program(_ROSE_LLD_LINKER NAMES "ld.lld-${LLVM_REQUIRED_MAJOR}" ld.lld lld)
+  endif()
+  find_program(_ROSE_MOLD_LINKER NAMES mold)
+  find_program(_ROSE_BFD_LINKER NAMES ld.bfd)
+
+  execute_process(
+    COMMAND uname -m
+    OUTPUT_VARIABLE _ROSE_UNAME_MACHINE
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET)
+  if(NOT _ROSE_UNAME_MACHINE)
+    set(_ROSE_UNAME_MACHINE "${CMAKE_HOST_SYSTEM_PROCESSOR}")
+  endif()
+
+  if(REX_LINKER STREQUAL "lld")
+    if(NOT _ROSE_LLD_LINKER)
+      message(FATAL_ERROR "REX_LINKER=lld was requested, but ld.lld was not found.")
+    endif()
+    set(ROSE_SELECTED_LINKER "${_ROSE_LLD_LINKER}")
+  elseif(REX_LINKER STREQUAL "mold")
+    if(NOT _ROSE_MOLD_LINKER)
+      message(FATAL_ERROR "REX_LINKER=mold was requested, but mold was not found.")
+    endif()
+    set(ROSE_SELECTED_LINKER "${_ROSE_MOLD_LINKER}")
+  elseif(REX_LINKER STREQUAL "bfd")
+    if(NOT _ROSE_BFD_LINKER)
+      message(FATAL_ERROR "REX_LINKER=bfd was requested, but ld.bfd was not found.")
+    endif()
+    set(ROSE_SELECTED_LINKER "${_ROSE_BFD_LINKER}")
+  elseif(REX_LINKER STREQUAL "auto")
+    if(_ROSE_LLD_LINKER)
+      set(ROSE_SELECTED_LINKER "${_ROSE_LLD_LINKER}")
+    elseif(_ROSE_MOLD_LINKER AND NOT _ROSE_UNAME_MACHINE MATCHES "^(loongarch64|loong64)$")
+      set(ROSE_SELECTED_LINKER "${_ROSE_MOLD_LINKER}")
+    elseif(_ROSE_MOLD_LINKER)
+      message(STATUS "ld.lld not found; mold is available but skipped on LoongArch.")
+    endif()
+    if(NOT ROSE_SELECTED_LINKER AND _ROSE_BFD_LINKER)
+      set(ROSE_SELECTED_LINKER "${_ROSE_BFD_LINKER}")
+    endif()
+  endif()
+
+  unset(_ROSE_CXX_COMPILER_PATH)
+  unset(_ROSE_COMPILER_BINDIR)
+  unset(_ROSE_LLD_LINKER CACHE)
+  unset(_ROSE_MOLD_LINKER CACHE)
+  unset(_ROSE_BFD_LINKER CACHE)
+endif()
+
+if(ROSE_SELECTED_LINKER)
+  set(CMAKE_LINKER "${ROSE_SELECTED_LINKER}" CACHE FILEPATH "Linker selected for REX builds" FORCE)
+  set(ROSE_SELECTED_LINKER_DRIVER_FLAG "-fuse-ld=${ROSE_SELECTED_LINKER}")
+  append_linker_driver_flag(CMAKE_EXE_LINKER_FLAGS_INIT "${ROSE_SELECTED_LINKER_DRIVER_FLAG}")
+  append_linker_driver_flag(CMAKE_SHARED_LINKER_FLAGS_INIT "${ROSE_SELECTED_LINKER_DRIVER_FLAG}")
+  append_linker_driver_flag(CMAKE_MODULE_LINKER_FLAGS_INIT "${ROSE_SELECTED_LINKER_DRIVER_FLAG}")
+  message(STATUS "Linker selection: ${ROSE_SELECTED_LINKER}")
+else()
+  message(STATUS "Linker selection: system default")
+endif()
+
+#-----------------------------------------------------------------------------------------------------------------------
 # Read ROSE version from ROSE_VERSION file before calling project()
 # This is needed so that the project version can be set correctly, which affects library versioning
 #-----------------------------------------------------------------------------------------------------------------------
@@ -186,6 +298,12 @@ project(ROSE
   VERSION ${ROSE_PACKAGE_VERSION}
   LANGUAGES C CXX
 )
+
+if(ROSE_SELECTED_LINKER_DRIVER_FLAG)
+  append_linker_driver_flag(CMAKE_EXE_LINKER_FLAGS "${ROSE_SELECTED_LINKER_DRIVER_FLAG}")
+  append_linker_driver_flag(CMAKE_SHARED_LINKER_FLAGS "${ROSE_SELECTED_LINKER_DRIVER_FLAG}")
+  append_linker_driver_flag(CMAKE_MODULE_LINKER_FLAGS "${ROSE_SELECTED_LINKER_DRIVER_FLAG}")
+endif()
 
 include(CheckLinkerFlag)
 

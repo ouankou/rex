@@ -161,14 +161,34 @@ find_llvm_config() {
     return 1
 }
 
-# Prefer the same GCC/stdlib headers/libs as CI (GCC 14) when driving Clang.
-: "${GCC_VERSION:=14}"
-GCC_PREFIX="/usr/lib/gcc/x86_64-linux-gnu/${GCC_VERSION}"
-GCC_CPLUS_INCLUDE_1="/usr/include/c++/${GCC_VERSION}"
-GCC_CPLUS_INCLUDE_2="/usr/include/x86_64-linux-gnu/c++/${GCC_VERSION}"
-export CPLUS_INCLUDE_PATH="${GCC_CPLUS_INCLUDE_1}:${GCC_CPLUS_INCLUDE_2}${CPLUS_INCLUDE_PATH:+:${CPLUS_INCLUDE_PATH}}"
-export LIBRARY_PATH="${GCC_PREFIX}${LIBRARY_PATH:+:${LIBRARY_PATH}}"
-export LD_LIBRARY_PATH="${GCC_PREFIX}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+prepend_path_if_dir() {
+    local var_name="$1"
+    local dir="$2"
+    local current_value="${!var_name:-}"
+
+    [ -d "$dir" ] || return 0
+    if [ -n "$current_value" ]; then
+        printf -v "$var_name" '%s:%s' "$dir" "$current_value"
+    else
+        printf -v "$var_name" '%s' "$dir"
+    fi
+    export "$var_name"
+}
+
+# Prefer the packaged GCC/stdlib headers/libs that match the active machine
+# when driving Clang.
+if [ -z "${GCC_VERSION:-}" ] && command -v g++ >/dev/null 2>&1; then
+    GCC_VERSION="$(g++ -dumpfullversion -dumpversion | sed -nE 's/^([0-9]+).*/\1/p')"
+fi
+GCC_VERSION="${GCC_VERSION:-14}"
+GCC_MULTIARCH="$(gcc -print-multiarch 2>/dev/null || true)"
+GCC_PREFIX="$(dirname "$(gcc -print-libgcc-file-name 2>/dev/null || echo /usr/lib/gcc/x86_64-linux-gnu/${GCC_VERSION}/libgcc.a)")"
+prepend_path_if_dir CPLUS_INCLUDE_PATH "/usr/include/c++/${GCC_VERSION}"
+if [ -n "$GCC_MULTIARCH" ]; then
+    prepend_path_if_dir CPLUS_INCLUDE_PATH "/usr/include/${GCC_MULTIARCH}/c++/${GCC_VERSION}"
+fi
+prepend_path_if_dir LIBRARY_PATH "$GCC_PREFIX"
+prepend_path_if_dir LD_LIBRARY_PATH "$GCC_PREFIX"
 
 # Check if we're in the repository root
 if [ ! -f "CMakeLists.txt" ]; then
@@ -183,11 +203,15 @@ fi
 
 # Initialize git submodules if not already done
 echo -e "${YELLOW}[1/5] Initializing git submodules...${NC}"
-if git submodule status | grep -q '^-'; then
-    git submodule update --init --recursive
-    echo -e "${GREEN}Submodules initialized.${NC}"
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    if git submodule status | grep -q '^-'; then
+        git submodule update --init --recursive
+        echo -e "${GREEN}Submodules initialized.${NC}"
+    else
+        echo -e "${GREEN}Submodules already initialized.${NC}"
+    fi
 else
-    echo -e "${GREEN}Submodules already initialized.${NC}"
+    echo -e "${YELLOW}Git metadata not available; assuming submodule contents are already present.${NC}"
 fi
 echo ""
 
@@ -217,7 +241,6 @@ AUTO_LLVM_OBJCOPY="$(find_first_executable "$LLVM_BINDIR" llvm-objcopy || true)"
 AUTO_LLVM_OBJDUMP="$(find_first_executable "$LLVM_BINDIR" llvm-objdump || true)"
 AUTO_LLVM_READELF="$(find_first_executable "$LLVM_BINDIR" llvm-readelf || true)"
 AUTO_LLVM_STRIP="$(find_first_executable "$LLVM_BINDIR" llvm-strip || true)"
-AUTO_LLD_LINKER="$(find_first_executable "$LLVM_BINDIR" ld.lld lld || true)"
 
 if [ -z "$AUTO_C_COMPILER" ] || [ -z "$AUTO_CXX_COMPILER" ]; then
     echo -e "${RED}Error: coherent Clang compiler pair not found under $LLVM_BINDIR.${NC}"
@@ -240,54 +263,7 @@ echo "C compiler:     ${CC:-$AUTO_C_COMPILER}"
 echo "C++ compiler:   ${CXX:-$AUTO_CXX_COMPILER}"
 echo "Archiver:       $AUTO_LLVM_AR"
 echo "Ranlib:         $AUTO_LLVM_RANLIB"
-
-SELECTED_LINKER=""
-SELECTED_LINKER_DRIVER_FLAG=""
-REX_LINKER="${REX_LINKER:-auto}"
-
-case "$REX_LINKER" in
-    auto)
-        if [ -n "$AUTO_LLD_LINKER" ]; then
-            SELECTED_LINKER="$AUTO_LLD_LINKER"
-        # mold 2.41 misrelaxes LoongArch GOT loads; do not auto-select it there.
-        elif [ "$(uname -m)" != "loongarch64" ] && command -v mold >/dev/null 2>&1; then
-            SELECTED_LINKER="$(command -v mold)"
-        elif command -v mold >/dev/null 2>&1; then
-            echo -e "${YELLOW}ld.lld not found; mold is available but skipped on loongarch64.${NC}"
-            echo -e "${YELLOW}Using the system default linker.${NC}"
-        else
-            echo -e "${YELLOW}ld.lld and mold not found; using the system default linker.${NC}"
-        fi
-        ;;
-    system|none)
-        echo "Linker:         system default"
-        ;;
-    lld)
-        if [ -n "$AUTO_LLD_LINKER" ]; then
-            SELECTED_LINKER="$AUTO_LLD_LINKER"
-        else
-            echo -e "${RED}Error: REX_LINKER=lld was requested, but ld.lld was not found under $LLVM_BINDIR.${NC}"
-            exit 1
-        fi
-        ;;
-    mold)
-        if command -v mold >/dev/null 2>&1; then
-            SELECTED_LINKER="$(command -v mold)"
-        else
-            echo -e "${RED}Error: REX_LINKER=mold was requested, but mold was not found in PATH.${NC}"
-            exit 1
-        fi
-        ;;
-    *)
-        echo -e "${RED}Error: unsupported REX_LINKER='$REX_LINKER'. Use auto, mold, lld, or system.${NC}"
-        exit 1
-        ;;
-esac
-
-if [ -n "$SELECTED_LINKER" ]; then
-    SELECTED_LINKER_DRIVER_FLAG="-fuse-ld=$SELECTED_LINKER"
-    echo "Linker:         $SELECTED_LINKER"
-fi
+echo "Linker policy:  ${REX_LINKER:-auto}"
 
 CMAKE_GENERATOR_ARGS=()
 if [ -n "${REX_CMAKE_GENERATOR:-}" ]; then
@@ -349,6 +325,7 @@ CMAKE_ARGS=(
     -DLLVM_ROOT="$LLVM_PREFIX"
     -DClang_ROOT="$LLVM_PREFIX"
     -DLLVM_REQUIRED_MAJOR="$LLVM_REQUIRED_MAJOR"
+    -DREX_LINKER="${REX_LINKER:-auto}"
     -DCMAKE_AR="$AUTO_LLVM_AR"
     -DCMAKE_RANLIB="$AUTO_LLVM_RANLIB"
     -DCMAKE_C_COMPILER_AR="$AUTO_LLVM_AR"
@@ -375,15 +352,6 @@ fi
 
 if [ -n "$AUTO_LLVM_STRIP" ]; then
     CMAKE_ARGS+=(-DCMAKE_STRIP="$AUTO_LLVM_STRIP")
-fi
-
-if [ -n "$SELECTED_LINKER" ]; then
-    CMAKE_ARGS+=(
-        -DCMAKE_LINKER="$SELECTED_LINKER"
-        -DCMAKE_EXE_LINKER_FLAGS_INIT="$SELECTED_LINKER_DRIVER_FLAG"
-        -DCMAKE_SHARED_LINKER_FLAGS_INIT="$SELECTED_LINKER_DRIVER_FLAG"
-        -DCMAKE_MODULE_LINKER_FLAGS_INIT="$SELECTED_LINKER_DRIVER_FLAG"
-    )
 fi
 
 if [ -n "$RESOLVED_FLANG_ROOT" ]; then

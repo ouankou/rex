@@ -8,6 +8,7 @@
 
 build
 build-*/
+!build-rex.sh
 cmake-build*/
 compile_commands.json
 CMakeCache.txt

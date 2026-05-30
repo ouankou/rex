@@ -1,12 +1,15 @@
 ARG BASE_IMAGE=ghcr.io/ouankou/rex:base
 ARG LLVM_VERSION=22
+ARG REX_LINKER=lld
 
 FROM ${BASE_IMAGE} AS rex-base
 
 LABEL org.opencontainers.image.source="https://github.com/ouankou/rex"
 
 ARG LLVM_VERSION
+ARG REX_LINKER
 ENV LLVM_VERSION=${LLVM_VERSION}
+ENV REX_LINKER=${REX_LINKER}
 ENV REX_ROOT=/opt/rex
 ENV REX_SOURCE_DIR=${REX_ROOT}/src
 ENV REX_BUILD_DIR=${REX_SOURCE_DIR}/build
@@ -24,16 +27,12 @@ FROM rex-base AS builder
 WORKDIR ${REX_SOURCE_DIR}
 COPY . ${REX_SOURCE_DIR}
 
-RUN cmake -S "${REX_SOURCE_DIR}" -B "${REX_BUILD_DIR}" \
-      -DCMAKE_BUILD_TYPE=Debug \
-      -DCMAKE_INSTALL_PREFIX="${REX_INSTALL_DIR}" \
-      -DENABLE-C=ON \
-      -DENABLE-FORTRAN=ON \
-      -DENABLE-FORTRAN-FLANG=ON \
-      -DCMAKE_CXX_STANDARD=17 \
-      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-    && cmake --build "${REX_BUILD_DIR}" -j"$(nproc)" \
-    && cmake --install "${REX_BUILD_DIR}"
+RUN set -eux; \
+    ./build-rex.sh "${REX_INSTALL_DIR}" Debug; \
+    if [ "${REX_LINKER}" = "lld" ]; then \
+      grep -Eq '^CMAKE_LINKER:FILEPATH=.*/ld\.lld(-[0-9]+)?$' "${REX_BUILD_DIR}/CMakeCache.txt"; \
+      grep -REq --include=link.txt -- '-fuse-ld=.*/ld\.lld(-[0-9]+)?' "${REX_BUILD_DIR}"; \
+    fi
 
 FROM rex-base AS runtime
 
