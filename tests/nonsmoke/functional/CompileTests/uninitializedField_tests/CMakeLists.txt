@@ -237,7 +237,9 @@ if(NOT _uninit_skip_all)
     ${_cxx20_uninit_positive})
   rex_add_uninit_cxx_tests(REX_UNINIT_CXX20_TESTS_POSITIVE_SOURCES FALSE
     -std=c++20)
-  rex_add_uninit_cxx20_module_test()
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    rex_add_uninit_cxx20_module_test()
+  endif()
   rex_add_uninit_cxx_tests(REX_CXX20_TESTS_NEGATIVE_SOURCES TRUE -std=c++20)
 
   rex_get_registered_compile_source_set(_all_c_sources REX_C_TESTS_SOURCES)

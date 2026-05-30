@@ -3,7 +3,6 @@
 
 #include "rose.h"
 
-#include <string>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -18,34 +17,22 @@ using namespace std;
 namespace {
 const std::unordered_set<SgNode *> *g_reachable_nodes = nullptr;
 
-std::string locatedNodeFileKey(SgLocatedNode *node) {
-  Sg_File_Info *file_info = node != nullptr ? node->get_file_info() : nullptr;
-  if (file_info == nullptr) {
-    return std::string();
-  }
-
-  std::string key = file_info->get_filenameString();
-  key.push_back('\0');
-  key += file_info->get_raw_filename();
-  key.push_back('\0');
-  key += file_info->get_physical_filename();
-  return key;
-}
-
 bool shouldSkipUninitTraversal(SgNode *node) {
   if (g_reachable_nodes != nullptr &&
       g_reachable_nodes->find(node) == g_reachable_nodes->end()) {
     return true;
   }
   if (SgLocatedNode *located = isSgLocatedNode(node)) {
-    static std::unordered_map<std::string, bool> system_header_cache;
-    std::string key = locatedNodeFileKey(located);
-    if (!key.empty()) {
-      auto cached = system_header_cache.find(key);
+    static std::unordered_map<int, bool> system_header_cache;
+    Sg_File_Info *file_info = located->get_file_info();
+    if (file_info != nullptr && file_info->get_file_id() >= 0) {
+      const int file_id = file_info->get_file_id();
+      auto cached = system_header_cache.find(file_id);
       if (cached == system_header_cache.end()) {
-        cached = system_header_cache
-                     .emplace(key, SageInterface::insideSystemHeader(located))
-                     .first;
+        cached =
+            system_header_cache
+                .emplace(file_id, SageInterface::insideSystemHeader(located))
+                .first;
       }
       if (cached->second) {
         return true;
