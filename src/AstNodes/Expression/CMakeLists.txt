@@ -43,6 +43,7 @@ add_library(roseAstNodesExpression OBJECT
   SgLabelRefExp.C
   SgLambdaExp.C
   SgLambdaRefExp.C
+  SgLogicalBinaryOpSupport.C
   SgMemberFunctionRefExp.C
   SgMinusMinusOp.C
   SgNewExp.C

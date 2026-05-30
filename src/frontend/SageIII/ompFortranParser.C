@@ -31,6 +31,19 @@ extern OpenMPDirective *ompparser_OpenMPIR;
 void parseOpenMPFortran(SgSourceFile *);
 bool isFortranPairedDirective(OpenMPDirective *);
 
+static void failOpenMPFortranParse(PreprocessingInfo *pinfo,
+                                   const std::string &directiveText) {
+  cerr << "Error: failed to parse OpenMP directive";
+  if (pinfo != nullptr) {
+    cerr << " at line " << pinfo->getLineNumber() << ":"
+         << pinfo->getColumnNumber();
+  }
+  cerr << ": " << directiveText << endl;
+  ompparser_OpenMPIR = nullptr;
+  setLang(Lang_unknown);
+  ROSE_ABORT();
+}
+
 // A file scope char* to avoid passing and returning target c string for every
 // and each function
 static const char *c_char = NULL; // current characters being scanned
@@ -460,7 +473,12 @@ bool isFortranPairedDirective(OpenMPDirective *node) {
   case OMPD_parallel:
   case OMPD_do:
   case OMPD_parallel_do:
+  case OMPD_parallel_do_simd:
+  case OMPD_parallel_for:
+  case OMPD_parallel_for_simd:
   case OMPD_parallel_loop:
+  case OMPD_loop:
+  case OMPD_workdistribute:
   case OMPD_critical:
   case OMPD_sections:
   case OMPD_master:
@@ -472,14 +490,38 @@ bool isFortranPairedDirective(OpenMPDirective *node) {
   case OMPD_single:
   case OMPD_task:
   case OMPD_taskgroup:
+  case OMPD_taskloop:
+  case OMPD_taskloop_simd:
   case OMPD_target:
   case OMPD_target_data:
   case OMPD_target_parallel:
+  case OMPD_target_parallel_do:
+  case OMPD_target_parallel_do_simd:
+  case OMPD_target_parallel_for:
+  case OMPD_target_parallel_for_simd:
   case OMPD_target_parallel_loop:
   case OMPD_target_teams:
+  case OMPD_target_teams_distribute:
+  case OMPD_target_teams_distribute_parallel_do:
+  case OMPD_target_teams_distribute_parallel_do_simd:
+  case OMPD_target_teams_distribute_parallel_for:
+  case OMPD_target_teams_distribute_parallel_for_simd:
+  case OMPD_target_teams_distribute_simd:
+  case OMPD_target_teams_workdistribute:
   case OMPD_target_teams_loop:
   case OMPD_target_simd:
   case OMPD_teams:
+  case OMPD_teams_distribute:
+  case OMPD_teams_distribute_parallel_do:
+  case OMPD_teams_distribute_parallel_do_simd:
+  case OMPD_teams_distribute_parallel_for:
+  case OMPD_teams_distribute_parallel_for_simd:
+  case OMPD_teams_distribute_simd:
+  case OMPD_distribute_simd:
+  case OMPD_distribute_parallel_do:
+  case OMPD_distribute_parallel_do_simd:
+  case OMPD_distribute_parallel_for:
+  case OMPD_distribute_parallel_for_simd:
   case OMPD_parallel_master:
   case OMPD_master_taskloop:
   case OMPD_master_taskloop_simd:
@@ -497,7 +539,35 @@ static bool allowsImplicitFortranEnd(OpenMPDirectiveKind kind) {
   case OMPD_parallel:
   case OMPD_do:
   case OMPD_parallel_do:
+  case OMPD_parallel_do_simd:
   case OMPD_parallel_loop:
+  case OMPD_loop:
+  case OMPD_target:
+  case OMPD_target_parallel_do:
+  case OMPD_target_parallel_do_simd:
+  case OMPD_target_parallel_for:
+  case OMPD_target_parallel_for_simd:
+  case OMPD_target_parallel_loop:
+  case OMPD_target_simd:
+  case OMPD_target_teams_distribute:
+  case OMPD_target_teams_distribute_parallel_do:
+  case OMPD_target_teams_distribute_parallel_do_simd:
+  case OMPD_target_teams_distribute_parallel_for:
+  case OMPD_target_teams_distribute_parallel_for_simd:
+  case OMPD_target_teams_distribute_simd:
+  case OMPD_teams_distribute:
+  case OMPD_teams_distribute_parallel_do:
+  case OMPD_teams_distribute_parallel_do_simd:
+  case OMPD_teams_distribute_parallel_for:
+  case OMPD_teams_distribute_parallel_for_simd:
+  case OMPD_teams_distribute_simd:
+  case OMPD_distribute_parallel_do:
+  case OMPD_distribute_parallel_do_simd:
+  case OMPD_distribute_parallel_for:
+  case OMPD_distribute_parallel_for_simd:
+  case OMPD_distribute_simd:
+  case OMPD_taskloop:
+  case OMPD_taskloop_simd:
     return true;
   default:
     return false;
@@ -605,7 +675,9 @@ void parseOpenMPFortran(SgSourceFile *sageFilePtr) {
     std::string parse_buffer = buffer;
     trimLeft(parse_buffer);
     ompparser_OpenMPIR = parseOpenMP(parse_buffer.c_str(), nullptr, nullptr);
-    ROSE_ASSERT(ompparser_OpenMPIR != NULL);
+    if (ompparser_OpenMPIR == NULL) {
+      failOpenMPFortranParse(pinfo, parse_buffer);
+    }
     ompparser_OpenMPIR->setLine(pinfo->getLineNumber());
 
     // set paired directives

@@ -106,6 +106,7 @@ rex_register_compile_source_set(REX_C89_GNU89_SOURCES ${ROSE_GNU89_TESTCODES})
 list(REMOVE_ITEM files_to_test test2013_06.c)
 
 rex_register_compile_source_set(REX_C89_TESTS_SOURCES ${files_to_test} test2013_06.c)
+rex_register_compile_source_set(REX_C89_TESTS_NEGATIVE_SOURCES test2013_06.c)
 
 foreach(file_to_test ${files_to_test})
   compile_test(${file_to_test} C89TEST TRUE)

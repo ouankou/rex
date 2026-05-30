@@ -3588,6 +3588,7 @@ Grammar::getGrammarNodeInfo(AstNodeClass *grammarnode) {
         nodeName == "SgOmpDispatchStatement" ||
         nodeName == "SgOmpDepobjStatement" ||
         nodeName == "SgOmpDistributeStatement" ||
+        nodeName == "SgOmpWorkdistributeStatement" ||
         nodeName == "SgOmpLoopStatement" ||
         nodeName == "SgOmpOrderedStatement" ||
         nodeName == "SgOmpOrderedDependStatement" ||
@@ -3611,6 +3612,7 @@ Grammar::getGrammarNodeInfo(AstNodeClass *grammarnode) {
         nodeName == "SgOmpTargetSimdStatement" ||
         nodeName == "SgOmpTargetTeamsStatement" ||
         nodeName == "SgOmpTargetTeamsDistributeStatement" ||
+        nodeName == "SgOmpTargetTeamsWorkdistributeStatement" ||
         nodeName == "SgOmpTargetTeamsDistributeSimdStatement" ||
         nodeName == "SgOmpTargetTeamsLoopStatement" ||
         nodeName == "SgOmpTargetTeamsDistributeParallelForStatement" ||

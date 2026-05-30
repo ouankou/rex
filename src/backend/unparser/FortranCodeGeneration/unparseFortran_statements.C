@@ -4841,9 +4841,28 @@ static bool fortranOmpDirectiveUsesExplicitEnd(SgStatement *stmt) {
   }
 
   switch (stmt->variantT()) {
-  // OpenMP Fortran permits implicit end for these constructs.
+  // OpenMP Fortran permits implicit end for these constructs.  The attribute
+  // checks above still preserve explicit source END directives.
   case V_SgOmpParallelStatement:
   case V_SgOmpDoStatement:
+  case V_SgOmpLoopStatement:
+  case V_SgOmpTaskloopStatement:
+  case V_SgOmpTaskloopSimdStatement:
+  case V_SgOmpTargetParallelForStatement:
+  case V_SgOmpTargetParallelForSimdStatement:
+  case V_SgOmpTargetParallelLoopStatement:
+  case V_SgOmpTargetSimdStatement:
+  case V_SgOmpTargetTeamsDistributeStatement:
+  case V_SgOmpTargetTeamsDistributeSimdStatement:
+  case V_SgOmpTargetTeamsDistributeParallelForStatement:
+  case V_SgOmpTargetTeamsDistributeParallelForSimdStatement:
+  case V_SgOmpTeamsDistributeStatement:
+  case V_SgOmpTeamsDistributeSimdStatement:
+  case V_SgOmpTeamsDistributeParallelForStatement:
+  case V_SgOmpTeamsDistributeParallelForSimdStatement:
+  case V_SgOmpDistributeSimdStatement:
+  case V_SgOmpDistributeParallelForStatement:
+  case V_SgOmpDistributeParallelForSimdStatement:
     return false;
 
   // Combined forms are represented as nested parallel/do statements in Sage,
@@ -4852,8 +4871,19 @@ static bool fortranOmpDirectiveUsesExplicitEnd(SgStatement *stmt) {
   case V_SgOmpSectionsStatement:
   case V_SgOmpMasterStatement:
   case V_SgOmpOrderedStatement:
+  case V_SgOmpTargetTeamsWorkdistributeStatement:
+  case V_SgOmpWorkdistributeStatement:
   case V_SgOmpWorkshareStatement:
   case V_SgOmpSingleStatement:
+  case V_SgOmpTargetDataStatement:
+  case V_SgOmpTargetParallelStatement:
+  case V_SgOmpTargetTeamsStatement:
+  case V_SgOmpTeamsStatement:
+  case V_SgOmpParallelMasterStatement:
+  case V_SgOmpMasterTaskloopStatement:
+  case V_SgOmpMasterTaskloopSimdStatement:
+  case V_SgOmpParallelMasterTaskloopStatement:
+  case V_SgOmpParallelMasterTaskloopSimdStatement:
     return true;
   case V_SgOmpTaskStatement:
     return false;
@@ -4879,7 +4909,36 @@ static bool fortranOmpCanEmitEndDirectivePrefix(SgStatement *stmt) {
   case V_SgOmpDoStatement:
   case V_SgOmpAtomicStatement:
   case V_SgOmpTargetStatement:
+  case V_SgOmpTargetDataStatement:
+  case V_SgOmpTargetParallelStatement:
+  case V_SgOmpTargetParallelForStatement:
+  case V_SgOmpTargetParallelForSimdStatement:
+  case V_SgOmpTargetParallelLoopStatement:
+  case V_SgOmpTargetSimdStatement:
+  case V_SgOmpTargetTeamsStatement:
+  case V_SgOmpTargetTeamsDistributeStatement:
+  case V_SgOmpTargetTeamsDistributeSimdStatement:
+  case V_SgOmpTargetTeamsWorkdistributeStatement:
+  case V_SgOmpTargetTeamsDistributeParallelForStatement:
+  case V_SgOmpTargetTeamsDistributeParallelForSimdStatement:
+  case V_SgOmpTeamsStatement:
+  case V_SgOmpTeamsDistributeStatement:
+  case V_SgOmpTeamsDistributeSimdStatement:
+  case V_SgOmpTeamsDistributeParallelForStatement:
+  case V_SgOmpTeamsDistributeParallelForSimdStatement:
+  case V_SgOmpDistributeSimdStatement:
+  case V_SgOmpDistributeParallelForStatement:
+  case V_SgOmpDistributeParallelForSimdStatement:
+  case V_SgOmpParallelMasterStatement:
+  case V_SgOmpMasterTaskloopStatement:
+  case V_SgOmpMasterTaskloopSimdStatement:
+  case V_SgOmpParallelMasterTaskloopStatement:
+  case V_SgOmpParallelMasterTaskloopSimdStatement:
   case V_SgOmpMetadirectiveStatement:
+  case V_SgOmpLoopStatement:
+  case V_SgOmpTaskloopStatement:
+  case V_SgOmpTaskloopSimdStatement:
+  case V_SgOmpWorkdistributeStatement:
     return true;
   default:
     return false;
@@ -4896,6 +4955,10 @@ static bool fortranOmpMovesClausesToEnd(SgStatement *stmt) {
   case V_SgOmpSingleStatement:
   case V_SgOmpWorkshareStatement:
   case V_SgOmpDoStatement:
+  case V_SgOmpTargetTeamsWorkdistributeStatement:
+  case V_SgOmpWorkdistributeStatement:
+  case V_SgOmpLoopStatement:
+  case V_SgOmpTaskloopStatement:
     return true;
   default:
     return false;
@@ -4907,6 +4970,13 @@ static bool fortranOmpJoinsFirstClauseWithoutSpace(SgStatement *stmt) {
       "omp_fortran_join_first_clause";
   return stmt != nullptr &&
          stmt->getAttribute(kOmpFortranJoinFirstClauseAttrName) != nullptr;
+}
+
+static bool fortranOmpUsesDoDirectiveSpelling(SgStatement *stmt) {
+  static const char *const kOmpFortranDoDirectiveAttrName =
+      "omp_fortran_do_directive";
+  return stmt != nullptr &&
+         stmt->getAttribute(kOmpFortranDoDirectiveAttrName) != nullptr;
 }
 
 // Just skip nowait and copyprivate clauses for Fortran
@@ -5178,6 +5248,167 @@ void FortranCodeGeneration_locatedNode::unparseOmpEndDirectivePrefixAndName(
   case V_SgOmpOrderedStatement: {
     unparseOmpPrefix(info);
     curprint(string("end ordered"));
+    break;
+  }
+  case V_SgOmpLoopStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end loop"));
+    break;
+  }
+  case V_SgOmpTaskloopStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end taskloop"));
+    break;
+  }
+  case V_SgOmpTaskloopSimdStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end taskloop simd"));
+    break;
+  }
+  case V_SgOmpTargetDataStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end target data"));
+    break;
+  }
+  case V_SgOmpTargetParallelStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end target parallel"));
+    break;
+  }
+  case V_SgOmpTargetParallelForStatement: {
+    unparseOmpPrefix(info);
+    curprint(fortranOmpUsesDoDirectiveSpelling(stmt)
+                 ? string("end target parallel do")
+                 : string("end target parallel for"));
+    break;
+  }
+  case V_SgOmpTargetParallelForSimdStatement: {
+    unparseOmpPrefix(info);
+    curprint(fortranOmpUsesDoDirectiveSpelling(stmt)
+                 ? string("end target parallel do simd")
+                 : string("end target parallel for simd"));
+    break;
+  }
+  case V_SgOmpTargetParallelLoopStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end target parallel loop"));
+    break;
+  }
+  case V_SgOmpTargetSimdStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end target simd"));
+    break;
+  }
+  case V_SgOmpTargetTeamsStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end target teams"));
+    break;
+  }
+  case V_SgOmpTargetTeamsDistributeStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end target teams distribute"));
+    break;
+  }
+  case V_SgOmpTargetTeamsDistributeSimdStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end target teams distribute simd"));
+    break;
+  }
+  case V_SgOmpTargetTeamsWorkdistributeStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end target teams workdistribute"));
+    break;
+  }
+  case V_SgOmpTargetTeamsDistributeParallelForStatement: {
+    unparseOmpPrefix(info);
+    curprint(fortranOmpUsesDoDirectiveSpelling(stmt)
+                 ? string("end target teams distribute parallel do")
+                 : string("end target teams distribute parallel for"));
+    break;
+  }
+  case V_SgOmpTargetTeamsDistributeParallelForSimdStatement: {
+    unparseOmpPrefix(info);
+    curprint(fortranOmpUsesDoDirectiveSpelling(stmt)
+                 ? string("end target teams distribute parallel do simd")
+                 : string("end target teams distribute parallel for simd"));
+    break;
+  }
+  case V_SgOmpTeamsStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end teams"));
+    break;
+  }
+  case V_SgOmpTeamsDistributeStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end teams distribute"));
+    break;
+  }
+  case V_SgOmpTeamsDistributeSimdStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end teams distribute simd"));
+    break;
+  }
+  case V_SgOmpTeamsDistributeParallelForStatement: {
+    unparseOmpPrefix(info);
+    curprint(fortranOmpUsesDoDirectiveSpelling(stmt)
+                 ? string("end teams distribute parallel do")
+                 : string("end teams distribute parallel for"));
+    break;
+  }
+  case V_SgOmpTeamsDistributeParallelForSimdStatement: {
+    unparseOmpPrefix(info);
+    curprint(fortranOmpUsesDoDirectiveSpelling(stmt)
+                 ? string("end teams distribute parallel do simd")
+                 : string("end teams distribute parallel for simd"));
+    break;
+  }
+  case V_SgOmpDistributeParallelForStatement: {
+    unparseOmpPrefix(info);
+    curprint(fortranOmpUsesDoDirectiveSpelling(stmt)
+                 ? string("end distribute parallel do")
+                 : string("end distribute parallel for"));
+    break;
+  }
+  case V_SgOmpDistributeSimdStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end distribute simd"));
+    break;
+  }
+  case V_SgOmpDistributeParallelForSimdStatement: {
+    unparseOmpPrefix(info);
+    curprint(fortranOmpUsesDoDirectiveSpelling(stmt)
+                 ? string("end distribute parallel do simd")
+                 : string("end distribute parallel for simd"));
+    break;
+  }
+  case V_SgOmpParallelMasterStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end parallel master"));
+    break;
+  }
+  case V_SgOmpMasterTaskloopStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end master taskloop"));
+    break;
+  }
+  case V_SgOmpMasterTaskloopSimdStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end master taskloop simd"));
+    break;
+  }
+  case V_SgOmpParallelMasterTaskloopStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end parallel master taskloop"));
+    break;
+  }
+  case V_SgOmpParallelMasterTaskloopSimdStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end parallel master taskloop simd"));
+    break;
+  }
+  case V_SgOmpWorkdistributeStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end workdistribute"));
     break;
   }
   case V_SgOmpWorkshareStatement: {

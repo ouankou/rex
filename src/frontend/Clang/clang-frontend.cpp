@@ -10539,6 +10539,48 @@ alignDirectiveLocationToHash(clang::SourceManager *source_manager,
   return resolved;
 }
 
+bool locationIsAtDirectiveLineStart(clang::SourceManager *source_manager,
+                                    clang::SourceLocation loc) {
+  if (source_manager == nullptr || !loc.isValid()) {
+    return false;
+  }
+
+  clang::SourceLocation file_loc = source_manager->getFileLoc(loc);
+  if (!file_loc.isValid()) {
+    return false;
+  }
+
+  clang::FileID file_id = source_manager->getFileID(file_loc);
+  if (file_id.isInvalid()) {
+    return false;
+  }
+
+  auto buffer = source_manager->getBufferDataOrNone(file_id);
+  if (!buffer) {
+    return false;
+  }
+
+  unsigned offset = source_manager->getFileOffset(file_loc);
+  if (offset >= buffer->size()) {
+    return false;
+  }
+
+  unsigned line_start = offset;
+  while (line_start > 0 && (*buffer)[line_start - 1] != '\n' &&
+         (*buffer)[line_start - 1] != '\r') {
+    --line_start;
+  }
+
+  unsigned first_nonspace = line_start;
+  while (
+      first_nonspace < buffer->size() &&
+      ((*buffer)[first_nonspace] == ' ' || (*buffer)[first_nonspace] == '\t')) {
+    ++first_nonspace;
+  }
+
+  return offset == first_nonspace && (*buffer)[offset] == '#';
+}
+
 bool lineEndsWithPhysicalDirectiveContinuation(const char *line_begin,
                                                const char *line_end) {
   const char *back = line_end;
@@ -11204,10 +11246,14 @@ void SagePreprocessorRecord::SourceRangeSkipped(
     return;
   }
 
-  clang::SourceLocation end_of_token =
-      clang::Lexer::getLocForEndOfToken(end, 0, *p_source_manager, lang_opts);
-  if (end_of_token.isValid()) {
-    end = end_of_token;
+  const bool end_at_directive_line_start =
+      locationIsAtDirectiveLineStart(p_source_manager, end);
+  if (!end_at_directive_line_start) {
+    clang::SourceLocation end_of_token =
+        clang::Lexer::getLocForEndOfToken(end, 0, *p_source_manager, lang_opts);
+    if (end_of_token.isValid()) {
+      end = end_of_token;
+    }
   }
 
   clang::CharSourceRange char_range =
@@ -11234,10 +11280,13 @@ void SagePreprocessorRecord::SourceRangeSkipped(
     clang::FileID file_id = p_source_manager->getFileID(file_begin);
     clang::FileID file_id_end = p_source_manager->getFileID(file_end);
     if (file_id.isValid() && file_id == file_id_end) {
-      if (clang::SourceLocation after_token = clang::Lexer::getLocForEndOfToken(
-              file_end, 0, *p_source_manager, lang_opts);
-          after_token.isValid()) {
-        file_end = after_token;
+      if (!end_at_directive_line_start) {
+        if (clang::SourceLocation after_token =
+                clang::Lexer::getLocForEndOfToken(file_end, 0,
+                                                  *p_source_manager, lang_opts);
+            after_token.isValid()) {
+          file_end = after_token;
+        }
       }
 
       auto buffer = p_source_manager->getBufferDataOrNone(file_id);

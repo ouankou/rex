@@ -60,6 +60,8 @@ int main(int argc, char **argv) {
       sandbox.path() / "vendor-rose" / "include" / "rose.h";
   const fs::path stlHeader =
       sandbox.path() / "vendor-stl" / "include" / "vector";
+  const fs::path unknownHeader =
+      sandbox.path() / "vendor-unknown" / "include" / "project_header.hpp";
   const fs::path mappedHeader =
       sandbox.path() / "vendor-custom" / "include" / "custom.h";
   const fs::path missingHeader =
@@ -69,6 +71,7 @@ int main(int argc, char **argv) {
   touchFile(cHeader);
   touchFile(roseHeader);
   touchFile(stlHeader);
+  touchFile(unknownHeader);
   touchFile(mappedHeader);
 
   const string sourceDir = appRoot.string();
@@ -95,6 +98,10 @@ int main(int argc, char **argv) {
   classification = classifyFileName(stlHeader.string(), sourceDir);
   expectClassification(classification, FILENAME_LOCATION_LIBRARY,
                        FILENAME_LIBRARY_STL);
+
+  classification = classifyFileName(unknownHeader.string(), sourceDir);
+  expectClassification(classification, FILENAME_LOCATION_UNKNOWN,
+                       FILENAME_LIBRARY_UNKNOWN);
 
   map<string, string> customLibraries;
   customLibraries[(sandbox.path() / "vendor-custom").string()] = "ThirdParty";

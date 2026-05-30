@@ -22012,19 +22012,15 @@ private:
 std::unordered_set<PreprocessingInfo *>
 collectFileOwnedPreprocessingInfo(SgProject *project) {
   std::unordered_set<PreprocessingInfo *> owned;
-  if (project == nullptr) {
-    return owned;
-  }
 
-  const SgFilePtrList &files = project->get_fileList();
-  for (SgFile *file : files) {
+  auto collect_from_file = [&](SgFile *file) {
     if (file == nullptr) {
-      continue;
+      return;
     }
     ROSEAttributesListContainer *lists =
         file->get_preprocessorDirectivesAndCommentsList();
     if (lists == nullptr) {
-      continue;
+      return;
     }
     for (const auto &entry : lists->getList()) {
       ROSEAttributesList *list = entry.second;
@@ -22037,7 +22033,31 @@ collectFileOwnedPreprocessingInfo(SgProject *project) {
         }
       }
     }
+  };
+
+  if (project != nullptr) {
+    const SgFilePtrList &files = project->get_fileList();
+    for (SgFile *file : files) {
+      collect_from_file(file);
+    }
   }
+
+  class FileOwnedPreprocessingCollector
+      : public ROSE_VisitorPatternDefaultBase {
+  public:
+    explicit FileOwnedPreprocessingCollector(
+        const std::function<void(SgFile *)> &collect)
+        : collect_(collect) {}
+
+    void visit(SgFile *file) override { collect_(file); }
+
+  private:
+    const std::function<void(SgFile *)> &collect_;
+  };
+
+  FileOwnedPreprocessingCollector collector(collect_from_file);
+  traverseMemoryPoolVisitorPattern(collector);
+
   return owned;
 }
 

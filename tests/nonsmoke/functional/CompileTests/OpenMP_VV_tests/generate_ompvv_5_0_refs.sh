@@ -4,7 +4,7 @@ set -euo pipefail
 version="${1:-5.0}"
 
 repo_root=$(git rev-parse --show-toplevel)
-source_root="$repo_root/third_party/OpenMP_VV/tests/$version"
+source_root="$repo_root/tests/external/OpenMP_VV/tests/$version"
 reference_root="$repo_root/tests/nonsmoke/functional/CompileTests/OpenMP_VV_tests/referenceResults/$version"
 extract_script="$repo_root/tests/nonsmoke/functional/CompileTests/OpenMP_VV_tests/extract_omp_directives.sh"
 

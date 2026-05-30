@@ -11215,7 +11215,8 @@ bool ClangToSageTranslator::VisitCXXConstructExpr(
           (llvm::isa<clang::CXXConstructExpr>(peeled_source) ||
            llvm::isa<clang::CXXTemporaryObjectExpr>(peeled_source) ||
            llvm::isa<clang::CXXUnresolvedConstructExpr>(peeled_source) ||
-           llvm::isa<clang::CXXFunctionalCastExpr>(peeled_source))) {
+           llvm::isa<clang::CXXFunctionalCastExpr>(peeled_source) ||
+           llvm::isa<clang::LambdaExpr>(peeled_source))) {
         if (SgNode *elided_node = Traverse(copy_source)) {
           if (SgExpression *elided_expr = isSgExpression(elided_node)) {
             *node = elided_expr;

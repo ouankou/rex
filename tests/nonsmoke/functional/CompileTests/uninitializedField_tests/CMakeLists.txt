@@ -85,7 +85,9 @@ function(rex_add_uninit_c_copy_tests prefix property_name will_fail)
   rex_get_registered_compile_source_set(_sources ${property_name})
   foreach(source_rel IN LISTS _sources)
     set(_source_path ${REX_COMPILE_TESTS_SOURCE_DIR}/${source_rel})
+    get_filename_component(_source_name ${_source_path} NAME)
     get_filename_component(_source_dir ${_source_path} DIRECTORY)
+    rex_get_cxx_specimen_extra_flags(_extra_frontend_flags ${_source_name})
     rex_uninit_test_name(_test_name ${prefix} ${source_rel})
     add_test(
       NAME ${_test_name}
@@ -98,6 +100,8 @@ function(rex_add_uninit_c_copy_tests prefix property_name will_fail)
         $<TARGET_FILE:testUninitializedFields>
         ${_uninit_flags}
         ${_group_flags}
+        ${_extra_frontend_flags}
+        -DTEST_STRING_MACRO="Thu Apr 14 08:18:33 PDT 2005"
         -I${_source_dir}
         ${_uninit_includes}
         -c
@@ -107,6 +111,48 @@ function(rex_add_uninit_c_copy_tests prefix property_name will_fail)
       set_tests_properties(${_test_name} PROPERTIES WILL_FAIL TRUE)
     endif()
   endforeach()
+endfunction()
+
+function(rex_add_uninit_cxx20_module_test)
+  set(_source_rel Cxx20_tests/test2020_45.C)
+  set(_source_path ${REX_COMPILE_TESTS_SOURCE_DIR}/${_source_rel})
+  set(_module_source ${REX_COMPILE_TESTS_SOURCE_DIR}/Cxx20_tests/test2020_45_module.C)
+  set(_module_dir ${CMAKE_CURRENT_BINARY_DIR}/test2020_45_modules)
+  set(_iostream_pcm ${_module_dir}/iostream.pcm)
+  set(_module_pcm ${_module_dir}/test2020_45_module.pcm)
+  get_filename_component(_source_dir ${_source_path} DIRECTORY)
+  rex_uninit_test_name(_test_name uninit_fields_cxx ${_source_rel})
+
+  string(CONCAT _module_command
+    "set -eu; "
+    "module_dir=\"${_module_dir}\"; "
+    "mkdir -p \"$module_dir\"; "
+    "${CMAKE_CXX_COMPILER} -std=c++20 -xc++-system-header --precompile "
+    "iostream -o \"${_iostream_pcm}\"; "
+    "${CMAKE_CXX_COMPILER} -std=c++20 -x c++-module --precompile "
+    "\"${_module_source}\" "
+    "-fmodule-file=\"${_iostream_pcm}\" "
+    "-o \"${_module_pcm}\"; "
+    "translator=\"$1\"; shift; "
+    "exec \"$translator\" \"$@\"")
+
+  add_test(
+    NAME ${_test_name}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND
+      ${BASH_EXECUTABLE} -c
+      "${_module_command}"
+      dummy
+      $<TARGET_FILE:testUninitializedFields>
+      ${_uninit_flags}
+      -std=c++20
+      -DTEST_STRING_MACRO="Thu Apr 14 08:18:33 PDT 2005"
+      -I${_source_dir}
+      ${_uninit_includes}
+      -fmodule-file=${_iostream_pcm}
+      -fmodule-file=test2020_45_module=${_module_pcm}
+      -c ${_source_path}
+  )
 endfunction()
 
 function(rex_add_uninit_fortran_tests prefix property_name will_fail)
@@ -159,17 +205,39 @@ if(NOT _uninit_skip_all)
   rex_filter_negative_sources(REX_UNINIT_CXX11_TESTS_CXX11_POSITIVE_SOURCES
     REX_CXX11_TESTS_CXX11_SOURCES
     REX_CXX11_TESTS_NEGATIVE_SOURCES)
+  rex_get_registered_compile_source_set(_cxx11_uninit_positive
+    REX_UNINIT_CXX11_TESTS_CXX11_POSITIVE_SOURCES)
+  list(APPEND _cxx11_uninit_positive Cxx11_tests/test2019_315.C)
+  list(REMOVE_DUPLICATES _cxx11_uninit_positive)
+  set_property(GLOBAL PROPERTY REX_UNINIT_CXX11_TESTS_CXX11_POSITIVE_SOURCES
+    ${_cxx11_uninit_positive})
+  rex_get_registered_compile_source_set(_cxx11_uninit_negative
+    REX_CXX11_TESTS_NEGATIVE_SOURCES)
+  list(REMOVE_ITEM _cxx11_uninit_negative Cxx11_tests/test2019_315.C)
+  set_property(GLOBAL PROPERTY REX_UNINIT_CXX11_TESTS_NEGATIVE_SOURCES
+    ${_cxx11_uninit_negative})
   rex_add_uninit_cxx_tests(REX_UNINIT_CXX11_TESTS_CXX11_POSITIVE_SOURCES FALSE
     -std=c++11)
-  rex_add_uninit_cxx_tests(REX_CXX11_TESTS_NEGATIVE_SOURCES TRUE -std=c++11)
+  rex_add_uninit_cxx_tests(REX_UNINIT_CXX11_TESTS_NEGATIVE_SOURCES TRUE -std=c++11)
   rex_add_uninit_cxx_tests(REX_CXX11_TESTS_CXX03_SOURCES FALSE -std=c++03)
   rex_add_uninit_cxx_tests(REX_CXX14_TESTS_SOURCES FALSE -std=c++14)
-  rex_add_uninit_cxx_tests(REX_CXX17_TESTS_SOURCES FALSE -std=c++17)
+  rex_filter_negative_sources(REX_UNINIT_CXX17_TESTS_POSITIVE_SOURCES
+    REX_CXX17_TESTS_SOURCES
+    REX_CXX17_TESTS_NEGATIVE_SOURCES)
+  rex_add_uninit_cxx_tests(REX_UNINIT_CXX17_TESTS_POSITIVE_SOURCES FALSE
+    -std=c++17)
+  rex_add_uninit_cxx_tests(REX_CXX17_TESTS_NEGATIVE_SOURCES TRUE -std=c++17)
   rex_filter_negative_sources(REX_UNINIT_CXX20_TESTS_POSITIVE_SOURCES
     REX_CXX20_TESTS_SOURCES
     REX_CXX20_TESTS_NEGATIVE_SOURCES)
+  rex_get_registered_compile_source_set(_cxx20_uninit_positive
+    REX_UNINIT_CXX20_TESTS_POSITIVE_SOURCES)
+  list(REMOVE_ITEM _cxx20_uninit_positive Cxx20_tests/test2020_45.C)
+  set_property(GLOBAL PROPERTY REX_UNINIT_CXX20_TESTS_POSITIVE_SOURCES
+    ${_cxx20_uninit_positive})
   rex_add_uninit_cxx_tests(REX_UNINIT_CXX20_TESTS_POSITIVE_SOURCES FALSE
     -std=c++20)
+  rex_add_uninit_cxx20_module_test()
   rex_add_uninit_cxx_tests(REX_CXX20_TESTS_NEGATIVE_SOURCES TRUE -std=c++20)
 
   rex_get_registered_compile_source_set(_all_c_sources REX_C_TESTS_SOURCES)
@@ -181,6 +249,11 @@ if(NOT _uninit_skip_all)
   rex_get_registered_compile_source_set(_c89_gnu89_sources REX_C89_GNU89_SOURCES)
   if(_c89_gnu89_sources)
     list(REMOVE_ITEM _c89_sources ${_c89_gnu89_sources})
+  endif()
+  rex_get_registered_compile_source_set(_c89_negative_sources
+    REX_C89_TESTS_NEGATIVE_SOURCES)
+  if(_c89_negative_sources)
+    list(REMOVE_ITEM _c89_sources ${_c89_negative_sources})
   endif()
   if(_c89_sources)
     list(REMOVE_ITEM _all_c_sources ${_c89_sources})
