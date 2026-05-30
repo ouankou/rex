@@ -164,7 +164,11 @@ find_llvm_config() {
 prepend_path_if_dir() {
     local var_name="$1"
     local dir="$2"
-    local current_value="${!var_name}"
+    local current_value=""
+
+    if [[ -v "$var_name" ]]; then
+        current_value="${!var_name}"
+    fi
 
     [ -d "$dir" ] || return 0
     if [ -n "$current_value" ]; then
