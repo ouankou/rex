@@ -16485,6 +16485,10 @@ SOURCE_OMP_DISTRIBUTE_STATEMENT_START
 void SgOmpDistributeStatement::post_construction_initialization() {}
 SOURCE_OMP_DISTRIBUTE_STATEMENT_END
 
+SOURCE_OMP_WORKDISTRIBUTE_STATEMENT_START
+void SgOmpWorkdistributeStatement::post_construction_initialization() {}
+SOURCE_OMP_WORKDISTRIBUTE_STATEMENT_END
+
 SOURCE_OMP_LOOP_STATEMENT_START
 void SgOmpLoopStatement::post_construction_initialization() {}
 SOURCE_OMP_LOOP_STATEMENT_END
@@ -16860,6 +16864,11 @@ SOURCE_OMP_TARGET_TEAMS_STATEMENT_END
 SOURCE_OMP_TARGET_TEAMS_DISTRIBUTE_STATEMENT_START
 void SgOmpTargetTeamsDistributeStatement::post_construction_initialization() {}
 SOURCE_OMP_TARGET_TEAMS_DISTRIBUTE_STATEMENT_END
+
+SOURCE_OMP_TARGET_TEAMS_WORKDISTRIBUTE_STATEMENT_START
+void SgOmpTargetTeamsWorkdistributeStatement::
+    post_construction_initialization() {}
+SOURCE_OMP_TARGET_TEAMS_WORKDISTRIBUTE_STATEMENT_END
 
 SOURCE_OMP_TARGET_TEAMS_DISTRIBUTE_SIMD_STATEMENT_START
 void SgOmpTargetTeamsDistributeSimdStatement::

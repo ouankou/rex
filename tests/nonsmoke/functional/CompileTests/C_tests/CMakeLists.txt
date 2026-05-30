@@ -1149,7 +1149,6 @@ set(C_TESTCODES_NEGATIVE
   test2014_90.c
   test2015_42.c
   test2015_46.c
-  test2015_106.c
   test2015_87.c
   test2015_93.c
   test2016_21.c

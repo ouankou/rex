@@ -331,6 +331,7 @@ SgOmpTaskgroupStatement
 SgOmpDispatchStatement
 SgOmpDepobjStatement
 SgOmpDistributeStatement
+SgOmpWorkdistributeStatement
 SgOmpLoopStatement
 SgOmpScanStatement
 SgOmpTaskloopStatement
@@ -354,6 +355,7 @@ SgOmpTargetParallelLoopStatement
 SgOmpTargetSimdStatement
 SgOmpTargetTeamsStatement
 SgOmpTargetTeamsDistributeStatement
+SgOmpTargetTeamsWorkdistributeStatement
 SgOmpTargetTeamsDistributeSimdStatement
 SgOmpTargetTeamsLoopStatement
 SgOmpTargetTeamsDistributeParallelForStatement

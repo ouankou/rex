@@ -11,7 +11,10 @@ set(OMPVV_EXTRACT_SCRIPT
     "${CMAKE_CURRENT_SOURCE_DIR}/extract_omp_directives.sh")
 set(OMPVV_RUN_SCRIPT
     "${CMAKE_CURRENT_SOURCE_DIR}/run_ompvv_5_0_case.sh")
-set(OMPVV_SUPPORT_ROOT "${CMAKE_SOURCE_DIR}/third_party/OpenMP_VV/ompvv")
+set(OMPVV_NEGATIVE_PARSE_SCRIPT
+    "${CMAKE_CURRENT_SOURCE_DIR}/run_ompvv_parse_must_fail.sh")
+set(OMPVV_ROOT "${CMAKE_SOURCE_DIR}/tests/external/OpenMP_VV")
+set(OMPVV_SUPPORT_ROOT "${OMPVV_ROOT}/ompvv")
 
 if(NOT EXISTS "${OMPVV_EXTRACT_SCRIPT}")
   message(FATAL_ERROR "OpenMP_VV extractor script missing: ${OMPVV_EXTRACT_SCRIPT}")
@@ -21,14 +24,30 @@ if(NOT EXISTS "${OMPVV_RUN_SCRIPT}")
   message(FATAL_ERROR "OpenMP_VV runner script missing: ${OMPVV_RUN_SCRIPT}")
 endif()
 
+if(NOT EXISTS "${OMPVV_NEGATIVE_PARSE_SCRIPT}")
+  message(FATAL_ERROR "OpenMP_VV negative parser script missing: ${OMPVV_NEGATIVE_PARSE_SCRIPT}")
+endif()
+
 if(NOT EXISTS "${OMPVV_SUPPORT_ROOT}")
   message(FATAL_ERROR "OpenMP_VV support tree not found: ${OMPVV_SUPPORT_ROOT}")
 endif()
 
+set(OMPVV_NEGATIVE_OUTPUT_ROOT "${CMAKE_CURRENT_BINARY_DIR}/negative-test-output")
+file(MAKE_DIRECTORY "${OMPVV_NEGATIVE_OUTPUT_ROOT}")
+add_test(
+  NAME OMPVV_negative_bad_fortran_directive_parse_failure
+  WORKING_DIRECTORY "${OMPVV_NEGATIVE_OUTPUT_ROOT}"
+  COMMAND ${BASH_EXECUTABLE} "${OMPVV_NEGATIVE_PARSE_SCRIPT}"
+          "$<TARGET_FILE:parseOmp>"
+          "${CMAKE_CURRENT_SOURCE_DIR}/negative/bad_openmp_directive.F90")
+set_tests_properties(OMPVV_negative_bad_fortran_directive_parse_failure
+  PROPERTIES LABELS "OMPVV;OMPVV_negative"
+             ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${OMPVV_NEGATIVE_OUTPUT_ROOT}")
+
 function(add_ompvv_version_tests version)
   string(REPLACE "." "_" version_tag "${version}")
 
-  set(source_root "${CMAKE_SOURCE_DIR}/third_party/OpenMP_VV/tests/${version}")
+  set(source_root "${OMPVV_ROOT}/tests/${version}")
   set(reference_root "${CMAKE_CURRENT_SOURCE_DIR}/referenceResults/${version}")
   set(output_root "${CMAKE_CURRENT_BINARY_DIR}/test-output/${version}")
 
@@ -40,7 +59,7 @@ function(add_ompvv_version_tests version)
     message(FATAL_ERROR "OpenMP_VV reference tree not found: ${reference_root}")
   endif()
 
-  file(GLOB_RECURSE version_tests
+  file(GLOB_RECURSE version_tests CONFIGURE_DEPENDS
        RELATIVE "${source_root}"
        "${source_root}/*.c"
        "${source_root}/*.cc"

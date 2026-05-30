@@ -6925,6 +6925,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         case V_SgOmpTaskgroupStatement:
         case V_SgOmpDispatchStatement:
         case V_SgOmpDistributeStatement:
+        case V_SgOmpWorkdistributeStatement:
         case V_SgOmpLoopStatement:
         case V_SgOmpScanStatement:
         case V_SgOmpTaskloopStatement:
@@ -6945,6 +6946,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         case V_SgOmpTargetSimdStatement:
         case V_SgOmpTargetTeamsStatement:
         case V_SgOmpTargetTeamsDistributeStatement:
+        case V_SgOmpTargetTeamsWorkdistributeStatement:
         case V_SgOmpTargetTeamsDistributeSimdStatement:
         case V_SgOmpTargetTeamsLoopStatement:
         case V_SgOmpTargetTeamsDistributeParallelForStatement:
@@ -12950,6 +12952,43 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     return result;
   }
 
+  static std::string directiveNameModifierToString(
+      SgOmpClause::omp_directive_name_modifier_enum modifier) {
+    switch (modifier) {
+    case SgOmpClause::e_omp_directive_name_modifier_unspecified:
+      return "";
+    case SgOmpClause::e_omp_directive_name_modifier_parallel:
+      return "parallel";
+    case SgOmpClause::e_omp_directive_name_modifier_for:
+      return "for";
+    case SgOmpClause::e_omp_directive_name_modifier_do:
+      return "do";
+    case SgOmpClause::e_omp_directive_name_modifier_distribute:
+      return "distribute";
+    case SgOmpClause::e_omp_directive_name_modifier_sections:
+      return "sections";
+    case SgOmpClause::e_omp_directive_name_modifier_single:
+      return "single";
+    case SgOmpClause::e_omp_directive_name_modifier_scope:
+      return "scope";
+    case SgOmpClause::e_omp_directive_name_modifier_target:
+      return "target";
+    case SgOmpClause::e_omp_directive_name_modifier_task:
+      return "task";
+    case SgOmpClause::e_omp_directive_name_modifier_taskloop:
+      return "taskloop";
+    case SgOmpClause::e_omp_directive_name_modifier_teams:
+      return "teams";
+    case SgOmpClause::e_omp_directive_name_modifier_unknown:
+      break;
+    }
+
+    cerr << "Error: unhandled directive-name modifier in "
+            "directiveNameModifierToString():"
+         << modifier << endl;
+    ROSE_ABORT();
+  }
+
   static std::string scheduleModifierToString(
       SgOmpClause::omp_schedule_modifier_enum rm) {
     string result = "";
@@ -13642,6 +13681,12 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       break;
     case V_SgOmpFirstprivateClause:
       curprint(string(" firstprivate("));
+      if (c->get_directive_name_modifier() !=
+          SgOmpClause::e_omp_directive_name_modifier_unspecified) {
+        curprint(
+            directiveNameModifierToString(c->get_directive_name_modifier()));
+        curprint(string(":"));
+      }
       break;
     case V_SgOmpNontemporalClause:
       curprint(string(" nontemporal("));
@@ -15146,6 +15191,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       curprint(string("distribute"));
       break;
     }
+    case V_SgOmpWorkdistributeStatement: {
+      curprint(string("workdistribute"));
+      break;
+    }
     case V_SgOmpTeamsStatement: {
       curprint(string("teams"));
       break;
@@ -15280,6 +15329,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     }
     case V_SgOmpTargetTeamsDistributeStatement: {
       curprint(string("target teams distribute"));
+      break;
+    }
+    case V_SgOmpTargetTeamsWorkdistributeStatement: {
+      curprint(string("target teams workdistribute"));
       break;
     }
     case V_SgOmpTargetTeamsDistributeSimdStatement: {
@@ -15658,10 +15711,12 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       // TODO assertion for must-have bodies
     }
 
-    // unparse the end directive and name
-    unparseOmpEndDirectivePrefixAndName(stmt, info);
-    // unparse the end directive's clause
-    unparseOmpEndDirectiveClauses(stmt, info);
+    if (!isVariant) {
+      // Variant directives inside metadirective/declarative-variant clauses
+      // are selector syntax, not full structured regions.
+      unparseOmpEndDirectivePrefixAndName(stmt, info);
+      unparseOmpEndDirectiveClauses(stmt, info);
+    }
 
   } // end unparseOmpGenericStatement
 

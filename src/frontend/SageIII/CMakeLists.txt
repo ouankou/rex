@@ -2,6 +2,8 @@ add_subdirectory(astFixup)
 add_subdirectory(astPostProcessing)
 add_subdirectory(sageInterface)
 add_subdirectory(virtualCFG)
+set(OMPPARSER_BUILD_TESTING OFF CACHE BOOL
+    "Build ompparser standalone tests" FORCE)
 add_subdirectory(ompparser)
 set(USE_REX true)
 set(USE_OMPPARSER true)

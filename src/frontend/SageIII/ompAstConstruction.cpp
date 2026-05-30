@@ -45,6 +45,8 @@ static const char *const kFortranKeepOpenMPPragmaAttributeName =
     "fortran_keep_openmp_pragma";
 static const char *const kOmpCombinedParallelNestedVariantAttrName =
     "omp_combined_parallel_nested_variant";
+static const char *const kOmpClauseOriginalOrderAttrName =
+    "omp_clause_original_order";
 static const char *const kOmpDeclareTargetExtendedListAttrName =
     "omp_declare_target_extended_list";
 static const char *const kFortranOmpSourceTextAttributeName =
@@ -4325,9 +4327,35 @@ static bool allowsImplicitFortranEnd(OpenMPDirectiveKind kind) {
   case OMPD_parallel:
   case OMPD_do:
   case OMPD_parallel_do:
+  case OMPD_parallel_do_simd:
   case OMPD_parallel_loop:
+  case OMPD_loop:
   case OMPD_target:
+  case OMPD_target_parallel_do:
+  case OMPD_target_parallel_do_simd:
+  case OMPD_target_parallel_for:
+  case OMPD_target_parallel_for_simd:
+  case OMPD_target_parallel_loop:
   case OMPD_target_simd:
+  case OMPD_target_teams_distribute:
+  case OMPD_target_teams_distribute_parallel_do:
+  case OMPD_target_teams_distribute_parallel_do_simd:
+  case OMPD_target_teams_distribute_parallel_for:
+  case OMPD_target_teams_distribute_parallel_for_simd:
+  case OMPD_target_teams_distribute_simd:
+  case OMPD_teams_distribute:
+  case OMPD_teams_distribute_parallel_do:
+  case OMPD_teams_distribute_parallel_do_simd:
+  case OMPD_teams_distribute_parallel_for:
+  case OMPD_teams_distribute_parallel_for_simd:
+  case OMPD_teams_distribute_simd:
+  case OMPD_distribute_parallel_do:
+  case OMPD_distribute_parallel_do_simd:
+  case OMPD_distribute_parallel_for:
+  case OMPD_distribute_parallel_for_simd:
+  case OMPD_distribute_simd:
+  case OMPD_taskloop:
+  case OMPD_taskloop_simd:
   case OMPD_declare_target:
     return true;
   default:
@@ -4421,6 +4449,61 @@ static OpenMPDirective *parseOpenMPDirectiveText(const std::string &text) {
     directive = parseOpenMP(text.c_str(), nullptr, nullptr);
   }
   return directive;
+}
+
+static void failOpenMPParse(SgSourceFile *sageFilePtr,
+                            SgPragmaDeclaration *pragmaDecl,
+                            const std::string &directiveText) {
+  std::cerr << "Error: failed to parse OpenMP directive";
+  if (pragmaDecl != nullptr) {
+    if (Sg_File_Info *info = pragmaDecl->get_startOfConstruct()) {
+      std::cerr << " at " << info->get_filenameString() << ":"
+                << info->get_line();
+    }
+  }
+  std::cerr << ": " << directiveText << std::endl;
+
+  const int openmp_parse_error = 100;
+  if (sageFilePtr != nullptr) {
+    sageFilePtr->set_frontendErrorCode(
+        std::max(sageFilePtr->get_frontendErrorCode(), openmp_parse_error));
+    if (SgProject *project = sageFilePtr->get_project()) {
+      project->set_frontendErrorCode(
+          std::max(project->get_frontendErrorCode(), openmp_parse_error));
+    }
+  }
+
+  ompparser_OpenMPIR = nullptr;
+  setLang(Lang_unknown);
+  ROSE_ABORT();
+}
+
+static void failOpenMPFortranAstConstruction(SgSourceFile *sageFilePtr,
+                                             SgPragmaDeclaration *pragmaDecl,
+                                             const std::string &directiveText,
+                                             const std::string &reason) {
+  std::cerr << "Error: failed to build OpenMP AST for Fortran directive";
+  if (pragmaDecl != nullptr) {
+    if (Sg_File_Info *info = pragmaDecl->get_startOfConstruct()) {
+      std::cerr << " at " << info->get_filenameString() << ":"
+                << info->get_line();
+    }
+  }
+  std::cerr << ": " << reason << ": " << directiveText << std::endl;
+
+  const int openmp_parse_error = 100;
+  if (sageFilePtr != nullptr) {
+    sageFilePtr->set_frontendErrorCode(
+        std::max(sageFilePtr->get_frontendErrorCode(), openmp_parse_error));
+    if (SgProject *project = sageFilePtr->get_project()) {
+      project->set_frontendErrorCode(
+          std::max(project->get_frontendErrorCode(), openmp_parse_error));
+    }
+  }
+
+  ompparser_OpenMPIR = nullptr;
+  setLang(Lang_unknown);
+  ROSE_ABORT();
 }
 
 static bool firstFortranContinuationAppendsWithoutSpace(
@@ -4912,8 +4995,9 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
     ompparser_OpenMPIR = parseOpenMPDirectiveText(pending);
     if (ompparser_OpenMPIR == NULL) {
       cleanup_local_directives();
-      setLang(Lang_unknown);
-      return false;
+      failOpenMPParse(sageFilePtr,
+                      pending_pragmas.empty() ? NULL : pending_pragmas.front(),
+                      pending);
     }
 
     pending_join_first_clause = shouldJoinFirstFortranOpenMPClauseWithoutSpace(
@@ -4939,8 +5023,9 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
         cleanup_local_directives();
         delete ompparser_OpenMPIR;
         ompparser_OpenMPIR = NULL;
-        setLang(Lang_unknown);
-        return false;
+        failOpenMPFortranAstConstruction(sageFilePtr, primary,
+                                         directive_source_text,
+                                         "unmatched OpenMP end directive");
       }
       bool matched = false;
       OpenMPDirective *matched_begin_directive = NULL;
@@ -4955,17 +5040,12 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
         }
       }
       if (!matched) {
-        // Some explicit END markers (for example, END ATOMIC block forms) are
-        // kept as standalone Fortran pragmas rather than entering the paired
-        // structured-body conversion path. Do not collapse the enclosing
-        // pairing stack when such a raw END appears.
-        if (isFortranPairedDirective(end_directive)) {
-          cleanup_local_directives();
-          delete ompparser_OpenMPIR;
-          ompparser_OpenMPIR = NULL;
-          setLang(Lang_unknown);
-          return false;
-        }
+        cleanup_local_directives();
+        delete ompparser_OpenMPIR;
+        ompparser_OpenMPIR = NULL;
+        failOpenMPFortranAstConstruction(sageFilePtr, primary,
+                                         directive_source_text,
+                                         "mismatched OpenMP end directive");
       } else {
         if (isFortranPotentiallyExplicitEndDirective(matched_begin_directive)) {
           for (const auto &entry : local_fortran_paired_pragma_dict) {
@@ -5392,6 +5472,39 @@ toSgOmpClauseIfModifier(OpenMPIfClauseModifier modifier) {
   }
   }
   return result;
+}
+
+//! Convert OpenMPIR directive-name modifiers to the Sage OpenMP clause enum.
+static SgOmpClause::omp_directive_name_modifier_enum
+toSgOmpClauseDirectiveNameModifier(OpenMPDirectiveKind modifier) {
+  switch (modifier) {
+  case OMPD_parallel:
+    return SgOmpClause::e_omp_directive_name_modifier_parallel;
+  case OMPD_for:
+    return SgOmpClause::e_omp_directive_name_modifier_for;
+  case OMPD_do:
+    return SgOmpClause::e_omp_directive_name_modifier_do;
+  case OMPD_distribute:
+    return SgOmpClause::e_omp_directive_name_modifier_distribute;
+  case OMPD_sections:
+    return SgOmpClause::e_omp_directive_name_modifier_sections;
+  case OMPD_single:
+    return SgOmpClause::e_omp_directive_name_modifier_single;
+  case OMPD_scope:
+    return SgOmpClause::e_omp_directive_name_modifier_scope;
+  case OMPD_target:
+    return SgOmpClause::e_omp_directive_name_modifier_target;
+  case OMPD_task:
+    return SgOmpClause::e_omp_directive_name_modifier_task;
+  case OMPD_taskloop:
+    return SgOmpClause::e_omp_directive_name_modifier_taskloop;
+  case OMPD_teams:
+    return SgOmpClause::e_omp_directive_name_modifier_teams;
+  case OMPD_unknown:
+    return SgOmpClause::e_omp_directive_name_modifier_unspecified;
+  default:
+    return SgOmpClause::e_omp_directive_name_modifier_unknown;
+  }
 }
 
 static SgOmpClause::omp_lastprivate_modifier_enum
@@ -7060,8 +7173,48 @@ static bool fortranAstUnparserEmitsOpenMPEnd(OpenMPDirectiveKind kind) {
   case OMPD_atomic:
   case OMPD_do:
   case OMPD_parallel_do:
+  case OMPD_parallel_do_simd:
+  case OMPD_parallel_for:
+  case OMPD_parallel_for_simd:
   case OMPD_parallel_loop:
+  case OMPD_loop:
+  case OMPD_taskloop:
+  case OMPD_taskloop_simd:
   case OMPD_target:
+  case OMPD_target_data:
+  case OMPD_target_parallel:
+  case OMPD_target_parallel_do:
+  case OMPD_target_parallel_do_simd:
+  case OMPD_target_parallel_for:
+  case OMPD_target_parallel_for_simd:
+  case OMPD_target_parallel_loop:
+  case OMPD_target_simd:
+  case OMPD_target_teams:
+  case OMPD_target_teams_distribute:
+  case OMPD_target_teams_distribute_parallel_do:
+  case OMPD_target_teams_distribute_parallel_do_simd:
+  case OMPD_target_teams_distribute_parallel_for:
+  case OMPD_target_teams_distribute_parallel_for_simd:
+  case OMPD_target_teams_distribute_simd:
+  case OMPD_target_teams_workdistribute:
+  case OMPD_teams:
+  case OMPD_teams_distribute:
+  case OMPD_teams_distribute_parallel_do:
+  case OMPD_teams_distribute_parallel_do_simd:
+  case OMPD_teams_distribute_parallel_for:
+  case OMPD_teams_distribute_parallel_for_simd:
+  case OMPD_teams_distribute_simd:
+  case OMPD_distribute_simd:
+  case OMPD_distribute_parallel_do:
+  case OMPD_distribute_parallel_do_simd:
+  case OMPD_distribute_parallel_for:
+  case OMPD_distribute_parallel_for_simd:
+  case OMPD_parallel_master:
+  case OMPD_master_taskloop:
+  case OMPD_master_taskloop_simd:
+  case OMPD_parallel_master_taskloop:
+  case OMPD_parallel_master_taskloop_simd:
+  case OMPD_workdistribute:
   case OMPD_begin_metadirective:
     return true;
   default:
@@ -8519,33 +8672,6 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
     file->set_openmp_processed(true);
   };
 
-  auto report_openmp_parse_failure =
-      [&](SgPragmaDeclaration *pragma_decl,
-          const std::string &directive_text) -> void {
-    if (pragma_decl != nullptr) {
-      if (Sg_File_Info *info = pragma_decl->get_startOfConstruct()) {
-        std::cerr << "Error: failed to parse OpenMP directive at "
-                  << info->get_filenameString() << ":" << info->get_line()
-                  << ": " << directive_text << std::endl;
-      } else {
-        std::cerr << "Error: failed to parse OpenMP directive: "
-                  << directive_text << std::endl;
-      }
-    }
-
-    const int openmp_parse_error = 100;
-    sageFilePtr->set_frontendErrorCode(
-        std::max(sageFilePtr->get_frontendErrorCode(), openmp_parse_error));
-    if (SgProject *project = sageFilePtr->get_project()) {
-      project->set_frontendErrorCode(
-          std::max(project->get_frontendErrorCode(), openmp_parse_error));
-    }
-
-    ompparser_OpenMPIR = nullptr;
-    setLang(Lang_unknown);
-    mark_processed(sageFilePtr);
-  };
-
   if (SgProject::get_verbose() > 1) {
     printf("Processing OpenMP directives ... \n");
   }
@@ -8636,8 +8762,7 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
               parseOpenMP(pragmaString.c_str(), nullptr, nullptr);
         }
         if (ompparser_OpenMPIR == NULL) {
-          report_openmp_parse_failure(pragmaDeclaration, pragmaString);
-          return;
+          failOpenMPParse(sageFilePtr, pragmaDeclaration, pragmaString);
         }
         if (isOpenMPDirectiveEndMarkerOnly(ompparser_OpenMPIR)) {
           OpenMPEndDirective *end_wrapper =
@@ -8845,6 +8970,7 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   case OMPD_dispatch:
   case OMPD_master:
   case OMPD_distribute:
+  case OMPD_workdistribute:
   case OMPD_loop:
   case OMPD_scan:
   case OMPD_taskloop:
@@ -8865,6 +8991,7 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   case OMPD_target_simd:
   case OMPD_target_teams:
   case OMPD_target_teams_distribute:
+  case OMPD_target_teams_workdistribute:
   case OMPD_target_teams_distribute_simd:
   case OMPD_target_teams_loop:
   case OMPD_target_teams_distribute_parallel_for:
@@ -9119,6 +9246,7 @@ convertCombinedBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
 
   switch (directive_kind) {
   case OMPD_parallel_do:
+  case OMPD_parallel_do_simd:
   case OMPD_parallel_for:
   case OMPD_parallel_for_simd:
   case OMPD_parallel_sections:
@@ -9555,6 +9683,10 @@ convertBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     result = new SgOmpDistributeStatement(NULL, body);
     break;
   }
+  case OMPD_workdistribute: {
+    result = new SgOmpWorkdistributeStatement(NULL, body);
+    break;
+  }
   case OMPD_loop: {
     result = new SgOmpLoopStatement(NULL, body);
     break;
@@ -9692,6 +9824,10 @@ convertBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   }
   case OMPD_target_teams_distribute: {
     result = new SgOmpTargetTeamsDistributeStatement(NULL, body);
+    break;
+  }
+  case OMPD_target_teams_workdistribute: {
+    result = new SgOmpTargetTeamsWorkdistributeStatement(NULL, body);
     break;
   }
   case OMPD_target_teams_distribute_simd: {
@@ -10947,6 +11083,10 @@ convertVariantBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     result = new SgOmpDistributeStatement(NULL, NULL);
     break;
   }
+  case OMPD_workdistribute: {
+    result = new SgOmpWorkdistributeStatement(NULL, NULL);
+    break;
+  }
   case OMPD_loop: {
     result = new SgOmpLoopStatement(NULL, NULL);
     break;
@@ -11072,6 +11212,10 @@ convertVariantBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   }
   case OMPD_target_teams_distribute: {
     result = new SgOmpTargetTeamsDistributeStatement(NULL, NULL);
+    break;
+  }
+  case OMPD_target_teams_workdistribute: {
+    result = new SgOmpTargetTeamsWorkdistributeStatement(NULL, NULL);
     break;
   }
   case OMPD_target_teams_distribute_simd: {
@@ -12043,6 +12187,26 @@ static bool tryMapFortranInReductionUserIdentifier(
 static bool tryMapFortranTaskReductionUserIdentifier(
     const std::string &raw_identifier,
     SgOmpClause::omp_task_reduction_identifier_enum &sg_identifier);
+static bool hasFirstprivateExpressionDirectiveNameModifier(
+    OpenMPFirstprivateClause *firstprivate_clause);
+static SgOmpFirstprivateClause *convertFirstprivateClauseWithModifiers(
+    SgStatement *directive, OpenMPDirective *omp_directive,
+    OpenMPFirstprivateClause *firstprivate_clause);
+
+static void attachOmpVariablesClauseToDirective(SgStatement *directive,
+                                                OpenMPDirective *omp_directive,
+                                                SgOmpVariablesClause *clause) {
+  ROSE_ASSERT(directive != NULL);
+  ROSE_ASSERT(omp_directive != NULL);
+  ROSE_ASSERT(clause != NULL);
+
+  if (omp_directive->getKind() == OMPD_declare_simd) {
+    ((SgOmpDeclareSimdStatement *)directive)->get_clauses().push_back(clause);
+  } else {
+    addOmpClause(directive, clause);
+  }
+  clause->set_parent(directive);
+}
 
 SgOmpVariablesClause *
 convertClause(SgStatement *directive,
@@ -12076,6 +12240,18 @@ convertClause(SgStatement *directive,
         parseOmpVariable(current_OpenMPIR_to_SageIII,
                          current_omp_clause->getKind(), expression);
       }
+    }
+  }
+
+  if (clause_kind == OMPC_firstprivate) {
+    OpenMPFirstprivateClause *firstprivate_clause =
+        static_cast<OpenMPFirstprivateClause *>(current_omp_clause);
+    if (hasFirstprivateExpressionDirectiveNameModifier(firstprivate_clause)) {
+      SgOmpFirstprivateClause *result = convertFirstprivateClauseWithModifiers(
+          directive, current_OpenMPIR_to_SageIII.second, firstprivate_clause);
+      attachOmpVariablesClauseToDirective(
+          directive, current_OpenMPIR_to_SageIII.second, result);
+      return result;
     }
   }
 
@@ -12287,16 +12463,15 @@ convertClause(SgStatement *directive,
     printf("Unknown Clause!\n");
   }
   }
+  if (current_omp_clause->hasDirectiveNameModifier()) {
+    result->set_directive_name_modifier(toSgOmpClauseDirectiveNameModifier(
+        current_omp_clause->getDirectiveNameModifier()));
+  }
   setOneSourcePositionForTransformation(result);
   buildVariableList(result);
   explist->set_parent(result);
-  // reconsider the location of following code to attach clause
-  if (current_OpenMPIR_to_SageIII.second->getKind() == OMPD_declare_simd) {
-    ((SgOmpDeclareSimdStatement *)directive)->get_clauses().push_back(result);
-  } else {
-    addOmpClause(directive, result);
-  }
-  result->set_parent(directive);
+  attachOmpVariablesClauseToDirective(
+      directive, current_OpenMPIR_to_SageIII.second, result);
   omp_variable_list.clear();
   return result;
 }
@@ -13500,6 +13675,115 @@ void buildVariableList(SgOmpVariablesClause *current_omp_clause) {
   }
 }
 
+static void copyOmpClauseOriginalOrder(SgOmpClause *sg_clause,
+                                       OpenMPClause *omp_clause) {
+  if (sg_clause == NULL || omp_clause == NULL ||
+      sg_clause->getAttribute(kOmpClauseOriginalOrderAttrName) != NULL) {
+    return;
+  }
+
+  const int original_order = omp_clause->getClausePosition();
+  if (original_order < 0) {
+    return;
+  }
+
+  sg_clause->addNewAttribute(kOmpClauseOriginalOrderAttrName,
+                             new OmpOwnedIntAttribute(original_order));
+}
+
+static SgOmpFirstprivateClause *buildFirstprivateClauseFromVariableRange(
+    OpenMPClause *omp_clause, size_t first_index, size_t last_index,
+    bool has_directive_name_modifier,
+    OpenMPDirectiveKind directive_name_modifier) {
+  ROSE_ASSERT(omp_clause != NULL);
+  ROSE_ASSERT(first_index <= last_index);
+  ROSE_ASSERT(last_index <= omp_variable_list.size());
+
+  SgExprListExp *explist = buildExprListExp();
+  SgOmpFirstprivateClause *result = new SgOmpFirstprivateClause(explist);
+  if (has_directive_name_modifier) {
+    result->set_directive_name_modifier(
+        toSgOmpClauseDirectiveNameModifier(directive_name_modifier));
+  }
+  setOneSourcePositionForTransformation(result);
+
+  for (size_t i = first_index; i < last_index; ++i) {
+    appendFlattenedOmpVarExprNodes(result, omp_variable_list[i].second);
+  }
+
+  explist->set_parent(result);
+  if (omp_clause->getKind() == OMPC_firstprivate) {
+    copyOmpClauseOriginalOrder(result, omp_clause);
+  }
+  return result;
+}
+
+static bool hasFirstprivateExpressionDirectiveNameModifier(
+    OpenMPFirstprivateClause *firstprivate_clause) {
+  ROSE_ASSERT(firstprivate_clause != NULL);
+  std::vector<const char *> *expressions =
+      firstprivate_clause->getExpressions();
+  ROSE_ASSERT(expressions != NULL);
+  for (size_t i = 0; i < expressions->size(); ++i) {
+    if (firstprivate_clause->expressionHasDirectiveNameModifier(i)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static SgOmpFirstprivateClause *convertFirstprivateClauseWithModifiers(
+    SgStatement *directive, OpenMPDirective *omp_directive,
+    OpenMPFirstprivateClause *firstprivate_clause) {
+  ROSE_ASSERT(directive != NULL);
+  ROSE_ASSERT(omp_directive != NULL);
+  ROSE_ASSERT(firstprivate_clause != NULL);
+  std::vector<const char *> *expressions =
+      firstprivate_clause->getExpressions();
+  ROSE_ASSERT(expressions != NULL);
+  if (expressions->size() != omp_variable_list.size()) {
+    std::cerr << "Error: OpenMP firstprivate clause expression count ("
+              << expressions->size()
+              << ") does not match resolved variable count ("
+              << omp_variable_list.size() << ")" << std::endl;
+    ROSE_ABORT();
+  }
+
+  SgOmpFirstprivateClause *first_result = NULL;
+  size_t group_begin = 0;
+  while (group_begin < expressions->size()) {
+    const bool group_has_modifier =
+        firstprivate_clause->expressionHasDirectiveNameModifier(group_begin);
+    const OpenMPDirectiveKind group_modifier =
+        firstprivate_clause->getExpressionDirectiveNameModifier(group_begin);
+    size_t group_end = group_begin + 1;
+    while (group_end < expressions->size() &&
+           firstprivate_clause->expressionHasDirectiveNameModifier(group_end) ==
+               group_has_modifier &&
+           (!group_has_modifier ||
+            firstprivate_clause->getExpressionDirectiveNameModifier(
+                group_end) == group_modifier)) {
+      ++group_end;
+    }
+
+    SgOmpFirstprivateClause *group_clause =
+        buildFirstprivateClauseFromVariableRange(
+            firstprivate_clause, group_begin, group_end, group_has_modifier,
+            group_modifier);
+    if (first_result == NULL) {
+      first_result = group_clause;
+    } else {
+      attachOmpVariablesClauseToDirective(directive, omp_directive,
+                                          group_clause);
+    }
+    group_begin = group_end;
+  }
+
+  omp_variable_list.clear();
+  ROSE_ASSERT(first_result != NULL);
+  return first_result;
+}
+
 SgOmpParallelStatement *convertOmpParallelStatementFromCombinedDirectives(
     std::pair<SgPragmaDeclaration *, OpenMPDirective *>
         current_OpenMPIR_to_SageIII) {
@@ -13752,6 +14036,7 @@ bool checkOpenMPIR(OpenMPDirective *directive) {
   case OMPD_target_simd:
   case OMPD_target_teams:
   case OMPD_target_teams_distribute:
+  case OMPD_target_teams_workdistribute:
   case OMPD_target_teams_distribute_simd:
   case OMPD_target_teams_loop:
   case OMPD_target_teams_distribute_parallel_for:
@@ -13778,6 +14063,7 @@ bool checkOpenMPIR(OpenMPDirective *directive) {
   case OMPD_taskyield:
   case OMPD_teams:
   case OMPD_threadprivate:
+  case OMPD_workdistribute:
   case OMPD_workshare:
   case OMPD_tile:
   case OMPD_unroll:

@@ -182,7 +182,10 @@ Rose::StringUtility::FileNameLibrary classifyLibrary(const string &fileName) {
 
   path p = fileName;
   while (!p.empty()) {
-    p = p.parent_path();
+    path parent = p.parent_path();
+    if (parent == p)
+      break;
+    p = parent;
     if (exists(p / path("rose.h")))
       return Rose::StringUtility::FILENAME_LIBRARY_ROSE;
 

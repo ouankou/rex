@@ -61,75 +61,72 @@ bool lambdaIsMarkedByTraversalCall(SgFunctionCallExp *functionCallExp,
 
 } // namespace
 
-// Build an inherited attribute for the tree traversal to test the rewrite mechanism
-class InheritedAttribute
-   {
-     public:
-         SgFunctionCallExp* functionCallExp;
+// Build an inherited attribute for the tree traversal to test the rewrite
+// mechanism
+class InheritedAttribute {
+public:
+  SgFunctionCallExp *functionCallExp;
 
-       // Specific constructors are required
-          InheritedAttribute () {};
-          InheritedAttribute ( const InheritedAttribute & X ) : functionCallExp(X.functionCallExp) {};
-   };
+  // Specific constructors are required
+  InheritedAttribute() {};
+  InheritedAttribute(const InheritedAttribute &X)
+      : functionCallExp(X.functionCallExp) {};
+};
 
-class visitorTraversal : public AstTopDownProcessing<InheritedAttribute>
-   {
-     public:
-       // virtual function must be defined
-          virtual InheritedAttribute evaluateInheritedAttribute(SgNode* n, InheritedAttribute inheritedAttribute);
-   };
+class visitorTraversal : public AstTopDownProcessing<InheritedAttribute> {
+public:
+  // virtual function must be defined
+  virtual InheritedAttribute
+  evaluateInheritedAttribute(SgNode *n, InheritedAttribute inheritedAttribute);
+};
 
-InheritedAttribute
-visitorTraversal::evaluateInheritedAttribute(SgNode* n, InheritedAttribute inheritedAttribute)
-   {
-     SgFunctionCallExp* functionCallExp = isSgFunctionCallExp(n);
-     if (functionCallExp != NULL)
-        {
-          inheritedAttribute.functionCallExp = functionCallExp;
-        }
+InheritedAttribute visitorTraversal::evaluateInheritedAttribute(
+    SgNode *n, InheritedAttribute inheritedAttribute) {
+  SgFunctionCallExp *functionCallExp = isSgFunctionCallExp(n);
+  if (functionCallExp != NULL) {
+    inheritedAttribute.functionCallExp = functionCallExp;
+  }
 
-     SgLambdaExp* lambdaExp = isSgLambdaExp(n);
-     if (lambdaExp != NULL) {
-       SgExprListExp *exprListExp = isSgExprListExp(lambdaExp->get_parent());
-       ROSE_ASSERT(exprListExp != NULL);
+  SgLambdaExp *lambdaExp = isSgLambdaExp(n);
+  if (lambdaExp != NULL) {
+    if (inheritedAttribute.functionCallExp != NULL) {
+      if (lambdaIsMarkedByTraversalCall(inheritedAttribute.functionCallExp,
+                                        lambdaExp)) {
+        SgExprListExp *exprListExp = isSgExprListExp(lambdaExp->get_parent());
+        ROSE_ASSERT(exprListExp != NULL);
+        lambdaExp->set_is_device(true);
+      }
+    } else {
+      printf("Error: We should have seen a function call expression at this "
+             "point \n");
+      ROSE_ASSERT(false);
+    }
+  }
 
-       if (inheritedAttribute.functionCallExp != NULL) {
-         if (lambdaIsMarkedByTraversalCall(inheritedAttribute.functionCallExp,
-                                           lambdaExp)) {
-           lambdaExp->set_is_device(true);
-         }
-       } else {
-         printf("Error: We should have seen a function call expression at this "
-                "point \n");
-         ROSE_ASSERT(false);
-       }
-     }
+  return inheritedAttribute;
+}
 
-     return inheritedAttribute;
-   }
-
-
-int main( int argc, char * argv[] )
-   {
+int main(int argc, char *argv[]) {
   // Generate the ROSE AST.
-     SgProject* project = frontend(argc,argv);
+  SgProject *project = frontend(argc, argv);
 
-  // AST consistency tests (optional for users, but this enforces more of our tests)
-     AstTests::runAllTests(project);
+  // AST consistency tests (optional for users, but this enforces more of our
+  // tests)
+  AstTests::runAllTests(project);
 
   // Build the inherited attribute
-     InheritedAttribute inheritedAttribute;
+  InheritedAttribute inheritedAttribute;
 
   // Build the traversal object
-     visitorTraversal exampleTraversal;
+  visitorTraversal exampleTraversal;
 
   // Call the traversal starting at the project node of the AST
-     exampleTraversal.traverseInputFiles(project,inheritedAttribute);
+  exampleTraversal.traverseInputFiles(project, inheritedAttribute);
 
   // Or the traversal over all AST IR nodes can be called!
-     exampleTraversal.traverse(project,inheritedAttribute);
+  exampleTraversal.traverse(project, inheritedAttribute);
 
-  // regenerate the source code and call the vendor 
+  // regenerate the source code and call the vendor
   // compiler, only backend error code is reported.
-     return backend(project);
-   }
+  return backend(project);
+}

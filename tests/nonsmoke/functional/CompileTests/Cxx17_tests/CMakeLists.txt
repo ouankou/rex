@@ -83,6 +83,9 @@ set(CXX17_NEGATIVE_TESTCODES
   # ambiguous. Keep it registered as negative C++17 frontend coverage.
   test2018_67.C
 )
+rex_register_compile_source_set(REX_CXX17_TESTS_NEGATIVE_SOURCES
+  ${CXX17_NEGATIVE_TESTCODES}
+)
 set(CXX17_POSITIVE_TESTCODES ${CXX17_TESTCODES})
 list(REMOVE_ITEM CXX17_POSITIVE_TESTCODES ${CXX17_NEGATIVE_TESTCODES})
 

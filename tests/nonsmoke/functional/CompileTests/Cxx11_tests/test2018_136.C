@@ -97,8 +97,8 @@ void func1() {
 
   // #define _mm_prefetch(P, I)
   void *P_void = NULL;
-  const _mm_hint enum_hint = _MM_HINT_NTA;
-  _mm_prefetch(P_void, enum_hint);
+  const int prefetch_hint = _MM_HINT_NTA;
+  _mm_prefetch(P_void, prefetch_hint);
 
   _mm_set1_epi32(42);
 
@@ -129,7 +129,7 @@ void func1() {
   // #define _mm_shuffle_pd(__A, __B, __C) ((__m128d)__builtin_ia32_shufpd
   // ((__v2df)__A, (__v2df)__B, (__C)))
   __v2df X_v2df;
-  _mm_shuffle_pd(X_v2df, X_v2df, 4);
+  _mm_shuffle_pd(X_v2df, X_v2df, 3);
 
   // #define _mm_shuffle_ps(A, B, MASK) ((__m128) __builtin_ia32_shufps
   // ((__v4sf)(A), (__v4sf)(B), (MASK)))

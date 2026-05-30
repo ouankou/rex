@@ -512,6 +512,23 @@ HEADER_OMP_CLAUSE_START
             e_omp_if_target_update
         };
 
+        enum omp_directive_name_modifier_enum
+        {
+            e_omp_directive_name_modifier_unspecified,
+            e_omp_directive_name_modifier_parallel,
+            e_omp_directive_name_modifier_for,
+            e_omp_directive_name_modifier_do,
+            e_omp_directive_name_modifier_distribute,
+            e_omp_directive_name_modifier_sections,
+            e_omp_directive_name_modifier_single,
+            e_omp_directive_name_modifier_scope,
+            e_omp_directive_name_modifier_target,
+            e_omp_directive_name_modifier_task,
+            e_omp_directive_name_modifier_taskloop,
+            e_omp_directive_name_modifier_teams,
+            e_omp_directive_name_modifier_unknown
+        };
+
         enum omp_depobj_modifier_enum
         {
             e_omp_depobj_modifier_unknown,

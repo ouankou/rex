@@ -359,6 +359,8 @@ void Grammar::setUpStatements() {
                      "OMP_CANCEL_STMT");
   NEW_TERMINAL_MACRO(OmpDistributeStatement, "OmpDistributeStatement",
                      "OMP_DISTRIBUTE_STMT");
+  NEW_TERMINAL_MACRO(OmpWorkdistributeStatement, "OmpWorkdistributeStatement",
+                     "OMP_WORKDISTRIBUTE_STMT");
   NEW_TERMINAL_MACRO(OmpMetadirectiveStatement, "OmpMetadirectiveStatement",
                      "OMP_METADIRECTIVE_STMT");
   NEW_TERMINAL_MACRO(OmpSingleStatement, "OmpSingleStatement",
@@ -413,6 +415,9 @@ void Grammar::setUpStatements() {
   NEW_TERMINAL_MACRO(OmpTargetTeamsDistributeStatement,
                      "OmpTargetTeamsDistributeStatement",
                      "OMP_TARGET_TEAMS_DISTRIBUTE_STMT");
+  NEW_TERMINAL_MACRO(OmpTargetTeamsWorkdistributeStatement,
+                     "OmpTargetTeamsWorkdistributeStatement",
+                     "OMP_TARGET_TEAMS_WORKDISTRIBUTE_STMT");
   NEW_TERMINAL_MACRO(OmpTargetTeamsDistributeSimdStatement,
                      "OmpTargetTeamsDistributeSimdStatement",
                      "OMP_TARGET_TEAMS_DISTRIBUTE_SIMD_STMT");
@@ -480,6 +485,7 @@ void Grammar::setUpStatements() {
           OmpTargetParallelStatement | OmpTargetParallelForSimdStatement |
           OmpTargetParallelLoopStatement | OmpTargetSimdStatement |
           OmpTargetTeamsStatement | OmpTargetTeamsDistributeStatement |
+          OmpTargetTeamsWorkdistributeStatement |
           OmpTargetTeamsDistributeSimdStatement | OmpTargetTeamsLoopStatement |
           OmpTargetTeamsDistributeParallelForStatement |
           OmpTargetTeamsDistributeParallelForSimdStatement |
@@ -491,7 +497,8 @@ void Grammar::setUpStatements() {
           OmpTeamsDistributeParallelForStatement |
           OmpTeamsDistributeParallelForSimdStatement | OmpTeamsLoopStatement |
           OmpSimdStatement | OmpForSimdStatement | OmpCriticalStatement |
-          OmpDistributeStatement | OmpUnrollStatement | OmpTileStatement,
+          OmpDistributeStatement | OmpWorkdistributeStatement |
+          OmpUnrollStatement | OmpTileStatement,
       "OmpClauseBodyStatement", "OMP_CLAUSEBODY_STMT", false);
 
   // + a statement / block
@@ -5426,6 +5433,8 @@ void Grammar::setUpStatements() {
                                        "../Grammar/Statement.code");
   OmpDistributeStatement.setFunctionSource("SOURCE_OMP_DISTRIBUTE_STATEMENT",
                                            "../Grammar/Statement.code");
+  OmpWorkdistributeStatement.setFunctionSource(
+      "SOURCE_OMP_WORKDISTRIBUTE_STATEMENT", "../Grammar/Statement.code");
   OmpLoopStatement.setFunctionSource("SOURCE_OMP_LOOP_STATEMENT",
                                      "../Grammar/Statement.code");
   OmpScanStatement.setFunctionSource("SOURCE_OMP_SCAN_STATEMENT",
@@ -5500,6 +5509,9 @@ void Grammar::setUpStatements() {
                                             "../Grammar/Statement.code");
   OmpTargetTeamsDistributeStatement.setFunctionSource(
       "SOURCE_OMP_TARGET_TEAMS_DISTRIBUTE_STATEMENT",
+      "../Grammar/Statement.code");
+  OmpTargetTeamsWorkdistributeStatement.setFunctionSource(
+      "SOURCE_OMP_TARGET_TEAMS_WORKDISTRIBUTE_STATEMENT",
       "../Grammar/Statement.code");
   OmpTargetTeamsDistributeSimdStatement.setFunctionSource(
       "SOURCE_OMP_TARGET_TEAMS_DISTRIBUTE_SIMD_STATEMENT",

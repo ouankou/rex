@@ -49,9 +49,12 @@ include_flags=(
   -I"$source_dir"
 )
 
-"$parse_omp" "${rose_flags[@]}" -rose:output "$rose_file" "${include_flags[@]}" -c "$source_file" >"$parse_log" 2>&1
+if ! "$parse_omp" "${rose_flags[@]}" -rose:output "$rose_file" "${include_flags[@]}" -c "$source_file" >"$parse_log" 2>&1; then
+  cat "$parse_log"
+  exit 1
+fi
 
-if grep -q "Errors in Processing Input File" "$parse_log"; then
+if grep -Eq '(^error:|^Error: failed to parse OpenMP directive|Errors in Processing Input File)' "$parse_log"; then
   cat "$parse_log"
   exit 1
 fi

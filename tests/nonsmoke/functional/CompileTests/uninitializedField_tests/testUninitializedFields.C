@@ -3,6 +3,7 @@
 
 #include "rose.h"
 
+#include <unordered_map>
 #include <unordered_set>
 
 #if ROSE_USE_VALGRIND
@@ -22,8 +23,24 @@ bool shouldSkipUninitTraversal(SgNode *node) {
     return true;
   }
   if (SgLocatedNode *located = isSgLocatedNode(node)) {
-    if (SageInterface::insideSystemHeader(located)) {
-      return true;
+    static std::unordered_map<int, bool> system_header_cache;
+    Sg_File_Info *file_info = located->get_file_info();
+    if (file_info != nullptr && file_info->get_file_id() >= 0) {
+      const int file_id = file_info->get_file_id();
+      auto cached = system_header_cache.find(file_id);
+      if (cached == system_header_cache.end()) {
+        cached =
+            system_header_cache
+                .emplace(file_id, SageInterface::insideSystemHeader(located))
+                .first;
+      }
+      if (cached->second) {
+        return true;
+      }
+    } else {
+      if (SageInterface::insideSystemHeader(located)) {
+        return true;
+      }
     }
   }
   return false;

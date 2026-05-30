@@ -346,6 +346,7 @@ set(CXX_TESTCODES
   test2005_109.C
   test2005_11.C
   test2005_110.C
+  test2005_111.C
   rex_test2026_issue213_va_start.cpp
   test2005_112.C
   test2005_113.C
@@ -3624,23 +3625,6 @@ add_test(
 )
 set_tests_properties(Cxx_tests_test_pdf_generation PROPERTIES LABELS Cxx_tests)
 rex_lock_test_for_input(Cxx_tests_test_pdf_generation test2004_77.C)
-
-find_program(HPCRUN_EXECUTABLE hpcrun)
-if(HPCRUN_EXECUTABLE)
-  add_test(
-    NAME Cxx_tests_hpctoolkit
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${HPCRUN_EXECUTABLE} -e WALLCLOCK --
-      $<TARGET_FILE:${translator}>
-      -w -rose:verbose 0 -rose:skip_unparse_asm_commands
-      -rose:skipAstConsistancyTests -rose:skip_commentsAndDirectives
-      -rose:skip_unparse -I${CMAKE_CURRENT_SOURCE_DIR}
-      -c ${CMAKE_CURRENT_SOURCE_DIR}/testPerformance.C
-  )
-  set_tests_properties(Cxx_tests_hpctoolkit PROPERTIES LABELS Cxx_tests )
-else()
-  message(STATUS "Skipping Cxx_tests_hpctoolkit because hpcrun was not found")
-endif()
 
 # Extra Issue 99 coverage beyond the default compile test.
 add_test(

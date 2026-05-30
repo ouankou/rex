@@ -26002,14 +26002,6 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
                                                 embedded_source_manager, true);
   const bool embedded_field_forward_decl =
       embedded_in_field && !record_decl->isThisDeclarationADefinition();
-  bool semantic_outer_field_tag = false;
-  if (embedded_in_field && field_owner_decl != nullptr) {
-    clang::DeclContext *semantic_ctx = record_decl->getDeclContext();
-    clang::DeclContext *lexical_ctx = record_decl->getLexicalDeclContext();
-    semantic_outer_field_tag = semantic_ctx != nullptr &&
-                               semantic_ctx != field_owner_decl &&
-                               lexical_ctx == field_owner_decl;
-  }
   const bool semantic_outer_embedded_tag = semantic_outer_named_definition;
   const bool inline_tag_definition_needs_suppression =
       is_inline_tag_decl && record_decl->isThisDeclarationADefinition();
@@ -26027,7 +26019,7 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
        record_decl->getTypedefNameForAnonDecl() != nullptr) ||
       (!semantic_outer_embedded_tag &&
        inline_tag_definition_needs_suppression) ||
-      (embedded_in_field && !semantic_outer_field_tag);
+      embedded_in_field;
   if (is_embedded_record) {
     const bool prior_forward_has_standalone_surface =
         prev_record_decl != nullptr &&
@@ -33707,12 +33699,15 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl *field_decl,
   bool isNamedNonEmbeddedRecord = false;
   bool isAnonymousStructOrUnion = false;
 
-  auto field_has_embedded_tag = [&](clang::TagDecl *tag_decl) -> bool {
-    if (tag_decl == nullptr || p_compiler_instance == nullptr) {
+  auto field_range_contains_tag_definition =
+      [&](const clang::FieldDecl *candidate_field,
+          clang::TagDecl *tag_decl) -> bool {
+    if (candidate_field == nullptr || tag_decl == nullptr ||
+        p_compiler_instance == nullptr) {
       return false;
     }
-    clang::SourceRange field_range = field_decl->getSourceRange();
-    if (clang::TypeSourceInfo *tsi = field_decl->getTypeSourceInfo()) {
+    clang::SourceRange field_range = candidate_field->getSourceRange();
+    if (clang::TypeSourceInfo *tsi = candidate_field->getTypeSourceInfo()) {
       clang::SourceRange type_range = tsi->getTypeLoc().getSourceRange();
       if (type_range.isValid()) {
         field_range = type_range;
@@ -33724,6 +33719,45 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl *field_decl,
     return tagDefinitionWrittenInRange(tag_decl, field_range,
                                        &p_compiler_instance->getSourceManager(),
                                        /*allow_fallback_loc_compare=*/false);
+  };
+  auto field_has_embedded_tag = [&](clang::TagDecl *tag_decl) -> bool {
+    return field_range_contains_tag_definition(field_decl, tag_decl);
+  };
+  auto field_is_first_embedded_tag_owner =
+      [&](clang::TagDecl *tag_decl) -> bool {
+    if (!field_has_embedded_tag(tag_decl)) {
+      return false;
+    }
+
+    clang::RecordDecl *parent_decl = field_decl->getParent();
+    if (parent_decl == nullptr) {
+      return true;
+    }
+
+    for (clang::FieldDecl *candidate_field : parent_decl->fields()) {
+      if (candidate_field == field_decl) {
+        return true;
+      }
+
+      clang::TagDecl *candidate_tag = nullptr;
+      clang::QualType candidate_qual_type = candidate_field->getType();
+      const clang::Type *candidate_type = stripFieldType(candidate_qual_type);
+      if (auto *record_type =
+              llvm::dyn_cast_or_null<clang::RecordType>(candidate_type)) {
+        candidate_tag = record_type->getDecl();
+      } else if (auto *enum_type =
+                     llvm::dyn_cast_or_null<clang::EnumType>(candidate_type)) {
+        candidate_tag = enum_type->getDecl();
+      }
+
+      if (candidate_tag != nullptr &&
+          candidate_tag->getCanonicalDecl() == tag_decl->getCanonicalDecl() &&
+          field_range_contains_tag_definition(candidate_field, tag_decl)) {
+        return false;
+      }
+    }
+
+    return true;
   };
   auto field_writes_tag_decl = [&](clang::TagDecl *tag_decl) -> bool {
     if (tag_decl == nullptr || p_compiler_instance == nullptr) {
@@ -33825,7 +33859,7 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl *field_decl,
       clang::DeclContext *tag_semantic_ctx = tag_to_translate->getDeclContext();
       if (tag_semantic_ctx != nullptr &&
           tag_semantic_ctx != field_decl->getParent() &&
-          tag_semantic_ctx->isNamespace()) {
+          tag_semantic_ctx->isFileContext()) {
         if (p_decl_translation_map.find(tag_to_translate) ==
                 p_decl_translation_map.end() &&
             p_decl_translation_in_progress.find(tag_to_translate) ==
@@ -33872,8 +33906,10 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl *field_decl,
     // than the tag's semantic context. In C, Clang can place a nested named
     // tag into translation-unit scope even when its definition is spelled
     // inline as part of the field declarator.
-    iscompleteDefined =
-        enumDeclaration->isThisDeclarationADefinition() && embedded_by_field;
+    const bool first_embedded_tag_owner =
+        field_is_first_embedded_tag_owner(enumDeclaration);
+    iscompleteDefined = enumDeclaration->isThisDeclarationADefinition() &&
+                        embedded_by_field && first_embedded_tag_owner;
     isembedded = iscompleteDefined;
     if (isembedded) {
       embeddedEnumDecl = enumDeclaration;
@@ -33897,8 +33933,10 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl *field_decl,
     // than the tag's semantic context. In C, Clang can place a nested named
     // tag into translation-unit scope even when its definition is spelled
     // inline as part of the field declarator.
-    iscompleteDefined =
-        recordDeclaration->isThisDeclarationADefinition() && embedded_by_field;
+    const bool first_embedded_tag_owner =
+        field_is_first_embedded_tag_owner(recordDeclaration);
+    iscompleteDefined = recordDeclaration->isThisDeclarationADefinition() &&
+                        embedded_by_field && first_embedded_tag_owner;
     isembedded = iscompleteDefined;
     if (isembedded) {
       embeddedRecordDecl = recordDeclaration;

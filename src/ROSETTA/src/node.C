@@ -1255,6 +1255,11 @@ void Grammar::setUpNodes() {
   // declared enum types within SgOmpClause
   OmpClause.setFunctionPrototype("HEADER_OMP_CLAUSE",
                                  "../Grammar/Support.code");
+  OmpClause.setDataPrototype("SgOmpClause::omp_directive_name_modifier_enum",
+                             "directive_name_modifier",
+                             "=e_omp_directive_name_modifier_unspecified",
+                             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                             NO_TRAVERSAL, NO_DELETE);
 
   // clauses with expressions
   OmpExpressionClause.setDataPrototype(

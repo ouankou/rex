@@ -85,7 +85,6 @@ set(OUTLINE_FORTRAN_TESTS
   arithmeticIf.f
   blockdo.f90
   column72.f
-  column80.f
   contains1.f90
   contains.f90
   continue.f
@@ -127,16 +126,6 @@ set(OUTLINE_FORTRAN_TESTS
   useModule1.f90
   write.f
 )
-
-# This checked-in specimen is already transformed/malformed Fortran and is
-# rejected by flang before ROSE outlining runs.
-set(OUTLINE_INVALID_FORTRAN_TESTS
-  column80.f
-)
-list(REMOVE_ITEM OUTLINE_FORTRAN_TESTS ${OUTLINE_INVALID_FORTRAN_TESTS})
-foreach(specimen IN LISTS OUTLINE_INVALID_FORTRAN_TESTS)
-  message(STATUS "Skipping outlining Fortran specimen rejected by flang: ${specimen}")
-endforeach()
 
 set(OUTLINE_OPENMP_C_TESTS
   jacobi.c

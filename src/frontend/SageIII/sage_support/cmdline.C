@@ -91,6 +91,16 @@ static bool isClangFrontendDriverOption(const std::string &arg) {
   return arg == "-ffreestanding" || arg == "-fhosted" || arg == "-fno-builtin";
 }
 
+static bool isClangDiagnosticOption(const std::string &arg) {
+  if (arg == "-w" || arg == "-Werror" || arg == "-Wno-error") {
+    return true;
+  }
+  if (arg.rfind("-Wl,", 0) == 0 || arg.rfind("-Wa,", 0) == 0) {
+    return false;
+  }
+  return arg.rfind("-W", 0) == 0;
+}
+
 /*-----------------------------------------------------------------------------
  *  Variable Definitions
  *---------------------------------------------------------------------------*/
@@ -4350,7 +4360,8 @@ void SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine,
     } else if (current_arg == "-fexceptions" ||
                current_arg == "-fcxx-exceptions" || current_arg == "-frtti") {
       clang_frontend_args.push_back(current_arg);
-    } else if (isClangFrontendDriverOption(current_arg)) {
+    } else if (isClangFrontendDriverOption(current_arg) ||
+               isClangDiagnosticOption(current_arg)) {
       clang_frontend_args.push_back(current_arg);
     } else if (current_arg == "-fno-rtti") {
       // Keep -fno-rtti backend-only unless frontend enforcement is explicitly

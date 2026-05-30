@@ -92,9 +92,6 @@ Common ways to reduce missing_executable (optional)
   install Valgrind headers and configure with `-DWITH-VALGRIND=<prefix>` or
   `-DWITH-VALGRIND-INCLUDE=<dir>`/`-DWITH-VALGRIND-LIB=<dir>` so CMake sets
   `ROSE_USE_VALGRIND`. Reconfigure and rebuild.
-- HPCToolkit tests:
-  install HPCToolkit so `hpcrun` is on `PATH`.
-
 Run the full default test set
 ctest --test-dir build --output-on-failure
 
