@@ -13741,7 +13741,13 @@ static SgOmpFirstprivateClause *convertFirstprivateClauseWithModifiers(
   std::vector<const char *> *expressions =
       firstprivate_clause->getExpressions();
   ROSE_ASSERT(expressions != NULL);
-  ROSE_ASSERT(expressions->size() == omp_variable_list.size());
+  if (expressions->size() != omp_variable_list.size()) {
+    std::cerr << "Error: OpenMP firstprivate clause expression count ("
+              << expressions->size()
+              << ") does not match resolved variable count ("
+              << omp_variable_list.size() << ")" << std::endl;
+    ROSE_ABORT();
+  }
 
   SgOmpFirstprivateClause *first_result = NULL;
   size_t group_begin = 0;

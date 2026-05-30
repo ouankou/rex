@@ -8,8 +8,11 @@ fi
 
 parse_omp=$1
 source_file=$2
-parse_log="bad_openmp_directive.parse.log"
-rose_file="rose_bad_openmp_directive.F90"
+source_base=$(basename "$source_file")
+temp_dir=$(mktemp -d "${TMPDIR:-.}/ompvv_parse_must_fail.XXXXXX")
+parse_log="$temp_dir/${source_base}.parse.log"
+rose_file="$temp_dir/rose_${source_base}"
+trap 'rm -rf "$temp_dir"' EXIT
 
 if [[ ! -x "$parse_omp" ]]; then
   echo "parseOmp executable is not runnable: $parse_omp" >&2
@@ -32,5 +35,3 @@ if ! grep -Eq '(^error:|^Error: failed to parse OpenMP directive|Errors in Proce
   echo "expected an OpenMP parser failure diagnostic for: $source_file" >&2
   exit 1
 fi
-
-rm -f "$parse_log" "$rose_file"
