@@ -205,6 +205,22 @@ endif()
 message(STATUS "Compiler selection: Using ${_C_COMPILER_DISPLAY} and ${_CXX_COMPILER_DISPLAY}")
 
 #-----------------------------------------------------------------------------------------------------------------------
+# Read ROSE version from ROSE_VERSION file before calling project()
+# This is needed so that the project version can be set correctly, which affects library versioning
+#-----------------------------------------------------------------------------------------------------------------------
+set(ROSE_SCM_VERSION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/ROSE_VERSION")
+if(NOT EXISTS "${ROSE_SCM_VERSION_FILE}")
+  message(FATAL_ERROR "ROSE version file not found: ${ROSE_SCM_VERSION_FILE}")
+endif()
+file(STRINGS ${ROSE_SCM_VERSION_FILE} ROSE_PACKAGE_VERSION LIMIT_COUNT 1)
+string(STRIP "${ROSE_PACKAGE_VERSION}" ROSE_PACKAGE_VERSION)
+
+project(ROSE
+  VERSION ${ROSE_PACKAGE_VERSION}
+  LANGUAGES C CXX
+)
+
+#-----------------------------------------------------------------------------------------------------------------------
 # Linker selection
 #-----------------------------------------------------------------------------------------------------------------------
 set(ROSE_SELECTED_LINKER "")
@@ -272,34 +288,12 @@ endif()
 if(ROSE_SELECTED_LINKER)
   set(CMAKE_LINKER "${ROSE_SELECTED_LINKER}" CACHE FILEPATH "Linker selected for REX builds" FORCE)
   set(ROSE_SELECTED_LINKER_DRIVER_FLAG "-fuse-ld=${ROSE_SELECTED_LINKER}")
-  append_linker_driver_flag(CMAKE_EXE_LINKER_FLAGS_INIT "${ROSE_SELECTED_LINKER_DRIVER_FLAG}")
-  append_linker_driver_flag(CMAKE_SHARED_LINKER_FLAGS_INIT "${ROSE_SELECTED_LINKER_DRIVER_FLAG}")
-  append_linker_driver_flag(CMAKE_MODULE_LINKER_FLAGS_INIT "${ROSE_SELECTED_LINKER_DRIVER_FLAG}")
-  message(STATUS "Linker selection: ${ROSE_SELECTED_LINKER}")
-else()
-  message(STATUS "Linker selection: system default")
-endif()
-
-#-----------------------------------------------------------------------------------------------------------------------
-# Read ROSE version from ROSE_VERSION file before calling project()
-# This is needed so that the project version can be set correctly, which affects library versioning
-#-----------------------------------------------------------------------------------------------------------------------
-set(ROSE_SCM_VERSION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/ROSE_VERSION")
-if(NOT EXISTS "${ROSE_SCM_VERSION_FILE}")
-  message(FATAL_ERROR "ROSE version file not found: ${ROSE_SCM_VERSION_FILE}")
-endif()
-file(STRINGS ${ROSE_SCM_VERSION_FILE} ROSE_PACKAGE_VERSION LIMIT_COUNT 1)
-string(STRIP "${ROSE_PACKAGE_VERSION}" ROSE_PACKAGE_VERSION)
-
-project(ROSE
-  VERSION ${ROSE_PACKAGE_VERSION}
-  LANGUAGES C CXX
-)
-
-if(ROSE_SELECTED_LINKER_DRIVER_FLAG)
   append_linker_driver_flag(CMAKE_EXE_LINKER_FLAGS "${ROSE_SELECTED_LINKER_DRIVER_FLAG}")
   append_linker_driver_flag(CMAKE_SHARED_LINKER_FLAGS "${ROSE_SELECTED_LINKER_DRIVER_FLAG}")
   append_linker_driver_flag(CMAKE_MODULE_LINKER_FLAGS "${ROSE_SELECTED_LINKER_DRIVER_FLAG}")
+  message(STATUS "Linker selection: ${ROSE_SELECTED_LINKER}")
+else()
+  message(STATUS "Linker selection: system default")
 endif()
 
 include(CheckLinkerFlag)
