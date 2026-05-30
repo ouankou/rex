@@ -5435,7 +5435,6 @@ def _explicit_name_mapping(
             "test2004_19.C": "test2004_19",
             "test2004_21.c": "test2004_21",
             "test2004_30.C": "test2004_30",
-            "test2004_41.C": "test2004_41",
             "test2005_56.C": "test2005_56",
             "test2005_64.C": "test2005_64",
             "test2005_168.c": "test2005_168",

@@ -12190,7 +12190,23 @@ static bool tryMapFortranTaskReductionUserIdentifier(
 static bool hasFirstprivateExpressionDirectiveNameModifier(
     OpenMPFirstprivateClause *firstprivate_clause);
 static SgOmpFirstprivateClause *convertFirstprivateClauseWithModifiers(
-    SgStatement *directive, OpenMPFirstprivateClause *firstprivate_clause);
+    SgStatement *directive, OpenMPDirective *omp_directive,
+    OpenMPFirstprivateClause *firstprivate_clause);
+
+static void attachOmpVariablesClauseToDirective(SgStatement *directive,
+                                                OpenMPDirective *omp_directive,
+                                                SgOmpVariablesClause *clause) {
+  ROSE_ASSERT(directive != NULL);
+  ROSE_ASSERT(omp_directive != NULL);
+  ROSE_ASSERT(clause != NULL);
+
+  if (omp_directive->getKind() == OMPD_declare_simd) {
+    ((SgOmpDeclareSimdStatement *)directive)->get_clauses().push_back(clause);
+  } else {
+    addOmpClause(directive, clause);
+  }
+  clause->set_parent(directive);
+}
 
 SgOmpVariablesClause *
 convertClause(SgStatement *directive,
@@ -12231,8 +12247,11 @@ convertClause(SgStatement *directive,
     OpenMPFirstprivateClause *firstprivate_clause =
         static_cast<OpenMPFirstprivateClause *>(current_omp_clause);
     if (hasFirstprivateExpressionDirectiveNameModifier(firstprivate_clause)) {
-      return convertFirstprivateClauseWithModifiers(directive,
-                                                    firstprivate_clause);
+      SgOmpFirstprivateClause *result = convertFirstprivateClauseWithModifiers(
+          directive, current_OpenMPIR_to_SageIII.second, firstprivate_clause);
+      attachOmpVariablesClauseToDirective(
+          directive, current_OpenMPIR_to_SageIII.second, result);
+      return result;
     }
   }
 
@@ -12451,13 +12470,8 @@ convertClause(SgStatement *directive,
   setOneSourcePositionForTransformation(result);
   buildVariableList(result);
   explist->set_parent(result);
-  // reconsider the location of following code to attach clause
-  if (current_OpenMPIR_to_SageIII.second->getKind() == OMPD_declare_simd) {
-    ((SgOmpDeclareSimdStatement *)directive)->get_clauses().push_back(result);
-  } else {
-    addOmpClause(directive, result);
-  }
-  result->set_parent(directive);
+  attachOmpVariablesClauseToDirective(
+      directive, current_OpenMPIR_to_SageIII.second, result);
   omp_variable_list.clear();
   return result;
 }
@@ -13719,8 +13733,10 @@ static bool hasFirstprivateExpressionDirectiveNameModifier(
 }
 
 static SgOmpFirstprivateClause *convertFirstprivateClauseWithModifiers(
-    SgStatement *directive, OpenMPFirstprivateClause *firstprivate_clause) {
+    SgStatement *directive, OpenMPDirective *omp_directive,
+    OpenMPFirstprivateClause *firstprivate_clause) {
   ROSE_ASSERT(directive != NULL);
+  ROSE_ASSERT(omp_directive != NULL);
   ROSE_ASSERT(firstprivate_clause != NULL);
   std::vector<const char *> *expressions =
       firstprivate_clause->getExpressions();
@@ -13748,10 +13764,11 @@ static SgOmpFirstprivateClause *convertFirstprivateClauseWithModifiers(
         buildFirstprivateClauseFromVariableRange(
             firstprivate_clause, group_begin, group_end, group_has_modifier,
             group_modifier);
-    addOmpClause(directive, group_clause);
-    group_clause->set_parent(directive);
     if (first_result == NULL) {
       first_result = group_clause;
+    } else {
+      attachOmpVariablesClauseToDirective(directive, omp_directive,
+                                          group_clause);
     }
     group_begin = group_end;
   }

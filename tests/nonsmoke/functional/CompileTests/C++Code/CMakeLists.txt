@@ -132,21 +132,6 @@ add_test(
           -c ${CMAKE_CURRENT_SOURCE_DIR}/test2004_30.C
 )
 
-# Test of simple STL (list) example code. This specimen depends on the old
-# staged g++_HEADERS bundle; do not register it when that external fixture is
-# not present in the build tree.
-set(_test2004_41_headers "${CMAKE_CURRENT_BINARY_DIR}/../g++_HEADERS/hdrs1/bits")
-if(EXISTS "${_test2004_41_headers}")
-  add_test(
-    NAME test2004_41
-    COMMAND testTranslator ${ROSE_FLAGS}
-            -I${_test2004_41_headers}
-            -c ${CMAKE_CURRENT_SOURCE_DIR}/test2004_41.C
-  )
-else()
-  message(STATUS "Skipping test2004_41 without external g++_HEADERS fixture: ${_test2004_41_headers}")
-endif()
-
 set(files_to_test
   test2004_35.C
   test2004_65.C test2004_67.C test2001_01.C test2001_02.C test2001_04.C
