@@ -30,11 +30,11 @@ COPY . ${REX_SOURCE_DIR}
 RUN set -eux; \
     bash ./build-rex.sh "${REX_INSTALL_DIR}" Debug; \
     if [ "${REX_LINKER}" = "lld" ]; then \
-      grep -Eq '^CMAKE_LINKER:FILEPATH=.*/(ld\.)?lld(-[0-9]+)?$' "${REX_BUILD_DIR}/CMakeCache.txt"; \
+      grep -Eq '^CMAKE_LINKER:FILEPATH=(.*/)?(ld\.)?lld(-[0-9]+)?$' "${REX_BUILD_DIR}/CMakeCache.txt"; \
       if [ -f "${REX_BUILD_DIR}/build.ninja" ]; then \
-        grep -Eq -- '-fuse-ld=.*/(ld\.)?lld(-[0-9]+)?' "${REX_BUILD_DIR}/build.ninja"; \
+        grep -Eq -- '-fuse-ld=(.*/)?(ld\.)?lld(-[0-9]+)?' "${REX_BUILD_DIR}/build.ninja"; \
       else \
-        grep -REq --include=link.txt -- '-fuse-ld=.*/(ld\.)?lld(-[0-9]+)?' "${REX_BUILD_DIR}"; \
+        grep -REq --include=link.txt -- '-fuse-ld=(.*/)?(ld\.)?lld(-[0-9]+)?' "${REX_BUILD_DIR}"; \
       fi; \
     fi
 

@@ -1265,6 +1265,9 @@ if(ROSE_VALGRIND_REQUESTED)
   endif()
   set(ROSE_USE_VALGRIND 1)
 endif()
+# Valgrind instrumentation is intentionally opt-in via WITH-VALGRIND* because
+# ROSE_USE_VALGRIND enables AST teardown in normal translator runs. CTest
+# memcheck discovery below still finds valgrind for explicit MemCheck runs.
 if(ROSE_USE_VALGRIND AND NOT VALGRIND_INCLUDE_PATH)
   unset(VALGRIND_INCLUDE_PATH)
   find_path(VALGRIND_INCLUDE_PATH valgrind/valgrind.h
