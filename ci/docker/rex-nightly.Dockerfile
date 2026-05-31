@@ -28,7 +28,7 @@ WORKDIR ${REX_SOURCE_DIR}
 COPY . ${REX_SOURCE_DIR}
 
 RUN set -eux; \
-    ./build-rex.sh "${REX_INSTALL_DIR}" Debug; \
+    bash ./build-rex.sh "${REX_INSTALL_DIR}" Debug; \
     if [ "${REX_LINKER}" = "lld" ]; then \
       grep -Eq '^CMAKE_LINKER:FILEPATH=.*/(ld\.)?lld(-[0-9]+)?$' "${REX_BUILD_DIR}/CMakeCache.txt"; \
       if [ -f "${REX_BUILD_DIR}/build.ninja" ]; then \
