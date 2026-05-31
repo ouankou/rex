@@ -166,9 +166,14 @@ prepend_path_if_dir() {
     local dir="$2"
     local current_value=""
 
-    if [[ -v "$var_name" ]]; then
-        current_value="${!var_name}"
-    fi
+    case "$var_name" in
+    "" | [0-9]* | *[!A-Za-z0-9_]*)
+        echo "Invalid environment variable name: $var_name" >&2
+        return 1
+        ;;
+    esac
+
+    eval "current_value=\"\${${var_name}:-}\""
 
     [ -d "$dir" ] || return 0
     if [ -n "$current_value" ]; then
