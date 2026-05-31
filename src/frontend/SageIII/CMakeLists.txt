@@ -107,6 +107,12 @@ endif()
 set(SAGE3_SOURCES ${SAGE3_SOURCES}
   ${CMAKE_CURRENT_BINARY_DIR}/license_string.h)
 
+set_source_files_properties(
+  ${CMAKE_CURRENT_BINARY_DIR}/lex.yy.C
+  ${CMAKE_CURRENT_BINARY_DIR}/omp_exprparser_parser.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/omp_exprparser_lexer.cc
+  PROPERTIES SKIP_PRECOMPILE_HEADERS TRUE)
+
 ########### next target ###############
 add_library(sage3 OBJECT ${SAGE3_SOURCES})
 add_dependencies(sage3 rosetta_generated)

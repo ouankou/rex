@@ -118,6 +118,35 @@ add_subdirectory(midend)
 add_subdirectory(backend)
 add_subdirectory(AstNodes)
 
+set(_rose_sage_pch_targets
+  abstractLayer
+  astDiagnostics
+  astDump
+  astFixup
+  astHiddenTypeAndDeclarationLists
+  astPostProcessing
+  astProcessing
+  astTokenStream
+  includeDirectivesProcessing
+  midend
+  midend_loopproc
+  midend_pa
+  midend_pt
+  midend_util
+  roseAstNodesExpression
+  sage3
+  sageInterface
+  trans_tracking
+  unparser
+  virtualCFG)
+foreach(_rose_sage_pch_target IN LISTS _rose_sage_pch_targets)
+  if(TARGET ${_rose_sage_pch_target})
+    rose_enable_sage_pch(${_rose_sage_pch_target})
+  endif()
+endforeach()
+unset(_rose_sage_pch_target)
+unset(_rose_sage_pch_targets)
+
 ########################################################################################################################
 # The ROSE library
 ########################################################################################################################
@@ -198,6 +227,9 @@ target_include_directories(ROSE_DLL PUBLIC
 
 # ROSE requires C++14 for public headers.
 target_compile_features(ROSE_DLL PUBLIC cxx_std_14)
+
+add_dependencies(ROSE_DLL rosetta_generated generate_rosePublicConfig)
+rose_enable_sage_pch(ROSE_DLL)
 
 # Link Clang/LLVM libraries (required for REX).
 # Keep these in the public link interface because GNU ld does not resolve

@@ -32,6 +32,8 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
 
   add_dependencies(libroseFlangFrontend rosetta_generated)
   target_compile_features(libroseFlangFrontend PRIVATE cxx_std_17)
+  rose_enable_private_pch(libroseFlangFrontend
+    "${ROSE_TOP_SRC_DIR}/cmake/pch/flang-frontend-pch.hpp")
 endif()
 
 if(ENABLE-FORTRAN)
