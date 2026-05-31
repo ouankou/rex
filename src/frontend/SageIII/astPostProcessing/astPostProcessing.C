@@ -2148,6 +2148,10 @@ bool sourceLocationsMatch(Sg_File_Info *lhs_info, Sg_File_Info *rhs_info) {
 
 bool classDeclarationsShareSourceLocation(SgClassDeclaration *lhs,
                                           SgClassDeclaration *rhs) {
+  if (lhs == nullptr || rhs == nullptr) {
+    return false;
+  }
+
   Sg_File_Info *lhs_info = bestRealSourceFileInfo(lhs);
   Sg_File_Info *rhs_info = bestRealSourceFileInfo(rhs);
   return sourceLocationsMatch(lhs_info, rhs_info);

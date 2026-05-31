@@ -51,6 +51,11 @@
 #include "rose_config.h"
 #include "rose_paths.h"
 
+#if defined(ROSE_USE_VALGRIND) && ROSE_USE_VALGRIND
+#include <valgrind/memcheck.h>
+#include <valgrind/valgrind.h>
+#endif
+
 namespace {
 
 void roseClangPhaseTrace(const char *phase) {

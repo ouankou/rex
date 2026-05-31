@@ -77,13 +77,16 @@ SgClassDeclaration *SgConstructorInitializer::get_class_decl() const {
 }
 
 void SgConstructorInitializer::post_construction_initialization() {
-  ROSE_ASSERT(p_expression_type != NULL);
   if (p_declaration == NULL) {
     // This can be NULL for the case of an undeclared constructor.
 
-    SgType *associated_type = p_expression_type->stripType(
-        SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_TYPEDEF_TYPE |
-        SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE);
+    SgType *associated_type =
+        p_expression_type != NULL
+            ? p_expression_type->stripType(SgType::STRIP_MODIFIER_TYPE |
+                                           SgType::STRIP_TYPEDEF_TYPE |
+                                           SgType::STRIP_REFERENCE_TYPE |
+                                           SgType::STRIP_RVALUE_REFERENCE_TYPE)
+            : NULL;
     bool has_associated_class = false;
     if (SgClassType *class_type = isSgClassType(associated_type)) {
       has_associated_class = class_type->get_declaration() != NULL;
@@ -96,6 +99,8 @@ void SgConstructorInitializer::post_construction_initialization() {
       }
     }
     ROSE_ASSERT(has_associated_class || (p_associated_class_unknown == true));
+  } else {
+    ROSE_ASSERT(p_expression_type != NULL);
   }
 
   // DQ (11/15/2006): avoid setting newArgs this late in the process.
