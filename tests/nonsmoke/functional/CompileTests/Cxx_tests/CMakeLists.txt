@@ -3053,26 +3053,8 @@ if(NOT REX_CXX_TESTS_HOST_IS_X86)
   list(REMOVE_ITEM CXX_TESTCODES ${CXX_TESTCODES_X86_ONLY})
 endif()
 
-set(CXX_TESTCODES_GNUXX03
-  # Legacy access declarations (e.g., A::foo;) require pre-C++11 mode.
-  test2020_31.C
-)
 list(REMOVE_ITEM CXX_TESTCODES ${CXX_TESTCODES_GNUXX03})
 
-set(CXX_TESTCODES_GNUXX17
-  # These use C++17 library/features (variant/filesystem/*_v traits/CTAD),
-  # or include ROSE headers that now require at least C++17.
-  rex_test2026_template_features.cpp
-  rex_test2026_stl_map.cpp
-  rex_test2026_stl_meta.cpp
-  rex_test2026_stl_type_traits.cpp
-  rex_test2026_stl_variant.cpp
-  rex_test2026_deduction_guide.cpp
-  rex_test2026_std_filesystem.cpp
-  rex_test2026_std_variant_visit.cpp
-  test2010_02.C
-  test2017_99.C
-)
 list(REMOVE_ITEM CXX_TESTCODES ${CXX_TESTCODES_GNUXX17})
 
 set(CXX_TESTCODES_DELAYED_TEMPLATE_PARSING

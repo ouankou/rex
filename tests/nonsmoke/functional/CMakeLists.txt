@@ -47,6 +47,26 @@ set(REX_FUNCTIONAL_SYSTEM_HEADER_LIKE_DIR
 set(REX_TEST2018_34_SUPPORT_DIR
   ${CMAKE_CURRENT_SOURCE_DIR}/CompileTests/C_tests/test2018_34_support)
 
+set(CXX_TESTCODES_GNUXX03
+  # Legacy access declarations (e.g., A::foo;) require pre-C++11 mode.
+  test2020_31.C
+)
+
+set(CXX_TESTCODES_GNUXX17
+  # These use C++17 library/features (variant/filesystem/*_v traits/CTAD),
+  # or include ROSE headers that now require at least C++17.
+  rex_test2026_template_features.cpp
+  rex_test2026_stl_map.cpp
+  rex_test2026_stl_meta.cpp
+  rex_test2026_stl_type_traits.cpp
+  rex_test2026_stl_variant.cpp
+  rex_test2026_deduction_guide.cpp
+  rex_test2026_std_filesystem.cpp
+  rex_test2026_std_variant_visit.cpp
+  test2010_02.C
+  test2017_99.C
+)
+
 function(rex_get_cxx_specimen_extra_flags out_var specimen)
   set(_flags)
   get_filename_component(_specimen_name "${specimen}" NAME)
@@ -70,6 +90,20 @@ function(rex_get_cxx_specimen_extra_flags out_var specimen)
     list(APPEND _flags -isystem ${REX_FUNCTIONAL_SYSTEM_HEADER_LIKE_DIR})
   endif()
   set(${out_var} "${_flags}" PARENT_SCOPE)
+endfunction()
+
+function(rex_get_cxx_specimen_standard_flag out_var specimen)
+  get_filename_component(_specimen_name "${specimen}" NAME)
+  if(_specimen_name STREQUAL "rex_test2026_concepts.cpp")
+    set(_flag -std=c++20)
+  elseif(_specimen_name IN_LIST CXX_TESTCODES_GNUXX03)
+    set(_flag -std=gnu++03)
+  elseif(_specimen_name IN_LIST CXX_TESTCODES_GNUXX17)
+    set(_flag -std=gnu++17)
+  else()
+    set(_flag -std=gnu++14)
+  endif()
+  set(${out_var} "${_flag}" PARENT_SCOPE)
 endfunction()
 
 function(rex_get_fortran_specimen_extra_flags out_var specimen)

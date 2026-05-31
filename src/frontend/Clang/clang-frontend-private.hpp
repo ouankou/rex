@@ -48,6 +48,29 @@ inline bool getClangTranslationUnitSourceOrder(const SgStatement *stmt,
 }
 
 inline bool
+constructorInitializerAssociatedClassUnknown(SgType *expression_type) {
+  if (expression_type == nullptr) {
+    return true;
+  }
+
+  SgType *base_type = expression_type->stripType(
+      SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_TYPEDEF_TYPE |
+      SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE);
+  if (SgClassType *class_type = isSgClassType(base_type)) {
+    return class_type->get_declaration() == nullptr;
+  }
+  if (SgNonrealType *nonreal_type = isSgNonrealType(base_type)) {
+    SgNonrealDecl *nonreal_decl =
+        isSgNonrealDecl(nonreal_type->get_declaration());
+    return nonreal_decl == nullptr ||
+           isSgClassDeclaration(nonreal_decl->get_templateDeclaration()) ==
+               nullptr;
+  }
+
+  return true;
+}
+
+inline bool
 isImplicitAutoPlaceholderTemplateParamName(const std::string &name) {
   if (name.size() >= 5 && name.compare(name.size() - 5, 5, ":auto") == 0) {
     return true;
@@ -1308,6 +1331,10 @@ protected:
   // preserve an explicitly written template-id even when it names the same
   // specialization as a defaulted or injected form.
   unsigned p_force_written_template_specialization_depth = 0;
+  // A direct injected class-name return type needs the full current
+  // instantiation spelling, but nested injected names in surrounding syntax
+  // should still follow their own source spelling.
+  unsigned p_force_injected_class_name_template_id_depth = 0;
   // Default template type arguments have no separate per-reference
   // qualification fields. Preserve explicitly written qualified tag names in
   // the type subtree for those contexts instead of lowering them to the

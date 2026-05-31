@@ -1202,8 +1202,17 @@ endif()
 set(ROSE_CTEST_MEMCHECK_COMMAND "")
 set(ROSE_CTEST_MEMCHECK_OPTIONS "")
 set(ROSE_CTEST_MEMCHECK_SUPPRESSIONS "")
+set(ROSE_CTEST_MEMCHECK_TYPE "")
 if(_rose_memcheck_valgrind)
-  set(ROSE_CTEST_MEMCHECK_COMMAND "${_rose_memcheck_valgrind}")
+  set(ROSE_REAL_VALGRIND "${_rose_memcheck_valgrind}")
+  set(ROSE_CTEST_MEMCHECK_WRAPPER
+      "${CMAKE_BINARY_DIR}/scripts/rex-ctest-valgrind-wrapper")
+  file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/scripts")
+  configure_file(cmake/rex-ctest-valgrind-wrapper.in
+                 "${ROSE_CTEST_MEMCHECK_WRAPPER}" @ONLY)
+  execute_process(COMMAND chmod +x "${ROSE_CTEST_MEMCHECK_WRAPPER}")
+  set(ROSE_CTEST_MEMCHECK_COMMAND "${ROSE_CTEST_MEMCHECK_WRAPPER}")
+  set(ROSE_CTEST_MEMCHECK_TYPE "Valgrind")
   set(ROSE_CTEST_MEMCHECK_SUPPRESSIONS "${CMAKE_SOURCE_DIR}/scripts/rex-suppressions-for-valgrind")
   set(_rose_memcheck_toolchain_major "${LLVM_REQUIRED_MAJOR}")
   if(DEFINED CLANG_VERSION_MAJOR AND CLANG_VERSION_MAJOR AND NOT CLANG_VERSION_MAJOR STREQUAL "0")
@@ -1273,8 +1282,37 @@ if(_rose_memcheck_valgrind)
       "mv"
       "rm"
       "install")
+  function(_rose_append_memcheck_child_skip _rose_compiler)
+    if(NOT _rose_compiler)
+      return()
+    endif()
+
+    list(APPEND _rose_memcheck_trace_children_skip "${_rose_compiler}")
+    get_filename_component(_rose_compiler_name "${_rose_compiler}" NAME)
+    if(_rose_compiler_name)
+      list(APPEND _rose_memcheck_trace_children_skip "${_rose_compiler_name}")
+    endif()
+    if(EXISTS "${_rose_compiler}")
+      get_filename_component(_rose_compiler_realpath "${_rose_compiler}" REALPATH)
+      if(_rose_compiler_realpath)
+        list(APPEND _rose_memcheck_trace_children_skip "${_rose_compiler_realpath}")
+      endif()
+    endif()
+    set(_rose_memcheck_trace_children_skip "${_rose_memcheck_trace_children_skip}" PARENT_SCOPE)
+  endfunction()
+  foreach(_rose_compiler IN ITEMS
+      "${CMAKE_C_COMPILER}"
+      "${CMAKE_CXX_COMPILER}"
+      "${CMAKE_Fortran_COMPILER}"
+      "${WITH-ALT-BACKEND-C-COMPILER}"
+      "${WITH-ALT-BACKEND-CXX-COMPILER}"
+      "${WITH-ALT-BACKEND-FORTRAN-COMPILER}")
+    _rose_append_memcheck_child_skip("${_rose_compiler}")
+  endforeach()
+  list(REMOVE_DUPLICATES _rose_memcheck_trace_children_skip)
   list(JOIN _rose_memcheck_trace_children_skip "," _rose_memcheck_trace_children_skip_arg)
-  set(ROSE_CTEST_MEMCHECK_OPTIONS "--leak-check=full --show-leak-kinds=all --error-exitcode=1 --max-stackframe=2047456 --num-callers=32 --trace-children=yes --trace-children-skip=${_rose_memcheck_trace_children_skip_arg} --trace-children-skip-by-arg=*gtest_internal_run_death_test*")
+  set(ROSE_CTEST_MEMCHECK_OPTIONS "--leak-check=full --show-leak-kinds=definite,indirect,possible --errors-for-leak-kinds=definite,indirect,possible --error-exitcode=1 --max-stackframe=2047456 --num-callers=32 --trace-children=yes --trace-children-skip=${_rose_memcheck_trace_children_skip_arg} --trace-children-skip-by-arg=*gtest_internal_run_death_test*")
+  unset(_rose_compiler)
   unset(_rose_memcheck_trace_children_skip_arg)
   unset(_rose_memcheck_trace_children_skip)
   unset(_rose_memcheck_toolchain_major)
@@ -1297,6 +1335,8 @@ endif()
 if(ROSE_CTEST_MEMCHECK_COMMAND)
   set(MEMORYCHECK_COMMAND "${ROSE_CTEST_MEMCHECK_COMMAND}" CACHE FILEPATH
       "Path to the memory checking command used by CTest" FORCE)
+  set(MEMORYCHECK_TYPE "${ROSE_CTEST_MEMCHECK_TYPE}" CACHE STRING
+      "Memory checker type used by CTest" FORCE)
   set(MEMORYCHECK_COMMAND_OPTIONS "${ROSE_CTEST_MEMCHECK_OPTIONS}" CACHE STRING
       "Command line options for the CTest memory checker" FORCE)
   set(MEMORYCHECK_SUPPRESSIONS_FILE "${ROSE_CTEST_MEMCHECK_SUPPRESSIONS}" CACHE FILEPATH
@@ -1304,6 +1344,8 @@ if(ROSE_CTEST_MEMCHECK_COMMAND)
 else()
   set(MEMORYCHECK_COMMAND "" CACHE FILEPATH
       "Path to the memory checking command used by CTest" FORCE)
+  set(MEMORYCHECK_TYPE "" CACHE STRING
+      "Memory checker type used by CTest" FORCE)
   set(MEMORYCHECK_COMMAND_OPTIONS "" CACHE STRING
       "Command line options for the CTest memory checker" FORCE)
   set(MEMORYCHECK_SUPPRESSIONS_FILE "" CACHE FILEPATH

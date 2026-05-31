@@ -78,6 +78,7 @@
 #include <algorithm> // for set operations
 #include <cctype>
 #include <cstring>
+#include <functional>
 
 #include <iostream>
 
@@ -20493,10 +20494,54 @@ void SageInterface::appendStatementWithDependentDeclaration(
 #endif
 }
 
+using TokenSubsequenceMap =
+    std::map<SgNode *, TokenStreamSequenceToNodeMapping *>;
+
+static std::unordered_set<TokenStreamSequenceToNodeMapping *>
+collectPooledTokenSequences() {
+  std::unordered_set<TokenStreamSequenceToNodeMapping *> pooled;
+  for (const auto &entry :
+       TokenStreamSequenceToNodeMapping::tokenSequencePool) {
+    if (entry.second != nullptr) {
+      pooled.insert(entry.second);
+    }
+  }
+  return pooled;
+}
+
+static void deleteTokenSubsequenceMapValues(
+    TokenSubsequenceMap *tokenMap,
+    const std::unordered_set<TokenStreamSequenceToNodeMapping *> &pooled,
+    std::unordered_set<TokenStreamSequenceToNodeMapping *> &deletedUnpooled) {
+  if (tokenMap == nullptr) {
+    return;
+  }
+
+  for (auto &entry : *tokenMap) {
+    TokenStreamSequenceToNodeMapping *mapping = entry.second;
+    if (mapping != nullptr && pooled.find(mapping) == pooled.end() &&
+        deletedUnpooled.insert(mapping).second) {
+      delete mapping;
+    }
+  }
+}
+
+static void deleteTokenSubsequenceMap(
+    TokenSubsequenceMap *tokenMap,
+    const std::unordered_set<TokenStreamSequenceToNodeMapping *> &pooled,
+    std::unordered_set<TokenStreamSequenceToNodeMapping *> &deletedUnpooled) {
+  deleteTokenSubsequenceMapValues(tokenMap, pooled, deletedUnpooled);
+  delete tokenMap;
+}
+
 static void clearTokenSubsequenceMapForSourceFile(SgSourceFile *sourceFile) {
   if (sourceFile == NULL) {
     return;
   }
+
+  const std::unordered_set<TokenStreamSequenceToNodeMapping *> pooled =
+      collectPooledTokenSequences();
+  std::unordered_set<TokenStreamSequenceToNodeMapping *> deletedUnpooled;
 
   std::map<SgSourceFile *,
            std::map<SgNode *, TokenStreamSequenceToNodeMapping *> *>::iterator
@@ -20505,7 +20550,7 @@ static void clearTokenSubsequenceMapForSourceFile(SgSourceFile *sourceFile) {
     std::map<SgNode *, TokenStreamSequenceToNodeMapping *> *tokenMap =
         mapIt->second;
     if (tokenMap != NULL) {
-      delete tokenMap;
+      deleteTokenSubsequenceMap(tokenMap, pooled, deletedUnpooled);
     }
 
     Rose::tokenSubsequenceMapOfMapsBySourceFile.erase(mapIt);
@@ -20540,6 +20585,9 @@ static void clearTokenSubsequenceMapsForProject(SgProject *project) {
 
   std::vector<SgSourceFile *> detachedHeaders;
   std::set<SgSourceFile *> sourceFilesToClear(projectFiles);
+  const std::unordered_set<TokenStreamSequenceToNodeMapping *> pooled =
+      collectPooledTokenSequences();
+  std::unordered_set<TokenStreamSequenceToNodeMapping *> deletedUnpooled;
   std::map<SgSourceFile *,
            std::map<SgNode *, TokenStreamSequenceToNodeMapping *> *>::iterator
       mapIt = Rose::tokenSubsequenceMapOfMapsBySourceFile.begin();
@@ -20549,7 +20597,7 @@ static void clearTokenSubsequenceMapsForProject(SgProject *project) {
       std::map<SgNode *, TokenStreamSequenceToNodeMapping *> *tokenMap =
           mapIt->second;
       if (tokenMap != NULL) {
-        delete tokenMap;
+        deleteTokenSubsequenceMap(tokenMap, pooled, deletedUnpooled);
       }
 
       if (sourceFile->get_isHeaderFile() == true &&
@@ -22046,13 +22094,13 @@ collectFileOwnedPreprocessingInfo(SgProject *project) {
       : public ROSE_VisitorPatternDefaultBase {
   public:
     explicit FileOwnedPreprocessingCollector(
-        const std::function<void(SgFile *)> &collect)
+        std::function<void(SgFile *)> collect)
         : collect_(collect) {}
 
     void visit(SgFile *file) override { collect_(file); }
 
   private:
-    const std::function<void(SgFile *)> &collect_;
+    std::function<void(SgFile *)> collect_;
   };
 
   FileOwnedPreprocessingCollector collector(collect_from_file);
@@ -22160,13 +22208,22 @@ void clearTokenStreamGlobalMaps() {
   }
   Rose::macroExpansionMapOfMaps.clear();
 
+  const std::unordered_set<TokenStreamSequenceToNodeMapping *> pooled =
+      collectPooledTokenSequences();
+  std::unordered_set<TokenStreamSequenceToNodeMapping *> deletedUnpooled;
+  std::unordered_set<TokenSubsequenceMap *> deletedMaps;
+
   for (auto &entry : Rose::tokenSubsequenceMapOfMaps) {
-    delete entry.second;
+    if (deletedMaps.insert(entry.second).second) {
+      deleteTokenSubsequenceMap(entry.second, pooled, deletedUnpooled);
+    }
   }
   Rose::tokenSubsequenceMapOfMaps.clear();
 
   for (auto &entry : Rose::tokenSubsequenceMapOfMapsBySourceFile) {
-    delete entry.second;
+    if (deletedMaps.insert(entry.second).second) {
+      deleteTokenSubsequenceMap(entry.second, pooled, deletedUnpooled);
+    }
   }
   Rose::tokenSubsequenceMapOfMapsBySourceFile.clear();
 

@@ -450,6 +450,24 @@
 }
 
 {
+   rex_upstream_clang22_act_on_fields_uninit_cond
+   Memcheck:Cond
+   fun:_ZN5clang4Sema11ActOnFieldsEPNS_5ScopeENS_14SourceLocationEPNS_4DeclEN4llvm8ArrayRefIS5_EES3_S3_RKNS_20ParsedAttributesViewE
+   fun:_ZN5clang6Parser20ParseStructUnionBodyENS_14SourceLocationENS_17TypeSpecifierTypeEPNS_10RecordDeclE
+   fun:_ZN5clang6Parser19ParseClassSpecifierENS_3tok9TokenKindENS_14SourceLocationERNS_8DeclSpecERNS0_18ParsedTemplateInfoENS_15AccessSpecifierEbNS0_15DeclSpecContextERNS_16ParsedAttributesE
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_act_on_fields_cxx_uninit_cond
+   Memcheck:Cond
+   fun:_ZN5clang4Sema11ActOnFieldsEPNS_5ScopeENS_14SourceLocationEPNS_4DeclEN4llvm8ArrayRefIS5_EES3_S3_RKNS_20ParsedAttributesViewE
+   fun:_ZN5clang4Sema33ActOnFinishCXXMemberSpecificationEPNS_5ScopeENS_14SourceLocationEPNS_4DeclES3_S3_RKNS_20ParsedAttributesViewE
+   fun:_ZN5clang6Parser27ParseCXXMemberSpecificationENS_14SourceLocationES1_RNS_16ParsedAttributesEjPNS_4DeclE
+   obj:*/libclang-cpp.so.*
+}
+
+{
    rex_upstream_clang22_function_proto_uninit_cond_c1
    Memcheck:Cond
    fun:_ZN5clang17FunctionProtoTypeC1ENS_8QualTypeEN4llvm8ArrayRefIS1_EES1_RKNS0_12ExtProtoInfoE
@@ -463,6 +481,670 @@
    fun:_ZN5clang17FunctionProtoTypeC2ENS_8QualTypeEN4llvm8ArrayRefIS1_EES1_RKNS0_12ExtProtoInfoE
    fun:_ZNK5clang10ASTContext23getFunctionTypeInternalENS_8QualTypeEN4llvm8ArrayRefIS1_EERKNS_17FunctionProtoType12ExtProtoInfoEb
    obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_init_list_checker_uninit_cond
+   Memcheck:Cond
+   ...
+   fun:_ZN12_GLOBAL__N_115InitListChecker*
+   ...
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_init_list_checker_uninit_value8
+   Memcheck:Value8
+   ...
+   fun:_ZN12_GLOBAL__N_115InitListChecker*
+   ...
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_init_list_expr_uninit_cond
+   Memcheck:Cond
+   ...
+   fun:_ZN5clang12InitListExpr*
+   ...
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_init_list_expr_uninit_value8
+   Memcheck:Value8
+   ...
+   fun:_ZN5clang12InitListExpr*
+   ...
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_check_base_specifier_uninit_cond
+   Memcheck:Cond
+   fun:_ZN5clang4Sema18CheckBaseSpecifierEPNS_13CXXRecordDeclENS_11SourceRangeEbNS_15AccessSpecifierEPNS_14TypeSourceInfoENS_14SourceLocationE
+   ...
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_convert_arguments_uninit_value8
+   Memcheck:Value8
+   ...
+   fun:_ZN5clang4Sema23ConvertArgumentsForCallEPNS_8CallExprEPNS_4ExprEPNS_12FunctionDeclEPKNS_17FunctionProtoTypeEN4llvm8ArrayRefIS4_EENS_14SourceLocationEb
+   ...
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_convert_arguments_uninit_cond
+   Memcheck:Cond
+   ...
+   fun:_ZN5clang4Sema23ConvertArgumentsForCallEPNS_8CallExprEPNS_4ExprEPNS_12FunctionDeclEPKNS_17FunctionProtoTypeEN4llvm8ArrayRefIS4_EENS_14SourceLocationEb
+   ...
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_check_function_call_uninit_value8
+   Memcheck:Value8
+   ...
+   fun:_ZN5clang4Sema17CheckFunctionCallEPNS_12FunctionDeclEPNS_8CallExprEPKNS_17FunctionProtoTypeE
+   ...
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_compound_literal_initialization_uninit_cond
+   Memcheck:Cond
+   ...
+   fun:_ZN5clang22InitializationSequence7PerformERNS_4SemaERKNS_17InitializedEntityERKNS_18InitializationKindEN4llvm15MutableArrayRefIPNS_4ExprEEEPNS_8QualTypeE
+   fun:_ZN5clang4Sema24BuildCompoundLiteralExprENS_14SourceLocationEPNS_14TypeSourceInfoES1_PNS_4ExprE
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_compound_literal_initialization_uninit_value8
+   Memcheck:Value8
+   ...
+   fun:_ZN5clang22InitializationSequence7PerformERNS_4SemaERKNS_17InitializedEntityERKNS_18InitializationKindEN4llvm15MutableArrayRefIPNS_4ExprEEEPNS_8QualTypeE
+   fun:_ZN5clang4Sema24BuildCompoundLiteralExprENS_14SourceLocationEPNS_14TypeSourceInfoES1_PNS_4ExprE
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_compound_literal_build_uninit_cond
+   Memcheck:Cond
+   ...
+   fun:_ZN5clang4Sema24BuildCompoundLiteralExprENS_14SourceLocationEPNS_14TypeSourceInfoES1_PNS_4ExprE
+   fun:_ZN5clang4Sema20ActOnCompoundLiteralENS_14SourceLocationENS_9OpaquePtrINS_8QualTypeEEES1_PNS_4ExprE
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_compound_literal_build_uninit_value8
+   Memcheck:Value8
+   ...
+   fun:_ZN5clang4Sema24BuildCompoundLiteralExprENS_14SourceLocationEPNS_14TypeSourceInfoES1_PNS_4ExprE
+   fun:_ZN5clang4Sema20ActOnCompoundLiteralENS_14SourceLocationENS_9OpaquePtrINS_8QualTypeEEES1_PNS_4ExprE
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_process_decl_attribute_list_uninit_value8
+   Memcheck:Value8
+   ...
+   fun:_ZN5clang4Sema24ProcessDeclAttributeListEPNS_5ScopeEPNS_4DeclERKNS_20ParsedAttributesViewERKNS0_27ProcessDeclAttributeOptionsE
+   ...
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_process_decl_attribute_list_uninit_cond
+   Memcheck:Cond
+   ...
+   fun:_ZN5clang4Sema24ProcessDeclAttributeListEPNS_5ScopeEPNS_4DeclERKNS_20ParsedAttributesViewERKNS0_27ProcessDeclAttributeOptionsE
+   ...
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_process_decl_attribute_list_top_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema24ProcessDeclAttributeListEPNS_5ScopeEPNS_4DeclERKNS_20ParsedAttributesViewERKNS0_27ProcessDeclAttributeOptionsE
+}
+
+{
+   rex_upstream_clang22_self_reference_checker_uninit_cond
+   Memcheck:Cond
+   ...
+   fun:_ZN12_GLOBAL__N_120SelfReferenceChecker9CheckExprEPN5clang4ExprE
+   ...
+   fun:_ZN12_GLOBAL__N_118CheckSelfReferenceERN5clang4SemaEPNS0_4DeclEPNS0_4ExprEb
+   fun:_ZN5clang4Sema20AddInitializerToDeclEPNS_4DeclEPNS_4ExprEb
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_self_reference_checker_uninit_value8
+   Memcheck:Value8
+   ...
+   fun:_ZN12_GLOBAL__N_120SelfReferenceChecker9CheckExprEPN5clang4ExprE
+   ...
+   fun:_ZN12_GLOBAL__N_118CheckSelfReferenceERN5clang4SemaEPNS0_4DeclEPNS0_4ExprEb
+   fun:_ZN5clang4Sema20AddInitializerToDeclEPNS_4DeclEPNS_4ExprEb
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_external_frontend_uninit_cond
+   Memcheck:Cond
+   obj:*/libclang-cpp.so.*
+   ...
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_external_frontend_uninit_value8
+   Memcheck:Value8
+   obj:*/libclang-cpp.so.*
+   ...
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_parser_uninit_cond
+   Memcheck:Cond
+   ...
+   fun:_ZN5clang6Parser17ParseTopLevelDeclERNS_9OpaquePtrINS_12DeclGroupRefEEERNS_4Sema17ModuleImportStateE
+   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
+}
+
+{
+   rex_upstream_clang22_parser_uninit_value8
+   Memcheck:Value8
+   ...
+   fun:_ZN5clang6Parser17ParseTopLevelDeclERNS_9OpaquePtrINS_12DeclGroupRefEEERNS_4Sema17ModuleImportStateE
+   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
+}
+
+{
+   rex_upstream_clang22_template_instantiation_uninit_cond
+   Memcheck:Cond
+   ...
+   fun:_ZN5clang24TemplateDeclInstantiator17VisitFunctionDeclEPNS_12FunctionDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
+   ...
+   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
+}
+
+{
+   rex_upstream_clang22_template_instantiation_uninit_value8
+   Memcheck:Value8
+   ...
+   fun:_ZN5clang24TemplateDeclInstantiator17VisitFunctionDeclEPNS_12FunctionDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
+   ...
+   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
+}
+
+{
+   rex_upstream_clang22_act_on_finish_full_expr_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema19ActOnFinishFullExprEPNS_4ExprENS_14SourceLocationEbbb
+}
+
+{
+   rex_upstream_clang22_int_expr_evaluator_binary_operator_uninit_value8
+   Memcheck:Value8
+   fun:_ZN12_GLOBAL__N_116IntExprEvaluator19VisitBinaryOperatorEPKN5clang14BinaryOperatorE
+}
+
+{
+   rex_upstream_clang22_lvalue_expr_evaluator_compound_literal_uninit_value8
+   Memcheck:Value8
+   fun:_ZN12_GLOBAL__N_119LValueExprEvaluator24VisitCompoundLiteralExprEPKN5clang19CompoundLiteralExprE
+   obj:*
+   obj:*
+}
+
+{
+   rex_upstream_clang22_handle_aligned_attr_uninit_value8
+   Memcheck:Value8
+   fun:_ZL17handleAlignedAttrRN5clang4SemaEPNS_4DeclERKNS_10ParsedAttrE
+}
+
+{
+   rex_upstream_clang22_diagnose_use_of_decl_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema17DiagnoseUseOfDeclEPNS_9NamedDeclEN4llvm8ArrayRefINS_14SourceLocationEEEPKNS_17ObjCInterfaceDeclEbbPS7_b
+   obj:*
+}
+
+{
+   rex_upstream_clang22_diagnose_use_of_decl_top_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema17DiagnoseUseOfDeclEPNS_9NamedDeclEN4llvm8ArrayRefINS_14SourceLocationEEEPKNS_17ObjCInterfaceDeclEbbPS7_b
+}
+
+{
+   rex_upstream_clang22_decl_context_dependent_context_uninit_value8
+   Memcheck:Value8
+   fun:_ZNK5clang11DeclContext18isDependentContextEv
+}
+
+{
+   rex_upstream_clang22_decl_availability_uninit_value8
+   Memcheck:Value8
+   fun:_ZNK5clang4Decl15getAvailabilityEPNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN4llvm12VersionTupleEPNS8_9StringRefE
+}
+
+{
+   rex_upstream_clang22_expr_evaluate_constant_uninit_value8
+   Memcheck:Value8
+   fun:_ZNK5clang4Expr22EvaluateAsConstantExprERNS0_10EvalResultERKNS_10ASTContextENS0_16ConstantExprKindE
+}
+
+{
+   rex_upstream_clang22_check_variable_declaration_type_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema28CheckVariableDeclarationTypeEPNS_7VarDeclE
+}
+
+{
+   rex_upstream_clang22_add_initializer_to_decl_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema20AddInitializerToDeclEPNS_4DeclEPNS_4ExprEb
+}
+
+{
+   rex_upstream_clang22_finalize_declaration_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema19FinalizeDeclarationEPNS_4DeclE
+}
+
+{
+   rex_upstream_clang22_astcontext_subst_template_typeparm_folding_insert_uninit_value8
+   Memcheck:Value8
+   fun:SetNextInBucket
+   fun:_ZN4llvm14FoldingSetBase10InsertNodeEPNS0_4NodeEPvRKNS0_14FoldingSetInfoE
+   ...
+   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
+   ...
+   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
+}
+
+{
+   rex_upstream_clang22_astcontext_subst_template_typeparm_folding_insert_uninit_cond
+   Memcheck:Cond
+   fun:SetNextInBucket
+   fun:_ZN4llvm14FoldingSetBase10InsertNodeEPNS0_4NodeEPvRKNS0_14FoldingSetInfoE
+   ...
+   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
+   ...
+   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
+}
+
+{
+   rex_upstream_clang22_subst_function_decl_type_typesourceinfo_memmove_uninit_value8
+   Memcheck:Value8
+   fun:memmove
+   fun:getTypeSourceInfo
+   ...
+   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
+   ...
+   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
+}
+
+{
+   rex_upstream_clang22_subst_function_decl_type_typesourceinfo_memmove_uninit_cond
+   Memcheck:Cond
+   fun:memmove
+   fun:getTypeSourceInfo
+   ...
+   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
+   ...
+   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
+}
+
+{
+   rex_upstream_clang22_template_instantiation_typesourceinfo_memmove_uninit_value8
+   Memcheck:Value8
+   fun:memmove
+   fun:getTypeSourceInfo
+   ...
+   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
+   ...
+   fun:_ZN5clang24TemplateDeclInstantiator17VisitFunctionDeclEPNS_12FunctionDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
+}
+
+{
+   rex_upstream_clang22_template_instantiation_typesourceinfo_memmove_uninit_cond
+   Memcheck:Cond
+   fun:memmove
+   fun:getTypeSourceInfo
+   ...
+   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
+   ...
+   fun:_ZN5clang24TemplateDeclInstantiator17VisitFunctionDeclEPNS_12FunctionDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
+}
+
+{
+   rex_upstream_clang22_template_instantiation_folding_setnext_uninit_value8
+   Memcheck:Value8
+   fun:SetNextInBucket
+   fun:_ZN4llvm14FoldingSetBase10InsertNodeEPNS0_4NodeEPvRKNS0_14FoldingSetInfoE
+   ...
+   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
+   ...
+   fun:_ZN5clang24TemplateDeclInstantiator17VisitFunctionDeclEPNS_12FunctionDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
+}
+
+{
+   rex_upstream_clang22_template_instantiation_folding_setnext_uninit_cond
+   Memcheck:Cond
+   fun:SetNextInBucket
+   fun:_ZN4llvm14FoldingSetBase10InsertNodeEPNS0_4NodeEPvRKNS0_14FoldingSetInfoE
+   ...
+   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
+}
+
+{
+   rex_upstream_clang22_template_instantiation_folding_find_uninit_value8
+   Memcheck:Value8
+   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
+   ...
+   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
+   ...
+   fun:_ZN5clang24TemplateDeclInstantiator17VisitFunctionDeclEPNS_12FunctionDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
+}
+
+{
+   rex_upstream_clang22_template_instantiation_folding_find_uninit_cond
+   Memcheck:Cond
+   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
+   ...
+   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
+   ...
+   fun:_ZN5clang24TemplateDeclInstantiator17VisitFunctionDeclEPNS_12FunctionDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
+}
+
+{
+   rex_upstream_clang22_template_instantiation_folding_insert_uninit_value8
+   Memcheck:Value8
+   fun:_ZN4llvm14FoldingSetBase10InsertNodeEPNS0_4NodeEPvRKNS0_14FoldingSetInfoE
+   ...
+   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
+   ...
+   fun:_ZN5clang24TemplateDeclInstantiator17VisitFunctionDeclEPNS_12FunctionDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
+}
+
+{
+   rex_upstream_clang22_template_instantiation_folding_insert_uninit_cond
+   Memcheck:Cond
+   fun:_ZN4llvm14FoldingSetBase10InsertNodeEPNS0_4NodeEPvRKNS0_14FoldingSetInfoE
+   ...
+   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
+   ...
+   fun:_ZN5clang24TemplateDeclInstantiator17VisitFunctionDeclEPNS_12FunctionDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
+}
+
+{
+   rex_upstream_clang22_parse_attribute_argument_list_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang6Parser26ParseAttributeArgumentListERKNS_14IdentifierInfoERN4llvm15SmallVectorImplIPNS_4ExprEEENS_34ParsedAttributeArgumentsPropertiesEj
+}
+
+{
+   rex_upstream_clang22_act_on_init_list_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema13ActOnInitListENS_14SourceLocationEN4llvm15MutableArrayRefIPNS_4ExprEEES1_
+}
+
+{
+   rex_upstream_clang22_init_list_check_designated_initializer_uninit_value8
+   Memcheck:Value8
+   fun:_ZN12_GLOBAL__N_115InitListChecker26CheckDesignatedInitializerERKN5clang17InitializedEntityEPNS1_12InitListExprEPNS1_18DesignatedInitExprEjRNS1_8QualTypeEPNS1_11DeclContext22specific_decl_iteratorINS1_9FieldDeclEEEPN4llvm6APSIntERjS6_SJ_bb
+}
+
+{
+   rex_upstream_clang22_check_return_val_expr_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema18CheckReturnValExprEPNS_4ExprENS_8QualTypeENS_14SourceLocationEbPKN4llvm11SmallVectorIPNS_4AttrELj4EEEPKNS_12FunctionDeclE
+}
+
+{
+   rex_upstream_clang22_act_on_finish_function_body_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema23ActOnFinishFunctionBodyEPNS_4DeclEPNS_4StmtEbb
+}
+
+{
+   rex_upstream_clang22_astcontext_tagtype_folding_insert_uninit_value8
+   Memcheck:Value8
+   fun:_ZN4llvm14FoldingSetBase10InsertNodeEPNS0_4NodeEPvRKNS0_14FoldingSetInfoE
+   fun:InsertNode
+   fun:_ZNK5clang10ASTContext10getTagTypeENS_21ElaboratedTypeKeywordENS_19NestedNameSpecifierEPKNS_7TagDeclEb
+   ...
+   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
+}
+
+{
+   rex_upstream_clang22_astcontext_tagtype_folding_find_uninit_value8
+   Memcheck:Value8
+   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
+   fun:FindNodeOrInsertPos
+   fun:_ZNK5clang10ASTContext10getTagTypeENS_21ElaboratedTypeKeywordENS_19NestedNameSpecifierEPKNS_7TagDeclEb
+   ...
+   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
+}
+
+{
+   rex_upstream_clang22_expr_null_pointer_constant_uninit_value8
+   Memcheck:Value8
+   fun:_ZNK5clang4Expr21isNullPointerConstantERNS_10ASTContextENS0_34NullPointerConstantValueDependenceE
+}
+
+{
+   rex_upstream_clang22_expr_null_pointer_constant_uninit_cond
+   Memcheck:Cond
+   fun:_ZNK5clang4Expr21isNullPointerConstantERNS_10ASTContextENS0_34NullPointerConstantValueDependenceE
+}
+
+{
+   rex_upstream_clang22_default_lvalue_conversion_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema23DefaultLvalueConversionEPNS_4ExprE
+}
+
+{
+   rex_upstream_clang22_default_lvalue_conversion_uninit_cond
+   Memcheck:Cond
+   fun:_ZN5clang4Sema23DefaultLvalueConversionEPNS_4ExprE
+}
+
+{
+   rex_upstream_clang22_check_compare_operands_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema20CheckCompareOperandsERNS_12ActionResultIPNS_4ExprELb1EEES5_NS_14SourceLocationENS_18BinaryOperatorKindE
+}
+
+{
+   rex_upstream_clang22_act_on_finish_function_body_uninit_cond
+   Memcheck:Cond
+   fun:_ZN5clang4Sema23ActOnFinishFunctionBodyEPNS_4DeclEPNS_4StmtEbb
+}
+
+{
+   rex_upstream_clang22_usual_unary_conversions_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema21UsualUnaryConversionsEPNS_4ExprE
+}
+
+{
+   rex_upstream_clang22_finish_template_argument_deduction_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema31FinishTemplateArgumentDeductionEPNS_20FunctionTemplateDeclERN4llvm15SmallVectorImplINS_23DeducedTemplateArgumentEEEjRPNS_12FunctionDeclERNS_4sema21TemplateDeductionInfoEPKNS4_INS0_15OriginalCallArgEEEbbbNS3_12function_refIFbbEEE
+}
+
+{
+   rex_upstream_clang22_check_call_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema9checkCallEPNS_9NamedDeclEPKNS_17FunctionProtoTypeEPKNS_4ExprEN4llvm8ArrayRefIS8_EEbNS_14SourceLocationENS_11SourceRangeENS_16VariadicCallTypeE
+}
+
+{
+   rex_upstream_clang22_check_type_support_uninit_value8
+   Memcheck:Value8
+   fun:_ZZN5clang4Sema16checkTypeSupportENS_8QualTypeENS_14SourceLocationEPNS_9ValueDeclEENK3$_1clES1_b
+}
+
+{
+   rex_upstream_clang22_build_return_stmt_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema15BuildReturnStmtENS_14SourceLocationEPNS_4ExprEb
+}
+
+{
+   rex_upstream_clang22_build_resolved_call_expr_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema21BuildResolvedCallExprEPNS_4ExprEPNS_9NamedDeclENS_14SourceLocationEN4llvm8ArrayRefIS2_EES5_S2_bNS_8CallExpr11ADLCallKindE
+}
+
+{
+   rex_upstream_clang22_expr_evaluate_initializer_uninit_value8
+   Memcheck:Value8
+   fun:_ZNK5clang4Expr21EvaluateAsInitializerERNS_7APValueERKNS_10ASTContextEPKNS_7VarDeclERN4llvm15SmallVectorImplISt4pairINS_14SourceLocationENS_17PartialDiagnosticEEEEb
+}
+
+{
+   rex_upstream_clang22_expr_unused_result_warning_uninit_value8
+   Memcheck:Value8
+   fun:_ZNK5clang4Expr22isUnusedResultAWarningERPKS0_RNS_14SourceLocationERNS_11SourceRangeES7_RNS_10ASTContextE
+}
+
+{
+   rex_upstream_clang22_constexpr_evaluate_uninit_value8
+   Memcheck:Value8
+   fun:_ZL8EvaluateRN5clang7APValueERN12_GLOBAL__N_18EvalInfoEPKNS_4ExprE
+}
+
+{
+   rex_upstream_clang22_evaluate_var_decl_init_uninit_value8
+   Memcheck:Value8
+   fun:_ZL19evaluateVarDeclInitRN12_GLOBAL__N_18EvalInfoEPKN5clang4ExprEPKNS2_7VarDeclEPNS_14CallStackFrameEjRPNS2_7APValueE
+}
+
+{
+   rex_upstream_clang22_find_complete_object_uninit_value8
+   Memcheck:Value8
+   fun:_ZL18findCompleteObjectRN12_GLOBAL__N_18EvalInfoEPKN5clang4ExprENS2_11AccessKindsERKNS_6LValueENS2_8QualTypeE
+}
+
+{
+   rex_upstream_clang22_paren_list_expr_ctor_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang13ParenListExprC1ENS_14SourceLocationEN4llvm8ArrayRefIPNS_4ExprEEES1_
+}
+
+{
+   rex_upstream_clang22_deduce_variable_declaration_type_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema29DeduceVariableDeclarationTypeEPNS_7VarDeclEbPNS_4ExprE
+}
+
+{
+   rex_upstream_clang22_cxx_record_added_member_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang13CXXRecordDecl11addedMemberEPNS_4DeclE
+}
+
+{
+   rex_upstream_clang22_require_complete_type_impl_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema23RequireCompleteTypeImplENS_14SourceLocationENS_8QualTypeENS0_16CompleteTypeKindEPNS0_13TypeDiagnoserE
+}
+
+{
+   rex_upstream_clang22_cxx_ctor_is_copy_or_move_uninit_value8
+   Memcheck:Value8
+   fun:_ZNK5clang18CXXConstructorDecl23isCopyOrMoveConstructorERj
+}
+
+{
+   rex_upstream_clang22_declare_implicit_copy_constructor_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema30DeclareImplicitCopyConstructorEPNS_13CXXRecordDeclE
+}
+
+{
+   rex_upstream_clang22_declare_implicit_move_constructor_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema30DeclareImplicitMoveConstructorEPNS_13CXXRecordDeclE
+}
+
+{
+   rex_upstream_clang22_cxx_ctor_is_specialization_copying_object_uninit_value8
+   Memcheck:Value8
+   fun:_ZNK5clang18CXXConstructorDecl29isSpecializationCopyingObjectEv
+}
+
+{
+   rex_upstream_clang22_complete_constructor_call_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema23CompleteConstructorCallEPNS_18CXXConstructorDeclENS_8QualTypeEN4llvm15MutableArrayRefIPNS_4ExprEEENS_14SourceLocationERNS4_15SmallVectorImplIS7_EEbb
+}
+
+{
+   rex_upstream_clang22_itanium_record_layout_field_uninit_value8
+   Memcheck:Value8
+   fun:_ZN12_GLOBAL__N_126ItaniumRecordLayoutBuilder11LayoutFieldEPKN5clang9FieldDeclEb
+}
+
+{
+   rex_upstream_clang22_visit_function_call_arguments_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4semaL26visitFunctionCallArgumentsERN4llvm15SmallVectorImplINS0_12_GLOBAL__N_122IndirectLocalPathEntryEEEPNS_4ExprENS1_12function_refIFbS6_S8_NS3_13ReferenceKindEEEE
+}
+
+{
+   rex_upstream_clang22_check_addition_operands_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema21CheckAdditionOperandsERNS_12ActionResultIPNS_4ExprELb1EEES5_NS_14SourceLocationENS_18BinaryOperatorKindEPNS_8QualTypeE
+}
+
+{
+   rex_upstream_clang22_act_on_start_function_def_decl_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema23ActOnStartOfFunctionDefEPNS_5ScopeEPNS_4DeclEPNS_12SkipBodyInfoENS0_10FnBodyKindE
+}
+
+{
+   rex_upstream_clang22_template_argument_list_create_copy_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang20TemplateArgumentList10CreateCopyERNS_10ASTContextEN4llvm8ArrayRefINS_16TemplateArgumentEEE
+}
+
+{
+   rex_upstream_clang22_diagnose_tautological_comparison_uninit_value8
+   Memcheck:Value8
+   fun:_ZL30diagnoseTautologicalComparisonRN5clang4SemaENS_14SourceLocationEPNS_4ExprES4_NS_18BinaryOperatorKindE
+}
+
+{
+   rex_upstream_clang22_sequence_checker_note_post_use_uninit_value8
+   Memcheck:Value8
+   fun:_ZN12_GLOBAL__N_115SequenceChecker11notePostUseEPKN5clang9NamedDeclEPKNS1_4ExprE
+}
+
+{
+   rex_upstream_clang22_sequence_checker_note_post_mod_uninit_value8
+   Memcheck:Value8
+   fun:_ZN12_GLOBAL__N_115SequenceChecker11notePostModEPKN5clang9NamedDeclEPKNS1_4ExprENS0_9UsageKindE
+}
+
+{
+   rex_upstream_llvm22_ieeefloat_part_count_uninit_value8
+   Memcheck:Value8
+   fun:_ZNK4llvm6detail9IEEEFloat9partCountEv
 }
 
 {
@@ -510,4 +1192,387 @@
    ...
    fun:_ZN5clang24MakeDeductionFailureInfoERNS_10ASTContextENS_23TemplateDeductionResultERNS_4sema21TemplateDeductionInfoE
    obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang22_template_instantiation_typeloc_memmove_cond
+   Memcheck:Cond
+   fun:memmove
+   fun:getTypeLocInContext
+   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE31TransformNestedNameSpecifierLocENS_22NestedNameSpecifierLocENS_8QualTypeEPNS_9NamedDeclE
+}
+
+{
+   rex_upstream_clang22_template_instantiation_typeloc_memmove_value8
+   Memcheck:Value8
+   fun:memmove
+   fun:getTypeLocInContext
+   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE31TransformNestedNameSpecifierLocENS_22NestedNameSpecifierLocENS_8QualTypeEPNS_9NamedDeclE
+}
+
+{
+   rex_upstream_clang22_template_instantiation_nested_name_spec_cond
+   Memcheck:Cond
+   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE31TransformNestedNameSpecifierLocENS_22NestedNameSpecifierLocENS_8QualTypeEPNS_9NamedDeclE
+}
+
+{
+   rex_upstream_clang22_template_instantiation_nested_name_spec_value8
+   Memcheck:Value8
+   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE31TransformNestedNameSpecifierLocENS_22NestedNameSpecifierLocENS_8QualTypeEPNS_9NamedDeclE
+}
+
+{
+   rex_upstream_clang22_nested_name_spec_builder_cond
+   Memcheck:Cond
+   fun:memmove
+   fun:_ZNK5clang29NestedNameSpecifierLocBuilder19getWithLocInContextERNS_10ASTContextE
+}
+
+{
+   rex_upstream_clang22_nested_name_spec_builder_value8
+   Memcheck:Value8
+   fun:memmove
+   fun:_ZNK5clang29NestedNameSpecifierLocBuilder19getWithLocInContextERNS_10ASTContextE
+}
+
+{
+   rex_upstream_clang22_template_instantiator_transform_type_sourceinfo_cond
+   Memcheck:Cond
+   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE13TransformTypeEPNS_14TypeSourceInfoE
+}
+
+{
+   rex_upstream_clang22_template_instantiator_transform_type_sourceinfo_value8
+   Memcheck:Value8
+   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE13TransformTypeEPNS_14TypeSourceInfoE
+}
+
+{
+   rex_upstream_clang22_folding_find_uninit_cond
+   Memcheck:Cond
+   fun:bcmp
+   ...
+   fun:_ZNK4llvm16FoldingSetNodeIDeqERKS0_
+   ...
+   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
+}
+
+{
+   rex_upstream_clang22_folding_find_uninit_value8
+   Memcheck:Value8
+   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
+}
+
+{
+   rex_upstream_clang22_folding_insert_uninit_value8
+   Memcheck:Value8
+   fun:_ZN4llvm14FoldingSetBase10InsertNodeEPNS0_4NodeEPvRKNS0_14FoldingSetInfoE
+}
+
+{
+   rex_upstream_clang22_folding_get_or_insert_uninit_value8
+   Memcheck:Value8
+   fun:_ZN4llvm14FoldingSetBase15GetOrInsertNodeEPNS0_4NodeERKNS0_14FoldingSetInfoE
+}
+
+{
+   rex_upstream_clang22_folding_grow_bucket_count_uninit_value8
+   Memcheck:Value8
+   fun:_ZN4llvm14FoldingSetBase15GrowBucketCountEjRKNS0_14FoldingSetInfoE
+}
+
+{
+   rex_upstream_clang22_folding_destructor_uninit_value8
+   Memcheck:Value8
+   fun:_ZN4llvm14FoldingSetBaseD1Ev
+}
+
+{
+   rex_upstream_clang22_usual_arithmetic_conversions_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema26UsualArithmeticConversionsERNS_12ActionResultIPNS_4ExprELb1EEES5_NS_14SourceLocationENS_13ArithConvKindE
+}
+
+{
+   rex_upstream_clang22_instantiate_class_impl_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema20InstantiateClassImplENS_14SourceLocationEPNS_13CXXRecordDeclES3_RKNS_30MultiLevelTemplateArgumentListENS_26TemplateSpecializationKindEb
+}
+
+{
+   rex_upstream_clang22_check_complete_variable_declaration_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema32CheckCompleteVariableDeclarationEPNS_7VarDeclE
+}
+
+{
+   rex_upstream_clang22_act_on_uninitialized_decl_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Sema22ActOnUninitializedDeclEPNS_4DeclE
+}
+
+{
+   rex_upstream_clang22_decl_set_attrs_impl_uninit_cond
+   Memcheck:Cond
+   fun:_ZN5clang4Decl12setAttrsImplERKN4llvm11SmallVectorIPNS_4AttrELj4EEERNS_10ASTContextE
+}
+
+{
+   rex_upstream_clang22_decl_set_attrs_impl_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang4Decl12setAttrsImplERKN4llvm11SmallVectorIPNS_4AttrELj4EEERNS_10ASTContextE
+}
+
+{
+   rex_upstream_clang22_template_decl_instantiator_visit_var_decl_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang24TemplateDeclInstantiator12VisitVarDeclEPNS_7VarDeclEbPN4llvm8ArrayRefIPNS_11BindingDeclEEE
+}
+
+{
+   rex_upstream_clang22_astcontext_decltype_type_uninit_value8
+   Memcheck:Value8
+   fun:_ZNK5clang10ASTContext15getDecltypeTypeEPNS_4ExprENS_8QualTypeE
+}
+
+{
+   rex_upstream_clang22_decl_ref_expr_source_range_uninit_value8
+   Memcheck:Value8
+   fun:_ZN12_GLOBAL__N_118getSourceRangeImplIN5clang11DeclRefExprEEENS1_11SourceRangeEPKNS1_4StmtEMS4_KFS3_vE
+}
+
+{
+   rex_upstream_clang22_try_static_cast_uninit_value8
+   Memcheck:Value8
+   fun:_ZL13TryStaticCastRN5clang4SemaERNS_12ActionResultIPNS_4ExprELb1EEENS_8QualTypeENS_21CheckedConversionKindEN12_GLOBAL__N_113CastOperation11OpRangeTypeERjRNS_8CastKindERN4llvm11SmallVectorIPNS_16CXXBaseSpecifierELj4EEEb
+}
+
+{
+   rex_upstream_clang22_visit_cxx_method_decl_uninit_value8
+   Memcheck:Value8
+   fun:_ZN5clang24TemplateDeclInstantiator18VisitCXXMethodDeclEPNS_13CXXMethodDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
+}
+
+{
+   rex_upstream_clang22_set_eligible_methods_uninit_value8
+   Memcheck:Value8
+   fun:_ZL18SetEligibleMethodsRN5clang4SemaEPNS_13CXXRecordDeclEN4llvm8ArrayRefIPNS_13CXXMethodDeclEEENS_20CXXSpecialMemberKindE
+}
+
+{
+   rex_upstream_clang22_astcontext_template_specialization_type_uninit_value8
+   Memcheck:Value8
+   fun:_ZNK5clang10ASTContext29getTemplateSpecializationTypeENS_21ElaboratedTypeKeywordENS_12TemplateNameEN4llvm8ArrayRefINS_16TemplateArgumentEEES6_NS_8QualTypeE
+}
+
+{
+   rex_upstream_clang22_decl_set_attrs_impl_stl_copy_uninit_cond
+   Memcheck:Cond
+   fun:memmove
+   ...
+   fun:_ZN5clang4Decl12setAttrsImplERKN4llvm11SmallVectorIPNS_4AttrELj4EEERNS_10ASTContextE
+}
+
+{
+   rex_upstream_clang22_decl_set_attrs_impl_stl_copy_uninit_value8
+   Memcheck:Value8
+   fun:memmove
+   ...
+   fun:_ZN5clang4Decl12setAttrsImplERKN4llvm11SmallVectorIPNS_4AttrELj4EEERNS_10ASTContextE
+}
+
+{
+   rex_upstream_clang22_template_instantiation_nested_name_memmove_cond
+   Memcheck:Cond
+   fun:memmove
+   ...
+   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE31TransformNestedNameSpecifierLocENS_22NestedNameSpecifierLocENS_8QualTypeEPNS_9NamedDeclE
+}
+
+{
+   rex_upstream_clang22_template_instantiation_nested_name_memmove_value8
+   Memcheck:Value8
+   fun:memmove
+   ...
+   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE31TransformNestedNameSpecifierLocENS_22NestedNameSpecifierLocENS_8QualTypeEPNS_9NamedDeclE
+}
+
+{
+   rex_upstream_clang22_template_instantiation_transform_type_any_cond
+   Memcheck:Cond
+   ...
+   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE13TransformTypeEPNS_14TypeSourceInfoE
+}
+
+{
+   rex_upstream_clang22_template_instantiation_transform_type_any_value8
+   Memcheck:Value8
+   ...
+   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE13TransformTypeEPNS_14TypeSourceInfoE
+}
+
+{
+   rex_upstream_clang22_astcontext_auto_type_folding_cond
+   Memcheck:Cond
+   fun:bcmp
+   ...
+   fun:_ZNK4llvm16FoldingSetNodeIDeqERKS0_
+   ...
+   fun:_ZNK5clang10ASTContext19getAutoTypeInternalENS_8QualTypeENS_15AutoTypeKeywordEbbPNS_12TemplateDeclEN4llvm8ArrayRefINS_16TemplateArgumentEEEb
+}
+
+{
+   rex_upstream_clang22_astcontext_lvalue_reference_folding_cond
+   Memcheck:Cond
+   fun:bcmp
+   ...
+   fun:_ZNK4llvm16FoldingSetNodeIDeqERKS0_
+   ...
+   fun:_ZNK5clang10ASTContext22getLValueReferenceTypeENS_8QualTypeEb
+}
+
+{
+   rex_upstream_clang22_astcontext_rvalue_reference_folding_cond
+   Memcheck:Cond
+   fun:bcmp
+   ...
+   fun:_ZNK4llvm16FoldingSetNodeIDeqERKS0_
+   ...
+   fun:_ZNK5clang10ASTContext22getRValueReferenceTypeENS_8QualTypeE
+}
+
+{
+   rex_upstream_clang22_astcontext_function_type_folding_cond
+   Memcheck:Cond
+   fun:bcmp
+   ...
+   fun:_ZNK4llvm16FoldingSetNodeIDeqERKS0_
+   ...
+   fun:_ZNK5clang10ASTContext23getFunctionTypeInternalENS_8QualTypeEN4llvm8ArrayRefIS1_EERKNS_17FunctionProtoType12ExtProtoInfoEb
+}
+
+{
+   rex_upstream_clang22_astcontext_function_type_folding_direct_cond
+   Memcheck:Cond
+   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
+   ...
+   fun:_ZNK5clang10ASTContext23getFunctionTypeInternalENS_8QualTypeEN4llvm8ArrayRefIS1_EERKNS_17FunctionProtoType12ExtProtoInfoEb
+}
+
+{
+   rex_upstream_clang22_special_member_exception_folding_cond
+   Memcheck:Cond
+   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
+   fun:FindNodeOrInsertPos
+   fun:_ZN5clang4Sema19LookupSpecialMemberEPNS_13CXXRecordDeclENS_20CXXSpecialMemberKindEbbbbb
+   fun:lookupCallFromSpecialMember
+   fun:lookupIn
+   fun:_ZN12_GLOBAL__N_130SpecialMemberExceptionSpecInfo19visitClassSubobjectEPN5clang13CXXRecordDeclEN4llvm12PointerUnionIJPNS1_16CXXBaseSpecifierEPNS1_9FieldDeclEEEEj
+}
+
+{
+   rex_upstream_clang22_template_this_scope_pointer_type_folding_cond
+   Memcheck:Cond
+   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
+   fun:FindNodeOrInsertPos
+   fun:_ZNK5clang10ASTContext14getPointerTypeENS_8QualTypeE
+   fun:_ZN5clang4Sema16CXXThisScopeRAIIC1ERS0_PNS_4DeclENS_10QualifiersEb
+   fun:_ZN5clang4Sema16InstantiateAttrsERKNS_30MultiLevelTemplateArgumentListEPKNS_4DeclEPS4_PN4llvm11SmallVectorINS0_25LateInstantiatedAttributeELj1EEEPNS_23LocalInstantiationScopeE
+}
+
+{
+   rex_upstream_clang22_build_resolved_call_pointer_type_folding_cond
+   Memcheck:Cond
+   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
+   fun:FindNodeOrInsertPos
+   fun:_ZNK5clang10ASTContext14getPointerTypeENS_8QualTypeE
+   fun:_ZN5clang4Sema21BuildResolvedCallExprEPNS_4ExprEPNS_9NamedDeclENS_14SourceLocationEN4llvm8ArrayRefIS2_EES5_S2_bNS_8CallExpr11ADLCallKindE
+   fun:_ZL24FinishOverloadedCallExprRN5clang4SemaEPNS_5ScopeEPNS_4ExprEPNS_20UnresolvedLookupExprENS_14SourceLocationEN4llvm15MutableArrayRefIS5_EES8_S5_PNS_20OverloadCandidateSetEPPNS_17OverloadCandidateENS_17OverloadingResultEb
+}
+
+{
+   rex_upstream_clang22_build_call_pointer_type_folding_cond
+   Memcheck:Cond
+   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
+   fun:FindNodeOrInsertPos
+   fun:_ZNK5clang10ASTContext14getPointerTypeENS_8QualTypeE
+   fun:_ZN5clang4Sema21BuildResolvedCallExprEPNS_4ExprEPNS_9NamedDeclENS_14SourceLocationEN4llvm8ArrayRefIS2_EES5_S2_bNS_8CallExpr11ADLCallKindE
+   fun:_ZN5clang4Sema13BuildCallExprEPNS_5ScopeEPNS_4ExprENS_14SourceLocationEN4llvm15MutableArrayRefIS4_EES5_S4_bb
+}
+
+{
+   rex_upstream_clang22_lookup_destructor_folding_cond
+   Memcheck:Cond
+   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
+   fun:FindNodeOrInsertPos
+   fun:_ZN5clang4Sema19LookupSpecialMemberEPNS_13CXXRecordDeclENS_20CXXSpecialMemberKindEbbbbb
+   fun:_ZN5clang4Sema16LookupDestructorEPNS_13CXXRecordDeclE
+   fun:_ZN5clang4Sema20MaybeBindToTemporaryEPNS_4ExprE
+}
+
+{
+   rex_upstream_clang22_astcontext_dependent_name_folding_cond
+   Memcheck:Cond
+   fun:bcmp
+   ...
+   fun:_ZNK4llvm16FoldingSetNodeIDeqERKS0_
+   ...
+   fun:_ZNK5clang10ASTContext20getDependentNameTypeENS_21ElaboratedTypeKeywordENS_19NestedNameSpecifierEPKNS_14IdentifierInfoE
+}
+
+{
+   rex_upstream_clang22_astcontext_subst_template_typeparm_folding_cond
+   Memcheck:Cond
+   fun:bcmp
+   ...
+   fun:_ZNK4llvm16FoldingSetNodeIDeqERKS0_
+   ...
+   fun:_ZNK5clang10ASTContext28getSubstTemplateTypeParmTypeENS_8QualTypeEPNS_4DeclEjNS_14UnsignedOrNoneEb
+}
+
+{
+   rex_upstream_clang22_astcontext_typedef_type_folding_cond
+   Memcheck:Cond
+   fun:bcmp
+   ...
+   fun:_ZNK4llvm16FoldingSetNodeIDeqERKS0_
+   ...
+   fun:_ZNK5clang10ASTContext14getTypedefTypeENS_21ElaboratedTypeKeywordENS_19NestedNameSpecifierEPKNS_15TypedefNameDeclENS_8QualTypeESt8optionalIbE
+}
+
+{
+   rex_upstream_clang22_folding_find_clang_astcontext_value8
+   Memcheck:Value8
+   ...
+   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
+   ...
+   fun:*clang*
+}
+
+{
+   rex_upstream_clang22_folding_insert_clang_astcontext_value8
+   Memcheck:Value8
+   ...
+   fun:_ZN4llvm14FoldingSetBase10InsertNodeEPNS0_4NodeEPvRKNS0_14FoldingSetInfoE
+   ...
+   fun:*clang*
+}
+
+{
+   rex_upstream_clang22_folding_grow_bucket_clang_astcontext_value8
+   Memcheck:Value8
+   ...
+   fun:_ZN4llvm14FoldingSetBase15GrowBucketCountEjRKNS0_14FoldingSetInfoE
+   ...
+   fun:*clang*
+}
+
+{
+   rex_upstream_clang22_folding_get_or_insert_clang_astcontext_value8
+   Memcheck:Value8
+   ...
+   fun:_ZN4llvm14FoldingSetBase15GetOrInsertNodeEPNS0_4NodeERKNS0_14FoldingSetInfoE
+   ...
+   fun:*clang*
 }
