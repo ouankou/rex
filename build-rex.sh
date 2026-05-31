@@ -200,21 +200,51 @@ detect_system_multiarch() {
     printf '%s-linux-gnu\n' "$machine"
 }
 
+detect_gcc_version() {
+    local multiarch="$1"
+    local include_dir version best_version=""
+
+    for include_dir in /usr/include/c++/[0-9]*; do
+        [ -d "$include_dir" ] || continue
+        version="${include_dir##*/}"
+        case "$version" in
+        "" | *[!0-9]*)
+            continue
+            ;;
+        esac
+
+        if [ -n "$multiarch" ] && [ ! -d "/usr/lib/gcc/${multiarch}/${version}" ]; then
+            continue
+        fi
+
+        if [ -z "$best_version" ]; then
+            best_version="$version"
+        else
+            best_version="$(printf '%s\n%s\n' "$best_version" "$version" | sort -V | tail -n1)"
+        fi
+    done
+
+    if [ -n "$best_version" ]; then
+        printf '%s\n' "$best_version"
+    elif command -v g++ >/dev/null 2>&1; then
+        g++ -dumpversion | sed -nE 's/^([0-9]+).*/\1/p' | head -n1
+    fi
+}
+
 # Prefer the packaged GCC/stdlib headers/libs that match the active machine
 # when driving Clang.
-if [ -z "${GCC_VERSION:-}" ] && command -v g++ >/dev/null 2>&1; then
-    GCC_VERSION="$(g++ -dumpfullversion -dumpversion | sed -nE 's/^([0-9]+).*/\1/p')"
-fi
-GCC_VERSION="${GCC_VERSION:-14}"
 GCC_MULTIARCH="$(gcc -print-multiarch 2>/dev/null || true)"
 GCC_MULTIARCH="${GCC_MULTIARCH:-$(detect_system_multiarch)}"
-GCC_LIBGCC_PATH="$(gcc -print-libgcc-file-name 2>/dev/null || true)"
-if [ -n "$GCC_LIBGCC_PATH" ] && [ "${GCC_LIBGCC_PATH#/}" != "$GCC_LIBGCC_PATH" ]; then
-    GCC_PREFIX="$(dirname "$GCC_LIBGCC_PATH")"
-elif [ -n "$GCC_MULTIARCH" ]; then
-    GCC_PREFIX="/usr/lib/gcc/${GCC_MULTIARCH}/${GCC_VERSION}"
-else
-    GCC_PREFIX="/usr/lib/gcc/$(detect_system_multiarch)/${GCC_VERSION}"
+if [ -z "${GCC_VERSION:-}" ]; then
+    GCC_VERSION="$(detect_gcc_version "$GCC_MULTIARCH")"
+fi
+GCC_VERSION="${GCC_VERSION:-14}"
+GCC_PREFIX="/usr/lib/gcc/${GCC_MULTIARCH}/${GCC_VERSION}"
+if [ ! -d "$GCC_PREFIX" ]; then
+    GCC_LIBGCC_PATH="$(gcc -print-libgcc-file-name 2>/dev/null || true)"
+    if [ -n "$GCC_LIBGCC_PATH" ] && [ "${GCC_LIBGCC_PATH#/}" != "$GCC_LIBGCC_PATH" ]; then
+        GCC_PREFIX="$(dirname "$GCC_LIBGCC_PATH")"
+    fi
 fi
 prepend_path_if_dir CPLUS_INCLUDE_PATH "/usr/include/c++/${GCC_VERSION}"
 if [ -n "$GCC_MULTIARCH" ]; then

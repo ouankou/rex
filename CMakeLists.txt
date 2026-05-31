@@ -1264,21 +1264,6 @@ if(ROSE_VALGRIND_REQUESTED)
     message(STATUS "Valgrind version: ${_rose_valgrind_version}")
   endif()
   set(ROSE_USE_VALGRIND 1)
-else()
-  unset(VALGRIND_BINARY)
-  find_program(VALGRIND_BINARY valgrind
-    PATHS ENV PATH /usr/bin /usr/local/bin
-    NO_CMAKE_FIND_ROOT_PATH)
-  if(VALGRIND_BINARY AND NOT VALGRIND_INCLUDE_PATH)
-    unset(VALGRIND_INCLUDE_PATH)
-    find_path(VALGRIND_INCLUDE_PATH valgrind/valgrind.h
-      PATHS /usr/include /usr/local/include
-      NO_DEFAULT_PATH)
-  endif()
-  if(VALGRIND_BINARY AND VALGRIND_INCLUDE_PATH)
-    set(ROSE_USE_VALGRIND 1)
-    message(STATUS "Auto-enabled Valgrind support: ${VALGRIND_BINARY}")
-  endif()
 endif()
 if(ROSE_USE_VALGRIND AND NOT VALGRIND_INCLUDE_PATH)
   unset(VALGRIND_INCLUDE_PATH)
