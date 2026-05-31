@@ -251,7 +251,7 @@ if(NOT REX_LINKER STREQUAL "system")
   endif()
   find_program(_ROSE_LLD_LINKER
     NAMES "ld.lld-${LLVM_REQUIRED_MAJOR}" ld.lld lld
-    HINTS ${_ROSE_LINKER_HINTS}
+    HINTS "${_ROSE_LINKER_HINTS}"
     NAMES_PER_DIR)
   find_program(_ROSE_MOLD_LINKER NAMES mold)
   find_program(_ROSE_BFD_LINKER NAMES ld.bfd)

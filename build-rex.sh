@@ -220,7 +220,7 @@ detect_gcc_version() {
         if [ -z "$best_version" ]; then
             best_version="$version"
         else
-            best_version="$(printf '%s\n%s\n' "$best_version" "$version" | sort -V | tail -n1)"
+            best_version="$(printf '%s\n%s\n' "$best_version" "$version" | sort -n | tail -n1)"
         fi
     done
 
