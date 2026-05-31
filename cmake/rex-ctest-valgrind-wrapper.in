@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+real_valgrind="@ROSE_REAL_VALGRIND@"
+if [[ -z "${real_valgrind}" || ! -x "${real_valgrind}" ]]; then
+  real_valgrind=valgrind
+fi
+
+args=("$@")
+cmd_index=0
+while (( cmd_index < ${#args[@]} )); do
+  arg="${args[cmd_index]}"
+  if [[ "${arg}" == "--" ]]; then
+    cmd_index=$((cmd_index + 1))
+    break
+  fi
+  if [[ "${arg}" != -* ]]; then
+    break
+  fi
+  cmd_index=$((cmd_index + 1))
+done
+
+if (( cmd_index >= ${#args[@]} )); then
+  exec "${real_valgrind}" "$@"
+fi
+
+tool="${args[cmd_index]}"
+if [[ "${tool}" == */rth_run.pl ]]; then
+  valgrind_words=("${real_valgrind}" "${args[@]:0:cmd_index}")
+  valgrind_command=""
+  printf -v valgrind_command "%q " "${valgrind_words[@]}"
+  valgrind_command="${valgrind_command% }"
+  exec "${tool}" "VALGRIND=${valgrind_command}" "${args[@]:cmd_index + 1}"
+fi
+
+exec "${real_valgrind}" "$@"

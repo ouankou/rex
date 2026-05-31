@@ -77,15 +77,30 @@ SgClassDeclaration *SgConstructorInitializer::get_class_decl() const {
 }
 
 void SgConstructorInitializer::post_construction_initialization() {
-  ROSE_ASSERT(p_expression_type != NULL);
   if (p_declaration == NULL) {
     // This can be NULL for the case of an undeclared constructor.
 
-    // DQ (1/19/2019): This is failing in the copyAST tests for test2005_24.C
-    ROSE_ASSERT((isSgTypedefType(p_expression_type) ||
-                 isSgClassType(p_expression_type) != NULL ||
-                 isSgNonrealType(p_expression_type) != NULL) ||
-                (p_associated_class_unknown == true));
+    SgType *associated_type =
+        p_expression_type != NULL
+            ? p_expression_type->stripType(SgType::STRIP_MODIFIER_TYPE |
+                                           SgType::STRIP_TYPEDEF_TYPE |
+                                           SgType::STRIP_REFERENCE_TYPE |
+                                           SgType::STRIP_RVALUE_REFERENCE_TYPE)
+            : NULL;
+    bool has_associated_class = false;
+    if (SgClassType *class_type = isSgClassType(associated_type)) {
+      has_associated_class = class_type->get_declaration() != NULL;
+    } else if (SgNonrealType *nonreal_type = isSgNonrealType(associated_type)) {
+      if (SgNonrealDecl *nonreal_decl =
+              isSgNonrealDecl(nonreal_type->get_declaration())) {
+        has_associated_class =
+            isSgClassDeclaration(nonreal_decl->get_templateDeclaration()) !=
+            NULL;
+      }
+    }
+    ROSE_ASSERT(has_associated_class || (p_associated_class_unknown == true));
+  } else {
+    ROSE_ASSERT(p_expression_type != NULL);
   }
 
   // DQ (11/15/2006): avoid setting newArgs this late in the process.

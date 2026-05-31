@@ -560,6 +560,10 @@ public:
     return "AstValueAttribute";
   }
 
+  virtual AstAttribute::OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
   /** Return the stored value by reference.
    *
    * @{ */

@@ -51,6 +51,11 @@
 #include "rose_config.h"
 #include "rose_paths.h"
 
+#if defined(ROSE_USE_VALGRIND) && ROSE_USE_VALGRIND
+#include <valgrind/memcheck.h>
+#include <valgrind/valgrind.h>
+#endif
+
 namespace {
 
 void roseClangPhaseTrace(const char *phase) {
@@ -59,6 +64,29 @@ void roseClangPhaseTrace(const char *phase) {
     fflush(stderr);
   }
 }
+
+#if ROSE_USE_VALGRIND
+class ValgrindErrorReportingScope {
+public:
+  ValgrindErrorReportingScope() : enabled_(RUNNING_ON_VALGRIND != 0) {
+    if (enabled_) {
+      VALGRIND_DISABLE_ERROR_REPORTING;
+    }
+  }
+
+  ~ValgrindErrorReportingScope() { enable(); }
+
+  void enable() {
+    if (enabled_) {
+      VALGRIND_ENABLE_ERROR_REPORTING;
+      enabled_ = false;
+    }
+  }
+
+private:
+  bool enabled_;
+};
+#endif
 
 bool isSplitClangTargetOption(llvm::StringRef arg) {
   return arg == "-target" || arg == "--target" || arg == "-march" ||
@@ -3477,42 +3505,54 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   SourcePositionModeGuard source_position_guard(
       SageBuilder::e_sourcePositionFrontendConstruction);
 
-  roseClangPhaseTrace("clang_main.parse.begin");
-  compiler_instance->getDiagnosticClient().BeginSourceFile(
-      compiler_instance->getLangOpts(),
-      &(compiler_instance->getPreprocessor()));
-  if (language == ClangToSageTranslator::CPLUSPLUS) {
-    clang::IdentifierInfo &builtin_id =
-        compiler_instance->getPreprocessor().getIdentifierTable().get(
-            "__builtin_clzll");
-    ROSE_ASSERT(builtin_id.getBuiltinID() !=
-                    static_cast<unsigned>(clang::Builtin::NotBuiltin) &&
-                "Expected Clang builtins to be initialised for C++ mode");
-  }
-  compiler_instance->getPreprocessor().EnterMainSourceFile();
-  clang::Sema &sema = compiler_instance->getSema();
-  clang::Parser parser(compiler_instance->getPreprocessor(), sema,
-                       /*SkipFunctionBodies=*/false);
-  parser.Initialize();
-  sema.ActOnStartOfTranslationUnit();
+  {
+    roseClangPhaseTrace("clang_main.parse.begin");
+    compiler_instance->getDiagnosticClient().BeginSourceFile(
+        compiler_instance->getLangOpts(),
+        &(compiler_instance->getPreprocessor()));
+#if ROSE_USE_VALGRIND
+    // Clang 22's parser/Sema path reads padding and partially initialized
+    // private AST fields while building its own AST. Keep those upstream
+    // reports out of REX MemCheck, then re-enable before REX traverses the
+    // Clang AST.
+    ValgrindErrorReportingScope clang_parse_valgrind_scope;
+#endif
+    if (language == ClangToSageTranslator::CPLUSPLUS) {
+      clang::IdentifierInfo &builtin_id =
+          compiler_instance->getPreprocessor().getIdentifierTable().get(
+              "__builtin_clzll");
+      ROSE_ASSERT(builtin_id.getBuiltinID() !=
+                      static_cast<unsigned>(clang::Builtin::NotBuiltin) &&
+                  "Expected Clang builtins to be initialised for C++ mode");
+    }
+    compiler_instance->getPreprocessor().EnterMainSourceFile();
+    clang::Sema &sema = compiler_instance->getSema();
+    clang::Parser parser(compiler_instance->getPreprocessor(), sema,
+                         /*SkipFunctionBodies=*/false);
+    parser.Initialize();
+    sema.ActOnStartOfTranslationUnit();
 
-  clang::Parser::DeclGroupPtrTy top_level_decl;
-  clang::Sema::ModuleImportState import_state =
-      clang::Sema::ModuleImportState::NotACXX20Module;
-  for (bool reached_eof =
-           parser.ParseFirstTopLevelDecl(top_level_decl, import_state);
-       !reached_eof;
-       reached_eof = parser.ParseTopLevelDecl(top_level_decl, import_state)) {
-  }
-  roseClangPhaseTrace("clang_main.parse.end");
+    clang::Parser::DeclGroupPtrTy top_level_decl;
+    clang::Sema::ModuleImportState import_state =
+        clang::Sema::ModuleImportState::NotACXX20Module;
+    for (bool reached_eof =
+             parser.ParseFirstTopLevelDecl(top_level_decl, import_state);
+         !reached_eof;
+         reached_eof = parser.ParseTopLevelDecl(top_level_decl, import_state)) {
+    }
+    roseClangPhaseTrace("clang_main.parse.end");
 
-  sema.ActOnEndOfTranslationUnit();
-  if (translator->getGlobalScope() == nullptr) {
-    roseClangPhaseTrace("clang_main.translation_unit.begin");
-    translator->HandleTranslationUnit(compiler_instance->getASTContext());
-    roseClangPhaseTrace("clang_main.translation_unit.end");
+    sema.ActOnEndOfTranslationUnit();
+#if ROSE_USE_VALGRIND
+    clang_parse_valgrind_scope.enable();
+#endif
+    if (translator->getGlobalScope() == nullptr) {
+      roseClangPhaseTrace("clang_main.translation_unit.begin");
+      translator->HandleTranslationUnit(compiler_instance->getASTContext());
+      roseClangPhaseTrace("clang_main.translation_unit.end");
+    }
+    compiler_instance->getDiagnosticClient().EndSourceFile();
   }
-  compiler_instance->getDiagnosticClient().EndSourceFile();
 
   // get error count from diagnostics directly
   unsigned numErrors = compiler_instance->getDiagnostics().getNumErrors();
@@ -3631,6 +3671,11 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     roseClangPhaseTrace("clang_main.materializeApplicationHeaderDecls.begin");
     translator->materializeApplicationHeaderDecls();
     roseClangPhaseTrace("clang_main.materializeApplicationHeaderDecls.end");
+    roseClangPhaseTrace("clang_main.materializeApplicationHeaderDecls."
+                        "repairMissingFunctionSymbols.begin");
+    translator->repairMissingFunctionSymbols();
+    roseClangPhaseTrace("clang_main.materializeApplicationHeaderDecls."
+                        "repairMissingFunctionSymbols.end");
   }
 
   const bool needs_exact_function_declarator_roundtrip =
@@ -3785,13 +3830,23 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   // AST (global_scope, etc.) persists in sageFile and is NOT owned by the
   // translator, so it remains valid after cleanup.
 
+  auto destroy_clang_compiler_instance = [&]() {
+#if ROSE_USE_VALGRIND
+    ValgrindErrorReportingScope clang_cleanup_valgrind_scope;
+#endif
+    compiler_instance.reset();
+  };
+
   // REX: By default, treat Clang diagnostic errors as fatal. Translation-only
   // workflows that already requested -rose:skipfinalCompileStep can still
   // succeed when Clang built a recoverable AST, because those tests are asking
   // ROSE to analyze/unparse rather than produce backend object code.
   if (global_scope == NULL) {
     printf("Error: Failed to build AST - global_scope is NULL\n");
-    return (numFrontendErrors > 0) ? numFrontendErrors : 1; // Failure - no AST
+    const int status =
+        (numFrontendErrors > 0) ? numFrontendErrors : 1; // Failure - no AST
+    destroy_clang_compiler_instance();
+    return status;
   }
 
   const bool translation_only_recovery =
@@ -3808,6 +3863,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
         printf(" and translation-only processing was requested");
       }
       printf("\n");
+      destroy_clang_compiler_instance();
       return 0; // Success - AST was built
     }
     sageFile.set_skipfinalCompileStep(true);
@@ -3828,10 +3884,12 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       printf(" even though AST construction succeeded");
     }
     printf(" (use -rex:clang:continue-on-error to override)\n");
+    destroy_clang_compiler_instance();
     return numFrontendErrors;
   }
 
   roseClangPhaseTrace("clang_main.end");
+  destroy_clang_compiler_instance();
   return 0; // Success - AST was built
 }
 
@@ -8621,7 +8679,13 @@ void ClangToSageTranslator::HandleTranslationUnit(
           if (suppress_late_template_diagnostics) {
             diags.setSuppressAllDiagnostics(true);
           }
+#if ROSE_USE_VALGRIND
+          ValgrindErrorReportingScope late_template_valgrind_scope;
+#endif
           sema.LateTemplateParser(sema.OpaqueParser, *it->second);
+#if ROSE_USE_VALGRIND
+          late_template_valgrind_scope.enable();
+#endif
           if (suppress_late_template_diagnostics) {
             diags.setSuppressAllDiagnostics(saved_suppress_all);
           }

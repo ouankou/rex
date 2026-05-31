@@ -363,33 +363,14 @@ bool Outliner::isOutlineable(const SgStatement *s, bool verbose) {
   const SgTemplateInstantiationMemberFunctionDecl *inst_mem =
       isSgTemplateInstantiationMemberFunctionDecl(decl);
   if (inst_func != NULL || inst_mem != NULL) {
-    const SgFunctionDeclaration *template_decl = NULL;
-    if (inst_func != NULL) {
-      template_decl = inst_func->get_templateDeclaration();
-    } else if (inst_mem != NULL) {
-      template_decl = inst_mem->get_templateDeclaration();
-    }
-
-    const SgSourceFile *stmt_file =
-        SageInterface::getEnclosingSourceFile(const_cast<SgStatement *>(s));
-    const SgSourceFile *template_file =
-        template_decl != NULL
-            ? SageInterface::getEnclosingSourceFile(
-                  const_cast<SgFunctionDeclaration *>(template_decl))
-            : NULL;
-
-    bool allow_instantiation =
-        template_decl != NULL && template_decl->get_definition() != NULL &&
-        stmt_file != NULL && template_file == stmt_file &&
-        template_decl->get_file_info() != NULL &&
-        template_decl->get_file_info()->isCompilerGenerated() == false;
-
-    if (!allow_instantiation) {
-      // \todo Fix the template instantiation case (see Cxx_tests/test2004_75.C)
-      if (verbose)
-        cerr << "*** Can't outline template instantiations yet. ***" << endl;
-      return false;
-    }
+    // Template instantiations are compiler-generated semantic materializations
+    // of a source template pattern.  Clang preserves source locations on their
+    // bodies, but transforming them emits a second class member beside the
+    // transformed pattern.  The source template declaration is the stable
+    // transformation target.
+    if (verbose)
+      cerr << "*** Can't outline template instantiations yet. ***" << endl;
+    return false;
   }
 
   if (isSgDeclarationStatement(s) && !isSgVariableDeclaration(s)) {

@@ -27,6 +27,10 @@ public:
 
   AstAttribute *copy() const override { return new ExprVarIdAttribute(value); }
 
+  AstAttribute::OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
   varID value;
 };
 } // namespace

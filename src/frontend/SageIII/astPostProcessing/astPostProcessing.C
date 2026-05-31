@@ -2109,6 +2109,107 @@ bool classScopesHaveSameOwnerShape(SgScopeStatement *lhs,
              classTemplateParameterCount(rhs_decl);
 }
 
+bool classDeclarationsShareChain(SgClassDeclaration *lhs,
+                                 SgClassDeclaration *rhs) {
+  if (lhs == nullptr || rhs == nullptr) {
+    return false;
+  }
+  if (lhs == rhs) {
+    return true;
+  }
+
+  std::vector<SgClassDeclaration *> lhs_chain = {
+      lhs, isSgClassDeclaration(lhs->get_firstNondefiningDeclaration()),
+      isSgClassDeclaration(lhs->get_definingDeclaration())};
+  std::vector<SgClassDeclaration *> rhs_chain = {
+      rhs, isSgClassDeclaration(rhs->get_firstNondefiningDeclaration()),
+      isSgClassDeclaration(rhs->get_definingDeclaration())};
+
+  for (SgClassDeclaration *lhs_member : lhs_chain) {
+    if (lhs_member == nullptr) {
+      continue;
+    }
+    for (SgClassDeclaration *rhs_member : rhs_chain) {
+      if (lhs_member == rhs_member) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+bool sourceLocationsMatch(Sg_File_Info *lhs_info, Sg_File_Info *rhs_info) {
+  return lhs_info != nullptr && rhs_info != nullptr &&
+         lhs_info->get_filenameString() == rhs_info->get_filenameString() &&
+         lhs_info->get_line() == rhs_info->get_line() &&
+         lhs_info->get_col() == rhs_info->get_col();
+}
+
+bool classDeclarationsShareSourceLocation(SgClassDeclaration *lhs,
+                                          SgClassDeclaration *rhs) {
+  if (lhs == nullptr || rhs == nullptr) {
+    return false;
+  }
+
+  Sg_File_Info *lhs_info = bestRealSourceFileInfo(lhs);
+  Sg_File_Info *rhs_info = bestRealSourceFileInfo(rhs);
+  return sourceLocationsMatch(lhs_info, rhs_info);
+}
+
+bool classScopesRepresentSameClass(SgScopeStatement *lhs,
+                                   SgScopeStatement *rhs) {
+  if (lhs == nullptr || rhs == nullptr) {
+    return false;
+  }
+  if (lhs == rhs) {
+    return true;
+  }
+
+  lhs = classLikeScope(lhs);
+  rhs = classLikeScope(rhs);
+  if (lhs == nullptr || rhs == nullptr) {
+    return false;
+  }
+  if (lhs == rhs) {
+    return true;
+  }
+
+  SgClassDeclaration *lhs_decl = classDeclarationFromClassLikeScope(lhs);
+  SgClassDeclaration *rhs_decl = classDeclarationFromClassLikeScope(rhs);
+  if (classDeclarationsShareChain(lhs_decl, rhs_decl)) {
+    return true;
+  }
+
+  return classScopesHaveSameOwnerShape(lhs, rhs) &&
+         classDeclarationsShareSourceLocation(lhs_decl, rhs_decl);
+}
+
+bool functionDeclarationsShareSourceLocation(SgFunctionDeclaration *lhs,
+                                             SgFunctionDeclaration *rhs) {
+  return sourceLocationsMatch(getDeclSortFileInfo(lhs),
+                              getDeclSortFileInfo(rhs));
+}
+
+bool templateMemberFunctionScopesRepresentSameClass(
+    SgTemplateMemberFunctionDeclaration *lhs,
+    SgTemplateMemberFunctionDeclaration *rhs) {
+  if (lhs == nullptr || rhs == nullptr) {
+    return false;
+  }
+
+  SgScopeStatement *lhs_scope = lhs->get_scope();
+  SgScopeStatement *rhs_scope = rhs->get_scope();
+  if (classScopesRepresentSameClass(lhs_scope, rhs_scope)) {
+    return true;
+  }
+
+  return lhs->get_name() == rhs->get_name() &&
+         classScopesHaveSameOwnerShape(classLikeScope(lhs_scope),
+                                       classLikeScope(rhs_scope)) &&
+         functionDeclarationsShareSourceLocation(lhs, rhs);
+}
+
 void repairOutOfLineTemplateClassDefinitionScopes(SgNode *node) {
   if (node == nullptr) {
     return;
@@ -2416,6 +2517,136 @@ bool functionDeclSourceLess(SgFunctionDeclaration *lhs,
   return functionDeclStableTieLess(lhs, rhs);
 }
 
+bool templateMemberFunctionChainHasScopeMismatch(
+    const std::vector<SgFunctionDeclaration *> &members) {
+  for (SgFunctionDeclaration *decl : members) {
+    SgTemplateMemberFunctionDeclaration *first_nondef =
+        isSgTemplateMemberFunctionDeclaration(
+            decl != nullptr ? decl->get_firstNondefiningDeclaration()
+                            : nullptr);
+    SgTemplateMemberFunctionDeclaration *defining_decl =
+        isSgTemplateMemberFunctionDeclaration(
+            decl != nullptr ? decl->get_definingDeclaration() : nullptr);
+    if (first_nondef == nullptr || defining_decl == nullptr ||
+        first_nondef == defining_decl) {
+      continue;
+    }
+
+    SgScopeStatement *first_scope = first_nondef->get_scope();
+    SgScopeStatement *defining_scope = defining_decl->get_scope();
+    if (first_scope != defining_scope &&
+        templateMemberFunctionScopesRepresentSameClass(first_nondef,
+                                                       defining_decl)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void moveDeclarationIntoScopeList(SgDeclarationStatement *decl,
+                                  SgScopeStatement *old_scope,
+                                  SgScopeStatement *target_scope) {
+  if (decl == nullptr || target_scope == nullptr || old_scope == target_scope) {
+    return;
+  }
+
+  if (old_scope != nullptr) {
+    detachDeclarationFromScopeList(decl, old_scope);
+  }
+
+  SgDeclarationStatementPtrList *target_decls =
+      scopeDeclarationList(target_scope);
+  if (target_decls != nullptr &&
+      std::find(target_decls->begin(), target_decls->end(), decl) ==
+          target_decls->end()) {
+    target_decls->push_back(decl);
+  }
+
+  decl->set_parent(target_scope);
+}
+
+void moveDeclarationSymbolToScope(SgDeclarationStatement *decl,
+                                  SgScopeStatement *old_scope,
+                                  SgScopeStatement *target_scope) {
+  if (decl == nullptr || target_scope == nullptr || old_scope == target_scope) {
+    return;
+  }
+
+  SgSymbol *symbol = decl->get_symbol_from_symbol_table();
+  if (symbol != nullptr && old_scope != nullptr &&
+      old_scope->symbol_exists(symbol)) {
+    old_scope->remove_symbol(symbol);
+  }
+
+  decl->set_scope(target_scope);
+
+  if (symbol == nullptr) {
+    return;
+  }
+
+  if (!target_scope->symbol_exists(symbol)) {
+    target_scope->insert_symbol(symbol->get_name(), symbol);
+  } else if (symbol->get_parent() != target_scope->get_symbol_table()) {
+    symbol->set_parent(target_scope->get_symbol_table());
+  }
+}
+
+bool isClassLikeDeclarationScope(SgScopeStatement *scope) {
+  return isSgClassDefinition(scope) != nullptr ||
+         isSgTemplateClassDefinition(scope) != nullptr ||
+         isSgTemplateInstantiationDefn(scope) != nullptr;
+}
+
+bool declarationIsAttachedToScopeList(SgDeclarationStatement *decl,
+                                      SgScopeStatement *scope) {
+  SgDeclarationStatementPtrList *decls = scopeDeclarationList(scope);
+  return decl != nullptr && decls != nullptr &&
+         std::find(decls->begin(), decls->end(), decl) != decls->end();
+}
+
+void repairTemplateMemberFunctionChainScopes(
+    const std::vector<SgFunctionDeclaration *> &members,
+    SgFunctionDeclaration *first_nondef, SgFunctionDeclaration *defining_decl) {
+  SgTemplateMemberFunctionDeclaration *canonical_first =
+      isSgTemplateMemberFunctionDeclaration(first_nondef);
+  SgTemplateMemberFunctionDeclaration *canonical_defining =
+      isSgTemplateMemberFunctionDeclaration(defining_decl);
+  if (canonical_first == nullptr || canonical_defining == nullptr ||
+      canonical_first == canonical_defining) {
+    return;
+  }
+
+  SgScopeStatement *target_scope = canonical_defining->get_scope();
+  if (target_scope == nullptr) {
+    return;
+  }
+
+  for (SgFunctionDeclaration *decl : members) {
+    SgTemplateMemberFunctionDeclaration *template_member =
+        isSgTemplateMemberFunctionDeclaration(decl);
+    if (template_member == nullptr || template_member == canonical_defining) {
+      continue;
+    }
+
+    SgScopeStatement *old_scope = template_member->get_scope();
+    if (old_scope == nullptr || old_scope == target_scope ||
+        !templateMemberFunctionScopesRepresentSameClass(template_member,
+                                                        canonical_defining)) {
+      continue;
+    }
+
+    if (isClassLikeDeclarationScope(old_scope) &&
+        functionDeclHasRealSource(template_member) &&
+        declarationIsAttachedToScopeList(template_member, old_scope)) {
+      continue;
+    }
+
+    moveDeclarationIntoScopeList(template_member, old_scope, target_scope);
+    moveDeclarationSymbolToScope(template_member, old_scope, target_scope);
+  }
+}
+
 void suppressFunctionDeclOutput(SgFunctionDeclaration *decl) {
   if (decl == nullptr) {
     return;
@@ -2666,6 +2897,9 @@ void repairBrokenFunctionDeclarationChains(SgNode *node) {
     if (first_nondef_roots.size() > 1) {
       needs_repair = true;
     }
+    if (!needs_repair && templateMemberFunctionChainHasScopeMismatch(members)) {
+      needs_repair = true;
+    }
     if (!needs_repair) {
       continue;
     }
@@ -2748,6 +2982,9 @@ void repairBrokenFunctionDeclarationChains(SgNode *node) {
       decl->set_firstNondefiningDeclaration(first_nondef);
       decl->set_definingDeclaration(defining_decl);
     }
+
+    repairTemplateMemberFunctionChainScopes(members, first_nondef,
+                                            defining_decl);
   }
 }
 
