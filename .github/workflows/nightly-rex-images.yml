@@ -26,8 +26,12 @@ jobs:
 
     env:
       IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
+      LOCAL_IMAGE_REPO: rex-local
       REX_RUNTIME_TAG: latest
       REX_DEV_TAG: dev
+      REX_IMAGE_BUILD_JOBS: 4
+      TARGET_ARCH: riscv64
+      TARGET_PLATFORM: linux/riscv64
 
     steps:
     - uses: actions/checkout@v4
@@ -35,48 +39,85 @@ jobs:
         submodules: 'recursive'
         persist-credentials: false
 
-    - name: Set up QEMU (riscv64)
+    - name: Set up QEMU (${{ env.TARGET_ARCH }})
       uses: docker/setup-qemu-action@v4
       with:
-        platforms: riscv64
+        platforms: ${{ env.TARGET_ARCH }}
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
     - name: Log in to GHCR
+      if: ${{ !env.ACT }}
       uses: docker/login-action@v3
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Build and push REX runtime image (riscv64)
+    - name: Build and push REX runtime image (${{ env.TARGET_ARCH }})
+      if: ${{ !env.ACT }}
       id: build-runtime
       uses: docker/build-push-action@v6
       with:
         context: .
         file: ci/docker/rex-nightly.Dockerfile
-        platforms: linux/riscv64
+        platforms: ${{ env.TARGET_PLATFORM }}
         target: runtime
         pull: true
         provenance: false
         build-args: |
           BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
-    - name: Build and push REX dev image (riscv64)
+    - name: Build REX runtime image locally (${{ env.TARGET_ARCH }})
+      if: ${{ env.ACT }}
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ci/docker/rex-nightly.Dockerfile
+        platforms: ${{ env.TARGET_PLATFORM }}
+        target: runtime
+        pull: true
+        provenance: false
+        build-args: |
+          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+        load: true
+        tags: ${{ env.LOCAL_IMAGE_REPO }}:runtime-${{ env.TARGET_ARCH }}-local
+
+    - name: Build and push REX dev image (${{ env.TARGET_ARCH }})
+      if: ${{ !env.ACT }}
       id: build-dev
       uses: docker/build-push-action@v6
       with:
         context: .
         file: ci/docker/rex-nightly.Dockerfile
-        platforms: linux/riscv64
+        platforms: ${{ env.TARGET_PLATFORM }}
         target: test
         pull: true
         provenance: false
         build-args: |
           BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+
+    - name: Build REX dev image locally (${{ env.TARGET_ARCH }})
+      if: ${{ env.ACT }}
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ci/docker/rex-nightly.Dockerfile
+        platforms: ${{ env.TARGET_PLATFORM }}
+        target: test
+        pull: true
+        provenance: false
+        build-args: |
+          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+        load: true
+        tags: ${{ env.LOCAL_IMAGE_REPO }}:dev-${{ env.TARGET_ARCH }}-local
 
   build-loong64:
     runs-on: ubuntu-24.04
@@ -93,8 +134,12 @@ jobs:
 
     env:
       IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
+      LOCAL_IMAGE_REPO: rex-local
       REX_RUNTIME_TAG: latest
       REX_DEV_TAG: dev
+      REX_IMAGE_BUILD_JOBS: 4
+      TARGET_ARCH: loong64
+      TARGET_PLATFORM: linux/loong64
 
     steps:
     - uses: actions/checkout@v4
@@ -102,48 +147,85 @@ jobs:
         submodules: 'recursive'
         persist-credentials: false
 
-    - name: Set up QEMU (loong64)
+    - name: Set up QEMU (${{ env.TARGET_ARCH }})
       uses: docker/setup-qemu-action@v4
       with:
-        platforms: loong64
+        platforms: ${{ env.TARGET_ARCH }}
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
     - name: Log in to GHCR
+      if: ${{ !env.ACT }}
       uses: docker/login-action@v3
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Build and push REX runtime image (loong64)
+    - name: Build and push REX runtime image (${{ env.TARGET_ARCH }})
+      if: ${{ !env.ACT }}
       id: build-runtime
       uses: docker/build-push-action@v6
       with:
         context: .
         file: ci/docker/rex-nightly.Dockerfile
-        platforms: linux/loong64
+        platforms: ${{ env.TARGET_PLATFORM }}
         target: runtime
         pull: true
         provenance: false
         build-args: |
           BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
-    - name: Build and push REX dev image (loong64)
+    - name: Build REX runtime image locally (${{ env.TARGET_ARCH }})
+      if: ${{ env.ACT }}
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ci/docker/rex-nightly.Dockerfile
+        platforms: ${{ env.TARGET_PLATFORM }}
+        target: runtime
+        pull: true
+        provenance: false
+        build-args: |
+          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+        load: true
+        tags: ${{ env.LOCAL_IMAGE_REPO }}:runtime-${{ env.TARGET_ARCH }}-local
+
+    - name: Build and push REX dev image (${{ env.TARGET_ARCH }})
+      if: ${{ !env.ACT }}
       id: build-dev
       uses: docker/build-push-action@v6
       with:
         context: .
         file: ci/docker/rex-nightly.Dockerfile
-        platforms: linux/loong64
+        platforms: ${{ env.TARGET_PLATFORM }}
         target: test
         pull: true
         provenance: false
         build-args: |
           BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+
+    - name: Build REX dev image locally (${{ env.TARGET_ARCH }})
+      if: ${{ env.ACT }}
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ci/docker/rex-nightly.Dockerfile
+        platforms: ${{ env.TARGET_PLATFORM }}
+        target: test
+        pull: true
+        provenance: false
+        build-args: |
+          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+        load: true
+        tags: ${{ env.LOCAL_IMAGE_REPO }}:dev-${{ env.TARGET_ARCH }}-local
 
   publish-manifests:
     runs-on: ubuntu-24.04
@@ -165,9 +247,11 @@ jobs:
 
     steps:
     - name: Set up Docker Buildx
+      if: ${{ !env.ACT }}
       uses: docker/setup-buildx-action@v3
 
     - name: Log in to GHCR
+      if: ${{ !env.ACT }}
       uses: docker/login-action@v3
       with:
         registry: ghcr.io
@@ -175,6 +259,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Publish multi-arch runtime manifest (latest tag)
+      if: ${{ !env.ACT }}
       run: |
         set -euo pipefail
         docker buildx imagetools create \
@@ -184,6 +269,7 @@ jobs:
         docker buildx imagetools inspect "${IMAGE_REPO}:${REX_RUNTIME_TAG}"
 
     - name: Publish multi-arch dev manifest (dev tag)
+      if: ${{ !env.ACT }}
       run: |
         set -euo pipefail
         docker buildx imagetools create \

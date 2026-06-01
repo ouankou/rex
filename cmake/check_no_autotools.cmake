@@ -17,14 +17,16 @@ foreach(path IN LISTS _forbidden_paths)
   endif()
 endforeach()
 
-set(_find_command find "${REX_SOURCE_DIR}"
-  "(" -name "Makefile.am*" -o -name "*.m4" -o -name "Makefile.in" -o -name "stamp-h*.in" ")"
-  -type f)
-
+set(_find_prune_expr "(" -path "${REX_SOURCE_DIR}/.git")
 if(DEFINED REX_BUILD_DIR AND NOT REX_BUILD_DIR STREQUAL "")
-  list(APPEND _find_command -not -path "${REX_BUILD_DIR}/*")
+  list(APPEND _find_prune_expr -o -path "${REX_BUILD_DIR}")
 endif()
-list(APPEND _find_command -not -path "${REX_SOURCE_DIR}/.git/*")
+list(APPEND _find_prune_expr ")")
+
+set(_find_command find "${REX_SOURCE_DIR}"
+  ${_find_prune_expr} -prune -o
+  "(" -name "Makefile.am*" -o -name "*.m4" -o -name "Makefile.in" -o -name "stamp-h*.in" ")"
+  -type f -print)
 
 execute_process(
   COMMAND ${_find_command}

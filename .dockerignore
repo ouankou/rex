@@ -6,9 +6,10 @@
 **/__pycache__
 **/*.pyc
 
-build
+build/
 build-*/
 cmake-build*/
+!build-rex.sh
 compile_commands.json
 CMakeCache.txt
 CMakeFiles/
