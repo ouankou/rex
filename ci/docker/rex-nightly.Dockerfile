@@ -21,19 +21,12 @@ ENV LD_LIBRARY_PATH=${REX_INSTALL_DIR}/lib:/usr/lib/llvm-${LLVM_VERSION}/lib
 
 FROM rex-base AS builder
 
+ARG REX_BUILD_NUM_JOBS=4
+
 WORKDIR ${REX_SOURCE_DIR}
 COPY . ${REX_SOURCE_DIR}
 
-RUN cmake -S "${REX_SOURCE_DIR}" -B "${REX_BUILD_DIR}" \
-      -DCMAKE_BUILD_TYPE=Debug \
-      -DCMAKE_INSTALL_PREFIX="${REX_INSTALL_DIR}" \
-      -DENABLE-C=ON \
-      -DENABLE-FORTRAN=ON \
-      -DENABLE-FORTRAN-FLANG=ON \
-      -DCMAKE_CXX_STANDARD=17 \
-      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-    && cmake --build "${REX_BUILD_DIR}" -j"$(nproc)" \
-    && cmake --install "${REX_BUILD_DIR}"
+RUN NUM_JOBS="${REX_BUILD_NUM_JOBS}" ./build-rex.sh "${REX_INSTALL_DIR}" Debug
 
 FROM rex-base AS runtime
 
