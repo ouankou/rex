@@ -67,6 +67,9 @@ rose_force_system_include_dirs(libroseClangFrontend
 target_compile_definitions(libroseClangFrontend PRIVATE
   ${LLVM_DEFINITIONS})
 
+rose_enable_private_pch(libroseClangFrontend
+  "${ROSE_TOP_SRC_DIR}/cmake/pch/clang-frontend-pch.hpp")
+
 set(CLANG_BUILTIN_HEADERS
   clang-builtin-c.h
   clang-builtin-cpp.hpp
