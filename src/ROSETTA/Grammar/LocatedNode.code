@@ -807,7 +807,7 @@ SgLocatedNode::isTransformation () const
           if (result != expression->get_operatorPosition()->isTransformation())
              {
                printf ("Warning: this = %p = %s result != expression->get_operatorPosition()->isTransformation() \n",this,this->class_name().c_str());
-               printf ("   --- Suggest calling the set transformation on the SgLocated node directly, instead of on the SgFileInfo objects seperately. \n");
+               printf ("   --- Suggest calling the set transformation on the SgLocated node directly, instead of on the SgFileInfo objects separately. \n");
              }
        // DQ (12/13/2018): This is difficult to enforce and causes an error in the outlining tests for Fortran in roseTests/astOutliningTests.
        // When we eliminate the alternative interface to set this in each Sg_FileInfo object then it will be easier to enforce. So for now
@@ -889,7 +889,7 @@ SgLocatedNode::isShared () const
           if (result != expression->get_operatorPosition()->isShared())
              {
                printf ("Warning: this = %p = %s result != expression->get_operatorPosition()->isShared() \n",this,this->class_name().c_str());
-               printf ("   --- Suggest calling the set shared on the SgLocated node directly, instead of on the SgFileInfo objects seperately. \n");
+               printf ("   --- Suggest calling the set shared on the SgLocated node directly, instead of on the SgFileInfo objects separately. \n");
              }
        // DQ (12/13/2018): This is difficult to enforce and causes an error in the outlining tests for Fortran in roseTests/astOutliningTests.
        // When we eliminate the alternative interface to set this in each Sg_FileInfo object then it will be easier to enforce. So for now
@@ -965,7 +965,7 @@ SgLocatedNode::isFrontendSpecific () const
           if (result != expression->get_operatorPosition()->isFrontendSpecific())
              {
                printf ("Warning: this = %p = %s result != expression->get_operatorPosition()->isFrontendSpecific() \n",this,this->class_name().c_str());
-               printf ("   --- Suggest calling the set shared on the SgLocated node directly, instead of on the SgFileInfo objects seperately. \n");
+               printf ("   --- Suggest calling the set shared on the SgLocated node directly, instead of on the SgFileInfo objects separately. \n");
              }
        // DQ (12/13/2018): This is difficult to enforce and causes an error in the outlining tests for Fortran in roseTests/astOutliningTests.
        // When we eliminate the alternative interface to set this in each Sg_FileInfo object then it will be easier to enforce. So for now

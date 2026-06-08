@@ -186,7 +186,7 @@ public:
 
   // DQ (2/16/2021): This function supports
   // iterateOverListAndInsertPreviouslyUninsertedElementsAppearingBeforeLineNumber().
-  // It seperates the case where comments and CPP directives are put in the
+  // It separates the case where comments and CPP directives are put in the
   // scope or attached to the bottom of the previous statement.
   void handleBracedScopes(SgLocatedNode *previousLocatedNode,
                           SgStatement *bracedScope, int lineOfClosingBrace,

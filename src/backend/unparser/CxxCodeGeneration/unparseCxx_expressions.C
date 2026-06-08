@@ -1713,7 +1713,7 @@ void Unparse_ExprStmt::unparseTemplateFunctionName(
   // long function calls in the generated code).  Note that if some template
   // arguments are specified and some are not then control over not unparsing
   // template arguments that where not explicit in the original code will be
-  // handled seperately in the near future (in the SgTemplateArgument IR nodes).
+  // handled separately in the near future (in the SgTemplateArgument IR nodes).
   if (unparseTemplateArguments == true) {
     if (templateInstantiationFunctionDeclaration->get_templateArguments()
             .empty()) {
@@ -4413,12 +4413,12 @@ void Unparse_ExprStmt::unparseMFuncRefSupport(SgExpression *expr,
             // contains template arguments that requires name qualification.
 
             // DQ (5/25/2013): Added support to unparse the template arguments
-            // seperately from the member function name (which should NOT
+            // separately from the member function name (which should NOT
             // include the template arguments when unparsing). Note the the
             // template arguments in the name are important for the generation
             // of mangled names for use in symbol tabls, but that we need to
             // output the member function name and it's template arguments
-            // seperately so that they name qulification can be computed and
+            // separately so that they name qulification can be computed and
             // saved in the name qualification name maps.
 
             // Note that this code below is a copy of that from the support for
@@ -4471,12 +4471,12 @@ void Unparse_ExprStmt::unparseMFuncRefSupport(SgExpression *expr,
 #endif
 
             // DQ (5/25/2013): Added support to unparse the template arguments
-            // seperately from the member function name (which should NOT
+            // separately from the member function name (which should NOT
             // include the template arguments when unparsing). Note the the
             // template arguments in the name are important for the generation
             // of mangled names for use in symbol tabls, but that we need to
             // output the member function name and it's template arguments
-            // seperately so that they name qulification can be computed and
+            // separately so that they name qulification can be computed and
             // saved in the name qualification name maps.
 
             // Note that this code below is a copy of that from the support for
@@ -4915,7 +4915,7 @@ void Unparse_ExprStmt::unparseTypeTraitBuiltinOperator(SgExpression *expr,
 
     // DQ (7/13/2013): Build a new SgUnparse_Info so that we can skip passing on
     // any existing referenceNode for name qualification. We need to debug name
-    // qualification seperately, if it is required, likely it could be fore any
+    // qualification separately, if it is required, likely it could be fore any
     // referenced types.
     SgUnparse_Info newinfo(info);
     newinfo.set_reference_node_for_qualification(operatorExp);

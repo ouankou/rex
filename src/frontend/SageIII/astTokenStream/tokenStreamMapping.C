@@ -270,7 +270,7 @@ TokenStreamSequenceToNodeMapping::createTokenInterval(
     int input_trailing_whitespace_end, int input_else_whitespace_start,
     int input_else_whitespace_end) {
   // The token interval is unique and using it we define an interval tree (of
-  // tokens) on the AST to seperate the token stream over the AST IR nodes. This
+  // tokens) on the AST to separate the token stream over the AST IR nodes. This
   // function defines a set which used a unique key for any possible interval.
 
   ROSE_ASSERT(tokenStreamSize > 0);
@@ -625,8 +625,8 @@ void Graph_TokenMappingTraversal::visit(SgNode *n) {
       label += string("\n name = ") + classDeclaration->get_name().str();
     }
 
-    // This could be a seperate subgraph...if it were seperated from this AST
-    // traversal into a seperate AST traversal. Check if we have strored token
+    // This could be a separate subgraph...if it were separated from this AST
+    // traversal into a separate AST traversal. Check if we have strored token
     // information about this AST IR node.
     if (tokenStreamSequenceMap.find(n) != tokenStreamSequenceMap.end()) {
       TokenStreamSequenceToNodeMapping *mapping = tokenStreamSequenceMap[n];
@@ -1004,10 +1004,10 @@ void Graph_TokenMappingTraversal::graph_ast_and_token_stream(
 
   Graph_TokenMappingTraversal traversal(tokenList, tokenStreamSequenceMap);
 
-  // This could be a seperate subgraph...
+  // This could be a separate subgraph...
   traversal.traverse(source_file, preorder);
 
-  // This could be a seperate subgraph...
+  // This could be a separate subgraph...
   for (size_t i = 0; i < tokenList.size(); i++) {
     string token_name = "token #";
     token_name += StringUtility::numberToString(i) + "\\n";
@@ -3545,7 +3545,7 @@ SynthesizedAttribute TokenMappingTraversal::evaluateSynthesizedAttribute(
             // turn off the processing of the leading white space as well.
             fixupDarkTokenSubsequencesForLeadingWhitespace = false;
           }
-          // These statements have syntax that seperate the main construct from
+          // These statements have syntax that separate the main construct from
           // the construct's associated body (namely the ")" closing
           // parenthesis).
           if ((switchStatement != NULL &&
@@ -5845,7 +5845,7 @@ InheritedAttribute TokenMappingTraversal::evaluateInheritedAttribute(
             }
           }
 
-          // DQ (1/24/2015): Handle the seperate case of a SgNullStatement in a
+          // DQ (1/24/2015): Handle the separate case of a SgNullStatement in a
           // SgForInitStatement.
           if (isNullForInitStatement == true) {
             // while ( (*start_of_token_subsequence)->beginning_fpi.line_num <
@@ -8544,7 +8544,7 @@ void buildTokenStreamMapping(SgSourceFile *sourceFile,
 void buildTokenStreamMappingForRoot(SgSourceFile *sourceFile,
                                     SgNode *traversalRoot,
                                     vector<stream_element *> &tokenVector) {
-  // DQ (12/6/2014): This function seperates the initial generation of the token
+  // DQ (12/6/2014): This function separates the initial generation of the token
   // stream and it's mapping to the AST from the assocaited connection to the
   // computed frontier after transformations have been done to define where the
   // AST should be using the token stream unparsing and where it should be using

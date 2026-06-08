@@ -237,8 +237,8 @@ static Configuration readConfigFile(const Settings &settings) {
 }
 
 /**
- * makeLibrarySearchPaths takes a space seperated list of directories, and
- *returns a colon seperated list of directories. As part of this, quoted strings
+ * makeLibrarySearchPaths takes a space separated list of directories, and
+ *returns a colon separated list of directories. As part of this, quoted strings
  *are unquoted.
  **/
 static std::string makeLibrarySearchPaths(const std::string &str) {
@@ -269,7 +269,7 @@ static std::string makeLibrarySearchPaths(const std::string &str) {
         if (quoted) { // in a quoted string, save as a normal characted
           arg += *s;
         } else if (!arg.empty()) { // NOT in a quote, this must be an argument
-                                   // seperator, so save the old arg, and start
+                                   // separator, so save the old arg, and start
                                    // a new one
           args.push_back(arg);
           arg = "";
@@ -286,7 +286,7 @@ static std::string makeLibrarySearchPaths(const std::string &str) {
     ASSERT_require2(quoted == '\0', "mismatched quotes");
   }
 
-  // Turn them all into a colon-seperated string
+  // Turn them all into a colon-separated string
   std::string retval;
   for (size_t i = 0; i < args.size(); ++i) {
     retval += (retval.empty() ? "" : ":") + args[i];
@@ -337,7 +337,7 @@ int main(int argc, char *argv[]) {
   if (found != config.end()) {
     if (key ==
         "libdirs") { // Special case for libdirs, which is stored space
-                     // seperated in the file, but returns as colon seperated
+                     // separated in the file, but returns as colon separated
       std::cout << makefileEscape(makeLibrarySearchPaths(found->second))
                 << "\n";
     } else {

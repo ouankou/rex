@@ -10419,7 +10419,7 @@ SgName SgFunctionDeclaration::get_mangled_name() const {
   } else {
     SgName mangledName;
 
-    // DQ (6/23/2010): Added support to maintain seperate "main()" functions as
+    // DQ (6/23/2010): Added support to maintain separate "main()" functions as
     // unique (to avoid them being merged).
     if (this->get_name() == "main") {
       // Append the pointer to the name to make this unique to avoid multiple
@@ -12316,7 +12316,7 @@ SgName SgClassDeclaration::get_mangled_name(void) const {
            "--- get_name() = %s \n",
            get_name().str());
 #endif
-    // DQ (3/14/2012): Seperating the steps to computing the mangled name (which
+    // DQ (3/14/2012): Separating the steps to computing the mangled name (which
     // should include some qualification via non empty mangledScopeName) SgName
     // mangledName =
     // joinMangledQualifiers(mangleQualifiers(get_scope()),get_name());
@@ -14649,7 +14649,7 @@ SgName SgTemplateClassDeclaration::get_mangled_name(void) const {
     // DQ (3/14/2012): Make sure that this is a valid pointer else it might
     // explain why qualification is not being use to generate the mangled names.
     ROSE_ASSERT(get_scope() != NULL);
-    // DQ (3/14/2012): Seperating the steps to computing the mangled name (which
+    // DQ (3/14/2012): Separating the steps to computing the mangled name (which
     // should include some qualification via non empty mangledScopeName) SgName
     // mangledName =
     // joinMangledQualifiers(mangleQualifiers(get_scope()),get_name());
@@ -14798,7 +14798,7 @@ void SgTemplateTypedefDeclaration::post_construction_initialization() {
   // not overwritten. ROSE_ASSERT(p_type != NULL); p_type = NULL;
   // ROSE_ASSERT(p_type == NULL);
 
-  // DQ (2/25/2018): Built the type seperately so that we can insert debugging.
+  // DQ (2/25/2018): Built the type separately so that we can insert debugging.
   // set_type(SgTypedefType::createType(this));
   // SgTypedefType* typedefType = SgTypedefType::createType(this);
   // ROSE_ASSERT(typedefType != NULL);

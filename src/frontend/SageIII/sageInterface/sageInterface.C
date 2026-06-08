@@ -1587,20 +1587,20 @@ string SageInterface::get_name(const SgDeclarationStatement *declaration) {
   }
 
   switch (declaration->variantT()) {
-    // DQ (12/28/2011): Added seperate support for new design of template IR
+    // DQ (12/28/2011): Added separate support for new design of template IR
     // nodes. DQ (12/4/2011): Added support for template declarations in the
     // AST.
   case V_SgTemplateMemberFunctionDeclaration:
     name = isSgTemplateMemberFunctionDeclaration(declaration)->get_name().str();
     break;
 
-    // DQ (12/28/2011): Added seperate support for new design of template IR
+    // DQ (12/28/2011): Added separate support for new design of template IR
     // nodes.
   case V_SgTemplateFunctionDeclaration:
     name = isSgTemplateFunctionDeclaration(declaration)->get_name().str();
     break;
 
-    // DQ (12/28/2011): Added seperate support for new design of template IR
+    // DQ (12/28/2011): Added separate support for new design of template IR
     // nodes. DQ (6/11/2011): Added support for new template IR nodes.
   case V_SgTemplateClassDeclaration:
     name = isSgTemplateClassDeclaration(declaration)->get_name().str();
@@ -2813,14 +2813,14 @@ string SageInterface::generateUniqueNameForUseAsIdentifier_support(
       break;
     }
 
-    // DQ (3/29/2016): Seperate out the case of the SgTemplateInstantiationDecl.
+    // DQ (3/29/2016): Separate out the case of the SgTemplateInstantiationDecl.
   case V_SgTemplateInstantiationDecl: {
     SgTemplateInstantiationDecl *templateInstantiationDeclaration =
         isSgTemplateInstantiationDecl(declaration);
     ROSE_ASSERT(templateInstantiationDeclaration != NULL);
 
     // Note that we can't use the mangled name because they might not be unique
-    // across multiple translation units if seperately compiled). string
+    // across multiple translation units if separately compiled). string
     // type_name = templateInstantiationDeclaration->get_name(); string
     // type_name = templateInstantiationDeclaration->get_mangled_name(); string
     // type_name = templateInstantiationDeclaration->get_templateName();
@@ -8921,7 +8921,7 @@ bool SageInterface::isMemberFunctionMemberReference(
 
 bool SageInterface::isDataMemberReference(SgVarRefExp *varRefExp) {
   // This function is used to support the name qualification of data member
-  // references seperate from name qualification of variables that might be
+  // references separate from name qualification of variables that might be
   // members (e.g. "X x; x.A::y;" instead of "A::y" (which is just simple name
   // qualification)).
 

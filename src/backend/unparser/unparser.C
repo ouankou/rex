@@ -1066,7 +1066,7 @@ void Unparser::unparseFile(SgSourceFile *file, SgUnparse_Info &info,
   SgUnparse_Info::set_previousStatementUnparsedFromTokenStream(false);
 
   // DQ (10/29/2018): I now think we need to support this mechanism of
-  // specifying the scope to be unparsed seperately. This is essential to the
+  // specifying the scope to be unparsed separately. This is essential to the
   // support for header files representing nested scopes inside of the global
   // scope. Traversing the global scope does not permit these inner nested
   // scopes to be traversed using the unparser.

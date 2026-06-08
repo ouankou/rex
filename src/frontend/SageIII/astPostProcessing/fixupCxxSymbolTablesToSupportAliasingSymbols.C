@@ -497,7 +497,7 @@ void FixupAstSymbolTablesToSupportAliasedSymbols::
 
 #define DEBUG_PRIVATE_BASE_CLASS_ALIAS_SYMBOL_SUPPORT 0
 
-      // DQ (1/25/2019): This code should be refactored to a seperate function
+      // DQ (1/25/2019): This code should be refactored to a separate function
       // since it is just about the private base class support.  An alternative
       // implementation could use a isInherited flag or
       // isInheritedThroughPrivateBaseClass flag that might simplify the

@@ -1163,11 +1163,11 @@ void Grammar::setUpExpressions() {
                            "", NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
   // DQ (2/5/2020): I think this should be a TypeEnum, so fixing this now.
-  // I think we require a seperate get_type() function so that we can pass in
+  // I think we require a separate get_type() function so that we can pass in
   // the required SgEnumDeclaration. EnumVal.setFunctionSource                (
   // "SOURCE_GET_TYPE_GENERIC","../Grammar/Expression.code" ); DQ (2/5/2020): I
   // think this should be a TypeEnum, so fixing this now. I think we require a
-  // seperate get_type() function so that we can pass in the required
+  // separate get_type() function so that we can pass in the required
   // SgEnumDeclaration. Shouldn't this be using the TypeEnum?
   // EnumVal.editSubstitute                ( "GENERIC_TYPE", "SgTypeInt" );
   // EnumVal.editSubstitute                ( "GENERIC_TYPE", "SgEnumType" );

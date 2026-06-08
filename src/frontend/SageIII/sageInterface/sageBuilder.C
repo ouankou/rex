@@ -3203,7 +3203,7 @@ SgVariableDeclaration *SageBuilder::buildVariableDeclaration_nfi(
     // if (reuseTheAssociatedVariableDeclaration == true &&
     // associatedVariableDeclaration != NULL)
     if (reuseTheAssociatedVariableDeclaration == true) {
-      // Build a seperate SgVariableDeclaration so that we can avoid sharing the
+      // Build a separate SgVariableDeclaration so that we can avoid sharing the
       // SgInitializedName (and it's possible initializer which would be an
       // error for the secondary declaration (the declaration in the class for
       // the case of a static declaration))
@@ -4955,7 +4955,7 @@ actualFunction *SageBuilder::buildNondefiningFunctionDeclaration_T(
                   templateParameterList != NULL);
       // DQ (8/13/2013): We need to test for function symbols (which will
       // include member function symbols), template functions and template
-      // member functions. Each must be tested for seperately because template
+      // member functions. Each must be tested for separately because template
       // functions and template member functions are not connected to derivation
       // which non-template functions and non-template member functions are
       // connected through derivation.
@@ -5478,7 +5478,7 @@ actualFunction *SageBuilder::buildNondefiningFunctionDeclaration_T(
   }
 
   // DQ (2/11/2012): If this is a template instantiation then we have to set the
-  // template name (seperate from the name of the function which can include
+  // template name (separate from the name of the function which can include
   // template parameters)). setTemplateNameInTemplateInstantiations(func,name);
   setTemplateNameInTemplateInstantiations(func, nameWithoutTemplateArguments);
 
@@ -6601,7 +6601,7 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
   }
 
   // DQ (2/11/2012): If this is a template instantiation then we have to set the
-  // template name (seperate from the name of the function which can include
+  // template name (separate from the name of the function which can include
   // template parameters)).
   // setTemplateNameInTemplateInstantiations(defining_func,name);
   setTemplateNameInTemplateInstantiations(defining_func,
@@ -6670,7 +6670,7 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
 void SageBuilder::setTemplateNameInTemplateInstantiations(
     SgFunctionDeclaration *func, const SgName &name) {
   // DQ (2/11/2012): If this is a template instantiation then we have to set the
-  // template name (seperate from the name of the function which can include
+  // template name (separate from the name of the function which can include
   // template parameters)).
 
   SgTemplateInstantiationFunctionDecl *templateInstantiationFunctionDecl =
@@ -14267,7 +14267,7 @@ SageBuilder::buildNondefiningTemplateClassDeclaration_nfi(
 
   if (mysymbol != NULL) // set links if nondefining declaration already exists.
   {
-    // DQ (3/7/2012): Build a seperate non-defining declaration (reusing the
+    // DQ (3/7/2012): Build a separate non-defining declaration (reusing the
     // existing one will cause the test for unique statements to fail). printf
     // ("WARNING: Even if the first non-defining SgTemplateClassDeclaration is
     // found in the symbol table then likely we still might want to build a 2nd
@@ -15770,7 +15770,7 @@ SgFile *SageBuilder::buildFile(const std::string &inputFileName,
 
   // DQ (3/6/2014): This function should be called after the SgFile has been
   // added to the file list in the SgProject. DQ (6/14/2013): Since we
-  // seperated the construction of the SgFile IR nodes from the invocation of
+  // separated the construction of the SgFile IR nodes from the invocation of
   // the frontend, we have to call the frontend explicitly.
   result->runFrontend(nextErrorCode);
 
@@ -15926,7 +15926,7 @@ SgSourceFile *SageBuilder::buildSourceFile(
       if (temp_file->getFileName() == file->getFileName()) {
         // Then the temp_file is the original version of the file we are
         // building for a second time (usually as a part of the outlining to a
-        // seperate file).  and we need to mark at least the unparsing headr
+        // separate file).  and we need to mark at least the unparsing headr
         // file optimizations to be the same across thje two file.
 
         temp_file->set_header_file_unparsing_optimization(
@@ -18064,7 +18064,7 @@ void SageBuilder::fixupCopyOfNodeFromSeparateFileInNewTargetAst(
         // name will be found in the target AST. Note that if the variable could
         // not be found then it should have been added as part of the snippet,
         // or a previously added snippet. We need to look into the scope of the
-        // block used to define the statments as seperate snippets (same issue
+        // block used to define the statments as separate snippets (same issue
         // as for functions).
 
         // If could be that the symbol is in the local scope of the snippet AST.

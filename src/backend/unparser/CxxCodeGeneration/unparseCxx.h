@@ -538,7 +538,7 @@ public:
   void unparseTypeAttributes(SgDeclarationStatement *declaration);
 
   // DQ (5/24/2013): Added to support refactoing of the code to unparse the
-  // template arguments when they are generated seperately for SgFunctionRefExp
+  // template arguments when they are generated separately for SgFunctionRefExp
   // and SgMemberFunctionRefExp IR nodes. void
   // unparseGeneratedTemplateArgumentsList (SgName unqualifiedName, SgName
   // qualifiedName, SgLocatedNode* locatedNode, SgUnparse_Info& info);

@@ -2762,7 +2762,7 @@ bool UnparseLanguageIndependentConstructs::statementFromFile(
         // requires the physical source position. Ideally, the fortran
         // support would have the same implementation, but the handling
         // of intermdiate preprocessed files makes this more complex
-        // (and it should be a seperate fix to handle that).
+        // (and it should be a separate fix to handle that).
         // statementfilename =
         // SgFile::generate_C_preprocessor_intermediate_filename(stmt->get_file_info()->get_physical_filename());
         // statementfilename =
@@ -3288,7 +3288,7 @@ bool UnparseLanguageIndependentConstructs::canBeUnparsedFromTokenStream(
     canBeUnparsed = (tokenSubsequence->token_subsequence_start != -1);
     // DQ (11/29/2013): Added support for the detection of redundantly mapped
     // statements to token sequences. E.g. ROSE normalizations of variable
-    // declaration with multiple variables into seperate (multiple)
+    // declaration with multiple variables into separate (multiple)
     // SgVariableDeclaration IR nodes in the AST.
     std::multimap<int, SgStatement *>
         &redundantlyMappedTokensToStatementMultimap =
@@ -3464,7 +3464,7 @@ bool UnparseLanguageIndependentConstructs::
 
     // DQ (11/29/2013): Added support for the detection of redundantly mapped
     // statements to token sequences. E.g. ROSE normalizations of variable
-    // declaration with multiple variables into seperate (multiple)
+    // declaration with multiple variables into separate (multiple)
     // SgVariableDeclaration IR nodes in the AST.
     std::multimap<int, SgStatement *>
         &redundantlyMappedTokensToStatementMultimap =
@@ -5472,7 +5472,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         // to be unparsed via the token stream. bool unparseViaTokenStream =
         // (isSgExprStatement(stmt) != NULL) && (info.inConditional() == false);
 
-        // Note that there is a seperate map of frontier nodes for each file.
+        // Note that there is a separate map of frontier nodes for each file.
         // Check if this is a frontier node and unparse it using the token
         // stream (we actually need to check that is not marked to be parsed
         // from the AST). vector<FrontierNode*> & frontier_nodes =
@@ -5504,7 +5504,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         // Check is this is marked as already being handled via the unparsing of
         // the token stream from another statement. For example, variable
         // declarations containing multiple variables will be represented as
-        // seperate SgVariableDeclaration IR nodes in the AST, but will have
+        // separate SgVariableDeclaration IR nodes in the AST, but will have
         // been unparsed using a single token stream. static int
         // lastUnparsedToken = 0;
 
@@ -7029,7 +7029,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       } else {
 #if DEBUG_USING_CURPRINT
         curprint("\n/* In unparseStatement(): outputStatementAsTokens == true "
-                 "(1st part, case handled seperately) */");
+                 "(1st part, case handled separately) */");
 #endif
       }
 
@@ -10373,7 +10373,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         }
       } else {
         // If this is the case of suppressOutputOfDotExp == true, then output a
-        // space to seperate the output tokens (simplifies debugging).
+        // space to separate the output tokens (simplifies debugging).
         curprint(" ");
       }
 
@@ -11734,7 +11734,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       // header file with no statements).
 
       // DQ (9/24/2018): I think we want CPP directivs to be unparsed from the
-      // SgAttachedPreprocessingInfo lists on statements, instead of seperately.
+      // SgAttachedPreprocessingInfo lists on statements, instead of separately.
       // This is the better choice because then the other comments and any other
       // CPP directives will be unparsed as in the original code. NOTE: If we
       // don't suppores this here, then there will be two include directives

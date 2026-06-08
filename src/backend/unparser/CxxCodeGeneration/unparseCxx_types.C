@@ -3363,7 +3363,7 @@ void Unparse_Type::unparseTemplateTypedefName(
   // long function calls in the generated code).  Note that if some template
   // arguments are specified and some are not then control over not unparsing
   // template arguments that where not explicit in the original code will be
-  // handled seperately in the near future (in the SgTemplateArgument IR nodes).
+  // handled separately in the near future (in the SgTemplateArgument IR nodes).
   // unparseTemplateArgumentList(templateInstantiationFunctionDeclaration->get_templateArguments(),info);
   if (unparseTemplateArguments == true) {
     unp->u_exprStmt->unparseTemplateArgumentList(template_arguments, info);

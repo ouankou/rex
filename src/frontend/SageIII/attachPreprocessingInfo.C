@@ -3524,7 +3524,7 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr,
     // DQ (6/2/2020): Change the API to pass in the CPP directives and comments
     // list. Also disable boolean processAllFiles since these are no longer
     // processed in the traversal (adding CPP directives and comments from each
-    // file is a seperate). AttachPreprocessingInfoTreeTrav
+    // file is a separate). AttachPreprocessingInfoTreeTrav
     // tt(sageFilePtr,processAllFiles);
     AttachPreprocessingInfoTreeTrav tt(sageFilePtr, commentAndCppDirectiveList);
     SgSourceFile *attachment_traversal_root =

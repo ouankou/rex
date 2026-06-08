@@ -248,7 +248,7 @@ AttachPreprocessingInfoTreeTrav::AttachPreprocessingInfoTreeTrav(
   start_index = 0;
 
   // DQ (6/2/2020): This feature is now handled through repeated calls to attach
-  // the CPP directives and comments to each file seperately.
+  // the CPP directives and comments to each file separately.
   // processAllIncludeFiles = includeDirectivesAndCommentsFromAllFiles;
   processAllIncludeFiles = false;
 
@@ -330,7 +330,7 @@ void AttachPreprocessingInfoTreeTrav::handleBracedScopes(
 
   // DQ (2/16/2021): This function supports
   // iterateOverListAndInsertPreviouslyUninsertedElementsAppearingBeforeLineNumber().
-  // It seperates the case where comments and CPP directives are put in the
+  // It separates the case where comments and CPP directives are put in the
   // scope or attached to the bottom of the previous statement.
 
   SgStatement *previousStatement = isSgStatement(previousLocatedNode);
@@ -1033,7 +1033,7 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
       // DQ (2/20/2021): This conditional fixes the performance problem with the
       // use of ROSE without the token-based unparsing. The token based
       // unparsing is more expensive mostly because of the call to
-      // buildTokenStreamMapping().  We might have to look into that seperately.
+      // buildTokenStreamMapping().  We might have to look into that separately.
       // Since it is about as expensive as the cost of the frontend with
       // token-based unparsing. DQ (2/18/2021): We only want to process the
       // token stream when the unparser will later consult preserved token

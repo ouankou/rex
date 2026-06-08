@@ -62,7 +62,7 @@ MarkTransformationsForOutput::evaluateInheritedAttribute(
         // Mark the IR node as a transformation.
 
         // DQ (3/20/2015): Mark this as a transformation uniformally for both
-        // the startOfConstruct and endOfConstruct seperately. Note: there is
+        // the startOfConstruct and endOfConstruct separately. Note: there is
         // not uniform API at SgLocatedNode for marking the startOfConstruct and
         // endOfConstruct together. fileInfo->setTransformation();
         SgLocatedNode *locatedNode = isSgLocatedNode(node);

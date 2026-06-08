@@ -59,7 +59,7 @@ int main(int argc, char *argv[]) {
   // Add the function declearation to the target scope (global scope).
   SageInterface::appendStatement(functionDeclaration, globalScopeOfNewFile);
 
-  // Find the associated nondefining declaration to unparse seperately as a
+  // Find the associated nondefining declaration to unparse separately as a
   // function prototype in a header file.
   SgFunctionDeclaration *nondefiningFunctionDeclaration =
       isSgFunctionDeclaration(

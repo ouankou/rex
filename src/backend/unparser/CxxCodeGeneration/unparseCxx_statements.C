@@ -4590,7 +4590,7 @@ void Unparse_ExprStmt::unparseFunctionParameterDeclaration(
   // DQ (9/7/2014): These should have been setup to be the same.
   ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
 
-  // DQ (8/9/2013): refactored to support additional refactoring to seperate out
+  // DQ (8/9/2013): refactored to support additional refactoring to separate out
   // code to unparse SgInitializedName.
   bool oldStyleDefinition =
       funcdecl_stmt->get_oldStyleDefinition() && !funcdecl_stmt->isForward();
@@ -6549,7 +6549,7 @@ void Unparse_ExprStmt::unparseTemplateInstantiationFunctionDeclStmt(
         outputInstantiatedTemplateFunction = true;
       } else {
         // DQ (8/2/2012): Else it was compiler generated and we have to
-        // explicitly ask if we have seperately determined that it should be
+        // explicitly ask if we have separately determined that it should be
         // output.
         // We only look at the isOutputInCodeGeneration() if this is a compiler
         // generated function.

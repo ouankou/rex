@@ -1708,7 +1708,7 @@ int NameQualificationTraversal::nameQualificationDepth(
   //       declarations position in scope relative to the input declaration.
   //       Some function declarations require name qualification depending on if
   //       they appear before or after a prototype declaration for the function
-  //       that would define it's scope (seperate from its visability.
+  //       that would define it's scope (separate from its visability.
 
   // Note: we are evaluating the name qualification for references to
   // declarations (e.g. the defining member function outside of the class which
@@ -4000,7 +4000,7 @@ int NameQualificationTraversal::nameQualificationDepth(
           if (same_declaration == true) {
             // #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
             // DQ (1/4/2020): This is the better implementation and it should be
-            // isolated into a seperate function so that we can call it from the
+            // isolated into a separate function so that we can call it from the
             // case V_SgTypedefSymbol and case V_SgEnumSymbol (and maybe some
             // other locations as well (generating more test codes to drive this
             // would be helpful).
@@ -5393,7 +5393,7 @@ void NameQualificationTraversal::
                   currentScope->class_name().c_str());
 #endif
       // DQ (3/15/2019): Added Comment: This is required because the expression
-      // can be a subtree that would have to be seperately traversed.
+      // can be a subtree that would have to be separately traversed.
       generateNestedTraversalWithExplicitScope(expression, effectiveScope);
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) ||                                    \
@@ -8657,7 +8657,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
   // this can happen in nexted types we need the type traversal to discover
   // these.  I am hoping this will not be a performance issue for long types
   // stemming from template instatiations, if so we might want to detect these
-  // seperately and avoid name qualification for them.
+  // separately and avoid name qualification for them.
   SgPointerMemberType *pointerMemberType = isSgPointerMemberType(n);
   if (pointerMemberType != NULL) {
     SgScopeStatement *currentScope = inheritedAttribute.get_currentScope();
@@ -9214,7 +9214,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
     }
 
     // DQ (4/26/2019): The initializer should be processed as an expression to
-    // be name qualified seperately.
+    // be name qualified separately.
 #if DEBUG_INITIALIZED_NAME
     MLOG_WARN_C(MLOG_UNPARSER,
                 "############################################# \n");
@@ -9523,7 +9523,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
     }
 
     // DQ (4/26/2019): The initializer should be processed as an expression to
-    // be name qualified seperately.
+    // be name qualified separately.
 
     // DQ (10/18/2020): Moved declaration to where it is being used.
     SgDeclarationStatement *declaration =
@@ -12468,7 +12468,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
           // used with the SgArrowExp or SgDotExp which would not require the
           // name qualification.  The only case where we would still need the
           // name qualification is the relatively rare case of multiple
-          // inheritance (which must be detected seperately).
+          // inheritance (which must be detected separately).
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
           MLOG_WARN_C(MLOG_UNPARSER, "variableDeclaration = %p \n",
@@ -14815,7 +14815,7 @@ void NameQualificationTraversal::setNameQualification(
   // the non-defining declarations associated with any function and thus query
   // if one of them was declard in a scope that defined its scope definatively.
   // This class should be a part of an AST Information sort of object that we
-  // would use to collect similar analysis information that would be seperate
+  // would use to collect similar analysis information that would be separate
   // from the AST, but might be used with the AST for certain purposes (e.g.
   // removning all functions including all associated non-defining
   // declarations).
