@@ -14,6 +14,7 @@ Read references:
 Write references:
 	SgInitializedName@4:3	"N"
 	SgInitializedName@5:3	"base"
+	SgInitializedName@6:3	"m_nvol"
 	SgInitializedName@7:3	"m_ovol"
 	SgInitializedName@9:9	"i"
 	SgPntrArrRefExp@10:5	"m_nvol"
@@ -52,6 +53,7 @@ Read references:
 	SgVarRefExp@28:8	"i"
 Write references:
 	SgInitializedName@17:3	"base"
+	SgInitializedName@19:3	"x1"
 	SgInitializedName@20:3	"x2"
 	SgInitializedName@21:9	"i"
 	SgPntrArrRefExp@23:7	"x1"

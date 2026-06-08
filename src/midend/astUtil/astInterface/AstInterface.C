@@ -1897,7 +1897,9 @@ bool AstInterface::IsAliasingDecl(const AstNodePtr &_s, AstNodeList *vars,
         isSgVariableDeclaration(s)->get_variables();
     for (SgInitializedNamePtrList::iterator p = names.begin(); p != names.end();
          ++p) {
-      has_alias = IsAliasingDecl(*p, vars, aliases) || has_alias;
+      if (IsAliasingDecl(*p, vars, aliases)) {
+        has_alias = true;
+      }
     }
     return has_alias;
   }
@@ -1912,21 +1914,30 @@ bool AstInterface::IsAliasingDecl(const AstNodePtr &_s, AstNodeList *vars,
     if (type == 0) {
       return false;
     }
+    SgExpression *init = var->get_initializer();
+    if (init != 0 && init->variantT() == V_SgAssignInitializer) {
+      init = isSgAssignInitializer(init)->get_operand();
+    }
     switch (type->variantT()) {
-    case V_SgPointerType:
-    case V_SgReferenceType: {
-      SgExpression *def = var->get_initializer();
-      size_t alias_count_before = aliases != 0 ? aliases->size() : 0;
-      if (def != 0 && IsMemoryAccess(def, aliases)) {
+    case V_SgPointerType: {
+      if (IsAddressOfOp(init)) {
         if (vars != 0) {
-          size_t alias_count = 1;
-          if (aliases != 0) {
-            ROSE_ASSERT(aliases->size() > alias_count_before);
-            alias_count = aliases->size() - alias_count_before;
-          }
-          for (size_t i = 0; i < alias_count; ++i) {
-            vars->push_back(var);
-          }
+          vars->push_back(var);
+        }
+        if (aliases != 0) {
+          aliases->push_back(init);
+        }
+        return true;
+      }
+      return false;
+    }
+    case V_SgReferenceType: {
+      if (init != 0 && IsMemoryAccess(init)) {
+        if (vars != 0) {
+          vars->push_back(var);
+        }
+        if (aliases != 0) {
+          aliases->push_back(init);
         }
         return true;
       }
@@ -2693,11 +2704,25 @@ AstNodeType AstInterface::GetArrayType(const AstNodeType &base,
   }
 }
 
-bool AstInterface::IsAddressOfOp(const AstNodePtr &_s) {
+bool AstInterface::IsAddressOfOp(const AstNodePtr &_s, AstNodePtr *ref) {
   SgNode *s = AstNodePtrImpl(_s).get_ptr();
   if (s == 0)
     return false;
-  return (s->variantT() == V_SgAddressOfOp);
+  if (s->variantT() == V_SgAssignInitializer) {
+    s = isSgAssignInitializer(s)->get_operand();
+  }
+  while (s != 0 && s->variantT() == V_SgCastExp) {
+    s = isSgUnaryOp(s)->get_operand();
+  }
+  if (s == 0)
+    return false;
+  if (s->variantT() == V_SgAddressOfOp) {
+    if (ref != 0) {
+      *ref = isSgAddressOfOp(s)->get_operand();
+    }
+    return true;
+  }
+  return false;
 }
 
 bool AstInterface::IsMemoryAllocation(const AstNodePtr &s, AstNodeType *exptype,
@@ -2799,31 +2824,38 @@ bool AstInterface::IsMemoryAccess(const AstNodePtr &_s, AstNodeList *subrefs) {
   case V_SgConstructorInitializer:
     return false;
   case V_SgAssignInitializer:
-    return IsMemoryAccess(isSgAssignInitializer(s)->get_operand(), subrefs);
-  case V_SgAddressOfOp:
+    if (subrefs != 0) {
+      IsMemoryAccess(isSgAssignInitializer(s)->get_operand(), subrefs);
+    }
+    return false;
   case V_SgCastExp:
     return IsMemoryAccess(isSgUnaryOp(s)->get_operand(), subrefs);
-  case V_SgPointerDerefExp:
+  case V_SgAddressOfOp:
     if (subrefs != 0) {
-      subrefs->push_back(isSgUnaryOp(s)->get_operand());
+      IsMemoryAccess(isSgUnaryOp(s)->get_operand(), subrefs);
     }
-    return true;
+    return false;
   case V_SgCommaOpExp: {
-    SgCommaOpExp *comma = isSgCommaOpExp(s);
-    AstNodePtr lhs = comma->get_lhs_operand();
-    AstNodePtr rhs = comma->get_rhs_operand();
-    bool lhs_access = IsMemoryAccess(lhs, subrefs);
-    bool rhs_access = IsMemoryAccess(rhs, subrefs);
-    return lhs_access || rhs_access;
+    if (subrefs != 0) {
+      SgCommaOpExp *comma = isSgCommaOpExp(s);
+      IsMemoryAccess(comma->get_lhs_operand(), subrefs);
+      IsMemoryAccess(comma->get_rhs_operand(), subrefs);
+    }
+    return false;
   }
   case V_SgConditionalExp: {
-    SgConditionalExp *conditional = isSgConditionalExp(s);
-    AstNodePtr true_exp = conditional->get_true_exp();
-    AstNodePtr false_exp = conditional->get_false_exp();
-    bool true_access = IsMemoryAccess(true_exp, subrefs);
-    bool false_access = IsMemoryAccess(false_exp, subrefs);
-    return true_access || false_access;
+    if (subrefs != 0) {
+      SgConditionalExp *conditional = isSgConditionalExp(s);
+      IsMemoryAccess(conditional->get_true_exp(), subrefs);
+      IsMemoryAccess(conditional->get_false_exp(), subrefs);
+    }
+    return false;
   }
+  case V_SgPointerDerefExp:
+    if (subrefs != 0) {
+      subrefs->push_back(_s);
+    }
+    return true;
   case V_SgDotExp:
   case V_SgArrowExp: {
     SgNode *rhs = isSgBinaryOp(s)->get_rhs_operand();
@@ -3465,14 +3497,29 @@ bool AstInterface::IsFunctionCall(const AstNodePtr &_s, AstNodePtr *fname,
     }
     // Store arguments of reference types into outargs
     if (outargs != 0) {
-      AstNodeList::const_iterator p1 = args->begin();
-      for (AstTypeList::const_iterator p = paramtypes->begin();
-           p != paramtypes->end() && p1 != args->end(); ++p, ++p1) {
-        SgType *t = AstNodeTypeImpl(*p).get_ptr();
-        if (t != 0 && t->variantT() == V_SgReferenceType) {
-          auto *modifier = isSgConstVolatileModifier(t->get_modifiers());
-          if (modifier == 0 || !modifier->isConst()) {
-            outargs->push_back(*p1);
+      if (paramtypes == 0 || args == 0 || paramtypes->size() != args->size()) {
+        outargs->push_back(AST_UNKNOWN);
+      } else {
+        AstNodeList::const_iterator p1 = args->begin();
+        for (AstTypeList::const_iterator p = paramtypes->begin();
+             p != paramtypes->end() && p1 != args->end(); ++p, ++p1) {
+          SgType *t = AstNodeTypeImpl(*p).get_ptr();
+          if (t != nullptr) {
+            t = t->stripTypedefsAndModifiers();
+          }
+          AstNodePtr ref = *p1;
+          SgType *referenced_type = nullptr;
+          if (SgReferenceType *ref_type = isSgReferenceType(t)) {
+            referenced_type = ref_type->get_base_type();
+          } else if (SgPointerType *ptr_type = isSgPointerType(t)) {
+            if (IsAddressOfOp(*p1, &ref)) {
+              referenced_type = ptr_type->get_base_type();
+            }
+          }
+          if (referenced_type != nullptr) {
+            if (!SageInterface::isConstType(referenced_type)) {
+              outargs->push_back(ref);
+            }
           }
         }
       }

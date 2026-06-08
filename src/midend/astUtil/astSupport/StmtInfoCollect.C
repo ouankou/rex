@@ -55,20 +55,26 @@ void StmtInfoCollect::AppendFuncCallArguments(AstInterface &fa,
 
 void StmtInfoCollect::AppendFuncCallWrite(AstInterface &fa,
                                           const AstNodePtr &fc) {
-  AstInterface::AstNodeList args;
-  if (!fa.IsFunctionCall(fc, 0, 0, &args)) {
+  DebugLocalInfoCollect([&fc]() {
+    return "Append Function Call write " + AstInterface::AstToString(fc);
+  });
+  AstInterface::AstNodeList outargs;
+  if (!fa.IsFunctionCall(fc, 0, 0, &outargs)) {
+    DebugLocalInfoCollect([&fc]() {
+      return "quitting because it is not a function call: " +
+             AstInterface::AstToString(fc);
+    });
     // We can't figure out the arguments right now. Skip. It's OK b/c an unknown
     // will also be returned.
     return;
   }
-  for (AstInterface::AstNodeList::const_iterator p2 = args.begin();
-       p2 != args.end(); ++p2) {
-    AstNodePtr c = AstNodePtrImpl(*p2).get_ptr();
+  for (const AstNodePtr &c : outargs) {
     if (c == AstNodePtr())
       continue;
-    if (fa.IsMemoryAccess(c)) {
-      AppendModLoc(fa, c);
-    }
+    DebugLocalInfoCollect([&c]() {
+      return "Function write Argument?: " + AstInterface::AstToString(c);
+    });
+    AppendModLoc(fa, c);
   }
 }
 
@@ -205,10 +211,9 @@ bool StmtInfoCollect ::ProcessTree(AstInterface &fa,
       });
       AppendFuncCall(fa, AstNodePtrImpl(s).get_ptr());
       Skip(s);
-    }
-    // Jim Leek 2023/02/07  Added IsSgAddressOfOp because I want it
-    // to behave the same as a memory access, although it isn't one exactly
-    else if (fa.IsMemoryAccess(s, &vars) || fa.IsAddressOfOp(s)) {
+    } else if (fa.IsAddressOfOp(s, &lhs)) {
+      SkipOnly(lhs);
+    } else if (fa.IsMemoryAccess(s, &vars)) {
       DebugLocalInfoCollect([&s]() {
         return " append read set " + AstInterface::AstToString(s);
       });
@@ -246,7 +251,15 @@ bool StmtInfoCollect ::ProcessTree(AstInterface &fa,
       for (typename ModMap::const_iterator p = modmap.begin();
            p != modmap.end(); ++p) {
         std::pair<const AstNodePtr, ModRecord> c = *p;
-        AppendModLoc(fa, c.first, c.second.rhs);
+        AstInterface::AstNodeList memory_refs;
+        fa.IsMemoryAccess(c.first, &memory_refs);
+        if (!memory_refs.empty()) {
+          for (const auto &v : memory_refs) {
+            AppendModLoc(fa, v, c.second.rhs);
+          }
+        } else {
+          AppendModLoc(fa, c.first, c.second.rhs);
+        }
       }
       modstack.pop_back();
     }
@@ -354,8 +367,8 @@ void StmtSideEffectCollect::AppendAliasDecl(AstInterface & /* fa */,
                                             const AstNodePtr &variable,
                                             const AstNodePtr &var_init) {
   DebugLocalInfoCollect([&variable, &var_init]() {
-    return "appending var decl " + AstInterface::AstToString(variable) + " = " +
-           AstInterface::AstToString(var_init);
+    return "appending alias decl " + AstInterface::AstToString(variable) +
+           " = " + AstInterface::AstToString(var_init);
   });
   AstNodeType vartype;
   if (curstmt == 0)

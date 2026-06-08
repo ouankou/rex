@@ -114,7 +114,13 @@ void AstUtilInterface::ComputeAstSideEffects(
           return "save alias:" + AstInterface::GetVariableSignature(first) +
                  "->" + AstInterface::GetVariableSignature(second);
         });
-        alias_map[AstInterface::GetVariableSignature(first)] = second;
+        const auto sig_first = AstInterface::GetVariableSignature(first);
+        AstNodePtr base;
+        if (AstInterface::IsAddressOfOp(second, &base)) {
+          alias_map["_deref_" + sig_first] = base;
+        } else {
+          alias_map[sig_first] = second;
+        }
         if (collect != 0) {
           (*collect)(first, second, OperatorSideEffect::Alias);
         }
@@ -138,10 +144,10 @@ void AstUtilInterface::ComputeAstSideEffects(
         }
         for (AstNodePtr &subref : subrefs) {
           AstNodePtr memory_ref = subref;
-          AstNodePtr array;
           bool is_unknown_ref = false;
           bool is_local_ref =
               AstInterface::IsLocalRef(memory_ref, body, &is_unknown_ref);
+          AstNodePtr array;
           if (AstInterface::IsArrayAccess(memory_ref, &array)) {
             memory_ref = array;
             is_local_ref = false;
@@ -152,6 +158,10 @@ void AstUtilInterface::ComputeAstSideEffects(
           }
           auto ref_aliased =
               alias_map.find(AstInterface::GetVariableSignature(memory_ref));
+          DebugAstUtil([&memory_ref]() {
+            return "Looking for aliased reference:" +
+                   AstInterface::AstToString(memory_ref);
+          });
           if (ref_aliased != alias_map.end()) {
             memory_ref = AstNodePtr((*ref_aliased).second);
             is_local_ref = false;
@@ -159,10 +169,8 @@ void AstUtilInterface::ComputeAstSideEffects(
               return "Finding aliased reference:" +
                      AstInterface::AstToString(memory_ref);
             });
-          } else {
-            if (is_unknown_ref) {
-              memory_ref.set_is_unknown_reference();
-            }
+          } else if (is_unknown_ref) {
+            memory_ref.set_is_unknown_reference();
           }
           OperatorSideEffect current_what = what;
           if (memory_ref.is_unknown() || memory_ref.is_unknown_reference() ||
