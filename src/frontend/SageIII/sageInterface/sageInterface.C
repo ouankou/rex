@@ -20835,7 +20835,6 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
     SgTemplateDeclaration *template_defining;
     SgMemberFunctionDeclaration *memFunc;
     SgTypedefDeclaration *typedef_defining;
-    SgFunctionDeclaration *function_decl;
     SgTemplateInstantiationDecl *templateInstantiate_defining;
     NodeDeletionQueue *deletion_queue = nullptr;
 
@@ -20867,7 +20866,6 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
       class_defining = NULL;
       memFunc = NULL;
       typedef_defining = NULL;
-      function_decl = NULL;
       SgTemplateSymbolPtr = NULL;
       template_defining = NULL;
       SgEnumFieldSymbolPtr = NULL;
@@ -20888,7 +20886,6 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
       class_defining = NULL;
       memFunc = NULL;
       typedef_defining = NULL;
-      function_decl = NULL;
       SgTemplateSymbolPtr = NULL;
       template_defining = NULL;
       SgEnumFieldSymbolPtr = NULL;
@@ -20905,7 +20902,6 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
       class_defining = NULL;
       memFunc = NULL;
       typedef_defining = NULL;
-      function_decl = NULL;
       SgTemplateSymbolPtr = NULL;
       template_defining = NULL;
       SgEnumFieldSymbolPtr = NULL;
@@ -20922,7 +20918,6 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
       class_defining = NULL;
       memFunc = NULL;
       typedef_defining = NULL;
-      function_decl = NULL;
       SgTemplateSymbolPtr = NULL;
       template_defining = NULL;
       SgEnumFieldSymbolPtr = NULL;
@@ -20939,7 +20934,6 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
       class_defining = NULL;
       memFunc = NULL;
       typedef_defining = NULL;
-      function_decl = NULL;
       SgTemplateSymbolPtr = NULL;
       template_defining = NULL;
       SgEnumFieldSymbolPtr = NULL;
@@ -20957,7 +20951,6 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
       class_defining = NULL;
       memFunc = NULL;
       typedef_defining = NULL;
-      function_decl = NULL;
       template_defining = NULL;
       SgEnumFieldSymbolPtr = NULL;
       templateInstantiate_defining = NULL;
@@ -20975,7 +20968,6 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
       class_defining = NULL;
       memFunc = NULL;
       typedef_defining = NULL;
-      function_decl = NULL;
       template_defining = NULL;
       templateInstantiate_defining = NULL;
     }
@@ -20989,7 +20981,6 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
       SgVariableSymbolPtr = NULL;
       memFunc = NULL;
       typedef_defining = NULL;
-      function_decl = NULL;
       SgTemplateSymbolPtr = NULL;
       template_defining = NULL;
       SgEnumFieldSymbolPtr = NULL;
@@ -21006,13 +20997,11 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
       SgVariableSymbolPtr = NULL;
       memFunc = NULL;
       typedef_defining = NULL;
-      function_decl = NULL;
       SgTemplateSymbolPtr = NULL;
       SgEnumFieldSymbolPtr = NULL;
       templateInstantiate_defining = NULL;
     }
-    ClassicVisitor(SgFunctionDeclaration *node) {
-      function_decl = node;
+    ClassicVisitor(SgFunctionDeclaration * /*node*/) {
       class_defining = NULL;
       SgMemFuncSymbolPtr = NULL;
       SgTypedefPtr = NULL;
@@ -21029,7 +21018,6 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
 
     ClassicVisitor(SgMemberFunctionDeclaration *node) {
       memFunc = node;
-      function_decl = NULL;
       class_defining = NULL;
       SgMemFuncSymbolPtr = NULL;
       SgTypedefPtr = NULL;
@@ -21046,7 +21034,6 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
     ClassicVisitor(SgTypedefDeclaration *node) {
       typedef_defining = node;
       memFunc = NULL;
-      function_decl = NULL;
       class_defining = NULL;
       SgMemFuncSymbolPtr = NULL;
       SgTypedefPtr = NULL;
@@ -21063,7 +21050,6 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
       templateInstantiate_defining = node;
       typedef_defining = NULL;
       memFunc = NULL;
-      function_decl = NULL;
       class_defining = NULL;
       SgMemFuncSymbolPtr = NULL;
       SgTypedefPtr = NULL;
