@@ -323,6 +323,8 @@ set(SAGE_GENERIC_COVERAGE
 )
 
 set(SAGE_COLLECT_FUNCTION_SIDE_EFFECT
+  rex_readwriteset_address_of_cast.cpp
+  rex_readwriteset_nested_memory_refs.cpp
   test2017_14_Liao.C
   test2017_15_Liao.C
 )

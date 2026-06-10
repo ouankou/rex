@@ -1,0 +1,44 @@
+--------------------------------------------------
+Function name:"::write_int"
+Read references:
+	SgVarRefExp@1:27	"p"
+Write references:
+	SgPointerDerefExp@1:26	"p"
+Read var names:
+	"p"
+Write var names:
+	"p"
+--------------------------------------------------
+Function name:"::read_int"
+Read references:
+	SgVarRefExp@3:38	"p"
+Read var names:
+	"p"
+--------------------------------------------------
+Function name:"::write_ref"
+Write references:
+	SgVarRefExp@5:26	"r"
+Write var names:
+	"r"
+--------------------------------------------------
+Function name:"::test_address_of_casts"
+Read references:
+	SgVarRefExp@12:21	"a"
+	SgVarRefExp@13:30	"b"
+	SgVarRefExp@14:26	"c"
+	SgVarRefExp@15:13	"c"
+Write references:
+	SgInitializedName@10:3	"c"
+	SgInitializedName@8:3	"a"
+	SgInitializedName@9:3	"b"
+	SgVarRefExp@12:21	"a"
+	SgVarRefExp@13:30	"b"
+	SgVarRefExp@15:13	"c"
+Read var names:
+	"a"
+	"b"
+	"c"
+Write var names:
+	"a"
+	"b"
+	"c"

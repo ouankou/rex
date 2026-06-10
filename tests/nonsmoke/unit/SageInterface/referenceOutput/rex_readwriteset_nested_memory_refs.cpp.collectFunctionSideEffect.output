@@ -1,0 +1,28 @@
+--------------------------------------------------
+Function name:"::test_nested_memory_refs"
+Read references:
+	SgVarRefExp@2:12	"p"
+	SgVarRefExp@2:17	"q"
+	SgVarRefExp@2:4	"cond"
+	SgVarRefExp@3:11	"r"
+	SgVarRefExp@3:17	"p"
+	SgVarRefExp@3:4	"cond"
+	SgVarRefExp@4:13	"r"
+	SgVarRefExp@4:19	"q"
+	SgVarRefExp@4:6	"cond"
+Write references:
+	SgPointerDerefExp@2:11	"p"
+	SgPointerDerefExp@2:16	"q"
+	SgPointerDerefExp@3:10	"r"
+	SgPointerDerefExp@4:12	"r"
+	SgVarRefExp@4:6	"cond"
+Read var names:
+	"cond"
+	"p"
+	"q"
+	"r"
+Write var names:
+	"cond"
+	"p"
+	"q"
+	"r"
