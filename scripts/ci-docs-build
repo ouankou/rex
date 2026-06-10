@@ -96,6 +96,7 @@ if [ ! -f "$BUILD_DIR/compile_commands.json" ]; then
   cmake -S "$root" -B "$BUILD_DIR" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+    -DROSE_ENABLE_PCH=OFF \
     -DENABLE-C=ON \
     -DENABLE-FORTRAN=OFF \
     -DENABLE-TESTS-DIRECTORY=OFF \

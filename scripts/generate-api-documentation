@@ -576,6 +576,71 @@ def is_in_inputs(path: Path) -> bool:
             continue
     return False
 
+def is_cmake_pch_arg(arg: str) -> bool:
+    return arg.rsplit("/", 1)[-1].startswith("cmake_pch.")
+
+def strip_cmake_pch_args(argv: list[str]) -> list[str]:
+    if not any(is_cmake_pch_arg(arg) for arg in argv):
+        return list(argv)
+
+    cleaned = []
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+
+        if arg in {"-Winvalid-pch", "-fpch-instantiate-templates"}:
+            i += 1
+            continue
+
+        if arg == "-include-pch" and i + 1 < len(argv) and is_cmake_pch_arg(argv[i + 1]):
+            i += 2
+            continue
+
+        if arg == "-include" and i + 1 < len(argv) and is_cmake_pch_arg(argv[i + 1]):
+            i += 2
+            continue
+
+        if (
+            arg in {"-I", "-isystem", "-iquote", "-idirafter"}
+            and i + 1 < len(argv)
+            and is_cmake_pch_arg(argv[i + 1])
+        ):
+            i += 2
+            continue
+
+        if arg == "-Xclang" and i + 1 < len(argv):
+            xclang_arg = argv[i + 1]
+            if xclang_arg == "-include-pch":
+                if (
+                    i + 3 < len(argv)
+                    and argv[i + 2] == "-Xclang"
+                    and is_cmake_pch_arg(argv[i + 3])
+                ):
+                    i += 4
+                    continue
+                if i + 2 < len(argv) and is_cmake_pch_arg(argv[i + 2]):
+                    i += 3
+                    continue
+            if xclang_arg == "-include":
+                if (
+                    i + 3 < len(argv)
+                    and argv[i + 2] == "-Xclang"
+                    and is_cmake_pch_arg(argv[i + 3])
+                ):
+                    i += 4
+                    continue
+                if i + 2 < len(argv) and is_cmake_pch_arg(argv[i + 2]):
+                    i += 3
+                    continue
+
+        if is_cmake_pch_arg(arg):
+            i += 1
+            continue
+
+        cleaned.append(arg)
+        i += 1
+    return cleaned
+
 data = json.loads(compile_db_path.read_text(encoding="utf-8"))
 if not isinstance(data, list):
     raise SystemExit("compile_commands.json is not a list")
@@ -596,6 +661,8 @@ for entry in data:
         continue
     if not is_in_inputs(file_path):
         continue
+    if file_path.name.startswith("cmake_pch."):
+        continue
     new_entry = dict(entry)
     new_entry["file"] = str(file_path)
     if "directory" in new_entry and new_entry["directory"]:
@@ -607,6 +674,8 @@ for entry in data:
             import shlex
             args = shlex.split(cmd)
     if isinstance(args, list) and args:
+        args = strip_cmake_pch_args(args)
+
         def is_cpp_source(path: Path, argv: list[str]) -> bool:
             suffix = path.suffix
             suffix_lower = suffix.lower()
