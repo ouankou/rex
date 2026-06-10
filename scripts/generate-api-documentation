@@ -661,7 +661,7 @@ for entry in data:
         continue
     if not is_in_inputs(file_path):
         continue
-    if is_cmake_pch_arg(str(file_path)):
+    if file_path.name.startswith("cmake_pch."):
         continue
     new_entry = dict(entry)
     new_entry["file"] = str(file_path)
