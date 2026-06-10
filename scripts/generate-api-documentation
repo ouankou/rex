@@ -577,7 +577,7 @@ def is_in_inputs(path: Path) -> bool:
     return False
 
 def is_cmake_pch_arg(arg: str) -> bool:
-    return Path(arg).name.startswith("cmake_pch.")
+    return arg.replace("\\", "/").split("/")[-1].startswith("cmake_pch.")
 
 def strip_cmake_pch_args(argv: list[str]) -> list[str]:
     if not any(is_cmake_pch_arg(arg) for arg in argv):
