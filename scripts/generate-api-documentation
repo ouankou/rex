@@ -596,16 +596,8 @@ def strip_cmake_pch_args(argv: list[str]) -> list[str]:
             i += 2
             continue
 
-        if arg.startswith("-include-pch") and is_cmake_pch_arg(arg):
-            i += 1
-            continue
-
         if arg == "-include" and i + 1 < len(argv) and is_cmake_pch_arg(argv[i + 1]):
             i += 2
-            continue
-
-        if arg.startswith("-include") and is_cmake_pch_arg(arg):
-            i += 1
             continue
 
         if arg == "-Xclang" and i + 1 < len(argv):
