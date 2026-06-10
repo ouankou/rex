@@ -7,25 +7,31 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
 
 concurrency:
-  group: docs-publish-main
+  group: pages
   cancel-in-progress: true
 
 env:
   LLVM_VERSION: 22
 
 jobs:
-  docs:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
           fetch-depth: 0
+
+      - name: Configure GitHub Pages
+        id: pages
+        uses: actions/configure-pages@v5
 
       - name: Add LLVM apt repository
         run: |
@@ -84,12 +90,20 @@ jobs:
           DOCS_JOBS: 32
         run: bash scripts/ci-docs-build
 
+      - name: Upload GitHub Pages Artifact
+        if: ${{ !env.ACT }}
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ./_site
+
+  deploy:
+    runs-on: ubuntu-24.04
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy to GitHub Pages
         if: ${{ !env.ACT }}
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: _site
-          force_orphan: true
-          cname: rex.ouankou.com
+        id: deployment
+        uses: actions/deploy-pages@v4
