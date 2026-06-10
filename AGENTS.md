@@ -48,6 +48,7 @@ cmake --install .
     *   Run regression tests: `ctest --test-dir build --output-on-failure`
     *   Run specific tests: `ctest -R <regex>`
     *   New tests: Add to `tests/nonsmoke`, mirroring source layout.
+    *   New REX-originated test specimens must use `rex_<area>_<behavior>.<ext>` names, with lowercase snake_case for the area and behavior terms. Preserve imported, upstream, or vendor test names unchanged.
 *   **Formatting:**
     *   Run `clang-format` on changed files before committing to ensure adherence to formatting requirements.
 

@@ -19,6 +19,24 @@
 #include <assert.h>
 
 DebugLog DebugLocalInfoCollect("-debuglocalinfocollect");
+
+namespace {
+
+void collectAssignmentTargetMemoryRefs(AstInterface &fa, const AstNodePtr &expr,
+                                       AstInterface::AstNodeList &refs) {
+  SgNode *node = AstNodePtrImpl(expr).get_ptr();
+  if (node == nullptr) {
+    return;
+  }
+  if (SgCommaOpExp *comma = isSgCommaOpExp(node)) {
+    collectAssignmentTargetMemoryRefs(fa, comma->get_rhs_operand(), refs);
+    return;
+  }
+  fa.IsMemoryAccess(expr, &refs);
+}
+
+} // namespace
+
 void StmtInfoCollect::AppendFuncCallArguments(AstInterface &fa,
                                               const AstNodePtr &fc,
                                               AstNodePtr *callee) {
@@ -252,7 +270,7 @@ bool StmtInfoCollect ::ProcessTree(AstInterface &fa,
            p != modmap.end(); ++p) {
         std::pair<const AstNodePtr, ModRecord> c = *p;
         AstInterface::AstNodeList memory_refs;
-        fa.IsMemoryAccess(c.first, &memory_refs);
+        collectAssignmentTargetMemoryRefs(fa, c.first, memory_refs);
         if (!memory_refs.empty()) {
           for (const auto &v : memory_refs) {
             AppendModLoc(fa, v, c.second.rhs);
