@@ -26,6 +26,8 @@
 
 #include <list>
 
+#include <memory>
+
 #include <set>
 
 #define DEBUG 1
@@ -39,7 +41,7 @@ int main(int argc, char *argv[]) {
   std::vector<InterproceduralInfo *> ip;
 #ifdef NEWDU
   // Create the global def-use analysis
-  DFAnalysis *defUseAnalysis = new DefUseAnalysis(project);
+  std::unique_ptr<DFAnalysis> defUseAnalysis(new DefUseAnalysis(project));
   if (defUseAnalysis->run(false) == 1) {
     std::cerr
         << "testSDG:: DFAnalysis failed!  -- (defUseAnalysis->run(false)==0"
@@ -102,8 +104,8 @@ int main(int argc, char *argv[]) {
 
 // get the data dependence for this function
 #ifdef NEWDU
-      ddg =
-          new DataDependenceGraph(fDec->get_definition(), defUseAnalysis, ipi);
+      ddg = new DataDependenceGraph(fDec->get_definition(),
+                                    defUseAnalysis.get(), ipi);
 #else
       ddg = new DataDependenceGraph(fDec->get_definition(), ipi);
 #endif

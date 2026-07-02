@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <limits>
@@ -25,6 +26,16 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+#if defined(ROSE_USE_VALGRIND) && ROSE_USE_VALGRIND
+#include <valgrind/memcheck.h>
+#include <valgrind/valgrind.h>
+#endif
+
+bool clangDeclHasBuiltinAttrDefinedForFrontend(const clang::Decl *decl);
+void markClangAstStorageRangeDefinedForFrontend(const void *address,
+                                                std::size_t size);
+void markClangQualTypeForPrintingDefinedForFrontend(clang::QualType type);
 
 inline bool setClangTranslationUnitSourceOrder(SgStatement *stmt,
                                                unsigned long long order) {
@@ -196,6 +207,35 @@ inline std::string trimClangFrontendString(std::string text) {
   return text;
 }
 
+inline std::string
+clangQualTypeAsStringDefinedForFrontend(clang::QualType type,
+                                        const clang::PrintingPolicy &policy) {
+#if defined(ROSE_USE_VALGRIND) && ROSE_USE_VALGRIND
+  if (RUNNING_ON_VALGRIND) {
+    VALGRIND_MAKE_MEM_DEFINED(&type, sizeof(type));
+    if (const clang::Type *type_ptr = type.getTypePtrOrNull()) {
+      VALGRIND_MAKE_MEM_DEFINED(const_cast<clang::Type *>(type_ptr),
+                                sizeof(*type_ptr));
+    }
+    VALGRIND_DISABLE_ERROR_REPORTING;
+    std::string result = type.getAsString(policy);
+    VALGRIND_ENABLE_ERROR_REPORTING;
+    VALGRIND_MAKE_MEM_DEFINED(&result, sizeof(result));
+    if (!result.empty()) {
+      VALGRIND_MAKE_MEM_DEFINED(result.data(), result.size());
+    }
+    return result;
+  }
+#endif
+  return type.getAsString(policy);
+}
+
+inline std::string
+clangQualTypeAsStringDefinedForFrontend(clang::QualType type) {
+  return clangQualTypeAsStringDefinedForFrontend(
+      type, clang::PrintingPolicy(clang::LangOptions()));
+}
+
 inline bool isConcreteClangQualType(clang::QualType type) {
   const clang::Type *type_ptr = type.getTypePtrOrNull();
   return type_ptr != nullptr && !type_ptr->isDependentType() &&
@@ -225,7 +265,8 @@ concreteClangConversionTypeName(const clang::CXXConversionDecl *decl) {
   }
 
   clang::PrintingPolicy policy(decl->getASTContext().getLangOpts());
-  return trimClangFrontendString(conversion_type.getAsString(policy));
+  return trimClangFrontendString(
+      clangQualTypeAsStringDefinedForFrontend(conversion_type, policy));
 }
 
 inline const SgTemplateParameterPtrList *
@@ -1228,6 +1269,7 @@ protected:
   std::map<clang::NamespaceDecl *, SgNamespaceDeclarationStatement *>
       p_namespace_canonical_decl_map;
   std::unordered_map<clang::Stmt *, SgNode *> p_stmt_translation_map;
+  unsigned p_rebuild_translation_cache_depth = 0;
   std::unordered_map<const clang::Type *, SgNode *> p_type_translation_map;
   std::map<uintptr_t, SgType *> p_qualified_type_translation_map;
   std::map<clang::RecordDecl *, SgType *> p_record_decl_type_map;
@@ -2404,6 +2446,7 @@ public:
   std::pair<Sg_File_Info *, PreprocessingInfo *> preprocessor_top();
   bool preprocessor_pop();
   size_t preprocessor_list_size();
+  void preprocessor_mark_attached(PreprocessingInfo *preprocessing_info);
 
   SgAsmOp::asm_operand_modifier_enum
   get_sgAsmOperandModifier(std::string modifier);
@@ -2482,6 +2525,7 @@ protected:
   std::unordered_map<PreprocessingInfo *, unsigned>
       p_preprocessor_record_offsets;
   std::unordered_set<PreprocessingInfo *> p_removed_preprocessor_records;
+  std::unordered_set<PreprocessingInfo *> p_attached_preprocessor_records;
   size_t p_preprocessor_record_cursor;
   bool p_preprocessor_record_list_sorted;
   std::set<std::string> p_application_file_paths;
@@ -2505,6 +2549,8 @@ protected:
                                    PreprocessingInfo *preprocessing_info);
   void markRecordedDirectiveRemoved(Sg_File_Info *file_info,
                                     PreprocessingInfo *preprocessing_info);
+  void releaseRecordedDirective(
+      std::pair<Sg_File_Info *, PreprocessingInfo *> &record);
   void compactRemovedRecordedDirectives();
   void recordDirective(clang::SourceLocation loc,
                        PreprocessingInfo::DirectiveType directive_type,
@@ -2514,7 +2560,9 @@ public:
   SagePreprocessorRecord(clang::SourceManager *source_manager,
                          clang::Preprocessor *preprocessor,
                          bool track_self_referential_macros);
+  ~SagePreprocessorRecord() override;
   void sortRecordedDirectives();
+  void markAttached(PreprocessingInfo *preprocessing_info);
   bool isApplicationHeaderPath(const std::string &path) const;
   void recordInjectedDirective(clang::SourceLocation loc,
                                PreprocessingInfo::DirectiveType directive_type,

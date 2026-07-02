@@ -25,6 +25,8 @@
 
 #include "sage_support.h"
 
+#include "astJson/sageAstJson.h"
+
 #include "rose_path_resolver.h"
 
 #include "rose_paths.h"
@@ -3009,6 +3011,8 @@ void SgFile::secondaryPassOverSourceFile() {
       // Liao, 3/31/2009 Handle OpenMP here to see macro calls within directives
 #ifdef ROSE_BUILD_CPP_LANGUAGE_SUPPORT
       rosePhaseTrace("secondaryPassOverSourceFile.openmp.begin");
+      sourceFile = Rose::AstJson::roundTripSourceFile(
+          sourceFile, Rose::AstJson::Checkpoint::PreOmpConstruction);
       processOpenMP(sourceFile);
       rosePhaseTrace("secondaryPassOverSourceFile.openmp.end");
 #endif

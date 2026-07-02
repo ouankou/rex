@@ -267,6 +267,10 @@ public:
 
 template <typename T> struct GenericAttr : AstAttribute {
   T attr;
+
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
 };
 
 template <typename T>
@@ -327,6 +331,21 @@ public:
     }
     // cout << "Node " << node << endl;
     // cout << "ObjectsAllocated are " << ObjectsAllocated(node) << endl;
+  }
+};
+
+class AttributeCleanup : public AstSimpleProcessing {
+public:
+  void visit(SgNode *node) {
+    if (node->attributeExists("ObjectsAllocated")) {
+      node->removeAttribute("ObjectsAllocated");
+    }
+    if (node->attributeExists("AuxObjectsAllocated")) {
+      node->removeAttribute("AuxObjectsAllocated");
+    }
+    if (node->attributeExists("Temporaries")) {
+      node->removeAttribute("Temporaries");
+    }
   }
 };
 
@@ -644,5 +663,8 @@ void destructorCallAnnotator(SgProject *prj) {
 
     Transformer t;
     t.traverse(isSgFunctionDefinition(*i)->get_body(), postorder);
+
+    AttributeCleanup cleanup;
+    cleanup.traverse(isSgFunctionDefinition(*i)->get_body(), preorder);
   }
 }

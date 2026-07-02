@@ -124,6 +124,8 @@ set(CXX20_TESTCODES
   test2020_93.C
   test2020_119.C
   test2020_121.C
+  rex_test2026_coreturn_valgrind_defined_reads.cpp
+  rex_test2026_cxx20_paren_list_init_valgrind_defined_reads.cpp
   rex_test2026_concepts_requires.cpp
 )
 

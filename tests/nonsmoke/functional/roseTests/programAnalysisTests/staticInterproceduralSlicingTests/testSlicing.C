@@ -26,6 +26,8 @@
 
 #include <list>
 
+#include <memory>
+
 #include <set>
 
 #define DEBUG 1
@@ -39,7 +41,7 @@ int main(int argc, char *argv[]) {
   std::vector<InterproceduralInfo *> ip;
 #ifdef NEWDU
   // Create the global def-use analysis
-  EDefUse *defUseAnalysis = new EDefUse(project);
+  std::unique_ptr<EDefUse> defUseAnalysis(new EDefUse(project));
   if (defUseAnalysis->run(false) != 0) {
     std::cerr << "DFAnalysis failed!" << endl;
   }
@@ -47,7 +49,7 @@ int main(int argc, char *argv[]) {
   string outputFileName =
       project->get_fileList().front()->get_sourceFileNameWithoutPath();
 
-  SystemDependenceGraph *sdg = new SystemDependenceGraph;
+  std::unique_ptr<SystemDependenceGraph> sdg(new SystemDependenceGraph);
   // for all function-declarations in the AST
   NodeQuerySynthesizedAttributeType functionDeclarations =
       NodeQuery::querySubTree(project, V_SgFunctionDeclaration);
@@ -55,10 +57,7 @@ int main(int argc, char *argv[]) {
   for (NodeQuerySynthesizedAttributeType::iterator i =
            functionDeclarations.begin();
        i != functionDeclarations.end(); i++) {
-    ControlDependenceGraph *cdg;
-    DataDependenceGraph *ddg;
     //	FunctionDependenceGraph * pdg;
-    InterproceduralInfo *ipi;
 
     SgFunctionDeclaration *fDec = isSgFunctionDeclaration(*i);
 
@@ -76,39 +75,43 @@ int main(int argc, char *argv[]) {
       // treat librarycall -> iterprocedualInfo must be created...
       // make all call-parameters used and create a function stub for
       // the graph
-      ipi = new InterproceduralInfo(fDec);
+      std::unique_ptr<InterproceduralInfo> ipi(new InterproceduralInfo(fDec));
       ipi->addExitNode(fDec);
-      sdg->addInterproceduralInformation(ipi);
+      sdg->addInterproceduralInformation(ipi.get());
       if (sdg->isKnownLibraryFunction(fDec)) {
         sdg->createConnectionsForLibaryFunction(fDec);
       } else {
         sdg->createSafeConfiguration(fDec);
       }
-      ip.push_back(ipi);
+      ip.push_back(ipi.get());
+      ipi.release();
 
       // This is somewhat a waste of memory and a more efficient approach might
       // generate this when needed, but at the momenent everything is created...
     } else {
       // get the control depenence for this function
-      ipi = new InterproceduralInfo(fDec);
+      std::unique_ptr<InterproceduralInfo> ipi(new InterproceduralInfo(fDec));
 
       ROSE_ASSERT(ipi != NULL);
 
       // get control dependence for this function defintion
-      cdg = new ControlDependenceGraph(fDec->get_definition(), ipi);
-      cdg->computeInterproceduralInformation(ipi);
+      std::unique_ptr<ControlDependenceGraph> cdg(
+          new ControlDependenceGraph(fDec->get_definition(), ipi.get()));
+      cdg->computeInterproceduralInformation(ipi.get());
 
 // get the data dependence for this function
 #ifdef NEWDU
-      ddg =
-          new DataDependenceGraph(fDec->get_definition(), defUseAnalysis, ipi);
+      std::unique_ptr<DataDependenceGraph> ddg(new DataDependenceGraph(
+          fDec->get_definition(), defUseAnalysis.get(), ipi.get()));
 #else
-      ddg = new DataDependenceGraph(fDec->get_definition(), ipi);
+      std::unique_ptr<DataDependenceGraph> ddg(
+          new DataDependenceGraph(fDec->get_definition(), ipi.get()));
 #endif
 
-      sdg->addFunction(cdg, ddg);
-      sdg->addInterproceduralInformation(ipi);
-      ip.push_back(ipi);
+      sdg->addFunction(cdg.get(), ddg.get());
+      sdg->addInterproceduralInformation(ipi.get());
+      ip.push_back(ipi.get());
+      ipi.release();
     }
     // else if (fD->get_definition() == NULL)
   }
@@ -142,7 +145,7 @@ int main(int argc, char *argv[]) {
   if (targetList.size() == 0) {
     cout << "no slicing targes, exiting" << endl;
   } else {
-    CreateSliceSet sliceSet(sdg, targetList);
+    CreateSliceSet sliceSet(sdg.get(), targetList);
     for (std::list<SgNode *>::iterator i = targetList.begin();
          i != targetList.end(); i++) {
       cout << "slicing for \"" << (*i)->unparseToString() << "\"" << endl;

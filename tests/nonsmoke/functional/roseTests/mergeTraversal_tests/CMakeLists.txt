@@ -32,4 +32,11 @@ add_test(
     -c ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_Grammar.C
 )
 
+add_test(
+  NAME rex_merge_traversal_memcheck
+  COMMAND traversalArray -I${CMAKE_BINARY_DIR}
+    ${_rose_include_flags}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_merge_traversal_memcheck.cpp
+)
+
 ########### install files ###############

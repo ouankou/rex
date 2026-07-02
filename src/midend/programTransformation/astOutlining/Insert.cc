@@ -263,6 +263,7 @@ generatePrototype(const SgFunctionDeclaration *full_decl,
         SageBuilder::buildNondefiningTemplateFunctionDeclaration(
             template_decl->get_name(), return_type, paralist, scope,
             template_params);
+    delete template_params;
     ROSE_ASSERT(proto != NULL);
     for (SgTemplateParameterPtrList::iterator it =
              proto->get_templateParameters().begin();

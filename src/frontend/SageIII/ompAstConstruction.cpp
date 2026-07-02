@@ -2,6 +2,7 @@
 // Liao 10/8/2010
 #include "ompAstConstruction.h"
 
+#include "astJson/sageAstJson.h"
 #include "astPostProcessing.h"
 #include "fixupTypes.h"
 
@@ -680,6 +681,126 @@ static bool buildDeclareMapperTemplateArgumentNodes(
   return true;
 }
 
+static SgType *
+normalizeDeclareMapperTemplateInstantiationScope(SgNode *context_node,
+                                                 SgType *type) {
+  SgClassType *class_type = isSgClassType(type);
+  if (class_type == nullptr) {
+    return type;
+  }
+
+  SgTemplateInstantiationDecl *decl =
+      isSgTemplateInstantiationDecl(class_type->get_declaration());
+  if (decl == nullptr) {
+    return type;
+  }
+
+  SgGlobal *global_scope = context_node != nullptr
+                               ? SageInterface::getGlobalScope(context_node)
+                               : nullptr;
+  if (global_scope == nullptr) {
+    return type;
+  }
+
+  SgTemplateClassDeclaration *template_decl =
+      isSgTemplateClassDeclaration(decl->get_templateDeclaration());
+  SgName template_name = decl->get_templateName();
+  if (template_name.getString().empty() && template_decl != nullptr) {
+    template_name = template_decl->get_name();
+  }
+  if (!template_name.getString().empty()) {
+    auto is_under_current_global = [&](SgNode *node) {
+      for (SgNode *cursor = node; cursor != nullptr;
+           cursor = cursor->get_parent()) {
+        if (cursor == global_scope) {
+          return true;
+        }
+      }
+      return false;
+    };
+    SgScopeStatement *lookup_scope =
+        isSgStatement(context_node) != nullptr &&
+                isSgStatement(context_node)->get_scope() != nullptr
+            ? isSgStatement(context_node)->get_scope()
+            : static_cast<SgScopeStatement *>(global_scope);
+    SgTemplateClassDeclaration *visible_template_decl = nullptr;
+    SgTemplateClassSymbol *template_symbol =
+        SageInterface::lookupTemplateClassSymbolInParentScopes(
+            template_name, nullptr, nullptr, lookup_scope);
+    if (template_symbol == nullptr && lookup_scope != global_scope) {
+      template_symbol = SageInterface::lookupTemplateClassSymbolInParentScopes(
+          template_name, nullptr, nullptr, global_scope);
+    }
+    if (template_symbol != nullptr) {
+      visible_template_decl =
+          isSgTemplateClassDeclaration(template_symbol->get_declaration());
+      if (visible_template_decl != nullptr &&
+          !is_under_current_global(visible_template_decl)) {
+        visible_template_decl = nullptr;
+      }
+    }
+    if (visible_template_decl == nullptr) {
+      Rose_STL_Container<SgNode *> candidates =
+          NodeQuery::querySubTree(global_scope, V_SgTemplateClassDeclaration);
+      for (SgNode *candidate : candidates) {
+        SgTemplateClassDeclaration *candidate_decl =
+            isSgTemplateClassDeclaration(candidate);
+        if (candidate_decl != nullptr &&
+            candidate_decl->get_name() == template_name) {
+          visible_template_decl = candidate_decl;
+          break;
+        }
+      }
+    }
+    if (visible_template_decl != nullptr &&
+        visible_template_decl != template_decl) {
+      decl->set_templateDeclaration(visible_template_decl);
+    }
+  }
+
+  SgGlobal *decl_global = isSgGlobal(decl->get_scope());
+  if (decl_global == nullptr || decl_global == global_scope) {
+    return type;
+  }
+
+  SgSymbol *symbol = decl->get_symbol_from_symbol_table();
+  if (symbol != nullptr && decl_global->symbol_exists(symbol)) {
+    decl_global->remove_symbol(symbol);
+  }
+
+  decl->set_scope(global_scope);
+  if (symbol != nullptr && !global_scope->symbol_exists(symbol)) {
+    global_scope->insert_symbol(symbol->get_name(), symbol);
+  }
+
+  return type;
+}
+
+static void
+normalizeDeclareMapperTemplateInstantiationScopes(SgSourceFile *source_file) {
+  if (source_file == nullptr) {
+    return;
+  }
+
+  struct Traversal : public AstSimpleProcessing {
+    void visit(SgNode *node) override {
+      SgOmpDeclareMapperStatement *mapper = isSgOmpDeclareMapperStatement(node);
+      if (mapper == nullptr) {
+        return;
+      }
+      SgTypeExpression *mapper_type =
+          isSgTypeExpression(mapper->get_mapper_type());
+      if (mapper_type == nullptr) {
+        return;
+      }
+      normalizeDeclareMapperTemplateInstantiationScope(mapper,
+                                                       mapper_type->get_type());
+    }
+  };
+
+  Traversal().traverse(source_file, preorder);
+}
+
 static SgType *resolveDeclareMapperNamedBaseType(
     SgPragmaDeclaration *directive,
     const std::vector<std::string> &base_name_tokens) {
@@ -719,7 +840,8 @@ static SgType *resolveDeclareMapperNamedBaseType(
     if (SgClassSymbol *class_symbol =
             SageInterface::lookupClassSymbolInParentScopes(
                 SgName(name), scope, &template_arguments)) {
-      return class_symbol->get_type();
+      return normalizeDeclareMapperTemplateInstantiationScope(
+          directive, class_symbol->get_type());
     }
     return nullptr;
   };
@@ -742,8 +864,9 @@ static SgType *resolveDeclareMapperNamedBaseType(
       Rose_STL_Container<SgNode *> argument_nodes;
       if (buildDeclareMapperTemplateArgumentNodes(template_arguments,
                                                   argument_nodes)) {
-        return SageBuilder::buildClassTemplateType(template_decl,
-                                                   argument_nodes);
+        return normalizeDeclareMapperTemplateInstantiationScope(
+            directive,
+            SageBuilder::buildClassTemplateType(template_decl, argument_nodes));
       }
     }
   }
@@ -756,7 +879,8 @@ static SgType *resolveDeclareMapperNamedBaseType(
         return nullptr;
       }
     }
-    return resolved;
+    return normalizeDeclareMapperTemplateInstantiationScope(directive,
+                                                            resolved);
   }
 
   return nullptr;
@@ -1765,6 +1889,7 @@ static void normalizeMovedConditionalSkippedTokens(SgStatement *statement) {
     }
     if (text.empty()) {
       it = infos->erase(it);
+      delete info;
       continue;
     }
     info->setString(text);
@@ -5184,6 +5309,8 @@ static void removeFortranDirectiveComments(SgSourceFile *sageFilePtr,
                                            const std::string &keyword) {
   ROSE_ASSERT(sageFilePtr != NULL);
 
+  std::unordered_set<PreprocessingInfo *> removed_infos;
+
   std::vector<SgNode *> loc_nodes =
       NodeQuery::querySubTree(sageFilePtr, V_SgLocatedNode);
   for (SgNode *node : loc_nodes) {
@@ -5210,11 +5337,16 @@ static void removeFortranDirectiveComments(SgSourceFile *sageFilePtr,
         }
       }
       if (is_directive || is_sentinel_lead) {
+        removed_infos.insert(*iter);
         iter = comments->erase(iter);
       } else {
         ++iter;
       }
     }
+  }
+
+  for (PreprocessingInfo *info : removed_infos) {
+    delete info;
   }
 }
 
@@ -8924,10 +9056,18 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
              sageFilePtr->get_openmp_ast_only() ? "true" : "false");
     }
     canonicalize_named_types();
+    normalizeDeclareMapperTemplateInstantiationScopes(sageFilePtr);
+    sageFilePtr = Rose::AstJson::roundTripSourceFile(
+        sageFilePtr, Rose::AstJson::Checkpoint::PostOmpConstruction);
     releaseOpenMPParseStateForSourceFile(sageFilePtr);
     mark_processed(sageFilePtr);
     return;
   }
+
+  canonicalize_named_types();
+  normalizeDeclareMapperTemplateInstantiationScopes(sageFilePtr);
+  sageFilePtr = Rose::AstJson::roundTripSourceFile(
+      sageFilePtr, Rose::AstJson::Checkpoint::PostOmpConstruction);
 
   // Analyze OpenMP AST
   analyze_omp(sageFilePtr);
@@ -8947,6 +9087,8 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
 
   lower_omp(sageFilePtr);
   canonicalize_named_types();
+  sageFilePtr = Rose::AstJson::roundTripSourceFile(
+      sageFilePtr, Rose::AstJson::Checkpoint::PostOmpLowering);
   releaseOpenMPParseStateForSourceFile(sageFilePtr);
   mark_processed(sageFilePtr);
 }
@@ -10766,8 +10908,6 @@ convertUsesAllocatorsClause(SgOmpClauseBodyStatement *clause_body,
   SgOmpUsesAllocatorsClause *result = NULL;
   SgOmpUsesAllocatorsDefination *uses_allocators_defination = NULL;
   SgOmpClause::omp_uses_allocators_allocator_enum sg_allocator;
-  SgExpression *user_defined_allocator = NULL;
-  SgExpression *clause_expression = NULL;
   std::vector<usesAllocatorParameter *> *uses_allocators =
       ((OpenMPUsesAllocatorsClause *)current_omp_clause)
           ->getUsesAllocatorsAllocatorSequence();
@@ -10778,9 +10918,10 @@ convertUsesAllocatorsClause(SgOmpClauseBodyStatement *clause_body,
     OpenMPUsesAllocatorsClauseAllocator allocator =
         ((usesAllocatorParameter *)(*iter))->getUsesAllocatorsAllocator();
     sg_allocator = toSgOmpClauseUsesAllocatorsAllocator(allocator);
+    SgExpression *user_defined_allocator = NULL;
     if (sg_allocator ==
         SgOmpClause::e_omp_uses_allocators_allocator_user_defined) {
-      clause_expression = parseOmpExpression(
+      user_defined_allocator = parseOmpExpression(
           current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
           ((usesAllocatorParameter *)(*iter))->getAllocatorUser());
     }
@@ -10799,7 +10940,8 @@ convertUsesAllocatorsClause(SgOmpClauseBodyStatement *clause_body,
         allocator_traits_array);
     uses_allocators_defination->set_allocator(sg_allocator);
 
-    uses_allocators_defination->set_user_defined_allocator(clause_expression);
+    uses_allocators_defination->set_user_defined_allocator(
+        user_defined_allocator);
     uses_allocators_definations.push_back(uses_allocators_defination);
   }
 

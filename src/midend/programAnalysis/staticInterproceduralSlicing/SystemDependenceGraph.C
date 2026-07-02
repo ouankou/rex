@@ -9,9 +9,25 @@
 #include <list>
 
 #include <map>
+
+#include <memory>
 using namespace std;
 
 #include <assert.h>
+
+SystemDependenceGraph::~SystemDependenceGraph() {
+  std::set<InterproceduralInfo *> owned(interproceduralInformationList.begin(),
+                                        interproceduralInformationList.end());
+  for (auto &entry : interproceduralInformation) {
+    owned.insert(entry.second);
+  }
+  interproceduralInformationList.clear();
+  interproceduralInformation.clear();
+
+  for (InterproceduralInfo *info : owned) {
+    delete info;
+  }
+}
 
 bool SystemDependenceGraph::isKnownLibraryFunction(
     SgFunctionDeclaration *fDec) {
@@ -108,7 +124,7 @@ void SystemDependenceGraph::createSafeConfiguration(
 void SystemDependenceGraph::parseProject(SgProject *project) {
 #ifdef NEWDU
   // Create the global def-use analysis
-  EDefUse *defUseAnalysis = new EDefUse(project);
+  std::unique_ptr<EDefUse> defUseAnalysis(new EDefUse(project));
   if (defUseAnalysis->run(false) == 1) {
     std::cerr << "SystemDependenceGraph :: DFAnalysis failed!  -- "
                  "defUseAnalysis->run(false)==0"
@@ -129,17 +145,14 @@ void SystemDependenceGraph::parseProject(SgProject *project) {
       NodeQuery::querySubTree(project, V_SgFunctionDeclaration);
   for (Rose_STL_Container<SgNode *>::iterator i = functionDeclarations.begin();
        i != functionDeclarations.end(); i++) {
-    ControlDependenceGraph *cdg;
-    DataDependenceGraph *ddg;
-    InterproceduralInfo *ipi;
     SgFunctionDeclaration *fDec = isSgFunctionDeclaration(*i);
 
     ROSE_ASSERT(fDec != NULL);
     if (fDec->get_definition() == NULL) {
-      ipi = new InterproceduralInfo(fDec);
+      std::unique_ptr<InterproceduralInfo> ipi(new InterproceduralInfo(fDec));
       // create "Safe"-Configurations
       ipi->addExitNode(fDec);
-      addInterproceduralInformation(ipi);
+      addInterproceduralInformation(ipi.get());
       ipi->addExitNode(fDec);
       //>addInterproceduralInformation(ipi);
       if (isKnownLibraryFunction(fDec)) {
@@ -147,31 +160,35 @@ void SystemDependenceGraph::parseProject(SgProject *project) {
       } else {
         createSafeConfiguration(fDec);
       }
+      ipi.release();
       // This is somewhat a waste of memory and a more efficient approach might
       // generate this when needed, but at the momenent everything is created...
     } else {
       // get the control depenence for this function
-      ipi = new InterproceduralInfo(fDec);
+      std::unique_ptr<InterproceduralInfo> ipi(new InterproceduralInfo(fDec));
 
       ROSE_ASSERT(ipi != NULL);
 
       // get control dependence for this function defintion
-      cdg = new ControlDependenceGraph(fDec->get_definition(), ipi);
+      std::unique_ptr<ControlDependenceGraph> cdg(
+          new ControlDependenceGraph(fDec->get_definition(), ipi.get()));
       cdg->computeAdditionalFunctioncallDepencencies();
-      cdg->computeInterproceduralInformation(ipi);
+      cdg->computeInterproceduralInformation(ipi.get());
 
 // get the data dependence for this function
 #ifdef NEWDU
-      ddg =
-          new DataDependenceGraph(fDec->get_definition(), defUseAnalysis, ipi);
+      std::unique_ptr<DataDependenceGraph> ddg(new DataDependenceGraph(
+          fDec->get_definition(), defUseAnalysis.get(), ipi.get()));
 #else
-      ddg = new DataDependenceGraph(fDec->get_definition(), ipi);
+      std::unique_ptr<DataDependenceGraph> ddg(
+          new DataDependenceGraph(fDec->get_definition(), ipi.get()));
 #endif
       cdg->computeAdditionalFunctioncallDepencencies();
-      ddg->computeInterproceduralInformation(ipi);
+      ddg->computeInterproceduralInformation(ipi.get());
 
-      addFunction(cdg, ddg);
-      addInterproceduralInformation(ipi);
+      addFunction(cdg.get(), ddg.get());
+      addInterproceduralInformation(ipi.get());
+      ipi.release();
     }
     // else if (fD->get_definition() == NULL)
   }

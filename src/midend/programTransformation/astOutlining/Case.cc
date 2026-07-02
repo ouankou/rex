@@ -37,6 +37,12 @@ CPreproc::If::Case::Case(PreprocessingInfo *info, SgLocatedNode *node,
 CPreproc::If::Case::Case(const Case &c)
     : info_(c.info_), node_(c.node_), parent_(c.parent_), kids_(c.kids_) {}
 
+CPreproc::If::Case::~Case(void) {
+  for (If *child : kids_) {
+    delete child;
+  }
+}
+
 // ========================================================================
 
 bool CPreproc::If::Case::isIf(void) const {

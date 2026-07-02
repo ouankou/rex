@@ -14,6 +14,13 @@ set(normalizationTranslator_SWITCHES
 set(_rth ${CMAKE_SOURCE_DIR}/scripts/rth_run.pl)
 set(_exit_status ${CMAKE_SOURCE_DIR}/scripts/test_exit_status)
 
+function(rex_configure_normalization_instrumented_test test_name)
+  if(REX_EXTENDED_TEST_TIMEOUTS)
+    set_tests_properties(${test_name} PROPERTIES
+      PROCESSORS 16)
+  endif()
+endfunction()
+
 set(_normalization_output_dir ${CMAKE_CURRENT_BINARY_DIR}/rose_test_output)
 file(MAKE_DIRECTORY ${_normalization_output_dir})
 
@@ -43,4 +50,5 @@ foreach(file_to_test ${_normalization_tests})
   )
   set_tests_properties(normalizationTranslator_${file_to_test} PROPERTIES
     ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_normalization_output_dir}")
+  rex_configure_normalization_instrumented_test(normalizationTranslator_${file_to_test})
 endforeach()

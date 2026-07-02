@@ -4,6 +4,7 @@
 #ifndef OMP_LOWERING_H
 #define OMP_LOWERING_H
 
+#include "ASTtools.hh"
 #include "ompSupport.h"
 
 /*!
@@ -150,12 +151,12 @@ mergeSgNodeList(Rose_STL_Container<SgNode *> node_list1,
 //! A helper function to generate implicit or explicit task for either omp
 //! parallel or omp task
 // It calls the ROSE AST outliner internally.
-SgFunctionDeclaration *
-generateOutlinedTask(SgNode *node, std::string &wrapper_name,
-                     std::set<const SgVariableSymbol *> &syms,
-                     std::set<const SgVariableSymbol *> &pdSyms3,
-                     bool use_task_param = false,
-                     bool insert_runtime_ids = true);
+SgFunctionDeclaration *generateOutlinedTask(SgNode *node,
+                                            std::string &wrapper_name,
+                                            ASTtools::VarSymSet_t &syms,
+                                            ASTtools::VarSymSet_t &pdSyms3,
+                                            bool use_task_param = false,
+                                            bool insert_runtime_ids = true);
 
 //! Translate OpenMP variables associated with an OpenMP pragma, such as
 //! private, firstprivate, lastprivate, reduction, etc. bb1 is the translation

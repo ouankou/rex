@@ -7,6 +7,7 @@
 #include "DefUseAnalysis.h"
 
 #include <iostream>
+#include <memory>
 
 #include <string>
 using namespace std;
@@ -20,7 +21,7 @@ void testOneFunction(std::string funcParamName, int argc, char *argv[],
   // Build the AST used by ROSE
   SgProject *project = frontend(argc, argv);
   // Call the Def-Use Analysis
-  DFAnalysis *defuse = new DefUseAnalysis(project);
+  std::unique_ptr<DFAnalysis> defuse(new DefUseAnalysis(project));
   int val = defuse->run(debug);
   if (debug)
     std::cout << "Analysis run is : " << (val ? "success" : "failure")
@@ -154,7 +155,7 @@ void runCurrentFile(int argc, char *argv[]) {
     std::cout << ">>>> start def-use analysis ... " << endl;
 
   // Call the Def-Use Analysis
-  DFAnalysis *defuse = new DefUseAnalysis(project);
+  std::unique_ptr<DFAnalysis> defuse(new DefUseAnalysis(project));
   bool debug = false;
   int val = defuse->run(debug);
   if (debug)

@@ -8,6 +8,7 @@
 #include "sage3basic.h"
 
 #include <algorithm>
+#include <functional>
 #include <sstream>
 
 #include "VarSym.hh"
@@ -15,6 +16,235 @@
 // ========================================================================
 
 using namespace std;
+
+// ========================================================================
+
+namespace {
+
+static std::string normalizedSymbolName(const SgName &name) {
+  return Rose::StringUtility::convertToLowerCase(name.getString());
+}
+
+static std::string normalizedSymbolName(const SgVariableSymbol *sym,
+                                        const SgInitializedName *decl) {
+  if (sym != NULL && !sym->get_name().getString().empty())
+    return normalizedSymbolName(sym->get_name());
+  if (decl != NULL)
+    return normalizedSymbolName(decl->get_name());
+  return std::string();
+}
+
+static const SgFunctionDeclaration *
+getDirectParameterOwnerFunctionDeclaration(const SgInitializedName *name) {
+  if (name == NULL)
+    return NULL;
+
+  const SgFunctionParameterList *param_list =
+      isSgFunctionParameterList(name->get_parent());
+  if (param_list == NULL)
+    return NULL;
+
+  return isSgFunctionDeclaration(param_list->get_parent());
+}
+
+static const SgFunctionDeclaration *
+getEnclosingFunctionForSymbolOrder(const SgInitializedName *name) {
+  if (name == NULL)
+    return NULL;
+
+  if (const SgFunctionDeclaration *owner =
+          getDirectParameterOwnerFunctionDeclaration(name))
+    return owner;
+
+  if (SgDeclarationStatement *decl =
+          const_cast<SgDeclarationStatement *>(name->get_declaration())) {
+    if (SgFunctionDeclaration *enclosing =
+            SageInterface::getEnclosingFunctionDeclaration(decl, false))
+      return enclosing;
+  }
+
+  if (SgScopeStatement *scope =
+          const_cast<SgScopeStatement *>(name->get_scope()))
+    return SageInterface::getEnclosingFunctionDeclaration(scope, true);
+
+  return NULL;
+}
+
+static int getFunctionParameterIndex(const SgFunctionDeclaration *function,
+                                     const SgInitializedName *name,
+                                     const std::string &normalized_name) {
+  if (function == NULL || name == NULL)
+    return -1;
+
+  SgFunctionParameterList *params =
+      const_cast<SgFunctionDeclaration *>(function)->get_parameterList();
+  if (params == NULL)
+    return -1;
+
+  SgInitializedNamePtrList &args = params->get_args();
+  for (SgInitializedNamePtrList::size_type i = 0; i < args.size(); ++i) {
+    SgInitializedName *arg = args[i];
+    if (arg == NULL)
+      continue;
+    if (arg == name)
+      return static_cast<int>(i);
+  }
+
+  for (SgInitializedNamePtrList::size_type i = 0; i < args.size(); ++i) {
+    SgInitializedName *arg = args[i];
+    if (arg == NULL)
+      continue;
+    if (normalizedSymbolName(arg->get_name()) == normalized_name)
+      return static_cast<int>(i);
+  }
+
+  return -1;
+}
+
+static int getInitializedNameListIndex(const SgInitializedName *name) {
+  if (name == NULL)
+    return -1;
+
+  if (const SgVariableDeclaration *var_decl =
+          isSgVariableDeclaration(name->get_declaration())) {
+    SgInitializedNamePtrList &vars =
+        const_cast<SgVariableDeclaration *>(var_decl)->get_variables();
+    for (SgInitializedNamePtrList::size_type i = 0; i < vars.size(); ++i) {
+      if (vars[i] == name)
+        return static_cast<int>(i);
+    }
+  }
+
+  if (const SgFunctionParameterList *param_list =
+          isSgFunctionParameterList(name->get_parent())) {
+    SgInitializedNamePtrList &args =
+        const_cast<SgFunctionParameterList *>(param_list)->get_args();
+    for (SgInitializedNamePtrList::size_type i = 0; i < args.size(); ++i) {
+      if (args[i] == name)
+        return static_cast<int>(i);
+    }
+  }
+
+  return -1;
+}
+
+static const Sg_File_Info *
+getBestFileInfoForSymbolOrder(const SgInitializedName *name) {
+  if (name != NULL) {
+    if (const Sg_File_Info *info = name->get_startOfConstruct())
+      return info;
+    if (const Sg_File_Info *info = name->get_file_info())
+      return info;
+    if (const SgDeclarationStatement *decl = name->get_declaration()) {
+      if (const Sg_File_Info *info = decl->get_startOfConstruct())
+        return info;
+      if (const Sg_File_Info *info = decl->get_file_info())
+        return info;
+    }
+  }
+  return NULL;
+}
+
+struct VarSymOrderKey {
+  bool has_parameter_index = false;
+  int parameter_index = -1;
+  bool has_source_position = false;
+  int file_id = -1;
+  int physical_file_id = -1;
+  int line = -1;
+  int column = -1;
+  int declaration_list_index = -1;
+  std::string normalized_name;
+  std::string declaration_kind;
+};
+
+static VarSymOrderKey makeVarSymOrderKey(const SgVariableSymbol *sym) {
+  VarSymOrderKey key;
+  const SgInitializedName *decl = sym != NULL ? sym->get_declaration() : NULL;
+  key.normalized_name = normalizedSymbolName(sym, decl);
+
+  const SgFunctionDeclaration *function =
+      getEnclosingFunctionForSymbolOrder(decl);
+  const int parameter_index =
+      getFunctionParameterIndex(function, decl, key.normalized_name);
+  if (parameter_index >= 0) {
+    key.has_parameter_index = true;
+    key.parameter_index = parameter_index;
+  }
+
+  if (const Sg_File_Info *info = getBestFileInfoForSymbolOrder(decl)) {
+    key.file_id = info->get_file_id();
+    key.physical_file_id = info->get_physical_file_id();
+    key.line = info->get_line();
+    key.column = info->get_col();
+    key.has_source_position = key.line > 0 || key.column > 0 ||
+                              key.file_id >= 0 || key.physical_file_id >= 0;
+  }
+
+  key.declaration_list_index = getInitializedNameListIndex(decl);
+  if (decl != NULL && decl->get_declaration() != NULL)
+    key.declaration_kind = decl->get_declaration()->class_name();
+  return key;
+}
+
+template <typename T> static int compareScalar(const T &lhs, const T &rhs) {
+  if (lhs < rhs)
+    return -1;
+  if (rhs < lhs)
+    return 1;
+  return 0;
+}
+
+static int compareVarSymOrderKey(const VarSymOrderKey &lhs,
+                                 const VarSymOrderKey &rhs) {
+  if (int cmp = compareScalar(lhs.has_parameter_index, rhs.has_parameter_index))
+    return -cmp; // symbols matching formal parameters sort first
+  if (lhs.has_parameter_index) {
+    if (int cmp = compareScalar(lhs.parameter_index, rhs.parameter_index))
+      return cmp;
+  }
+
+  if (int cmp = compareScalar(lhs.has_source_position, rhs.has_source_position))
+    return -cmp; // source-positioned declarations sort before generated ties
+  if (lhs.has_source_position) {
+    if (int cmp = compareScalar(lhs.file_id, rhs.file_id))
+      return cmp;
+    if (int cmp = compareScalar(lhs.physical_file_id, rhs.physical_file_id))
+      return cmp;
+    if (int cmp = compareScalar(lhs.line, rhs.line))
+      return cmp;
+    if (int cmp = compareScalar(lhs.column, rhs.column))
+      return cmp;
+  }
+
+  if (int cmp =
+          compareScalar(lhs.declaration_list_index, rhs.declaration_list_index))
+    return cmp;
+  if (int cmp = compareScalar(lhs.normalized_name, rhs.normalized_name))
+    return cmp;
+  if (int cmp = compareScalar(lhs.declaration_kind, rhs.declaration_kind))
+    return cmp;
+  return 0;
+}
+
+} // namespace
+
+bool ASTtools::VarSymLess::operator()(const SgVariableSymbol *lhs,
+                                      const SgVariableSymbol *rhs) const {
+  if (lhs == rhs)
+    return false;
+  if (lhs == NULL)
+    return rhs != NULL;
+  if (rhs == NULL)
+    return false;
+
+  const VarSymOrderKey lhs_key = makeVarSymOrderKey(lhs);
+  const VarSymOrderKey rhs_key = makeVarSymOrderKey(rhs);
+  if (int cmp = compareVarSymOrderKey(lhs_key, rhs_key))
+    return cmp < 0;
+
+  return std::less<const SgVariableSymbol *>()(lhs, rhs);
+}
 
 // ========================================================================
 

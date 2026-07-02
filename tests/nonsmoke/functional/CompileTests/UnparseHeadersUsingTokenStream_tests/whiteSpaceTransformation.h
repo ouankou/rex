@@ -59,14 +59,15 @@ class Traversal : public SgTopDownBottomUpProcessing<WhiteSpaceInheritedAttribut
 
      public:
        // Functions required
-          WhiteSpaceInheritedAttribute evaluateInheritedAttribute (
-             SgNode* astNode, 
-             WhiteSpaceInheritedAttribute inheritedAttribute );
+       ~Traversal() override;
 
-          WhiteSpaceSynthesizedAttribute evaluateSynthesizedAttribute (
-             SgNode* astNode,
-             WhiteSpaceInheritedAttribute inheritedAttribute,
-             SubTreeSynthesizedAttributes synthesizedAttributeList );
+       WhiteSpaceInheritedAttribute evaluateInheritedAttribute(
+           SgNode *astNode,
+           WhiteSpaceInheritedAttribute inheritedAttribute) override;
+
+       WhiteSpaceSynthesizedAttribute evaluateSynthesizedAttribute(
+           SgNode *astNode, WhiteSpaceInheritedAttribute inheritedAttribute,
+           SubTreeSynthesizedAttributes synthesizedAttributeList) override;
    };
 
 
@@ -88,5 +89,4 @@ class Segregation_Attribute: public AstAttribute
 
           std::string get_name();
           std::string get_color();
-   };
-
+};

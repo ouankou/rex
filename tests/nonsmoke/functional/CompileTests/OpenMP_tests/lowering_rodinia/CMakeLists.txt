@@ -35,6 +35,28 @@ function(add_rodinia_lowering_test case_name)
   )
 endfunction()
 
+function(add_rodinia_ast_json_lowering_test case_name)
+  set(_input_file ${CMAKE_CURRENT_SOURCE_DIR}/inputs/${case_name}.c)
+  set(_workdir ${_omp_rodinia_test_output_dir}/ast-json/${case_name})
+
+  add_test(
+    NAME ASTJSON_OMPLOWERING_RODINIA_${case_name}
+    WORKING_DIRECTORY "${_omp_rodinia_test_output_dir}"
+    COMMAND ${BASH_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_checkpoint_compare.sh
+            $<TARGET_FILE:parseOmp>
+            ${_input_file}
+            ${_workdir}
+            ${case_name})
+
+  set_tests_properties(
+    ASTJSON_OMPLOWERING_RODINIA_${case_name}
+    PROPERTIES
+      LABELS "ASTJSON;OMPLOWERING;OMPLOWERING_RODINIA"
+  )
+endfunction()
+
 foreach(_case_name IN LISTS RODINIA_LOWERING_CASES)
   add_rodinia_lowering_test(${_case_name})
+  add_rodinia_ast_json_lowering_test(${_case_name})
 endforeach()

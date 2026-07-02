@@ -1,0 +1,1 @@
+#pragma omp target map(from : result) uses_allocators(omp_default_mem_alloc, omp_const_mem_alloc(value))

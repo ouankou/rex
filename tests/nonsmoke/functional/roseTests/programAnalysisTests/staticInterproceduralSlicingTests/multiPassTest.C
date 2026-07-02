@@ -25,6 +25,8 @@
 
 #include <list>
 
+#include <memory>
+
 #include <set>
 
 #define DEBUG 1
@@ -36,7 +38,7 @@ int main(int argc, char *argv[]) {
   SlicingInfo si = SlicingInfo();
   si.traverse(project, preorder);
 
-  SystemDependenceGraph *sdg = new SystemDependenceGraph();
+  std::unique_ptr<SystemDependenceGraph> sdg(new SystemDependenceGraph());
   sdg->parseProject(project);
 
   //	CreateSliceSet sliceSet(sdg,si.getSlicingTargets());
@@ -45,8 +47,7 @@ int main(int argc, char *argv[]) {
   //	cs.traverse(project);
   AstTests::runAllTests(project);
 
-  delete (sdg);
-  sdg = new SystemDependenceGraph();
+  sdg.reset(new SystemDependenceGraph());
   sdg->parseProject(project);
 
   project->unparse();

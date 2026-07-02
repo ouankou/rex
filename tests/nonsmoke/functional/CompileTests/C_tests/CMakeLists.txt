@@ -24,6 +24,10 @@ set(C_TESTCODES
   gconv_info.c
   math.c
   rex_test2025_embedded_record_decl.c
+  rex_test2026_clang_stmt_expr_valgrind_defined_reads.c
+  rex_test2026_clang_valgrind_defined_reads.c
+  rex_test2026_compound_literal_typeloc_valgrind_defined_reads.c
+  rex_test2026_token_stream_explicit_leading_trailing_output.c
   rose-1391-a.c
   rose-1391-b.c
   stdio.c

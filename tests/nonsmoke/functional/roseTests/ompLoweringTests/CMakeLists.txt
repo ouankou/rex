@@ -21,6 +21,10 @@ set(_omp_semantic_script
   ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_semantic_compare.sh)
 set(_omp_invariant_script
   ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_invariant_check.sh)
+set(_omp_mapper_checkpoint_script
+  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_mapper_checkpoint_compare.sh)
+set(_omp_deterministic_script
+  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_deterministic_lowering_compare.sh)
 set(_omp_lowering_test_output_dir
   ${CMAKE_CURRENT_BINARY_DIR}/test-output)
 file(MAKE_DIRECTORY ${_omp_lowering_test_output_dir})
@@ -28,6 +32,85 @@ file(MAKE_DIRECTORY ${_omp_lowering_test_output_dir})
 set(_omp_legacy_labels
   OMPLOWERING
   OMPLOWERING_LEGACY)
+
+set(_omp_sanitizer_test_environment)
+set(_omp_fortran_sanitizer_test_environment)
+if(ROSE_USE_SANITIZER AND ROSE_SANITIZERS)
+  string(REPLACE ";" "," _omp_sanitizer_test_list "${ROSE_SANITIZERS}")
+  list(APPEND _omp_sanitizer_test_environment
+       "ROSE_TEST_SANITIZER_FLAGS=-fsanitize=${_omp_sanitizer_test_list}")
+
+  if(CMAKE_C_COMPILER_ID STREQUAL "Clang")
+    execute_process(
+      COMMAND "${CMAKE_C_COMPILER}" -print-resource-dir
+      OUTPUT_VARIABLE _omp_clang_resource_dir
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET)
+    execute_process(
+      COMMAND "${CMAKE_C_COMPILER}" -dumpmachine
+      OUTPUT_VARIABLE _omp_clang_target_triple
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET)
+
+    set(_omp_clang_runtime_dir "")
+    if(_omp_clang_resource_dir AND _omp_clang_target_triple AND
+       IS_DIRECTORY "${_omp_clang_resource_dir}/lib/${_omp_clang_target_triple}")
+      set(_omp_clang_runtime_dir "${_omp_clang_resource_dir}/lib/${_omp_clang_target_triple}")
+    endif()
+
+    set(_omp_fortran_sanitizer_link_flags)
+    if(_omp_clang_runtime_dir)
+      if("address" IN_LIST ROSE_SANITIZERS OR "leak" IN_LIST ROSE_SANITIZERS)
+        set(_omp_asan_static "${_omp_clang_runtime_dir}/libclang_rt.asan_static.a")
+        set(_omp_asan "${_omp_clang_runtime_dir}/libclang_rt.asan.a")
+        set(_omp_asan_syms "${_omp_clang_runtime_dir}/libclang_rt.asan.a.syms")
+        if(EXISTS "${_omp_asan_static}" AND EXISTS "${_omp_asan}" AND
+           EXISTS "${_omp_asan_syms}")
+          list(APPEND _omp_fortran_sanitizer_link_flags
+               -Wl,--whole-archive
+               "${_omp_asan_static}"
+               "${_omp_asan}"
+               -Wl,--no-whole-archive
+               "-Wl,--dynamic-list=${_omp_asan_syms}"
+               -pthread
+               -lrt
+               -lm
+               -ldl
+               -lresolv)
+        endif()
+      elseif("undefined" IN_LIST ROSE_SANITIZERS)
+        set(_omp_ubsan "${_omp_clang_runtime_dir}/libclang_rt.ubsan_standalone.a")
+        set(_omp_ubsan_syms "${_omp_clang_runtime_dir}/libclang_rt.ubsan_standalone.a.syms")
+        if(EXISTS "${_omp_ubsan}" AND EXISTS "${_omp_ubsan_syms}")
+          list(APPEND _omp_fortran_sanitizer_link_flags
+               -Wl,--whole-archive
+               "${_omp_ubsan}"
+               -Wl,--no-whole-archive
+               "-Wl,--dynamic-list=${_omp_ubsan_syms}"
+               -pthread
+               -lrt
+               -lm
+               -ldl
+               -lresolv)
+        endif()
+      endif()
+    endif()
+
+    if(_omp_fortran_sanitizer_link_flags)
+      list(JOIN _omp_fortran_sanitizer_link_flags " "
+           _omp_fortran_sanitizer_link_flags_string)
+      list(APPEND _omp_fortran_sanitizer_test_environment
+           "ROSE_TEST_SANITIZER_LINK_FLAGS=${_omp_fortran_sanitizer_link_flags_string}")
+    endif()
+  endif()
+endif()
+
+function(_set_omp_test_sanitizer_environment test_name)
+  if(_omp_sanitizer_test_environment)
+    set_property(TEST ${test_name} APPEND PROPERTY ENVIRONMENT
+                 "${_omp_sanitizer_test_environment}")
+  endif()
+endfunction()
 
 function(_omp_sanitize_name out_var specimen)
   set(_name ${specimen})
@@ -53,6 +136,28 @@ function(_label_omp_invariant test_name)
   set_property(TEST ${test_name} APPEND PROPERTY LABELS "${_omp_legacy_labels};OMPLOWERING_INVARIANT")
 endfunction()
 
+set(_omp_lowering_ctest_timeout_scale 1)
+if(ROSE_USE_VALGRIND)
+  if(DEFINED ROSE_CTEST_EXPLICIT_TIMEOUT_SCALE)
+    set(_omp_lowering_ctest_timeout_scale ${ROSE_CTEST_EXPLICIT_TIMEOUT_SCALE})
+  else()
+    set(_omp_lowering_ctest_timeout_scale 4)
+  endif()
+endif()
+
+function(_omp_scaled_ctest_timeout out_var timeout_seconds)
+  if(NOT timeout_seconds MATCHES "^[0-9]+$")
+    message(FATAL_ERROR "OpenMP lowering test timeout must be an integer: ${timeout_seconds}")
+  endif()
+  math(EXPR _timeout "${timeout_seconds} * ${_omp_lowering_ctest_timeout_scale}")
+  set(${out_var} ${_timeout} PARENT_SCOPE)
+endfunction()
+
+function(_omp_set_test_timeout test_name timeout_seconds)
+  _omp_scaled_ctest_timeout(_timeout ${timeout_seconds})
+  set_tests_properties(${test_name} PROPERTIES TIMEOUT ${_timeout})
+endfunction()
+
 function(add_omp_translate_only_test test_name translator input_file work_subdir)
   add_test(
     NAME ${test_name}
@@ -62,7 +167,7 @@ function(add_omp_translate_only_test test_name translator input_file work_subdir
             ${_omp_test_dir}/${input_file}
             ${_omp_lowering_test_output_dir}/${work_subdir}
             ${input_file})
-  set_tests_properties(${test_name} PROPERTIES TIMEOUT 540)
+  _omp_set_test_timeout(${test_name} 540)
   _label_omp_compile_only(${test_name})
 endfunction()
 
@@ -83,7 +188,8 @@ function(add_omp_semantic_test test_name translator compiler input_file mode lan
             ${input_file}
             ${language}
             ${ROSE_OPENMP_VERSION})
-  set_tests_properties(${test_name} PROPERTIES TIMEOUT 900)
+  _omp_set_test_timeout(${test_name} 900)
+  _set_omp_test_sanitizer_environment(${test_name})
   _label_omp_semantic(${test_name})
 endfunction()
 
@@ -423,8 +529,8 @@ if(ENABLE-C)
       set_tests_properties(
         omp_lowering_invariant_${_omp_name}
         PROPERTIES
-          DEPENDS ${_invariant_dep}
-          TIMEOUT 540)
+          DEPENDS ${_invariant_dep})
+      _omp_set_test_timeout(omp_lowering_invariant_${_omp_name} 540)
       _label_omp_invariant(omp_lowering_invariant_${_omp_name})
     endif()
   endforeach()
@@ -456,10 +562,71 @@ if(ENABLE-C)
             ${_omp_test_dir}/declare_mapper_target_update.c
             ${_omp_lowering_test_output_dir}/mapper_semantic/declare_mapper_target_update
             declare_mapper_target_update.c)
-  set_tests_properties(
-    omp_lowering_mapper_semantic_declare_mapper_target_update
-    PROPERTIES TIMEOUT 540)
+  _omp_set_test_timeout(omp_lowering_mapper_semantic_declare_mapper_target_update 540)
   _label_omp_semantic(omp_lowering_mapper_semantic_declare_mapper_target_update)
+
+  add_test(
+    NAME ASTJSON_omp_lowering_mapper_semantic_declare_mapper_target_update
+    WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+    COMMAND ${BASH_EXECUTABLE}
+            ${_omp_mapper_checkpoint_script}
+            $<TARGET_FILE:roseomp>
+            ${_omp_test_dir}/declare_mapper_target_update.c
+            ${_omp_lowering_test_output_dir}/ast-json/mapper_semantic/declare_mapper_target_update
+            declare_mapper_target_update.c)
+  set_tests_properties(
+    ASTJSON_omp_lowering_mapper_semantic_declare_mapper_target_update
+    PROPERTIES
+      LABELS "ASTJSON;OMPLOWERING;OMPLOWERING_SEMANTIC")
+  _omp_set_test_timeout(ASTJSON_omp_lowering_mapper_semantic_declare_mapper_target_update 540)
+
+  add_test(
+    NAME omp_lowering_rex_test2026_deterministic_capture_order_cpp
+    WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+    COMMAND ${BASH_EXECUTABLE}
+            ${_omp_deterministic_script}
+            $<TARGET_FILE:roseomp>
+            ${_omp_test_dir}/rex_test2026_omp_lowering_deterministic_capture_order.cpp
+            ${_omp_lowering_test_output_dir}/deterministic/capture_order
+            rex_test2026_omp_lowering_deterministic_capture_order.cpp
+            none)
+  set_tests_properties(
+    omp_lowering_rex_test2026_deterministic_capture_order_cpp
+    PROPERTIES
+      LABELS "OMPLOWERING;OMPLOWERING_DETERMINISTIC")
+  _omp_set_test_timeout(omp_lowering_rex_test2026_deterministic_capture_order_cpp 540)
+
+  add_test(
+    NAME omp_lowering_rex_test2026_deterministic_root_order_cpp
+    WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+    COMMAND ${BASH_EXECUTABLE}
+            ${_omp_deterministic_script}
+            $<TARGET_FILE:roseomp>
+            ${_omp_test_dir}/rex_test2026_omp_lowering_deterministic_root_order.cpp
+            ${_omp_lowering_test_output_dir}/deterministic/root_order
+            rex_test2026_omp_lowering_deterministic_root_order.cpp
+            none)
+  set_tests_properties(
+    omp_lowering_rex_test2026_deterministic_root_order_cpp
+    PROPERTIES
+      LABELS "OMPLOWERING;OMPLOWERING_DETERMINISTIC")
+  _omp_set_test_timeout(omp_lowering_rex_test2026_deterministic_root_order_cpp 540)
+
+  add_test(
+    NAME ASTJSON_omp_lowering_rex_test2026_deterministic_root_order_cpp
+    WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+    COMMAND ${BASH_EXECUTABLE}
+            ${_omp_deterministic_script}
+            $<TARGET_FILE:roseomp>
+            ${_omp_test_dir}/rex_test2026_omp_lowering_deterministic_root_order.cpp
+            ${_omp_lowering_test_output_dir}/deterministic/root_order_ast_json
+            rex_test2026_omp_lowering_deterministic_root_order.cpp
+            all)
+  set_tests_properties(
+    ASTJSON_omp_lowering_rex_test2026_deterministic_root_order_cpp
+    PROPERTIES
+      LABELS "ASTJSON;OMPLOWERING;OMPLOWERING_DETERMINISTIC")
+  _omp_set_test_timeout(ASTJSON_omp_lowering_rex_test2026_deterministic_root_order_cpp 540)
 
   add_test(
     NAME omp_acc_lowering_c_compile_only_target_literal_scalar
@@ -470,9 +637,7 @@ if(ENABLE-C)
             ${_omp_test_dir}/target_literal_scalar.c
             ${_omp_lowering_test_output_dir}/acc_c/target_literal_scalar
             target_literal_scalar.c)
-  set_tests_properties(
-    omp_acc_lowering_c_compile_only_target_literal_scalar
-    PROPERTIES TIMEOUT 540)
+  _omp_set_test_timeout(omp_acc_lowering_c_compile_only_target_literal_scalar 540)
   _label_omp_compile_only(omp_acc_lowering_c_compile_only_target_literal_scalar)
 endif()
 
@@ -480,6 +645,8 @@ set(OMP_LOWERING_FORTRAN_LABELS ${_omp_legacy_labels})
 set(OMP_LOWERING_TRANSLATE_SCRIPT ${_omp_translate_script})
 set(OMP_LOWERING_FORTRAN_SEMANTIC_SCRIPT
     ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_fortran_semantic_compare.sh)
+set(OMP_LOWERING_FORTRAN_CHECKPOINT_SCRIPT
+    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_fortran_checkpoint_compare.sh)
 set(OMP_LOWERING_INVARIANT_VERIFY_SCRIPT
     ${CMAKE_CURRENT_SOURCE_DIR}/scripts/verify_lowering_invariants.sh)
 set(OMP_LOWERING_TEST_DIR ${_omp_test_dir})

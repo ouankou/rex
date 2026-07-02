@@ -461,7 +461,7 @@ bool DefUseAnalysis::start_traversal_of_functions() {
   // Traverse through each FunctionDefinition and check for DefUse
   Rose_STL_Container<SgNode *> functions =
       NodeQuery::querySubTree(project, V_SgFunctionDefinition);
-  DefUseAnalysisPF *defuse_perfunc = new DefUseAnalysisPF(DEBUG_MODE, this);
+  DefUseAnalysisPF defuse_perfunc(DEBUG_MODE, this);
   bool abortme = false;
   for (Rose_STL_Container<SgNode *>::const_iterator i = functions.begin();
        i != functions.end(); ++i) {
@@ -469,16 +469,13 @@ bool DefUseAnalysis::start_traversal_of_functions() {
     if (DEBUG_MODE)
       cout << "\t function Def@" << proc->get_file_info()->get_filename() << ":"
            << proc->get_file_info()->get_line() << endl;
-    FilteredCFGNode<IsDFAFilter> rem_source =
-        defuse_perfunc->run(proc, abortme);
-    nrOfNodesVisited += defuse_perfunc->getNumberOfNodesVisited();
+    FilteredCFGNode<IsDFAFilter> rem_source = defuse_perfunc.run(proc, abortme);
+    nrOfNodesVisited += defuse_perfunc.getNumberOfNodesVisited();
     // cout << nrOfNodesVisited << " ......... function " <<
     // proc->get_declaration()->get_name().str() << endl;
     if (rem_source.getNode() != NULL)
       dfaFunctions.push_back(rem_source);
   }
-  delete defuse_perfunc;
-
   if (DEBUG_MODE) {
     dfaToDOT();
   }
@@ -496,14 +493,14 @@ int DefUseAnalysis::start_traversal_of_one_function(
 
   nrOfNodesVisited = 0;
   bool abortme = false;
-  DefUseAnalysisPF *defuse_perfunc = new DefUseAnalysisPF(false, this);
+  DefUseAnalysisPF defuse_perfunc(false, this);
 
   // DQ (12/10/2016): Eliminating a warning that we want to be an error:
   // -Werror=unused-but-set-variable. FilteredCFGNode <IsDFAFilter> rem_source =
   // defuse_perfunc->run(proc,abortme);
-  defuse_perfunc->run(proc, abortme);
+  defuse_perfunc.run(proc, abortme);
 
-  nrOfNodesVisited = defuse_perfunc->getNumberOfNodesVisited();
+  nrOfNodesVisited = defuse_perfunc.getNumberOfNodesVisited();
 
   // cout << " nodes visited: " << nrOfNodesVisited << " ......... function " <<
   // proc->get_declaration()->get_name().str() << endl;
@@ -539,6 +536,8 @@ int DefUseAnalysis::run() {
   ROSE_ASSERT(project != NULL);
 
   table.clear();
+  usetable.clear();
+  globalVarList.clear();
   vizzhelp.clear();
 
   clock_t start = clock();

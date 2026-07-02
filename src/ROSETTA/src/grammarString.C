@@ -488,6 +488,39 @@ GrammarString::buildCopyMemberFunctionSource(bool buildConstructorArgument) {
     return returnString;
   }
 
+  if (typeName == "AttachedPreprocessingInfoType*" &&
+      variableName == "attachedPreprocessingInfoPtr") {
+    string copyOfVariableName = variableName + "_copy";
+    string sourceVariableName = "p_" + variableName;
+
+    commentString = "  // case: deep copy AttachedPreprocessingInfoType* for " +
+                    variableName + "\n";
+    returnString +=
+        "     " + typeName + " " + copyOfVariableName + " = NULL; \n";
+    returnString += commentString;
+    returnString += "     if (" + sourceVariableName + " != NULL) \n";
+    returnString += "        { \n";
+    returnString += "          " + copyOfVariableName +
+                    " = new AttachedPreprocessingInfoType; \n";
+    returnString +=
+        "          for (AttachedPreprocessingInfoType::const_iterator i = " +
+        sourceVariableName + "->begin(); i != " + sourceVariableName +
+        "->end(); ++i) \n";
+    returnString += "             { \n";
+    returnString +=
+        "               " + copyOfVariableName +
+        "->push_back((*i != NULL) ? new PreprocessingInfo(**i) : NULL); \n";
+    returnString += "             } \n";
+    returnString += "        } \n";
+
+    if (buildConstructorArgument == false) {
+      returnString += "     result->p_" + variableName + " = " +
+                      copyOfVariableName + "; \n";
+    }
+
+    return returnString;
+  }
+
   // The rule is that if it is not a char* or char** then if it ia a pointer
   // type it is a pointer to a Sage IR node
   bool typeIsSgNode = typeName.find('*') != string::npos;
@@ -1149,6 +1182,26 @@ string GrammarString::buildDestructorSource() {
     // code fragment returnString += commentString;
     returnString = commentString + returnString;
 
+    return returnString;
+  }
+
+  if (typeName == "AttachedPreprocessingInfoType*" &&
+      variableName == "attachedPreprocessingInfoPtr") {
+    commentString =
+        "  // case: delete AttachedPreprocessingInfoType* contents for " +
+        variableName + "\n";
+    returnString += "     if (p_" + variableName + " != NULL) \n";
+    returnString += "        { \n";
+    returnString +=
+        "          for (AttachedPreprocessingInfoType::iterator i = p_" +
+        variableName + "->begin(); i != p_" + variableName + "->end(); ++i) \n";
+    returnString += "             { \n";
+    returnString += "               delete *i; \n";
+    returnString += "             } \n";
+    returnString += "          delete p_" + variableName + "; \n";
+    returnString += "          p_" + variableName + " = NULL; \n";
+    returnString += "        } \n";
+    returnString = commentString + returnString;
     return returnString;
   }
 

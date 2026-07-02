@@ -9,6 +9,7 @@
 
 #include "sageBuilder.h"
 
+#include <memory>
 #include <sstream>
 
 #include <vector>
@@ -19,6 +20,7 @@ using namespace std;
 
 class CfgConfig : public BuildCFGConfig<int> {
   PRE::ControlFlowGraph &graph;
+  std::vector<std::unique_ptr<PRE::Vertex>> vertices;
 
 public:
   CfgConfig(PRE::ControlFlowGraph &graph) : graph(graph) {}
@@ -27,7 +29,8 @@ public:
     // cerr << "Creating node" << endl;
     PRE::Vertex vertex = graph.graph.add_vertex();
     graph.node_statements.push_back(vector<SgNode *>());
-    return new PRE::Vertex(vertex);
+    vertices.push_back(std::make_unique<PRE::Vertex>(vertex));
+    return vertices.back().get();
   }
 
   virtual void CreateEdge(PRE::Vertex *src, PRE::Vertex *tgt,

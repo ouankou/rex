@@ -89,7 +89,8 @@ int main(int argc, char *argv[]) {
   }
 
   MemoryPoolFilterGuard guard(project);
-  Vis().traverseMemoryPool();
+  Vis vis;
+  vis.traverseMemoryPool();
   return (VALGRIND_COUNT_ERRORS != 0) ? 1 : 0;
 }
 

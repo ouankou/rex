@@ -406,6 +406,88 @@ bool is_conditional_directive_line(const std::string &line) {
          is_directive_kind_token(line, pos, "endif");
 }
 
+std::string trim_preprocessing_directive_line(std::string text) {
+  const size_t begin = text.find_first_not_of(" \t\r\n");
+  if (begin == std::string::npos) {
+    return "";
+  }
+
+  const size_t end = text.find_last_not_of(" \t\r\n");
+  return text.substr(begin, end - begin + 1);
+}
+
+bool text_contains_preprocessing_directive_line(const std::string &text,
+                                                const std::string &directive) {
+  const std::string directive_line =
+      trim_preprocessing_directive_line(directive);
+  if (directive_line.empty()) {
+    return false;
+  }
+
+  size_t cursor = 0;
+  while (cursor <= text.size()) {
+    const size_t line_end = text.find_first_of("\r\n", cursor);
+    const std::string line = line_end == std::string::npos
+                                 ? text.substr(cursor)
+                                 : text.substr(cursor, line_end - cursor);
+    if (trim_preprocessing_directive_line(line) == directive_line) {
+      return true;
+    }
+    if (line_end == std::string::npos) {
+      break;
+    }
+    cursor = line_end + 1;
+  }
+
+  return false;
+}
+
+bool template_function_saved_spelling_contains_preprocessing_info(
+    SgStatement *statement, PreprocessingInfo *preproc_info) {
+  if (preproc_info == nullptr ||
+      !preprocessing_directive_is_conditional_boundary(
+          preproc_info->getTypeOfDirective())) {
+    return false;
+  }
+
+  auto saved_template_contains = [&](SgFunctionDeclaration *decl) {
+    SgName saved_template_name;
+    if (SgTemplateFunctionDeclaration *template_function =
+            isSgTemplateFunctionDeclaration(decl)) {
+      saved_template_name = template_function->get_string();
+    } else if (SgTemplateMemberFunctionDeclaration *template_member =
+                   isSgTemplateMemberFunctionDeclaration(decl)) {
+      saved_template_name = template_member->get_string();
+    } else {
+      return false;
+    }
+
+    const char *saved_template_string = saved_template_name.str();
+    return saved_template_string != nullptr &&
+           text_contains_preprocessing_directive_line(
+               saved_template_string, preproc_info->getString());
+  };
+
+  SgFunctionDeclaration *function_decl = isSgFunctionDeclaration(statement);
+  if (saved_template_contains(function_decl)) {
+    return true;
+  }
+
+  const bool class_scope_template =
+      statement != nullptr &&
+      (isSgClassDefinition(statement->get_parent()) != nullptr ||
+       isSgTemplateClassDefinition(statement->get_parent()) != nullptr ||
+       isSgTemplateInstantiationDefn(statement->get_parent()) != nullptr);
+  if (class_scope_template || function_decl == nullptr) {
+    return false;
+  }
+
+  return saved_template_contains(isSgFunctionDeclaration(
+             function_decl->get_firstNondefiningDeclaration())) ||
+         saved_template_contains(
+             isSgFunctionDeclaration(function_decl->get_definingDeclaration()));
+}
+
 bool is_openmp_or_openacc_pragma_line(const std::string &line) {
   size_t pos = line.find_first_not_of(" \t");
   if (pos == std::string::npos || line[pos] != '#') {
@@ -9126,6 +9208,13 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 
       if (suppress_misplaced_leading_variable_declaration_directive(
               stmt, *i, whereToUnparse)) {
+        continue;
+      }
+
+      if ((whereToUnparse == PreprocessingInfo::before ||
+           whereToUnparse == PreprocessingInfo::inside) &&
+          template_function_saved_spelling_contains_preprocessing_info(
+              isSgStatement(stmt), *i)) {
         continue;
       }
 

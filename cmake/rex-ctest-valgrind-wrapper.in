@@ -26,6 +26,10 @@ fi
 
 tool="${args[cmd_index]}"
 if [[ "${tool}" == */rth_run.pl ]]; then
+  rth_timeout_scale="@ROSE_CTEST_MEMCHECK_RTH_TIMEOUT_SCALE@"
+  if [[ -z "${ROSE_TEST_TIMEOUT_SCALE:-}" && "${rth_timeout_scale}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    export ROSE_TEST_TIMEOUT_SCALE="${rth_timeout_scale}"
+  fi
   valgrind_words=("${real_valgrind}" "${args[@]:0:cmd_index}")
   valgrind_command=""
   printf -v valgrind_command "%q " "${valgrind_words[@]}"

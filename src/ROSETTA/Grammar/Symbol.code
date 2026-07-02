@@ -637,10 +637,16 @@ SgLabelSymbol::SgLabelSymbol ( SgInitializedName* initializedName )
   // Verify that this is used correctly.
      ROSE_ASSERT(initializedName->get_name() == "*");
 
+     p_declaration = NULL;
+     p_fortran_statement = NULL;
+     p_fortran_alternate_return_parameter = NULL;
+     p_numeric_label_value = -1;
+
   // Set the internal mode to support analysis...
      p_label_type = e_alternative_return_type;
 
      set_fortran_alternate_return_parameter(initializedName);
+     post_construction_initialization();
    }
 
 SOURCE_LABEL_SYMBOL_END

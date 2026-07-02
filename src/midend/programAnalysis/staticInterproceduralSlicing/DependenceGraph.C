@@ -53,6 +53,19 @@ const char *DependenceGraph::getEdgeName(EdgeType type) {
   }
 }
 
+DependenceGraph::~DependenceGraph() {
+  edgeTypeMap.clear();
+  edgeMap.clear();
+  sgNodeToDepNodeMap.clear();
+  nodeTypeToDepNodeMapMap.clear();
+
+  std::set<SimpleDirectedGraphNode *> nodes;
+  nodes.swap(_nodes);
+  for (SimpleDirectedGraphNode *node : nodes) {
+    delete node;
+  }
+}
+
 /*
 DependenceNode *DependenceGraph::createNode(DependenceNode * node)
 {

@@ -24,6 +24,8 @@
 
 #include <list>
 
+#include <memory>
+
 #include <set>
 
 #define DEBUG 1
@@ -37,7 +39,7 @@ int main(int argc, char *argv[]) {
   std::vector<InterproceduralInfo *> ip;
 #ifdef NEWDU
   // Create the global def-use analysis
-  EDefUse *defUseAnalysis = new EDefUse(project);
+  std::unique_ptr<EDefUse> defUseAnalysis(new EDefUse(project));
   if (defUseAnalysis->run(false) == 0) {
     std::cerr << "DFAnalysis failed!" << endl;
   }
@@ -45,7 +47,7 @@ int main(int argc, char *argv[]) {
   string outputFileName =
       project->get_fileList().front()->get_sourceFileNameWithoutPath();
 
-  SystemDependenceGraph *sdg = new SystemDependenceGraph;
+  std::unique_ptr<SystemDependenceGraph> sdg(new SystemDependenceGraph);
   // for all function-declarations in the AST
   NodeQuerySynthesizedAttributeType functionDeclarations =
       NodeQuery::querySubTree(project, V_SgFunctionDeclaration);
@@ -53,10 +55,7 @@ int main(int argc, char *argv[]) {
   for (NodeQuerySynthesizedAttributeType::iterator i =
            functionDeclarations.begin();
        i != functionDeclarations.end(); i++) {
-    ControlDependenceGraph *cdg;
-    DataDependenceGraph *ddg;
     //	FunctionDependenceGraph * pdg;
-    InterproceduralInfo *ipi;
 
     SgFunctionDeclaration *fDec = isSgFunctionDeclaration(*i);
 
@@ -94,22 +93,24 @@ stub for
       // generate this when needed, but at the momenent everything is created...
     } else {
       // get the control depenence for this function
-      ipi = new InterproceduralInfo(fDec);
+      std::unique_ptr<InterproceduralInfo> ipi(new InterproceduralInfo(fDec));
 
       ROSE_ASSERT(ipi != NULL);
 
       // get control dependence for this function defintion
-      cdg = new ControlDependenceGraph(fDec->get_definition(), ipi);
+      std::unique_ptr<ControlDependenceGraph> cdg(
+          new ControlDependenceGraph(fDec->get_definition(), ipi.get()));
       cdg->computeAdditionalFunctioncallDepencencies();
-      cdg->computeInterproceduralInformation(ipi);
+      cdg->computeInterproceduralInformation(ipi.get());
 
       // get the data dependence for this function
-      ddg =
-          new DataDependenceGraph(fDec->get_definition(), defUseAnalysis, ipi);
+      std::unique_ptr<DataDependenceGraph> ddg(new DataDependenceGraph(
+          fDec->get_definition(), defUseAnalysis.get(), ipi.get()));
 
-      sdg->addFunction(cdg, ddg);
-      sdg->addInterproceduralInformation(ipi);
-      ip.push_back(ipi);
+      sdg->addFunction(cdg.get(), ddg.get());
+      sdg->addInterproceduralInformation(ipi.get());
+      ip.push_back(ipi.get());
+      ipi.release();
     }
     // else if (fD->get_definition() == NULL)
   }

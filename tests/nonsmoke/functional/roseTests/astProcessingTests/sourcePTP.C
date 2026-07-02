@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
     ROSE_ASSERT(fni != NULL);
     forsA.push_back(*i);
   }
-  visitorTraversal *visif = new visitorTraversal();
+  visitorTraversal visif;
   SgIncidenceDirectedGraph *g = cfg.getGraph();
   // std::set<SgNode*> completedIfs;
   auto mg = instantiateGraph(g, cfg);
@@ -90,16 +90,16 @@ int main(int argc, char *argv[]) {
       fors.push_back(forsA[i]);
       // visitorTraversal* visif = new visitorTraversal();
       // SgIncidenceDirectedGraph* g = cfg.getGraph();
-      visif->tltnodes = 0;
-      visif->paths = 0;
-      visif->constructPathAnalyzer(
-          mg.get(), false, mg->getVSlink()[cfg.cfgForBeginning(fors[i])],
-          mg->getVSlink()[cfg.cfgForEnd(fors[i])]);
+      visif.tltnodes = 0;
+      visif.paths = 0;
+      visif.constructPathAnalyzer(mg.get(), false,
+                                  mg->getVSlink()[cfg.cfgForBeginning(fors[i])],
+                                  mg->getVSlink()[cfg.cfgForEnd(fors[i])]);
       // visif->constructPathAnalyzer(mg.get(),
       // mg->getVSlink()[cfg.cfgForEnd(fors[i-1])],
       // mg->getVSlink()[cfg.cfgForBeginning(fors[i])]);
       std::cout << "between: " << i << " and " << i + 1 << " there are "
-                << visif->paths << " paths." << std::endl;
+                << visif.paths << " paths." << std::endl;
       // completedIfs.insert(ifs[i]);
       // }
     }

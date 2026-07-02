@@ -5,6 +5,23 @@
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 
+namespace {
+
+bool isInsideDetachedSourceFile(SgNode *node) {
+  for (SgNode *current = node; current != nullptr;
+       current = current->get_parent()) {
+    if (SgSourceFile *source_file = isSgSourceFile(current)) {
+      return source_file->get_parent() == nullptr;
+    }
+    if (isSgFileList(current) != nullptr || isSgProject(current) != nullptr) {
+      return false;
+    }
+  }
+  return false;
+}
+
+} // namespace
+
 void resetTypesInAST() {
   ResetTypes t;
   SgNamedType::traverseMemoryPoolNodes(t);
@@ -13,6 +30,10 @@ void resetTypesInAST() {
 }
 
 void ResetTypes::visit(SgNode *node) {
+  if (isInsideDetachedSourceFile(node)) {
+    return;
+  }
+
   // The purpose of this traversal is to fixup the AST to share types more
   // uniformally shared. It appears that in the legacy frontend/Sage translation
   // some types are not shared properly, particularly SgNamedTypes.

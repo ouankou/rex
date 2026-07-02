@@ -50,9 +50,10 @@ public:
   virtual ~Unparse_ExprStmt();
 
   // DQ (3/13/2004): Added to support templates
-  virtual void unparseTemplateParameter(SgTemplateParameter *templateParameter,
-                                        SgUnparse_Info &info,
-                                        bool is_template_header = false);
+  virtual void unparseTemplateParameter(
+      SgTemplateParameter *templateParameter, SgUnparse_Info &info,
+      bool is_template_header = false,
+      SgDeclarationStatement *template_declaration = nullptr);
   virtual void unparseTemplateArgument(SgTemplateArgument *templateArgument,
                                        SgUnparse_Info &info);
 
@@ -78,7 +79,8 @@ public:
   // qualification.
   void unparseTemplateParameterList(
       const SgTemplateParameterPtrList &templateParameterList,
-      SgUnparse_Info &info, bool is_template_header = false);
+      SgUnparse_Info &info, bool is_template_header = false,
+      SgDeclarationStatement *template_declaration = nullptr);
 
   // DQ (5/25/2013): Added support for unparsing the name of the template member
   // function.

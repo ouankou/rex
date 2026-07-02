@@ -6,6 +6,7 @@
 
 #include "SageTreeBuilder.h"
 
+#include <algorithm>
 #include <iostream>
 
 #include <set>
@@ -63,18 +64,32 @@ void DedupAttachedPreprocessingInfo(SgLocatedNode *node) {
   }
 
   std::set<std::string> seen_keys;
+  std::set<PreprocessingInfo *> retained_infos;
+  std::set<PreprocessingInfo *> deleted_infos;
   for (auto it = info_list->begin(); it != info_list->end();) {
     PreprocessingInfo *info = *it;
+    if (info != nullptr && deleted_infos.count(info) > 0) {
+      it = info_list->erase(it);
+      continue;
+    }
     if (!IsCommentInfo(info)) {
+      if (info != nullptr) {
+        retained_infos.insert(info);
+      }
       ++it;
       continue;
     }
     const std::string key = BuildCommentKey(info);
     if (seen_keys.count(key) > 0) {
       it = info_list->erase(it);
+      if (retained_infos.count(info) == 0 &&
+          deleted_infos.insert(info).second) {
+        delete info;
+      }
       continue;
     }
     seen_keys.insert(key);
+    retained_infos.insert(info);
     ++it;
   }
 }
@@ -102,8 +117,13 @@ void RemoveDuplicateComments(SgLocatedNode *target, SgLocatedNode *reference) {
     ref_keys.insert(BuildCommentKey(info));
   }
 
+  std::set<PreprocessingInfo *> deleted_infos;
   for (auto it = target_list->begin(); it != target_list->end();) {
     PreprocessingInfo *info = *it;
+    if (info != nullptr && deleted_infos.count(info) > 0) {
+      it = target_list->erase(it);
+      continue;
+    }
     if (!IsCommentInfo(info)) {
       ++it;
       continue;
@@ -111,6 +131,11 @@ void RemoveDuplicateComments(SgLocatedNode *target, SgLocatedNode *reference) {
     const std::string key = BuildCommentKey(info);
     if (ref_keys.count(key) > 0) {
       it = target_list->erase(it);
+      if (std::find(ref_list->begin(), ref_list->end(), info) ==
+              ref_list->end() &&
+          deleted_infos.insert(info).second) {
+        delete info;
+      }
       continue;
     }
     ++it;
@@ -974,6 +999,13 @@ void SageTreeBuilder::setSourcePosition(SgLocatedNode *node,
 
   // and attach comments if they exist
   if (isSgFunctionDefinition(node) == nullptr) {
+    if (language_ == LanguageEnum::Fortran) {
+      if (SgBasicBlock *block = isSgBasicBlock(node)) {
+        if (block->get_statements().empty()) {
+          return;
+        }
+      }
+    }
     PosInfo pinfo{start.line, start.column, end.line, end.column};
     attachComments(node, pinfo);
   }
@@ -1219,26 +1251,38 @@ void SageTreeBuilder::Leave(SgScopeStatement *scope) {
                  type == PreprocessingInfo::CplusplusStyleComment;
         };
         std::set<std::string> seen_keys;
+        std::set<PreprocessingInfo *> retained_infos;
+        std::set<PreprocessingInfo *> deleted_infos;
         if (AttachedPreprocessingInfoType *first_info =
                 first_stmt->getAttachedPreprocessingInfo()) {
-          for (const PreprocessingInfo *info : *first_info) {
+          for (PreprocessingInfo *info : *first_info) {
             if (!is_comment_info(info)) {
               continue;
             }
             seen_keys.insert(BuildCommentKey(info));
+            retained_infos.insert(info);
           }
         }
         AttachedPreprocessingInfoType to_move;
         for (auto it = info_list->begin(); it != info_list->end();) {
           PreprocessingInfo *info = *it;
+          if (info != nullptr && deleted_infos.count(info) > 0) {
+            it = info_list->erase(it);
+            continue;
+          }
           if (info != nullptr && is_comment_info(info) &&
               (first_line <= 0 || info->getLineNumber() <= first_line)) {
             const std::string key = BuildCommentKey(info);
             if (seen_keys.count(key) > 0) {
               it = info_list->erase(it);
+              if (retained_infos.count(info) == 0 &&
+                  deleted_infos.insert(info).second) {
+                delete info;
+              }
               continue;
             }
             seen_keys.insert(key);
+            retained_infos.insert(info);
             to_move.push_back(info);
             it = info_list->erase(it);
             continue;

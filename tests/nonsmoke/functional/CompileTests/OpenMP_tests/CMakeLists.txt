@@ -4,6 +4,11 @@ target_link_libraries(parseOmp ROSE_DLL ${link_with_libraries})
 add_executable(checkOmpAnalyzing checkOmpAnalyzing.C)
 target_link_libraries(checkOmpAnalyzing ROSE_DLL ${link_with_libraries})
 
+add_executable(rex_test2026_mapper_typedef_unparse
+  rex_test2026_mapper_typedef_unparse.cpp)
+target_link_libraries(rex_test2026_mapper_typedef_unparse
+  ROSE_DLL ${link_with_libraries})
+
 find_program(BASH_EXECUTABLE bash)
 if(NOT BASH_EXECUTABLE)
   message(FATAL_ERROR "bash not found; OpenMP_tests require bash")
@@ -58,6 +63,8 @@ set(C_TESTCODES
 	simd2.c simd3.c simd4.c simd5.c single.c single2.c single3.c
 	single_copyprivate.c sizeof.c spmd1.c staticChunk.c subteam2.c subteam.c
 	target.c target1.c target_uses_allocators.c targetparallel.c
+	rex_test2026_uses_allocators_optional_edges.c
+	rex_test2026_uses_allocators_user_defined_isolation.c
 	targetparallelforsimd.c targetparallelloop.c targetsimd.c targetteams.c
 	targetteamsdistribute.c targetteamsdistributesimd.c targetteamsloop.c
 	targetteamsdistributeparallelfor.c targetteamsdistributeparallelforsimd.c
@@ -81,7 +88,9 @@ set(CXX_TESTCODES
 	memberFunction2.cpp objectPrivate.cpp objectFirstPrivate.cpp
 	objectLastprivate.cpp referenceType.cpp declare_mapper_type_qualifiers.cpp
 	orphanedAtomic.cpp preprocessingInfo2.cpp task_link.cpp task_link2.cpp
-	task_tree.cpp jacobi-ompacc2.cpp data-member-access.cpp define-directive2.cpp)
+	task_tree.cpp jacobi-ompacc2.cpp data-member-access.cpp define-directive2.cpp
+	rex_test2026_array_section_optional_bounds.cpp
+	rex_test2026_mapper_template_reachable_scope.cpp)
 
 set(TESTCODES ${C_TESTCODES} ${CXX_TESTCODES})
 
@@ -102,6 +111,103 @@ set(_omp_test_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
 file(MAKE_DIRECTORY ${_omp_test_output_dir})
 
 set(ROSE_OMP_ANALYZING_FLAGS -rose:openmp:analyzing -rose:skipfinalCompileStep -w -rose:verbose 0)
+
+set(_ast_json_checkpoint_script
+    ${CMAKE_CURRENT_SOURCE_DIR}/ast_json_checkpoint/run_checkpoint_compare.sh)
+
+function(add_ast_json_checkpoint_test name checkpoint input_file label)
+  set(_workdir ${_omp_test_output_dir}/ast-json/${name})
+  add_test(
+    NAME ASTJSON_${name}
+    WORKING_DIRECTORY ${_omp_test_output_dir}
+    COMMAND ${BASH_EXECUTABLE}
+            ${_ast_json_checkpoint_script}
+            $<TARGET_FILE:parseOmp>
+            ${checkpoint}
+            ${CMAKE_CURRENT_SOURCE_DIR}/${input_file}
+            ${_workdir}
+            ${input_file}
+            ${ARGN})
+  set_tests_properties(ASTJSON_${name} PROPERTIES LABELS "ASTJSON;${label}")
+endfunction()
+
+add_ast_json_checkpoint_test(
+  pre_omp_construction_parallel
+  pre-omp-construction
+  parallel.c
+  OMPTEST
+  ${ROSE_C_FLAGS})
+
+add_ast_json_checkpoint_test(
+  post_omp_construction_targetparallel
+  post-omp-construction
+  targetparallel.c
+  OMPTEST
+  ${ROSE_C_FLAGS})
+
+add_ast_json_checkpoint_test(
+  post_omp_construction_axpy_ompacc
+  post-omp-construction
+  axpy_ompacc.c
+  OMPACCTEST
+  ${ROSE_C_FLAGS}
+  -rose:skipfinalCompileStep)
+
+add_ast_json_checkpoint_test(
+  all_omp_construction_task_dep2
+  all
+  task_dep2.c
+  OMPTEST
+  ${ROSE_C_FLAGS})
+
+add_ast_json_checkpoint_test(
+  all_omp_construction_task_dep3
+  all
+  task_dep3.c
+  OMPTEST
+  ${ROSE_C_FLAGS})
+
+add_ast_json_checkpoint_test(
+  all_omp_construction_memberFunction_cpp
+  all
+  memberFunction.cpp
+  OMPTEST
+  ${ROSE_CXX_FLAGS})
+
+add_ast_json_checkpoint_test(
+  all_omp_construction_task_link2_cpp
+  all
+  task_link2.cpp
+  OMPTEST
+  ${ROSE_CXX_FLAGS})
+
+add_ast_json_checkpoint_test(
+  all_omp_construction_rex_test2026_array_section_optional_bounds_cpp
+  all
+  rex_test2026_array_section_optional_bounds.cpp
+  OMPTEST
+  ${ROSE_CXX_FLAGS})
+
+add_ast_json_checkpoint_test(
+  all_omp_construction_rex_test2026_uses_allocators_optional_edges_c
+  all
+  rex_test2026_uses_allocators_optional_edges.c
+  OMPTEST
+  ${ROSE_C_FLAGS})
+
+add_ast_json_checkpoint_test(
+  all_omp_construction_rex_test2026_uses_allocators_user_defined_isolation_c
+  all
+  rex_test2026_uses_allocators_user_defined_isolation.c
+  OMPTEST
+  ${ROSE_C_FLAGS})
+
+add_ast_json_checkpoint_test(
+  all_omp_construction_rex_test2026_mapper_template_reachable_scope_cpp
+  all
+  rex_test2026_mapper_template_reachable_scope.cpp
+  OMPTEST
+  ${ROSE_CXX_FLAGS})
 
 foreach(file_to_test ${TESTCODES})
   if(file_to_test MATCHES "\\.c$")
@@ -148,6 +254,74 @@ add_test(
           -rose:collectAllCommentsAndDirectives
           ${CMAKE_CURRENT_SOURCE_DIR}/macroIds.c)
 set_tests_properties(OMPTEST_macroIds PROPERTIES LABELS OMPTEST)
+
+set(_rex_test2026_mapper_typedef_output
+    ${_omp_test_output_dir}/rex_test2026_mapper_typedef_unparse.c)
+add_test(
+  NAME OMPTEST_rex_test2026_mapper_typedef_unparse_cpp
+  WORKING_DIRECTORY ${_omp_test_output_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "\"$@\" && grep -F '#pragma omp declare mapper(default : Vec  v)' ${_rex_test2026_mapper_typedef_output} && ! grep -F 'class ::Vec' ${_rex_test2026_mapper_typedef_output} && $<TARGET_FILE:parseOmp> -rose:openmp:ast_only -w -rose:verbose 0 -rose:skipfinalCompileStep -c ${_rex_test2026_mapper_typedef_output}"
+    --
+    $<TARGET_FILE:rex_test2026_mapper_typedef_unparse>
+    ${ROSE_C_FLAGS}
+    -rose:output ${_rex_test2026_mapper_typedef_output}
+    -rose:skipfinalCompileStep
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/declare_mapper_target_update.c)
+set_tests_properties(OMPTEST_rex_test2026_mapper_typedef_unparse_cpp
+  PROPERTIES LABELS OMPTEST)
+
+set(_rex_test2026_mapper_template_output
+    ${_omp_test_output_dir}/rex_test2026_mapper_template_reachable_scope.cpp)
+add_test(
+  NAME OMPTEST_rex_test2026_mapper_template_reachable_scope_cpp
+  WORKING_DIRECTORY ${_omp_test_output_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "\"$@\" && grep -F '#pragma omp declare mapper(default : ::RexTest2026Vec<float> v)' ${_rex_test2026_mapper_template_output} && $<TARGET_FILE:parseOmp> -rose:openmp:ast_only -w -rose:verbose 0 -rose:skipfinalCompileStep -c ${_rex_test2026_mapper_template_output}"
+    --
+    $<TARGET_FILE:parseOmp>
+    ${ROSE_CXX_FLAGS}
+    -rose:output ${_rex_test2026_mapper_template_output}
+    -rose:skipfinalCompileStep
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_mapper_template_reachable_scope.cpp)
+set_tests_properties(OMPTEST_rex_test2026_mapper_template_reachable_scope_cpp
+  PROPERTIES LABELS OMPTEST)
+
+set(_rex_test2026_ast_json_option_dir
+    ${_omp_test_output_dir}/rex_test2026_ast_json_option_filter)
+add_test(
+  NAME OMPTEST_rex_test2026_ast_json_clang_option_filter_cpp
+  WORKING_DIRECTORY ${_omp_test_output_dir}
+  COMMAND ${CMAKE_COMMAND} -E env
+    REX_AST_JSON_CHECKPOINT=pre-omp-construction
+    REX_AST_JSON_DIR=${_rex_test2026_ast_json_option_dir}
+    $<TARGET_FILE:parseOmp>
+      ${ROSE_CXX_FLAGS}
+      -rex:ast-json-checkpoint=pre-omp-construction
+      -rex:ast-json-dir=${_rex_test2026_ast_json_option_dir}
+      -rose:output ${_omp_test_output_dir}/rose_rex_test2026_ast_json_clang_option_filter.cpp
+      -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/rex_test2026_ast_json_clang_option_filter.cpp)
+set_tests_properties(OMPTEST_rex_test2026_ast_json_clang_option_filter_cpp
+  PROPERTIES LABELS "OMPTEST;ASTJSON")
+
+set(_rex_test2026_omp_expr_lookup_dir
+    ${_omp_test_output_dir}/rex_test2026_omp_expr_lookup_current_file)
+add_test(
+  NAME OMPTEST_rex_test2026_omp_expr_lookup_current_file_cpp
+  WORKING_DIRECTORY ${_omp_test_output_dir}
+  COMMAND ${CMAKE_COMMAND} -E env
+    REX_AST_JSON_CHECKPOINT=all
+    REX_AST_JSON_DIR=${_rex_test2026_omp_expr_lookup_dir}
+    $<TARGET_FILE:parseOmp>
+      ${ROSE_CXX_FLAGS}
+      -rex:ast-json-checkpoint=all
+      -rex:ast-json-dir=${_rex_test2026_omp_expr_lookup_dir}
+      -rose:output ${_omp_test_output_dir}/rose_rex_test2026_omp_expr_lookup_current_file.cpp
+      -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_omp_expr_lookup_current_file_a.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_omp_expr_lookup_current_file_b.cpp)
+set_tests_properties(OMPTEST_rex_test2026_omp_expr_lookup_current_file_cpp
+  PROPERTIES LABELS "OMPTEST;ASTJSON")
 
 set(_omp_reference_dir ${CMAKE_CURRENT_SOURCE_DIR}/referenceResults)
 

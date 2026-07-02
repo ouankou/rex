@@ -58,5 +58,14 @@ add_test(
     -c ${_type_trait_tests_dir}/roseHeader.C
 )
 
-set_tests_properties(type_trait_without_ret_roseHeader PROPERTIES TIMEOUT 600)
-
+set(_type_trait_without_ret_timeout 600)
+if(REX_EXTENDED_TEST_TIMEOUTS)
+  set(_type_trait_without_ret_timeout 14400)
+endif()
+set(_type_trait_without_ret_properties
+  TIMEOUT ${_type_trait_without_ret_timeout}
+)
+if(ROSE_USE_SANITIZER OR REX_EXTENDED_TEST_TIMEOUTS)
+  list(APPEND _type_trait_without_ret_properties RUN_SERIAL TRUE)
+endif()
+set_tests_properties(type_trait_without_ret_roseHeader PROPERTIES ${_type_trait_without_ret_properties})

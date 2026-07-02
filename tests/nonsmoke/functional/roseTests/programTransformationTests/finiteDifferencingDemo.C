@@ -2,6 +2,8 @@
 
 #include "finiteDifferencing.h"
 
+#include <memory>
+
 using namespace std;
 
 std::vector<SgExpression *> exprs;
@@ -53,7 +55,8 @@ int main(int argc, char *argv[]) {
   moveForDeclaredVariables(sageProject);
 
   SgNode *tempProject = sageProject;
-  rewrite(getAlgebraicRules(), tempProject);
+  std::unique_ptr<RewriteRule> algebraicRules(getAlgebraicRules());
+  rewrite(algebraicRules.get(), tempProject);
   sageProject = isSgProject(tempProject);
   ROSE_ASSERT(sageProject);
 
@@ -70,7 +73,9 @@ int main(int argc, char *argv[]) {
           isSgStatement(exprs[i]->get_parent()->get_parent()->get_parent());
       if (stmt)
         SageInterface::myRemoveStatement(stmt);
-      doFiniteDifferencingOne(exprs[i], body, getFiniteDifferencingRules());
+      std::unique_ptr<RewriteRule> finiteDifferencingRules(
+          getFiniteDifferencingRules());
+      doFiniteDifferencingOne(exprs[i], body, finiteDifferencingRules.get());
     }
 
     bang_exprs.clear();
@@ -91,7 +96,8 @@ int main(int argc, char *argv[]) {
       simpleUndoFiniteDifferencingOne(bb, vr);
     }
     SgNode *tempBody = body;
-    rewrite(getAlgebraicRules(), tempBody);
+    std::unique_ptr<RewriteRule> bodyAlgebraicRules(getAlgebraicRules());
+    rewrite(bodyAlgebraicRules.get(), tempBody);
     body = isSgBasicBlock(tempBody);
     ROSE_ASSERT(body);
   }

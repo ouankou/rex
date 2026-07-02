@@ -9,6 +9,7 @@ set(CLANG_FRONTEND_SOURCES
   clang-frontend-decl.cpp
   clang-frontend-stmt.cpp
   clang-frontend-type.cpp
+  clang-frontend-valgrind.cpp
   clang-to-rose-support.cpp
   clang-to-dot.cpp
   clang-to-dot-decl.cpp

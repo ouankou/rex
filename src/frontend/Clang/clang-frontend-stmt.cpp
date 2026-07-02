@@ -70,6 +70,15 @@ static void suppress_unparse_output(SgLocatedNode *n) {
 using llvm::isa; // For LLVM type checking (isa<Type>)
 
 namespace {
+static bool clangFrontendRunningOnValgrind() {
+#if ROSE_USE_VALGRIND
+  static const bool running = RUNNING_ON_VALGRIND;
+  return running;
+#else
+  return false;
+#endif
+}
+
 double roseSlowStmtTraceThresholdMs() {
   static const double threshold_ms = []() -> double {
     const char *value = getenv("ROSE_SLOW_STMT_TRACE_MS");
@@ -89,16 +98,25 @@ double roseSlowStmtTraceThresholdMs() {
   return threshold_ms;
 }
 
+static void markClangAstStorageDefined(const void *address, size_t size) {
+#if ROSE_USE_VALGRIND
+  if (address != nullptr && size != 0) {
+    VALGRIND_MAKE_MEM_DEFINED(const_cast<void *>(address), size);
+  }
+#else
+  (void)address;
+  (void)size;
+#endif
+}
+
 template <typename T> T *markClangAstObjectDefined(T *node) {
 #if ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND) {
+  if (clangFrontendRunningOnValgrind()) {
     // Clang's ASTContext uses bump allocation and leaves padding/unused bits in
     // AST objects undefined. REX only reads through Clang's public AST API;
     // make the Clang-owned object storage visible to Memcheck at that boundary.
     VALGRIND_MAKE_MEM_DEFINED(&node, sizeof(node));
-    if (node != nullptr) {
-      VALGRIND_MAKE_MEM_DEFINED(node, sizeof(*node));
-    }
+    markClangAstStorageDefined(node, sizeof(*node));
   }
 #endif
   return node;
@@ -106,11 +124,9 @@ template <typename T> T *markClangAstObjectDefined(T *node) {
 
 template <typename T> const T *markClangAstObjectDefined(const T *node) {
 #if ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND) {
+  if (clangFrontendRunningOnValgrind()) {
     VALGRIND_MAKE_MEM_DEFINED(&node, sizeof(node));
-    if (node != nullptr) {
-      VALGRIND_MAKE_MEM_DEFINED(const_cast<T *>(node), sizeof(*node));
-    }
+    markClangAstStorageDefined(node, sizeof(*node));
   }
 #endif
   return node;
@@ -118,7 +134,7 @@ template <typename T> const T *markClangAstObjectDefined(const T *node) {
 
 template <typename T> const T &markClangValueDefined(const T &value) {
 #if ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND) {
+  if (clangFrontendRunningOnValgrind()) {
     VALGRIND_MAKE_MEM_DEFINED(const_cast<T *>(&value), sizeof(value));
   }
 #endif
@@ -128,7 +144,7 @@ template <typename T> const T &markClangValueDefined(const T &value) {
 template <typename F>
 static auto readClangApiValueDefined(F &&read) -> decltype(read()) {
 #if ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND) {
+  if (clangFrontendRunningOnValgrind()) {
     VALGRIND_DISABLE_ERROR_REPORTING;
     auto value = read();
     VALGRIND_ENABLE_ERROR_REPORTING;
@@ -151,7 +167,7 @@ static const clang::Type *
 markClangTypeObjectDefinedByClass(const clang::Type *type) {
 #if ROSE_USE_VALGRIND
   markClangValueDefined(type);
-  if (!RUNNING_ON_VALGRIND || type == nullptr) {
+  if (!clangFrontendRunningOnValgrind() || type == nullptr) {
     return type;
   }
 
@@ -294,7 +310,7 @@ markClangTypeObjectDefinedByClass(const clang::Type *type) {
 static clang::QualType markClangQualTypeDefined(clang::QualType qual_type) {
 #if ROSE_USE_VALGRIND
   markClangValueDefined(qual_type);
-  if (RUNNING_ON_VALGRIND) {
+  if (clangFrontendRunningOnValgrind()) {
     markClangTypeObjectDefinedByClass(qual_type.getTypePtrOrNull());
   }
 #endif
@@ -304,7 +320,7 @@ static clang::QualType markClangQualTypeDefined(clang::QualType qual_type) {
 static void markClangTypeLocDataDefined(const clang::TypeLoc &type_loc) {
 #if ROSE_USE_VALGRIND
   markClangValueDefined(type_loc);
-  if (!RUNNING_ON_VALGRIND || type_loc.isNull()) {
+  if (!clangFrontendRunningOnValgrind() || type_loc.isNull()) {
     return;
   }
 
@@ -324,10 +340,17 @@ static void markClangTypeLocDataDefined(const clang::TypeLoc &type_loc) {
 #endif
 }
 
+template <typename F>
+static auto readClangTypeLocDefined(F &&read) -> decltype(read()) {
+  auto type_loc = readClangApiValueDefined(std::forward<F>(read));
+  markClangTypeLocDataDefined(type_loc);
+  return type_loc;
+}
+
 static clang::TypeSourceInfo *
 markClangTypeSourceInfoDefined(clang::TypeSourceInfo *type_info) {
 #if ROSE_USE_VALGRIND
-  if (!RUNNING_ON_VALGRIND || type_info == nullptr) {
+  if (!clangFrontendRunningOnValgrind() || type_info == nullptr) {
     return type_info;
   }
 
@@ -342,7 +365,7 @@ static clang::NestedNameSpecifier
 markClangNestedNameSpecifierDefined(clang::NestedNameSpecifier specifier) {
 #if ROSE_USE_VALGRIND
   markClangValueDefined(specifier);
-  if (!RUNNING_ON_VALGRIND) {
+  if (!clangFrontendRunningOnValgrind()) {
     return specifier;
   }
 
@@ -364,13 +387,20 @@ markClangNestedNameSpecifierDefined(clang::NestedNameSpecifier specifier) {
   return specifier;
 }
 
+static clang::NestedNameSpecifier
+getClangNestedNameSpecifierLocSpecifierDefined(
+    const clang::NestedNameSpecifierLoc &qualifier_loc) {
+  return markClangNestedNameSpecifierDefined(readClangApiValueDefined(
+      [&]() { return qualifier_loc.getNestedNameSpecifier(); }));
+}
+
 static unsigned
 clangNestedNameSpecifierLocDataLength(clang::NestedNameSpecifier specifier) {
   unsigned length = 0;
   for (clang::NestedNameSpecifier current =
            markClangNestedNameSpecifierDefined(specifier);
        current; current = markClangNestedNameSpecifierDefined(
-                    current.getAsNamespaceAndPrefix().Prefix)) {
+                    nestedNameSpecifierPrefix(current))) {
     length += sizeof(clang::SourceLocation::UIntTy);
     switch (current.getKind()) {
     case clang::NestedNameSpecifier::Kind::Global:
@@ -396,12 +426,12 @@ static clang::NestedNameSpecifierLoc markClangNestedNameSpecifierLocDefined(
     clang::NestedNameSpecifierLoc qualifier_loc) {
 #if ROSE_USE_VALGRIND
   markClangValueDefined(qualifier_loc);
-  if (!RUNNING_ON_VALGRIND || !qualifier_loc) {
+  if (!clangFrontendRunningOnValgrind() || !qualifier_loc) {
     return qualifier_loc;
   }
 
-  clang::NestedNameSpecifier qualifier = markClangNestedNameSpecifierDefined(
-      qualifier_loc.getNestedNameSpecifier());
+  clang::NestedNameSpecifier qualifier =
+      getClangNestedNameSpecifierLocSpecifierDefined(qualifier_loc);
   if (void *data = qualifier_loc.getOpaqueData()) {
     const unsigned size = clangNestedNameSpecifierLocDataLength(qualifier);
     if (size != 0) {
@@ -418,23 +448,30 @@ static clang::NestedNameSpecifierLoc markClangNestedNameSpecifierLocDefined(
 static const clang::DeclContext *
 markClangDeclContextObjectDefined(const clang::DeclContext *context) {
 #if ROSE_USE_VALGRIND
-  if (!RUNNING_ON_VALGRIND || context == nullptr) {
+  markClangValueDefined(context);
+  if (!clangFrontendRunningOnValgrind() || context == nullptr) {
     return context;
   }
 
-  markClangValueDefined(context);
   markClangAstObjectDefined(context);
-  if (const clang::Decl *decl = clang::Decl::castFromDeclContext(context)) {
+  if (const clang::Decl *decl = readClangApiValueDefined(
+          [&]() { return clang::Decl::castFromDeclContext(context); })) {
     markClangDeclObjectDefinedByKind(decl);
   }
 #endif
   return context;
 }
 
+static clang::DeclContext *
+markClangDeclContextObjectDefined(clang::DeclContext *context) {
+  return const_cast<clang::DeclContext *>(markClangDeclContextObjectDefined(
+      static_cast<const clang::DeclContext *>(context)));
+}
+
 static clang::Decl *markClangDeclObjectDefinedByKind(clang::Decl *decl) {
 #if ROSE_USE_VALGRIND
   markClangValueDefined(decl);
-  if (!RUNNING_ON_VALGRIND || decl == nullptr) {
+  if (!clangFrontendRunningOnValgrind() || decl == nullptr) {
     return decl;
   }
 
@@ -479,6 +516,9 @@ static clang::Decl *markClangDeclObjectDefinedByKind(clang::Decl *decl) {
   if (auto *specific = llvm::dyn_cast<clang::EnumDecl>(decl)) {
     return markClangAstObjectDefined(specific);
   }
+  if (auto *specific = llvm::dyn_cast<clang::EnumConstantDecl>(decl)) {
+    return markClangAstObjectDefined(specific);
+  }
   if (auto *specific = llvm::dyn_cast<clang::CXXConstructorDecl>(decl)) {
     return markClangAstObjectDefined(specific);
   }
@@ -492,6 +532,15 @@ static clang::Decl *markClangDeclObjectDefinedByKind(clang::Decl *decl) {
     return markClangAstObjectDefined(specific);
   }
   if (auto *specific = llvm::dyn_cast<clang::FunctionDecl>(decl)) {
+    return markClangAstObjectDefined(specific);
+  }
+  if (auto *specific = llvm::dyn_cast<clang::ParmVarDecl>(decl)) {
+    return markClangAstObjectDefined(specific);
+  }
+  if (auto *specific = llvm::dyn_cast<clang::VarDecl>(decl)) {
+    return markClangAstObjectDefined(specific);
+  }
+  if (auto *specific = llvm::dyn_cast<clang::FieldDecl>(decl)) {
     return markClangAstObjectDefined(specific);
   }
 #endif
@@ -545,11 +594,64 @@ markClangDeclObjectDefinedByKind(const clang::Decl *decl) {
   return markClangDeclObjectDefinedByKind(const_cast<clang::Decl *>(decl));
 }
 
+template <typename T> static T *markClangSpecificDeclDefined(T *decl) {
+  return llvm::dyn_cast_or_null<T>(markClangDeclObjectDefinedByKind(decl));
+}
+
+static clang::DeclContext *clangDeclContextDefined(const clang::Decl *decl) {
+  decl = markClangDeclObjectDefinedByKind(decl);
+  if (decl == nullptr) {
+    return nullptr;
+  }
+
+  const clang::DeclContext *context =
+      readClangApiValueDefined([&]() { return decl->getDeclContext(); });
+  return markClangDeclContextObjectDefined(
+      const_cast<clang::DeclContext *>(context));
+}
+
+static bool clangVarDeclIsStaticDataMemberDefined(const clang::VarDecl *decl) {
+  clang::VarDecl *var_decl =
+      markClangSpecificDeclDefined(const_cast<clang::VarDecl *>(decl));
+  if (var_decl == nullptr) {
+    return false;
+  }
+
+  clangDeclContextDefined(var_decl);
+  return readClangApiValueDefined(
+      [&]() { return var_decl->isStaticDataMember(); });
+}
+
+static clang::CXXRecordDecl *
+clangCXXRecordDefinitionDefined(clang::CXXRecordDecl *decl) {
+  decl = markClangSpecificDeclDefined(decl);
+  if (decl == nullptr) {
+    return nullptr;
+  }
+
+  clang::CXXRecordDecl *definition =
+      readClangApiValueDefined([&]() { return decl->getDefinition(); });
+  return markClangSpecificDeclDefined(definition);
+}
+
+static clang::CXXRecordDecl *
+clangCXXMethodDeclParentDefined(clang::CXXMethodDecl *decl) {
+  decl = markClangSpecificDeclDefined(decl);
+  if (decl == nullptr) {
+    return nullptr;
+  }
+
+  clangDeclContextDefined(decl);
+  clang::CXXRecordDecl *parent =
+      readClangApiValueDefined([&]() { return decl->getParent(); });
+  return markClangSpecificDeclDefined(parent);
+}
+
 static clang::ValueDecl *
 markClangValueDeclObjectDefinedByKind(clang::ValueDecl *decl) {
 #if ROSE_USE_VALGRIND
   markClangValueDefined(decl);
-  if (!RUNNING_ON_VALGRIND || decl == nullptr) {
+  if (!clangFrontendRunningOnValgrind() || decl == nullptr) {
     return decl;
   }
 
@@ -593,10 +695,10 @@ markClangValueDeclObjectDefinedByKind(clang::ValueDecl *decl) {
 static const clang::TemplateArgumentList *
 markClangTemplateArgumentListDefined(const clang::TemplateArgumentList *args) {
 #if ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND) {
+  if (clangFrontendRunningOnValgrind()) {
     VALGRIND_MAKE_MEM_DEFINED(&args, sizeof(args));
   }
-  if (!RUNNING_ON_VALGRIND || args == nullptr) {
+  if (!clangFrontendRunningOnValgrind() || args == nullptr) {
     return args;
   }
 
@@ -613,7 +715,7 @@ markClangTemplateArgumentListDefined(const clang::TemplateArgumentList *args) {
 static void markClangPointerArrayDefined(clang::Stmt *const *data,
                                          size_t count) {
 #if ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND && data != nullptr && count != 0) {
+  if (clangFrontendRunningOnValgrind() && data != nullptr && count != 0) {
     VALGRIND_MAKE_MEM_DEFINED(const_cast<clang::Stmt **>(data),
                               count * sizeof(clang::Stmt *));
   }
@@ -621,10 +723,86 @@ static void markClangPointerArrayDefined(clang::Stmt *const *data,
 }
 
 static clang::Stmt *markClangStmtObjectDefinedByClass(clang::Stmt *stmt);
+static clang::Expr *markClangExprObjectDefinedByClass(clang::Expr *expr);
+static const clang::Expr *
+markClangExprObjectDefinedByClass(const clang::Expr *expr);
+
+static clang::DeclGroupRef
+markClangDeclGroupRefStorageDefined(clang::DeclGroupRef group) {
+#if ROSE_USE_VALGRIND
+  markClangValueDefined(group);
+  if (!clangFrontendRunningOnValgrind() || group.isNull()) {
+    return group;
+  }
+
+  if (group.isSingleDecl()) {
+    markClangDeclObjectDefinedByKind(
+        readClangApiValueDefined([&]() { return group.getSingleDecl(); }));
+    return group;
+  }
+
+  clang::DeclGroup *decl_group_ptr = nullptr;
+  VALGRIND_DISABLE_ERROR_REPORTING;
+  decl_group_ptr = &group.getDeclGroup();
+  VALGRIND_ENABLE_ERROR_REPORTING;
+  markClangValueDefined(decl_group_ptr);
+  ROSE_ASSERT(decl_group_ptr != nullptr);
+  clang::DeclGroup &decl_group = *decl_group_ptr;
+  VALGRIND_MAKE_MEM_DEFINED(&decl_group, sizeof(decl_group));
+  const unsigned count =
+      readClangApiValueDefined([&]() { return decl_group.size(); });
+  clang::Decl **begin =
+      readClangApiValueDefined([&]() { return group.begin(); });
+  if (begin != nullptr && count != 0) {
+    VALGRIND_MAKE_MEM_DEFINED(begin, count * sizeof(clang::Decl *));
+    for (unsigned i = 0; i < count; ++i) {
+      markClangDeclObjectDefinedByKind(begin[i]);
+    }
+  }
+#endif
+  return group;
+}
+
+static std::vector<clang::NamedDecl *>
+readClangLookupResultDeclsDefined(clang::DeclContextLookupResult lookup) {
+  std::vector<clang::NamedDecl *> decls;
+#if ROSE_USE_VALGRIND
+  markClangValueDefined(lookup);
+  if (clangFrontendRunningOnValgrind()) {
+    VALGRIND_DISABLE_ERROR_REPORTING;
+    decls.assign(lookup.begin(), lookup.end());
+    VALGRIND_ENABLE_ERROR_REPORTING;
+  } else {
+    decls.assign(lookup.begin(), lookup.end());
+  }
+
+  for (clang::NamedDecl *decl : decls) {
+    markClangDeclObjectDefinedByKind(decl);
+  }
+#else
+  decls.assign(lookup.begin(), lookup.end());
+#endif
+  return decls;
+}
+
+static clang::DeclStmt *markClangDeclStmtStorageDefined(clang::DeclStmt *stmt) {
+#if ROSE_USE_VALGRIND
+  if (!clangFrontendRunningOnValgrind() || stmt == nullptr) {
+    return stmt;
+  }
+
+  stmt = markClangAstObjectDefined(stmt);
+  markClangDeclGroupRefStorageDefined(
+      readClangApiValueDefined([&]() { return stmt->getDeclGroup(); }));
+  readClangApiValueDefined([&]() { return stmt->getBeginLoc(); });
+  readClangApiValueDefined([&]() { return stmt->getEndLoc(); });
+#endif
+  return stmt;
+}
 
 static clang::CallExpr *markClangCallExprStorageDefined(clang::CallExpr *expr) {
 #if ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND && expr != nullptr) {
+  if (clangFrontendRunningOnValgrind() && expr != nullptr) {
     expr = markClangAstObjectDefined(expr);
     llvm::ArrayRef<clang::Stmt *> sub_exprs = expr->getRawSubExprs();
     markClangPointerArrayDefined(sub_exprs.data(), sub_exprs.size());
@@ -636,7 +814,7 @@ static clang::CallExpr *markClangCallExprStorageDefined(clang::CallExpr *expr) {
 static clang::CXXConstructExpr *
 markClangCxxConstructStorageDefined(clang::CXXConstructExpr *expr) {
 #if ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND && expr != nullptr) {
+  if (clangFrontendRunningOnValgrind() && expr != nullptr) {
     expr = markClangAstObjectDefined(expr);
     markClangPointerArrayDefined(
         reinterpret_cast<clang::Stmt *const *>(expr->getArgs()),
@@ -646,10 +824,52 @@ markClangCxxConstructStorageDefined(clang::CXXConstructExpr *expr) {
   return expr;
 }
 
+static clang::CXXNewExpr *
+markClangCxxNewStorageDefined(clang::CXXNewExpr *expr) {
+#if ROSE_USE_VALGRIND
+  if (clangFrontendRunningOnValgrind() && expr != nullptr) {
+    expr = markClangAstObjectDefined(expr);
+
+    clang::QualType result_type = markClangQualTypeDefined(
+        readClangApiValueDefined([&]() { return expr->getType(); }));
+    markClangTypeObjectDefinedByClass(result_type.getTypePtrOrNull());
+
+    clang::QualType allocated_type = markClangQualTypeDefined(
+        readClangApiValueDefined([&]() { return expr->getAllocatedType(); }));
+    markClangTypeObjectDefinedByClass(allocated_type.getTypePtrOrNull());
+    markClangTypeSourceInfoDefined(readClangApiValueDefined(
+        [&]() { return expr->getAllocatedTypeSourceInfo(); }));
+
+    const unsigned raw_arg_count = readClangApiValueDefined([&]() {
+      return static_cast<unsigned>(expr->isArray()) +
+             static_cast<unsigned>(expr->hasInitializer()) +
+             expr->getNumPlacementArgs();
+    });
+    markClangPointerArrayDefined(expr->raw_arg_begin(), raw_arg_count);
+
+    markClangStmtObjectDefinedByClass(
+        readClangApiValueDefined([&]() { return expr->getInitializer(); }));
+
+    for (unsigned i = 0, n = readClangApiValueDefined(
+                             [&]() { return expr->getNumPlacementArgs(); });
+         i < n; ++i) {
+      markClangStmtObjectDefinedByClass(
+          readClangApiValueDefined([&]() { return expr->getPlacementArg(i); }));
+    }
+
+    markClangDeclObjectDefinedByKind(
+        readClangApiValueDefined([&]() { return expr->getOperatorNew(); }));
+    markClangDeclObjectDefinedByKind(
+        readClangApiValueDefined([&]() { return expr->getOperatorDelete(); }));
+  }
+#endif
+  return expr;
+}
+
 static clang::InitListExpr *
 markClangInitListStorageDefined(clang::InitListExpr *expr) {
 #if ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND && expr != nullptr) {
+  if (clangFrontendRunningOnValgrind() && expr != nullptr) {
     expr = markClangAstObjectDefined(expr);
     markClangPointerArrayDefined(
         reinterpret_cast<clang::Stmt *const *>(expr->getInits()),
@@ -659,10 +879,72 @@ markClangInitListStorageDefined(clang::InitListExpr *expr) {
   return expr;
 }
 
+static clang::CXXStdInitializerListExpr *
+markClangCxxStdInitializerListStorageDefined(
+    clang::CXXStdInitializerListExpr *expr) {
+#if ROSE_USE_VALGRIND
+  if (clangFrontendRunningOnValgrind() && expr != nullptr) {
+    expr = markClangAstObjectDefined(expr);
+    markClangStmtObjectDefinedByClass(
+        readClangApiValueDefined([&]() { return expr->getSubExpr(); }));
+  }
+#endif
+  return expr;
+}
+
+static clang::MemberExpr *
+markClangMemberExprStorageDefined(clang::MemberExpr *expr) {
+#if ROSE_USE_VALGRIND
+  if (clangFrontendRunningOnValgrind() && expr != nullptr) {
+    expr = markClangAstObjectDefined(expr);
+    markClangExprObjectDefinedByClass(
+        readClangApiValueDefined([&]() { return expr->getBase(); }));
+    markClangValueDeclObjectDefinedByKind(
+        readClangApiValueDefined([&]() { return expr->getMemberDecl(); }));
+    markClangNestedNameSpecifierLocDefined(
+        readClangApiValueDefined([&]() { return expr->getQualifierLoc(); }));
+    markClangQualTypeDefined(
+        readClangApiValueDefined([&]() { return expr->getType(); }));
+  }
+#endif
+  return expr;
+}
+
+static clang::CoreturnStmt *
+markClangCoreturnStorageDefined(clang::CoreturnStmt *stmt) {
+#if ROSE_USE_VALGRIND
+  if (clangFrontendRunningOnValgrind() && stmt != nullptr) {
+    stmt = markClangAstObjectDefined(stmt);
+    markClangStmtObjectDefinedByClass(
+        readClangApiValueDefined([&]() { return stmt->getOperand(); }));
+    markClangStmtObjectDefinedByClass(
+        readClangApiValueDefined([&]() { return stmt->getPromiseCall(); }));
+  }
+#endif
+  return stmt;
+}
+
+static clang::CoroutineBodyStmt *
+markClangCoroutineBodyStorageDefined(clang::CoroutineBodyStmt *stmt) {
+#if ROSE_USE_VALGRIND
+  if (clangFrontendRunningOnValgrind() && stmt != nullptr) {
+    stmt = markClangAstObjectDefined(stmt);
+    clang::Stmt::child_range children =
+        readClangApiValueDefined([&]() { return stmt->children(); });
+    for (clang::Stmt::child_iterator it = children.begin();
+         it != children.end(); ++it) {
+      markClangStmtObjectDefinedByClass(
+          readClangApiValueDefined([&]() { return *it; }));
+    }
+  }
+#endif
+  return stmt;
+}
+
 static clang::CompoundStmt *
 markClangCompoundStmtStorageDefined(clang::CompoundStmt *stmt) {
 #if ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND && stmt != nullptr) {
+  if (clangFrontendRunningOnValgrind() && stmt != nullptr) {
     stmt = markClangAstObjectDefined(stmt);
     markClangPointerArrayDefined(stmt->body_begin(), stmt->size());
     for (clang::Stmt *child : stmt->body()) {
@@ -676,7 +958,7 @@ markClangCompoundStmtStorageDefined(clang::CompoundStmt *stmt) {
 static clang::CXXCatchStmt *
 markClangCxxCatchStmtStorageDefined(clang::CXXCatchStmt *stmt) {
 #if ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND && stmt != nullptr) {
+  if (clangFrontendRunningOnValgrind() && stmt != nullptr) {
     stmt = markClangAstObjectDefined(stmt);
     markClangDeclObjectDefinedByKind(stmt->getExceptionDecl());
     markClangStmtObjectDefinedByClass(
@@ -689,7 +971,7 @@ markClangCxxCatchStmtStorageDefined(clang::CXXCatchStmt *stmt) {
 static clang::CXXTryStmt *
 markClangCxxTryStmtStorageDefined(clang::CXXTryStmt *stmt) {
 #if ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND && stmt != nullptr) {
+  if (clangFrontendRunningOnValgrind() && stmt != nullptr) {
     stmt = markClangAstObjectDefined(stmt);
     markClangStmtObjectDefinedByClass(markClangAstObjectDefined(
         readClangApiValueDefined([&]() { return stmt->getTryBlock(); })));
@@ -702,26 +984,30 @@ markClangCxxTryStmtStorageDefined(clang::CXXTryStmt *stmt) {
   return stmt;
 }
 
-static clang::UnresolvedLookupExpr *
-markClangUnresolvedLookupStorageDefined(clang::UnresolvedLookupExpr *expr) {
+static void markClangOverloadExprStorageDefined(clang::OverloadExpr *expr) {
 #if ROSE_USE_VALGRIND
-  if (!RUNNING_ON_VALGRIND || expr == nullptr) {
-    return expr;
+  if (!clangFrontendRunningOnValgrind() || expr == nullptr) {
+    return;
   }
 
   expr = markClangAstObjectDefined(expr);
   for (auto it = expr->decls_begin(); it != expr->decls_end(); ++it) {
-#if ROSE_USE_VALGRIND
     const clang::DeclAccessPair &pair = it.getPair();
     VALGRIND_MAKE_MEM_DEFINED(const_cast<clang::DeclAccessPair *>(&pair),
                               sizeof(pair));
-#endif
     markClangDeclObjectDefinedByKind(it.getDecl());
   }
 
-  if (expr->hasExplicitTemplateArgs()) {
+  clang::NestedNameSpecifierLoc qualifier_loc =
+      markClangNestedNameSpecifierLocDefined(
+          readClangApiValueDefined([&]() { return expr->getQualifierLoc(); }));
+  markClangNestedNameSpecifierDefined(readClangApiValueDefined(
+      [&]() { return qualifier_loc.getNestedNameSpecifier(); }));
+
+  if (readClangApiValueDefined(
+          [&]() { return expr->hasExplicitTemplateArgs(); })) {
     llvm::ArrayRef<clang::TemplateArgumentLoc> args =
-        expr->template_arguments();
+        readClangApiValueDefined([&]() { return expr->template_arguments(); });
     if (args.data() != nullptr && !args.empty()) {
       VALGRIND_MAKE_MEM_DEFINED(
           const_cast<clang::TemplateArgumentLoc *>(args.data()),
@@ -729,11 +1015,78 @@ markClangUnresolvedLookupStorageDefined(clang::UnresolvedLookupExpr *expr) {
     }
     for (const clang::TemplateArgumentLoc &arg : args) {
       markClangValueDefined(arg);
-      markClangValueDefined(arg.getArgument());
-      if (clang::TypeSourceInfo *type_info = arg.getTypeSourceInfo()) {
+      const clang::TemplateArgument &argument = arg.getArgument();
+      markClangValueDefined(argument);
+      if (clang::TypeSourceInfo *type_info = readClangApiValueDefined(
+              [&]() { return arg.getTypeSourceInfo(); })) {
         markClangTypeSourceInfoDefined(type_info);
       }
+      if (clang::Expr *expr_arg = readClangApiValueDefined([&]() {
+            return argument.getKind() == clang::TemplateArgument::Expression
+                       ? argument.getAsExpr()
+                       : nullptr;
+          })) {
+        markClangExprObjectDefinedByClass(expr_arg);
+      }
     }
+  }
+#else
+  (void)expr;
+#endif
+}
+
+static clang::UnresolvedLookupExpr *
+markClangUnresolvedLookupStorageDefined(clang::UnresolvedLookupExpr *expr) {
+#if ROSE_USE_VALGRIND
+  if (!clangFrontendRunningOnValgrind() || expr == nullptr) {
+    return expr;
+  }
+
+  expr = markClangAstObjectDefined(expr);
+  markClangOverloadExprStorageDefined(expr);
+#endif
+  return expr;
+}
+
+static clang::UnresolvedMemberExpr *
+markClangUnresolvedMemberStorageDefined(clang::UnresolvedMemberExpr *expr) {
+#if ROSE_USE_VALGRIND
+  if (!clangFrontendRunningOnValgrind() || expr == nullptr) {
+    return expr;
+  }
+
+  expr = markClangAstObjectDefined(expr);
+  markClangOverloadExprStorageDefined(expr);
+  markClangQualTypeDefined(
+      readClangApiValueDefined([&]() { return expr->getBaseType(); }));
+  if (!readClangApiValueDefined([&]() { return expr->isImplicitAccess(); })) {
+    markClangExprObjectDefinedByClass(
+        readClangApiValueDefined([&]() { return expr->getBase(); }));
+  }
+#endif
+  return expr;
+}
+
+static clang::CXXParenListInitExpr *
+markClangCxxParenListInitStorageDefined(clang::CXXParenListInitExpr *expr) {
+#if ROSE_USE_VALGRIND
+  if (clangFrontendRunningOnValgrind() && expr != nullptr) {
+    expr = markClangAstObjectDefined(expr);
+    markClangQualTypeDefined(
+        readClangApiValueDefined([&]() { return expr->getType(); }));
+    llvm::ArrayRef<clang::Expr *> init_exprs =
+        readClangApiValueDefined([&]() { return expr->getInitExprs(); });
+    if (init_exprs.data() != nullptr && !init_exprs.empty()) {
+      VALGRIND_MAKE_MEM_DEFINED(const_cast<clang::Expr **>(init_exprs.data()),
+                                init_exprs.size() * sizeof(clang::Expr *));
+    }
+    for (clang::Expr *init_expr : init_exprs) {
+      markClangExprObjectDefinedByClass(init_expr);
+    }
+    markClangExprObjectDefinedByClass(
+        readClangApiValueDefined([&]() { return expr->getArrayFiller(); }));
+    markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+        [&]() { return expr->getInitializedFieldInUnion(); }));
   }
 #endif
   return expr;
@@ -742,7 +1095,7 @@ markClangUnresolvedLookupStorageDefined(clang::UnresolvedLookupExpr *expr) {
 static clang::DesignatedInitExpr *
 markClangDesignatedInitStorageDefined(clang::DesignatedInitExpr *expr) {
 #if ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND && expr != nullptr) {
+  if (clangFrontendRunningOnValgrind() && expr != nullptr) {
     expr = markClangAstObjectDefined(expr);
     auto designators = expr->designators();
     if (designators.data() != nullptr && !designators.empty()) {
@@ -764,17 +1117,60 @@ markClangDesignatedInitStorageDefined(clang::DesignatedInitExpr *expr) {
   return expr;
 }
 
+static uintptr_t alignClangTrailingObjectAddress(uintptr_t address,
+                                                 size_t alignment) {
+  ROSE_ASSERT(alignment != 0);
+  return (address + alignment - 1) & ~(alignment - 1);
+}
+
+static clang::StringLiteral *
+markClangStringLiteralStorageDefined(clang::StringLiteral *literal) {
+#if ROSE_USE_VALGRIND
+  if (!clangFrontendRunningOnValgrind() || literal == nullptr) {
+    return literal;
+  }
+
+  literal = markClangAstObjectDefined(literal);
+
+  uintptr_t address =
+      reinterpret_cast<uintptr_t>(literal) + sizeof(clang::StringLiteral);
+  address = alignClangTrailingObjectAddress(address, alignof(unsigned));
+  auto *length = reinterpret_cast<unsigned *>(address);
+  VALGRIND_MAKE_MEM_DEFINED(length, sizeof(*length));
+
+  const unsigned byte_length = literal->getByteLength();
+  const unsigned token_count = literal->getNumConcatenated();
+
+  address += sizeof(*length);
+  address =
+      alignClangTrailingObjectAddress(address, alignof(clang::SourceLocation));
+  if (token_count != 0) {
+    VALGRIND_MAKE_MEM_DEFINED(reinterpret_cast<void *>(address),
+                              token_count * sizeof(clang::SourceLocation));
+  }
+
+  address += token_count * sizeof(clang::SourceLocation);
+  address = alignClangTrailingObjectAddress(address, alignof(char));
+  if (byte_length != 0) {
+    VALGRIND_MAKE_MEM_DEFINED(reinterpret_cast<void *>(address), byte_length);
+  }
+#endif
+  return literal;
+}
+
 static clang::Stmt *markClangStmtObjectDefinedByClass(clang::Stmt *stmt) {
 #if ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND) {
+  if (clangFrontendRunningOnValgrind()) {
     VALGRIND_MAKE_MEM_DEFINED(&stmt, sizeof(stmt));
   }
-  if (!RUNNING_ON_VALGRIND || stmt == nullptr) {
+  if (!clangFrontendRunningOnValgrind() || stmt == nullptr) {
     return stmt;
   }
 
   stmt = markClangAstObjectDefined(stmt);
   switch (stmt->getStmtClass()) {
+  case clang::Stmt::AtomicExprClass:
+    return markClangAstObjectDefined(static_cast<clang::AtomicExpr *>(stmt));
   case clang::Stmt::ArraySubscriptExprClass:
     return markClangAstObjectDefined(
         static_cast<clang::ArraySubscriptExpr *>(stmt));
@@ -798,6 +1194,12 @@ static clang::Stmt *markClangStmtObjectDefinedByClass(clang::Stmt *stmt) {
   case clang::Stmt::ConditionalOperatorClass:
     return markClangAstObjectDefined(
         static_cast<clang::ConditionalOperator *>(stmt));
+  case clang::Stmt::CoreturnStmtClass:
+    return markClangCoreturnStorageDefined(
+        static_cast<clang::CoreturnStmt *>(stmt));
+  case clang::Stmt::CoroutineBodyStmtClass:
+    return markClangCoroutineBodyStorageDefined(
+        static_cast<clang::CoroutineBodyStmt *>(stmt));
   case clang::Stmt::CStyleCastExprClass:
     return markClangAstObjectDefined(
         static_cast<clang::CStyleCastExpr *>(stmt));
@@ -810,6 +1212,8 @@ static clang::Stmt *markClangStmtObjectDefinedByClass(clang::Stmt *stmt) {
   case clang::Stmt::CXXConstCastExprClass:
     return markClangAstObjectDefined(
         static_cast<clang::CXXConstCastExpr *>(stmt));
+  case clang::Stmt::CXXDeleteExprClass:
+    return markClangAstObjectDefined(static_cast<clang::CXXDeleteExpr *>(stmt));
   case clang::Stmt::CXXDefaultArgExprClass:
     return markClangAstObjectDefined(
         static_cast<clang::CXXDefaultArgExpr *>(stmt));
@@ -825,15 +1229,30 @@ static clang::Stmt *markClangStmtObjectDefinedByClass(clang::Stmt *stmt) {
   case clang::Stmt::CXXFunctionalCastExprClass:
     return markClangAstObjectDefined(
         static_cast<clang::CXXFunctionalCastExpr *>(stmt));
+  case clang::Stmt::CXXForRangeStmtClass:
+    return markClangAstObjectDefined(
+        static_cast<clang::CXXForRangeStmt *>(stmt));
   case clang::Stmt::CXXMemberCallExprClass:
     return markClangCallExprStorageDefined(
         static_cast<clang::CXXMemberCallExpr *>(stmt));
+  case clang::Stmt::CXXNewExprClass:
+    return markClangCxxNewStorageDefined(
+        static_cast<clang::CXXNewExpr *>(stmt));
   case clang::Stmt::CXXOperatorCallExprClass:
     return markClangCallExprStorageDefined(
         static_cast<clang::CXXOperatorCallExpr *>(stmt));
+  case clang::Stmt::CXXParenListInitExprClass:
+    return markClangCxxParenListInitStorageDefined(
+        static_cast<clang::CXXParenListInitExpr *>(stmt));
+  case clang::Stmt::CXXPseudoDestructorExprClass:
+    return markClangAstObjectDefined(
+        static_cast<clang::CXXPseudoDestructorExpr *>(stmt));
   case clang::Stmt::CXXReinterpretCastExprClass:
     return markClangAstObjectDefined(
         static_cast<clang::CXXReinterpretCastExpr *>(stmt));
+  case clang::Stmt::CXXStdInitializerListExprClass:
+    return markClangCxxStdInitializerListStorageDefined(
+        static_cast<clang::CXXStdInitializerListExpr *>(stmt));
   case clang::Stmt::CXXStaticCastExprClass:
     return markClangAstObjectDefined(
         static_cast<clang::CXXStaticCastExpr *>(stmt));
@@ -846,11 +1265,15 @@ static clang::Stmt *markClangStmtObjectDefinedByClass(clang::Stmt *stmt) {
         static_cast<clang::CXXTryStmt *>(stmt));
   case clang::Stmt::DeclRefExprClass:
     return markClangAstObjectDefined(static_cast<clang::DeclRefExpr *>(stmt));
+  case clang::Stmt::DependentScopeDeclRefExprClass:
+    return markClangAstObjectDefined(
+        static_cast<clang::DependentScopeDeclRefExpr *>(stmt));
   case clang::Stmt::DesignatedInitExprClass:
     return markClangDesignatedInitStorageDefined(
         static_cast<clang::DesignatedInitExpr *>(stmt));
   case clang::Stmt::DeclStmtClass:
-    return markClangAstObjectDefined(static_cast<clang::DeclStmt *>(stmt));
+    return markClangDeclStmtStorageDefined(
+        static_cast<clang::DeclStmt *>(stmt));
   case clang::Stmt::ExprWithCleanupsClass:
     return markClangAstObjectDefined(
         static_cast<clang::ExprWithCleanups *>(stmt));
@@ -859,6 +1282,8 @@ static clang::Stmt *markClangStmtObjectDefinedByClass(clang::Stmt *stmt) {
         static_cast<clang::FloatingLiteral *>(stmt));
   case clang::Stmt::ForStmtClass:
     return markClangAstObjectDefined(static_cast<clang::ForStmt *>(stmt));
+  case clang::Stmt::GCCAsmStmtClass:
+    return markClangAstObjectDefined(static_cast<clang::GCCAsmStmt *>(stmt));
   case clang::Stmt::IfStmtClass:
     return markClangAstObjectDefined(static_cast<clang::IfStmt *>(stmt));
   case clang::Stmt::ImplicitCastExprClass:
@@ -874,11 +1299,19 @@ static clang::Stmt *markClangStmtObjectDefinedByClass(clang::Stmt *stmt) {
     return markClangAstObjectDefined(
         static_cast<clang::MaterializeTemporaryExpr *>(stmt));
   case clang::Stmt::MemberExprClass:
-    return markClangAstObjectDefined(static_cast<clang::MemberExpr *>(stmt));
+    return markClangMemberExprStorageDefined(
+        static_cast<clang::MemberExpr *>(stmt));
+  case clang::Stmt::MSAsmStmtClass:
+    return markClangAstObjectDefined(static_cast<clang::MSAsmStmt *>(stmt));
   case clang::Stmt::ParenExprClass:
     return markClangAstObjectDefined(static_cast<clang::ParenExpr *>(stmt));
   case clang::Stmt::ReturnStmtClass:
     return markClangAstObjectDefined(static_cast<clang::ReturnStmt *>(stmt));
+  case clang::Stmt::StringLiteralClass:
+    return markClangStringLiteralStorageDefined(
+        static_cast<clang::StringLiteral *>(stmt));
+  case clang::Stmt::StmtExprClass:
+    return markClangAstObjectDefined(static_cast<clang::StmtExpr *>(stmt));
   case clang::Stmt::SubstNonTypeTemplateParmExprClass:
     return markClangAstObjectDefined(
         static_cast<clang::SubstNonTypeTemplateParmExpr *>(stmt));
@@ -886,10 +1319,12 @@ static clang::Stmt *markClangStmtObjectDefinedByClass(clang::Stmt *stmt) {
     return markClangUnresolvedLookupStorageDefined(
         static_cast<clang::UnresolvedLookupExpr *>(stmt));
   case clang::Stmt::UnresolvedMemberExprClass:
-    return markClangAstObjectDefined(
+    return markClangUnresolvedMemberStorageDefined(
         static_cast<clang::UnresolvedMemberExpr *>(stmt));
   case clang::Stmt::UnaryOperatorClass:
     return markClangAstObjectDefined(static_cast<clang::UnaryOperator *>(stmt));
+  case clang::Stmt::VAArgExprClass:
+    return markClangAstObjectDefined(static_cast<clang::VAArgExpr *>(stmt));
   default:
     return stmt;
   }
@@ -912,15 +1347,25 @@ static clang::Expr *markClangExprObjectDefinedByClass(clang::Expr *expr) {
       markClangStmtObjectDefinedByClass(expr));
 }
 
+static const clang::Expr *
+markClangExprObjectDefinedByClass(const clang::Expr *expr) {
+  return markClangExprObjectDefinedByClass(const_cast<clang::Expr *>(expr));
+}
+
 static void markClangStmtChildrenDefined(clang::Stmt *stmt) {
 #if ROSE_USE_VALGRIND
-  if (!RUNNING_ON_VALGRIND || stmt == nullptr) {
+  if (!clangFrontendRunningOnValgrind() || stmt == nullptr) {
     return;
   }
 
   stmt = markClangStmtObjectDefinedByClass(stmt);
   if (clang::CallExpr *call = llvm::dyn_cast<clang::CallExpr>(stmt)) {
-    llvm::ArrayRef<clang::Stmt *> sub_exprs = call->getRawSubExprs();
+    llvm::ArrayRef<clang::Stmt *> sub_exprs =
+        readClangApiValueDefined([&]() { return call->getRawSubExprs(); });
+    if (sub_exprs.data() != nullptr && !sub_exprs.empty()) {
+      VALGRIND_MAKE_MEM_DEFINED(const_cast<clang::Stmt **>(sub_exprs.data()),
+                                sub_exprs.size() * sizeof(clang::Stmt *));
+    }
     for (clang::Stmt *child : sub_exprs) {
       markClangStmtObjectDefinedByClass(markClangAstObjectDefined(child));
     }
@@ -929,7 +1374,11 @@ static void markClangStmtChildrenDefined(clang::Stmt *stmt) {
 
   if (clang::CXXConstructExpr *construct =
           llvm::dyn_cast<clang::CXXConstructExpr>(stmt)) {
-    for (clang::Expr *arg : construct->arguments()) {
+    const unsigned arg_count =
+        readClangApiValueDefined([&]() { return construct->getNumArgs(); });
+    for (unsigned i = 0; i < arg_count; ++i) {
+      clang::Expr *arg =
+          readClangApiValueDefined([&]() { return construct->getArg(i); });
       markClangStmtObjectDefinedByClass(markClangAstObjectDefined(arg));
     }
     return;
@@ -940,6 +1389,47 @@ static void markClangStmtChildrenDefined(clang::Stmt *stmt) {
     for (clang::Expr *init : init_list->inits()) {
       markClangStmtObjectDefinedByClass(markClangAstObjectDefined(init));
     }
+    return;
+  }
+
+  if (clang::CXXStdInitializerListExpr *init_list =
+          llvm::dyn_cast<clang::CXXStdInitializerListExpr>(stmt)) {
+    markClangStmtObjectDefinedByClass(
+        readClangApiValueDefined([&]() { return init_list->getSubExpr(); }));
+    return;
+  }
+
+  if (clang::CoreturnStmt *coreturn_stmt =
+          llvm::dyn_cast<clang::CoreturnStmt>(stmt)) {
+    markClangStmtObjectDefinedByClass(readClangApiValueDefined(
+        [&]() { return coreturn_stmt->getOperand(); }));
+    markClangStmtObjectDefinedByClass(readClangApiValueDefined(
+        [&]() { return coreturn_stmt->getPromiseCall(); }));
+    return;
+  }
+
+  if (clang::CoroutineBodyStmt *coroutine_body_stmt =
+          llvm::dyn_cast<clang::CoroutineBodyStmt>(stmt)) {
+    coroutine_body_stmt =
+        markClangCoroutineBodyStorageDefined(coroutine_body_stmt);
+    return;
+  }
+
+  if (clang::CXXParenListInitExpr *paren_list_init =
+          llvm::dyn_cast<clang::CXXParenListInitExpr>(stmt)) {
+    llvm::ArrayRef<clang::Expr *> init_exprs = readClangApiValueDefined(
+        [&]() { return paren_list_init->getInitExprs(); });
+    for (clang::Expr *init_expr : init_exprs) {
+      markClangStmtObjectDefinedByClass(init_expr);
+    }
+    markClangStmtObjectDefinedByClass(readClangApiValueDefined(
+        [&]() { return paren_list_init->getArrayFiller(); }));
+    return;
+  }
+
+  if (clang::UnresolvedMemberExpr *unresolved_member =
+          llvm::dyn_cast<clang::UnresolvedMemberExpr>(stmt)) {
+    markClangUnresolvedMemberStorageDefined(unresolved_member);
     return;
   }
 
@@ -958,6 +1448,23 @@ static void markClangStmtChildrenDefined(clang::Stmt *stmt) {
     clang::Expr *sub_expr =
         readClangApiValueDefined([&]() { return throw_expr->getSubExpr(); });
     markClangStmtObjectDefinedByClass(markClangAstObjectDefined(sub_expr));
+    return;
+  }
+
+  if (clang::DeclStmt *decl_stmt = llvm::dyn_cast<clang::DeclStmt>(stmt)) {
+    decl_stmt = markClangDeclStmtStorageDefined(decl_stmt);
+    for (clang::Decl *decl : decl_stmt->decls()) {
+      decl = markClangDeclObjectDefinedByKind(decl);
+      if (auto *value_decl = llvm::dyn_cast_or_null<clang::ValueDecl>(decl)) {
+        value_decl = markClangValueDeclObjectDefinedByKind(value_decl);
+        markClangQualTypeDefined(
+            readClangApiValueDefined([&]() { return value_decl->getType(); }));
+      }
+      if (auto *var_decl = llvm::dyn_cast_or_null<clang::VarDecl>(decl)) {
+        markClangStmtObjectDefinedByClass(
+            readClangApiValueDefined([&]() { return var_decl->getInit(); }));
+      }
+    }
     return;
   }
 
@@ -1012,10 +1519,31 @@ static void markClangStmtChildrenDefined(clang::Stmt *stmt) {
 
   if (clang::ArraySubscriptExpr *subscript =
           llvm::dyn_cast<clang::ArraySubscriptExpr>(stmt)) {
-    markClangStmtObjectDefinedByClass(
-        markClangAstObjectDefined(subscript->getBase()));
-    markClangStmtObjectDefinedByClass(
-        markClangAstObjectDefined(subscript->getIdx()));
+    clang::Expr *base =
+        readClangApiValueDefined([&]() { return subscript->getBase(); });
+    clang::Expr *idx =
+        readClangApiValueDefined([&]() { return subscript->getIdx(); });
+    markClangStmtObjectDefinedByClass(markClangAstObjectDefined(base));
+    markClangStmtObjectDefinedByClass(markClangAstObjectDefined(idx));
+    return;
+  }
+
+  if (clang::GCCAsmStmt *gcc_asm_stmt =
+          llvm::dyn_cast<clang::GCCAsmStmt>(stmt)) {
+    const unsigned num_outputs = readClangApiValueDefined(
+        [&]() { return gcc_asm_stmt->getNumOutputs(); });
+    const unsigned num_inputs = readClangApiValueDefined(
+        [&]() { return gcc_asm_stmt->getNumInputs(); });
+    for (unsigned i = 0; i < num_outputs; ++i) {
+      markClangStmtObjectDefinedByClass(
+          markClangAstObjectDefined(readClangApiValueDefined(
+              [&]() { return gcc_asm_stmt->getOutputExpr(i); })));
+    }
+    for (unsigned i = 0; i < num_inputs; ++i) {
+      markClangStmtObjectDefinedByClass(
+          markClangAstObjectDefined(readClangApiValueDefined(
+              [&]() { return gcc_asm_stmt->getInputExpr(i); })));
+    }
     return;
   }
 
@@ -1045,6 +1573,12 @@ static void markClangStmtChildrenDefined(clang::Stmt *stmt) {
           llvm::dyn_cast<clang::ExprWithCleanups>(stmt)) {
     markClangStmtObjectDefinedByClass(
         markClangAstObjectDefined(cleanups->getSubExpr()));
+    return;
+  }
+
+  if (clang::StmtExpr *stmt_expr = llvm::dyn_cast<clang::StmtExpr>(stmt)) {
+    markClangStmtObjectDefinedByClass(markClangAstObjectDefined(
+        readClangApiValueDefined([&]() { return stmt_expr->getSubStmt(); })));
     return;
   }
 
@@ -1509,7 +2043,7 @@ static bool should_materialize_implicit_c_function_decl_for_ref(
     return false;
   }
   if (decl->getBuiltinID() != clang::Builtin::NotBuiltin ||
-      decl->hasAttr<clang::BuiltinAttr>()) {
+      clangDeclHasBuiltinAttrDefinedForFrontend(decl)) {
     return false;
   }
   if (!decl->isImplicit() && decl->doesThisDeclarationHaveABody()) {
@@ -2839,13 +3373,13 @@ std::string printNestedNameSpecifier(clang::NestedNameSpecifier specifier,
   policy.SuppressScope = false;
   policy.SuppressTagKeyword = true;
 #if ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND) {
+  if (clangFrontendRunningOnValgrind()) {
     VALGRIND_DISABLE_ERROR_REPORTING;
   }
 #endif
   specifier.print(stream, policy);
 #if ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND) {
+  if (clangFrontendRunningOnValgrind()) {
     VALGRIND_ENABLE_ERROR_REPORTING;
   }
 #endif
@@ -3124,7 +3658,7 @@ ExplicitQualifierInfo getExplicitQualifierInfo(
           clang::PrintingPolicy policy(context.getLangOpts());
           policy.SuppressScope = true;
           policy.SuppressTagKeyword = true;
-          token = qual_type.getAsString(policy);
+          token = clangQualTypeAsStringDefinedForFrontend(qual_type, policy);
         }
         break;
       }
@@ -3210,7 +3744,8 @@ void attachExplicitQualifierFromNestedName(
 
   const clang::NestedNameSpecifierLoc *qualifier_loc_ptr = nullptr;
   clang::NestedNameSpecifierLoc defined_qualifier_loc;
-  if (qualifier_loc != nullptr && qualifier_loc->getNestedNameSpecifier()) {
+  if (qualifier_loc != nullptr &&
+      getClangNestedNameSpecifierLocSpecifierDefined(*qualifier_loc)) {
     defined_qualifier_loc =
         markClangNestedNameSpecifierLocDefined(*qualifier_loc);
     qualifier_loc_ptr = &defined_qualifier_loc;
@@ -3225,6 +3760,7 @@ void attachExplicitQualifierFromNestedName(
 
 clang::NestedNameSpecifier structuralQualifierForExplicitlyQualifiedNonrealRef(
     clang::NestedNameSpecifier qualifier) {
+  qualifier = markClangNestedNameSpecifierDefined(qualifier);
   if (!qualifier) {
     return qualifier;
   }
@@ -3657,7 +4193,7 @@ size_t ClangToSageTranslator::countExplicitTemplateArgumentsFromSource(
 void ClangToSageTranslator::applySourceRangeWithTrailingSemicolon(
     SgNode *rose_node, const clang::Stmt *clang_stmt) {
 #if ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND) {
+  if (clangFrontendRunningOnValgrind()) {
     VALGRIND_MAKE_MEM_DEFINED(&clang_stmt, sizeof(clang_stmt));
   }
 #endif
@@ -3717,7 +4253,8 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
   }
 
   auto it = p_stmt_translation_map.find(stmt);
-  if (it != p_stmt_translation_map.end()) {
+  if (p_rebuild_translation_cache_depth == 0 &&
+      it != p_stmt_translation_map.end()) {
     if (SgExpression *expr = isSgExpression(it->second)) {
       // Clang can reuse expression subtrees across template patterns,
       // instantiations, and other lowered wrapper nodes. ROSE expressions
@@ -4389,8 +4926,12 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
     }
   }
 
-  p_stmt_translation_map.insert(
-      std::pair<clang::Stmt *, SgNode *>(stmt, result));
+  if (p_rebuild_translation_cache_depth != 0) {
+    p_stmt_translation_map[stmt] = result;
+  } else {
+    p_stmt_translation_map.insert(
+        std::pair<clang::Stmt *, SgNode *>(stmt, result));
+  }
 
   return result;
 }
@@ -4495,13 +5036,16 @@ bool ClangToSageTranslator::VisitGCCAsmStmt(clang::GCCAsmStmt *gcc_asm_stmt,
 #endif
   bool res = true;
 
-  unsigned asmNumInput = gcc_asm_stmt->getNumInputs();
-  unsigned asmNumOutput = gcc_asm_stmt->getNumOutputs();
-  unsigned asmClobber = gcc_asm_stmt->getNumClobbers();
+  unsigned asmNumInput =
+      readClangApiValueDefined([&]() { return gcc_asm_stmt->getNumInputs(); });
+  unsigned asmNumOutput =
+      readClangApiValueDefined([&]() { return gcc_asm_stmt->getNumOutputs(); });
+  unsigned asmClobber = readClangApiValueDefined(
+      [&]() { return gcc_asm_stmt->getNumClobbers(); });
 
   // LLVM returns std::string
-  std::string AsmString;
-  AsmString = gcc_asm_stmt->getAsmString();
+  std::string AsmString =
+      readClangApiValueDefined([&]() { return gcc_asm_stmt->getAsmString(); });
 #if DEBUG_VISIT_STMT
   std::cerr << "AsmString:" << AsmString << std::endl;
 #endif
@@ -4515,8 +5059,9 @@ bool ClangToSageTranslator::VisitGCCAsmStmt(clang::GCCAsmStmt *gcc_asm_stmt,
   // Pei-Hung (03/22/2022)  The clobber string is available.
   // The implementation adding clobber into ROSE AST is not in place.
   for (unsigned i = 0; i < asmClobber; ++i) {
-    std::string clobberStr =
-        static_cast<std::string>(gcc_asm_stmt->getClobber(i));
+    std::string clobberStr = readClangApiValueDefined([&]() {
+      return static_cast<std::string>(gcc_asm_stmt->getClobber(i));
+    });
 #if DEBUG_VISIT_STMT
     std::cerr << "AsmOp clobber[" << i << "]: " << clobberStr << std::endl;
 #endif
@@ -4542,12 +5087,16 @@ bool ClangToSageTranslator::VisitGCCAsmStmt(clang::GCCAsmStmt *gcc_asm_stmt,
 
   // process output
   for (unsigned i = 0; i < asmNumOutput; ++i) {
-    SgNode *tmp_node = Traverse(gcc_asm_stmt->getOutputExpr(i));
+    clang::Expr *clang_output_expr =
+        markClangExprObjectDefinedByClass(readClangApiValueDefined(
+            [&]() { return gcc_asm_stmt->getOutputExpr(i); }));
+    SgNode *tmp_node = Traverse(clang_output_expr);
     SgExpression *outputExpr = isSgExpression(tmp_node);
     ROSE_ASSERT(outputExpr != nullptr);
 
-    std::string outputConstraintStr =
-        static_cast<std::string>(gcc_asm_stmt->getOutputConstraint(i));
+    std::string outputConstraintStr = readClangApiValueDefined([&]() {
+      return static_cast<std::string>(gcc_asm_stmt->getOutputConstraint(i));
+    });
 // Clang's constraint is equivalent to ROSE's modifier + operand constraints
 #if DEBUG_VISIT_STMT
     std::cerr << "AsmOp output constraint[" << i << "]: " << outputConstraintStr
@@ -4578,9 +5127,10 @@ bool ClangToSageTranslator::VisitGCCAsmStmt(clang::GCCAsmStmt *gcc_asm_stmt,
 
     // set as an output AsmOp
     sageAsmOp->set_isOutputOperand(true);
-    if (llvm::StringRef outputName = gcc_asm_stmt->getOutputName(i);
-        !outputName.empty()) {
-      sageAsmOp->set_name(outputName.str());
+    std::string outputName = readClangApiValueDefined(
+        [&]() { return gcc_asm_stmt->getOutputName(i).str(); });
+    if (!outputName.empty()) {
+      sageAsmOp->set_name(outputName);
     }
 
     ROSE_ASSERT(sm.size() == 4);
@@ -4615,12 +5165,16 @@ bool ClangToSageTranslator::VisitGCCAsmStmt(clang::GCCAsmStmt *gcc_asm_stmt,
 
   // process input
   for (unsigned i = 0; i < asmNumInput; ++i) {
-    SgNode *tmp_node = Traverse(gcc_asm_stmt->getInputExpr(i));
+    clang::Expr *clang_input_expr =
+        markClangExprObjectDefinedByClass(readClangApiValueDefined(
+            [&]() { return gcc_asm_stmt->getInputExpr(i); }));
+    SgNode *tmp_node = Traverse(clang_input_expr);
     SgExpression *inputExpr = isSgExpression(tmp_node);
     ROSE_ASSERT(inputExpr != nullptr);
 
-    std::string inputConstraintStr =
-        static_cast<std::string>(gcc_asm_stmt->getInputConstraint(i));
+    std::string inputConstraintStr = readClangApiValueDefined([&]() {
+      return static_cast<std::string>(gcc_asm_stmt->getInputConstraint(i));
+    });
 // Clang's constraint is equivalent to ROSE's modifier + operand constraints
 #if DEBUG_VISIT_STMT
     std::cerr << "AsmOp input constraint[" << i << "]: " << inputConstraintStr
@@ -4651,9 +5205,10 @@ bool ClangToSageTranslator::VisitGCCAsmStmt(clang::GCCAsmStmt *gcc_asm_stmt,
 
     // set as an input AsmOp
     sageAsmOp->set_isOutputOperand(false);
-    if (llvm::StringRef inputName = gcc_asm_stmt->getInputName(i);
-        !inputName.empty()) {
-      sageAsmOp->set_name(inputName.str());
+    std::string inputName = readClangApiValueDefined(
+        [&]() { return gcc_asm_stmt->getInputName(i).str(); });
+    if (!inputName.empty()) {
+      sageAsmOp->set_name(inputName);
     }
 
     ROSE_ASSERT(sm.size() == 4);
@@ -5441,7 +5996,7 @@ SgStatement *
 ClangToSageTranslator::wrapStatementWithPragmas(clang::Stmt *stmt,
                                                 SgStatement *statement) {
 #if ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND) {
+  if (clangFrontendRunningOnValgrind()) {
     VALGRIND_MAKE_MEM_DEFINED(&stmt, sizeof(stmt));
   }
 #endif
@@ -5597,8 +6152,11 @@ bool ClangToSageTranslator::VisitCoreturnStmt(
 #endif
   bool res = true;
 
+  core_turn_stmt = markClangCoreturnStorageDefined(core_turn_stmt);
   SgExpression *return_expr = nullptr;
-  if (clang::Expr *operand = core_turn_stmt->getOperand()) {
+  if (clang::Expr *operand =
+          markClangExprObjectDefinedByClass(readClangApiValueDefined(
+              [&]() { return core_turn_stmt->getOperand(); }))) {
     SgNode *tmp_expr = Traverse(operand);
     return_expr = isSgExpression(tmp_expr);
     if (tmp_expr != nullptr && return_expr == nullptr) {
@@ -5624,13 +6182,17 @@ bool ClangToSageTranslator::VisitCoroutineBodyStmt(
 #endif
   bool res = true;
 
-  SgNode *tmp_body = Traverse(coroutine_body_stmt->getBody());
+  coroutine_body_stmt =
+      markClangCoroutineBodyStorageDefined(coroutine_body_stmt);
+  clang::CompoundStmt *clang_body = static_cast<clang::CompoundStmt *>(
+      markClangStmtObjectDefinedByClass(readClangApiValueDefined(
+          [&]() { return coroutine_body_stmt->getBody(); })));
+  SgNode *tmp_body = Traverse(clang_body);
   SgStatement *body = isSgStatement(tmp_body);
   if (body == nullptr && tmp_body != nullptr) {
     if (SgExpression *expr = isSgExpression(tmp_body)) {
       body = SageBuilder::buildExprStatement(expr);
-      applySourceRangeWithTrailingSemicolon(body,
-                                            coroutine_body_stmt->getBody());
+      applySourceRangeWithTrailingSemicolon(body, clang_body);
     } else {
       std::cerr << "Runtime error: CoroutineBodyStmt body did not translate "
                    "into SgStatement or SgExpression"
@@ -5643,7 +6205,9 @@ bool ClangToSageTranslator::VisitCoroutineBodyStmt(
     body = SageBuilder::buildNullStatement();
   }
 
-  applySourceRange(body, coroutine_body_stmt->getSourceRange());
+  applySourceRange(body, readClangApiValueDefined([&]() {
+                     return coroutine_body_stmt->getSourceRange();
+                   }));
   *node = body;
 
   return VisitStmt(coroutine_body_stmt, node) && res;
@@ -5737,6 +6301,7 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
 
   auto translate_for_init_child =
       [&](clang::Stmt *clang_stmt) -> SgStatement * {
+    clang_stmt = markClangStmtObjectDefinedByClass(clang_stmt);
     if (clang_stmt == nullptr) {
       return nullptr;
     }
@@ -5764,7 +6329,10 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
 
   SgBasicBlock *wrapper_block = nullptr;
   SgStatement *init_stmt = nullptr;
-  if (clang::Stmt *clang_init = cxx_for_range_stmt->getInit()) {
+  clang::Stmt *clang_init =
+      markClangStmtObjectDefinedByClass(readClangApiValueDefined(
+          [&]() { return cxx_for_range_stmt->getInit(); }));
+  if (clang_init != nullptr) {
     wrapper_block = SageBuilder::buildBasicBlock_nfi();
     if (wrapper_block != nullptr && wrapper_block->get_parent() == nullptr) {
       wrapper_block->set_parent(SageBuilder::topScopeStack());
@@ -5811,17 +6379,32 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
   // Root-cause fix: model C++ range-for directly in the AST instead of
   // desugaring to SgForStatement. SgForStatement for-init unparsing merges
   // declarations and rewrites type deduction semantics (e.g. __range/__begin).
-  SgVariableDeclaration *range_decl = translate_var_decl_child(
-      cxx_for_range_stmt->getRangeStmt(), "CXXForRangeStmt::range");
-  SgVariableDeclaration *begin_decl = translate_var_decl_child(
-      cxx_for_range_stmt->getBeginStmt(), "CXXForRangeStmt::begin");
-  SgVariableDeclaration *end_decl = translate_var_decl_child(
-      cxx_for_range_stmt->getEndStmt(), "CXXForRangeStmt::end");
-  SgVariableDeclaration *iterator_decl = translate_var_decl_child(
-      cxx_for_range_stmt->getLoopVarStmt(), "CXXForRangeStmt::loop variable");
+  SgVariableDeclaration *range_decl =
+      translate_var_decl_child(readClangApiValueDefined([&]() {
+                                 return cxx_for_range_stmt->getRangeStmt();
+                               }),
+                               "CXXForRangeStmt::range");
+  SgVariableDeclaration *begin_decl =
+      translate_var_decl_child(readClangApiValueDefined([&]() {
+                                 return cxx_for_range_stmt->getBeginStmt();
+                               }),
+                               "CXXForRangeStmt::begin");
+  SgVariableDeclaration *end_decl =
+      translate_var_decl_child(readClangApiValueDefined([&]() {
+                                 return cxx_for_range_stmt->getEndStmt();
+                               }),
+                               "CXXForRangeStmt::end");
+  SgVariableDeclaration *iterator_decl =
+      translate_var_decl_child(readClangApiValueDefined([&]() {
+                                 return cxx_for_range_stmt->getLoopVarStmt();
+                               }),
+                               "CXXForRangeStmt::loop variable");
 
   SgExpression *not_equal_expr = nullptr;
-  if (clang::Expr *clang_cond = cxx_for_range_stmt->getCond()) {
+  clang::Expr *clang_cond =
+      markClangExprObjectDefinedByClass(readClangApiValueDefined(
+          [&]() { return cxx_for_range_stmt->getCond(); }));
+  if (clang_cond != nullptr) {
     SgNode *tmp_cond = Traverse(clang_cond);
     if (SgExpression *cond_expr = isSgExpression(tmp_cond)) {
       not_equal_expr = cond_expr;
@@ -5836,7 +6419,9 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
   }
 
   SgExpression *increment_expr = nullptr;
-  if (clang::Expr *clang_inc = cxx_for_range_stmt->getInc()) {
+  clang::Expr *clang_inc = markClangExprObjectDefinedByClass(
+      readClangApiValueDefined([&]() { return cxx_for_range_stmt->getInc(); }));
+  if (clang_inc != nullptr) {
     SgNode *tmp_inc = Traverse(clang_inc);
     if (SgExpression *inc_expr = isSgExpression(tmp_inc)) {
       increment_expr = inc_expr;
@@ -6028,6 +6613,7 @@ bool ClangToSageTranslator::VisitDeclStmt(clang::DeclStmt *decl_stmt,
   std::cerr << "ClangToSageTranslator::VisitDeclStmt" << std::endl;
 #endif
   decl_stmt = markClangAstObjectDefined(decl_stmt);
+  decl_stmt = markClangDeclStmtStorageDefined(decl_stmt);
 
   bool res = true;
   bool prev_in_decl_stmt = p_in_decl_stmt_translation;
@@ -6035,6 +6621,7 @@ bool ClangToSageTranslator::VisitDeclStmt(clang::DeclStmt *decl_stmt,
 
   std::vector<clang::Decl *> visible_decls;
   for (clang::Decl *decl : decl_stmt->decls()) {
+    decl = markClangDeclObjectDefinedByKind(decl);
     if (decl == nullptr) {
       continue;
     }
@@ -6098,6 +6685,7 @@ bool ClangToSageTranslator::VisitDeclStmt(clang::DeclStmt *decl_stmt,
     for (auto visible_it = visible_decls.begin();
          visible_it != visible_decls.end() - 1; ++visible_it) {
       clang::Decl *decl = *visible_it;
+      decl = markClangDeclObjectDefinedByKind(decl);
       if (decl == nullptr)
         continue;
       SgNode *child = Traverse(decl);
@@ -6115,7 +6703,8 @@ bool ClangToSageTranslator::VisitDeclStmt(clang::DeclStmt *decl_stmt,
       if (sub_decl_stmt == nullptr) {
         continue;
       } else if (child != nullptr) {
-        if (clang::TagDecl *tagDecl = llvm::dyn_cast<clang::TagDecl>(decl)) {
+        if (clang::TagDecl *tagDecl = llvm::dyn_cast<clang::TagDecl>(
+                markClangDeclObjectDefinedByKind(decl))) {
           if (tagDecl->isEmbeddedInDeclarator() ||
               tagDecl->getTypedefNameForAnonDecl() != nullptr) {
             continue;
@@ -6128,7 +6717,8 @@ bool ClangToSageTranslator::VisitDeclStmt(clang::DeclStmt *decl_stmt,
       }
     }
     // last declaration in scope
-    clang::Decl *last_clang_decl = visible_decls.back();
+    clang::Decl *last_clang_decl =
+        markClangDeclObjectDefinedByKind(visible_decls.back());
     SgNode *lastDecl = Traverse(last_clang_decl);
     detach_block_scope_function_decl_from_semantic_scope(last_clang_decl,
                                                          lastDecl);
@@ -6832,7 +7422,8 @@ bool ClangToSageTranslator::VisitIfStmt(clang::IfStmt *if_stmt, SgNode **node) {
   // Since SgIfStmt does not directly model init-statements, lower this shape to
   // an equivalent block:
   //   { init; if (cond) ... }
-  clang::Stmt *clang_if_init_stmt = if_stmt->getInit();
+  clang::Stmt *clang_if_init_stmt = markClangStmtObjectDefinedByClass(
+      readClangApiValueDefined([&]() { return if_stmt->getInit(); }));
   SgBasicBlock *if_init_wrapper = nullptr;
   if (clang_if_init_stmt != nullptr) {
     if_init_wrapper = SageBuilder::buildBasicBlock_nfi();
@@ -6866,7 +7457,9 @@ bool ClangToSageTranslator::VisitIfStmt(clang::IfStmt *if_stmt, SgNode **node) {
       sg_init_stmt = SageBuilder::buildNullStatement_nfi();
       setCompilerGeneratedFileInfo(sg_init_stmt, true);
     } else {
-      applySourceRange(sg_init_stmt, clang_if_init_stmt->getSourceRange());
+      applySourceRange(sg_init_stmt, readClangApiValueDefined([&]() {
+                         return clang_if_init_stmt->getSourceRange();
+                       }));
     }
 
     sg_init_stmt->set_parent(if_init_wrapper);
@@ -6881,7 +7474,9 @@ bool ClangToSageTranslator::VisitIfStmt(clang::IfStmt *if_stmt, SgNode **node) {
   SageBuilder::pushScopeStack(isSgScopeStatement(*node));
 
   SgStatement *cond_stmt = nullptr;
-  if (clang::DeclStmt *cond_decl = if_stmt->getConditionVariableDeclStmt()) {
+  if (clang::DeclStmt *cond_decl = llvm::dyn_cast_or_null<clang::DeclStmt>(
+          markClangStmtObjectDefinedByClass(readClangApiValueDefined(
+              [&]() { return if_stmt->getConditionVariableDeclStmt(); })))) {
     SgNode *tmp_cond = Traverse(cond_decl);
     cond_stmt = isSgStatement(tmp_cond);
     if (tmp_cond != nullptr && cond_stmt == nullptr) {
@@ -6891,16 +7486,21 @@ bool ClangToSageTranslator::VisitIfStmt(clang::IfStmt *if_stmt, SgNode **node) {
       res = false;
     }
     if (cond_stmt != nullptr) {
-      applySourceRange(cond_stmt, cond_decl->getSourceRange());
+      applySourceRange(cond_stmt, readClangApiValueDefined([&]() {
+                         return cond_decl->getSourceRange();
+                       }));
     }
   } else {
-    clang::Expr *cond_expr_clang = llvm::dyn_cast_or_null<clang::Expr>(
-        markClangStmtObjectDefinedByClass(if_stmt->getCond()));
+    clang::Expr *cond_expr_clang =
+        llvm::dyn_cast_or_null<clang::Expr>(markClangStmtObjectDefinedByClass(
+            readClangApiValueDefined([&]() { return if_stmt->getCond(); })));
     SgNode *tmp_cond = Traverse(cond_expr_clang);
     SgExpression *cond_expr = isSgExpression(tmp_cond);
     cond_stmt = SageBuilder::buildExprStatement(cond_expr);
     if (cond_expr_clang != nullptr) {
-      applySourceRange(cond_stmt, cond_expr_clang->getSourceRange());
+      applySourceRange(cond_stmt, readClangApiValueDefined([&]() {
+                         return cond_expr_clang->getSourceRange();
+                       }));
     } else {
       setCompilerGeneratedFileInfo(cond_stmt, true);
     }
@@ -6928,8 +7528,8 @@ bool ClangToSageTranslator::VisitIfStmt(clang::IfStmt *if_stmt, SgNode **node) {
     setCompilerGeneratedFileInfo(cond_stmt, true);
   }
 
-  clang::Stmt *then_clang_stmt =
-      markClangStmtObjectDefinedByClass(if_stmt->getThen());
+  clang::Stmt *then_clang_stmt = markClangStmtObjectDefinedByClass(
+      readClangApiValueDefined([&]() { return if_stmt->getThen(); }));
   SgNode *tmp_then = Traverse(then_clang_stmt);
   SgStatement *then_stmt = isSgStatement(tmp_then);
   if (then_stmt == nullptr) {
@@ -6940,8 +7540,8 @@ bool ClangToSageTranslator::VisitIfStmt(clang::IfStmt *if_stmt, SgNode **node) {
   applySourceRangeWithTrailingSemicolon(then_stmt, then_clang_stmt);
   then_stmt = wrapStatementWithPragmas(then_clang_stmt, then_stmt);
 
-  clang::Stmt *else_clang_stmt =
-      markClangStmtObjectDefinedByClass(if_stmt->getElse());
+  clang::Stmt *else_clang_stmt = markClangStmtObjectDefinedByClass(
+      readClangApiValueDefined([&]() { return if_stmt->getElse(); }));
   SgNode *tmp_else = Traverse(else_clang_stmt);
   SgStatement *else_stmt = isSgStatement(tmp_else);
   if (else_stmt == nullptr) {
@@ -7606,7 +8206,10 @@ bool ClangToSageTranslator::VisitSwitchStmt(clang::SwitchStmt *switch_stmt,
 
   bool res = true;
 
-  clang::Stmt *clang_switch_init_stmt = switch_stmt->getInit();
+  switch_stmt = llvm::cast<clang::SwitchStmt>(
+      markClangStmtObjectDefinedByClass(switch_stmt));
+  clang::Stmt *clang_switch_init_stmt = markClangStmtObjectDefinedByClass(
+      readClangApiValueDefined([&]() { return switch_stmt->getInit(); }));
   // SgSwitchStatement has no dedicated child for a C++17 init-statement.
   // Lower it into an enclosing block so the translated AST remains
   // structurally valid while preserving the initializer's scope for the switch
@@ -7685,8 +8288,10 @@ bool ClangToSageTranslator::VisitSwitchStmt(clang::SwitchStmt *switch_stmt,
   SageBuilder::pushScopeStack(sg_switch_stmt);
 
   SgStatement *cond_stmt = nullptr;
-  if (clang::DeclStmt *cond_decl =
-          switch_stmt->getConditionVariableDeclStmt()) {
+  if (clang::DeclStmt *cond_decl = llvm::dyn_cast_or_null<clang::DeclStmt>(
+          markClangStmtObjectDefinedByClass(readClangApiValueDefined([&]() {
+            return switch_stmt->getConditionVariableDeclStmt();
+          })))) {
     SgNode *tmp_cond = Traverse(cond_decl);
     cond_stmt = isSgStatement(tmp_cond);
     if (tmp_cond != nullptr && cond_stmt == nullptr) {
@@ -7696,14 +8301,22 @@ bool ClangToSageTranslator::VisitSwitchStmt(clang::SwitchStmt *switch_stmt,
       res = false;
     }
     if (cond_stmt != nullptr) {
-      applySourceRange(cond_stmt, cond_decl->getSourceRange());
+      applySourceRange(cond_stmt, readClangApiValueDefined([&]() {
+                         return cond_decl->getSourceRange();
+                       }));
     }
   } else {
-    SgNode *tmp_cond = Traverse(switch_stmt->getCond());
+    clang::Expr *clang_cond = llvm::dyn_cast_or_null<clang::Expr>(
+        markClangStmtObjectDefinedByClass(readClangApiValueDefined(
+            [&]() { return switch_stmt->getCond(); })));
+    ROSE_ASSERT(clang_cond != nullptr);
+    SgNode *tmp_cond = Traverse(clang_cond);
     SgExpression *cond = isSgExpression(tmp_cond);
     ROSE_ASSERT(cond != nullptr);
     cond_stmt = SageBuilder::buildExprStatement(cond);
-    applySourceRange(cond_stmt, switch_stmt->getCond()->getSourceRange());
+    applySourceRange(cond_stmt, readClangApiValueDefined([&]() {
+                       return clang_cond->getSourceRange();
+                     }));
   }
 
   if (cond_stmt == nullptr) {
@@ -7734,12 +8347,14 @@ bool ClangToSageTranslator::VisitSwitchStmt(clang::SwitchStmt *switch_stmt,
   cond_stmt->set_parent(sg_switch_stmt);
   sg_switch_stmt->set_item_selector(cond_stmt);
 
-  SgNode *tmp_body = Traverse(switch_stmt->getBody());
+  clang::Stmt *clang_body = markClangStmtObjectDefinedByClass(
+      readClangApiValueDefined([&]() { return switch_stmt->getBody(); }));
+  SgNode *tmp_body = Traverse(clang_body);
   SgStatement *body = isSgStatement(tmp_body);
   SgExpression *expr = isSgExpression(tmp_body);
   if (expr != nullptr) {
     body = SageBuilder::buildExprStatement(expr);
-    applySourceRangeWithTrailingSemicolon(body, switch_stmt->getBody());
+    applySourceRangeWithTrailingSemicolon(body, clang_body);
   }
   if (body == nullptr) {
     body = SageBuilder::buildNullStatement_nfi();
@@ -7754,15 +8369,19 @@ bool ClangToSageTranslator::VisitSwitchStmt(clang::SwitchStmt *switch_stmt,
   body->set_parent(sg_switch_stmt);
 
   if (switch_init_wrapper != nullptr) {
-    applySourceRange(sg_switch_stmt, switch_stmt->getSourceRange());
+    applySourceRange(sg_switch_stmt, readClangApiValueDefined([&]() {
+                       return switch_stmt->getSourceRange();
+                     }));
     sg_switch_stmt->set_parent(switch_init_wrapper);
     switch_init_wrapper->append_statement(sg_switch_stmt);
 
-    if (clang_switch_init_stmt->getBeginLoc().isValid() &&
-        switch_stmt->getEndLoc().isValid()) {
+    clang::SourceLocation init_begin = readClangApiValueDefined(
+        [&]() { return clang_switch_init_stmt->getBeginLoc(); });
+    clang::SourceLocation switch_end =
+        readClangApiValueDefined([&]() { return switch_stmt->getEndLoc(); });
+    if (init_begin.isValid() && switch_end.isValid()) {
       applySourceRange(switch_init_wrapper,
-                       clang::SourceRange(clang_switch_init_stmt->getBeginLoc(),
-                                          switch_stmt->getEndLoc()));
+                       clang::SourceRange(init_begin, switch_end));
     }
 
     SageBuilder::popScopeStack();
@@ -8098,7 +8717,10 @@ bool ClangToSageTranslator::VisitArraySubscriptExpr(
 
   bool res = true;
 
-  SgNode *tmp_base = Traverse(array_subscript_expr->getBase());
+  clang::Expr *clang_base =
+      markClangExprObjectDefinedByClass(readClangApiValueDefined(
+          [&]() { return array_subscript_expr->getBase(); }));
+  SgNode *tmp_base = Traverse(clang_base);
   SgExpression *base = isSgExpression(tmp_base);
   if (tmp_base != nullptr && base == nullptr) {
     std::cerr << "Runtime error: tmp_base != nullptr && base == nullptr"
@@ -8138,7 +8760,10 @@ bool ClangToSageTranslator::VisitArraySubscriptExpr(
     }
   }
 
-  SgNode *tmp_idx = Traverse(array_subscript_expr->getIdx());
+  clang::Expr *clang_idx =
+      markClangExprObjectDefinedByClass(readClangApiValueDefined(
+          [&]() { return array_subscript_expr->getIdx(); }));
+  SgNode *tmp_idx = Traverse(clang_idx);
   SgExpression *idx = isSgExpression(tmp_idx);
   if (tmp_idx != nullptr && idx == nullptr) {
     std::cerr << "Runtime error: tmp_idx != nullptr && idx == nullptr"
@@ -8199,6 +8824,8 @@ bool ClangToSageTranslator::VisitAtomicExpr(clang::AtomicExpr *atomic_expr,
   std::cerr << "ClangToSageTranslator::VisitAtomicExpr" << std::endl;
 #endif
   bool res = true;
+  atomic_expr = llvm::cast<clang::AtomicExpr>(
+      markClangStmtObjectDefinedByClass(atomic_expr));
 
   // ROOT CAUSE FIX: AtomicExpr represents C11/C++11 atomic operations like:
   // __atomic_load, __atomic_store, __atomic_fetch_add, __atomic_exchange, etc.
@@ -8206,7 +8833,9 @@ bool ClangToSageTranslator::VisitAtomicExpr(clang::AtomicExpr *atomic_expr,
 
   SgExprListExp *args = SageBuilder::buildExprListExp();
 
-  auto append_atomic_arg = [&](clang::Expr *clang_arg) -> void {
+  auto append_atomic_arg = [&](auto read_clang_arg) -> void {
+    clang::Expr *clang_arg = markClangExprObjectDefinedByClass(
+        readClangApiValueDefined(read_clang_arg));
     if (clang_arg == nullptr) {
       res = false;
       return;
@@ -8224,23 +8853,26 @@ bool ClangToSageTranslator::VisitAtomicExpr(clang::AtomicExpr *atomic_expr,
   };
 
   auto append_atomic_scope_arg = [&]() {
-    if (atomic_expr->getScopeModel() != nullptr) {
-      append_atomic_arg(atomic_expr->getScope());
+    const bool has_scope_model = readClangApiValueDefined(
+        [&]() { return atomic_expr->getScopeModel() != nullptr; });
+    if (has_scope_model) {
+      append_atomic_arg([&]() { return atomic_expr->getScope(); });
     }
   };
 
-  const clang::AtomicExpr::AtomicOp atomic_op = atomic_expr->getOp();
+  const clang::AtomicExpr::AtomicOp atomic_op =
+      readClangApiValueDefined([&]() { return atomic_expr->getOp(); });
   switch (atomic_op) {
   case clang::AtomicExpr::AO__atomic_compare_exchange:
   case clang::AtomicExpr::AO__atomic_compare_exchange_n:
   case clang::AtomicExpr::AO__scoped_atomic_compare_exchange:
   case clang::AtomicExpr::AO__scoped_atomic_compare_exchange_n:
-    append_atomic_arg(atomic_expr->getPtr());
-    append_atomic_arg(atomic_expr->getVal1());
-    append_atomic_arg(atomic_expr->getVal2());
-    append_atomic_arg(atomic_expr->getWeak());
-    append_atomic_arg(atomic_expr->getOrder());
-    append_atomic_arg(atomic_expr->getOrderFail());
+    append_atomic_arg([&]() { return atomic_expr->getPtr(); });
+    append_atomic_arg([&]() { return atomic_expr->getVal1(); });
+    append_atomic_arg([&]() { return atomic_expr->getVal2(); });
+    append_atomic_arg([&]() { return atomic_expr->getWeak(); });
+    append_atomic_arg([&]() { return atomic_expr->getOrder(); });
+    append_atomic_arg([&]() { return atomic_expr->getOrderFail(); });
     append_atomic_scope_arg();
     break;
 
@@ -8250,35 +8882,36 @@ bool ClangToSageTranslator::VisitAtomicExpr(clang::AtomicExpr *atomic_expr,
   case clang::AtomicExpr::AO__opencl_atomic_compare_exchange_weak:
   case clang::AtomicExpr::AO__hip_atomic_compare_exchange_strong:
   case clang::AtomicExpr::AO__hip_atomic_compare_exchange_weak:
-    append_atomic_arg(atomic_expr->getPtr());
-    append_atomic_arg(atomic_expr->getVal1());
-    append_atomic_arg(atomic_expr->getVal2());
-    append_atomic_arg(atomic_expr->getOrder());
-    append_atomic_arg(atomic_expr->getOrderFail());
+    append_atomic_arg([&]() { return atomic_expr->getPtr(); });
+    append_atomic_arg([&]() { return atomic_expr->getVal1(); });
+    append_atomic_arg([&]() { return atomic_expr->getVal2(); });
+    append_atomic_arg([&]() { return atomic_expr->getOrder(); });
+    append_atomic_arg([&]() { return atomic_expr->getOrderFail(); });
     append_atomic_scope_arg();
     break;
 
   case clang::AtomicExpr::AO__c11_atomic_init:
   case clang::AtomicExpr::AO__opencl_atomic_init:
-    append_atomic_arg(atomic_expr->getPtr());
-    append_atomic_arg(atomic_expr->getVal1());
+    append_atomic_arg([&]() { return atomic_expr->getPtr(); });
+    append_atomic_arg([&]() { return atomic_expr->getVal1(); });
     break;
 
   case clang::AtomicExpr::AO__atomic_exchange:
   case clang::AtomicExpr::AO__scoped_atomic_exchange:
-    append_atomic_arg(atomic_expr->getPtr());
-    append_atomic_arg(atomic_expr->getVal1());
-    append_atomic_arg(atomic_expr->getVal2());
-    append_atomic_arg(atomic_expr->getOrder());
+    append_atomic_arg([&]() { return atomic_expr->getPtr(); });
+    append_atomic_arg([&]() { return atomic_expr->getVal1(); });
+    append_atomic_arg([&]() { return atomic_expr->getVal2(); });
+    append_atomic_arg([&]() { return atomic_expr->getOrder(); });
     append_atomic_scope_arg();
     break;
 
   default:
-    append_atomic_arg(atomic_expr->getPtr());
-    if (atomic_expr->hasVal1Operand()) {
-      append_atomic_arg(atomic_expr->getVal1());
+    append_atomic_arg([&]() { return atomic_expr->getPtr(); });
+    if (readClangApiValueDefined(
+            [&]() { return atomic_expr->hasVal1Operand(); })) {
+      append_atomic_arg([&]() { return atomic_expr->getVal1(); });
     }
-    append_atomic_arg(atomic_expr->getOrder());
+    append_atomic_arg([&]() { return atomic_expr->getOrder(); });
     append_atomic_scope_arg();
     break;
   }
@@ -8290,7 +8923,8 @@ bool ClangToSageTranslator::VisitAtomicExpr(clang::AtomicExpr *atomic_expr,
 
   // Use the actual return type from Clang, not void - many atomics return
   // values Example: __atomic_fetch_add returns the old value before addition
-  SgType *return_type = buildTypeFromQualifiedType(atomic_expr->getType());
+  SgType *return_type = buildTypeFromQualifiedType(markClangQualTypeDefined(
+      readClangApiValueDefined([&]() { return atomic_expr->getType(); })));
   *node = SageBuilder::buildFunctionCallExp(builtin_name, return_type, args,
                                             SageBuilder::topScopeStack());
 
@@ -8643,13 +9277,17 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
 
     for (auto it = unresolved_lookup->decls_begin();
          it != unresolved_lookup->decls_end(); ++it) {
-      clang::NamedDecl *named_decl = it.getDecl();
+      clang::NamedDecl *named_decl = llvm::dyn_cast_or_null<clang::NamedDecl>(
+          markClangDeclObjectDefinedByKind(
+              readClangApiValueDefined([&]() { return it.getDecl(); })));
       if (named_decl == nullptr) {
         continue;
       }
       if (clang::UsingShadowDecl *shadow =
               llvm::dyn_cast<clang::UsingShadowDecl>(named_decl)) {
-        named_decl = shadow->getTargetDecl();
+        named_decl = llvm::dyn_cast_or_null<clang::NamedDecl>(
+            markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+                [&]() { return shadow->getTargetDecl(); })));
       }
       if (named_decl == nullptr) {
         continue;
@@ -8658,24 +9296,34 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
       clang::FunctionDecl *function_decl = nullptr;
       if (clang::FunctionTemplateDecl *template_decl =
               llvm::dyn_cast<clang::FunctionTemplateDecl>(named_decl)) {
-        function_decl = template_decl->getTemplatedDecl();
+        function_decl = llvm::dyn_cast_or_null<clang::FunctionDecl>(
+            markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+                [&]() { return template_decl->getTemplatedDecl(); })));
       } else {
-        function_decl = llvm::dyn_cast<clang::FunctionDecl>(named_decl);
+        function_decl = llvm::dyn_cast<clang::FunctionDecl>(
+            markClangDeclObjectDefinedByKind(named_decl));
       }
       if (function_decl == nullptr) {
         return;
       }
+      function_decl = llvm::dyn_cast<clang::FunctionDecl>(
+          markClangDeclObjectDefinedByKind(function_decl));
 
-      const unsigned min_args = function_decl->getMinRequiredArguments();
-      const unsigned max_args = function_decl->getNumParams();
-      const bool viable_by_arity =
-          call_arg_count >= min_args &&
-          (function_decl->isVariadic() || call_arg_count <= max_args);
+      const unsigned min_args = readClangApiValueDefined(
+          [&]() { return function_decl->getMinRequiredArguments(); });
+      const unsigned max_args = readClangApiValueDefined(
+          [&]() { return function_decl->getNumParams(); });
+      const bool is_variadic = readClangApiValueDefined(
+          [&]() { return function_decl->isVariadic(); });
+      const bool viable_by_arity = call_arg_count >= min_args &&
+                                   (is_variadic || call_arg_count <= max_args);
       if (!viable_by_arity) {
         continue;
       }
 
-      clang::Decl *canonical_decl = function_decl->getCanonicalDecl();
+      clang::Decl *canonical_decl =
+          markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+              [&]() { return function_decl->getCanonicalDecl(); }));
       if (selected_canonical_decl != nullptr &&
           selected_canonical_decl != canonical_decl) {
         selected_named_decl = nullptr;
@@ -8894,7 +9542,8 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
 
       SgScopeStatement *member_scope =
           normalize_class_like_scope(resolveScopeFromDeclContext(
-              const_cast<clang::CXXRecordDecl *>(method_decl->getParent()),
+              clangCXXMethodDeclParentDefined(
+                  const_cast<clang::CXXMethodDecl *>(method_decl)),
               SageBuilder::topScopeStack()));
       return member_scope != nullptr &&
              member_scope != current_class_like_scope;
@@ -9159,12 +9808,16 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
       }
 
       auto remove_reference = [](clang::QualType qt) -> clang::QualType {
+        qt = markClangQualTypeDefined(qt);
         if (qt.isNull()) {
           return qt;
         }
+        const clang::Type *qt_type =
+            markClangTypeObjectDefinedByClass(qt.getTypePtrOrNull());
         if (const clang::ReferenceType *ref =
-                qt->getAs<clang::ReferenceType>()) {
-          return ref->getPointeeType();
+                llvm::dyn_cast_or_null<clang::ReferenceType>(qt_type)) {
+          return markClangQualTypeDefined(readClangApiValueDefined(
+              [&]() { return ref->getPointeeType(); }));
         }
         return qt;
       };
@@ -9174,11 +9827,16 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
         if (qt.isNull()) {
           return qt;
         }
-        return qt.getCanonicalType().getUnqualifiedType();
+        clang::QualType canonical = markClangQualTypeDefined(
+            readClangApiValueDefined([&]() { return qt.getCanonicalType(); }));
+        return markClangQualTypeDefined(readClangApiValueDefined(
+            [&]() { return canonical.getUnqualifiedType(); }));
       };
 
       auto has_typedef_spelling = [](clang::QualType qt) -> bool {
-        const clang::Type *type = qt.getTypePtrOrNull();
+        qt = markClangQualTypeDefined(qt);
+        const clang::Type *type =
+            markClangTypeObjectDefinedByClass(qt.getTypePtrOrNull());
         while (type != nullptr) {
           if (llvm::isa<clang::TypedefType>(type) ||
               llvm::isa<clang::UsingType>(type)) {
@@ -9186,16 +9844,31 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
           }
           if (const clang::ReferenceType *ref =
                   llvm::dyn_cast<clang::ReferenceType>(type)) {
-            type = ref->getPointeeType().getTypePtrOrNull();
+            clang::QualType pointee =
+                markClangQualTypeDefined(readClangApiValueDefined(
+                    [&]() { return ref->getPointeeType(); }));
+            type =
+                markClangTypeObjectDefinedByClass(pointee.getTypePtrOrNull());
           } else if (const clang::ParenType *paren =
                          llvm::dyn_cast<clang::ParenType>(type)) {
-            type = paren->getInnerType().getTypePtrOrNull();
+            clang::QualType inner =
+                markClangQualTypeDefined(readClangApiValueDefined(
+                    [&]() { return paren->getInnerType(); }));
+            type = markClangTypeObjectDefinedByClass(inner.getTypePtrOrNull());
           } else if (const clang::AttributedType *attributed =
                          llvm::dyn_cast<clang::AttributedType>(type)) {
-            type = attributed->getModifiedType().getTypePtrOrNull();
+            clang::QualType modified =
+                markClangQualTypeDefined(readClangApiValueDefined(
+                    [&]() { return attributed->getModifiedType(); }));
+            type =
+                markClangTypeObjectDefinedByClass(modified.getTypePtrOrNull());
           } else if (const clang::AdjustedType *adjusted =
                          llvm::dyn_cast<clang::AdjustedType>(type)) {
-            type = adjusted->getOriginalType().getTypePtrOrNull();
+            clang::QualType original =
+                markClangQualTypeDefined(readClangApiValueDefined(
+                    [&]() { return adjusted->getOriginalType(); }));
+            type =
+                markClangTypeObjectDefinedByClass(original.getTypePtrOrNull());
           } else {
             break;
           }
@@ -9205,8 +9878,12 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
 
       auto same_spelled_type = [](clang::QualType lhs,
                                   clang::QualType rhs) -> bool {
-        lhs = lhs.getUnqualifiedType();
-        rhs = rhs.getUnqualifiedType();
+        lhs = markClangQualTypeDefined(readClangApiValueDefined([&]() {
+          return markClangQualTypeDefined(lhs).getUnqualifiedType();
+        }));
+        rhs = markClangQualTypeDefined(readClangApiValueDefined([&]() {
+          return markClangQualTypeDefined(rhs).getUnqualifiedType();
+        }));
         return lhs.getTypePtrOrNull() == rhs.getTypePtrOrNull();
       };
 
@@ -9227,7 +9904,8 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
           continue;
         }
 
-        clang::QualType deduced_type = clang_arg.getAsType();
+        clang::QualType deduced_type = markClangQualTypeDefined(
+            readClangApiValueDefined([&]() { return clang_arg.getAsType(); }));
         clang::QualType deduced_canonical = canonical_unqualified(deduced_type);
         if (deduced_canonical.isNull()) {
           continue;
@@ -9236,16 +9914,26 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
         clang::QualType selected_source_type;
         bool ambiguous_source_type = false;
         for (const clang::Expr *call_arg : call_expr->arguments()) {
+          call_arg = markClangExprObjectDefinedByClass(call_arg);
           if (call_arg == nullptr) {
             continue;
           }
 
-          const clang::Expr *source_arg = call_arg->IgnoreParenImpCasts();
-          if (source_arg == nullptr || source_arg->getType().isNull()) {
+          const clang::Expr *source_arg =
+              markClangExprObjectDefinedByClass(readClangApiValueDefined(
+                  [&]() { return call_arg->IgnoreParenImpCasts(); }));
+          clang::QualType source_arg_type;
+          if (source_arg != nullptr) {
+            clang::Expr *mutable_source_arg =
+                const_cast<clang::Expr *>(source_arg);
+            source_arg_type = markClangQualTypeDefined(readClangApiValueDefined(
+                [&]() { return mutable_source_arg->getType(); }));
+          }
+          if (source_arg == nullptr || source_arg_type.isNull()) {
             continue;
           }
 
-          clang::QualType source_type = remove_reference(source_arg->getType());
+          clang::QualType source_type = remove_reference(source_arg_type);
           if (source_type.isNull() || !has_typedef_spelling(source_type)) {
             continue;
           }
@@ -9992,12 +10680,16 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
   maybe_upgrade_template_callee();
 
   SgExprListExp *param_list = SageBuilder::buildExprListExp_nfi();
-  applySourceRange(param_list, call_expr->getSourceRange());
+  applySourceRange(param_list, readClangApiValueDefined([&]() {
+                     return call_expr->getSourceRange();
+                   }));
 
   clang::CallExpr::arg_iterator it;
   for (it = call_expr->arg_begin(); it != call_expr->arg_end(); ++it) {
-    clang::Expr *arg = *it;
-    if (clang::isa<clang::CXXDefaultArgExpr>(arg)) {
+    clang::Expr *arg = markClangExprObjectDefinedByClass(
+        readClangApiValueDefined([&]() { return *it; }));
+    if (readClangApiValueDefined(
+            [&]() { return clang::isa<clang::CXXDefaultArgExpr>(arg); })) {
       continue;
     }
     SgNode *tmp_expr = Traverse(arg);
@@ -10008,15 +10700,21 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
       res = false;
       continue;
     }
-    if (clang::isa<clang::InitListExpr>(arg->IgnoreParenImpCasts())) {
+    clang::Expr *ignored_arg = markClangExprObjectDefinedByClass(
+        readClangApiValueDefined([&]() { return arg->IgnoreParenImpCasts(); }));
+    if (readClangApiValueDefined(
+            [&]() { return clang::isa<clang::InitListExpr>(ignored_arg); })) {
       if (SgExprListExp *init_list = isSgExprListExp(expr)) {
-        SgType *init_type = buildTypeFromQualifiedType(arg->getType());
+        SgType *init_type = buildTypeFromQualifiedType(markClangQualTypeDefined(
+            readClangApiValueDefined([&]() { return arg->getType(); })));
         if (init_type == nullptr) {
           init_type = init_list->get_type();
         }
         SgAggregateInitializer *aggregate_init =
             SageBuilder::buildAggregateInitializer_nfi(init_list, init_type);
-        applySourceRange(aggregate_init, arg->getSourceRange());
+        applySourceRange(aggregate_init, readClangApiValueDefined([&]() {
+                           return arg->getSourceRange();
+                         }));
         expr = aggregate_init;
       }
     }
@@ -10080,9 +10778,7 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
                 [&]() { return member_call->getMethodDecl(); })));
     if (method_decl != nullptr) {
       const clang::CXXRecordDecl *record_decl =
-          llvm::dyn_cast_or_null<clang::CXXRecordDecl>(
-              markClangDeclObjectDefinedByKind(readClangApiValueDefined(
-                  [&]() { return method_decl->getParent(); })));
+          clangCXXMethodDeclParentDefined(method_decl);
       const clang::ClassTemplateSpecializationDecl *spec_decl = nullptr;
       clang::QualType object_type =
           markClangQualTypeDefined(readClangApiValueDefined(
@@ -10626,9 +11322,6 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
     }
 
     SgNode *tmp_decl = nullptr;
-    for (const auto &entry : p_decl_translation_map) {
-      markClangDeclObjectDefinedByKind(entry.first);
-    }
     auto it_decl = p_decl_translation_map.find(direct_callee);
     if (it_decl != p_decl_translation_map.end()) {
       tmp_decl = it_decl->second;
@@ -10803,6 +11496,18 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
     return false;
   };
 
+  clang::FunctionDecl *cached_direct_callee = nullptr;
+  bool cached_direct_callee_known = false;
+  auto direct_operator_callee = [&]() -> clang::FunctionDecl * {
+    if (!cached_direct_callee_known) {
+      cached_direct_callee = llvm::dyn_cast_or_null<clang::FunctionDecl>(
+          markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+              [&]() { return cxx_operator_call_expr->getDirectCallee(); })));
+      cached_direct_callee_known = true;
+    }
+    return cached_direct_callee;
+  };
+
   if (cxx_operator_call_expr->getOperator() == clang::OO_Equal &&
       cxx_operator_call_expr->getNumArgs() >= 2) {
     SgExpression *lhs = traverse_operator_arg(0);
@@ -10815,12 +11520,7 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
       if (lhs_type != nullptr && op_type != nullptr && lhs_type == op_type) {
         SgExpression *assign = SageBuilder::buildAssignOp(lhs, rhs);
         std::vector<SgExpression *> semantic_args{lhs, rhs};
-        clang::FunctionDecl *direct_callee =
-            llvm::dyn_cast_or_null<clang::FunctionDecl>(
-                markClangDeclObjectDefinedByKind(
-                    readClangApiValueDefined([&]() {
-                      return cxx_operator_call_expr->getDirectCallee();
-                    })));
+        clang::FunctionDecl *direct_callee = direct_operator_callee();
         attach_member_operator_semantic_call(assign, direct_callee,
                                              semantic_args);
         *node = assign;
@@ -10841,12 +11541,7 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
 
   if (!has_explicit_template_args && !preserve_unary_deref_call &&
       !operator_result_is_callable()) {
-    if (clang::FunctionDecl *direct_callee =
-            llvm::dyn_cast_or_null<clang::FunctionDecl>(
-                markClangDeclObjectDefinedByKind(
-                    readClangApiValueDefined([&]() {
-                      return cxx_operator_call_expr->getDirectCallee();
-                    })))) {
+    if (clang::FunctionDecl *direct_callee = direct_operator_callee()) {
       if (llvm::isa<clang::CXXMethodDecl>(direct_callee) &&
           cxx_operator_call_expr->getNumArgs() == 1) {
         switch (cxx_operator_call_expr->getOperator()) {
@@ -10877,9 +11572,7 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
   }
 
   if (!has_explicit_template_args && !preserve_unary_deref_call &&
-      readClangApiValueDefined([&]() {
-        return cxx_operator_call_expr->getDirectCallee();
-      }) == nullptr) {
+      direct_operator_callee() == nullptr) {
     clang::Expr *callee = cxx_operator_call_expr->getCallee();
     clang::Expr *base_callee =
         callee != nullptr ? callee->IgnoreParenImpCasts() : nullptr;
@@ -10896,11 +11589,7 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
   // the first argument, while ROSE represents it as a dot/arrow expression in
   // the call's callee. Convert member-operator calls into the ROSE form to
   // preserve correct operator arity and unparsing.
-  if (clang::FunctionDecl *direct_callee =
-          llvm::dyn_cast_or_null<clang::FunctionDecl>(
-              markClangDeclObjectDefinedByKind(readClangApiValueDefined([&]() {
-                return cxx_operator_call_expr->getDirectCallee();
-              })))) {
+  if (clang::FunctionDecl *direct_callee = direct_operator_callee()) {
     if (llvm::isa<clang::CXXMethodDecl>(direct_callee) &&
         cxx_operator_call_expr->getNumArgs() > 0) {
       // operator[] is special: ROSE's unparser expects the implicit object to
@@ -12010,30 +12699,38 @@ bool ClangToSageTranslator::VisitCompoundLiteralExpr(
   // REX FIX: Check if the type is defined inside the compound literal
   // If so, mark the declaration as non-autonomous so it gets unparsed
   // correctly
-  if (clang::TypeSourceInfo *TInfo = compound_literal->getTypeSourceInfo()) {
-    clang::TypeLoc TL = TInfo->getTypeLoc();
+  if (clang::TypeSourceInfo *TInfo =
+          markClangTypeSourceInfoDefined(readClangApiValueDefined(
+              [&]() { return compound_literal->getTypeSourceInfo(); }))) {
+    clang::TypeLoc TL =
+        readClangTypeLocDefined([&]() { return TInfo->getTypeLoc(); });
     // Drill down to the underlying TagTypeLoc, stripping common wrappers
     // (const qualifiers, parens, attributes, arrays, pointers, elaborations).
     while (true) {
       bool advanced = false;
 
       // Strip top-level qualifiers
-      TL = TL.getUnqualifiedLoc();
+      TL = readClangTypeLocDefined([&]() { return TL.getUnqualifiedLoc(); });
 
-      if (auto ParenTL = TL.getAs<clang::ParenTypeLoc>()) {
-        TL = ParenTL.getInnerLoc();
+      if (auto ParenTL = readClangTypeLocDefined(
+              [&]() { return TL.getAs<clang::ParenTypeLoc>(); })) {
+        TL = readClangTypeLocDefined([&]() { return ParenTL.getInnerLoc(); });
         advanced = true;
-      } else if (auto AttrTL = TL.getAs<clang::AttributedTypeLoc>()) {
-        TL = AttrTL.getModifiedLoc();
+      } else if (auto AttrTL = readClangTypeLocDefined(
+                     [&]() { return TL.getAs<clang::AttributedTypeLoc>(); })) {
+        TL = readClangTypeLocDefined([&]() { return AttrTL.getModifiedLoc(); });
         advanced = true;
-      } else if (auto AdjTL = TL.getAs<clang::AdjustedTypeLoc>()) {
-        TL = AdjTL.getOriginalLoc();
+      } else if (auto AdjTL = readClangTypeLocDefined(
+                     [&]() { return TL.getAs<clang::AdjustedTypeLoc>(); })) {
+        TL = readClangTypeLocDefined([&]() { return AdjTL.getOriginalLoc(); });
         advanced = true;
-      } else if (auto ATL = TL.getAs<clang::ArrayTypeLoc>()) {
-        TL = ATL.getElementLoc();
+      } else if (auto ATL = readClangTypeLocDefined(
+                     [&]() { return TL.getAs<clang::ArrayTypeLoc>(); })) {
+        TL = readClangTypeLocDefined([&]() { return ATL.getElementLoc(); });
         advanced = true;
-      } else if (auto PTL = TL.getAs<clang::PointerTypeLoc>()) {
-        TL = PTL.getPointeeLoc();
+      } else if (auto PTL = readClangTypeLocDefined(
+                     [&]() { return TL.getAs<clang::PointerTypeLoc>(); })) {
+        TL = readClangTypeLocDefined([&]() { return PTL.getPointeeLoc(); });
         advanced = true;
       }
 
@@ -12041,9 +12738,12 @@ bool ClangToSageTranslator::VisitCompoundLiteralExpr(
         break;
     }
 
-    if (auto TagTL = TL.getAs<clang::TagTypeLoc>()) {
+    if (auto TagTL = readClangTypeLocDefined(
+            [&]() { return TL.getAs<clang::TagTypeLoc>(); })) {
       if (TagTL.isDefinition()) {
-        clang::TagDecl *TD = TagTL.getDecl();
+        clang::TagDecl *TD =
+            llvm::cast<clang::TagDecl>(markClangDeclObjectDefinedByKind(
+                readClangApiValueDefined([&]() { return TagTL.getDecl(); })));
         auto it = p_decl_translation_map.find(TD);
         if (it != p_decl_translation_map.end()) {
           SgNode *node = it->second;
@@ -12502,7 +13202,8 @@ bool ClangToSageTranslator::VisitCXXConstructExpr(
     if (cxx_construct_expr->getNumArgs() == 1) {
       clang::Expr *same_type_source = peel_same_type_implicit_conversion_object(
           cxx_construct_expr->getArg(0), cxx_construct_expr->getType(),
-          cxx_construct_expr->getSourceRange());
+          readClangApiValueDefined(
+              [&]() { return cxx_construct_expr->getSourceRange(); }));
       if (same_type_source != nullptr) {
         if (SgNode *elided_node = Traverse(same_type_source)) {
           if (SgExpression *elided_expr = isSgExpression(elided_node)) {
@@ -12649,8 +13350,7 @@ bool ClangToSageTranslator::VisitCXXConstructExpr(
     SgClassDeclaration *enclosingClassDecl = nullptr;
     if (ctor_decl != nullptr) {
       if (clang::CXXRecordDecl *parent_record =
-              llvm::dyn_cast_or_null<clang::CXXRecordDecl>(
-                  markClangDeclObjectDefinedByKind(ctor_decl->getParent()))) {
+              clangCXXMethodDeclParentDefined(ctor_decl)) {
         enclosingClassDecl = isSgClassDeclaration(Traverse(parent_record));
       }
     }
@@ -12780,7 +13480,9 @@ bool ClangToSageTranslator::VisitCXXDeleteExpr(
   // Examples: delete ptr; or delete[] array;
 
   // Get the expression being deleted
-  clang::Expr *arg_expr = cxx_delete_expr->getArgument();
+  clang::Expr *arg_expr =
+      markClangExprObjectDefinedByClass(readClangApiValueDefined(
+          [&]() { return cxx_delete_expr->getArgument(); }));
   SgNode *tmp_arg = arg_expr ? Traverse(arg_expr) : nullptr;
   SgExpression *arg = isSgExpression(tmp_arg);
 
@@ -12790,7 +13492,8 @@ bool ClangToSageTranslator::VisitCXXDeleteExpr(
   }
 
   // Check if this is array delete (delete[]) or single object delete (delete)
-  bool is_array = cxx_delete_expr->isArrayForm();
+  bool is_array = readClangApiValueDefined(
+      [&]() { return cxx_delete_expr->isArrayForm(); });
 
   // Build the delete expression
   *node = SageBuilder::buildDeleteExp(arg, is_array, false, nullptr);
@@ -12932,9 +13635,13 @@ bool ClangToSageTranslator::VisitCXXDependentScopeMemberExpr(
     clang::DeclContextLookupResult lookup = readClangApiValueDefined(
         [&]() { return record_def->lookup(member_name_decl); });
     std::vector<clang::FieldDecl *> matching_fields;
-    for (clang::NamedDecl *member_decl : lookup) {
+    for (clang::NamedDecl *member_decl :
+         readClangLookupResultDeclsDefined(lookup)) {
+      member_decl = llvm::dyn_cast_or_null<clang::NamedDecl>(
+          markClangDeclObjectDefinedByKind(member_decl));
       if (clang::FieldDecl *field_decl =
-              llvm::dyn_cast_or_null<clang::FieldDecl>(member_decl)) {
+              llvm::dyn_cast_or_null<clang::FieldDecl>(
+                  markClangDeclObjectDefinedByKind(member_decl))) {
         matching_fields.push_back(field_decl);
       }
     }
@@ -13138,10 +13845,14 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
   std::cerr << "ClangToSageTranslator::VisitCXXNewExpr" << std::endl;
 #endif
   bool res = true;
-  clang::QualType allocatedType = cxx_new_expr->getAllocatedType();
+  cxx_new_expr = markClangCxxNewStorageDefined(cxx_new_expr);
+  clang::QualType allocatedType =
+      markClangQualTypeDefined(readClangApiValueDefined(
+          [&]() { return cxx_new_expr->getAllocatedType(); }));
   SgType *allocated_sg_type = nullptr;
   if (clang::TypeSourceInfo *allocated_type_info =
-          cxx_new_expr->getAllocatedTypeSourceInfo()) {
+          markClangTypeSourceInfoDefined(readClangApiValueDefined(
+              [&]() { return cxx_new_expr->getAllocatedTypeSourceInfo(); }))) {
     allocated_sg_type = buildTypeFromTypeLoc(allocated_type_info->getTypeLoc());
   }
   if (allocated_sg_type == nullptr) {
@@ -13154,9 +13865,14 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
   };
 
   SgExprListExp *placementArgs = nullptr;
-  if (cxx_new_expr->getNumPlacementArgs() > 0) {
+  const unsigned num_placement_args = readClangApiValueDefined(
+      [&]() { return cxx_new_expr->getNumPlacementArgs(); });
+  if (num_placement_args > 0) {
     placementArgs = SageBuilder::buildExprListExp();
-    for (clang::Expr *placementArg : cxx_new_expr->placement_arguments()) {
+    for (unsigned i = 0; i < num_placement_args; ++i) {
+      clang::Expr *placementArg =
+          markClangExprObjectDefinedByClass(readClangApiValueDefined(
+              [&]() { return cxx_new_expr->getPlacementArg(i); }));
       SgNode *tmpArg = Traverse(placementArg);
       if (SgExpression *expr = isSgExpression(tmpArg)) {
         placementArgs->append_expression(expr);
@@ -13166,14 +13882,20 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
 
   SgConstructorInitializer *constructor_args = nullptr;
   if (const clang::CXXConstructExpr *construct_expr =
-          cxx_new_expr->getConstructExpr()) {
+          llvm::dyn_cast_or_null<clang::CXXConstructExpr>(
+              markClangStmtObjectDefinedByClass(readClangApiValueDefined(
+                  [&]() { return cxx_new_expr->getConstructExpr(); })))) {
     SgNode *constructorInitializer =
         Traverse(const_cast<clang::CXXConstructExpr *>(construct_expr));
     constructor_args = isSgConstructorInitializer(constructorInitializer);
   }
 
-  if (constructor_args == nullptr && cxx_new_expr->hasInitializer()) {
-    clang::Expr *initializer = cxx_new_expr->getInitializer();
+  const bool has_initializer = readClangApiValueDefined(
+      [&]() { return cxx_new_expr->hasInitializer(); });
+  if (constructor_args == nullptr && has_initializer) {
+    clang::Expr *initializer =
+        markClangExprObjectDefinedByClass(readClangApiValueDefined(
+            [&]() { return cxx_new_expr->getInitializer(); }));
     if (initializer != nullptr) {
       SgNode *translated_initializer = Traverse(initializer);
       if (SgConstructorInitializer *ctor_init =
@@ -13196,7 +13918,9 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
         constructor_args->set_is_braced_initialized(
             llvm::isa<clang::InitListExpr>(initializer) ||
             llvm::isa<clang::CXXStdInitializerListExpr>(initializer));
-        applySourceRange(constructor_args, initializer->getSourceRange());
+        applySourceRange(constructor_args, readClangApiValueDefined([&]() {
+                           return initializer->getSourceRange();
+                         }));
       } else if (translated_initializer != nullptr) {
         std::cerr << "Runtime error: CXXNewExpr initializer did not translate "
                      "into SgExpression."
@@ -13207,11 +13931,13 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
     }
   }
 
-  if (cxx_new_expr->isArray()) {
+  if (readClangApiValueDefined([&]() { return cxx_new_expr->isArray(); })) {
     SgExpression *array_size = nullptr;
     if (const std::optional<clang::Expr *> size_expr_opt =
-            cxx_new_expr->getArraySize()) {
-      if (clang::Expr *size_expr = *size_expr_opt) {
+            readClangApiValueDefined(
+                [&]() { return cxx_new_expr->getArraySize(); })) {
+      if (clang::Expr *size_expr =
+              markClangExprObjectDefinedByClass(*size_expr_opt)) {
         SgNode *translated_size = Traverse(size_expr);
         array_size = isSgExpression(translated_size);
         ROSE_ASSERT(array_size != nullptr);
@@ -13221,20 +13947,27 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
     new_expr_type = SageBuilder::buildArrayType(allocated_sg_type, array_size);
   }
 
-  SgNode *clangFuncDecl = Traverse(cxx_new_expr->getOperatorNew());
+  SgNode *clangFuncDecl =
+      Traverse(markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+          [&]() { return cxx_new_expr->getOperatorNew(); })));
   if (constructor_args != nullptr) {
     // (4/28/23 Pei-Hung) The type name is given through sg_type,
     // SgConstructorInitializer doesn't seem to provide name for unparsing.
     constructor_args->set_need_name(false);
     if (const clang::CXXConstructExpr *construct_expr =
-            cxx_new_expr->getConstructExpr()) {
-      clangFuncDecl = Traverse(construct_expr->getConstructor());
+            llvm::dyn_cast_or_null<clang::CXXConstructExpr>(
+                markClangStmtObjectDefinedByClass(readClangApiValueDefined(
+                    [&]() { return cxx_new_expr->getConstructExpr(); })))) {
+      clangFuncDecl =
+          Traverse(markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+              [&]() { return construct_expr->getConstructor(); })));
     }
   }
   SgFunctionDeclaration *sgFuncDecl = isSgFunctionDeclaration(clangFuncDecl);
 
   SgExpression *builtin_args = nullptr;
-  short int need_global_specifier = (short int)cxx_new_expr->isGlobalNew();
+  short int need_global_specifier = (short int)readClangApiValueDefined(
+      [&]() { return cxx_new_expr->isGlobalNew(); });
 
   SgNewExp *newExp =
       SageBuilder::buildNewExp(new_expr_type, placementArgs, constructor_args,
@@ -13248,7 +13981,8 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
   if (builtin_args != nullptr) {
     builtin_args->set_parent(newExp);
   }
-  newExp->set_type_id_is_parenthesized(cxx_new_expr->isParenTypeId());
+  newExp->set_type_id_is_parenthesized(readClangApiValueDefined(
+      [&]() { return cxx_new_expr->isParenTypeId(); }));
   *node = newExp;
 
   return VisitExpr(cxx_new_expr, node) && res;
@@ -13329,28 +14063,40 @@ bool ClangToSageTranslator::VisitCXXPseudoDestructorExpr(
             << std::endl;
 #endif
   bool res = true;
+  cxx_pseudo_destructor_expr = static_cast<clang::CXXPseudoDestructorExpr *>(
+      markClangStmtObjectDefinedByClass(cxx_pseudo_destructor_expr));
 
   // Clang models pseudo-destructor calls as
   // CallExpr(callee=CXXPseudoDestructorExpr). Build the callee structurally so
   // the enclosing SgFunctionCallExp can emit the call parentheses without
   // duplication.
 
-  SgNode *tmp_base = Traverse(cxx_pseudo_destructor_expr->getBase());
+  clang::Expr *clang_base =
+      markClangExprObjectDefinedByClass(readClangApiValueDefined(
+          [&]() { return cxx_pseudo_destructor_expr->getBase(); }));
+  SgNode *tmp_base = Traverse(clang_base);
   SgExpression *base = isSgExpression(tmp_base);
   ROSE_ASSERT(base != nullptr);
 
   SgType *destroyed_type = nullptr;
-  if (clang::TypeSourceInfo *type_info =
-          cxx_pseudo_destructor_expr->getDestroyedTypeInfo()) {
-    destroyed_type = buildTypeFromQualifiedType(type_info->getType());
+  clang::TypeSourceInfo *type_info =
+      markClangTypeSourceInfoDefined(readClangApiValueDefined([&]() {
+        return cxx_pseudo_destructor_expr->getDestroyedTypeInfo();
+      }));
+  if (type_info != nullptr) {
+    destroyed_type = buildTypeFromQualifiedType(markClangQualTypeDefined(
+        readClangApiValueDefined([&]() { return type_info->getType(); })));
   } else {
-    if (const clang::IdentifierInfo *id =
-            cxx_pseudo_destructor_expr->getDestroyedTypeIdentifier()) {
-      destroyed_type =
-          SageBuilder::buildTemplateType(SgName(id->getName().str()));
+    if (const clang::IdentifierInfo *id = readClangApiValueDefined([&]() {
+          return cxx_pseudo_destructor_expr->getDestroyedTypeIdentifier();
+        })) {
+      destroyed_type = SageBuilder::buildTemplateType(SgName(
+          readClangApiValueDefined([&]() { return id->getName(); }).str()));
     } else {
       clang::QualType qual_type =
-          cxx_pseudo_destructor_expr->getDestroyedType();
+          markClangQualTypeDefined(readClangApiValueDefined([&]() {
+            return cxx_pseudo_destructor_expr->getDestroyedType();
+          }));
       if (!qual_type.isNull()) {
         destroyed_type = buildTypeFromQualifiedType(qual_type);
       }
@@ -13367,20 +14113,26 @@ bool ClangToSageTranslator::VisitCXXPseudoDestructorExpr(
   ROSE_ASSERT(pseudo_dtor != nullptr);
   pseudo_dtor->post_construction_initialization();
 
-  clang::SourceLocation tilde_loc = cxx_pseudo_destructor_expr->getTildeLoc();
+  clang::SourceLocation tilde_loc = readClangApiValueDefined(
+      [&]() { return cxx_pseudo_destructor_expr->getTildeLoc(); });
   clang::SourceLocation name_end_loc;
-  if (clang::TypeSourceInfo *type_info =
-          cxx_pseudo_destructor_expr->getDestroyedTypeInfo()) {
-    name_end_loc = type_info->getTypeLoc().getEndLoc();
+  if (type_info != nullptr) {
+    clang::TypeLoc destroyed_type_loc =
+        readClangTypeLocDefined([&]() { return type_info->getTypeLoc(); });
+    name_end_loc = readClangApiValueDefined(
+        [&]() { return destroyed_type_loc.getEndLoc(); });
   }
+  clang::SourceRange expr_range = readClangApiValueDefined(
+      [&]() { return cxx_pseudo_destructor_expr->getSourceRange(); });
   if (tilde_loc.isValid() && name_end_loc.isValid()) {
     applySourceRange(pseudo_dtor, clang::SourceRange(tilde_loc, name_end_loc));
   } else {
-    applySourceRange(pseudo_dtor, cxx_pseudo_destructor_expr->getSourceRange());
+    applySourceRange(pseudo_dtor, expr_range);
   }
 
   SgExpression *callee = nullptr;
-  if (cxx_pseudo_destructor_expr->isArrow()) {
+  if (readClangApiValueDefined(
+          [&]() { return cxx_pseudo_destructor_expr->isArrow(); })) {
     callee =
         SageBuilder::buildBinaryExpression_nfi<SgArrowExp>(base, pseudo_dtor);
   } else {
@@ -13388,7 +14140,7 @@ bool ClangToSageTranslator::VisitCXXPseudoDestructorExpr(
         SageBuilder::buildBinaryExpression_nfi<SgDotExp>(base, pseudo_dtor);
   }
   ROSE_ASSERT(callee != nullptr);
-  applySourceRange(callee, cxx_pseudo_destructor_expr->getSourceRange());
+  applySourceRange(callee, expr_range);
 
   *node = callee;
 
@@ -13514,7 +14266,11 @@ bool ClangToSageTranslator::VisitCXXStdInitializerListExpr(
 #endif
   bool res = true;
 
-  clang::Expr *sub_expr = cxx_std_initializer_list_expr->getSubExpr();
+  cxx_std_initializer_list_expr = markClangCxxStdInitializerListStorageDefined(
+      cxx_std_initializer_list_expr);
+  clang::Expr *sub_expr =
+      markClangExprObjectDefinedByClass(readClangApiValueDefined(
+          [&]() { return cxx_std_initializer_list_expr->getSubExpr(); }));
   if (sub_expr == nullptr) {
     std::cerr << "Runtime error: CXXStdInitializerListExpr has no subexpr."
               << std::endl;
@@ -13548,11 +14304,14 @@ bool ClangToSageTranslator::VisitCXXStdInitializerListExpr(
     expr_list->append_expression(expr);
   }
 
-  SgType *init_list_type =
-      buildTypeFromQualifiedType(cxx_std_initializer_list_expr->getType());
+  SgType *init_list_type = buildTypeFromQualifiedType(
+      markClangQualTypeDefined(readClangApiValueDefined(
+          [&]() { return cxx_std_initializer_list_expr->getType(); })));
   SgAggregateInitializer *agg_init =
       SageBuilder::buildAggregateInitializer_nfi(expr_list, init_list_type);
-  applySourceRange(agg_init, cxx_std_initializer_list_expr->getSourceRange());
+  applySourceRange(agg_init, readClangApiValueDefined([&]() {
+                     return cxx_std_initializer_list_expr->getSourceRange();
+                   }));
   *node = agg_init;
 
   return VisitExpr(cxx_std_initializer_list_expr, node) && res;
@@ -13854,14 +14613,84 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
   decl_ref_expr = static_cast<clang::DeclRefExpr *>(
       markClangStmtObjectDefinedByClass(decl_ref_expr));
   markClangStmtChildrenDefined(decl_ref_expr);
-  markClangValueDeclObjectDefinedByKind(decl_ref_expr->getDecl());
+  clang::ValueDecl *decl_ref_decl = markClangValueDeclObjectDefinedByKind(
+      readClangApiValueDefined([&]() { return decl_ref_expr->getDecl(); }));
+  ROSE_ASSERT(decl_ref_decl != nullptr);
+
+  auto read_decl_context =
+      [](const clang::Decl *decl) -> const clang::DeclContext * {
+    decl = markClangDeclObjectDefinedByKind(decl);
+    if (decl == nullptr) {
+      return nullptr;
+    }
+    return markClangDeclContextObjectDefined(
+        readClangApiValueDefined([&]() { return decl->getDeclContext(); }));
+  };
+  auto read_lexical_decl_context =
+      [](const clang::Decl *decl) -> const clang::DeclContext * {
+    decl = markClangDeclObjectDefinedByKind(decl);
+    if (decl == nullptr) {
+      return nullptr;
+    }
+    return markClangDeclContextObjectDefined(readClangApiValueDefined(
+        [&]() { return decl->getLexicalDeclContext(); }));
+  };
+  auto read_mutable_decl_context =
+      [&](const clang::Decl *decl) -> clang::DeclContext * {
+    return const_cast<clang::DeclContext *>(read_decl_context(decl));
+  };
+  auto read_decl_context_parent =
+      [](const clang::DeclContext *ctx) -> const clang::DeclContext * {
+    ctx = markClangDeclContextObjectDefined(ctx);
+    if (ctx == nullptr) {
+      return nullptr;
+    }
+    return markClangDeclContextObjectDefined(
+        readClangApiValueDefined([&]() { return ctx->getParent(); }));
+  };
+  auto context_decl = [](const clang::DeclContext *ctx) -> const clang::Decl * {
+    ctx = markClangDeclContextObjectDefined(ctx);
+    if (ctx == nullptr) {
+      return nullptr;
+    }
+    return markClangDeclObjectDefinedByKind(
+        clang::Decl::castFromDeclContext(ctx));
+  };
+  auto strip_linkage_context =
+      [&](const clang::DeclContext *ctx) -> const clang::DeclContext * {
+    ctx = markClangDeclContextObjectDefined(ctx);
+    while (const clang::Decl *decl = context_decl(ctx)) {
+      if (!llvm::isa<clang::LinkageSpecDecl>(decl)) {
+        break;
+      }
+      ctx = read_decl_context_parent(ctx);
+    }
+    return ctx;
+  };
+  auto context_is_translation_unit = [](const clang::DeclContext *ctx) -> bool {
+    ctx = markClangDeclContextObjectDefined(ctx);
+    return ctx != nullptr &&
+           readClangApiValueDefined([&]() { return ctx->isTranslationUnit(); });
+  };
+  auto context_is_namespace = [](const clang::DeclContext *ctx) -> bool {
+    ctx = markClangDeclContextObjectDefined(ctx);
+    return ctx != nullptr &&
+           readClangApiValueDefined([&]() { return ctx->isNamespace(); });
+  };
+  auto context_is_record = [](const clang::DeclContext *ctx) -> bool {
+    ctx = markClangDeclContextObjectDefined(ctx);
+    return ctx != nullptr &&
+           readClangApiValueDefined([&]() { return ctx->isRecord(); });
+  };
+
   if (clang::NonTypeTemplateParmDecl *non_type_param =
-          llvm::dyn_cast<clang::NonTypeTemplateParmDecl>(
-              decl_ref_expr->getDecl())) {
+          llvm::dyn_cast<clang::NonTypeTemplateParmDecl>(decl_ref_decl)) {
     SgDeclarationStatement *owning_template = nullptr;
-    if (clang::DeclContext *ctx = non_type_param->getDeclContext()) {
+    if (clang::DeclContext *ctx = read_mutable_decl_context(non_type_param)) {
       if (clang::TemplateDecl *template_ctx =
-              llvm::dyn_cast<clang::TemplateDecl>(ctx)) {
+              llvm::dyn_cast<clang::TemplateDecl>(
+                  markClangDeclObjectDefinedByKind(
+                      clang::Decl::castFromDeclContext(ctx)))) {
         auto it = p_decl_translation_map.find(template_ctx);
         if (it != p_decl_translation_map.end()) {
           owning_template = isSgDeclarationStatement(it->second);
@@ -13910,19 +14739,22 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         canonical_name = nonreal_type->get_name().getString();
       }
       if (const clang::Decl *canonical_decl =
-              non_type_param->getCanonicalDecl()) {
+              markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+                  [&]() { return non_type_param->getCanonicalDecl(); }))) {
         if (canonical_name.empty()) {
           if (const clang::NonTypeTemplateParmDecl *canonical_nttp =
                   llvm::dyn_cast<clang::NonTypeTemplateParmDecl>(
                       canonical_decl)) {
-            canonical_name = normalizeClangTemplateParamName(
-                canonical_nttp->getNameAsString());
+            canonical_name =
+                normalizeClangTemplateParamName(readClangApiValueDefined(
+                    [&]() { return canonical_nttp->getNameAsString(); }));
           }
         }
       }
       if (canonical_name.empty()) {
         canonical_name =
-            normalizeClangTemplateParamName(non_type_param->getNameAsString());
+            normalizeClangTemplateParamName(readClangApiValueDefined(
+                [&]() { return non_type_param->getNameAsString(); }));
       }
       param_val->set_valueString(canonical_name);
       if (sg_param->get_type() != nullptr) {
@@ -13967,23 +14799,21 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
   };
 
   auto clang_context_is_namespace_or_tu =
-      [](const clang::DeclContext *ctx) -> bool {
-    while (ctx != nullptr && llvm::isa<clang::LinkageSpecDecl>(ctx)) {
-      ctx = ctx->getParent();
-    }
-    return ctx != nullptr && (ctx->isNamespace() || ctx->isTranslationUnit());
+      [&](const clang::DeclContext *ctx) -> bool {
+    ctx = strip_linkage_context(ctx);
+    return ctx != nullptr &&
+           (context_is_namespace(ctx) || context_is_translation_unit(ctx));
   };
-  auto clang_context_is_class_like = [](const clang::DeclContext *ctx) -> bool {
-    while (ctx != nullptr && llvm::isa<clang::LinkageSpecDecl>(ctx)) {
-      ctx = ctx->getParent();
-    }
+  auto clang_context_is_class_like =
+      [&](const clang::DeclContext *ctx) -> bool {
+    ctx = strip_linkage_context(ctx);
     if (ctx == nullptr) {
       return false;
     }
-    if (ctx->isRecord()) {
+    if (context_is_record(ctx)) {
       return true;
     }
-    if (const clang::Decl *ctx_decl = llvm::dyn_cast<clang::Decl>(ctx)) {
+    if (const clang::Decl *ctx_decl = context_decl(ctx)) {
       return llvm::isa<clang::ClassTemplateDecl>(ctx_decl) ||
              llvm::isa<clang::ClassTemplateSpecializationDecl>(ctx_decl) ||
              llvm::isa<clang::ClassTemplatePartialSpecializationDecl>(ctx_decl);
@@ -13999,46 +14829,62 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     auto has_namespace_scope_primary_template =
         [&](const clang::FunctionDecl *func) -> bool {
       clang::FunctionTemplateDecl *primary_template =
-          func->getPrimaryTemplate();
+          static_cast<clang::FunctionTemplateDecl *>(
+              markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+                  [&]() { return func->getPrimaryTemplate(); })));
       if (primary_template == nullptr) {
         if (const clang::FunctionTemplateSpecializationInfo *spec_info =
-                func->getTemplateSpecializationInfo()) {
-          primary_template = spec_info->getTemplate();
+                markClangAstObjectDefined(readClangApiValueDefined(
+                    [&]() { return func->getTemplateSpecializationInfo(); }))) {
+          primary_template = static_cast<clang::FunctionTemplateDecl *>(
+              markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+                  [&]() { return spec_info->getTemplate(); })));
         }
       }
-      if (primary_template == nullptr ||
-          primary_template->getTemplatedDecl() == nullptr) {
+      clang::FunctionDecl *templated_decl =
+          primary_template != nullptr
+              ? static_cast<clang::FunctionDecl *>(
+                    markClangDeclObjectDefinedByKind(
+                        readClangApiValueDefined([&]() {
+                          return primary_template->getTemplatedDecl();
+                        })))
+              : nullptr;
+      if (templated_decl == nullptr) {
         return false;
       }
 
-      clang::FunctionDecl *templated_decl =
-          primary_template->getTemplatedDecl();
       return clang_context_is_namespace_or_tu(
-                 templated_decl->getDeclContext()) &&
+                 read_decl_context(templated_decl)) &&
              clang_context_is_namespace_or_tu(
-                 templated_decl->getLexicalDeclContext());
+                 read_lexical_decl_context(templated_decl));
     };
 
     if (has_namespace_scope_primary_template(clang_func)) {
       return false;
     }
 
-    if (clang_func->getFriendObjectKind() != clang::Decl::FOK_None) {
+    if (readClangApiValueDefined([&]() {
+          return clang_func->getFriendObjectKind();
+        }) != clang::Decl::FOK_None) {
       return true;
     }
 
-    const clang::DeclContext *semantic_ctx = clang_func->getDeclContext();
-    const clang::DeclContext *lexical_ctx = clang_func->getLexicalDeclContext();
+    const clang::DeclContext *semantic_ctx = read_decl_context(clang_func);
+    const clang::DeclContext *lexical_ctx =
+        read_lexical_decl_context(clang_func);
     if (clang_context_is_namespace_or_tu(semantic_ctx) &&
         (clang_context_is_class_like(lexical_ctx) ||
          clang_context_is_class_like(semantic_ctx))) {
       return true;
     }
 
-    const clang::FunctionDecl *first_decl = clang_func->getFirstDecl();
+    const clang::FunctionDecl *first_decl =
+        static_cast<const clang::FunctionDecl *>(
+            markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+                [&]() { return clang_func->getFirstDecl(); })));
     return first_decl != nullptr && first_decl != clang_func &&
-           (clang_context_is_class_like(first_decl->getDeclContext()) ||
-            clang_context_is_class_like(first_decl->getLexicalDeclContext()));
+           (clang_context_is_class_like(read_decl_context(first_decl)) ||
+            clang_context_is_class_like(read_lexical_decl_context(first_decl)));
   };
 
   auto translated_hidden_friend_ref_decl =
@@ -14266,7 +15112,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
       };
   if (force_global_scope) {
     if (clang::FunctionDecl *clang_func =
-            llvm::dyn_cast<clang::FunctionDecl>(decl_ref_expr->getDecl())) {
+            llvm::dyn_cast<clang::FunctionDecl>(decl_ref_decl)) {
       ensure_global_function_decl_symbol(clang_func);
     }
   }
@@ -14279,8 +15125,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         return;
       }
       SgScopeStatement *resolved_scope = nullptr;
-      if (clang::DeclContext *ctx =
-              decl_ref_expr->getDecl()->getDeclContext()) {
+      if (clang::DeclContext *ctx = read_mutable_decl_context(decl_ref_decl)) {
         resolved_scope =
             resolveScopeFromDeclContext(ctx, SageBuilder::topScopeStack());
       }
@@ -14418,7 +15263,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     };
     if (!decl_ref_qualifier) {
       if (clang::FunctionDecl *clang_func =
-              llvm::dyn_cast<clang::FunctionDecl>(decl_ref_expr->getDecl())) {
+              llvm::dyn_cast<clang::FunctionDecl>(decl_ref_decl)) {
         if (is_adl_only_friend_function(clang_func)) {
           expr->set_name_qualification_length(0);
           expr->set_global_qualification_required(false);
@@ -14440,7 +15285,9 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
   // referenced from user code. Translation is deferred until the TU pass
   // completes to avoid ordering issues.
   if (clang::FunctionDecl *func_decl =
-          llvm::dyn_cast<clang::FunctionDecl>(decl_ref_expr->getDecl())) {
+          llvm::dyn_cast<clang::FunctionDecl>(decl_ref_decl)) {
+    func_decl = llvm::cast<clang::FunctionDecl>(
+        markClangDeclObjectDefinedByKind(func_decl));
     clang::TemplateSpecializationKind kind =
         func_decl->getTemplateSpecializationKind();
     if (kind == clang::TSK_ImplicitInstantiation ||
@@ -14494,7 +15341,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
               namespaceDeclStmt->get_definition();
           if (namespaceDefinition != nullptr) {
             SageBuilder::pushScopeStack(namespaceDefinition);
-            sym = GetSymbolFromSymbolTable(decl_ref_expr->getDecl());
+            sym = GetSymbolFromSymbolTable(decl_ref_decl);
             SageBuilder::popScopeStack();
           }
         }
@@ -14513,9 +15360,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           }
           if (classDef == nullptr) {
             if (clang::CXXRecordDecl *definitionDecl =
-                    llvm::dyn_cast_or_null<clang::CXXRecordDecl>(
-                        markClangDeclObjectDefinedByKind(
-                            cxxRecordDecl->getDefinition()))) {
+                    clangCXXRecordDefinitionDefined(cxxRecordDecl)) {
               SgNode *def_node = TraverseOnDemand(definitionDecl);
               if (SgClassDeclaration *def_decl =
                       isSgClassDeclaration(def_node)) {
@@ -14534,7 +15379,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           }
           ROSE_ASSERT(classDef != nullptr);
           SageBuilder::pushScopeStack(classDef);
-          sym = GetSymbolFromSymbolTable(decl_ref_expr->getDecl());
+          sym = GetSymbolFromSymbolTable(decl_ref_decl);
           SageBuilder::popScopeStack();
         }
       } else if (clang::NamespaceAliasDecl *namespaceAliasDecl =
@@ -14549,16 +15394,17 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           SgNamespaceDefinitionStatement *namespaceDefinition =
               namespaceDeclStmt->get_definition();
           SageBuilder::pushScopeStack(namespaceDefinition);
-          sym = GetSymbolFromSymbolTable(decl_ref_expr->getDecl());
+          sym = GetSymbolFromSymbolTable(decl_ref_decl);
           SageBuilder::popScopeStack();
         }
       } else if (qualifier.getKind() ==
                  clang::NestedNameSpecifier::Kind::Global) {
         SgGlobal *globalScope =
             SageInterface::getGlobalScope(SageBuilder::topScopeStack());
-        std::string declName = decl_ref_expr->getDecl()->getNameAsString();
+        std::string declName = readClangApiValueDefined(
+            [&]() { return decl_ref_decl->getNameAsString(); });
         if (clang::FunctionDecl *clang_func =
-                llvm::dyn_cast<clang::FunctionDecl>(decl_ref_expr->getDecl())) {
+                llvm::dyn_cast<clang::FunctionDecl>(decl_ref_decl)) {
           if (SgFunctionType *func_type = isSgFunctionType(
                   buildTypeFromQualifiedType(clang_func->getType()))) {
             sym = globalScope->lookup_nontemplate_function_symbol(
@@ -14590,10 +15436,10 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
   }
 
   if (clang::VarDecl *var_decl =
-          llvm::dyn_cast<clang::VarDecl>(decl_ref_expr->getDecl())) {
-    if (var_decl->isStaticDataMember()) {
+          llvm::dyn_cast<clang::VarDecl>(decl_ref_decl)) {
+    if (clangVarDeclIsStaticDataMemberDefined(var_decl)) {
       auto resolve_static_member_scope = [&]() -> SgScopeStatement * {
-        clang::DeclContext *ctx = var_decl->getDeclContext();
+        clang::DeclContext *ctx = read_mutable_decl_context(var_decl);
         if (ctx == nullptr) {
           return nullptr;
         }
@@ -14609,9 +15455,12 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         }
         if (clang::CXXRecordDecl *record =
                 llvm::dyn_cast<clang::CXXRecordDecl>(ctx)) {
-          clang::CXXRecordDecl *record_def = record->getDefinition() != nullptr
-                                                 ? record->getDefinition()
-                                                 : record;
+          record = markClangSpecificDeclDefined(record);
+          clang::CXXRecordDecl *record_def =
+              clangCXXRecordDefinitionDefined(record);
+          if (record_def == nullptr) {
+            record_def = record;
+          }
           if (record_def != nullptr) {
             if (SgDeclarationStatement *decl = lookupSgDeclarationForClangDecl(
                     record_def,
@@ -14701,7 +15550,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
   }
 
   if (sym == nullptr) {
-    sym = GetSymbolFromSymbolTable(decl_ref_expr->getDecl());
+    sym = GetSymbolFromSymbolTable(decl_ref_decl);
   }
 
   auto symbol_has_missing_function_declaration = [](SgSymbol *symbol) -> bool {
@@ -14927,7 +15776,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
   };
 
   if (clang::CXXMethodDecl *clang_method =
-          llvm::dyn_cast<clang::CXXMethodDecl>(decl_ref_expr->getDecl())) {
+          llvm::dyn_cast<clang::CXXMethodDecl>(decl_ref_decl)) {
     SgMemberFunctionSymbol *method_sym = isSgMemberFunctionSymbol(sym);
     if (method_sym != nullptr && method_sym->get_declaration() == nullptr) {
       method_sym = nullptr;
@@ -14989,7 +15838,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
 
   if (sym != nullptr) {
     if (clang::FunctionDecl *clang_func =
-            llvm::dyn_cast<clang::FunctionDecl>(decl_ref_expr->getDecl())) {
+            llvm::dyn_cast<clang::FunctionDecl>(decl_ref_decl)) {
       if (isSgTemplateFunctionSymbol(sym) != nullptr &&
           !llvm::isa<clang::CXXMethodDecl>(clang_func) &&
           clang_func->getDescribedFunctionTemplate() == nullptr &&
@@ -15057,7 +15906,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     // specialization.
     if (decl_ref_expr->hasExplicitTemplateArgs()) {
       if (clang::FunctionDecl *clang_func =
-              llvm::dyn_cast<clang::FunctionDecl>(decl_ref_expr->getDecl())) {
+              llvm::dyn_cast<clang::FunctionDecl>(decl_ref_decl)) {
         if (clang::CXXMethodDecl *method_decl =
                 llvm::dyn_cast<clang::CXXMethodDecl>(clang_func)) {
           clang::TemplateArgumentListInfo arg_info;
@@ -15065,7 +15914,8 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           const size_t explicit_arg_count =
               countExpandedTemplateArguments(arg_info);
 
-          clang::CXXRecordDecl *parent_decl = method_decl->getParent();
+          clang::CXXRecordDecl *parent_decl =
+              clangCXXMethodDeclParentDefined(method_decl);
           SgScopeStatement *class_scope = nullptr;
           if (parent_decl != nullptr) {
             SgNode *parent_node = nullptr;
@@ -15187,7 +16037,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
 
     SgNode *tmp_decl = nullptr;
     SgScopeStatement *decl_scope_hint = nullptr;
-    if (clang::DeclContext *ctx = decl_ref_expr->getDecl()->getDeclContext()) {
+    if (clang::DeclContext *ctx = read_mutable_decl_context(decl_ref_decl)) {
       decl_scope_hint =
           resolveScopeFromDeclContext(ctx, SageBuilder::topScopeStack());
     }
@@ -15204,7 +16054,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     }
 
     if (clang::FunctionDecl *clang_func =
-            llvm::dyn_cast<clang::FunctionDecl>(decl_ref_expr->getDecl())) {
+            llvm::dyn_cast<clang::FunctionDecl>(decl_ref_decl)) {
       if (p_decl_translation_in_progress.find(clang_func) !=
           p_decl_translation_in_progress.end()) {
         if (clang::FunctionTemplateDecl *primary =
@@ -15242,12 +16092,12 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     }
 
     if (tmp_decl == nullptr) {
-      tmp_decl = lookupSgDeclarationForClangDecl(decl_ref_expr->getDecl(),
+      tmp_decl = lookupSgDeclarationForClangDecl(decl_ref_decl,
                                                  /*allow_on_demand=*/true);
     }
 
     if (tmp_decl == nullptr) {
-      tmp_decl = Traverse(decl_ref_expr->getDecl());
+      tmp_decl = Traverse(decl_ref_decl);
     }
 
     if (SgTemplateInstantiationDirectiveStatement *inst_directive =
@@ -15263,9 +16113,12 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     }
 
     if (tmp_decl == nullptr) {
-      clang::ValueDecl *clang_decl = decl_ref_expr->getDecl();
+      clang::ValueDecl *clang_decl = decl_ref_decl;
       clang::Decl *canonical_decl =
-          clang_decl != nullptr ? clang_decl->getCanonicalDecl() : nullptr;
+          clang_decl != nullptr
+              ? markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+                    [&]() { return clang_decl->getCanonicalDecl(); }))
+              : nullptr;
       clang::SourceManager &source_manager =
           p_compiler_instance->getSourceManager();
       auto format_loc = [&](clang::SourceLocation loc) -> std::string {
@@ -15308,8 +16161,9 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                 << (canonical_decl != nullptr &&
                     p_decl_translation_on_demand.count(canonical_decl) != 0);
       if (clang_decl != nullptr) {
-        if (clang::DeclContext *ctx = clang_decl->getDeclContext()) {
-          if (clang::Decl *ctx_decl = llvm::dyn_cast<clang::Decl>(ctx)) {
+        if (clang::DeclContext *ctx = read_mutable_decl_context(clang_decl)) {
+          if (clang::Decl *ctx_decl = markClangDeclObjectDefinedByKind(
+                  clang::Decl::castFromDeclContext(ctx))) {
             std::cerr << " declContextKind=" << ctx_decl->getDeclKindName();
             if (clang::NamedDecl *named_ctx =
                     llvm::dyn_cast<clang::NamedDecl>(ctx_decl)) {
@@ -15326,7 +16180,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     ROSE_ASSERT(tmp_decl != nullptr);
 
     if (clang::FunctionDecl *clang_func =
-            llvm::dyn_cast<clang::FunctionDecl>(decl_ref_expr->getDecl())) {
+            llvm::dyn_cast<clang::FunctionDecl>(decl_ref_decl)) {
       if (should_materialize_implicit_c_function_decl_for_ref(
               clang_func, p_compiler_instance)) {
         materialize_implicit_c_function_decl_before_use(
@@ -15349,7 +16203,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
 #endif
 
     if (tmp_decl != nullptr) {
-      sym = GetSymbolFromSymbolTable(decl_ref_expr->getDecl());
+      sym = GetSymbolFromSymbolTable(decl_ref_decl);
       if (symbol_has_missing_function_declaration(sym)) {
         sym = nullptr;
       }
@@ -15506,7 +16360,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     if (sym == nullptr && isSgInitializedName(tmp_decl) != nullptr) {
       SgInitializedName *init_name = isSgInitializedName(tmp_decl);
 
-      if (llvm::isa<clang::EnumConstantDecl>(decl_ref_expr->getDecl())) {
+      if (llvm::isa<clang::EnumConstantDecl>(decl_ref_decl)) {
         SgScopeStatement *init_scope =
             normalizeNamespaceScope(init_name->get_scope());
         if (init_scope == nullptr) {
@@ -15586,7 +16440,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     }
 
     if (clang::FunctionDecl *clang_func =
-            llvm::dyn_cast<clang::FunctionDecl>(decl_ref_expr->getDecl())) {
+            llvm::dyn_cast<clang::FunctionDecl>(decl_ref_decl)) {
       if (should_materialize_implicit_c_function_decl_for_ref(
               clang_func, p_compiler_instance)) {
         SgFunctionDeclaration *referenced_decl = nullptr;
@@ -15620,8 +16474,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
       SgExpression *ref_exp = nullptr;
       const bool explicit_variable_template_ref =
           decl_ref_expr->hasExplicitTemplateArgs() &&
-          (llvm::isa<clang::VarTemplateSpecializationDecl>(
-               decl_ref_expr->getDecl()) ||
+          (llvm::isa<clang::VarTemplateSpecializationDecl>(decl_ref_decl) ||
            isSgTemplateVariableSymbol(sym) != nullptr);
       const bool build_nonreal_ref =
           explicit_variable_template_ref ||
@@ -15637,7 +16490,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           if (template_args.empty()) {
             if (clang::VarTemplateSpecializationDecl *spec_decl =
                     llvm::dyn_cast<clang::VarTemplateSpecializationDecl>(
-                        decl_ref_expr->getDecl())) {
+                        decl_ref_decl)) {
               const clang::TemplateArgumentList &clang_args =
                   spec_decl->getTemplateArgs();
               for (unsigned i = 0; i < clang_args.size(); ++i) {
@@ -15659,7 +16512,9 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         ref_exp = buildNonrealRefExpFromNestedNameSpecifier(
             structuralQualifierForExplicitlyQualifiedNonrealRef(
                 decl_ref_qualifier),
-            scope, SgName(decl_ref_expr->getDecl()->getNameAsString()),
+            scope, SgName(readClangApiValueDefined([&]() {
+              return decl_ref_decl->getNameAsString();
+            })),
             decl_ref_expr->hasTemplateKeyword(), template_args_ptr);
         attach_explicit_qualifier(ref_exp);
       }
@@ -15686,8 +16541,8 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                 static_cast<SgSymbol *>(func_sym)));
       }
 
-      clang::FunctionDecl *clang_func = llvm::dyn_cast<clang::FunctionDecl>(
-          markClangValueDeclObjectDefinedByKind(decl_ref_expr->getDecl()));
+      clang::FunctionDecl *clang_func =
+          llvm::dyn_cast<clang::FunctionDecl>(decl_ref_decl);
       auto get_explicit_template_arg_info =
           [&](clang::TemplateArgumentListInfo &arg_info,
               size_t &explicit_arg_count) -> bool {
@@ -15736,7 +16591,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         }
       }
       const bool is_member_function_decl =
-          llvm::isa<clang::CXXMethodDecl>(decl_ref_expr->getDecl());
+          llvm::isa<clang::CXXMethodDecl>(decl_ref_decl);
       // Restrict on-the-fly instantiation synthesis to unqualified explicit
       // template-argument references, except member-function templates where
       // explicit args are carried by instantiation declarations.
@@ -15966,8 +16821,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
 
             SgType *lookup_type = sym_type;
             if (clang::FunctionDecl *clang_func =
-                    llvm::dyn_cast<clang::FunctionDecl>(
-                        decl_ref_expr->getDecl())) {
+                    llvm::dyn_cast<clang::FunctionDecl>(decl_ref_decl)) {
               if (SgType *clang_type =
                       buildTypeFromQualifiedType(clang_func->getType())) {
                 if (isSgMemberFunctionType(clang_type) != nullptr ||
@@ -16171,7 +17025,9 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           SgExpression *ref_exp = buildNonrealRefExpFromNestedNameSpecifier(
               structuralQualifierForExplicitlyQualifiedNonrealRef(
                   decl_ref_qualifier),
-              scope, SgName(decl_ref_expr->getDecl()->getNameAsString()),
+              scope, SgName(readClangApiValueDefined([&]() {
+                return decl_ref_decl->getNameAsString();
+              })),
               decl_ref_expr->hasTemplateKeyword(), template_args_ptr);
           attach_explicit_qualifier(ref_exp);
           *node = ref_exp;
@@ -16192,12 +17048,14 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           };
 
           SgScopeStatement *func_scope = func_sym->get_scope();
-          if (SgScopeStatement *decl_scope =
-                  get_decl_namespace_scope(decl_ref_expr->getFoundDecl())) {
+          if (SgScopeStatement *decl_scope = get_decl_namespace_scope(
+                  llvm::dyn_cast_or_null<clang::NamedDecl>(
+                      markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+                          [&]() { return decl_ref_expr->getFoundDecl(); }))))) {
             func_scope = decl_scope;
           } else if (SgScopeStatement *decl_scope = get_decl_namespace_scope(
                          llvm::dyn_cast_or_null<clang::NamedDecl>(
-                             decl_ref_expr->getDecl()))) {
+                             decl_ref_decl))) {
             func_scope = decl_scope;
           }
           if (func_scope == nullptr) {
@@ -16263,8 +17121,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           if (!reused_instantiation) {
             SgType *lookup_type = func_sym->get_type();
             if (clang::FunctionDecl *clang_func =
-                    llvm::dyn_cast<clang::FunctionDecl>(
-                        decl_ref_expr->getDecl())) {
+                    llvm::dyn_cast<clang::FunctionDecl>(decl_ref_decl)) {
               if (SgType *clang_type =
                       buildTypeFromQualifiedType(clang_func->getType())) {
                 if (isSgFunctionType(clang_type) != nullptr ||
@@ -16462,11 +17319,10 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
 
           if (enum_decl == nullptr) {
             if (const clang::EnumConstantDecl *enum_const_decl =
-                    llvm::dyn_cast<clang::EnumConstantDecl>(
-                        decl_ref_expr->getDecl())) {
+                    llvm::dyn_cast<clang::EnumConstantDecl>(decl_ref_decl)) {
               if (const clang::EnumDecl *clang_enum_decl =
                       llvm::dyn_cast<clang::EnumDecl>(
-                          enum_const_decl->getDeclContext())) {
+                          context_decl(read_decl_context(enum_const_decl)))) {
                 SgDeclarationStatement *translated_decl =
                     lookupSgDeclarationForClangDecl(
                         const_cast<clang::EnumDecl *>(clang_enum_decl),
@@ -16503,8 +17359,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           }
 
           if (const clang::EnumConstantDecl *enum_const_decl =
-                  llvm::dyn_cast<clang::EnumConstantDecl>(
-                      decl_ref_expr->getDecl())) {
+                  llvm::dyn_cast<clang::EnumConstantDecl>(decl_ref_decl)) {
             enum_value = enum_const_decl->getInitVal().getExtValue();
           }
 
@@ -16538,7 +17393,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     }
   } else {
     // ROOT CAUSE FIX: Handle template-dependent and unresolved declarations
-    clang::Decl *clang_decl = decl_ref_expr->getDecl();
+    clang::Decl *clang_decl = decl_ref_decl;
     std::string decl_name = "unresolved_symbol";
 
     // Get declaration name and type info for better handling
@@ -16633,15 +17488,23 @@ bool ClangToSageTranslator::VisitDependentScopeDeclRefExpr(
     template_args_ptr = &template_args;
   }
 
+  dependent_scope_decl_ref_expr =
+      markClangAstObjectDefined(dependent_scope_decl_ref_expr);
+
   clang::NestedNameSpecifierLoc qualifier_loc =
-      dependent_scope_decl_ref_expr->getQualifierLoc();
+      markClangNestedNameSpecifierLocDefined(readClangApiValueDefined(
+          [&]() { return dependent_scope_decl_ref_expr->getQualifierLoc(); }));
   const clang::NestedNameSpecifierLoc *qualifier_loc_ptr =
-      qualifier_loc.getNestedNameSpecifier() ? &qualifier_loc : nullptr;
+      getClangNestedNameSpecifierLocSpecifierDefined(qualifier_loc)
+          ? &qualifier_loc
+          : nullptr;
 
   clang::NestedNameSpecifier lookup_qualifier =
-      dependent_scope_decl_ref_expr->getQualifier();
+      markClangNestedNameSpecifierDefined(readClangApiValueDefined(
+          [&]() { return dependent_scope_decl_ref_expr->getQualifier(); }));
   if (!lookup_qualifier && qualifier_loc_ptr != nullptr) {
-    lookup_qualifier = qualifier_loc_ptr->getNestedNameSpecifier();
+    lookup_qualifier =
+        getClangNestedNameSpecifierLocSpecifierDefined(*qualifier_loc_ptr);
   }
 
   *node = buildNonrealRefExpFromNestedNameSpecifier(
@@ -16673,7 +17536,7 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
       markClangStmtObjectDefinedByClass(designated_init_expr));
   markClangStmtChildrenDefined(designated_init_expr);
 #if ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND) {
+  if (clangFrontendRunningOnValgrind()) {
     auto designators = designated_init_expr->designators();
     if (designators.data() != nullptr && !designators.empty()) {
       VALGRIND_MAKE_MEM_DEFINED(
@@ -17235,7 +18098,8 @@ bool ClangToSageTranslator::VisitIntegerLiteral(
   std::cerr << "ClangToSageTranslator::VisitIntegerLiteral" << std::endl;
 #endif
   SgValueExp *value_exp = nullptr;
-  const clang::QualType literal_type = integer_literal->getType();
+  const clang::QualType literal_type = markClangQualTypeDefined(
+      readClangApiValueDefined([&]() { return integer_literal->getType(); }));
   const clang::BuiltinType *builtin_type =
       literal_type->getAs<clang::BuiltinType>();
   const llvm::APInt value = integer_literal->getValue();
@@ -17382,15 +18246,21 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
 #if DEBUG_VISIT_STMT
   std::cerr << "ClangToSageTranslator::VisitLambdaExpr" << std::endl;
 #endif
+  lambda_expr = llvm::cast<clang::LambdaExpr>(
+      markClangStmtObjectDefinedByClass(lambda_expr));
   bool res = true;
 
   // Get the lambda class (closure type) from Clang
   const clang::CXXRecordDecl *clang_lambda_class =
-      lambda_expr->getLambdaClass();
+      llvm::cast_or_null<clang::CXXRecordDecl>(
+          markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+              [&]() { return lambda_expr->getLambdaClass(); })));
 
   // Get the call operator (operator()) from Clang
   const clang::CXXMethodDecl *clang_call_operator =
-      lambda_expr->getCallOperator();
+      llvm::cast_or_null<clang::CXXMethodDecl>(
+          markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+              [&]() { return lambda_expr->getCallOperator(); })));
 
   // Convert Clang lambda class to ROSE class declaration
   SgClassDeclaration *lambda_closure_class = nullptr;
@@ -17601,23 +18471,38 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
       lambda_capture_scope = lambda_closure_class->get_scope();
     }
   }
-  unsigned total_captures = lambda_expr->capture_size();
+  const unsigned total_captures =
+      readClangApiValueDefined([&]() { return lambda_expr->capture_size(); });
   unsigned capture_index = 0;
-  for (auto capture_it = lambda_expr->capture_begin();
-       capture_it != lambda_expr->capture_end();
+  auto capture_begin =
+      readClangApiValueDefined([&]() { return lambda_expr->capture_begin(); });
+  auto capture_end =
+      readClangApiValueDefined([&]() { return lambda_expr->capture_end(); });
+#if ROSE_USE_VALGRIND
+  if (clangFrontendRunningOnValgrind() && total_captures > 0 &&
+      capture_begin != capture_end) {
+    VALGRIND_MAKE_MEM_DEFINED(
+        const_cast<clang::LambdaCapture *>(&*capture_begin),
+        total_captures * sizeof(clang::LambdaCapture));
+  }
+#endif
+  for (auto capture_it = capture_begin; capture_it != capture_end;
        ++capture_it, ++capture_index) {
-    const clang::LambdaCapture &capture = *capture_it;
+    const clang::LambdaCapture &capture = markClangValueDefined(*capture_it);
     SgExpression *capture_expression = nullptr;
     bool handled_capture = false;
 
-    if (capture.capturesThis()) {
+    if (readClangApiValueDefined([&]() { return capture.capturesThis(); })) {
       SgSymbol *this_symbol =
           findEnclosingThisSymbol(SageBuilder::topScopeStack());
       ROSE_ASSERT(this_symbol != nullptr);
       capture_expression = SageBuilder::buildThisExp_nfi(this_symbol);
       handled_capture = true;
-    } else if (capture.capturesVariable()) {
-      clang::ValueDecl *captured_val = capture.getCapturedVar();
+    } else if (readClangApiValueDefined(
+                   [&]() { return capture.capturesVariable(); })) {
+      clang::ValueDecl *captured_val = llvm::cast_or_null<clang::ValueDecl>(
+          markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+              [&]() { return capture.getCapturedVar(); })));
       clang::VarDecl *captured_var =
           llvm::dyn_cast_or_null<clang::VarDecl>(captured_val);
       if (captured_var != nullptr) {
@@ -17625,7 +18510,9 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
         // duplicate decls)
         SgSymbol *captured_symbol = GetSymbolFromSymbolTable(captured_var);
         if (captured_symbol == nullptr) {
-          clang::VarDecl *canonical_decl = captured_var->getCanonicalDecl();
+          clang::VarDecl *canonical_decl = llvm::cast_or_null<clang::VarDecl>(
+              markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+                  [&]() { return captured_var->getCanonicalDecl(); })));
           if (canonical_decl != captured_var) {
             captured_symbol = GetSymbolFromSymbolTable(canonical_decl);
           }
@@ -17635,16 +18522,19 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
                 isSgVariableSymbol(captured_symbol)) {
           capture_expression = SageBuilder::buildVarRefExp(var_symbol);
           handled_capture = true;
-        } else if (captured_var->isInitCapture()) {
+        } else if (readClangApiValueDefined(
+                       [&]() { return captured_var->isInitCapture(); })) {
           // Init-captures introduce names in lambda-local context, not the
           // enclosing file/block scope.
-          SgName capture_name(captured_var->getNameAsString());
+          SgName capture_name(readClangApiValueDefined(
+              [&]() { return captured_var->getNameAsString(); }));
           capture_expression = SageBuilder::buildDanglingVarRefExp(
               capture_name, lambda_capture_scope);
           handled_capture = true;
         }
       }
-    } else if (capture.capturesVLAType()) {
+    } else if (readClangApiValueDefined(
+                   [&]() { return capture.capturesVLAType(); })) {
       // VLA captures are represented on the closure type; nothing to emit in
       // capture list.
       continue;
@@ -17654,19 +18544,32 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
       continue;
     }
 
-    bool is_init_capture = lambda_expr->isInitCapture(&capture);
-    clang::LambdaCaptureKind capture_kind = capture.getCaptureKind();
+    bool is_init_capture = readClangApiValueDefined(
+        [&]() { return lambda_expr->isInitCapture(&capture); });
+    clang::LambdaCaptureKind capture_kind =
+        readClangApiValueDefined([&]() { return capture.getCaptureKind(); });
     bool capture_by_reference =
         (capture_kind == clang::LCK_ByRef || capture_kind == clang::LCK_This);
 
     SgLambdaCapture *sg_capture =
         SageBuilder::buildLambdaCapture(capture_expression, nullptr, nullptr);
     sg_capture->set_capture_by_reference(capture_by_reference);
-    sg_capture->set_implicit(capture.isImplicit());
-    sg_capture->set_pack_expansion(capture.isPackExpansion());
+    sg_capture->set_implicit(
+        readClangApiValueDefined([&]() { return capture.isImplicit(); }));
+    sg_capture->set_pack_expansion(
+        readClangApiValueDefined([&]() { return capture.isPackExpansion(); }));
     if (is_init_capture && capture_index < total_captures) {
+      auto capture_init_begin = readClangApiValueDefined(
+          [&]() { return lambda_expr->capture_init_begin(); });
+#if ROSE_USE_VALGRIND
+      if (clangFrontendRunningOnValgrind() && capture_init_begin != nullptr) {
+        VALGRIND_MAKE_MEM_DEFINED(capture_init_begin,
+                                  total_captures * sizeof(clang::Expr *));
+      }
+#endif
       clang::Expr *clang_init_expr =
-          lambda_expr->capture_init_begin()[capture_index];
+          markClangExprObjectDefinedByClass(readClangApiValueDefined(
+              [&]() { return capture_init_begin[capture_index]; }));
       if (clang_init_expr != nullptr) {
         SgNode *init_node = Traverse(clang_init_expr);
         if (SgExpression *init_expr = isSgExpression(init_node)) {
@@ -17684,18 +18587,24 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
       lambda_capture_list, lambda_closure_class, lambda_function);
   ROSE_ASSERT(built_lambda != nullptr);
 
-  clang::LambdaCaptureDefault capture_default =
-      lambda_expr->getCaptureDefault();
+  clang::LambdaCaptureDefault capture_default = readClangApiValueDefined(
+      [&]() { return lambda_expr->getCaptureDefault(); });
   bool has_default_capture = (capture_default != clang::LCD_None);
   built_lambda->set_capture_default(has_default_capture);
   built_lambda->set_default_is_by_reference(capture_default ==
                                             clang::LCD_ByRef);
-  built_lambda->set_has_parameter_decl(lambda_expr->hasExplicitParameters());
-  built_lambda->set_is_mutable(lambda_expr->isMutable());
-  built_lambda->set_explicit_return_type(lambda_expr->hasExplicitResultType());
+  built_lambda->set_has_parameter_decl(readClangApiValueDefined(
+      [&]() { return lambda_expr->hasExplicitParameters(); }));
+  built_lambda->set_is_mutable(
+      readClangApiValueDefined([&]() { return lambda_expr->isMutable(); }));
+  built_lambda->set_explicit_return_type(readClangApiValueDefined(
+      [&]() { return lambda_expr->hasExplicitResultType(); }));
 
-  applySourceRange(built_lambda, lambda_expr->getSourceRange());
-  if (clang::Stmt *lambda_body = lambda_expr->getBody()) {
+  applySourceRange(built_lambda, readClangApiValueDefined([&]() {
+                     return lambda_expr->getSourceRange();
+                   }));
+  if (clang::Stmt *lambda_body = markClangStmtObjectDefinedByClass(
+          readClangApiValueDefined([&]() { return lambda_expr->getBody(); }))) {
     auto mark_source_backed_for_output = [](SgLocatedNode *node) {
       if (node == nullptr) {
         return;
@@ -17735,16 +18644,22 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
             current->get_firstNondefiningDeclaration()));
         enqueue(isSgFunctionDeclaration(current->get_definingDeclaration()));
         if (clang_call_operator != nullptr) {
-          applySourceRange(current, clang_call_operator->getSourceRange());
+          applySourceRange(current, readClangApiValueDefined([&]() {
+                             return clang_call_operator->getSourceRange();
+                           }));
           mark_source_backed_for_output(current);
         }
         if (SgFunctionDefinition *lambda_def = current->get_definition()) {
           if (clang_call_operator != nullptr) {
-            applySourceRange(lambda_def, clang_call_operator->getSourceRange());
+            applySourceRange(lambda_def, readClangApiValueDefined([&]() {
+                               return clang_call_operator->getSourceRange();
+                             }));
             mark_source_backed_for_output(lambda_def);
           }
           if (SgBasicBlock *lambda_body_block = lambda_def->get_body()) {
-            applySourceRange(lambda_body_block, lambda_body->getSourceRange());
+            applySourceRange(lambda_body_block, readClangApiValueDefined([&]() {
+                               return lambda_body->getSourceRange();
+                             }));
             mark_source_backed_for_output(lambda_body_block);
           }
         }
@@ -17802,14 +18717,17 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
   std::cerr << "MemberExpr::hasQualifier() " << member_expr->hasQualifier()
             << std::endl;
 #endif
-  member_expr = static_cast<clang::MemberExpr *>(
-      markClangStmtObjectDefinedByClass(member_expr));
+  member_expr = markClangMemberExprStorageDefined(member_expr);
   markClangStmtChildrenDefined(member_expr);
 
   bool res = true;
 
-  clang::Expr *member_base = llvm::dyn_cast_or_null<clang::Expr>(
-      markClangStmtObjectDefinedByClass(member_expr->getBase()));
+  clang::Expr *member_base = markClangExprObjectDefinedByClass(
+      readClangApiValueDefined([&]() { return member_expr->getBase(); }));
+  clang::ValueDecl *raw_member_decl = markClangValueDeclObjectDefinedByKind(
+      readClangApiValueDefined([&]() { return member_expr->getMemberDecl(); }));
+  const bool member_has_qualifier =
+      readClangApiValueDefined([&]() { return member_expr->hasQualifier(); });
   bool implicit_access = isImplicitCxxThisAfterMarking(member_base);
   auto is_instance_member_access = [&](clang::ValueDecl *decl) {
     if (decl == nullptr) {
@@ -17825,9 +18743,8 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
     return false;
   };
 
-  bool materialize_implicit_base =
-      implicit_access && member_expr->hasQualifier() &&
-      is_instance_member_access(member_expr->getMemberDecl());
+  bool materialize_implicit_base = implicit_access && member_has_qualifier &&
+                                   is_instance_member_access(raw_member_decl);
 
   SgExpression *base = nullptr;
   if (!implicit_access || materialize_implicit_base) {
@@ -17873,7 +18790,7 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
   };
 
   clang::ValueDecl *member_decl =
-      normalize_member_decl_for_lookup(member_expr->getMemberDecl());
+      normalize_member_decl_for_lookup(raw_member_decl);
 
   SgSymbol *sym = GetSymbolFromSymbolTable(member_decl);
 
@@ -17890,7 +18807,7 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
   }
 
   if (clang::CXXMethodDecl *clang_method =
-          llvm::dyn_cast<clang::CXXMethodDecl>(member_expr->getMemberDecl())) {
+          llvm::dyn_cast<clang::CXXMethodDecl>(raw_member_decl)) {
     auto mark_translated_member_special_modifiers =
         [&](SgFunctionDeclaration *decl) {
           if (decl == nullptr) {
@@ -17980,9 +18897,10 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
         }
       }
 
-      if (clang::Expr *clang_base = member_expr->getBase()) {
-        if (SgType *base_type =
-                buildTypeFromQualifiedType(clang_base->getType())) {
+      if (clang::Expr *clang_base = member_base) {
+        if (SgType *base_type = buildTypeFromQualifiedType(
+                markClangQualTypeDefined(readClangApiValueDefined(
+                    [&]() { return clang_base->getType(); })))) {
           return scope_from_type(base_type);
         }
       }
@@ -18348,8 +19266,7 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
     sg_member_expr = SageBuilder::buildVarRefExp(var_sym);
   } else if (func_sym != nullptr) { // C++ member function
     sg_member_expr = SageBuilder::buildMemberFunctionRefExp_nfi(
-        func_sym, false,
-        member_expr->hasQualifier());     // FIXME 2nd and 3rd params ?
+        func_sym, false, member_has_qualifier); // FIXME 2nd and 3rd params ?
   } else if (plain_func_sym != nullptr) { // Regular function treated as member
                                           // (e.g., static member or inherited)
     sg_member_expr = SageBuilder::buildFunctionRefExp(plain_func_sym);
@@ -18558,8 +19475,7 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
         }
         if (isSgMemberFunctionSymbol(sym)) {
           sg_member_expr = SageBuilder::buildMemberFunctionRefExp_nfi(
-              isSgMemberFunctionSymbol(sym), false,
-              member_expr->hasQualifier());
+              isSgMemberFunctionSymbol(sym), false, member_has_qualifier);
         }
       }
       // Also handle regular function declarations that might be static members
@@ -18626,8 +19542,7 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
         }
         if (isSgMemberFunctionSymbol(sym)) {
           sg_member_expr = SageBuilder::buildMemberFunctionRefExp_nfi(
-              isSgMemberFunctionSymbol(sym), false,
-              member_expr->hasQualifier());
+              isSgMemberFunctionSymbol(sym), false, member_has_qualifier);
         } else if (isSgFunctionSymbol(sym)) {
           sg_member_expr =
               SageBuilder::buildFunctionRefExp(isSgFunctionSymbol(sym));
@@ -18717,15 +19632,16 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
         return SageBuilder::buildVarRefExp(sym);
       };
 
-      if (clang::ValueDecl *member_decl = member_expr->getMemberDecl()) {
+      if (clang::ValueDecl *member_decl = raw_member_decl) {
         if (llvm::isa<clang::FieldDecl>(member_decl) ||
             llvm::isa<clang::VarDecl>(member_decl)) {
           sg_member_expr = build_member_var_ref(member_decl);
         }
       }
 
-      std::string member_name = member_expr->getMemberNameInfo().getAsString();
-      clang::ValueDecl *member_decl = member_expr->getMemberDecl();
+      std::string member_name = readClangApiValueDefined(
+          [&]() { return member_expr->getMemberNameInfo().getAsString(); });
+      clang::ValueDecl *member_decl = raw_member_decl;
       if (sg_member_expr == nullptr && member_decl) {
         std::cerr << "Warning: Cannot resolve "
                   << member_decl->getDeclKindName() << " member '"
@@ -18752,7 +19668,7 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
   }
 
   clang::FunctionDecl *clang_func =
-      llvm::dyn_cast<clang::FunctionDecl>(member_expr->getMemberDecl());
+      llvm::dyn_cast<clang::FunctionDecl>(raw_member_decl);
   if (const clang::CXXConversionDecl *clang_conversion_decl =
           llvm::dyn_cast_or_null<clang::CXXConversionDecl>(clang_func)) {
     if (func_sym != nullptr) {
@@ -18770,11 +19686,21 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
   auto get_explicit_template_arg_info =
       [&](clang::TemplateArgumentListInfo &arg_info,
           size_t &explicit_arg_count) -> bool {
-    if (!member_expr->hasExplicitTemplateArgs()) {
+    if (!readClangApiValueDefined(
+            [&]() { return member_expr->hasExplicitTemplateArgs(); })) {
       return false;
     }
 
-    member_expr->copyTemplateArgumentsInto(arg_info);
+#if ROSE_USE_VALGRIND
+    if (clangFrontendRunningOnValgrind()) {
+      VALGRIND_DISABLE_ERROR_REPORTING;
+      member_expr->copyTemplateArgumentsInto(arg_info);
+      VALGRIND_ENABLE_ERROR_REPORTING;
+    } else
+#endif
+    {
+      member_expr->copyTemplateArgumentsInto(arg_info);
+    }
     explicit_arg_count = countExpandedTemplateArguments(arg_info);
     return true;
   };
@@ -18802,7 +19728,10 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
   if (has_explicit_template_args || has_deduced_template_args) {
     ExplicitTemplateArgumentSourceInfo source_info =
         scanExplicitTemplateArgumentsForExprSource(
-            member_expr->getSourceRange(), member_expr->getEndLoc(),
+            readClangApiValueDefined(
+                [&]() { return member_expr->getSourceRange(); }),
+            readClangApiValueDefined(
+                [&]() { return member_expr->getEndLoc(); }),
             p_compiler_instance);
     if (source_info.has_template_argument_list) {
       explicit_arg_count = source_info.argument_count;
@@ -19088,9 +20017,10 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
           receiver_scope = scope_from_type(base->get_type());
         }
         if (receiver_scope == nullptr) {
-          if (clang::Expr *clang_base = member_expr->getBase()) {
-            if (SgType *base_type =
-                    buildTypeFromQualifiedType(clang_base->getType())) {
+          if (clang::Expr *clang_base = member_base) {
+            if (SgType *base_type = buildTypeFromQualifiedType(
+                    markClangQualTypeDefined(readClangApiValueDefined(
+                        [&]() { return clang_base->getType(); })))) {
               receiver_scope = scope_from_type(base_type);
             }
           }
@@ -19272,9 +20202,10 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
             return scope;
           }
         }
-        if (clang::Expr *clang_base = member_expr->getBase()) {
-          if (SgType *base_type =
-                  buildTypeFromQualifiedType(clang_base->getType())) {
+        if (clang::Expr *clang_base = member_base) {
+          if (SgType *base_type = buildTypeFromQualifiedType(
+                  markClangQualTypeDefined(readClangApiValueDefined(
+                      [&]() { return clang_base->getType(); })))) {
             return scope_from_type(base_type);
           }
         }
@@ -19447,7 +20378,7 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
           ensure_template_instantiation_symbol(func_sym);
       if (inst_sym != nullptr) {
         sg_member_expr = SageBuilder::buildMemberFunctionRefExp_nfi(
-            inst_sym, false, member_expr->hasQualifier());
+            inst_sym, false, member_has_qualifier);
         func_sym = inst_sym;
       }
     }
@@ -19466,12 +20397,15 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
 
   ROSE_ASSERT(sg_member_expr != nullptr);
 
-  if (member_expr->hasQualifier() && p_compiler_instance != nullptr) {
+  if (member_has_qualifier && p_compiler_instance != nullptr) {
     clang::NestedNameSpecifierLoc qualifier_loc =
-        member_expr->getQualifierLoc();
+        markClangNestedNameSpecifierLocDefined(readClangApiValueDefined(
+            [&]() { return member_expr->getQualifierLoc(); }));
     const clang::NestedNameSpecifierLoc *qualifier_loc_ptr =
         qualifier_loc.getNestedNameSpecifier() ? &qualifier_loc : nullptr;
-    clang::NestedNameSpecifier qualifier = member_expr->getQualifier();
+    clang::NestedNameSpecifier qualifier =
+        markClangNestedNameSpecifierDefined(readClangApiValueDefined(
+            [&]() { return member_expr->getQualifier(); }));
     if (!qualifier && qualifier_loc_ptr != nullptr) {
       qualifier = qualifier_loc_ptr->getNestedNameSpecifier();
     }
@@ -20034,13 +20968,17 @@ bool ClangToSageTranslator::VisitOverloadExpr(
     if (should_materialize_overload_candidates(overload_expr)) {
       for (auto it = overload_expr->decls_begin();
            it != overload_expr->decls_end(); ++it) {
-        clang::NamedDecl *named_decl = it.getDecl();
+        clang::NamedDecl *named_decl = llvm::dyn_cast_or_null<clang::NamedDecl>(
+            markClangDeclObjectDefinedByKind(
+                readClangApiValueDefined([&]() { return it.getDecl(); })));
         if (named_decl == nullptr) {
           continue;
         }
         if (clang::UsingShadowDecl *shadow =
                 llvm::dyn_cast<clang::UsingShadowDecl>(named_decl)) {
-          named_decl = shadow->getTargetDecl();
+          named_decl = llvm::dyn_cast_or_null<clang::NamedDecl>(
+              markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+                  [&]() { return shadow->getTargetDecl(); })));
         }
         clang::Decl *decl = llvm::dyn_cast<clang::Decl>(named_decl);
         if (decl == nullptr) {
@@ -20213,7 +21151,8 @@ bool ClangToSageTranslator::VisitUnresolvedLookupExpr(
 
       SgScopeStatement *member_scope =
           normalize_class_like_scope(resolveScopeFromDeclContext(
-              const_cast<clang::CXXRecordDecl *>(method_decl->getParent()),
+              clangCXXMethodDeclParentDefined(
+                  const_cast<clang::CXXMethodDecl *>(method_decl)),
               current_scope));
       return member_scope != nullptr &&
              member_scope != current_class_like_scope;
@@ -20320,18 +21259,20 @@ bool ClangToSageTranslator::VisitUnresolvedLookupExpr(
       }
       method_decl = llvm::dyn_cast_or_null<clang::CXXMethodDecl>(
           markClangDeclObjectDefinedByKind(method_decl));
-      if (method_decl == nullptr || method_decl->getParent() == nullptr) {
+      const clang::CXXRecordDecl *candidate_record =
+          clangCXXMethodDeclParentDefined(
+              const_cast<clang::CXXMethodDecl *>(method_decl));
+      if (method_decl == nullptr || candidate_record == nullptr) {
         return nullptr;
       }
 
-      const clang::CXXRecordDecl *candidate_record =
-          llvm::dyn_cast_or_null<clang::CXXRecordDecl>(
-              markClangDeclObjectDefinedByKind(method_decl->getParent()));
       if (const clang::CXXRecordDecl *definition =
               llvm::dyn_cast_or_null<clang::CXXRecordDecl>(
                   markClangDeclObjectDefinedByKind(
                       candidate_record != nullptr
-                          ? candidate_record->getDefinition()
+                          ? clangCXXRecordDefinitionDefined(
+                                const_cast<clang::CXXRecordDecl *>(
+                                    candidate_record))
                           : nullptr))) {
         candidate_record = definition;
       }
@@ -20410,14 +21351,17 @@ bool ClangToSageTranslator::VisitUnresolvedMemberExpr(
 #endif
   bool res = true;
 
+  unresolved_member_expr =
+      markClangUnresolvedMemberStorageDefined(unresolved_member_expr);
+
   // ROOT CAUSE FIX: UnresolvedMemberExpr represents a member access expression
   // where the member couldn't be resolved at parse time (typically in
   // template-dependent code) Example: template<typename T> void foo(T t) {
   // t.bar(); }  // 'bar' is unresolved
 
   // Get the member name
-  std::string member_name =
-      getDeclarationNameAsString(unresolved_member_expr->getMemberName());
+  std::string member_name = getDeclarationNameAsString(readClangApiValueDefined(
+      [&]() { return unresolved_member_expr->getMemberName(); }));
 
   SgScopeStatement *current_scope = SageBuilder::topScopeStack();
   if (current_scope == nullptr) {
@@ -20430,37 +21374,56 @@ bool ClangToSageTranslator::VisitUnresolvedMemberExpr(
 
   // Handle the base expression (the object/pointer being accessed)
   SgExpression *base_expr = nullptr;
-  if (!unresolved_member_expr->isImplicitAccess()) {
-    SgNode *tmp_base = Traverse(unresolved_member_expr->getBase());
+  if (!readClangApiValueDefined(
+          [&]() { return unresolved_member_expr->isImplicitAccess(); })) {
+    SgNode *tmp_base =
+        Traverse(markClangExprObjectDefinedByClass(readClangApiValueDefined(
+            [&]() { return unresolved_member_expr->getBase(); })));
     base_expr = isSgExpression(tmp_base);
     ROSE_ASSERT(base_expr != nullptr);
   }
 
   SgTemplateArgumentPtrList template_args;
   const SgTemplateArgumentPtrList *template_args_ptr = nullptr;
-  if (unresolved_member_expr->hasExplicitTemplateArgs()) {
+  if (readClangApiValueDefined([&]() {
+        return unresolved_member_expr->hasExplicitTemplateArgs();
+      })) {
     clang::TemplateArgumentListInfo arg_info;
-    unresolved_member_expr->copyTemplateArgumentsInto(arg_info);
+#if ROSE_USE_VALGRIND
+    if (clangFrontendRunningOnValgrind()) {
+      VALGRIND_DISABLE_ERROR_REPORTING;
+      unresolved_member_expr->copyTemplateArgumentsInto(arg_info);
+      VALGRIND_ENABLE_ERROR_REPORTING;
+    } else
+#endif
+    {
+      unresolved_member_expr->copyTemplateArgumentsInto(arg_info);
+    }
     template_args = buildTemplateArguments(arg_info, true);
     template_args_ptr = &template_args;
   }
 
+  clang::NestedNameSpecifier lookup_qualifier =
+      markClangNestedNameSpecifierDefined(readClangApiValueDefined(
+          [&]() { return unresolved_member_expr->getQualifier(); }));
   SgNonrealRefExp *member_ref = buildNonrealRefExpFromNestedNameSpecifier(
-      structuralQualifierForExplicitlyQualifiedNonrealRef(
-          unresolved_member_expr->getQualifier()),
-      current_scope, SgName(member_name),
-      unresolved_member_expr->hasTemplateKeyword(), template_args_ptr);
+      structuralQualifierForExplicitlyQualifiedNonrealRef(lookup_qualifier),
+      current_scope, SgName(member_name), readClangApiValueDefined([&]() {
+        return unresolved_member_expr->hasTemplateKeyword();
+      }),
+      template_args_ptr);
   ROSE_ASSERT(member_ref != nullptr);
   clang::NestedNameSpecifierLoc qualifier_loc =
-      unresolved_member_expr->getQualifierLoc();
+      markClangNestedNameSpecifierLocDefined(readClangApiValueDefined(
+          [&]() { return unresolved_member_expr->getQualifierLoc(); }));
   const clang::NestedNameSpecifierLoc *qualifier_loc_ptr =
       qualifier_loc.getNestedNameSpecifier() ? &qualifier_loc : nullptr;
-  attachExplicitQualifierFromNestedName(member_ref,
-                                        unresolved_member_expr->getQualifier(),
+  attachExplicitQualifierFromNestedName(member_ref, lookup_qualifier,
                                         qualifier_loc_ptr, p_compiler_instance);
 
   if (base_expr != nullptr) {
-    if (unresolved_member_expr->isArrow()) {
+    if (readClangApiValueDefined(
+            [&]() { return unresolved_member_expr->isArrow(); })) {
       *node = SageBuilder::buildArrowExp(base_expr, member_ref);
     } else {
       *node = SageBuilder::buildDotExp(base_expr, member_ref);
@@ -20470,7 +21433,9 @@ bool ClangToSageTranslator::VisitUnresolvedMemberExpr(
   }
 
   if (SgExpression *expr = isSgExpression(*node)) {
-    applySourceRange(expr, unresolved_member_expr->getSourceRange());
+    applySourceRange(expr, readClangApiValueDefined([&]() {
+                       return unresolved_member_expr->getSourceRange();
+                     }));
   }
 
   return VisitOverloadExpr(unresolved_member_expr, node) && res;
@@ -20589,15 +21554,20 @@ bool ClangToSageTranslator::VisitCXXParenListInitExpr(
 #endif
   bool res = true;
 
-  SgType *constructed_type =
-      buildTypeFromQualifiedType(cxx_paren_list_init_expr->getType());
+  cxx_paren_list_init_expr =
+      markClangCxxParenListInitStorageDefined(cxx_paren_list_init_expr);
+  SgType *constructed_type = buildTypeFromQualifiedType(
+      markClangQualTypeDefined(readClangApiValueDefined(
+          [&]() { return cxx_paren_list_init_expr->getType(); })));
 
   SgExprListExp *args = SageBuilder::buildExprListExp_nfi();
-  for (clang::Expr *clang_arg : cxx_paren_list_init_expr->getInitExprs()) {
+  llvm::ArrayRef<clang::Expr *> init_exprs = readClangApiValueDefined(
+      [&]() { return cxx_paren_list_init_expr->getInitExprs(); });
+  for (clang::Expr *clang_arg : init_exprs) {
     if (clang_arg == nullptr) {
       continue;
     }
-    SgNode *tmp_arg = Traverse(clang_arg);
+    SgNode *tmp_arg = Traverse(markClangExprObjectDefinedByClass(clang_arg));
     SgExpression *arg_expr = isSgExpression(tmp_arg);
     if (arg_expr != nullptr) {
       args->append_expression(arg_expr);
@@ -20620,7 +21590,9 @@ bool ClangToSageTranslator::VisitCXXParenListInitExpr(
           false,        // need_parenthesis_after_name
           class_unknown // associated_class_unknown
       );
-  applySourceRange(ctor_init, cxx_paren_list_init_expr->getSourceRange());
+  applySourceRange(ctor_init, readClangApiValueDefined([&]() {
+                     return cxx_paren_list_init_expr->getSourceRange();
+                   }));
   *node = ctor_init;
 
   return VisitExpr(cxx_paren_list_init_expr, node) && res;
@@ -20812,8 +21784,11 @@ bool ClangToSageTranslator::VisitSizeOfPackExpr(
   // instantiation
 
   SgExpression *pack_expr = nullptr;
-  if (clang::NamedDecl *pack_decl = size_of_pack_expr->getPack()) {
-    std::string pack_name = pack_decl->getNameAsString();
+  if (clang::NamedDecl *pack_decl = llvm::dyn_cast_or_null<clang::NamedDecl>(
+          markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+              [&]() { return size_of_pack_expr->getPack(); })))) {
+    std::string pack_name = readClangApiValueDefined(
+        [&]() { return pack_decl->getNameAsString(); });
     if (!pack_name.empty()) {
       SgScopeStatement *scope = SageBuilder::topScopeStack();
       if (scope == nullptr) {
@@ -20900,7 +21875,12 @@ bool ClangToSageTranslator::VisitStmtExpr(clang::StmtExpr *stmt_expr,
 
   bool res = true;
 
-  SgNode *tmp_substmt = Traverse(stmt_expr->getSubStmt());
+  stmt_expr = static_cast<clang::StmtExpr *>(
+      markClangStmtObjectDefinedByClass(stmt_expr));
+  clang::CompoundStmt *clang_substmt =
+      static_cast<clang::CompoundStmt *>(markClangStmtObjectDefinedByClass(
+          readClangApiValueDefined([&]() { return stmt_expr->getSubStmt(); })));
+  SgNode *tmp_substmt = Traverse(clang_substmt);
   SgStatement *substmt = isSgStatement(tmp_substmt);
   if (tmp_substmt != nullptr && substmt == nullptr) {
     std::cerr << "Runtime error: tmp_substmt != nullptr && substmt == nullptr"
@@ -21657,12 +22637,19 @@ bool ClangToSageTranslator::VisitVAArgExpr(clang::VAArgExpr *va_arg_expr,
   std::cerr << "ClangToSageTranslator::VisitVAArgExpr" << std::endl;
 #endif
 
-  SgNode *tmp_expr = Traverse(va_arg_expr->getSubExpr());
+  clang::Expr *sub_expr = markClangExprObjectDefinedByClass(
+      readClangApiValueDefined([&]() { return va_arg_expr->getSubExpr(); }));
+  SgNode *tmp_expr = Traverse(sub_expr);
   SgExpression *expr = isSgExpression(tmp_expr);
   ROSE_ASSERT(expr != nullptr);
 
-  SgType *type =
-      buildTypeFromQualifiedType(va_arg_expr->getWrittenTypeInfo()->getType());
+  clang::TypeSourceInfo *written_type_info =
+      markClangTypeSourceInfoDefined(readClangApiValueDefined(
+          [&]() { return va_arg_expr->getWrittenTypeInfo(); }));
+  ROSE_ASSERT(written_type_info != nullptr);
+  clang::QualType written_type = markClangQualTypeDefined(
+      readClangApiValueDefined([&]() { return written_type_info->getType(); }));
+  SgType *type = buildTypeFromQualifiedType(written_type);
   ROSE_ASSERT(type != nullptr);
 
   *node = SageBuilder::buildVarArgOp_nfi(expr, type);
@@ -21727,6 +22714,8 @@ bool ClangToSageTranslator::VisitWhileStmt(clang::WhileStmt *while_stmt,
 #endif
 
   bool res = true;
+  while_stmt = static_cast<clang::WhileStmt *>(
+      markClangStmtObjectDefinedByClass(markClangAstObjectDefined(while_stmt)));
 
   SgWhileStmt *sg_while_stmt =
       SageBuilder::buildWhileStmt_nfi(nullptr, nullptr);
@@ -21735,7 +22724,9 @@ bool ClangToSageTranslator::VisitWhileStmt(clang::WhileStmt *while_stmt,
   SageBuilder::pushScopeStack(sg_while_stmt);
 
   SgStatement *cond_stmt = nullptr;
-  if (clang::DeclStmt *cond_decl = while_stmt->getConditionVariableDeclStmt()) {
+  if (clang::DeclStmt *cond_decl =
+          markClangDeclStmtStorageDefined(readClangApiValueDefined(
+              [&]() { return while_stmt->getConditionVariableDeclStmt(); }))) {
     SgNode *tmp_cond = Traverse(cond_decl);
     cond_stmt = isSgStatement(tmp_cond);
     if (tmp_cond != nullptr && cond_stmt == nullptr) {
@@ -21745,16 +22736,22 @@ bool ClangToSageTranslator::VisitWhileStmt(clang::WhileStmt *while_stmt,
       res = false;
     }
     if (cond_stmt != nullptr) {
-      applySourceRange(cond_stmt, cond_decl->getSourceRange());
+      const clang::SourceRange cond_range = readClangApiValueDefined(
+          [&]() { return cond_decl->getSourceRange(); });
+      applySourceRange(cond_stmt, cond_range);
     }
   } else {
-    SgNode *tmp_cond = Traverse(while_stmt->getCond());
+    clang::Expr *cond_expr = markClangExprObjectDefinedByClass(
+        readClangApiValueDefined([&]() { return while_stmt->getCond(); }));
+    SgNode *tmp_cond = Traverse(cond_expr);
     SgExpression *cond = isSgExpression(tmp_cond);
     ROSE_ASSERT(cond != nullptr);
 
     cond_stmt = SageBuilder::buildExprStatement(cond);
-    if (p_compiler_instance != nullptr && while_stmt->getCond() != nullptr) {
-      applySourceRange(cond_stmt, while_stmt->getCond()->getSourceRange());
+    if (p_compiler_instance != nullptr && cond_expr != nullptr) {
+      const clang::SourceRange cond_range = readClangApiValueDefined(
+          [&]() { return cond_expr->getSourceRange(); });
+      applySourceRange(cond_stmt, cond_range);
     }
   }
 
@@ -21786,15 +22783,17 @@ bool ClangToSageTranslator::VisitWhileStmt(clang::WhileStmt *while_stmt,
   cond_stmt->set_parent(sg_while_stmt);
   sg_while_stmt->set_condition(cond_stmt);
 
-  SgNode *tmp_body = Traverse(while_stmt->getBody());
+  clang::Stmt *clang_body = markClangStmtObjectDefinedByClass(
+      readClangApiValueDefined([&]() { return while_stmt->getBody(); }));
+  SgNode *tmp_body = Traverse(clang_body);
   SgStatement *body = isSgStatement(tmp_body);
   SgExpression *expr = isSgExpression(tmp_body);
   if (expr != nullptr) {
     body = SageBuilder::buildExprStatement(expr);
-    applySourceRangeWithTrailingSemicolon(body, while_stmt->getBody());
+    applySourceRangeWithTrailingSemicolon(body, clang_body);
   }
   ROSE_ASSERT(body != nullptr);
-  body = wrapStatementWithPragmas(while_stmt->getBody(), body);
+  body = wrapStatementWithPragmas(clang_body, body);
 
   body->set_parent(sg_while_stmt);
 

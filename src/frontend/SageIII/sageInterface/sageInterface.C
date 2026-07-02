@@ -4130,6 +4130,8 @@ void SageInterface::rebuildSymbolTable(SgScopeStatement *scope) {
 
   case V_SgBasicBlock:
   case V_SgClassDefinition:
+  case V_SgDeclarationScope:
+  case V_SgFunctionParameterScope:
   case V_SgTemplateInstantiationDefn:
   case V_SgGlobal:
   case V_SgNamespaceDefinitionStatement:
@@ -4337,6 +4339,8 @@ void SageInterface::rebuildSymbolTable(SgScopeStatement *scope) {
         // DQ (12/24/2012): Added support for templates.
       case V_SgTemplateFunctionDeclaration:
 
+      case V_SgProgramHeaderStatement:
+      case V_SgProcedureHeaderStatement:
       case V_SgFunctionDeclaration: {
         SgFunctionDeclaration *derivedDeclaration =
             isSgFunctionDeclaration(declaration);
@@ -4469,6 +4473,7 @@ void SageInterface::rebuildSymbolTable(SgScopeStatement *scope) {
         // DQ (12/24/2012): Added support for templates.
       case V_SgTemplateClassDeclaration:
 
+      case V_SgDerivedTypeStatement:
       case V_SgClassDeclaration: {
         SgClassDeclaration *derivedDeclaration =
             isSgClassDeclaration(declaration);
@@ -4597,6 +4602,25 @@ void SageInterface::rebuildSymbolTable(SgScopeStatement *scope) {
         break;
       }
 
+      case V_SgNonrealDecl: {
+        SgNonrealDecl *derivedDeclaration = isSgNonrealDecl(declaration);
+        ROSE_ASSERT(derivedDeclaration != NULL);
+        SgSymbol *symbol = new SgNonrealSymbol(derivedDeclaration);
+        ROSE_ASSERT(symbol != NULL);
+        symbolTable->insert(derivedDeclaration->get_name(), symbol);
+        break;
+      }
+
+      case V_SgModuleStatement: {
+        SgModuleStatement *derivedDeclaration =
+            isSgModuleStatement(declaration);
+        ROSE_ASSERT(derivedDeclaration != NULL);
+        SgSymbol *symbol = new SgModuleSymbol(derivedDeclaration);
+        ROSE_ASSERT(symbol != NULL);
+        symbolTable->insert(derivedDeclaration->get_name(), symbol);
+        break;
+      }
+
       case V_SgTemplateDeclaration: {
         SgTemplateDeclaration *derivedDeclaration =
             isSgTemplateDeclaration(declaration);
@@ -4675,6 +4699,22 @@ void SageInterface::rebuildSymbolTable(SgScopeStatement *scope) {
       case V_SgClinkageStartStatement:
       case V_SgClinkageEndStatement:
       case V_SgTemplateInstantiationDirectiveStatement:
+      case V_SgOmpDeclareMapperStatement:
+      case V_SgOmpDeclareSimdStatement:
+      case V_SgOmpDeclareVariantStatement:
+      case V_SgOmpBeginDeclareVariantStatement:
+      case V_SgOmpEndDeclareVariantStatement:
+      case V_SgOmpDeclareTargetStatement:
+      case V_SgOmpEndDeclareTargetStatement:
+      case V_SgOmpThreadprivateStatement:
+      case V_SgOmpAllocateStatement:
+      case V_SgOmpRequiresStatement:
+      case V_SgOmpTaskwaitStatement:
+      case V_SgImplicitStatement:
+      case V_SgUseStatement:
+      case V_SgContainsStatement:
+      case V_SgAttributeSpecificationStatement:
+      case V_SgInterfaceStatement:
       case V_SgUsingDeclarationStatement: {
         // DQ (10/22/2005): Not sure if we have to worry about this
         // declaration's appearance in the symbol table!
@@ -20260,6 +20300,10 @@ void SageInterface::appendStatementWithDependentDeclaration(
         }
       }
 
+      for (PreprocessingInfo *info : *infos) {
+        delete info;
+      }
+      delete infos;
       locatedNode->set_attachedPreprocessingInfoPtr(clonedInfos);
     }
   };
@@ -21998,7 +22042,7 @@ public:
       const std::unordered_set<PreprocessingInfo *> &file_owned)
       : file_owned_(file_owned) {}
 
-  void visitDefault(SgNode *node) override {
+  void cleanupNode(SgNode *node) {
     if (!node) {
       return;
     }
@@ -22036,6 +22080,8 @@ public:
       }
     }
   }
+
+  void visitDefault(SgNode *node) override { cleanupNode(node); }
 
 private:
   const std::unordered_set<PreprocessingInfo *> &file_owned_;
@@ -22253,8 +22299,7 @@ void tearDownAstAtExit() {
     project = findAnyLiveProject();
   }
   if (project == nullptr && !hasLiveAstNodes()) {
-    g_astTeardownComplete = true;
-    g_astTeardownProject = nullptr;
+    SageInterface::tearDownAst(nullptr);
     return;
   }
   SageInterface::tearDownAst(project);
@@ -22313,10 +22358,10 @@ void SageInterface::tearDownAst(SgProject *project) {
       collectFileOwnedPreprocessingInfo(project);
   AttributeCleanupVisitor attributeCleanup(file_owned_preprocessing);
   traverseMemoryPoolVisitorPattern(attributeCleanup);
-
-  if (project != nullptr) {
-    DeleteAstSymbolTableLookupGuard skipLookups(true);
-    SageInterface::deleteAST(project);
+  LiveNodeCollector auxiliaryCleanupNodes;
+  traverseMemoryPoolVisitorPattern(auxiliaryCleanupNodes);
+  for (SgNode *node : auxiliaryCleanupNodes.nodes) {
+    attributeCleanup.cleanupNode(node);
   }
 
   LiveNodeCollector remainingNodes;

@@ -10,6 +10,8 @@
 using namespace std;
 EDefUse::EDefUse(SgProject *proj) { internalDefUse = new DefUseAnalysis(proj); }
 
+EDefUse::~EDefUse() { delete internalDefUse; }
+
 int EDefUse::run(bool debug) {
   internalDefUse->run(debug);
   return 0; // JJW 10-17-2007 does not appear to ever be used

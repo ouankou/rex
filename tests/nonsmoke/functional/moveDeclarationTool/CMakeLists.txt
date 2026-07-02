@@ -36,6 +36,11 @@ set(MOVE_DECLS_TESTCODES_ADDITIONAL
   inputmoveDeclarationToInnermostScope_test2014_26.C
 )
 
+set(MOVE_DECLS_TESTCODES_EXTENDED_TIMEOUT
+  inputmoveDeclarationToInnermostScope_test2014_18.C
+  inputmoveDeclarationToInnermostScope_test2014_22.C
+)
+
 set(MOVE_DECLS_TESTCODES_ALL
   ${MOVE_DECLS_TESTCODES_FULLY_SUPPORTED}
   ${MOVE_DECLS_TESTCODES_ADDITIONAL}
@@ -356,6 +361,16 @@ foreach(specimen IN LISTS MOVE_DECLS_TESTCODES_ALL)
       ${_reference_root}/withmerge/${_output_v3}
   )
   set_tests_properties(moveDecl_v3_diff_${_name} PROPERTIES DEPENDS moveDecl_v3_${_name})
+
+  if(REX_EXTENDED_TEST_TIMEOUTS AND specimen IN_LIST MOVE_DECLS_TESTCODES_EXTENDED_TIMEOUT)
+    set_tests_properties(
+      moveDecl_v1_${_name}
+      moveDecl_v2_${_name}
+      moveDecl_v3_${_name}
+      PROPERTIES
+        TIMEOUT 10800
+        PROCESSORS 16)
+  endif()
 
 endforeach()
 

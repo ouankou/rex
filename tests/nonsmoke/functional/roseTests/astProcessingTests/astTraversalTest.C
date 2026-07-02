@@ -143,6 +143,14 @@ template <class T> std::vector<T *> *buildTraversalList() {
   return traversalList;
 }
 
+template <class T> void destroyTraversalList(std::vector<T *> *traversalList) {
+  for (typename std::vector<T *>::iterator it = traversalList->begin();
+       it != traversalList->end(); ++it) {
+    delete *it;
+  }
+  delete traversalList;
+}
+
 void runSequentialTests(SgProject *root,
                         std::vector<unsigned long> *referenceResults) {
   struct timeval beginTime, endTime;
@@ -174,7 +182,7 @@ void runSequentialTests(SgProject *root,
   std::cout << "approximate time (seconds): "
             << timeDifference(endTime, beginTime) << std::endl;
 
-  delete simpleList;
+  destroyTraversalList(simpleList);
 
   // DQ (11/5/2016): Bug caught by address sanitizer (reset to NULL to avoid
   // possible use below, also fixed below).
@@ -210,7 +218,7 @@ void runSequentialTests(SgProject *root,
 
   // DQ (11/5/2016): Bug caught by address sanitizer (simpleList deleted above).
   // delete simpleList;
-  delete simpleList2;
+  destroyTraversalList(simpleList2);
 
   std::cout << "pre-post sequential" << std::endl;
   std::vector<NodeCountPrePost *> *prePostList =
@@ -233,7 +241,7 @@ void runSequentialTests(SgProject *root,
 #endif
   std::cout << "approximate time (seconds): "
             << timeDifference(endTime, beginTime) << std::endl;
-  delete prePostList;
+  destroyTraversalList(prePostList);
 
   std::cout << "bottom-up sequential" << std::endl;
   std::vector<NodeCountBottomUp *> *bottomUpList =
@@ -241,7 +249,9 @@ void runSequentialTests(SgProject *root,
   std::vector<NodeCountBottomUp *>::iterator b;
   beginTime = getCPUTime();
   for (b = bottomUpList->begin(); b != bottomUpList->end(); ++b) {
-    (*b)->variantCount = *(*b)->traverse(root);
+    unsigned long *result = (*b)->traverse(root);
+    (*b)->variantCount = *result;
+    delete result;
   }
   endTime = getCPUTime();
   i = 0;
@@ -256,7 +266,7 @@ void runSequentialTests(SgProject *root,
 #endif
   std::cout << "approximate time (seconds): "
             << timeDifference(endTime, beginTime) << std::endl;
-  delete bottomUpList;
+  destroyTraversalList(bottomUpList);
 
   std::cout << "top-down sequential" << std::endl;
   std::vector<NodeCountTopDown *> *topDownList =
@@ -279,7 +289,7 @@ void runSequentialTests(SgProject *root,
 #endif
   std::cout << "approximate time (seconds): "
             << timeDifference(endTime, beginTime) << std::endl;
-  delete topDownList;
+  destroyTraversalList(topDownList);
 
   std::cout << "top-down bottom-up sequential" << std::endl;
   std::vector<NodeCountTopDownBottomUp *> *topDownBottomUpList =
@@ -304,7 +314,7 @@ void runSequentialTests(SgProject *root,
 #endif
   std::cout << "approximate time (seconds): "
             << timeDifference(endTime, beginTime) << std::endl;
-  delete topDownBottomUpList;
+  destroyTraversalList(topDownBottomUpList);
 }
 
 void runCombinedTests(SgProject *root,
@@ -335,6 +345,7 @@ void runCombinedTests(SgProject *root,
 #endif
   std::cout << "approximate time (seconds): "
             << timeDifference(endTime, beginTime) << std::endl;
+  destroyTraversalList(simpleList);
 
   std::cout << "pre-post combined" << std::endl;
   std::vector<NodeCountPrePost *> *prePostList =
@@ -358,6 +369,7 @@ void runCombinedTests(SgProject *root,
 #endif
   std::cout << "approximate time (seconds): "
             << timeDifference(endTime, beginTime) << std::endl;
+  destroyTraversalList(prePostList);
 
   std::cout << "bottom-up combined" << std::endl;
   std::vector<NodeCountBottomUp *> *bottomUpList =
@@ -377,12 +389,15 @@ void runCombinedTests(SgProject *root,
     std::cout << **br << ' ';
 #endif
     ROSE_ASSERT(**br == referenceResults->at(i++));
+    delete *br;
   }
 #if OUTPUT_RESULTS
   std::cout << std::endl;
 #endif
   std::cout << "approximate time (seconds): "
             << timeDifference(endTime, beginTime) << std::endl;
+  delete bottomUpResults;
+  destroyTraversalList(bottomUpList);
 
   std::cout << "top-down combined" << std::endl;
   std::vector<NodeCountTopDown *> *topDownList =
@@ -409,6 +424,7 @@ void runCombinedTests(SgProject *root,
 #endif
   std::cout << "approximate time (seconds): "
             << timeDifference(endTime, beginTime) << std::endl;
+  destroyTraversalList(topDownList);
 
   std::cout << "top-down bottom-up combined" << std::endl;
   std::vector<NodeCountTopDownBottomUp *> *topDownBottomUpList =
@@ -440,6 +456,8 @@ void runCombinedTests(SgProject *root,
 #endif
   std::cout << "approximate time (seconds): "
             << timeDifference(endTime, beginTime) << std::endl;
+  delete topDownBottomUpResults;
+  destroyTraversalList(topDownBottomUpList);
 }
 
 void runParallelTests(SgProject *root,
@@ -474,6 +492,7 @@ void runParallelTests(SgProject *root,
 #endif
   std::cout << "approximate time (seconds): "
             << timeDifference(endTime, beginTime) << std::endl;
+  destroyTraversalList(simpleList);
 
   std::cout << "pre-post parallel" << std::endl;
   std::vector<NodeCountPrePost *> *prePostList =
@@ -497,6 +516,7 @@ void runParallelTests(SgProject *root,
 #endif
   std::cout << "approximate time (seconds): "
             << timeDifference(endTime, beginTime) << std::endl;
+  destroyTraversalList(prePostList);
 
   std::cout << "bottom-up parallel" << std::endl;
   std::vector<NodeCountBottomUp *> *bottomUpList =
@@ -516,12 +536,15 @@ void runParallelTests(SgProject *root,
     std::cout << **br << ' ';
 #endif
     ROSE_ASSERT(**br == referenceResults->at(i++));
+    delete *br;
   }
 #if OUTPUT_RESULTS
   std::cout << std::endl;
 #endif
   std::cout << "approximate time (seconds): "
             << timeDifference(endTime, beginTime) << std::endl;
+  delete bottomUpResults;
+  destroyTraversalList(bottomUpList);
 
   std::cout << "top-down parallel" << std::endl;
   std::vector<NodeCountTopDown *> *topDownList =
@@ -548,6 +571,7 @@ void runParallelTests(SgProject *root,
 #endif
   std::cout << "approximate time (seconds): "
             << timeDifference(endTime, beginTime) << std::endl;
+  destroyTraversalList(topDownList);
 
   std::cout << "top-down bottom-up parallel" << std::endl;
   std::vector<NodeCountTopDownBottomUp *> *topDownBottomUpList =
@@ -580,6 +604,8 @@ void runParallelTests(SgProject *root,
 #endif
   std::cout << "approximate time (seconds): "
             << timeDifference(endTime, beginTime) << std::endl;
+  delete topDownBottomUpResults;
+  destroyTraversalList(topDownBottomUpList);
 #endif
 }
 

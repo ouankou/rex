@@ -1,5 +1,7 @@
 #include <iostream>
 
+#include <memory>
+
 #include <stdlib.h>
 
 #include <string>
@@ -133,12 +135,11 @@ int obtainAndExecuteActions(SgProject *n) {
   // 4. Iterate through the registered plugins
   for (size_t i = 0; i < PluginActions.size(); i++) {
     string action_name = PluginActions[i];
-    PluginAction *p_action = NULL;
     for (PluginRegistry::iterator it = PluginRegistry::begin();
          it != PluginRegistry::end(); ++it) {
       // find an action matching the action name
       if (it->getName() == action_name) {
-        p_action = it->instantiate();
+        std::unique_ptr<PluginAction> p_action(it->instantiate());
 
         // call command line parsing for the plugin
         if (!p_action->ParseArgs(PluginArgs[action_name]))

@@ -42,12 +42,12 @@ fi
 # the following four lists control the behavior of the script
 ###############################################################################
 
-STL_CPP98_HEADERS_PASSING="algorithm   deque exception functional limits list map memory new numeric queue set stack typeinfo utility valarray vector"
-STL_CPP98_HEADERS_FAILING="bitset complex fstream iomanip ios iosfwd iostream istream iterator locale ostream sstream stdexcept streambuf string"
+: ${STL_CPP98_HEADERS_PASSING:="algorithm   deque exception functional limits list map memory new numeric queue set stack typeinfo utility valarray vector"}
+: ${STL_CPP98_HEADERS_FAILING:="bitset complex fstream iomanip ios iosfwd iostream istream iterator locale ostream sstream stdexcept streambuf string"}
 
 # C++11 TESTS are expected to pass for frontend (T0_FAIL+T1_FAIL==0 (but not for backend (T2_FAIL>0))
-STL_CPP11_HEADERS_PASSING="algorithm bitset complex deque exception fstream functional iomanip ios iosfwd iostream istream iterator limits list locale map memory new numeric ostream queue set sstream stack stdexcept streambuf string typeinfo utility valarray vector"
-STL_CPP11_HEADERS_FAILING=""
+: ${STL_CPP11_HEADERS_PASSING:="algorithm bitset complex deque exception fstream functional iomanip ios iosfwd iostream istream iterator limits list locale map memory new numeric ostream queue set sstream stack stdexcept streambuf string typeinfo utility valarray vector"}
+: ${STL_CPP11_HEADERS_FAILING:=""}
 
 ###############################################################################
 

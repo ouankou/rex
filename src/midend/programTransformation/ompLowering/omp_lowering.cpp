@@ -20,6 +20,7 @@
 #include <filesystem>
 #include <limits>
 #include <sstream>
+#include <unordered_map>
 #include <unordered_set>
 
 using namespace std;
@@ -262,6 +263,146 @@ bool sourcePositionAfter(const Sg_File_Info *lhs, const Sg_File_Info *rhs) {
     return lhs->get_line() > rhs->get_line();
   }
   return lhs->get_col() > rhs->get_col();
+}
+
+bool isUsableLoweringOrderPosition(const Sg_File_Info *info) {
+  return info != nullptr && info->get_line() > 0 && !info->isTransformation() &&
+         !info->isCompilerGenerated() &&
+         !info->isSourcePositionUnavailableInFrontend();
+}
+
+bool loweringOrderPositionLess(const Sg_File_Info *lhs,
+                               const Sg_File_Info *rhs) {
+  ROSE_ASSERT(lhs != nullptr);
+  ROSE_ASSERT(rhs != nullptr);
+  if (lhs->get_file_id() != rhs->get_file_id()) {
+    return lhs->get_file_id() < rhs->get_file_id();
+  }
+  if (lhs->get_physical_file_id() != rhs->get_physical_file_id()) {
+    return lhs->get_physical_file_id() < rhs->get_physical_file_id();
+  }
+  if (lhs->get_line() != rhs->get_line()) {
+    return lhs->get_line() < rhs->get_line();
+  }
+  return lhs->get_col() < rhs->get_col();
+}
+
+const Sg_File_Info *getBestLoweringOrderPosition(SgNode *root) {
+  if (root == nullptr) {
+    return nullptr;
+  }
+
+  const Sg_File_Info *best = nullptr;
+  Rose_STL_Container<SgNode *> located_nodes =
+      NodeQuery::querySubTree(root, V_SgLocatedNode);
+  for (SgNode *node : located_nodes) {
+    if (isSgOmpExecStatement(node) != nullptr ||
+        isSgOmpClause(node) != nullptr) {
+      continue;
+    }
+    SgLocatedNode *located = isSgLocatedNode(node);
+    if (located == nullptr) {
+      continue;
+    }
+    const Sg_File_Info *candidates[] = {located->get_startOfConstruct(),
+                                        located->get_file_info()};
+    for (const Sg_File_Info *info : candidates) {
+      if (!isUsableLoweringOrderPosition(info)) {
+        continue;
+      }
+      if (best == nullptr || loweringOrderPositionLess(info, best)) {
+        best = info;
+      }
+    }
+  }
+  return best;
+}
+
+std::string getLoweringOrderFunctionKey(SgNode *node) {
+  const SgFunctionDeclaration *function_decl =
+      getEnclosingFunctionDeclaration(node);
+  if (function_decl == nullptr) {
+    return std::string();
+  }
+
+  std::ostringstream key;
+  if (const Sg_File_Info *info = function_decl->get_startOfConstruct()) {
+    key << info->get_file_id() << ':' << info->get_physical_file_id() << ':'
+        << info->get_line() << ':' << info->get_col() << ':';
+  }
+  key << function_decl->get_name().getString();
+  return key.str();
+}
+
+std::vector<size_t> getLoweringOrderStructuralPath(SgNode *node) {
+  std::vector<size_t> reversed_path;
+  SgNode *current = node;
+  while (current != nullptr && !isSgSourceFile(current) &&
+         !isSgFunctionDefinition(current)) {
+    SgNode *parent = current->get_parent();
+    if (parent == nullptr) {
+      break;
+    }
+
+    size_t index = std::numeric_limits<size_t>::max();
+    SgNodePtrList siblings = parent->get_traversalSuccessorContainer();
+    for (size_t i = 0; i < siblings.size(); ++i) {
+      if (siblings[i] == current) {
+        index = i;
+        break;
+      }
+    }
+    reversed_path.push_back(index);
+    current = parent;
+  }
+
+  std::reverse(reversed_path.begin(), reversed_path.end());
+  return reversed_path;
+}
+
+void sortOpenMpRootsForLowering(Rose_STL_Container<SgNode *> &omp_nodes) {
+  std::unordered_map<SgNode *, const Sg_File_Info *> order_positions;
+  std::unordered_map<SgNode *, std::string> function_keys;
+  std::unordered_map<SgNode *, std::vector<size_t>> structural_paths;
+  for (SgNode *node : omp_nodes) {
+    order_positions[node] = getBestLoweringOrderPosition(node);
+    function_keys[node] = getLoweringOrderFunctionKey(node);
+    structural_paths[node] = getLoweringOrderStructuralPath(node);
+  }
+
+  std::stable_sort(omp_nodes.begin(), omp_nodes.end(),
+                   [&order_positions, &function_keys,
+                    &structural_paths](SgNode *lhs, SgNode *rhs) {
+                     const Sg_File_Info *lhs_info = order_positions[lhs];
+                     const Sg_File_Info *rhs_info = order_positions[rhs];
+                     if (lhs_info != nullptr || rhs_info != nullptr) {
+                       if (lhs_info == nullptr || rhs_info == nullptr) {
+                         return lhs_info != nullptr && rhs_info == nullptr;
+                       }
+                       if (loweringOrderPositionLess(lhs_info, rhs_info)) {
+                         return true;
+                       }
+                       if (loweringOrderPositionLess(rhs_info, lhs_info)) {
+                         return false;
+                       }
+                     }
+
+                     const std::string &lhs_function = function_keys[lhs];
+                     const std::string &rhs_function = function_keys[rhs];
+                     if (lhs_function != rhs_function) {
+                       return lhs_function < rhs_function;
+                     }
+
+                     const std::vector<size_t> &lhs_path =
+                         structural_paths[lhs];
+                     const std::vector<size_t> &rhs_path =
+                         structural_paths[rhs];
+                     if (lhs_path != rhs_path) {
+                       return lhs_path < rhs_path;
+                     }
+
+                     return lhs->sage_class_name() < rhs->sage_class_name();
+                   });
 }
 
 SgStatement *findNextOriginalStatementInScope(SgStatement *target) {
@@ -3133,16 +3274,22 @@ static void removeOpenMPDirectivePreprocessingInfo(SgNode *root) {
   if (root == nullptr)
     return;
 
-  auto filter_attached = [](AttachedPreprocessingInfoType *attached) {
-    if (attached == nullptr)
-      return;
-    attached->erase(std::remove_if(attached->begin(), attached->end(),
-                                   [](PreprocessingInfo *info) {
-                                     return isOpenMPDirectivePreprocessingInfo(
-                                         info);
-                                   }),
-                    attached->end());
-  };
+  std::unordered_set<PreprocessingInfo *> removed_infos;
+  auto filter_attached =
+      [&removed_infos](AttachedPreprocessingInfoType *attached) {
+        if (attached == nullptr)
+          return;
+        for (AttachedPreprocessingInfoType::iterator it = attached->begin();
+             it != attached->end();) {
+          PreprocessingInfo *info = *it;
+          if (isOpenMPDirectivePreprocessingInfo(info)) {
+            removed_infos.insert(info);
+            it = attached->erase(it);
+          } else {
+            ++it;
+          }
+        }
+      };
 
   if (SgLocatedNode *located_root = isSgLocatedNode(root))
     filter_attached(located_root->getAttachedPreprocessingInfo());
@@ -3154,20 +3301,37 @@ static void removeOpenMPDirectivePreprocessingInfo(SgNode *root) {
     if (SgLocatedNode *located = isSgLocatedNode(*it))
       filter_attached(located->getAttachedPreprocessingInfo());
   }
+
+  for (PreprocessingInfo *info : removed_infos) {
+    delete info;
+  }
+}
+
+static void
+deletePreprocessingInfos(const std::unordered_set<PreprocessingInfo *> &infos) {
+  for (PreprocessingInfo *info : infos) {
+    delete info;
+  }
 }
 
 void stripConditionalDirectivesFromList(AttachedPreprocessingInfoType &list) {
   AttachedPreprocessingInfoType filtered;
+  std::unordered_set<PreprocessingInfo *> removed_infos;
   filtered.reserve(list.size());
   for (AttachedPreprocessingInfoType::const_iterator it = list.begin();
        it != list.end(); ++it) {
     PreprocessingInfo *info = *it;
-    if (info == nullptr || isConditionalPreprocessingDirective(info)) {
+    if (info == nullptr) {
+      continue;
+    }
+    if (isConditionalPreprocessingDirective(info)) {
+      removed_infos.insert(info);
       continue;
     }
     filtered.push_back(info);
   }
   list.swap(filtered);
+  deletePreprocessingInfos(removed_infos);
 }
 
 void stripConditionalDirectivesFromNode(SgLocatedNode *node) {
@@ -3177,16 +3341,22 @@ void stripConditionalDirectivesFromNode(SgLocatedNode *node) {
   if (AttachedPreprocessingInfoType *attached =
           node->getAttachedPreprocessingInfo()) {
     AttachedPreprocessingInfoType filtered;
+    std::unordered_set<PreprocessingInfo *> removed_infos;
     filtered.reserve(attached->size());
     for (AttachedPreprocessingInfoType::const_iterator it = attached->begin();
          it != attached->end(); ++it) {
       PreprocessingInfo *info = *it;
-      if (info == nullptr || isConditionalPreprocessingDirective(info)) {
+      if (info == nullptr) {
+        continue;
+      }
+      if (isConditionalPreprocessingDirective(info)) {
+        removed_infos.insert(info);
         continue;
       }
       filtered.push_back(info);
     }
     attached->swap(filtered);
+    deletePreprocessingInfos(removed_infos);
   }
 }
 
@@ -3372,15 +3542,28 @@ void removeUnbalancedConditionalDirectives(SgNode *root) {
     return;
   }
 
+  std::unordered_set<PreprocessingInfo *> removed_infos;
+  auto remove_from_attached =
+      [&to_remove, &removed_infos](AttachedPreprocessingInfoType *attached) {
+        if (attached == nullptr) {
+          return;
+        }
+        for (AttachedPreprocessingInfoType::iterator it = attached->begin();
+             it != attached->end();) {
+          PreprocessingInfo *info = *it;
+          if (to_remove.count(info) != 0) {
+            if (info != nullptr) {
+              removed_infos.insert(info);
+            }
+            it = attached->erase(it);
+          } else {
+            ++it;
+          }
+        }
+      };
+
   if (SgLocatedNode *located_root = isSgLocatedNode(root)) {
-    if (AttachedPreprocessingInfoType *attached =
-            located_root->getAttachedPreprocessingInfo()) {
-      attached->erase(std::remove_if(attached->begin(), attached->end(),
-                                     [&](PreprocessingInfo *info) {
-                                       return to_remove.count(info) != 0;
-                                     }),
-                      attached->end());
-    }
+    remove_from_attached(located_root->getAttachedPreprocessingInfo());
   }
 
   Rose_STL_Container<SgNode *> located_nodes =
@@ -3391,17 +3574,10 @@ void removeUnbalancedConditionalDirectives(SgNode *root) {
     if (located == nullptr) {
       continue;
     }
-    AttachedPreprocessingInfoType *attached =
-        located->getAttachedPreprocessingInfo();
-    if (attached == nullptr) {
-      continue;
-    }
-    attached->erase(std::remove_if(attached->begin(), attached->end(),
-                                   [&](PreprocessingInfo *info) {
-                                     return to_remove.count(info) != 0;
-                                   }),
-                    attached->end());
+    remove_from_attached(located->getAttachedPreprocessingInfo());
   }
+
+  deletePreprocessingInfos(removed_infos);
 }
 
 bool declarationsMatch(const SgVariableSymbol *lhs_sym,
@@ -3914,6 +4090,29 @@ static int computeMaxNestedForDepth(SgNode *node) {
 
 std::map<SgOmpExecStatement *, std::map<SgInitializedName *, SgExpression *> *>
     clause_variable_renaming_record;
+
+static void clearClauseVariableRenamingRecord() {
+  for (std::map<SgOmpExecStatement *,
+                std::map<SgInitializedName *, SgExpression *> *>::iterator it =
+           clause_variable_renaming_record.begin();
+       it != clause_variable_renaming_record.end(); ++it) {
+    std::map<SgInitializedName *, SgExpression *> *name_mapping = it->second;
+    if (name_mapping == NULL)
+      continue;
+
+    for (std::map<SgInitializedName *, SgExpression *>::iterator expr_it =
+             name_mapping->begin();
+         expr_it != name_mapping->end(); ++expr_it) {
+      SgExpression *expr = expr_it->second;
+      if (expr == NULL)
+        continue;
+      ROSE_ASSERT(expr->get_parent() == NULL);
+      SageInterface::deepDelete(expr);
+    }
+    delete name_mapping;
+  }
+  clause_variable_renaming_record.clear();
+}
 
 // Liao 1/23/2015
 // when translating mapped variables using
@@ -6482,7 +6681,8 @@ SgFunctionDeclaration *generateOutlinedTask(SgNode *node,
   ASTtools::VarSymSet_t fp_syms, pdSyms2;
   convertAndFilter(fp_vars, fp_syms);
   set_difference(pdSyms.begin(), pdSyms.end(), fp_syms.begin(), fp_syms.end(),
-                 std::inserter(pdSyms2, pdSyms2.begin()));
+                 std::inserter(pdSyms2, pdSyms2.begin()),
+                 ASTtools::VarSymLess());
   //  ROSE_ASSERT (pdSyms.size() == pdSyms2.size());  this means the previous
   //  set_difference is neccesary !
 
@@ -7179,9 +7379,10 @@ rewriteArraySubscripts(SgBasicBlock *body_block,
       continue;
     // TODO: move this logic into a function in SageInterface
     //  If it is a canonical array reference we can handle?
-    vector<SgExpression *> *subscripts = new vector<SgExpression *>;
+    vector<SgExpression *> subscripts;
+    vector<SgExpression *> *subscript_ptr = &subscripts;
     SgExpression *array_name_exp = NULL;
-    isArrayReference(vRef, &array_name_exp, &subscripts);
+    isArrayReference(vRef, &array_name_exp, &subscript_ptr);
     SgInitializedName *a_name = convertRefToInitializedName(array_name_exp);
     if (a_name == NULL)
       continue;
@@ -7199,10 +7400,11 @@ rewriteArraySubscripts(SgBasicBlock *body_block,
            candidate_refs.rbegin();
        riter != candidate_refs.rend(); riter++) {
     SgExpression *arrayNameExp = NULL;
-    std::vector<SgExpression *> *subscripts = new vector<SgExpression *>;
-    bool is_array_ref = isArrayReference(*riter, &arrayNameExp, &subscripts);
+    std::vector<SgExpression *> subscripts;
+    std::vector<SgExpression *> *subscript_ptr = &subscripts;
+    bool is_array_ref = isArrayReference(*riter, &arrayNameExp, &subscript_ptr);
     ROSE_ASSERT(is_array_ref);
-    if ((*subscripts).size() > 1)
+    if (subscripts.size() > 1)
       linearizeArrayAccess(*riter);
   }
 }
@@ -13190,6 +13392,8 @@ void lower_omp(SgSourceFile *file) {
       omp_nodes.push_back(fallback);
     }
 
+    sortOpenMpRootsForLowering(omp_nodes);
+
     for (iter = omp_nodes.begin(); iter != omp_nodes.end(); iter++) {
       SgStatement *node = isSgStatement(*iter);
       ROSE_ASSERT(node != NULL);
@@ -13399,6 +13603,7 @@ void lower_omp(SgSourceFile *file) {
 
   // post processing
   post_processing(file);
+  clearClauseVariableRenamingRecord();
   SageBuilder::symbol_table_case_insensitive_semantics = saved_case_insensitive;
 }
 

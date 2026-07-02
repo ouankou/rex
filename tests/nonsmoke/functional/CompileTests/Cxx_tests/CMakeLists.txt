@@ -30,6 +30,19 @@ set(CXX_TESTCODES
   rex_test2026_deduction_guide.cpp
   rex_test2026_sfinae.cpp
   rex_test2026_dependent_qualification.cpp
+  rex_test2026_friend_template_saved_spelling.cpp
+  rex_test2026_dependent_using_dedup.cpp
+  rex_test2026_inline_constructor_preserved.cpp
+  rex_test2026_namespace_template_source_order.cpp
+  rex_test2026_guarded_friend_template_definition.cpp
+  rex_test2026_reopened_namespace_template_spelling.cpp
+  rex_test2026_base_alias_skips_ctor_parameter.cpp
+  rex_test2026_anonymous_member_no_qualification.cpp
+  rex_test2026_clang_method_context_valgrind_defined_reads.cpp
+  rex_test2026_clang_cxx_stmt_type_valgrind_defined_reads.cpp
+  rex_test2026_template_instantiation_reachable_scope.cpp
+  rex_test2026_declaration_scope_structural_successor.cpp
+  rex_test2026_ast_json_clang_option_filter.cpp
   rex_test2026_extern_c_brace_roundtrip.cpp
   rex_test2026_std_filesystem.cpp
   rex_test2026_std_shared_ptr_enable_shared.cpp
@@ -77,6 +90,8 @@ set(CXX_TESTCODES
   rex_test2025_issue125_fixup_child_list_warning.cpp
   rex_test2025_issue126_default_template_args.cpp
   rex_test2026_redecl_default_template_arg.cpp
+  rex_test2026_template_definition_prior_default.cpp
+  rex_test2026_split_template_defaults.cpp
   rex_test2025_defaulted_special_members_anon_union.cpp
   rex_test2025_issue59_template_template_arg_global_qual.cpp
   rex_test2025_issue60_friend_function_symbol_scope.cpp
@@ -3124,6 +3139,33 @@ set(ROSE_OUTPUT_TO_BUILD_TESTCODES
   test2007_125.C
 )
 
+set(CXX_TESTCODES_EXTENDED_INSTRUMENTED_TIMEOUT
+  test2010_02.C
+  test2017_24.C
+  test2017_99.C
+  longFile.C
+  test2013_13.C
+  test2013_14.C
+  test2013_15.C
+)
+
+set(CXX_UNFOLDED_CONSTANTS_EXTENDED_INSTRUMENTED_TIMEOUT
+  longFile.C
+  test2013_13.C
+  test2013_14.C
+  test2013_15.C
+  test2017_24.C
+)
+
+function(rex_set_cxx_extended_instrumented_timeout test_name specimen)
+  if(REX_EXTENDED_TEST_TIMEOUTS AND
+     specimen IN_LIST CXX_TESTCODES_EXTENDED_INSTRUMENTED_TIMEOUT)
+    set_tests_properties(${test_name} PROPERTIES
+      TIMEOUT 10800
+      PROCESSORS 16)
+  endif()
+endfunction()
+
 set(ROSE_FLAGS ${_rose_flags_base} -std=gnu++03)
 foreach(file_to_test ${CXX_TESTCODES_GNUXX03})
   compile_test(${file_to_test} "Cxx_tests")
@@ -3131,6 +3173,7 @@ foreach(file_to_test ${CXX_TESTCODES_GNUXX03})
   rex_lock_test_for_input(${_test_name} ${file_to_test})
   set_tests_properties(${_test_name} PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  rex_set_cxx_extended_instrumented_timeout(${_test_name} ${file_to_test})
 endforeach()
 set(ROSE_FLAGS ${_rose_flags_default})
 
@@ -3141,6 +3184,7 @@ foreach(file_to_test ${CXX_TESTCODES_GNUXX17})
   rex_lock_test_for_input(${_test_name} ${file_to_test})
   set_tests_properties(${_test_name} PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  rex_set_cxx_extended_instrumented_timeout(${_test_name} ${file_to_test})
 endforeach()
 set(ROSE_FLAGS ${_rose_flags_default})
 
@@ -3151,6 +3195,7 @@ foreach(file_to_test ${CXX_TESTCODES_DELAYED_TEMPLATE_PARSING})
   rex_lock_test_for_input(${_test_name} ${file_to_test})
   set_tests_properties(${_test_name} PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  rex_set_cxx_extended_instrumented_timeout(${_test_name} ${file_to_test})
 endforeach()
 set(ROSE_FLAGS ${_rose_flags_default})
 
@@ -3160,6 +3205,7 @@ foreach(file_to_test ${CXX_TESTCODES})
   rex_lock_test_for_input(${_test_name} ${file_to_test})
   set_tests_properties(${_test_name} PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  rex_set_cxx_extended_instrumented_timeout(${_test_name} ${file_to_test})
 endforeach()
 
 foreach(file_to_test ${CXX_TESTCODES_NEGATIVE})
@@ -3198,6 +3244,12 @@ function(add_cxx_unfolded_constants_test file_to_test will_fail)
   set_property(TEST ${_unfolded_target} APPEND PROPERTY ENVIRONMENT
                "ROSE_TEST_OUTPUT_DIR=${ROSE_TEST_OUTPUT_DIR}")
   rex_lock_test_for_input(${_unfolded_target} ${file_to_test})
+  if(REX_EXTENDED_TEST_TIMEOUTS AND
+     file_to_test IN_LIST CXX_UNFOLDED_CONSTANTS_EXTENDED_INSTRUMENTED_TIMEOUT)
+    set_tests_properties(${_unfolded_target} PROPERTIES
+      TIMEOUT 10800
+      PROCESSORS 16)
+  endif()
 endfunction()
 
 # Additional unfolded-constants coverage for the default CTest run.
@@ -3926,6 +3978,51 @@ set_tests_properties(${_issue203_test} PROPERTIES
   FAIL_REGULAR_EXPRESSION "In mangleQualifiersToString\\(\\):"
 )
 
+rex_add_cxx_unparse_check_test(
+  "rex_test2026_anonymous_member_no_qualification"
+  "! grep -F '__anonymous_0x' rose_rex_test2026_anonymous_member_no_qualification.cpp && ${CMAKE_CXX_COMPILER} -std=gnu++14 -c rose_rex_test2026_anonymous_member_no_qualification.cpp"
+)
+
+rex_add_cxx_unparse_check_test(
+  "rex_test2026_friend_template_saved_spelling"
+  "grep -E 'friend[[:space:]]+U[[:space:]]+rex_test2026_friend_template_saved_spelling_friend' rose_rex_test2026_friend_template_saved_spelling.cpp && grep -F 'after_friend' rose_rex_test2026_friend_template_saved_spelling.cpp && ${CMAKE_CXX_COMPILER} -std=c++98 -c rose_rex_test2026_friend_template_saved_spelling.cpp"
+)
+
+rex_add_cxx_unparse_check_test(
+  "rex_test2026_dependent_using_dedup"
+  "awk '/using .*touch/ { ++n } END { exit !(n == 1) }' rose_rex_test2026_dependent_using_dedup.cpp && ${CMAKE_CXX_COMPILER} -std=c++98 -c rose_rex_test2026_dependent_using_dedup.cpp"
+)
+
+rex_add_cxx_unparse_check_test(
+  "rex_test2026_inline_constructor_preserved"
+  "grep -F 'RexTest2026InlineConstructorBase' rose_rex_test2026_inline_constructor_preserved.cpp && ${CMAKE_CXX_COMPILER} -std=c++98 -c rose_rex_test2026_inline_constructor_preserved.cpp"
+)
+
+rex_add_cxx_unparse_check_test(
+  "rex_test2026_namespace_template_source_order"
+  "awk '/template <typename T> inline void swap/ { if (!def) def=NR } /rex_test2026_namespace_template_source_order::swap/ { if (!call) call=NR } END { exit !(def && call && def < call) }' rose_rex_test2026_namespace_template_source_order.cpp && ${CMAKE_CXX_COMPILER} -std=c++98 -c rose_rex_test2026_namespace_template_source_order.cpp"
+)
+
+rex_add_cxx_unparse_check_test(
+  "rex_test2026_guarded_friend_template_definition"
+  "awk '/#if REX_TEST2026_AS_FRIEND/ { ++n } END { exit !(n == 2) }' rose_rex_test2026_guarded_friend_template_definition.cpp && ${CMAKE_CXX_COMPILER} -std=gnu++14 -c rose_rex_test2026_guarded_friend_template_definition.cpp"
+)
+
+rex_add_cxx_unparse_check_test(
+  "rex_test2026_reopened_namespace_template_spelling"
+  "${CMAKE_CXX_COMPILER} -std=gnu++14 -c rose_rex_test2026_reopened_namespace_template_spelling.cpp"
+)
+
+rex_add_cxx_unparse_check_test(
+  "rex_test2026_base_alias_skips_ctor_parameter"
+  "${CMAKE_CXX_COMPILER} -std=gnu++14 -c rose_rex_test2026_base_alias_skips_ctor_parameter.cpp"
+)
+
+rex_add_cxx_unparse_check_test(
+  "rex_test2026_split_template_defaults"
+  "${CMAKE_CXX_COMPILER} -std=gnu++14 -c rose_rex_test2026_split_template_defaults.cpp"
+)
+
 # Issue 113: Template argument spelling must not depend on using directives in
 # the instantiation scope; keep namespace qualifiers in the generated name.
 add_test(
@@ -4289,6 +4386,32 @@ rex_lock_test_for_input(
   Cxx_tests_rex_test2025_cfe_error_exit_code_diagnostics
   rex_test2025_cfe_error_exit_code.cpp)
 
+# rex_test2026: a hard Clang diagnostic must stop before ROSE translates or
+# postprocesses an invalid recursive-template instantiation graph.
+add_test(
+  NAME Cxx_tests_rex_test2026_recursive_template_diagnostic_stop
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND
+    ${BASH_EXECUTABLE} -c
+    "\"$@\" > ${CMAKE_CURRENT_BINARY_DIR}/rex_test2026_recursive_template_diagnostic_stop.log 2>&1; status=$?; test $status -ne 0 && grep -E \"template instantiation depth|recursive template instantiation exceeded maximum depth|Clang found [0-9]+ diagnostic errors\" ${CMAKE_CURRENT_BINARY_DIR}/rex_test2026_recursive_template_diagnostic_stop.log && grep -F \"Error: Clang reported\" ${CMAKE_CURRENT_BINARY_DIR}/rex_test2026_recursive_template_diagnostic_stop.log && ! grep -F \"clang_main.translation_unit.begin\" ${CMAKE_CURRENT_BINARY_DIR}/rex_test2026_recursive_template_diagnostic_stop.log && ! grep -F \"clang_main.finishSageAST.begin\" ${CMAKE_CURRENT_BINARY_DIR}/rex_test2026_recursive_template_diagnostic_stop.log"
+    dummy
+    ${CMAKE_COMMAND} -E env ROSE_PHASE_TRACE=1
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -ftemplate-depth=32
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_recursive_template_diagnostic_stop.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2026_recursive_template_diagnostic_stop
+  PROPERTIES
+    LABELS Cxx_tests
+    TIMEOUT 60
+)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2026_recursive_template_diagnostic_stop
+  rex_test2026_recursive_template_diagnostic_stop.cpp)
+
 # Issue 144: Allow backend when explicitly opted in.
 add_test(
   NAME Cxx_tests_rex_test2025_cfe_error_exit_code_continue_on_error_unparse
@@ -4442,6 +4565,27 @@ set_tests_properties(
 rex_lock_test_for_input(
   Cxx_tests_rex_test2026_redecl_default_template_arg_unparse
   rex_test2026_redecl_default_template_arg.cpp)
+
+# A definition following a declaration with a default template argument must not
+# re-emit the inherited default.
+add_test(
+  NAME Cxx_tests_rex_test2026_template_definition_prior_default_unparse
+  COMMAND
+    sh -c
+    "\"$@\" && awk '/Iter[[:space:]]*=[[:space:]]*T[[:space:]]*\\*/ { ++n } END { exit !(n == 1) }' rose_rex_test2026_template_definition_prior_default.cpp && ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2026_template_definition_prior_default.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_template_definition_prior_default.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2026_template_definition_prior_default_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2026_template_definition_prior_default_unparse
+  rex_test2026_template_definition_prior_default.cpp)
 
 # Replacing redeclared definition parameters must also refresh template-param
 # lookups before translating requires clauses and dependent members.
@@ -4785,6 +4929,7 @@ set_tests_properties(
   Cxx_tests_rex_test2025_issue124_system_header_specialization_args_unparse
   Cxx_tests_rex_test2025_issue126_default_template_args_unparse
   Cxx_tests_rex_test2026_redecl_default_template_arg_unparse
+  Cxx_tests_rex_test2026_template_definition_prior_default_unparse
   Cxx_tests_rex_test2026_redecl_default_template_arg_requires_unparse
   Cxx_tests_rex_test2025_issue59_template_template_arg_global_qual_unparse
   Cxx_tests_rex_test2025_issue60_friend_function_symbol_scope_unparse

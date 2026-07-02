@@ -2,6 +2,8 @@
 
 #include "patternRewrite.h"
 
+#include <memory>
+
 int main(int argc, char *argv[]) {
   // Main Function for default example ROSE Preprocessor
   // This is an example of a preprocessor that can be built with ROSE
@@ -13,7 +15,8 @@ int main(int argc, char *argv[]) {
   // FixSgProject(sageProject);
 
   SgNode *tempProject = sageProject;
-  rewrite(getAlgebraicRules(), tempProject);
+  std::unique_ptr<RewriteRule> algebraicRules(getAlgebraicRules());
+  rewrite(algebraicRules.get(), tempProject);
   sageProject = isSgProject(tempProject);
   ROSE_ASSERT(sageProject);
 

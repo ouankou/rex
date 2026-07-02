@@ -401,6 +401,7 @@ createTemplateFuncSkeleton(const string &name, SgType *ret_type,
   SgTemplateFunctionDeclaration *nondef =
       SageBuilder::buildNondefiningTemplateFunctionDeclaration(
           name, ret_type, nondef_params, scope, template_params_copy);
+  delete template_params_copy;
   ROSE_ASSERT(nondef != NULL);
   setTemplateParameterParents(nondef);
 
@@ -1773,7 +1774,11 @@ static void remapVarSyms(
             new std::map<SgInitializedName *, SgExpression *>();
       std::map<SgInitializedName *, SgExpression *> *name_mapping =
           clause_variable_renaming_record[directive];
-      (*name_mapping)[ref_orig->get_symbol()->get_declaration()] = deref_exp;
+      SgExpression *&mapped_expression =
+          (*name_mapping)[ref_orig->get_symbol()->get_declaration()];
+      if (mapped_expression != NULL && mapped_expression != deref_exp)
+        SageInterface::deepDelete(mapped_expression);
+      mapped_expression = deref_exp;
       return;
     }
 

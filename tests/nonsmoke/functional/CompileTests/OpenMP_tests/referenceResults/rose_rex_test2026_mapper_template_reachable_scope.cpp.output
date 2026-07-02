@@ -1,0 +1,4 @@
+#pragma omp declare mapper(default : ::RexTest2026Vec<float> v) map(tofrom : v.len,v.data[0:v.len])
+#pragma omp target data map(mapper(default), tofrom : v[0:n])
+#pragma omp target update to(mapper(default):v[0:n])
+#pragma omp target map(mapper(default), tofrom : v[0:n])

@@ -233,6 +233,31 @@ static bool isKnownVariableSymbolType(SgVariableSymbol *symbol) {
     return isSgTypeUnknown(type) == NULL;
 }
 
+static bool symbolBelongsToDirectiveSourceFile(SgVariableSymbol *symbol) {
+    if (symbol == NULL || omp_directive_node == NULL) {
+        return true;
+    }
+
+    SgSourceFile *directive_file =
+        SageInterface::getEnclosingSourceFile(omp_directive_node, true);
+    if (directive_file == NULL) {
+        return true;
+    }
+
+    SgInitializedName *declaration = symbol->get_declaration();
+    if (declaration == NULL) {
+        return false;
+    }
+
+    SgSourceFile *declaration_file =
+        SageInterface::getEnclosingSourceFile(declaration, true);
+    if (declaration_file == NULL) {
+        return true;
+    }
+
+    return declaration_file == directive_file;
+}
+
 static SgVariableSymbol *lookupVariableSymbolInScopeWithVariants(
     SgScopeStatement *scope, const std::string &name) {
     if (scope == NULL || name.empty()) {
@@ -271,6 +296,9 @@ static SgVariableSymbol *lookupVariableSymbolPreferTyped(
     }
 
     SgVariableSymbol *symbol = lookupVariableSymbolInParentScopes(name, scope);
+    if (symbol != NULL && !symbolBelongsToDirectiveSourceFile(symbol)) {
+        symbol = NULL;
+    }
     if (isKnownVariableSymbolType(symbol)) {
         return symbol;
     }
@@ -281,6 +309,14 @@ static SgVariableSymbol *lookupVariableSymbolPreferTyped(
         SgVariableSymbol *candidate =
             lookupVariableSymbolInScopeWithVariants(current_scope, name);
         if (candidate == NULL) {
+            SgScopeStatement *next_scope = current_scope->get_scope();
+            if (next_scope == current_scope) {
+                break;
+            }
+            current_scope = next_scope;
+            continue;
+        }
+        if (!symbolBelongsToDirectiveSourceFile(candidate)) {
             SgScopeStatement *next_scope = current_scope->get_scope();
             if (next_scope == current_scope) {
                 break;

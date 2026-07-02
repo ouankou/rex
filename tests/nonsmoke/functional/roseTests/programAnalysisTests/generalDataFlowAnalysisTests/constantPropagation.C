@@ -68,7 +68,7 @@ bool ConstantPropagationLattice::setBottom() {
 bool ConstantPropagationLattice::setTop() {
   // These are more than access functions, they return if the state of the
   // lattice has changed.
-  bool modified = this->level != bottom;
+  bool modified = this->level != top;
   this->value = 0;
   level = top;
   return modified;
@@ -234,9 +234,10 @@ void ConstantPropagationAnalysisTransfer::transferAdditive(
     // Both knownValue
     if (arg1Lat->getLevel() == ConstantPropagationLattice::constantValue &&
         arg2Lat->getLevel() == ConstantPropagationLattice::constantValue) {
-      updateModified(resLat->setValue(
-          isAddition ? arg1Lat->getValue() + arg2Lat->getValue()
-                     : arg1Lat->getValue() - arg2Lat->getValue()));
+      long long lhs = arg1Lat->getValue();
+      long long rhs = arg2Lat->getValue();
+      updateModified(
+          setSignedValue(resLat, isAddition ? lhs + rhs : lhs - rhs));
     } else {
       // Else => Top
       updateModified(resLat->setLevel(ConstantPropagationLattice::top));
@@ -254,8 +255,9 @@ void ConstantPropagationAnalysisTransfer::transferMultiplicative(
     // Both knownValue
     if (arg1Lat->getLevel() == ConstantPropagationLattice::constantValue &&
         arg2Lat->getLevel() == ConstantPropagationLattice::constantValue) {
-      updateModified(
-          resLat->setValue(arg1Lat->getValue() * arg2Lat->getValue()));
+      updateModified(setSignedValue(
+          resLat, static_cast<long long>(arg1Lat->getValue()) *
+                      static_cast<long long>(arg2Lat->getValue())));
     } else {
       // Else => Top
       updateModified(resLat->setLevel(ConstantPropagationLattice::top));
@@ -273,8 +275,13 @@ void ConstantPropagationAnalysisTransfer::transferDivision(
     // Both knownValue
     if (arg1Lat->getLevel() == ConstantPropagationLattice::constantValue &&
         arg2Lat->getLevel() == ConstantPropagationLattice::constantValue) {
-      updateModified(
-          resLat->setValue(arg1Lat->getValue() / arg2Lat->getValue()));
+      int rhs = arg2Lat->getValue();
+      if (rhs == 0 || (arg1Lat->getValue() == std::numeric_limits<int>::min() &&
+                       rhs == -1)) {
+        updateModified(resLat->setTop());
+      } else {
+        updateModified(resLat->setValue(arg1Lat->getValue() / rhs));
+      }
     } else {
       // Else => Top
       updateModified(resLat->setLevel(ConstantPropagationLattice::top));
@@ -293,8 +300,13 @@ void ConstantPropagationAnalysisTransfer::transferMod(
     // Both knownValue
     if (arg1Lat->getLevel() == ConstantPropagationLattice::constantValue &&
         arg2Lat->getLevel() == ConstantPropagationLattice::constantValue) {
-      updateModified(
-          resLat->setValue(arg1Lat->getValue() % arg2Lat->getValue()));
+      int rhs = arg2Lat->getValue();
+      if (rhs == 0 || (arg1Lat->getValue() == std::numeric_limits<int>::min() &&
+                       rhs == -1)) {
+        updateModified(resLat->setTop());
+      } else {
+        updateModified(resLat->setValue(arg1Lat->getValue() % rhs));
+      }
     } else {
       // Else => Top
       updateModified(resLat->setLevel(ConstantPropagationLattice::top));
@@ -308,26 +320,24 @@ ConstantPropagationAnalysisTransfer::makeTempLattice() {
   return tempLattices.back().get();
 }
 
-void ConstantPropagationAnalysisTransfer::setSignedValue(
+bool ConstantPropagationAnalysisTransfer::setSignedValue(
     ConstantPropagationLattice *lat, long long value) {
   ROSE_ASSERT(lat != NULL);
   if (value < std::numeric_limits<int>::min() ||
       value > std::numeric_limits<int>::max()) {
-    lat->setTop();
-    return;
+    return lat->setTop();
   }
-  lat->setValue(static_cast<int>(value));
+  return lat->setValue(static_cast<int>(value));
 }
 
-void ConstantPropagationAnalysisTransfer::setUnsignedValue(
+bool ConstantPropagationAnalysisTransfer::setUnsignedValue(
     ConstantPropagationLattice *lat, unsigned long long value) {
   ROSE_ASSERT(lat != NULL);
   if (value >
       static_cast<unsigned long long>(std::numeric_limits<int>::max())) {
-    lat->setTop();
-    return;
+    return lat->setTop();
   }
-  lat->setValue(static_cast<int>(value));
+  return lat->setValue(static_cast<int>(value));
 }
 
 ConstantPropagationLattice *

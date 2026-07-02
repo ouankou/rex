@@ -41,6 +41,11 @@ compile_flags=(
   "-Wl,-rpath,${omp_runtime_dir}"
 )
 
+if [[ -n "${ROSE_TEST_SANITIZER_FLAGS:-}" ]]; then
+  read -r -a sanitizer_flags <<< "${ROSE_TEST_SANITIZER_FLAGS}"
+  compile_flags+=("${sanitizer_flags[@]}")
+fi
+
 canonicalize() {
   local in_file="$1"
   local out_file="$2"

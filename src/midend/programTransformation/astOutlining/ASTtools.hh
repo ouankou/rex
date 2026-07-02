@@ -25,8 +25,14 @@
 #include <string>
 
 namespace ASTtools {
+//! Stable ordering for variable symbols used by outlining/lowering interfaces.
+struct ROSE_DLL_API VarSymLess {
+  bool operator()(const SgVariableSymbol *lhs,
+                  const SgVariableSymbol *rhs) const;
+};
+
 //! Stores a collection of SgVariableSymbols (var syms).
-typedef std::set<const SgVariableSymbol *> VarSymSet_t;
+typedef std::set<const SgVariableSymbol *, VarSymLess> VarSymSet_t;
 
 //! Search for the first surrounding scope that may contain a function def.
 ROSE_DLL_API const SgScopeStatement *

@@ -68,5 +68,5 @@ int main(int argc, char *argv[]) {
   myvisitor.traverseInputFiles(project, preorder);
   ofile.close();
 
-  return backend(project);
+  return 0;
 }

@@ -1593,8 +1593,9 @@ void Grammar::setUpNodes() {
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
   OmpUsesAllocatorsDefination.setDataPrototype(
-      "SgExpression*", "allocator_traits_array", "", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      "SgExpression*", "allocator_traits_array", "= NULL",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
 
   // depend(modifier, type:variables)
   OmpDependClause.setDataPrototype(

@@ -124,6 +124,13 @@ set(_cpu_compare_script "${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_cpu_compare.sh"
 set(_omp_cpu_test_output_dir "${CMAKE_CURRENT_BINARY_DIR}/test-output")
 file(MAKE_DIRECTORY "${_omp_cpu_test_output_dir}")
 
+set(_omp_cpu_sanitizer_test_environment)
+if(ROSE_USE_SANITIZER AND ROSE_SANITIZERS)
+  string(REPLACE ";" "," _omp_cpu_sanitizer_test_list "${ROSE_SANITIZERS}")
+  list(APPEND _omp_cpu_sanitizer_test_environment
+       "ROSE_TEST_SANITIZER_FLAGS=-fsanitize=${_omp_cpu_sanitizer_test_list}")
+endif()
+
 function(add_omp_lowering_cpu_compare_test input_file mode)
   string(REPLACE "." "_" _name "${input_file}")
   string(REPLACE "-" "_" _name "${_name}")
@@ -148,6 +155,10 @@ function(add_omp_lowering_cpu_compare_test input_file mode)
     PROPERTIES
       LABELS "OMPLOWERING;OMPLOWERING_CPU"
       TIMEOUT 300)
+  if(_omp_cpu_sanitizer_test_environment)
+    set_property(TEST OMPLOWERING_CPU_${_name} APPEND PROPERTY ENVIRONMENT
+                 "${_omp_cpu_sanitizer_test_environment}")
+  endif()
 endfunction()
 
 foreach(_cpu_case IN LISTS OMP_LOWERING_CPU_EXACT_CASES)
