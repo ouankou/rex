@@ -3497,29 +3497,43 @@ bool AstInterface::IsFunctionCall(const AstNodePtr &_s, AstNodePtr *fname,
     }
     // Store arguments of reference types into outargs
     if (outargs != 0) {
-      if (paramtypes == 0 || args == 0 || paramtypes->size() != args->size()) {
-        outargs->push_back(AST_UNKNOWN);
-      } else {
-        AstNodeList::const_iterator p1 = args->begin();
-        for (AstTypeList::const_iterator p = paramtypes->begin();
-             p != paramtypes->end() && p1 != args->end(); ++p, ++p1) {
-          SgType *t = AstNodeTypeImpl(*p).get_ptr();
-          if (t != nullptr) {
-            t = t->stripTypedefsAndModifiers();
+      if (paramtypes == nullptr || args == nullptr) {
+        SgNode *node = s.get_ptr();
+        auto *file_info = node != nullptr ? node->get_file_info() : nullptr;
+        const std::string filename = file_info != nullptr
+                                         ? file_info->get_filenameString()
+                                         : "<unknown>";
+        const int line = file_info != nullptr ? file_info->get_line() : 0;
+        const std::string class_name =
+            node != nullptr ? node->class_name() : "<unknown>";
+        const std::string expression =
+            node != nullptr ? node->unparseToString() : "<unknown>";
+        MLOG_ERROR_C("astInterface",
+                     "Could not collect function call out-arguments for %s, "
+                     "Expression is %s at %s:%d\n",
+                     class_name.c_str(), expression.c_str(), filename.c_str(),
+                     line);
+        ROSE_ABORT();
+      }
+      AstNodeList::const_iterator p1 = args->begin();
+      for (AstTypeList::const_iterator p = paramtypes->begin();
+           p != paramtypes->end() && p1 != args->end(); ++p, ++p1) {
+        SgType *t = AstNodeTypeImpl(*p).get_ptr();
+        if (t != nullptr) {
+          t = t->stripTypedefsAndModifiers();
+        }
+        AstNodePtr ref = *p1;
+        SgType *referenced_type = nullptr;
+        if (SgReferenceType *ref_type = isSgReferenceType(t)) {
+          referenced_type = ref_type->get_base_type();
+        } else if (SgPointerType *ptr_type = isSgPointerType(t)) {
+          if (IsAddressOfOp(*p1, &ref)) {
+            referenced_type = ptr_type->get_base_type();
           }
-          AstNodePtr ref = *p1;
-          SgType *referenced_type = nullptr;
-          if (SgReferenceType *ref_type = isSgReferenceType(t)) {
-            referenced_type = ref_type->get_base_type();
-          } else if (SgPointerType *ptr_type = isSgPointerType(t)) {
-            if (IsAddressOfOp(*p1, &ref)) {
-              referenced_type = ptr_type->get_base_type();
-            }
-          }
-          if (referenced_type != nullptr) {
-            if (!SageInterface::isConstType(referenced_type)) {
-              outargs->push_back(ref);
-            }
+        }
+        if (referenced_type != nullptr) {
+          if (!SageInterface::isConstType(referenced_type)) {
+            outargs->push_back(ref);
           }
         }
       }
@@ -5146,6 +5160,19 @@ std::string AstInterface::GetVariableSignature(const AstNodePtr &_variable) {
   case V_SgClassDefinition:
     return GetVariableSignature(
         isSgClassDefinition(variable)->get_declaration());
+  case V_SgConstructorInitializer: {
+    SgConstructorInitializer *ctor_init = isSgConstructorInitializer(variable);
+    if (SgMemberFunctionDeclaration *decl = ctor_init->get_declaration()) {
+      return GetVariableSignature(decl);
+    }
+    if (SgClassDeclaration *class_decl = ctor_init->get_class_decl()) {
+      return GetVariableSignature(class_decl);
+    }
+    if (SgType *expr_type = ctor_init->get_expression_type()) {
+      return GetVariableSignature(expr_type);
+    }
+    return "_UNKNOWN_" + variable->class_name();
+  }
   case V_SgClassDeclaration:
   case V_SgTemplateClassDeclaration:
     return "class_" +
