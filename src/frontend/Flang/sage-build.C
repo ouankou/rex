@@ -629,8 +629,9 @@ bool MatchesRawIncludeDirectiveAtSource(const PreprocessingInfo *info,
   return target_path.empty() || info_path.empty() || info_path == target_path;
 }
 
-void RemoveRawIncludeDirectiveFromAttachedInfo(SgLocatedNode *node,
-                                               const SourcePosition &source) {
+void RemoveRawIncludeDirectiveFromAttachedInfo(
+    SgLocatedNode *node, const SourcePosition &source,
+    std::set<PreprocessingInfo *> *removed_infos = nullptr) {
   if (node == nullptr) {
     return;
   }
@@ -642,8 +643,14 @@ void RemoveRawIncludeDirectiveFromAttachedInfo(SgLocatedNode *node,
   }
 
   for (auto it = info_list->begin(); it != info_list->end();) {
-    if (MatchesRawIncludeDirectiveAtSource(*it, source)) {
+    PreprocessingInfo *info = *it;
+    if (MatchesRawIncludeDirectiveAtSource(info, source)) {
       it = info_list->erase(it);
+      if (removed_infos != nullptr) {
+        removed_infos->insert(info);
+      } else {
+        delete info;
+      }
       continue;
     }
     ++it;
@@ -655,6 +662,8 @@ void ConsumeRawFortranIncludeDirective(SgSourceFile *source_file,
   if (source_file == nullptr || source.line <= 0) {
     return;
   }
+
+  std::set<PreprocessingInfo *> removed_infos;
 
   if (ROSEAttributesListContainerPtr directives =
           source_file->get_preprocessorDirectivesAndCommentsList()) {
@@ -668,8 +677,10 @@ void ConsumeRawFortranIncludeDirective(SgSourceFile *source_file,
       }
       std::vector<PreprocessingInfo *> &entries = list->getList();
       for (auto entry_it = entries.begin(); entry_it != entries.end();) {
-        if (MatchesRawIncludeDirectiveAtSource(*entry_it, source)) {
+        PreprocessingInfo *info = *entry_it;
+        if (MatchesRawIncludeDirectiveAtSource(info, source)) {
           entry_it = entries.erase(entry_it);
+          removed_infos.insert(info);
           continue;
         }
         ++entry_it;
@@ -678,12 +689,17 @@ void ConsumeRawFortranIncludeDirective(SgSourceFile *source_file,
   }
 
   RemoveRawIncludeDirectiveFromAttachedInfo(source_file->get_globalScope(),
-                                            source);
+                                            source, &removed_infos);
 
   std::vector<SgNode *> nodes =
       NodeQuery::querySubTree(source_file->get_globalScope(), V_SgLocatedNode);
   for (SgNode *node : nodes) {
-    RemoveRawIncludeDirectiveFromAttachedInfo(isSgLocatedNode(node), source);
+    RemoveRawIncludeDirectiveFromAttachedInfo(isSgLocatedNode(node), source,
+                                              &removed_infos);
+  }
+
+  for (PreprocessingInfo *info : removed_infos) {
+    delete info;
   }
 }
 

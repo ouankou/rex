@@ -20,6 +20,8 @@
 
 #include <iostream>
 
+#include <memory>
+
 #include <vector>
 
 #include "finiteDifferencing.h"
@@ -776,7 +778,8 @@ void simpleIndexFiniteDifferencing(SgNode *root) {
     proj = proj->get_parent();
   ROSE_ASSERT(proj);
   AstTests::runAllTests(isSgProject(proj));
-  rewrite(getAlgebraicRules(), root); // This might modify root
+  std::unique_ptr<RewriteRule> algebraicRules(getAlgebraicRules());
+  rewrite(algebraicRules.get(), root); // This might modify root
   FdFindFunctionsVisitor ffv;
   ffv.traverse(root, preorder);
   for (unsigned int x = 0; x < ffv.functions.size(); ++x) {
@@ -854,12 +857,15 @@ void simpleIndexFiniteDifferencing(SgNode *root) {
 #endif
       }
     }
+    std::unique_ptr<RewriteRule> finiteDifferencingRules(
+        getFiniteDifferencingRules());
     for (int i = mult_exprs.size() - 1; i >= 0; --i)
       doFiniteDifferencingOne(mult_exprs[i], body,
-                              getFiniteDifferencingRules());
+                              finiteDifferencingRules.get());
 
     SgNode *bodyCopyForRewrite = body;
-    rewrite(getAlgebraicRules(),
+    std::unique_ptr<RewriteRule> bodyAlgebraicRules(getAlgebraicRules());
+    rewrite(bodyAlgebraicRules.get(),
             bodyCopyForRewrite); // This might update bodyCopyForRewrite
     ROSE_ASSERT(isSgBasicBlock(bodyCopyForRewrite));
     body = isSgBasicBlock(bodyCopyForRewrite);

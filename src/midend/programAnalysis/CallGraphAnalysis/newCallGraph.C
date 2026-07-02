@@ -13,6 +13,7 @@
 #include "newCallGraph.h"
 
 #include <fstream>
+#include <memory>
 
 // file locking support
 #include <cstring>
@@ -45,6 +46,18 @@ CallGraphEdgeInfo::CallGraphEdgeInfo(CallGraphNodeInfo *from,
 }
 
 CallGraph::CallGraph() {}
+
+CallGraph::~CallGraph() {
+  for (std::map<std::string, CallGraphEdgeInfo *>::value_type &edge : edgeMap) {
+    delete edge.second;
+  }
+  edgeMap.clear();
+
+  for (std::map<std::string, CallGraphNodeInfo *>::value_type &node : nodeMap) {
+    delete node.second;
+  }
+  nodeMap.clear();
+}
 
 CallGraphFileStructure::CallGraphFileStructure()
     // : functionNameLength(256), fileNameLength(256)
@@ -83,18 +96,30 @@ void CallGraph::visit(SgNode *astNode) {
         } else {
           printf("Insert a new node into the nodeMap for function = %s \n",
                  functionDeclaration->get_name().str());
-          nodeMap.insert(pair<string, CallGraphNodeInfo *>(
-              name, new CallGraphNodeInfo(functionDeclaration)));
+          CallGraphNodeInfo *node = new CallGraphNodeInfo(functionDeclaration);
+          pair<map<string, CallGraphNodeInfo *>::iterator, bool> inserted =
+              nodeMap.insert(pair<string, CallGraphNodeInfo *>(name, node));
+          if (!inserted.second) {
+            delete node;
+          }
         }
       } else {
         // Insert the node into the node map so that we can build edges ("from"
         // and "to" nodes are required to define edges).
-        nodeMap.insert(pair<string, CallGraphNodeInfo *>(
-            name, new CallGraphNodeInfo(functionDeclaration)));
+        CallGraphNodeInfo *node = new CallGraphNodeInfo(functionDeclaration);
+        pair<map<string, CallGraphNodeInfo *>::iterator, bool> inserted =
+            nodeMap.insert(pair<string, CallGraphNodeInfo *>(name, node));
+        if (!inserted.second) {
+          delete node;
+        }
       }
     } else {
-      nodeMap.insert(pair<string, CallGraphNodeInfo *>(
-          name, new CallGraphNodeInfo(functionDeclaration)));
+      CallGraphNodeInfo *node = new CallGraphNodeInfo(functionDeclaration);
+      pair<map<string, CallGraphNodeInfo *>::iterator, bool> inserted =
+          nodeMap.insert(pair<string, CallGraphNodeInfo *>(name, node));
+      if (!inserted.second) {
+        delete node;
+      }
     }
 
     // form dot file string for function definition
@@ -165,8 +190,12 @@ void CallGraph::visit(SgNode *astNode) {
     ROSE_ASSERT(from != NULL);
     ROSE_ASSERT(to != NULL);
 
-    edgeMap.insert(pair<string, CallGraphEdgeInfo *>(
-        edge_name, new CallGraphEdgeInfo(from, to)));
+    CallGraphEdgeInfo *edge = new CallGraphEdgeInfo(from, to);
+    pair<map<string, CallGraphEdgeInfo *>::iterator, bool> inserted =
+        edgeMap.insert(pair<string, CallGraphEdgeInfo *>(edge_name, edge));
+    if (!inserted.second) {
+      delete edge;
+    }
 
     // form dot file string for function call
   }
@@ -312,8 +341,8 @@ void NewCallGraph::generateCallGraphFile(SgProject *project, CallGraph &cg) {
 
   // Read the existing file (if it exists) of previously processed files and
   // their parts of the call graph.
-  vector<CallGraphFileStructure> *callGraphVector =
-      readCallGraphFile(binaryFilename);
+  std::unique_ptr<vector<CallGraphFileStructure>> callGraphVector(
+      readCallGraphFile(binaryFilename));
 
   // Reopen the file for writing (we still have the lock), and position the file
   // cursor at the start of the file so that it can be overwritten with updated
@@ -348,7 +377,7 @@ void NewCallGraph::generateCallGraphFile(SgProject *project, CallGraph &cg) {
   map<string, CallGraphEdgeInfo *> &edgeMap = cg.edgeMap;
 
   printf("After reading existing call graph: callGraphVector = %p \n",
-         callGraphVector);
+         callGraphVector.get());
 
   // Check if we have entries from an existing binary file of call graph data.
   if (callGraphVector != NULL) {
@@ -602,8 +631,8 @@ void NewCallGraph::generateCallGraphFile(SgProject *project, CallGraph &cg) {
 }
 
 void NewCallGraph::generateDotFile(string binaryFilename) {
-  vector<CallGraphFileStructure> *callGraphVector =
-      NewCallGraph::readCallGraphFile(binaryFilename);
+  std::unique_ptr<vector<CallGraphFileStructure>> callGraphVector(
+      NewCallGraph::readCallGraphFile(binaryFilename));
 
   if (callGraphVector == NULL) {
     return;

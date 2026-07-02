@@ -3427,6 +3427,20 @@ void HiddenListTraversal::setNameQualification(
       outputNameQualificationLength, outputGlobalQualification,
       outputTypeEvaluation);
 
+  SgNode *parent = varRefExp->get_parent();
+  const bool isMemberAccessRhs =
+      (isSgDotExp(parent) != NULL &&
+       isSgDotExp(parent)->get_rhs_operand() == varRefExp) ||
+      (isSgArrowExp(parent) != NULL &&
+       isSgArrowExp(parent)->get_rhs_operand() == varRefExp);
+  if (isMemberAccessRhs == true && qualifier.find("__anonymous_0x") == 0) {
+    varRefExp->set_global_qualification_required(false);
+    varRefExp->set_name_qualification_length(0);
+    varRefExp->set_type_elaboration_required(false);
+    qualifiedNameMapForNames.erase(varRefExp);
+    return;
+  }
+
   varRefExp->set_global_qualification_required(outputGlobalQualification);
   varRefExp->set_name_qualification_length(outputNameQualificationLength);
 

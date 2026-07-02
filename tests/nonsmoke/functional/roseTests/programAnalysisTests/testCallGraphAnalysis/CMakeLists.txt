@@ -157,4 +157,8 @@ get_property(_callgraph_registered_tests DIRECTORY PROPERTY TESTS)
 if(_callgraph_registered_tests)
   set_property(TEST ${_callgraph_registered_tests} APPEND PROPERTY ENVIRONMENT
                "ROSE_TEST_OUTPUT_DIR=${_callgraph_output_dir}")
+  if(REX_EXTENDED_TEST_TIMEOUTS)
+    set_tests_properties(${_callgraph_registered_tests} PROPERTIES
+      PROCESSORS 16)
+  endif()
 endif()

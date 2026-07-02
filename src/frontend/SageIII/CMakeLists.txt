@@ -50,6 +50,17 @@ set(SAGE3_SOURCES
   sage_support/keep_going.C
   sage_support/ast_memory_cleanup.C
   sage_support/utility_functions.C
+  astJson/sageAstJsonApi.cpp
+  astJson/sageAstJsonCollect.cpp
+  astJson/sageAstJsonDeserializeFinalize.cpp
+  astJson/sageAstJsonDeserializeNodes.cpp
+  astJson/sageAstJsonDeserializeSymbols.cpp
+  astJson/sageAstJsonDeserializeTypes.cpp
+  astJson/sageAstJsonFormat.cpp
+  astJson/sageAstJsonProject.cpp
+  astJson/sageAstJsonSerializeExternal.cpp
+  astJson/sageAstJsonSerializeNodes.cpp
+  astJson/sageAstJsonSerializeSupport.cpp
   fixupCopy_scopes.C
   fixupCopy_symbols.C
   fixupCopy_references.C
@@ -126,6 +137,7 @@ endif()
 install(
   FILES
     sage3.h ${CMAKE_CURRENT_BINARY_DIR}/sage3basic.h rose_attributes_list.h attachPreprocessingInfo.h
+    astJson/sageAstJson.h
     attachPreprocessingInfoTraversal.h attach_all_info.h manglingSupport.h
     C++_include_files.h fixupCopy.h general_token_defs.h rtiHelpers.h
     ompAstConstruction.h omp.h ompSupport.h

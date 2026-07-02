@@ -170,10 +170,19 @@ if(ENABLE-C)
       -o /dev/null
   )
 
+  set(_fortran_protected_module
+      "${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected_mod.f03")
+  set(_fortran_protected_input
+      "${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected.f03")
+  set(_fortran_protected_command
+      "${BACKEND_FORTRAN_COMPILER} -c ${_fortran_protected_module} && $<TARGET_FILE:testFortranProtected> ${_fortran_protected_input} -o /dev/null")
+  if(NOT ROSE_USE_SANITIZER AND NOT ROSE_USE_VALGRIND)
+    set(_fortran_protected_command
+        "${BACKEND_FORTRAN_COMPILER} -c ${_fortran_protected_module} && gdb -nx -batch --return-child-result -ex 'set pagination off' -ex 'set debuginfod enabled off' -ex 'run' --args $<TARGET_FILE:testFortranProtected> ${_fortran_protected_input} -o /dev/null || { status=$?; gdb -nx -batch -ex 'set pagination off' -ex 'set debuginfod enabled off' -ex 'run' -ex 'bt' --args $<TARGET_FILE:testFortranProtected> ${_fortran_protected_input} -o /dev/null; exit $status; }")
+  endif()
   add_test(
     NAME Translator_testFortranProtected
-    COMMAND sh -c
-      "${BACKEND_FORTRAN_COMPILER} -c ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected_mod.f03 && gdb -nx -batch --return-child-result -ex 'set pagination off' -ex 'set debuginfod enabled off' -ex 'run' --args $<TARGET_FILE:testFortranProtected> ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected.f03 -o /dev/null || { status=$?; gdb -nx -batch -ex 'set pagination off' -ex 'set debuginfod enabled off' -ex 'run' -ex 'bt' --args $<TARGET_FILE:testFortranProtected> ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected.f03 -o /dev/null; exit $status; }"
+    COMMAND sh -c "${_fortran_protected_command}"
   )
 
   set(_translator_output_dir ${CMAKE_CURRENT_BINARY_DIR}/rose_test_output)

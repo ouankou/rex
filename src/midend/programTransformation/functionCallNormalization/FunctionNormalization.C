@@ -513,6 +513,10 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
       } else
         replaceFunctionCallsInExpression(stm, fct2Var);
     }
+
+    for (Declaration *declaration : declarations) {
+      delete declaration;
+    }
   } // end if isSgStatement block
 }
 

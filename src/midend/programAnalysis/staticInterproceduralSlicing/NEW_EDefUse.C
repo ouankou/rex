@@ -10,6 +10,8 @@
 using namespace std;
 EDefUse::EDefUse(SgProject *proj) { internalDefUse = new DefUseAnalysis(proj); }
 
+EDefUse::~EDefUse() { delete internalDefUse; }
+
 void EDefUse::printDefUse() {
 
   cout << "defs:\n";

@@ -85,10 +85,40 @@ markClangNnsNamespaceBaseDeclDefined(const clang::NamespaceBaseDecl *decl) {
   return decl;
 }
 
+inline void markClangNnsNamespaceAndPrefixStorageDefined(
+    clang::NestedNameSpecifier nns, const clang::NamespaceAndPrefix &value) {
+#if defined(ROSE_USE_VALGRIND) && ROSE_USE_VALGRIND
+  if (!RUNNING_ON_VALGRIND || !value.Prefix) {
+    return;
+  }
+
+  const clang::NestedNameSpecifier::Kind prefix_kind =
+      readClangNnsApiValueDefined([&]() { return value.Prefix.getKind(); });
+  if (prefix_kind != clang::NestedNameSpecifier::Kind::Namespace) {
+    return;
+  }
+
+  constexpr uintptr_t nns_flag_bits = 2;
+  constexpr uintptr_t nns_flag_offset = 1;
+  constexpr uintptr_t nns_ptr_offset = nns_flag_bits + nns_flag_offset;
+  constexpr uintptr_t nns_ptr_mask = (uintptr_t(1) << nns_ptr_offset) - 1;
+  const uintptr_t encoded = reinterpret_cast<uintptr_t>(nns.getAsVoidPointer());
+  void *storage = reinterpret_cast<void *>(encoded & ~nns_ptr_mask);
+  if (storage != nullptr) {
+    VALGRIND_MAKE_MEM_DEFINED(storage,
+                              sizeof(clang::NamespaceAndPrefixStorage));
+  }
+#else
+  (void)nns;
+  (void)value;
+#endif
+}
+
 inline clang::NamespaceAndPrefix
 nestedNameSpecifierNamespaceAndPrefix(clang::NestedNameSpecifier nns) {
   clang::NamespaceAndPrefix result = readClangNnsApiValueDefined(
       [&]() { return nns.getAsNamespaceAndPrefix(); });
+  markClangNnsNamespaceAndPrefixStorageDefined(nns, result);
   markClangNnsNamespaceBaseDeclDefined(result.Namespace);
   markClangNnsValueDefined(result.Prefix);
   return result;
@@ -96,10 +126,13 @@ nestedNameSpecifierNamespaceAndPrefix(clang::NestedNameSpecifier nns) {
 
 inline bool
 nestedNameSpecifierHasTemplateKeyword(clang::NestedNameSpecifier nns) {
-  if (!nns || nns.getKind() != clang::NestedNameSpecifier::Kind::Type) {
+  markClangNnsValueDefined(nns);
+  if (!nns || readClangNnsApiValueDefined([&]() { return nns.getKind(); }) !=
+                  clang::NestedNameSpecifier::Kind::Type) {
     return false;
   }
-  const clang::Type *type = markClangNnsTypeObjectDefined(nns.getAsType());
+  const clang::Type *type = markClangNnsTypeObjectDefined(
+      readClangNnsApiValueDefined([&]() { return nns.getAsType(); }));
   if (type == nullptr) {
     return false;
   }
@@ -128,11 +161,12 @@ nestedNameSpecifierHasTemplateKeyword(clang::NestedNameSpecifier nns) {
 
 inline clang::NestedNameSpecifier
 nestedNameSpecifierPrefix(clang::NestedNameSpecifier nns) {
+  markClangNnsValueDefined(nns);
   if (!nns) {
     return std::nullopt;
   }
 
-  switch (nns.getKind()) {
+  switch (readClangNnsApiValueDefined([&]() { return nns.getKind(); })) {
   case clang::NestedNameSpecifier::Kind::Null:
   case clang::NestedNameSpecifier::Kind::Global:
   case clang::NestedNameSpecifier::Kind::MicrosoftSuper:
@@ -140,7 +174,11 @@ nestedNameSpecifierPrefix(clang::NestedNameSpecifier nns) {
   case clang::NestedNameSpecifier::Kind::Namespace:
     return nestedNameSpecifierNamespaceAndPrefix(nns).Prefix;
   case clang::NestedNameSpecifier::Kind::Type:
-    return nns.getAsType()->getPrefix();
+    if (const clang::Type *type = markClangNnsTypeObjectDefined(
+            readClangNnsApiValueDefined([&]() { return nns.getAsType(); }))) {
+      return readClangNnsApiValueDefined([&]() { return type->getPrefix(); });
+    }
+    return std::nullopt;
   }
 
   llvm_unreachable("unexpected nested-name-specifier kind");
@@ -148,7 +186,9 @@ nestedNameSpecifierPrefix(clang::NestedNameSpecifier nns) {
 
 inline const clang::NamespaceBaseDecl *
 nestedNameSpecifierNamespaceBase(clang::NestedNameSpecifier nns) {
-  if (!nns || nns.getKind() != clang::NestedNameSpecifier::Kind::Namespace) {
+  markClangNnsValueDefined(nns);
+  if (!nns || readClangNnsApiValueDefined([&]() { return nns.getKind(); }) !=
+                  clang::NestedNameSpecifier::Kind::Namespace) {
     return nullptr;
   }
   return markClangNnsNamespaceBaseDeclDefined(
@@ -176,42 +216,55 @@ qualifiedTypeQualifier(const clang::Type *type) {
 
   if (const auto *tag = llvm::dyn_cast<clang::TagType>(type)) {
     tag = markClangNnsAstObjectDefined(tag);
-    return tag->getQualifier();
+    return readClangNnsApiValueDefined([&]() { return tag->getQualifier(); });
   }
   if (const auto *typedef_type = llvm::dyn_cast<clang::TypedefType>(type)) {
     typedef_type = markClangNnsAstObjectDefined(typedef_type);
-    return typedef_type->getQualifier();
+    return readClangNnsApiValueDefined(
+        [&]() { return typedef_type->getQualifier(); });
   }
   if (const auto *using_type = llvm::dyn_cast<clang::UsingType>(type)) {
     using_type = markClangNnsAstObjectDefined(using_type);
-    return using_type->getQualifier();
+    return readClangNnsApiValueDefined(
+        [&]() { return using_type->getQualifier(); });
   }
   if (const auto *unresolved_using =
           llvm::dyn_cast<clang::UnresolvedUsingType>(type)) {
     unresolved_using = markClangNnsAstObjectDefined(unresolved_using);
-    return unresolved_using->getQualifier();
+    return readClangNnsApiValueDefined(
+        [&]() { return unresolved_using->getQualifier(); });
   }
   if (const auto *dependent_name =
           llvm::dyn_cast<clang::DependentNameType>(type)) {
     dependent_name = markClangNnsAstObjectDefined(dependent_name);
-    return dependent_name->getQualifier();
+    return readClangNnsApiValueDefined(
+        [&]() { return dependent_name->getQualifier(); });
   }
   if (const auto *template_specialization =
           llvm::dyn_cast<clang::TemplateSpecializationType>(type)) {
     template_specialization =
         markClangNnsAstObjectDefined(template_specialization);
-    return template_specialization->getTemplateName().getQualifier();
+    clang::TemplateName template_name = readClangNnsApiValueDefined(
+        [&]() { return template_specialization->getTemplateName(); });
+    markClangNnsValueDefined(template_name);
+    return readClangNnsApiValueDefined(
+        [&]() { return template_name.getQualifier(); });
   }
   if (const auto *deduced_template_specialization =
           llvm::dyn_cast<clang::DeducedTemplateSpecializationType>(type)) {
     deduced_template_specialization =
         markClangNnsAstObjectDefined(deduced_template_specialization);
-    return deduced_template_specialization->getTemplateName().getQualifier();
+    clang::TemplateName template_name = readClangNnsApiValueDefined(
+        [&]() { return deduced_template_specialization->getTemplateName(); });
+    markClangNnsValueDefined(template_name);
+    return readClangNnsApiValueDefined(
+        [&]() { return template_name.getQualifier(); });
   }
   if (const auto *injected_class_name =
           llvm::dyn_cast<clang::InjectedClassNameType>(type)) {
     injected_class_name = markClangNnsAstObjectDefined(injected_class_name);
-    return injected_class_name->getQualifier();
+    return readClangNnsApiValueDefined(
+        [&]() { return injected_class_name->getQualifier(); });
   }
 
   return std::nullopt;

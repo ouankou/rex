@@ -26,6 +26,8 @@
 
 #include <list>
 
+#include <memory>
+
 #include <set>
 
 #define DEBUG 1
@@ -38,7 +40,7 @@ int main(int argc, char *argv[]) {
   SgProject *project = frontend(argc, argv);
 #ifdef NEWDU
   // Create the global def-use analysis
-  DFAnalysis *defUseAnalysis = new DefUseAnalysis(project);
+  std::unique_ptr<DFAnalysis> defUseAnalysis(new DefUseAnalysis(project));
   if (defUseAnalysis->run(false) == 1) {
     std::cerr << "testDDG:: DFAnalysis failed! -- defUseAnalysis->run(false)==0"
               << endl;
@@ -75,7 +77,7 @@ int main(int argc, char *argv[]) {
 
       // get the data dependence for this function
 #ifdef NEWDU
-      ddg = new DataDependenceGraph(fD->get_definition(), defUseAnalysis);
+      ddg = new DataDependenceGraph(fD->get_definition(), defUseAnalysis.get());
 #else
       ddg = new DataDependenceGraph(fD->get_definition());
 #endif

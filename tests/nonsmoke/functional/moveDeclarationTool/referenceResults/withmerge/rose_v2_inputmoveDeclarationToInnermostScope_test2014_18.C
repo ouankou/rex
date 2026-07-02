@@ -7927,8 +7927,6 @@ namespace std __attribute__ ((__visibility__ ("default"))) {
     }
 }
 namespace std __attribute__ ((__visibility__ ("default"))) {
-template<> class ctype<char>;
-template<> class ctype<wchar_t>;
 template<typename _Tv>
     void
     __convert_to_v(const char* __in, _Tv& __out, ios_base::iostate& __err,

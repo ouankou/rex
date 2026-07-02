@@ -108,7 +108,11 @@ function(add_omp_fortran_semantic_test specimen)
             $<TARGET_FILE:kmpc_fortran_abi>
             ${specimen}
             ${OMP_FORTRAN_SEMANTIC_RUN_TIMEOUT_SECONDS})
-  set_tests_properties(${_test_name} PROPERTIES TIMEOUT ${_total_timeout})
+  _omp_set_test_timeout(${_test_name} ${_total_timeout})
+  if(_omp_fortran_sanitizer_test_environment)
+    set_property(TEST ${_test_name} APPEND PROPERTY ENVIRONMENT
+                 "${_omp_fortran_sanitizer_test_environment}")
+  endif()
   set_property(TEST ${_test_name} APPEND PROPERTY LABELS
                "${OMP_LOWERING_FORTRAN_LABELS};OMPLOWERING_SEMANTIC;OMPLOWERING_FORTRAN")
 endfunction()
@@ -124,9 +128,43 @@ function(add_omp_fortran_invariant_test specimen dependency_test_name workdir)
             ${workdir}
             ${specimen})
   set_tests_properties(${_inv_name}
-    PROPERTIES DEPENDS ${dependency_test_name} TIMEOUT 360)
+    PROPERTIES DEPENDS ${dependency_test_name})
+  _omp_set_test_timeout(${_inv_name} 360)
   set_property(TEST ${_inv_name} APPEND PROPERTY LABELS
                "${OMP_LOWERING_FORTRAN_LABELS};OMPLOWERING_INVARIANT;OMPLOWERING_FORTRAN")
+endfunction()
+
+function(add_omp_fortran_ast_json_checkpoint_test specimen checkpoint)
+  _omp_sanitize_name(_omp_name ${specimen})
+  set(_test_name ASTJSON_omp_lowering_fortran_${checkpoint}_${_omp_name})
+  string(REPLACE "-" "_" _test_name ${_test_name})
+  set(_workdir ${_omp_fortran_lowering_output_dir}/ast-json/${_omp_name})
+  math(EXPR _total_timeout
+       "2 * (${OMP_FORTRAN_SEMANTIC_COMPILE_OVERHEAD_SECONDS} + ${OMP_FORTRAN_SEMANTIC_TOTAL_RUNS} * ${OMP_FORTRAN_SEMANTIC_RUN_TIMEOUT_SECONDS})")
+  add_test(
+    NAME ${_test_name}
+    WORKING_DIRECTORY ${_omp_fortran_lowering_output_dir}
+    COMMAND ${BASH_EXECUTABLE} ${OMP_LOWERING_FORTRAN_CHECKPOINT_SCRIPT}
+            ${OMP_LOWERING_FORTRAN_SEMANTIC_SCRIPT}
+            $<TARGET_FILE:roseomp>
+            ${_omp_fortran_compiler}
+            ${_omp_fortran_dir}/${specimen}
+            ${_workdir}
+            sort
+            ${_omp_fortran_omp_include}
+            ${ROSE_LLVM_OPENMP_RUNTIME_DIR}
+            ${OMP_LOWERING_INC_DIR}
+            $<TARGET_FILE:kmpc_fortran_abi>
+            ${specimen}
+            ${OMP_FORTRAN_SEMANTIC_RUN_TIMEOUT_SECONDS}
+            ${checkpoint})
+  _omp_set_test_timeout(${_test_name} ${_total_timeout})
+  if(_omp_fortran_sanitizer_test_environment)
+    set_property(TEST ${_test_name} APPEND PROPERTY ENVIRONMENT
+                 "${_omp_fortran_sanitizer_test_environment}")
+  endif()
+  set_property(TEST ${_test_name} APPEND PROPERTY LABELS
+               "ASTJSON;${OMP_LOWERING_FORTRAN_LABELS};OMPLOWERING_SEMANTIC;OMPLOWERING_FORTRAN")
 endfunction()
 
 if(enable-fortran)
@@ -138,4 +176,7 @@ if(enable-fortran)
       omp_lowering_fortran_semantic_${_omp_name}
       ${_omp_fortran_lowering_output_dir}/semantic/${_omp_name})
   endforeach()
+
+  add_omp_fortran_ast_json_checkpoint_test(schedule.f all)
+  add_omp_fortran_ast_json_checkpoint_test(exampleA41f.f90 all)
 endif()

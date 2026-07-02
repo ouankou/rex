@@ -13,6 +13,15 @@ file(MAKE_DIRECTORY ${_collect_comments_output_dir})
 set(_collect_comments_test_dir
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests)
 
+set(_collect_comments_extended_instrumented_sources
+  longFile.C
+  test2010_02.C
+  test2013_13.C
+  test2013_14.C
+  test2013_15.C
+  test2017_24.C
+  test2017_99.C)
+
 function(rex_add_collect_comments_tests property_name)
   set(_group_flags ${ARGN})
   rex_get_registered_compile_source_set(_collect_sources ${property_name})
@@ -37,6 +46,13 @@ function(rex_add_collect_comments_tests property_name)
     set_property(TEST compiler_options_collect_comments_${_collect_name}
                  APPEND PROPERTY ENVIRONMENT
                  "ROSE_TEST_OUTPUT_DIR=${_collect_comments_output_dir}")
+    if(REX_EXTENDED_TEST_TIMEOUTS AND
+       _source_name IN_LIST _collect_comments_extended_instrumented_sources)
+      set_tests_properties(compiler_options_collect_comments_${_collect_name}
+        PROPERTIES
+          TIMEOUT 10800
+          PROCESSORS 16)
+    endif()
   endforeach()
 endfunction()
 

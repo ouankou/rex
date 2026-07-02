@@ -54,11 +54,29 @@ using namespace std;
 
 // =====================================================================
 
+namespace {
+class IfsOwner {
+public:
+  explicit IfsOwner(CPreproc::Ifs_t &ifs) : ifs_(ifs) {}
+  ~IfsOwner() {
+    for (CPreproc::If *directive : ifs_) {
+      delete directive;
+    }
+  }
+
+private:
+  CPreproc::Ifs_t &ifs_;
+};
+} // namespace
+
+// =====================================================================
+
 SgBasicBlock *Outliner::Preprocess::transformPreprocIfs(SgBasicBlock *b) {
   ROSE_ASSERT(b && b->get_parent());
 
   // Determine the '#if' directive context at 'b'.
   CPreproc::Ifs_t ifs;
+  IfsOwner ifsOwner(ifs);
   CPreproc::If::Case *top = 0;
   CPreproc::If::Case *bottom = 0;
   CPreproc::findIfDirectiveContext(b, ifs, top, bottom);

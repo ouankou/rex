@@ -1529,7 +1529,7 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
         SgUnparse_Info tinfo(info);
         tinfo.set_declstatement_ptr(NULL);
         tinfo.set_declstatement_ptr(tmpl_decl);
-        unparseTemplateParameterList(params, tinfo, true);
+        unparseTemplateParameterList(params, tinfo, true, tmpl_decl);
         curprint("\n");
       }
     }

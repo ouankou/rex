@@ -89,7 +89,7 @@ void Outliner::collectVars(
   // variable references to non-local-declared variables
   ASTtools::VarSymSet_t diff_U_L;
   set_difference(U.begin(), U.end(), L.begin(), L.end(),
-                 inserter(diff_U_L, diff_U_L.begin()));
+                 inserter(diff_U_L, diff_U_L.begin()), ASTtools::VarSymLess());
   dump(diff_U_L, "U - L = ");
 
   // if the outlined function is put into a separated file

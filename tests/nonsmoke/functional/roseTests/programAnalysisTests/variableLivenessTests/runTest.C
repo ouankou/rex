@@ -14,6 +14,7 @@
 #include <string>
 
 #include <iostream>
+#include <memory>
 using namespace std;
 using namespace Rose;
 
@@ -31,7 +32,7 @@ void testOneFunction(
   // Build the AST used by ROSE
   SgProject *project = frontend(argvList);
   // Call the Def-Use Analysis
-  DFAnalysis *defuse = new DefUseAnalysis(project);
+  std::unique_ptr<DFAnalysis> defuse(new DefUseAnalysis(project));
   int val = defuse->run(debug);
   if (debug)
     std::cerr << ">Analysis run is : " << (val ? "failure" : "success") << " "
@@ -42,7 +43,8 @@ void testOneFunction(
   if (debug == false)
     defuse->dfaToDOT();
 
-  LivenessAnalysis *liv = new LivenessAnalysis(debug, (DefUseAnalysis *)defuse);
+  std::unique_ptr<LivenessAnalysis> liv(
+      new LivenessAnalysis(debug, (DefUseAnalysis *)defuse.get()));
   // iterate all function definitions
   std::vector<FilteredCFGNode<IsDFAFilter>> dfaFunctions;
   NodeQuerySynthesizedAttributeType vars =
@@ -258,7 +260,8 @@ void testOneFunction(
   if (debug)
     cerr << "Writing out to var.dot... " << endl;
   std::ofstream f2("var.dot");
-  dfaToDot(f2, string("var"), dfaFunctions, (DefUseAnalysis *)defuse, liv);
+  dfaToDot(f2, string("var"), dfaFunctions, (DefUseAnalysis *)defuse.get(),
+           liv.get());
   f2.close();
 
   if (abortme) {
@@ -286,7 +289,8 @@ void testOneFunction(
   if (debug)
     cerr << "Writing out to varFix.dot... " << endl;
   std::ofstream f3("varFix.dot");
-  dfaToDot(f3, string("varFix"), dfaFunctions2, (DefUseAnalysis *)defuse, liv);
+  dfaToDot(f3, string("varFix"), dfaFunctions2, (DefUseAnalysis *)defuse.get(),
+           liv.get());
   f3.close();
 
   if (debug)
@@ -306,7 +310,7 @@ void runCurrentFile(vector<string> &argvList, bool debug, bool debug_map) {
     std::cout << ">>>> start def-use analysis ... " << endl;
 
   // Call the Def-Use Analysis
-  DFAnalysis *defuse = new DefUseAnalysis(project);
+  std::unique_ptr<DFAnalysis> defuse(new DefUseAnalysis(project));
   int val = defuse->run(debug);
   if (debug)
     std::cout << "Analysis is : " << (val ? "failure" : "success") << " " << val
@@ -316,7 +320,8 @@ void runCurrentFile(vector<string> &argvList, bool debug, bool debug_map) {
   if (debug == false)
     defuse->dfaToDOT();
 
-  LivenessAnalysis *liv = new LivenessAnalysis(true, (DefUseAnalysis *)defuse);
+  std::unique_ptr<LivenessAnalysis> liv(
+      new LivenessAnalysis(true, (DefUseAnalysis *)defuse.get()));
 
   // example usage
   //  testing
@@ -338,7 +343,8 @@ void runCurrentFile(vector<string> &argvList, bool debug, bool debug_map) {
   }
 
   std::ofstream f2("var.dot");
-  dfaToDot(f2, string("var"), dfaFunctions, (DefUseAnalysis *)defuse, liv);
+  dfaToDot(f2, string("var"), dfaFunctions, (DefUseAnalysis *)defuse.get(),
+           liv.get());
   f2.close();
   if (abortme) {
     cerr << "ABORTING ." << endl;
@@ -346,7 +352,6 @@ void runCurrentFile(vector<string> &argvList, bool debug, bool debug_map) {
   }
 
   delete project;
-  delete defuse;
 }
 
 void thisUsage() {

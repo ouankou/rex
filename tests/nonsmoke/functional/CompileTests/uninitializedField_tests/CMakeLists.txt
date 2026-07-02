@@ -42,6 +42,15 @@ set(_uninit_includes
   ${ROSE_INCLUDE_FLAGS}
   -isystem ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/input_codes/system_header_like
 )
+set(_uninit_cxx_extended_instrumented_timeout_sources
+  Cxx_tests/test2010_02.C
+  Cxx_tests/test2017_24.C
+  Cxx_tests/test2017_99.C
+  Cxx_tests/longFile.C
+  Cxx_tests/test2013_13.C
+  Cxx_tests/test2013_14.C
+  Cxx_tests/test2013_15.C
+)
 
 function(rex_uninit_test_name out_var prefix source_rel)
   set(_name ${source_rel})
@@ -73,6 +82,12 @@ function(rex_add_uninit_cxx_tests property_name will_fail)
     )
     if(${will_fail})
       set_tests_properties(${_test_name} PROPERTIES WILL_FAIL TRUE)
+    endif()
+    if(REX_EXTENDED_TEST_TIMEOUTS AND
+       source_rel IN_LIST _uninit_cxx_extended_instrumented_timeout_sources)
+      set_tests_properties(${_test_name} PROPERTIES
+        TIMEOUT 10800
+        PROCESSORS 16)
     endif()
     if(source_rel MATCHES "axpy")
       set_tests_properties(${_test_name} PROPERTIES TIMEOUT 7200)

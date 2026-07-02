@@ -8,5 +8,7 @@
 int main(int argc, char *argv[]) {
   SgProject *project = frontend(argc, argv);
   AstTests::runAllTests(project);
-  return backend(project);
+  int status = backend(project);
+  SageInterface::tearDownAst(project);
+  return status;
 }

@@ -28,6 +28,8 @@
 
 #include <list>
 
+#include <memory>
+
 #include <set>
 
 #define DEBUG 1
@@ -247,7 +249,7 @@ int main(int argc, char *argv[]) {
 
   SgProject *project = frontend(argc, argv);
   // Create the global def-use analysis
-  DFAnalysis *defUseAnalysis = new DefUseAnalysis(project);
+  std::unique_ptr<DFAnalysis> defUseAnalysis(new DefUseAnalysis(project));
   if (defUseAnalysis->run(false) == 1) {
     std::cerr << "newDU:: DFAnalysis failed!  defUseAnalysis->run()==0" << endl;
     exit(0);
@@ -277,7 +279,7 @@ int main(int argc, char *argv[]) {
     } else {
       cout << "--------------------------------------------------------------"
            << endl;
-      analyseFunction(fD->get_definition(), defUseAnalysis);
+      analyseFunction(fD->get_definition(), defUseAnalysis.get());
     }
   }
   return 0;

@@ -6,6 +6,12 @@ set(CXX11_TESTCODES
   test2012_05.C
   test2012_06.C
   test2012_09.C
+  rex_test2026_cxx_std_initializer_list_valgrind_defined_reads.cpp
+  rex_test2026_atomic_expr_valgrind_defined_reads.cpp
+  rex_test2026_function_definition_valgrind_defined_reads.cpp
+  rex_test2026_member_expr_valgrind_defined_reads.cpp
+  rex_test2026_template_qualifier_friend_valgrind_defined_reads.cpp
+  rex_test2026_unresolved_member_valgrind_defined_reads.cpp
   test2012_10.C
   test2012_11.C
   test2012_12.C
@@ -959,7 +965,8 @@ function(assert_cxx11_specimens_exist test_files_var_name)
   file(GLOB _specimens
     RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.C"
-    "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 
   set(_missing_specimens ${${test_files_var_name}})
   list(REMOVE_ITEM _missing_specimens ${_specimens})

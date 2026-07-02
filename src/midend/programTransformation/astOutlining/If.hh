@@ -78,6 +78,7 @@ public:
   public:
     Case(PreprocessingInfo *, SgLocatedNode *, If * = 0);
     Case(const Case &);
+    ~Case();
 
     void dump(size_t level = 0);
     //! Returns 'true' if this case is a '#if'.

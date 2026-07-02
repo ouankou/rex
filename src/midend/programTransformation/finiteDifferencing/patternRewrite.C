@@ -16,6 +16,14 @@
 
 using namespace std;
 
+namespace {
+void deletePattern(Pattern *pattern) {
+  if (pattern != nullptr && pattern != p_wildcard) {
+    delete pattern;
+  }
+}
+} // namespace
+
 bool RewriteRuleCombiner::doRewrite(SgNode *&n) const {
   for (vector<RewriteRule *>::const_iterator i = rules.begin();
        i != rules.end(); ++i) {
@@ -26,6 +34,12 @@ bool RewriteRuleCombiner::doRewrite(SgNode *&n) const {
     }
   }
   return false;
+}
+
+RewriteRuleCombiner::~RewriteRuleCombiner() {
+  for (RewriteRule *rule : rules) {
+    delete rule;
+  }
 }
 
 class DoRewriteRuleDeepVisitor : public AstSimpleProcessing {
@@ -114,6 +128,11 @@ bool PatternActionRule::doRewrite(SgNode *&n) const {
     return false;
 }
 
+PatternActionRule::~PatternActionRule() {
+  deletePattern(pattern);
+  deletePattern(action);
+}
+
 PatternActionRule *patact(Pattern *pattern, Pattern *action) {
   return new PatternActionRule(pattern, action);
 }
@@ -123,6 +142,8 @@ template <class Operator> class UnaryPattern : public Pattern {
 
 public:
   UnaryPattern(Pattern *rhs) : rhs(rhs) {}
+
+  ~UnaryPattern() { deletePattern(rhs); }
 
   virtual bool match(SgNode *top, PatternVariables &vars) const {
     if (dynamic_cast<Operator *>(top)) {
@@ -148,6 +169,11 @@ template <class Operator> class BinaryPattern : public Pattern {
 
 public:
   BinaryPattern(Pattern *lhs, Pattern *rhs) : lhs(lhs), rhs(rhs) {}
+
+  ~BinaryPattern() {
+    deletePattern(lhs);
+    deletePattern(rhs);
+  }
 
   virtual bool match(SgNode *top, PatternVariables &vars) const {
     if (dynamic_cast<Operator *>(top)) {

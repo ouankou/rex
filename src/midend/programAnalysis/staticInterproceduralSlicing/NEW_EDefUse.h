@@ -10,6 +10,7 @@
 class EDefUse {
 public:
   EDefUse(SgProject *proj);
+  ~EDefUse();
 
 protected:
   DefUseAnalysis *internalDefUse;

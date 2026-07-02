@@ -1368,4 +1368,8 @@ get_property(_gdfa_registered_tests DIRECTORY PROPERTY TESTS)
 if(_gdfa_registered_tests)
   set_property(TEST ${_gdfa_registered_tests} APPEND PROPERTY ENVIRONMENT
                "ROSE_TEST_OUTPUT_DIR=${_gdfa_debug_output_dir}")
+  if(REX_EXTENDED_TEST_TIMEOUTS)
+    set_tests_properties(${_gdfa_registered_tests} PROPERTIES
+      PROCESSORS 16)
+  endif()
 endif()

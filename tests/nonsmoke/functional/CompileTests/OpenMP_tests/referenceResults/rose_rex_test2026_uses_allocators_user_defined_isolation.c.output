@@ -1,0 +1,1 @@
+#pragma omp target map(from : result) uses_allocators(rex_test2026_allocator(value), omp_default_mem_alloc)

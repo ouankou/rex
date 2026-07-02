@@ -38,7 +38,7 @@ public:
   virtual bool doRewrite(SgNode *&n) const;
 
   // DQ (12/16/2006): Added destructor to eliminate g++ compiler warning.
-  virtual ~RewriteRuleCombiner() {}
+  virtual ~RewriteRuleCombiner();
 };
 
 //! Rewrite a node and its children recursively using a rule.  Iterate until no
@@ -70,7 +70,7 @@ public:
 
   virtual bool doRewrite(SgNode *&n) const;
   // Liao (2/7/2008): Added destructor to eliminate g++ compiler warning.
-  virtual ~PatternActionRule() {}
+  virtual ~PatternActionRule();
 };
 
 //! Create a PatternActionRule

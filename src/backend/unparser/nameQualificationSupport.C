@@ -12265,52 +12265,73 @@ NameQualificationTraversal::evaluateInheritedAttribute(
           }
           // std::string qualifier =
           // std::string((*classChain_last)->get_name().str()) + "::";
-          std::string qualifier =
-              std::string((*classChain_target)->get_name().str()) + "::";
+          SgClassType *targetClassType = *classChain_target;
+          ROSE_ASSERT(targetClassType != NULL);
+          SgClassDeclaration *targetClassDeclaration =
+              isSgClassDeclaration(targetClassType->get_declaration());
+          ROSE_ASSERT(targetClassDeclaration != NULL);
+          const std::string targetDeclarationName =
+              targetClassDeclaration->get_name().getString();
+          const std::string targetClassName =
+              targetClassType->get_name().getString();
+          const bool targetClassIsAnonymous =
+              targetClassDeclaration->get_isUnNamed() == true ||
+              targetDeclarationName.find("__anonymous_0x") == 0 ||
+              targetClassName.find("__anonymous_0x") == 0;
 
-#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-          MLOG_WARN_C(MLOG_UNPARSER, "data member qualifier = %s \n",
-                      qualifier.c_str());
-#endif
-          // DQ (2/16/2019): Mark this as at least non-zero, but it is computed
-          // based on where the ambiguity is instead of as a length of the chain
-          // of scope from the variable referenced's variable declaration scope.
-          varRefExp->set_name_qualification_length(1);
-
-          varRefExp->set_global_qualification_required(false);
-          varRefExp->set_type_elaboration_required(false);
-
-          if (qualifiedNameMapForNames.find(varRefExp) ==
-              qualifiedNameMapForNames.end()) {
-#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-            MLOG_WARN_C(MLOG_UNPARSER,
-                        "Inserting qualifier for name = %s into list at IR "
-                        "node = %p = %s \n",
-                        qualifier.c_str(), varRefExp,
-                        varRefExp->class_name().c_str());
-#endif
-            qualifiedNameMapForNames.insert(
-                std::pair<SgNode *, std::string>(varRefExp, qualifier));
+          if (targetClassIsAnonymous == true) {
+            varRefExp->set_name_qualification_length(0);
+            varRefExp->set_global_qualification_required(false);
+            varRefExp->set_type_elaboration_required(false);
+            qualifiedNameMapForNames.erase(varRefExp);
           } else {
-            // DQ (6/20/2011): We see this case in test2011_87.C.
-            // If it already existes then overwrite the existing information.
-            NameQualificationMapType::iterator i =
-                qualifiedNameMapForNames.find(varRefExp);
-            ROSE_ASSERT(i != qualifiedNameMapForNames.end());
+            std::string qualifier = targetClassName + "::";
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-            string previousQualifier = i->second.c_str();
-            MLOG_WARN_C(MLOG_UNPARSER,
-                        "WARNING: test 1: replacing previousQualifier = %s "
-                        "with new qualifier = %s \n",
-                        previousQualifier.c_str(), qualifier.c_str());
+            MLOG_WARN_C(MLOG_UNPARSER, "data member qualifier = %s \n",
+                        qualifier.c_str());
 #endif
-            if (i->second != qualifier) {
-              // DQ (7/23/2011): Multiple uses of the SgVarRefExp expression in
-              // SgArrayType will cause the name qualification to be reset each
-              // time.  This is OK since it is used to build the type name that
-              // will be saved.
-              i->second = qualifier;
+            // DQ (2/16/2019): Mark this as at least non-zero, but it is
+            // computed based on where the ambiguity is instead of as a length
+            // of the chain of scope from the variable referenced's variable
+            // declaration scope.
+            varRefExp->set_name_qualification_length(1);
+
+            varRefExp->set_global_qualification_required(false);
+            varRefExp->set_type_elaboration_required(false);
+
+            if (qualifiedNameMapForNames.find(varRefExp) ==
+                qualifiedNameMapForNames.end()) {
+#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
+              MLOG_WARN_C(MLOG_UNPARSER,
+                          "Inserting qualifier for name = %s into list at IR "
+                          "node = %p = %s \n",
+                          qualifier.c_str(), varRefExp,
+                          varRefExp->class_name().c_str());
+#endif
+              qualifiedNameMapForNames.insert(
+                  std::pair<SgNode *, std::string>(varRefExp, qualifier));
+            } else {
+              // DQ (6/20/2011): We see this case in test2011_87.C.
+              // If it already existes then overwrite the existing information.
+              NameQualificationMapType::iterator i =
+                  qualifiedNameMapForNames.find(varRefExp);
+              ROSE_ASSERT(i != qualifiedNameMapForNames.end());
+
+#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
+              string previousQualifier = i->second.c_str();
+              MLOG_WARN_C(MLOG_UNPARSER,
+                          "WARNING: test 1: replacing previousQualifier = %s "
+                          "with new qualifier = %s \n",
+                          previousQualifier.c_str(), qualifier.c_str());
+#endif
+              if (i->second != qualifier) {
+                // DQ (7/23/2011): Multiple uses of the SgVarRefExp expression
+                // in SgArrayType will cause the name qualification to be reset
+                // each time.  This is OK since it is used to build the type
+                // name that will be saved.
+                i->second = qualifier;
+              }
             }
           }
         }
@@ -14569,6 +14590,16 @@ void NameQualificationTraversal::setNameQualification(
         outputGlobalQualification, outputTypeEvaluation);
     applyExplicitQualifier(varRefExp, qualifier, outputNameQualificationLength,
                            outputGlobalQualification);
+    const bool isMemberAccessRhs =
+        (dotExp != NULL && dotExp->get_rhs_operand() == varRefExp) ||
+        (arrowExp != NULL && arrowExp->get_rhs_operand() == varRefExp);
+    if (isMemberAccessRhs == true && qualifier.find("__anonymous_0x") == 0) {
+      varRefExp->set_global_qualification_required(false);
+      varRefExp->set_name_qualification_length(0);
+      varRefExp->set_type_elaboration_required(false);
+      qualifiedNameMapForNames.erase(varRefExp);
+      return;
+    }
 
     varRefExp->set_global_qualification_required(outputGlobalQualification);
     varRefExp->set_name_qualification_length(outputNameQualificationLength);
@@ -14627,21 +14658,10 @@ void NameQualificationTraversal::setNameQualification(
       }
     }
   } else {
-    SgScopeStatement *scope =
-        traverseNonrealDeclForCorrectScope(variableDeclaration);
-    string qualifier = setNameQualificationSupport(
-        scope, amountOfNameQualificationRequired, outputNameQualificationLength,
-        outputGlobalQualification, outputTypeEvaluation);
-    applyExplicitQualifier(varRefExp, qualifier, outputNameQualificationLength,
-                           outputGlobalQualification);
-
-    varRefExp->set_global_qualification_required(outputGlobalQualification);
-    varRefExp->set_name_qualification_length(outputNameQualificationLength);
-
-    // There should be no type evaluation required for a variable reference, as
-    // I recall.
-    ROSE_ASSERT(outputTypeEvaluation == false);
-    varRefExp->set_type_elaboration_required(outputTypeEvaluation);
+    varRefExp->set_global_qualification_required(false);
+    varRefExp->set_name_qualification_length(0);
+    varRefExp->set_type_elaboration_required(false);
+    qualifiedNameMapForNames.erase(varRefExp);
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
     MLOG_WARN_C(MLOG_UNPARSER,
@@ -14658,39 +14678,6 @@ void NameQualificationTraversal::setNameQualification(
                 varRefExp->get_global_qualification_required() ? "true"
                                                                : "false");
 #endif
-
-    if (qualifiedNameMapForNames.find(varRefExp) ==
-        qualifiedNameMapForNames.end()) {
-#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-      MLOG_WARN_C(
-          MLOG_UNPARSER,
-          "Inserting qualifier for name = %s into list at IR node = %p = %s \n",
-          qualifier.c_str(), varRefExp, varRefExp->class_name().c_str());
-#endif
-      qualifiedNameMapForNames.insert(
-          std::pair<SgNode *, std::string>(varRefExp, qualifier));
-    } else {
-      // DQ (6/20/2011): We see this case in test2011_87.C.
-      // If it already existes then overwrite the existing information.
-      NameQualificationMapType::iterator i =
-          qualifiedNameMapForNames.find(varRefExp);
-      ROSE_ASSERT(i != qualifiedNameMapForNames.end());
-
-#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-      string previousQualifier = i->second.c_str();
-      MLOG_WARN_C(MLOG_UNPARSER,
-                  "WARNING: test 2: replacing previousQualifier = %s with new "
-                  "qualifier = %s \n",
-                  previousQualifier.c_str(), qualifier.c_str());
-#endif
-      if (i->second != qualifier) {
-        // DQ (7/23/2011): Multiple uses of the SgVarRefExp expression in
-        // SgArrayType will cause the name qualification to be reset each time.
-        // This is OK since it is used to build the type name that will be
-        // saved.
-        i->second = qualifier;
-      }
-    }
   }
 }
 

@@ -1038,3 +1038,9 @@ add_test(
   COMMAND bash -c
     "${CMAKE_CXX_COMPILER} -c ${CMAKE_CURRENT_SOURCE_DIR}/test_class_ODR_violation_main.C && ${CMAKE_CXX_COMPILER} -c ${CMAKE_CURRENT_SOURCE_DIR}/test_class_ODR_violation_outlined.C && ${CMAKE_CXX_COMPILER} test_class_ODR_violation_main.o test_class_ODR_violation_outlined.o -o test_class_ODR_violation"
 )
+
+get_property(_outline_registered_tests DIRECTORY PROPERTY TESTS)
+if(REX_EXTENDED_TEST_TIMEOUTS AND _outline_registered_tests)
+  set_tests_properties(${_outline_registered_tests} PROPERTIES
+    PROCESSORS 16)
+endif()

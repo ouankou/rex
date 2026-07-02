@@ -129,6 +129,7 @@ private:
   bool needssafety;
   int recursed;
   int checkedfound;
+  void clearPreparedGraphState();
   void prepareGraph(CFG *&g);
   void findClosuresAndMarkersAndEnumerate(CFG *&g);
   int stoppedpaths;
@@ -225,9 +226,38 @@ SgGraphTraversal<CFG>::operator=(SgGraphTraversal &other) {
 
 #ifndef SWIG
 
-template <class CFG> SgGraphTraversal<CFG>::~SgGraphTraversal() {}
+template <class CFG> SgGraphTraversal<CFG>::~SgGraphTraversal() {
+  clearPreparedGraphState();
+}
 
 #endif
+
+template <class CFG> void SgGraphTraversal<CFG>::clearPreparedGraphState() {
+  vertintmap.clear();
+  edgeintmap.clear();
+  intvertmap.clear();
+  intedgemap.clear();
+  sources.clear();
+  sinks.clear();
+  recursiveLoops.clear();
+  recurses.clear();
+  ptsNum.clear();
+  badloop.clear();
+  totalLoops.clear();
+  nodeStrings.clear();
+  loopStore.clear();
+  pathStore.clear();
+  subpathglobal.clear();
+  subpathglobalinv.clear();
+  orderOfNodes.clear();
+  SubGraphGraphMap.clear();
+  GraphSubGraphMap.clear();
+  subGraphVector.clear();
+  markers.clear();
+  closures.clear();
+  markerIndex.clear();
+  pathsAtMarkers.clear();
+}
 
 /**
     Gets the source of an edge
@@ -1070,6 +1100,7 @@ Input:
 */
 
 template <class CFG> void SgGraphTraversal<CFG>::prepareGraph(CFG *&g) {
+  clearPreparedGraphState();
   nextNode = 1;
   nextEdge = 1;
   findClosuresAndMarkersAndEnumerate(g);

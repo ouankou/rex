@@ -6,15 +6,11 @@ SgType *SgSubscriptExpression::get_type() const {
   SgType *returnType = NULL;
 
   bool isLowerBoundNullExpression =
-      (isSgNullExpression(get_lowerBound()) != NULL);
+      (get_lowerBound() == NULL ||
+       isSgNullExpression(get_lowerBound()) != NULL);
   bool isUpperBoundNullExpression =
-      (isSgNullExpression(get_upperBound()) != NULL);
-  bool isStrideNullExpression =
-      (isSgNullExpression(get_stride()) != NULL); // blame initial commit
-
-  // Even if the stride was not specified it should default to unit stride
-  // (value == 1).
-  ROSE_ASSERT(isStrideNullExpression == false);
+      (get_upperBound() == NULL ||
+       isSgNullExpression(get_upperBound()) != NULL);
 
   if (isLowerBoundNullExpression == true) {
     // There was no lower bound specified

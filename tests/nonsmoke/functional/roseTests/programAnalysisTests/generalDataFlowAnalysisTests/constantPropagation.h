@@ -90,8 +90,8 @@ private:
 
   std::vector<std::unique_ptr<ConstantPropagationLattice>> tempLattices;
   ConstantPropagationLattice *makeTempLattice();
-  void setSignedValue(ConstantPropagationLattice *lat, long long value);
-  void setUnsignedValue(ConstantPropagationLattice *lat,
+  bool setSignedValue(ConstantPropagationLattice *lat, long long value);
+  bool setUnsignedValue(ConstantPropagationLattice *lat,
                         unsigned long long value);
   ConstantPropagationLattice *fallbackLattice(const SgExpression *sgn) override;
 

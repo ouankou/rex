@@ -349,6 +349,24 @@ void markSubtreeAsTransformation(SgNode *root) {
   }
 }
 
+void discardCopiedPreprocessingInfo(SgLocatedNode *node) {
+  if (node == nullptr) {
+    return;
+  }
+
+  AttachedPreprocessingInfoType *copied_info =
+      node->get_attachedPreprocessingInfoPtr();
+  if (copied_info == nullptr) {
+    return;
+  }
+
+  for (PreprocessingInfo *info : *copied_info) {
+    delete info;
+  }
+  delete copied_info;
+  node->set_attachedPreprocessingInfoPtr(nullptr);
+}
+
 void moveLeadingPreprocessingInfoPreservingDestinationTokens(
     SgStatement *source, SgStatement *destination) {
   ROSE_ASSERT(source != nullptr);
@@ -1902,7 +1920,7 @@ void copyMoveVariableDeclaration(
     // the original declaration. We don't want this behavior since it may
     // duplicate the troublesome #endif for each copy of the declaration A
     // workaround is to clean this pointer
-    decl_copy->set_attachedPreprocessingInfoPtr(NULL);
+    discardCopiedPreprocessingInfo(decl_copy);
     // bool skip = false; // in some rare case, we skip a target scope, no move
     // to that scope (like while-stmt) This won't work. The move must happen to
     // all scopes or not at all, or dangling variable use without a declaration.
@@ -2196,10 +2214,11 @@ void copyMoveVariableDeclaration(
     }
   } // end if transTracking
 #endif
-  // TODO deepDelete is problematic
-  // SageInterface::deepDelete(decl);  // symbol is not deleted?
+  if (decl->get_parent() == NULL) {
+    SageInterface::deleteAST(decl);
+  }
+  // TODO remove the stale symbol from the original scope.
   // orig_scope->remove_symbol(sym);
-  // delete i_name;
   //  return inserted_copied_decls;
 }
 

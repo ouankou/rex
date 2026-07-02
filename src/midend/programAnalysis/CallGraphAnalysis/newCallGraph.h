@@ -38,7 +38,8 @@ public:
   std::map<std::string, CallGraphEdgeInfo *> edgeMap;
 
   CallGraph();
-  void visit(SgNode *astNode);
+  ~CallGraph() override;
+  void visit(SgNode *astNode) override;
 };
 
 class CallGraphFileStructure {

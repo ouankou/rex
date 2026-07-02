@@ -77,17 +77,39 @@ foreach(entry IN LISTS ROSE_INCLUDES)
 endforeach()
 string(JOIN " " _rose_include_flags_str ${_rose_include_flags})
 
+set(_ast_query_cxx_grammar_timeout 1800)
+set(_ast_query_cxx_grammar_ctest_timeout 1900)
+set(_ast_query_cxx_grammar_properties
+  TIMEOUT ${_ast_query_cxx_grammar_ctest_timeout}
+)
+if(REX_EXTENDED_TEST_TIMEOUTS)
+  set(_ast_query_cxx_grammar_timeout 21600)
+  set(_ast_query_cxx_grammar_ctest_timeout 22200)
+  set(_ast_query_cxx_grammar_properties
+    TIMEOUT ${_ast_query_cxx_grammar_ctest_timeout}
+    PROCESSORS 16
+    RUN_SERIAL TRUE
+  )
+elseif(ROSE_USE_SANITIZER)
+  set(_ast_query_cxx_grammar_timeout 3600)
+  set(_ast_query_cxx_grammar_ctest_timeout 3900)
+  set(_ast_query_cxx_grammar_properties
+    TIMEOUT ${_ast_query_cxx_grammar_ctest_timeout}
+    RUN_SERIAL TRUE
+  )
+endif()
+
 add_test(
   NAME astQuery_test3_cxx_grammar
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${_rth}
     "TITLE=test3 Cxx_Grammar.C [test3.passed]"
     "USE_SUBDIR=yes"
-    "TIMEOUT=1800"
+    "TIMEOUT=${_ast_query_cxx_grammar_timeout}"
     "CMD=$<TARGET_FILE:testQuery3> -rose:verbose 0 -std=c++${CMAKE_CXX_STANDARD} -I${CMAKE_BINARY_DIR} ${_rose_include_flags_str} -c ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_Grammar.C"
     ${_exit_status}
     test3.passed
 )
-set_tests_properties(astQuery_test3_cxx_grammar PROPERTIES TIMEOUT 1900)
+set_tests_properties(astQuery_test3_cxx_grammar PROPERTIES ${_ast_query_cxx_grammar_properties})
 
 install(TARGETS testQuery testQuery2 testQuery3 DESTINATION bin)

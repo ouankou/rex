@@ -413,6 +413,7 @@ static void dedupeIncludeDirectives(SgGlobal *glob_scope) {
       return;
 
     AttachedPreprocessingInfoType filtered;
+    AttachedPreprocessingInfoType removed;
     filtered.reserve(infos->size());
     for (AttachedPreprocessingInfoType::iterator it = infos->begin();
          it != infos->end(); ++it) {
@@ -426,6 +427,7 @@ static void dedupeIncludeDirectives(SgGlobal *glob_scope) {
       if (is_include) {
         std::string key = extractIncludeKey(info->getString());
         if (!key.empty() && seen.count(key) != 0) {
+          removed.push_back(info);
           continue;
         }
         if (!key.empty())
@@ -434,6 +436,9 @@ static void dedupeIncludeDirectives(SgGlobal *glob_scope) {
       filtered.push_back(info);
     }
     infos->swap(filtered);
+    for (PreprocessingInfo *info : removed) {
+      delete info;
+    }
   };
 
   prune_info(glob_scope);

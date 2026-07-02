@@ -71,11 +71,7 @@ static void insertOutlineDirectives(RandomStmtSelector::StmtSet_t &S) {
 
       // Generate pragma, randomly choosing between
       // pass-by-reference or pass-by-pointer outlining styles.
-      char *pragma_text = new char[30];
-      ROSE_ASSERT(pragma_text);
-      strcpy(pragma_text, "rose_outline");
-
-      SgPragma *pragma = new SgPragma(pragma_text, ASTtools::newFileInfo());
+      SgPragma *pragma = new SgPragma("rose_outline", ASTtools::newFileInfo());
       ROSE_ASSERT(pragma);
       SgPragmaDeclaration *pragma_decl =
           new SgPragmaDeclaration(ASTtools::newFileInfo(), pragma);

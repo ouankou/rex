@@ -23,6 +23,7 @@
 #include <iostream>
 
 #include <string>
+#include <vector>
 
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
@@ -47,76 +48,271 @@ const char *templateParameterKeywordSpelling(
   }
 }
 
-std::string
-buildTemplateDefaultArgumentEmissionKey(SgTemplateParameter *template_parameter,
-                                        SgUnparse_Info &info) {
+const SgTemplateParameterPtrList *
+templateDeclarationParameters(SgDeclarationStatement *decl) {
+  if (SgTemplateDeclaration *legacy_template = isSgTemplateDeclaration(decl)) {
+    return &legacy_template->get_templateParameters();
+  }
+  if (SgTemplateClassDeclaration *class_template =
+          isSgTemplateClassDeclaration(decl)) {
+    return &class_template->get_templateParameters();
+  }
+  if (SgTemplateFunctionDeclaration *function_template =
+          isSgTemplateFunctionDeclaration(decl)) {
+    return &function_template->get_templateParameters();
+  }
+  if (SgTemplateMemberFunctionDeclaration *member_function_template =
+          isSgTemplateMemberFunctionDeclaration(decl)) {
+    return &member_function_template->get_templateParameters();
+  }
+  if (SgTemplateTypedefDeclaration *typedef_template =
+          isSgTemplateTypedefDeclaration(decl)) {
+    return &typedef_template->get_templateParameters();
+  }
+  if (SgTemplateVariableDeclaration *variable_template =
+          isSgTemplateVariableDeclaration(decl)) {
+    return &variable_template->get_templateParameters();
+  }
+  return nullptr;
+}
+
+SgDeclarationStatement *templateParameterOwner(SgDeclarationStatement *owner,
+                                               SgUnparse_Info &info) {
+  if (owner != nullptr) {
+    return owner;
+  }
+
+  SgDeclarationStatement *info_decl = info.get_declstatement_ptr();
+  return templateDeclarationParameters(info_decl) != nullptr ? info_decl
+                                                             : nullptr;
+}
+
+bool templateParameterHasDefault(SgTemplateParameter *template_parameter) {
+  return template_parameter != nullptr &&
+         (template_parameter->get_defaultTypeParameter() != nullptr ||
+          template_parameter->get_defaultExpressionParameter() != nullptr ||
+          template_parameter->get_defaultTemplateDeclarationParameter() !=
+              nullptr);
+}
+
+bool templateParameterIndexInDeclaration(
+    SgTemplateParameter *template_parameter, SgDeclarationStatement *decl,
+    size_t &parameter_index) {
+  const SgTemplateParameterPtrList *params =
+      templateDeclarationParameters(decl);
+  if (template_parameter == nullptr || params == nullptr) {
+    return false;
+  }
+
+  for (size_t i = 0; i < params->size(); ++i) {
+    if ((*params)[i] == template_parameter) {
+      parameter_index = i;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+SgTemplateParameter *templateParameterAt(SgDeclarationStatement *decl,
+                                         size_t parameter_index) {
+  const SgTemplateParameterPtrList *params =
+      templateDeclarationParameters(decl);
+  if (params == nullptr || parameter_index >= params->size()) {
+    return nullptr;
+  }
+
+  return (*params)[parameter_index];
+}
+
+size_t
+findTopLevelTemplateParameterDefaultInSegment(const std::string &segment) {
+  int angle_depth = 0;
+  int paren_depth = 0;
+  int bracket_depth = 0;
+  int brace_depth = 0;
+  for (size_t i = 0; i < segment.size(); ++i) {
+    char ch = segment[i];
+    if (ch == '<') {
+      ++angle_depth;
+    } else if (ch == '>' && angle_depth > 0) {
+      --angle_depth;
+    } else if (ch == '(') {
+      ++paren_depth;
+    } else if (ch == ')' && paren_depth > 0) {
+      --paren_depth;
+    } else if (ch == '[') {
+      ++bracket_depth;
+    } else if (ch == ']' && bracket_depth > 0) {
+      --bracket_depth;
+    } else if (ch == '{') {
+      ++brace_depth;
+    } else if (ch == '}' && brace_depth > 0) {
+      --brace_depth;
+    } else if (ch == '=' && angle_depth == 0 && paren_depth == 0 &&
+               bracket_depth == 0 && brace_depth == 0) {
+      return i;
+    }
+  }
+  return std::string::npos;
+}
+
+bool spelledTemplateParameterDefaults(SgDeclarationStatement *decl,
+                                      std::vector<bool> &defaults) {
+  SgName saved_template_name;
+  if (SgTemplateClassDeclaration *class_template =
+          isSgTemplateClassDeclaration(decl)) {
+    saved_template_name = class_template->get_string();
+  } else {
+    return false;
+  }
+
+  const char *saved_template_string = saved_template_name.str();
+  if (saved_template_name.is_null() || saved_template_string == nullptr ||
+      saved_template_string[0] == '\0') {
+    return false;
+  }
+
+  std::string text(saved_template_string);
+  size_t template_pos = text.find("template");
+  if (template_pos == std::string::npos) {
+    return false;
+  }
+  size_t open = text.find('<', template_pos);
+  if (open == std::string::npos) {
+    return false;
+  }
+
+  int angle_depth = 1;
+  int paren_depth = 0;
+  int bracket_depth = 0;
+  int brace_depth = 0;
+  size_t close = std::string::npos;
+  for (size_t i = open + 1; i < text.size(); ++i) {
+    char ch = text[i];
+    if (ch == '<') {
+      ++angle_depth;
+    } else if (ch == '>') {
+      --angle_depth;
+      if (angle_depth == 0) {
+        close = i;
+        break;
+      }
+    } else if (ch == '(') {
+      ++paren_depth;
+    } else if (ch == ')' && paren_depth > 0) {
+      --paren_depth;
+    } else if (ch == '[') {
+      ++bracket_depth;
+    } else if (ch == ']' && bracket_depth > 0) {
+      --bracket_depth;
+    } else if (ch == '{') {
+      ++brace_depth;
+    } else if (ch == '}' && brace_depth > 0) {
+      --brace_depth;
+    }
+  }
+  if (close == std::string::npos) {
+    return false;
+  }
+
+  const std::string params = text.substr(open + 1, close - open - 1);
+  defaults.clear();
+  size_t segment_start = 0;
+  angle_depth = paren_depth = bracket_depth = brace_depth = 0;
+  auto push_segment = [&](size_t segment_end) {
+    const std::string segment =
+        params.substr(segment_start, segment_end - segment_start);
+    defaults.push_back(findTopLevelTemplateParameterDefaultInSegment(segment) !=
+                       std::string::npos);
+  };
+
+  for (size_t i = 0; i < params.size(); ++i) {
+    char ch = params[i];
+    if (ch == '<') {
+      ++angle_depth;
+    } else if (ch == '>' && angle_depth > 0) {
+      --angle_depth;
+    } else if (ch == '(') {
+      ++paren_depth;
+    } else if (ch == ')' && paren_depth > 0) {
+      --paren_depth;
+    } else if (ch == '[') {
+      ++bracket_depth;
+    } else if (ch == ']' && bracket_depth > 0) {
+      --bracket_depth;
+    } else if (ch == '{') {
+      ++brace_depth;
+    } else if (ch == '}' && brace_depth > 0) {
+      --brace_depth;
+    } else if (ch == ',' && angle_depth == 0 && paren_depth == 0 &&
+               bracket_depth == 0 && brace_depth == 0) {
+      push_segment(i);
+      segment_start = i + 1;
+    }
+  }
+  push_segment(params.size());
+  return true;
+}
+
+std::string templateDeclarationStableName(SgDeclarationStatement *decl) {
+  if (decl == nullptr) {
+    return std::string();
+  }
+
+  std::string key = decl->get_mangled_name().getString();
+  if (key.empty()) {
+    key = SageInterface::get_name(decl);
+  }
+
+  const Sg_File_Info *file_info = decl->get_file_info();
+  if (file_info != nullptr) {
+    const std::string location = file_info->get_filenameString() + ":" +
+                                 std::to_string(file_info->get_line()) + ":" +
+                                 std::to_string(file_info->get_col());
+    if (key.empty()) {
+      key = location;
+    } else {
+      key += "@" + location;
+    }
+  }
+
+  return key;
+}
+
+std::string buildTemplateDefaultArgumentEmissionKey(
+    SgTemplateParameter *template_parameter, SgUnparse_Info &info,
+    SgDeclarationStatement *template_declaration) {
   if (template_parameter == nullptr) {
     return std::string();
   }
 
-  SgTemplateDeclaration *template_decl =
-      isSgTemplateDeclaration(info.get_declstatement_ptr());
-  if (template_decl == nullptr) {
+  SgDeclarationStatement *template_decl =
+      templateParameterOwner(template_declaration, info);
+  const SgTemplateParameterPtrList *params =
+      templateDeclarationParameters(template_decl);
+  if (template_decl == nullptr || params == nullptr) {
     return std::string();
   }
 
-  const SgTemplateParameterPtrList &params =
-      template_decl->get_templateParameters();
   size_t parameter_index = 0;
-  bool found_parameter = false;
-  for (size_t i = 0; i < params.size(); ++i) {
-    if (params[i] == template_parameter) {
-      parameter_index = i;
-      found_parameter = true;
-      break;
-    }
-  }
-  if (!found_parameter) {
+  if (!templateParameterIndexInDeclaration(template_parameter, template_decl,
+                                           parameter_index)) {
     return std::string();
   }
 
-  auto buildStableTemplateDeclarationKey =
-      [](SgTemplateDeclaration *decl) -> std::string {
-    if (decl == nullptr) {
-      return std::string();
-    }
-
-    std::string key = decl->get_mangled_name().getString();
-    if (key.empty()) {
-      key = decl->get_qualified_name().getString();
-    }
-    if (key.empty()) {
-      key = decl->get_name().getString();
-    }
-
-    const Sg_File_Info *file_info = decl->get_file_info();
-    if (file_info != nullptr) {
-      const std::string location = file_info->get_filenameString() + ":" +
-                                   std::to_string(file_info->get_line()) + ":" +
-                                   std::to_string(file_info->get_col());
-      if (key.empty()) {
-        key = location;
-      } else {
-        key += "@" + location;
-      }
-    }
-
-    return key;
-  };
-
-  SgTemplateDeclaration *canonical_decl = template_decl;
-  if (SgTemplateDeclaration *first_nondef = isSgTemplateDeclaration(
-          template_decl->get_firstNondefiningDeclaration())) {
+  SgDeclarationStatement *canonical_decl = template_decl;
+  if (SgDeclarationStatement *first_nondef =
+          template_decl->get_firstNondefiningDeclaration()) {
     canonical_decl = first_nondef;
-  } else if (SgTemplateDeclaration *defining_decl = isSgTemplateDeclaration(
-                 template_decl->get_definingDeclaration())) {
+  } else if (SgDeclarationStatement *defining_decl =
+                 template_decl->get_definingDeclaration()) {
     canonical_decl = defining_decl;
   }
 
-  std::string declaration_key =
-      buildStableTemplateDeclarationKey(canonical_decl);
+  std::string declaration_key = templateDeclarationStableName(canonical_decl);
   if (declaration_key.empty() && template_decl != canonical_decl) {
-    declaration_key = buildStableTemplateDeclarationKey(template_decl);
+    declaration_key = templateDeclarationStableName(template_decl);
   }
 
   if (declaration_key.empty()) {
@@ -124,8 +320,8 @@ buildTemplateDefaultArgumentEmissionKey(SgTemplateParameter *template_parameter,
   }
 
   return template_decl->class_name() + "|" +
-         std::to_string(static_cast<int>(template_decl->get_template_kind())) +
-         "|" + declaration_key + "|" + std::to_string(parameter_index);
+         std::to_string(static_cast<int>(template_decl->variantT())) + "|" +
+         declaration_key + "|" + std::to_string(parameter_index);
 }
 
 bool typeEndsWithTemplateIdClose(const SgType *type) {
@@ -1297,6 +1493,9 @@ void Unparse_ExprStmt::unparseNonrealRefExpression(SgExpression *expr,
       func_name = tail;
     }
   }
+  if (nrdecl->get_has_template_keyword()) {
+    curprint("template ");
+  }
   curprint(func_name);
 
   if (!tpl_args.empty() && !uses_operator_syntax) {
@@ -1876,6 +2075,15 @@ void SgTemplateArgument::outputTemplateArgument(bool &skip_unparsing,
     }
   }
 
+  bool isEmptyTemplateTypePlaceholder = false;
+  if (!isExplicitlySpecified &&
+      this->get_argumentType() == SgTemplateArgument::type_argument) {
+    if (SgTemplateType *template_type = isSgTemplateType(this->get_type())) {
+      isEmptyTemplateTypePlaceholder =
+          template_type->get_name().getString().empty();
+    }
+  }
+
   if (isPackElement && isExplicitlySpecified) {
 #if DEBUG_OUTPUT_TEMPLATE_ARGUMENT
     printf(" !!! isPackElement && isExplicitlySpecified => isPackElement == "
@@ -1936,7 +2144,8 @@ void SgTemplateArgument::outputTemplateArgument(bool &skip_unparsing,
 #endif
 
   if (isPackExpansionStart || isAnonymousClass ||
-      (isPackElement && !isExplicitlySpecified) || skip_non_explicit) {
+      (isPackElement && !isExplicitlySpecified) || skip_non_explicit ||
+      isEmptyTemplateTypePlaceholder) {
     skip_unparsing = true;
   }
 
@@ -2011,7 +2220,6 @@ void Unparse_ExprStmt::unparseTemplateArgumentList(
 
     SgTemplateArgument *tplarg = *copy_iter;
     ASSERT_not_null(tplarg);
-
 #if DEBUG_TEMPLATE_ARGUMENT_LIST
     printf(" - tplarg = %s\n", tplarg->unparseToString().c_str());
 #endif
@@ -2305,7 +2513,8 @@ void Unparse_ExprStmt::unparseTemplateArgumentList(
 
 void Unparse_ExprStmt::unparseTemplateParameterList(
     const SgTemplateParameterPtrList &templateParameterList,
-    SgUnparse_Info &info, bool is_template_header) {
+    SgUnparse_Info &info, bool is_template_header,
+    SgDeclarationStatement *template_declaration) {
 
   if (templateParameterList.empty() == false) {
     bool use_compact_template_brackets = true;
@@ -2344,7 +2553,8 @@ void Unparse_ExprStmt::unparseTemplateParameterList(
     while (i != templateParameterList.end()) {
       SgTemplateParameter *templateParameter = *i;
       ASSERT_not_null(templateParameter);
-      unparseTemplateParameter(templateParameter, info, is_template_header);
+      unparseTemplateParameter(templateParameter, info, is_template_header,
+                               template_declaration);
 
       i++;
 
@@ -2375,7 +2585,7 @@ void Unparse_ExprStmt::unparseTemplateParameterList(
 
 void Unparse_ExprStmt::unparseTemplateParameter(
     SgTemplateParameter *templateParameter, SgUnparse_Info &info,
-    bool is_template_header) {
+    bool is_template_header, SgDeclarationStatement *template_declaration) {
   ASSERT_not_null(templateParameter);
 
   // Default template arguments belong on the primary declaration only.
@@ -2385,9 +2595,151 @@ void Unparse_ExprStmt::unparseTemplateParameter(
   bool emit_default_template_arg = is_template_header;
   std::string default_template_arg_key;
   if (emit_default_template_arg) {
-    SgTemplateDeclaration *template_decl =
-        isSgTemplateDeclaration(info.get_declstatement_ptr());
+    SgDeclarationStatement *template_decl =
+        templateParameterOwner(template_declaration, info);
     if (template_decl != NULL) {
+      auto candidate_is_visible =
+          [](SgDeclarationStatement *candidate) -> bool {
+        if (candidate == nullptr) {
+          return false;
+        }
+        Sg_File_Info *candidate_fi = candidate->get_file_info();
+        if (candidate_fi == nullptr) {
+          return false;
+        }
+        if (candidate_fi->isOutputInCodeGeneration()) {
+          return true;
+        }
+        return !candidate_fi->isCompilerGenerated() &&
+               !candidate_fi->isFrontendSpecific();
+      };
+
+      size_t template_parameter_index = 0;
+      const bool have_template_parameter_index =
+          templateParameterIndexInDeclaration(templateParameter, template_decl,
+                                              template_parameter_index);
+      auto declaration_has_default_for_parameter =
+          [&](SgDeclarationStatement *decl) -> bool {
+        if (!have_template_parameter_index) {
+          return false;
+        }
+        std::vector<bool> spelled_defaults;
+        if (spelledTemplateParameterDefaults(decl, spelled_defaults) &&
+            template_parameter_index < spelled_defaults.size()) {
+          return spelled_defaults[template_parameter_index];
+        }
+        return templateParameterHasDefault(
+            templateParameterAt(decl, template_parameter_index));
+      };
+
+      auto class_template_has_prior_visible_decl =
+          [&](SgTemplateClassDeclaration *decl) -> bool {
+        if (decl == nullptr || decl->get_definition() == nullptr) {
+          return false;
+        }
+
+        SgScopeStatement *scope = isSgScopeStatement(decl->get_parent());
+        if (scope == nullptr) {
+          scope = decl->get_scope();
+        }
+        if (scope == nullptr) {
+          return false;
+        }
+
+        auto scope_decls =
+            [](SgScopeStatement *scope) -> SgDeclarationStatementPtrList * {
+          if (SgGlobal *global = isSgGlobal(scope)) {
+            return &global->get_declarations();
+          }
+          if (SgNamespaceDefinitionStatement *ns_def =
+                  isSgNamespaceDefinitionStatement(scope)) {
+            return &ns_def->get_declarations();
+          }
+          if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+            return &class_def->get_members();
+          }
+          if (SgTemplateClassDefinition *template_def =
+                  isSgTemplateClassDefinition(scope)) {
+            return &template_def->get_members();
+          }
+          if (SgTemplateInstantiationDefn *inst_def =
+                  isSgTemplateInstantiationDefn(scope)) {
+            return &inst_def->get_members();
+          }
+          if (SgDeclarationScope *decl_scope = isSgDeclarationScope(scope)) {
+            return &decl_scope->get_declarations();
+          }
+          return nullptr;
+        };
+
+        auto candidate_precedes_decl =
+            [](SgDeclarationStatement *candidate,
+               SgDeclarationStatement *decl) -> bool {
+          if (candidate == nullptr || decl == nullptr) {
+            return false;
+          }
+          Sg_File_Info *candidate_fi = candidate->get_file_info();
+          Sg_File_Info *decl_fi = decl->get_file_info();
+          if (candidate_fi == nullptr || decl_fi == nullptr ||
+              candidate_fi->get_line() <= 0 || decl_fi->get_line() <= 0) {
+            return true;
+          }
+          if (candidate_fi->get_filenameString() !=
+              decl_fi->get_filenameString()) {
+            return true;
+          }
+          if (candidate_fi->get_line() != decl_fi->get_line()) {
+            return candidate_fi->get_line() < decl_fi->get_line();
+          }
+          return candidate_fi->get_col() < decl_fi->get_col();
+        };
+
+        auto scope_has_prior_decl = [&](SgScopeStatement *candidate_scope) {
+          SgDeclarationStatementPtrList *decls = scope_decls(candidate_scope);
+          if (decls == nullptr) {
+            return false;
+          }
+
+          for (SgDeclarationStatement *candidate_stmt : *decls) {
+            SgTemplateClassDeclaration *candidate =
+                isSgTemplateClassDeclaration(candidate_stmt);
+            if (candidate == nullptr || candidate == decl ||
+                candidate->get_name() != decl->get_name()) {
+              continue;
+            }
+            if (candidate_is_visible(candidate) &&
+                candidate_precedes_decl(candidate, decl) &&
+                declaration_has_default_for_parameter(candidate)) {
+              return true;
+            }
+          }
+
+          return false;
+        };
+
+        if (SgNamespaceDefinitionStatement *ns_scope =
+                isSgNamespaceDefinitionStatement(scope)) {
+          while (ns_scope->get_previousNamespaceDefinition() != nullptr) {
+            ns_scope = ns_scope->get_previousNamespaceDefinition();
+          }
+          for (SgNamespaceDefinitionStatement *current = ns_scope;
+               current != nullptr;
+               current = current->get_nextNamespaceDefinition()) {
+            if (scope_has_prior_decl(current)) {
+              return true;
+            }
+          }
+          return false;
+        }
+
+        return scope_has_prior_decl(scope);
+      };
+
+      if (class_template_has_prior_visible_decl(
+              isSgTemplateClassDeclaration(template_decl))) {
+        emit_default_template_arg = false;
+      }
+
       SgDeclarationStatement *first_nondef =
           template_decl->get_firstNondefiningDeclaration();
       auto source_matches = [](SgDeclarationStatement *lhs,
@@ -2406,19 +2758,17 @@ void Unparse_ExprStmt::unparseTemplateParameter(
       };
 
       const bool first_nondef_is_synthetic =
-          first_nondef != NULL &&
-          (first_nondef->get_file_info() == nullptr ||
-           first_nondef->get_file_info()->isCompilerGenerated() ||
-           !first_nondef->get_file_info()->isOutputInCodeGeneration());
+          first_nondef != NULL && !candidate_is_visible(first_nondef);
 
       if (first_nondef != NULL && first_nondef != template_decl &&
           !first_nondef_is_synthetic &&
-          !source_matches(first_nondef, template_decl)) {
+          !source_matches(first_nondef, template_decl) &&
+          declaration_has_default_for_parameter(first_nondef)) {
         emit_default_template_arg = false;
       }
     }
-    default_template_arg_key =
-        buildTemplateDefaultArgumentEmissionKey(templateParameter, info);
+    default_template_arg_key = buildTemplateDefaultArgumentEmissionKey(
+        templateParameter, info, template_declaration);
   }
   if (emit_default_template_arg &&
       emitted_default_template_args_.find(templateParameter) !=

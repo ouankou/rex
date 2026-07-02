@@ -6,6 +6,13 @@ set(_exit_status ${CMAKE_SOURCE_DIR}/scripts/test_exit_status)
 set(_ast_token_stream_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
 file(MAKE_DIRECTORY ${_ast_token_stream_output_dir})
 
+function(rex_configure_instrumented_token_stream_test test_name)
+  if(REX_EXTENDED_TEST_TIMEOUTS)
+    set_tests_properties(${test_name} PROPERTIES
+      PROCESSORS 16)
+  endif()
+endfunction()
+
 #-------------------------------------------------------------------------------
 # Linearization
 add_executable(testLinearization testLinearization.C)
@@ -309,6 +316,7 @@ set(TOKEN_C_TESTCODES_REQUIRED
   test2010_11.c
   test2010_14.c
   constants.c
+  rex_test2026_token_stream_explicit_leading_trailing_output.c
 )
 
 # test2013_06.c is invalid even for stock C compilers because its header uses
@@ -1267,6 +1275,7 @@ foreach(file_to_test IN LISTS TOKEN_C_TESTCODES_REQUIRED)
       ${_exit_status}
       ${_target}
   )
+  rex_configure_instrumented_token_stream_test(tokenStreamMapping_${_name})
 endforeach()
 
 #-------------------------------------------------------------------------------
@@ -1290,6 +1299,7 @@ foreach(file_to_test IN LISTS _token_c_all_testcodes)
       ${_exit_status}
       ${_target}
   )
+  rex_configure_instrumented_token_stream_test(tokenStream_C_${_name})
 endforeach()
 
 #-------------------------------------------------------------------------------
@@ -1314,6 +1324,7 @@ foreach(file_to_test IN LISTS _token_cxx_all_testcodes)
       ${_exit_status}
       ${_target}
   )
+  rex_configure_instrumented_token_stream_test(tokenStream_CXX_${_name})
 endforeach()
 
 #-------------------------------------------------------------------------------

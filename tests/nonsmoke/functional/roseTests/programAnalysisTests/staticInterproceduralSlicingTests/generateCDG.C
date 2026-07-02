@@ -23,6 +23,8 @@
 
 #include <list>
 
+#include <memory>
+
 #include <set>
 
 #define DEBUG 1
@@ -46,9 +48,6 @@ int main(int argc, char *argv[]) {
   for (NodeQuerySynthesizedAttributeType::iterator i =
            functionDeclarations.begin();
        i != functionDeclarations.end(); i++) {
-    ControlDependenceGraph *cdg;
-    InterproceduralInfo *ipi;
-
     SgFunctionDeclaration *fD = isSgFunctionDeclaration(*i);
 
     // SGFunctionDefinition * fDef;
@@ -63,12 +62,13 @@ int main(int argc, char *argv[]) {
     if (fD->get_definition() == NULL) {
     } else {
       // get the control depenence for this function
-      ipi = new InterproceduralInfo(fD);
+      std::unique_ptr<InterproceduralInfo> ipi(new InterproceduralInfo(fD));
 
       ROSE_ASSERT(ipi != NULL);
 
       // get control dependence for this function defintion
-      cdg = new ControlDependenceGraph(fD->get_definition(), ipi);
+      std::unique_ptr<ControlDependenceGraph> cdg(
+          new ControlDependenceGraph(fD->get_definition(), ipi.get()));
       cdg->computeAdditionalFunctioncallDepencencies();
       //						cdg->computeInterproceduralInformation(ipi);
       //						cdg->debugCoutNodeList();

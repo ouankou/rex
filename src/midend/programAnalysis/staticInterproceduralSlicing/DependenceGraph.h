@@ -450,7 +450,7 @@ protected:
 
 public:
   DependenceGraph() { debugme = false; }
-  virtual ~DependenceGraph() {};
+  virtual ~DependenceGraph();
   void debugCoutNodeList() {
     std::set<SimpleDirectedGraphNode *>::iterator i;
     for (i = _nodes.begin(); i != _nodes.end(); i++) {
@@ -978,7 +978,7 @@ public:
 
      This simply does a backwards reachability across all edges to produce
      the slice. */
-  virtual std::set<DependenceNode *> getSlice(DependenceNode *node);
+  std::set<DependenceNode *> getSlice(DependenceNode *node) override;
 
 private:
   //! completes the FDG using the interprocedural-information
@@ -1034,6 +1034,7 @@ public:
       libraryExtenders.push_back(le);
   }
   SystemDependenceGraph() { debug = false; }
+  ~SystemDependenceGraph() override;
   SgNode *getMainFunction();
   void createSafeConfiguration(SgFunctionDeclaration *fDef);
   bool isKnownLibraryFunction(SgFunctionDeclaration *fDec);
@@ -1096,7 +1097,7 @@ public:
      nodes while not traversing call edges. Thus it ignores calling
      functions. The final set of reachable nodes is the interprocedural
      slice. */
-  virtual std::set<DependenceNode *> getSlice(DependenceNode *node);
+  std::set<DependenceNode *> getSlice(DependenceNode *node) override;
 
   /* ! \brief retrieve the PDGs in the graph
 

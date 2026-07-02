@@ -32,7 +32,7 @@ mkdir -p "${workdir}"
 rm -f "${workdir}"/orig.exe "${workdir}"/lowered.exe
 rm -f "${workdir}"/rose_* "${workdir}"/rex_lib_* "${workdir}"/lower.log
 
-source_name="$(basename "${input_file}")"
+source_name="${input_file##*/}"
 rose_file="${workdir}/rose_${source_name}"
 
 compile_flags=(
@@ -45,6 +45,11 @@ compile_flags=(
   "-L${omp_runtime_dir}"
   "-Wl,-rpath,${omp_runtime_dir}"
 )
+
+if [[ -n "${ROSE_TEST_SANITIZER_FLAGS:-}" ]]; then
+  read -r -a sanitizer_flags <<< "${ROSE_TEST_SANITIZER_FLAGS}"
+  compile_flags+=("${sanitizer_flags[@]}")
+fi
 
 canonicalize() {
   local in_file="$1"
@@ -67,11 +72,11 @@ fail_with_diff() {
 
 "${compiler}" "${compile_flags[@]}" "${input_file}" -o "${workdir}/orig.exe"
 
-(
-  cd "${workdir}"
-  "${translator}" -rose:openmp:lowering -rose:skipfinalCompileStep -w -rose:verbose 0 \
-    -c "${input_file}" > lower.log 2>&1
-)
+saved_pwd="${PWD}"
+cd "${workdir}"
+"${translator}" -rose:openmp:lowering -rose:skipfinalCompileStep -w -rose:verbose 0 \
+  -c "${input_file}" > lower.log 2>&1
+cd "${saved_pwd}"
 
 if [[ ! -f "${rose_file}" ]]; then
   echo "ERROR(${case_name}): missing lowered host file '${rose_file}'" >&2
@@ -97,7 +102,7 @@ export LD_LIBRARY_PATH="${omp_runtime_dir}:${LD_LIBRARY_PATH:-}"
 thread_counts=(2 4)
 repeats=4
 for threads in "${thread_counts[@]}"; do
-  for i in $(seq 1 "${repeats}"); do
+  for ((i = 1; i <= repeats; ++i)); do
     timeout 30s env OMP_NUM_THREADS="${threads}" "${workdir}/orig.exe" > "${workdir}/orig_${threads}_${i}.out" 2> "${workdir}/orig_${threads}_${i}.err"
     timeout 30s env OMP_NUM_THREADS="${threads}" "${workdir}/lowered.exe" > "${workdir}/low_${threads}_${i}.out" 2> "${workdir}/low_${threads}_${i}.err"
 

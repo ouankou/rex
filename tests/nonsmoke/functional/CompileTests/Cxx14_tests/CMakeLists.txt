@@ -1,4 +1,6 @@
 set(CXX14_TESTCODES
+  rex_test2026_constructor_parent_valgrind_defined_reads.cpp
+  rex_test2026_template_argument_marking_valgrind_defined_reads.cpp
   test2016_01.C
   test2016_12.C
   test2016_13.C

@@ -18771,6 +18771,7 @@ SgTemplateArgument::SgTemplateArgument ( SgType* argument, bool explicitlySpecif
      post_construction_initialization();
 
      p_argumentType        = type_argument;
+     p_isArrayBoundUnknownType = false;
      p_type                = argument;
      p_explicitlySpecified = explicitlySpecified;
 
@@ -18788,6 +18789,7 @@ SgTemplateArgument::SgTemplateArgument ( SgExpression* argument, bool explicitly
      post_construction_initialization();
 
      p_argumentType        = nontype_argument;
+     p_isArrayBoundUnknownType = false;
      p_expression          = argument;
      p_explicitlySpecified = explicitlySpecified;
 
@@ -18808,6 +18810,7 @@ SgTemplateArgument::SgTemplateArgument ( SgTemplateDeclaration* argument, bool e
      post_construction_initialization();
 
      p_argumentType        = template_template_argument;
+     p_isArrayBoundUnknownType = false;
      p_templateDeclaration = argument;
      p_explicitlySpecified = explicitlySpecified;
 
@@ -18830,6 +18833,7 @@ SgTemplateArgument::SgTemplateArgument ( bool explicitlySpecified )
      post_construction_initialization();
 
      p_argumentType        = start_of_pack_expansion_argument;
+     p_isArrayBoundUnknownType = false;
      p_expression          = NULL;
      p_explicitlySpecified = explicitlySpecified;
 

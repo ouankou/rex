@@ -3255,6 +3255,20 @@ void TestAstSymbolTables::visit(SgNode *node) {
         break;
       }
 
+      case V_SgInterfaceSymbol: {
+        SgInterfaceSymbol *interfaceSymbol = isSgInterfaceSymbol(symbol);
+        ROSE_ASSERT(interfaceSymbol != NULL);
+        ROSE_ASSERT(interfaceSymbol->get_declaration() != NULL);
+        break;
+      }
+
+      case V_SgModuleSymbol: {
+        SgModuleSymbol *moduleSymbol = isSgModuleSymbol(symbol);
+        ROSE_ASSERT(moduleSymbol != NULL);
+        ROSE_ASSERT(moduleSymbol->get_declaration() != NULL);
+        break;
+      }
+
       case V_SgNamespaceSymbol: {
         SgNamespaceSymbol *namespaceSymbol = isSgNamespaceSymbol(symbol);
         ROSE_ASSERT(namespaceSymbol != NULL);

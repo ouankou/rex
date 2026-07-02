@@ -1267,6 +1267,7 @@ endif()
 
 set(ROSE_SANITIZERS "" CACHE STRING "Semicolon-separated list of sanitizers to enable (address;leak;undefined)")
 option(ENABLE-SANITIZER "Enable sanitizer instrumentation for ROSE development" OFF)
+option(REX_EXTENDED_TEST_TIMEOUTS "Use extended timeouts for instrumented CTest configurations such as memcheck" OFF)
 set(_rose_requested_sanitizers "")
 if(ENABLE-SANITIZER)
   set(_rose_requested_sanitizers "${ROSE_SANITIZERS}")
@@ -1493,12 +1494,23 @@ if(NOT _rose_memcheck_valgrind AND UNIX)
   unset(_rose_valgrind_status)
 endif()
 
+set(ROSE_CTEST_EXPLICIT_TIMEOUT_SCALE 1)
+set(ROSE_CTEST_RTH_TIMEOUT_SCALE 1)
+if(ROSE_USE_VALGRIND)
+  set(ROSE_CTEST_EXPLICIT_TIMEOUT_SCALE 4)
+  set(ROSE_CTEST_RTH_TIMEOUT_SCALE 4)
+  if(REX_EXTENDED_TEST_TIMEOUTS)
+    set(ROSE_CTEST_RTH_TIMEOUT_SCALE 24)
+  endif()
+endif()
+
 set(ROSE_CTEST_MEMCHECK_COMMAND "")
 set(ROSE_CTEST_MEMCHECK_OPTIONS "")
 set(ROSE_CTEST_MEMCHECK_SUPPRESSIONS "")
 set(ROSE_CTEST_MEMCHECK_TYPE "")
 if(_rose_memcheck_valgrind)
   set(ROSE_REAL_VALGRIND "${_rose_memcheck_valgrind}")
+  set(ROSE_CTEST_MEMCHECK_RTH_TIMEOUT_SCALE ${ROSE_CTEST_RTH_TIMEOUT_SCALE})
   set(ROSE_CTEST_MEMCHECK_WRAPPER
       "${CMAKE_BINARY_DIR}/scripts/rex-ctest-valgrind-wrapper")
   file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/scripts")
@@ -1515,82 +1527,82 @@ if(_rose_memcheck_valgrind)
     set(_rose_memcheck_toolchain_major "${LLVM_VERSION_MAJOR}")
   endif()
   set(_rose_memcheck_trace_children_skip
-      "/usr/bin/clang++-${_rose_memcheck_toolchain_major}"
-      "/usr/bin/clang-${_rose_memcheck_toolchain_major}"
-      "/usr/bin/flang-${_rose_memcheck_toolchain_major}"
-      "/usr/lib/llvm-${_rose_memcheck_toolchain_major}/bin/clang++-${_rose_memcheck_toolchain_major}"
-      "/usr/lib/llvm-${_rose_memcheck_toolchain_major}/bin/clang-${_rose_memcheck_toolchain_major}"
-      "/usr/lib/llvm-${_rose_memcheck_toolchain_major}/bin/flang-${_rose_memcheck_toolchain_major}"
-      "/usr/lib/llvm-${_rose_memcheck_toolchain_major}/bin/flang"
-      "clang++-${_rose_memcheck_toolchain_major}"
-      "clang-${_rose_memcheck_toolchain_major}"
-      "flang-${_rose_memcheck_toolchain_major}"
-      "flang"
-      "clang++"
-      "clang"
-      "g++"
-      "gcc"
-      "c++"
-      "cc"
-      "/usr/bin/grep"
-      "/bin/grep"
-      "grep"
-      "/usr/bin/cmp"
-      "/bin/cmp"
-      "cmp"
-      "/usr/bin/mktemp"
-      "/bin/mktemp"
-      "mktemp"
-      "/usr/bin/dash"
-      "/bin/dash"
-      "dash"
-      "/usr/bin/bash"
-      "/bin/bash"
-      "bash"
-      "egrep"
-      "fgrep"
-      "diff"
-      "sed"
-      "awk"
-      "tr"
-      "cut"
-      "sort"
-      "uniq"
-      "head"
-      "tail"
-      "cmake"
-      "ctest"
-      "make"
-      "ninja"
-      "sh"
-      "perl"
-      "python"
-      "python3"
-      "tar"
-      "gzip"
-      "bzip2"
-      "xz"
-      "zip"
-      "unzip"
-      "cp"
-      "mv"
-      "rm"
-      "install")
+      "*/clang++-${_rose_memcheck_toolchain_major}"
+      "*/clang-${_rose_memcheck_toolchain_major}"
+      "*/flang-${_rose_memcheck_toolchain_major}"
+      "*/flang"
+      "*/clang++"
+      "*/clang"
+      "*/g++"
+      "*/gcc"
+      "*/c++"
+      "*/cc"
+      "*/grep"
+      "*/cmp"
+      "*/mktemp"
+      "*/dash"
+      "*/bash")
+
+  set(_rose_memcheck_harness_tools
+      egrep
+      fgrep
+      diff
+      sed
+      awk
+      basename
+      tr
+      cut
+      dirname
+      sort
+      uniq
+      git
+      head
+      tail
+      cmake
+      ctest
+      make
+      ninja
+      sh
+      perl
+      python
+      python3
+      tar
+      gzip
+      bzip2
+      find
+      xz
+      zip
+      unzip
+      cat
+      cp
+      env
+      ln
+      mkdir
+      mv
+      pwd
+      readlink
+      realpath
+      rm
+      rmdir
+      seq
+      tee
+      timeout
+      touch
+      wc
+      xargs
+      install)
+  foreach(_rose_memcheck_harness_tool IN LISTS _rose_memcheck_harness_tools)
+    list(APPEND _rose_memcheck_trace_children_skip "*/${_rose_memcheck_harness_tool}")
+  endforeach()
+  list(APPEND _rose_memcheck_trace_children_skip "*/scripts/policies/*")
+
   function(_rose_append_memcheck_child_skip _rose_compiler)
     if(NOT _rose_compiler)
       return()
     endif()
-
-    list(APPEND _rose_memcheck_trace_children_skip "${_rose_compiler}")
     get_filename_component(_rose_compiler_name "${_rose_compiler}" NAME)
     if(_rose_compiler_name)
-      list(APPEND _rose_memcheck_trace_children_skip "${_rose_compiler_name}")
-    endif()
-    if(EXISTS "${_rose_compiler}")
-      get_filename_component(_rose_compiler_realpath "${_rose_compiler}" REALPATH)
-      if(_rose_compiler_realpath)
-        list(APPEND _rose_memcheck_trace_children_skip "${_rose_compiler_realpath}")
-      endif()
+      list(APPEND _rose_memcheck_trace_children_skip "*/${_rose_compiler_name}")
     endif()
     set(_rose_memcheck_trace_children_skip "${_rose_memcheck_trace_children_skip}" PARENT_SCOPE)
   endfunction()
@@ -1607,6 +1619,8 @@ if(_rose_memcheck_valgrind)
   list(JOIN _rose_memcheck_trace_children_skip "," _rose_memcheck_trace_children_skip_arg)
   set(ROSE_CTEST_MEMCHECK_OPTIONS "--leak-check=full --show-leak-kinds=definite,indirect,possible --errors-for-leak-kinds=definite,indirect,possible --error-exitcode=1 --max-stackframe=2047456 --num-callers=32 --trace-children=yes --trace-children-skip=${_rose_memcheck_trace_children_skip_arg} --trace-children-skip-by-arg=*gtest_internal_run_death_test*")
   unset(_rose_compiler)
+  unset(_rose_memcheck_harness_tool)
+  unset(_rose_memcheck_harness_tools)
   unset(_rose_memcheck_trace_children_skip_arg)
   unset(_rose_memcheck_trace_children_skip)
   unset(_rose_memcheck_toolchain_major)
@@ -1622,9 +1636,15 @@ set(CTEST_MEMORYCHECK_SUPPRESSIONS_FILE "${ROSE_CTEST_MEMCHECK_SUPPRESSIONS}")
 set(ROSE_CTEST_CUSTOM_ENVIRONMENT "")
 if(ROSE_USE_VALGRIND)
   set(ROSE_CTEST_CUSTOM_ENVIRONMENT
-      "set(CTEST_CUSTOM_ENVIRONMENT \"ROSE_TEST_TIMEOUT_SCALE=4\")")
+      "set(CTEST_CUSTOM_ENVIRONMENT \"ROSE_TEST_TIMEOUT_SCALE=${ROSE_CTEST_RTH_TIMEOUT_SCALE}\")")
   # Memcheck can exceed CTest's default 1500-second timeout on parser-heavy tests.
-  set(DART_TESTING_TIMEOUT 5400)
+  set(_rose_dashboard_timeout 5400)
+  if(REX_EXTENDED_TEST_TIMEOUTS)
+    set(_rose_dashboard_timeout 22200)
+  endif()
+  set(DART_TESTING_TIMEOUT ${_rose_dashboard_timeout} CACHE STRING
+      "Maximum time in seconds for CTest dashboard tests" FORCE)
+  unset(_rose_dashboard_timeout)
 endif()
 if(ROSE_CTEST_MEMCHECK_COMMAND)
   set(MEMORYCHECK_COMMAND "${ROSE_CTEST_MEMCHECK_COMMAND}" CACHE FILEPATH

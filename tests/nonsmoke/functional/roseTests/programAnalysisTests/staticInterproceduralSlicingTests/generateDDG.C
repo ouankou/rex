@@ -27,6 +27,8 @@
 
 #include <list>
 
+#include <memory>
+
 #include <set>
 
 #define DEBUG 1
@@ -39,7 +41,7 @@ int main(int argc, char *argv[]) {
 
   SgProject *project = frontend(argc, argv);
 #ifdef NEWDU
-  EDefUse *edu = new EDefUse(project);
+  std::unique_ptr<EDefUse> edu(new EDefUse(project));
   // Create the global def-use analysis
   if (edu->run(false) == 0) {
     std::cerr << "DFAnalysis failed!" << endl;
@@ -57,9 +59,6 @@ int main(int argc, char *argv[]) {
   for (NodeQuerySynthesizedAttributeType::iterator i =
            functionDeclarations.begin();
        i != functionDeclarations.end(); i++) {
-    DataDependenceGraph *ddg;
-    InterproceduralInfo *ipi;
-
     SgFunctionDeclaration *fD = isSgFunctionDeclaration(*i);
 
     // SGFunctionDefinition * fDef;
@@ -74,15 +73,17 @@ int main(int argc, char *argv[]) {
     if (fD->get_definition() == NULL) {
     } else {
       // get the control depenence for this function
-      ipi = new InterproceduralInfo(fD);
+      std::unique_ptr<InterproceduralInfo> ipi(new InterproceduralInfo(fD));
 
       ROSE_ASSERT(ipi != NULL);
 
       // get the data dependence for this function
 #ifdef NEWDU
-      ddg = new DataDependenceGraph(fD->get_definition(), edu);
+      std::unique_ptr<DataDependenceGraph> ddg(
+          new DataDependenceGraph(fD->get_definition(), edu.get()));
 #else
-      ddg = new DataDependenceGraph(fD->get_definition());
+      std::unique_ptr<DataDependenceGraph> ddg(
+          new DataDependenceGraph(fD->get_definition()));
 #endif
       // printf("DDG for %s:\n", fD->get_name().str());
 

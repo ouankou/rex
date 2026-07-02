@@ -901,6 +901,7 @@ SgType::SgType()
   // DQ (10/3/2010): Readded to the SgType since it is used uniformally within Fortran types.
   // DQ (12/1/2007): This has been moved to the SgModifierType
      p_type_kind(NULL),
+     p_hasTypeKindStar(false),
      p_attributeMechanism(NULL)
    {
      ROSE_ASSERT(p_ref_to == NULL);
@@ -939,6 +940,7 @@ SgType::SgType(const SgType & X)
   // DQ (10/3/2010): Readded to the SgType since it is used uniformally within Fortran types.
   // DQ (12/1/2007): This has been moved to the SgModifierType
      p_type_kind(X.p_type_kind),
+     p_hasTypeKindStar(X.p_hasTypeKindStar),
      p_attributeMechanism(X.p_attributeMechanism)
    {
   // DQ (10/17/2007): This copy constructor is built to support the AST copy mechanism where for

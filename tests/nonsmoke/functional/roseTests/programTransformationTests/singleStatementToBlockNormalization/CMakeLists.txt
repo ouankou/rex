@@ -12,6 +12,13 @@ include(${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests/Cxx
 set(_rth ${CMAKE_SOURCE_DIR}/scripts/rth_run.pl)
 set(_exit_status ${CMAKE_SOURCE_DIR}/scripts/test_exit_status)
 
+function(rex_configure_single_stmt_instrumented_test test_name)
+  if(REX_EXTENDED_TEST_TIMEOUTS)
+    set_tests_properties(${test_name} PROPERTIES
+      PROCESSORS 16)
+  endif()
+endfunction()
+
 set(_single_stmt_tests_dir
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests)
 set(_single_stmt_switches
@@ -44,7 +51,23 @@ foreach(specimen IN LISTS REX_CXX_TRANSFORMATION_TEST_SOURCES)
   )
   set_tests_properties(singleStatementToBlockNormalization_${specimen} PROPERTIES
     ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_single_stmt_output_dir}")
+  rex_configure_single_stmt_instrumented_test(singleStatementToBlockNormalization_${specimen})
 endforeach()
+
+set(_single_stmt_memcheck_target rex_single_statement_normalization_memcheck.passed)
+set(_single_stmt_memcheck_cmd
+  "$<TARGET_FILE:singleStatementToBlockNormalization> ${_single_stmt_switches_str} -std=gnu++14 -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_single_statement_normalization_memcheck.cpp")
+add_test(
+  NAME rex_single_statement_normalization_memcheck
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND ${_rth}
+    CMD="${_single_stmt_memcheck_cmd}"
+    ${_exit_status}
+    ${_single_stmt_memcheck_target}
+)
+set_tests_properties(rex_single_statement_normalization_memcheck PROPERTIES
+  ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_single_stmt_output_dir}")
+rex_configure_single_stmt_instrumented_test(rex_single_statement_normalization_memcheck)
 
 set(_single_stmt_issue432_output_dir
   ${CMAKE_CURRENT_BINARY_DIR}/issue432_explicit_instantiation_output)

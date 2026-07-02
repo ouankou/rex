@@ -24,6 +24,8 @@
 
 #include <list>
 
+#include <memory>
+
 #include <set>
 
 #define DEBUG 1
@@ -39,11 +41,11 @@ int main(int argc, char *argv[]) {
   si.traverse(project, preorder);
 
   // Generate the System Dependence Graph
-  SystemDependenceGraph *sdg = new SystemDependenceGraph();
+  std::unique_ptr<SystemDependenceGraph> sdg(new SystemDependenceGraph());
   sdg->parseProject(project);
 
   // Generate an STL set of IR nodes representing the slice
-  CreateSliceSet sliceSet(sdg, si.getSlicingTargets());
+  CreateSliceSet sliceSet(sdg.get(), si.getSlicingTargets());
 
   // Traversal to prune the AST (of everything but the slice)
   CreateSlice cs(sliceSet.computeSliceSet());

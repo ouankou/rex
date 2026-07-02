@@ -1,0 +1,3 @@
+#pragma omp target map(tofrom : a[:n])
+#pragma omp target map(tofrom : a[start:])
+#pragma omp target map(tofrom : a[::2])

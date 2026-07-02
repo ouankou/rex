@@ -56,5 +56,7 @@ int main(int argc, char *argv[]) {
   string naked_name = StringUtility::stripFileSuffixFromFileName(orig_name);
   cur_file->set_unparse_output_filename("rose_" + naked_name + ".cu");
 
-  return backend(project);
+  int status = backend(project);
+  SageInterface::tearDownAst(project);
+  return status;
 }

@@ -42,6 +42,11 @@ compile_flags=(
   "-Wl,-rpath,${omp_runtime_dir}"
 )
 
+sanitizer_link_flags=()
+if [[ -n "${ROSE_TEST_SANITIZER_LINK_FLAGS:-}" ]]; then
+  read -r -a sanitizer_link_flags <<< "${ROSE_TEST_SANITIZER_LINK_FLAGS}"
+fi
+
 write_subroutine_driver_if_needed() {
   local source="$1"
   local case_id="$2"
@@ -367,7 +372,7 @@ if ! "${compiler}" "${compile_flags[@]}" "${input_file}" "${driver_sources[@]}" 
   exit 0
 fi
 
-if ! "${compiler}" "${compile_flags[@]}" "${rose_file}" "${driver_sources[@]}" "${kmpc_fortran_abi_lib}" \
+if ! "${compiler}" "${compile_flags[@]}" "${rose_file}" "${driver_sources[@]}" "${kmpc_fortran_abi_lib}" "${sanitizer_link_flags[@]}" \
     -o "${workdir}/lowered.exe" > "${workdir}/lowered_compile.out" 2> "${workdir}/lowered_compile.err"; then
   echo "ERROR(${case_name}): lowered source failed to compile after successful translation" >&2
   echo "---- lowered_compile.err (${case_name}) ----" >&2

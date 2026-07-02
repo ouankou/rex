@@ -3,4 +3,49 @@ set(CTEST_CUSTOM_ERROR_EXCEPTION
   "unbalanced braces"
 )
 
+set(CTEST_CUSTOM_MEMCHECK_IGNORE
+  # Standalone compiler baseline; normal CTest still runs it, but Memcheck is
+  # reserved for REX executables instead of LLVM's driver.
+  compiler_options_include_order_sys_include_cc
+
+  # Full-header/generated-source traversal performance checks remain regular
+  # CTest coverage. Under Valgrind they spend hours in the Clang frontend before
+  # reaching the traversal under test; rex_merge_traversal_memcheck covers the
+  # traversal executable with a bounded AST in Memcheck.
+  merge_traversal_input
+  merge_traversal_cxx_grammar
+
+  # This legacy iostream/template specimen is regular CTest coverage for
+  # single-statement normalization, but it spends more than an hour in the
+  # instrumented Clang frontend under Memcheck. The bounded
+  # rex_single_statement_normalization_memcheck test covers the same
+  # transformation executable in Memcheck.
+  singleStatementToBlockNormalization_test2013_231.C
+
+  # These large preprocessed C++ header specimens remain regular and sanitizer
+  # CTest coverage. Under Memcheck they spend hours in the instrumented Clang
+  # frontend before reaching the generated compile, unfolded-constants,
+  # uninitialized-field, or comment-collection pass being exercised.
+  Cxx_tests_longFile_C
+  Cxx_tests_test2013_13_C
+  Cxx_tests_test2013_14_C
+  Cxx_tests_test2013_15_C
+  Cxx_tests_test2017_24_C
+  longFile.C.unfoldedConstants-o
+  test2013_13.C.unfoldedConstants-o
+  test2013_14.C.unfoldedConstants-o
+  test2013_15.C.unfoldedConstants-o
+  test2017_24.C.unfoldedConstants-o
+  uninit_fields_cxx_Cxx_tests_longFile_C
+  uninit_fields_cxx_Cxx_tests_test2013_13_C
+  uninit_fields_cxx_Cxx_tests_test2013_14_C
+  uninit_fields_cxx_Cxx_tests_test2013_15_C
+  uninit_fields_cxx_Cxx_tests_test2017_24_C
+  compiler_options_collect_comments_Cxx_tests_longFile_C
+  compiler_options_collect_comments_Cxx_tests_test2013_13_C
+  compiler_options_collect_comments_Cxx_tests_test2013_14_C
+  compiler_options_collect_comments_Cxx_tests_test2013_15_C
+  compiler_options_collect_comments_Cxx_tests_test2017_24_C
+)
+
 @ROSE_CTEST_CUSTOM_ENVIRONMENT@

@@ -59,6 +59,50 @@ AliasSymbolIdentity buildAliasSymbolIdentity(const SgName &name,
   identity.variant = static_cast<int>(non_alias_symbol->variantT());
   return identity;
 }
+
+bool declaration_is_owned_by_scope(SgDeclarationStatement *decl,
+                                   SgScopeStatement *scope) {
+  if (decl == nullptr || scope == nullptr) {
+    return false;
+  }
+
+  return decl->get_scope() == scope || decl->get_parent() == scope;
+}
+
+bool initialized_name_is_owned_by_scope(SgInitializedName *name,
+                                        SgScopeStatement *scope) {
+  if (name == nullptr || scope == nullptr) {
+    return false;
+  }
+
+  if (SgDeclarationStatement *decl = name->get_declptr()) {
+    return declaration_is_owned_by_scope(decl, scope);
+  }
+
+  if (SgDeclarationStatement *parent_decl =
+          isSgDeclarationStatement(name->get_parent())) {
+    return declaration_is_owned_by_scope(parent_decl, scope);
+  }
+
+  return name->get_scope() == scope && name->get_parent() == scope;
+}
+
+bool symbol_basis_is_owned_by_referenced_class_scope(
+    SgNode *symbol_basis, SgScopeStatement *referenced_scope) {
+  if (isSgClassDefinition(referenced_scope) == nullptr) {
+    return true;
+  }
+
+  if (SgDeclarationStatement *decl = isSgDeclarationStatement(symbol_basis)) {
+    return declaration_is_owned_by_scope(decl, referenced_scope);
+  }
+
+  if (SgInitializedName *name = isSgInitializedName(symbol_basis)) {
+    return initialized_name_is_owned_by_scope(name, referenced_scope);
+  }
+
+  return false;
+}
 } // namespace
 
 struct FixupAstSymbolTablesToSupportAliasedSymbols::CurrentScopeAliasIndex {
@@ -417,6 +461,11 @@ void FixupAstSymbolTablesToSupportAliasedSymbols::
         // SgNode* symbolBasis = symbol->get_symbol_basis();
         symbolBasis = symbol->get_symbol_basis();
         ROSE_ASSERT(symbolBasis != NULL);
+        if (!symbol_basis_is_owned_by_referenced_class_scope(symbolBasis,
+                                                             referencedScope)) {
+          i++;
+          continue;
+        }
 #if ALIAS_SYMBOL_DEBUGGING
         printf("symbolBasis = %p = %s \n", symbolBasis,
                symbolBasis->class_name().c_str());

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 4 ]]; then
-  echo "usage: $0 <translator> <input> <workdir> <case_name>" >&2
+if [[ $# -lt 4 ]]; then
+  echo "usage: $0 <translator> <input> <workdir> <case_name> [translator_flags...]" >&2
   exit 2
 fi
 
@@ -11,6 +11,8 @@ translator="$1"
 input_file="$2"
 workdir="$3"
 case_name="$4"
+shift 4
+extra_translator_flags=("$@")
 source_name="$(basename "${input_file}")"
 rose_file="${workdir}/rose_${source_name}"
 
@@ -20,7 +22,7 @@ fail() {
 }
 
 bash "${script_dir}/run_translate_only.sh" "${translator}" "${input_file}" \
-  "${workdir}" "${case_name}"
+  "${workdir}" "${case_name}" "${extra_translator_flags[@]}"
 
 [[ -f "${rose_file}" ]] || fail "missing lowered host file '${rose_file}'"
 

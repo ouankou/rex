@@ -584,5 +584,10 @@ foreach(specimen IN LISTS FILELOCATION_TEST_SOURCES)
   )
 endforeach()
 
-########### install files ###############
+get_property(_filelocation_registered_tests DIRECTORY PROPERTY TESTS)
+if(REX_EXTENDED_TEST_TIMEOUTS AND _filelocation_registered_tests)
+  set_tests_properties(${_filelocation_registered_tests} PROPERTIES
+    PROCESSORS 16)
+endif()
 
+########### install files ###############

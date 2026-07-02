@@ -3,6 +3,8 @@
 #include "AstPerformance.h"
 
 #include <cstdio>
+#include <memory>
+#include <vector>
 // Fix suggested by Brian White (to allow "sleep()" to be defined)
 // #include <unistd.h>
 
@@ -14,8 +16,10 @@ void foo() {
 
   printf("Before memory allocation ... \n");
   // Allocate some memory to test the memory useage
+  std::vector<std::unique_ptr<int[]>> allocations;
+  allocations.reserve(1000);
   for (int i = 0; i < 1000; i++) {
-    /* int* pointer = */ new int[250000];
+    allocations.push_back(std::unique_ptr<int[]>(new int[250000]));
   }
 
   printf("After memory allocation ... \n");
@@ -34,8 +38,10 @@ int main() {
 
   printf("Before memory allocation ... \n");
   // Allocate some memory to test the memory useage
+  std::vector<std::unique_ptr<int[]>> allocations;
+  allocations.reserve(1000);
   for (int i = 0; i < 1000; i++) {
-    /* int* pointer = */ new int[250000];
+    allocations.push_back(std::unique_ptr<int[]>(new int[250000]));
   }
 
   printf("After memory allocation ... \n");

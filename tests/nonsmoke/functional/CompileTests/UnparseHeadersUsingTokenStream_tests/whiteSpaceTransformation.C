@@ -72,6 +72,11 @@ WhiteSpaceInheritedAttribute::WhiteSpaceInheritedAttribute ( const WhiteSpaceInh
      return returnValue;
    }
 
+   Traversal::~Traversal() {
+     for (std::pair<SgNode *, SgNode *> *interval : intervalList) {
+       delete interval;
+     }
+   }
 
 std::string
 Segregation_Attribute::get_name()
@@ -459,5 +464,3 @@ main ( int argc, char* argv[] )
   // Only output code if there was a transformation that was done.
      return backend(project);
    }
-
-

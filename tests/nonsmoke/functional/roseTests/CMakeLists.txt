@@ -8,6 +8,7 @@ if(ENABLE-C)
   add_subdirectory (astProcessingTests)
   add_subdirectory (astQueryTests)
   add_subdirectory (astSymbolTableTests)
+  add_subdirectory (astJsonTests)
   add_subdirectory (astTokenStreamTests)
   add_subdirectory (programTransformationTests)
   #add_subdirectory (graph_tests)
@@ -23,4 +24,3 @@ if(ENABLE-C)
   #add_subdirectory (loopProcessingTests)
   add_subdirectory (fileLocation_tests)
 endif() # C/C++
-

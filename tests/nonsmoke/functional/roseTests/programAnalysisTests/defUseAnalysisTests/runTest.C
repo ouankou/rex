@@ -10,6 +10,7 @@
 #include <string>
 
 #include <iostream>
+#include <memory>
 using namespace std;
 
 void testOneFunction(
@@ -27,7 +28,7 @@ void testOneFunction(
   // Build the AST used by ROSE
   SgProject *project = frontend(argvList);
   // Call the Def-Use Analysis
-  DFAnalysis *defuse = new DefUseAnalysis(project);
+  std::unique_ptr<DFAnalysis> defuse(new DefUseAnalysis(project));
   int val = defuse->run(debug);
   if (debug)
     std::cout << "Analysis run is : " << (val ? "failure" : "success") << " "
@@ -186,7 +187,7 @@ void runCurrentFile(vector<string> &argvList, bool debug, bool debug_map) {
     std::cout << ">>>> start def-use analysis ... " << endl;
 
   // Call the Def-Use Analysis
-  DFAnalysis *defuse = new DefUseAnalysis(project);
+  std::unique_ptr<DFAnalysis> defuse(new DefUseAnalysis(project));
   int val = defuse->run(debug);
   if (debug)
     std::cout << "Analysis is : " << (val ? "failure" : "success") << " " << val
@@ -242,7 +243,6 @@ void runCurrentFile(vector<string> &argvList, bool debug, bool debug_map) {
     defuse->printUseMap();
   }
   delete project;
-  delete defuse;
 }
 
 void usage() {

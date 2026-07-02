@@ -188,7 +188,7 @@ string AstNodeClass::buildDestructorBody() {
 #endif
     }
     if (typeName == " rose_hash_multimap*" ||
-        typeName == "OSEAttributesListContainerPtr") {
+        typeName == "ROSEAttributesListContainerPtr") {
       tempString = "    if (p_$DATA) { delete " + tempString + "p_$DATA; }\n";
     }
     tempString = StringUtility::copyEdit(tempString, "$DATA", varName);
