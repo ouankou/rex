@@ -1,6 +1,15 @@
-#include "sage3basic.h"
+#ifndef ROSE_ACC_AST_CONSTRUCTION_H
+#define ROSE_ACC_AST_CONSTRUCTION_H
 
 #include "OpenACCIR.h"
+
+#include <utility>
+
+class SgAccClause;
+class SgAccClauseBodyStatement;
+class SgAccExpressionClause;
+class SgPragmaDeclaration;
+class SgStatement;
 
 bool checkOpenACCIR(OpenACCDirective *);
 SgStatement *convertOpenACCDirective(
@@ -14,3 +23,5 @@ SgAccClause *
 convertOpenACCClause(SgStatement *,
                      std::pair<SgPragmaDeclaration *, OpenACCDirective *>,
                      OpenACCClause *);
+
+#endif
