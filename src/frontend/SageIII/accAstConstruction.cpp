@@ -1,3 +1,5 @@
+#include "sage3basic.h"
+
 #include "accAstConstruction.h"
 
 extern OpenACCDirective *parseOpenACC(std::string);
