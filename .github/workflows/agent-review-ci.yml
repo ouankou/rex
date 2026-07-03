@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   comment:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     env:
       CODEX_COMMENT_TOKEN: ${{ secrets.CODEX_COMMENT_TOKEN }}
     steps:
@@ -34,5 +34,5 @@ jobs:
           echo "Posting review comment to PR #${{ github.event.pull_request.number }}"
           gh pr comment ${{ github.event.pull_request.number }} \
             --repo ${{ github.repository }} \
-            --body "/gemini review"
+            --body "@codex review"
           echo "✓ Posted review comment"

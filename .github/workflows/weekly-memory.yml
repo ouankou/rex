@@ -16,25 +16,27 @@ env:
 
 jobs:
   full-tests:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     defaults:
       run:
         shell: bash
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         submodules: 'recursive'
         persist-credentials: false
 
-    # NOTE: Ubuntu 24.04 ships antlr4 v4.9 but antlr4-cpp-runtime v4.10, which are API-incompatible; manually install the matching antlr4 v4.10.
-    - uses: StoneMoe/setup-antlr4@v4.10.1
+    # NOTE: Ubuntu 26.04 ships antlr4-cpp-runtime v4.10; use a matching ANTLR4 CLI while keeping the action runtime current.
+    - uses: StoneMoe/setup-antlr4@v4.13.2
+      with:
+        download_url: https://www.antlr.org/download/antlr-4.10.1-complete.jar
 
     - name: Add LLVM apt repository
       run: |
         wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc > /dev/null
-        echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
+        echo "deb http://apt.llvm.org/resolute/ llvm-toolchain-resolute-${LLVM_VERSION} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
 
     - name: Install dependencies
       run: |
@@ -95,7 +97,7 @@ jobs:
 
     - name: Upload full test log
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: full-tests-log
         path: |
@@ -108,24 +110,26 @@ jobs:
         exit "$(cat ctest_exit_code.txt)"
 
   memcheck:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     defaults:
       run:
         shell: bash
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         submodules: 'recursive'
         persist-credentials: false
 
-    - uses: StoneMoe/setup-antlr4@v4.10.1
+    - uses: StoneMoe/setup-antlr4@v4.13.2
+      with:
+        download_url: https://www.antlr.org/download/antlr-4.10.1-complete.jar
 
     - name: Add LLVM apt repository
       run: |
         wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc > /dev/null
-        echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
+        echo "deb http://apt.llvm.org/resolute/ llvm-toolchain-resolute-${LLVM_VERSION} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
 
     - name: Install dependencies
       run: |
@@ -188,7 +192,7 @@ jobs:
 
     - name: Upload memcheck logs
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: memcheck-logs
         path: |
@@ -198,24 +202,26 @@ jobs:
         if-no-files-found: warn
 
   sanitizer:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     defaults:
       run:
         shell: bash
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         submodules: 'recursive'
         persist-credentials: false
 
-    - uses: StoneMoe/setup-antlr4@v4.10.1
+    - uses: StoneMoe/setup-antlr4@v4.13.2
+      with:
+        download_url: https://www.antlr.org/download/antlr-4.10.1-complete.jar
 
     - name: Add LLVM apt repository
       run: |
         wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc > /dev/null
-        echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
+        echo "deb http://apt.llvm.org/resolute/ llvm-toolchain-resolute-${LLVM_VERSION} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
 
     - name: Install dependencies
       run: |
@@ -278,7 +284,7 @@ jobs:
 
     - name: Upload sanitizer log
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: sanitizer-log
         path: ctest-sanitizer.log

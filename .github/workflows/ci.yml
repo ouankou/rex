@@ -16,7 +16,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-24.04]
+        os: [ubuntu-26.04]
         llvm: [22]
 
     runs-on: ${{ matrix.os }}
@@ -26,18 +26,20 @@ jobs:
         shell: bash
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         submodules: 'recursive'
         persist-credentials: false
 
-    # NOTE: Ubuntu 24.04 ships antlr4 v4.9 but antlr4-cpp-runtime v4.10, which are API-incompatible; manually install the matching antlr4 v4.10.
-    - uses: StoneMoe/setup-antlr4@v4.10.1
+    # NOTE: Ubuntu 26.04 ships antlr4-cpp-runtime v4.10; use a matching ANTLR4 CLI while keeping the action runtime current.
+    - uses: StoneMoe/setup-antlr4@v4.13.2
+      with:
+        download_url: https://www.antlr.org/download/antlr-4.10.1-complete.jar
 
     - name: Add LLVM apt repository
       run: |
         wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc > /dev/null
-        echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${{ matrix.llvm }} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
+        echo "deb http://apt.llvm.org/resolute/ llvm-toolchain-resolute-${{ matrix.llvm }} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
 
     # Install only version-specific LLVM/Clang packages from apt.llvm.org.
     - name: Install dependencies
@@ -99,7 +101,7 @@ jobs:
   fortran-only-config:
     strategy:
       matrix:
-        os: [ubuntu-24.04]
+        os: [ubuntu-26.04]
         llvm: [22]
 
     runs-on: ${{ matrix.os }}
@@ -109,17 +111,19 @@ jobs:
         shell: bash
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         submodules: 'recursive'
         persist-credentials: false
 
-    - uses: StoneMoe/setup-antlr4@v4.10.1
+    - uses: StoneMoe/setup-antlr4@v4.13.2
+      with:
+        download_url: https://www.antlr.org/download/antlr-4.10.1-complete.jar
 
     - name: Add LLVM apt repository
       run: |
         wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc > /dev/null
-        echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${{ matrix.llvm }} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
+        echo "deb http://apt.llvm.org/resolute/ llvm-toolchain-resolute-${{ matrix.llvm }} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
 
     - name: Install dependencies
       run: |
