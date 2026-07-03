@@ -194,6 +194,16 @@ jobs:
             bash -lc '
               set -euo pipefail
               javac -version
-              dpkg-query -W openjdk-25-jdk-headless antlr4 clang-${LLVM_VERSION} lld-${LLVM_VERSION} mold gdb
+              dpkg-query -W \
+                openjdk-25-jdk-headless \
+                antlr4 \
+                clang-${LLVM_VERSION} \
+                flang-${LLVM_VERSION} \
+                lld-${LLVM_VERSION} \
+                libclang-rt-${LLVM_VERSION}-dev \
+                mold \
+                gdb
+              printf "      end\n" >/tmp/rex_fortran_smoke.f
+              flang-${LLVM_VERSION} -fuse-ld=lld /tmp/rex_fortran_smoke.f -o /tmp/rex_fortran_smoke
             '
         done
