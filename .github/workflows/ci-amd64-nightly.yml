@@ -1,4 +1,4 @@
-name: Nightly RISC-V64 CI
+name: Nightly x86_64 CI
 
 on:
   schedule:
@@ -7,11 +7,11 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: nightly-riscv64-${{ github.ref }}
+  group: nightly-amd64-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  test-riscv64:
+  test-amd64:
     runs-on: ubuntu-26.04
 
     defaults:
@@ -21,16 +21,11 @@ jobs:
     env:
       IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
       LOCAL_IMAGE_REPO: rex-local
-      TARGET_ARCH: riscv64
-      TARGET_PLATFORM: linux/riscv64
+      TARGET_ARCH: amd64
+      TARGET_PLATFORM: linux/amd64
 
     steps:
-    - name: Set up QEMU (${{ env.TARGET_ARCH }})
-      uses: docker/setup-qemu-action@v4
-      with:
-        platforms: ${{ env.TARGET_ARCH }}
-
-    - name: Run core tests from prebuilt image (${{ env.TARGET_ARCH }} via QEMU)
+    - name: Run core tests from prebuilt image (${{ env.TARGET_ARCH }})
       if: ${{ !env.ACT }}
       run: |
         set -euo pipefail
@@ -47,7 +42,7 @@ jobs:
               -j"${CTEST_JOBS}"
           '
 
-    - name: Run core tests from local dev image (${{ env.TARGET_ARCH }} via QEMU)
+    - name: Run core tests from local dev image (${{ env.TARGET_ARCH }})
       if: ${{ env.ACT }}
       run: |
         set -euo pipefail

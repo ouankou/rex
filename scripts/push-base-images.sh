@@ -15,6 +15,7 @@ OWNER="$1"
 IMAGE_NAME="${2:-rex}"
 TAG="${3:-base}"
 IMAGE="ghcr.io/${OWNER}/${IMAGE_NAME}"
+LLVM_VERSION="${LLVM_VERSION:-22}"
 
 BUILDER="${BUILDER:-rex-multi}"
 if ! docker buildx inspect "${BUILDER}" >/dev/null 2>&1; then
@@ -25,30 +26,41 @@ fi
 
 docker buildx inspect --bootstrap >/dev/null
 
-LOONG_META="$(mktemp)"
-RISCV_META="$(mktemp)"
+ARCHES=(amd64 arm64 riscv64 loong64)
+declare -A PLATFORMS=(
+  [amd64]=linux/amd64
+  [arm64]=linux/arm64
+  [riscv64]=linux/riscv64
+  [loong64]=linux/loong64
+)
+declare -A DOCKERFILES=(
+  [amd64]=ci/docker/rex-amd64.Dockerfile
+  [arm64]=ci/docker/rex-arm64.Dockerfile
+  [riscv64]=ci/docker/rex-riscv64.Dockerfile
+  [loong64]=ci/docker/rex-loongarch64.Dockerfile
+)
+declare -A DIGESTS=()
+METAS=()
+
 cleanup() {
-  rm -f "${LOONG_META}" "${RISCV_META}"
+  rm -f "${METAS[@]}"
 }
 trap cleanup EXIT
 
-docker buildx build \
-  --platform linux/loong64 \
-  -f ci/docker/rex-loongarch64.Dockerfile \
-  --output=type=registry,name="${IMAGE}",push-by-digest=true \
-  --provenance=false \
-  --metadata-file "${LOONG_META}" \
-  .
+for arch in "${ARCHES[@]}"; do
+  meta="$(mktemp)"
+  METAS+=("${meta}")
 
-docker buildx build \
-  --platform linux/riscv64 \
-  -f ci/docker/rex-riscv64.Dockerfile \
-  --output=type=registry,name="${IMAGE}",push-by-digest=true \
-  --provenance=false \
-  --metadata-file "${RISCV_META}" \
-  .
+  docker buildx build \
+    --platform "${PLATFORMS[$arch]}" \
+    -f "${DOCKERFILES[$arch]}" \
+    --build-arg LLVM_VERSION="${LLVM_VERSION}" \
+    --output=type=registry,name="${IMAGE}",push-by-digest=true \
+    --provenance=false \
+    --metadata-file "${meta}" \
+    .
 
-LOONG_DIGEST="$(python3 - <<'PY' "${LOONG_META}"
+  DIGESTS["${arch}"]="$(python3 - <<'PY' "${meta}"
 import json
 import sys
 
@@ -57,21 +69,16 @@ with open(sys.argv[1], "r", encoding="utf-8") as handle:
 print(data["containerimage.digest"])
 PY
 )"
+done
 
-RISCV_DIGEST="$(python3 - <<'PY' "${RISCV_META}"
-import json
-import sys
+refs=()
+for arch in "${ARCHES[@]}"; do
+  refs+=("${IMAGE}@${DIGESTS[$arch]}")
+done
 
-with open(sys.argv[1], "r", encoding="utf-8") as handle:
-    data = json.load(handle)
-print(data["containerimage.digest"])
-PY
-)"
-
-docker buildx imagetools create -t "${IMAGE}:${TAG}" \
-  "${IMAGE}@${LOONG_DIGEST}" \
-  "${IMAGE}@${RISCV_DIGEST}"
+docker buildx imagetools create -t "${IMAGE}:${TAG}" "${refs[@]}"
 
 echo "Pushed multi-arch image: ${IMAGE}:${TAG}"
-echo "  loong64: ${LOONG_DIGEST}"
-echo "  riscv64: ${RISCV_DIGEST}"
+for arch in "${ARCHES[@]}"; do
+  echo "  ${arch}: ${DIGESTS[$arch]}"
+done

@@ -32,10 +32,10 @@ jobs:
       with:
         persist-credentials: false
 
-    - name: Set up QEMU (riscv64, loong64)
+    - name: Set up QEMU (arm64, riscv64, loong64)
       uses: docker/setup-qemu-action@v4
       with:
-        platforms: riscv64,loong64
+        platforms: arm64,riscv64,loong64
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v4
@@ -47,6 +47,64 @@ jobs:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push base image (amd64)
+      if: ${{ !env.ACT }}
+      id: build-amd64
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        file: ci/docker/rex-amd64.Dockerfile
+        platforms: linux/amd64
+        build-args: |
+          LLVM_VERSION=${{ env.LLVM_VERSION }}
+        pull: true
+        provenance: false
+        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+
+    - name: Build base image locally (amd64)
+      if: ${{ env.ACT }}
+      uses: docker/build-push-action@v7
+      with:
+        builder: default
+        context: .
+        file: ci/docker/rex-amd64.Dockerfile
+        platforms: linux/amd64
+        build-args: |
+          LLVM_VERSION=${{ env.LLVM_VERSION }}
+        pull: true
+        provenance: false
+        load: true
+        tags: ${{ env.LOCAL_IMAGE_REPO }}:base-amd64-local
+
+    - name: Build and push base image (arm64)
+      if: ${{ !env.ACT }}
+      id: build-arm64
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        file: ci/docker/rex-arm64.Dockerfile
+        platforms: linux/arm64
+        build-args: |
+          LLVM_VERSION=${{ env.LLVM_VERSION }}
+        pull: true
+        provenance: false
+        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+
+    - name: Build base image locally (arm64)
+      if: ${{ env.ACT }}
+      uses: docker/build-push-action@v7
+      with:
+        builder: default
+        context: .
+        file: ci/docker/rex-arm64.Dockerfile
+        platforms: linux/arm64
+        build-args: |
+          LLVM_VERSION=${{ env.LLVM_VERSION }}
+        pull: true
+        provenance: false
+        load: true
+        tags: ${{ env.LOCAL_IMAGE_REPO }}:base-arm64-local
 
     - name: Build and push base image (riscv64)
       if: ${{ !env.ACT }}
@@ -66,6 +124,7 @@ jobs:
       if: ${{ env.ACT }}
       uses: docker/build-push-action@v7
       with:
+        builder: default
         context: .
         file: ci/docker/rex-riscv64.Dockerfile
         platforms: linux/riscv64
@@ -94,6 +153,7 @@ jobs:
       if: ${{ env.ACT }}
       uses: docker/build-push-action@v7
       with:
+        builder: default
         context: .
         file: ci/docker/rex-loongarch64.Dockerfile
         platforms: linux/loong64
@@ -110,6 +170,8 @@ jobs:
         set -euo pipefail
         docker buildx imagetools create \
           -t "${IMAGE_REPO}:${BASE_TAG}" \
+          "${IMAGE_REPO}@${{ steps.build-amd64.outputs.digest }}" \
+          "${IMAGE_REPO}@${{ steps.build-arm64.outputs.digest }}" \
           "${IMAGE_REPO}@${{ steps.build-riscv64.outputs.digest }}" \
           "${IMAGE_REPO}@${{ steps.build-loong64.outputs.digest }}"
         docker buildx imagetools inspect "${IMAGE_REPO}:${BASE_TAG}"
@@ -118,19 +180,20 @@ jobs:
       if: ${{ env.ACT }}
       run: |
         set -euo pipefail
-        docker run --rm --platform=linux/riscv64 \
-          -e LLVM_VERSION="${LLVM_VERSION}" \
-          "${LOCAL_IMAGE_REPO}:base-riscv64-local" \
-          bash -lc '
-            set -euo pipefail
-            javac -version
-            dpkg-query -W openjdk-25-jdk-headless antlr4 clang-${LLVM_VERSION} lld-${LLVM_VERSION} mold
-          '
-        docker run --rm --platform=linux/loong64 \
-          -e LLVM_VERSION="${LLVM_VERSION}" \
-          "${LOCAL_IMAGE_REPO}:base-loong64-local" \
-          bash -lc '
-            set -euo pipefail
-            javac -version
-            dpkg-query -W openjdk-21-jdk-headless antlr4 clang-${LLVM_VERSION} lld-${LLVM_VERSION} mold
-          '
+        declare -A platforms=(
+          [amd64]=linux/amd64
+          [arm64]=linux/arm64
+          [riscv64]=linux/riscv64
+          [loong64]=linux/loong64
+        )
+
+        for arch in amd64 arm64 riscv64 loong64; do
+          docker run --rm --platform="${platforms[$arch]}" \
+            -e LLVM_VERSION="${LLVM_VERSION}" \
+            "${LOCAL_IMAGE_REPO}:base-${arch}-local" \
+            bash -lc '
+              set -euo pipefail
+              javac -version
+              dpkg-query -W openjdk-25-jdk-headless antlr4 clang-${LLVM_VERSION} lld-${LLVM_VERSION} mold gdb
+            '
+        done

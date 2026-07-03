@@ -18,18 +18,41 @@ jobs:
       run:
         shell: bash
 
+    env:
+      IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
+      LOCAL_IMAGE_REPO: rex-local
+      TARGET_ARCH: loong64
+      TARGET_PLATFORM: linux/loong64
+
     steps:
-    - name: Set up QEMU (loong64)
+    - name: Set up QEMU (${{ env.TARGET_ARCH }})
       uses: docker/setup-qemu-action@v4
       with:
-        platforms: loong64
+        platforms: ${{ env.TARGET_ARCH }}
 
-    - name: Run core tests from prebuilt image (loong64 via QEMU)
+    - name: Run core tests from prebuilt image (${{ env.TARGET_ARCH }} via QEMU)
+      if: ${{ !env.ACT }}
       run: |
         set -euo pipefail
-        docker pull --platform=linux/loong64 ghcr.io/${{ github.repository_owner }}/rex:dev
-        docker run --rm --platform=linux/loong64 \
-          ghcr.io/${{ github.repository_owner }}/rex:dev \
+        docker pull --platform="${TARGET_PLATFORM}" "${IMAGE_REPO}:dev"
+        docker run --rm --platform="${TARGET_PLATFORM}" \
+          "${IMAGE_REPO}:dev" \
+          bash -lc '
+            set -euo pipefail
+            cd /opt/rex/src
+            CTEST_JOBS="$(nproc)"
+            ctest --test-dir build \
+              -R "rex|astInterface|OMPLOWERING_RODINIA_" \
+              --output-on-failure \
+              -j"${CTEST_JOBS}"
+          '
+
+    - name: Run core tests from local dev image (${{ env.TARGET_ARCH }} via QEMU)
+      if: ${{ env.ACT }}
+      run: |
+        set -euo pipefail
+        docker run --rm --platform="${TARGET_PLATFORM}" \
+          "${LOCAL_IMAGE_REPO}:dev-${TARGET_ARCH}-local" \
           bash -lc '
             set -euo pipefail
             cd /opt/rex/src
