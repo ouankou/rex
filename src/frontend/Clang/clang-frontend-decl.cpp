@@ -21016,84 +21016,90 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl *decl, SgNode **node) {
   if (decl != nullptr) {
     int max_alignment = -1;
     bool has_aligned_attr = false;
+    const bool has_attrs =
+        readClangApiValueDefined([&]() { return decl->hasAttrs(); });
+    if (has_attrs) {
 #if ROSE_USE_VALGRIND
-    markClangDeclAttrsDefined(decl);
-    VALGRIND_DISABLE_ERROR_REPORTING;
+      markClangDeclAttrsDefined(decl);
+      VALGRIND_DISABLE_ERROR_REPORTING;
 #endif
-    const clang::AttrVec &attrs = decl->getAttrs();
+      const clang::AttrVec &attrs = decl->getAttrs();
 #if ROSE_USE_VALGRIND
-    VALGRIND_ENABLE_ERROR_REPORTING;
+      VALGRIND_ENABLE_ERROR_REPORTING;
 #endif
-    for (size_t attr_index = 0; attr_index < attrs.size(); ++attr_index) {
-      const clang::Attr *attr = markClangAstObjectDefined(
-          readClangApiValueDefined([&]() { return attrs[attr_index]; }));
-      const clang::AlignedAttr *aligned_attr =
-          llvm::dyn_cast_or_null<clang::AlignedAttr>(attr);
-      aligned_attr = markClangAstObjectDefined(aligned_attr);
-      if (aligned_attr == nullptr) {
-        continue;
-      }
-      has_aligned_attr = true;
-      if (aligned_attr == nullptr || p_compiler_instance == nullptr) {
-        continue;
-      }
-      clang::ASTContext &ast_context = p_compiler_instance->getASTContext();
+      const size_t attr_count =
+          readClangApiValueDefined([&]() { return attrs.size(); });
+      for (size_t attr_index = 0; attr_index < attr_count; ++attr_index) {
+        const clang::Attr *attr = markClangAstObjectDefined(
+            readClangApiValueDefined([&]() { return attrs[attr_index]; }));
+        const clang::AlignedAttr *aligned_attr =
+            llvm::dyn_cast_or_null<clang::AlignedAttr>(attr);
+        aligned_attr = markClangAstObjectDefined(aligned_attr);
+        if (aligned_attr == nullptr) {
+          continue;
+        }
+        has_aligned_attr = true;
+        if (aligned_attr == nullptr || p_compiler_instance == nullptr) {
+          continue;
+        }
+        clang::ASTContext &ast_context = p_compiler_instance->getASTContext();
 
-      int alignment_candidate = -1;
-      if (readClangApiValueDefined(
-              [&]() { return aligned_attr->isAlignmentDependent(); }) ||
-          readClangApiValueDefined(
-              [&]() { return aligned_attr->isAlignmentErrorDependent(); })) {
-        continue;
-      }
+        int alignment_candidate = -1;
+        if (readClangApiValueDefined(
+                [&]() { return aligned_attr->isAlignmentDependent(); }) ||
+            readClangApiValueDefined(
+                [&]() { return aligned_attr->isAlignmentErrorDependent(); })) {
+          continue;
+        }
 
-      if (readClangApiValueDefined(
-              [&]() { return aligned_attr->isAlignmentExpr(); })) {
-        const clang::Expr *alignment_expr =
-            markClangAstObjectDefined(readClangApiValueDefined(
-                [&]() { return aligned_attr->getAlignmentExpr(); }));
-        if (alignment_expr != nullptr) {
-          alignment_expr = markClangAstObjectDefined(readClangApiValueDefined(
-              [&]() { return alignment_expr->IgnoreParenImpCasts(); }));
-          if (readClangApiValueDefined([&]() {
-                return alignment_expr->isEvaluatable(ast_context);
-              })) {
-            const llvm::APSInt value = readClangApiValueDefined([&]() {
-              return alignment_expr->EvaluateKnownConstInt(ast_context);
-            });
-            if (value.isNonNegative()) {
-              const int64_t alignment_value_64 = value.getSExtValue();
-              if (alignment_value_64 <= std::numeric_limits<int>::max()) {
-                alignment_candidate = static_cast<int>(alignment_value_64);
+        if (readClangApiValueDefined(
+                [&]() { return aligned_attr->isAlignmentExpr(); })) {
+          const clang::Expr *alignment_expr =
+              markClangAstObjectDefined(readClangApiValueDefined(
+                  [&]() { return aligned_attr->getAlignmentExpr(); }));
+          if (alignment_expr != nullptr) {
+            alignment_expr = markClangAstObjectDefined(readClangApiValueDefined(
+                [&]() { return alignment_expr->IgnoreParenImpCasts(); }));
+            if (readClangApiValueDefined([&]() {
+                  return alignment_expr->isEvaluatable(ast_context);
+                })) {
+              const llvm::APSInt value = readClangApiValueDefined([&]() {
+                return alignment_expr->EvaluateKnownConstInt(ast_context);
+              });
+              if (value.isNonNegative()) {
+                const int64_t alignment_value_64 = value.getSExtValue();
+                if (alignment_value_64 <= std::numeric_limits<int>::max()) {
+                  alignment_candidate = static_cast<int>(alignment_value_64);
+                }
+              }
+            }
+          }
+        } else {
+          clang::TypeSourceInfo *alignment_type =
+              markClangAstObjectDefined(aligned_attr->getAlignmentType());
+          if (alignment_type != nullptr) {
+            const clang::QualType qual_type = alignment_type->getType();
+            markClangValueDefined(qual_type);
+            markClangTypeObjectDefinedByClass(qual_type.getTypePtrOrNull());
+            if (!qual_type.isNull() && !qual_type->isDependentType() &&
+                !qual_type->isInstantiationDependentType()) {
+              const clang::CharUnits align_chars =
+                  ast_context.getTypeAlignInChars(qual_type);
+              if (!align_chars.isZero()) {
+                const auto quantity = align_chars.getQuantity();
+                if (quantity > 0 &&
+                    quantity <= static_cast<decltype(quantity)>(
+                                    std::numeric_limits<int>::max())) {
+                  alignment_candidate = static_cast<int>(quantity);
+                }
               }
             }
           }
         }
-      } else {
-        clang::TypeSourceInfo *alignment_type =
-            markClangAstObjectDefined(aligned_attr->getAlignmentType());
-        if (alignment_type != nullptr) {
-          const clang::QualType qual_type = alignment_type->getType();
-          markClangValueDefined(qual_type);
-          markClangTypeObjectDefinedByClass(qual_type.getTypePtrOrNull());
-          if (!qual_type.isNull() && !qual_type->isDependentType() &&
-              !qual_type->isInstantiationDependentType()) {
-            const clang::CharUnits align_chars =
-                ast_context.getTypeAlignInChars(qual_type);
-            if (!align_chars.isZero()) {
-              const auto quantity = align_chars.getQuantity();
-              if (quantity > 0 &&
-                  quantity <= static_cast<decltype(quantity)>(
-                                  std::numeric_limits<int>::max())) {
-                alignment_candidate = static_cast<int>(quantity);
-              }
-            }
-          }
-        }
-      }
 
-      if (alignment_candidate > max_alignment) {
-        max_alignment = alignment_candidate;
+        if (alignment_candidate > max_alignment) {
+          max_alignment = alignment_candidate;
+        }
       }
     }
     int alignment_value = max_alignment;
