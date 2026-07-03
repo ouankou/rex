@@ -1,4 +1,4 @@
-FROM ghcr.io/loong64/debian:sid
+FROM debian:sid
 LABEL org.opencontainers.image.source="https://github.com/ouankou/rex"
 
 ARG LLVM_VERSION=22

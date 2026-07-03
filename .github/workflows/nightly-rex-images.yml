@@ -11,6 +11,253 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  build-amd64:
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      runtime_digest: ${{ steps.build-runtime.outputs.digest }}
+      dev_digest: ${{ steps.build-dev.outputs.digest }}
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
+      LOCAL_IMAGE_REPO: rex-local
+      REX_RUNTIME_TAG: latest
+      REX_DEV_TAG: dev
+      REX_IMAGE_BUILD_JOBS: 4
+      TARGET_ARCH: amd64
+      TARGET_PLATFORM: linux/amd64
+
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        submodules: 'recursive'
+        persist-credentials: false
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v4
+
+    - name: Log in to GHCR
+      if: ${{ !env.ACT }}
+      uses: docker/login-action@v4
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push REX runtime image (${{ env.TARGET_ARCH }})
+      if: ${{ !env.ACT }}
+      id: build-runtime
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        file: ci/docker/rex-nightly.Dockerfile
+        platforms: ${{ env.TARGET_PLATFORM }}
+        target: runtime
+        pull: true
+        provenance: false
+        build-args: |
+          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+
+    - name: Build REX runtime image locally (${{ env.TARGET_ARCH }})
+      if: ${{ env.ACT }}
+      uses: docker/build-push-action@v7
+      with:
+        builder: default
+        context: .
+        file: ci/docker/rex-nightly.Dockerfile
+        platforms: ${{ env.TARGET_PLATFORM }}
+        target: runtime
+        pull: false
+        provenance: false
+        build-args: |
+          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
+          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+        load: true
+        tags: ${{ env.LOCAL_IMAGE_REPO }}:runtime-${{ env.TARGET_ARCH }}-local
+
+    - name: Build and push REX dev image (${{ env.TARGET_ARCH }})
+      if: ${{ !env.ACT }}
+      id: build-dev
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        file: ci/docker/rex-nightly.Dockerfile
+        platforms: ${{ env.TARGET_PLATFORM }}
+        target: test
+        pull: true
+        provenance: false
+        build-args: |
+          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+
+    - name: Build REX dev image locally (${{ env.TARGET_ARCH }})
+      if: ${{ env.ACT }}
+      uses: docker/build-push-action@v7
+      with:
+        builder: default
+        context: .
+        file: ci/docker/rex-nightly.Dockerfile
+        platforms: ${{ env.TARGET_PLATFORM }}
+        target: test
+        pull: false
+        provenance: false
+        build-args: |
+          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
+          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+        load: true
+        tags: ${{ env.LOCAL_IMAGE_REPO }}:dev-${{ env.TARGET_ARCH }}-local
+
+    - name: Verify local REX dev image (${{ env.TARGET_ARCH }})
+      if: ${{ env.ACT }}
+      run: |
+        set -euo pipefail
+        docker run --rm --platform="${TARGET_PLATFORM}" \
+          "${LOCAL_IMAGE_REPO}:dev-${TARGET_ARCH}-local" \
+          bash -lc '
+            set -euo pipefail
+            cd /opt/rex/src
+            CTEST_JOBS="$(nproc)"
+            ctest --test-dir build \
+              -R "rex|astInterface|OMPLOWERING_RODINIA_" \
+              --output-on-failure \
+              -j"${CTEST_JOBS}"
+          '
+
+  build-arm64:
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      runtime_digest: ${{ steps.build-runtime.outputs.digest }}
+      dev_digest: ${{ steps.build-dev.outputs.digest }}
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
+      LOCAL_IMAGE_REPO: rex-local
+      REX_RUNTIME_TAG: latest
+      REX_DEV_TAG: dev
+      REX_IMAGE_BUILD_JOBS: 4
+      TARGET_ARCH: arm64
+      TARGET_PLATFORM: linux/arm64
+
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        submodules: 'recursive'
+        persist-credentials: false
+
+    - name: Set up QEMU (${{ env.TARGET_ARCH }})
+      uses: docker/setup-qemu-action@v4
+      with:
+        platforms: ${{ env.TARGET_ARCH }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v4
+
+    - name: Log in to GHCR
+      if: ${{ !env.ACT }}
+      uses: docker/login-action@v4
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push REX runtime image (${{ env.TARGET_ARCH }})
+      if: ${{ !env.ACT }}
+      id: build-runtime
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        file: ci/docker/rex-nightly.Dockerfile
+        platforms: ${{ env.TARGET_PLATFORM }}
+        target: runtime
+        pull: true
+        provenance: false
+        build-args: |
+          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+
+    - name: Build REX runtime image locally (${{ env.TARGET_ARCH }})
+      if: ${{ env.ACT }}
+      uses: docker/build-push-action@v7
+      with:
+        builder: default
+        context: .
+        file: ci/docker/rex-nightly.Dockerfile
+        platforms: ${{ env.TARGET_PLATFORM }}
+        target: runtime
+        pull: false
+        provenance: false
+        build-args: |
+          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
+          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+        load: true
+        tags: ${{ env.LOCAL_IMAGE_REPO }}:runtime-${{ env.TARGET_ARCH }}-local
+
+    - name: Build and push REX dev image (${{ env.TARGET_ARCH }})
+      if: ${{ !env.ACT }}
+      id: build-dev
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        file: ci/docker/rex-nightly.Dockerfile
+        platforms: ${{ env.TARGET_PLATFORM }}
+        target: test
+        pull: true
+        provenance: false
+        build-args: |
+          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+
+    - name: Build REX dev image locally (${{ env.TARGET_ARCH }})
+      if: ${{ env.ACT }}
+      uses: docker/build-push-action@v7
+      with:
+        builder: default
+        context: .
+        file: ci/docker/rex-nightly.Dockerfile
+        platforms: ${{ env.TARGET_PLATFORM }}
+        target: test
+        pull: false
+        provenance: false
+        build-args: |
+          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
+          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+        load: true
+        tags: ${{ env.LOCAL_IMAGE_REPO }}:dev-${{ env.TARGET_ARCH }}-local
+
+    - name: Verify local REX dev image (${{ env.TARGET_ARCH }})
+      if: ${{ env.ACT }}
+      run: |
+        set -euo pipefail
+        docker run --rm --platform="${TARGET_PLATFORM}" \
+          "${LOCAL_IMAGE_REPO}:dev-${TARGET_ARCH}-local" \
+          bash -lc '
+            set -euo pipefail
+            cd /opt/rex/src
+            CTEST_JOBS="$(nproc)"
+            ctest --test-dir build \
+              -R "rex|astInterface|OMPLOWERING_RODINIA_" \
+              --output-on-failure \
+              -j"${CTEST_JOBS}"
+          '
+
   build-riscv64:
     runs-on: ubuntu-26.04
     permissions:
@@ -75,14 +322,15 @@ jobs:
       if: ${{ env.ACT }}
       uses: docker/build-push-action@v7
       with:
+        builder: default
         context: .
         file: ci/docker/rex-nightly.Dockerfile
         platforms: ${{ env.TARGET_PLATFORM }}
         target: runtime
-        pull: true
+        pull: false
         provenance: false
         build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
         load: true
         tags: ${{ env.LOCAL_IMAGE_REPO }}:runtime-${{ env.TARGET_ARCH }}-local
@@ -107,17 +355,34 @@ jobs:
       if: ${{ env.ACT }}
       uses: docker/build-push-action@v7
       with:
+        builder: default
         context: .
         file: ci/docker/rex-nightly.Dockerfile
         platforms: ${{ env.TARGET_PLATFORM }}
         target: test
-        pull: true
+        pull: false
         provenance: false
         build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
         load: true
         tags: ${{ env.LOCAL_IMAGE_REPO }}:dev-${{ env.TARGET_ARCH }}-local
+
+    - name: Verify local REX dev image (${{ env.TARGET_ARCH }})
+      if: ${{ env.ACT }}
+      run: |
+        set -euo pipefail
+        docker run --rm --platform="${TARGET_PLATFORM}" \
+          "${LOCAL_IMAGE_REPO}:dev-${TARGET_ARCH}-local" \
+          bash -lc '
+            set -euo pipefail
+            cd /opt/rex/src
+            CTEST_JOBS="$(nproc)"
+            ctest --test-dir build \
+              -R "rex|astInterface|OMPLOWERING_RODINIA_" \
+              --output-on-failure \
+              -j"${CTEST_JOBS}"
+          '
 
   build-loong64:
     runs-on: ubuntu-26.04
@@ -183,14 +448,15 @@ jobs:
       if: ${{ env.ACT }}
       uses: docker/build-push-action@v7
       with:
+        builder: default
         context: .
         file: ci/docker/rex-nightly.Dockerfile
         platforms: ${{ env.TARGET_PLATFORM }}
         target: runtime
-        pull: true
+        pull: false
         provenance: false
         build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
         load: true
         tags: ${{ env.LOCAL_IMAGE_REPO }}:runtime-${{ env.TARGET_ARCH }}-local
@@ -215,21 +481,40 @@ jobs:
       if: ${{ env.ACT }}
       uses: docker/build-push-action@v7
       with:
+        builder: default
         context: .
         file: ci/docker/rex-nightly.Dockerfile
         platforms: ${{ env.TARGET_PLATFORM }}
         target: test
-        pull: true
+        pull: false
         provenance: false
         build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
         load: true
         tags: ${{ env.LOCAL_IMAGE_REPO }}:dev-${{ env.TARGET_ARCH }}-local
 
+    - name: Verify local REX dev image (${{ env.TARGET_ARCH }})
+      if: ${{ env.ACT }}
+      run: |
+        set -euo pipefail
+        docker run --rm --platform="${TARGET_PLATFORM}" \
+          "${LOCAL_IMAGE_REPO}:dev-${TARGET_ARCH}-local" \
+          bash -lc '
+            set -euo pipefail
+            cd /opt/rex/src
+            CTEST_JOBS="$(nproc)"
+            ctest --test-dir build \
+              -R "rex|astInterface|OMPLOWERING_RODINIA_" \
+              --output-on-failure \
+              -j"${CTEST_JOBS}"
+          '
+
   publish-manifests:
     runs-on: ubuntu-26.04
     needs:
+    - build-amd64
+    - build-arm64
     - build-riscv64
     - build-loong64
     permissions:
@@ -264,6 +549,8 @@ jobs:
         set -euo pipefail
         docker buildx imagetools create \
           -t "${IMAGE_REPO}:${REX_RUNTIME_TAG}" \
+          "${IMAGE_REPO}@${{ needs.build-amd64.outputs.runtime_digest }}" \
+          "${IMAGE_REPO}@${{ needs.build-arm64.outputs.runtime_digest }}" \
           "${IMAGE_REPO}@${{ needs.build-riscv64.outputs.runtime_digest }}" \
           "${IMAGE_REPO}@${{ needs.build-loong64.outputs.runtime_digest }}"
         docker buildx imagetools inspect "${IMAGE_REPO}:${REX_RUNTIME_TAG}"
@@ -274,6 +561,8 @@ jobs:
         set -euo pipefail
         docker buildx imagetools create \
           -t "${IMAGE_REPO}:${REX_DEV_TAG}" \
+          "${IMAGE_REPO}@${{ needs.build-amd64.outputs.dev_digest }}" \
+          "${IMAGE_REPO}@${{ needs.build-arm64.outputs.dev_digest }}" \
           "${IMAGE_REPO}@${{ needs.build-riscv64.outputs.dev_digest }}" \
           "${IMAGE_REPO}@${{ needs.build-loong64.outputs.dev_digest }}"
         docker buildx imagetools inspect "${IMAGE_REPO}:${REX_DEV_TAG}"
