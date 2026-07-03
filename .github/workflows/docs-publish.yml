@@ -20,23 +20,23 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           submodules: recursive
           fetch-depth: 0
 
       - name: Configure GitHub Pages
         id: pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Add LLVM apt repository
         run: |
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc > /dev/null
-          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
+          echo "deb http://apt.llvm.org/resolute/ llvm-toolchain-resolute-${LLVM_VERSION} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
 
       - name: Install system dependencies
         run: |
@@ -75,7 +75,7 @@ jobs:
           chmod +x .tools/antlr4/antlr4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -92,12 +92,12 @@ jobs:
 
       - name: Upload GitHub Pages Artifact
         if: ${{ !env.ACT }}
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ./_site
 
   deploy:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: build
     environment:
       name: github-pages
@@ -106,4 +106,4 @@ jobs:
       - name: Deploy to GitHub Pages
         if: ${{ !env.ACT }}
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
