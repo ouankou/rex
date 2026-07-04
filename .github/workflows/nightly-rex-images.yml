@@ -26,6 +26,8 @@ jobs:
 
     env:
       IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
+      LLVM_VERSION: 22
+      BASE_DOCKERFILE: ci/docker/rex-amd64.Dockerfile
       LOCAL_IMAGE_REPO: rex-local
       REX_RUNTIME_TAG: latest
       REX_DEV_TAG: dev
@@ -50,6 +52,20 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Build and push fresh base image (${{ env.TARGET_ARCH }})
+      if: ${{ !env.ACT }}
+      id: build-base
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        file: ${{ env.BASE_DOCKERFILE }}
+        platforms: ${{ env.TARGET_PLATFORM }}
+        build-args: |
+          LLVM_VERSION=${{ env.LLVM_VERSION }}
+        pull: true
+        provenance: false
+        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+
     - name: Build and push REX runtime image (${{ env.TARGET_ARCH }})
       if: ${{ !env.ACT }}
       id: build-runtime
@@ -62,7 +78,7 @@ jobs:
         pull: true
         provenance: false
         build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          BASE_IMAGE=${{ env.IMAGE_REPO }}@${{ steps.build-base.outputs.digest }}
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
@@ -95,7 +111,7 @@ jobs:
         pull: true
         provenance: false
         build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          BASE_IMAGE=${{ env.IMAGE_REPO }}@${{ steps.build-base.outputs.digest }}
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
@@ -147,6 +163,8 @@ jobs:
 
     env:
       IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
+      LLVM_VERSION: 22
+      BASE_DOCKERFILE: ci/docker/rex-arm64.Dockerfile
       LOCAL_IMAGE_REPO: rex-local
       REX_RUNTIME_TAG: latest
       REX_DEV_TAG: dev
@@ -176,6 +194,20 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Build and push fresh base image (${{ env.TARGET_ARCH }})
+      if: ${{ !env.ACT }}
+      id: build-base
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        file: ${{ env.BASE_DOCKERFILE }}
+        platforms: ${{ env.TARGET_PLATFORM }}
+        build-args: |
+          LLVM_VERSION=${{ env.LLVM_VERSION }}
+        pull: true
+        provenance: false
+        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+
     - name: Build and push REX runtime image (${{ env.TARGET_ARCH }})
       if: ${{ !env.ACT }}
       id: build-runtime
@@ -188,7 +220,7 @@ jobs:
         pull: true
         provenance: false
         build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          BASE_IMAGE=${{ env.IMAGE_REPO }}@${{ steps.build-base.outputs.digest }}
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
@@ -221,7 +253,7 @@ jobs:
         pull: true
         provenance: false
         build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          BASE_IMAGE=${{ env.IMAGE_REPO }}@${{ steps.build-base.outputs.digest }}
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
@@ -273,6 +305,8 @@ jobs:
 
     env:
       IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
+      LLVM_VERSION: 22
+      BASE_DOCKERFILE: ci/docker/rex-riscv64.Dockerfile
       LOCAL_IMAGE_REPO: rex-local
       REX_RUNTIME_TAG: latest
       REX_DEV_TAG: dev
@@ -302,6 +336,20 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Build and push fresh base image (${{ env.TARGET_ARCH }})
+      if: ${{ !env.ACT }}
+      id: build-base
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        file: ${{ env.BASE_DOCKERFILE }}
+        platforms: ${{ env.TARGET_PLATFORM }}
+        build-args: |
+          LLVM_VERSION=${{ env.LLVM_VERSION }}
+        pull: true
+        provenance: false
+        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+
     - name: Build and push REX runtime image (${{ env.TARGET_ARCH }})
       if: ${{ !env.ACT }}
       id: build-runtime
@@ -314,7 +362,7 @@ jobs:
         pull: true
         provenance: false
         build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          BASE_IMAGE=${{ env.IMAGE_REPO }}@${{ steps.build-base.outputs.digest }}
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
@@ -347,7 +395,7 @@ jobs:
         pull: true
         provenance: false
         build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          BASE_IMAGE=${{ env.IMAGE_REPO }}@${{ steps.build-base.outputs.digest }}
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
@@ -399,6 +447,8 @@ jobs:
 
     env:
       IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
+      LLVM_VERSION: 22
+      BASE_DOCKERFILE: ci/docker/rex-loongarch64.Dockerfile
       LOCAL_IMAGE_REPO: rex-local
       REX_RUNTIME_TAG: latest
       REX_DEV_TAG: dev
@@ -428,6 +478,20 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Build and push fresh base image (${{ env.TARGET_ARCH }})
+      if: ${{ !env.ACT }}
+      id: build-base
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        file: ${{ env.BASE_DOCKERFILE }}
+        platforms: ${{ env.TARGET_PLATFORM }}
+        build-args: |
+          LLVM_VERSION=${{ env.LLVM_VERSION }}
+        pull: true
+        provenance: false
+        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+
     - name: Build and push REX runtime image (${{ env.TARGET_ARCH }})
       if: ${{ !env.ACT }}
       id: build-runtime
@@ -440,7 +504,7 @@ jobs:
         pull: true
         provenance: false
         build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          BASE_IMAGE=${{ env.IMAGE_REPO }}@${{ steps.build-base.outputs.digest }}
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
@@ -473,7 +537,7 @@ jobs:
         pull: true
         provenance: false
         build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+          BASE_IMAGE=${{ env.IMAGE_REPO }}@${{ steps.build-base.outputs.digest }}
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
