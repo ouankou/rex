@@ -17,6 +17,8 @@
 
 #include <stdint.h>
 
+#include <type_traits>
+
 #include "constantFolding.h"
 
 namespace legacy {
@@ -149,12 +151,18 @@ public:
 // Accumulate a certain property of all neighbors of a graph node.  Used
 // internally by PRE.
 template <class PropMap, class BinOp>
-typename BinOp::result_type
+using NeighborAccumulationResult =
+    std::invoke_result_t<BinOp, typename PropMap::value_type,
+                         typename PropMap::value_type>;
+
+template <class PropMap, class BinOp>
+NeighborAccumulationResult<PropMap, BinOp>
 accumulate_neighbors(const PRE::myControlFlowGraph &cfg, int,
                      const PropMap &prop, const vector<int> &edges,
                      int (PRE::simpleGraph::*edge_to_neighbor)(int) const,
-                     const BinOp &combine, typename BinOp::result_type init,
-                     typename BinOp::result_type ifnone) {
+                     const BinOp &combine,
+                     NeighborAccumulationResult<PropMap, BinOp> init,
+                     NeighborAccumulationResult<PropMap, BinOp> ifnone) {
   std::vector<int>::const_iterator i = edges.begin(), end = edges.end();
   if (i == end)
     return ifnone;

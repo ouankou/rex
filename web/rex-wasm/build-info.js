@@ -1,0 +1,1 @@
+window.REX_WASM_BUILD_INFO = window.REX_WASM_BUILD_INFO || {};

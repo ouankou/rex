@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  echo "source this script instead of executing it: source scripts/ci-llvm-env [LLVM_VERSION]" >&2
+  exit 2
+fi
+
+llvm_version="${1:-${LLVM_VERSION:-22}}"
+llvm_root="${LLVM_ROOT:-/usr/lib/llvm-${llvm_version}}"
+
+if [ ! -d "${llvm_root}" ]; then
+  echo "ci-llvm-env: LLVM root not found: ${llvm_root}" >&2
+  return 2
+fi
+
+java_server=""
+for candidate in /usr/lib/jvm/java-*-openjdk-amd64/lib/server; do
+  if [ -d "${candidate}" ]; then
+    java_server="${candidate}"
+    break
+  fi
+done
+
+export PATH="${llvm_root}/bin:${PATH}"
+export LD_LIBRARY_PATH="${llvm_root}/lib${java_server:+:${java_server}}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+export CMAKE_PREFIX_PATH="${llvm_root}${CMAKE_PREFIX_PATH:+:${CMAKE_PREFIX_PATH}}"
+export LLVM_DIR="${llvm_root}"
+export LLVM_NATIVE_TOOL_DIR="${LLVM_NATIVE_TOOL_DIR:-${llvm_root}/bin}"

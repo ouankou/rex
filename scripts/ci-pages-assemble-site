@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+arg0="${0##*/}"
+dir0="${0%/*}"
+repo_root="$(cd "$dir0/.." && pwd)"
+
+wasm_dir="${PAGES_WASM_DIR:?PAGES_WASM_DIR is required}"
+docs_dir="${PAGES_DOCS_DIR:?PAGES_DOCS_DIR is required}"
+site_dir="${PAGES_SITE_DIR:-$repo_root/pages-site}"
+pages_domain="${PAGES_DOMAIN:-rex.ouankou.com}"
+require_wasm="${PAGES_REQUIRE_WASM:-1}"
+require_docs="${PAGES_REQUIRE_DOCS:-0}"
+
+die() {
+  echo "$arg0: error:" "$@" >&2
+  exit 1
+}
+
+normalize_dir() {
+  local path="$1"
+  if [ -n "$path" ] && [[ "$path" != /* ]]; then
+    path="$repo_root/$path"
+  fi
+  printf '%s\n' "$path"
+}
+
+dir_has_files() {
+  local path="$1"
+  [ -d "$path" ] || return 1
+  find "$path" -mindepth 1 -print -quit | grep -q .
+}
+
+copy_tree() {
+  local src="$1"
+  local dst="$2"
+  mkdir -p "$dst"
+  cp -a "$src"/. "$dst"/
+}
+
+wasm_dir="$(normalize_dir "$wasm_dir")"
+docs_dir="$(normalize_dir "$docs_dir")"
+site_dir="$(normalize_dir "$site_dir")"
+
+if [ "$require_wasm" = "1" ] && ! dir_has_files "$wasm_dir"; then
+  die "missing required WASM site directory: $wasm_dir"
+fi
+
+if [ "$require_docs" = "1" ] && ! dir_has_files "$docs_dir"; then
+  die "missing required docs site directory: $docs_dir"
+fi
+
+rm -rf "$site_dir"
+mkdir -p "$site_dir"
+
+if dir_has_files "$wasm_dir"; then
+  copy_tree "$wasm_dir" "$site_dir"
+fi
+
+if dir_has_files "$docs_dir"; then
+  rm -rf "$site_dir/docs"
+  copy_tree "$docs_dir" "$site_dir/docs"
+  rm -f "$site_dir/docs/CNAME"
+fi
+
+printf '%s\n' "$pages_domain" > "$site_dir/CNAME"
+touch "$site_dir/.nojekyll"
+
+echo "GitHub Pages site assembled in $site_dir"

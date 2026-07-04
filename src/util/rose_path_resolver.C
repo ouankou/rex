@@ -342,6 +342,13 @@ RosePathRoots resolveRosePaths(const char *argv0) {
     return make_build_tree_roots(*build_root);
   }
 
+#ifdef __EMSCRIPTEN__
+  const path wasm_build_root("/rex");
+  if (dir_exists(wasm_build_root / "include-staging")) {
+    return make_build_tree_roots(wasm_build_root);
+  }
+#endif
+
   std::vector<path> install_candidates;
   if (library_prefix) {
     install_candidates.push_back(*library_prefix);

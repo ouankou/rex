@@ -1095,12 +1095,16 @@ void whatTypeOfFileIsThis(const string &name) {
   printf("Error: unknown file type: ");
   flush(cout);
 
+#ifdef __EMSCRIPTEN__
+  printf("%s\n", name.c_str());
+#else
   // Use "-b" for brief mode!
   string commandLine = "file " + name;
   if (system(commandLine.c_str()))
     MLOG_ERROR_CXX("sage_support")
         << "command failed: \"" << StringUtility::cEscape(commandLine)
         << "\"\n";
+#endif
 }
 
 void outputTypeOfFileAndExit(const string &name) {

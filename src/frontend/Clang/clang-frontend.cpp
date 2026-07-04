@@ -91,7 +91,8 @@ private:
 bool isSplitClangTargetOption(llvm::StringRef arg) {
   return arg == "-target" || arg == "--target" || arg == "-march" ||
          arg == "-mcpu" || arg == "-mtune" || arg == "-mabi" ||
-         arg == "-mfpu" || arg == "-isysroot" || arg == "--sysroot";
+         arg == "-mfpu" || arg == "-isysroot" || arg == "--sysroot" ||
+         arg == "-resource-dir";
 }
 
 bool isJoinedClangTargetOption(llvm::StringRef arg) {
@@ -100,8 +101,8 @@ bool isJoinedClangTargetOption(llvm::StringRef arg) {
          arg.starts_with("-mtune=") || arg.starts_with("-mabi=") ||
          arg.starts_with("-mfpu=") || arg.starts_with("-mfloat-abi=") ||
          arg.starts_with("-isysroot") || arg.starts_with("--sysroot=") ||
-         arg == "-m32" || arg == "-m64" || arg == "-mx32" ||
-         arg == "-msoft-float" || arg == "-mhard-float" ||
+         arg.starts_with("-resource-dir=") || arg == "-m32" || arg == "-m64" ||
+         arg == "-mx32" || arg == "-msoft-float" || arg == "-mhard-float" ||
          arg == "-mlittle-endian" || arg == "-mbig-endian";
 }
 

@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+arg0="${0##*/}"
+mode="${1:-}"
+llvm_version="${2:-${LLVM_VERSION:-22}}"
+
+die() {
+  echo "$arg0: error:" "$@" >&2
+  exit 2
+}
+
+add_llvm_apt_repo() {
+  wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+    | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc > /dev/null
+  echo "deb http://apt.llvm.org/resolute/ llvm-toolchain-resolute-${llvm_version} main" \
+    | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
+}
+
+install_packages() {
+  sudo apt-get update
+  sudo apt-get install -y "$@"
+}
+
+if [ -z "$mode" ]; then
+  die "usage: $arg0 {native|docs|wasm} [llvm-version]"
+fi
+
+add_llvm_apt_repo
+
+case "$mode" in
+  native)
+    install_packages \
+      bison \
+      build-essential \
+      cmake \
+      clang-"${llvm_version}" \
+      curl \
+      flang-"${llvm_version}" \
+      flex \
+      g++ \
+      gdb \
+      ghostscript \
+      git \
+      graphviz \
+      lld-"${llvm_version}" \
+      libantlr4-runtime-dev \
+      libclang-"${llvm_version}"-dev \
+      libclang-cpp"${llvm_version}"-dev \
+      libhpdf-dev \
+      libomp-"${llvm_version}"-dev \
+      libtool \
+      llvm-"${llvm_version}" \
+      llvm-"${llvm_version}"-dev \
+      mold \
+      openjdk-25-jdk \
+      pkg-config
+    ;;
+  docs)
+    install_packages \
+      antlr4 \
+      asciidoctor \
+      bison \
+      build-essential \
+      clang-"${llvm_version}" \
+      cmake \
+      curl \
+      flex \
+      lld-"${llvm_version}" \
+      libantlr4-runtime-dev \
+      libclang-"${llvm_version}"-dev \
+      libflang-"${llvm_version}"-dev \
+      libhpdf-dev \
+      libomp-"${llvm_version}"-dev \
+      llvm-"${llvm_version}" \
+      llvm-"${llvm_version}"-dev \
+      mold \
+      perl \
+      pkg-config
+    ;;
+  wasm)
+    install_packages \
+      antlr4 \
+      bison \
+      build-essential \
+      cmake \
+      clang-"${llvm_version}" \
+      clang-tools-"${llvm_version}" \
+      curl \
+      flex \
+      libomp-"${llvm_version}"-dev \
+      llvm-"${llvm_version}" \
+      llvm-"${llvm_version}"-dev \
+      ninja-build \
+      nodejs \
+      openjdk-25-jdk \
+      perl \
+      pkg-config
+    ;;
+  *)
+    die "unknown dependency mode: $mode"
+    ;;
+esac

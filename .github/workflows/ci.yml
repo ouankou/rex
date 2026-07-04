@@ -8,9 +8,17 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
+
+env:
+  REX_WASM_ARTIFACT: rex-wasm-dist
+  DOCS_SITE_ARTIFACT: docs-site
+  PAGES_SITE_DIR: pages-site
 
 jobs:
   build:
@@ -36,142 +44,98 @@ jobs:
       with:
         download_url: https://www.antlr.org/download/antlr-4.10.1-complete.jar
 
-    - name: Add LLVM apt repository
-      run: |
-        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc > /dev/null
-        echo "deb http://apt.llvm.org/resolute/ llvm-toolchain-resolute-${{ matrix.llvm }} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
-
     # Install only version-specific LLVM/Clang packages from apt.llvm.org.
     - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          bison \
-          build-essential \
-          cmake \
-          clang-${{ matrix.llvm }} \
-          curl \
-          flang-${{ matrix.llvm }} \
-          flex \
-          g++ \
-          gdb \
-          ghostscript \
-          git \
-          graphviz \
-          lld-${{ matrix.llvm }} \
-          libantlr4-runtime-dev \
-          libclang-${{ matrix.llvm }}-dev \
-          libclang-cpp${{ matrix.llvm }}-dev \
-          libhpdf-dev \
-          libomp-${{ matrix.llvm }}-dev \
-          libtool \
-          llvm-${{ matrix.llvm }} \
-          llvm-${{ matrix.llvm }}-dev \
-          mold \
-          openjdk-25-jdk \
-          pkg-config
+      run: scripts/ci-install-deps native "${{ matrix.llvm }}"
 
     # Simplified build using build-rex.sh script
     - name: Build and Install (Debug)
-      env:
-        # Set up LLVM paths so "clang" resolves to the selected version.
-        PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
-        CMAKE_PREFIX_PATH: /usr/lib/llvm-${{ matrix.llvm }}
-        LLVM_DIR: /usr/lib/llvm-${{ matrix.llvm }}
-        CC: clang-${{ matrix.llvm }}
-        CXX: clang++-${{ matrix.llvm }}
-        FC: flang-${{ matrix.llvm }}
       run: |
         cd $GITHUB_WORKSPACE
+        source scripts/ci-llvm-env "${{ matrix.llvm }}"
+        export CC=clang-${{ matrix.llvm }}
+        export CXX=clang++-${{ matrix.llvm }}
+        export FC=flang-${{ matrix.llvm }}
         ./build-rex.sh $GITHUB_WORKSPACE/rex_install Debug
 
     # Run frontend-related tests
     - name: Run core and OpenMP tests
-      env:
-        PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
       run: |
         cd $GITHUB_WORKSPACE
+        source scripts/ci-llvm-env "${{ matrix.llvm }}"
         CTEST_JOBS="$(nproc)"
 
         # Single CI sweep: core + OpenMP AST + OpenMP lowering suites.
         ctest --test-dir build -R "rex|astInterface|testQuery|fortran|f90|f03|gfortran|OMPTEST_|OMPACCTEST_|OMPFORTRAN_|OMPANALYZE_|OMPVV_5_0_|OMPVV_4_5_|OMPVV_5_1_|OMPVV_5_2_|OMPVV_6_0_|omp_lowering_|OMPLOWERING_CPU_|OMPLOWERING_RODINIA_|^Cxx_tests_test2013_69_C$|^Cxx_tests_test2013_198_C$" --output-on-failure -j"${CTEST_JOBS}"
 
-  fortran-only-config:
-    strategy:
-      matrix:
-        os: [ubuntu-26.04]
-        llvm: [22]
+  rex-wasm:
+    name: Build & Test (WASM)
+    uses: ./.github/workflows/rex-wasm-build.yml
+    with:
+      upload-artifact: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
-    runs-on: ${{ matrix.os }}
-
-    defaults:
-      run:
-        shell: bash
+  deploy-rex-wasm:
+    name: Deploy REX WASM site
+    runs-on: ubuntu-26.04
+    needs: [build, rex-wasm]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      actions: read
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-    - uses: actions/checkout@v7
+    - name: Checkout REX
+      uses: actions/checkout@v7
       with:
-        submodules: 'recursive'
         persist-credentials: false
 
-    - uses: StoneMoe/setup-antlr4@v4.13.2
+    - name: Download REX WASM dist
+      uses: actions/download-artifact@v4
       with:
-        download_url: https://www.antlr.org/download/antlr-4.10.1-complete.jar
+        name: ${{ env.REX_WASM_ARTIFACT }}
+        path: ${{ env.REX_WASM_ARTIFACT }}
 
-    - name: Add LLVM apt repository
-      run: |
-        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc > /dev/null
-        echo "deb http://apt.llvm.org/resolute/ llvm-toolchain-resolute-${{ matrix.llvm }} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
-
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          bison \
-          build-essential \
-          cmake \
-          clang-${{ matrix.llvm }} \
-          curl \
-          flang-${{ matrix.llvm }} \
-          flex \
-          g++ \
-          gdb \
-          ghostscript \
-          git \
-          graphviz \
-          lld-${{ matrix.llvm }} \
-          libantlr4-runtime-dev \
-          libclang-${{ matrix.llvm }}-dev \
-          libclang-cpp${{ matrix.llvm }}-dev \
-          libhpdf-dev \
-          libomp-${{ matrix.llvm }}-dev \
-          libtool \
-          llvm-${{ matrix.llvm }} \
-          llvm-${{ matrix.llvm }}-dev \
-          mold \
-          openjdk-25-jdk \
-          pkg-config
-
-    - name: Configure and build (Fortran-only)
+    - name: Download latest docs site artifact
+      id: docs-artifact
       env:
-        PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib
-        CMAKE_PREFIX_PATH: /usr/lib/llvm-${{ matrix.llvm }}
-        LLVM_DIR: /usr/lib/llvm-${{ matrix.llvm }}
-        CC: clang-${{ matrix.llvm }}
-        CXX: clang++-${{ matrix.llvm }}
-        FC: flang-${{ matrix.llvm }}
+        GH_TOKEN: ${{ github.token }}
+        DOCS_ARTIFACT_BRANCH: ${{ github.event.repository.default_branch }}
       run: |
-        cmake -S . -B build-fortran-only \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DENABLE-C=OFF \
-          -DENABLE-FORTRAN=ON \
-          -DENABLE-FORTRAN-FLANG=ON
-        cmake --build build-fortran-only -j"$(nproc)"
+        scripts/ci-download-latest-artifact "$DOCS_SITE_ARTIFACT" "$DOCS_SITE_ARTIFACT" --optional "$DOCS_ARTIFACT_BRANCH"
 
-    - name: Verify Fortran-only compiler metadata
+    - name: Skip deploy until docs artifact exists
+      if: steps.docs-artifact.outputs.found != 'true'
       run: |
-        grep -E "^#define BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER [0-9]+$" build-fortran-only/rose_config.h
-        grep -E "^#define BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER [0-9]+$" build-fortran-only/rose_config.h
+        echo "No $DOCS_SITE_ARTIFACT artifact found; run Publish Docs once to bootstrap the full static site."
+
+    - name: Assemble GitHub Pages site
+      if: steps.docs-artifact.outputs.found == 'true'
+      env:
+        PAGES_WASM_DIR: ${{ env.REX_WASM_ARTIFACT }}
+        PAGES_DOCS_DIR: ${{ env.DOCS_SITE_ARTIFACT }}
+        PAGES_SITE_DIR: ${{ env.PAGES_SITE_DIR }}
+        PAGES_REQUIRE_DOCS: "1"
+      run: scripts/ci-pages-assemble-site
+
+    - name: Configure GitHub Pages
+      if: steps.docs-artifact.outputs.found == 'true'
+      uses: actions/configure-pages@v6
+
+    - name: Upload GitHub Pages artifact
+      if: steps.docs-artifact.outputs.found == 'true'
+      uses: actions/upload-pages-artifact@v5
+      with:
+        path: ${{ env.PAGES_SITE_DIR }}
+
+    - name: Deploy to GitHub Pages
+      if: steps.docs-artifact.outputs.found == 'true'
+      id: deployment
+      uses: actions/deploy-pages@v5

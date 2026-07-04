@@ -7,7 +7,9 @@ set(OMPPARSER_BUILD_TESTING OFF CACHE BOOL
 add_subdirectory(ompparser)
 set(USE_REX true)
 set(USE_OMPPARSER true)
-add_subdirectory(accparser)
+if(NOT REX_ENABLE_WASM)
+  add_subdirectory(accparser)
+endif()
 if(TARGET accparser)
   # accparser is a submodule; inject ROSE_ABORT via forced include without editing submodule sources.
   target_include_directories(accparser PUBLIC ${ROSE_TOP_SRC_DIR}/src/util)
@@ -40,7 +42,6 @@ if(NOT ENABLE-INTERNALFRONTENDDEVELOPMENT)
 endif()
 
 set(SAGE3_SOURCES
-  accAstConstruction.cpp
   rose_attributes_list.C
   attachPreprocessingInfo.C
   attachPreprocessingInfoTraversal.C
@@ -69,6 +70,10 @@ set(SAGE3_SOURCES
   rose_graph_support.C
   Utf8.C
   memory-pool-snapshot.C)
+
+if(NOT REX_ENABLE_WASM)
+  list(PREPEND SAGE3_SOURCES accAstConstruction.cpp)
+endif()
 
 configure_file(sage3basic.h.in ${CMAKE_CURRENT_BINARY_DIR}/sage3basic.h @ONLY)
 
