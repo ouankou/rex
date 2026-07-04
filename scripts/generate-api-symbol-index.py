@@ -24,8 +24,8 @@ def _to_url(target: str) -> str:
         target = target[: -len(".adoc")]
     target = target.strip("/")
     if not target:
-        return "/reference/"
-    return f"/reference/{target}/"
+        return "reference/"
+    return f"reference/{target}/"
 
 
 def main() -> int:

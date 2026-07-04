@@ -44,13 +44,15 @@ static bool startsWith(const std::string &value, const char *prefix) {
 static bool isSplitClangTargetOption(const std::string &arg) {
   return arg == "-target" || arg == "--target" || arg == "-march" ||
          arg == "-mcpu" || arg == "-mtune" || arg == "-mabi" ||
-         arg == "-mfpu" || arg == "-isysroot" || arg == "--sysroot";
+         arg == "-mfpu" || arg == "-isysroot" || arg == "--sysroot" ||
+         arg == "-resource-dir";
 }
 
 static bool isJoinedClangTargetOption(const std::string &arg) {
-  static const char *prefixes[] = {
-      "-target=", "--target=", "-march=",      "-mcpu=",    "-mtune=",
-      "-mabi=",   "-mfpu=",    "-mfloat-abi=", "-isysroot", "--sysroot="};
+  static const char *prefixes[] = {"-target=",   "--target=",     "-march=",
+                                   "-mcpu=",     "-mtune=",       "-mabi=",
+                                   "-mfpu=",     "-mfloat-abi=",  "-isysroot",
+                                   "--sysroot=", "-resource-dir="};
   for (const char *prefix : prefixes) {
     if (startsWith(arg, prefix)) {
       return true;
@@ -325,6 +327,7 @@ bool CommandlineProcessing::isOptionTakingSecondParameter(string argument) {
       argument == "-isystem" || // Used for preinclude directory list (to
                                 // specify include paths to be search before all
                                 // others, common requirement for compiler)
+      isSplitClangTargetOption(argument) ||
 
       // ROSE options
       argument == "-rose:output" || // Used to specify output file to ROSE

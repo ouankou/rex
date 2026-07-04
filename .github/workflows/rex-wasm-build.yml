@@ -1,0 +1,147 @@
+name: Build REX WASM
+
+on:
+  workflow_call:
+    inputs:
+      upload-artifact:
+        description: Upload the generated static WASM site as an artifact.
+        type: boolean
+        default: false
+      llvm-version:
+        type: string
+        default: "22"
+      llvm-project-ref:
+        type: string
+        default: llvmorg-22.1.8
+      emsdk-version:
+        type: string
+        default: 4.0.22
+      build-type:
+        type: string
+        default: MinSizeRel
+      llvm-project-checkout-dir:
+        type: string
+        default: llvm-project
+      llvm-wasm-cache-dir:
+        type: string
+        default: .build/rex-wasm/llvm-wasm
+      rex-wasm-cmake-build-dir:
+        type: string
+        default: .build/rex-wasm/rex
+      artifact-name:
+        type: string
+        default: rex-wasm-dist
+      artifact-retention-days:
+        type: number
+        default: 90
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & Test WASM
+    runs-on: ubuntu-26.04
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      LLVM_VERSION: ${{ inputs.llvm-version }}
+      LLVM_PROJECT_REF: ${{ inputs.llvm-project-ref }}
+      EMSDK_VERSION: ${{ inputs.emsdk-version }}
+      REX_WASM_BUILD_TYPE: ${{ inputs.build-type }}
+      LLVM_PROJECT_CHECKOUT_DIR: ${{ inputs.llvm-project-checkout-dir }}
+      LLVM_WASM_CACHE_DIR: ${{ inputs.llvm-wasm-cache-dir }}
+      REX_WASM_CMAKE_BUILD_DIR: ${{ inputs.rex-wasm-cmake-build-dir }}
+      REX_WASM_ARTIFACT: ${{ inputs.artifact-name }}
+      LLVM_SOURCE_DIR: ${{ github.workspace }}/${{ inputs.llvm-project-checkout-dir }}/llvm
+      LLVM_WASM_BUILD_DIR: ${{ github.workspace }}/${{ inputs.llvm-wasm-cache-dir }}
+      REX_WASM_BUILD_DIR: ${{ github.workspace }}/${{ inputs.rex-wasm-cmake-build-dir }}
+      REX_WASM_DIST_DIR: ${{ github.workspace }}/${{ inputs.artifact-name }}
+      REX_WASM_TEST_TIMEOUT: 180s
+
+    steps:
+      - name: Checkout REX
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Restore wasm LLVM cache
+        id: cache-llvm-wasm
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.LLVM_WASM_CACHE_DIR }}
+          key: rex-wasm-llvm-${{ runner.os }}-emsdk-${{ env.EMSDK_VERSION }}-${{ env.LLVM_PROJECT_REF }}-${{ env.REX_WASM_BUILD_TYPE }}
+
+      - name: Report wasm LLVM cache hit
+        run: |
+          cache_hit="${{ steps.cache-llvm-wasm.outputs.cache-hit }}"
+          if [[ "${cache_hit}" == "true" ]]; then
+            echo "wasm LLVM cache: exact hit"
+          else
+            echo "wasm LLVM cache: miss; LLVM will be built from source"
+          fi
+          {
+            echo "### REX WASM cache"
+            echo "- actions/cache cache-hit: ${cache_hit:-false}"
+            echo "- cache key: rex-wasm-llvm-${{ runner.os }}-emsdk-${EMSDK_VERSION}-${LLVM_PROJECT_REF}-${REX_WASM_BUILD_TYPE}"
+            echo "- cache path: ${LLVM_WASM_CACHE_DIR}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Checkout LLVM project
+        uses: actions/checkout@v7
+        with:
+          repository: llvm/llvm-project
+          ref: ${{ env.LLVM_PROJECT_REF }}
+          path: ${{ env.LLVM_PROJECT_CHECKOUT_DIR }}
+          persist-credentials: false
+
+      - name: Install system dependencies
+        run: scripts/ci-install-deps wasm "${LLVM_VERSION}"
+
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: ${{ env.EMSDK_VERSION }}
+
+      - name: Inspect wasm LLVM cache contents
+        run: |
+          source scripts/ci-llvm-env "${LLVM_VERSION}"
+          scripts/ci-rex-wasm-build-dist llvm-status
+
+      - name: Build or reuse wasm LLVM/Clang
+        run: |
+          source scripts/ci-llvm-env "${LLVM_VERSION}"
+          scripts/ci-rex-wasm-build-dist llvm
+
+      - name: Configure REX WASM
+        run: |
+          source scripts/ci-llvm-env "${LLVM_VERSION}"
+          scripts/ci-rex-wasm-build-dist configure-rex
+
+      - name: Build REX WASM target
+        run: |
+          source scripts/ci-llvm-env "${LLVM_VERSION}"
+          scripts/ci-rex-wasm-build-dist build-rex
+
+      - name: Run REX WASM smoke tests
+        run: |
+          source scripts/ci-llvm-env "${LLVM_VERSION}"
+          scripts/ci-rex-wasm-build-dist test
+
+      - name: Assemble static REX WASM site
+        run: |
+          source scripts/ci-llvm-env "${LLVM_VERSION}"
+          scripts/ci-rex-wasm-build-dist dist
+
+      - name: Upload REX WASM dist
+        if: ${{ inputs.upload-artifact }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.REX_WASM_ARTIFACT }}
+          path: ${{ env.REX_WASM_ARTIFACT }}
+          retention-days: ${{ inputs.artifact-retention-days }}
+          overwrite: true

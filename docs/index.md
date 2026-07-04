@@ -14,7 +14,7 @@ This site documents the REX source tree for developers: build notes and a genera
 
 ## Build Metadata
 
-- [docs-build-manifest.json](/docs-build-manifest.json)
+- [docs-build-manifest.json](docs-build-manifest.json)
 
 ## Build Locally
 

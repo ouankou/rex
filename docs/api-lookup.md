@@ -14,6 +14,10 @@ This page loads a compact symbol index and lets you jump directly to the generat
   const q = document.getElementById("api-lookup-q");
   const meta = document.getElementById("api-lookup-meta");
   const results = document.getElementById("api-lookup-results");
+  const pathname = window.location.pathname;
+  const isDirectoryPage = pathname.endsWith("/") || pathname.endsWith("/index.html");
+  const siteRoot = new URL(isDirectoryPage ? "../" : "./", window.location.href);
+  const symbolsUrl = new URL("assets/api/symbols.json", siteRoot);
   const state = { symbols: [], loaded: false };
 
   const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({
@@ -25,13 +29,23 @@ This page loads a compact symbol index and lets you jump directly to the generat
   }[c]));
 
   const normalize = (s) => String(s || "").toLowerCase();
-  const isSafeUrl = (url) => typeof url === "string" && url.startsWith("/") && !url.startsWith("//");
+  const resolveSiteUrl = (url) => {
+    if (typeof url !== "string" || url.startsWith("//") || /^[a-z][a-z0-9+.-]*:/i.test(url)) {
+      return null;
+    }
+    const path = url.replace(/^\/+/, "");
+    if (!path.startsWith("reference/")) {
+      return null;
+    }
+    return new URL(path, siteRoot).pathname;
+  };
 
   const render = (items, total) => {
     const safeItems = [];
     for (const s of items) {
-      if (isSafeUrl(s?.url)) {
-        safeItems.push(s);
+      const url = resolveSiteUrl(s?.url);
+      if (url) {
+        safeItems.push({ ...s, url });
       } else {
         console.error("Skipping invalid symbol URL:", s?.url);
       }
@@ -74,7 +88,7 @@ This page loads a compact symbol index and lets you jump directly to the generat
 
   q.addEventListener("input", filter);
 
-  fetch("/assets/api/symbols.json", { cache: "no-store" })
+  fetch(symbolsUrl, { cache: "no-store" })
     .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
     .then((data) => {
       state.symbols = Array.isArray(data?.symbols) ? data.symbols : [];
@@ -85,7 +99,7 @@ This page loads a compact symbol index and lets you jump directly to the generat
     .catch((err) => {
       state.loaded = true;
       meta.textContent = "failed to load index";
-      results.innerHTML = `<p>Failed to load /assets/api/symbols.json: ${escapeHtml(err.message)}</p>`;
+      results.innerHTML = `<p>Failed to load ${escapeHtml(symbolsUrl.pathname)}: ${escapeHtml(err.message)}</p>`;
     });
 })();
 </script>

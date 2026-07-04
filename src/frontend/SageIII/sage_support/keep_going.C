@@ -6,6 +6,7 @@
 #include "sage3basic.h"
 
 #include <fcntl.h>
+#include <unistd.h>
 
 #include <filesystem>
 
@@ -31,6 +32,8 @@
 #include <sstream>
 
 #include <string>
+
+#include <system_error>
 
 #include <vector>
 #ifdef __linux__
@@ -620,6 +623,19 @@ void Rose::KeepGoing::touch(const std::string &pathname) {
     return;
   }
 
+  close(fd);
+
+#ifdef __EMSCRIPTEN__
+  std::error_code ec;
+  std::filesystem::last_write_time(
+      pathname, std::filesystem::file_time_type::clock::now(), ec);
+  if (ec) {
+    std::cerr << __PRETTY_FUNCTION__
+              << ": Couldn't update timestamp for path \"" << pathname
+              << "\": " << ec.message() << "\n";
+    return;
+  }
+#else
   int rc = utime(pathname.c_str(), 0);
 
   if (rc) {
@@ -627,6 +643,7 @@ void Rose::KeepGoing::touch(const std::string &pathname) {
               << "\"\n";
     return;
   }
+#endif
   if (verbose) {
     std::clog << __PRETTY_FUNCTION__ << ": Completed touch() on path \""
               << pathname << "\"\n";

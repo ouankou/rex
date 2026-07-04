@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>REX WASM</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace" aria-label="REX browser workspace">
+        <div class="source-pane">
+          <header class="pane-header">
+            <div>
+              <div class="title-row">
+                <h1>REX WASM</h1>
+                <a id="build-commit" class="commit-link" hidden></a>
+              </div>
+              <p>C/C++ source-to-source OpenMP demo</p>
+            </div>
+            <div class="header-actions">
+              <a class="header-link" href="docs/">Docs</a>
+              <label class="file-button">
+                Upload
+                <input id="file-input" type="file" accept=".c,.C,.cc,.cp,.cpp,.CPP,.cxx,.c++,text/x-c,text/x-c++src,text/plain">
+              </label>
+            </div>
+          </header>
+
+          <div class="source-control-row">
+            <label class="source-label" for="source-editor">Input source</label>
+            <div class="mode-bar" role="toolbar" aria-label="REX mode">
+              <button class="mode-button" type="button" data-mode="plain">Round Trip</button>
+              <button class="mode-button" type="button" data-mode="omp_ast">OpenMP AST-Only</button>
+              <button class="mode-button" type="button" data-mode="omp_lowering">OpenMP Lowering</button>
+            </div>
+          </div>
+          <div class="source-editor-shell">
+            <div id="source-mirror" class="code-lines source-mirror" aria-hidden="true"></div>
+            <textarea id="source-editor" spellcheck="false" wrap="soft"></textarea>
+          </div>
+        </div>
+
+        <div class="output-pane">
+          <header class="pane-header output-header">
+            <div>
+              <div class="title-row">
+                <h2>Generated Output</h2>
+                <div id="output-mode" class="mode-chip">No output yet</div>
+              </div>
+              <p id="status-line">Ready</p>
+            </div>
+            <div id="run-badge" class="run-badge">idle</div>
+          </header>
+
+          <div id="tab-list" class="tab-list" role="tablist" aria-label="Generated files"></div>
+          <div id="output-view" class="output-view" tabindex="0" aria-label="Output content"></div>
+        </div>
+      </section>
+    </main>
+    <script src="build-info.js"></script>
+    <script src="app.js" type="module"></script>
+  </body>
+</html>

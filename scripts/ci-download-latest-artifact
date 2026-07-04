@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+arg0="${0##*/}"
+
+artifact_name="${1:-}"
+dest_dir="${2:-}"
+optional="${3:-}"
+artifact_branch="${4:-${GITHUB_REF_NAME:-}}"
+
+die() {
+  echo "$arg0: error:" "$@" >&2
+  exit 1
+}
+
+[ -n "$artifact_name" ] || die "artifact name is required"
+if [ "$dest_dir" = "--optional" ]; then
+  optional="--optional"
+  dest_dir=""
+fi
+dest_dir="${dest_dir:-$artifact_name}"
+[ -n "${GITHUB_REPOSITORY:-}" ] || die "GITHUB_REPOSITORY is required"
+
+if [ -n "$optional" ] && [ "$optional" != "--optional" ]; then
+  die "unknown option: $optional"
+fi
+
+artifact_filter=".name == \"$artifact_name\" and (.expired | not)"
+if [ -n "$artifact_branch" ]; then
+  artifact_filter="$artifact_filter and .workflow_run.head_branch == \"$artifact_branch\""
+fi
+
+artifact_line="$(
+  gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
+    --jq ".artifacts[] | select($artifact_filter) | [.created_at, .workflow_run.id] | @tsv" \
+    | awk 'best == "" || $0 > best { best = $0 } END { print best }'
+)"
+
+if [ -z "$artifact_line" ]; then
+  if [ -n "${GITHUB_OUTPUT:-}" ]; then
+    echo "found=false" >> "$GITHUB_OUTPUT"
+  fi
+  if [ "$optional" = "--optional" ]; then
+    mkdir -p "$dest_dir"
+    if [ -n "$artifact_branch" ]; then
+      echo "No non-expired $artifact_name artifact found for branch $artifact_branch"
+    else
+      echo "No non-expired $artifact_name artifact found"
+    fi
+    exit 0
+  fi
+  if [ -n "$artifact_branch" ]; then
+    die "no non-expired $artifact_name artifact found for branch $artifact_branch"
+  fi
+  die "no non-expired $artifact_name artifact found"
+fi
+
+run_id="${artifact_line##*$'\t'}"
+rm -rf "$dest_dir"
+mkdir -p "$dest_dir"
+gh run download "$run_id" -n "$artifact_name" -D "$dest_dir"
+
+if [ -n "${GITHUB_OUTPUT:-}" ]; then
+  echo "found=true" >> "$GITHUB_OUTPUT"
+  echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+fi
+
+if [ -n "$artifact_branch" ]; then
+  echo "Downloaded $artifact_name from branch $artifact_branch workflow run $run_id"
+else
+  echo "Downloaded $artifact_name from workflow run $run_id"
+fi

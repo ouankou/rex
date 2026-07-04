@@ -172,7 +172,6 @@ set(rose_LIB_SRCS
   $<TARGET_OBJECTS:midend_util>
   $<TARGET_OBJECTS:midend_pt>
   $<TARGET_OBJECTS:ompparser>
-  $<TARGET_OBJECTS:accparser>
   $<TARGET_OBJECTS:sageInterface>
   $<TARGET_OBJECTS:astTokenStream>
   $<TARGET_OBJECTS:astHiddenTypeAndDeclarationLists>
@@ -180,6 +179,10 @@ set(rose_LIB_SRCS
   $<TARGET_OBJECTS:includeDirectivesProcessing>
   $<TARGET_OBJECTS:astPostProcessing>
   $<TARGET_OBJECTS:trans_tracking>)
+
+if(TARGET accparser)
+  list(APPEND rose_LIB_SRCS $<TARGET_OBJECTS:accparser>)
+endif()
 
 if(NOT enable-internalFrontendDevelopment)
   list(APPEND rose_LIB_SRCS
@@ -202,7 +205,11 @@ endif()
 # The ROSE library itself (librose.so, librose.a)
 ########################################################################################################################
 
-add_library(ROSE_DLL SHARED ${rose_LIB_SRCS} )
+if(REX_ENABLE_WASM)
+  add_library(ROSE_DLL STATIC ${rose_LIB_SRCS})
+else()
+  add_library(ROSE_DLL SHARED ${rose_LIB_SRCS})
+endif()
 
 add_dependencies(ROSE_DLL roseUtil)
 target_sources(ROSE_DLL PRIVATE ${ROSE_DOC_HEADERS})
@@ -298,7 +305,9 @@ if(ZLIB_FOUND)
   add_library_dependency(${ZLIB_LIBRARY})
 endif()
 
-target_link_libraries(ROSE_DLL PRIVATE ${HPDF_LIBRARIES})
+if(HPDF_LIBRARIES)
+  target_link_libraries(ROSE_DLL PRIVATE ${HPDF_LIBRARIES})
+endif()
 if(HPDF_LIBRARY_DIRS)
   list(APPEND rose_library_dir_list ${HPDF_LIBRARY_DIRS})
 endif()
@@ -306,9 +315,17 @@ endif()
 set(LINK_FILES
   ${CMAKE_DL_LIBS})
 
-# link ANTLR 4 C++ runtime
-# On Ubuntu 20.04, it is installed to /usr/lib
-list(APPEND LINK_FILES antlr4-runtime)
+foreach(_rose_embedded_parser_target ompparser accparser)
+  if(TARGET ${_rose_embedded_parser_target})
+    get_target_property(_rose_embedded_parser_link_libraries
+      ${_rose_embedded_parser_target} LINK_LIBRARIES)
+    if(_rose_embedded_parser_link_libraries)
+      list(APPEND LINK_FILES ${_rose_embedded_parser_link_libraries})
+    endif()
+    unset(_rose_embedded_parser_link_libraries)
+  endif()
+endforeach()
+unset(_rose_embedded_parser_target)
 
 # Smaller-generated-files support removed; link standard targets only.
 set(ROSE_TARGET_LINK ${LINK_FILES})
@@ -328,6 +345,8 @@ endif()
 remove_definitions(-DROSE_DLL_EXPORTS)
 #add_executable(testSharedRoseLib testRoseLib.C)
 #target_link_libraries(testSharedRoseLib ROSE_DLL ${link_with_libraries})
+
+if(NOT REX_ENABLE_WASM)
 
 ########################################################################################################################
 # The rose-config tool (Deprecated; use the rose-config.cfg file directly instead)
@@ -423,6 +442,12 @@ if(ENABLE-FORTRAN)
     COMMAND rm -f hello-world.f90 hello-world-f90 hello-world-f90.ast hello-world.o rose_hello-world.f90
     VERBATIM
     COMMENT "  TEST     ROSE Fortran compiler")
+endif()
+
+endif()
+
+if(REX_ENABLE_WASM)
+  add_subdirectory(wasm)
 endif()
 
 

@@ -65,6 +65,11 @@ add_dependencies(CxxGrammarMetaProgram roseUtil)
 # build ROSETTA code generator
 set(link_libs ${CMAKE_THREAD_LIBS_INIT})
 target_link_libraries(CxxGrammarMetaProgram ${link_libs} roseUtil)
+if(REX_ENABLE_WASM)
+  target_link_options(CxxGrammarMetaProgram PRIVATE
+    "-sNODERAWFS=1"
+    "-sALLOW_MEMORY_GROWTH=1")
+endif()
 
 if(VERBOSE)
   message(STATUS "Smaller generated files disabled")

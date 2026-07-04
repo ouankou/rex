@@ -1,0 +1,364 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+llvm_version="${LLVM_VERSION:-22}"
+build_root="${REX_WASM_BUILD_ROOT:-${repo_root}/build/rex-wasm}"
+llvm_wasm_build_dir="${LLVM_WASM_BUILD_DIR:-${build_root}/llvm-wasm}"
+rex_wasm_build_dir="${REX_WASM_BUILD_DIR:-${build_root}/rex}"
+dist_dir="${REX_WASM_DIST_DIR:-${repo_root}/rex-wasm-dist}"
+jobs="${REX_WASM_JOBS:-$(nproc)}"
+build_type="${REX_WASM_BUILD_TYPE:-MinSizeRel}"
+package_sysroot="${REX_WASM_PACKAGE_SYSROOT:-ON}"
+phase="${1:-all}"
+
+find_existing_dir() {
+  local candidate
+  for candidate in "$@"; do
+    if [[ -d "${candidate}" ]]; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+find_existing_file_dir() {
+  local candidate
+  for candidate in "$@"; do
+    if [[ -f "${candidate}" ]]; then
+      dirname "${candidate}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+require_executable() {
+  local name="$1"
+  if ! command -v "${name}" >/dev/null 2>&1; then
+    echo "error: required executable not found on PATH: ${name}" >&2
+    exit 2
+  fi
+}
+
+github_repo_url() {
+  local remote_url="$1"
+  if [[ "${remote_url}" == https://github.com/* ]]; then
+    printf '%s\n' "${remote_url%.git}"
+    return 0
+  fi
+  if [[ "${remote_url}" == git@github.com:* ]]; then
+    local repo_path="${remote_url#git@github.com:}"
+    printf 'https://github.com/%s\n' "${repo_path%.git}"
+    return 0
+  fi
+  return 1
+}
+
+llvm_wasm_ready() {
+  local dir="$1"
+  [[ -f "${dir}/lib/cmake/llvm/LLVMConfig.cmake" &&
+     -f "${dir}/lib/cmake/clang/ClangConfig.cmake" &&
+     -f "${dir}/lib/libclangFrontend.a" &&
+     -d "${dir}/lib/clang/${llvm_version}/include" ]]
+}
+
+llvm_wasm_is_ready=0
+if llvm_wasm_ready "${llvm_wasm_build_dir}"; then
+  llvm_wasm_is_ready=1
+fi
+
+if [[ -z "${LLVM_NATIVE_TOOL_DIR:-}" ]]; then
+  if command -v llvm-tblgen >/dev/null 2>&1 && command -v clang-tblgen >/dev/null 2>&1; then
+    llvm_tblgen_dir="$(dirname "$(command -v llvm-tblgen)")"
+    clang_tblgen_dir="$(dirname "$(command -v clang-tblgen)")"
+    if [[ "${llvm_tblgen_dir}" == "${clang_tblgen_dir}" ]]; then
+      LLVM_NATIVE_TOOL_DIR="${llvm_tblgen_dir}"
+    fi
+  fi
+fi
+
+if [[ -z "${LLVM_NATIVE_TOOL_DIR:-}" ]]; then
+  LLVM_NATIVE_TOOL_DIR="$(find_existing_dir \
+    "/usr/lib/llvm-${llvm_version}/bin" \
+    "${repo_root}/../llvm-project/build/bin" || true)"
+fi
+
+if [[ "${llvm_wasm_is_ready}" != "1" &&
+      ( "${phase}" == "all" || "${phase}" == "llvm" ) ]]; then
+  if [[ -z "${LLVM_SOURCE_DIR:-}" ]]; then
+    LLVM_SOURCE_DIR="$(find_existing_dir \
+      "${repo_root}/llvm-project/llvm" \
+      "${repo_root}/../llvm-project/llvm" || true)"
+  fi
+  if [[ -z "${LLVM_SOURCE_DIR:-}" || ! -d "${LLVM_SOURCE_DIR}" ]]; then
+    echo "error: set LLVM_SOURCE_DIR to the llvm-project/llvm source directory" >&2
+    exit 2
+  fi
+fi
+
+if [[ "${llvm_wasm_is_ready}" != "1" &&
+      ( "${phase}" == "all" || "${phase}" == "llvm" ) &&
+      ( -z "${LLVM_NATIVE_TOOL_DIR:-}" ||
+        ! -x "${LLVM_NATIVE_TOOL_DIR}/llvm-tblgen" ||
+        ! -x "${LLVM_NATIVE_TOOL_DIR}/clang-tblgen" ) ]]; then
+  echo "error: set LLVM_NATIVE_TOOL_DIR to a native LLVM ${llvm_version} bin directory containing llvm-tblgen and clang-tblgen" >&2
+  exit 2
+fi
+
+needs_rex_config=0
+case "${phase}" in
+  all|configure-rex)
+    needs_rex_config=1
+    ;;
+esac
+
+if [[ "${needs_rex_config}" == "1" && -z "${REX_WASM_OMP_INCLUDE_DIR:-}" ]]; then
+  omp_include_candidates=(
+    "/usr/lib/llvm-${llvm_version}/lib/clang/${llvm_version}/include/omp.h"
+  )
+  if [[ -n "${LLVM_NATIVE_TOOL_DIR:-}" ]]; then
+    omp_include_candidates=(
+      "${LLVM_NATIVE_TOOL_DIR}/../lib/clang/${llvm_version}/include/omp.h"
+      "${omp_include_candidates[@]}"
+    )
+  fi
+  REX_WASM_OMP_INCLUDE_DIR="$(find_existing_file_dir "${omp_include_candidates[@]}" || true)"
+fi
+if [[ "${needs_rex_config}" == "1" &&
+      ( -z "${REX_WASM_OMP_INCLUDE_DIR:-}" ||
+        ! -f "${REX_WASM_OMP_INCLUDE_DIR}/omp.h" ) ]]; then
+  echo "error: set REX_WASM_OMP_INCLUDE_DIR to a Clang resource include directory containing omp.h" >&2
+  exit 2
+fi
+
+rex_wasm_sysroot="${REX_WASM_SYSROOT:-}"
+if [[ -z "${rex_wasm_sysroot}" && -n "${EMSDK:-}" ]]; then
+  rex_wasm_sysroot="${EMSDK}/upstream/emscripten/cache/sysroot"
+fi
+if [[ "${needs_rex_config}" == "1" &&
+      "${package_sysroot}" == "ON" &&
+      ( -z "${rex_wasm_sysroot}" || ! -d "${rex_wasm_sysroot}/include" ) ]]; then
+  echo "error: Emscripten sysroot not found; source emsdk_env.sh or set REX_WASM_SYSROOT" >&2
+  exit 2
+fi
+
+mkdir -p "${build_root}"
+
+# Some developer shells export LLVM to a native source/build tree.  The wasm
+# configure must use the explicit LLVM_DIR/Clang_DIR values below instead.
+unset LLVM
+
+require_llvm_wasm_ready() {
+  if llvm_wasm_ready "${llvm_wasm_build_dir}"; then
+    return 0
+  fi
+
+  echo "error: wasm LLVM/Clang build is missing or incomplete: ${llvm_wasm_build_dir}" >&2
+  echo "       run: scripts/ci-rex-wasm-build-dist llvm" >&2
+  exit 2
+}
+
+report_llvm_wasm_status() {
+  if llvm_wasm_ready "${llvm_wasm_build_dir}"; then
+    echo "==> wasm LLVM/Clang is ready: ${llvm_wasm_build_dir}"
+    du -sh "${llvm_wasm_build_dir}" 2>/dev/null || true
+    if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+      echo "ready=true" >> "${GITHUB_OUTPUT}"
+    fi
+  else
+    echo "==> wasm LLVM/Clang is not ready; a source build is required"
+    echo "    expected cache/build dir: ${llvm_wasm_build_dir}"
+    if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+      echo "ready=false" >> "${GITHUB_OUTPUT}"
+    fi
+  fi
+}
+
+build_llvm_wasm() {
+  require_executable cmake
+  require_executable ninja
+  require_executable emcmake
+
+  if llvm_wasm_ready "${llvm_wasm_build_dir}"; then
+    echo "==> Reusing existing wasm LLVM/Clang build in ${llvm_wasm_build_dir}"
+    return 0
+  fi
+
+  echo "==> Configuring wasm LLVM/Clang in ${llvm_wasm_build_dir}"
+  emcmake cmake -S "${LLVM_SOURCE_DIR}" -B "${llvm_wasm_build_dir}" -G Ninja \
+    -DCMAKE_BUILD_TYPE="${build_type}" \
+    -DLLVM_ENABLE_PROJECTS=clang \
+    -DLLVM_TARGETS_TO_BUILD=WebAssembly \
+    -DLLVM_DEFAULT_TARGET_TRIPLE=wasm32-unknown-emscripten \
+    -DLLVM_HOST_TRIPLE=wasm32-unknown-emscripten \
+    -DLLVM_TABLEGEN="${LLVM_NATIVE_TOOL_DIR}/llvm-tblgen" \
+    -DCLANG_TABLEGEN="${LLVM_NATIVE_TOOL_DIR}/clang-tblgen" \
+    -DLLVM_BUILD_TOOLS=OFF \
+    -DLLVM_ENABLE_PLUGINS=OFF \
+    -DLLVM_INCLUDE_TESTS=OFF \
+    -DLLVM_INCLUDE_EXAMPLES=OFF \
+    -DLLVM_INCLUDE_BENCHMARKS=OFF \
+    -DLLVM_INCLUDE_DOCS=OFF \
+    -DCLANG_BUILD_TOOLS=OFF \
+    -DCLANG_PLUGIN_SUPPORT=OFF \
+    -DLLVM_ENABLE_THREADS=OFF \
+    -DLLVM_ENABLE_TERMINFO=OFF \
+    -DLLVM_ENABLE_ZLIB=OFF \
+    -DLLVM_ENABLE_ZSTD=OFF \
+    -DLLVM_ENABLE_LIBXML2=OFF \
+    -DLLVM_ENABLE_LIBEDIT=OFF \
+    -DLLVM_ENABLE_FFI=OFF \
+    -DLLVM_ENABLE_RTTI=ON \
+    -DLLVM_ENABLE_EH=ON
+
+  echo "==> Building wasm LLVM/Clang libraries"
+  cmake --build "${llvm_wasm_build_dir}" -j"${jobs}" --target \
+    clang-resource-headers \
+    clangFrontend \
+    clangDriver \
+    clangParse \
+    clangSema \
+    clangSerialization \
+    clangAnalysis \
+    clangASTMatchers \
+    clangAST \
+    clangEdit \
+    clangLex \
+    clangBasic \
+    clangSupport
+
+  require_llvm_wasm_ready
+}
+
+configure_rex_wasm() {
+  require_executable emcmake
+  require_llvm_wasm_ready
+
+  echo "==> Configuring REX wasm target in ${rex_wasm_build_dir}"
+  rex_wasm_cmake_args=(
+    -S "${repo_root}"
+    -B "${rex_wasm_build_dir}"
+    -G Ninja
+    -DCMAKE_BUILD_TYPE="${build_type}"
+    -DREX_ENABLE_WASM=ON
+    -DREX_WASM_PACKAGE_SYSROOT="${package_sysroot}"
+    -DLLVM_DIR="${llvm_wasm_build_dir}/lib/cmake/llvm"
+    -DClang_DIR="${llvm_wasm_build_dir}/lib/cmake/clang"
+    -DREX_WASM_CLANG_RESOURCE_INPUT="${llvm_wasm_build_dir}/lib/clang/${llvm_version}"
+    -DREX_WASM_OMP_INCLUDE_DIR="${REX_WASM_OMP_INCLUDE_DIR}"
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON)
+  if [[ -n "${rex_wasm_sysroot}" ]]; then
+    rex_wasm_cmake_args+=("-DREX_WASM_SYSROOT=${rex_wasm_sysroot}")
+  fi
+  emcmake cmake "${rex_wasm_cmake_args[@]}"
+}
+
+build_rex_wasm() {
+  require_executable cmake
+  echo "==> Building REX wasm target"
+  cmake --build "${rex_wasm_build_dir}" --target rex_wasm -j"${jobs}"
+}
+
+run_rex_wasm_smoke_tests() {
+  require_executable node
+
+  if [[ "${REX_WASM_SKIP_TESTS:-0}" == "1" ]]; then
+    echo "==> Skipping REX wasm smoke tests"
+    return 0
+  fi
+
+  local test_runner="${repo_root}/src/wasm/tests/run_rex_wasm_tests.js"
+  local module="${rex_wasm_build_dir}/wasm/rex_wasm.js"
+  local test_timeout="${REX_WASM_TEST_TIMEOUT:-180s}"
+
+  echo "==> Running REX wasm smoke tests"
+  if command -v timeout >/dev/null 2>&1; then
+    local test_case
+    while IFS= read -r test_case; do
+      [[ -n "${test_case}" ]] || continue
+      echo "==> REX wasm smoke test: ${test_case}"
+      timeout "${test_timeout}" node "${test_runner}" "${module}" --case "${test_case}"
+    done < <(node "${test_runner}" --list)
+  else
+    echo "warning: timeout command not found; running smoke tests without per-case timeout" >&2
+    node "${test_runner}" "${module}"
+  fi
+}
+
+assemble_static_dist() {
+  echo "==> Assembling static dist in ${dist_dir}"
+  rm -rf "${dist_dir}"
+  mkdir -p "${dist_dir}"
+  cp "${repo_root}/web/rex-wasm/"* "${dist_dir}/"
+  cp "${rex_wasm_build_dir}/wasm"/rex_wasm.* "${dist_dir}/"
+
+  commit="${GITHUB_SHA:-$(git -C "${repo_root}" rev-parse HEAD 2>/dev/null || true)}"
+  commit_short="${commit:0:12}"
+  commit_url=""
+  if [[ -n "${commit}" ]]; then
+    if [[ -n "${GITHUB_SERVER_URL:-}" && -n "${GITHUB_REPOSITORY:-}" ]]; then
+      commit_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${commit}"
+    else
+      remote_url="$(git -C "${repo_root}" config --get remote.origin.url 2>/dev/null || true)"
+      repo_url="$(github_repo_url "${remote_url}" || true)"
+      if [[ -n "${repo_url}" ]]; then
+        commit_url="${repo_url}/commit/${commit}"
+      fi
+    fi
+  fi
+
+  cat > "${dist_dir}/build-info.js" <<EOF
+window.REX_WASM_BUILD_INFO = {
+  commit: "${commit_short}",
+  commitUrl: "${commit_url}"
+};
+EOF
+
+  cat > "${dist_dir}/BUILD_INFO.txt" <<EOF
+REX WASM build
+Commit: ${commit}
+Commit URL: ${commit_url}
+LLVM source: ${LLVM_SOURCE_DIR:-prebuilt/cache}
+LLVM wasm build: ${llvm_wasm_build_dir}
+REX wasm build: ${rex_wasm_build_dir}
+OpenMP resource include: ${REX_WASM_OMP_INCLUDE_DIR:-}
+Package Emscripten sysroot: ${package_sysroot}
+EOF
+
+  echo "==> Done. Static site: ${dist_dir}"
+}
+
+case "${phase}" in
+  all)
+    build_llvm_wasm
+    configure_rex_wasm
+    build_rex_wasm
+    run_rex_wasm_smoke_tests
+    assemble_static_dist
+    ;;
+  llvm-status)
+    report_llvm_wasm_status
+    ;;
+  llvm)
+    build_llvm_wasm
+    ;;
+  configure-rex)
+    configure_rex_wasm
+    ;;
+  build-rex)
+    build_rex_wasm
+    ;;
+  test)
+    run_rex_wasm_smoke_tests
+    ;;
+  dist)
+    assemble_static_dist
+    ;;
+  *)
+    echo "usage: scripts/ci-rex-wasm-build-dist [all|llvm-status|llvm|configure-rex|build-rex|test|dist]" >&2
+    exit 2
+    ;;
+esac

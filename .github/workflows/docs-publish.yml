@@ -8,19 +8,21 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
 
 env:
   LLVM_VERSION: 22
+  DOCS_SITE_ARTIFACT: docs-site
+  DOCS_BUILD_OUTPUT_DIR: _site
+  REX_WASM_ARTIFACT: rex-wasm-dist
+  PAGES_SITE_DIR: pages-site
+  ARTIFACT_RETENTION_DAYS: 90
 
 jobs:
   build:
+    name: Build Docs
     runs-on: ubuntu-26.04
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -29,38 +31,8 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Configure GitHub Pages
-        id: pages
-        uses: actions/configure-pages@v6
-
-      - name: Add LLVM apt repository
-        run: |
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc > /dev/null
-          echo "deb http://apt.llvm.org/resolute/ llvm-toolchain-resolute-${LLVM_VERSION} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
-
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            antlr4 \
-            bison \
-            build-essential \
-            clang-${LLVM_VERSION} \
-            cmake \
-            curl \
-            flex \
-            lld-${LLVM_VERSION} \
-            libflang-${LLVM_VERSION}-dev \
-            libclang-${LLVM_VERSION}-dev \
-            libomp-${LLVM_VERSION}-dev \
-            libantlr4-runtime-dev \
-            libhpdf-dev \
-            llvm-${LLVM_VERSION} \
-            llvm-${LLVM_VERSION}-dev \
-            mold \
-            perl \
-            asciidoctor \
-            pkg-config
+        run: scripts/ci-install-deps docs
 
       - name: Install ANTLR4 tool (4.10.1)
         run: |
@@ -79,31 +51,80 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build docs (shared script)
-        env:
-          PATH: /usr/lib/llvm-${{ env.LLVM_VERSION }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-          CMAKE_PREFIX_PATH: /usr/lib/llvm-${{ env.LLVM_VERSION }}
-          LLVM_DIR: /usr/lib/llvm-${{ env.LLVM_VERSION }}
-          CC: clang-${{ env.LLVM_VERSION }}
-          CXX: clang++-${{ env.LLVM_VERSION }}
-          DOCS_ANTLR4_EXECUTABLE: ${{ github.workspace }}/.tools/antlr4/antlr4
-          DOCS_JOBS: 32
-        run: bash scripts/ci-docs-build
+      - name: Build docs
+        run: |
+          source scripts/ci-llvm-env "${LLVM_VERSION}"
+          export CC="clang-${LLVM_VERSION}"
+          export CXX="clang++-${LLVM_VERSION}"
+          export DOCS_ANTLR4_EXECUTABLE="${GITHUB_WORKSPACE}/.tools/antlr4/antlr4"
+          export DOCS_JOBS=32
+          bash scripts/ci-docs-build
 
-      - name: Upload GitHub Pages Artifact
-        if: ${{ !env.ACT }}
-        uses: actions/upload-pages-artifact@v5
+      - name: Upload docs site artifact
+        uses: actions/upload-artifact@v4
         with:
-          path: ./_site
+          name: ${{ env.DOCS_SITE_ARTIFACT }}
+          path: ${{ env.DOCS_BUILD_OUTPUT_DIR }}
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          overwrite: true
+
+  rex-wasm:
+    name: Build & Test WASM
+    uses: ./.github/workflows/rex-wasm-build.yml
+    with:
+      upload-artifact: true
 
   deploy:
+    name: Deploy Full Static Site
     runs-on: ubuntu-26.04
-    needs: build
+    needs: [build, rex-wasm]
+    permissions:
+      actions: read
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download docs site artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.DOCS_SITE_ARTIFACT }}
+          path: ${{ env.DOCS_SITE_ARTIFACT }}
+
+      - name: Download REX WASM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.REX_WASM_ARTIFACT }}
+          path: ${{ env.REX_WASM_ARTIFACT }}
+
+      - name: Assemble GitHub Pages site
+        env:
+          PAGES_WASM_DIR: ${{ env.REX_WASM_ARTIFACT }}
+          PAGES_DOCS_DIR: ${{ env.DOCS_SITE_ARTIFACT }}
+          PAGES_SITE_DIR: ${{ env.PAGES_SITE_DIR }}
+          PAGES_REQUIRE_WASM: "1"
+          PAGES_REQUIRE_DOCS: "1"
+        run: scripts/ci-pages-assemble-site
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload GitHub Pages Artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ${{ env.PAGES_SITE_DIR }}
+
       - name: Deploy to GitHub Pages
-        if: ${{ !env.ACT }}
         id: deployment
         uses: actions/deploy-pages@v5

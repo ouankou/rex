@@ -65,8 +65,19 @@ rose_force_system_include_dirs(libroseClangFrontend
   ${CLANG_INCLUDE_DIRS})
 
 # Add LLVM definitions
-target_compile_definitions(libroseClangFrontend PRIVATE
-  ${LLVM_DEFINITIONS})
+set(_rose_clang_llvm_definitions "")
+foreach(_rose_llvm_definition IN LISTS LLVM_DEFINITIONS)
+  separate_arguments(_rose_split_llvm_definitions UNIX_COMMAND
+    "${_rose_llvm_definition}")
+  list(APPEND _rose_clang_llvm_definitions ${_rose_split_llvm_definitions})
+endforeach()
+if(_rose_clang_llvm_definitions)
+  target_compile_options(libroseClangFrontend PRIVATE
+    ${_rose_clang_llvm_definitions})
+endif()
+unset(_rose_clang_llvm_definitions)
+unset(_rose_llvm_definition)
+unset(_rose_split_llvm_definitions)
 
 rose_enable_private_pch(libroseClangFrontend
   "${ROSE_TOP_SRC_DIR}/cmake/pch/clang-frontend-pch.hpp")

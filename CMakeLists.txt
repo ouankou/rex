@@ -39,6 +39,12 @@ if(NOT LLVM_REQUIRED_MAJOR MATCHES "^[0-9]+$")
   message(FATAL_ERROR "LLVM_REQUIRED_MAJOR must be a numeric major version, got '${LLVM_REQUIRED_MAJOR}'.")
 endif()
 
+option(REX_ENABLE_WASM "Build the pure static browser WebAssembly REX demo" FALSE)
+set(REX_USING_EMSCRIPTEN_TOOLCHAIN FALSE)
+if(REX_ENABLE_WASM OR CMAKE_TOOLCHAIN_FILE MATCHES "Emscripten[.]cmake$")
+  set(REX_USING_EMSCRIPTEN_TOOLCHAIN TRUE)
+endif()
+
 #-----------------------------------------------------------------------------------------------------------------------
 # Enable ccache if not already enabled by symlink masquerading and if no other compiler launchers are already defined
 #-----------------------------------------------------------------------------------------------------------------------
@@ -155,38 +161,43 @@ function(detect_compiler LANG CMAKE_VAR ENV_VAR LANG_NAME PREFERRED_NAMES FALLBA
   endif()
 endfunction()
 
-# Detect C and C++ compilers
-if((NOT DEFINED CMAKE_C_COMPILER OR "${CMAKE_C_COMPILER}" STREQUAL "") AND
-   DEFINED CMAKE_CXX_COMPILER AND NOT "${CMAKE_CXX_COMPILER}" STREQUAL "")
-  find_sibling_compiler(_C_COMPILER_FROM_CXX "${CMAKE_CXX_COMPILER}" "clang-${LLVM_REQUIRED_MAJOR}" "clang")
-  if(_C_COMPILER_FROM_CXX)
-    set(CMAKE_C_COMPILER "${_C_COMPILER_FROM_CXX}")
-    message(STATUS "Auto-detected C compiler next to C++ compiler: ${_C_COMPILER_FROM_CXX}")
+# Detect C and C++ compilers.  Emscripten's toolchain file initializes the
+# compiler during project(), so do not preempt it with a host clang probe.
+if(NOT REX_USING_EMSCRIPTEN_TOOLCHAIN)
+  if((NOT DEFINED CMAKE_C_COMPILER OR "${CMAKE_C_COMPILER}" STREQUAL "") AND
+     DEFINED CMAKE_CXX_COMPILER AND NOT "${CMAKE_CXX_COMPILER}" STREQUAL "")
+    find_sibling_compiler(_C_COMPILER_FROM_CXX "${CMAKE_CXX_COMPILER}" "clang-${LLVM_REQUIRED_MAJOR}" "clang")
+    if(_C_COMPILER_FROM_CXX)
+      set(CMAKE_C_COMPILER "${_C_COMPILER_FROM_CXX}")
+      message(STATUS "Auto-detected C compiler next to C++ compiler: ${_C_COMPILER_FROM_CXX}")
+    endif()
+    unset(_C_COMPILER_FROM_CXX)
   endif()
-  unset(_C_COMPILER_FROM_CXX)
-endif()
-detect_compiler(C CMAKE_C_COMPILER CC "C" "clang-${LLVM_REQUIRED_MAJOR}" "clang")
+  detect_compiler(C CMAKE_C_COMPILER CC "C" "clang-${LLVM_REQUIRED_MAJOR}" "clang")
 
-if((NOT DEFINED CMAKE_CXX_COMPILER OR "${CMAKE_CXX_COMPILER}" STREQUAL "") AND
-   DEFINED CMAKE_C_COMPILER AND NOT "${CMAKE_C_COMPILER}" STREQUAL "")
-  find_sibling_compiler(_CXX_COMPILER_FROM_C "${CMAKE_C_COMPILER}" "clang++-${LLVM_REQUIRED_MAJOR}" "clang++")
-  if(_CXX_COMPILER_FROM_C)
-    set(CMAKE_CXX_COMPILER "${_CXX_COMPILER_FROM_C}")
-    message(STATUS "Auto-detected C++ compiler next to C compiler: ${_CXX_COMPILER_FROM_C}")
+  if((NOT DEFINED CMAKE_CXX_COMPILER OR "${CMAKE_CXX_COMPILER}" STREQUAL "") AND
+     DEFINED CMAKE_C_COMPILER AND NOT "${CMAKE_C_COMPILER}" STREQUAL "")
+    find_sibling_compiler(_CXX_COMPILER_FROM_C "${CMAKE_C_COMPILER}" "clang++-${LLVM_REQUIRED_MAJOR}" "clang++")
+    if(_CXX_COMPILER_FROM_C)
+      set(CMAKE_CXX_COMPILER "${_CXX_COMPILER_FROM_C}")
+      message(STATUS "Auto-detected C++ compiler next to C compiler: ${_CXX_COMPILER_FROM_C}")
+    endif()
+    unset(_CXX_COMPILER_FROM_C)
   endif()
-  unset(_CXX_COMPILER_FROM_C)
-endif()
-detect_compiler(CXX CMAKE_CXX_COMPILER CXX "C++" "clang++-${LLVM_REQUIRED_MAJOR}" "clang++")
+  detect_compiler(CXX CMAKE_CXX_COMPILER CXX "C++" "clang++-${LLVM_REQUIRED_MAJOR}" "clang++")
 
-if((NOT DEFINED LLVM_ROOT OR "${LLVM_ROOT}" STREQUAL "") AND
-   DEFINED CMAKE_C_COMPILER AND NOT "${CMAKE_C_COMPILER}" STREQUAL "")
-  find_llvm_root_from_compiler(_ROSE_DETECTED_LLVM_ROOT "${CMAKE_C_COMPILER}")
-  if(_ROSE_DETECTED_LLVM_ROOT)
-    set(LLVM_ROOT "${_ROSE_DETECTED_LLVM_ROOT}")
-    set(Clang_ROOT "${_ROSE_DETECTED_LLVM_ROOT}")
-    message(STATUS "Auto-detected LLVM root from compiler: ${_ROSE_DETECTED_LLVM_ROOT}")
+  if((NOT DEFINED LLVM_ROOT OR "${LLVM_ROOT}" STREQUAL "") AND
+     DEFINED CMAKE_C_COMPILER AND NOT "${CMAKE_C_COMPILER}" STREQUAL "")
+    find_llvm_root_from_compiler(_ROSE_DETECTED_LLVM_ROOT "${CMAKE_C_COMPILER}")
+    if(_ROSE_DETECTED_LLVM_ROOT)
+      set(LLVM_ROOT "${_ROSE_DETECTED_LLVM_ROOT}")
+      set(Clang_ROOT "${_ROSE_DETECTED_LLVM_ROOT}")
+      message(STATUS "Auto-detected LLVM root from compiler: ${_ROSE_DETECTED_LLVM_ROOT}")
+    endif()
+    unset(_ROSE_DETECTED_LLVM_ROOT)
   endif()
-  unset(_ROSE_DETECTED_LLVM_ROOT)
+else()
+  message(STATUS "Compiler selection: deferring to the Emscripten toolchain")
 endif()
 
 set(_C_COMPILER_DISPLAY "${CMAKE_C_COMPILER}")
@@ -275,6 +286,10 @@ project(ROSE
   LANGUAGES C CXX
 )
 
+if(REX_ENABLE_WASM AND NOT EMSCRIPTEN)
+  message(FATAL_ERROR "REX_ENABLE_WASM requires configuring with emcmake/Emscripten.")
+endif()
+
 include(CheckLinkerFlag)
 
 if(CMAKE_CXX_COMPILER)
@@ -296,12 +311,15 @@ unset(_ROSE_USER_PROVIDED_CMAKE_AR)
 unset(_ROSE_USER_PROVIDED_CMAKE_RANLIB)
 
 set(REX_LINKER "auto" CACHE STRING "Linker to use for REX builds: auto, lld, mold, bfd, or system")
+if(REX_ENABLE_WASM)
+  set(REX_LINKER "system" CACHE STRING "Linker to use for REX builds: auto, lld, mold, bfd, or system" FORCE)
+endif()
 set_property(CACHE REX_LINKER PROPERTY STRINGS auto lld mold bfd system)
 if(NOT REX_LINKER MATCHES "^(auto|lld|mold|bfd|system)$")
   message(FATAL_ERROR "REX_LINKER must be one of auto, lld, mold, bfd, or system; got '${REX_LINKER}'.")
 endif()
 
-if(NOT REX_LINKER STREQUAL "system")
+if(NOT REX_ENABLE_WASM AND NOT REX_LINKER STREQUAL "system")
   set(_rose_lld_linker_names "ld.lld-${LLVM_REQUIRED_MAJOR}" "lld-${LLVM_REQUIRED_MAJOR}" ld.lld lld)
   set(_rose_linker_names "")
   if(REX_LINKER STREQUAL "auto")
@@ -446,22 +464,34 @@ function(rose_force_system_include_dirs target)
       "Call it only after add_library() or add_executable() has created target '${target}'.")
   endif()
 
-  set(_rose_system_include_dirs ${ARGN})
+  set(_rose_system_include_dirs "")
+  foreach(_rose_raw_dir IN LISTS ARGN)
+    string(STRIP "${_rose_raw_dir}" _rose_raw_dir)
+    if(_rose_raw_dir)
+      separate_arguments(_rose_split_dirs UNIX_COMMAND "${_rose_raw_dir}")
+      list(APPEND _rose_system_include_dirs ${_rose_split_dirs})
+    endif()
+  endforeach()
   list(REMOVE_DUPLICATES _rose_system_include_dirs)
 
   set(_rose_system_include_opts "")
   foreach(_rose_dir IN LISTS _rose_system_include_dirs)
     if(_rose_dir)
-      list(APPEND _rose_system_include_opts "-isystem" "${_rose_dir}")
+      list(APPEND _rose_system_include_opts "-isystem${_rose_dir}")
     endif()
   endforeach()
 
   if(_rose_system_include_opts)
     target_compile_options(${target} PRIVATE ${_rose_system_include_opts})
   endif()
+  unset(_rose_raw_dir)
+  unset(_rose_split_dirs)
 endfunction()
 
 option(ROSE_ENABLE_PCH "Enable precompiled headers for in-tree REX targets" TRUE)
+if(REX_ENABLE_WASM)
+  set(ROSE_ENABLE_PCH FALSE CACHE BOOL "Enable precompiled headers for in-tree REX targets" FORCE)
+endif()
 
 function(rose_target_accepts_pch OUT_VAR target)
   set(_rose_accepts_pch TRUE)
@@ -791,6 +821,9 @@ endif()
 ########################################################################################################################
 # C/C++
 option(ENABLE-C "Enable C/C++ analysis" ON)
+if(REX_ENABLE_WASM)
+  set(ENABLE-C ON CACHE BOOL "Enable C/C++ analysis" FORCE)
+endif()
 if(ENABLE-C)
   set(ROSE_BUILD_CXX_LANGUAGE_SUPPORT 1)
   set(ROSE_BUILD_C_LANGUAGE_SUPPORT 1)
@@ -805,6 +838,9 @@ endif()
 
 # CUDA
 option(ENABLE-CUDA "Enable CUDA analysis" OFF) # OFF because lack of CUDA is not handled properly
+if(REX_ENABLE_WASM)
+  set(ENABLE-CUDA OFF CACHE BOOL "Enable CUDA analysis" FORCE)
+endif()
 if(ENABLE-CUDA)
   find_package(CUDA REQUIRED)
   set(ROSE_BUILD_CUDA_LANGUAGE_SUPPORT 1)
@@ -815,6 +851,10 @@ option(ENABLE-FORTRAN "Enable Fortran analysis." OFF)
 
 # Flang frontend
 option(ENABLE-FORTRAN-FLANG "Enable Flang frontend support." ON)
+if(REX_ENABLE_WASM)
+  set(ENABLE-FORTRAN OFF CACHE BOOL "Enable Fortran analysis." FORCE)
+  set(ENABLE-FORTRAN-FLANG OFF CACHE BOOL "Enable Flang frontend support." FORCE)
+endif()
 set(FLANG_ROOT "" CACHE PATH "Path to Flang installation (lib/, include/).")
 
 # Legacy tests still reference enable-fortran (lowercase).
@@ -964,6 +1004,9 @@ endif()
 
 # OpenCL
 option(ENABLE-OPENCL "Enable OpenCL analysis" ON)
+if(REX_ENABLE_WASM)
+  set(ENABLE-OPENCL OFF CACHE BOOL "Enable OpenCL analysis" FORCE)
+endif()
 if(ENABLE-OPENCL)
   find_package(OpenCL)
   set(ROSE_BUILD_OPENCL_LANGUAGE_SUPPORT 1)
@@ -1039,13 +1082,13 @@ endif()
 #
 # Clang frontend support requires shared LLVM to avoid duplicate global
 # allocator instances and shutdown-time memory corruption from static linkage.
-if(NOT (UNIX AND NOT APPLE))
+if(NOT REX_ENABLE_WASM AND NOT (UNIX AND NOT APPLE))
   message(FATAL_ERROR
     "REX Clang frontend currently supports Linux only.")
 endif()
 
 set(_rose_shared_llvm_link_item "")
-if(TARGET LLVM)
+if(NOT REX_ENABLE_WASM AND TARGET LLVM)
   foreach(_rose_prop
       IMPORTED_LOCATION
       IMPORTED_LOCATION_RELEASE
@@ -1061,7 +1104,7 @@ if(TARGET LLVM)
   endforeach()
 endif()
 
-if(NOT _rose_shared_llvm_link_item)
+if(NOT REX_ENABLE_WASM AND NOT _rose_shared_llvm_link_item)
   set(_rose_saved_library_suffixes "${CMAKE_FIND_LIBRARY_SUFFIXES}")
   set(CMAKE_FIND_LIBRARY_SUFFIXES ".so")
   if(DEFINED LLVM_VERSION_MAJOR)
@@ -1093,44 +1136,65 @@ if(NOT _rose_shared_llvm_link_item)
   unset(_rose_llvm_candidates)
 endif()
 
-if(NOT _rose_shared_llvm_link_item)
+if(NOT REX_ENABLE_WASM AND NOT _rose_shared_llvm_link_item)
   message(FATAL_ERROR
     "REX Clang frontend requires a shared LLVM library (libLLVM). "
     "Install/build LLVM with LLVM_BUILD_LLVM_DYLIB=ON and rerun CMake.")
 endif()
 
-set(LLVM_LIBS "${_rose_shared_llvm_link_item}")
-message(STATUS "Using required shared LLVM library for Clang frontend: ${LLVM_LIBS}")
+if(REX_ENABLE_WASM)
+  set(LLVM_LIBS "")
+  message(STATUS "Using static LLVM/Clang component targets for REX WASM")
+else()
+  set(LLVM_LIBS "${_rose_shared_llvm_link_item}")
+  message(STATUS "Using required shared LLVM library for Clang frontend: ${LLVM_LIBS}")
+endif()
 unset(_rose_candidate)
 unset(_rose_prop)
 unset(_rose_shared_llvm_link_item)
 
 # Clang libraries needed
-set(CLANG_LIBS
-  clangFrontendTool
-  clangStaticAnalyzerFrontend
-  clangStaticAnalyzerCheckers
-  clangStaticAnalyzerCore
-  clangIndex
-  clangFrontend
-  clangCodeGen
-  clangRewrite
-  clangSerialization
-  clangDriver
-  clangParse
-  clangSema
-  clangAnalysis
-  clangAST
-  clangBasic
-  clangEdit
-  clangLex)
+if(REX_ENABLE_WASM)
+  set(CLANG_LIBS
+    clangFrontend
+    clangDriver
+    clangParse
+    clangSema
+    clangSerialization
+    clangAnalysis
+    clangASTMatchers
+    clangAST
+    clangEdit
+    clangLex
+    clangBasic
+    clangSupport)
+else()
+  set(CLANG_LIBS
+    clangFrontendTool
+    clangStaticAnalyzerFrontend
+    clangStaticAnalyzerCheckers
+    clangStaticAnalyzerCore
+    clangIndex
+    clangFrontend
+    clangCodeGen
+    clangRewrite
+    clangSerialization
+    clangDriver
+    clangParse
+    clangSema
+    clangAnalysis
+    clangAST
+    clangBasic
+    clangEdit
+    clangLex)
 
-list(APPEND CLANG_LIBS
-  clangSupport
-  clangCrossTU
-  clangASTMatchers
-  clangAPINotes
-  clangTooling)
+  list(APPEND CLANG_LIBS
+    clangSupport
+    clangCrossTU
+    clangASTMatchers
+    clangAPINotes
+    clangTooling)
+endif()
 
 set(_rose_clang_cpp_candidates
   clang-cpp
@@ -1182,12 +1246,14 @@ if(UNIX AND NOT APPLE)
     endif()
   endif()
 endif()
-find_library(CLANG_CPP_LIBRARY
-  NAMES ${_rose_clang_cpp_candidates}
-  PATHS ${_rose_clang_cpp_search_dirs}
-  NO_DEFAULT_PATH)
-if(NOT CLANG_CPP_LIBRARY)
-  find_library(CLANG_CPP_LIBRARY NAMES ${_rose_clang_cpp_candidates})
+if(NOT REX_ENABLE_WASM)
+  find_library(CLANG_CPP_LIBRARY
+    NAMES ${_rose_clang_cpp_candidates}
+    PATHS ${_rose_clang_cpp_search_dirs}
+    NO_DEFAULT_PATH)
+  if(NOT CLANG_CPP_LIBRARY)
+    find_library(CLANG_CPP_LIBRARY NAMES ${_rose_clang_cpp_candidates})
+  endif()
 endif()
 set(CMAKE_FIND_LIBRARY_SUFFIXES "${_rose_saved_library_suffixes}")
 if(CLANG_CPP_LIBRARY)
@@ -1228,10 +1294,17 @@ find_package(Perl REQUIRED)
 option(ENABLE-TESTS-DIRECTORY "Enable compilation and testing of the ROSE/tests directory" ON)
 set(_rex_enable_testing_default "${ENABLE-TESTS-DIRECTORY}")
 option(REX_ENABLE_TESTING "Enable REX tests (alias for ENABLE-TESTS-DIRECTORY)" ${_rex_enable_testing_default})
+if(REX_ENABLE_WASM)
+  set(REX_ENABLE_TESTING OFF CACHE BOOL "Enable REX tests (alias for ENABLE-TESTS-DIRECTORY)" FORCE)
+  set(ENABLE-TESTS-DIRECTORY OFF CACHE BOOL "Enable compilation and testing of the ROSE/tests directory" FORCE)
+endif()
 set(ENABLE-TESTS-DIRECTORY "${REX_ENABLE_TESTING}" CACHE BOOL "Enable compilation and testing of the ROSE/tests directory" FORCE)
 set(BUILD_TESTING "${ENABLE-TESTS-DIRECTORY}" CACHE BOOL "Build the testing tree." FORCE)
 set(_rex_enable_example_translators_default "${ENABLE-TESTS-DIRECTORY}")
 option(ENABLE-EXAMPLE-TRANSLATORS-DIRECTORY "Enable compilation and testing of exampleTranslators directory" ${_rex_enable_example_translators_default})
+if(REX_ENABLE_WASM)
+  set(ENABLE-EXAMPLE-TRANSLATORS-DIRECTORY OFF CACHE BOOL "Enable compilation and testing of exampleTranslators directory" FORCE)
+endif()
 if(ENABLE-TESTS-DIRECTORY AND NOT ENABLE-EXAMPLE-TRANSLATORS-DIRECTORY)
   message(FATAL_ERROR
     "ENABLE-TESTS-DIRECTORY=ON requires ENABLE-EXAMPLE-TRANSLATORS-DIRECTORY=ON because tests depend on translator executables. "
@@ -1357,6 +1430,11 @@ find_bison()
 # Zlib may be required by libharu. To find it in a special place, set ZLIB_ROOT to its installation prefix.
 include(FindZlib)
 find_zlib()
+if(REX_ENABLE_WASM)
+  set(ZLIB_FOUND FALSE)
+  set(ZLIB_LIBRARY "")
+  set(ZLIB_LIBRARIES "")
+endif()
 
 set(VALGRIND_INSTALL_PATH "")
 set(VALGRIND_BIN_PATH "")
@@ -1670,7 +1748,17 @@ include(CTest)
 set(ROSE_LLVM_OPENMP_RUNTIME_DIR "")
 set(ROSE_LLVM_OPENMP_RUNTIME_LIBRARY "")
 set(ROSE_LLVM_OPENMP_INCLUDE_DIR "")
-if(ENABLE-C)
+if(REX_ENABLE_WASM AND ENABLE-C)
+  set(ROSE_LLVM_OPENMP_INCLUDE_DIR "/rex/lib/clang/${CLANG_VERSION_MAJOR}/include")
+  set(LLVM_OPENMP_INCLUDE_PATH "${ROSE_LLVM_OPENMP_INCLUDE_DIR}")
+  set(LLVM_OPENMP_LIB_PATH "")
+  set(ROSE_LLVM_OPENMP_INCLUDE_DIR "${ROSE_LLVM_OPENMP_INCLUDE_DIR}" CACHE INTERNAL
+    "LLVM OpenMP header directory used by REX WASM")
+  set(ROSE_LLVM_OPENMP_RUNTIME_DIR "" CACHE INTERNAL
+    "Directory containing the LLVM OpenMP runtime library used by REX")
+  set(ROSE_LLVM_OPENMP_RUNTIME_LIBRARY "" CACHE INTERNAL
+    "LLVM OpenMP runtime library selected by REX")
+elseif(ENABLE-C)
   set(_rose_llvm_openmp_driver "")
   if(CMAKE_C_COMPILER_ID STREQUAL "Clang")
     set(_rose_llvm_openmp_driver "${CMAKE_C_COMPILER}")
@@ -1978,33 +2066,128 @@ if(WITH-LLVM-OMP-RUNTIME-LIBRARY AND NOT LLVM_OPENMP_LIB_PATH)
   set(LLVM_OPENMP_LIB_PATH "${WITH-LLVM-OMP-RUNTIME-LIBRARY}")
 endif()
 
+if(REX_ENABLE_WASM)
+  set(REX_WASM_CLANG_RESOURCE_INPUT "" CACHE PATH
+    "Clang resource directory containing an include/ subtree for the REX WASM package")
+  set(REX_WASM_CLANG_HEADERS_INPUT "" CACHE PATH
+    "Fallback Clang lib/Headers source directory for the REX WASM package")
+  set(REX_WASM_OMP_INCLUDE_DIR "" CACHE PATH
+    "Directory containing the LLVM omp.h header for the REX WASM package")
+  option(REX_WASM_PACKAGE_SYSROOT
+    "Package the Emscripten sysroot headers into the REX WASM virtual filesystem" FALSE)
+  set(REX_WASM_SYSROOT "${EMSCRIPTEN_SYSROOT}" CACHE PATH
+    "Optional Emscripten sysroot to package for the REX WASM browser frontend")
+
+  if(NOT REX_WASM_CLANG_RESOURCE_INPUT AND LLVM_LIBRARY_DIRS)
+    foreach(_rose_llvm_lib_dir IN LISTS LLVM_LIBRARY_DIRS)
+      if(EXISTS "${_rose_llvm_lib_dir}/clang/${CLANG_VERSION_MAJOR}/include/stddef.h")
+        set(REX_WASM_CLANG_RESOURCE_INPUT
+          "${_rose_llvm_lib_dir}/clang/${CLANG_VERSION_MAJOR}" CACHE PATH
+          "Clang resource directory containing an include/ subtree for the REX WASM package" FORCE)
+        break()
+      endif()
+    endforeach()
+    unset(_rose_llvm_lib_dir)
+  endif()
+
+  if(NOT REX_WASM_CLANG_HEADERS_INPUT AND LLVM_CMAKE_DIR)
+    get_filename_component(_rose_llvm_source_root
+      "${LLVM_CMAKE_DIR}/../../.." ABSOLUTE)
+    if(EXISTS "${_rose_llvm_source_root}/clang/lib/Headers/stddef.h")
+      set(REX_WASM_CLANG_HEADERS_INPUT
+        "${_rose_llvm_source_root}/clang/lib/Headers" CACHE PATH
+        "Fallback Clang lib/Headers source directory for the REX WASM package" FORCE)
+    endif()
+    if(NOT REX_WASM_OMP_INCLUDE_DIR AND
+       EXISTS "${_rose_llvm_source_root}/openmp/runtime/src/include/omp.h")
+      set(REX_WASM_OMP_INCLUDE_DIR
+        "${_rose_llvm_source_root}/openmp/runtime/src/include" CACHE PATH
+        "Directory containing the LLVM omp.h header for the REX WASM package" FORCE)
+    endif()
+    unset(_rose_llvm_source_root)
+  endif()
+
+  if(NOT REX_WASM_OMP_INCLUDE_DIR)
+    foreach(_rose_omp_include_candidate
+        "${LLVM_LIBRARY_DIRS}/clang/${CLANG_VERSION_MAJOR}/include"
+        "/usr/lib/llvm-${CLANG_VERSION_MAJOR}/lib/clang/${CLANG_VERSION_MAJOR}/include"
+        "/usr/lib/llvm-${CLANG_VERSION_MAJOR}/lib/clang/${LLVM_PACKAGE_VERSION}/include")
+      if(EXISTS "${_rose_omp_include_candidate}/omp.h")
+        set(REX_WASM_OMP_INCLUDE_DIR "${_rose_omp_include_candidate}" CACHE PATH
+          "Directory containing the LLVM omp.h header for the REX WASM package" FORCE)
+        break()
+      endif()
+    endforeach()
+    unset(_rose_omp_include_candidate)
+  endif()
+
+  if(NOT REX_WASM_CLANG_RESOURCE_INPUT AND NOT REX_WASM_CLANG_HEADERS_INPUT)
+    message(FATAL_ERROR
+      "REX_ENABLE_WASM requires Clang resource headers. Set "
+      "REX_WASM_CLANG_RESOURCE_INPUT or REX_WASM_CLANG_HEADERS_INPUT.")
+  endif()
+  if(NOT REX_WASM_OMP_INCLUDE_DIR OR NOT EXISTS "${REX_WASM_OMP_INCLUDE_DIR}/omp.h")
+    message(FATAL_ERROR
+      "REX_ENABLE_WASM requires an LLVM omp.h header. Set REX_WASM_OMP_INCLUDE_DIR.")
+  endif()
+  if(REX_WASM_PACKAGE_SYSROOT AND
+     (NOT REX_WASM_SYSROOT OR NOT EXISTS "${REX_WASM_SYSROOT}/include"))
+    message(FATAL_ERROR
+      "REX_ENABLE_WASM requires an Emscripten sysroot with include/. Set REX_WASM_SYSROOT.")
+  endif()
+
+  set(REX_WASM_CLANG_RESOURCE_DIR
+    "${CMAKE_BINARY_DIR}/wasm-resource/clang/${CLANG_VERSION_MAJOR}" CACHE INTERNAL
+    "Staged Clang resource directory for the REX WASM package")
+  file(REMOVE_RECURSE "${REX_WASM_CLANG_RESOURCE_DIR}")
+  file(MAKE_DIRECTORY "${REX_WASM_CLANG_RESOURCE_DIR}/include")
+  if(REX_WASM_CLANG_RESOURCE_INPUT)
+    file(COPY "${REX_WASM_CLANG_RESOURCE_INPUT}/include/"
+      DESTINATION "${REX_WASM_CLANG_RESOURCE_DIR}/include")
+  else()
+    file(COPY "${REX_WASM_CLANG_HEADERS_INPUT}/"
+      DESTINATION "${REX_WASM_CLANG_RESOURCE_DIR}/include")
+  endif()
+  configure_file(
+    "${REX_WASM_OMP_INCLUDE_DIR}/omp.h"
+    "${REX_WASM_CLANG_RESOURCE_DIR}/include/omp.h"
+    COPYONLY)
+endif()
+
 set(LIBHARU_ROOT "" CACHE PATH "Optional libharu installation prefix")
-if(LIBHARU_ROOT)
-  list(APPEND CMAKE_PREFIX_PATH "${LIBHARU_ROOT}")
-endif()
+if(NOT REX_ENABLE_WASM)
+  if(LIBHARU_ROOT)
+    list(APPEND CMAKE_PREFIX_PATH "${LIBHARU_ROOT}")
+  endif()
 
-# libharu is required for PDF generation (system-provided).
-find_package(PkgConfig)
-if(PKG_CONFIG_FOUND)
-  set(PKG_CONFIG_USE_CMAKE_PREFIX_PATH ON)
-  pkg_check_modules(HPDF QUIET libhpdf)
-endif()
+  # libharu is required for PDF generation (system-provided).
+  find_package(PkgConfig)
+  if(PKG_CONFIG_FOUND)
+    set(PKG_CONFIG_USE_CMAKE_PREFIX_PATH ON)
+    pkg_check_modules(HPDF QUIET libhpdf)
+  endif()
 
-if(NOT HPDF_FOUND)
-  find_path(HPDF_INCLUDE_DIRS NAMES hpdf.h
-            HINTS ENV LIBHARU_ROOT ${LIBHARU_ROOT}
-            PATH_SUFFIXES include)
-  find_library(HPDF_LIBRARIES NAMES hpdf libhpdf
-               HINTS ENV LIBHARU_ROOT ${LIBHARU_ROOT}
-               PATH_SUFFIXES lib lib64)
+  if(NOT HPDF_FOUND)
+    find_path(HPDF_INCLUDE_DIRS NAMES hpdf.h
+              HINTS ENV LIBHARU_ROOT ${LIBHARU_ROOT}
+              PATH_SUFFIXES include)
+    find_library(HPDF_LIBRARIES NAMES hpdf libhpdf
+                 HINTS ENV LIBHARU_ROOT ${LIBHARU_ROOT}
+                 PATH_SUFFIXES lib lib64)
 
-  include(FindPackageHandleStandardArgs)
-  find_package_handle_standard_args(HPDF DEFAULT_MSG
-                                    HPDF_LIBRARIES HPDF_INCLUDE_DIRS)
-endif()
+    include(FindPackageHandleStandardArgs)
+    find_package_handle_standard_args(HPDF DEFAULT_MSG
+                                      HPDF_LIBRARIES HPDF_INCLUDE_DIRS)
+  endif()
 
-if(NOT HPDF_FOUND OR NOT HPDF_LIBRARIES OR NOT HPDF_INCLUDE_DIRS)
-  message(FATAL_ERROR "libharu (hpdf) is required. Install the libharu development package and ensure hpdf.h and libhpdf are discoverable, or set the LIBHARU_ROOT environment variable.")
+  if(NOT HPDF_FOUND OR NOT HPDF_LIBRARIES OR NOT HPDF_INCLUDE_DIRS)
+    message(FATAL_ERROR "libharu (hpdf) is required. Install the libharu development package and ensure hpdf.h and libhpdf are discoverable, or set the LIBHARU_ROOT environment variable.")
+  endif()
+else()
+  set(HPDF_FOUND FALSE)
+  set(HPDF_LIBRARIES "")
+  set(HPDF_LIBRARY_DIRS "")
+  set(HPDF_INCLUDE_DIRS "")
 endif()
 
 if(NOT HPDF_VERSION)
@@ -2045,7 +2228,11 @@ if(NOT HPDF_LIBRARY_DIRS)
   endif()
 endif()
 
-set(ROSE_WITH_LIBHARU 1)
+if(HPDF_FOUND)
+  set(ROSE_WITH_LIBHARU 1)
+else()
+  set(ROSE_WITH_LIBHARU 0)
+endif()
 
 set(ASSERTION_BEHAVIOR "exit" CACHE STRING "Default behavior of failed assertions. Can be 'abort', 'exit', or 'throw'.")
 if(ASSERTION_BEHAVIOR STREQUAL "abort")
@@ -2073,8 +2260,10 @@ if(NOT FLEX_FOUND)
   message(FATAL_ERROR "Could not find flex command")
 endif()
 
-find_library(M_LIB m REQUIRED)
-find_library(RT_LIB rt)
+if(NOT REX_ENABLE_WASM)
+  find_library(M_LIB m REQUIRED)
+  find_library(RT_LIB rt)
+endif()
 
 ########################################################################################################################
 # Back-end compilers
@@ -2109,21 +2298,49 @@ if(WITH-ALT-BACKEND-FORTRAN-COMPILER)
 endif()
 
 # define a global variable to collect all common linked third-party libraries for rose (Linux-only)
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-find_package(Threads REQUIRED)
-set(link_with_libraries Threads::Threads)
-if(M_LIB)
-  list(APPEND link_with_libraries m)
-endif()
-if(RT_LIB)
-  list(APPEND link_with_libraries rt)
-endif()
-if(HAVE_QUADMATH_COMPILE)
-  list(APPEND link_with_libraries quadmath)
+if(REX_ENABLE_WASM)
+  set(link_with_libraries "")
+else()
+  set(THREADS_PREFER_PTHREAD_FLAG ON)
+  find_package(Threads REQUIRED)
+  set(link_with_libraries Threads::Threads)
+  if(M_LIB)
+    list(APPEND link_with_libraries m)
+  endif()
+  if(RT_LIB)
+    list(APPEND link_with_libraries rt)
+  endif()
+  if(HAVE_QUADMATH_COMPILE)
+    list(APPEND link_with_libraries quadmath)
+  endif()
 endif()
 
 # Check compilers and version numbers. The module is located in src/cmake/modules.
-if(ENABLE-C OR ENABLE-FORTRAN)
+if(REX_ENABLE_WASM)
+  set(BACKEND_C_COMPILER "${CMAKE_C_COMPILER}")
+  set(BACKEND_C_COMPILER_NAME_WITHOUT_PATH "emcc")
+  set(BACKEND_C_COMPILER_MAJOR_VERSION_NUMBER "${CMAKE_C_COMPILER_VERSION_MAJOR}")
+  set(BACKEND_C_COMPILER_MINOR_VERSION_NUMBER "${CMAKE_C_COMPILER_VERSION_MINOR}")
+  set(BACKEND_C_COMPILER_PATCH_LEVEL_NUMBER "${CMAKE_C_COMPILER_VERSION_PATCH}")
+  set(BACKEND_CXX_COMPILER "${CMAKE_CXX_COMPILER}")
+  set(BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH "em++")
+  set(BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER "${CMAKE_CXX_COMPILER_VERSION_MAJOR}")
+  set(BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER "${CMAKE_CXX_COMPILER_VERSION_MINOR}")
+  set(BACKEND_CXX_COMPILER_PATCH_LEVEL_NUMBER "${CMAKE_CXX_COMPILER_VERSION_PATCH}")
+  foreach(_rex_backend_version_var
+      BACKEND_C_COMPILER_MAJOR_VERSION_NUMBER
+      BACKEND_C_COMPILER_MINOR_VERSION_NUMBER
+      BACKEND_C_COMPILER_PATCH_LEVEL_NUMBER
+      BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER
+      BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER
+      BACKEND_CXX_COMPILER_PATCH_LEVEL_NUMBER)
+    if("${${_rex_backend_version_var}}" STREQUAL "")
+      set(${_rex_backend_version_var} "0")
+    endif()
+  endforeach()
+  unset(_rex_backend_version_var)
+  set(BACKEND_CXX_IS_CLANG_COMPILER 1)
+elseif(ENABLE-C OR ENABLE-FORTRAN)
   include(roseChooseBackendCompiler)
 
   if(ENABLE-FORTRAN)
@@ -2450,8 +2667,10 @@ endif()
 add_subdirectory(LicenseInformation)
 add_subdirectory(config)
 add_subdirectory(src)
-add_subdirectory(exampleTranslators)
-add_subdirectory(scripts)
+if(NOT REX_ENABLE_WASM)
+  add_subdirectory(exampleTranslators)
+  add_subdirectory(scripts)
+endif()
 
 # Copy CTestCustom.cmake into the binary directory.  This file tells CTest to ignore some output that it otherwise
 # considers compilation errors.
@@ -2474,12 +2693,15 @@ if(ENABLE-CUDA)
 endif()
 
 # Linux-only: fail fast on non-Linux platforms.
-if (NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if(NOT REX_ENABLE_WASM AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
   message(FATAL_ERROR "This project now targets Linux only; non-Linux builds are unsupported.")
 endif()
 
 # Linux-only header discovery (GNU/Clang toolchains)
-if(ENABLE-C)
+if(REX_ENABLE_WASM)
+  set(C_INCLUDE_STRING "{\"emscripten\"")
+  set(CXX_INCLUDE_STRING "{\"emscripten\"")
+elseif(ENABLE-C)
   set(C_INCLUDE_STRING "{\"${BACKEND_C_COMPILER_NAME_WITHOUT_PATH}_HEADERS\"")
 
   set(CXX_INCLUDE_STRING "{\"${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH}_HEADERS\"")
@@ -2552,12 +2774,12 @@ if(ENABLE-C)
     ${CMAKE_BINARY_DIR}/include-staging ${CMAKE_BINARY_DIR}/include)
 endif()
 install(FILES ${ROSE_TOP_SRC_DIR}/src/Rose/SourceLocation.h DESTINATION include/Rose)
-  set(C_INCLUDE_STRING "${C_INCLUDE_STRING}}")
-  set(CXX_INCLUDE_STRING "${CXX_INCLUDE_STRING}}")
 else()
-  set(C_INCLUDE_STRING {\"none\"})
-  set(CXX_INCLUDE_STRING {\"none\"})
+  set(C_INCLUDE_STRING "{\"none\"")
+  set(CXX_INCLUDE_STRING "{\"none\"")
 endif()
+set(C_INCLUDE_STRING "${C_INCLUDE_STRING}}")
+set(CXX_INCLUDE_STRING "${CXX_INCLUDE_STRING}}")
 
 ########################################################################################################################
 # Private and public build-time configuration files
@@ -2591,11 +2813,13 @@ if(ROSE_ENABLE_PCH)
   rose_enable_private_pch(rosePublicPch "${ROSE_TOP_SRC_DIR}/src/rose.h")
 endif()
 
-add_subdirectory(tools)
-if(ENABLE-TESTS-DIRECTORY)
-  add_subdirectory(tests)
+if(NOT REX_ENABLE_WASM)
+  add_subdirectory(tools)
+  if(ENABLE-TESTS-DIRECTORY)
+    add_subdirectory(tests)
+  endif()
 endif()
-if(ENABLE-TUTORIAL-DIRECTORY)
+if(NOT REX_ENABLE_WASM AND ENABLE-TUTORIAL-DIRECTORY)
   add_subdirectory(tutorial)
 endif()
 rose_apply_public_pch_to_in_tree_targets()
@@ -2605,7 +2829,7 @@ rose_apply_public_pch_to_in_tree_targets()
 ########################################################################################################################
 # When ROSE dependencies are managed with "rmc", a file named ".spock" is created at the top of the build tree.
 # Install this file as "lib/rmc/rose" if RMC is active.
-if(DEFINED ENV{SPOCK_EMPLOYED})
+if(NOT REX_ENABLE_WASM AND DEFINED ENV{SPOCK_EMPLOYED})
   if(EXISTS "${CMAKE_BINARY_DIR}/.spock")
     install(FILES ${CMAKE_BINARY_DIR}/.spock
       DESTINATION ${LIB_INSTALL_DIR}/rmc
@@ -2619,7 +2843,7 @@ endif()
 ########################################################################################################################
 
 # These actions don't work on Linux Debian-based systems during "make install" and appear to not be necessary anyway.
-if(NOT UNIX)
+if(NOT REX_ENABLE_WASM AND NOT UNIX)
   # This has to remain the last subdirectory so that all the targets are installed before bundle.cmake runs.
   add_subdirectory(cmake)
 
