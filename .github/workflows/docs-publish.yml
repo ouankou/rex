@@ -61,7 +61,7 @@ jobs:
           bash scripts/ci-docs-build
 
       - name: Upload docs site artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.DOCS_SITE_ARTIFACT }}
           path: ${{ env.DOCS_BUILD_OUTPUT_DIR }}
@@ -97,13 +97,13 @@ jobs:
           persist-credentials: false
 
       - name: Download docs site artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.DOCS_SITE_ARTIFACT }}
           path: ${{ env.DOCS_SITE_ARTIFACT }}
 
       - name: Download REX WASM artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.REX_WASM_ARTIFACT }}
           path: ${{ env.REX_WASM_ARTIFACT }}
@@ -127,6 +127,7 @@ jobs:
         with:
           name: github-pages-${{ github.run_attempt }}
           path: ${{ env.PAGES_SITE_DIR }}
+          include-hidden-files: true
 
       - name: Deploy to GitHub Pages
         if: ${{ !env.ACT }}

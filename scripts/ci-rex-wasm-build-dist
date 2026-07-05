@@ -10,7 +10,7 @@ rex_wasm_build_dir="${REX_WASM_BUILD_DIR:-${build_root}/rex}"
 dist_dir="${REX_WASM_DIST_DIR:-${repo_root}/rex-wasm-dist}"
 jobs="${REX_WASM_JOBS:-$(nproc)}"
 build_type="${REX_WASM_BUILD_TYPE:-MinSizeRel}"
-package_sysroot="${REX_WASM_PACKAGE_SYSROOT:-ON}"
+package_sysroot="${REX_WASM_PACKAGE_SYSROOT:-OFF}"
 phase="${1:-all}"
 
 find_existing_dir() {

@@ -19,6 +19,10 @@ on:
       build-type:
         type: string
         default: MinSizeRel
+      package-sysroot:
+        description: Package Emscripten sysroot headers into the browser demo.
+        type: boolean
+        default: false
       llvm-project-checkout-dir:
         type: string
         default: llvm-project
@@ -52,6 +56,7 @@ jobs:
       LLVM_PROJECT_REF: ${{ inputs.llvm-project-ref }}
       EMSDK_VERSION: ${{ inputs.emsdk-version }}
       REX_WASM_BUILD_TYPE: ${{ inputs.build-type }}
+      REX_WASM_PACKAGE_SYSROOT: ${{ inputs.package-sysroot }}
       LLVM_PROJECT_CHECKOUT_DIR: ${{ inputs.llvm-project-checkout-dir }}
       LLVM_WASM_CACHE_DIR: ${{ inputs.llvm-wasm-cache-dir }}
       REX_WASM_CMAKE_BUILD_DIR: ${{ inputs.rex-wasm-cmake-build-dir }}
@@ -149,7 +154,7 @@ jobs:
 
       - name: Upload REX WASM dist
         if: ${{ inputs.upload-artifact }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.REX_WASM_ARTIFACT }}
           path: ${{ env.REX_WASM_ARTIFACT }}

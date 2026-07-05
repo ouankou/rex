@@ -20,19 +20,6 @@ int main(void) {
     expectedFiles : [ "rose_plain_round_trip.c" ],
   },
   {
-    name : "plain-c-stdio",
-    mode : "plain",
-    filename : "plain_stdio.c",
-    source : `#include <stdio.h>
-
-int main(void) {
-  printf("rex wasm\\n");
-  return 0;
-}
-`,
-    expectedFiles : [ "rose_plain_stdio.c" ],
-  },
-  {
     name : "plain-cxx-round-trip",
     mode : "plain",
     filename : "plain_class.cpp",
@@ -71,9 +58,7 @@ int main() {
     name : "openmp-ast",
     mode : "omp_ast",
     filename : "omp_parallel.c",
-    source : `#include <omp.h>
-
-int main(void) {
+    source : `int main(void) {
   int sum = 0;
 #pragma omp parallel reduction(+:sum)
   {
