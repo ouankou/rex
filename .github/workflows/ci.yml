@@ -126,16 +126,16 @@ jobs:
       run: scripts/ci-pages-assemble-site
 
     - name: Configure GitHub Pages
-      if: steps.docs-artifact.outputs.found == 'true'
+      if: ${{ steps.docs-artifact.outputs.found == 'true' && !env.ACT }}
       uses: actions/configure-pages@v6
 
     - name: Upload GitHub Pages artifact
-      if: steps.docs-artifact.outputs.found == 'true'
+      if: ${{ steps.docs-artifact.outputs.found == 'true' && !env.ACT }}
       uses: actions/upload-pages-artifact@v5
       with:
         path: ${{ env.PAGES_SITE_DIR }}
 
     - name: Deploy to GitHub Pages
-      if: steps.docs-artifact.outputs.found == 'true'
+      if: ${{ steps.docs-artifact.outputs.found == 'true' && !env.ACT }}
       id: deployment
       uses: actions/deploy-pages@v5

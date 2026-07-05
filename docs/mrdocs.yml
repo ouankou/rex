@@ -31,7 +31,9 @@ multipage: true
 inherit-base-members: never
 auto-function-metadata: true
 extract-private: true
-# Use system libc and C++ standard library headers to match the toolchain.
+# Use the runner toolchain's C and C++ headers. The generated include overlay
+# strips known unsupported HTML doc-comment tags without crossing line
+# boundaries, so system declarations are not rewritten.
 use-system-libc: true
 use-system-stdlib: true
 warnings: true
