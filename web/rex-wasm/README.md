@@ -20,3 +20,7 @@ OpenMP GPU offloading example. It exposes three modes:
 
 All modes route through REX with `-rose:skipfinalCompileStep`; the browser app
 only displays generated source files and the REX log.
+
+The published browser package intentionally omits the Emscripten sysroot to keep
+the static site small. Use self-contained C/C++ examples; OpenMP pragma parsing
+and the bundled `omp.h` resource are still available.
