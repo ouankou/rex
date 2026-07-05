@@ -133,9 +133,12 @@ jobs:
       if: ${{ steps.docs-artifact.outputs.found == 'true' && !env.ACT }}
       uses: actions/upload-pages-artifact@v5
       with:
+        name: github-pages-${{ github.run_attempt }}
         path: ${{ env.PAGES_SITE_DIR }}
 
     - name: Deploy to GitHub Pages
       if: ${{ steps.docs-artifact.outputs.found == 'true' && !env.ACT }}
       id: deployment
       uses: actions/deploy-pages@v5
+      with:
+        artifact_name: github-pages-${{ github.run_attempt }}
