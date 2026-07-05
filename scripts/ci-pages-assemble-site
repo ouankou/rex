@@ -31,6 +31,11 @@ dir_has_files() {
   find "$path" -mindepth 1 -print -quit | grep -q .
 }
 
+require_file() {
+  local path="$1"
+  [ -f "$path" ] || die "missing expected assembled site file: $path"
+}
+
 copy_tree() {
   local src="$1"
   local dst="$2"
@@ -65,5 +70,18 @@ fi
 
 printf '%s\n' "$pages_domain" > "$site_dir/CNAME"
 touch "$site_dir/.nojekyll"
+
+if [ "$require_wasm" = "1" ]; then
+  require_file "$site_dir/index.html"
+  require_file "$site_dir/rex_wasm.js"
+  require_file "$site_dir/rex_wasm.wasm"
+fi
+
+if [ "$require_docs" = "1" ]; then
+  require_file "$site_dir/docs/index.html"
+fi
+
+require_file "$site_dir/CNAME"
+require_file "$site_dir/.nojekyll"
 
 echo "GitHub Pages site assembled in $site_dir"

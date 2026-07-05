@@ -641,6 +641,40 @@ def strip_cmake_pch_args(argv: list[str]) -> list[str]:
         i += 1
     return cleaned
 
+def is_stdlib_include_path(value: str) -> bool:
+    return "/include/c++/" in value or "/c++/" in value
+
+def strip_stdlib_include_args(argv: list[str]) -> list[str]:
+    cleaned = []
+    i = 0
+    include_prefixes = ("-I", "-isystem", "-iquote", "-idirafter")
+    while i < len(argv):
+        arg = argv[i]
+
+        if (
+            arg in include_prefixes
+            and i + 1 < len(argv)
+            and is_stdlib_include_path(argv[i + 1])
+        ):
+            i += 2
+            continue
+
+        removed = False
+        for prefix in include_prefixes:
+            if arg.startswith(prefix) and arg != prefix:
+                path = arg[len(prefix):]
+                if is_stdlib_include_path(path):
+                    removed = True
+                break
+        if removed:
+            i += 1
+            continue
+
+        cleaned.append(arg)
+        i += 1
+
+    return cleaned
+
 data = json.loads(compile_db_path.read_text(encoding="utf-8"))
 if not isinstance(data, list):
     raise SystemExit("compile_commands.json is not a list")
@@ -699,6 +733,8 @@ for entry in data:
             return False
 
         if is_cpp_source(file_path, args):
+            if not use_system_stdlib:
+                args = strip_stdlib_include_args(args)
             if not use_system_stdlib and "-nostdinc++" not in args:
                 args.insert(1, "-nostdinc++")
             if overlay_path and overlay_path.is_dir():
@@ -802,18 +838,25 @@ build-include-overlay() {
     local compiler="$1"
     local out_dir="$2"
     local compile_db="${3-}"
+    local use_system_stdlib="${4:-true}"
     local overlay_dir="$out_dir/include-overlay"
     local include_paths=()
 
     while IFS=: read -r kind path; do
         if [ -n "$path" ]; then
+            if [ "$use_system_stdlib" != "true" ] && [ "$kind" = "stdlib" ]; then
+                continue
+            fi
             include_paths+=("$path")
         fi
     done < <(collect-include-paths "$compiler")
 
     if [ -n "$compile_db" ] && [ -f "$compile_db" ]; then
-        while IFS= read -r path; do
+        while IFS=: read -r kind path; do
             if [ -n "$path" ]; then
+                if [ "$use_system_stdlib" != "true" ] && [ "$kind" = "stdlib" ]; then
+                    continue
+                fi
                 include_paths+=("$path")
             fi
         done < <("$PYTHON_BIN" - "$compile_db" <<'PY'
@@ -843,6 +886,8 @@ for entry in data:
         if arg == "-isystem" and next_val:
             paths.append(next_val)
             i += 1
+        elif arg.startswith("-isystem") and arg != "-isystem":
+            paths.append(arg[len("-isystem"):])
         i += 1
 
 seen = set()
@@ -851,7 +896,14 @@ for raw in paths:
     if path in seen:
         continue
     seen.add(path)
-    print(path)
+    path_text = str(path)
+    if "/include/c++/" in path_text or "/c++/" in path_text:
+        kind = "stdlib"
+    elif "/lib/clang/" in path_text or "/llvm" in path_text:
+        kind = "system"
+    else:
+        kind = "libc"
+    print(f"{kind}:{path}")
 PY
 )
     fi
@@ -879,7 +931,9 @@ for raw in sys.argv[2:]:
         continue
     seen.add(resolved)
     bases.append(path)
-pattern_tags = re.compile(r"</?\s*(tt|summary|p|strong|pre|ul|li|code|em)\b[^>]*>", re.IGNORECASE)
+# Keep tag stripping line-bounded. Malformed system-header doc comments can
+# otherwise make the match cross into real declarations before the next ">".
+pattern_tags = re.compile(r"</?\s*(tt|summary|p|strong|pre|ul|li|code|em)\b[^>\n]*>", re.IGNORECASE)
 written = 0
 
 for base in bases:
@@ -999,7 +1053,7 @@ fi
 
 compiler="$(resolve-compiler "$(compiler-from-db "$compilation_db")")"
 docs_dir="$(mktemp -d)"
-include_overlay="$(build-include-overlay "$compiler" "$docs_dir" "$compilation_db")"
+include_overlay="$(build-include-overlay "$compiler" "$docs_dir" "$compilation_db" "$use_system_stdlib")"
 docs_db="$(filter-compilation-db "$CONFIG" "$compilation_db" "$docs_dir" "$include_overlay")"
 
 output_args=()

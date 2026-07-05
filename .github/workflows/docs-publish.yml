@@ -118,13 +118,16 @@ jobs:
         run: scripts/ci-pages-assemble-site
 
       - name: Configure GitHub Pages
+        if: ${{ !env.ACT }}
         uses: actions/configure-pages@v6
 
       - name: Upload GitHub Pages Artifact
+        if: ${{ !env.ACT }}
         uses: actions/upload-pages-artifact@v5
         with:
           path: ${{ env.PAGES_SITE_DIR }}
 
       - name: Deploy to GitHub Pages
+        if: ${{ !env.ACT }}
         id: deployment
         uses: actions/deploy-pages@v5
