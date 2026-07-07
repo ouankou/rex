@@ -187,7 +187,7 @@ def commit_subject(repo: Path, sha: str) -> str:
 
 
 def commit_date(repo: Path, sha: str) -> str:
-    return run_git(["show", "-s", "--format=%ad", "--date=short", sha], repo).strip()
+    return run_git(["show", "-s", "--format=%cd", "--date=short", sha], repo).strip()
 
 
 def is_merge_commit(repo: Path, sha: str) -> bool:

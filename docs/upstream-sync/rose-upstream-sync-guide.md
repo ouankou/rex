@@ -16,6 +16,7 @@ Upstream ROSE is read-only evidence for REX. Agents may fetch, inspect logs, sho
 - For sync tasks, use `.codex/skills/rose-upstream-sync/SKILL.md`.
 - Scripts may inventory, classify, guard, and update records. They must not be used to bulk-apply code without per-commit review.
 - Commit log must only reference upstream `rose/weekly` history; never use local REX history for log entries (always run `git log rose/weekly ...` when enumerating commits).
+- The CSV `Upstream date` column records the upstream committer date (`%cd --date=short`), not the author date, because upstream weekly history can contain rebased/cherry-picked commits with stale author dates.
 - Before logging any commit, verify the SHA exists in `rose/weekly` (e.g., `git merge-base --is-ancestor <sha> rose/weekly`); if not, do not log it.
 - If a commit is marked `pick`, apply the code change immediately (before moving on).
 - If a `pick` is already present in REX, record that in the Notes column and set the REX commit column to the existing REX commit when known.

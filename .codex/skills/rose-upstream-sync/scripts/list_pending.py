@@ -31,7 +31,7 @@ def main() -> int:
         [
             "log",
             f"{checkpoint}..{args.upstream_ref}",
-            "--format=%H\t%ad\t%s",
+            "--format=%H\t%cd\t%s",
             "--date=short",
             "--reverse",
         ],
