@@ -193,14 +193,6 @@ AstPerformance::AstPerformance(std::string s, bool outputReport)
   }
 
   ProcessingPhase *parentData = NULL;
-  // check the stack for an existing performance monitor (it will be come the
-  // parent) TOO1 (4/11/2013): TODO: -rose:keep_going tends to segfault here, so
-  // for now we
-  //                         will simply skip AstPerformance processing.
-  if (project != NULL && project->get_keep_going() == true) {
-    project = NULL;
-  }
-
   // DQ (10/28/2020): Reset this to be controlled via the command line (static
   // data member). outputReportInDestructor = outputCompilationPerformance;
 

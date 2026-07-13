@@ -281,7 +281,8 @@ SgExpression *insertBeforeExpression(SgExpression *expr,
                                      SgExpression *newNode) {
   // Do the real insertion of a comma operator
   SgNode *oldParent = expr->get_parent();
-  SgCommaOpExp *co = new SgCommaOpExp(SgDefaultFile, newNode, expr);
+  SgCommaOpExp *co =
+      new SgCommaOpExp(SgDefaultFile, newNode, expr, expr->get_type());
   // copy the access type from the original expression to the new comma
   // expression
   cloneAccessType(co, expr);
@@ -299,7 +300,8 @@ SgExpression *insertBeforeExpression(SgExpression *expr,
 SgExpression *insertAfterExpression(SgExpression *expr, SgExpression *newNode) {
   // Do the real insertion of a comma operator
   SgNode *oldParent = expr->get_parent();
-  SgCommaOpExp *co = new SgCommaOpExp(SgDefaultFile, expr, newNode);
+  SgCommaOpExp *co =
+      new SgCommaOpExp(SgDefaultFile, expr, newNode, newNode->get_type());
   // copy the access type from the new expression to the comma expression
   cloneAccessType(co, expr);
   // wrap this comma expression in parentheses
@@ -338,15 +340,17 @@ public:
         new SgExprStatement(SgDefaultFile, op->get_lhs_operand()),
         new SgBasicBlock(
             SgDefaultFile,
-            new SgExprStatement(
-                SgDefaultFile,
-                new SgAssignOp(SgDefaultFile, lhs, op->get_rhs_operand()))),
+            new SgExprStatement(SgDefaultFile,
+                                new SgAssignOp(SgDefaultFile, lhs,
+                                               op->get_rhs_operand(),
+                                               lhs->get_type()))),
         new SgBasicBlock(
             SgDefaultFile,
             new SgExprStatement(
                 SgDefaultFile,
                 new SgAssignOp(SgDefaultFile, lhs,
-                               new SgBoolValExp(SgDefaultFile, false)))));
+                               new SgBoolValExp(SgDefaultFile, false),
+                               lhs->get_type()))));
     printf("Building IR node #1: tree = %p \n", tree);
     printf("Building IR node #4: new SgBasicBlock = %p \n",
            tree->get_true_body());
@@ -373,12 +377,14 @@ public:
             new SgExprStatement(
                 SgDefaultFile,
                 new SgAssignOp(SgDefaultFile, lhs,
-                               new SgBoolValExp(SgDefaultFile, true)))),
+                               new SgBoolValExp(SgDefaultFile, true),
+                               lhs->get_type()))),
         new SgBasicBlock(
             SgDefaultFile,
-            new SgExprStatement(
-                SgDefaultFile,
-                new SgAssignOp(SgDefaultFile, lhs, op->get_rhs_operand()))));
+            new SgExprStatement(SgDefaultFile,
+                                new SgAssignOp(SgDefaultFile, lhs,
+                                               op->get_rhs_operand(),
+                                               lhs->get_type()))));
     printf("Building IR node #2: tree = %p \n", tree);
     printf("Building IR node #6: new SgBasicBlock = %p \n",
            tree->get_true_body());
@@ -396,20 +402,29 @@ public:
   ConditionalExpGenerator(SgConditionalExp *op) : op(op) {}
 
   virtual SgStatement *generate(SgExpression *lhs) {
+    op->validate();
+    if (op->get_operator_kind() !=
+        SgConditionalExp::e_conditional_operator_standard) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[cfg-rewrite-gnu-conditional]: CFGRewrite "
+              "requires an explicit evaluation-once lowering for GNU binary "
+              "conditionals\n");
+      ROSE_ABORT();
+    }
     // SgStatement* tree =
     SgIfStmt *tree = new SgIfStmt(
         SgDefaultFile,
         new SgExprStatement(SgDefaultFile, op->get_conditional_exp()),
-        new SgBasicBlock(
-            SgDefaultFile,
-            new SgExprStatement(
-                SgDefaultFile,
-                new SgAssignOp(SgDefaultFile, lhs, op->get_true_exp()))),
-        new SgBasicBlock(
-            SgDefaultFile,
-            new SgExprStatement(
-                SgDefaultFile,
-                new SgAssignOp(SgDefaultFile, lhs, op->get_false_exp()))));
+        new SgBasicBlock(SgDefaultFile,
+                         new SgExprStatement(SgDefaultFile,
+                                             new SgAssignOp(SgDefaultFile, lhs,
+                                                            op->get_true_exp(),
+                                                            lhs->get_type()))),
+        new SgBasicBlock(SgDefaultFile,
+                         new SgExprStatement(SgDefaultFile,
+                                             new SgAssignOp(SgDefaultFile, lhs,
+                                                            op->get_false_exp(),
+                                                            lhs->get_type()))));
     printf("Building IR node #3: tree = %p \n", tree);
     printf("Building IR node #8: new SgBasicBlock = %p \n",
            tree->get_true_body());
@@ -478,7 +493,11 @@ SgStatement *createFuncCallStmt(SgFunctionDeclaration *funcDecl) {
     SgFunctionSymbol *funcSymb = new SgFunctionSymbol(funcDecl);
     SgFunctionRefExp *funcRefExp =
         new SgFunctionRefExp(SgDefaultFile, funcSymb);
-    funcCall = new SgFunctionCallExp(SgDefaultFile, funcRefExp, argList);
+    SgFunctionType *functionType = funcDecl->get_type();
+    ROSE_ASSERT(functionType != nullptr);
+    ROSE_ASSERT(functionType->get_return_type() != nullptr);
+    funcCall = new SgFunctionCallExp(SgDefaultFile, funcRefExp, argList,
+                                     functionType->get_return_type());
     funcRefExp->set_parent(funcCall);
     argList->set_parent(funcCall);
   }

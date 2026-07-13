@@ -19,6 +19,12 @@ $CONSTRUCT_ARG_COPY
      result = new $CLASSNAME( $CONSTRUCT_ARG_LIST );
      ROSE_ASSERT(result != NULL);
 
+  // Publish the original-to-copy identity before recursively copying any data
+  // members.  Semantic edges can form cycles, and every recursive encounter
+  // must reuse this in-progress node instead of manufacturing a second,
+  // detached provisional copy that would need late graph repair.
+     help.insertCopiedNodePair(this,result);
+
   // Copy data members of "this" class
 $POST_CONSTRUCT_COPY
 
@@ -52,12 +58,15 @@ $POST_CONSTRUCT_COPY
 
           Sg_File_Info* end = locatedNode->get_endOfConstruct();
 
-       // DQ (10/27/2007): Some input AST's have not been constructed properly so that the copy of the endOfConstruct was not made.
-       // Warn about this but allow it for now so that the outliner can be allowed to work (under older semantics).
-       // ROSE_ASSERT(end != NULL);
+       // A located node without a complete source range is malformed.  Copying
+       // it would preserve the broken producer state and fail later in an
+       // unrelated consumer, so reject it at the copy boundary.
           if (end == NULL)
              {
-               printf ("Warning, input to AST copy was not a correct AST (with valid endOfConstruct pointer) this = %p = %s \n",this,this->class_name().c_str());
+               fprintf(stderr,
+                       "REX_COPY_INVARIANT[located-end-position]: source=%p/%s has no endOfConstruct\n",
+                       static_cast<const void*>(this), this->class_name().c_str());
+               ROSE_ABORT();
              }
             else
              {
@@ -91,10 +100,59 @@ $POST_CONSTRUCT_COPY
 
         }
 
-  // DQ (10/15/2007): Add everything to the map held internally so that we can more easily reference things like scopes.
-     help.insertCopiedNodePair(this,result);
-
   // printf ("End of copy $CLASSNAME = %p = %s \n",this,SageInterface::get_name(this).c_str());
+
+  // A function definition is physically owned by its defining declaration,
+  // even though the declaration is reached through the definition's parent
+  // relation rather than a normal downward data-member edge.  When the
+  // definition itself is the copy root, include that exact owner while this
+  // copy transaction is still nested.  The already-published definition map
+  // entry closes the declaration/definition cycle without manufacturing a
+  // second definition or requiring late repair.
+     if (help.get_depth() == 1)
+        {
+          const SgFunctionDefinition* rootDefinition = isSgFunctionDefinition(this);
+          if (rootDefinition != NULL)
+             {
+               SgFunctionDeclaration* rootDeclaration = rootDefinition->get_declaration();
+               if (rootDeclaration == NULL || rootDeclaration->get_definition() != rootDefinition)
+                  {
+                    fprintf(stderr,
+                            "REX_COPY_INVARIANT[function-definition-root-owner]: "
+                            "definition=%p declaration=%p has no exact physical owner\n",
+                            static_cast<const void*>(rootDefinition),
+                            static_cast<void*>(rootDeclaration));
+                    ROSE_ABORT();
+                  }
+               SgNode* copiedRootDeclaration = help.copyOrLookupAst(rootDeclaration);
+               SgFunctionDeclaration* copiedDeclaration =
+                   isSgFunctionDeclaration(copiedRootDeclaration);
+               if (copiedDeclaration == NULL ||
+                   copiedRootDeclaration == rootDeclaration)
+                  {
+                    fprintf(stderr,
+                            "REX_COPY_INVARIANT[function-definition-root-owner]: "
+                            "definition=%p declaration=%p copy=%p is not one exact copied owner\n",
+                            static_cast<const void*>(rootDefinition),
+                            static_cast<void*>(rootDeclaration),
+                            static_cast<void*>(copiedRootDeclaration));
+                    ROSE_ABORT();
+                  }
+               SgFunctionDefinition* copiedDefinition =
+                   isSgFunctionDefinition(result);
+               if (copiedDefinition == NULL ||
+                   copiedDefinition->get_declaration() != copiedDeclaration ||
+                   copiedDeclaration->get_definition() != copiedDefinition)
+                  {
+                    fprintf(stderr,
+                            "REX_COPY_INVARIANT[function-definition-root-owner]: "
+                            "copied definition=%p declaration=%p does not preserve the exact ownership cycle\n",
+                            static_cast<void*>(copiedDefinition),
+                            static_cast<void*>(copiedDeclaration));
+                    ROSE_ABORT();
+                  }
+             }
+        }
 
   // Record the depth of the copy so that we build an clear internal state (new feature)
   // used to associated old and new symbols in the original AST and the copy of the AST.

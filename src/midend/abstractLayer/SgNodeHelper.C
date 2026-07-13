@@ -189,11 +189,15 @@ vector<SgVarRefExp *> SgNodeHelper::determineVariablesInSubtree(SgNode *node) {
 }
 
 size_t SgNodeHelper::determineChildIndex(SgNode *child) {
+  ROSE_ASSERT(child != nullptr);
   SgNode *parent = child->get_parent();
-  if (parent == 0)
-    return -1;
-  else
-    return parent->get_childIndex(child);
+  if (parent == nullptr) {
+    std::cerr << "REX_AST_INVARIANT[child-index-parent]: child has no exact "
+                 "structural parent"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  return parent->get_childIndex(child);
 }
 
 bool SgNodeHelper::Pattern::OutputTarget::isKnown() {
@@ -524,31 +528,11 @@ SgNodeHelper::getSymbolOfFunctionDeclaration(SgFunctionDeclaration *decl) {
 SgSymbol *SgNodeHelper::getSymbolOfVariable(SgVarRefExp *varRefExp) {
   SgVariableSymbol *varSym = varRefExp->get_symbol();
   if (varSym) {
-    // schroder3 (2016-08-23): Check for incorrect AST structure which is an
-    // indicator that the wrong
-    //  symbol is referenced. This is known to happen inside catch blocks if the
-    //  SgVarRefExp refers to the caught variable.
     SgNode *initName = varSym->get_declaration();
-    if (initName) {
-      SgNode *initNameParent = initName->get_parent();
-      if (initNameParent->get_childIndex(initName) >
-          initNameParent->get_numberOfTraversalSuccessors()) {
-        // Incorrect AST structure: Node is not a child of its parent node. This
-        // is currently only known to happen
-        //  inside a catch block:
-        SgCatchOptionStmt *catchStmt =
-            isSgCatchOptionStmt(initNameParent->get_parent());
-        ROSE_ASSERT(catchStmt);
-        // Get the correct symbol:
-        SgVariableDeclaration *decl = catchStmt->get_condition();
-        ROSE_ASSERT(decl);
-        SgVariableSymbol *correctVarSym = isSgVariableSymbol(
-            SgNodeHelper::getSymbolOfVariableDeclaration(decl));
-        ROSE_ASSERT(correctVarSym);
-        ROSE_ASSERT(symbolToString(correctVarSym) == symbolToString(varSym));
-        varSym = correctVarSym;
-      }
-    }
+    ROSE_ASSERT(initName != nullptr);
+    SgNode *initNameParent = initName->get_parent();
+    ROSE_ASSERT(initNameParent != nullptr);
+    (void)initNameParent->get_childIndex(initName);
   }
   return varSym;
 }
@@ -1368,7 +1352,8 @@ SgNode *SgNodeHelper::getTrueBranch(SgNode *node) {
     return ifstmt->get_true_body();
   }
   if (SgConditionalExp *condexp = isSgConditionalExp(node)) {
-    return condexp->get_true_exp();
+    condexp->validate();
+    return condexp->get_true_value_exp();
   }
   throw std::runtime_error(
       "SgNodeHelper::getTrueBranch: improper node operation.");
@@ -1379,6 +1364,7 @@ SgNode *SgNodeHelper::getFalseBranch(SgNode *node) {
     return ifstmt->get_false_body();
   }
   if (SgConditionalExp *condexp = isSgConditionalExp(node)) {
+    condexp->validate();
     return condexp->get_false_exp();
   }
   throw std::runtime_error(
@@ -1596,12 +1582,6 @@ void SgNodeHelper::replaceExpression(SgExpression *e1, SgExpression *e2,
   }
 }
 
-void SgNodeHelper::replaceAstWithString(SgNode *node, string s) {
-  AstUnparseAttribute *substituteNameAttribute =
-      new AstUnparseAttribute(s, AstUnparseAttribute::e_replace);
-  node->setAttribute("AstUnparseAttribute", substituteNameAttribute);
-}
-
 bool SgNodeHelper::isArrayAccess(SgNode *node) {
   return isSgPntrArrRefExp(node) != 0;
 }
@@ -1756,7 +1736,15 @@ bool SgNodeHelper::isLastChildOf(SgNode *elem, SgNode *parent) {
 
 #if __cplusplus > 199711L
 bool SgNodeHelper::hasOmpNoWait(SgOmpClauseBodyStatement *ompNode) {
-  for (auto c : ompNode->get_clauses()) {
+  SgOmpClauseList *clause_list =
+      ompNode != nullptr ? ompNode->get_clause_list() : nullptr;
+  if (clause_list == nullptr || clause_list->get_parent() != ompNode) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[openmp-clause-list]: SgNodeHelper received "
+            "an OpenMP statement without exact clause-list ownership\n");
+    ROSE_ABORT();
+  }
+  for (SgOmpClause *c : clause_list->get_clauses()) {
     if (isSgOmpNowaitClause(c)) {
       return true;
     }

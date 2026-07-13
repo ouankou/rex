@@ -1,5 +1,4 @@
 
-
 void func() {
   {
     for (int i = 0; ; ) {
@@ -10,4 +9,3 @@ void func() {
   for (int i = 0; ; ) {
   }
 }
-

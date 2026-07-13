@@ -13,9 +13,6 @@ set(TESTCODES_2
 set(ELSATEST_GNU_X86_TARGET_TESTCODES
   t0126.c)
 
-set(ELSATEST_GNU_CONTINUE_ON_ERROR
-  t0126.c)
-
 set(ELSATEST_GNU_GNU89_C_TESTCODES
   c0001.c)
 
@@ -37,6 +34,7 @@ set(ELSATEST_GNU_NEGATIVE_TESTCODES
   g0013.cc
   g0018.cc
   k0004.cc
+  t0126.c
 )
 
 function(rex_elsa_gnu_compile_test input_file label)
@@ -51,13 +49,15 @@ function(rex_elsa_gnu_compile_test input_file label)
     list(FILTER _rose_flags EXCLUDE REGEX "^-std=.*")
     list(APPEND _rose_flags -std=gnu89)
   endif()
-  if(input_file IN_LIST ELSATEST_GNU_CONTINUE_ON_ERROR)
-    list(APPEND _rose_flags -rex:clang:continue-on-error)
-  endif()
   set(ROSE_FLAGS ${_rose_flags})
-  if(input_file IN_LIST ELSATEST_GNU_NEGATIVE_TESTCODES)
+  if(input_file STREQUAL "t0126.c")
+    compile_exact_negative_test(${input_file} ${label}
+      "error: function declared with regparm(0) attribute was previously declared without the regparm attribute")
+  elseif(input_file IN_LIST ELSATEST_GNU_NEGATIVE_TESTCODES)
     compile_negative_test(${input_file} ${label})
   else()
+    list(APPEND _rose_flags ${REX_ELSA_SEMANTIC_PROBE_FLAGS})
+    set(ROSE_FLAGS ${_rose_flags})
     compile_test(${input_file} ${label})
   endif()
 endfunction()
@@ -67,7 +67,7 @@ foreach(file_to_test ${TESTCODES_1})
   rex_elsa_gnu_compile_test(${file_to_test} ELSATEST)
 endforeach()
 
-set(ROSE_FLAGS -w -rose:C)
+set(ROSE_FLAGS -w)
 foreach(file_to_test ${TESTCODES_2})
   rex_elsa_gnu_compile_test(${file_to_test} ELSATEST)
 endforeach()

@@ -500,6 +500,10 @@ bool ClangToDotTranslator::VisitBuiltinType(clang::BuiltinType *builtin_type,
     node_desc.attributes.push_back(
         std::pair<std::string, std::string>("type", "wchar_u"));
     break;
+  case clang::BuiltinType::Char8:
+    node_desc.attributes.push_back(
+        std::pair<std::string, std::string>("type", "char_8"));
+    break;
   case clang::BuiltinType::Char16:
     node_desc.attributes.push_back(
         std::pair<std::string, std::string>("type", "char_16"));

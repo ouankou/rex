@@ -23,15 +23,16 @@ int main (int argc, char *argv[])
   SgFunctionParameterList * paraList = buildFunctionParameterList();
   appendArg(paraList,arg1);  
   appendArg(paraList,arg2);  
-	  // build nondefining function declaration 
-  SgFunctionDeclaration * func1 = buildNondefiningFunctionDeclaration (SgName("foo"),buildVoidType(),paraList);
-  appendStatement (func1);
+	  // build nondefining function declaration
+  SgFunctionDeclaration *func1 = buildNondefiningFunctionDeclaration(
+      function_declaration_ownership::sourceLexical(), SgName("foo"),
+      buildVoidType(), paraList, globalScope);
 
-    // SgFunctionParameterList should not be shared, deepcopy
+  // SgFunctionParameterList should not be shared, deepcopy
   SgFunctionParameterList * paraList2 = isSgFunctionParameterList(deepCopy(paraList));
-  SgFunctionDeclaration * func2 = buildNondefiningFunctionDeclaration (SgName("foo"),buildVoidType(),paraList2);
-  // insert prototype function declaration
-  appendStatement (func2);
+  SgFunctionDeclaration *func2 = buildNondefiningFunctionDeclaration(
+      function_declaration_ownership::sourceLexical(), SgName("foo"),
+      buildVoidType(), paraList2, globalScope);
 
   // build a defining function declaration
 
@@ -47,27 +48,26 @@ int main (int argc, char *argv[])
   //      SgTemplateArgumentPtrList* templateArgumentsList)
   // SgFunctionDeclaration *func3 = buildDefiningFunctionDeclaration
   // (SgName("foo"),buildVoidType(),paraList3);
-  SgFunctionDeclaration *func3 = buildDefiningFunctionDeclaration (SgName("foo"),buildVoidType(),paraList3);
+  SgFunctionDeclaration *func3 = buildDefiningFunctionDeclaration(
+      function_declaration_ownership::sourceLexical(), SgName("foo"),
+      buildVoidType(), paraList3, globalScope);
 
-	  // build a statement inside the function body
+  // build a statement inside the function body
   SgBasicBlock *func_body = func3->get_definition ()->get_body ();
   ROSE_ASSERT (func_body);
   pushScopeStack (isSgScopeStatement (func_body));
 
-  SgVariableDeclaration *varDecl = buildVariableDeclaration
-    (SgName ("i"), buildIntType());
+  SgVariableDeclaration *varDecl =
+      buildVariableDeclaration(SgName("i"), buildIntType(), nullptr, func_body);
 
-	  // Insert the statement
-  appendStatement (varDecl);
-  popScopeStack ();
-  // insert the defining function
-  appendStatement (func3);
-
+  // Insert the statement
+  appendStatement(varDecl, func_body);
+  popScopeStack();
   // build nondefining  int foo(int x, float) the 3rd time
   SgFunctionParameterList * paraList4= isSgFunctionParameterList(deepCopy(paraList));
-  SgFunctionDeclaration * func4 = buildNondefiningFunctionDeclaration \
-     (SgName("foo"),buildVoidType(),paraList4);
-  appendStatement(func4);
+  SgFunctionDeclaration *func4 = buildNondefiningFunctionDeclaration(
+      function_declaration_ownership::sourceLexical(), SgName("foo"),
+      buildVoidType(), paraList4, globalScope);
   // pop the final scope after all AST insertion
   popScopeStack ();
 

@@ -22,6 +22,21 @@ DebugLog DebugLocalInfoCollect("-debuglocalinfocollect");
 
 namespace {
 
+SgNode *stripAliasIdentityConversions(SgNode *expression) {
+  while (SgCastExp *cast = isSgCastExp(expression)) {
+    cast->validate_semantic_conversion();
+    switch (cast->get_semantic_conversion_kind()) {
+    case SgCastExp::e_semantic_conversion_NoOp:
+    case SgCastExp::e_semantic_conversion_LValueToRValue:
+      expression = cast->get_operand();
+      break;
+    default:
+      return expression;
+    }
+  }
+  return expression;
+}
+
 void collectAssignmentTargetMemoryRefs(AstInterface &fa, const AstNodePtr &expr,
                                        AstInterface::AstNodeList &refs) {
   SgNode *node = AstNodePtrImpl(expr).get_ptr();
@@ -76,15 +91,35 @@ void StmtInfoCollect::AppendFuncCallWrite(AstInterface &fa,
   DebugLocalInfoCollect([&fc]() {
     return "Append Function Call write " + AstInterface::AstToString(fc);
   });
+  AstNodePtr callee;
+  AstInterface::AstNodeList args;
+  if (!fa.IsFunctionCall(fc, &callee, &args)) {
+    std::cerr << "REX_AST_INVARIANT[function-call-write]: classified function "
+                 "call cannot be reclassified while collecting writes"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  if (isSgNonrealRefExp(callee.get_ptr()) != nullptr) {
+    // Overload resolution for a dependent call occurs at instantiation.  Every
+    // memory-bearing operand is therefore a potential non-const reference
+    // argument.  Preserve that exact language boundary conservatively instead
+    // of inventing unavailable formal parameter types.
+    for (const AstNodePtr &argument : args) {
+      AstInterface::AstNodeList refs;
+      fa.IsMemoryAccess(argument, &refs);
+      for (const AstNodePtr &ref : refs) {
+        AppendModLoc(fa, ref);
+      }
+    }
+    return;
+  }
+
   AstInterface::AstNodeList outargs;
   if (!fa.IsFunctionCall(fc, 0, 0, &outargs)) {
-    DebugLocalInfoCollect([&fc]() {
-      return "quitting because it is not a function call: " +
-             AstInterface::AstToString(fc);
-    });
-    // We can't figure out the arguments right now. Skip. It's OK b/c an unknown
-    // will also be returned.
-    return;
+    std::cerr << "REX_AST_INVARIANT[function-call-write]: concrete function "
+                 "call has no exact out-argument classification"
+              << std::endl;
+    ROSE_ABORT();
   }
   for (const AstNodePtr &c : outargs) {
     if (c == AstNodePtr())
@@ -450,11 +485,44 @@ void StmtSideEffectCollect::AppendFuncCall(AstInterface &fa,
 
   AstNodePtr callee;
   AppendFuncCallArguments(fa, fc, &callee);
-  if (funcanal == 0 || !funcanal->get_read(fa, fc, &read)) {
+  if (callee.is_unknown()) {
+    std::cerr << "REX_AST_INVARIANT[function-call-read]: classified function "
+                 "call produced an unknown callee identity"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  SgNode *calleeNode = callee.get_ptr();
+  const bool directCallableIdentity =
+      isSgFunctionRefExp(calleeNode) != nullptr ||
+      isSgTemplateFunctionRefExp(calleeNode) != nullptr ||
+      isSgMemberFunctionRefExp(calleeNode) != nullptr ||
+      isSgTemplateMemberFunctionRefExp(calleeNode) != nullptr ||
+      isSgNonrealRefExp(calleeNode) != nullptr;
+  const bool indirectCallableMemory = fa.IsMemoryAccess(callee);
+  const bool constructorCall =
+      isSgConstructorInitializer(calleeNode) != nullptr;
+  if (indirectCallableMemory) {
+    // The read channel represents object and memory identities consumed while
+    // selecting an indirect callee.  A direct callable identity is retained by
+    // the function-call AST and the call-collection channel; treating it as an
+    // object read loses its declaration kind when consumers request an
+    // SgInitializedName and creates a false NULL variable reference.
+    AppendReadLoc(fa, callee);
+  } else if (!directCallableIdentity && !constructorCall) {
+    std::cerr << "REX_AST_INVARIANT[function-call-read]: callee=" << calleeNode
+              << "/"
+              << (calleeNode != nullptr ? calleeNode->class_name() : "<null>")
+              << " has neither a direct callable identity, an indirect "
+                 "callable memory location, nor a constructor role"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  if (funcanal == nullptr || !funcanal->get_read(fa, fc, &read)) {
     readunknown = true;
     DebugLocalInfoCollect([&fc]() {
-      return "no interprecedural read info for : " +
-             AstInterface::AstToString(fc) + "adding function call arguments.";
+      return "no interprocedural read info for: " +
+             AstInterface::AstToString(fc) +
+             "; retaining exact callee and argument reads.";
     });
     if (unknownFunctionEffectPolicy ==
         UnknownFunctionEffectPolicy::CollectSyntheticRefs) {
@@ -463,11 +531,14 @@ void StmtSideEffectCollect::AppendFuncCall(AstInterface &fa,
     callee.set_is_unknown_function_call();
   }
   CollectModRefWrap mod(fa, funcanal, curstmt, readcollect, modcollect);
-  if (funcanal == 0 || !funcanal->get_modify(fa, fc, &mod)) {
+  if (funcanal == nullptr || !funcanal->get_modify(fa, fc, &mod)) {
     DebugLocalInfoCollect([&fc]() {
-      return "no interprecedural mod info for : " +
-             AstInterface::AstToString(fc);
+      return "no interprocedural modification info for: " +
+             AstInterface::AstToString(fc) +
+             "; retaining exact type-directed argument modifications.";
     });
+    // Preserve the exact syntactic/type-directed subset even though the call's
+    // complete interprocedural effect is unknown.
     AppendFuncCallWrite(fa, fc);
     modunknown = true;
     if (unknownFunctionEffectPolicy ==
@@ -647,10 +718,12 @@ void StmtVarAliasCollect::AppendModLoc(AstInterface &fa, const AstNodePtr &mod,
       collect(std::pair<AstNodePtr, int>(*p, 0));
     }
   } else {
+    AstNodePtr exact_rhs =
+        AstNodePtrImpl(stripAliasIdentityConversions(rhs.get_ptr()));
     std::string rhsname;
     AstNodeType rhstype;
     AstNodePtr rhsscope;
-    if (fa.IsVarRef(rhs, &rhstype, &rhsname, &rhsscope)) {
+    if (fa.IsVarRef(exact_rhs, &rhstype, &rhsname, &rhsscope)) {
       if (!fa.IsScalarType(rhstype))
         aliasmap.get_alias_map(modname, modscope)
             ->union_with(aliasmap.get_alias_map(rhsname, rhsscope));

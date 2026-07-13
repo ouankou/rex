@@ -39,21 +39,6 @@ using namespace std;
 
 // =====================================================================
 
-namespace {
-
-void assignGeneratedNodeToScopeFile(SgNode *node, SgScopeStatement *scope) {
-  if (node == NULL || scope == NULL || scope->get_file_info() == NULL) {
-    return;
-  }
-
-  int physical_file_id = scope->get_file_info()->get_physical_file_id();
-  if (physical_file_id >= 0) {
-    ASTtools::assignGeneratedSubtreeToPhysicalFile(node, physical_file_id);
-  }
-}
-
-} // namespace
-
 // =====================================================================
 
 //! Make sure jumps have a unique id.
@@ -77,7 +62,8 @@ static SgVariableDeclaration *createIntDecl(const string &name, int val = 0,
   SgIntVal *init_val = SageBuilder::buildIntVal(val);
   ROSE_ASSERT(init_val);
 
-  SgAssignInitializer *init = SageBuilder::buildAssignInitializer(init_val);
+  SgAssignInitializer *init =
+      SageBuilder::buildAssignInitializer(init_val, var_type);
 
   ROSE_ASSERT(init);
 
@@ -116,7 +102,12 @@ static SgIfStmt *createJumpTable(SgVariableSymbol *jump_var,
   ROSE_ASSERT(jump_var_ref);
   SgIntVal *val = SageBuilder::buildIntVal(jump_val);
   ROSE_ASSERT(val);
-  SgEqualityOp *cond = SageBuilder::buildEqualityOp(jump_var_ref, val);
+  SgType *comparison_type =
+      SageInterface::is_Cxx_family_language()
+          ? static_cast<SgType *>(SageBuilder::buildBoolType())
+          : static_cast<SgType *>(SageBuilder::buildIntType());
+  SgEqualityOp *cond =
+      SageBuilder::buildEqualityOp(jump_var_ref, val, comparison_type);
   ROSE_ASSERT(cond);
   SgExprStatement *cond_stmt = SageBuilder::buildExprStatement(cond);
   ROSE_ASSERT(cond_stmt);
@@ -169,7 +160,7 @@ static SgBasicBlock *createJumpReplacementGoto(SgVariableSymbol *jump_var,
   SgIntVal *id = SageBuilder::buildIntVal(jump_id);
   ROSE_ASSERT(id);
 
-  SgAssignOp *assign = SageBuilder::buildAssignOp(v, id);
+  SgAssignOp *assign = SageBuilder::buildAssignOp(v, id, v->get_type());
   ROSE_ASSERT(assign);
 
   SgExprStatement *assign_stmt = SageBuilder::buildExprStatement(assign);
@@ -312,7 +303,6 @@ private:
       SgVariableDeclaration *temp_decl = buildVariableDeclaration(
           SgName(temp_name), stmt->get_expression()->get_type(), NULL, scope);
       prependStatement(temp_decl, scope);
-      assignGeneratedNodeToScopeFile(temp_decl, scope);
 
       //
       // for the return statement, we change it two be two statements:
@@ -371,9 +361,7 @@ Outliner::Preprocess::transformNonLocalControlFlow(SgBasicBlock *b_orig) {
   SgName var_exit_name("EXIT_TAKEN__");
   SgVariableDeclaration *var_exit = createIntDecl(var_exit_name, 0, b_orig);
   ROSE_ASSERT(var_exit);
-  b_orig->prepend_statement(var_exit);
-  var_exit->set_parent(b_orig);
-  assignGeneratedNodeToScopeFile(var_exit, b_orig);
+  SageInterface::prependStatement(var_exit, b_orig);
 
   // Retrieve a symbol for 'EXIT_TAKEN__' for future use.
   SgVariableSymbol *jump_var = b_orig->lookup_var_symbol(var_exit_name);
@@ -387,16 +375,20 @@ Outliner::Preprocess::transformNonLocalControlFlow(SgBasicBlock *b_orig) {
       SageBuilder::buildLabelStatement(label_exit_name, null_stmt, b_gotos);
   ROSE_ASSERT(label_exit);
 
-  b_gotos->append_statement(label_exit);
-  label_exit->set_parent(b_gotos);
-  label_exit->set_scope(b_gotos); // seg fault if missing, Liao
-  // add SgLabelSymbol,liao, 10/30,2007
-  //  SgLabelSymbol *lsymbol= new SgLabelSymbol(label_exit);
-  //  b_gotos->insert_symbol(label_exit_name,lsymbol);
-
-  b_gotos->append_statement(null_stmt);
-  null_stmt->set_parent(b_gotos);
-  // null_stmt->set_scope(b_gotos);
+  SageInterface::appendStatement(label_exit, b_gotos);
+  SgFunctionDefinition *label_function =
+      SageInterface::getEnclosingFunctionDefinition(b_gotos, true);
+  SgLabelSymbol *label_symbol =
+      isSgLabelSymbol(label_exit->get_symbol_from_symbol_table());
+  if (label_function == NULL || label_exit->get_scope() != label_function ||
+      label_symbol == NULL || label_symbol->get_declaration() != label_exit ||
+      label_symbol->get_scope() != label_function) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[nonlocal-label-owner]: generated "
+            "label=%p has no exact enclosing function symbol\n",
+            static_cast<void *>(label_exit));
+    ROSE_ABORT();
+  }
 
   // Convert all non-local jumps to local gotos to 'label_exit'
   convertJumpsToGotos(jump_var, jumps, label_exit);
@@ -404,8 +396,7 @@ Outliner::Preprocess::transformNonLocalControlFlow(SgBasicBlock *b_orig) {
   // Assemble the non-local "jump table (conditionals)"
   SgIfStmt *jump_table = createJumpTable(jump_var, jumps.begin(), jumps.end());
   ROSE_ASSERT(jump_table);
-  b_orig->append_statement(jump_table);
-  assignGeneratedNodeToScopeFile(jump_table, b_orig);
+  SageInterface::appendStatement(jump_table, b_orig);
 
   return b_gotos;
 }

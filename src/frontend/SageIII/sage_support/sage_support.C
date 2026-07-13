@@ -17,8 +17,6 @@
 
 #include "FileHelper.h"
 
-#include "keep_going.h"
-
 #include "processSupport.h"
 
 #include "sage3basic.h"
@@ -54,6 +52,67 @@ void rosePhaseTrace(const char *phase) {
 #include <memory>
 #include <set>
 #include <system_error>
+
+namespace {
+using OriginalHeaderSnapshots = std::map<std::string, std::string>;
+
+OriginalHeaderSnapshots &originalHeaderSnapshots(SgProject *project) {
+  ASSERT_not_null(project);
+  return project->get_original_header_snapshots();
+}
+
+void snapshotOriginalHeader(SgProject *project, const std::string &headerPath) {
+  OriginalHeaderSnapshots &snapshots = originalHeaderSnapshots(project);
+  if (snapshots.find(headerPath) != snapshots.end()) {
+    return;
+  }
+
+  std::ifstream input(headerPath, std::ios::in | std::ios::binary);
+  if (!input) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[header-snapshot]: unable to open %s\n",
+            headerPath.c_str());
+    ROSE_ABORT();
+  }
+  std::ostringstream contents;
+  contents << input.rdbuf();
+  if (input.bad()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[header-snapshot]: unable to read %s\n",
+            headerPath.c_str());
+    ROSE_ABORT();
+  }
+  snapshots.emplace(headerPath, contents.str());
+}
+
+bool insertFrontendSourceFile(std::map<std::string, SgSourceFile *> &files,
+                              const std::string &path, SgSourceFile *sourceFile,
+                              const char *inventory) {
+  ASSERT_not_null(sourceFile);
+  const std::string normalizedPath = FileHelper::normalizePathIfPossible(path);
+  const std::string normalizedSourcePath =
+      FileHelper::normalizePathIfPossible(sourceFile->getFileName());
+  if (normalizedPath.empty() || normalizedSourcePath.empty() ||
+      normalizedPath != normalizedSourcePath) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[header-source]: inventory=%s path=%s "
+            "source=%s has inconsistent file identity\n",
+            inventory, path.c_str(), sourceFile->getFileName().c_str());
+    ROSE_ABORT();
+  }
+  const auto inserted = files.emplace(normalizedPath, sourceFile);
+  if (!inserted.second && inserted.first->second != sourceFile) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[header-context]: inventory=%s path=%s "
+            "maps to distinct source nodes %p and %p\n",
+            inventory, normalizedPath.c_str(),
+            static_cast<void *>(inserted.first->second),
+            static_cast<void *>(sourceFile));
+    ROSE_ABORT();
+  }
+  return inserted.second;
+}
+} // namespace
 
 // DQ (12/22/2019): I don't need this now, and it is an issue for some compilers
 // (e.g. GNU 4.9.4). DQ (12/21/2019): Require hash table support for determining
@@ -109,9 +168,7 @@ static bool shouldBuildTokenMapping(const SgSourceFile *sourceFile) {
     return false;
   }
 
-  return (sourceFile->get_unparse_tokens() == true ||
-          sourceFile->get_use_token_stream_to_improve_source_position_info() ==
-              true);
+  return sourceFile->get_unparse_tokens();
 }
 
 static bool hasAttachedPreprocessingInfo(SgNode *root) {
@@ -201,81 +258,6 @@ static bool fixQuotedArgumentForWrapperScript(std::string &arg) {
 
   return changed;
 }
-
-namespace {
-#if defined(ROSE_FLANG_FRONTEND)
-bool isFortranSourcePath(const std::string &path) {
-  std::string ext = getPathSuffix(path);
-  if (ext.empty())
-    return false;
-  ext = toLowerCopy(ext);
-  return ext == "f" || ext == "f77" || ext == "f90" || ext == "f95" ||
-         ext == "f03" || ext == "f08" || ext == "f18";
-}
-
-bool isIntrinsicModuleUse(const SgUseStatement *use_stmt) {
-  if (use_stmt == NULL)
-    return false;
-  std::string nature = toLowerCopy(use_stmt->get_module_nature());
-  return nature == "intrinsic";
-}
-
-void collectModuleSourcesFromFile(SgSourceFile *file,
-                                  std::vector<std::string> &order,
-                                  std::set<std::string> &seen,
-                                  std::set<std::string> &visiting);
-
-void collectModuleSourcesFromUse(const SgUseStatement *use_stmt,
-                                 std::vector<std::string> &order,
-                                 std::set<std::string> &seen,
-                                 std::set<std::string> &visiting) {
-  if (use_stmt == NULL || isIntrinsicModuleUse(use_stmt))
-    return;
-
-  std::string name = use_stmt->get_name().str();
-  if (name.empty())
-    return;
-
-  SgModuleStatement *mod_stmt = FlangModuleInfo::getModule(name);
-  if (mod_stmt == NULL)
-    return;
-
-  SgSourceFile *mod_file = SageInterface::getEnclosingSourceFile(mod_stmt);
-  if (mod_file == NULL)
-    return;
-
-  collectModuleSourcesFromFile(mod_file, order, seen, visiting);
-}
-
-void collectModuleSourcesFromFile(SgSourceFile *file,
-                                  std::vector<std::string> &order,
-                                  std::set<std::string> &seen,
-                                  std::set<std::string> &visiting) {
-  if (file == NULL)
-    return;
-  std::string path = file->getFileName();
-  if (!isFortranSourcePath(path))
-    return;
-  if (seen.count(path) != 0)
-    return;
-  if (visiting.count(path) != 0)
-    return;
-
-  visiting.insert(path);
-
-  Rose_STL_Container<SgNode *> uses =
-      NodeQuery::querySubTree(file, V_SgUseStatement);
-  for (Rose_STL_Container<SgNode *>::iterator it = uses.begin();
-       it != uses.end(); ++it) {
-    collectModuleSourcesFromUse(isSgUseStatement(*it), order, seen, visiting);
-  }
-
-  visiting.erase(path);
-  seen.insert(path);
-  order.push_back(path);
-}
-#endif
-} // namespace
 
 static bool isFlangFortranSourceSuffix(const std::string &suffix) {
   const std::string lower = toLowerCopy(suffix);
@@ -427,8 +409,44 @@ static SgSourceFile *buildHeaderSourceFile(SgProject *project,
       CommandlineProcessing::generateSourceFilenames(
           argv, project->get_binary_only());
   CommandlineProcessing::removeAllFileNamesExcept(argv, fileList, headerPath);
-  if (std::find(argv.begin(), argv.end(), headerPath) == argv.end()) {
-    argv.push_back(headerPath);
+
+  const char *headerLanguage = NULL;
+  if (referenceFile->get_Cuda_only()) {
+    headerLanguage = "cuda";
+  } else if (referenceFile->get_OpenCL_only()) {
+    headerLanguage = "cl";
+  } else if (referenceFile->get_Cxx_only()) {
+    headerLanguage = "c++-header";
+  } else if (referenceFile->get_C_only() || referenceFile->get_C99_only() ||
+             referenceFile->get_C11_only()) {
+    headerLanguage = "c-header";
+  } else {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[header-materialization-language]: "
+            "header=%s reference=%p/%s has no exact supported Clang "
+            "language\n",
+            headerPath.c_str(), static_cast<const void *>(referenceFile),
+            referenceFile->get_sourceFileNameWithPath().c_str());
+    ROSE_ABORT();
+  }
+
+  // A header path is not a suffix-classified driver source.  Publish it as one
+  // exact source operand using the reference translation unit's Clang
+  // language; otherwise SgFile construction receives no source identity.
+  argv.push_back("-x");
+  argv.push_back(headerLanguage);
+  argv.push_back(headerPath);
+  Rose_STL_Container<string> headerSources =
+      CommandlineProcessing::generateSourceFilenames(
+          argv, project->get_binary_only());
+  if (headerSources.size() != 1 ||
+      FileHelper::normalizePathIfPossible(headerSources.front()) !=
+          FileHelper::normalizePathIfPossible(headerPath)) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[header-materialization-command]: "
+            "header=%s language=%s produced %zu source operands\n",
+            headerPath.c_str(), headerLanguage, headerSources.size());
+    ROSE_ABORT();
   }
 
   SgSourceFile *headerFile = new SgSourceFile(argv, project);
@@ -437,15 +455,9 @@ static SgSourceFile *buildHeaderSourceFile(SgProject *project,
   headerFile->set_isHeaderFile(true);
   headerFile->set_unparseHeaderFiles(referenceFile->get_unparseHeaderFiles());
   headerFile->set_unparse_tokens(referenceFile->get_unparse_tokens());
-  headerFile->set_use_token_stream_to_improve_source_position_info(
-      referenceFile->get_use_token_stream_to_improve_source_position_info());
-  headerFile->set_unparse_using_leading_and_trailing_token_mappings(
-      referenceFile->get_unparse_using_leading_and_trailing_token_mappings());
-
   copyLanguageSettings(headerFile, referenceFile);
 
   headerFile->set_requires_C_preprocessor(false);
-  headerFile->initializeGlobalScope();
 
   if (headerFile->get_preprocessorDirectivesAndCommentsList() == NULL) {
     headerFile->set_preprocessorDirectivesAndCommentsList(
@@ -455,38 +467,222 @@ static SgSourceFile *buildHeaderSourceFile(SgProject *project,
   return headerFile;
 }
 
-static SgIncludeFile *findIncludeFileByPath(SgIncludeFile *includeRoot,
-                                            const std::string &headerPath) {
-  if (includeRoot == NULL) {
+static SgIncludeFile *
+findDirectIncludeFileByPath(SgIncludeFile *includingFile,
+                            const std::string &headerPath) {
+  if (includingFile == NULL) {
     return NULL;
   }
 
   const std::string normalizedHeaderPath =
       FileHelper::normalizePathIfPossible(headerPath);
-
-  std::vector<SgIncludeFile *> worklist;
-  std::set<SgIncludeFile *> visited;
-  worklist.push_back(includeRoot);
-
-  while (!worklist.empty()) {
-    SgIncludeFile *includeFile = worklist.back();
-    worklist.pop_back();
-    if (includeFile == NULL || !visited.insert(includeFile).second) {
-      continue;
+  for (SgIncludeFile *includeFile : includingFile->get_include_file_list()) {
+    if (includeFile == NULL) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[include-tree]: including file=%s has a "
+              "null direct include\n",
+              includingFile->get_filename().str());
+      ROSE_ABORT();
     }
-
     if (FileHelper::normalizePathIfPossible(includeFile->get_filename()) ==
         normalizedHeaderPath) {
       return includeFile;
     }
-
-    const SgIncludeFilePtrList &children = includeFile->get_include_file_list();
-    for (SgIncludeFile *child : children) {
-      worklist.push_back(child);
-    }
   }
 
   return NULL;
+}
+
+static void inventoryMaterializedIncludeSources(
+    SgProject *project, SgIncludeFile *includeRoot,
+    std::map<std::string, SgSourceFile *> &sourceFilesByPath) {
+  ASSERT_not_null(project);
+  if (includeRoot == nullptr) {
+    return;
+  }
+
+  std::vector<SgIncludeFile *> worklist{includeRoot};
+  std::set<SgIncludeFile *> visited;
+  while (!worklist.empty()) {
+    SgIncludeFile *includeFile = worklist.back();
+    worklist.pop_back();
+    if (includeFile == nullptr) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[include-tree]: null include-file node "
+              "during source inventory\n");
+      ROSE_ABORT();
+    }
+    if (!visited.insert(includeFile).second) {
+      continue;
+    }
+
+    if (SgSourceFile *sourceFile = includeFile->get_source_file()) {
+      if (sourceFile->get_project() != project) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[header-context]: header=%s source=%p "
+                "belongs to a different project\n",
+                includeFile->get_filename().str(),
+                static_cast<void *>(sourceFile));
+        ROSE_ABORT();
+      }
+      insertFrontendSourceFile(sourceFilesByPath,
+                               includeFile->get_filename().str(), sourceFile,
+                               "include-tree");
+    }
+
+    for (SgIncludeFile *child : includeFile->get_include_file_list()) {
+      if (child == nullptr) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[include-tree]: include=%s contains "
+                "a null child\n",
+                includeFile->get_filename().str());
+        ROSE_ABORT();
+      }
+      worklist.push_back(child);
+    }
+  }
+}
+
+static SgGlobal *findHeaderEmissionGlobalScope(SgSourceFile *translationUnit,
+                                               const std::string &headerPath) {
+  ASSERT_not_null(translationUnit);
+  const std::string normalizedHeaderPath =
+      FileHelper::normalizePathIfPossible(headerPath);
+  if (normalizedHeaderPath.empty()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[header-scope]: header=%s has no "
+            "normalized path\n",
+            headerPath.c_str());
+    ROSE_ABORT();
+  }
+
+  SgGlobal *emissionGlobal = nullptr;
+  SgGlobal *translationUnitGlobal = translationUnit->get_globalScope();
+  if (translationUnitGlobal == nullptr) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[header-scope]: translation unit=%s has "
+            "no global scope\n",
+            translationUnit->getFileName().c_str());
+    ROSE_ABORT();
+  }
+
+  if (AttachedPreprocessingInfoType *records =
+          translationUnitGlobal->getAttachedPreprocessingInfo()) {
+    for (PreprocessingInfo *record : *records) {
+      if (record == nullptr || record->get_file_info() == nullptr) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[header-preprocessing]: global=%p "
+                "contains an incomplete preprocessing record\n",
+                static_cast<void *>(translationUnitGlobal));
+        ROSE_ABORT();
+      }
+      if (FileHelper::normalizePathIfPossible(
+              record->get_file_info()->get_filenameString()) ==
+          normalizedHeaderPath) {
+        emissionGlobal = translationUnitGlobal;
+        break;
+      }
+    }
+  }
+
+  for (SgNode *node : NodeQuery::querySubTree(translationUnit, V_SgStatement)) {
+    SgStatement *statement = isSgStatement(node);
+    if (statement == nullptr || statement->get_file_info() == nullptr) {
+      continue;
+    }
+    const std::string statementPath =
+        FileHelper::normalizePathIfPossible(Sg_File_Info::getFilenameFromID(
+            statement->get_file_info()->get_physical_file_id()));
+    if (statementPath != normalizedHeaderPath) {
+      continue;
+    }
+
+    SgNode *ancestor = statement;
+    std::set<SgNode *> visited;
+    while (ancestor != nullptr && isSgGlobal(ancestor) == nullptr) {
+      if (!visited.insert(ancestor).second) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[header-scope]: header=%s "
+                "statement=%p has a parent cycle at %p\n",
+                normalizedHeaderPath.c_str(), static_cast<void *>(statement),
+                static_cast<void *>(ancestor));
+        ROSE_ABORT();
+      }
+      ancestor = ancestor->get_parent();
+    }
+    SgGlobal *candidate = isSgGlobal(ancestor);
+    if (candidate == nullptr) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[header-scope]: header=%s statement=%p "
+              "has no translation-unit global emission scope\n",
+              normalizedHeaderPath.c_str(), static_cast<void *>(statement));
+      ROSE_ABORT();
+    }
+    if (emissionGlobal != nullptr && emissionGlobal != candidate) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[header-context]: header=%s has "
+              "distinct emission globals %p and %p\n",
+              normalizedHeaderPath.c_str(), static_cast<void *>(emissionGlobal),
+              static_cast<void *>(candidate));
+      ROSE_ABORT();
+    }
+    emissionGlobal = candidate;
+  }
+  return emissionGlobal;
+}
+
+static bool
+includeDirectiveNamesPhysicalPath(PreprocessingInfo *preprocessingInfo,
+                                  const std::string &normalizedIncludingPath,
+                                  const std::string &normalizedIncludedPath) {
+  if (preprocessingInfo == nullptr ||
+      preprocessingInfo->get_file_info() == nullptr) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[include-owner]: included=%s contains an "
+            "incomplete preprocessing-info candidate\n",
+            normalizedIncludedPath.c_str());
+    ROSE_ABORT();
+  }
+  const PreprocessingInfo::DirectiveType directiveType =
+      preprocessingInfo->getTypeOfDirective();
+  if (directiveType != PreprocessingInfo::CpreprocessorIncludeDeclaration &&
+      directiveType != PreprocessingInfo::CpreprocessorIncludeNextDeclaration) {
+    return false;
+  }
+  if (FileHelper::getNormalizedContainingFileName(preprocessingInfo) !=
+      normalizedIncludingPath) {
+    return false;
+  }
+
+  IncludeDirective directive(preprocessingInfo->getString());
+  std::string spelling = directive.getIncludedPath();
+  while (spelling.rfind("./", 0) == 0) {
+    spelling.erase(0, 2);
+  }
+  if (spelling.empty()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[include-owner]: directive=%s from=%s has "
+            "no include spelling\n",
+            preprocessingInfo->getString().c_str(),
+            normalizedIncludingPath.c_str());
+    ROSE_ABORT();
+  }
+
+  if (FileHelper::isAbsolutePath(spelling)) {
+    return FileHelper::normalizePathIfPossible(spelling) ==
+           normalizedIncludedPath;
+  }
+  const std::string relativeCandidate =
+      FileHelper::normalizePathIfPossible(FileHelper::concatenatePaths(
+          FileHelper::getParentFolder(normalizedIncludingPath), spelling));
+  if (relativeCandidate == normalizedIncludedPath) {
+    return true;
+  }
+  const std::string suffix = "/" + spelling;
+  return normalizedIncludedPath.size() >= suffix.size() &&
+         normalizedIncludedPath.compare(normalizedIncludedPath.size() -
+                                            suffix.size(),
+                                        suffix.size(), suffix) == 0;
 }
 
 static PreprocessingInfo *findIncludingPreprocessingInfo(
@@ -495,82 +691,141 @@ static PreprocessingInfo *findIncludingPreprocessingInfo(
     SgSourceFile *includingSourceFile, const std::string &includedPath) {
   ROSE_ASSERT(project != NULL);
   if (includingSourceFile == NULL) {
-    return NULL;
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[include-owner]: included=%s has no "
+            "including source file\n",
+            includedPath.c_str());
+    ROSE_ABORT();
   }
 
   const std::string normalizedIncludedPath =
       FileHelper::normalizePathIfPossible(includedPath);
   const std::string normalizedIncludingPath =
       FileHelper::normalizePathIfPossible(includingSourceFile->getFileName());
+  if (normalizedIncludedPath.empty() || normalizedIncludingPath.empty()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[include-owner]: included=%s including=%s "
+            "has incomplete path identity\n",
+            includedPath.c_str(), includingSourceFile->getFileName().c_str());
+    ROSE_ABORT();
+  }
 
-  auto matchesInclude = [&](PreprocessingInfo *preprocessingInfo) {
-    if (preprocessingInfo == NULL) {
-      return false;
-    }
-
-    if (FileHelper::getNormalizedContainingFileName(preprocessingInfo) !=
-        normalizedIncludingPath) {
-      return false;
-    }
-
-    const std::string resolvedIncludedPath =
-        FileHelper::normalizePathIfPossible(
-            project->findIncludedFile(preprocessingInfo));
-    return !resolvedIncludedPath.empty() &&
-           resolvedIncludedPath == normalizedIncludedPath;
-  };
-
+  std::set<PreprocessingInfo *> candidates;
+  std::set<PreprocessingInfo *> compilerResolvedCandidates;
   map<string, set<PreprocessingInfo *>>::const_iterator mapIt =
       includingPreprocessingInfosMap.find(normalizedIncludedPath);
   if (mapIt == includingPreprocessingInfosMap.end()) {
     mapIt = includingPreprocessingInfosMap.find(includedPath);
   }
   if (mapIt != includingPreprocessingInfosMap.end()) {
-    const set<PreprocessingInfo *> &includingInfos = mapIt->second;
-    for (set<PreprocessingInfo *>::const_iterator infoIt =
-             includingInfos.begin();
-         infoIt != includingInfos.end(); ++infoIt) {
-      if (matchesInclude(*infoIt)) {
-        return *infoIt;
-      }
-    }
+    candidates.insert(mapIt->second.begin(), mapIt->second.end());
+    compilerResolvedCandidates.insert(mapIt->second.begin(),
+                                      mapIt->second.end());
   }
 
   ROSEAttributesListContainerPtr filePreprocInfo =
       includingSourceFile->get_preprocessorDirectivesAndCommentsList();
-  if (filePreprocInfo == NULL) {
-    return NULL;
+  if (filePreprocInfo == nullptr) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[include-owner]: including=%s has no "
+            "preprocessing inventory while resolving=%s\n",
+            normalizedIncludingPath.c_str(), normalizedIncludedPath.c_str());
+    ROSE_ABORT();
+  }
+  for (const auto &entry : filePreprocInfo->getList()) {
+    if (entry.second == nullptr) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[include-owner]: including=%s has a null "
+              "preprocessing list while resolving=%s\n",
+              normalizedIncludingPath.c_str(), normalizedIncludedPath.c_str());
+      ROSE_ABORT();
+    }
+    candidates.insert(entry.second->getList().begin(),
+                      entry.second->getList().end());
   }
 
-  std::map<std::string, ROSEAttributesList *> &attributeLists =
-      filePreprocInfo->getList();
-  for (std::map<std::string, ROSEAttributesList *>::iterator listIt =
-           attributeLists.begin();
-       listIt != attributeLists.end(); ++listIt) {
-    ROSEAttributesList *attributeList = listIt->second;
-    if (attributeList == NULL) {
+  PreprocessingInfo *selected = nullptr;
+  std::string selectedSpelling;
+  bool selectedQuoted = false;
+  PreprocessingInfo::DirectiveType selectedType =
+      PreprocessingInfo::CpreprocessorUnknownDeclaration;
+  for (PreprocessingInfo *preprocessingInfo : candidates) {
+    const bool compilerResolved =
+        compilerResolvedCandidates.count(preprocessingInfo) != 0;
+    const bool ownedByIncludingFile =
+        preprocessingInfo != nullptr &&
+        preprocessingInfo->get_file_info() != nullptr &&
+        FileHelper::getNormalizedContainingFileName(preprocessingInfo) ==
+            normalizedIncludingPath;
+    const bool isIncludeDirective =
+        preprocessingInfo != nullptr &&
+        (preprocessingInfo->getTypeOfDirective() ==
+             PreprocessingInfo::CpreprocessorIncludeDeclaration ||
+         preprocessingInfo->getTypeOfDirective() ==
+             PreprocessingInfo::CpreprocessorIncludeNextDeclaration);
+    if (!(compilerResolved && ownedByIncludingFile && isIncludeDirective) &&
+        !includeDirectiveNamesPhysicalPath(preprocessingInfo,
+                                           normalizedIncludingPath,
+                                           normalizedIncludedPath)) {
       continue;
     }
-
-    std::vector<PreprocessingInfo *> &preprocessingInfos =
-        attributeList->getList();
-    for (std::vector<PreprocessingInfo *>::iterator infoIt =
-             preprocessingInfos.begin();
-         infoIt != preprocessingInfos.end(); ++infoIt) {
-      if (matchesInclude(*infoIt)) {
-        return *infoIt;
-      }
+    const PreprocessingInfo::DirectiveType directiveType =
+        preprocessingInfo->getTypeOfDirective();
+    IncludeDirective directive(preprocessingInfo->getString());
+    const std::string spelling = directive.getIncludedPath();
+    if (spelling.empty()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[include-owner]: directive=%s from=%s "
+              "has no literal include spelling\n",
+              preprocessingInfo->getString().c_str(),
+              normalizedIncludingPath.c_str());
+      ROSE_ABORT();
+    }
+    if (selected == nullptr) {
+      selected = preprocessingInfo;
+      selectedSpelling = spelling;
+      selectedQuoted = directive.isQuotedInclude();
+      selectedType = directiveType;
+      continue;
+    }
+    if (selectedSpelling != spelling ||
+        selectedQuoted != directive.isQuotedInclude() ||
+        selectedType != directiveType) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[include-owner]: including=%s reaches=%s "
+              "through distinct directive spellings: %s and %s\n",
+              normalizedIncludingPath.c_str(), normalizedIncludedPath.c_str(),
+              selected->getString().c_str(),
+              preprocessingInfo->getString().c_str());
+      ROSE_ABORT();
+    }
+    Sg_File_Info *selectedInfo = selected->get_file_info();
+    Sg_File_Info *candidateInfo = preprocessingInfo->get_file_info();
+    if (candidateInfo->get_line() < selectedInfo->get_line() ||
+        (candidateInfo->get_line() == selectedInfo->get_line() &&
+         candidateInfo->get_col() < selectedInfo->get_col())) {
+      selected = preprocessingInfo;
     }
   }
 
-  return NULL;
+  if (selected == nullptr) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[include-owner]: including=%s has no owned "
+            "active directive resolving to %s\n",
+            normalizedIncludingPath.c_str(), normalizedIncludedPath.c_str());
+    ROSE_ABORT();
+  }
+  return selected;
 }
 
 static SgIncludeFile *ensureSourceFileIncludeRoot(SgProject *project,
                                                   SgSourceFile *sourceFile) {
   ROSE_ASSERT(project != NULL);
   if (sourceFile == NULL) {
-    return NULL;
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[include-root]: cannot build a root for a "
+            "null source file\n");
+    ROSE_ABORT();
   }
 
   SgIncludeFile *includeRoot = sourceFile->get_associated_include_file();
@@ -579,11 +834,22 @@ static SgIncludeFile *ensureSourceFileIncludeRoot(SgProject *project,
   }
 
   if (sourceFile->get_isHeaderFile() == true) {
-    return NULL;
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[include-root]: header=%s lost its parent "
+            "include node\n",
+            sourceFile->getFileName().c_str());
+    ROSE_ABORT();
   }
 
   const std::string sourcePath =
       FileHelper::normalizePathIfPossible(sourceFile->getFileName());
+  if (sourcePath.empty()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[include-root]: source=%p has no normalized "
+            "filename\n",
+            static_cast<void *>(sourceFile));
+    ROSE_ABORT();
+  }
   includeRoot = new SgIncludeFile(sourcePath);
   includeRoot->set_filename(sourcePath);
   includeRoot->set_name_used_in_include_directive(
@@ -607,14 +873,195 @@ static SgIncludeFile *ensureSourceFileIncludeRoot(SgProject *project,
   return includeRoot;
 }
 
+static std::filesystem::path requireCanonicalSourcePath(const std::string &path,
+                                                        const char *contract) {
+  ASSERT_not_null(contract);
+  if (path.empty()) {
+    fprintf(stderr, "REX_FRONTEND_INVARIANT[%s]: source path is empty\n",
+            contract);
+    ROSE_ABORT();
+  }
+
+  std::error_code ec;
+  const std::filesystem::path canonical = std::filesystem::weakly_canonical(
+      std::filesystem::absolute(path, ec), ec);
+  if (ec || canonical.empty() || !canonical.is_absolute()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[%s]: source path=%s has no exact "
+            "canonical absolute identity: %s\n",
+            contract, path.c_str(), ec.message().c_str());
+    ROSE_ABORT();
+  }
+  return canonical;
+}
+
+static std::filesystem::path
+commonAbsoluteDirectory(const std::filesystem::path &lhs,
+                        const std::filesystem::path &rhs,
+                        const char *contract) {
+  ASSERT_not_null(contract);
+  if (lhs.empty() || rhs.empty() || !lhs.is_absolute() || !rhs.is_absolute()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[%s]: cannot intersect non-absolute "
+            "source roots lhs=%s rhs=%s\n",
+            contract, lhs.string().c_str(), rhs.string().c_str());
+    ROSE_ABORT();
+  }
+
+  std::filesystem::path shared;
+  auto left = lhs.begin();
+  auto right = rhs.begin();
+  while (left != lhs.end() && right != rhs.end() && *left == *right) {
+    shared /= *left;
+    ++left;
+    ++right;
+  }
+  if (shared.empty() || !shared.is_absolute()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[%s]: source roots lhs=%s rhs=%s have no "
+            "exact common absolute directory\n",
+            contract, lhs.string().c_str(), rhs.string().c_str());
+    ROSE_ABORT();
+  }
+  return shared.lexically_normal();
+}
+
+static bool isWithinApplicationRoot(const std::filesystem::path &path,
+                                    const std::filesystem::path &root) {
+  if (path.empty() || root.empty() || !path.is_absolute() ||
+      !root.is_absolute()) {
+    return false;
+  }
+  const std::filesystem::path relative =
+      path.lexically_relative(root).lexically_normal();
+  if (relative.empty() || relative.is_absolute()) {
+    return false;
+  }
+  for (const std::filesystem::path &component : relative) {
+    if (component == "..")
+      return false;
+  }
+  return true;
+}
+
+static void publishHeaderApplicationRoot(
+    SgProject *project,
+    const std::map<std::string, SgSourceFile *> &sourceFilesByPath) {
+  ASSERT_not_null(project);
+  std::filesystem::path applicationRoot = requireCanonicalSourcePath(
+      project->get_applicationRootDirectory(), "application-root");
+  const bool explicitRoot = project->get_usingApplicationRootDirectory();
+
+  for (const auto &entry : sourceFilesByPath) {
+    SgSourceFile *sourceFile = entry.second;
+    ASSERT_not_null(sourceFile);
+    SgIncludeFile *includeFile = sourceFile->get_associated_include_file();
+    if (includeFile == nullptr) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[application-root]: materialized "
+              "source=%s has no exact include owner\n",
+              entry.first.c_str());
+      ROSE_ABORT();
+    }
+    if (!includeFile->get_isApplicationFile())
+      continue;
+
+    const std::filesystem::path sourcePath =
+        requireCanonicalSourcePath(entry.first, "application-root");
+    const std::filesystem::path sourceDirectory = sourcePath.parent_path();
+    if (sourceDirectory.empty()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[application-root]: application "
+              "source=%s has no exact parent directory\n",
+              entry.first.c_str());
+      ROSE_ABORT();
+    }
+    if (explicitRoot && !isWithinApplicationRoot(sourcePath, applicationRoot)) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[application-root]: application "
+              "source=%s escapes explicit root=%s\n",
+              entry.first.c_str(), applicationRoot.string().c_str());
+      ROSE_ABORT();
+    }
+    if (!explicitRoot) {
+      applicationRoot = commonAbsoluteDirectory(
+          applicationRoot, sourceDirectory, "application-root");
+    }
+  }
+
+  project->set_applicationRootDirectory(applicationRoot.string());
+
+  std::set<SgIncludeFile *> visited;
+  std::vector<SgIncludeFile *> pending;
+  for (SgFile *file : project->get_fileList()) {
+    SgSourceFile *sourceFile = isSgSourceFile(file);
+    if (sourceFile != nullptr) {
+      SgIncludeFile *root = sourceFile->get_associated_include_file();
+      if (root == nullptr) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[application-root]: CLI source=%s "
+                "has no exact include root\n",
+                sourceFile->getFileName().c_str());
+        ROSE_ABORT();
+      }
+      pending.push_back(root);
+    }
+  }
+
+  while (!pending.empty()) {
+    SgIncludeFile *includeFile = pending.back();
+    pending.pop_back();
+    ASSERT_not_null(includeFile);
+    if (!visited.insert(includeFile).second) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[application-root]: include=%p path=%s "
+              "appears more than once in the exact include graph\n",
+              static_cast<void *>(includeFile),
+              includeFile->get_filename().str());
+      ROSE_ABORT();
+    }
+    includeFile->set_applicationRootDirectory(applicationRoot.string());
+    if (includeFile->get_isApplicationFile()) {
+      const std::filesystem::path sourcePath = requireCanonicalSourcePath(
+          includeFile->get_filename().str(), "application-root");
+      if (!isWithinApplicationRoot(sourcePath, applicationRoot)) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[application-root]: application "
+                "include=%s escapes published root=%s\n",
+                sourcePath.string().c_str(), applicationRoot.string().c_str());
+        ROSE_ABORT();
+      }
+    }
+
+    for (SgIncludeFile *child : includeFile->get_include_file_list()) {
+      if (child == nullptr || child->get_parent_include_file() != includeFile) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[application-root]: include=%p path=%s "
+                "has a child without one exact parent edge\n",
+                static_cast<void *>(includeFile),
+                includeFile->get_filename().str());
+        ROSE_ABORT();
+      }
+      pending.push_back(child);
+    }
+  }
+}
+
 static SgIncludeFile *
 synthesizeIncludeFile(SgProject *project, SgSourceFile *includingSourceFile,
                       SgSourceFile *includedSourceFile,
                       const std::string &includedPath,
                       PreprocessingInfo *preprocessingInfo) {
   ROSE_ASSERT(project != NULL);
-  if (includingSourceFile == NULL || includedSourceFile == NULL) {
-    return NULL;
+  if (includingSourceFile == NULL || includedSourceFile == NULL ||
+      preprocessingInfo == NULL) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[include-node]: including=%p included=%p "
+            "preprocessing=%p cannot synthesize incomplete include ownership\n",
+            static_cast<void *>(includingSourceFile),
+            static_cast<void *>(includedSourceFile),
+            static_cast<void *>(preprocessingInfo));
+    ROSE_ABORT();
   }
 
   SgIncludeFile *parentIncludeFile =
@@ -624,17 +1071,28 @@ synthesizeIncludeFile(SgProject *project, SgSourceFile *includingSourceFile,
         ensureSourceFileIncludeRoot(project, includingSourceFile);
   }
   if (parentIncludeFile == NULL) {
-    return NULL;
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[include-node]: including=%s has no include "
+            "tree parent\n",
+            includingSourceFile->getFileName().c_str());
+    ROSE_ABORT();
   }
 
   SgIncludeFile *includeFile =
-      findIncludeFileByPath(parentIncludeFile, includedPath);
+      findDirectIncludeFileByPath(parentIncludeFile, includedPath);
   if (includeFile != NULL) {
     return includeFile;
   }
 
   const std::string normalizedIncludedPath =
       FileHelper::normalizePathIfPossible(includedPath);
+  if (normalizedIncludedPath.empty()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[include-node]: included source=%s has no "
+            "normalized path\n",
+            includedPath.c_str());
+    ROSE_ABORT();
+  }
   includeFile = new SgIncludeFile(normalizedIncludedPath);
   includeFile->set_filename(normalizedIncludedPath);
   includeFile->set_name_without_path(
@@ -653,28 +1111,38 @@ synthesizeIncludeFile(SgProject *project, SgSourceFile *includingSourceFile,
     std::filesystem::path includedPath(normalizedIncludedPath);
     std::error_code ec;
     rootPath = std::filesystem::weakly_canonical(rootPath, ec);
-    if (!ec) {
-      includedPath = std::filesystem::weakly_canonical(includedPath, ec);
+    if (ec) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[include-root]: application root=%s "
+              "cannot be canonicalized: %s\n",
+              normalizedApplicationRoot.c_str(), ec.message().c_str());
+      ROSE_ABORT();
     }
-    if (!ec) {
-      std::string root = rootPath.string();
-      std::string included = includedPath.string();
-      if (!root.empty() &&
-          root.back() != std::filesystem::path::preferred_separator) {
-        root += std::filesystem::path::preferred_separator;
-      }
-      includedPathIsUnderApplicationRoot =
-          included == rootPath.string() || included.rfind(root, 0) == 0;
+    includedPath = std::filesystem::weakly_canonical(includedPath, ec);
+    if (ec) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[include-root]: included path=%s cannot "
+              "be canonicalized: %s\n",
+              normalizedIncludedPath.c_str(), ec.message().c_str());
+      ROSE_ABORT();
     }
+    std::string root = rootPath.string();
+    std::string included = includedPath.string();
+    if (!root.empty() &&
+        root.back() != std::filesystem::path::preferred_separator) {
+      root += std::filesystem::path::preferred_separator;
+    }
+    includedPathIsUnderApplicationRoot =
+        included == rootPath.string() || included.rfind(root, 0) == 0;
   }
-  if (preprocessingInfo != NULL) {
+  {
+    ASSERT_not_null(preprocessingInfo->get_file_info());
     IncludeDirective includeDirective(preprocessingInfo->getString());
     nameUsedInIncludeDirective = includeDirective.getIncludedPath();
     bool includedPathResolvesFromIncludingFile = false;
     if (includeDirective.isQuotedInclude() == false &&
         FileHelper::isAbsolutePath(includeDirective.getIncludedPath()) ==
-            false &&
-        preprocessingInfo->get_file_info() != NULL) {
+            false) {
       const std::string includingFileName =
           preprocessingInfo->get_file_info()->get_filenameString();
       const std::string includingDirectory =
@@ -707,15 +1175,12 @@ synthesizeIncludeFile(SgProject *project, SgSourceFile *includingSourceFile,
 
   SgSourceFile *translationUnit =
       parentIncludeFile->get_source_file_of_translation_unit();
-  if (translationUnit == NULL &&
-      includingSourceFile->get_isHeaderFile() == false) {
-    translationUnit = includingSourceFile;
-  }
   if (translationUnit == NULL) {
-    translationUnit = parentIncludeFile->get_including_source_file();
-  }
-  if (translationUnit == NULL) {
-    translationUnit = includingSourceFile;
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[include-node]: parent=%s has no owning "
+            "translation unit\n",
+            parentIncludeFile->get_filename().str());
+    ROSE_ABORT();
   }
   includeFile->set_source_file_of_translation_unit(translationUnit);
   includeFile->set_including_source_file(includingSourceFile);
@@ -751,27 +1216,33 @@ static void ensureHeaderTokenMapping(SgSourceFile *headerFile,
 
   std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap =
       headerFile->get_tokenSubsequenceMap();
-  const int firstTokenIndex = tokenVector.empty() ? -1 : 0;
-  const int lastTokenIndex =
-      tokenVector.empty() ? -1 : static_cast<int>(tokenVector.size()) - 1;
-
-  auto ensureWholeFileMapping = [&](SgNode *node) {
-    if (node == NULL) {
-      return;
-    }
-
+  auto requireWholeFileMapping = [&](SgNode *node) {
+    ASSERT_not_null(node);
     std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator mapIt =
         tokenMap.find(node);
-    if (mapIt != tokenMap.end() && mapIt->second != NULL) {
-      return;
+    if (mapIt == tokenMap.end() || mapIt->second == nullptr) {
+      fprintf(stderr,
+              "REX_TOKEN_INVARIANT[header-whole-file-mapping]: file=%s "
+              "node=%p/%s has no exact producer-owned token mapping\n",
+              headerFile->getFileName().c_str(), static_cast<void *>(node),
+              node->class_name().c_str());
+      ROSE_ABORT();
     }
-
-    tokenMap[node] = new TokenStreamSequenceToNodeMapping(
-        node, -1, -1, firstTokenIndex, lastTokenIndex, -1, -1, -1, -1);
+    const TokenStreamHalfOpenInterval &core = mapIt->second->halfOpenInterval(
+        TokenStreamIntervalKind::token_subsequence);
+    if (core.begin != 0 || core.end != static_cast<int>(tokenVector.size())) {
+      fprintf(stderr,
+              "REX_TOKEN_INVARIANT[header-whole-file-mapping]: file=%s "
+              "node=%p/%s interval=[%d,%d) does not own [0,%zu)\n",
+              headerFile->getFileName().c_str(), static_cast<void *>(node),
+              node->class_name().c_str(), core.begin, core.end,
+              tokenVector.size());
+      ROSE_ABORT();
+    }
   };
 
-  ensureWholeFileMapping(headerFile);
-  ensureWholeFileMapping(headerFile->get_globalScope());
+  requireWholeFileMapping(headerFile);
+  requireWholeFileMapping(headerFile->get_globalScope());
 }
 
 // DQ (2/12/2011): Added const so that this could be called in get_mangled()
@@ -1020,15 +1491,30 @@ std::string SgValueExp::get_constant_folded_value_as_string() const {
     const SgComplexVal *complexValueExpression = isSgComplexVal(this);
     ASSERT_not_null(complexValueExpression);
 
+    auto requireFoldedComponent = [](SgExpression *component,
+                                     const char *role) -> std::string {
+      SgValueExp *value = isSgValueExp(component);
+      if (value == nullptr) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[complex-folded-value]: %s component=%p/%s "
+                "is a symbolic expression and has no folded numeric value\n",
+                role, static_cast<void *>(component),
+                component != nullptr ? component->class_name().c_str()
+                                     : "<null>");
+        ROSE_ABORT();
+      }
+      return value->get_constant_folded_value_as_string();
+    };
+
     string real_string = "null";
     if (complexValueExpression->get_real_value() != nullptr)
-      real_string = complexValueExpression->get_real_value()
-                        ->get_constant_folded_value_as_string();
+      real_string = requireFoldedComponent(
+          complexValueExpression->get_real_value(), "real");
 
     string imaginary_string = "null";
     if (complexValueExpression->get_imaginary_value() != nullptr)
-      imaginary_string = complexValueExpression->get_imaginary_value()
-                             ->get_constant_folded_value_as_string();
+      imaginary_string = requireFoldedComponent(
+          complexValueExpression->get_imaginary_value(), "imaginary");
 
     s = "(" + real_string + "," + imaginary_string + ")";
     break;
@@ -1260,14 +1746,32 @@ void SgSourceFile::initializeGlobalScope() {
   // called.
   ASSERT_not_null(get_startOfConstruct());
 
-  string sourceFilename = get_startOfConstruct()->get_filename();
+  Sg_File_Info *sourceInfo = get_file_info();
+  if (sourceInfo == nullptr || sourceInfo->get_physical_file_id() < 0 ||
+      sourceInfo->isShared()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[global-output-owner-producer]: source "
+            "file=%p has no exact physical identity before global-scope "
+            "construction\n",
+            static_cast<void *>(this));
+    ROSE_ABORT();
+  }
+  const string sourceFilename = sourceInfo->get_physical_filename();
+  if (sourceFilename.empty()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[global-output-owner-producer]: source "
+            "file=%p has no registered physical filename\n",
+            static_cast<void *>(this));
+    ROSE_ABORT();
+  }
 
   // DQ (8/31/2006): Generate a NULL_FILE (instead of SgFile::SgFile) so that we
   // can enforce that the filename is always an absolute path (starting with
   // "/"). Sg_File_Info* globalScopeFileInfo = new
   // Sg_File_Info("SgGlobal::SgGlobal",0,0);
-  Sg_File_Info *globalScopeFileInfo = new Sg_File_Info(sourceFilename, 0, 0);
+  Sg_File_Info *globalScopeFileInfo = new Sg_File_Info(sourceFilename, 1, 1);
   ASSERT_not_null(globalScopeFileInfo);
+  globalScopeFileInfo->setOutputInCodeGeneration();
 
   // printf ("&&&&&&&&&& In SgSourceFile::initializeGlobalScope(): Building
   // SgGlobal (with empty filename) &&&&&&&&&& \n");
@@ -1291,8 +1795,11 @@ void SgSourceFile::initializeGlobalScope() {
   // later) printf ("In SgFile::initialization(): p_root->get_endOfConstruct() =
   // %p \n",p_root->get_endOfConstruct());
   ROSE_ASSERT(get_globalScope()->get_endOfConstruct() == nullptr);
-  get_globalScope()->set_endOfConstruct(new Sg_File_Info(sourceFilename, 0, 0));
+  get_globalScope()->set_endOfConstruct(new Sg_File_Info(sourceFilename, 1, 1));
   ASSERT_not_null(get_globalScope()->get_endOfConstruct());
+  get_globalScope()->get_endOfConstruct()->set_parent(get_globalScope());
+  get_globalScope()->get_endOfConstruct()->setOutputInCodeGeneration();
+  get_globalScope()->setOutputInCodeGeneration();
 
   // DQ (1/21/2008): Set the filename in the SgGlobal IR node so that the
   // traversal to add CPP directives and comments will succeed.
@@ -1308,36 +1815,24 @@ void SgSourceFile::initializeGlobalScope() {
   // ROSE_ASSERT(p_root->get_file_info()->get_filenameString().empty() ==
   // false);
 
-  // DQ (12/22/2008): Added to support CPP preprocessing of Fortran files.
-  string filename = p_sourceFileNameWithPath;
-  if (get_requires_C_preprocessor() == true) {
-    // This must be a Fortran source file (requiring the use of CPP to process
-    // its directives).
-    if (get_experimental_flang_frontend() == false) {
-      filename = generate_C_preprocessor_intermediate_filename(filename);
-    }
-  }
-
-  // printf ("get_requires_C_preprocessor() = %s filename = %s
-  // \n",get_requires_C_preprocessor() ? "true" : "false",filename.c_str());
-
-  get_globalScope()->get_startOfConstruct()->set_filenameString(filename);
-  ROSE_ASSERT(
-      get_globalScope()->get_startOfConstruct()->get_filenameString().empty() ==
-      false);
-
-  get_globalScope()->get_endOfConstruct()->set_filenameString(filename);
-  ROSE_ASSERT(
-      get_globalScope()->get_endOfConstruct()->get_filenameString().empty() ==
-      false);
-
-  // DQ (12/23/2008): These should be in the Sg_File_Info map already.
-  ROSE_ASSERT(
-      Sg_File_Info::getIDFromFilename(get_file_info()->get_filename()) >= 0);
-  if (get_requires_C_preprocessor() == true) {
-    ROSE_ASSERT(Sg_File_Info::getIDFromFilename(
-                    generate_C_preprocessor_intermediate_filename(
-                        get_file_info()->get_filename())) >= 0);
+  Sg_File_Info *globalStart = get_globalScope()->get_startOfConstruct();
+  Sg_File_Info *globalEnd = get_globalScope()->get_endOfConstruct();
+  if (globalStart == nullptr || globalEnd == nullptr ||
+      globalStart->get_parent() != get_globalScope() ||
+      globalEnd->get_parent() != get_globalScope() ||
+      globalStart->get_physical_file_id() !=
+          sourceInfo->get_physical_file_id() ||
+      globalEnd->get_physical_file_id() != sourceInfo->get_physical_file_id() ||
+      globalStart->get_line() != 1 || globalEnd->get_line() != 1 ||
+      !globalStart->isOutputInCodeGeneration() ||
+      !globalEnd->isOutputInCodeGeneration() ||
+      !get_globalScope()->isOutputInCodeGeneration()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[global-output-owner-producer]: source "
+            "file=%p global=%p failed one atomic exact physical owner "
+            "publication\n",
+            static_cast<void *>(this), static_cast<void *>(get_globalScope()));
+    ROSE_ABORT();
   }
 }
 
@@ -1376,7 +1871,33 @@ SgFile *determineFileType(vector<string> argv, int &nextErrorCode,
 
     // DQ (8/31/2006): Convert the source file to have a path if it does not
     // already
-    string sourceFilename = *(fileList.begin());
+    const string sourceOperand = *(fileList.begin());
+    const CommandlineProcessing::ClangLanguageSelection clangLanguage =
+        CommandlineProcessing::clangLanguageSelectionForSource(argv,
+                                                               sourceOperand);
+    const bool suffixSelected =
+        clangLanguage.family ==
+        CommandlineProcessing::ClangLanguageFamily::Suffix;
+    const bool cSelected =
+        clangLanguage.family == CommandlineProcessing::ClangLanguageFamily::C;
+    const bool cxxSelected =
+        clangLanguage.family == CommandlineProcessing::ClangLanguageFamily::Cxx;
+    const bool cudaSelected = clangLanguage.family ==
+                              CommandlineProcessing::ClangLanguageFamily::Cuda;
+    const bool openclSelected =
+        clangLanguage.family ==
+        CommandlineProcessing::ClangLanguageFamily::OpenCL;
+
+    if (!suffixSelected && commandLineSelectsFortran(argv)) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[input-language]: source '%s' has both "
+              "an explicit Clang -x language and an explicit Fortran "
+              "language selection\n",
+              sourceOperand.c_str());
+      ROSE_ABORT();
+    }
+
+    string sourceFilename = sourceOperand;
 
     sourceFilename =
         StringUtility::getAbsolutePathFromRelativePath(sourceFilename, true);
@@ -1400,20 +1921,20 @@ SgFile *determineFileType(vector<string> argv, int &nextErrorCode,
     // using a C++ filename extension.
     string filenameExtension = StringUtility::fileNameSuffix(sourceFilename);
 
-    // DQ (1/8/2014): We need to handle the case of "/dev/null" being used as an
-    // input filename.
-    if (filenameExtension == "/dev/null") {
-      printf("Warning: detected use of /dev/null as input filename: not yet "
-             "supported (exiting with 0 exit code) \n");
-      exit(0);
-    }
-
     // DQ (11/17/2007): Mark this as a file using a Fortran file extension (else
     // this turns off options down stream).
-    if (CommandlineProcessing::isFortranFileNameSuffix(filenameExtension) ==
-        true) {
+    if (suffixSelected &&
+        CommandlineProcessing::isFortranFileNameSuffix(filenameExtension)) {
       SgSourceFile *sourceFile = new SgSourceFile(argv, project);
       file = sourceFile;
+
+#if defined(ROSE_FLANG_FRONTEND)
+      // REX's Fortran source-file producer is Flang-only.  Publish that typed
+      // frontend identity before initializeGlobalScope() decides the physical
+      // translation-unit owner; setting it later in callFrontEnd() is too late
+      // for preprocessed Fortran inputs.
+      sourceFile->set_experimental_flang_frontend(true);
+#endif
 
       // printf ("----------- Great location to set the sourceFilename = %s
       // \n",sourceFilename.c_str());
@@ -1547,9 +2068,9 @@ SgFile *determineFileType(vector<string> argv, int &nextErrorCode,
       {
 
         // if (StringUtility::isCppFileNameSuffix(filenameExtension) == true)
-        if (CommandlineProcessing::isCppFileNameSuffix(filenameExtension) ==
-                true &&
-            project->get_C_only() == false) {
+        if (cxxSelected ||
+            (suffixSelected &&
+             CommandlineProcessing::isCppFileNameSuffix(filenameExtension))) {
           // file = new SgSourceFile ( argv,  project );
           SgSourceFile *sourceFile = new SgSourceFile(argv, project);
           file = sourceFile;
@@ -1577,11 +2098,11 @@ SgFile *determineFileType(vector<string> argv, int &nextErrorCode,
           ROSE_ASSERT(file->get_requires_C_preprocessor() == false);
           sourceFile->initializeGlobalScope();
         } else {
-          if (CommandlineProcessing::isCFileNameSuffix(filenameExtension) ==
-                  true ||
-              CommandlineProcessing::isAssemblerFileNameSuffix(
-                  filenameExtension) == true ||
-              project->get_C_only() == true) {
+          if (cSelected ||
+              (suffixSelected &&
+               (CommandlineProcessing::isCFileNameSuffix(filenameExtension) ||
+                CommandlineProcessing::isAssemblerFileNameSuffix(
+                    filenameExtension)))) {
             // file = new SgSourceFile ( argv,  project );
             SgSourceFile *sourceFile = new SgSourceFile(argv, project);
             file = sourceFile;
@@ -1613,8 +2134,9 @@ SgFile *determineFileType(vector<string> argv, int &nextErrorCode,
             ROSE_ASSERT(file->get_requires_C_preprocessor() == false);
             sourceFile->initializeGlobalScope();
           } else {
-            if (CommandlineProcessing::isCudaFileNameSuffix(
-                    filenameExtension) == true) {
+            if (cudaSelected ||
+                (suffixSelected && CommandlineProcessing::isCudaFileNameSuffix(
+                                       filenameExtension))) {
               SgSourceFile *sourceFile = new SgSourceFile(argv, project);
               file = sourceFile;
 
@@ -1636,10 +2158,14 @@ SgFile *determineFileType(vector<string> argv, int &nextErrorCode,
               // false.
               ROSE_ASSERT(file->get_requires_C_preprocessor() == false);
               sourceFile->initializeGlobalScope();
-            } else if (CommandlineProcessing::isOpenCLFileNameSuffix(
-                           filenameExtension) == true) {
+            } else if (openclSelected ||
+                       (suffixSelected &&
+                        CommandlineProcessing::isOpenCLFileNameSuffix(
+                            filenameExtension))) {
               SgSourceFile *sourceFile = new SgSourceFile(argv, project);
               file = sourceFile;
+              file->set_outputLanguage(SgFile::e_C_language);
+              file->set_inputLanguage(SgFile::e_C_language);
               file->set_OpenCL_only(true);
 
               // DQ (11/25/2020): Add support to set this as a
@@ -1653,9 +2179,13 @@ SgFile *determineFileType(vector<string> argv, int &nextErrorCode,
               // false.
               ROSE_ASSERT(file->get_requires_C_preprocessor() == false);
               sourceFile->initializeGlobalScope();
-            } else if (commandLineSelectsFortran(argv)) {
+            } else if (suffixSelected && commandLineSelectsFortran(argv)) {
               SgSourceFile *sourceFile = new SgSourceFile(argv, project);
               file = sourceFile;
+
+#if defined(ROSE_FLANG_FRONTEND)
+              sourceFile->set_experimental_flang_frontend(true);
+#endif
 
               file->set_sourceFileUsesFortranFileExtension(false);
               file->set_outputLanguage(SgFile::e_Fortran_language);
@@ -1758,6 +2288,11 @@ void SgFile::runFrontend(int &nextErrorCode) {
   // of SgFile IR nodes from calling the fronend on each one).
   ROSE_ASSERT(get_parent() != NULL);
 
+  // A frontend invocation is an AST mutation boundary.  Names cached by an
+  // analysis of the enclosing project are valid, but they cannot survive a
+  // nested producer that may add or replace declarations.
+  SgNode::clearGlobalMangledNameMap();
+
   // DQ (6/13/2013): This is wrong, the parent of the SgFile is the SgFileList
   // IR node. ROSE_ASSERT(isSgProject(get_parent()) != NULL);
 
@@ -1776,6 +2311,10 @@ void SgFile::runFrontend(int &nextErrorCode) {
     nextErrorCode = this->callFrontEnd();
     this->set_frontendErrorCode(nextErrorCode);
   }
+  // Mangled names are derived from declaration structure. A frontend call may
+  // build or replace that structure, so its cache lifetime ends at this
+  // producer boundary regardless of whether diagnostics stopped translation.
+  SgNode::clearGlobalMangledNameMap();
   // Frontends are allowed to return a real diagnostic count for hard errors.
   // SgProject::parse/frontendExitStatus interpret those nonzero statuses; do
   // not treat them as an internal invariant violation here.
@@ -1819,15 +2358,9 @@ int SgProject::parse(const vector<string> &argv) {
   // meaning the SgProject object is not properly constructed yet.. The only
   // thing we can do, then, if there is an error here in the commandline
   // handling, is to halt the program.
-  if (KEEP_GOING_CAUGHT_COMMANDLINE_SIGNAL) {
-    std::cout << "[FATAL] "
-              << "Unrecoverable signal generated during commandline processing"
-              << std::endl;
-    exit(1);
-  } else {
-    // builds file list (or none if this is a link line)
-    processCommandLine(argv);
-  }
+  // Builds the file list (or none if this is a link line). Signals and hard
+  // failures propagate directly; there is no recovery boundary.
+  processCommandLine(argv);
 
   // volatile used as a work around for warning: variable might be clobbered by
   // 'longjmp' or 'vfork'
@@ -1913,9 +2446,23 @@ int SgSourceFile::callFrontEnd() {
     ASSERT_not_null(get_globalScope());
     ASSERT_not_null(get_globalScope()->get_startOfConstruct());
     ASSERT_not_null(get_globalScope()->get_endOfConstruct());
-    const std::string filename = get_sourceFileNameWithPath();
-    get_globalScope()->get_startOfConstruct()->set_filenameString(filename);
-    get_globalScope()->get_endOfConstruct()->set_filenameString(filename);
+    Sg_File_Info *sourceInfo = get_file_info();
+    Sg_File_Info *globalStart = get_globalScope()->get_startOfConstruct();
+    Sg_File_Info *globalEnd = get_globalScope()->get_endOfConstruct();
+    if (sourceInfo == nullptr || sourceInfo->get_physical_file_id() < 0 ||
+        globalStart->get_physical_file_id() !=
+            sourceInfo->get_physical_file_id() ||
+        globalEnd->get_physical_file_id() !=
+            sourceInfo->get_physical_file_id() ||
+        globalStart->get_filenameString() != sourceInfo->get_filenameString() ||
+        globalEnd->get_filenameString() != sourceInfo->get_filenameString()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[global-output-owner-producer]: "
+              "preprocessed Flang source file=%p reached frontend completion "
+              "without its original exact physical global owner\n",
+              static_cast<void *>(this));
+      ROSE_ABORT();
+    }
   }
   // DQ (1/21/2008): This must be set for all languages
   ASSERT_not_null(get_globalScope());
@@ -1989,10 +2536,10 @@ int SgProject::parse() {
     int nextErrorCode = 0;
 
     // DQ (4/20/2006): Exclude other files from list in argc and argv
-    vector<string> argv = get_originalCommandLineArgumentList();
     string currentFileName = *nameIterator;
-    CommandlineProcessing::removeAllFileNamesExcept(argv, p_sourceFileNameList,
-                                                    currentFileName);
+    vector<string> argv = CommandlineProcessing::sliceCommandLineForSource(
+        get_originalCommandLineArgumentList(), p_sourceFileNameList,
+        currentFileName);
     // DQ (11/13/2008): Removed overly complex logic here!
     SgFile *newFile = determineFileType(argv, nextErrorCode, this);
     ASSERT_not_null(newFile);
@@ -2003,6 +2550,19 @@ int SgProject::parse() {
     // construction of SgFile IR nodes from calling the fronend on each one).
     ASSERT_not_null(isSgProject(newFile->get_parent()));
     ROSE_ASSERT(newFile->get_parent() == this);
+
+    SgSourceFile *commandLineSource = isSgSourceFile(newFile);
+    if (commandLineSource != nullptr) {
+      if (commandLineSource->get_isCommandLineInputSource() ||
+          commandLineSource->get_isGeneratedSource()) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[command-line-source-role]: input=%s "
+                "was preclassified as a generated or CLI source\n",
+                currentFileName.c_str());
+        ROSE_ABORT();
+      }
+      commandLineSource->set_isCommandLineInputSource(true);
+    }
 
     // This just adds the new file to the list of files stored internally (note:
     // this sets the parent of the newFile).
@@ -2022,11 +2582,78 @@ int SgProject::parse() {
     i++;
   } // end while
 
-  errorCode = this->RunFrontend();
-  if (!Rose::KeepGoing::g_keep_going && errorCode != 0) {
-    return errorCode;
+  // Header/source output paths require one project-level anchor before the
+  // frontend constructs any include graph.  An explicit command-line root is
+  // authoritative; otherwise derive the exact common parent of every CLI
+  // input.  Publishing that typed project contract here keeps path selection
+  // out of the backend and makes multi-input behavior deterministic.
+  if (get_applicationRootDirectory().empty() && !vectorOfFiles.empty()) {
+    std::filesystem::path commonParent;
+    bool firstInput = true;
+    for (SgFile *file : vectorOfFiles) {
+      ASSERT_not_null(file);
+      const std::string &inputName = file->getFileName();
+      if (inputName.empty()) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[application-root]: project input has "
+                "no filename\n");
+        ROSE_ABORT();
+      }
+
+      std::error_code ec;
+      std::filesystem::path inputPath = std::filesystem::weakly_canonical(
+          std::filesystem::absolute(inputName, ec), ec);
+      if (ec || inputPath.empty() || !inputPath.is_absolute() ||
+          inputPath.filename().empty()) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[application-root]: input=%s cannot "
+                "provide one exact normalized parent: %s\n",
+                inputName.c_str(), ec.message().c_str());
+        ROSE_ABORT();
+      }
+      const std::filesystem::path parent = inputPath.parent_path();
+      if (parent.empty()) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[application-root]: input=%s has no "
+                "normalized parent directory\n",
+                inputName.c_str());
+        ROSE_ABORT();
+      }
+
+      if (firstInput) {
+        commonParent = parent;
+        firstInput = false;
+        continue;
+      }
+
+      std::filesystem::path shared;
+      auto lhs = commonParent.begin();
+      auto rhs = parent.begin();
+      while (lhs != commonParent.end() && rhs != parent.end() && *lhs == *rhs) {
+        shared /= *lhs;
+        ++lhs;
+        ++rhs;
+      }
+      if (shared.empty() || !shared.is_absolute()) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[application-root]: inputs do not "
+                "share one exact absolute parent\n");
+        ROSE_ABORT();
+      }
+      commonParent = shared;
+    }
+    if (firstInput || commonParent.empty() || !commonParent.is_absolute()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[application-root]: project did not "
+              "derive one exact input anchor\n");
+      ROSE_ABORT();
+    }
+    set_applicationRootDirectory(commonParent.string());
+    set_usingApplicationRootDirectory(false);
   }
-  if (errorCode > 3) {
+
+  errorCode = this->RunFrontend();
+  if (errorCode != 0) {
     return errorCode;
   }
 
@@ -2064,15 +2691,34 @@ int SgProject::parse() {
     rosePhaseTrace("AstPostProcessing.begin");
     AstPostProcessing(this);
     rosePhaseTrace("AstPostProcessing.end");
+  }
 
-    // Some template-instantiation function declaration chains are finalized
-    // only after the broader AST post-processing pipeline completes. Re-run
-    // the targeted template-instantiation repair once the project AST is fully
-    // assembled so defining/nondefining links remain coherent for later AST
-    // copies and consistency checks.
-    rosePhaseTrace("fixupTemplateInstantiations.begin");
-    fixupTemplateInstantiations(this);
-    rosePhaseTrace("fixupTemplateInstantiations.end");
+  bool foundSourceFileMode = false;
+  bool unparse_using_tokens = false;
+  bool unparse_header_files = false;
+  for (SgFile *file : get_fileList()) {
+    ASSERT_not_null(file);
+    SgSourceFile *sourceFile = isSgSourceFile(file);
+    if (sourceFile == nullptr || sourceFile->get_skip_unparse()) {
+      continue;
+    }
+    if (!foundSourceFileMode) {
+      foundSourceFileMode = true;
+      unparse_using_tokens = sourceFile->get_unparse_tokens();
+      unparse_header_files = sourceFile->get_unparseHeaderFiles();
+      continue;
+    }
+    if (sourceFile->get_unparse_tokens() != unparse_using_tokens ||
+        sourceFile->get_unparseHeaderFiles() != unparse_header_files) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[project-unparse-mode]: source=%s token="
+              "%d headers=%d disagrees with project token=%d headers=%d\n",
+              sourceFile->getFileName().c_str(),
+              sourceFile->get_unparse_tokens() ? 1 : 0,
+              sourceFile->get_unparseHeaderFiles() ? 1 : 0,
+              unparse_using_tokens ? 1 : 0, unparse_header_files ? 1 : 0);
+      ROSE_ABORT();
+    }
   }
 
   // negara1 (06/23/2011): Collect information about the included files to
@@ -2080,8 +2726,7 @@ int SgProject::parse() {
   // include search paths, which will be used while attaching include
   // preprocessing infos. Proceed only if there are input files and they require
   // header files unparsing.
-  if (!get_fileList().empty() &&
-      (*get_fileList().begin())->get_unparseHeaderFiles()) {
+  if (unparse_header_files) {
     if (SgProject::get_verbose() >= 1) {
       cout << endl << "***HEADER FILES ANALYSIS***" << endl << endl;
     }
@@ -2109,63 +2754,15 @@ int SgProject::parse() {
   // to be output before preprocessing information is attached.
   SgFilePtrList &files = get_fileList();
 
-  // volatile used as a work around for warning: variable might be clobbered by
-  // 'longjmp' or 'vfork'
-  volatile bool unparse_using_tokens = false;
-
   for (SgFile *file : files) {
     ASSERT_not_null(file);
-
-    SgSourceFile *sourceFile = isSgSourceFile(file);
-
-    // ROSE_ASSERT(sourceFile != NULL);
-    if (sourceFile != nullptr) {
-      // DQ (4/25/2021): I think this should be a static bool data member.
-      if (unparse_using_tokens == false) {
-        unparse_using_tokens = sourceFile->get_unparse_tokens();
-      }
-    }
-    if (KEEP_GOING_CAUGHT_FRONTEND_SECONDARY_PASS_SIGNAL) {
-      std::cout << "[WARN] "
-                << "Configured to keep going after catching a signal in "
-                << "SgFile::secondaryPassOverSourceFile()" << std::endl;
-
-      if (file != nullptr) {
-        file->set_frontendErrorCode(100);
-        int save_volatile_variable = errorCode;
-        errorCode = std::max(100, save_volatile_variable);
-      } else {
-        std::cout
-            << "[FATAL] "
-            << "Unable to keep going due to an unrecoverable internal error"
-            << std::endl;
-        // Liao, 4/25/2017. one assertion failure may trigger other assertion
-        // failures. We still want to keep going.
-        exit(1);
-      }
-    } else {
-      // DQ (1/23/2018): If we are not doing the translation of legacy
-      // frontend to ROSE, then we don't want to call this second pass.
-      // This will fix the negative test in Plum hall for what should be
-      // an error to the C preprocessor.
-      // file->secondaryPassOverSourceFile();
-
-      // DQ (8/19/2019): Divide this into two parts, for optimization of
-      // header file unparsing, optionally support the main file
-      // collection of comments and CPP directives, and seperately the
-      // header file collection of comments and CPP directives.
-      rosePhaseTrace("secondaryPassOverSourceFile.begin");
-      file->secondaryPassOverSourceFile();
-      rosePhaseTrace("secondaryPassOverSourceFile.end");
-      ROSE_ASSERT(file->get_header_file_unparsing_optimization_source_file() ==
-                  false);
-      ROSE_ASSERT(file->get_header_file_unparsing_optimization_header_file() ==
-                  false);
-    }
-  }
-
-  if (errorCode != 0) {
-    return errorCode;
+    rosePhaseTrace("secondaryPassOverSourceFile.begin");
+    file->secondaryPassOverSourceFile();
+    rosePhaseTrace("secondaryPassOverSourceFile.end");
+    ROSE_ASSERT(file->get_header_file_unparsing_optimization_source_file() ==
+                false);
+    ROSE_ASSERT(file->get_header_file_unparsing_optimization_header_file() ==
+                false);
   }
 
   // negara1 (06/23/2011): Collect information about the included files to
@@ -2173,8 +2770,7 @@ int SgProject::parse() {
   // preprocessing infos are already attached), collect the including files map.
   // Proceed only if there are input files and they require header files
   // unparsing.
-  if (!get_fileList().empty() &&
-      (*get_fileList().begin())->get_unparseHeaderFiles()) {
+  if (unparse_header_files) {
     CompilerOutputParser compilerOutputParser(this);
     const map<string, set<string>> &includedFilesMap =
         compilerOutputParser.collectIncludedFilesMap();
@@ -2193,9 +2789,23 @@ int SgProject::parse() {
       }
       std::string normalizedPath =
           FileHelper::normalizePathIfPossible(sourceFile->getFileName());
-      if (!normalizedPath.empty()) {
-        sourceFilesByPath[normalizedPath] = sourceFile;
+      if (normalizedPath.empty()) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[source-path]: source=%p has no "
+                "normalized filename\n",
+                static_cast<void *>(sourceFile));
+        ROSE_ABORT();
       }
+      insertFrontendSourceFile(sourceFilesByPath, normalizedPath, sourceFile,
+                               "project-files");
+    }
+    for (SgFile *file : get_fileList()) {
+      SgSourceFile *sourceFile = isSgSourceFile(file);
+      if (sourceFile == nullptr) {
+        continue;
+      }
+      inventoryMaterializedIncludeSources(
+          this, sourceFile->get_associated_include_file(), sourceFilesByPath);
     }
 
     std::map<std::string, SgSourceFile *> tokenMapFilesByPath;
@@ -2208,13 +2818,25 @@ int SgProject::parse() {
            ++mapIt) {
         SgSourceFile *sourceFile = mapIt->first;
         if (sourceFile == NULL) {
+          fprintf(stderr,
+                  "REX_FRONTEND_INVARIANT[token-map]: token inventory contains "
+                  "a null source-file key\n");
+          ROSE_ABORT();
+        }
+        if (sourceFile->get_project() != this) {
           continue;
         }
         std::string normalizedPath =
             FileHelper::normalizePathIfPossible(sourceFile->getFileName());
-        if (!normalizedPath.empty()) {
-          tokenMapFilesByPath[normalizedPath] = sourceFile;
+        if (normalizedPath.empty()) {
+          fprintf(stderr,
+                  "REX_FRONTEND_INVARIANT[token-map]: source=%p has no "
+                  "normalized filename\n",
+                  static_cast<void *>(sourceFile));
+          ROSE_ABORT();
         }
+        insertFrontendSourceFile(tokenMapFilesByPath, normalizedPath,
+                                 sourceFile, "token-map");
       }
     }
 
@@ -2252,8 +2874,13 @@ int SgProject::parse() {
           std::string includedPath =
               FileHelper::normalizePathIfPossible(*incIt);
           if (!FileHelper::fileExists(includedPath)) {
-            continue;
+            fprintf(stderr,
+                    "REX_FRONTEND_INVARIANT[header-path]: resolved include "
+                    "does not exist: %s\n",
+                    includedPath.c_str());
+            ROSE_ABORT();
           }
+          snapshotOriginalHeader(this, includedPath);
 
           std::map<std::string, SgSourceFile *>::const_iterator headerIt =
               sourceFilesByPath.find(includedPath);
@@ -2275,18 +2902,29 @@ int SgProject::parse() {
                 buildHeaderSourceFile(this, includedPath, traversalRoot);
           }
           if (headerFile == NULL) {
-            continue;
+            fprintf(stderr,
+                    "REX_FRONTEND_INVARIANT[header-materialization]: failed "
+                    "to build SgSourceFile for %s\n",
+                    includedPath.c_str());
+            ROSE_ABORT();
           }
 
-          if (sourceFilesByPath.insert(std::make_pair(includedPath, headerFile))
-                  .second) {
+          headerFile->set_isHeaderFile(true);
+          headerFile->set_unparseHeaderFiles(
+              traversalRoot->get_unparseHeaderFiles());
+          headerFile->set_unparse_tokens(traversalRoot->get_unparse_tokens());
+          copyLanguageSettings(headerFile, traversalRoot);
+
+          if (insertFrontendSourceFile(sourceFilesByPath, includedPath,
+                                       headerFile, "included-files")) {
             discoveredNewSourceFile = true;
           }
           if (unparse_using_tokens == true) {
-            tokenMapFilesByPath[includedPath] = headerFile;
+            insertFrontendSourceFile(tokenMapFilesByPath, includedPath,
+                                     headerFile, "included-token-map");
           }
 
-          SgIncludeFile *includeFile = findIncludeFileByPath(
+          SgIncludeFile *includeFile = findDirectIncludeFileByPath(
               traversalRoot->get_associated_include_file(), includedPath);
           if (includeFile == NULL) {
             PreprocessingInfo *preprocessingInfo =
@@ -2297,13 +2935,83 @@ int SgProject::parse() {
                 synthesizeIncludeFile(this, traversalRoot, headerFile,
                                       includedPath, preprocessingInfo);
           }
-
-          if (includeFile != NULL &&
-              headerFile->get_associated_include_file() == NULL) {
-            headerFile->set_associated_include_file(includeFile);
+          if (includeFile == NULL) {
+            fprintf(stderr,
+                    "REX_FRONTEND_INVARIANT[include-node]: failed to build "
+                    "SgIncludeFile for %s\n",
+                    includedPath.c_str());
+            ROSE_ABORT();
           }
-          if (includeFile != NULL && includeFile->get_source_file() == NULL) {
+
+          if (includeFile->get_source_file() == NULL) {
             includeFile->set_source_file(headerFile);
+          } else if (includeFile->get_source_file() != headerFile) {
+            fprintf(stderr,
+                    "REX_FRONTEND_INVARIANT[header-context]: header=%s has "
+                    "distinct materialized source nodes %p and %p\n",
+                    includedPath.c_str(),
+                    static_cast<void *>(includeFile->get_source_file()),
+                    static_cast<void *>(headerFile));
+            ROSE_ABORT();
+          }
+          SgIncludeFile *associatedIncludeFile =
+              headerFile->get_associated_include_file();
+          if (associatedIncludeFile == NULL) {
+            headerFile->set_associated_include_file(includeFile);
+          } else {
+            const std::string associatedPath =
+                FileHelper::normalizePathIfPossible(
+                    associatedIncludeFile->get_filename());
+            if (associatedPath != includedPath ||
+                associatedIncludeFile->get_source_file() != headerFile) {
+              fprintf(
+                  stderr,
+                  "REX_FRONTEND_INVARIANT[header-context]: header=%s "
+                  "canonical include=%p has path=%s source=%p, but direct "
+                  "include=%p has source=%p\n",
+                  includedPath.c_str(),
+                  static_cast<void *>(associatedIncludeFile),
+                  associatedPath.c_str(),
+                  static_cast<void *>(associatedIncludeFile->get_source_file()),
+                  static_cast<void *>(includeFile),
+                  static_cast<void *>(includeFile->get_source_file()));
+              ROSE_ABORT();
+            }
+          }
+
+          SgGlobal *emissionGlobal =
+              findHeaderEmissionGlobalScope(traversalRoot, includedPath);
+          if (emissionGlobal != nullptr) {
+            SgGlobal *materializedGlobal = headerFile->get_globalScope();
+            if (materializedGlobal != nullptr &&
+                materializedGlobal != emissionGlobal &&
+                !materializedGlobal->get_declarations().empty()) {
+              fprintf(stderr,
+                      "REX_FRONTEND_INVARIANT[header-context]: header=%s has "
+                      "both a materialized global %p and emission global %p\n",
+                      includedPath.c_str(),
+                      static_cast<void *>(materializedGlobal),
+                      static_cast<void *>(emissionGlobal));
+              ROSE_ABORT();
+            }
+            headerFile->set_globalScope(emissionGlobal);
+          } else if (headerFile->get_globalScope() == nullptr) {
+            headerFile->initializeGlobalScope();
+          }
+
+          // Header preprocessing/token ownership is part of frontend
+          // completion.  The backend must never attach comments, change file
+          // modes, or manufacture mappings after user transformations.
+          headerFile->set_header_file_unparsing_optimization_header_file(true);
+          if (!headerFile->get_processedToIncludeCppDirectivesAndComments()) {
+            headerFile->secondaryPassOverSourceFile();
+          }
+          if (!headerFile->get_processedToIncludeCppDirectivesAndComments()) {
+            fprintf(stderr,
+                    "REX_FRONTEND_INVARIANT[header-preprocessing]: failed to "
+                    "finalize %s\n",
+                    includedPath.c_str());
+            ROSE_ABORT();
           }
 
           if (unparse_using_tokens == true) {
@@ -2323,6 +3031,29 @@ int SgProject::parse() {
       }
     } while (discoveredNewSourceFile == true);
 
+    for (const auto &entry : includedFilesMap) {
+      const std::string includingPath =
+          FileHelper::normalizePathIfPossible(entry.first);
+      if (includingPath.empty() ||
+          sourceFilesByPath.find(includingPath) == sourceFilesByPath.end() ||
+          processedIncludingFiles.find(includingPath) ==
+              processedIncludingFiles.end()) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[include-closure]: including file=%s "
+                "was not materialized and finalized by the frontend\n",
+                entry.first.c_str());
+        ROSE_ABORT();
+      }
+    }
+
+    // The command-line input parents are only a provisional application root.
+    // Once the frontend has materialized the exact include graph, expand an
+    // implicit root to cover every non-system source. This preserves valid
+    // parent-relative include spellings in the output tree. An explicitly
+    // requested root remains authoritative and any application include that
+    // escapes it is rejected here, before backend output planning.
+    publishHeaderApplicationRoot(this, sourceFilesByPath);
+
     if (SgProject::get_verbose() >= 1) {
       printf("\nOutput info for unparse headers support: \n");
       CollectionHelper::printMapOfSets(
@@ -2332,7 +3063,6 @@ int SgProject::parse() {
           "\nIncluding files map:", "File:", "Including file:");
     }
 
-    // ROSE_ASSERT(file->get_header_file_unparsing_optimization() == true);
     // ROSE_ASSERT(file->get_header_file_unparsing_optimization_source_file() ==
     // false);
     // ROSE_ASSERT(file->get_header_file_unparsing_optimization_header_file() ==
@@ -2371,45 +3101,60 @@ int SgProject::parse() {
   return errorCode;
 } // end parse(;
 
-// negara1 (07/29/2011)
-// The returned file path is not normalized.
-// TODO: Return the normalized path after the bug in ROSE is fixed. The bug
-// manifests itself when the same header file is included in multiple places
-// using different paths. In such a case, ROSE treats the same file as different
-// files and generates different IDs for them.
 string SgProject::findIncludedFile(PreprocessingInfo *preprocessingInfo) {
+  ASSERT_not_null(preprocessingInfo);
+  ASSERT_not_null(preprocessingInfo->get_file_info());
+  const PreprocessingInfo::DirectiveType directiveType =
+      preprocessingInfo->getTypeOfDirective();
+  if (directiveType != PreprocessingInfo::CpreprocessorIncludeDeclaration &&
+      directiveType != PreprocessingInfo::CpreprocessorIncludeNextDeclaration) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[include-resolution]: preprocessing "
+            "record type=%s is not an include directive\n",
+            PreprocessingInfo::directiveTypeName(directiveType).c_str());
+    ROSE_ABORT();
+  }
   IncludeDirective includeDirective(preprocessingInfo->getString());
   const string &includedPath = includeDirective.getIncludedPath();
+  if (includedPath.empty()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[include-resolution]: directive=%s has no "
+            "included path\n",
+            preprocessingInfo->getString().c_str());
+    ROSE_ABORT();
+  }
   if (FileHelper::isAbsolutePath(includedPath)) {
-    // the path is absolute, so no need to search for the file
     if (FileHelper::fileExists(includedPath)) {
-      return includedPath;
+      return FileHelper::normalizePath(includedPath);
     }
-    return ""; // file does not exist, so return an empty string
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[include-resolution]: absolute include=%s "
+            "does not exist\n",
+            includedPath.c_str());
+    ROSE_ABORT();
   }
   if (includeDirective.isQuotedInclude()) {
-    // start looking from the current folder, then proceed with the quoted
-    // includes search paths
-    // TODO: Consider the presence of -I- option, which disables looking in the
-    // current folder for quoted includes.
     string currentFolder = FileHelper::getParentFolder(
         preprocessingInfo->get_file_info()->get_filenameString());
-    p_quotedIncludesSearchPaths.insert(p_quotedIncludesSearchPaths.begin(),
-                                       currentFolder);
-    string includedFilePath = FileHelper::getIncludedFilePath(
-        p_quotedIncludesSearchPaths, includedPath);
-    p_quotedIncludesSearchPaths.erase(
-        p_quotedIncludesSearchPaths
-            .begin()); // remove the previously inserted current folder (for
-                       // other files it might be different)
+    list<string> quotedSearchPaths = p_quotedIncludesSearchPaths;
+    quotedSearchPaths.push_front(currentFolder);
+    string includedFilePath =
+        FileHelper::getIncludedFilePath(quotedSearchPaths, includedPath);
     if (!includedFilePath.empty()) {
-      return includedFilePath;
+      return FileHelper::normalizePath(includedFilePath);
     }
   }
-  // For bracketed includes and for not yet found quoted includes proceed with
-  // the bracketed includes search paths
-  return FileHelper::getIncludedFilePath(p_bracketedIncludesSearchPaths,
-                                         includedPath);
+  const string includedFilePath = FileHelper::getIncludedFilePath(
+      p_bracketedIncludesSearchPaths, includedPath);
+  if (includedFilePath.empty()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[include-resolution]: directive=%s from=%s "
+            "did not resolve through frontend include paths\n",
+            preprocessingInfo->getString().c_str(),
+            preprocessingInfo->get_file_info()->get_filenameString().c_str());
+    ROSE_ABORT();
+  }
+  return FileHelper::normalizePath(includedFilePath);
 }
 
 void SgSourceFile::doSetupForConstructor(const vector<string> &argv,
@@ -2881,12 +3626,9 @@ void SgFile::secondaryPassOverSourceFile() {
       const bool using_flang_frontend =
           sourceFile->get_experimental_flang_frontend() &&
           sourceFile->get_Fortran_only();
-      SgNode *preproc_root = sourceFile->get_globalScope();
-      if (preproc_root == nullptr) {
-        preproc_root = sourceFile;
-      }
-      const bool preproc_already_attached =
-          hasAttachedPreprocessingInfo(preproc_root);
+      const bool using_clang_frontend =
+          sourceFile->get_C_only() || sourceFile->get_Cxx_only() ||
+          sourceFile->get_Cuda_only() || sourceFile->get_OpenCL_only();
       if (requiresCPP == false) {
         // DQ (10/21/2019): This will be tested below, in
         // attachPreprocessingInfo(), if it is not in place then we need to do
@@ -2908,7 +3650,12 @@ void SgFile::secondaryPassOverSourceFile() {
 #endif
         rosePhaseTrace("secondaryPassOverSourceFile.attachPreprocessing.begin");
         if (!using_flang_frontend) {
-          attachPreprocessingInfo(sourceFile, "", !preproc_already_attached);
+          // The Clang frontend records and attaches its exact preprocessing
+          // stream while source locations are still available.  The legacy
+          // scanner is retained only to build the raw token stream; it must
+          // never infer ownership again from whether the resulting AST happens
+          // to contain a preprocessing record.
+          attachPreprocessingInfo(sourceFile, "", !using_clang_frontend);
         } else {
           // Flang already attaches Fortran comments during AST construction.
           sourceFile->set_processedToIncludeCppDirectivesAndComments(true);
@@ -2948,9 +3695,7 @@ void SgFile::secondaryPassOverSourceFile() {
         // file->get_unparse_tokens() == true)
         if (((SageInterface::is_C_language() == true) ||
              (SageInterface::is_Cxx_language() == true)) &&
-            ((file->get_unparse_tokens() == true) ||
-             (file->get_use_token_stream_to_improve_source_position_info() ==
-              true))) {
+            file->get_unparse_tokens()) {
           // This is only currently being tested and evaluated for C language
           // (should also work for C++, but not yet for Fortran).
           if (file->get_translateCommentsAndDirectivesIntoAST() == true) {
@@ -3165,6 +3910,30 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
     flangCommandLine.push_back("-fexternal-builder");
     vector<string> flangArgs = argv;
     SgFile::stripRoseCommandLineOptions(flangArgs);
+    // Flang's parse tree and cooked-source provenance are the canonical
+    // producer for Fortran directive boundaries and physical spelling.  REX
+    // still owns semantic Sage OpenMP/OpenACC construction through ompparser,
+    // but disabling the Flang language features discards directives as
+    // comments before the AST builder can receive typed provenance.
+    if (get_openmp() || get_openacc()) {
+      flangArgs.erase(
+          std::remove_if(flangArgs.begin(), flangArgs.end(),
+                         [&](const std::string &arg) {
+                           if (get_openmp() &&
+                               (arg == "-fopenmp" || arg == "-fopenmp-simd" ||
+                                arg.rfind("-fopenmp=", 0) == 0)) {
+                             return true;
+                           }
+                           return get_openacc() && arg == "-fopenacc";
+                         }),
+          flangArgs.end());
+      if (get_openmp()) {
+        flangArgs.push_back("-fopenmp");
+      }
+      if (get_openacc()) {
+        flangArgs.push_back("-fopenacc");
+      }
+    }
     bool needs_compile_only = false;
     if (SgProject *project = get_project()) {
       needs_compile_only =
@@ -3200,7 +3969,7 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
     bool remove_temp_dir = false;
     std::vector<std::string> temp_files;
     bool replaced_source = false;
-    bool include_temp_dir_set = false;
+    std::string flang_include_temp_dir;
 
     auto ensure_temp_dir = [&]() -> const std::filesystem::path & {
       if (temp_dir_ready) {
@@ -3242,13 +4011,49 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
           stem + ".rose_flang_" + std::to_string(hash_value) + "." + new_suffix;
       const std::filesystem::path temp_path = out_dir / temp_name;
 
-      std::error_code ec;
-      std::filesystem::copy_file(
-          original_path, temp_path,
-          std::filesystem::copy_options::overwrite_existing, ec);
-      if (ec) {
-        std::cerr << "Error: failed to create flang input copy for "
-                  << original_path.string() << ": " << ec.message() << "\n";
+      const std::string original_name =
+          FileHelper::normalizePathIfPossible(original_path.string());
+      if (original_name.empty() ||
+          std::any_of(original_name.begin(), original_name.end(),
+                      [](unsigned char c) {
+                        return c == '\0' || c == '\n' || c == '\r';
+                      })) {
+        std::cerr
+            << "REX_FRONTEND_INVARIANT[flang-extension-adapter]: source path "
+            << original_path.string()
+            << " cannot be represented by an exact line directive\n";
+        ROSE_ABORT();
+      }
+
+      std::string line_directive_name;
+      line_directive_name.reserve(original_name.size());
+      for (char c : original_name) {
+        if (c == '\\' || c == '"') {
+          line_directive_name.push_back('\\');
+        }
+        line_directive_name.push_back(c);
+      }
+
+      std::ifstream input(original_path, std::ios::in | std::ios::binary);
+      std::ofstream output(temp_path,
+                           std::ios::out | std::ios::binary | std::ios::trunc);
+      if (!input || !output) {
+        std::cerr
+            << "REX_FRONTEND_INVARIANT[flang-extension-adapter]: unable to "
+               "open source="
+            << original_path.string() << " adapter=" << temp_path.string()
+            << "\n";
+        ROSE_ABORT();
+      }
+      output << "#line 1 \"" << line_directive_name << "\"\n";
+      output << input.rdbuf();
+      output.flush();
+      if (input.bad() || !output) {
+        std::cerr
+            << "REX_FRONTEND_INVARIANT[flang-extension-adapter]: unable to "
+               "write exact source adapter source="
+            << original_path.string() << " adapter=" << temp_path.string()
+            << "\n";
         ROSE_ABORT();
       }
       temp_files.push_back(temp_path.string());
@@ -3259,8 +4064,7 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
 #if defined(ROSE_FLANG_FRONTEND)
     {
       const std::filesystem::path include_temp_dir = ensure_temp_dir();
-      set_flang_include_temp_dir(include_temp_dir.string());
-      include_temp_dir_set = true;
+      flang_include_temp_dir = include_temp_dir.string();
     }
 #endif
 
@@ -3274,8 +4078,8 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
       flangCommandLine.push_back(rewrite_source_arg(source_path));
     }
 
-    if ((replaced_source || include_temp_dir_set) && !source_dir.empty() &&
-        !hasIncludeDir(flangCommandLine, source_dir)) {
+    if ((replaced_source || !flang_include_temp_dir.empty()) &&
+        !source_dir.empty() && !hasIncludeDir(flangCommandLine, source_dir)) {
       flangCommandLine.push_back("-I");
       flangCommandLine.push_back(source_dir);
     }
@@ -3289,8 +4093,8 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
 
 #if defined(ROSE_FLANG_FRONTEND)
     status = experimental_fortran_main(flangArgc, flangArgv,
-                                       const_cast<SgSourceFile *>(this));
-    set_flang_include_temp_dir(std::string());
+                                       const_cast<SgSourceFile *>(this),
+                                       flang_include_temp_dir);
     for (const auto &path : temp_files) {
       std::error_code ec;
       std::filesystem::remove(path, ec);
@@ -3334,70 +4138,18 @@ int Rose::Frontend::RunSerial(SgProject *project) {
   if (SgProject::get_verbose() > 0)
     std::cout << "[INFO] [Frontend] Running in serial mode" << std::endl;
 
-  // volatile used as a work around for warning: variable might be clobbered by
-  // 'longjmp' or 'vfork'
-  volatile int status_of_function = 0;
+  int status_of_function = 0;
 
   std::vector<SgFile *> all_files = project->get_fileList();
   {
     int status_of_file = 0;
     for (SgFile *file : all_files) {
       ASSERT_not_null(file);
-      if (KEEP_GOING_CAUGHT_FRONTEND_SIGNAL) {
-        std::cout << "[WARN] "
-                  << "Configured to keep going after catching a "
-                  << "signal in SgFile::RunFrontend()" << std::endl;
-
-        if (file != nullptr) {
-          file->set_frontendErrorCode(100);
-          int save_volatile_variable = status_of_function;
-          status_of_function = std::max(100, save_volatile_variable);
-        } else {
-          std::cout
-              << "[FATAL] "
-              << "Unable to keep going due to an unrecoverable internal error"
-              << std::endl;
-          exit(1);
-        }
-      } else {
-        //-----------------------------------------------------------
-        // Pass File to Frontend. Avoid using try/catch/re-throw if not
-        // necessary because it interferes with debugging the exception (it
-        // makes it hard to find where the exception was originally thrown).
-        // Also, no need to print a fatal message to std::cout(!) if the
-        // exception inherits from the STL properly since the C++ runtime will
-        // do all that for us. [Robb P. Matzke 2015-01-07]
-        //-----------------------------------------------------------
-        if (Rose::KeepGoing::g_keep_going) {
-          try {
-            int save_volatile_variable = status_of_function;
-            file->runFrontend(
-                status_of_file); // status_of_file is modified as a side effect
-            status_of_function = max(status_of_file, save_volatile_variable);
-          } catch (...) {
-            if (file != nullptr) {
-              file->set_frontendErrorCode(100);
-            } else {
-              std::cout << "[FATAL] "
-                        << "Unable to keep going due to an unrecoverable "
-                           "internal error"
-                        << std::endl;
-              exit(1);
-            }
-            raise(SIGABRT); // catch with signal handling above
-          }
-        } else {
-          // Same thing but without the try/catch because we want the exception
-          // to be propagated all the way to the user without us re-throwing it
-          // and interfering with debugging.
-          int save_volatile_variable = status_of_function;
-          file->runFrontend(
-              status_of_file); // status_of_file is modified as a side effect
-          status_of_function = max(status_of_file, save_volatile_variable);
-          if (status_of_file != 0) {
-            break;
-          }
-        }
+      file->runFrontend(
+          status_of_file); // status_of_file is modified as a side effect
+      status_of_function = max(status_of_file, status_of_function);
+      if (status_of_file != 0) {
+        break;
       }
     }
   } // all_files->callFrontEnd
@@ -3720,10 +4472,6 @@ int SgSourceFile::buildAST(vector<string> argv,
              "\"frontend_failed\" exception due to syntax errors detected in "
              "the input code \n");
     }
-    if (Rose::KeepGoing::g_keep_going) {
-      raise(SIGABRT); // raise a signal to be handled by the keep going support
-                      // , instead of exit. Liao 4/25/2017
-    }
     return frontendErrorLevel;
   }
 
@@ -3814,117 +4562,32 @@ int SgFile::compileOutput(vector<string> &argv, int fileNameIndex) {
 
   // ROSE_ASSERT (get_unparse_output_filename().empty() == true);
 
-  // DQ (4/21/2006): If we have not set the unparse_output_filename then we
-  // could not have called unparse and we want to compile the original source
-  // file as a backup mechanism to generate an object file. printf ("In
-  // SgFile::compileOutput(): get_unparse_output_filename() = %s
-  // \n",get_unparse_output_filename().c_str());
-
-  bool use_original_input_file =
-      Rose::KeepGoing::Backend::UseOriginalInputFile(this);
-
-  // TOO1 (05/14/2013): Handling for -rose:keep_going
-  // Replace the unparsed file with the original input file.
-  if (use_original_input_file == true) {
-    // ROSE_ASSERT(get_skip_unparse() == true);
-    string outputFilename = get_sourceFileNameWithPath();
-
-    // DQ (9/15/2013): Added support for generated file to be placed into the
-    // same directory as the source file. It's use here is similar to that in
-    // the unparse.C file, but less clear here that it is correct since we don't
-    // have tests of the -rose:keep_going option (that I know of directly in
-    // ROSE).
-    SgProject *project = SageInterface::getProject(this);
-    if (project != nullptr) {
-      if (debugProjectCompileCommandLineWithArgs) {
-        printf("In SgFile::compileOutput(): "
-               "project->get_unparse_in_same_directory_as_input_file() = %s \n",
-               project->get_unparse_in_same_directory_as_input_file()
-                   ? "true"
-                   : "false");
-      }
-      if (project->get_unparse_in_same_directory_as_input_file() == true) {
-        outputFilename =
-            Rose::getPathFromFileName(get_sourceFileNameWithPath()) + "/rose_" +
-            get_sourceFileNameWithoutPath();
-
-        printf("In SgFile::compileOutput(): Using filename for unparsed file "
-               "into same directory as input file: outputFilename = %s \n",
-               outputFilename.c_str());
-
-        set_unparse_output_filename(outputFilename);
-      }
-    } else {
-      printf("WARNING: In SgFile::compileOutput(): file = %p has no associated "
-             "project \n",
-             this);
-    }
-
-    if (debugProjectCompileCommandLineWithArgs) {
-      printf("get_unparse_output_filename() = %s \n",
-             get_unparse_output_filename().c_str());
-    }
-
-    if (get_unparse_output_filename().empty()) {
-      if (get_skipfinalCompileStep()) {
-        // nothing to do...
-      } else if (this->get_frontendErrorCode() == 0) {
-        // DQ (7/14/2013): This is the branch taken when processing the -H
-        // option (which outputs the header file list, and is required to be
-        // supported in ROSE as part of some application specific configuration
-        // testing (when configure tests ROSE translators)).
-
-        // TOO1 (9/23/2013): There was never an else branch (or
-        // assertion) here before.
-        //                   Commenting out for now to allow
-        //                   $ROSE/tests/CompilerOptionTests to pass in
-        //                   order to expedite the transition from
-        //                   ROSE-FRONTEND3 to ROSE-FRONTEND4.
-        //   ROSE_ASSERT(! "Not implemented yet");
-      }
-    } else {
-      std::filesystem::path original_file = outputFilename;
-      std::filesystem::path unparsed_file = get_unparse_output_filename();
-
-      if (SgProject::get_verbose() >= 2) {
-        std::cout << "[DEBUG] "
-                  << "unparsed_file "
-                  << "'" << unparsed_file << "' "
-                  << "exists = " << std::boolalpha
-                  << std::filesystem::exists(unparsed_file) << std::endl;
-      }
-      // Don't replace the original input file with itself
-      if (original_file.string() != unparsed_file.string()) {
-        if (SgProject::get_verbose() >= 1) {
-          std::cout << "[INFO] "
-                    << "Replacing "
-                    << "'" << unparsed_file << "' "
-                    << "with "
-                    << "'" << original_file << "'" << std::endl;
-        }
-
-        // Remove the existing file first to ensure a complete
-        // overwrite.
-        if (std::filesystem::exists(unparsed_file)) {
-          std::filesystem::remove(unparsed_file);
-        }
-        if (debugProjectCompileCommandLineWithArgs) {
-          printf("NOTE: keep_going option supporting direct copy of original "
-                 "input file to overwrite the unparsed file \n");
-        }
-        Rose::FileSystem::copyFile(original_file, unparsed_file);
-      }
-    }
-
-    if (debugProjectCompileCommandLineWithArgs) {
-      // DQ (11/8/2015): Commented out to avoid output spew.
-      printf("In SgFile::compileOutput(): outputFilename = %s \n",
-             outputFilename.c_str());
-    }
-    set_unparse_output_filename(outputFilename);
+  SgProject *project = SageInterface::getProject(this);
+  ASSERT_not_null(project);
+  if (get_frontendErrorCode() != 0 || project->get_midendErrorCode() != 0 ||
+      get_unparserErrorCode() != 0 || get_backendCompilerErrorCode() != 0) {
+    fprintf(stderr,
+            "REX_BACKEND_INVARIANT[pipeline-error]: file=%s frontend=%d "
+            "midend=%d unparser=%d backend=%d refusing to compile a fallback "
+            "input\n",
+            getFileName().c_str(), get_frontendErrorCode(),
+            project->get_midendErrorCode(), get_unparserErrorCode(),
+            get_backendCompilerErrorCode());
+    ROSE_ABORT();
   }
 
-  ROSE_ASSERT(get_unparse_output_filename().empty() == false);
+  if (get_unparse_output_filename().empty()) {
+    if (!get_skip_unparse() && !project->get_useBackendOnly()) {
+      fprintf(stderr,
+              "REX_BACKEND_INVARIANT[missing-unparse-output]: file=%s has no "
+              "generated source to compile\n",
+              getFileName().c_str());
+      ROSE_ABORT();
+    }
+    // Backend-only and explicitly skipped-unparse modes compile the input by
+    // design. They are not recovery paths for a failed frontend or unparser.
+    set_unparse_output_filename(get_sourceFileNameWithPath());
+  }
 
   // Now call the compiler that rose is replacing
   // if (get_useBackendOnly() == false)
@@ -4089,6 +4752,11 @@ int SgFile::compileOutput(vector<string> &argv, int fileNameIndex) {
       }
     }
 
+    if (get_C_only() || get_Cxx_only() || get_Fortran_only()) {
+      CommandlineProcessing::validateBackendCompileOnlyCommandLine(
+          compilerCmdLine, get_unparse_output_filename());
+    }
+
     if (debugProjectCompileCommandLineWithArgs || showBackendCommandLine) {
       // DQ (2/6/2022): Set to "1" to output the backend compiler command
       // line.
@@ -4098,62 +4766,6 @@ int SgFile::compileOutput(vector<string> &argv, int fileNameIndex) {
                                                               false, false)
                  .c_str());
     }
-
-#if defined(ROSE_FLANG_FRONTEND)
-    if (get_Fortran_only() == true &&
-        get_experimental_flang_frontend() == true) {
-      std::vector<std::string> module_sources;
-      std::set<std::string> seen;
-      std::set<std::string> visiting;
-
-      Rose_STL_Container<SgNode *> uses =
-          NodeQuery::querySubTree(this, V_SgUseStatement);
-      for (Rose_STL_Container<SgNode *>::iterator it = uses.begin();
-           it != uses.end(); ++it) {
-        collectModuleSourcesFromUse(isSgUseStatement(*it), module_sources, seen,
-                                    visiting);
-      }
-
-      if (!module_sources.empty()) {
-        std::string unparse_path = get_unparse_output_filename();
-        std::string original_path = get_sourceFileNameWithPath();
-        for (const std::string &module_path : module_sources) {
-          if (module_path.empty())
-            continue;
-          if (module_path == unparse_path || module_path == original_path)
-            continue;
-
-          std::vector<std::string> module_cmd = compilerCmdLine;
-          bool replaced = false;
-          if (!unparse_path.empty()) {
-            std::vector<std::string>::iterator it =
-                std::find(module_cmd.begin(), module_cmd.end(), unparse_path);
-            if (it != module_cmd.end()) {
-              *it = module_path;
-              replaced = true;
-            }
-          }
-          if (replaced == false && !original_path.empty()) {
-            std::vector<std::string>::iterator it =
-                std::find(module_cmd.begin(), module_cmd.end(), original_path);
-            if (it != module_cmd.end()) {
-              *it = module_path;
-              replaced = true;
-            }
-          }
-          if (replaced == false)
-            continue;
-
-          int module_rc = systemFromVector(module_cmd);
-          if (module_rc != 0) {
-            printf("Exiting with an error in the backend compilation while "
-                   "building Fortran module dependencies! \n");
-            ROSE_ASSERT(false);
-          }
-        }
-      }
-    }
-#endif
 
     // DQ (2/20/2013): The timer used in TimingPerformance is now fixed to
     // properly record elapsed wall clock time. CAVE3 double check that is
@@ -4165,45 +4777,8 @@ int SgFile::compileOutput(vector<string> &argv, int fileNameIndex) {
            "= "
         << returnValueForCompiler << std::endl;
 
-    // TOO1 (05/14/2013): Handling for -rose:keep_going
-    //
-    // Compilation failed =>
-    //
-    //   1. Unparsed file is invalid => Try compiling the original input file
-    //   2. Original input file is invalid => abort
     if (returnValueForCompiler != 0) {
       this->set_backendCompilerErrorCode(-1);
-      if (this->get_project()->get_keep_going() == true) {
-        // 1. We already failed the compilation of the ROSE unparsed file.
-        // 2. Now we tried to compile the original input file --
-        //    that was just compiled above -- and failed also.
-        if (this->get_unparsedFileFailedCompilation()) {
-          this->set_backendCompilerErrorCode(-1);
-          // TOO1 (11/16/2013): TODO: Allow user to catch
-          // InvalidOriginalInputFileException?
-          // throw std::runtime_error("Original input file is invalid");
-          std::cout << "[FATAL] "
-                    << "Original input file is invalid: "
-                    << "'" << this->getFileName() << "'"
-                    << "\n\treported by " << __FILE__ << ":" << __LINE__
-                    << std::endl;
-          if (Rose::KeepGoing::g_keep_going)
-            raise(SIGABRT); // raise a signal to be handled by the keep going
-                            // support , instead of exit. Liao 4/25/2017
-          else
-            exit(1);
-        } else {
-          // The ROSE unparsed file is invalid...
-          this->set_frontendErrorCode(-1);
-          this->set_unparsedFileFailedCompilation(true);
-
-          returnValueForCompiler = this->compileOutput(argv, fileNameIndex);
-        }
-      } else {
-        // Propagate backend compilation failures as a normal nonzero return
-        // value so callers and negative-test harnesses can handle them.
-        this->set_backendCompilerErrorCode(-1);
-      }
     }
   } // if (get_skipfinalCompileStep() == false)
   else {
@@ -4246,11 +4821,6 @@ int SgFile::compileOutput(vector<string> &argv, int fileNameIndex) {
 
     finalCompiledExitStatus =
         (finalCompiledExitStatus == 0) ? /* error */ 1 : /* success */ 0;
-  }
-
-  // Liao, 4/26/2017. KeepGoingTranslator should keep going no mater what.
-  if (Rose::KeepGoing::g_keep_going) {
-    finalCompiledExitStatus = 0;
   }
 
   return finalCompiledExitStatus;
@@ -4453,20 +5023,11 @@ int SgProject::compileOutput() {
           file.set_multifile_support(true);
         }
 
-        if (KEEP_GOING_CAUGHT_BACKEND_COMPILER_SIGNAL) {
-          std::cout << "[WARN] "
-                    << "Configured to keep going after catching a "
-                    << "signal in SgProject::compileOutput()" << std::endl;
-
-          localErrorCode = 100;
-          file.set_backendCompilerErrorCode(localErrorCode);
-        } else {
 #if DEBUG_PROJECT_COMPILE_COMMAND_LINE
-          printf("\nIn Project::compileOutput(): Calling file.compileOutput(0) "
-                 "\n");
+        printf("\nIn Project::compileOutput(): Calling file.compileOutput(0) "
+               "\n");
 #endif
-          localErrorCode = file.compileOutput(0);
-        }
+        localErrorCode = file.compileOutput(0);
 
         if (localErrorCode > errorCode) {
           errorCode = localErrorCode;
@@ -5009,8 +5570,7 @@ SgC_PreprocessorDirectiveStatement::createDirective(
   case PreprocessingInfo::CplusplusStyleComment:
   case PreprocessingInfo::FortranStyleComment:
   case PreprocessingInfo::CpreprocessorBlankLine:
-  case PreprocessingInfo::ClinkageSpecificationStart:
-  case PreprocessingInfo::ClinkageSpecificationEnd: {
+  case PreprocessingInfo::CpreprocessorPragmaDeclaration: {
     printf("Error: these cases could not generate a new IR node "
            "(directiveTypeName = %s) \n",
            PreprocessingInfo::directiveTypeName(directive).c_str());
@@ -5156,19 +5716,82 @@ bool StringUtility::popen_wrapper(const string &command,
 
 SgFunctionDeclaration *
 SgFunctionCallExp::getAssociatedFunctionDeclaration() const {
-  // This is helpful in chasing down the associated declaration to this function
-  // reference.
-  SgFunctionDeclaration *returnFunctionDeclaration = nullptr;
+  SgExpression *functionExpression = get_function();
+  if (functionExpression == nullptr ||
+      functionExpression->get_parent() != this) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[function-call-callee-owner]: function call=%p "
+            "has no exact owned callee expression\n",
+            static_cast<const void *>(this));
+    ROSE_ABORT();
+  }
+
+  SgExpression *semanticFunctionExpression = functionExpression;
+  std::unordered_set<SgExpression *> visitedFunctionWrappers;
+  while (visitedFunctionWrappers.insert(semanticFunctionExpression).second) {
+    SgExpression *operand = nullptr;
+    if (SgCastExp *castExpression = isSgCastExp(semanticFunctionExpression)) {
+      operand = castExpression->get_operand_i();
+    } else if (SgPointerDerefExp *pointerDeref =
+                   isSgPointerDerefExp(semanticFunctionExpression)) {
+      operand = pointerDeref->get_operand_i();
+    } else if (SgAddressOfOp *addressOf =
+                   isSgAddressOfOp(semanticFunctionExpression)) {
+      operand = addressOf->get_operand_i();
+    } else {
+      break;
+    }
+    if (operand == nullptr ||
+        operand->get_parent() != semanticFunctionExpression) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[function-call-callee-owner]: function "
+              "wrapper=%p/%s has no exact owned operand\n",
+              static_cast<void *>(semanticFunctionExpression),
+              semanticFunctionExpression->class_name().c_str());
+      ROSE_ABORT();
+    }
+    semanticFunctionExpression = operand;
+  }
+
+  // A template-function reference has two deliberately independent edges:
+  // its symbol names the primary template exactly as written, while its typed
+  // semantic declaration names the selected callable specialization.  The
+  // call-level query must not collapse those identities by consulting the
+  // spelling symbol.
+  if (SgTemplateFunctionRefExp *templateReference =
+          isSgTemplateFunctionRefExp(semanticFunctionExpression)) {
+    return templateReference->getAssociatedFunctionDeclaration();
+  }
+
+  // Member-template references carry the same source/semantic split, but are
+  // owned by the right-hand side of their dot or arrow access.  Resolve the
+  // typed callable edge directly; getAssociatedFunctionSymbol() deliberately
+  // answers the separate source-spelling symbol query.
+  SgExpression *memberReferenceExpression = nullptr;
+  if (SgDotExp *dot = isSgDotExp(semanticFunctionExpression)) {
+    memberReferenceExpression = dot->get_rhs_operand_i();
+  } else if (SgArrowExp *arrow = isSgArrowExp(semanticFunctionExpression)) {
+    memberReferenceExpression = arrow->get_rhs_operand_i();
+  }
+  if (memberReferenceExpression != nullptr) {
+    if (memberReferenceExpression->get_parent() != semanticFunctionExpression) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[template-member-call-callee-owner]: "
+              "member access=%p/%s has no exact owned callable reference\n",
+              static_cast<void *>(semanticFunctionExpression),
+              semanticFunctionExpression->class_name().c_str());
+      ROSE_ABORT();
+    }
+    if (SgTemplateMemberFunctionRefExp *templateReference =
+            isSgTemplateMemberFunctionRefExp(memberReferenceExpression)) {
+      return templateReference->getAssociatedMemberFunctionDeclaration();
+    }
+  }
 
   SgFunctionSymbol *associatedFunctionSymbol = getAssociatedFunctionSymbol();
-  // It can be NULL for a function pointer
-  // ROSE_ASSERT(associatedFunctionSymbol != NULL);
-  if (associatedFunctionSymbol != nullptr)
-    returnFunctionDeclaration = associatedFunctionSymbol->get_declaration();
-
-  // ROSE_ASSERT(returnFunctionDeclaration != NULL);
-
-  return returnFunctionDeclaration;
+  return associatedFunctionSymbol != nullptr
+             ? associatedFunctionSymbol->get_declaration()
+             : nullptr;
 }
 
 SgFunctionSymbol *SgFunctionCallExp::getAssociatedFunctionSymbol() const {
@@ -5197,6 +5820,63 @@ SgFunctionSymbol *SgFunctionCallExp::getAssociatedFunctionSymbol() const {
   bool isAlwaysResolvedStatically = false;
 
   SgExpression *functionExp = this->get_function();
+  if (functionExp == nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[function-call-callee]: function call has no "
+            "owned callee expression\n");
+    ROSE_ABORT();
+  }
+  if (functionExp->get_parent() != this) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[function-call-callee-owner]: function-call "
+            "callee is not owned by its containing call\n");
+    ROSE_ABORT();
+  }
+  SgNode *functionExpOwner = const_cast<SgFunctionCallExp *>(this);
+  auto resolvedNonrealFunctionSymbol =
+      [](SgNonrealRefExp *reference) -> SgFunctionSymbol * {
+    ASSERT_not_null(reference);
+    if (reference->get_resolved_function_declaration() == nullptr) {
+      if (reference->get_resolved_variable_declaration() != nullptr) {
+        SageInterface::requireResolvedVariableTemplateReference(
+            reference, "function-call callee");
+      }
+      return nullptr;
+    }
+    SgFunctionDeclaration *resolved =
+        SageInterface::requireResolvedFunctionTemplateReference(
+            reference, "function-call callee");
+    SgFunctionDeclaration *canonical =
+        isSgFunctionDeclaration(resolved->get_firstNondefiningDeclaration());
+    SgFunctionSymbol *symbol =
+        canonical != nullptr
+            ? isSgFunctionSymbol(canonical->get_symbol_from_symbol_table())
+            : nullptr;
+    if (canonical == nullptr || symbol == nullptr ||
+        symbol->get_declaration() != canonical) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[function-template-callee-symbol]: "
+              "reference=%p resolved=%p has no exact canonical function "
+              "symbol\n",
+              static_cast<void *>(reference), static_cast<void *>(resolved));
+      ROSE_ABORT();
+    }
+    return symbol;
+  };
+  auto unwrapMacroExpansion = [&]() {
+    while (SgMacroExpansionExp *macro = isSgMacroExpansionExp(functionExp)) {
+      if (macro->get_parent() != functionExpOwner) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[macro-call-callee-owner]: macro spelling "
+                "'%s' is not owned by its containing callee expression\n",
+                macro->get_spelling().c_str());
+        ROSE_ABORT();
+      }
+      functionExpOwner = macro;
+      functionExp = macro->get_expanded_expression_checked();
+    }
+  };
+  unwrapMacroExpansion();
 
   // schroder3 (2016-08-16): Moved the handling of SgPointerDerefExp and
   // SgAddressOfOp above the switch. Due to this
@@ -5220,13 +5900,273 @@ SgFunctionSymbol *SgFunctionCallExp::getAssociatedFunctionSymbol() const {
   // associated with it. In this case return NULL should be allowed and the
   // caller has to handle it accordingly
   //
-  while (isSgPointerDerefExp(functionExp) || isSgAddressOfOp(functionExp)) {
-    functionExp = isSgUnaryOp(functionExp)->get_operand();
+  auto unwrapIdentityUnaryOperators = [&]() {
+    while (isSgPointerDerefExp(functionExp) || isSgAddressOfOp(functionExp)) {
+      SgUnaryOp *unary = isSgUnaryOp(functionExp);
+      if (unary == nullptr || unary->get_parent() != functionExpOwner ||
+          unary->get_operand() == nullptr ||
+          unary->get_operand()->get_parent() != unary) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[function-call-callee-unary-owner]: "
+                "identity-preserving callee unary=%p has no exact owned "
+                "operand\n",
+                static_cast<void *>(unary));
+        ROSE_ABORT();
+      }
+      functionExpOwner = unary;
+      functionExp = unary->get_operand();
+      unwrapMacroExpansion();
+    }
+  };
+  unwrapIdentityUnaryOperators();
+
+  // The Clang frontend preserves implicit callee conversions as typed
+  // SgCastExp nodes.  Resolve through only the exact conversion families that
+  // cannot change callable identity; explicit casts and pointer-valued
+  // expressions remain intentionally unresolved here.
+  auto resolveFunctionDecayEndpoint = [](SgType *type,
+                                         const char *role) -> SgType * {
+    std::set<SgType *> seen;
+    while (type != nullptr) {
+      type = type->stripTypedefsAndModifiers();
+      if (type == nullptr || !seen.insert(type).second) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[function-call-callee-conversion-type]: "
+                "%s endpoint contains a null or cyclic semantic type chain\n",
+                role != nullptr ? role : "<unknown>");
+        ROSE_ABORT();
+      }
+
+      SgType *underlying = nullptr;
+      if (SgTypeOfType *typeOf = isSgTypeOfType(type)) {
+        underlying = typeOf->get_base_type();
+      } else if (SgDeclType *declType = isSgDeclType(type)) {
+        underlying = declType->get_base_type();
+      }
+      if (underlying == nullptr) {
+        break;
+      }
+      type = underlying;
+    }
+    return type;
+  };
+  while (SgCastExp *cast = isSgCastExp(functionExp)) {
+    cast->validate_semantic_conversion();
+    if (cast->get_cast_type() != SgCastExp::e_implicit_cast) {
+      break;
+    }
+    if (cast->get_parent() != functionExpOwner ||
+        cast->get_operand() == nullptr ||
+        cast->get_operand()->get_parent() != cast) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[function-call-callee-conversion-owner]: "
+              "implicit callee cast=%p has no exact owned operand\n",
+              static_cast<void *>(cast));
+      ROSE_ABORT();
+    }
+
+    switch (cast->get_semantic_conversion_kind()) {
+    case SgCastExp::e_semantic_conversion_FunctionToPointerDecay: {
+      SgType *result = cast->get_type();
+      SgPointerType *target =
+          result != nullptr
+              ? isSgPointerType(result->stripTypedefsAndModifiers())
+              : nullptr;
+      SgType *source = cast->get_operand()->get_type();
+      SgType *targetBase =
+          target != nullptr ? target->get_base_type() : nullptr;
+      SgType *resolvedSource = resolveFunctionDecayEndpoint(source, "source");
+      SgType *resolvedTargetBase =
+          resolveFunctionDecayEndpoint(targetBase, "result pointee");
+      SgFunctionType *sourceFunction = isSgFunctionType(resolvedSource);
+      SgFunctionType *targetFunction = isSgFunctionType(resolvedTargetBase);
+      if (target == nullptr || sourceFunction == nullptr ||
+          targetFunction == nullptr ||
+          !SageInterface::isEquivalentFunctionType(sourceFunction,
+                                                   targetFunction)) {
+        if (SgFunctionType *sourceFunctionType =
+                isSgFunctionType(resolvedSource)) {
+          SgFunctionSymbol *sourceSymbol = nullptr;
+          if (SgFunctionRefExp *reference =
+                  isSgFunctionRefExp(cast->get_operand())) {
+            sourceSymbol = reference->get_symbol();
+          } else if (SgTemplateFunctionRefExp *reference =
+                         isSgTemplateFunctionRefExp(cast->get_operand())) {
+            sourceSymbol = reference->get_symbol();
+          }
+          SgFunctionType *targetFunctionType =
+              isSgFunctionType(resolvedTargetBase);
+          fprintf(
+              stderr,
+              "REX_AST_INVARIANT[function-call-callee-conversion-detail]: "
+              "callee=%s source-return=%p/%s target-return=%p/%s "
+              "source-args=%zu target-args=%zu\n",
+              sourceSymbol != nullptr
+                  ? sourceSymbol->get_name().getString().c_str()
+                  : "<non-function-reference>",
+              static_cast<void *>(sourceFunctionType->get_return_type()),
+              sourceFunctionType->get_return_type() != nullptr
+                  ? sourceFunctionType->get_return_type()->class_name().c_str()
+                  : "<null>",
+              targetFunctionType != nullptr
+                  ? static_cast<void *>(targetFunctionType->get_return_type())
+                  : nullptr,
+              targetFunctionType != nullptr &&
+                      targetFunctionType->get_return_type() != nullptr
+                  ? targetFunctionType->get_return_type()->class_name().c_str()
+                  : "<null>",
+              sourceFunctionType->get_arguments().size(),
+              targetFunctionType != nullptr
+                  ? targetFunctionType->get_arguments().size()
+                  : 0);
+          if (targetFunctionType != nullptr) {
+            const SgTypePtrList sourceArguments =
+                sourceFunctionType->get_arguments();
+            const SgTypePtrList targetArguments =
+                targetFunctionType->get_arguments();
+            const std::size_t common =
+                std::min(sourceArguments.size(), targetArguments.size());
+            for (std::size_t index = 0; index < common; ++index) {
+              fprintf(
+                  stderr,
+                  "REX_AST_INVARIANT[function-call-callee-conversion-"
+                  "detail]: argument=%zu source=%p/%s stripped=%p/%s "
+                  "target=%p/%s stripped=%p/%s equivalent=%d\n",
+                  index, static_cast<void *>(sourceArguments[index]),
+                  sourceArguments[index] != nullptr
+                      ? sourceArguments[index]->class_name().c_str()
+                      : "<null>",
+                  sourceArguments[index] != nullptr
+                      ? static_cast<void *>(
+                            sourceArguments[index]->stripTypedefsAndModifiers())
+                      : nullptr,
+                  sourceArguments[index] != nullptr
+                      ? sourceArguments[index]
+                            ->stripTypedefsAndModifiers()
+                            ->class_name()
+                            .c_str()
+                      : "<null>",
+                  static_cast<void *>(targetArguments[index]),
+                  targetArguments[index] != nullptr
+                      ? targetArguments[index]->class_name().c_str()
+                      : "<null>",
+                  targetArguments[index] != nullptr
+                      ? static_cast<void *>(
+                            targetArguments[index]->stripTypedefsAndModifiers())
+                      : nullptr,
+                  targetArguments[index] != nullptr
+                      ? targetArguments[index]
+                            ->stripTypedefsAndModifiers()
+                            ->class_name()
+                            .c_str()
+                      : "<null>",
+                  sourceArguments[index] != nullptr &&
+                          targetArguments[index] != nullptr &&
+                          SageInterface::isEquivalentType(
+                              sourceArguments[index], targetArguments[index])
+                      ? 1
+                      : 0);
+            }
+          }
+        }
+        fprintf(stderr,
+                "REX_AST_INVARIANT[function-call-callee-conversion]: "
+                "call=%p cast=%p function-to-pointer decay has incompatible "
+                "source=%p/%s resolved-source=%p/%s result=%p/%s "
+                "target-base=%p/%s resolved-target-base=%p/%s types\n",
+                static_cast<const void *>(this), static_cast<void *>(cast),
+                static_cast<void *>(source),
+                source != nullptr ? source->class_name().c_str() : "<null>",
+                static_cast<void *>(resolvedSource),
+                resolvedSource != nullptr ? resolvedSource->class_name().c_str()
+                                          : "<null>",
+                static_cast<void *>(result),
+                result != nullptr ? result->class_name().c_str() : "<null>",
+                static_cast<void *>(targetBase),
+                targetBase != nullptr ? targetBase->class_name().c_str()
+                                      : "<null>",
+                static_cast<void *>(resolvedTargetBase),
+                resolvedTargetBase != nullptr
+                    ? resolvedTargetBase->class_name().c_str()
+                    : "<null>");
+        ROSE_ABORT();
+      }
+      break;
+    }
+    case SgCastExp::e_semantic_conversion_BuiltinFnToFnPtr: {
+      SgType *result = cast->get_type();
+      SgType *strippedResult =
+          result != nullptr ? result->stripTypedefsAndModifiers() : nullptr;
+      SgType *source = cast->get_operand()->get_type();
+      SgType *strippedSource =
+          source != nullptr ? source->stripTypedefsAndModifiers() : nullptr;
+      SgPointerType *pointerResult = isSgPointerType(strippedResult);
+      const bool functionResult = isSgFunctionType(strippedResult) != nullptr;
+      const bool functionPointerResult =
+          pointerResult != nullptr &&
+          pointerResult->get_base_type() != nullptr &&
+          isSgFunctionType(
+              pointerResult->get_base_type()->stripTypedefsAndModifiers()) !=
+              nullptr;
+      if (isSgFunctionType(strippedSource) == nullptr ||
+          functionResult == functionPointerResult) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[function-call-callee-conversion]: builtin "
+                "function decay cast=%p operand=%p/%s source=%p/%s "
+                "stripped-source=%p/%s result=%p/%s stripped-result=%p/%s "
+                "function-result=%d function-pointer-result=%d has no exact "
+                "LLVM builtin callee type shape\n",
+                static_cast<void *>(cast),
+                static_cast<void *>(cast->get_operand()),
+                cast->get_operand()->class_name().c_str(),
+                static_cast<void *>(cast->get_operand()->get_type()),
+                cast->get_operand()->get_type() != nullptr
+                    ? cast->get_operand()->get_type()->class_name().c_str()
+                    : "<null>",
+                static_cast<void *>(strippedSource),
+                strippedSource != nullptr ? strippedSource->class_name().c_str()
+                                          : "<null>",
+                static_cast<void *>(result),
+                result != nullptr ? result->class_name().c_str() : "<null>",
+                static_cast<void *>(strippedResult),
+                strippedResult != nullptr ? strippedResult->class_name().c_str()
+                                          : "<null>",
+                functionResult ? 1 : 0, functionPointerResult ? 1 : 0);
+        ROSE_ABORT();
+      }
+      break;
+    }
+    case SgCastExp::e_semantic_conversion_LValueToRValue:
+    case SgCastExp::e_semantic_conversion_NoOp:
+      if (cast->get_operand()->get_type() == nullptr ||
+          SageInterface::containsUnknownType(cast->get_operand()->get_type()) ||
+          SageInterface::containsUnknownType(cast->get_type())) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[function-call-callee-conversion]: "
+                "transparent callee conversion has no exact source/result "
+                "type\n");
+        ROSE_ABORT();
+      }
+      break;
+    default:
+      fprintf(stderr,
+              "REX_AST_INVARIANT[function-call-callee-conversion]: implicit "
+              "callee cast has unsupported semantic conversion=%d\n",
+              static_cast<int>(cast->get_semantic_conversion_kind()));
+      ROSE_ABORT();
+    }
+    functionExpOwner = cast;
+    functionExp = cast->get_operand();
+    unwrapMacroExpansion();
+    unwrapIdentityUnaryOperators();
   }
 
   switch (functionExp->variantT()) {
   case V_SgPointerDerefExp:
   case V_SgAddressOfOp: {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[function-call-callee-unary]: callable unary "
+            "surface remained after exact identity normalization\n");
     ROSE_ABORT();
   }
   case V_SgFunctionRefExp: {
@@ -5314,6 +6254,9 @@ SgFunctionSymbol *SgFunctionCallExp::getAssociatedFunctionSymbol() const {
 
       // DQ (2/8/2009): Can we assert this! What about pointers to functions?
       ASSERT_not_null(returnSymbol);
+    } else if (SgNonrealRefExp *nonreal =
+                   isSgNonrealRefExp(arrayExp->get_rhs_operand())) {
+      returnSymbol = resolvedNonrealFunctionSymbol(nonreal);
     }
     break;
   }
@@ -5352,7 +6295,7 @@ SgFunctionSymbol *SgFunctionCallExp::getAssociatedFunctionSymbol() const {
                     dotExp->get_rhs_operand(),
                     dotExp->get_rhs_operand()->class_name().c_str());
               } else {
-                // FIXME should we return the non-real symbol?
+                returnSymbol = resolvedNonrealFunctionSymbol(nrRefExp);
               }
             } else {
               ASSERT_not_null(varRefExp);
@@ -5461,8 +6404,9 @@ SgFunctionSymbol *SgFunctionCallExp::getAssociatedFunctionSymbol() const {
 
     // YYH(2023/02/01): need to debug this how this could happen.
   case V_SgNonrealRefExp: {
+    returnSymbol =
+        resolvedNonrealFunctionSymbol(isSgNonrealRefExp(functionExp));
     break;
-    // ROSE_ABORT();
   }
     // DQ (2/25/2013): Added support for this case, from test2012_133.c.
     // This should not resolve to a symbol.
@@ -5476,6 +6420,13 @@ SgFunctionSymbol *SgFunctionCallExp::getAssociatedFunctionSymbol() const {
     break;
   }
 
+  // A dependent non-type template parameter can be the callee of a valid
+  // dependent call.  It deliberately has no concrete function declaration or
+  // symbol until instantiation, just like a function-pointer variable.
+  case V_SgTemplateParameterVal: {
+    break;
+  }
+
     // DQ (12/17/2016): added case to support reducing output spew
     // from C++11 tests and applications.
   case V_SgThisExp: {
@@ -5485,9 +6436,6 @@ SgFunctionSymbol *SgFunctionCallExp::getAssociatedFunctionSymbol() const {
     returnSymbol = isSgFunctionSymbol(functionExp);
     break;
   }
-    // CLANG FRONTEND FIX: Handle SgIntVal and other value expressions that may
-    // appear when Clang RecoveryExpr creates placeholders during parse errors
-    // or template issues
   case V_SgIntVal:
   case V_SgFloatVal:
   case V_SgDoubleVal:
@@ -5495,16 +6443,11 @@ SgFunctionSymbol *SgFunctionCallExp::getAssociatedFunctionSymbol() const {
   case V_SgBoolValExp:
   case V_SgCharVal:
   case V_SgNullExpression: {
-    // These are placeholder values from error recovery - cannot resolve to
-    // function symbol Return NULL to indicate function symbol cannot be
-    // determined
-#if DEBUG_SAGE_SUPPORT_GETASSOCIATEDFUNCTION
-    MLOG_WARN_C("sage_support",
-                "Function call expression has value literal %s as callee "
-                "(likely from parse error recovery), returning NULL\n",
-                functionExp->class_name().c_str());
-#endif
-    break;
+    fprintf(stderr,
+            "REX_AST_INVARIANT[function-call-callee]: non-callable literal "
+            "%s cannot be a function-call callee\n",
+            functionExp->class_name().c_str());
+    ROSE_ABORT();
   }
   case V_SgPseudoDestructorRefExp: {
     // Pseudo-destructor calls don't correspond to a function symbol in the
@@ -5512,29 +6455,11 @@ SgFunctionSymbol *SgFunctionCallExp::getAssociatedFunctionSymbol() const {
     break;
   }
   default: {
-    // Send out error message before the assertion, which may fail and stop
-    // first otherwise.
-    MLOG_ERROR_C("sage_support",
-                 "There should be no other cases functionExp = %p = %s \n",
-                 functionExp, functionExp->class_name().c_str());
-
-    ASSERT_not_null(functionExp->get_file_info());
-
-    // DQ (3/15/2017): Fixed to use mlog message logging.
-    // if (Rose::ir_node_mlog[Rose::Diagnostics::DEBUG])
-    {
-      functionExp->get_file_info()->display(
-          "In SgFunctionCallExp::getAssociatedFunctionSymbol(): case not "
-          "supported: debug");
-    }
-
-    // schroder3 (2016-07-25): Changed "#if 1" to "#if 0" to remove ROSE_ASSERT.
-    // If this member function is unable to determine the
-    //  associated function then it should return 0 instead of raising an
-    //  assertion.
-    // DQ (2/23/2013): Allow this to be commented out so that I can generate the
-    // DOT graphs to better understand the problem in test2013_69.C.
-    // ROSE_ABORT();
+    fprintf(stderr,
+            "REX_AST_INVARIANT[function-call-callee]: unsupported callee "
+            "node kind %s\n",
+            functionExp->class_name().c_str());
+    ROSE_ABORT();
   }
   }
 

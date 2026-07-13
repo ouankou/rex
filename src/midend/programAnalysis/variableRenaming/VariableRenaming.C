@@ -2783,9 +2783,11 @@ VariableRenaming::buildVariableReference(const VarName &var,
     SgVarRefExp *nextVar = SageBuilder::buildVarRefExp(var[i + 1], scope);
 
     if (isSgPointerType(initName->get_type())) {
-      varsSoFar = SageBuilder::buildArrowExp(varsSoFar, nextVar);
+      varsSoFar =
+          SageBuilder::buildArrowExp(varsSoFar, nextVar, nextVar->get_type());
     } else {
-      varsSoFar = SageBuilder::buildDotExp(varsSoFar, nextVar);
+      varsSoFar =
+          SageBuilder::buildDotExp(varsSoFar, nextVar, nextVar->get_type());
     }
   }
 

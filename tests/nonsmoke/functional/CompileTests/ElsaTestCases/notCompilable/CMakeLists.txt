@@ -23,47 +23,33 @@ set(ELSATEST_NOTCOMPILABLE_EXPECT_PASS_TESTCODES
   g0024.cc
   g0026.cc
   k0002.cc
-  13.3.3.1.4.cc
-  13.3.3.2a.cc
-  13.3.3.2b.cc
-  13.3.3.2d.cc
-  13.3.3b.cc
-  13.cc
-  t0116.cc
-  t0120.cc
-  t0127.cc
+  7.3.1.cc
+  7.3.3e.cc
+  7.3.4a.cc
+  7.3.4c.cc
+  t0093.cc
+  t0126.cc
   t0128.cc
   t0129.cc
   t0130.cc
-  t0136.cc
-  t0137.cc
-  t0141.cc
-  t0142.cc
-  t0143.cc
-  t0146.cc
   t0147.cc
-  t0148.cc
+  t0157.cc
+  t0159.cc
+  t0162.cc
+  t0163.cc
   t0178.cc
   t0196.cc
-  t0230.cc
   t0272.cc
-  t0282.cc
-  t0297.cc
-  t0299.cc
-  t0309.cc
-  t0311.cc
-  t0342.cc
-  t0345.cc
+  t0339.cc
   t0347.cc
-  t0354.cc
-  t0416.cc
-  t0423.cc
-  t0431.cc
+  t0380.cc
+  t0385.cc
+  t0401.cc
+  t0402.cc
+  t0403.cc
   t0449.cc
   t0452.cc
-  t0465.cc
-  t0529.cc
-  t0533.cc)
+  t0465.cc)
 
 function(elsa_not_compilable_test input_file label)
   set(_test_key ${input_file})
@@ -98,24 +84,42 @@ function(elsa_not_compilable_test input_file label)
   get_filename_component(_source_dir "${_source_path}" DIRECTORY)
   if(_source_path MATCHES "\\.c$")
     list(FILTER _rose_flags EXCLUDE REGEX "^-std=.*")
-    list(APPEND _rose_flags -rose:C)
   endif()
 
-  add_test(
-    NAME ${test_id}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${translator}
+  if(input_file IN_LIST ELSATEST_NOTCOMPILABLE_EXPECT_PASS_TESTCODES)
+    # These accepted ELSA specimens encode their semantic lookup result in an
+    # intentionally non-assembling inline-asm payload supplied by the probe
+    # header.  Their contract ends after the Clang frontend and AST unparse;
+    # sending that payload to the assembler tests neither of those surfaces.
+    list(APPEND _rose_flags
+      ${REX_ELSA_SEMANTIC_PROBE_FLAGS}
+      -rose:skipfinalCompileStep)
+    add_test(
+      NAME ${test_id}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+      COMMAND ${translator}
+        ${_rose_flags}
+        ${ROSE_INCLUDE_FLAGS}
+        -I${CMAKE_CURRENT_SOURCE_DIR}
+        -I${_source_dir}
+        -c ${_source_path})
+    set_tests_properties(${test_id} PROPERTIES LABELS "${label}")
+  else()
+    rex_get_clang_frontend_negative_diagnostic(
+      _expected_diagnostic "${_source_path}")
+    rex_add_clang_frontend_negative_test(
+      ${test_id}
+      ${label}
+      ${CMAKE_CURRENT_BINARY_DIR}
+      ${_test_key}.frontend-negative.log
+      "${_expected_diagnostic}"
+      $<TARGET_FILE:${translator}>
       ${_rose_flags}
       ${ROSE_INCLUDE_FLAGS}
       -I${CMAKE_CURRENT_SOURCE_DIR}
       -I${_source_dir}
-      -c ${_source_path}
-  )
-  set(_test_will_fail TRUE)
-  if(input_file IN_LIST ELSATEST_NOTCOMPILABLE_EXPECT_PASS_TESTCODES)
-    set(_test_will_fail FALSE)
+      -c ${_source_path})
   endif()
-  set_tests_properties(${test_id} PROPERTIES LABELS "${label}" WILL_FAIL ${_test_will_fail})
   set_property(TEST ${test_id} APPEND PROPERTY ENVIRONMENT
                "ROSE_TEST_OUTPUT_DIR=${_test_output_dir}")
 endfunction()

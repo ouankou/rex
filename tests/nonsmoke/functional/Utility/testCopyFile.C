@@ -1,5 +1,7 @@
 #include "rose.h"
 
+#include <Rose/FileSystem.h>
+
 #define SOURCE_FILE_NAME "copyFile-source"
 #define TARGET_FILE_NAME "copyFile-target"
 #define FILE_CONTENT "Contents of the file" // No line feed

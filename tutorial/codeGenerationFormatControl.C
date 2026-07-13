@@ -11,8 +11,8 @@ public:
   CustomCodeFormat();
   ~CustomCodeFormat();
 
-  virtual int getLine(SgLocatedNode *, SgUnparse_Info &info, FormatOpt opt);
-  virtual int getCol(SgLocatedNode *, SgUnparse_Info &info, FormatOpt opt);
+  std::optional<OutputPosition>
+  getPosition(SgLocatedNode *, SgUnparse_Info &info, FormatOpt opt) override;
 
   // return the value for indentation of code (part of control over style)
   virtual int tabIndent();
@@ -34,18 +34,11 @@ CustomCodeFormat::CustomCodeFormat() {
 
 CustomCodeFormat::~CustomCodeFormat() {}
 
-// return: > 0: start new lines; == 0: use same line; < 0:default
-int CustomCodeFormat::getLine(SgLocatedNode *, SgUnparse_Info &info,
+// Return no custom position to use the normal line and column placement.
+std::optional<UnparseFormatHelp::OutputPosition>
+CustomCodeFormat::getPosition(SgLocatedNode *, SgUnparse_Info &info,
                               FormatOpt opt) {
-  // Use default mechanism to select the line where to output generated code
-  return -1;
-}
-
-// return starting column. if < 0, use default
-int CustomCodeFormat::getCol(SgLocatedNode *, SgUnparse_Info &info,
-                             FormatOpt opt) {
-  // Use default mechanism to select the column where to output generated code
-  return -1;
+  return std::nullopt;
 }
 
 int CustomCodeFormat::tabIndent() {

@@ -62,6 +62,7 @@ add_test(
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:rex_test2026_openmp_acc_ast>
     -rose:openmp:ast_only
+    -rose:openacc:ast_only
     -c ${CMAKE_CURRENT_SOURCE_DIR}/input_rex_test2026_openmp_acc.C
 )
 

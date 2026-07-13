@@ -2,11 +2,11 @@
 #ifndef FRONTIER_DETECTION_HEADER
 #define FRONTIER_DETECTION_HEADER
 
-// DQ (12/1/2013): Added switch to control testing mode for token unparsing.
-// Test codes in the tests/nonsmoke/functional/roseTests/astTokenStreamTests
-// directory turn on this variable so that all regression tests can be processed
-// to mix the unparsing of the token stream with unparsing from the AST.
-extern ROSE_DLL_API bool tokenUnparsingTestingMode;
+#include <map>
+#include <memory>
+#include <set>
+#include <utility>
+#include <vector>
 
 // The support for unparsing from the token stream is a feature in
 // ROSE to provide a new level of portability for the generated code.
@@ -42,6 +42,54 @@ public:
 
   // DQ (5/23/2021): Added to support C++.
   bool isPartOfTemplateInstantiation;
+
+  // Semantic declarations have exact structural ownership through an
+  // SgAuxiliaryDeclarationList, but they do not describe a lexical source
+  // surface.  Keep that typed traversal role distinct from physical token
+  // frontier ownership.
+  bool isPartOfAuxiliaryDeclarationSubtree;
+
+  // Function parameter and constructor-initializer lists are typed structural
+  // children of one function declaration, not independent source statements.
+  // This flag is true only while visiting the wrapper itself; its payload is
+  // still traversed normally so a real child transformation cannot disappear.
+  bool isFunctionDeclarationStructuralWrapper;
+
+  // A non-function declaration can own a typed source-declarator scope whose
+  // children mix semantic name infrastructure with source-written tag
+  // surfaces.  The scope is not an independent source statement; its exact
+  // declaration owner is the only lexical frontier boundary.
+  bool isSourceDeclaratorStructuralWrapper;
+
+  // The range, begin, and end declarations beneath a C++ range-for are
+  // semantic lowering containers.  Their expression children remain visible
+  // to transformation analysis, but the declaration shells are not independent
+  // lexical statement surfaces.
+  bool isRangeForSemanticDeclarationWrapper;
+
+  // Every traversal descendant of a semantic range/begin/end declaration is
+  // payload of that typed lowering container, not an independent statement
+  // surface.  The enclosing SgRangeBasedForStatement remains the sole lexical
+  // owner, including for the source expression nested below the range shell.
+  bool isPartOfRangeForSemanticDeclarationSubtree;
+
+  // An unbraced declaration used as a controlled substatement needs a lexical
+  // scope even though no braces were written. The frontend represents that
+  // scope with a typed implicit SgBasicBlock owned by the control statement.
+  bool isImplicitControlFlowStructuralWrapper;
+
+  // A declaration-form SgForInitStatement is a typed structural list whose
+  // sole SgDeclarationGroupStatement child owns the source declaration
+  // surface.  Keep the wrapper role explicit so frontier synthesis can
+  // delegate to that one lexical owner without publishing two owners for the
+  // same token interval.
+  bool isForInitDeclarationGroupWrapper;
+
+  // Omitted `for` initializer and condition fields have real separator syntax
+  // but no Clang statement node.  The frontend represents each absence with
+  // an exact semantic SgNullStatement child.  This role keeps those children
+  // traversable without inventing another physical source surface.
+  bool isSourceLessForStructuralPayload;
 
   // DQ (5/12/2021): Added to support header file unparsing.
   // int subtree_color_index;
@@ -85,9 +133,6 @@ public:
   bool unparseUsingTokenStream;
   bool unparseFromTheAST;
 
-  // DQ (5/16/2021): This data member is not used.
-  bool redundant_token_subsequence;
-
   // FrontierNode(SgStatement* n,bool unparseUsingTokenStream,bool
   // unparseFromTheAST) : node(node),
   // unparseUsingTokenStream(unparseUsingTokenStream),
@@ -99,6 +144,52 @@ public:
 
   FrontierNode(const FrontierNode &X);
   FrontierNode operator=(const FrontierNode &X);
+};
+
+struct TokenUnparseFrontierFileContext {
+  std::map<SgStatement *, FrontierNode *> frontierNodes;
+  std::map<SgNode *, std::pair<SgNode *, SgNode *>> frontierAdjacency;
+  std::set<SgStatement *> statementsToUnparseFromAst;
+  std::set<SgStatement *> statementsContainingAstUnparse;
+  std::vector<std::unique_ptr<FrontierNode>> ownedFrontierNodes;
+  bool transformationAnalysisComplete = false;
+
+  void adoptFrontierNode(SgStatement *statement, FrontierNode *frontierNode);
+  void markStatementForAstUnparse(SgStatement *statement);
+  void markStatementAsContainingAstUnparse(SgStatement *statement);
+  bool isStatementMarkedForAstUnparse(SgStatement *statement) const;
+  bool statementContainsAstUnparse(SgStatement *statement) const;
+  bool statementRequiresAstUnparse(SgStatement *statement) const;
+  void finishTransformationAnalysis();
+};
+
+class TokenUnparseFrontierContext {
+  std::map<SgSourceFile *, TokenUnparseFrontierFileContext> files;
+
+public:
+  // Include ownership is part of one unparse invocation. Keeping this index in
+  // the invocation context prevents one project from affecting another and
+  // makes duplicate physical ownership an immediate contract violation.
+  std::map<std::string, SgIncludeFile *> includeFilesByPath;
+  std::map<std::string, std::vector<SgIncludeFile *>>
+      includeFileOccurrencesByPath;
+  std::map<SgIncludeFile *, std::pair<SgStatement *, SgStatement *>>
+      includeFileStatementBounds;
+  std::map<SgSourceFile *, std::pair<SgStatement *, SgStatement *>>
+      sourceFileStatementBounds;
+  std::map<SgSourceFile *, std::map<SgScopeStatement *,
+                                    std::pair<SgStatement *, SgStatement *>>>
+      scopeStatementBoundsBySourceFile;
+
+  TokenUnparseFrontierContext() = default;
+  TokenUnparseFrontierContext(const TokenUnparseFrontierContext &) = delete;
+  TokenUnparseFrontierContext &
+  operator=(const TokenUnparseFrontierContext &) = delete;
+
+  TokenUnparseFrontierFileContext &beginFile(SgSourceFile *sourceFile);
+  TokenUnparseFrontierFileContext &file(SgSourceFile *sourceFile);
+  const TokenUnparseFrontierFileContext &file(SgSourceFile *sourceFile) const;
+  bool hasFile(SgSourceFile *sourceFile) const;
 };
 
 class FrontierDetectionForTokenStreamMapping_SynthesizedAttribute {
@@ -138,8 +229,6 @@ class FrontierDetectionForTokenStreamMapping
           FrontierDetectionForTokenStreamMapping_InheritedAttribute,
           FrontierDetectionForTokenStreamMapping_SynthesizedAttribute> {
 public:
-  int numberOfNodes;
-
   // DQ (5/13/2021): Adding accumulator attribute.
   // int filenameToColorCodeMap;
 
@@ -161,7 +250,9 @@ public:
   FrontierNode *getFrontierNode(SgStatement *statement);
   void outputFrontierNodes();
 
-  FrontierDetectionForTokenStreamMapping(SgSourceFile *sourceFile);
+  FrontierDetectionForTokenStreamMapping(
+      SgSourceFile *sourceFile,
+      const TokenUnparseFrontierFileContext &frontierContext);
   ~FrontierDetectionForTokenStreamMapping();
 
   // virtual function must be defined
@@ -178,57 +269,19 @@ public:
           inheritedAttribute,
       SubTreeSynthesizedAttributes synthesizedAttributeList);
 
-  // This is used to test the random association of AST node to either token
-  // unparsing or AST unparsing.
-  int numberOfNodesInSubtree(SgSourceFile *sourceFile);
-
   // DQ (5/11/2021): Added to better organize code (and support for unparsing
   // headers).
-  bool isChildNodeFromSameFileAsCurrentNode(SgStatement *statement,
+  bool isChildNodeFromSameFileAsCurrentNode(SgNode *currentNode,
                                             SgStatement *child_statement);
+
+private:
+  SgSourceFile *sourceFile;
+  const TokenUnparseFrontierFileContext &frontierContext;
 };
 
 // DQ (5/10/2021): Activate this code.
-void frontierDetectionForTokenStreamMapping(SgSourceFile *sourceFile,
-                                            bool traverseHeaderFiles);
-
-class FrontierDetectionForTokenStreamMappingAttribute : public AstAttribute {
-  // This class supports marking the AST in the normal ROSE AST graph
-  // generation. We use this ROSE feature to mark the frontier of where the
-  // token stream will be unparsed vs. unparsing directly from the AST (e.g. for
-  // transformations).
-
-private:
-  // DQ (3/25/2017): Remove to avoid Clang warning about unused private
-  // variable. SgNode* node;
-
-  std::string name;
-  std::string options;
-
-public:
-  FrontierDetectionForTokenStreamMappingAttribute(SgNode *n, std::string name,
-                                                  std::string options);
-
-  FrontierDetectionForTokenStreamMappingAttribute(
-      const FrontierDetectionForTokenStreamMappingAttribute &X);
-
-  // Support for graphics output of IR nodes using attributes (see the DOT graph
-  // of the AST)
-  virtual std::string additionalNodeOptions() override;
-  virtual std::vector<AstAttribute::AttributeEdgeInfo>
-  additionalEdgeInfo() override;
-  virtual std::vector<AstAttribute::AttributeNodeInfo>
-  additionalNodeInfo() override;
-
-  // Support for the coping of AST and associated attributes on each IR node
-  // (required for attributes derived from AstAttribute, else just the base
-  // class AstAttribute will be copied).
-  virtual AstAttribute *copy() const override;
-
-  // DQ (6/11/2017): Added virtual function now required to eliminate warning at
-  // runtime.
-  virtual AstAttribute::OwnershipPolicy
-  getOwnershipPolicy() const override; // { return CONTAINER_OWNERSHIP; }
-};
+void frontierDetectionForTokenStreamMapping(
+    SgSourceFile *sourceFile, bool traverseHeaderFiles,
+    TokenUnparseFrontierContext &context, SgNode *traversalRoot = nullptr);
 
 #endif

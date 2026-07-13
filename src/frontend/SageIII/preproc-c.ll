@@ -592,19 +592,38 @@ typedef int bool;
 #define yytext Rose_C_Cxx_text
 #define yylex  Rose_C_Cxx_lex
 
-#define HANDLEMACROSTART preproc_start_line_num=preproc_line_num; preproc_start_column_num=1; preproc_column_num+=strlen(yytext); macroString = yytext; BEGIN MACRO;
+#define ADVANCEPHYSICALMATCH(match_text)                                       \
+  do {                                                                         \
+    for (size_t match_index = 0; match_index < (match_text).size();            \
+         ++match_index) {                                                      \
+      if ((match_text)[match_index] == '\r' &&                                \
+          match_index + 1 < (match_text).size() &&                             \
+          (match_text)[match_index + 1] == '\n') {                            \
+        ++preproc_line_num;                                                    \
+        preproc_column_num = 1;                                                \
+        ++match_index;                                                         \
+      } else if ((match_text)[match_index] == '\n') {                         \
+        ++preproc_line_num;                                                    \
+        preproc_column_num = 1;                                                \
+      } else {                                                                 \
+        ++preproc_column_num;                                                  \
+      }                                                                        \
+    }                                                                          \
+  } while (false)
+
+#define HANDLEMACROSTART                                                       \
+  do {                                                                         \
+    preproc_start_line_num = preproc_line_num;                                 \
+    preproc_start_column_num = preproc_column_num;                             \
+    macroString = yytext;                                                      \
+    ADVANCEPHYSICALMATCH(macroString);                                         \
+    BEGIN MACRO;                                                               \
+  } while (false);
 
 int i = 0;
 
 std::string commentString;
 std::string macroString;
-//remove these _st's later
-std::stack<int> curly_brace_stack_st;
-std::stack<int> parenthesis_stack;
-std::stack<int> square_bracket;
-
-//All the above should be "matching constructs"
-//create new for various casts and templates
 
 
 // DQ (4/19/2006):
@@ -613,18 +632,7 @@ std::stack<int> square_bracket;
 // comments and CPP directive.
 std::string globalFileName;
 
-int curr_brace_depth=0;
-int ls_startingline_no; 
-int ls_startingpreproc_column_num; 
-int brace_counting_on=0;
 PreprocessingInfo::DirectiveType macrotype = PreprocessingInfo::CpreprocessorUnknownDeclaration;
-
-int topcurlybracestack();
-void pushbracestack(int);
-int popbracestack();
-bool isemptystack();
-
-int num_of_newlines(char*);
 
 struct physical_line_splice {
   int line_num;
@@ -893,7 +901,6 @@ whitespacenl            [\t\n ]+
 whitespace              [\t ]+
 lineprefix              ^{whitespace}*"#"{whitespace}*
 macrokeyword            "include"|"define"|"undef"|"line"|"error"|"warning"|"if"|"ifdef"|"ifndef"|"elif"|"else"|"endif"
-mlinkagespecification   ^{whitespace}*"extern"{whitespace}*(("\"C\"")|("\"C++\"")){whitespacenl}*"{"
 */
 
 //refresher: blank and space function exactly as the STDLIB functions isblank and isspace respectively.
@@ -923,9 +930,25 @@ I am not sure if the whitespacenl would count the number of newlines in code tha
 
 whitespacenl            [[:space:]]+
 whitespace              [[:blank:]]+
-lineprefix              ^{whitespace}*"#"{whitespace}*
-macrokeyword            "include"|"define"|"undef"|"line"|"error"|"warning"|"if"|"ifdef"|"ifndef"|"elif"|"else"|"endif"
-mlinkagespecification   ^{whitespace}*"extern"{whitespace}*(("\"C\"")|("\"C++\"")){whitespacenl}*"{"
+horizontal              [\t \f\v]
+linesplice              (\\\r\n|\\\n)
+blockcomment            "/*"([^*]|\*+[^*/])*\*+"/"
+prefixtrivia            ({horizontal}|{linesplice}|{blockcomment})
+lineprefix              ^{prefixtrivia}*"#"{prefixtrivia}*
+splice                  ({linesplice})*
+includekeyword          i{splice}n{splice}c{splice}l{splice}u{splice}d{splice}e
+definekeyword           d{splice}e{splice}f{splice}i{splice}n{splice}e
+undefkeyword            u{splice}n{splice}d{splice}e{splice}f
+linekeyword             l{splice}i{splice}n{splice}e
+errorkeyword            e{splice}r{splice}r{splice}o{splice}r
+warningkeyword          w{splice}a{splice}r{splice}n{splice}i{splice}n{splice}g
+ifkeyword               i{splice}f
+ifdefkeyword            i{splice}f{splice}d{splice}e{splice}f
+ifndefkeyword           i{splice}f{splice}n{splice}d{splice}e{splice}f
+elifkeyword             e{splice}l{splice}i{splice}f
+elsekeyword             e{splice}l{splice}s{splice}e
+endifkeyword            e{splice}n{splice}d{splice}i{splice}f
+pragmakeyword           p{splice}r{splice}a{splice}g{splice}m{splice}a
 languagesyntax         "<" | ">" | "?" | ":"
 %s NORMAL CXX_COMMENT C_COMMENT STRING_LIT CHAR_LIT MACRO C_COMMENT_INMACRO STRING_LIT_IN_MACRO
 %%
@@ -962,41 +985,11 @@ BEGIN NORMAL;
   // preproc_column_num = 1;
    }
 
-<NORMAL>{mlinkagespecification} { 
-#if DEBUG_LEX_PASS
-     printf("%s is a mlinkagespecification token \n",yytext);
-#endif
-     preprocessorList.addElement(PreprocessingInfo::ClinkageSpecificationStart,yytext,globalFileName,preproc_line_num,preproc_column_num,0); 
-     int number_of_lines = num_of_newlines(yytext);
-     add_token(yytext,preproc_line_num,preproc_column_num,0);
-     if (number_of_lines > 0)
-        {
-          preproc_line_num += number_of_lines;
-          preproc_column_num = getColumnNumberOfEndOfString(yytext);
-        }
-     else
-        {
-          preproc_column_num += strlen(yytext);
-        }
-
-     curr_brace_depth++; 
-     pushbracestack(curr_brace_depth);
-   }
-
-        /*Handle the braces (left and right). Push and Pop the bracestack accordingly*/
 <NORMAL>"{"     { 
 #if DEBUG_LEX_PASS
      printf("%s is a syntax token \n",yytext);
 #endif
-     if (!isemptystack()) 
-        { 
-       /* we only count braces within a linkage specification. */ 
-          curr_brace_depth++; 
-        } 
-  // printf("Ram: found left brace at preproc_line_num = %d, preproc_column_num = %d\n", preproc_line_num, preproc_column_num);
-
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
 <NORMAL>"}"     { 
@@ -1004,65 +997,21 @@ BEGIN NORMAL;
      printf("%s is a syntax token \n",yytext);
 #endif
 
-     bool added_link_specification_as_token = false;
-     if (!isemptystack()) 
-        { 
-          if (curr_brace_depth==topcurlybracestack()) 
-             { 
-               popbracestack();
-
-            // The semantics of ROSEAttributesList::addElement() is to use std::vector::push_back();
-               preprocessorList.addElement(PreprocessingInfo::ClinkageSpecificationEnd, yytext, globalFileName, preproc_line_num, preproc_column_num, 0); 
-
-               added_link_specification_as_token = true;
-
-            // This token should maybe be special since it marks the end of a link specification (later).
-               add_preprocessingInfo_to_token_stream(preprocessorList.lastElement(),preproc_line_num,preproc_column_num,0);
-             }
-
-          curr_brace_depth--; 
-        } 
-  // printf("Ram: found right brace at preproc_line_num = %d, preproc_column_num = %d\n", preproc_line_num, preproc_column_num);
-
-     if (added_link_specification_as_token == false)
-        {
-          add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-        }
-  // preproc_column_num++; 
+     add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
    }
 
 <NORMAL>"("     { 
-                    /*if(!isemptystack()) 
-                    { 
-                        //we only count braces within a linkage specification. 
-                        curr_brace_depth++; 
-                    }
-                    */
 #if DEBUG_LEX_PASS
      printf("%s is a syntax token \n", yytext);
 #endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
 <NORMAL>")"     { 
-                    /*
-                    if(!isemptystack()) 
-                    { 
-                        if(curr_brace_depth==topcurlybracestack()) 
-                        { 
-                            popbracestack(); 
-                            preprocessorList.addElement(PreprocessingInfo::ClinkageSpecificationEnd, 
-                                                            yytext, globalFileName, preproc_line_num, preproc_column_num, 0); 
-                        }
-                        curr_brace_depth--; 
-                    } 
-                    */
 #if DEBUG_LEX_PASS
      printf("%s is a syntax token \n", yytext);
 #endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
      /* DQ (9/29/2013): Added additional syntax to token handling */
@@ -1351,22 +1300,25 @@ BEGIN NORMAL;
                 }
     */
 
-<NORMAL>{lineprefix}"include"   { macrotype=PreprocessingInfo::CpreprocessorIncludeDeclaration; HANDLEMACROSTART }
-<NORMAL>{lineprefix}"define"    { macrotype=PreprocessingInfo::CpreprocessorDefineDeclaration; HANDLEMACROSTART }
-<NORMAL>{lineprefix}"undef"     { macrotype=PreprocessingInfo::CpreprocessorUndefDeclaration; HANDLEMACROSTART }
-<NORMAL>{lineprefix}"line"      { macrotype=PreprocessingInfo::CpreprocessorLineDeclaration; HANDLEMACROSTART }
-<NORMAL>{lineprefix}"error"     { macrotype=PreprocessingInfo::CpreprocessorErrorDeclaration; HANDLEMACROSTART }
-<NORMAL>{lineprefix}"if"        { macrotype=PreprocessingInfo::CpreprocessorIfDeclaration; HANDLEMACROSTART }
-<NORMAL>{lineprefix}"ifdef"     { macrotype=PreprocessingInfo::CpreprocessorIfdefDeclaration; HANDLEMACROSTART }
-<NORMAL>{lineprefix}"ifndef"    { macrotype=PreprocessingInfo::CpreprocessorIfndefDeclaration; HANDLEMACROSTART }
-<NORMAL>{lineprefix}"elif"      { macrotype=PreprocessingInfo::CpreprocessorElifDeclaration; HANDLEMACROSTART }
-<NORMAL>{lineprefix}"else"      { macrotype=PreprocessingInfo::CpreprocessorElseDeclaration; HANDLEMACROSTART }
-<NORMAL>{lineprefix}"endif"     { macrotype=PreprocessingInfo::CpreprocessorEndifDeclaration; HANDLEMACROSTART }
-<NORMAL>{lineprefix}"warning"   { macrotype=PreprocessingInfo::CpreprocessorWarningDeclaration; HANDLEMACROSTART }
+<NORMAL>{lineprefix}{includekeyword}   { macrotype=PreprocessingInfo::CpreprocessorIncludeDeclaration; HANDLEMACROSTART }
+<NORMAL>{lineprefix}{definekeyword}    { macrotype=PreprocessingInfo::CpreprocessorDefineDeclaration; HANDLEMACROSTART }
+<NORMAL>{lineprefix}{undefkeyword}     { macrotype=PreprocessingInfo::CpreprocessorUndefDeclaration; HANDLEMACROSTART }
+<NORMAL>{lineprefix}{linekeyword}      { macrotype=PreprocessingInfo::CpreprocessorLineDeclaration; HANDLEMACROSTART }
+<NORMAL>{lineprefix}{errorkeyword}     { macrotype=PreprocessingInfo::CpreprocessorErrorDeclaration; HANDLEMACROSTART }
+<NORMAL>{lineprefix}{ifkeyword}        { macrotype=PreprocessingInfo::CpreprocessorIfDeclaration; HANDLEMACROSTART }
+<NORMAL>{lineprefix}{ifdefkeyword}     { macrotype=PreprocessingInfo::CpreprocessorIfdefDeclaration; HANDLEMACROSTART }
+<NORMAL>{lineprefix}{ifndefkeyword}    { macrotype=PreprocessingInfo::CpreprocessorIfndefDeclaration; HANDLEMACROSTART }
+<NORMAL>{lineprefix}{elifkeyword}      { macrotype=PreprocessingInfo::CpreprocessorElifDeclaration; HANDLEMACROSTART }
+<NORMAL>{lineprefix}{elsekeyword}      { macrotype=PreprocessingInfo::CpreprocessorElseDeclaration; HANDLEMACROSTART }
+<NORMAL>{lineprefix}{endifkeyword}     { macrotype=PreprocessingInfo::CpreprocessorEndifDeclaration; HANDLEMACROSTART }
+<NORMAL>{lineprefix}{warningkeyword}   { macrotype=PreprocessingInfo::CpreprocessorWarningDeclaration; HANDLEMACROSTART }
 
    /* DQ (9/30/2013): Added support to recognize #pragma as a token */
-<NORMAL>{lineprefix}"pragma"    {
-     add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_PRAGMA);
+<NORMAL>{lineprefix}{pragmakeyword}    {
+     std::string pragma_spelling = yytext;
+     int pragma_column = preproc_column_num;
+     add_token(pragma_spelling,preproc_line_num,pragma_column,C_CXX_PRAGMA);
+     ADVANCEPHYSICALMATCH(pragma_spelling);
    }
 
         /*Add code here to attach the whitespace before newlines (and general lineprefix code) */
@@ -1600,26 +1552,6 @@ BEGIN NORMAL;
                             }
 %%
 
-const int maxstacksize=500;
-int bracestack[maxstacksize];
-
-int top=0;
-void pushbracestack(int brace_no) { bracestack[top++]=brace_no; }
-int topcurlybracestack() { if(top) return bracestack[top-1]; else return -1; }
-int popbracestack() { return bracestack[--top]; }
-bool isemptystack() { return top==0; }
-
-int num_of_newlines(char* s)
-   {
-     int num = 0;
-     while(*s != '\0')
-        {
-          if(*s == '\n')
-               num++;
-          s++;
-        }
-     return num;
-   }
 
 
 // DQ (1/4/2021): Adding support for comments and CPP directives and tokens to use new_filename.

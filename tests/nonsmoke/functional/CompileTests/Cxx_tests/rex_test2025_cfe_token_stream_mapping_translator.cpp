@@ -10,6 +10,8 @@
 
 #include <algorithm>
 
+#include <cstdlib>
+
 #include <map>
 
 #include <set>
@@ -28,6 +30,13 @@ const char kMacroIncludeFile[] =
     "rex_test2025_cfe_token_stream_mapping_macros_includes.cpp";
 const char kMacroTransformFile[] =
     "rex_test2025_cfe_token_stream_mapping_macro_transform.cpp";
+const char kMacroEndedDeclarationFile[] =
+    "rex_token_mapping_macro_ended_declaration.cpp";
+const char kMacroDeclarationFragmentsFile[] =
+    "rex_token_mapping_macro_declaration_fragments.cpp";
+const char kFunctionPrototypeBoundaryFile[] =
+    "rex_token_mapping_function_prototype_boundaries.cpp";
+const char kMacroSpliceFile[] = "rex_frontend_macro_splice_contract.cpp";
 const char kPreprocFile[] =
     "rex_test2025_cfe_token_stream_mapping_preproc_order.cpp";
 const char kHeaderFile[] = "rex_test2025_cfe_token_stream_mapping_header.h";
@@ -87,40 +96,35 @@ TokenStreamSequenceToNodeMapping *requireMapping(
   return it->second;
 }
 
-void checkOptionalRange(int start, int end, int tokenLimit) {
-  if (start == -1 && end == -1) {
-    return;
-  }
-  ROSE_ASSERT(start >= 0);
-  ROSE_ASSERT(end >= 0);
-  ROSE_ASSERT(start <= end);
-  ROSE_ASSERT(end < tokenLimit);
+void checkRange(const TokenStreamHalfOpenInterval &interval, int tokenLimit) {
+  ROSE_ASSERT(interval.begin >= 0);
+  ROSE_ASSERT(interval.end >= interval.begin);
+  ROSE_ASSERT(interval.end <= tokenLimit);
 }
 
 void checkMappingBounds(const TokenStreamSequenceToNodeMapping *mapping,
                         int tokenLimit) {
   ROSE_ASSERT(mapping != NULL);
-  ROSE_ASSERT(mapping->token_subsequence_start >= 0);
-  ROSE_ASSERT(mapping->token_subsequence_end >=
-              mapping->token_subsequence_start);
-  ROSE_ASSERT(mapping->token_subsequence_end < tokenLimit);
-
-  checkOptionalRange(mapping->leading_whitespace_start,
-                     mapping->leading_whitespace_end, tokenLimit);
-  checkOptionalRange(mapping->trailing_whitespace_start,
-                     mapping->trailing_whitespace_end, tokenLimit);
-  checkOptionalRange(mapping->else_whitespace_start,
-                     mapping->else_whitespace_end, tokenLimit);
-
-  if (mapping->leading_whitespace_start >= 0 &&
-      mapping->leading_whitespace_end >= 0) {
-    ROSE_ASSERT(mapping->leading_whitespace_end <=
-                mapping->token_subsequence_start);
-  }
-  if (mapping->trailing_whitespace_start >= 0 &&
-      mapping->trailing_whitespace_end >= 0) {
-    ROSE_ASSERT(mapping->trailing_whitespace_start >=
-                mapping->token_subsequence_end);
+  const TokenStreamHalfOpenInterval &leading =
+      mapping->halfOpenInterval(TokenStreamIntervalKind::leading_whitespace);
+  const TokenStreamHalfOpenInterval &core =
+      mapping->halfOpenInterval(TokenStreamIntervalKind::token_subsequence);
+  const TokenStreamHalfOpenInterval &trailing =
+      mapping->halfOpenInterval(TokenStreamIntervalKind::trailing_whitespace);
+  const TokenStreamHalfOpenInterval &else_interval =
+      mapping->halfOpenInterval(TokenStreamIntervalKind::else_whitespace);
+  checkRange(leading, tokenLimit);
+  checkRange(core, tokenLimit);
+  checkRange(trailing, tokenLimit);
+  checkRange(else_interval, tokenLimit);
+  ROSE_ASSERT(!core.empty());
+  ROSE_ASSERT(leading.end == core.begin);
+  ROSE_ASSERT(trailing.begin == core.end);
+  if (else_interval.empty()) {
+    ROSE_ASSERT(else_interval.begin == core.end);
+  } else {
+    ROSE_ASSERT(else_interval.begin >= core.begin);
+    ROSE_ASSERT(else_interval.end <= core.end);
   }
 }
 
@@ -184,34 +188,47 @@ void checkSharedIntervals(SgSourceFile *file) {
       file->get_tokenSubsequenceMap();
   ROSE_ASSERT(!tokenMap.empty());
 
-  std::map<TokenStreamSequenceToNodeMapping *, std::vector<std::string>> groups;
+  std::map<SgDeclarationGroupStatement *, std::set<std::string>> groups;
+  std::set<std::string> found;
   for (SgNode *node : NodeQuery::querySubTree(file, V_SgVariableDeclaration)) {
     SgVariableDeclaration *decl = isSgVariableDeclaration(node);
     if (decl == NULL || !isFromFile(decl, file)) {
       continue;
     }
     const SgInitializedNamePtrList &vars = decl->get_variables();
-    if (vars.empty()) {
+    ROSE_ASSERT(vars.size() == 1);
+    SgInitializedName *var = vars.front();
+    ROSE_ASSERT(var != NULL);
+    const std::string name = var->get_name().getString();
+    if (targets.count(name) == 0) {
       continue;
     }
-    std::string name = vars.front()->get_name().getString();
-    if (targets.find(name) == targets.end()) {
-      continue;
-    }
-    TokenStreamSequenceToNodeMapping *mapping = requireMapping(decl, tokenMap);
-    groups[mapping].push_back(name);
+    ROSE_ASSERT(found.insert(name).second);
+    SgDeclarationGroupStatement *group =
+        isSgDeclarationGroupStatement(decl->get_parent());
+    ROSE_ASSERT(group != NULL);
+    groups[group].insert(name);
+    ROSE_ASSERT(tokenMap.find(decl) == tokenMap.end());
   }
 
+  ROSE_ASSERT(found == targets);
   ROSE_ASSERT(groups.size() == 2);
-  for (std::map<TokenStreamSequenceToNodeMapping *,
-                std::vector<std::string>>::const_iterator it = groups.begin();
-       it != groups.end(); ++it) {
-    TokenStreamSequenceToNodeMapping *mapping = it->first;
-    ROSE_ASSERT(mapping != NULL);
-    ROSE_ASSERT(mapping->shared);
-    ROSE_ASSERT(mapping->nodeVector.size() == it->second.size());
-    ROSE_ASSERT(it->second.size() >= 2);
+  const std::set<std::string> first_group{"a", "b", "c"};
+  const std::set<std::string> second_group{"p", "q"};
+  bool saw_first_group = false;
+  bool saw_second_group = false;
+  for (const auto &entry : groups) {
+    ROSE_ASSERT(entry.first != NULL);
+    TokenStreamSequenceToNodeMapping *mapping =
+        requireMapping(entry.first, tokenMap);
+    ROSE_ASSERT(mapping->node == entry.first);
+    ROSE_ASSERT(mapping->nodeVector.size() == 1);
+    ROSE_ASSERT(mapping->nodeVector.front() == entry.first);
+    ROSE_ASSERT(entry.first->get_declarations().size() == entry.second.size());
+    saw_first_group = saw_first_group || entry.second == first_group;
+    saw_second_group = saw_second_group || entry.second == second_group;
   }
+  ROSE_ASSERT(saw_first_group && saw_second_group);
 }
 
 void checkElseWhitespace(SgSourceFile *file) {
@@ -240,15 +257,18 @@ void checkElseWhitespace(SgSourceFile *file) {
     TokenStreamSequenceToNodeMapping *falseMapping =
         requireMapping(falseBody, tokenMap);
 
-    ROSE_ASSERT(ifMapping->else_whitespace_start >= 0);
-    ROSE_ASSERT(ifMapping->else_whitespace_end >= 0);
-    ROSE_ASSERT(ifMapping->else_whitespace_start <=
-                ifMapping->else_whitespace_end);
-    ROSE_ASSERT(ifMapping->else_whitespace_end < tokenLimit);
-    ROSE_ASSERT(ifMapping->else_whitespace_start >=
-                trueMapping->token_subsequence_end + 1);
-    ROSE_ASSERT(ifMapping->else_whitespace_end <
-                falseMapping->token_subsequence_start);
+    const TokenStreamHalfOpenInterval &else_interval =
+        ifMapping->halfOpenInterval(TokenStreamIntervalKind::else_whitespace);
+    const TokenStreamHalfOpenInterval &true_core =
+        trueMapping->halfOpenInterval(
+            TokenStreamIntervalKind::token_subsequence);
+    const TokenStreamHalfOpenInterval &false_core =
+        falseMapping->halfOpenInterval(
+            TokenStreamIntervalKind::token_subsequence);
+    checkRange(else_interval, tokenLimit);
+    ROSE_ASSERT(!else_interval.empty());
+    ROSE_ASSERT(else_interval.begin >= true_core.end);
+    ROSE_ASSERT(else_interval.end <= false_core.begin);
     checked = true;
   }
 
@@ -324,9 +344,24 @@ void checkMacroTransform(SgSourceFile *file) {
   ROSE_ASSERT(targetMacro != NULL);
   ROSE_ASSERT(targetStatement != NULL);
 
+  std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap =
+      file->get_tokenSubsequenceMap();
+  TokenStreamSequenceToNodeMapping *targetMapping =
+      requireMapping(targetStatement, tokenMap);
+  const TokenStreamHalfOpenInterval &targetCore =
+      targetMapping->halfOpenInterval(
+          TokenStreamIntervalKind::token_subsequence);
+  ROSE_ASSERT(targetMacro->token_interval.begin == targetCore.begin);
+  ROSE_ASSERT(targetMacro->token_interval.end == targetCore.end);
+
   SgExprStatement *exprStmt = isSgExprStatement(targetStatement);
   ROSE_ASSERT(exprStmt != NULL);
-  SgAssignOp *assign = isSgAssignOp(exprStmt->get_expression());
+  SgMacroExpansionExp *macroExpression =
+      isSgMacroExpansionExp(exprStmt->get_expression());
+  ROSE_ASSERT(macroExpression != NULL &&
+              macroExpression->get_parent() == exprStmt);
+  SgAssignOp *assign =
+      isSgAssignOp(macroExpression->get_expanded_expression_checked());
   ROSE_ASSERT(assign != NULL);
 
   SgExpression *rhs = assign->get_rhs_operand();
@@ -336,11 +371,211 @@ void checkMacroTransform(SgSourceFile *file) {
   replacement->setOutputInCodeGeneration();
   SageInterface::replaceExpression(rhs, replacement);
 
-  detectMacroExpansionsToBeUnparsedAsAstTransformations(file);
+  const bool statementWasTransformation = targetStatement->isTransformation();
+  const bool statementWasOutput = targetStatement->isOutputInCodeGeneration();
+  const bool macroWasTransformed = targetMacro->isTransformed;
+  TokenUnparseFrontierFileContext frontierContext;
+  detectMacroExpansionsToBeUnparsedAsAstTransformations(file, frontierContext);
 
-  ROSE_ASSERT(targetStatement->isTransformation());
-  ROSE_ASSERT(targetStatement->isOutputInCodeGeneration());
-  ROSE_ASSERT(targetMacro->isTransformed);
+  ROSE_ASSERT(frontierContext.isStatementMarkedForAstUnparse(targetStatement));
+  ROSE_ASSERT(targetStatement->isTransformation() ==
+              statementWasTransformation);
+  ROSE_ASSERT(targetStatement->isOutputInCodeGeneration() ==
+              statementWasOutput);
+  ROSE_ASSERT(targetMacro->isTransformed == macroWasTransformed);
+}
+
+void corruptMacroStatementPhysicalFileIdentity(SgSourceFile *file) {
+  ROSE_ASSERT(file != NULL);
+  for (const auto &entry : file->get_macroExpansionMap()) {
+    if (entry.first != NULL && entry.second != NULL &&
+        entry.second->macro_name == kMacroName) {
+      Sg_File_Info *statementInfo = entry.first->get_file_info();
+      ROSE_ASSERT(statementInfo != NULL);
+      statementInfo->set_physical_file_id(-1);
+      return;
+    }
+  }
+  ROSE_ABORT();
+}
+
+void corruptMacroSourcePhysicalFileIdentity(SgSourceFile *file) {
+  ROSE_ASSERT(file != NULL);
+  Sg_File_Info *sourceInfo = file->get_file_info();
+  ROSE_ASSERT(sourceInfo != NULL);
+  sourceInfo->set_physical_file_id(-1);
+}
+
+void checkMacroEndedDeclaration(SgSourceFile *file) {
+  SgVariableDeclaration *macroEndedDeclaration = NULL;
+  SgVariableDeclaration *regularDeclaration = NULL;
+  for (SgNode *node : NodeQuery::querySubTree(file, V_SgVariableDeclaration)) {
+    SgVariableDeclaration *declaration = isSgVariableDeclaration(node);
+    if (declaration == NULL || !isFromFile(declaration, file)) {
+      continue;
+    }
+    const SgInitializedNamePtrList &variables = declaration->get_variables();
+    ROSE_ASSERT(variables.size() == 1);
+    SgInitializedName *variable = variables.front();
+    ROSE_ASSERT(variable != NULL);
+    if (variable->get_name() == "rex_macro_ended") {
+      macroEndedDeclaration = declaration;
+    } else if (variable->get_name() == "rex_regular") {
+      regularDeclaration = declaration;
+    }
+  }
+
+  ROSE_ASSERT(macroEndedDeclaration != NULL);
+  ROSE_ASSERT(regularDeclaration != NULL);
+  ROSE_ASSERT(
+      macroEndedDeclaration->get_source_range_ends_in_macro_expansion());
+  ROSE_ASSERT(
+      !macroEndedDeclaration->get_source_range_is_macro_expansion_fragment());
+  ROSE_ASSERT(!regularDeclaration->get_source_range_ends_in_macro_expansion());
+
+  TokenStreamSequenceToNodeMapping *mapping =
+      requireMapping(macroEndedDeclaration, file->get_tokenSubsequenceMap());
+  ROSE_ASSERT(
+      !mapping->halfOpenInterval(TokenStreamIntervalKind::token_subsequence)
+           .empty());
+}
+
+void checkMacroDeclarationFragments(SgSourceFile *file) {
+  const std::set<std::string> macroDeclarations{
+      "rex_global_first", "rex_global_second", "rex_local_first",
+      "rex_local_second"};
+  std::set<std::string> foundMacroDeclarations;
+  SgVariableDeclaration *regularDeclaration = NULL;
+  std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap =
+      file->get_tokenSubsequenceMap();
+
+  for (SgNode *node : NodeQuery::querySubTree(file, V_SgVariableDeclaration)) {
+    SgVariableDeclaration *declaration = isSgVariableDeclaration(node);
+    if (declaration == NULL || !isFromFile(declaration, file)) {
+      continue;
+    }
+    const SgInitializedNamePtrList &variables = declaration->get_variables();
+    ROSE_ASSERT(variables.size() == 1);
+    SgInitializedName *variable = variables.front();
+    ROSE_ASSERT(variable != NULL);
+    const std::string name = variable->get_name().getString();
+    if (macroDeclarations.count(name) != 0) {
+      ROSE_ASSERT(foundMacroDeclarations.insert(name).second);
+      ROSE_ASSERT(declaration->get_source_range_is_macro_expansion_fragment());
+      ROSE_ASSERT(tokenMap.count(declaration) == 0);
+    } else if (name == "rex_regular") {
+      ROSE_ASSERT(regularDeclaration == NULL);
+      regularDeclaration = declaration;
+    }
+  }
+
+  ROSE_ASSERT(foundMacroDeclarations == macroDeclarations);
+  ROSE_ASSERT(regularDeclaration != NULL);
+  ROSE_ASSERT(
+      !regularDeclaration->get_source_range_is_macro_expansion_fragment());
+  checkMappingBounds(requireMapping(regularDeclaration, tokenMap),
+                     static_cast<int>(file->get_token_list().size()));
+}
+
+void checkFunctionPrototypeBoundaries(SgSourceFile *file) {
+  const std::map<std::string, std::string> expectedFirstTokens{
+      {"rex_global_prototype", "int"},
+      {"rex_namespace_prototype", "long"},
+      {"rex_class_prototype", "static"},
+      {"rex_local_prototype", "void"}};
+  std::set<std::string> found;
+  const SgTokenPtrList &tokens = file->get_token_list();
+  std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap =
+      file->get_tokenSubsequenceMap();
+
+  for (const auto &entry : tokenMap) {
+    SgFunctionDeclaration *function = isSgFunctionDeclaration(entry.first);
+    if (function == NULL || function->get_definition() != NULL) {
+      continue;
+    }
+    const std::string name = function->get_name().getString();
+    const auto expected = expectedFirstTokens.find(name);
+    if (expected == expectedFirstTokens.end()) {
+      continue;
+    }
+    ROSE_ASSERT(found.insert(name).second);
+    TokenStreamSequenceToNodeMapping *mapping = entry.second;
+    ROSE_ASSERT(mapping != NULL);
+    const TokenStreamHalfOpenInterval &core =
+        mapping->halfOpenInterval(TokenStreamIntervalKind::token_subsequence);
+    ROSE_ASSERT(core.begin >= 0);
+    ROSE_ASSERT(core.end > core.begin);
+    ROSE_ASSERT(static_cast<size_t>(core.end) <= tokens.size());
+    SgToken *first = tokens[core.begin];
+    SgToken *last = tokens[core.end - 1];
+    ROSE_ASSERT(first != NULL && last != NULL);
+    ROSE_ASSERT(first->get_lexeme_string() == expected->second);
+    ROSE_ASSERT(last->get_lexeme_string() == ";");
+
+    Sg_File_Info *sourceStart = function->get_startOfConstruct();
+    Sg_File_Info *sourceEnd = function->get_endOfConstruct();
+    Sg_File_Info *tokenStart = first->get_startOfConstruct();
+    Sg_File_Info *tokenEnd = last->get_endOfConstruct();
+    ROSE_ASSERT(sourceStart != NULL && sourceEnd != NULL);
+    ROSE_ASSERT(tokenStart != NULL && tokenEnd != NULL);
+    ROSE_ASSERT(sourceStart->isSameFile(tokenStart));
+    ROSE_ASSERT(sourceEnd->isSameFile(tokenEnd));
+    ROSE_ASSERT(sourceStart->get_physical_line() ==
+                tokenStart->get_physical_line());
+    ROSE_ASSERT(sourceStart->get_col() == tokenStart->get_col());
+    ROSE_ASSERT(sourceEnd->get_physical_line() ==
+                tokenEnd->get_physical_line());
+    ROSE_ASSERT(sourceEnd->get_col() == tokenEnd->get_col());
+
+    if (name == "rex_global_prototype") {
+      ROSE_ASSERT(isSgGlobal(function->get_parent()) != NULL);
+    } else if (name == "rex_namespace_prototype") {
+      ROSE_ASSERT(isSgNamespaceDefinitionStatement(function->get_parent()) !=
+                  NULL);
+    } else if (name == "rex_class_prototype") {
+      ROSE_ASSERT(isSgClassDefinition(function->get_parent()) != NULL);
+    } else {
+      ROSE_ASSERT(name == "rex_local_prototype");
+      ROSE_ASSERT(isSgBasicBlock(function->get_parent()) != NULL);
+    }
+  }
+
+  ROSE_ASSERT(found.size() == expectedFirstTokens.size());
+}
+
+void checkMacroSpliceDirectives(SgSourceFile *file) {
+  const std::set<std::string> expected{"REX_COMMENT_PREFIX", "REX_HASH_SPLICE",
+                                       "REX_LEADING_COMMENT",
+                                       "REX_SEPARATOR_SPLICE", "REX_SPLICED"};
+  std::set<std::string> actual;
+  std::set<PreprocessingInfo *> visited;
+  bool sawRawLineSplice = false;
+
+  const std::vector<SgNode *> locatedNodes =
+      NodeQuery::querySubTree(file, V_SgLocatedNode);
+  for (SgNode *node : locatedNodes) {
+    SgLocatedNode *located = isSgLocatedNode(node);
+    ROSE_ASSERT(located != NULL);
+    AttachedPreprocessingInfoType *attached =
+        located->getAttachedPreprocessingInfo();
+    if (attached == NULL) {
+      continue;
+    }
+    for (PreprocessingInfo *entry : *attached) {
+      ROSE_ASSERT(entry != NULL);
+      if (!visited.insert(entry).second ||
+          entry->getTypeOfDirective() !=
+              PreprocessingInfo::CpreprocessorDefineDeclaration) {
+        continue;
+      }
+      actual.insert(entry->getMacroName());
+      sawRawLineSplice = sawRawLineSplice ||
+                         entry->getString().find("\\\n") != std::string::npos;
+    }
+  }
+
+  ROSE_ASSERT(actual == expected);
+  ROSE_ASSERT(sawRawLineSplice);
 }
 
 void checkPreprocOrdering(SgSourceFile *file) {
@@ -421,6 +656,25 @@ int main(int argc, char **argv) {
   SgSourceFile *sourceFile = findMainSourceFile(project);
   ROSE_ASSERT(sourceFile != NULL);
 
+  const char *corruption = std::getenv("REX_TEST_TOKEN_MAPPING_CORRUPTION");
+  if (corruption != nullptr &&
+      std::string(corruption) == "duplicate-macro-publication") {
+    detectMacroOrIncludeFileExpansions(sourceFile);
+    ROSE_ABORT();
+  }
+  if (corruption != nullptr &&
+      std::string(corruption) == "invalid-macro-physical-file") {
+    corruptMacroStatementPhysicalFileIdentity(sourceFile);
+    checkMacroTransform(sourceFile);
+    ROSE_ABORT();
+  }
+  if (corruption != nullptr &&
+      std::string(corruption) == "invalid-macro-source-physical-file") {
+    corruptMacroSourcePhysicalFileIdentity(sourceFile);
+    checkMacroTransform(sourceFile);
+    ROSE_ABORT();
+  }
+
   std::string base = baseName(sourceFile->getFileName());
   if (base == kBasicFile) {
     checkBasicMapping(sourceFile);
@@ -432,6 +686,14 @@ int main(int argc, char **argv) {
     checkMacroIncludes(project, sourceFile);
   } else if (base == kMacroTransformFile) {
     checkMacroTransform(sourceFile);
+  } else if (base == kMacroEndedDeclarationFile) {
+    checkMacroEndedDeclaration(sourceFile);
+  } else if (base == kMacroDeclarationFragmentsFile) {
+    checkMacroDeclarationFragments(sourceFile);
+  } else if (base == kFunctionPrototypeBoundaryFile) {
+    checkFunctionPrototypeBoundaries(sourceFile);
+  } else if (base == kMacroSpliceFile) {
+    checkMacroSpliceDirectives(sourceFile);
   } else if (base == kPreprocFile) {
     checkPreprocOrdering(sourceFile);
   } else {

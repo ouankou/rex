@@ -23,6 +23,11 @@ main (int argc, char *argv[])
         {
           SgFunctionDeclaration* functionDelcaration = isSgFunctionDeclaration(*i);
           SgName functionName = functionDelcaration->get_name();
+          if (isSgAuxiliaryDeclarationList(functionDelcaration->get_parent()) !=
+              NULL) {
+            i++;
+            continue;
+          }
 
           if (functionName == "InsertStatementBeforeThisFunction")
              {
@@ -31,9 +36,11 @@ main (int argc, char *argv[])
                SgExpression* varRefExp = buildVarRefExp(variableSymbol);
                SgAssignInitializer* initializer = new SgAssignInitializer(varRefExp,buildIntType());
 
-               SgVariableDeclaration *varDecl = buildVariableDeclaration(functionName+"_var",buildIntType(),initializer);
+               SgVariableDeclaration *varDecl = buildVariableDeclaration(
+                   functionName + "_var", buildIntType(), initializer,
+                   globalScope);
 
-            // Insert this variable declaration before this function
+               // Insert this variable declaration before this function
                bool insertBeforeNode = true;
                SageInterface::insertStatement(functionDelcaration, varDecl, insertBeforeNode);
              }
@@ -45,9 +52,11 @@ main (int argc, char *argv[])
                SgExpression* functionRefExp     = buildFunctionCallExp(functionSymbol);
                SgAssignInitializer* initializer = new SgAssignInitializer(functionRefExp,buildIntType());
 
-               SgVariableDeclaration *varDecl = buildVariableDeclaration(functionName+"_var",buildIntType(),initializer);
+               SgVariableDeclaration *varDecl = buildVariableDeclaration(
+                   functionName + "_var", buildIntType(), initializer,
+                   globalScope);
 
-            // Insert this variable declaration after this function
+               // Insert this variable declaration after this function
                bool insertBeforeNode = false;
                SageInterface::insertStatement(functionDelcaration, varDecl, insertBeforeNode);
              }

@@ -196,20 +196,95 @@ void AstPDFGeneration_private::edit_page(size_t pageNumber, SgNode *node,
     else
       HPDF_Page_ShowTextNextLine(currentPage, "IsOutputInCodeGeneration:0");
   }
-  if (isSgDeclarationStatement(node)) {
-    HPDF_Page_ShowTextNextLine(
-        currentPage,
-        ("Declaration mangled name: " +
-         isSgDeclarationStatement(node)->get_mangled_name().getString())
-            .c_str());
+  if (SgDeclarationStatement *declaration = isSgDeclarationStatement(node);
+      declaration != nullptr && declaration->has_semantic_mangled_name()) {
+    HPDF_Page_ShowTextNextLine(currentPage,
+                               ("Declaration mangled name: " +
+                                declaration->get_mangled_name().getString())
+                                   .c_str());
   }
 
-  // JW hack to show expression types
-  if (isSgExpression(node))
+  // Expression types can contain context-dependent template arguments. Supply
+  // the exact statement use-site instead of asking a shared type node to infer
+  // a lexical context it does not own.
+  if (SgExpression *expression = isSgExpression(node);
+      expression != nullptr && expression->has_semantic_value_type()) {
+    if (isSgTypeUnknown(expression->get_type()) != nullptr) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[pdf-expression-type]: expression=%p type=%s "
+              "parent=%p parent-type=%s file=%s line=%d owns SgTypeUnknown\n",
+              static_cast<void *>(expression), expression->class_name().c_str(),
+              static_cast<void *>(expression->get_parent()),
+              expression->get_parent() != nullptr
+                  ? expression->get_parent()->class_name().c_str()
+                  : "<null>",
+              expression->get_file_info() != nullptr
+                  ? expression->get_file_info()->get_filenameString().c_str()
+                  : "<unknown>",
+              expression->get_file_info() != nullptr
+                  ? expression->get_file_info()->get_line()
+                  : 0);
+      ROSE_ABORT();
+    }
+    SgStatement *use_site = SageInterface::getEnclosingStatement(expression);
+    Sg_File_Info *use_primary =
+        use_site != nullptr ? use_site->get_file_info() : nullptr;
+    Sg_File_Info *use_start =
+        use_site != nullptr ? use_site->get_startOfConstruct() : nullptr;
+    Sg_File_Info *use_end =
+        use_site != nullptr ? use_site->get_endOfConstruct() : nullptr;
+    SgSourceFile *source_file =
+        use_site != nullptr ? SageInterface::getEnclosingSourceFile(use_site)
+                            : nullptr;
+    SgScopeStatement *scope =
+        use_site != nullptr ? SageInterface::getScope(use_site) : nullptr;
+    if (use_site == nullptr || use_primary == nullptr || use_start == nullptr ||
+        use_end == nullptr || source_file == nullptr || scope == nullptr) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[pdf-expression-type]: expression=%p type=%s "
+              "has no exact statement provenance, source file, or semantic "
+              "scope\n",
+              static_cast<void *>(expression),
+              expression->class_name().c_str());
+      ROSE_ABORT();
+    }
+    const bool primary_output = use_primary->isOutputInCodeGeneration();
+    const bool start_output = use_start->isOutputInCodeGeneration();
+    const bool end_output = use_end->isOutputInCodeGeneration();
+    if (primary_output != start_output || start_output != end_output) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[pdf-expression-type]: statement=%p type=%s "
+              "has inconsistent primary/start/end output role=%d/%d/%d\n",
+              static_cast<void *>(use_site), use_site->class_name().c_str(),
+              primary_output ? 1 : 0, start_output ? 1 : 0, end_output ? 1 : 0);
+      ROSE_ABORT();
+    }
+    SgDeclarationStatement *use_declaration =
+        isSgDeclarationStatement(use_site);
+    const bool semantic_auxiliary =
+        use_declaration != nullptr &&
+        isSgAuxiliaryDeclarationList(use_declaration->get_parent()) != nullptr;
+    const bool semantic_nonreal =
+        isSgNonrealDecl(use_declaration) != nullptr &&
+        isSgDeclarationScope(use_declaration->get_parent()) != nullptr;
+    if (semantic_auxiliary) {
+      isSgAuxiliaryDeclarationList(use_declaration->get_parent())
+          ->validate_semantic_non_output_role();
+    }
+    // An expression's value type is semantic identity, not a source type-use.
+    // In particular, implicit casts have no lexical TypeLoc and therefore no
+    // valid name-qualification record.  Diagnostic renderers must report the
+    // typed IR directly instead of asking the source unparser to invent a type
+    // spelling at the enclosing statement.
+    const char *role =
+        primary_output && !semantic_auxiliary && !semantic_nonreal
+            ? "source-owned expression"
+            : "non-output expression";
     HPDF_Page_ShowTextNextLine(
-        currentPage, ("Expression type: " +
-                      isSgExpression(node)->get_type()->unparseToString())
+        currentPage, ("Expression semantic type: " +
+                      expression->get_type()->class_name() + " (" + role + ")")
                          .c_str());
+  }
 
   HPDF_Page_SetRGBFill(currentPage, 0, 1, 0);
 

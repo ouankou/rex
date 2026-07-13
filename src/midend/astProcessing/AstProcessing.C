@@ -21,32 +21,75 @@ bool SgTreeTraversal_inFileToTraverse(SgNode *node, bool traversalConstraint,
     return true;
   }
 
-  // DQ (1/21/2008): Some nodes do not have a SgFileInfo object.
-  // Of all the nodes to be traversed, only SgProject is allowed to have
-  // a NULL file info; go ahead and try to traverse it (even though this
-  // does not make sense since it is not within any file).
-  if (node->get_file_info() == NULL) {
-    // if (isSgProject(node) == NULL)
-    //      printf ("What node is this: node = %p = %s
-    //      \n",node,node->class_name().c_str()); //
-    //      SageInterface::get_name(node).c_str());
-    // ROSE_ASSERT(isSgProject(node) != NULL);
-
-    // if (isSgProject(node) == NULL && isSgAsmNode(node) == NULL)
-    if (isSgProject(node) == NULL) {
-      printf("Error: SgTreeTraversal_inFileToTraverse() --- "
-             "node->get_file_info() == NULL: node = %p = %s \n",
-             node, node->class_name().c_str());
-      SageInterface::dumpInfo(node);
+  // Non-located semantic nodes (for example SgTemplateParameter) inherit file
+  // membership only through their exact structural owner.  Never guess a file
+  // or continue after printing a diagnostic: validate every parent/traversal
+  // edge until a located owner publishes the physical identity.
+  SgNode *ownershipNode = node;
+  std::set<SgNode *> ownershipPath;
+  while (ownershipNode->get_file_info() == NULL) {
+    if (!ownershipPath.insert(ownershipNode).second) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[traversal-physical-owner]: node=%p type=%s "
+              "has a cycle in its structural ownership path\n",
+              static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
+    }
+    if (isSgProject(ownershipNode) != NULL) {
+      if (ownershipNode != node) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[traversal-physical-owner]: node=%p "
+                "type=%s reaches the project without one located owner\n",
+                static_cast<void *>(node), node->class_name().c_str());
+        ROSE_ABORT();
+      }
+      return true;
     }
 
-    return true;
+    SgNode *parent = ownershipNode->get_parent();
+    if (parent == NULL) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[traversal-physical-owner]: node=%p type=%s "
+              "has no located structural owner\n",
+              static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
+    }
+    const SgNodePtrList successors = parent->get_traversalSuccessorContainer();
+    const size_t traversalEdgeCount =
+        std::count(successors.begin(), successors.end(), ownershipNode);
+    if (traversalEdgeCount != 1) {
+      size_t writtenArgumentEdges = 0;
+      size_t deducedArgumentEdges = 0;
+      if (SgTemplateInstantiationDecl *instantiation =
+              isSgTemplateInstantiationDecl(parent)) {
+        writtenArgumentEdges =
+            std::count(instantiation->get_templateArguments().begin(),
+                       instantiation->get_templateArguments().end(),
+                       isSgTemplateArgument(ownershipNode));
+        deducedArgumentEdges =
+            std::count(instantiation->get_deducedTemplateArguments().begin(),
+                       instantiation->get_deducedTemplateArguments().end(),
+                       isSgTemplateArgument(ownershipNode));
+      }
+      fprintf(stderr,
+              "REX_AST_INVARIANT[traversal-physical-owner]: node=%p type=%s "
+              "owner=%p type=%s publishes traversal=%zu written=%zu "
+              "deduced=%zu edges instead of one\n",
+              static_cast<void *>(ownershipNode),
+              ownershipNode->class_name().c_str(), static_cast<void *>(parent),
+              parent->class_name().c_str(), traversalEdgeCount,
+              writtenArgumentEdges, deducedArgumentEdges);
+      ROSE_ABORT();
+    }
+    ownershipNode = parent;
   }
+  Sg_File_Info *ownershipInfo = ownershipNode->get_file_info();
+  ROSE_ASSERT(ownershipInfo != NULL);
 
   // Traverse compiler generated code and code generated from
   // transformations, unless it is "frontend specific" like the stuff in
   // rose_required_macros_and_functions.h.
-  bool isFrontendSpecific = node->get_file_info()->isFrontendSpecific();
+  bool isFrontendSpecific = ownershipInfo->isFrontendSpecific();
   bool isCompilerGeneratedOrPartOfTransformation;
   if (isFrontendSpecific) {
     isCompilerGeneratedOrPartOfTransformation = false;
@@ -60,15 +103,14 @@ bool SgTreeTraversal_inFileToTraverse(SgNode *node, bool traversalConstraint,
     // definition of the AST. isCompilerGeneratedOrPartOfTransformation =
     // node->get_file_info()->isCompilerGenerated() ||
     // node->get_file_info()->isTransformation();
-    bool isOutputInCodeGeneration =
-        node->get_file_info()->isOutputInCodeGeneration();
+    bool isOutputInCodeGeneration = ownershipInfo->isOutputInCodeGeneration();
     isCompilerGeneratedOrPartOfTransformation =
-        node->get_file_info()->isCompilerGenerated() ||
-        node->get_file_info()->isTransformation() || isOutputInCodeGeneration;
+        ownershipInfo->isCompilerGenerated() ||
+        ownershipInfo->isTransformation() || isOutputInCodeGeneration;
   }
 
   // Traverse this node if it is in the file we want to visit.
-  bool isRightFile = node->get_file_info()->isSameFile(fileToVisit);
+  bool isRightFile = ownershipInfo->isSameFile(fileToVisit);
 
   // This function is meant to traverse input files in the sense of not
   // visiting "header" files (a fuzzy concept). But not every #included file

@@ -5642,7 +5642,6 @@ def _explicit_name_mapping(
             "testTemplates": "functional_testTemplates",
             "testTranslatorFoldedConstants": "functional_testTranslatorFoldedConstants",
             "testTranslatorUnfoldedConstants": "functional_testTranslatorUnfoldedConstants",
-            "testKeepGoingTranslator": "functional_testKeepGoingTranslator",
             "testExampleIdentityTranslator": "functional_testExampleIdentityTranslator",
             "testReadFileTwice": "functional_testReadFileTwice",
         }

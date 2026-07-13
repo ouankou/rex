@@ -1,5 +1,4 @@
 
-
 void func() {
   {
     {
@@ -14,4 +13,3 @@ void func() {
     int i = 0;
   }
 }
-

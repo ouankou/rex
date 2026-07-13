@@ -723,6 +723,13 @@ unique id varID getVarReference( SgInitializedName *iN )
 
 // Returns the varID that corresponds to the given SgExpression
 varID SgExpr2Var(const SgExpression *expr) {
+  if (const SgMacroExpansionExp *macro = isSgMacroExpansionExp(expr)) {
+    // A macro-expansion expression owns the source spelling of an expression
+    // whose semantics are represented by its expanded child.  Dataflow
+    // identities must therefore be transparent across this syntax envelope.
+    return SgExpr2Var(macro->get_expanded_expression_checked());
+  }
+
   if (AstAttribute *attr = expr->getAttribute(kExprVarIdAttributeName)) {
     ExprVarIdAttribute *cached = dynamic_cast<ExprVarIdAttribute *>(attr);
     ROSE_ASSERT(cached != NULL);
@@ -1050,12 +1057,20 @@ SgPntrArrRefExp *arrayElt::toSgExpression_rec(
   SgTreeCopy tc;
   SgExpression *curIndexExpr = *itIndexes;
   itIndexes++;
-  if (itIndexes == indexExprs->rend())
-    return new SgPntrArrRefExp(SgDefaultFile, arrayVar.toSgExpression(),
-                               isSgExpression(curIndexExpr->copy(tc)));
-  else
-    return new SgPntrArrRefExp(SgDefaultFile, toSgExpression_rec(itIndexes),
-                               isSgExpression(curIndexExpr->copy(tc)));
+  SgExpression *base = itIndexes == indexExprs->rend()
+                           ? arrayVar.toSgExpression()
+                           : toSgExpression_rec(itIndexes);
+  SgType *element_type = SageInterface::getElementType(base->get_type());
+  if (element_type == nullptr || isSgTypeUnknown(element_type) != nullptr ||
+      isSgTypeDefault(element_type) != nullptr) {
+    std::cerr << "REX_AST_INVARIANT[binary-result-type-producer]: arrayElt "
+                 "has no exact element result type"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  return new SgPntrArrRefExp(SgDefaultFile, base,
+                             isSgExpression(curIndexExpr->copy(tc)),
+                             element_type);
 }
 
 // returns true if this variable is global and false otherwise

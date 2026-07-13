@@ -4,12 +4,33 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   echo "source this script instead of executing it: source scripts/ci-llvm-env [LLVM_VERSION]" >&2
   exit 2
 fi
+if (( $# > 1 )); then
+  echo "usage: source scripts/ci-llvm-env [LLVM_VERSION]" >&2
+  return 2
+fi
 
 llvm_version="${1:-${LLVM_VERSION:-22}}"
+if [[ "${llvm_version}" != "22" ]]; then
+  echo "ci-llvm-env: REX is pinned to LLVM/Clang major 22; requested '${llvm_version}'" >&2
+  return 2
+fi
 llvm_root="${LLVM_ROOT:-/usr/lib/llvm-${llvm_version}}"
 
+if [[ "${llvm_root}" != /* ]]; then
+  echo "ci-llvm-env: LLVM root must be absolute: ${llvm_root}" >&2
+  return 2
+fi
 if [ ! -d "${llvm_root}" ]; then
   echo "ci-llvm-env: LLVM root not found: ${llvm_root}" >&2
+  return 2
+fi
+if [[ ! -s "${llvm_root}/lib/cmake/llvm/LLVMConfig.cmake" ]] ||
+   [[ ! -s "${llvm_root}/lib/cmake/clang/ClangConfig.cmake" ]] ||
+   [[ ! -s "${llvm_root}/lib/clang/22/include/stddef.h" ]] ||
+   [[ ! -s "${llvm_root}/lib/clang/22/include/omp.h" ]] ||
+   ! grep -Eq '^[[:space:]]*set\(LLVM_VERSION_MAJOR[[:space:]]+22\)' \
+     "${llvm_root}/lib/cmake/llvm/LLVMConfig.cmake"; then
+  echo "ci-llvm-env: ${llvm_root} is not an exact LLVM 22 installation" >&2
   return 2
 fi
 
@@ -24,5 +45,9 @@ done
 export PATH="${llvm_root}/bin:${PATH}"
 export LD_LIBRARY_PATH="${llvm_root}/lib${java_server:+:${java_server}}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 export CMAKE_PREFIX_PATH="${llvm_root}${CMAKE_PREFIX_PATH:+:${CMAKE_PREFIX_PATH}}"
-export LLVM_DIR="${llvm_root}"
-export LLVM_NATIVE_TOOL_DIR="${LLVM_NATIVE_TOOL_DIR:-${llvm_root}/bin}"
+export LLVM_ROOT="${llvm_root}"
+export Clang_ROOT="${llvm_root}"
+export LLVM_DIR="${llvm_root}/lib/cmake/llvm"
+export Clang_DIR="${llvm_root}/lib/cmake/clang"
+export LLVM_NATIVE_TOOL_DIR="${llvm_root}/bin"
+export REX_WASM_OMP_INCLUDE_DIR="${llvm_root}/lib/clang/22/include"

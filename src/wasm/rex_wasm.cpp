@@ -27,8 +27,10 @@
 
 namespace {
 
-#ifndef REX_WASM_CLANG_RESOURCE_DIR
-#define REX_WASM_CLANG_RESOURCE_DIR "/rex/lib/clang/22"
+#if !defined(REX_WASM_CLANG_C_DRIVER) ||                                       \
+    !defined(REX_WASM_CLANG_CXX_DRIVER) ||                                     \
+    !defined(REX_WASM_CLANG_RESOURCE_DIR)
+#error "REX WASM requires exact virtual Clang driver and resource paths"
 #endif
 
 struct GeneratedFile {
@@ -118,19 +120,106 @@ std::string readFile(const std::filesystem::path &path) {
 void writeFile(const std::filesystem::path &path, const std::string &content) {
   std::ofstream output(path, std::ios::binary);
   output << content;
+  if (!output) {
+    std::fprintf(stderr, "REX_WASM_INVARIANT[file-write]: cannot write '%s'\n",
+                 path.c_str());
+    ROSE_ABORT();
+  }
+}
+
+void ensureVirtualClangDriver(const std::filesystem::path &path) {
+  if (!path.is_absolute()) {
+    std::fprintf(stderr,
+                 "REX_WASM_INVARIANT[clang-driver-path]: configured driver "
+                 "path is not absolute: '%s'\n",
+                 path.c_str());
+    ROSE_ABORT();
+  }
+  if (std::filesystem::is_symlink(path) ||
+      (std::filesystem::exists(path) &&
+       !std::filesystem::is_regular_file(path))) {
+    std::fprintf(stderr,
+                 "REX_WASM_INVARIANT[clang-driver-path]: configured driver "
+                 "path is not a regular file: '%s'\n",
+                 path.c_str());
+    ROSE_ABORT();
+  }
+  if (!std::filesystem::exists(path)) {
+    writeFile(path, "REX in-process Clang driver contract\n");
+  }
+
+  std::error_code error;
+  std::filesystem::permissions(path,
+                               std::filesystem::perms::owner_exec |
+                                   std::filesystem::perms::group_exec |
+                                   std::filesystem::perms::others_exec,
+                               std::filesystem::perm_options::add, error);
+  if (error) {
+    std::fprintf(stderr,
+                 "REX_WASM_INVARIANT[clang-driver-path]: cannot make '%s' "
+                 "executable: %s\n",
+                 path.c_str(), error.message().c_str());
+    ROSE_ABORT();
+  }
+}
+
+void assertVirtualClangResourceContract() {
+  const std::filesystem::path resourceDir(REX_WASM_CLANG_RESOURCE_DIR);
+  if (!resourceDir.is_absolute() || std::filesystem::is_symlink(resourceDir) ||
+      !std::filesystem::is_directory(resourceDir)) {
+    std::fprintf(stderr,
+                 "REX_WASM_INVARIANT[clang-resource-dir]: configured resource "
+                 "directory is missing: '%s'\n",
+                 resourceDir.c_str());
+    ROSE_ABORT();
+  }
+  for (const char *requiredHeader : {"stddef.h", "omp.h"}) {
+    const std::filesystem::path header =
+        resourceDir / "include" / requiredHeader;
+    if (!std::filesystem::is_regular_file(header)) {
+      std::fprintf(stderr,
+                   "REX_WASM_INVARIANT[clang-resource-dir]: required header "
+                   "is missing: '%s'\n",
+                   header.c_str());
+      ROSE_ABORT();
+    }
+  }
 }
 
 void ensureDirectoryAlias(const std::filesystem::path &target,
                           const std::filesystem::path &linkPath) {
-  if (target.empty() || linkPath.empty() || std::filesystem::exists(linkPath)) {
-    return;
+  if (target.empty() || linkPath.empty() ||
+      !std::filesystem::is_directory(target)) {
+    std::fprintf(stderr,
+                 "REX_WASM_INVARIANT[include-staging-alias]: invalid target "
+                 "or alias path ('%s', '%s')\n",
+                 target.c_str(), linkPath.c_str());
+    ROSE_ABORT();
   }
 
   std::filesystem::create_directories(linkPath.parent_path());
-  if (symlink(target.c_str(), linkPath.c_str()) != 0) {
-    std::filesystem::copy(target, linkPath,
-                          std::filesystem::copy_options::recursive |
-                              std::filesystem::copy_options::skip_existing);
+  if (!std::filesystem::exists(linkPath) &&
+      !std::filesystem::is_symlink(linkPath) &&
+      symlink(target.c_str(), linkPath.c_str()) != 0) {
+    std::fprintf(stderr,
+                 "REX_WASM_INVARIANT[include-staging-alias]: cannot create "
+                 "exact alias '%s' -> '%s': %s\n",
+                 linkPath.c_str(), target.c_str(), std::strerror(errno));
+    ROSE_ABORT();
+  }
+
+  std::error_code targetError;
+  std::error_code aliasError;
+  const std::filesystem::path canonicalTarget =
+      std::filesystem::canonical(target, targetError);
+  const std::filesystem::path canonicalAlias =
+      std::filesystem::canonical(linkPath, aliasError);
+  if (targetError || aliasError || canonicalTarget != canonicalAlias) {
+    std::fprintf(stderr,
+                 "REX_WASM_INVARIANT[include-staging-alias]: alias '%s' does "
+                 "not resolve exactly to '%s'\n",
+                 linkPath.c_str(), target.c_str());
+    ROSE_ABORT();
   }
 }
 
@@ -211,12 +300,9 @@ void ensureRuntimeRoots() {
   if (!std::filesystem::exists("/rex/bin/rex-wasm")) {
     writeFile("/rex/bin/rex-wasm", "");
   }
-  if (!std::filesystem::exists("/rex/bin/clang")) {
-    writeFile("/rex/bin/clang", "");
-  }
-  if (!std::filesystem::exists("/rex/bin/clang++")) {
-    writeFile("/rex/bin/clang++", "");
-  }
+  ensureVirtualClangDriver(REX_WASM_CLANG_C_DRIVER);
+  ensureVirtualClangDriver(REX_WASM_CLANG_CXX_DRIVER);
+  assertVirtualClangResourceContract();
 }
 
 std::vector<std::string> buildArgs(const std::string &mode,
@@ -227,7 +313,6 @@ std::vector<std::string> buildArgs(const std::string &mode,
       "wasm32-unknown-emscripten",
       std::string("-resource-dir=") + REX_WASM_CLANG_RESOURCE_DIR,
       "-rose:skipfinalCompileStep",
-      "-w",
       "-rose:verbose",
       "0",
   };

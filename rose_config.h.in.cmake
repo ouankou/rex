@@ -559,6 +559,9 @@
 /* Location (unquoted) of the LLVM OpenMP header directory. */
 #cmakedefine LLVM_OPENMP_INCLUDE_PATH "@LLVM_OPENMP_INCLUDE_PATH@"
 
+/* CUDA toolkit header directory required by Clang's CUDA runtime wrapper. */
+#cmakedefine ROSE_CLANG_CUDA_RUNTIME_INCLUDE_DIR "@ROSE_CLANG_CUDA_RUNTIME_INCLUDE_DIR@"
+
 /* Version number of package */
 //AS Don't know what to do with this
 

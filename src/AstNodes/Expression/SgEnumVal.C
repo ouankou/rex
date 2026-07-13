@@ -7,7 +7,15 @@ SgType *SgEnumVal::get_type() const {
   SgEnumDeclaration *enumDeclaration = this->get_declaration();
   ROSE_ASSERT(enumDeclaration != NULL);
 
-  return SgEnumType::createType(enumDeclaration);
+  SgType *enumType = SgEnumType::createType(enumDeclaration);
+  ROSE_ASSERT(enumType != NULL);
+  if (get_literal_type() != NULL && get_literal_type() != enumType) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[enum-literal-semantic-type]: explicit literal "
+            "type does not name its exact enum declaration\n");
+    ROSE_ABORT();
+  }
+  return get_literal_type() != NULL ? get_literal_type() : enumType;
 }
 
 // DQ (6/11/2015): Moved these six access functions, they should not be

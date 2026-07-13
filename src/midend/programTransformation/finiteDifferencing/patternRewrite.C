@@ -7,6 +7,8 @@
 
 #include <iostream>
 
+#include <type_traits>
+
 #include <vector>
 
 // DQ (8/1/2005): test use of new static function to create
@@ -21,6 +23,11 @@ void deletePattern(Pattern *pattern) {
   if (pattern != nullptr && pattern != p_wildcard) {
     delete pattern;
   }
+}
+
+bool hasTraversalChild(SgNode *parent, SgNode *child) {
+  const SgNodePtrList children = parent->get_traversalSuccessorContainer();
+  return std::find(children.begin(), children.end(), child) != children.end();
 }
 } // namespace
 
@@ -91,25 +98,28 @@ void replaceChild(SgNode *parent, SgNode *from, SgNode *to) {
   ROSE_ASSERT(from != to);
   ROSE_ASSERT(from != parent);
   ROSE_ASSERT(to != parent);
-  if (parent->get_childIndex(from) == Rose::INVALID_INDEX) {
+  ROSE_ASSERT(from->get_parent() == parent);
+  if (!hasTraversalChild(parent, from)) {
     cerr << "From not found: from is a " << from->class_name()
          << " and parent is a " << parent->class_name() << endl;
     ROSE_ABORT();
   }
-  ROSE_ASSERT(parent->get_childIndex(to) == Rose::INVALID_INDEX);
+  ROSE_ASSERT(!hasTraversalChild(parent, to));
   if (isSgExpression(parent) && isSgExpression(from) && isSgExpression(to)) {
     to->set_parent(parent);
     isSgExpression(parent)->replace_expression(isSgExpression(from),
                                                isSgExpression(to));
-    ROSE_ASSERT(parent->get_childIndex(from) == Rose::INVALID_INDEX);
-    ROSE_ASSERT(parent->get_childIndex(to) != Rose::INVALID_INDEX);
+    ROSE_ASSERT(!hasTraversalChild(parent, from));
+    ROSE_ASSERT(hasTraversalChild(parent, to));
+    from->set_parent(nullptr);
     return;
   }
   if (isSgExprStatement(parent) && isSgExpression(to)) {
     to->set_parent(parent);
     isSgExprStatement(parent)->set_expression(isSgExpression(to));
-    ROSE_ASSERT(parent->get_childIndex(from) == Rose::INVALID_INDEX);
-    ROSE_ASSERT(parent->get_childIndex(to) != Rose::INVALID_INDEX);
+    ROSE_ASSERT(!hasTraversalChild(parent, from));
+    ROSE_ASSERT(hasTraversalChild(parent, to));
+    from->set_parent(nullptr);
     return;
   }
   cout << parent->sage_class_name() << " " << from->sage_class_name() << " "
@@ -137,31 +147,52 @@ PatternActionRule *patact(Pattern *pattern, Pattern *action) {
   return new PatternActionRule(pattern, action);
 }
 
-template <class Operator> class UnaryPattern : public Pattern {
-  Pattern *rhs;
+template <class Operator>
+bool hasExactPatternOperatorDomain(const Operator *op) {
+  ROSE_ASSERT(op != nullptr);
+  SgType *lhs_type = op->get_lhs_operand()->get_type();
+  SgType *rhs_type = op->get_rhs_operand()->get_type();
+  SgType *result_type = op->get_type();
+  ROSE_ASSERT(lhs_type != nullptr);
+  ROSE_ASSERT(rhs_type != nullptr);
+  ROSE_ASSERT(result_type != nullptr);
 
-public:
-  UnaryPattern(Pattern *rhs) : rhs(rhs) {}
-
-  ~UnaryPattern() { deletePattern(rhs); }
-
-  virtual bool match(SgNode *top, PatternVariables &vars) const {
-    if (dynamic_cast<Operator *>(top)) {
-      Operator *t = dynamic_cast<Operator *>(top);
-      return rhs->match(t->get_rhs_operand(), vars);
-    } else
-      return false;
+  if constexpr (std::is_same_v<Operator, SgCommaOpExp>) {
+    return result_type == rhs_type;
+  } else if constexpr (std::is_same_v<Operator, SgPlusAssignOp>) {
+    return result_type == lhs_type;
+  } else {
+    static_assert(std::is_same_v<Operator, SgAddOp> ||
+                  std::is_same_v<Operator, SgMultiplyOp>);
+    return lhs_type == rhs_type && result_type == lhs_type;
   }
+}
 
-  virtual SgNode *subst(PatternVariables &vars) const {
-    SgNode *new_rhs = rhs->subst(vars);
-    ROSE_ASSERT(isSgExpression(new_rhs));
-    SgExpression *op = new Operator(SgNULL_FILE, isSgExpression(new_rhs));
-    op->set_endOfConstruct(SgNULL_FILE);
-    new_rhs->set_parent(op);
-    return op;
+template <class Operator>
+SgType *exactPatternOperatorResultType(SgExpression *lhs, SgExpression *rhs) {
+  ROSE_ASSERT(lhs != nullptr);
+  ROSE_ASSERT(rhs != nullptr);
+  SgType *lhs_type = lhs->get_type();
+  SgType *rhs_type = rhs->get_type();
+  ROSE_ASSERT(lhs_type != nullptr);
+  ROSE_ASSERT(rhs_type != nullptr);
+
+  if constexpr (std::is_same_v<Operator, SgCommaOpExp>) {
+    return rhs_type;
+  } else if constexpr (std::is_same_v<Operator, SgPlusAssignOp>) {
+    return lhs_type;
+  } else {
+    static_assert(std::is_same_v<Operator, SgAddOp> ||
+                  std::is_same_v<Operator, SgMultiplyOp>);
+    if (lhs_type != rhs_type) {
+      std::cerr << "PATTERN_REWRITE_INVARIANT: cannot synthesize a binary "
+                   "operator from operands with different exact result types"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    return lhs_type;
   }
-};
+}
 
 template <class Operator> class BinaryPattern : public Pattern {
   Pattern *lhs;
@@ -176,8 +207,9 @@ public:
   }
 
   virtual bool match(SgNode *top, PatternVariables &vars) const {
-    if (dynamic_cast<Operator *>(top)) {
-      Operator *t = dynamic_cast<Operator *>(top);
+    if (Operator *t = dynamic_cast<Operator *>(top)) {
+      if (!hasExactPatternOperatorDomain(t))
+        return false;
       return lhs->match(t->get_lhs_operand(), vars) &&
              rhs->match(t->get_rhs_operand(), vars);
     } else
@@ -187,10 +219,17 @@ public:
   virtual SgNode *subst(PatternVariables &vars) const {
     SgNode *new_lhs = lhs->subst(vars);
     SgNode *new_rhs = rhs->subst(vars);
-    ROSE_ASSERT(isSgExpression(new_lhs));
-    ROSE_ASSERT(isSgExpression(new_rhs));
-    SgExpression *op = new Operator(SgNULL_FILE, isSgExpression(new_lhs),
-                                    isSgExpression(new_rhs));
+    SgExpression *lhs_expression = isSgExpression(new_lhs);
+    SgExpression *rhs_expression = isSgExpression(new_rhs);
+    ROSE_ASSERT(lhs_expression != nullptr);
+    ROSE_ASSERT(rhs_expression != nullptr);
+    ROSE_ASSERT(lhs_expression != rhs_expression);
+    ROSE_ASSERT(lhs_expression->get_parent() == nullptr);
+    ROSE_ASSERT(rhs_expression->get_parent() == nullptr);
+    SgType *result_type = exactPatternOperatorResultType<Operator>(
+        lhs_expression, rhs_expression);
+    SgExpression *op =
+        new Operator(SgNULL_FILE, lhs_expression, rhs_expression, result_type);
     op->set_endOfConstruct(SgNULL_FILE);
     new_lhs->set_parent(op);
     new_rhs->set_parent(op);
@@ -219,7 +258,10 @@ public:
   virtual SgNode *subst(PatternVariables &vars) const {
     SgNode *binding = vars[name];
     ROSE_ASSERT(binding);
-    return binding;
+    SgNode *copy = SageInterface::deepCopyNode(binding);
+    ROSE_ASSERT(copy != nullptr);
+    copy->set_parent(nullptr);
+    return copy;
   }
 };
 
@@ -250,6 +292,10 @@ public:
   virtual SgNode *subst(PatternVariables &) const {
     NodeClass *n = new NodeClass(SgNULL_FILE, value);
     n->set_endOfConstruct(SgNULL_FILE);
+    SgValueExp *valueExpression = isSgValueExp(n);
+    ROSE_ASSERT(valueExpression != nullptr);
+    valueExpression->set_literal_spelling_form(
+        SgValueExp::e_literal_canonical_generated);
     return n;
   }
 };
@@ -301,6 +347,7 @@ public:
     ROSE_ASSERT(av && bv);
     SgIntVal *iv = new SgIntVal(SgNULL_FILE, av->get_value() + bv->get_value());
     iv->set_endOfConstruct(SgNULL_FILE);
+    iv->set_literal_spelling_form(SgValueExp::e_literal_canonical_generated);
     return iv;
   }
 };
@@ -335,6 +382,7 @@ public:
     SgIntVal *iv =
         new SgIntVal(SgNULL_FILE, lhs->get_value() * rhs->get_value());
     iv->set_endOfConstruct(SgNULL_FILE);
+    iv->set_literal_spelling_form(SgValueExp::e_literal_canonical_generated);
     replaceChild(n->get_parent(), n, iv);
     n = iv;
     return true;

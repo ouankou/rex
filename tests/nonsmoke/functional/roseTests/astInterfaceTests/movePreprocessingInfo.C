@@ -23,23 +23,24 @@ int main(int argc, char *argv[]) {
   SgFunctionParameterList *paraList = buildFunctionParameterList();
   appendArg(paraList, arg1);
   appendArg(paraList, arg2);
+  SgStatement *oldFirstStmt = getFirstStatement(globalScope);
   // build a nondefining function declaration
   SgFunctionDeclaration *func1 = buildNondefiningFunctionDeclaration(
-      SgName("foo"), buildVoidType(), paraList);
+      function_declaration_ownership::sourceLexicalAtTop(globalScope),
+      SgName("foo"), buildVoidType(), paraList, globalScope);
 
-  SgStatement *oldFirstStmt = getFirstStatement(globalScope);
   //  cout<<"debug..."<<oldFirstStmt->unparseToString()<<endl;
-  prependStatement(func1);
-  moveUpPreprocessingInfo(func1, oldFirstStmt);
-
-  // build another nondefining function declaration
-  SgFunctionDeclaration *func2 = buildNondefiningFunctionDeclaration(
-      SgName("bar"), buildVoidType(), buildFunctionParameterList());
+  movePreprocessingInfo(oldFirstStmt, func1);
 
   oldFirstStmt = getFirstStatement(globalScope);
+  // build another nondefining function declaration
+  SgFunctionDeclaration *func2 = buildNondefiningFunctionDeclaration(
+      function_declaration_ownership::sourceLexicalAtTop(globalScope),
+      SgName("bar"), buildVoidType(), buildFunctionParameterList(),
+      globalScope);
+
   //  cout<<"debug..."<<oldFirstStmt->unparseToString()<<endl;
-  prependStatement(func2);
-  moveUpPreprocessingInfo(func2, oldFirstStmt);
+  movePreprocessingInfo(oldFirstStmt, func2);
   // pop the final scope after all AST insertion
   popScopeStack();
   AstTests::runAllTests(project);

@@ -31,7 +31,9 @@ set(_mergeast_additional_tests
 mergeTest_121.C
 )
 
-set(ROSE_FLAGS  -w  -rose:ast:merge)
+# The historical AST-merge subsystem is not part of REX.  These imported
+# specimens remain useful as ordinary frontend and AST-consistency coverage.
+set(ROSE_FLAGS -w)
 
 foreach(file_to_test ${TESTCODES})
   add_test(
@@ -43,7 +45,7 @@ endforeach()
 
 add_test(
   NAME nonsmoke_functional_CompileTests_mergeAST_tests_mergeTest_01.C
-  COMMAND testTranslator -w -rose:ast:merge
+  COMMAND testTranslator -w
     -c ${CMAKE_CURRENT_SOURCE_DIR}/mergeTest_01.C
 )
 set_tests_properties(nonsmoke_functional_CompileTests_mergeAST_tests_mergeTest_01.C PROPERTIES LABELS MERGEASTTEST DEPENDS MERGEASTTEST_mergeTest_01.C)

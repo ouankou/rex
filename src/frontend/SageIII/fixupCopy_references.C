@@ -9,12 +9,452 @@
 
 #include "rose_config.h"
 
+#include <set>
+
 // This file implementes support for the AST copy fixup.  It is specific to:
 // 1) variable reference expressions (SgVarRefExp)
 // 2) function reference expressions (SgFunctionRefExp)
 // 3) member function reference expressions (SgMemberFunctionRefExp)
+// 4) nonreal references with exact resolved function or variable-template edges
 
 namespace {
+
+void requireExactCopiedReferenceChild(const SgNode *originalOwner,
+                                      const SgNode *originalChild,
+                                      SgNode *copiedOwner, SgNode *copiedChild,
+                                      SgCopyHelp &help, const char *relation) {
+  ASSERT_not_null(originalOwner);
+  ASSERT_not_null(originalChild);
+  ASSERT_not_null(copiedOwner);
+  ASSERT_not_null(relation);
+  SgCopyHelp::copiedNodeMapTypeIterator mapping =
+      help.get_copiedNodeMap().find(const_cast<SgNode *>(originalChild));
+  SgNode *expected =
+      mapping != help.get_copiedNodeMap().end() ? mapping->second : nullptr;
+  if (expected == nullptr || expected == originalChild ||
+      expected != copiedChild || originalChild->get_parent() != originalOwner ||
+      copiedChild == nullptr || copiedChild->get_parent() != copiedOwner ||
+      copiedChild->variantT() != originalChild->variantT()) {
+    fprintf(
+        stderr,
+        "REX_COPY_INVARIANT[reference-child-map]: relation=%s "
+        "original-owner=%p/%s child=%p/%s parent=%p copy-owner=%p/%s "
+        "child=%p/%s parent=%p expected=%p\n",
+        relation, static_cast<const void *>(originalOwner),
+        originalOwner->class_name().c_str(),
+        static_cast<const void *>(originalChild),
+        originalChild->class_name().c_str(),
+        static_cast<void *>(originalChild->get_parent()),
+        static_cast<void *>(copiedOwner), copiedOwner->class_name().c_str(),
+        static_cast<void *>(copiedChild),
+        copiedChild != nullptr ? copiedChild->class_name().c_str() : "<null>",
+        static_cast<void *>(copiedChild != nullptr ? copiedChild->get_parent()
+                                                   : nullptr),
+        static_cast<void *>(expected));
+    ROSE_ABORT();
+  }
+}
+
+void fixupExactCopiedSupportReferences(const SgNode *original, SgNode *copy,
+                                       SgCopyHelp &help,
+                                       std::set<const SgNode *> &active) {
+  ASSERT_not_null(original);
+  ASSERT_not_null(copy);
+  if (!active.insert(original).second) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[support-reference-cycle]: original=%p/%s "
+            "copy=%p/%s\n",
+            static_cast<const void *>(original), original->class_name().c_str(),
+            static_cast<void *>(copy), copy->class_name().c_str());
+    ROSE_ABORT();
+  }
+
+  const Rose_STL_Container<SgNode *> originalChildren =
+      const_cast<SgNode *>(original)->get_traversalSuccessorContainer();
+  const Rose_STL_Container<SgNode *> copiedChildren =
+      copy->get_traversalSuccessorContainer();
+  if (originalChildren.size() != copiedChildren.size()) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[support-reference-arity]: original=%p/%s "
+            "children=%zu copy=%p/%s children=%zu\n",
+            static_cast<const void *>(original), original->class_name().c_str(),
+            originalChildren.size(), static_cast<void *>(copy),
+            copy->class_name().c_str(), copiedChildren.size());
+    ROSE_ABORT();
+  }
+  for (size_t index = 0; index < originalChildren.size(); ++index) {
+    SgNode *originalChild = originalChildren[index];
+    SgNode *copiedChild = copiedChildren[index];
+    if ((originalChild == nullptr) != (copiedChild == nullptr)) {
+      fprintf(
+          stderr,
+          "REX_COPY_INVARIANT[support-reference-null-child]: "
+          "owner=%p/%s copy=%p/%s index=%zu original-child=%p "
+          "copy-child=%p\n",
+          static_cast<const void *>(original), original->class_name().c_str(),
+          static_cast<void *>(copy), copy->class_name().c_str(), index,
+          static_cast<void *>(originalChild), static_cast<void *>(copiedChild));
+      ROSE_ABORT();
+    }
+    if (originalChild == nullptr) {
+      continue;
+    }
+    requireExactCopiedReferenceChild(original, originalChild, copy, copiedChild,
+                                     help, "support-reference-child");
+    if (isSgExpression(originalChild) != nullptr ||
+        isSgStatement(originalChild) != nullptr) {
+      originalChild->fixupCopy_references(copiedChild, help);
+    } else {
+      fixupExactCopiedSupportReferences(originalChild, copiedChild, help,
+                                        active);
+    }
+  }
+  active.erase(original);
+}
+
+void fixupExactCopiedSupportReferences(const SgNode *original, SgNode *copy,
+                                       SgCopyHelp &help) {
+  std::set<const SgNode *> active;
+  fixupExactCopiedSupportReferences(original, copy, help, active);
+}
+
+void fixupExactCopiedOwnedSuccessorReferences(const SgNode *original,
+                                              SgNode *copy, SgCopyHelp &help,
+                                              const char *relation) {
+  ASSERT_not_null(original);
+  ASSERT_not_null(copy);
+  ASSERT_not_null(relation);
+  SgCopyHelp::copiedNodeMapTypeIterator mapping =
+      help.get_copiedNodeMap().find(const_cast<SgNode *>(original));
+  SgNode *expected =
+      mapping != help.get_copiedNodeMap().end() ? mapping->second : nullptr;
+  if (expected == nullptr || expected == original || expected != copy ||
+      copy->variantT() != original->variantT()) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[owned-reference-root]: relation=%s "
+            "source=%p/%s copy=%p/%s expected=%p/%s\n",
+            relation, static_cast<const void *>(original),
+            original->class_name().c_str(), static_cast<void *>(copy),
+            copy->class_name().c_str(), static_cast<void *>(expected),
+            expected != nullptr ? expected->class_name().c_str() : "<null>");
+    ROSE_ABORT();
+  }
+  fixupExactCopiedSupportReferences(original, copy, help);
+}
+
+void requireExactCopiedReferenceRoot(const SgNode *original, SgNode *copy,
+                                     SgCopyHelp &help, const char *relation) {
+  ASSERT_not_null(original);
+  ASSERT_not_null(copy);
+  ASSERT_not_null(relation);
+  SgCopyHelp::copiedNodeMapTypeIterator mapping =
+      help.get_copiedNodeMap().find(const_cast<SgNode *>(original));
+  SgNode *expected =
+      mapping != help.get_copiedNodeMap().end() ? mapping->second : nullptr;
+  if (expected == nullptr || expected == original || expected != copy ||
+      copy->variantT() != original->variantT()) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[reference-root-map]: relation=%s "
+            "original=%p/%s copy=%p/%s expected=%p/%s\n",
+            relation, static_cast<const void *>(original),
+            original->class_name().c_str(), static_cast<void *>(copy),
+            copy->class_name().c_str(), static_cast<void *>(expected),
+            expected != nullptr ? expected->class_name().c_str() : "<null>");
+    ROSE_ABORT();
+  }
+}
+
+bool hasNonidentityMappedReferenceOwner(const SgNode *node, SgCopyHelp &help) {
+  std::set<const SgNode *> visited;
+  for (const SgNode *current = node; current != nullptr;
+       current = current->get_parent()) {
+    if (!visited.insert(current).second) {
+      fprintf(stderr,
+              "REX_COPY_INVARIANT[reference-semantic-owner-cycle]: "
+              "node=%p/%s current=%p/%s\n",
+              static_cast<const void *>(node), node->class_name().c_str(),
+              static_cast<const void *>(current),
+              current->class_name().c_str());
+      ROSE_ABORT();
+    }
+    SgCopyHelp::copiedNodeMapTypeIterator mapping =
+        help.get_copiedNodeMap().find(const_cast<SgNode *>(current));
+    if (mapping != help.get_copiedNodeMap().end() &&
+        mapping->second != current) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void requireExactCopiedOrExternalReferenceEdge(const SgNode *originalEdge,
+                                               const SgNode *copiedEdge,
+                                               SgCopyHelp &help,
+                                               const char *relation) {
+  ASSERT_not_null(relation);
+  if (originalEdge == nullptr) {
+    if (copiedEdge != nullptr) {
+      fprintf(stderr,
+              "REX_COPY_INVARIANT[reference-semantic-null]: relation=%s "
+              "copy-edge=%p/%s\n",
+              relation, static_cast<const void *>(copiedEdge),
+              copiedEdge->class_name().c_str());
+      ROSE_ABORT();
+    }
+    return;
+  }
+
+  SgCopyHelp::copiedNodeMapTypeIterator mapping =
+      help.get_copiedNodeMap().find(const_cast<SgNode *>(originalEdge));
+  if (mapping != help.get_copiedNodeMap().end() &&
+      mapping->second != originalEdge) {
+    if (mapping->second == nullptr || copiedEdge != mapping->second ||
+        copiedEdge->variantT() != originalEdge->variantT()) {
+      fprintf(stderr,
+              "REX_COPY_INVARIANT[reference-semantic-map]: relation=%s "
+              "source=%p/%s copy-edge=%p/%s expected=%p/%s\n",
+              relation, static_cast<const void *>(originalEdge),
+              originalEdge->class_name().c_str(),
+              static_cast<const void *>(copiedEdge),
+              copiedEdge != nullptr ? copiedEdge->class_name().c_str()
+                                    : "<null>",
+              static_cast<void *>(mapping->second),
+              mapping->second != nullptr ? mapping->second->class_name().c_str()
+                                         : "<null>");
+      ROSE_ABORT();
+    }
+    return;
+  }
+
+  if (copiedEdge != originalEdge ||
+      hasNonidentityMappedReferenceOwner(originalEdge, help)) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[reference-semantic-external]: relation=%s "
+            "source=%p/%s copy-edge=%p/%s inside-transaction=%d\n",
+            relation, static_cast<const void *>(originalEdge),
+            originalEdge->class_name().c_str(),
+            static_cast<const void *>(copiedEdge),
+            copiedEdge != nullptr ? copiedEdge->class_name().c_str() : "<null>",
+            hasNonidentityMappedReferenceOwner(originalEdge, help) ? 1 : 0);
+    ROSE_ABORT();
+  }
+}
+
+SgNode *remapExactCopiedOrExternalReferenceEdge(const SgNode *originalEdge,
+                                                SgNode *provisionalCopiedEdge,
+                                                SgCopyHelp &help,
+                                                const char *relation) {
+  ASSERT_not_null(relation);
+  if (originalEdge == nullptr) {
+    if (provisionalCopiedEdge != nullptr) {
+      fprintf(stderr,
+              "REX_COPY_INVARIANT[reference-semantic-null]: relation=%s "
+              "copy-edge=%p/%s\n",
+              relation, static_cast<void *>(provisionalCopiedEdge),
+              provisionalCopiedEdge->class_name().c_str());
+      ROSE_ABORT();
+    }
+    return nullptr;
+  }
+
+  SgCopyHelp::copiedNodeMapTypeIterator mapping =
+      help.get_copiedNodeMap().find(const_cast<SgNode *>(originalEdge));
+  if (mapping != help.get_copiedNodeMap().end() &&
+      mapping->second != originalEdge) {
+    SgNode *expected = mapping->second;
+    if (expected == nullptr ||
+        expected->variantT() != originalEdge->variantT() ||
+        (provisionalCopiedEdge != originalEdge &&
+         provisionalCopiedEdge != expected)) {
+      fprintf(stderr,
+              "REX_COPY_INVARIANT[reference-semantic-map]: relation=%s "
+              "source=%p/%s provisional=%p/%s expected=%p/%s\n",
+              relation, static_cast<const void *>(originalEdge),
+              originalEdge->class_name().c_str(),
+              static_cast<void *>(provisionalCopiedEdge),
+              provisionalCopiedEdge != nullptr
+                  ? provisionalCopiedEdge->class_name().c_str()
+                  : "<null>",
+              static_cast<void *>(expected), expected->class_name().c_str());
+      ROSE_ABORT();
+    }
+    return expected;
+  }
+
+  if (provisionalCopiedEdge != originalEdge ||
+      hasNonidentityMappedReferenceOwner(originalEdge, help)) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[reference-semantic-external]: relation=%s "
+            "source=%p/%s provisional=%p/%s inside-transaction=%d\n",
+            relation, static_cast<const void *>(originalEdge),
+            originalEdge->class_name().c_str(),
+            static_cast<void *>(provisionalCopiedEdge),
+            provisionalCopiedEdge != nullptr
+                ? provisionalCopiedEdge->class_name().c_str()
+                : "<null>",
+            hasNonidentityMappedReferenceOwner(originalEdge, help) ? 1 : 0);
+    ROSE_ABORT();
+  }
+  return const_cast<SgNode *>(originalEdge);
+}
+
+SgTemplateParameterPtrList *
+templateParameterListForReferenceFixup(SgDeclarationStatement *declaration) {
+  ASSERT_not_null(declaration);
+  switch (declaration->variantT()) {
+  case V_SgTemplateDeclaration:
+    return &isSgTemplateDeclaration(declaration)->get_templateParameters();
+  case V_SgTemplateClassDeclaration:
+    return &isSgTemplateClassDeclaration(declaration)->get_templateParameters();
+  case V_SgTemplateFunctionDeclaration:
+    return &isSgTemplateFunctionDeclaration(declaration)
+                ->get_templateParameters();
+  case V_SgTemplateMemberFunctionDeclaration:
+    return &isSgTemplateMemberFunctionDeclaration(declaration)
+                ->get_templateParameters();
+  case V_SgTemplateVariableDeclaration:
+    return &isSgTemplateVariableDeclaration(declaration)
+                ->get_templateParameters();
+  case V_SgTemplateTypedefDeclaration:
+    return &isSgTemplateTypedefDeclaration(declaration)
+                ->get_templateParameters();
+  case V_SgNonrealDecl:
+    return &isSgNonrealDecl(declaration)->get_tpl_params();
+  default:
+    return nullptr;
+  }
+}
+
+void fixupExactCopiedTemplateParameterReferences(
+    const SgDeclarationStatement *originalDeclaration,
+    SgDeclarationStatement *copiedDeclaration, SgCopyHelp &help) {
+  SgTemplateParameterPtrList *originalParameters =
+      templateParameterListForReferenceFixup(
+          const_cast<SgDeclarationStatement *>(originalDeclaration));
+  SgTemplateParameterPtrList *copiedParameters =
+      templateParameterListForReferenceFixup(copiedDeclaration);
+  if ((originalParameters == nullptr) != (copiedParameters == nullptr)) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[template-parameter-reference-kind]: "
+            "original=%p/%s copy=%p/%s\n",
+            static_cast<const void *>(originalDeclaration),
+            originalDeclaration->class_name().c_str(),
+            static_cast<void *>(copiedDeclaration),
+            copiedDeclaration->class_name().c_str());
+    ROSE_ABORT();
+  }
+  if (originalParameters == nullptr) {
+    return;
+  }
+  if (originalParameters->size() != copiedParameters->size()) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[template-parameter-reference-count]: "
+            "original=%p count=%zu copy=%p count=%zu\n",
+            static_cast<const void *>(originalDeclaration),
+            originalParameters->size(), static_cast<void *>(copiedDeclaration),
+            copiedParameters->size());
+    ROSE_ABORT();
+  }
+  for (size_t index = 0; index < originalParameters->size(); ++index) {
+    SgTemplateParameter *originalParameter = (*originalParameters)[index];
+    SgTemplateParameter *copiedParameter = (*copiedParameters)[index];
+    requireExactCopiedReferenceChild(originalDeclaration, originalParameter,
+                                     copiedDeclaration, copiedParameter, help,
+                                     "template-parameter");
+    originalParameter->fixupCopy_references(copiedParameter, help);
+  }
+}
+
+void fixupExactCopiedOwnedDeclarationScopeReferences(
+    const SgDeclarationStatement *originalDeclaration,
+    SgDeclarationStatement *copiedDeclaration, SgCopyHelp &help) {
+  SgDeclarationScope *originalScope =
+      originalDeclaration->get_nonreal_decl_scope();
+  SgDeclarationScope *copiedScope = copiedDeclaration->get_nonreal_decl_scope();
+  if ((originalScope == nullptr) != (copiedScope == nullptr)) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[owned-declaration-scope-reference-null]: "
+            "original=%p scope=%p copy=%p scope=%p\n",
+            static_cast<const void *>(originalDeclaration),
+            static_cast<void *>(originalScope),
+            static_cast<void *>(copiedDeclaration),
+            static_cast<void *>(copiedScope));
+    ROSE_ABORT();
+  }
+  if (originalScope == nullptr) {
+    return;
+  }
+  requireExactCopiedReferenceChild(originalDeclaration, originalScope,
+                                   copiedDeclaration, copiedScope, help,
+                                   "owned-declaration-scope");
+  const SgDeclarationStatementPtrList &originalChildren =
+      originalScope->get_declarations();
+  const SgDeclarationStatementPtrList &copiedChildren =
+      copiedScope->get_declarations();
+  if (originalChildren.size() != copiedChildren.size()) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[owned-declaration-scope-reference-count]: "
+            "original=%p count=%zu copy=%p count=%zu\n",
+            static_cast<void *>(originalScope), originalChildren.size(),
+            static_cast<void *>(copiedScope), copiedChildren.size());
+    ROSE_ABORT();
+  }
+  for (size_t index = 0; index < originalChildren.size(); ++index) {
+    SgDeclarationStatement *originalChild = originalChildren[index];
+    SgDeclarationStatement *copiedChild = copiedChildren[index];
+    requireExactCopiedReferenceChild(originalScope, originalChild, copiedScope,
+                                     copiedChild, help,
+                                     "owned-declaration-scope-declaration");
+    originalChild->fixupCopy_references(copiedChild, help);
+  }
+  originalScope->fixupCopy_references(copiedScope, help);
+}
+
+void fixupExactCopiedFunctionDeclaratorScopeReferences(
+    const SgFunctionDeclaration *originalDeclaration,
+    SgFunctionDeclaration *copiedDeclaration, SgCopyHelp &help) {
+  SgDeclarationScope *originalScope =
+      originalDeclaration->get_function_declarator_scope();
+  SgDeclarationScope *copiedScope =
+      copiedDeclaration->get_function_declarator_scope();
+  if ((originalScope == nullptr) != (copiedScope == nullptr)) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[function-declarator-scope-reference-null]: "
+            "original=%p scope=%p copy=%p scope=%p\n",
+            static_cast<const void *>(originalDeclaration),
+            static_cast<void *>(originalScope),
+            static_cast<void *>(copiedDeclaration),
+            static_cast<void *>(copiedScope));
+    ROSE_ABORT();
+  }
+  if (originalScope == nullptr) {
+    return;
+  }
+  requireExactCopiedReferenceChild(originalDeclaration, originalScope,
+                                   copiedDeclaration, copiedScope, help,
+                                   "function-declarator-scope");
+  const SgDeclarationStatementPtrList &originalChildren =
+      originalScope->get_declarations();
+  const SgDeclarationStatementPtrList &copiedChildren =
+      copiedScope->get_declarations();
+  if (originalChildren.size() != copiedChildren.size()) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[function-declarator-scope-reference-count]: "
+            "original=%p count=%zu copy=%p count=%zu\n",
+            static_cast<void *>(originalScope), originalChildren.size(),
+            static_cast<void *>(copiedScope), copiedChildren.size());
+    ROSE_ABORT();
+  }
+  for (size_t index = 0; index < originalChildren.size(); ++index) {
+    SgDeclarationStatement *originalChild = originalChildren[index];
+    SgDeclarationStatement *copiedChild = copiedChildren[index];
+    requireExactCopiedReferenceChild(originalScope, originalChild, copiedScope,
+                                     copiedChild, help,
+                                     "function-declarator-scope-declaration");
+    originalChild->fixupCopy_references(copiedChild, help);
+  }
+  originalScope->fixupCopy_references(copiedScope, help);
+}
 
 SgVariableSymbol *
 findCopiedVariableSymbolInLocalScope(SgInitializedName *initializedNameCopy,
@@ -101,11 +541,129 @@ void fixupCanonicalDeclarationCopiesForReferences(
 
 } // namespace
 
-void SgInitializedName::fixupCopy_references(SgNode *, SgCopyHelp &) const {
+void SgInitializedName::fixupCopy_references(SgNode *copy,
+                                             SgCopyHelp &help) const {
 #if DEBUG_FIXUP_COPY
   printf("Inside of SgInitializedName::fixupCopy_references() %p = %s \n", this,
          this->get_name().str());
 #endif
+
+  SgInitializedName *initializedNameCopy = isSgInitializedName(copy);
+  if (initializedNameCopy == nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[initialized-name-copy]: original=%p copy=%p "
+            "does not preserve the initialized-name node kind\n",
+            static_cast<const void *>(this), static_cast<void *>(copy));
+    ROSE_ABORT();
+  }
+
+  SgInitializedName *crayPointee = get_cray_pointer_pointee();
+  if (crayPointee == nullptr) {
+    initializedNameCopy->set_cray_pointer_pointee(nullptr);
+  } else {
+    SgCopyHelp::copiedNodeMapTypeIterator copiedPointee =
+        help.get_copiedNodeMap().find(crayPointee);
+    if (copiedPointee == help.get_copiedNodeMap().end()) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[cray-pointer-copy]: pointer=%p name=%s was "
+              "copied without its exact pointee=%p\n",
+              static_cast<const void *>(this), get_name().str(),
+              static_cast<void *>(crayPointee));
+      ROSE_ABORT();
+    }
+    SgInitializedName *crayPointeeCopy =
+        isSgInitializedName(copiedPointee->second);
+    SgExprListExp *sourceShape = get_fortran_cray_pointer_pointee_shape();
+    SgExprListExp *copiedShape =
+        initializedNameCopy->get_fortran_cray_pointer_pointee_shape();
+    if (crayPointeeCopy == nullptr ||
+        (sourceShape == nullptr) != (copiedShape == nullptr) ||
+        (copiedShape != nullptr &&
+         copiedShape->get_parent() != initializedNameCopy)) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[cray-pointer-copy]: pointer=%p name=%s "
+              "does not preserve its exact pointee or owned shape\n",
+              static_cast<const void *>(this), get_name().str());
+      ROSE_ABORT();
+    }
+    initializedNameCopy->set_cray_pointer_pointee(crayPointeeCopy);
+  }
+
+  SgStatement *pointerOwner = get_fortran_separate_pointer_declaration();
+  if (pointerOwner == nullptr) {
+    initializedNameCopy->set_fortran_separate_pointer_declaration(nullptr);
+  } else {
+    SgCopyHelp::copiedNodeMapTypeIterator copiedPointerOwner =
+        help.get_copiedNodeMap().find(pointerOwner);
+    if (copiedPointerOwner == help.get_copiedNodeMap().end()) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[fortran-pointer-copy]: entity=%p name=%s "
+              "was copied without its exact POINTER statement=%p\n",
+              static_cast<const void *>(this), get_name().str(),
+              static_cast<void *>(pointerOwner));
+      ROSE_ABORT();
+    }
+    SgAttributeSpecificationStatement *pointerOwnerCopy =
+        isSgAttributeSpecificationStatement(copiedPointerOwner->second);
+    if (pointerOwnerCopy == nullptr ||
+        pointerOwnerCopy->get_attribute_kind() !=
+            SgAttributeSpecificationStatement::e_pointerStatement) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[fortran-pointer-copy]: POINTER owner=%p "
+              "mapped to an invalid copied node=%p\n",
+              static_cast<void *>(pointerOwner),
+              static_cast<void *>(copiedPointerOwner->second));
+      ROSE_ABORT();
+    }
+    initializedNameCopy->set_fortran_separate_pointer_declaration(
+        pointerOwnerCopy);
+  }
+
+  SgStatement *shapeOwner = get_fortran_separate_shape_declaration();
+  if (shapeOwner == nullptr) {
+    initializedNameCopy->set_fortran_separate_shape_declaration(nullptr);
+    return;
+  }
+
+  SgCopyHelp::copiedNodeMapTypeIterator copiedOwner =
+      help.get_copiedNodeMap().find(shapeOwner);
+  if (copiedOwner == help.get_copiedNodeMap().end()) {
+    // A copied declaration without its separate shape statement must emit its
+    // semantic array shape directly. Keeping the original cross-edge would
+    // suppress that shape and leave the copy dependent on another AST.
+    initializedNameCopy->set_fortran_separate_shape_declaration(nullptr);
+    return;
+  }
+
+  SgStatement *shapeOwnerCopy = isSgStatement(copiedOwner->second);
+  SgAttributeSpecificationStatement *attributeOwnerCopy =
+      isSgAttributeSpecificationStatement(shapeOwnerCopy);
+  SgVariableDeclaration *crayPointerOwnerCopy =
+      isSgVariableDeclaration(shapeOwnerCopy);
+  if (shapeOwnerCopy == nullptr ||
+      (attributeOwnerCopy == nullptr &&
+       isSgCommonBlock(shapeOwnerCopy) == nullptr &&
+       crayPointerOwnerCopy == nullptr) ||
+      (attributeOwnerCopy != nullptr &&
+       attributeOwnerCopy->get_attribute_kind() !=
+           SgAttributeSpecificationStatement::e_dimensionStatement &&
+       attributeOwnerCopy->get_attribute_kind() !=
+           SgAttributeSpecificationStatement::e_allocatableStatement &&
+       attributeOwnerCopy->get_attribute_kind() !=
+           SgAttributeSpecificationStatement::e_pointerStatement) ||
+      (crayPointerOwnerCopy != nullptr &&
+       (crayPointerOwnerCopy->get_variables().size() != 1 ||
+        isSgTypeCrayPointer(crayPointerOwnerCopy->get_variables()
+                                .front()
+                                ->get_fortran_source_type()) == nullptr))) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[fortran-separate-shape-copy]: owner=%p "
+            "mapped to an invalid copied node=%p\n",
+            static_cast<void *>(shapeOwner),
+            static_cast<void *>(copiedOwner->second));
+    ROSE_ABORT();
+  }
+  initializedNameCopy->set_fortran_separate_shape_declaration(shapeOwnerCopy);
 }
 
 void SgStatement::fixupCopy_references(SgNode *copy, SgCopyHelp &help) const {
@@ -116,6 +674,191 @@ void SgStatement::fixupCopy_references(SgNode *copy, SgCopyHelp &help) const {
 #endif
 
   SgLocatedNode::fixupCopy_references(copy, help);
+}
+
+void SgOmpClauseStatement::fixupCopy_references(SgNode *copy,
+                                                SgCopyHelp &help) const {
+  fixupExactCopiedOwnedSuccessorReferences(this, copy, help,
+                                           "openmp-clause-statement");
+}
+
+void SgOmpTaskwaitStatement::fixupCopy_references(SgNode *copy,
+                                                  SgCopyHelp &help) const {
+  fixupExactCopiedOwnedSuccessorReferences(this, copy, help,
+                                           "openmp-taskwait-statement");
+}
+
+void SgAccClauseStatement::fixupCopy_references(SgNode *copy,
+                                                SgCopyHelp &help) const {
+  fixupExactCopiedOwnedSuccessorReferences(this, copy, help,
+                                           "openacc-clause-statement");
+}
+
+void SgOmpBodyStatement::fixupCopy_references(SgNode *copy,
+                                              SgCopyHelp &help) const {
+  SgOmpBodyStatement *copiedBodyOwner = isSgOmpBodyStatement(copy);
+  if (copiedBodyOwner == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[openmp-body-reference-kind]: original=%p/%s "
+            "copy=%p/%s\n",
+            static_cast<const void *>(this), class_name().c_str(),
+            static_cast<void *>(copy),
+            copy != nullptr ? copy->class_name().c_str() : "<null>");
+    ROSE_ABORT();
+  }
+  SgStatement *originalBody = get_body();
+  SgStatement *copiedBody = copiedBodyOwner->get_body();
+  if ((originalBody == nullptr) != (copiedBody == nullptr)) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[openmp-body-reference-null]: original=%p "
+            "body=%p copy=%p body=%p\n",
+            static_cast<const void *>(this), static_cast<void *>(originalBody),
+            static_cast<void *>(copiedBodyOwner),
+            static_cast<void *>(copiedBody));
+    ROSE_ABORT();
+  }
+  if (originalBody != nullptr) {
+    requireExactCopiedReferenceChild(this, originalBody, copiedBodyOwner,
+                                     copiedBody, help, "openmp-body-reference");
+  }
+  fixupExactCopiedSupportReferences(this, copy, help);
+}
+
+void SgAccBodyStatement::fixupCopy_references(SgNode *copy,
+                                              SgCopyHelp &help) const {
+  SgAccBodyStatement *copiedBodyOwner = isSgAccBodyStatement(copy);
+  if (copiedBodyOwner == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[openacc-body-reference-kind]: original=%p/%s "
+            "copy=%p/%s\n",
+            static_cast<const void *>(this), class_name().c_str(),
+            static_cast<void *>(copy),
+            copy != nullptr ? copy->class_name().c_str() : "<null>");
+    ROSE_ABORT();
+  }
+  SgStatement *originalBody = get_body();
+  SgStatement *copiedBody = copiedBodyOwner->get_body();
+  if ((originalBody == nullptr) != (copiedBody == nullptr)) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[openacc-body-reference-null]: original=%p "
+            "body=%p copy=%p body=%p\n",
+            static_cast<const void *>(this), static_cast<void *>(originalBody),
+            static_cast<void *>(copiedBodyOwner),
+            static_cast<void *>(copiedBody));
+    ROSE_ABORT();
+  }
+  if (originalBody != nullptr) {
+    requireExactCopiedReferenceChild(this, originalBody, copiedBodyOwner,
+                                     copiedBody, help,
+                                     "openacc-body-reference");
+  }
+  fixupExactCopiedSupportReferences(this, copy, help);
+}
+
+void SgOmpClauseBodyStatement::fixupCopy_references(SgNode *copy,
+                                                    SgCopyHelp &help) const {
+  SgOmpClauseBodyStatement *copiedClauseBody = isSgOmpClauseBodyStatement(copy);
+  if (copiedClauseBody == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[openmp-clause-reference-kind]: "
+            "original=%p/%s copy=%p/%s\n",
+            static_cast<const void *>(this), class_name().c_str(),
+            static_cast<void *>(copy),
+            copy != nullptr ? copy->class_name().c_str() : "<null>");
+    ROSE_ABORT();
+  }
+  requireExactCopiedReferenceChild(this, get_clause_list(), copiedClauseBody,
+                                   copiedClauseBody->get_clause_list(), help,
+                                   "openmp-clause-list-reference");
+  SgOmpBodyStatement::fixupCopy_references(copy, help);
+}
+
+void SgAccClauseBodyStatement::fixupCopy_references(SgNode *copy,
+                                                    SgCopyHelp &help) const {
+  SgAccClauseBodyStatement *copiedClauseBody = isSgAccClauseBodyStatement(copy);
+  if (copiedClauseBody == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[openacc-clause-reference-kind]: "
+            "original=%p/%s copy=%p/%s\n",
+            static_cast<const void *>(this), class_name().c_str(),
+            static_cast<void *>(copy),
+            copy != nullptr ? copy->class_name().c_str() : "<null>");
+    ROSE_ABORT();
+  }
+  const SgAccClausePtrList &originalClauses = get_clauses();
+  const SgAccClausePtrList &copiedClauses = copiedClauseBody->get_clauses();
+  if (originalClauses.size() != copiedClauses.size()) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[openacc-clause-reference-count]: "
+            "original=%p clauses=%zu copy=%p clauses=%zu\n",
+            static_cast<const void *>(this), originalClauses.size(),
+            static_cast<void *>(copiedClauseBody), copiedClauses.size());
+    ROSE_ABORT();
+  }
+  for (size_t index = 0; index < originalClauses.size(); ++index) {
+    requireExactCopiedReferenceChild(this, originalClauses[index],
+                                     copiedClauseBody, copiedClauses[index],
+                                     help, "openacc-clause-reference");
+  }
+  SgAccBodyStatement::fixupCopy_references(copy, help);
+}
+
+void SgOmpDeclareSimdStatement::fixupCopy_references(SgNode *copy,
+                                                     SgCopyHelp &help) const {
+  fixupExactCopiedOwnedSuccessorReferences(this, copy, help,
+                                           "openmp-declare-simd");
+}
+
+void SgOmpDeclareVariantStatement::fixupCopy_references(
+    SgNode *copy, SgCopyHelp &help) const {
+  fixupExactCopiedOwnedSuccessorReferences(this, copy, help,
+                                           "openmp-declare-variant");
+}
+
+void SgOmpBeginDeclareVariantStatement::fixupCopy_references(
+    SgNode *copy, SgCopyHelp &help) const {
+  fixupExactCopiedOwnedSuccessorReferences(this, copy, help,
+                                           "openmp-begin-declare-variant");
+}
+
+void SgOmpDeclareMapperStatement::fixupCopy_references(SgNode *copy,
+                                                       SgCopyHelp &help) const {
+  fixupExactCopiedOwnedSuccessorReferences(this, copy, help,
+                                           "openmp-declare-mapper");
+}
+
+void SgOmpDeclareTargetStatement::fixupCopy_references(SgNode *copy,
+                                                       SgCopyHelp &help) const {
+  fixupExactCopiedOwnedSuccessorReferences(this, copy, help,
+                                           "openmp-declare-target");
+}
+
+void SgOmpRequiresStatement::fixupCopy_references(SgNode *copy,
+                                                  SgCopyHelp &help) const {
+  fixupExactCopiedOwnedSuccessorReferences(this, copy, help, "openmp-requires");
+}
+
+void SgOmpAssumesStatement::fixupCopy_references(SgNode *copy,
+                                                 SgCopyHelp &help) const {
+  fixupExactCopiedOwnedSuccessorReferences(this, copy, help, "openmp-assumes");
+}
+
+void SgOmpBeginAssumesStatement::fixupCopy_references(SgNode *copy,
+                                                      SgCopyHelp &help) const {
+  fixupExactCopiedOwnedSuccessorReferences(this, copy, help,
+                                           "openmp-begin-assumes");
+}
+
+void SgOmpGroupprivateStatement::fixupCopy_references(SgNode *copy,
+                                                      SgCopyHelp &help) const {
+  fixupExactCopiedOwnedSuccessorReferences(this, copy, help,
+                                           "openmp-groupprivate");
+}
+
+void SgOmpThreadprivateStatement::fixupCopy_references(SgNode *copy,
+                                                       SgCopyHelp &help) const {
+  fixupExactCopiedOwnedSuccessorReferences(this, copy, help,
+                                           "openmp-threadprivate");
 }
 
 void SgExpression::fixupCopy_references(SgNode *copy, SgCopyHelp &help) const {
@@ -165,6 +908,47 @@ void SgLocatedNode::fixupCopy_references(SgNode *copy, SgCopyHelp &help) const {
 
     void visit(SgNode *n) {
       switch (n->variantT()) {
+      case V_SgThisExp: {
+        SgThisExp *thisExpression = isSgThisExp(n);
+        ROSE_ASSERT(thisExpression != nullptr);
+        SgClassSymbol *sourceClassSymbol = thisExpression->get_class_symbol();
+        SgNonrealSymbol *sourceNonrealSymbol =
+            thisExpression->get_nonreal_symbol();
+        SgClassSymbol *copiedClassSymbol =
+            isSgClassSymbol(remapExactCopiedOrExternalReferenceEdge(
+                sourceClassSymbol, sourceClassSymbol, helpSupport,
+                "this-expression-class-symbol"));
+        SgNonrealSymbol *copiedNonrealSymbol =
+            isSgNonrealSymbol(remapExactCopiedOrExternalReferenceEdge(
+                sourceNonrealSymbol, sourceNonrealSymbol, helpSupport,
+                "this-expression-nonreal-symbol"));
+        if ((sourceClassSymbol != nullptr) ==
+                (sourceNonrealSymbol != nullptr) ||
+            (sourceClassSymbol != nullptr && copiedClassSymbol == nullptr) ||
+            (sourceNonrealSymbol != nullptr &&
+             copiedNonrealSymbol == nullptr)) {
+          fprintf(stderr,
+                  "REX_COPY_INVARIANT[this-expression-symbol-kind]: "
+                  "expression=%p class=%p nonreal=%p copied-class=%p "
+                  "copied-nonreal=%p\n",
+                  static_cast<void *>(thisExpression),
+                  static_cast<void *>(sourceClassSymbol),
+                  static_cast<void *>(sourceNonrealSymbol),
+                  static_cast<void *>(copiedClassSymbol),
+                  static_cast<void *>(copiedNonrealSymbol));
+          ROSE_ABORT();
+        }
+        thisExpression->set_class_symbol(copiedClassSymbol);
+        thisExpression->set_nonreal_symbol(copiedNonrealSymbol);
+        requireExactCopiedOrExternalReferenceEdge(
+            sourceClassSymbol, thisExpression->get_class_symbol(), helpSupport,
+            "this-expression-class-symbol");
+        requireExactCopiedOrExternalReferenceEdge(
+            sourceNonrealSymbol, thisExpression->get_nonreal_symbol(),
+            helpSupport, "this-expression-nonreal-symbol");
+        break;
+      }
+
       case V_SgVarRefExp: {
         SgVarRefExp *varRefExp = isSgVarRefExp(n);
         ROSE_ASSERT(varRefExp != NULL);
@@ -213,12 +997,228 @@ void SgLocatedNode::fixupCopy_references(SgNode *copy, SgCopyHelp &help) const {
         break;
       }
 
+      case V_SgTemplateFunctionRefExp: {
+        SgTemplateFunctionRefExp *reference = isSgTemplateFunctionRefExp(n);
+        ROSE_ASSERT(reference != nullptr);
+        SgTemplateFunctionSymbol *original_symbol = reference->get_symbol();
+        SgTemplateFunctionDeclaration *original_source =
+            original_symbol != nullptr ? isSgTemplateFunctionDeclaration(
+                                             original_symbol->get_declaration())
+                                       : nullptr;
+        SgFunctionDeclaration *original_semantic =
+            reference->get_semantic_function_declaration();
+        if (original_source == nullptr || original_semantic == nullptr) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[template-function-copy-reference]: "
+                  "copied reference=%p has no exact source or semantic "
+                  "function identity\n",
+                  static_cast<void *>(reference));
+          ROSE_ABORT();
+        }
+
+        auto source_copy =
+            helpSupport.get_copiedNodeMap().find(original_source);
+        if (source_copy != helpSupport.get_copiedNodeMap().end()) {
+          SgTemplateFunctionDeclaration *copied_source =
+              isSgTemplateFunctionDeclaration(source_copy->second);
+          SgTemplateFunctionSymbol *copied_symbol =
+              copied_source != nullptr
+                  ? isSgTemplateFunctionSymbol(
+                        copied_source->get_symbol_from_symbol_table())
+                  : nullptr;
+          if (copied_symbol == nullptr ||
+              copied_symbol->get_declaration() != copied_source) {
+            fprintf(stderr,
+                    "REX_AST_INVARIANT[template-function-copy-reference]: "
+                    "copied source template has no exact copied symbol\n");
+            ROSE_ABORT();
+          }
+          reference->set_symbol(copied_symbol);
+        }
+
+        auto semantic_copy =
+            helpSupport.get_copiedNodeMap().find(original_semantic);
+        if (semantic_copy != helpSupport.get_copiedNodeMap().end()) {
+          SgFunctionDeclaration *copied_semantic =
+              isSgFunctionDeclaration(semantic_copy->second);
+          if (copied_semantic == nullptr) {
+            fprintf(stderr,
+                    "REX_AST_INVARIANT[template-function-copy-reference]: "
+                    "semantic callable edge maps to a non-function node\n");
+            ROSE_ABORT();
+          }
+          reference->set_semantic_function_declaration(copied_semantic);
+        }
+        if (reference->getAssociatedFunctionDeclaration() == nullptr) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[template-function-copy-reference]: "
+                  "copied reference lost its exact semantic callable\n");
+          ROSE_ABORT();
+        }
+        break;
+      }
+
+      case V_SgNonrealRefExp: {
+        SgNonrealRefExp *reference = isSgNonrealRefExp(n);
+        ROSE_ASSERT(reference != nullptr);
+        if (reference->get_resolved_function_declaration() != nullptr &&
+            reference->get_resolved_variable_declaration() != nullptr) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[nonreal-copy-reference]: copied "
+                  "reference=%p resolves to both a function and a variable "
+                  "template\n",
+                  static_cast<void *>(reference));
+          ROSE_ABORT();
+        }
+
+        SgNonrealSymbol *original_symbol = reference->get_symbol();
+        SgNonrealDecl *original_spelling =
+            original_symbol != nullptr ? original_symbol->get_declaration()
+                                       : nullptr;
+        if ((reference->get_resolved_function_declaration() != nullptr ||
+             reference->get_resolved_variable_declaration() != nullptr) &&
+            original_spelling == nullptr) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[nonreal-copy-reference]: resolved "
+                  "reference has no exact synthetic symbol declaration\n");
+          ROSE_ABORT();
+        }
+        SgNonrealDecl *copied_spelling = nullptr;
+        if (original_spelling != nullptr) {
+          SgCopyHelp::copiedNodeMapTypeIterator spelling_copy =
+              helpSupport.get_copiedNodeMap().find(original_spelling);
+          if (spelling_copy != helpSupport.get_copiedNodeMap().end()) {
+            copied_spelling = isSgNonrealDecl(spelling_copy->second);
+            SgNonrealSymbol *copied_symbol =
+                copied_spelling != nullptr
+                    ? isSgNonrealSymbol(
+                          copied_spelling->get_symbol_from_symbol_table())
+                    : nullptr;
+            if (copied_symbol == nullptr ||
+                copied_symbol->get_declaration() != copied_spelling) {
+              fprintf(stderr,
+                      "REX_AST_INVARIANT[nonreal-copy-reference]: copied "
+                      "synthetic declaration has no exact copied symbol\n");
+              ROSE_ABORT();
+            }
+            reference->set_symbol(copied_symbol);
+
+            if (SgDeclarationStatement *original_template =
+                    original_spelling->get_templateDeclaration()) {
+              SgCopyHelp::copiedNodeMapTypeIterator template_copy =
+                  helpSupport.get_copiedNodeMap().find(original_template);
+              if (template_copy != helpSupport.get_copiedNodeMap().end()) {
+                SgDeclarationStatement *copied_template =
+                    isSgDeclarationStatement(template_copy->second);
+                if (copied_template == nullptr) {
+                  fprintf(stderr,
+                          "REX_AST_INVARIANT[nonreal-copy-reference]: "
+                          "synthetic semantic edge maps to a non-declaration "
+                          "node\n");
+                  ROSE_ABORT();
+                }
+                copied_spelling->set_templateDeclaration(copied_template);
+              }
+            }
+          }
+        }
+
+        if (SgFunctionDeclaration *original_function =
+                reference->get_resolved_function_declaration()) {
+          SgCopyHelp::copiedNodeMapTypeIterator function_copy =
+              helpSupport.get_copiedNodeMap().find(original_function);
+          if (function_copy != helpSupport.get_copiedNodeMap().end()) {
+            SgFunctionDeclaration *copied_function =
+                isSgFunctionDeclaration(function_copy->second);
+            if (copied_function == nullptr || copied_spelling == nullptr) {
+              fprintf(stderr,
+                      "REX_AST_INVARIANT[nonreal-copy-reference]: resolved "
+                      "function edge cannot be rebound without exact copied "
+                      "function and synthetic identities\n");
+              ROSE_ABORT();
+            }
+            reference->set_resolved_function_declaration(copied_function);
+          }
+        }
+
+        if (SgTemplateVariableDeclaration *original_variable =
+                reference->get_resolved_variable_declaration()) {
+          SgCopyHelp::copiedNodeMapTypeIterator variable_copy =
+              helpSupport.get_copiedNodeMap().find(original_variable);
+          if (variable_copy != helpSupport.get_copiedNodeMap().end()) {
+            SgTemplateVariableDeclaration *copied_variable =
+                isSgTemplateVariableDeclaration(variable_copy->second);
+            if (copied_variable == nullptr || copied_spelling == nullptr ||
+                original_spelling == nullptr ||
+                original_spelling->get_templateDeclaration() !=
+                    original_variable) {
+              fprintf(stderr,
+                      "REX_AST_INVARIANT[nonreal-copy-reference]: resolved "
+                      "variable edge cannot be rebound without the exact "
+                      "copied synthetic identity\n");
+              ROSE_ABORT();
+            }
+            reference->set_resolved_variable_declaration(copied_variable);
+            copied_spelling->set_templateDeclaration(copied_variable);
+
+            std::set<SgTemplateVariableDeclaration *> visited_templates;
+            SgTemplateVariableDeclaration *original_link = original_variable;
+            while (original_link != nullptr &&
+                   original_link->get_specializedTemplateDeclaration() !=
+                       nullptr) {
+              if (!visited_templates.insert(original_link).second) {
+                fprintf(stderr,
+                        "REX_AST_INVARIANT[nonreal-copy-reference]: original "
+                        "variable-template specialization chain contains a "
+                        "cycle\n");
+                ROSE_ABORT();
+              }
+              SgTemplateVariableDeclaration *original_primary =
+                  isSgTemplateVariableDeclaration(
+                      original_link->get_specializedTemplateDeclaration());
+              if (original_primary == nullptr) {
+                fprintf(stderr,
+                        "REX_AST_INVARIANT[nonreal-copy-reference]: original "
+                        "variable specialization has a wrong-kind source "
+                        "template edge\n");
+                ROSE_ABORT();
+              }
+              SgCopyHelp::copiedNodeMapTypeIterator copied_link_entry =
+                  helpSupport.get_copiedNodeMap().find(original_link);
+              SgCopyHelp::copiedNodeMapTypeIterator copied_primary_entry =
+                  helpSupport.get_copiedNodeMap().find(original_primary);
+              if (copied_link_entry != helpSupport.get_copiedNodeMap().end() &&
+                  copied_primary_entry !=
+                      helpSupport.get_copiedNodeMap().end()) {
+                SgTemplateVariableDeclaration *copied_link =
+                    isSgTemplateVariableDeclaration(copied_link_entry->second);
+                SgTemplateVariableDeclaration *copied_primary =
+                    isSgTemplateVariableDeclaration(
+                        copied_primary_entry->second);
+                if (copied_link == nullptr || copied_primary == nullptr) {
+                  fprintf(
+                      stderr,
+                      "REX_AST_INVARIANT[nonreal-copy-reference]: copied "
+                      "variable-template chain maps to a wrong-kind node\n");
+                  ROSE_ABORT();
+                }
+                copied_link->set_specializedTemplateDeclaration(copied_primary);
+              }
+              original_link = original_primary;
+            }
+          }
+        }
+        break;
+      }
+
       case V_SgFunctionRefExp: {
         SgFunctionRefExp *functionRefExp = isSgFunctionRefExp(n);
         ROSE_ASSERT(functionRefExp != NULL);
         SgFunctionSymbol *functionSymbol_original =
             functionRefExp->get_symbol();
         ROSE_ASSERT(functionSymbol_original != NULL);
+        SgFunctionSymbol *sourceVisibleSymbol_original =
+            functionRefExp->get_fortran_source_visible_symbol();
         SgFunctionDeclaration *functionDeclaration_original =
             functionSymbol_original->get_declaration();
         ROSE_ASSERT(functionDeclaration_original != NULL);
@@ -256,6 +1256,103 @@ void SgLocatedNode::fixupCopy_references(SgNode *copy, SgCopyHelp &help) const {
                      SageInterface::get_name(functionDeclaration_copy).c_str());
             // ROSE_ABORT();
           }
+        }
+        if (sourceVisibleSymbol_original != nullptr) {
+          SgFunctionDeclaration *sourceVisibleDeclaration_original =
+              sourceVisibleSymbol_original->get_declaration();
+          if (sourceVisibleDeclaration_original == nullptr) {
+            fprintf(stderr,
+                    "REX_AST_INVARIANT[fortran-function-copy-reference]: "
+                    "source-visible symbol=%p has no exact declaration\n",
+                    static_cast<void *>(sourceVisibleSymbol_original));
+            ROSE_ABORT();
+          }
+          auto sourceVisibleCopy = helpSupport.get_copiedNodeMap().find(
+              sourceVisibleDeclaration_original);
+          if (sourceVisibleCopy != helpSupport.get_copiedNodeMap().end()) {
+            SgFunctionDeclaration *sourceVisibleDeclaration_copy =
+                isSgFunctionDeclaration(sourceVisibleCopy->second);
+            SgFunctionSymbol *sourceVisibleSymbol_copy =
+                sourceVisibleDeclaration_copy != nullptr
+                    ? isSgFunctionSymbol(sourceVisibleDeclaration_copy
+                                             ->get_symbol_from_symbol_table())
+                    : nullptr;
+            if (sourceVisibleSymbol_copy == nullptr ||
+                sourceVisibleSymbol_copy->get_declaration() !=
+                    sourceVisibleDeclaration_copy) {
+              fprintf(stderr,
+                      "REX_AST_INVARIANT[fortran-function-copy-reference]: "
+                      "copied source-visible declaration has no exact copied "
+                      "function symbol\n");
+              ROSE_ABORT();
+            }
+            functionRefExp->set_fortran_source_visible_symbol(
+                sourceVisibleSymbol_copy);
+          }
+        }
+        break;
+      }
+
+      case V_SgTemplateMemberFunctionRefExp: {
+        SgTemplateMemberFunctionRefExp *reference =
+            isSgTemplateMemberFunctionRefExp(n);
+        ROSE_ASSERT(reference != nullptr);
+        SgTemplateMemberFunctionSymbol *original_symbol =
+            reference->get_symbol();
+        SgTemplateMemberFunctionDeclaration *original_source =
+            original_symbol != nullptr ? isSgTemplateMemberFunctionDeclaration(
+                                             original_symbol->get_declaration())
+                                       : nullptr;
+        SgMemberFunctionDeclaration *original_semantic =
+            reference->get_semantic_member_function_declaration();
+        if (original_source == nullptr || original_semantic == nullptr) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[template-member-function-copy-reference]: "
+                  "copied reference=%p has no exact source or semantic "
+                  "member-function identity\n",
+                  static_cast<void *>(reference));
+          ROSE_ABORT();
+        }
+
+        auto source_copy =
+            helpSupport.get_copiedNodeMap().find(original_source);
+        if (source_copy != helpSupport.get_copiedNodeMap().end()) {
+          SgTemplateMemberFunctionDeclaration *copied_source =
+              isSgTemplateMemberFunctionDeclaration(source_copy->second);
+          SgTemplateMemberFunctionSymbol *copied_symbol =
+              copied_source != nullptr
+                  ? isSgTemplateMemberFunctionSymbol(
+                        copied_source->get_symbol_from_symbol_table())
+                  : nullptr;
+          if (copied_symbol == nullptr ||
+              copied_symbol->get_declaration() != copied_source) {
+            fprintf(stderr,
+                    "REX_AST_INVARIANT[template-member-function-copy-"
+                    "reference]: copied source template has no exact copied "
+                    "symbol\n");
+            ROSE_ABORT();
+          }
+          reference->set_symbol(copied_symbol);
+        }
+
+        auto semantic_copy =
+            helpSupport.get_copiedNodeMap().find(original_semantic);
+        if (semantic_copy != helpSupport.get_copiedNodeMap().end()) {
+          SgMemberFunctionDeclaration *copied_semantic =
+              isSgMemberFunctionDeclaration(semantic_copy->second);
+          if (copied_semantic == nullptr) {
+            fprintf(stderr, "REX_AST_INVARIANT[template-member-function-copy-"
+                            "reference]: semantic callable edge maps to a "
+                            "non-member-function node\n");
+            ROSE_ABORT();
+          }
+          reference->set_semantic_member_function_declaration(copied_semantic);
+        }
+        if (reference->getAssociatedMemberFunctionDeclaration() == nullptr) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[template-member-function-copy-reference]: "
+                  "copied reference lost its exact semantic callable\n");
+          ROSE_ABORT();
         }
         break;
       }
@@ -422,6 +1519,20 @@ void SgDeclarationStatement::fixupCopy_references(SgNode *copy,
          this->get_firstNondefiningDeclaration());
 #endif
 
+  SgDeclarationStatement *copiedDeclaration = isSgDeclarationStatement(copy);
+  if (copiedDeclaration == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[declaration-reference-copy]: original=%p/%s "
+            "copy=%p\n",
+            static_cast<const void *>(this), class_name().c_str(),
+            static_cast<void *>(copy));
+    ROSE_ABORT();
+  }
+  requireExactCopiedReferenceRoot(this, copiedDeclaration, help, "declaration");
+  fixupExactCopiedOwnedDeclarationScopeReferences(this, copiedDeclaration,
+                                                  help);
+  fixupExactCopiedTemplateParameterReferences(this, copiedDeclaration, help);
+
   // Call the base class fixupCopy member function (this will setup the parent)
   SgStatement::fixupCopy_references(copy, help);
 }
@@ -440,6 +1551,9 @@ void SgFunctionDeclaration::fixupCopy_references(SgNode *copy,
 
   // Call the base class fixupCopy member function
   SgDeclarationStatement::fixupCopy_references(copy, help);
+
+  fixupExactCopiedFunctionDeclaratorScopeReferences(
+      this, functionDeclaration_copy, help);
 
   // Setup the scopes of the SgInitializedName objects in the paraleter list
   ROSE_ASSERT(get_parameterList() != NULL);
@@ -533,6 +1647,24 @@ void SgMemberFunctionDeclaration::fixupCopy_references(SgNode *copy,
 
   // Call the base class fixupCopy member function
   SgFunctionDeclaration::fixupCopy_references(copy, help);
+}
+
+void SgTemplateParameter::fixupCopy_references(SgNode *copy,
+                                               SgCopyHelp &help) const {
+  SgTemplateParameter *copiedParameter = isSgTemplateParameter(copy);
+  if (copiedParameter == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[template-parameter-reference-copy]: "
+            "original=%p copy=%p\n",
+            static_cast<const void *>(this), static_cast<void *>(copy));
+    ROSE_ABORT();
+  }
+  requireExactCopiedReferenceRoot(this, copiedParameter, help,
+                                  "template-parameter");
+  requireExactCopiedOrExternalReferenceEdge(
+      get_templateDeclaration(), copiedParameter->get_templateDeclaration(),
+      help, "template-parameter-declaration");
+  fixupExactCopiedSupportReferences(this, copiedParameter, help);
 }
 
 void SgTemplateDeclaration::fixupCopy_references(SgNode *copy,
@@ -647,17 +1779,33 @@ void SgVariableDeclaration::fixupCopy_references(SgNode *copy,
       isSgVariableDeclaration(copy);
   ROSE_ASSERT(variableDeclaration_copy != NULL);
 
-  // DQ (10/14/2007): Handle the case of a type defined in the base type of the
-  // typedef (similar problem for SgVariableDeclaration). printf ("this = %p
-  // this->get_variableDeclarationContainsBaseTypeDefiningDeclaration() = %s
-  // \n",this,this->get_variableDeclarationContainsBaseTypeDefiningDeclaration()
-  // ? "true" : "false");
-  if (this->get_variableDeclarationContainsBaseTypeDefiningDeclaration() ==
-      true) {
-    ROSE_ASSERT(
-        variableDeclaration_copy
-            ->get_variableDeclarationContainsBaseTypeDefiningDeclaration() ==
-        true);
+  SgDeclarationStatement *baseTypeNondefiningOriginal =
+      get_baseTypeNondefiningDeclaration();
+  SgDeclarationStatement *baseTypeNondefiningCopy =
+      variableDeclaration_copy->get_baseTypeNondefiningDeclaration();
+  if ((baseTypeNondefiningOriginal == NULL) !=
+      (baseTypeNondefiningCopy == NULL)) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[variable-base-type-forward-reference-null]: "
+            "source=%p child=%p copy=%p child=%p\n",
+            static_cast<const void *>(this),
+            static_cast<void *>(baseTypeNondefiningOriginal),
+            static_cast<void *>(variableDeclaration_copy),
+            static_cast<void *>(baseTypeNondefiningCopy));
+    ROSE_ABORT();
+  }
+  if (baseTypeNondefiningOriginal != NULL) {
+    requireExactCopiedReferenceChild(
+        this, baseTypeNondefiningOriginal, variableDeclaration_copy,
+        baseTypeNondefiningCopy, help, "variable-base-type-forward");
+    baseTypeNondefiningOriginal->fixupCopy_references(baseTypeNondefiningCopy,
+                                                      help);
+  }
+
+  // Preserve references for the exact inline base-type definition child.
+  if (this->get_baseTypeDefiningDeclaration() != NULL) {
+    ROSE_ASSERT(variableDeclaration_copy->get_baseTypeDefiningDeclaration() !=
+                NULL);
     SgDeclarationStatement *baseTypeDeclaration_original =
         this->get_baseTypeDefiningDeclaration();
     SgDeclarationStatement *baseTypeDeclaration_copy =
@@ -788,21 +1936,14 @@ void SgBaseClass::fixupCopy_references(SgNode *copy, SgCopyHelp &help) const {
   SgNonrealBaseClass *nrBaseClass_copy = isSgNonrealBaseClass(copy);
 
   if (this->get_base_class() != NULL) {
-    ROSE_ASSERT(baseClass_copy->get_base_class());
-
     ROSE_ASSERT(nrBaseClass == NULL);
     ROSE_ASSERT(nrBaseClass_copy == NULL);
-
-    this->get_base_class()->fixupCopy_references(
-        baseClass_copy->get_base_class(), help);
+    ROSE_ASSERT(baseClass_copy->get_base_class() != NULL);
   } else if (nrBaseClass != NULL) {
     ROSE_ASSERT(nrBaseClass->get_base_class_nonreal() != NULL);
 
     ROSE_ASSERT(nrBaseClass_copy != NULL);
     ROSE_ASSERT(nrBaseClass_copy->get_base_class_nonreal() != NULL);
-
-    nrBaseClass->get_base_class_nonreal()->fixupCopy_references(
-        nrBaseClass_copy->get_base_class_nonreal(), help);
   } else {
     ROSE_ABORT();
   }
@@ -1146,15 +2287,43 @@ void SgCatchStatementSeq::fixupCopy_references(SgNode *copy,
   SgStatement::fixupCopy_references(copy, help);
 
   SgCatchStatementSeq *catchStatement_copy = isSgCatchStatementSeq(copy);
-  ROSE_ASSERT(catchStatement_copy != NULL);
+  if (catchStatement_copy == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[catch-sequence-reference-copy]: original=%p "
+            "copy=%p\n",
+            static_cast<const void *>(this), static_cast<void *>(copy));
+    ROSE_ABORT();
+  }
+  requireExactCopiedReferenceRoot(this, catchStatement_copy, help,
+                                  "catch-sequence");
 
-  printf(
-      "SgCatchStatementSeq::fixupCopy_references(): Sorry not implemented \n");
-
-  // The relavant data member here is a SgStatementPtrList p_catch_statement_seq
-
-  // ROSE_ASSERT(this->get_body() != NULL);
-  // this->get_body()->fixupCopy_references(catchStatement_copy->get_body(),help);
+  const SgStatementPtrList &originalCatches = get_catch_statement_seq();
+  const SgStatementPtrList &copiedCatches =
+      catchStatement_copy->get_catch_statement_seq();
+  if (originalCatches.size() != copiedCatches.size()) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[catch-sequence-reference-count]: original=%p "
+            "count=%zu copy=%p count=%zu\n",
+            static_cast<const void *>(this), originalCatches.size(),
+            static_cast<void *>(catchStatement_copy), copiedCatches.size());
+    ROSE_ABORT();
+  }
+  for (size_t index = 0; index < originalCatches.size(); ++index) {
+    SgCatchOptionStmt *originalCatch =
+        isSgCatchOptionStmt(originalCatches[index]);
+    SgCatchOptionStmt *copiedCatch = isSgCatchOptionStmt(copiedCatches[index]);
+    if (originalCatch == nullptr || copiedCatch == nullptr) {
+      fprintf(stderr,
+              "REX_COPY_INVARIANT[catch-handler-reference-kind]: index=%zu "
+              "original=%p copy=%p\n",
+              index, static_cast<void *>(originalCatches[index]),
+              static_cast<void *>(copiedCatches[index]));
+      ROSE_ABORT();
+    }
+    requireExactCopiedReferenceChild(this, originalCatch, catchStatement_copy,
+                                     copiedCatch, help, "catch-handler");
+    originalCatch->fixupCopy_references(copiedCatch, help);
+  }
 }
 
 void SgWhileStmt::fixupCopy_references(SgNode *copy, SgCopyHelp &help) const {
@@ -1230,10 +2399,38 @@ void SgTryStmt::fixupCopy_references(SgNode *copy, SgCopyHelp &help) const {
   SgStatement::fixupCopy_references(copy, help);
 
   SgTryStmt *tryStatement_copy = isSgTryStmt(copy);
-  ROSE_ASSERT(tryStatement_copy != NULL);
-
-  ROSE_ASSERT(this->get_body() != NULL);
-  this->get_body()->fixupCopy_references(tryStatement_copy->get_body(), help);
+  if (tryStatement_copy == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[try-statement-reference-copy]: original=%p "
+            "copy=%p\n",
+            static_cast<const void *>(this), static_cast<void *>(copy));
+    ROSE_ABORT();
+  }
+  requireExactCopiedReferenceRoot(this, tryStatement_copy, help,
+                                  "try-statement");
+  SgStatement *originalBody = get_body();
+  SgStatement *copiedBody = tryStatement_copy->get_body();
+  SgCatchStatementSeq *originalCatches = get_catch_statement_seq_root();
+  SgCatchStatementSeq *copiedCatches =
+      tryStatement_copy->get_catch_statement_seq_root();
+  if (originalBody == nullptr || copiedBody == nullptr ||
+      originalCatches == nullptr || copiedCatches == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[try-statement-reference-children]: "
+            "original=%p body=%p catches=%p copy=%p body=%p catches=%p\n",
+            static_cast<const void *>(this), static_cast<void *>(originalBody),
+            static_cast<void *>(originalCatches),
+            static_cast<void *>(tryStatement_copy),
+            static_cast<void *>(copiedBody),
+            static_cast<void *>(copiedCatches));
+    ROSE_ABORT();
+  }
+  requireExactCopiedReferenceChild(this, originalBody, tryStatement_copy,
+                                   copiedBody, help, "try-body");
+  requireExactCopiedReferenceChild(this, originalCatches, tryStatement_copy,
+                                   copiedCatches, help, "try-catches");
+  originalBody->fixupCopy_references(copiedBody, help);
+  originalCatches->fixupCopy_references(copiedCatches, help);
 }
 
 void SgCatchOptionStmt::fixupCopy_references(SgNode *copy,
@@ -1244,24 +2441,61 @@ void SgCatchOptionStmt::fixupCopy_references(SgNode *copy,
          this, this->class_name().c_str(), copy);
 #endif
 
-  printf("SgCatchOptionStmt::fixupCopy_references(): Sorry not implemented \n");
-
   SgScopeStatement::fixupCopy_references(copy, help);
 
   SgCatchOptionStmt *catchOptionStatement_copy = isSgCatchOptionStmt(copy);
-  ROSE_ASSERT(catchOptionStatement_copy != NULL);
+  if (catchOptionStatement_copy == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[catch-handler-reference-copy]: original=%p "
+            "copy=%p\n",
+            static_cast<const void *>(this), static_cast<void *>(copy));
+    ROSE_ABORT();
+  }
+  requireExactCopiedReferenceRoot(this, catchOptionStatement_copy, help,
+                                  "catch-handler");
+  SgTryStmt *originalTry = get_trystmt();
+  SgTryStmt *copiedTry = catchOptionStatement_copy->get_trystmt();
+  if (originalTry == nullptr || copiedTry == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[catch-handler-reference-try]: original=%p "
+            "try=%p copy=%p try=%p\n",
+            static_cast<const void *>(this), static_cast<void *>(originalTry),
+            static_cast<void *>(catchOptionStatement_copy),
+            static_cast<void *>(copiedTry));
+    ROSE_ABORT();
+  }
+  requireExactCopiedOrExternalReferenceEdge(originalTry, copiedTry, help,
+                                            "catch-handler-try");
 
-  ROSE_ASSERT(this->get_trystmt() != NULL);
-  // I think this might cause endless recursion, so comment out for now!
-  // this->get_trystmt()->fixupCopy_references(catchOptionStatement_copy->get_trystmt(),help);
-
-  ROSE_ASSERT(this->get_condition() != NULL);
-  this->get_condition()->fixupCopy_references(
-      catchOptionStatement_copy->get_condition(), help);
-
-  ROSE_ASSERT(this->get_body() != NULL);
-  this->get_body()->fixupCopy_references(catchOptionStatement_copy->get_body(),
-                                         help);
+  SgVariableDeclaration *originalCondition = get_condition();
+  SgVariableDeclaration *copiedCondition =
+      catchOptionStatement_copy->get_condition();
+  SgStatement *originalBody = get_body();
+  SgStatement *copiedBody = catchOptionStatement_copy->get_body();
+  if ((originalCondition == nullptr) != (copiedCondition == nullptr) ||
+      originalBody == nullptr || copiedBody == nullptr) {
+    fprintf(
+        stderr,
+        "REX_COPY_INVARIANT[catch-handler-reference-children]: "
+        "original=%p condition=%p body=%p copy=%p condition=%p body=%p\n",
+        static_cast<const void *>(this), static_cast<void *>(originalCondition),
+        static_cast<void *>(originalBody),
+        static_cast<void *>(catchOptionStatement_copy),
+        static_cast<void *>(copiedCondition), static_cast<void *>(copiedBody));
+    ROSE_ABORT();
+  }
+  if (originalCondition != nullptr) {
+    requireExactCopiedReferenceChild(this, originalCondition,
+                                     catchOptionStatement_copy, copiedCondition,
+                                     help, "catch-handler-condition");
+  }
+  requireExactCopiedReferenceChild(this, originalBody,
+                                   catchOptionStatement_copy, copiedBody, help,
+                                   "catch-handler-body");
+  if (originalCondition != nullptr) {
+    originalCondition->fixupCopy_references(copiedCondition, help);
+  }
+  originalBody->fixupCopy_references(copiedBody, help);
 }
 
 void SgCaseOptionStmt::fixupCopy_references(SgNode *copy,
@@ -1304,7 +2538,19 @@ void SgDefaultOptionStmt::fixupCopy_references(SgNode *copy,
 void SgTemplateArgument::fixupCopy_references(SgNode *copy,
                                               SgCopyHelp &help) const {
   SgTemplateArgument *templateArgument_copy = isSgTemplateArgument(copy);
-  ROSE_ASSERT(templateArgument_copy != NULL);
+  if (templateArgument_copy == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[template-argument-reference-copy]: "
+            "original=%p copy=%p\n",
+            static_cast<const void *>(this), static_cast<void *>(copy));
+    ROSE_ABORT();
+  }
+  requireExactCopiedReferenceRoot(this, templateArgument_copy, help,
+                                  "template-argument");
+  requireExactCopiedOrExternalReferenceEdge(
+      get_templateDeclaration(),
+      templateArgument_copy->get_templateDeclaration(), help,
+      "template-argument-declaration");
 
 #if DEBUG_FIXUP_COPY
   printf("\nIn SgTemplateArgument::fixupCopy_references(): this = %p = %s copy "
@@ -1322,14 +2568,13 @@ void SgTemplateArgument::fixupCopy_references(SgNode *copy,
     }
   }
 
-  if (SgType *unparsable_type_alias_original = get_unparsable_type_alias()) {
+  if (SgType *source_spelled_type_original = get_sourceSpelledType()) {
     SgCopyHelp::copiedNodeMapTypeIterator i =
-        help.get_copiedNodeMap().find(unparsable_type_alias_original);
+        help.get_copiedNodeMap().find(source_spelled_type_original);
     if (i != help.get_copiedNodeMap().end()) {
-      SgType *unparsable_type_alias_copy = isSgType(i->second);
-      ROSE_ASSERT(unparsable_type_alias_copy != NULL);
-      templateArgument_copy->set_unparsable_type_alias(
-          unparsable_type_alias_copy);
+      SgType *source_spelled_type_copy = isSgType(i->second);
+      ROSE_ASSERT(source_spelled_type_copy != NULL);
+      templateArgument_copy->set_sourceSpelledType(source_spelled_type_copy);
     }
   }
 
@@ -1354,4 +2599,6 @@ void SgTemplateArgument::fixupCopy_references(SgNode *copy,
       templateArgument_copy->set_next_instance(next_instance_copy);
     }
   }
+
+  fixupExactCopiedSupportReferences(this, templateArgument_copy, help);
 }

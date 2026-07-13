@@ -11,20 +11,26 @@ void SgTemplateFunctionRefExp::set_symbol(SgTemplateFunctionSymbol *symbol) {
   set_symbol_i(symbol);
 }
 
-SgTemplateFunctionDeclaration *
+SgFunctionDeclaration *
 SgTemplateFunctionRefExp::getAssociatedFunctionDeclaration() const {
-  // This is helpful in chasing down the associated declaration to this function
-  // reference.
-  SgTemplateFunctionDeclaration *returnFunctionDeclaration = NULL;
   SgTemplateFunctionSymbol *functionSymbol = this->get_symbol();
-
-  ROSE_ASSERT(functionSymbol != NULL);
-
-  if (functionSymbol != NULL)
-    returnFunctionDeclaration =
-        isSgTemplateFunctionDeclaration(functionSymbol->get_declaration());
-
-  return returnFunctionDeclaration;
+  SgFunctionDeclaration *sourceTemplate =
+      functionSymbol != nullptr ? functionSymbol->get_declaration() : nullptr;
+  SgFunctionDeclaration *semanticFunction = get_semantic_function_declaration();
+  if (functionSymbol == nullptr || sourceTemplate == nullptr ||
+      isSgTemplateFunctionDeclaration(sourceTemplate) == nullptr ||
+      semanticFunction == nullptr || semanticFunction->get_type() == nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[template-function-reference]: reference=%p "
+            "symbol=%p source-template=%p semantic-function=%p has no exact "
+            "source and semantic callable identities\n",
+            static_cast<const void *>(this),
+            static_cast<void *>(functionSymbol),
+            static_cast<void *>(sourceTemplate),
+            static_cast<void *>(semanticFunction));
+    ROSE_ABORT();
+  }
+  return semanticFunction;
 }
 
 // DQ (6/11/2015): Moved these six access functions, they should not be

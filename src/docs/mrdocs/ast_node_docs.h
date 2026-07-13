@@ -140,10 +140,8 @@ class SgAggregateInitializer;
  *
  * #### `SgAsmStmt::AsmRegisterNameList SgAsmStmt::p_clobberRegisterList`
  * This is the clobber list (list of registers where side-effects happen).
- * This is a list of enum values (type
- * SgInitializedName::asm_register_name_enum) that are standard gnu names for
- * registers.  The only currently supported register set is X86, other register
- * sets could be supported in the future.
+ * This is a list of exact target-register strings supplied by the frontend.
+ * Exact strings preserve register width, aliases, and non-x86 target names.
  *
  * **Member functions**
  *
@@ -181,13 +179,11 @@ class SgAggregateInitializer;
  *
  * #### `SgAsmStmt::get_clobberRegisterList()`
  * Access function for operand list (STL list).
- * - Return: Returns STL list of SgInitializedName::asm_register_name_enum by
- * reference (SgAsmStmt::AsmRegisterNameList).
+ * - Return: Returns the exact target-register strings by reference.
  *
  * #### `SgAsmStmt::get_clobberRegisterList() const`
  * Access function for operand list (STL list).
- * - Return: Returns STL list of SgInitializedName::asm_register_name_enum by
- * const reference (SgAsmStmt::AsmRegisterNameList).
+ * - Return: Returns the exact target-register strings by const reference.
  */
 class SgAsmStmt;
 
@@ -1055,11 +1051,9 @@ class SgClassDefinition;
 /** @brief This class represents the concept of a C++ expression built from a
  * class name.
  *
- * This IR node does not appear within any AST's that I have built, but it is
- * part of the EDG/Sage III translation, and I recall that it is part of the
- * support for the AST associated with template declarations
- * (SgTemplateDeclaration) but that is currently a string while we debug the
- * support for template declarations as a more meaningful AST.
+ * This legacy reference node is retained for AST compatibility. Template
+ * declarations themselves are represented structurally by typed declaration,
+ * parameter, argument, constraint, and definition nodes.
  * - Todo: Need to figure out some examples of whare this is used.
  * - See also:
  * Example of using a SgClassNameRefExp object
@@ -4672,23 +4666,9 @@ class SgIfStmt;
  * - Internal: I think that the preinitalization information might be redundant
  * with the SgStorageModifier information.
  *
- * #### `SgInitializedName::p_register_name_code`
- * Code (following GNU standard) for register name.
- * This value is set based on an enum value of GNU standard codes mappings to
- * register names.
- * - Internal: This is a very architecture dependent aspect of the Sage III IR.
- * We only currently represent code for the Intel X86 processor.
- *
- * #### `SgInitializedName::p_register_name_name`
- * String representing the register name, used when associated GNU code can't be
- * translated. This is a string value representing the name specified
- * (untranslated to the GNU standard register codes). The string is used when
- * the name specified by theused was untranslatable to a more compact GNU code.
- * This forces the IR to hold an rarely used string object in a frequently used
- * IR node, but I don't think we have any simple way around this detail since we
- * have to support the more general use of the asm options in C and C++.
- * - Internal: This is less architecture dependent than the GNU standard
- * register codes, but takes more storage (though it is not used often).
+ * #### `SgInitializedName::p_register_name_string`
+ * Exact target spelling of a GNU variable asm label. The spelling is not
+ * normalized through an architecture-specific register enum.
  *
  * **Member functions**
  *
@@ -5371,38 +5351,6 @@ class SgIsOp;
  * - Return: Returns void.
  */
 class SgLabelStatement;
-
-/** @brief This class represents a lambda expression.
- *
- * This class represents a lambda expression in the input language. Currently,
- * this IR node only works with Python input files.
- *
- * **Data members**
- *
- * #### `SgLambdaRefExp::p_functionDeclaration`
- * The implicit function referred to by this lambda.
- *
- * **Member functions**
- *
- * #### `SgLambdaRefExp::SgLambdaRefExp ()`
- * This is the constructor.
- * This constructor builds the SgLambdaRefExp base class.
- *
- * #### `SgLambdaRefExp::isSgLambdaRefExp (SgNode *s)`
- * Cast function (from derived class to SgLambdaRefExp pointer).
- * This functions returns a SgLambdaRefExp pointer for any input of a
- * pointer to an object derived from a SgLambdaRefExp.
- * - Return: Returns valid pointer to SgLambdaRefExp if input is derived from a
- * SgLambdaRefExp.
- *
- * #### `SgLambdaRefExp::isSgLambdaRefExp (const SgNode *s)`
- * Cast function (from derived class to SgLambdaRefExp pointer).
- * This functions returns a SgLambdaRefExp pointer for any input of a
- * pointer to an object derived from a SgLambdaRefExp.
- * - Return: Returns valid pointer to SgLambdaRefExp if input is derived from a
- * SgLambdaRefExp.
- */
-class SgLambdaRefExp;
 
 /** @brief This class represents a list display.
  *
@@ -6844,9 +6792,6 @@ class SgPragmaDeclaration;
  * functions and member functions to files (to avoid multiply defined symbols at
  * link time).
  *
- * #### `SgProject::p_astMerge`
- * This controls the merging of AST when multiple files are being processed.
- *
  * #### `SgProject::p_openmp_linking`
  * This flag is used to indicate if OpenMP lowering is requested by the command
  * line so linking to ROSE's OpenMP runtime library is needed. This flag is set
@@ -8140,12 +8085,11 @@ class SgTemplateArgument;
  * - function (e_template_function),
  * - member function (e_template_m_function), or
  * - member data (e_template_m_data)
- * The name of the template is available from the get_name() member function.
- * The rest of the template is internally strored as a string (this will be
- * changed very quickly).  The template parameters are available within from
- * the get_templateParameters() member function.  The scope is stored explicitly
- * for this IR node, since name qualification permits it to have a scope
- * independent of its structural location within the source code.
+ * The template name, parameter list, optional requires-clause, classification,
+ * and semantic scope are represented by typed fields. Source declarations and
+ * definitions are represented by the corresponding typed class, function,
+ * variable, or typedef declaration nodes; no source-text payload is stored on
+ * this semantic template identity node.
  * - Todo: Template declarations marked as friend don't seem to be marked as
  * friend internally.
  * - Todo: The scope of a SgTemplateDeclaration should be a
@@ -8170,12 +8114,6 @@ class SgTemplateArgument;
  * This is the name of the template
  * This is the name of the template (e.g. for "template<class T> class X;",
  * the name is "X".
- *
- * #### `SgTemplateDeclaration::p_string`
- * This is the full template declaration as a string only.
- * This is the template declaration as a string (e.g. for "template<class T>
- * class X {};", the string is "template<class T> class X {};".
- * - Todo: Check the accuracy of this statement in the unparser!
  *
  * #### `SgTemplateDeclaration::p_template_kind`
  * This is the classification of the template declaration
@@ -8231,14 +8169,6 @@ class SgTemplateArgument;
  *
  * #### `SgTemplateDeclaration::set_name(SgName name)`
  * Access function for p_name.
- * - Return: Returns void.
- *
- * #### `SgTemplateDeclaration::get_string()`
- * Returns stringified template declaration.
- * - Return: Returns SgName by value.
- *
- * #### `SgTemplateDeclaration::set_string(SgName name)`
- * Access function for p_string.
  * - Return: Returns void.
  *
  * #### `SgTemplateDeclaration::get_template_kind()`
@@ -9764,17 +9694,6 @@ class SgVarRefExp;
  * Each variable is a SgInitializedName object, their can be a list of
  * then, so this list holds that collection of variables.
  *
- * ####
- * `SgVariableDeclaration::p_variableDeclarationContainsBaseTypeDefiningDeclaration`
- * This bool records if the variable declaration has the explicit defining
- * declaration associated with its type. Since types are shared, we can't store
- * such information in the type (else each reference to the type would trigger
- * the output of the full definition of the type). The value of this variable is
- * most typically false.
- * - Todo: Provide an example of where
- * p_variableDeclarationContainsBaseTypeDefiningDeclaration is true and where it
- * is false.
- *
  * #### `SgVariableDeclaration::p_specialization`
  * This is part of template support (variables of templated types).
  * This is most often set to SgDeclarationStatement::e_no_specialization, but
@@ -9816,17 +9735,16 @@ class SgVarRefExp;
  * Access function for p_variables.
  * - Return: Returns a non-const reference to SgInitializedNamePtrList.
  *
- * ####
- * `SgVariableDeclaration::get_variableDeclarationContainsBaseTypeDefiningDeclaration()
- * const` Access function for
- * p_variableDeclarationContainsBaseTypeDefiningDeclaration.
- * - Return: Returns bool.
+ * #### `SgVariableDeclaration::get_baseTypeDefiningDeclaration() const`
+ * Returns the exact class or enum definition structurally owned by this
+ * declaration, or null when the declaration only references its base type.
  *
  * ####
- * `SgVariableDeclaration::set_variableDeclarationContainsBaseTypeDefiningDeclaration(bool
- * variableDeclarationContainsBaseTypeDefiningDeclaration)` Access function for
- * p_variableDeclarationContainsBaseTypeDefiningDeclaration.
- * - Return: Returns void.
+ * `SgVariableDeclaration::set_baseTypeDefiningDeclaration(SgDeclarationStatement*)`
+ * Sets the exact owned, non-autonomous class or enum definition. Null is not a
+ * valid setter argument; absence is the construction-time default. The
+ * definition must already have this variable declaration as its parent and
+ * must be the base definition named by every declarator type.
  *
  * #### `SgVariableDeclaration::get_specialization() const`
  * Access function for p_specialization.

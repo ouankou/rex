@@ -2,7 +2,7 @@
 # DO NOT DISABLE without first checking with a ROSE core developer
 
 # Please do not increase this limit! Only decrease it.
-my $allowedFailures = 24;
+my $allowedFailures = 23;
 
 
 

@@ -45,17 +45,8 @@ void attachComment(const std::string &comment, SgStatement *s);
 //! Attaches a string as a new C++-style comment to the given statement.
 void attachComment(const char *comment, SgStatement *s);
 
-//! Inserts an '#include' of a header file at the first statement.
-bool insertHeader(const std::string &filename, SgProject *proj);
-
-/*!
- *  \brief Returns the preprocessing information list attached to
- *  the given statement; if no preprocessing information exists,
- *  then this routine will create an empty list and return its
- *  pointer. Thus, this routine is guaranteed to return a non-NULL
- *  result.
- */
-AttachedPreprocessingInfoType *createInfoList(SgStatement *s);
+//! Inserts an '#include' into every source file, including an empty file.
+void insertHeader(const std::string &filename, SgProject *proj);
 
 //! Removes all preprocessing information at a given position.
 void cutPreprocInfo(SgBasicBlock *b,

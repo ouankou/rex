@@ -1,0 +1,30 @@
+# REX Flang frontend link libraries. Keep this list limited to parsing,
+# semantics, and expression evaluation; lowering pulls in FIR/MLIR and is not
+# part of the REX frontend contract.
+library FortranSemantics
+library FortranEvaluate
+library FortranParser
+library FortranDecimal
+library FortranSupport
+
+# REX Flang frontend headers. Every path is relative to one installation's
+# include directory.
+header flang/Evaluate/fold.h
+header flang/Evaluate/tools.h
+header flang/Parser/dump-parse-tree.h
+header flang/Parser/instrumented-parser.h
+header flang/Parser/message.h
+header flang/Parser/parse-tree-visitor.h
+header flang/Parser/parse-tree.h
+header flang/Parser/parsing.h
+header flang/Parser/provenance.h
+header flang/Parser/unparse.h
+header flang/Semantics/scope.h
+header flang/Semantics/semantics.h
+header flang/Semantics/symbol.h
+header flang/Semantics/tools.h
+header flang/Support/Fortran-features.h
+header flang/Support/LangOptions.h
+header flang/Support/OpenMP-features.h
+header flang/Support/default-kinds.h
+header flang/omp_lib.h

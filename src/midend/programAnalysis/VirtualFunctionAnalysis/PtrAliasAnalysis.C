@@ -179,9 +179,23 @@ void PtrAliasAnalysis::SortCallGraphRecursive(
 
   assert(graphNode != NULL);
 
+  SgFunctionDeclaration *defining =
+      isSgFunctionDeclaration(targetFunction->get_definingDeclaration());
+  const bool has_analyzable_definition =
+      defining != nullptr && defining->get_definition() != nullptr;
+  const bool has_intra_analysis = intraAliases.count(targetFunction) == 1;
+  if (has_analyzable_definition != has_intra_analysis) {
+    std::cerr << "REX_VFA_INVARIANT[intraprocedural-domain]: function="
+              << targetFunction->get_qualified_name().getString()
+              << " declaration=" << targetFunction << " defining=" << defining
+              << " has-definition=" << has_analyzable_definition
+              << " has-analysis=" << has_intra_analysis << std::endl;
+    ROSE_ABORT();
+  }
+
   colors[graphNode] = GREY;
 
-  if (order == TOPOLOGICAL)
+  if (order == TOPOLOGICAL && has_intra_analysis)
     processingOrder.push_back(targetFunction);
 
   vector<SgGraphNode *> callees;
@@ -204,7 +218,7 @@ void PtrAliasAnalysis::SortCallGraphRecursive(
 
   if (find(processingOrder.begin(), processingOrder.end(), targetFunction) ==
           processingOrder.end() &&
-      order == REVERSE_TOPOLOGICAL)
+      order == REVERSE_TOPOLOGICAL && has_intra_analysis)
     processingOrder.push_back(targetFunction);
 
   colors[graphNode] = BLACK;

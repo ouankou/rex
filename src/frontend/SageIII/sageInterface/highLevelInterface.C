@@ -66,7 +66,8 @@ void buildInitializedName(const SgName &name, SgType *type,
   ROSE_ASSERT(name.is_null() == false);
   ROSE_ASSERT(type != NULL);
 
-  SgInitializedName *initializedName = new SgInitializedName(name, type, scope);
+  SgInitializedName *initializedName = new SgInitializedName(name, type);
+  initializedName->set_scope(scope);
 }
 
 void buildVariableDeclaration();

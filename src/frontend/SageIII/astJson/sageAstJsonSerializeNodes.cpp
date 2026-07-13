@@ -6,6 +6,63 @@ namespace AstJson {
 void writeNodeJson(std::ostream &out, SgNode *node,
                    const std::unordered_map<const SgNode *, uint64_t> &ids,
                    bool comma) {
+  if (SgAuxiliaryDeclarationList *container =
+          isSgAuxiliaryDeclarationList(node)) {
+    SgScopeStatement *owner = isSgScopeStatement(container->get_parent());
+    if (owner == nullptr || owner->get_auxiliary_declarations() != container ||
+        container->get_declarations().empty()) {
+      fprintf(stderr,
+              "REX_AST_JSON_INVARIANT[auxiliary-ownership]: container=%p "
+              "owner=%p/%s published=%p declarations=%zu\n",
+              static_cast<void *>(container), static_cast<void *>(owner),
+              owner != nullptr ? owner->sage_class_name() : "<null>",
+              static_cast<void *>(owner != nullptr
+                                      ? owner->get_auxiliary_declarations()
+                                      : nullptr),
+              container->get_declarations().size());
+      if (owner != nullptr) {
+        size_t depth = 0;
+        for (SgNode *cursor = owner; cursor != nullptr && depth != 12;
+             cursor = cursor->get_parent(), ++depth) {
+          SgFunctionDeclaration *function = isSgFunctionDeclaration(cursor);
+          fprintf(stderr,
+                  "REX_AST_JSON_INVARIANT[auxiliary-ownership-owner]: "
+                  "depth=%zu node=%p/%s parent=%p function=%s\n",
+                  depth, static_cast<void *>(cursor), cursor->sage_class_name(),
+                  static_cast<void *>(cursor->get_parent()),
+                  function != nullptr ? function->get_name().getString().c_str()
+                                      : "<none>");
+          if (SgBasicBlock *block = isSgBasicBlock(cursor)) {
+            fprintf(stderr,
+                    "REX_AST_JSON_INVARIANT[auxiliary-ownership-block]: "
+                    "depth=%zu statements=%zu",
+                    depth, block->get_statements().size());
+            for (SgStatement *statement : block->get_statements()) {
+              fprintf(stderr, " %p/%s", static_cast<void *>(statement),
+                      statement != nullptr ? statement->sage_class_name()
+                                           : "<null>");
+            }
+            fprintf(stderr, "\n");
+          }
+        }
+      }
+      throw std::runtime_error(
+          "AST JSON cannot serialize malformed auxiliary declaration "
+          "ownership");
+    }
+    for (SgDeclarationStatement *declaration : container->get_declarations()) {
+      if (declaration == nullptr || declaration->get_parent() != container ||
+          declaration->get_scope() != owner ||
+          std::count(container->get_declarations().begin(),
+                     container->get_declarations().end(), declaration) != 1 ||
+          owner->statementExistsInScope(declaration)) {
+        throw std::runtime_error(
+            "AST JSON cannot serialize an auxiliary declaration with "
+            "inconsistent semantic or source-emission ownership");
+      }
+    }
+  }
+
   indent(out, 4);
   out << "{\n";
   writeIntegerField(out, 6, "id", ids.at(node));
@@ -19,8 +76,16 @@ void writeNodeJson(std::ostream &out, SgNode *node,
   writeBoolField(out, 8, "contains_transformation_to_surrounding_whitespace",
                  located_for_flags != nullptr &&
                      located_for_flags
-                         ->get_containsTransformationToSurroundingWhitespace(),
-                 false);
+                         ->get_containsTransformationToSurroundingWhitespace());
+  writeBoolField(
+      out, 8, "source_range_ends_in_macro_expansion",
+      located_for_flags != nullptr &&
+          located_for_flags->get_source_range_ends_in_macro_expansion());
+  writeBoolField(
+      out, 8, "source_range_is_macro_expansion_fragment",
+      located_for_flags != nullptr &&
+          located_for_flags->get_source_range_is_macro_expansion_fragment(),
+      false);
   indent(out, 6);
   out << "},\n";
 
@@ -31,7 +96,15 @@ void writeNodeJson(std::ostream &out, SgNode *node,
   writeFileInfoJson(out, 8, node->get_startOfConstruct(), true);
   indent(out, 8);
   out << jsonString("end") << ": ";
-  writeFileInfoJson(out, 8, node->get_endOfConstruct(), false);
+  SgExpression *expression_for_location = isSgExpression(node);
+  writeFileInfoJson(out, 8, node->get_endOfConstruct(),
+                    expression_for_location != nullptr);
+  if (expression_for_location != nullptr) {
+    indent(out, 8);
+    out << jsonString("operator") << ": ";
+    writeFileInfoJson(out, 8, expression_for_location->get_operatorPosition(),
+                      false);
+  }
   indent(out, 6);
   out << "},\n";
 
@@ -62,13 +135,27 @@ void writeNodeJson(std::ostream &out, SgNode *node,
       append_manual_edge(clause, "clauses");
     }
   };
-  if (SgOmpClauseStatement *stmt = isSgOmpClauseStatement(node)) {
-    append_clause_edges(stmt->get_clauses());
-  } else if (SgOmpClauseBodyStatement *stmt =
-                 isSgOmpClauseBodyStatement(node)) {
+  if (SgOmpDeclareSimdStatement *stmt = isSgOmpDeclareSimdStatement(node)) {
+    if (stmt->get_function_ref() == nullptr ||
+        stmt->get_function_ref()->get_parent() != stmt) {
+      throw std::runtime_error(
+          "AST JSON declare simd statement has no required exact target");
+    }
+    append_manual_edge(stmt->get_function_ref(), "function_ref");
     append_clause_edges(stmt->get_clauses());
   }
-  if (SgOmpDeclareSimdStatement *stmt = isSgOmpDeclareSimdStatement(node)) {
+  if (SgOmpDeclareVariantStatement *stmt =
+          isSgOmpDeclareVariantStatement(node)) {
+    if (stmt->get_base_function_ref() == nullptr ||
+        stmt->get_base_function_ref()->get_parent() != stmt ||
+        stmt->get_variant_function_ref() == nullptr ||
+        stmt->get_variant_function_ref()->get_parent() != stmt) {
+      throw std::runtime_error(
+          "AST JSON declare variant statement has no required exact target");
+    }
+    append_manual_edge(stmt->get_base_function_ref(), "base_function_ref");
+    append_manual_edge(stmt->get_variant_function_ref(),
+                       "variant_function_ref");
     append_clause_edges(stmt->get_clauses());
   }
   if (SgOmpDeclareMapperStatement *stmt = isSgOmpDeclareMapperStatement(node)) {
@@ -93,6 +180,60 @@ void writeNodeJson(std::ostream &out, SgNode *node,
                          "definingDeclaration");
     }
   }
+  if (SgVariableDeclaration *decl = isSgVariableDeclaration(node)) {
+    for (SgTemplateParameterList *parameter_list :
+         decl->get_sourceSpelledTemplateHeaders()) {
+      if (parameter_list == nullptr || parameter_list->get_parent() != decl) {
+        throw std::runtime_error(
+            "AST JSON variable source template header is not owned by its "
+            "exact SgVariableDeclaration");
+      }
+      append_manual_edge(parameter_list, "source_spelled_template_headers");
+    }
+  }
+  if (SgFunctionDeclaration *decl = isSgFunctionDeclaration(node)) {
+    for (SgTemplateParameterList *parameter_list :
+         decl->get_sourceSpelledTemplateHeaders()) {
+      if (parameter_list == nullptr || parameter_list->get_parent() != decl) {
+        throw std::runtime_error(
+            "AST JSON function source template header is not owned by its "
+            "exact SgFunctionDeclaration");
+      }
+      append_manual_edge(parameter_list, "source_spelled_template_headers");
+    }
+    if (SgFunctionDeclaration *pattern =
+            decl->get_templateInstantiationPattern()) {
+      if (pattern == decl ||
+          isSgTemplateInstantiationFunctionDecl(decl) != nullptr ||
+          isSgTemplateInstantiationMemberFunctionDecl(decl) != nullptr ||
+          pattern->get_templateInstantiationPattern() != nullptr) {
+        throw std::runtime_error(
+            "AST JSON function has a malformed exact instantiation-pattern "
+            "edge");
+      }
+    }
+    if (decl->get_template_instantiation_pattern_is_unpublished() ==
+        (decl->get_templateInstantiationPattern() != nullptr)) {
+      if (decl->get_template_instantiation_pattern_is_unpublished()) {
+        throw std::runtime_error(
+            "AST JSON function has both exact and unpublished instantiation "
+            "patterns");
+      }
+    }
+    append_manual_edge(decl->get_templateInstantiationPattern(),
+                       "template_instantiation_pattern");
+  }
+  if (SgClassDeclaration *decl = isSgClassDeclaration(node)) {
+    for (SgTemplateParameterList *parameter_list :
+         decl->get_sourceSpelledTemplateHeaders()) {
+      if (parameter_list == nullptr || parameter_list->get_parent() != decl) {
+        throw std::runtime_error(
+            "AST JSON class source template header is not owned by its exact "
+            "SgClassDeclaration");
+      }
+      append_manual_edge(parameter_list, "source_spelled_template_headers");
+    }
+  }
   if (SgStatement *stmt = isSgStatement(node)) {
     append_manual_edge(stmt->get_numeric_label(), "numeric_label");
   }
@@ -101,6 +242,10 @@ void writeNodeJson(std::ostream &out, SgNode *node,
   }
   if (SgClassDefinition *def = isSgClassDefinition(node)) {
     append_manual_edge(def->get_declaration(), "declaration");
+  }
+  if (SgBasicBlock *stmt = isSgBasicBlock(node)) {
+    append_manual_edge(stmt->get_fortran_block_end_numeric_label(),
+                       "end_numeric_label");
   }
   if (SgIfStmt *stmt = isSgIfStmt(node)) {
     append_manual_edge(stmt->get_else_numeric_label(), "else_numeric_label");
@@ -127,6 +272,56 @@ void writeNodeJson(std::ostream &out, SgNode *node,
   bool wrote_edge = false;
   for (const std::pair<SgNode *, std::string> &entry : pointers) {
     if (entry.first == nullptr) {
+      continue;
+    }
+    if (node == collectionBoundaryRoot && entry.second == "parent") {
+      continue;
+    }
+    if (isSgSourceFile(node) != nullptr &&
+        entry.second == "associated_include_file") {
+      // SgIncludeFile is parser planning metadata outside the Sage AST
+      // ownership graph.  Physical include syntax is serialized on its exact
+      // located owner as preprocessing information.
+      continue;
+    }
+    if (collectionBoundaryRoot != nullptr && isSgSourceFile(node) != nullptr &&
+        entry.second == "token_list") {
+      // Token ownership is part of a complete source-file checkpoint, not of
+      // the typed lexical subtree used to compare repeated header instances.
+      continue;
+    }
+    if (entry.second == "frontendExternalFileList") {
+      SgSourceFile *source_file = isSgSourceFile(node);
+      SgFileList *external_files = isSgFileList(entry.first);
+      SgFileList *project_files = source_file != nullptr
+                                      ? isSgFileList(source_file->get_parent())
+                                      : nullptr;
+      if (source_file == nullptr || external_files == nullptr ||
+          source_file->get_frontendExternalFileList() != external_files ||
+          external_files->get_parent() != source_file ||
+          project_files == nullptr ||
+          external_files->get_listOfFiles().empty()) {
+        throw std::runtime_error(
+            "AST JSON found malformed frontend-external file ownership");
+      }
+      std::unordered_set<SgFile *> unique_external_files;
+      for (SgFile *external_file : external_files->get_listOfFiles()) {
+        if (external_file == nullptr ||
+            external_file->get_parent() != external_files ||
+            !external_file->get_skip_unparse() ||
+            !external_file->get_skipfinalCompileStep() ||
+            std::find(project_files->get_listOfFiles().begin(),
+                      project_files->get_listOfFiles().end(), external_file) !=
+                project_files->get_listOfFiles().end() ||
+            !unique_external_files.insert(external_file).second) {
+          throw std::runtime_error(
+              "AST JSON found malformed frontend-external source file");
+        }
+      }
+      // Imported module source files are frontend-only semantic context, not
+      // part of this source file's checkpoint boundary.  The external
+      // declaration records and ownership-path metadata carry every semantic
+      // dependency used by the checkpoint.
       continue;
     }
     if (entry.second == "scope") {
@@ -171,6 +366,21 @@ void writeNodeJson(std::ostream &out, SgNode *node,
         functionParameterScopeNeedsExternalReferenceRecord(
             isSgFunctionDeclaration(node), ids)) {
       continue;
+    }
+    if (entry.second == "scope") {
+      SgInitializedName *name = isSgInitializedName(node);
+      SgFunctionParameterList *parameters =
+          name != nullptr ? isSgFunctionParameterList(name->get_parent())
+                          : nullptr;
+      SgFunctionDeclaration *function =
+          parameters != nullptr
+              ? isSgFunctionDeclaration(parameters->get_parent())
+              : nullptr;
+      if (function != nullptr && function->get_parameterList() == parameters &&
+          function->get_functionParameterScope() == entry.first &&
+          functionParameterScopeNeedsExternalReferenceRecord(function, ids)) {
+        continue;
+      }
     }
     auto target = ids.find(entry.first);
     if (target == ids.end()) {
@@ -297,12 +507,34 @@ void writeMetadataJson(std::ostream &out, SgSourceFile *file,
     writeStringField(out, 4, "source_file", "");
     writeStringField(out, 4, "output_file", "");
     writeStringArrayField(out, 4, "command_line", {});
+    writeStringArrayField(out, 4, "frontend_include_ownership_paths", {});
+    writeStringArrayField(out, 4, "frontend_system_include_ownership_paths",
+                          {});
+    writeStringArrayField(out, 4, "frontend_external_ownership_paths", {});
     writeFileIdMapJson(out, 4, false);
   } else {
     writeStringField(out, 4, "source_file", file->get_sourceFileNameWithPath());
     writeStringField(out, 4, "output_file",
                      file->get_unparse_output_filename());
     writeStringArrayField(out, 4, "command_line", commandLine(file));
+    const SgStringList &include_ownership_paths =
+        file->get_frontendIncludeOwnershipPathList();
+    writeStringArrayField(
+        out, 4, "frontend_include_ownership_paths",
+        std::vector<std::string>(include_ownership_paths.begin(),
+                                 include_ownership_paths.end()));
+    const SgStringList &system_include_ownership_paths =
+        file->get_frontendSystemIncludeOwnershipPathList();
+    writeStringArrayField(
+        out, 4, "frontend_system_include_ownership_paths",
+        std::vector<std::string>(system_include_ownership_paths.begin(),
+                                 system_include_ownership_paths.end()));
+    const SgStringList &external_ownership_paths =
+        file->get_frontendExternalOwnershipPathList();
+    writeStringArrayField(
+        out, 4, "frontend_external_ownership_paths",
+        std::vector<std::string>(external_ownership_paths.begin(),
+                                 external_ownership_paths.end()));
     writeBoolField(out, 4, "openmp", file->get_openmp());
     writeBoolField(out, 4, "openmp_parse_only", file->get_openmp_parse_only());
     writeBoolField(out, 4, "openmp_ast_only", file->get_openmp_ast_only());
@@ -312,8 +544,6 @@ void writeMetadataJson(std::ostream &out, SgSourceFile *file,
     writeBoolField(out, 4, "openacc", file->get_openacc());
     writeBoolField(out, 4, "skipfinalCompileStep",
                    file->get_skipfinalCompileStep());
-    writeBoolField(out, 4, "suppress_variable_declaration_normalization",
-                   file->get_suppress_variable_declaration_normalization());
     writeBoolField(out, 4, "unparse_tokens", file->get_unparse_tokens());
     writeFileIdMapJson(out, 4, false);
   }
@@ -324,128 +554,12 @@ void writeMetadataJson(std::ostream &out, SgSourceFile *file,
 std::string buildJson(SgNode *root, Checkpoint checkpoint, SgSourceFile *file) {
   ROSE_ASSERT(root != nullptr);
 
-  struct StaticDataMemberQualificationTraversal : public AstSimpleProcessing {
-    static size_t qualificationDepth(const std::string &prefix) {
-      size_t depth = 0;
-      size_t pos = 0;
-      while ((pos = prefix.find("::", pos)) != std::string::npos) {
-        ++depth;
-        pos += 2;
-      }
-      return depth;
-    }
-
-    static SgClassDeclaration *
-    classDeclarationForScope(SgScopeStatement *scope) {
-      if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
-        return class_def->get_declaration();
-      }
-      return nullptr;
-    }
-
-    static std::string qualifierForOwner(SgClassDeclaration *owner_decl) {
-      if (owner_decl == nullptr ||
-          isSgTemplateClassDeclaration(owner_decl) != nullptr ||
-          isSgTemplateInstantiationDecl(owner_decl) != nullptr) {
-        return "";
-      }
-      std::string prefix = owner_decl->get_qualified_name().getString();
-      if (prefix.empty()) {
-        return "";
-      }
-      while (prefix.rfind("::", 0) == 0) {
-        prefix.erase(0, 2);
-      }
-      prefix += "::";
-      return prefix;
-    }
-
-    static bool insideMemberFunctionOfOwner(SgNode *node,
-                                            SgClassDeclaration *owner_decl) {
-      for (SgNode *current = node; current != nullptr;
-           current = current->get_parent()) {
-        if (SgMemberFunctionDeclaration *member_decl =
-                isSgMemberFunctionDeclaration(current)) {
-          return member_decl->get_class_scope() == owner_decl->get_definition();
-        }
-      }
-      return false;
-    }
-
-    static void setNameQualifier(SgNode *node, const std::string &prefix) {
-      SgUnorderedMapNodeToString &name_map =
-          SgNode::get_globalQualifiedNameMapForNames();
-      auto found = name_map.find(node);
-      if (found != name_map.end()) {
-        std::string existing = found->second;
-        while (existing.rfind("::", 0) == 0) {
-          existing.erase(0, 2);
-        }
-        if (existing == prefix) {
-          found->second = prefix;
-          return;
-        }
-        throw std::runtime_error(
-            "AST JSON qualifier materialization conflicts with existing Sage "
-            "qualified-name map");
-      }
-      name_map[node] = prefix;
-    }
-
-    void visit(SgNode *node) override {
-      if (SgVarRefExp *ref = isSgVarRefExp(node)) {
-        if (isRightHandSideOfMemberAccess(ref)) {
-          return;
-        }
-        SgVariableSymbol *symbol = ref->get_symbol();
-        SgInitializedName *decl_name =
-            symbol != nullptr ? symbol->get_declaration() : nullptr;
-        SgClassDeclaration *owner_decl =
-            decl_name != nullptr
-                ? classDeclarationForScope(decl_name->get_scope())
-                : nullptr;
-        const std::string prefix = qualifierForOwner(owner_decl);
-        if (!prefix.empty() && !insideMemberFunctionOfOwner(ref, owner_decl)) {
-          setNameQualifier(ref, prefix);
-          ref->set_name_qualification_length(
-              static_cast<int>(qualificationDepth(prefix)));
-          ref->set_global_qualification_required(false);
-          ref->set_type_elaboration_required(false);
-        }
-        return;
-      }
-
-      SgVariableDeclaration *decl = isSgVariableDeclaration(node);
-      if (decl == nullptr || decl->get_variables().empty()) {
-        return;
-      }
-
-      SgInitializedName *name = decl->get_variables().front();
-      if (name == nullptr || name->get_prev_decl_item() == nullptr ||
-          name->get_scope() == nullptr || decl->get_scope() == nullptr ||
-          name->get_scope() == decl->get_scope()) {
-        return;
-      }
-
-      SgClassDeclaration *owner_decl =
-          classDeclarationForScope(name->get_scope());
-      const std::string prefix = qualifierForOwner(owner_decl);
-      if (prefix.empty()) {
-        return;
-      }
-      setNameQualifier(name, prefix);
-      name->set_name_qualification_length(
-          static_cast<int>(qualificationDepth(prefix)));
-      name->set_global_qualification_required(prefix.rfind("::", 0) == 0);
-      name->set_type_elaboration_required(false);
-    }
-  };
-
-  StaticDataMemberQualificationTraversal static_data_member_qualification;
-  static_data_member_qualification.traverse(root, preorder);
-
-  CollectionBoundaryGuard boundary(isSgSourceFile(root));
-  std::vector<SgNode *> nodes = collectNodes(root);
+  CollectionBoundaryGuard boundary(file != nullptr ? file
+                                                   : isSgSourceFile(root));
+  SubtreeBoundaryGuard subtreeBoundary(root != file ? root : nullptr);
+  ArrayTypeSerializationIdentityGuard array_type_identity_guard;
+  PointerMemberTypeSerializationIdentityGuard type_identity_guard;
+  std::vector<SgNode *> nodes = collectNodes(root, file);
   std::unordered_map<const SgNode *, uint64_t> ids;
   ids.reserve(nodes.size());
   std::unordered_set<uint64_t> used_ids;

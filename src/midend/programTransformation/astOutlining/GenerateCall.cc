@@ -11,6 +11,8 @@
 
 #include "sageBuilder.h"
 
+#include <algorithm>
+
 #include <iostream>
 
 #include <sstream>
@@ -53,9 +55,15 @@ void Outliner::appendIndividualFunctionCallArgs(
        ++i) {
     bool using_orig_type = false;
     SgInitializedName *iname = (*i)->get_declaration();
-    if (iname)
-      if (varUsingOriginalType.find(iname) != varUsingOriginalType.end())
-        using_orig_type = true;
+    if (iname == NULL) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[call-argument-identity]: variable "
+              "symbol=%p name=%s has no exact declaration\n",
+              static_cast<const void *>(*i), (*i)->get_name().str());
+      ROSE_ABORT();
+    }
+    if (varUsingOriginalType.find(iname) != varUsingOriginalType.end())
+      using_orig_type = true;
 
     // Create variable reference to pass to the function.
     SgVarRefExp *v_ref =
@@ -79,7 +87,8 @@ void Outliner::appendIndividualFunctionCallArgs(
       } else // conservatively always use &a for the default case (no wrapper,
              // none classic)
       {
-        i_arg = SageBuilder::buildAddressOfOp(v_ref);
+        i_arg = SageBuilder::buildAddressOfOp(
+            v_ref, ASTtools::buildAddressOfResultType(v_ref->get_type()));
       }
       ROSE_ASSERT(i_arg);
       e_list->append_expression(i_arg);
@@ -98,16 +107,23 @@ static void appendSingleWrapperArgument(const ASTtools::VarSymSet_t &syms,
                                         std::string arg_name,
                                         SgExprListExp *e_list,
                                         SgScopeStatement *scope) {
-  if (!e_list)
-    return;
+  if (e_list == NULL) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[call-argument-list]: wrapper=%s has no "
+            "exact call argument list\n",
+            arg_name.c_str());
+    ROSE_ABORT();
+  }
   if ((Outliner::useParameterWrapper || Outliner::useStructureWrapper) &&
       (syms.size() > 0)) {
     ROSE_ASSERT(scope != NULL);
     if (Outliner::useStructureWrapper) {
       // using &_out_argv as a wrapper
+      SgVarRefExp *wrapper_ref = SageBuilder::buildVarRefExp(arg_name, scope);
       SageInterface::appendExpression(
           e_list, SageBuilder::buildAddressOfOp(
-                      SageBuilder::buildVarRefExp(arg_name, scope)));
+                      wrapper_ref, ASTtools::buildAddressOfResultType(
+                                       wrapper_ref->get_type())));
     } else // using array of pointers wrapper
     {
       // using void * __out_argv[n] as a wrapper
@@ -129,115 +145,259 @@ static void appendSingleWrapperArgument(const ASTtools::VarSymSet_t &syms,
   }
 }
 
-static void
-appendExplicitTemplateArguments(const SgTemplateParameterPtrList &params,
-                                SgTemplateArgumentPtrList &args) {
+enum class ExplicitTemplateArgumentSurface {
+  semantic_declaration,
+  generated_reference
+};
+
+static SgFunctionDeclaration *
+canonicalFunctionFamilyDeclaration(SgFunctionDeclaration *declaration) {
+  if (declaration == NULL)
+    return NULL;
+  if (SgFunctionDeclaration *first = isSgFunctionDeclaration(
+          declaration->get_firstNondefiningDeclaration()))
+    return first;
+  if (SgFunctionDeclaration *defining =
+          isSgFunctionDeclaration(declaration->get_definingDeclaration()))
+    return defining;
+  return declaration;
+}
+
+static const Outliner::OutlinedLocalTypeTemplateEntry *
+findLocalTypeTemplateArgument(
+    const Outliner::OutlinedLocalTypeTemplatePlan &plan,
+    std::size_t parameter_index) {
+  const Outliner::OutlinedLocalTypeTemplateEntry *result = NULL;
+  for (const Outliner::OutlinedLocalTypeTemplateEntry &entry : plan.entries) {
+    if (entry.template_parameter_index != parameter_index)
+      continue;
+    if (result != NULL) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[local-type-call-argument]: template "
+              "parameter index=%zu has more than one exact actual type\n",
+              parameter_index);
+      ROSE_ABORT();
+    }
+    result = &entry;
+  }
+  return result;
+}
+
+static void appendExplicitTemplateArguments(
+    const SgTemplateParameterPtrList &params, SgTemplateArgumentPtrList &args,
+    ExplicitTemplateArgumentSurface surface, SgScopeStatement *call_scope,
+    const Outliner::OutlinedLocalTypeTemplatePlan &local_type_template_plan) {
   int param_index = 0;
   for (SgTemplateParameter *param : params) {
     if (param == NULL) {
-      ++param_index;
-      continue;
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[template-argument-identity]: null "
+              "template parameter at position %d\n",
+              param_index);
+      ROSE_ABORT();
     }
+    SgTemplateArgument *argument = nullptr;
     switch (param->get_parameterType()) {
     case SgTemplateParameter::type_parameter: {
       SgType *arg_type = param->get_type();
-      if (arg_type == NULL)
-        arg_type = param->get_defaultTypeParameter();
-      if (arg_type != NULL) {
-        args.push_back(new SgTemplateArgument(arg_type, true));
+      const Outliner::OutlinedLocalTypeTemplateEntry *local_type_entry =
+          findLocalTypeTemplateArgument(local_type_template_plan, param_index);
+      if (local_type_entry != NULL) {
+        SgFunctionDeclaration *call_function =
+            SageInterface::getEnclosingFunctionDeclaration(call_scope, true);
+        if (local_type_entry->source_type == NULL ||
+            local_type_entry->defining_parameter_type == NULL ||
+            local_type_entry->owning_function == NULL ||
+            canonicalFunctionFamilyDeclaration(call_function) !=
+                canonicalFunctionFamilyDeclaration(
+                    local_type_entry->owning_function) ||
+            isSgTemplateType(arg_type) == NULL) {
+          fprintf(
+              stderr,
+              "REX_OUTLINER_INVARIANT[local-type-call-argument]: "
+              "parameter index=%d source=%p generated=%p owner=%p "
+              "call-function=%p does not identify one visible exact local "
+              "type argument\n",
+              param_index, static_cast<void *>(local_type_entry->source_type),
+              static_cast<void *>(local_type_entry->defining_parameter_type),
+              static_cast<void *>(local_type_entry->owning_function),
+              static_cast<void *>(call_function));
+          ROSE_ABORT();
+        }
+        arg_type = local_type_entry->source_type;
       }
+      if (isSgTemplateType(arg_type) == NULL &&
+          isSgNonrealType(arg_type) == NULL && local_type_entry == NULL) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[template-argument-identity]: type "
+                "parameter at position %d has no exact template-parameter "
+                "type identity\n",
+                param_index);
+        ROSE_ABORT();
+      }
+      argument = new SgTemplateArgument(arg_type, true);
       break;
     }
     case SgTemplateParameter::nontype_parameter: {
-      SgExpression *arg_expr = param->get_expression();
-      if (arg_expr == NULL) {
-        SgTemplateParameterVal *param_val =
-            SageBuilder::buildTemplateParameterVal_nfi(param_index, "");
-        SgType *value_type = param->get_type();
-        if (value_type == NULL && param->get_initializedName() != NULL)
-          value_type = param->get_initializedName()->get_type();
-        if (value_type != NULL)
-          param_val->set_valueType(value_type);
-        arg_expr = param_val;
+      SgInitializedName *initialized_name = param->get_initializedName();
+      if (initialized_name == NULL ||
+          initialized_name->get_name().getString().empty()) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[template-argument-identity]: "
+                "non-type parameter at position %d has no exact name\n",
+                param_index);
+        ROSE_ABORT();
       }
-      if (arg_expr != NULL) {
-        args.push_back(new SgTemplateArgument(arg_expr, true));
+      SgTemplateParameterVal *arg_expr =
+          SageBuilder::buildTemplateParameterVal_nfi(
+              param_index, initialized_name->get_name().getString());
+      SgType *value_type = param->get_type();
+      if (value_type == NULL)
+        value_type = initialized_name->get_type();
+      if (value_type == NULL) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[template-argument-identity]: "
+                "non-type parameter at position %d has no exact type\n",
+                param_index);
+        ROSE_ABORT();
       }
+      arg_expr->set_valueType(value_type);
+      if (surface == ExplicitTemplateArgumentSurface::generated_reference) {
+        SageInterface::setOneSourcePositionForTransformation(arg_expr);
+      }
+      argument = new SgTemplateArgument(arg_expr, true);
       break;
     }
     case SgTemplateParameter::template_parameter: {
       SgTemplateDeclaration *template_decl =
           isSgTemplateDeclaration(param->get_templateDeclaration());
-      if (template_decl != NULL) {
-        args.push_back(new SgTemplateArgument(template_decl, true));
+      if (template_decl == NULL) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[template-argument-identity]: "
+                "template parameter at position %d has no exact template "
+                "declaration\n",
+                param_index);
+        ROSE_ABORT();
       }
+      argument = new SgTemplateArgument(template_decl, true);
       break;
     }
     default:
-      break;
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[template-argument-identity]: template "
+              "parameter at position %d has unsupported kind=%d\n",
+              param_index, static_cast<int>(param->get_parameterType()));
+      ROSE_ABORT();
     }
+    ROSE_ASSERT(argument != nullptr);
+    ASTtools::publishTemplateParameterPackExpansion(param, argument);
+    args.push_back(argument);
     ++param_index;
   }
 }
 
-static SgFunctionDeclaration *
-buildTemplateInstantiationForCall(SgTemplateFunctionDeclaration *template_func,
-                                  SgScopeStatement *scope) {
-  if (template_func == NULL || scope == NULL)
-    return NULL;
+static SgNonrealRefExp *buildExplicitTemplateReferenceForCall(
+    SgTemplateFunctionDeclaration *source_template,
+    SgScopeStatement *call_scope,
+    const Outliner::OutlinedLocalTypeTemplatePlan &local_type_template_plan) {
+  ROSE_ASSERT(source_template != NULL);
+  ROSE_ASSERT(call_scope != NULL);
 
-  const SgTemplateParameterPtrList *params =
-      &(template_func->get_templateParameters());
-  SgTemplateFunctionDeclaration *template_decl = template_func;
-  if (params->empty()) {
-    if (SgTemplateFunctionDeclaration *first = isSgTemplateFunctionDeclaration(
-            template_func->get_firstNondefiningDeclaration())) {
-      params = &(first->get_templateParameters());
-      template_decl = first;
+  const SgTemplateParameterPtrList &parameters =
+      source_template->get_templateParameters();
+  if (parameters.empty()) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[template-call-identity]: source "
+            "template=%p name=%s has no template parameters\n",
+            static_cast<void *>(source_template),
+            source_template->get_name().str());
+    ROSE_ABORT();
+  }
+
+  SgTemplateArgumentPtrList declaration_arguments;
+  appendExplicitTemplateArguments(
+      parameters, declaration_arguments,
+      ExplicitTemplateArgumentSurface::semantic_declaration, call_scope,
+      local_type_template_plan);
+  ROSE_ASSERT(declaration_arguments.size() == parameters.size());
+
+  // A dependent template-id needs a distinct spelling identity in the
+  // declaration scope used by SgNonrealRefExp.  Its typed arguments remain the
+  // source of truth; this semantic key is used only to keep different
+  // dependent argument lists from aliasing one declaration.
+  std::ostringstream semantic_name;
+  semantic_name << source_template->get_name().str() << '<';
+  bool first_argument = true;
+  for (SgTemplateArgument *argument : declaration_arguments) {
+    if (argument == NULL) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[template-call-identity]: template=%s "
+              "contains a null explicit argument\n",
+              source_template->get_name().str());
+      ROSE_ABORT();
     }
+    const std::string mangled_argument = argument->get_mangled_name().str();
+    if (mangled_argument.empty()) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[template-call-identity]: template=%s "
+              "contains an argument without semantic identity\n",
+              source_template->get_name().str());
+      ROSE_ABORT();
+    }
+    if (!first_argument)
+      semantic_name << ',';
+    first_argument = false;
+    semantic_name << mangled_argument.size() << ':' << mangled_argument;
   }
-  if (params->empty())
-    return NULL;
+  semantic_name << '>';
+  const SgName semantic_identity(semantic_name.str());
 
-  SgTemplateArgumentPtrList template_args;
-  appendExplicitTemplateArguments(*params, template_args);
-  if (template_args.empty())
-    return NULL;
-
-  SgFunctionParameterList *param_list =
-      SageInterface::deepCopy<SgFunctionParameterList>(
-          template_func->get_parameterList());
-  ROSE_ASSERT(param_list != NULL);
-
-  SgFunctionType *func_type = template_func->get_type();
-  ROSE_ASSERT(func_type != NULL);
-
-  SgFunctionDeclaration *inst_decl =
-      SageBuilder::buildNondefiningFunctionDeclaration(
-          template_func->get_name(), func_type->get_return_type(), param_list,
-          scope, true, &template_args,
-          template_func->get_declarationModifier()
-              .get_storageModifier()
-              .get_modifier());
-  ROSE_ASSERT(inst_decl != NULL);
-
-  SgTemplateInstantiationFunctionDecl *inst_func =
-      isSgTemplateInstantiationFunctionDecl(inst_decl);
-  ROSE_ASSERT(inst_func != NULL);
-
-  inst_func->set_templateDeclaration(template_decl);
-  inst_func->set_template_argument_list_is_explicit(true);
-
-  if (inst_func->get_startOfConstruct() != NULL) {
-    inst_func->get_startOfConstruct()->setCompilerGenerated();
-    inst_func->get_startOfConstruct()->unsetOutputInCodeGeneration();
+  SgNonrealType *spelling_type = SageBuilder::buildSemanticNonrealType(
+      source_template->get_name(), call_scope, &declaration_arguments,
+      &semantic_identity);
+  SgNonrealDecl *spelling_declaration =
+      spelling_type != NULL ? isSgNonrealDecl(spelling_type->get_declaration())
+                            : NULL;
+  SgNonrealSymbol *spelling_symbol =
+      spelling_declaration != NULL
+          ? isSgNonrealSymbol(
+                spelling_declaration->get_symbol_from_symbol_table())
+          : NULL;
+  if (spelling_declaration == NULL || spelling_symbol == NULL ||
+      spelling_symbol->get_declaration() != spelling_declaration) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[template-call-spelling]: template=%s "
+            "did not produce one exact typed spelling declaration\n",
+            source_template->get_name().str());
+    ROSE_ABORT();
   }
-  if (inst_func->get_endOfConstruct() != NULL) {
-    inst_func->get_endOfConstruct()->setCompilerGenerated();
-    inst_func->get_endOfConstruct()->unsetOutputInCodeGeneration();
-  }
+  spelling_declaration->set_templateDeclaration(source_template);
 
-  return inst_decl;
+  SgNonrealRefExp *reference =
+      SageBuilder::buildNonrealRefExp_nfi(spelling_symbol);
+  ROSE_ASSERT(reference != NULL);
+  SgTemplateArgumentPtrList reference_arguments;
+  appendExplicitTemplateArguments(
+      parameters, reference_arguments,
+      ExplicitTemplateArgumentSurface::generated_reference, call_scope,
+      local_type_template_plan);
+  reference->get_templateArguments() = reference_arguments;
+  SageBuilder::setTemplateArgumentParents(reference);
+  reference->set_explicit_template_argument_list(true);
+  reference->set_resolved_function_declaration(source_template);
+  SageInterface::setOneSourcePositionForTransformation(reference);
+  SageInterface::requireResolvedFunctionTemplateReference(
+      reference, "Outliner generated template call");
+  if (reference->get_resolved_function_declaration() != source_template ||
+      reference->get_templateArguments().size() != parameters.size() ||
+      spelling_declaration->get_templateDeclaration() != source_template) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[template-call-spelling]: template=%s "
+            "lost its exact source declaration or explicit typed arguments\n",
+            source_template->get_name().str());
+    ROSE_ABORT();
+  }
+  return reference;
 }
 
 // =====================================================================
@@ -252,7 +412,8 @@ buildTemplateInstantiationForCall(SgTemplateFunctionDeclaration *template_func,
 //     wrapper_name: is the name of the wrapper parameter
 //     varsUsingOriginalForm: is irrelevant in this choice
 SgStatement *Outliner::generateCall(
-    SgFunctionDeclaration *out_func, // the outlined function we want to call
+    SgFunctionDeclaration
+        *source_call_declaration, // exact source-visible declaration to call
     const ASTtools::VarSymSet_t
         &syms, // variables for generating function arguments
     const std::set<SgInitializedName *>
@@ -260,60 +421,104 @@ SgStatement *Outliner::generateCall(
                                // using a (originalForm) vs. &a
     std::string wrapper_name,  // when parameter wrapping is used, provide
                                // wrapper argument's name
-    SgScopeStatement *scope)   // the scope in which we insert the function call
-{
+    SgScopeStatement *scope,   // the scope in which we insert the function call
+    const OutlinedLocalTypeTemplatePlan &local_type_template_plan) {
   // Create a reference to the function.
   SgGlobal *glob_scope = SageInterface::getGlobalScope(scope);
   ROSE_ASSERT(glob_scope != NULL);
+  if (source_call_declaration == NULL ||
+      source_call_declaration->get_firstNondefiningDeclaration() !=
+          source_call_declaration ||
+      source_call_declaration->get_scope() == NULL) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[source-call-declaration]: declaration=%p "
+            "must be the exact canonical declaration with an explicit "
+            "semantic scope\n",
+            static_cast<void *>(source_call_declaration));
+    ROSE_ABORT();
+  }
+
+  SgScopeStatement *declaration_scope = source_call_declaration->get_scope();
+  SgSymbol *exact_symbol =
+      source_call_declaration->get_symbol_from_symbol_table();
+  SgSymbol *scope_symbol =
+      declaration_scope->find_symbol_from_declaration(source_call_declaration);
+  if (exact_symbol == NULL || scope_symbol != exact_symbol ||
+      exact_symbol->get_symbol_basis() != source_call_declaration ||
+      exact_symbol->get_parent() != declaration_scope->get_symbol_table()) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[source-call-symbol]: declaration=%p "
+            "name=%s symbol=%p scope-symbol=%p has no exact semantic "
+            "publication\n",
+            static_cast<void *>(source_call_declaration),
+            source_call_declaration->get_name().str(),
+            static_cast<void *>(exact_symbol),
+            static_cast<void *>(scope_symbol));
+    ROSE_ABORT();
+  }
+
+  if (!SageInterface::is_Fortran_language()) {
+    const SgDeclarationStatementPtrList &declarations =
+        glob_scope->get_declarations();
+    if (declaration_scope != glob_scope ||
+        source_call_declaration->get_parent() != glob_scope ||
+        std::count(declarations.begin(), declarations.end(),
+                   source_call_declaration) != 1 ||
+        source_call_declaration->get_file_info() == NULL ||
+        !source_call_declaration->get_file_info()->isOutputInCodeGeneration()) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[source-call-declaration]: "
+              "declaration=%p name=%s is not one exact source-global "
+              "declaration\n",
+              static_cast<void *>(source_call_declaration),
+              source_call_declaration->get_name().str());
+      ROSE_ABORT();
+    }
+  }
+
   SgExpression *func_ref = NULL;
   if (SgTemplateFunctionDeclaration *template_func =
-          isSgTemplateFunctionDeclaration(out_func)) {
-    SgFunctionDeclaration *inst_decl =
-        buildTemplateInstantiationForCall(template_func, glob_scope);
-    if (inst_decl != NULL) {
-      func_ref = SageBuilder::buildFunctionRefExp(inst_decl);
+          isSgTemplateFunctionDeclaration(source_call_declaration)) {
+    SgTemplateFunctionSymbol *template_symbol =
+        isSgTemplateFunctionSymbol(exact_symbol);
+    if (template_symbol == NULL ||
+        template_symbol->get_declaration() != source_call_declaration) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[source-call-symbol]: source template=%p "
+              "name=%s has no exact template-function symbol\n",
+              static_cast<void *>(source_call_declaration),
+              source_call_declaration->get_name().str());
+      ROSE_ABORT();
+    }
+    if (template_func->get_templateParameters().empty()) {
+      SgTemplateFunctionRefExp *template_ref =
+          SageBuilder::buildTemplateFunctionRefExp_nfi(template_symbol);
+      SageInterface::setOneSourcePositionForTransformation(template_ref);
+      func_ref = template_ref;
     } else {
-      SgTemplateFunctionSymbol *template_symbol =
-          glob_scope->lookup_template_function_symbol(
-              template_func->get_name(), template_func->get_type(),
-              &(template_func->get_templateParameters()));
-      ROSE_ASSERT(template_symbol != NULL);
-      func_ref = SageBuilder::buildTemplateFunctionRefExp_nfi(template_symbol);
+      func_ref = buildExplicitTemplateReferenceForCall(
+          template_func, scope, local_type_template_plan);
     }
   } else {
-    SgFunctionSymbol *func_symbol = glob_scope->lookup_function_symbol(
-        out_func->get_name(), out_func->get_type());
-    if (func_symbol == NULL) {
-      func_symbol = glob_scope->lookup_function_symbol(out_func->get_name());
+    SgFunctionSymbol *func_symbol = isSgFunctionSymbol(exact_symbol);
+    if (func_symbol == NULL ||
+        isSgTemplateFunctionSymbol(func_symbol) != NULL ||
+        func_symbol->get_declaration() != source_call_declaration) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[source-call-symbol]: source "
+              "declaration=%p name=%s has no exact function symbol\n",
+              static_cast<void *>(source_call_declaration),
+              source_call_declaration->get_name().str());
+      ROSE_ABORT();
     }
-    if (func_symbol == NULL) {
-      SgFunctionDeclaration *first_nondef =
-          isSgFunctionDeclaration(out_func->get_firstNondefiningDeclaration());
-      if (first_nondef != NULL) {
-        func_symbol = isSgFunctionSymbol(
-            glob_scope->find_symbol_from_declaration(first_nondef));
-        if (func_symbol == NULL) {
-          func_symbol =
-              isSgFunctionSymbol(first_nondef->get_symbol_from_symbol_table());
-        }
-        if (func_symbol == NULL) {
-          SgFunctionDeclaration *bridge_decl = first_nondef;
-          if (bridge_decl->get_scope() != glob_scope) {
-            bridge_decl = SageBuilder::buildNondefiningFunctionDeclaration(
-                bridge_decl, glob_scope);
-          }
-          func_symbol = new SgFunctionSymbol(bridge_decl);
-          glob_scope->insert_symbol(bridge_decl->get_name(), func_symbol);
-        }
-      }
-    }
-    if (func_symbol == NULL) {
-      printf("Failed to find a function symbol in %p for function %s\n",
-             glob_scope, out_func->get_name().getString().c_str());
-      ROSE_ASSERT(func_symbol != NULL);
-    }
-    ROSE_ASSERT(func_symbol);
-    func_ref = SageBuilder::buildFunctionRefExp(func_symbol);
+    func_ref = SageInterface::is_Fortran_language()
+                   ? static_cast<SgExpression *>(
+                         SageBuilder::buildFortranFunctionRefExp(
+                             func_symbol, func_symbol,
+                             SgFunctionRefExp::
+                                 e_fortran_source_visible_binding_exact_typed))
+                   : static_cast<SgExpression *>(
+                         SageBuilder::buildFunctionRefExp(func_symbol));
   }
   ROSE_ASSERT(func_ref != NULL);
 
@@ -327,8 +532,11 @@ SgStatement *Outliner::generateCall(
     appendIndividualFunctionCallArgs(syms, varsUsingOriginalForm, exp_list_exp);
 
   // Generate the actual call.
-  SgFunctionCallExp *func_call_expr =
-      SageBuilder::buildFunctionCallExp(func_ref, exp_list_exp);
+  SgFunctionType *function_type = source_call_declaration->get_type();
+  ROSE_ASSERT(function_type != nullptr);
+  ROSE_ASSERT(function_type->get_return_type() != nullptr);
+  SgFunctionCallExp *func_call_expr = SageBuilder::buildFunctionCallExp(
+      func_ref, function_type->get_return_type(), exp_list_exp);
   ROSE_ASSERT(func_call_expr);
 
   SgExprStatement *func_call_stmt =

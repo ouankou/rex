@@ -7,6 +7,7 @@ set(OMP_LOWERING_CPU_EXACT_CASES
     parallel-reduction.c
     parallel-reduction2.c
     parallelfor2.c
+    rex_omp_collapse_constant_expression.c
     single.c
     omp_version.c)
 

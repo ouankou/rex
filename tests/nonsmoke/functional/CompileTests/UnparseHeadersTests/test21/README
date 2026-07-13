@@ -1,0 +1,10 @@
+This regression keeps two nested namespace definitions open across the
+application header boundary. The header owns both namespace introducers and
+opening braces; the including source owns both closing braces.
+
+The transformed variable forces AST-based header emission. The generated
+header and source must therefore consume the namespace's explicit source
+fragments without synthesizing closes in the header or inferring the source
+closes from cross-file declaration ranges. The nested case also requires
+close-only unparsing to traverse the inner namespace before emitting the outer
+close. The final syntax-only compile checks the two generated files together.

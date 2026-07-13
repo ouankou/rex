@@ -1,44 +1,192 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if (( $# > 1 )); then
+  echo "usage: ${0##*/} [all|llvm-status|verify-llvm-cache|llvm|configure-rex|build-rex|test|dist]" >&2
+  exit 2
+fi
+
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 llvm_version="${LLVM_VERSION:-22}"
+if [[ "${llvm_version}" != "22" ]]; then
+  echo "error: REX is pinned to LLVM/Clang major 22; requested '${llvm_version}'" >&2
+  exit 2
+fi
 build_root="${REX_WASM_BUILD_ROOT:-${repo_root}/build/rex-wasm}"
 llvm_wasm_build_dir="${LLVM_WASM_BUILD_DIR:-${build_root}/llvm-wasm}"
 rex_wasm_build_dir="${REX_WASM_BUILD_DIR:-${build_root}/rex}"
-dist_dir="${REX_WASM_DIST_DIR:-${repo_root}/rex-wasm-dist}"
+dist_dir="${REX_WASM_DIST_DIR:-${build_root}/dist}"
 jobs="${REX_WASM_JOBS:-$(nproc)}"
 build_type="${REX_WASM_BUILD_TYPE:-MinSizeRel}"
 package_sysroot="${REX_WASM_PACKAGE_SYSROOT:-OFF}"
 phase="${1:-all}"
+readonly llvm_wasm_generated_header_manifest="${repo_root}/cmake/rex_wasm_required_generated_headers.txt"
 
-find_existing_dir() {
-  local candidate
-  for candidate in "$@"; do
-    if [[ -d "${candidate}" ]]; then
-      printf '%s\n' "${candidate}"
-      return 0
-    fi
-  done
-  return 1
-}
+if [[ ! "${jobs}" =~ ^[1-9][0-9]*$ ]]; then
+  echo "error: REX_WASM_JOBS must be a positive integer, got '${jobs}'" >&2
+  exit 2
+fi
+case "${build_type}" in
+  Debug|Release|RelWithDebInfo|MinSizeRel) ;;
+  *)
+    echo "error: unsupported REX_WASM_BUILD_TYPE '${build_type}'" >&2
+    exit 2
+    ;;
+esac
+case "${package_sysroot}" in
+  1|ON|TRUE|true) package_sysroot=ON ;;
+  0|OFF|FALSE|false) package_sysroot=OFF ;;
+  *)
+    echo "error: REX_WASM_PACKAGE_SYSROOT must be a CMake boolean, got '${package_sysroot}'" >&2
+    exit 2
+    ;;
+esac
+for output_dir in \
+  "${build_root}" \
+  "${llvm_wasm_build_dir}" \
+  "${rex_wasm_build_dir}" \
+  "${dist_dir}"; do
+  if [[ "${output_dir}" != /* ]]; then
+    echo "error: REX WASM output directories must be absolute: ${output_dir}" >&2
+    exit 2
+  fi
+done
+unset output_dir
 
-find_existing_file_dir() {
-  local candidate
-  for candidate in "$@"; do
-    if [[ -f "${candidate}" ]]; then
-      dirname "${candidate}"
-      return 0
-    fi
-  done
-  return 1
+if ! command -v realpath >/dev/null 2>&1; then
+  echo "error: required executable not found on PATH: realpath" >&2
+  exit 2
+fi
+canonical_repo_root="$(realpath -m "${repo_root}")"
+canonical_build_root="$(realpath -m "${build_root}")"
+canonical_llvm_wasm_build_dir="$(realpath -m "${llvm_wasm_build_dir}")"
+canonical_rex_wasm_build_dir="$(realpath -m "${rex_wasm_build_dir}")"
+canonical_dist_dir="$(realpath -m "${dist_dir}")"
+for output_dir in \
+  "${canonical_build_root}" \
+  "${canonical_llvm_wasm_build_dir}" \
+  "${canonical_rex_wasm_build_dir}" \
+  "${canonical_dist_dir}"; do
+  if [[ "${output_dir}" == "/" || "${output_dir}" == "${canonical_repo_root}" ]]; then
+    echo "error: REX WASM output directories must not overwrite the repository or filesystem root: ${output_dir}" >&2
+    exit 2
+  fi
+done
+unset output_dir
+if [[ "${canonical_build_root}" == "${canonical_llvm_wasm_build_dir}" ||
+      "${canonical_build_root}" == "${canonical_rex_wasm_build_dir}" ||
+      "${canonical_build_root}" == "${canonical_dist_dir}" ||
+      "${canonical_llvm_wasm_build_dir}" == "${canonical_rex_wasm_build_dir}" ||
+      "${canonical_llvm_wasm_build_dir}" == "${canonical_dist_dir}" ||
+      "${canonical_rex_wasm_build_dir}" == "${canonical_dist_dir}" ]]; then
+  echo "error: REX WASM build, LLVM, REX, and distribution directories must be distinct" >&2
+  exit 2
+fi
+for preserved_dir in \
+  "${canonical_repo_root}" \
+  "${canonical_build_root}" \
+  "${canonical_llvm_wasm_build_dir}" \
+  "${canonical_rex_wasm_build_dir}"; do
+  if [[ "${preserved_dir}/" == "${canonical_dist_dir}/"* ]]; then
+    echo "error: REX_WASM_DIST_DIR must not contain the repository or a build directory: ${canonical_dist_dir}" >&2
+    exit 2
+  fi
+done
+unset preserved_dir
+build_root="${canonical_build_root}"
+llvm_wasm_build_dir="${canonical_llvm_wasm_build_dir}"
+rex_wasm_build_dir="${canonical_rex_wasm_build_dir}"
+dist_dir="${canonical_dist_dir}"
+unset canonical_build_root
+unset canonical_dist_dir
+unset canonical_llvm_wasm_build_dir
+unset canonical_repo_root
+unset canonical_rex_wasm_build_dir
+
+readonly -a llvm_wasm_required_clang_libraries=(
+  clangFrontend
+  clangDriver
+  clangParse
+  clangSema
+  clangSerialization
+  clangAnalysis
+  clangASTMatchers
+  clangAST
+  clangEdit
+  clangLex
+  clangBasic
+  clangSupport
+)
+
+activate_exact_emsdk() {
+  local configured_root="${REX_WASM_EMSDK_ROOT:-}"
+  local emsdk_real
+  local expected_emcmake
+  local expected_emxx
+  local selected_emcmake
+  local selected_emxx
+
+  if [[ -z "${configured_root}" || "${configured_root}" != /* ||
+        ! -x "${configured_root}/emsdk" ||
+        ! -s "${configured_root}/emsdk_env.sh" ||
+        ! -x "${configured_root}/upstream/emscripten/emcmake" ||
+        ! -x "${configured_root}/upstream/emscripten/em++" ||
+        ! -s "${configured_root}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake" ]]; then
+    echo "error: REX_WASM_EMSDK_ROOT must name an absolute, complete Emscripten SDK root" >&2
+    exit 2
+  fi
+
+  configured_root="$(readlink -f "${configured_root}")"
+  # setup-emsdk copies a newly installed SDK from RUNNER_TEMP into this exact
+  # workspace path only after activation. Reconstruct the environment from the
+  # stable copy so CMake never records the per-run temporary path in its cache.
+  # shellcheck source=/dev/null
+  source "${configured_root}/emsdk_env.sh" >/dev/null
+
+  emsdk_real="$(readlink -f "${EMSDK:-}" 2>/dev/null || true)"
+  expected_emcmake="$(readlink -f \
+    "${configured_root}/upstream/emscripten/emcmake")"
+  expected_emxx="$(readlink -f \
+    "${configured_root}/upstream/emscripten/em++")"
+  selected_emcmake="$(command -v emcmake 2>/dev/null || true)"
+  selected_emxx="$(command -v em++ 2>/dev/null || true)"
+  selected_emcmake="$(readlink -f "${selected_emcmake}" 2>/dev/null || true)"
+  selected_emxx="$(readlink -f "${selected_emxx}" 2>/dev/null || true)"
+  if [[ "${emsdk_real}" != "${configured_root}" ||
+        "${selected_emcmake}" != "${expected_emcmake}" ||
+        "${selected_emxx}" != "${expected_emxx}" ]]; then
+    echo "error: Emscripten environment does not resolve exactly to REX_WASM_EMSDK_ROOT: ${configured_root}" >&2
+    exit 2
+  fi
 }
 
 require_executable() {
   local name="$1"
   if ! command -v "${name}" >/dev/null 2>&1; then
     echo "error: required executable not found on PATH: ${name}" >&2
+    exit 2
+  fi
+}
+
+require_exact_llvm_tool() {
+  local tool="$1"
+  local expected_version="$2"
+  local output
+  local version
+  if [[ ! -x "${tool}" ]]; then
+    echo "error: required LLVM tool is not executable: ${tool}" >&2
+    exit 2
+  fi
+  if ! output="$("${tool}" --version 2>&1)"; then
+    echo "error: cannot execute LLVM tool '${tool}': ${output}" >&2
+    exit 2
+  fi
+  version="$(printf '%s\n' "${output}" | \
+    sed -nE 's/.*version[[:space:]]+([0-9]+[.][0-9]+[.][0-9]+).*/\1/p' | \
+    head -n 1)"
+  if [[ "${version}" != "${expected_version}" ]]; then
+    echo "error: LLVM tool '${tool}' has version '${version:-unknown}'; exactly ${expected_version} is required by LLVM_SOURCE_DIR" >&2
     exit 2
   fi
 }
@@ -59,53 +207,246 @@ github_repo_url() {
 
 llvm_wasm_ready() {
   local dir="$1"
-  [[ -f "${dir}/lib/cmake/llvm/LLVMConfig.cmake" &&
-     -f "${dir}/lib/cmake/clang/ClangConfig.cmake" &&
-     -f "${dir}/lib/libclangFrontend.a" &&
-     -d "${dir}/lib/clang/${llvm_version}/include" ]]
-}
+  local cache_entry
+  local cache_key
+  local cache_value
+  local cached_source_real
+  local expected_value
+  local library
+  local policy
+  local relative_path
+  local source_real
+  local extra
+  local source_contract="${dir}/rex-wasm-llvm-source-contract.txt"
 
-llvm_wasm_is_ready=0
-if llvm_wasm_ready "${llvm_wasm_build_dir}"; then
-  llvm_wasm_is_ready=1
-fi
+  llvm_wasm_readiness_error=""
 
-if [[ -z "${LLVM_NATIVE_TOOL_DIR:-}" ]]; then
-  if command -v llvm-tblgen >/dev/null 2>&1 && command -v clang-tblgen >/dev/null 2>&1; then
-    llvm_tblgen_dir="$(dirname "$(command -v llvm-tblgen)")"
-    clang_tblgen_dir="$(dirname "$(command -v clang-tblgen)")"
-    if [[ "${llvm_tblgen_dir}" == "${clang_tblgen_dir}" ]]; then
-      LLVM_NATIVE_TOOL_DIR="${llvm_tblgen_dir}"
+  if [[ ! -s "${llvm_wasm_generated_header_manifest}" ]]; then
+    echo "error: required WASM LLVM generated-header manifest is missing or empty: ${llvm_wasm_generated_header_manifest}" >&2
+    exit 2
+  fi
+
+  for relative_path in \
+    CMakeCache.txt \
+    lib/cmake/llvm/LLVMConfig.cmake \
+    lib/cmake/clang/ClangConfig.cmake \
+    "lib/clang/${llvm_version}/include/stddef.h" \
+    rex-wasm-llvm-source-contract.txt; do
+    if [[ ! -s "${dir}/${relative_path}" ]]; then
+      llvm_wasm_readiness_error="required nonempty file is missing: ${relative_path}"
+      return 1
+    fi
+  done
+
+  if [[ -z "${llvm_source_commit:-}" ||
+        -z "${llvm_source_version:-}" ||
+        -z "${llvm_source_root:-}" ]]; then
+    llvm_wasm_readiness_error="exact LLVM source provenance was not established"
+    return 1
+  fi
+  if ! grep -Fqx "source_commit=${llvm_source_commit}" \
+       "${source_contract}" ||
+     ! grep -Fqx "source_version=${llvm_source_version}" \
+       "${source_contract}" ||
+     ! grep -Fqx "source_root=${llvm_source_root}" \
+       "${source_contract}"; then
+    llvm_wasm_readiness_error="LLVM source provenance stamp does not match the exact current source checkout"
+    return 1
+  fi
+
+  while read -r policy relative_path extra || [[ -n "${policy}" ]]; do
+    if [[ -z "${policy}" || "${policy}" == \#* ]]; then
+      continue
+    fi
+    if [[ -n "${extra}" || -z "${relative_path}" ||
+          ( "${policy}" != "nonempty" && "${policy}" != "exists" ) ||
+          "${relative_path}" == /* ||
+          "${relative_path}" == *".."* ||
+          "${relative_path}" == *\\* ]]; then
+      echo "error: malformed WASM LLVM generated-header manifest entry: ${policy} ${relative_path} ${extra}" >&2
+      exit 2
+    fi
+    if [[ "${policy}" == "nonempty" &&
+          ! -s "${dir}/${relative_path}" ]]; then
+      llvm_wasm_readiness_error="required nonempty generated header is missing: ${relative_path}"
+      return 1
+    fi
+    if [[ "${policy}" == "exists" &&
+          ! -f "${dir}/${relative_path}" ]]; then
+      llvm_wasm_readiness_error="required generated header is missing: ${relative_path}"
+      return 1
+    fi
+  done < "${llvm_wasm_generated_header_manifest}"
+
+  grep -Eq '^[[:space:]]*set\(LLVM_VERSION_MAJOR[[:space:]]+22\)' \
+    "${dir}/lib/cmake/llvm/LLVMConfig.cmake" || {
+      llvm_wasm_readiness_error="LLVMConfig.cmake is not exact LLVM 22"
+      return 1
+    }
+  grep -Eq '^#define[[:space:]]+CLANG_VERSION_MAJOR[[:space:]]+22$' \
+    "${dir}/tools/clang/include/clang/Basic/Version.inc" || {
+      llvm_wasm_readiness_error="Clang Version.inc is not exact Clang 22"
+      return 1
+    }
+
+  for cache_entry in \
+    "CMAKE_BUILD_TYPE=${build_type}" \
+    "CMAKE_GENERATOR=Ninja" \
+    "LLVM_ENABLE_PROJECTS=clang" \
+    "LLVM_TARGETS_TO_BUILD=WebAssembly" \
+    "LLVM_DEFAULT_TARGET_TRIPLE=wasm32-unknown-emscripten" \
+    "LLVM_HOST_TRIPLE=wasm32-unknown-emscripten" \
+    "LLVM_BUILD_TOOLS=OFF" \
+    "LLVM_ENABLE_PLUGINS=OFF" \
+    "LLVM_INCLUDE_TESTS=OFF" \
+    "LLVM_INCLUDE_EXAMPLES=OFF" \
+    "LLVM_INCLUDE_BENCHMARKS=OFF" \
+    "LLVM_INCLUDE_DOCS=OFF" \
+    "CLANG_BUILD_TOOLS=OFF" \
+    "CLANG_PLUGIN_SUPPORT=OFF" \
+    "LLVM_ENABLE_THREADS=OFF" \
+    "LLVM_ENABLE_TERMINFO=OFF" \
+    "LLVM_ENABLE_ZLIB=OFF" \
+    "LLVM_ENABLE_ZSTD=OFF" \
+    "LLVM_ENABLE_LIBXML2=OFF" \
+    "LLVM_ENABLE_LIBEDIT=OFF" \
+    "LLVM_ENABLE_FFI=OFF" \
+    "LLVM_ENABLE_RTTI=ON" \
+    "LLVM_ENABLE_EH=ON"; do
+    cache_key="${cache_entry%%=*}"
+    expected_value="${cache_entry#*=}"
+    cache_value="$(sed -n "s/^${cache_key}:[^=]*=//p" \
+      "${dir}/CMakeCache.txt")"
+    if [[ "${cache_value}" != "${expected_value}" ]]; then
+      llvm_wasm_readiness_error="CMake cache contract mismatch: ${cache_key}='${cache_value:-<missing>}' (expected '${expected_value}')"
+      return 1
+    fi
+  done
+
+  cache_value="$(sed -n 's/^CMAKE_TOOLCHAIN_FILE:[^=]*=//p' \
+    "${dir}/CMakeCache.txt")"
+  if [[ "${cache_value}" != /* || "${cache_value##*/}" != "Emscripten.cmake" ||
+        ! -f "${cache_value}" ]]; then
+    llvm_wasm_readiness_error="CMake cache does not name an existing absolute Emscripten toolchain: ${cache_value:-<missing>}"
+    return 1
+  fi
+  if [[ -n "${REX_WASM_EMSDK_ROOT:-}" ]]; then
+    local cached_toolchain_real
+    local expected_toolchain_real
+    cached_toolchain_real="$(readlink -f "${cache_value}" 2>/dev/null || true)"
+    expected_toolchain_real="$(readlink -f \
+      "${REX_WASM_EMSDK_ROOT}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake" \
+      2>/dev/null || true)"
+    if [[ -z "${expected_toolchain_real}" ||
+          "${cached_toolchain_real}" != "${expected_toolchain_real}" ]]; then
+      llvm_wasm_readiness_error="CMake cache belongs to a different Emscripten SDK: ${cache_value}"
+      return 1
     fi
   fi
-fi
 
-if [[ -z "${LLVM_NATIVE_TOOL_DIR:-}" ]]; then
-  LLVM_NATIVE_TOOL_DIR="$(find_existing_dir \
-    "/usr/lib/llvm-${llvm_version}/bin" \
-    "${repo_root}/../llvm-project/build/bin" || true)"
-fi
-
-if [[ "${llvm_wasm_is_ready}" != "1" &&
-      ( "${phase}" == "all" || "${phase}" == "llvm" ) ]]; then
-  if [[ -z "${LLVM_SOURCE_DIR:-}" ]]; then
-    LLVM_SOURCE_DIR="$(find_existing_dir \
-      "${repo_root}/llvm-project/llvm" \
-      "${repo_root}/../llvm-project/llvm" || true)"
+  if [[ -n "${LLVM_SOURCE_DIR:-}" ]]; then
+    cache_value="$(sed -n 's/^LLVM_SOURCE_DIR:[^=]*=//p' \
+      "${dir}/CMakeCache.txt")"
+    cached_source_real="$(readlink -f "${cache_value}" 2>/dev/null || true)"
+    source_real="$(readlink -f "${LLVM_SOURCE_DIR}" 2>/dev/null || true)"
+    if [[ -z "${cache_value}" || -z "${cached_source_real}" ||
+          "${cached_source_real}" != "${source_real}" ]]; then
+      llvm_wasm_readiness_error="CMake cache belongs to a different LLVM source tree: ${cache_value:-<missing>}"
+      return 1
+    fi
   fi
-  if [[ -z "${LLVM_SOURCE_DIR:-}" || ! -d "${LLVM_SOURCE_DIR}" ]]; then
+
+  for library in "${llvm_wasm_required_clang_libraries[@]}"; do
+    if [[ ! -s "${dir}/lib/lib${library}.a" ]]; then
+      llvm_wasm_readiness_error="required nonempty static archive is missing: lib/lib${library}.a"
+      return 1
+    fi
+  done
+}
+
+needs_llvm_source_contract=0
+case "${phase}" in
+  all|llvm-status|verify-llvm-cache|llvm|configure-rex)
+    needs_llvm_source_contract=1
+    ;;
+esac
+
+needs_emsdk_contract=0
+case "${phase}" in
+  all|llvm-status|llvm|configure-rex|build-rex)
+    needs_emsdk_contract=1
+    ;;
+esac
+if [[ "${needs_emsdk_contract}" == "1" ]]; then
+  activate_exact_emsdk
+fi
+
+if [[ "${needs_llvm_source_contract}" == "1" ]]; then
+  if [[ -z "${LLVM_SOURCE_DIR:-}" || ! -f "${LLVM_SOURCE_DIR}/CMakeLists.txt" ||
+        ! -f "${LLVM_SOURCE_DIR}/../clang/CMakeLists.txt" ]]; then
     echo "error: set LLVM_SOURCE_DIR to the llvm-project/llvm source directory" >&2
+    exit 2
+  fi
+  llvm_source_version_file="${LLVM_SOURCE_DIR}/../cmake/Modules/LLVMVersion.cmake"
+  if [[ ! -f "${llvm_source_version_file}" ]]; then
+    echo "error: LLVM_SOURCE_DIR is not an exact LLVM ${llvm_version} source tree: ${LLVM_SOURCE_DIR}" >&2
+    exit 2
+  fi
+  llvm_source_major="$(sed -nE \
+    's/^[[:space:]]*set\(LLVM_VERSION_MAJOR[[:space:]]+([0-9]+)\).*/\1/p' \
+    "${llvm_source_version_file}" | head -n 1)"
+  llvm_source_minor="$(sed -nE \
+    's/^[[:space:]]*set\(LLVM_VERSION_MINOR[[:space:]]+([0-9]+)\).*/\1/p' \
+    "${llvm_source_version_file}" | head -n 1)"
+  llvm_source_patch="$(sed -nE \
+    's/^[[:space:]]*set\(LLVM_VERSION_PATCH[[:space:]]+([0-9]+)\).*/\1/p' \
+    "${llvm_source_version_file}" | head -n 1)"
+  if [[ "${llvm_source_major}" != "${llvm_version}" ||
+        -z "${llvm_source_minor}" || -z "${llvm_source_patch}" ]]; then
+    echo "error: LLVM_SOURCE_DIR has malformed or non-22 version metadata: ${LLVM_SOURCE_DIR}" >&2
+    exit 2
+  fi
+  llvm_source_version="${llvm_source_major}.${llvm_source_minor}.${llvm_source_patch}"
+  require_executable git
+  llvm_source_root="$(git -C "${LLVM_SOURCE_DIR}/.." rev-parse \
+    --show-toplevel 2>/dev/null || true)"
+  llvm_source_root="$(readlink -f "${llvm_source_root}" 2>/dev/null || true)"
+  llvm_source_dir_real="$(readlink -f "${LLVM_SOURCE_DIR}" 2>/dev/null || true)"
+  if [[ -z "${llvm_source_root}" ||
+        "${llvm_source_dir_real}" != "${llvm_source_root}/llvm" ]]; then
+    echo "error: LLVM_SOURCE_DIR must be the llvm directory of one exact git checkout" >&2
+    exit 2
+  fi
+  llvm_source_commit="$(git -C "${llvm_source_root}" rev-parse \
+    --verify 'HEAD^{commit}' 2>/dev/null || true)"
+  if [[ ! "${llvm_source_commit}" =~ ^[0-9a-f]{40,64}$ ]]; then
+    echo "error: cannot resolve the exact LLVM source commit from ${llvm_source_root}" >&2
+    exit 2
+  fi
+  if [[ -n "$(git -C "${llvm_source_root}" status \
+        --porcelain --untracked-files=no)" ]]; then
+    echo "error: LLVM source checkout has tracked modifications: ${llvm_source_root}" >&2
+    exit 2
+  fi
+  if [[ -n "${LLVM_PROJECT_COMMIT:-}" &&
+        "${LLVM_PROJECT_COMMIT}" != "${llvm_source_commit}" ]]; then
+    echo "error: LLVM_PROJECT_COMMIT='${LLVM_PROJECT_COMMIT}' does not match checked-out commit '${llvm_source_commit}'" >&2
     exit 2
   fi
 fi
 
-if [[ "${llvm_wasm_is_ready}" != "1" &&
-      ( "${phase}" == "all" || "${phase}" == "llvm" ) &&
+if [[ ( "${phase}" == "all" || "${phase}" == "llvm" ) &&
       ( -z "${LLVM_NATIVE_TOOL_DIR:-}" ||
         ! -x "${LLVM_NATIVE_TOOL_DIR}/llvm-tblgen" ||
         ! -x "${LLVM_NATIVE_TOOL_DIR}/clang-tblgen" ) ]]; then
   echo "error: set LLVM_NATIVE_TOOL_DIR to a native LLVM ${llvm_version} bin directory containing llvm-tblgen and clang-tblgen" >&2
   exit 2
+fi
+if [[ "${phase}" == "all" || "${phase}" == "llvm" ]]; then
+  require_exact_llvm_tool "${LLVM_NATIVE_TOOL_DIR}/llvm-tblgen" \
+    "${llvm_source_version}"
+  require_exact_llvm_tool "${LLVM_NATIVE_TOOL_DIR}/clang-tblgen" \
+    "${llvm_source_version}"
 fi
 
 needs_rex_config=0
@@ -115,23 +456,26 @@ case "${phase}" in
     ;;
 esac
 
-if [[ "${needs_rex_config}" == "1" && -z "${REX_WASM_OMP_INCLUDE_DIR:-}" ]]; then
-  omp_include_candidates=(
-    "/usr/lib/llvm-${llvm_version}/lib/clang/${llvm_version}/include/omp.h"
-  )
-  if [[ -n "${LLVM_NATIVE_TOOL_DIR:-}" ]]; then
-    omp_include_candidates=(
-      "${LLVM_NATIVE_TOOL_DIR}/../lib/clang/${llvm_version}/include/omp.h"
-      "${omp_include_candidates[@]}"
-    )
-  fi
-  REX_WASM_OMP_INCLUDE_DIR="$(find_existing_file_dir "${omp_include_candidates[@]}" || true)"
-fi
 if [[ "${needs_rex_config}" == "1" &&
-      ( -z "${REX_WASM_OMP_INCLUDE_DIR:-}" ||
+      ( -z "${LLVM_NATIVE_TOOL_DIR:-}" ||
+        "${LLVM_NATIVE_TOOL_DIR}" != /* ||
+        -z "${REX_WASM_OMP_INCLUDE_DIR:-}" ||
+        "${REX_WASM_OMP_INCLUDE_DIR}" != /* ||
         ! -f "${REX_WASM_OMP_INCLUDE_DIR}/omp.h" ) ]]; then
-  echo "error: set REX_WASM_OMP_INCLUDE_DIR to a Clang resource include directory containing omp.h" >&2
+  echo "error: configure-rex requires an absolute LLVM_NATIVE_TOOL_DIR and its LLVM 22 resource include directory containing omp.h" >&2
   exit 2
+fi
+if [[ "${needs_rex_config}" == "1" ]]; then
+  native_llvm_root="$(readlink -f "${LLVM_NATIVE_TOOL_DIR}/.." 2>/dev/null || true)"
+  expected_omp_include="$(readlink -f \
+    "${native_llvm_root}/lib/clang/${llvm_version}/include" 2>/dev/null || true)"
+  actual_omp_include="$(readlink -f \
+    "${REX_WASM_OMP_INCLUDE_DIR}" 2>/dev/null || true)"
+  if [[ -z "${native_llvm_root}" || -z "${expected_omp_include}" ||
+        "${actual_omp_include}" != "${expected_omp_include}" ]]; then
+    echo "error: REX_WASM_OMP_INCLUDE_DIR must be the exact resource include directory from LLVM_NATIVE_TOOL_DIR: ${expected_omp_include:-<missing>}" >&2
+    exit 2
+  fi
 fi
 
 rex_wasm_sysroot="${REX_WASM_SYSROOT:-}"
@@ -157,6 +501,7 @@ require_llvm_wasm_ready() {
   fi
 
   echo "error: wasm LLVM/Clang build is missing or incomplete: ${llvm_wasm_build_dir}" >&2
+  echo "       ${llvm_wasm_readiness_error}" >&2
   echo "       run: scripts/ci-rex-wasm-build-dist llvm" >&2
   exit 2
 }
@@ -170,6 +515,7 @@ report_llvm_wasm_status() {
     fi
   else
     echo "==> wasm LLVM/Clang is not ready; a source build is required"
+    echo "    reason: ${llvm_wasm_readiness_error}"
     echo "    expected cache/build dir: ${llvm_wasm_build_dir}"
     if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
       echo "ready=false" >> "${GITHUB_OUTPUT}"
@@ -178,15 +524,19 @@ report_llvm_wasm_status() {
 }
 
 build_llvm_wasm() {
+  local source_contract
+
   require_executable cmake
   require_executable ninja
   require_executable emcmake
 
   if llvm_wasm_ready "${llvm_wasm_build_dir}"; then
-    echo "==> Reusing existing wasm LLVM/Clang build in ${llvm_wasm_build_dir}"
+    echo "==> Reusing exact validated wasm LLVM/Clang build in ${llvm_wasm_build_dir}"
     return 0
   fi
 
+  source_contract="${llvm_wasm_build_dir}/rex-wasm-llvm-source-contract.txt"
+  rm -f "${source_contract}"
   echo "==> Configuring wasm LLVM/Clang in ${llvm_wasm_build_dir}"
   emcmake cmake -S "${LLVM_SOURCE_DIR}" -B "${llvm_wasm_build_dir}" -G Ninja \
     -DCMAKE_BUILD_TYPE="${build_type}" \
@@ -217,18 +567,12 @@ build_llvm_wasm() {
   echo "==> Building wasm LLVM/Clang libraries"
   cmake --build "${llvm_wasm_build_dir}" -j"${jobs}" --target \
     clang-resource-headers \
-    clangFrontend \
-    clangDriver \
-    clangParse \
-    clangSema \
-    clangSerialization \
-    clangAnalysis \
-    clangASTMatchers \
-    clangAST \
-    clangEdit \
-    clangLex \
-    clangBasic \
-    clangSupport
+    "${llvm_wasm_required_clang_libraries[@]}"
+
+  printf '%s\n' \
+    "source_commit=${llvm_source_commit}" \
+    "source_version=${llvm_source_version}" \
+    "source_root=${llvm_source_root}" > "${source_contract}"
 
   require_llvm_wasm_ready
 }
@@ -248,6 +592,7 @@ configure_rex_wasm() {
     -DLLVM_DIR="${llvm_wasm_build_dir}/lib/cmake/llvm"
     -DClang_DIR="${llvm_wasm_build_dir}/lib/cmake/clang"
     -DREX_WASM_CLANG_RESOURCE_INPUT="${llvm_wasm_build_dir}/lib/clang/${llvm_version}"
+    -DREX_WASM_NATIVE_LLVM_ROOT="${native_llvm_root}"
     -DREX_WASM_OMP_INCLUDE_DIR="${REX_WASM_OMP_INCLUDE_DIR}"
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON)
   if [[ -n "${rex_wasm_sysroot}" ]]; then
@@ -263,37 +608,72 @@ build_rex_wasm() {
 }
 
 run_rex_wasm_smoke_tests() {
-  require_executable node
-
-  if [[ "${REX_WASM_SKIP_TESTS:-0}" == "1" ]]; then
-    echo "==> Skipping REX wasm smoke tests"
-    return 0
+  if [[ -n "${REX_WASM_SKIP_TESTS+x}" ]]; then
+    echo "error: REX_WASM_SKIP_TESTS was removed; REX WASM smoke tests are mandatory" >&2
+    exit 2
   fi
+
+  require_executable node
+  require_executable timeout
 
   local test_runner="${repo_root}/src/wasm/tests/run_rex_wasm_tests.js"
   local module="${rex_wasm_build_dir}/wasm/rex_wasm.js"
   local test_timeout="${REX_WASM_TEST_TIMEOUT:-180s}"
+  local listed_cases
+  local required_artifact
+
+  for required_artifact in "${module}" \
+    "${rex_wasm_build_dir}/wasm/rex_wasm.wasm" \
+    "${rex_wasm_build_dir}/wasm/rex_wasm.data"; do
+    if [[ ! -s "${required_artifact}" ]]; then
+      echo "error: required REX WASM smoke-test artifact is missing or empty: ${required_artifact}" >&2
+      exit 2
+    fi
+  done
 
   echo "==> Running REX wasm smoke tests"
-  if command -v timeout >/dev/null 2>&1; then
-    local test_case
-    while IFS= read -r test_case; do
-      [[ -n "${test_case}" ]] || continue
-      echo "==> REX wasm smoke test: ${test_case}"
-      timeout "${test_timeout}" node "${test_runner}" "${module}" --case "${test_case}"
-    done < <(node "${test_runner}" --list)
-  else
-    echo "warning: timeout command not found; running smoke tests without per-case timeout" >&2
-    node "${test_runner}" "${module}"
+  if ! listed_cases="$(node "${test_runner}" --list)"; then
+    echo "error: failed to enumerate REX WASM smoke tests" >&2
+    exit 2
   fi
+  if [[ -z "${listed_cases}" ]]; then
+    echo "error: REX WASM smoke-test enumeration returned no cases" >&2
+    exit 2
+  fi
+
+  local test_case
+  while IFS= read -r test_case; do
+    if [[ -z "${test_case}" ]]; then
+      echo "error: REX WASM smoke-test enumeration contains an empty case" >&2
+      exit 2
+    fi
+    echo "==> REX wasm smoke test: ${test_case}"
+    timeout "${test_timeout}" node "${test_runner}" "${module}" --case "${test_case}"
+  done <<< "${listed_cases}"
 }
 
 assemble_static_dist() {
+  local required_artifact
+
+  for required_artifact in \
+    "${rex_wasm_build_dir}/wasm/rex_wasm.js" \
+    "${rex_wasm_build_dir}/wasm/rex_wasm.wasm" \
+    "${rex_wasm_build_dir}/wasm/rex_wasm.data"; do
+    if [[ ! -s "${required_artifact}" ]]; then
+      echo "error: required REX WASM distribution artifact is missing or empty: ${required_artifact}" >&2
+      exit 2
+    fi
+  done
+
   echo "==> Assembling static dist in ${dist_dir}"
   rm -rf "${dist_dir}"
   mkdir -p "${dist_dir}"
   cp "${repo_root}/web/rex-wasm/"* "${dist_dir}/"
-  cp "${rex_wasm_build_dir}/wasm"/rex_wasm.* "${dist_dir}/"
+  cp \
+    "${rex_wasm_build_dir}/wasm/rex_wasm.js" \
+    "${rex_wasm_build_dir}/wasm/rex_wasm.wasm" \
+    "${rex_wasm_build_dir}/wasm/rex_wasm.data" \
+    "${dist_dir}/"
 
   commit="${GITHUB_SHA:-$(git -C "${repo_root}" rev-parse HEAD 2>/dev/null || true)}"
   commit_short="${commit:0:12}"
@@ -342,6 +722,9 @@ case "${phase}" in
   llvm-status)
     report_llvm_wasm_status
     ;;
+  verify-llvm-cache)
+    require_llvm_wasm_ready
+    ;;
   llvm)
     build_llvm_wasm
     ;;
@@ -358,7 +741,7 @@ case "${phase}" in
     assemble_static_dist
     ;;
   *)
-    echo "usage: scripts/ci-rex-wasm-build-dist [all|llvm-status|llvm|configure-rex|build-rex|test|dist]" >&2
+    echo "usage: scripts/ci-rex-wasm-build-dist [all|llvm-status|verify-llvm-cache|llvm|configure-rex|build-rex|test|dist]" >&2
     exit 2
     ;;
 esac

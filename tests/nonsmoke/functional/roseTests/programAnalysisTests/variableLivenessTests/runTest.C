@@ -75,9 +75,8 @@ void testOneFunction(
     NodeQuerySynthesizedAttributeType nodes =
         NodeQuery::querySubTree(func, V_SgNode);
 
-    // Legacy frontend variants sometimes add SgType nodes to the AST; remove
-    // them all since they make no difference in the variable-liveness analysis
-    // anyway.
+    // Type identities are structural AST dependencies, but they are not
+    // executable CFG nodes and do not participate in variable liveness.
     nodes.erase(std::remove_if(nodes.begin(), nodes.end(), is_type_node),
                 nodes.end());
 
@@ -88,9 +87,16 @@ void testOneFunction(
         decl->get_parameterList()->get_args();
     if (debug)
       cerr << "Found args : " << args.size() << endl;
-    Rose_STL_Container<SgInitializedName *>::const_iterator it = args.begin();
-    for (; it != args.end(); ++it) {
-      nodes.push_back(*it);
+    for (SgInitializedName *argument : args) {
+      ASSERT_not_null(argument);
+      ASSERT_require(argument->get_parent() == decl->get_parameterList());
+      // The semantic parameter list is intentionally distinct from the
+      // source-spelled parameter surface and is therefore not a structural
+      // successor of the function definition.  Def-use identities refer to
+      // these canonical parameters, so include each one exactly once in the
+      // analysis-node contract.
+      ASSERT_require(std::count(nodes.begin(), nodes.end(), argument) == 0);
+      nodes.push_back(argument);
     }
     if ((int)nodes.size() - 1 != nrOfNodes) {
       cerr << "Error :: Number of nodes = " << nodes.size() - 1
@@ -435,7 +441,7 @@ int main(int argc, char *argv[]) {
       outputResults.clear();
       vector<string> as;
       results.insert(pair<int, vector<string>>(make_pair(8, as)));
-      testOneFunction("::foo", argvList, debug, 21, results, outputResults);
+      testOneFunction("::foo", argvList, debug, 23, results, outputResults);
     }
 
     if (startNr <= 2 && 2 <= stopNr) {
@@ -446,7 +452,7 @@ int main(int argc, char *argv[]) {
       outputResults.clear();
       vector<string> as;
       results.insert(pair<int, vector<string>>(make_pair(8, as)));
-      testOneFunction("::foo", argvList, debug, 21, results, outputResults);
+      testOneFunction("::foo", argvList, debug, 23, results, outputResults);
     }
 
     if (startNr <= 3 && 3 <= stopNr) {
@@ -470,7 +476,7 @@ int main(int argc, char *argv[]) {
       vector<string> out(arrout, arrout + 1);
       outputResults.insert(pair<int, vector<string>>(make_pair(8, out)));
 
-      testOneFunction("::foo", argvList, debug, 16, results, outputResults);
+      testOneFunction("::foo", argvList, debug, 17, results, outputResults);
     }
 
     if (startNr <= 4 && 4 <= stopNr) {
@@ -510,7 +516,7 @@ int main(int argc, char *argv[]) {
       vector<string> out14;
       outputResults.insert(pair<int, vector<string>>(make_pair(14, in14)));
 
-      testOneFunction("::foo", argvList, debug, 17, results, outputResults);
+      testOneFunction("::foo", argvList, debug, 20, results, outputResults);
     }
 
     if (startNr <= 6 && 6 <= stopNr) {
@@ -526,7 +532,7 @@ int main(int argc, char *argv[]) {
       // Empty Out set
       vector<string> out22;
       outputResults.insert(pair<int, vector<string>>(make_pair(26, out22)));
-      testOneFunction("::foo", argvList, debug, 26, results, outputResults);
+      testOneFunction("::foo", argvList, debug, 31, results, outputResults);
     }
 
     if (startNr <= 7 && 7 <= stopNr) {
@@ -541,7 +547,7 @@ int main(int argc, char *argv[]) {
       string out12[] = {"i"};
       vector<string> out12v(out12, out12 + 1);
       outputResults.insert(pair<int, vector<string>>(make_pair(12, out12v)));
-      testOneFunction("::foo", argvList, debug, 16, results, outputResults);
+      testOneFunction("::foo", argvList, debug, 19, results, outputResults);
     }
 
     if (startNr <= 8 && 8 <= stopNr) {
@@ -553,7 +559,7 @@ int main(int argc, char *argv[]) {
       string out12[] = {"i", "p", "x"};
       vector<string> out12v(out12, out12 + 3);
       outputResults.insert(pair<int, vector<string>>(make_pair(20, out12v)));
-      testOneFunction("::foo", argvList, debug, 31, results, outputResults);
+      testOneFunction("::foo", argvList, debug, 38, results, outputResults);
     }
 
     if (startNr <= 9 && 9 <= stopNr) {
@@ -563,16 +569,18 @@ int main(int argc, char *argv[]) {
       results.clear();
       outputResults.clear();
 
-      vector<string> out9;
-      outputResults.insert(pair<int, vector<string>>(make_pair(9, out9)));
+      string out9[] = {"array"};
+      vector<string> out9v(out9, out9 + 1);
+      outputResults.insert(pair<int, vector<string>>(make_pair(9, out9v)));
 
-      vector<string> in12;
-      results.insert(pair<int, vector<string>>(make_pair(12, in12)));
+      string in12[] = {"array"};
+      vector<string> in12v(in12, in12 + 1);
+      results.insert(pair<int, vector<string>>(make_pair(12, in12v)));
 
-      string out12[] = {"i"};
-      vector<string> out12v(out12, out12 + 1);
+      string out12[] = {"array", "i"};
+      vector<string> out12v(out12, out12 + 2);
       outputResults.insert(pair<int, vector<string>>(make_pair(12, out12v)));
-      testOneFunction("::foo", argvList, debug, 30, results, outputResults);
+      testOneFunction("::foo", argvList, debug, 36, results, outputResults);
     }
 
     if (startNr <= 10 && 10 <= stopNr) {
@@ -608,7 +616,7 @@ int main(int argc, char *argv[]) {
       argvList[1] = srcdir + "tests/test14.C";
       results.clear();
       outputResults.clear();
-      testOneFunction("::f", argvList, debug, 11, results, outputResults);
+      testOneFunction("::f", argvList, debug, 17, results, outputResults);
     }
 
     if (startNr <= 15 && 15 <= stopNr) {
@@ -617,7 +625,7 @@ int main(int argc, char *argv[]) {
       argvList[1] = srcdir + "tests/test15.C";
       results.clear();
       outputResults.clear();
-      testOneFunction("::foo", argvList, debug, 22, results, outputResults);
+      testOneFunction("::foo", argvList, debug, 27, results, outputResults);
     }
 
     if (startNr <= 18 && 18 <= stopNr) {
@@ -626,7 +634,7 @@ int main(int argc, char *argv[]) {
       argvList[1] = srcdir + "tests/test18.C";
       results.clear();
       outputResults.clear();
-      testOneFunction("::foo", argvList, debug, 48, results, outputResults);
+      testOneFunction("::foo", argvList, debug, 61, results, outputResults);
     }
 
     if (startNr <= 19 && 19 <= stopNr) {
@@ -653,7 +661,7 @@ int main(int argc, char *argv[]) {
       argvList[1] = srcdir + "tests/test21.C";
       results.clear();
       outputResults.clear();
-      testOneFunction("::func", argvList, debug, 12, results, outputResults);
+      testOneFunction("::func", argvList, debug, 13, results, outputResults);
     }
 
     if (startNr <= 22 && 22 <= stopNr) {
@@ -662,7 +670,7 @@ int main(int argc, char *argv[]) {
       argvList[1] = srcdir + "tests/test22.C";
       results.clear();
       outputResults.clear();
-      testOneFunction("::func", argvList, debug, 18, results, outputResults);
+      testOneFunction("::func", argvList, debug, 19, results, outputResults);
     }
 
     if (startNr <= 23 && 23 <= stopNr) {
@@ -671,7 +679,7 @@ int main(int argc, char *argv[]) {
       argvList[1] = srcdir + "tests/test23.C";
       results.clear();
       outputResults.clear();
-      testOneFunction("::func", argvList, debug, 44, results, outputResults);
+      testOneFunction("::func", argvList, debug, 46, results, outputResults);
     }
 
     if (startNr <= 24 && 24 <= stopNr) {
@@ -689,7 +697,7 @@ int main(int argc, char *argv[]) {
       argvList[1] = srcdir + "tests/jacobi_seq.C";
       results.clear();
       outputResults.clear();
-      testOneFunction("::jacobi", argvList, debug, 248, results, outputResults);
+      testOneFunction("::jacobi", argvList, debug, 349, results, outputResults);
       testOneFunction("::foo", argvList, debug, 24, results, outputResults);
     }
   }

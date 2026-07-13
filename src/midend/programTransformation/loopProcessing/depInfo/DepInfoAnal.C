@@ -76,8 +76,10 @@ bool AnalyzeStmtRefs(AstInterface &fa, const AstNodePtr &n,
                            LoopTransformInterface::getSideEffectInterface());
   op.set_modify_collect(colw);
   op.set_read_collect(colr);
-  op(n);
-  return !has_unknown;
+  const bool complete = op(n);
+  // ReportOnly suppresses synthetic AST_UNKNOWN references; it does not turn
+  // an incomplete interprocedural result into a complete one.
+  return complete && !has_unknown;
 }
 
 std::string toString(std::vector<SymbolicVal> &analvec) {

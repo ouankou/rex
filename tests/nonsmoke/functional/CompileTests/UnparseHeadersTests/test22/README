@@ -1,0 +1,4 @@
+This regression exercises the valid ownership contract for a transformed
+physical header.  Every output node from the header belongs to one exact
+including scope, so the header planner can select that scope without comparing
+unparsed text.

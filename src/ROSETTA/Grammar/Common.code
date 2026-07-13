@@ -246,19 +246,6 @@ HEADER_START
        */
           virtual void processDataMemberReferenceToPointers(ReferenceToPointerHandler*) override;
 
-      /*! \brief \b FOR \b INTERNAL \b USE Returns a unique index value for the childNode in the list of children at this IR node.
-
-          This function returns a unique value for the input \b childNode in set of children at this IR node. Note
-          that a negative value indicates that the input node is not a child.  This is the basis for the implementation
-          of the isChild(SgNode*) member function.  Data members that are NULL in the IR node are counted internally
-          (so that this function returns value that could be statically defined, and so are not dynamically determined).
-
-          \warning The mapping on children to integer values could change from release to release of ROSE.
-
-          \returns long
-       */
-          virtual long getChildIndex( SgNode* childNode ) const override;
-
  // JH (10/24/2005): methods added to support the ast file IO
     private:
 

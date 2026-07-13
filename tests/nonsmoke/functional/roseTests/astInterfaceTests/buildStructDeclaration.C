@@ -2,75 +2,78 @@
 // Demonstrate how to build a struct declaration
 //
 // SageBuilder contains the AST nodes/subtrees builders
-// SageInterface contains any other AST utility tools 
+// SageInterface contains any other AST utility tools
 //-------------------------------------------------------------------
 #include "rose.h"
 
 using namespace SageBuilder;
 using namespace SageInterface;
 
-int main (int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
   // build a struct without any scope information
-  // cannot do it here, since frontend() will traverse memory pool and find the dangling decl.
-  //SgClassDeclaration * decl2 = buildStructDeclaration("bar");
+  // cannot do it here, since frontend() will traverse memory pool and find the
+  // dangling decl.
+  // SgClassDeclaration * decl2 = buildStructDeclaration("bar");
 
   // grab the scope in which AST will be added
-  SgProject *project = frontend (argc, argv);
-  SgGlobal *globalScope = getFirstGlobalScope (project);
-  ROSE_ASSERT (globalScope);
+  SgProject *project = frontend(argc, argv);
+  SgGlobal *globalScope = getFirstGlobalScope(project);
+  ROSE_ASSERT(globalScope);
 
   // build a struct without any scope information (no longer supported!)
   // Bottom up creation of a struct is no longer supported due to latest legacy
   // frontend 4.4 work Liao 11/27/2012
-  SgClassDeclaration * decl2 = buildStructDeclaration("bar",globalScope);
-  ROSE_ASSERT (decl2);
+  SgClassDeclaration *decl2 = buildStructDeclaration(
+      declaration_ownership::sourceLexical(), "bar", globalScope);
+  ROSE_ASSERT(decl2);
 
-  pushScopeStack (isSgScopeStatement (globalScope));
-  ROSE_ASSERT (topScopeStack());
+  pushScopeStack(isSgScopeStatement(globalScope));
+  ROSE_ASSERT(topScopeStack());
 
-  // build a struct declaration with implicit scope information from the scope stack
-  SgClassDeclaration * decl = buildStructDeclaration("foo");
+  // Scope stacks never substitute for the explicit semantic owner.
+  SgClassDeclaration *decl = buildStructDeclaration(
+      declaration_ownership::sourceLexical(), "foo", globalScope);
 
   // build member variables inside the structure
   SgClassDefinition *def = decl->get_definition();
-  pushScopeStack (isSgScopeStatement (def));
-  ROSE_ASSERT (topScopeStack());
+  pushScopeStack(isSgScopeStatement(def));
+  ROSE_ASSERT(topScopeStack());
 
-  SgVariableDeclaration *varDecl = buildVariableDeclaration(SgName ("i"), buildIntType());
+  SgVariableDeclaration *varDecl =
+      buildVariableDeclaration(SgName("i"), buildIntType(), nullptr, def);
 
- // Insert the  member variable
-  appendStatement (varDecl);
+  // Insert the  member variable
+  appendStatement(varDecl, def);
 
-   // build a member function prototype of the construct
-  SgInitializedName* arg1 = buildInitializedName(SgName("x"), buildIntType());
-  SgFunctionParameterList * paraList = buildFunctionParameterList();
-  appendArg(paraList,arg1);
+  // build a member function prototype of the construct
+  SgInitializedName *arg1 = buildInitializedName(SgName("x"), buildIntType());
+  SgFunctionParameterList *paraList = buildFunctionParameterList();
+  appendArg(paraList, arg1);
 
-  SgMemberFunctionDeclaration * funcdecl = buildNondefiningMemberFunctionDeclaration("bar",buildVoidType(), paraList);
-  appendStatement(funcdecl); 
+  SgMemberFunctionDeclaration *funcdecl =
+      buildNondefiningMemberFunctionDeclaration(
+          function_declaration_ownership::sourceLexical(), "bar",
+          buildVoidType(), paraList, def);
 
-  // build a defining member function 
-  SgFunctionParameterList * paraList2 = isSgFunctionParameterList(deepCopy(paraList)); 
+  // build a defining member function
+  SgFunctionParameterList *paraList2 =
+      isSgFunctionParameterList(deepCopy(paraList));
   ROSE_ASSERT(paraList2);
-  SgMemberFunctionDeclaration* funcdecl_2 = buildDefiningMemberFunctionDeclaration("bar2",buildVoidType(),paraList2);
-  appendStatement(funcdecl_2);                         
+  SgMemberFunctionDeclaration *funcdecl_2 =
+      buildDefiningMemberFunctionDeclaration(
+          function_declaration_ownership::sourceLexical(), "bar2",
+          buildVoidType(), paraList2, def);
 
-  popScopeStack ();
-  // insert the struct declaration
-  appendStatement (decl);
-    // This is a bottom up way for building decl2
-  insertStatementBefore (decl, decl2);
+  popScopeStack();
 
   // pop the final scope after all AST insertion
-  popScopeStack ();
+  popScopeStack();
 
-  //Declare a struct variable
-  SgVariableDeclaration * varDecl2 = SageBuilder::buildVariableDeclaration("temp", decl2->get_type(), NULL, globalScope);
+  // Declare a struct variable
+  SgVariableDeclaration *varDecl2 = SageBuilder::buildVariableDeclaration(
+      "temp", decl2->get_type(), NULL, globalScope);
   appendStatement(varDecl2, globalScope);
 
   AstTests::runAllTests(project);
-  return backend (project);
+  return backend(project);
 }
-
-

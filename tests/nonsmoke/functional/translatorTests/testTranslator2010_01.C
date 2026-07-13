@@ -22,9 +22,8 @@ main(int argc, char **argv)
      ROSE_ASSERT(globalScope != NULL);
 
      SgFunctionDeclaration *func = buildDefiningFunctionDeclaration(
-         "a_function", buildVoidType(), buildFunctionParameterList(),
-         globalScope);
-     appendStatement(func, globalScope);
+         function_declaration_ownership::sourceLexical(), "a_function",
+         buildVoidType(), buildFunctionParameterList(), globalScope);
 
      AstTests::runAllTests(project);
      project->unparse();

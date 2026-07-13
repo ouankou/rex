@@ -38,7 +38,15 @@ void visitorTraversal::visit(SgNode *node) {
           for (size_t i = 0; i < dims.size(); i++) {
             // Must redirect to a .output file to enable diff-based correctness
             // checking and avoid screen spewing interruptions.
-            ofile << dims[i]->unparseToString() << endl;
+            // The returned expression is intentionally detached and owned by
+            // this caller.  Supply its exact source use-site explicitly; a
+            // detached expression must never guess an unparse context.
+            SgUnparse_Info info;
+            SgStatement *useSite = SageInterface::getEnclosingStatement(iname);
+            ROSE_ASSERT(useSite != NULL);
+            info.set_template_argument_qualification_context(useSite);
+            info.set_reference_node_for_qualification(iname);
+            ofile << dims[i]->unparseToString(&info) << endl;
           }
         }
       }

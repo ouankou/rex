@@ -52,8 +52,6 @@ Additional functions to test (specific to sageBuilder.C):
 
    buildScopeOp()
 
-   buildCompoundInitializer()
-   buildCompoundInitializer_nfi()
 
    buildBracedInitializer()
    buildBracedInitializer_nfi()
@@ -169,7 +167,6 @@ Additional functions to test (specific to sageBuilder.C):
 
 // Code from Peter
    buildClassTemplateType()
-
 
 
 

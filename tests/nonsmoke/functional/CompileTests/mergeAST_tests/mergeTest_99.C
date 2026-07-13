@@ -47,12 +47,12 @@ namespace std
             // typedef struct ABC {} DEF;
 
             // typedef __gnu_cxx::__normal_iterator<pointer, basic_string> iterator;
-               typedef __gnu_cxx::__normal_iterator<const_pointer, basic_string> const_iterator
+               typedef __gnu_cxx::__normal_iterator<const_pointer, basic_string>
+                   const_iterator;
         };
    }
 
 namespace std
    {
      extern template class basic_string<char>;
-   }
-
+     }

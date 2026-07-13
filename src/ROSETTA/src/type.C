@@ -57,6 +57,11 @@ void Grammar::setUpTypes() {
   NEW_TERMINAL_MACRO(TypeComplex, "TypeComplex", "T_COMPLEX");
   NEW_TERMINAL_MACRO(TypeImaginary, "TypeImaginary", "T_IMAGINARY");
   NEW_TERMINAL_MACRO(TypeDefault, "TypeDefault", "T_DEFAULT");
+  NEW_TERMINAL_MACRO(TypeFortranAssumed, "TypeFortranAssumed",
+                     "T_FORTRAN_ASSUMED");
+  NEW_TERMINAL_MACRO(TypeFortranUnlimitedPolymorphic,
+                     "TypeFortranUnlimitedPolymorphic",
+                     "T_FORTRAN_UNLIMITED_POLYMORPHIC");
   NEW_TERMINAL_MACRO(PointerMemberType, "PointerMemberType",
                      "T_MEMBER_POINTER");
   NEW_TERMINAL_MACRO(ReferenceType, "ReferenceType", "T_REFERENCE");
@@ -180,8 +185,10 @@ void Grammar::setUpTypes() {
   NEW_TERMINAL_MACRO(QualifiedNameType, "QualifiedNameType",
                      "T_QUALIFIED_NAME");
 
-  // DQ (2/16/2018): Adding support for char16_t and char32_t (C99 and C++11
-  // specific types).
+  // The UTF character types are distinct fundamental types.  Keep separate
+  // ROSE nodes for them instead of folding them into their underlying integer
+  // representations.
+  NEW_TERMINAL_MACRO(TypeChar8, "TypeChar8", "T_CHAR8");
   NEW_TERMINAL_MACRO(TypeChar16, "TypeChar16", "T_CHAR16");
   NEW_TERMINAL_MACRO(TypeChar32, "TypeChar32", "T_CHAR32");
 
@@ -202,7 +209,8 @@ void Grammar::setUpTypes() {
 
   NEW_NONTERMINAL_MACRO(IntegralType,
                         SignedIntegralType | UnsignedIntegralType | TypeChar |
-                            TypeWchar | TypeChar16 | TypeChar32 | TypeBool,
+                            TypeWchar | TypeChar8 | TypeChar16 | TypeChar32 |
+                            TypeBool,
                         "IntegralType", "IntegralTypeTag", false);
 
   NEW_NONTERMINAL_MACRO(FloatingPointType,
@@ -225,8 +233,9 @@ void Grammar::setUpTypes() {
           ReferenceType | NamedType | ModifierType | FunctionType | ArrayType |
           TypeEllipse | TemplateType | QualifiedNameType | TypeComplex |
           TypeImaginary | TypeDefault | TypeCAFTeam | TypeCrayPointer |
-          TypeLabel | RvalueReferenceType | TypeNullptr | DeclType |
-          TypeOfType | AutoType | IntegralType | FloatingPointType,
+          TypeLabel | TypeFortranAssumed | TypeFortranUnlimitedPolymorphic |
+          RvalueReferenceType | TypeNullptr | DeclType | TypeOfType | AutoType |
+          IntegralType | FloatingPointType,
       "Type", "TypeTag", false);
 
   // ***********************************************************************
@@ -281,7 +290,7 @@ void Grammar::setUpTypes() {
   // frontend).
   Type.setDataPrototype("SgTypedefSeq*", "typedefs", "= NULL",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, DEF_DELETE);
+                        NO_TRAVERSAL, DEF_DELETE, CLONE_TREE);
 
   // DQ (7/29/2014): Adding support for C++11 rvalue references.
   Type.setDataPrototype("SgRvalueReferenceType*", "rvalue_ref_to", "= NULL",
@@ -301,8 +310,27 @@ void Grammar::setUpTypes() {
 
   Type.setDataPrototype("SgExpression*", "type_kind", "= nullptr",
                         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                        DEF_TRAVERSAL, DEF_DELETE);
+                        DEF_TRAVERSAL, DEF_DELETE, COPY_DATA,
+                        OPTIONAL_TRAVERSAL_MEMBER);
   Type.setDataPrototype("bool", "hasTypeKindStar", "= false",
+                        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                        NO_TRAVERSAL, NO_DELETE);
+
+  // DOUBLE PRECISION and DOUBLE COMPLEX have no source selector expression,
+  // but their implied KIND is target-configured Flang semantic state. Keep
+  // that value distinct from type_kind so the exact fixed source spelling is
+  // emitted unchanged while consumers can still validate its resolved type.
+  Type.setDataPrototype("bool", "fortran_fixed_kind_value_is_available",
+                        "= false", NO_CONSTRUCTOR_PARAMETER,
+                        BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  Type.setDataPrototype("int64_t", "fortran_fixed_kind_value", "= 0",
+                        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                        NO_TRAVERSAL, NO_DELETE);
+  // Source-spelled Fortran intrinsic types are structural syntax records, not
+  // semantic canonical types. This marker keeps reconstruction and copying
+  // from interning them into the global semantic type tables even when every
+  // selector is omitted or represented by a nonconstant sentinel.
+  Type.setDataPrototype("bool", "fortran_source_syntax", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
@@ -376,137 +404,133 @@ void Grammar::setUpTypes() {
   // TypeString.excludeFunctionPrototype ( "HEADER_GET_MANGLED",
   // "../Grammar/Type.code" );
 
-  // DQ (10/12/2014): I now think that the builtin_type data member should not
-  // be marked as part of the type traversal (DEF_TRAVERSAL). It is a static
-  // data member used within the management of types to define the required
-  // sharing that we seek for all types independent (but related to) the global
-  // type table support added 2 years ago.  Fixing this might be a better way to
-  // eliminate the special case handling
-  // to exclude this from the successor containers that are computed in the
-  // grammar.C file in the Grammar::buildTreeTraversalFunctions() function.  I
-  // wish to discuss this internally before making the change.
+  // Static builtin-type caches are interning implementation state, never AST
+  // ownership edges.  Keep that contract in the schema so every generated
+  // traversal API observes the same successor set.
 
   TypeUnknown.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                                NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                               DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                               NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeChar.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                            DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                            NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeSignedChar.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                                   NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                                  DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                                  NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeUnsignedChar.setDataPrototype(
       "static $CLASSNAME*", "builtin_type", "", NO_CONSTRUCTOR_PARAMETER,
-      NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeShort.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                             DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                             NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeSignedShort.setDataPrototype(
       "static $CLASSNAME*", "builtin_type", "", NO_CONSTRUCTOR_PARAMETER,
-      NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeUnsignedShort.setDataPrototype(
       "static $CLASSNAME*", "builtin_type", "", NO_CONSTRUCTOR_PARAMETER,
-      NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeInt.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                           DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                           NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeSignedInt.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                                  NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                                 DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                                 NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeUnsignedInt.setDataPrototype(
       "static $CLASSNAME*", "builtin_type", "", NO_CONSTRUCTOR_PARAMETER,
-      NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeLong.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                            DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                            NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeSignedLong.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                                   NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                                  DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                                  NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeUnsignedLong.setDataPrototype(
       "static $CLASSNAME*", "builtin_type", "", NO_CONSTRUCTOR_PARAMETER,
-      NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeVoid.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                            DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                            NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeGlobalVoid.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                                   NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                                  DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                                  NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeWchar.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                             DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                             NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeFloat.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                             DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                             NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeDouble.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                               NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                              DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                              NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeLongLong.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                                 NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                                DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                                NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeSignedLongLong.setDataPrototype(
       "static $CLASSNAME*", "builtin_type", "", NO_CONSTRUCTOR_PARAMETER,
-      NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeUnsignedLongLong.setDataPrototype(
       "static $CLASSNAME*", "builtin_type", "", NO_CONSTRUCTOR_PARAMETER,
-      NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
 
   // DQ (3/24/2014): Adding support for 128 bit integers.
   TypeSigned128bitInteger.setDataPrototype(
       "static $CLASSNAME*", "builtin_type", "", NO_CONSTRUCTOR_PARAMETER,
-      NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeUnsigned128bitInteger.setDataPrototype(
       "static $CLASSNAME*", "builtin_type", "", NO_CONSTRUCTOR_PARAMETER,
-      NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
 
-  // DQ (2/16/2018): Adding support for char16_t and char32_t for C99 and C++11.
+  TypeChar8.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
+                             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                             NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeChar16.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                               NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                              DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                              NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeChar32.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                               NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                              DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                              NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
 
   TypeCAFTeam.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                                NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                               DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                               NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
 
   // FMZ (4/8/2009): Added for Cray pointer
   TypeCrayPointer.setDataPrototype(
       "static $CLASSNAME*", "builtin_type", "", NO_CONSTRUCTOR_PARAMETER,
-      NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
 
   TypeLongDouble.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                                   NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                                  DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                                  NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeFloat80.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                                NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                               DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                               NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeFloat128.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                                 NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                                DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                                NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
 
   // PL (9/8/2025): Added support for C++23 fixed-width floating-point types
   TypeFloat16.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                                NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                               DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                               NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeFp16.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                            DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                            NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeBFloat16.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                                 NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                                DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                                NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeFloat32x.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                                 NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                                DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                                NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeFloat64x.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                                 NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                                DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                                NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeFloat32.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                                NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                               DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                               NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeFloat64.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                                NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                               DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                               NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
 
   // This type now has a length parameter, so we cannot use a single static
   // builtin_type to represent all of the variations.
@@ -522,7 +546,21 @@ void Grammar::setUpTypes() {
   // to support an expression as well.
   TypeString.setDataPrototype("SgExpression*", "lengthExpression", "= NULL",
                               CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                              DEF_TRAVERSAL, DEF_DELETE);
+                              DEF_TRAVERSAL, DEF_DELETE, COPY_DATA,
+                              OPTIONAL_TRAVERSAL_MEMBER);
+  // A nonconstant semantic CHARACTER length is resolved against the exact
+  // typed source expression during the same declaration transaction. Such a
+  // type may be used for semantic name publication while pending, but it must
+  // never cross an AST finalization, JSON, copy, or unparse boundary.
+  TypeString.setDataPrototype("bool", "fortran_dynamic_length_pending",
+                              "= false", NO_CONSTRUCTOR_PARAMETER,
+                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // A semantic expression can have a runtime CHARACTER length even when it is
+  // neither an assumed-length (*) nor deferred-length (:) declaration. Keep
+  // that valid semantic category explicit instead of collapsing it to ':'.
+  TypeString.setDataPrototype("bool", "fortran_dynamic_result_length",
+                              "= false", NO_CONSTRUCTOR_PARAMETER,
+                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   // TypeString.setDataPrototype           ("size_t"       , "lengthScalar" , "=
   // 0"    , CONSTRUCTOR_PARAMETER   , BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
   // NO_DELETE); TypeString.setDataPrototype           ("bool"         ,
@@ -531,17 +569,23 @@ void Grammar::setUpTypes() {
 
   TypeBool.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                            DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                            NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
 
   // DQ (7/29/2014): Added nullptr type (I think we require this for C++11
   // support).
   TypeNullptr.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                                NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                               DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                               NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
 
   TypeDefault.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                                NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                               DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                               NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+  TypeFortranAssumed.setDataPrototype(
+      "static $CLASSNAME*", "builtin_type", "", NO_CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+  TypeFortranUnlimitedPolymorphic.setDataPrototype(
+      "static $CLASSNAME*", "builtin_type", "", NO_CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   // PointerType.setDataPrototype          ("static
   // $CLASSNAME*","builtin_type","",NO_CONSTRUCTOR_PARAMETER,
   // NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
@@ -550,7 +594,7 @@ void Grammar::setUpTypes() {
   // NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   NamedType.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                             DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                             NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   // ModifierType.setDataPrototype         ("static
   // $CLASSNAME*","builtin_type","",NO_CONSTRUCTOR_PARAMETER,
   // NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
@@ -562,7 +606,7 @@ void Grammar::setUpTypes() {
   // NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   TypeEllipse.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                                NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                               DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                               NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   // TemplateType.setDataPrototype         ("static
   // $CLASSNAME*","builtin_type","",NO_CONSTRUCTOR_PARAMETER,
   // NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
@@ -577,14 +621,14 @@ void Grammar::setUpTypes() {
   // NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   PartialFunctionModifierType.setDataPrototype(
       "static SgPartialFunctionModifierType*", "builtin_type", "",
-      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE,
+      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
       NO_COPY_DATA);
 
   // DQ (2/1/2011): Added label type to support Fortran alternative return
   // arguments in function declarations.
   TypeLabel.setDataPrototype("static $CLASSNAME*", "builtin_type", "",
                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                             DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                             NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
 
   // DQ (11/28/2011): Adding template declaration support.
   // TemplateType.setDataPrototype         ("static
@@ -709,7 +753,8 @@ void Grammar::setUpTypes() {
   //                                     NO_DELETE);
   PointerType.setDataPrototype("SgType*", "base_type", "= NULL",
                                CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                               DEF_TRAVERSAL, NO_DELETE);
+                               DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
+                               OPTIONAL_TRAVERSAL_MEMBER);
 
   ReferenceType.setDataPrototype("SgType*", "base_type", "= NULL",
                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
@@ -723,7 +768,8 @@ void Grammar::setUpTypes() {
   DeclType.setFunctionPrototype("HEADER_DECL_TYPE", "../Grammar/Type.code");
   DeclType.setDataPrototype("SgExpression*", "base_expression", "= NULL",
                             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                            NO_TRAVERSAL, NO_DELETE);
+                            DEF_TRAVERSAL, DEF_DELETE, COPY_DATA,
+                            OPTIONAL_TRAVERSAL_MEMBER);
 
   // DQ (8/11/2014): We need to handle the case were the input is a function
   // parameter code (number and level) and then store the associated type until
@@ -749,7 +795,8 @@ void Grammar::setUpTypes() {
   TypeOfType.setFunctionPrototype("HEADER_TYPEOF_TYPE", "../Grammar/Type.code");
   TypeOfType.setDataPrototype("SgExpression*", "base_expression", "= NULL",
                               CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                              NO_TRAVERSAL, NO_DELETE);
+                              DEF_TRAVERSAL, DEF_DELETE, COPY_DATA,
+                              OPTIONAL_TRAVERSAL_MEMBER);
   TypeOfType.setDataPrototype("SgType*", "base_type", "= NULL",
                               CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                               NO_TRAVERSAL, NO_DELETE);
@@ -761,6 +808,26 @@ void Grammar::setUpTypes() {
   PointerMemberType.setDataPrototype(
       "SgType*", "class_type", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // An unqualified injected class name in a member-pointer declarator denotes
+  // the current instantiation semantically, but its exact source surface is the
+  // bare class name. Preserve that use-site role on the noncanonical TypeLoc
+  // wrapper rather than deriving spelling from the canonical class type.
+  PointerMemberType.setDataPrototype(
+      "bool", "source_class_type_is_unqualified_injected_name", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  PointerMemberType.setDataPrototype(
+      "bool", "source_base_type_qualification_present", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  PointerMemberType.setDataPrototype(
+      "bool", "source_base_type_global_qualification", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  PointerMemberType.setDataPrototype(
+      "SgStringList", "source_base_type_qualification_tokens", "",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
 
   // DQ (4/17/2019): To support SgPointerMemberType name qualification for the
   // class type and the base type, we need to add a name qualification field to
@@ -794,7 +861,8 @@ void Grammar::setUpTypes() {
   //      NO_DELETE);
   NamedType.setDataPrototype("SgDeclarationStatement*", "declaration", "= NULL",
                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                             DEF_TRAVERSAL, NO_DELETE);
+                             DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
+                             OPTIONAL_TRAVERSAL_MEMBER);
 
   // class A { int i; };    // An "autonomous" decl
   // class B { int i; } b;  // Not "autonomous"
@@ -834,6 +902,12 @@ void Grammar::setUpTypes() {
   //   "HEADER_GET_MANGLED",  "../Grammar/Type.code" );
 
   AutoType.setFunctionPrototype("HEADER_AUTO_TYPE", "../Grammar/Type.code");
+  AutoType.setDataPrototype("bool", "is_constrained", "= false",
+                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                            NO_TRAVERSAL, NO_DELETE);
+  AutoType.setDataPrototype("std::string", "source_constraint_spelling",
+                            "= \"\"", NO_CONSTRUCTOR_PARAMETER,
+                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   //   AutoType.excludeFunctionPrototype    ( "HEADER_GET_NAME",
   //   "../Grammar/Type.code" ); AutoType.excludeFunctionPrototype    (
   //   "HEADER_GET_MANGLED", "../Grammar/Type.code" );
@@ -859,17 +933,23 @@ void Grammar::setUpTypes() {
   TemplateType.setDataPrototype(
       "int", "template_parameter_depth", "= -1", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  TemplateType.setDataPrototype("std::optional<canonical_source_identity>",
+                                "canonical_source_identity", "= std::nullopt",
+                                NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                                NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 
   TemplateType.setDataPrototype(
       "SgType *", "class_type", "= NULL", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, DEF_DELETE);
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, DEF_DELETE, COPY_DATA,
+      OPTIONAL_TRAVERSAL_MEMBER);
   TemplateType.setDataPrototype(
       "SgType *", "parent_class_type", "= NULL", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, DEF_DELETE);
-  TemplateType.setDataPrototype("SgTemplateParameter *", "template_parameter",
-                                "= NULL", NO_CONSTRUCTOR_PARAMETER,
-                                BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
-                                DEF_DELETE);
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, DEF_DELETE, COPY_DATA,
+      OPTIONAL_TRAVERSAL_MEMBER);
+  TemplateType.setDataPrototype(
+      "SgTemplateParameter *", "template_parameter", "= NULL",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+      DEF_DELETE, COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
   TemplateType.setDataPrototype(
       "SgTemplateArgumentPtrList", "tpl_args", "= SgTemplateArgumentPtrList()",
       NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
@@ -925,7 +1005,8 @@ void Grammar::setUpTypes() {
   // ReferenceType and any other type with a base_type.
   ModifierType.setDataPrototype("SgType*", "base_type", "= NULL",
                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                                DEF_TRAVERSAL, NO_DELETE);
+                                DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
+                                OPTIONAL_TRAVERSAL_MEMBER);
 
   ModifierType.setDataPrototype("SgTypeModifier", "typeModifier", "",
                                 NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
@@ -958,7 +1039,8 @@ void Grammar::setUpTypes() {
                                     "../Grammar/Type.code");
   FunctionType.setDataPrototype("SgType*", "return_type", "= NULL",
                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                                DEF_TRAVERSAL, NO_DELETE);
+                                DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
+                                OPTIONAL_TRAVERSAL_MEMBER);
   FunctionType.setDataPrototype("bool", "has_ellipses", "= true",
                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                 NO_TRAVERSAL, NO_DELETE);
@@ -969,7 +1051,7 @@ void Grammar::setUpTypes() {
   FunctionType.setDataPrototype("SgFunctionParameterTypeList*", "argument_list",
                                 "= NULL", NO_CONSTRUCTOR_PARAMETER,
                                 BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-                                DEF_DELETE);
+                                DEF_DELETE, CLONE_TREE);
   MemberFunctionType.setFunctionPrototype("HEADER_MEMBER_FUNCTION_TYPE",
                                           "../Grammar/Type.code");
   MemberFunctionType.setDataPrototype(
@@ -1006,13 +1088,15 @@ void Grammar::setUpTypes() {
   //         NO_DELETE);
   ArrayType.setDataPrototype("SgExpression*", "index", "= NULL",
                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                             DEF_TRAVERSAL, DEF_DELETE);
+                             DEF_TRAVERSAL, DEF_DELETE, COPY_DATA,
+                             OPTIONAL_TRAVERSAL_MEMBER);
 
   // DQ (8/15/2007): This could replace the "index" above, we need the list to
   // handle Fortran, even though we only need a single expression for C and C++.
   ArrayType.setDataPrototype("SgExprListExp*", "dim_info", "= NULL",
                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                             DEF_TRAVERSAL, DEF_DELETE);
+                             DEF_TRAVERSAL, DEF_DELETE, COPY_DATA,
+                             OPTIONAL_TRAVERSAL_MEMBER);
   ArrayType.setDataPrototype("int", "rank", "= 0", NO_CONSTRUCTOR_PARAMETER,
                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   // TV (09/21/2018): (ROSE-1391) to be used in unparser when referenced symbol
@@ -1205,7 +1289,7 @@ void Grammar::setUpTypes() {
   TypeSigned128bitInteger.editSubstitute("MANGLED_ID_STRING", "SL128");
   TypeUnsigned128bitInteger.editSubstitute("MANGLED_ID_STRING", "UL128");
 
-  // DQ (2/16/2018): Adding support for char16_t and char32_t for C99 and C++11.
+  TypeChar8.editSubstitute("MANGLED_ID_STRING", "c8");
   TypeChar16.editSubstitute("MANGLED_ID_STRING", "c16");
   TypeChar32.editSubstitute("MANGLED_ID_STRING", "c32");
 
@@ -1221,6 +1305,9 @@ void Grammar::setUpTypes() {
 
   TypeComplex.editSubstitute("MANGLED_ID_STRING", "Complex");
   TypeImaginary.editSubstitute("MANGLED_ID_STRING", "Imaginary");
+  TypeFortranAssumed.editSubstitute("MANGLED_ID_STRING", "FortranAssumed");
+  TypeFortranUnlimitedPolymorphic.editSubstitute("MANGLED_ID_STRING",
+                                                 "FortranUnlimitedPolymorphic");
   // TypeDefault.editSubstitute( "MANGLED_ID_STRING", "u" );
   PointerType.editSubstitute("MANGLED_ID_STRING", "P");
   ReferenceType.editSubstitute("MANGLED_ID_STRING", "R");

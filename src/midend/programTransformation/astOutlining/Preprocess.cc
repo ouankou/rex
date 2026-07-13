@@ -26,9 +26,6 @@
 using namespace std;
 using namespace SageInterface;
 
-// a lookup table to avoid inserting headers more than once for a file
-static std::map<std::string, bool> fileHeaderMap;
-
 void Outliner::Preprocess::checkAndPatchUpOptions() {
   // useStructureWrapper is a sub option of useParameterWrapper
   // Setting useStructureWrapper means useParameterWrapper should be true also
@@ -50,23 +47,6 @@ SgBasicBlock *Outliner::Preprocess::preprocessOutlineTarget(SgStatement *s) {
 
   checkAndPatchUpOptions();
 
-  // insert a header to support outlining for auto tuning
-  if (use_dlopen) {
-    const string file_name = s->get_file_info()->get_filename();
-    if (fileHeaderMap[file_name] != true) {
-      // DQ (3/19/2019): Suppress the output of the #include "autotuning_lib.h"
-      // since some tools will want to define there own supporting libraries and
-      // header files. The original behavior is the default.
-      // SageInterface::insertHeader(AUTOTUNING_LIB_HEADER,PreprocessingInfo::after,
-      // false, s->get_scope());
-      if (suppress_autotuning_header == false) {
-        SageInterface::insertHeader(AUTOTUNING_LIB_HEADER,
-                                    PreprocessingInfo::after, false,
-                                    s->get_scope());
-      }
-      fileHeaderMap[file_name] = true;
-    }
-  }
   // Step 1: Make sure we outline an SgBasicBlock.
   SgBasicBlock *s_post = 0;
   ROSE_ASSERT(s);

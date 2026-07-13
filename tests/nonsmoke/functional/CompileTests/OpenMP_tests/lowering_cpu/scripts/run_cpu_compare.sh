@@ -76,7 +76,7 @@ fail_with_diff() {
 # Lower and build transformed source.
 (
   cd "$workdir"
-  "$parse_omp" --rex-omp-lowering -w -rose:verbose 0 -rose:skipfinalCompileStep -c "$input_file" > lower.log 2>&1
+  "$parse_omp" --rex-omp-lowering -rose:verbose 0 -rose:skipfinalCompileStep -c "$input_file" > lower.log 2>&1
 )
 
 if [[ ! -f "$rose_file" ]]; then

@@ -1,6 +1,6 @@
 /*
  * Test case for declaration movement
- *  
+ *
  * */
 int x, y;
 extern int f(int );
@@ -40,4 +40,3 @@ void func2(int len) {
     }
   }
 }
-

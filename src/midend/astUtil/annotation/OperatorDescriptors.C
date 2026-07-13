@@ -156,6 +156,13 @@ OperatorDeclaration::OperatorDeclaration(AstInterface &fa, AstNodePtr op_ast,
   if (argp == 0) {
     argp = &args;
   }
+  AstNodePtr dependent_callee;
+  if (fa.IsFunctionCall(op_ast, &dependent_callee) &&
+      isSgNonrealRefExp(dependent_callee.get_ptr()) != nullptr) {
+    has_concrete_signature_ = false;
+    argp->clear();
+    return;
+  }
   TypeDescriptor::get_name() = operator_signature(fa, op_ast, argp, &params);
   if (TypeDescriptor::get_name() == "") {
     DebugOperatorDescriptor([&]() {

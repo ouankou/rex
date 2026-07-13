@@ -4,7 +4,8 @@ LABEL org.opencontainers.image.source="https://github.com/ouankou/rex"
 ARG LLVM_VERSION=22
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update \
+RUN test "${LLVM_VERSION}" = "22" \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
       antlr4 \
       bison \

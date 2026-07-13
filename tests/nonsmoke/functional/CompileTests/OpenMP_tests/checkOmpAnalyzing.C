@@ -20,6 +20,9 @@ SgVarRefExp *extractVarRefFromExpression(SgExpression *expr) {
   if (SgVarRefExp *vref = isSgVarRefExp(expr)) {
     return vref;
   }
+  if (SgOmpMapItem *item = isSgOmpMapItem(expr)) {
+    return extractVarRefFromExpression(item->get_expression());
+  }
   if (SgPntrArrRefExp *aref = isSgPntrArrRefExp(expr)) {
     return extractVarRefFromExpression(aref->get_lhs_operand());
   }

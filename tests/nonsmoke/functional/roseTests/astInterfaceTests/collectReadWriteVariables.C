@@ -21,17 +21,17 @@ int main(int argc, char *argv[]) {
   ROSE_ASSERT(readNames.size() == 6);
   set<SgInitializedName *>::iterator iter;
   for (iter = readNames.begin(); iter != readNames.end(); iter++)
-    cout << "read variable:" << (*iter)->unparseToString() << endl;
+    cout << "read variable:" << (*iter)->get_name().getString() << endl;
   /* i, j, a, b
    */
   ROSE_ASSERT(writeNames.size() == 4);
   for (iter = writeNames.begin(); iter != writeNames.end(); iter++)
-    cout << "written variable:" << (*iter)->unparseToString() << endl;
+    cout << "written variable:" << (*iter)->get_name().getString() << endl;
   // read only variables
   set<SgInitializedName *> readOnlyVars;
   SageInterface::collectReadOnlyVariables(func, readOnlyVars);
   for (iter = readOnlyVars.begin(); iter != readOnlyVars.end(); iter++)
-    cout << "read-only variable:" << (*iter)->unparseToString() << endl;
+    cout << "read-only variable:" << (*iter)->get_name().getString() << endl;
 
   // run all tests
   // AstTests::runAllTests(project);

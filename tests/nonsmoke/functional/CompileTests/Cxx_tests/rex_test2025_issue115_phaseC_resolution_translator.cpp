@@ -4,6 +4,8 @@
 
 #include "sageInterface.h"
 
+#include <algorithm>
+
 #include <string>
 
 namespace {
@@ -28,13 +30,41 @@ SgTemplateFunctionDeclaration *findTemplatePattern(SgProject *project,
                                                    const std::string &name) {
   auto decls =
       NodeQuery::querySubTree(project, V_SgTemplateFunctionDeclaration);
+  SgTemplateFunctionDeclaration *defining = nullptr;
   for (SgNode *n : decls) {
     auto *decl = isSgTemplateFunctionDeclaration(n);
-    if (decl != NULL && decl->get_name().getString() == name) {
-      return decl;
+    if (decl == NULL || decl->get_name().getString() != name ||
+        decl->get_definition() == NULL) {
+      continue;
     }
+    ROSE_ASSERT(decl->get_definingDeclaration() == decl);
+    ROSE_ASSERT(defining == nullptr);
+    defining = decl;
   }
-  return NULL;
+
+  ROSE_ASSERT(defining != nullptr);
+  auto *canonical = isSgTemplateFunctionDeclaration(
+      defining->get_firstNondefiningDeclaration());
+  ROSE_ASSERT(canonical != nullptr);
+  ROSE_ASSERT(canonical != defining);
+  ROSE_ASSERT(canonical->get_firstNondefiningDeclaration() == canonical);
+  ROSE_ASSERT(canonical->get_definingDeclaration() == defining);
+  ROSE_ASSERT(canonical->get_definition() == nullptr);
+  ROSE_ASSERT(canonical->get_scope() == defining->get_scope());
+  auto *auxiliary = isSgAuxiliaryDeclarationList(canonical->get_parent());
+  ROSE_ASSERT(auxiliary != nullptr);
+  ROSE_ASSERT(auxiliary->get_parent() == canonical->get_scope());
+  ROSE_ASSERT(std::count(auxiliary->get_declarations().begin(),
+                         auxiliary->get_declarations().end(), canonical) == 1);
+
+  for (SgNode *n : decls) {
+    auto *decl = isSgTemplateFunctionDeclaration(n);
+    if (decl == nullptr || decl->get_name().getString() != name) {
+      continue;
+    }
+    ROSE_ASSERT(decl == canonical || decl == defining);
+  }
+  return defining;
 }
 
 SgTemplateInstantiationFunctionDecl *
@@ -159,5 +189,6 @@ int main(int argc, char **argv) {
     ROSE_ASSERT(subtreeHasFunctionRef(inst->get_definition(), expected_callee));
   }
 
+  AstTests::runAllTests(project);
   return backend(project);
 }

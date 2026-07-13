@@ -7,76 +7,6 @@
 
 #define DEBUG__unparseAssnInit 0
 
-namespace {
-
-bool hasAttachedIncludeDirective(SgLocatedNode *node) {
-  if (node == nullptr) {
-    return false;
-  }
-
-  AttachedPreprocessingInfoType *infos = node->getAttachedPreprocessingInfo();
-  if (infos == nullptr) {
-    return false;
-  }
-
-  for (PreprocessingInfo *info : *infos) {
-    if (info == nullptr) {
-      continue;
-    }
-    PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
-    if (type == PreprocessingInfo::CpreprocessorIncludeDeclaration ||
-        type == PreprocessingInfo::CpreprocessorIncludeNextDeclaration) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-bool assignInitializerOperandComesFromAnotherFile(SgAssignInitializer *init) {
-  if (init == nullptr) {
-    return false;
-  }
-
-  SgExpression *operand = init->get_operand_i();
-  while (SgCastExp *cast_op = isSgCastExp(operand)) {
-    if (cast_op->get_originalExpressionTree() != nullptr) {
-      operand = cast_op->get_originalExpressionTree();
-    } else {
-      operand = cast_op->get_operand_i();
-    }
-  }
-
-  SgLocatedNode *located_operand = isSgLocatedNode(operand);
-  if (located_operand == nullptr ||
-      located_operand->get_file_info() == nullptr) {
-    return false;
-  }
-
-  SgStatement *current_stmt = SageInterface::getEnclosingStatement(init);
-  if (current_stmt == nullptr) {
-    current_stmt = SageInterface::getEnclosingStatement(located_operand);
-  }
-  if (current_stmt == nullptr) {
-    return false;
-  }
-
-  SgFile *current_file = SageInterface::getEnclosingFileNode(current_stmt);
-  if (current_file == nullptr || current_file->get_file_info() == nullptr) {
-    return false;
-  }
-
-  const std::string operand_file =
-      located_operand->get_file_info()->get_physical_filename();
-  const std::string current_filename =
-      current_file->get_file_info()->get_physical_filename();
-
-  return !operand_file.empty() && operand_file != "NULL_FILE" &&
-         !current_filename.empty() && operand_file != current_filename;
-}
-
-} // namespace
-
 void Unparse_ExprStmt::unparseAssnInit(SgExpression *expr,
                                        SgUnparse_Info &info) {
   SgAssignInitializer *assn_init = isSgAssignInitializer(expr);
@@ -85,25 +15,100 @@ void Unparse_ExprStmt::unparseAssnInit(SgExpression *expr,
   printf("Enter unparseAssnInit()\n");
   printf("  assn_init = %p = %s\n", assn_init, assn_init->class_name().c_str());
 #endif
-  const bool suppress_semantic_operand =
-      hasAttachedIncludeDirective(assn_init) &&
-      assignInitializerOperandComesFromAnotherFile(assn_init);
-  if (assn_init->get_is_explicit_cast()) {
-    if (!suppress_semantic_operand &&
-        assn_init->get_operand()->get_originalExpressionTree() != NULL) {
-      unparseExpression(assn_init->get_operand()->get_originalExpressionTree(),
-                        info);
-    } else if (!suppress_semantic_operand) {
-      unparseExpression(assn_init->get_operand(), info);
-    }
-  } else {
-    SgCastExp *castExp = isSgCastExp(assn_init->get_operand());
-    if (!suppress_semantic_operand && castExp != NULL) {
-      unparseExpression(castExp->get_operand(), info);
-    } else if (!suppress_semantic_operand) {
-      unparseExpression(assn_init->get_operand(), info);
+  SgExpression *operand = assn_init->get_operand_i();
+  if (operand == nullptr) {
+    fprintf(stderr, "REX_UNPARSE_INVARIANT[assignment-initializer-operand]: "
+                    "initializer has no exact operand\n");
+    ROSE_ABORT();
+  }
+  const auto source_form = assn_init->get_source_form();
+  const bool allow_include_at_interval_start =
+      source_form ==
+      SgAssignInitializer::
+          e_assignment_initializer_source_include_complete_expansion;
+  size_t inside_include_count = 0;
+  if (AttachedPreprocessingInfoType *attached =
+          assn_init->getAttachedPreprocessingInfo()) {
+    for (PreprocessingInfo *record : *attached) {
+      if (record == nullptr) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[assignment-initializer-include]: "
+                "initializer has a null preprocessing record\n");
+        ROSE_ABORT();
+      }
+      const PreprocessingInfo::DirectiveType type =
+          record->getTypeOfDirective();
+      if ((type == PreprocessingInfo::CpreprocessorIncludeDeclaration ||
+           type == PreprocessingInfo::CpreprocessorIncludeNextDeclaration) &&
+          record->getRelativePosition() == PreprocessingInfo::inside) {
+        ++inside_include_count;
+        Sg_File_Info *initializer_start = assn_init->get_startOfConstruct();
+        Sg_File_Info *initializer_end = assn_init->get_endOfConstruct();
+        Sg_File_Info *include_location = record->get_file_info();
+        auto source_less = [](Sg_File_Info *lhs, Sg_File_Info *rhs) {
+          return lhs->get_line() < rhs->get_line() ||
+                 (lhs->get_line() == rhs->get_line() &&
+                  lhs->get_col() < rhs->get_col());
+        };
+        if (initializer_start == nullptr || initializer_end == nullptr ||
+            include_location == nullptr ||
+            initializer_start->get_physical_file_id() < 0 ||
+            initializer_end->get_physical_file_id() < 0 ||
+            include_location->get_physical_file_id() < 0 ||
+            !initializer_start->isSameFile(*initializer_end) ||
+            !initializer_start->isSameFile(*include_location) ||
+            (!source_less(initializer_start, include_location) &&
+             !(allow_include_at_interval_start &&
+               initializer_start->get_line() == include_location->get_line() &&
+               initializer_start->get_col() == include_location->get_col())) ||
+            !source_less(include_location, initializer_end)) {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[assignment-initializer-include]: "
+                  "include is not strictly inside its exact initializer "
+                  "source interval\n");
+          ROSE_ABORT();
+        }
+      }
     }
   }
+  switch (source_form) {
+  case SgAssignInitializer::e_assignment_initializer_source_ast:
+    if (inside_include_count != 0) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[assignment-initializer-include]: "
+              "AST-owned initializer carries %zu include-owned source "
+              "boundaries\n",
+              inside_include_count);
+      ROSE_ABORT();
+    }
+    break;
+  case SgAssignInitializer::
+      e_assignment_initializer_source_include_operand_expansion:
+  case SgAssignInitializer::
+      e_assignment_initializer_source_include_complete_expansion:
+    if (inside_include_count != 1) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[assignment-initializer-include]: "
+              "include-owned initializer carries %zu exact source "
+              "boundaries instead of one\n",
+              inside_include_count);
+      ROSE_ABORT();
+    }
+    unparseAttachedPreprocessingInfo(assn_init, info,
+                                     PreprocessingInfo::inside);
+    return;
+  default:
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[assignment-initializer-source-form]: "
+            "initializer has invalid source form=%d\n",
+            static_cast<int>(assn_init->get_source_form()));
+    ROSE_ABORT();
+  }
+  // Assignment initialization does not determine whether an operand cast was
+  // source-written.  SgCastExp::cast_type is the closed source-surface
+  // contract: explicit casts emit their syntax and e_implicit_cast validates
+  // its synthesized role before emitting only its operand.
+  unparseExpression(operand, info);
 #if DEBUG__unparseAssnInit
   printf("Leave unparseAssnInit()\n");
 #endif

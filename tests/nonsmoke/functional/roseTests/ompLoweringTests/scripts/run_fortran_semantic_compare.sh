@@ -1,22 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 11 ]]; then
-  echo "usage: $0 <translator> <compiler> <input> <workdir> <mode> <omp_fortran_inc> <omp_runtime_dir> <lowering_inc> <kmpc_fortran_abi_lib> <case_name> <timeout_s>" >&2
+if [[ $# -ne 12 ]]; then
+  echo "usage: $0 <translator> <compiler> <input> <oracle_input> <workdir> <mode> <omp_fortran_inc> <omp_runtime_dir> <lowering_inc> <kmpc_fortran_abi_lib> <case_name> <timeout_s>" >&2
   exit 2
 fi
 
 translator="$1"
 compiler="$2"
 input_file="$3"
-workdir="$4"
-mode="$5"
-omp_fortran_inc="$6"
-omp_runtime_dir="$7"
-lowering_inc="$8"
-kmpc_fortran_abi_lib="$9"
-case_name="${10}"
-timeout_s="${11}"
+oracle_input_file="$4"
+workdir="$5"
+mode="$6"
+omp_fortran_inc="$7"
+omp_runtime_dir="$8"
+lowering_inc="$9"
+kmpc_fortran_abi_lib="${10}"
+case_name="${11}"
+timeout_s="${12}"
+
+if [[ ! -f "${oracle_input_file}" ]]; then
+  echo "ERROR(${case_name}): semantic oracle source '${oracle_input_file}' does not exist" >&2
+  exit 2
+fi
 
 if [[ "${mode}" != "exact" && "${mode}" != "sort" ]]; then
   echo "ERROR(${case_name}): invalid mode '${mode}'" >&2
@@ -286,6 +292,53 @@ EOF
       end
 EOF
       ;;
+    rex_fortran_openmp_common_block_reference.f90)
+      cat > "${out_driver}" <<'EOF'
+program main
+  implicit none
+  integer :: flag_a, flag_b
+  common /FlAgS/ flag_a, flag_b
+
+  flag_a = 0
+  flag_b = 17
+  call openmp_common_block_reference()
+  print *, 'flag_a', flag_a
+end program main
+EOF
+      ;;
+    rex_fortran_openmp_directive_context_coverage.f90)
+      cat > "${out_driver}" <<'EOF'
+program main
+  use rex_fortran_openmp_directive_context_coverage
+  implicit none
+
+  call exercise_openmp_directive_context()
+  print *, 'done'
+end program main
+EOF
+      ;;
+    rex_fortran_openmp_module_directive_continuation.f90)
+      cat > "${out_driver}" <<'EOF'
+program main
+  use rex_fortran_openmp_module_directive_continuation
+  implicit none
+
+  value01 = 23
+  print *, 'value01', value01
+end program main
+EOF
+      ;;
+    rex_fortran_openmp_recursive_task_semantic_positive.f90)
+      cat > "${out_driver}" <<'EOF'
+program main
+  implicit none
+  integer :: rex_fortran_openmp_fibonacci
+  external rex_fortran_openmp_fibonacci
+
+  print *, 'fib', rex_fortran_openmp_fibonacci(10)
+end program main
+EOF
+      ;;
     testNewOFP.f)
       cat > "${out_driver}" <<'EOF'
       program main
@@ -366,10 +419,13 @@ if [[ ! -f "${rose_file}" ]]; then
   exit 1
 fi
 
-if ! "${compiler}" "${compile_flags[@]}" "${input_file}" "${driver_sources[@]}" \
+if ! "${compiler}" "${compile_flags[@]}" "${oracle_input_file}" "${driver_sources[@]}" \
     -o "${workdir}/orig.exe" > "${workdir}/orig_compile.out" 2> "${workdir}/orig_compile.err"; then
-  echo "NOTICE(${case_name}): semantic compare skipped because the original source is not semantically executable under the current Flang/OpenMP toolchain" >&2
-  exit 0
+  echo "ERROR(${case_name}): semantic oracle source failed to compile" >&2
+  echo "---- orig_compile.err (${case_name}) ----" >&2
+  cat "${workdir}/orig_compile.err" >&2
+  echo "---- end orig_compile.err ----" >&2
+  exit 1
 fi
 
 if ! "${compiler}" "${compile_flags[@]}" "${rose_file}" "${driver_sources[@]}" "${kmpc_fortran_abi_lib}" "${sanitizer_link_flags[@]}" \

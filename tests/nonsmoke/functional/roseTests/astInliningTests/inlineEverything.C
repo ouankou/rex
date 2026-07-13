@@ -217,7 +217,6 @@ int main(int argc, char *argv[]) {
     // This can be problematic since it tries to modifies lots of things,
     // including codes from headers which are not modified at all.
     cleanupInlinedCode(sageProject);
-    changeAllMembersToPublic(sageProject);
     AstTests::runAllTests(sageProject);
   }
 

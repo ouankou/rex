@@ -16,7 +16,8 @@ using namespace Rose;
 #include <iostream>
 using std::cout;
 
-int experimental_fortran_main(int argc, char *argv[], SgSourceFile *srcFile) {
+int experimental_fortran_main(int argc, char *argv[], SgSourceFile *srcFile,
+                              const std::string &includeTempDir) {
   int status{-1};
 
   if (srcFile != nullptr) {
@@ -75,7 +76,7 @@ int experimental_fortran_main(int argc, char *argv[], SgSourceFile *srcFile) {
     }
   }
 
-  status = flang_parser_driver_main(argc, argv, srcFile);
+  status = flang_parser_driver_main(argc, argv, srcFile, includeTempDir);
 
   // The Fortran frontend builds source-backed AST in frontend-construction
   // mode, but all later midend-generated nodes must switch back to
@@ -89,14 +90,6 @@ int experimental_fortran_main(int argc, char *argv[], SgSourceFile *srcFile) {
   }
 
   return status;
-}
-
-void set_flang_include_temp_dir(const std::string &path) {
-  if (path.empty()) {
-    flang_parser_driver_set_include_tmpdir(nullptr);
-    return;
-  }
-  flang_parser_driver_set_include_tmpdir(path.c_str());
 }
 
 SgScopeStatement *getTopOfScopeStack() {

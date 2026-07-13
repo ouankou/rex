@@ -54,11 +54,25 @@ void lower_omp(SgSourceFile *);
 
 void analyze_omp(SgSourceFile *);
 
+//! Return true when an OpenMP statement is a syntax-only construct selector
+//! owned by a MATCH/WHEN clause rather than an executable AST statement.
+bool isOmpContextSelectorMetadataDirective(const SgNode *);
+
+//! Return the exact source-language identifier for one LLVM OpenMP runtime
+//! entry point. C/C++ use the ABI spelling directly; Fortran uses the
+//! standards-conforming REX adapter spelling exported by
+//! kmpc_fortran_wrappers.c. Non-__kmpc names are contract violations.
+std::string getKmpcRuntimeFunctionName(const std::string &abiName);
+
+//! Build a reference to a generated Fortran outlined procedure through its
+//! exact semantic-only publication.
+SgFunctionRefExp *
+buildFortranOutlinedFunctionRef(SgFunctionDeclaration *declaration);
+
 //! Insert #include "xxx.h", the interface of a runtime library to the compiler
 void insertRTLHeaders(SgSourceFile *);
 
 //! Insert runtime init and terminate routines to main() entry
-void insertRTLinitAndCleanCode(SgSourceFile *);
 
 // Pei-Hung Insert accelerator init
 void insertAcceleratorInit(SgSourceFile *);
@@ -84,6 +98,62 @@ void transOmpTask(SgNode *node);
 
 //! Translate omp for or omp do loops
 void transOmpLoop(SgNode *node);
+
+//! Typed allowlists for the structural path from an OpenMP directive's exact
+//! body edge to its associated loop.  Worksharing and SIMD constructs permit
+//! only transparent singleton basic blocks.  Loop transformations additionally
+//! permit nested, supported loop-transformation directives; semantic OpenMP
+//! regions and attributed statements are never transparent wrappers.
+enum class AssociatedLoopPathContract {
+  Worksharing,
+  LoopTransformation,
+  Simd,
+  Target
+};
+
+//! Return the one exact loop owned by `directive` through `expected_root`.
+//! Every structural edge must be unique and parent-consistent, and every
+//! wrapper must be admitted by `path_contract`.  Malformed, ambiguous,
+//! cyclic, attributed, or semantically different wrapper paths are hard
+//! errors.
+SgStatement *requireExactAssociatedLoop(
+    SgOmpBodyStatement *directive, SgStatement *expected_root,
+    AssociatedLoopPathContract path_contract, const char *contract);
+SgForStatement *requireExactAssociatedForLoop(
+    SgOmpBodyStatement *directive, SgStatement *expected_root,
+    AssociatedLoopPathContract path_contract, const char *contract);
+
+//! Evaluate a language-valid, target-ABI integral constant and require it to be
+//! in [1, maximum].  Unsupported, malformed, volatile, cyclic, or undefined
+//! constant expressions are hard errors; no textual parsing or fallback value
+//! is permitted.
+unsigned long long requireExactPositiveIntegralConstant(
+    SgExpression *expression, unsigned long long maximum, const char *contract);
+
+//! Require `expression` to be one language-valid target-ABI integral constant
+//! expression.  This is a proof-only API: every runtime expression is a hard
+//! contract violation.
+void requireExactIntegralConstantExpression(SgExpression *expression,
+                                            const char *contract);
+
+//! Exact identities produced when an outlined OpenMP clause-variable record is
+//! transferred through one deep-copy transaction.
+struct ClauseVariableCopyIdentity {
+  SgOmpExecStatement *directive;
+  SgInitializedName *clauseVariable;
+  SgVariableSymbol *backingSymbol;
+};
+
+//! Resolve one original directive, all of the clause variable's exact
+//! expression identities, and its pointer-backing symbol through the deep-copy
+//! identity map.  The copied clause expressions must agree on exactly one
+//! symbol/declaration.  Missing, identity, ambiguous, or wrongly typed mappings
+//! are hard errors; spelling and scope lookup are never used.
+ROSE_DLL_API ClauseVariableCopyIdentity requireExactClauseVariableCopyIdentity(
+    const SgCopyHelp::copiedNodeMapType &identityMap,
+    SgOmpExecStatement *originalDirective,
+    SgInitializedName *originalClauseVariable,
+    SgVariableSymbol *originalBackingSymbol);
 
 //! Translate omp for or omp do loops affected by the "omp target" directive,
 //! using naive 1-to-1 mapping Liao 1/28/2013
@@ -112,6 +182,8 @@ void transOmpFlush(SgNode *node);
 
 //! Translate omp taskwait
 void transOmpTaskwait(SgNode *node);
+void transOmpTaskgroup(SgNode *node);
+void transOmpTaskloop(SgNode *node);
 
 //! Translate omp threadprivate
 void transOmpThreadprivate(SgNode *node);
@@ -314,19 +386,6 @@ ROSE_DLL_API omp_construct_enum getDataSharingAttribute(SgVarRefExp *varRef);
 //! within an OpenMP region.
 ROSE_DLL_API bool isSharedAccess(SgVarRefExp *varRef);
 
-//! Extract map clause information
-void extractMapClauses(
-    Rose_STL_Container<SgOmpClause *> map_clauses,
-    std::map<SgSymbol *, std::vector<std::pair<SgExpression *, SgExpression *>>>
-        &array_dimensions,
-    std::map<SgSymbol *,
-             std::vector<std::pair<SgOmpClause::omp_map_dist_data_enum,
-                                   SgExpression *>>> &dist_data_policies,
-    std::vector<SgOmpMapClause *> &map_alloc_clauses,
-    std::vector<SgOmpMapClause *> &map_to_clauses,
-    std::vector<SgOmpMapClause *> &map_from_clauses,
-    std::vector<SgOmpMapClause *> &map_tofrom_clauses);
-
 ROSE_DLL_API void
 markImplicitTargetMapVariable(SgOmpClauseBodyStatement *target,
                               SgInitializedName *var);
@@ -334,18 +393,6 @@ ROSE_DLL_API bool
 isImplicitTargetMapVariable(const SgOmpClauseBodyStatement *target,
                             const SgSymbol *sym);
 ROSE_DLL_API void clearImplicitTargetMapVariables();
-//! Categorize mapped variables
-void categorizeMapClauseVariables(
-    const SgInitializedNamePtrList
-        &all_vars, // all variables collected from map clauses
-    std::map<SgSymbol *, std::vector<std::pair<SgExpression *, SgExpression *>>>
-        &array_dimensions,            // array bounds  info as input
-    std::set<SgSymbol *> &array_syms, // variable symbols which are array types
-                                      // (explicit or as a pointer)
-    std::set<SgSymbol *>
-        &atom_syms); // variable symbols which are non-aggregate types: scalar,
-                     // pointer, etc
-
 void transOmpCollapse(SgStatement *node);
 } // end namespace OmpSupport
 

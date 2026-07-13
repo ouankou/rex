@@ -288,16 +288,72 @@ endif()
 set(_reference_root
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/moveDeclarationTool/referenceResults)
 
+set(_move_source_standard -std=gnu++14)
 set(_move_flags
   -w
   -rose:verbose 0
-  -rose:skip_unparse_asm_commands
-  -rose:skip_unparse_cc_commands
-  -std=gnu++14
+  ${_move_source_standard}
   -rose:debug
   -rose:trans-tracking)
 set(_move_output_dir ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(MAKE_DIRECTORY ${_move_output_dir})
+
+function(add_move_decl_syntax_validation variant specimen_name specimen output_path)
+  get_filename_component(_source_extension "${specimen}" EXT)
+  if(_source_extension STREQUAL ".C")
+    set(_compiler "${CMAKE_CXX_COMPILER}")
+    set(_language_flags -x c++ ${_move_source_standard})
+  else()
+    message(FATAL_ERROR
+      "No moveDeclaration syntax-validation compiler mapping for '${specimen}' "
+      "(extension '${_source_extension}')")
+  endif()
+
+  if(NOT _compiler)
+    message(FATAL_ERROR
+      "No compiler is configured for moveDeclaration specimen '${specimen}'")
+  endif()
+
+  set(_generation_test moveDecl_${variant}_${specimen_name})
+  set(_reference_test moveDecl_${variant}_diff_${specimen_name})
+  set(_syntax_test moveDecl_${variant}_syntax_${specimen_name})
+  set(_output_fixture
+    rex_move_decl_${variant}_${specimen_name}_output)
+  set(_reference_fixture
+    rex_move_decl_${variant}_${specimen_name}_reference_match)
+  set(_syntax_fixture
+    rex_move_decl_${variant}_${specimen_name}_syntax)
+
+  if(NOT TEST "${_generation_test}")
+    message(FATAL_ERROR
+      "Missing moveDeclaration generation test '${_generation_test}'")
+  endif()
+  if(NOT TEST "${_reference_test}")
+    message(FATAL_ERROR
+      "Missing moveDeclaration reference test '${_reference_test}'")
+  endif()
+
+  set_tests_properties(
+    ${_generation_test}
+    PROPERTIES FIXTURES_SETUP ${_output_fixture})
+  set_tests_properties(
+    ${_reference_test}
+    PROPERTIES
+      FIXTURES_REQUIRED ${_output_fixture}
+      FIXTURES_SETUP ${_reference_fixture})
+
+  add_test(
+    NAME ${_syntax_test}
+    COMMAND ${_compiler}
+      ${_language_flags}
+      -fsyntax-only
+      ${output_path})
+  set_tests_properties(
+    ${_syntax_test}
+    PROPERTIES
+      FIXTURES_REQUIRED ${_reference_fixture}
+      FIXTURES_SETUP ${_syntax_fixture})
+endfunction()
 
 foreach(specimen IN LISTS MOVE_DECLS_TESTCODES_ALL)
   string(REPLACE "." "_" _name ${specimen})
@@ -323,7 +379,7 @@ foreach(specimen IN LISTS MOVE_DECLS_TESTCODES_ALL)
       ${_output_v1_path}
       ${_reference_root}/${_output_v1}
   )
-  set_tests_properties(moveDecl_v1_diff_${_name} PROPERTIES DEPENDS moveDecl_v1_${_name})
+  add_move_decl_syntax_validation(v1 ${_name} ${specimen} ${_output_v1_path})
 
   add_test(
     NAME moveDecl_v2_${_name}
@@ -341,7 +397,7 @@ foreach(specimen IN LISTS MOVE_DECLS_TESTCODES_ALL)
       ${_output_v2_path}
       ${_reference_root}/withmerge/${_output_v2}
   )
-  set_tests_properties(moveDecl_v2_diff_${_name} PROPERTIES DEPENDS moveDecl_v2_${_name})
+  add_move_decl_syntax_validation(v2 ${_name} ${specimen} ${_output_v2_path})
 
   add_test(
     NAME moveDecl_v3_${_name}
@@ -349,7 +405,6 @@ foreach(specimen IN LISTS MOVE_DECLS_TESTCODES_ALL)
     COMMAND $<TARGET_FILE:${_move_decl_tool_target}>
       ${_move_flags}
       -rose:merge_decl_assign
-      -rose:suppress_variable_declaration_normalization
       -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}
       -rose:output ${_output_v3_path}
   )
@@ -360,7 +415,28 @@ foreach(specimen IN LISTS MOVE_DECLS_TESTCODES_ALL)
       ${_output_v3_path}
       ${_reference_root}/withmerge/${_output_v3}
   )
-  set_tests_properties(moveDecl_v3_diff_${_name} PROPERTIES DEPENDS moveDecl_v3_${_name})
+  add_move_decl_syntax_validation(v3 ${_name} ${specimen} ${_output_v3_path})
+
+  if(specimen STREQUAL "inputmoveDeclarationToInnermostScope_test2014_18.C" OR
+     specimen STREQUAL "inputmoveDeclarationToInnermostScope_test2014_22.C")
+    set(_syntax_fixtures
+      rex_move_decl_v1_${_name}_syntax
+      rex_move_decl_v2_${_name}_syntax
+      rex_move_decl_v3_${_name}_syntax)
+    add_test(
+      NAME moveDecl_rex_anonymous_tag_identity_${_name}
+      COMMAND ${BASH_EXECUTABLE} -c
+        "set -euo pipefail; for output in \"\$@\"; do if grep -Eq '(struct|union|enum)[[:space:]]+__anonymous_0x' \"\$output\"; then echo \"REX_MOVE_DECLARATION_INVARIANT[anonymous-tag]: generated identity leaked into \$output\" >&2; exit 1; fi; done"
+        dummy
+        ${_output_v1_path}
+        ${_output_v2_path}
+        ${_output_v3_path})
+    set_tests_properties(
+      moveDecl_rex_anonymous_tag_identity_${_name}
+      PROPERTIES
+        FIXTURES_REQUIRED "${_syntax_fixtures}"
+        LABELS "rex;AST;UNPARSER")
+  endif()
 
   if(REX_EXTENDED_TEST_TIMEOUTS AND specimen IN_LIST MOVE_DECLS_TESTCODES_EXTENDED_TIMEOUT)
     set_tests_properties(
@@ -403,6 +479,21 @@ foreach(specimen IN LISTS MOVE_DECLS_TESTCODES_WITH_TOKEN_UNPARSING_ALL)
   )
 
 endforeach()
+
+add_test(
+  NAME moveDecl_rex_move_declaration_boundary_ownership
+  COMMAND bash
+    ${CMAKE_CURRENT_SOURCE_DIR}/run_rex_move_declaration_boundary_ownership.sh
+    $<TARGET_FILE:${_move_decl_tool_target}>
+    ${CMAKE_CXX_COMPILER}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_move_declaration_boundary_ownership.C
+    ${_move_output_dir}/rex_move_declaration_boundary_ownership
+)
+set_tests_properties(
+  moveDecl_rex_move_declaration_boundary_ownership
+  PROPERTIES
+    ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_move_output_dir}"
+    RESOURCE_LOCK rex_move_declaration_boundary_ownership)
 
 get_property(_move_decl_registered_tests DIRECTORY PROPERTY TESTS)
 if(_move_decl_registered_tests)

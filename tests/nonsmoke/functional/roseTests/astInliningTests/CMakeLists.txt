@@ -40,6 +40,7 @@ set(INLINE_EVERYTHING_CPP11_SPECIMENS
   simplest_raja.C
   simplest_raja_v2.C
   lambda_001.C
+  rex_inliner_copied_scope_contract.cpp
 )
 
 set(INLINE_EVERYTHING_TOKEN_SPECIMENS
@@ -103,4 +104,3 @@ add_test(
     ${_test1_conf}
     test1.passed
 )
-

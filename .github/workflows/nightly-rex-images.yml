@@ -97,6 +97,7 @@ jobs:
         build-args: |
           BASE_IMAGE=${{ env.IMAGE_REPO }}:base
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+          REX_ENABLE_VALGRIND=1
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
     - name: Build REX dev image locally (${{ env.TARGET_ARCH }})
@@ -113,6 +114,7 @@ jobs:
         build-args: |
           BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+          REX_ENABLE_VALGRIND=1
         load: true
         tags: ${{ env.LOCAL_IMAGE_REPO }}:dev-${{ env.TARGET_ARCH }}-local
 
@@ -127,6 +129,7 @@ jobs:
             cd /opt/rex/src
             CTEST_JOBS="$(nproc)"
             ctest --test-dir build \
+              --no-tests=error \
               -R "rex|astInterface|OMPLOWERING_RODINIA_" \
               --output-on-failure \
               -j"${CTEST_JOBS}"
@@ -253,6 +256,7 @@ jobs:
             cd /opt/rex/src
             CTEST_JOBS="$(nproc)"
             ctest --test-dir build \
+              --no-tests=error \
               -R "rex|astInterface|OMPLOWERING_RODINIA_" \
               --output-on-failure \
               -j"${CTEST_JOBS}"
@@ -379,6 +383,7 @@ jobs:
             cd /opt/rex/src
             CTEST_JOBS="$(nproc)"
             ctest --test-dir build \
+              --no-tests=error \
               -R "rex|astInterface|OMPLOWERING_RODINIA_" \
               --output-on-failure \
               -j"${CTEST_JOBS}"
@@ -505,6 +510,7 @@ jobs:
             cd /opt/rex/src
             CTEST_JOBS="$(nproc)"
             ctest --test-dir build \
+              --no-tests=error \
               -R "rex|astInterface|OMPLOWERING_RODINIA_" \
               --output-on-failure \
               -j"${CTEST_JOBS}"

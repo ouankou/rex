@@ -27,8 +27,9 @@
  *
  * The high-level construction builds a variable declaration node using
  * `buildVariableDeclaration()` and inserts it into the AST with
- * `prependStatement()`. Scope pointers, symbol tables, and source file position
- * information are handled transparently.
+ * `prependStatement()`, passing the exact lexical scope explicitly. Symbol
+ * tables and source file position information are then validated against that
+ * owner.
  *
  * @subsection var_decl_example2 Example 2: Low-Level Variable Declaration
  *

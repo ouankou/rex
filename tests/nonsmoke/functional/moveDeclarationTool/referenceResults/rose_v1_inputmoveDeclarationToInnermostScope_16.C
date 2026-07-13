@@ -10,4 +10,3 @@ void foobar(int e) {
     d = 1;
   }
 }
-

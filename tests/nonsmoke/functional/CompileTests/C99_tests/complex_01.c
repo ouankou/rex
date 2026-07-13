@@ -40,3 +40,6 @@ int main(void) {
   // (not clear if this is might just be the use of the commar operator).
   // note that the parenthesis are required.
   _Complex float x_with_real_and_imaginary_parts = (1.0, -1.0);
+
+  return x_with_real_and_imaginary_parts != 0.0f;
+}

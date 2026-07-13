@@ -72,6 +72,8 @@ public:
 //! Representation for an operator (function)
 class OperatorDeclaration : public TypeDescriptor {
   ParameterDeclaration pars; // parameter names and types
+  bool has_concrete_signature_ = true;
+
 public:
   OperatorDeclaration() {}
   OperatorDeclaration(const std::string &signature)
@@ -84,6 +86,7 @@ public:
                                         AstInterface::AstNodeList *argp = 0,
                                         AstInterface::AstTypeList *paramp = 0);
   const ParameterDeclaration &get_param_info() const { return pars; }
+  bool has_concrete_signature() const { return has_concrete_signature_; }
   void add_param(const std::string &type, const std::string &name) {
     pars.add_param(type, name);
   }

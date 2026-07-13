@@ -1,0 +1,8 @@
+      PROGRAM REX_FLANG_LABELED_DO_HEADER_IDENTITY
+      INTEGER I, TOTAL
+      TOTAL = 0
+      GO TO 2
+ 2    DO 3 I = 1, 3
+ 3       TOTAL = TOTAL + I
+      IF (TOTAL .NE. 6) STOP 1
+      END

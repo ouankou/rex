@@ -1,0 +1,1 @@
+!$acc parallel loop if(enabled)

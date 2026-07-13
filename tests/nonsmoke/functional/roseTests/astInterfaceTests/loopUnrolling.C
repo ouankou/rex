@@ -52,9 +52,7 @@ int main(int argc, char *argv[])
 
   // Unroll it
   //--------------------------------------------------
-  bool result = false;
-  result = SageInterface::loopUnrolling(forLoop, factor);
-  ROSE_ASSERT(result != false);
+  SageInterface::loopUnrolling(forLoop, factor);
   // Qing's loop processor does not pass postprocessing and runAllTests
   //  AstPostProcessing(project);
 

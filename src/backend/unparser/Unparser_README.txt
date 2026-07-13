@@ -200,7 +200,7 @@ correctly. If the statement is not in the input source file, then the
 format_transformations function is called to format the statement in a
 design that I have specified. The check is as follows:
 
-if (!strcmp(getFileName(stmt), getFileName()) &&
+if (statementFromFile(stmt, getFileName(), info) &&
     !opt.get_forced_transformation_opt()) {
 
   format(stmt);
@@ -380,18 +380,9 @@ suppress the parenthesis when the this option is FALSE and the lhs of
 the binary expression is a SgThisExp (the boolean this_op monitors the
 check).
 
-The parenthesis printed from the unparseExprList function are also
-unnecessary in most cases, but not all. This unparse function is most
-often called by the unparseConInit function. Parenthesis are necessary
-when unparsing the argument list of a constructor in a variable
-declaration statement. Except for the case mentioned above,
-parenthesis are not necessary around expression lists with only one
-element (or constructor initializers with only one argument). The
-isOneElementList auxiliary function checks if the argument list of the
-constructor only has one element. If so, parenthesis are not needed
-around the individual arguments of a function call (when unparsing the
-function call's arguments in unparseFuncCall) and around an array
-reference (the RemovePareninExprList function).
+Constructor argument delimiters are selected by the exact source-form fields
+on SgConstructorInitializer. The backend does not infer parentheses from the
+number or kinds of argument expressions.
 
 options.{C,h}
 -------------

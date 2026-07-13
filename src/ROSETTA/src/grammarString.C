@@ -76,6 +76,46 @@ ConstructParamEnum GrammarString::getIsInConstructorParameterList() const {
 
 TraversalEnum GrammarString::getToBeTraversed() const { return toBeTraversed; }
 
+bool GrammarString::hasTraversalCardinality() const {
+  return p_traversalCardinality.has_value();
+}
+
+TraversalCardinalityEnum GrammarString::getTraversalCardinality() const {
+  if (!p_traversalCardinality.has_value()) {
+    fprintf(stderr,
+            "REX_ROSETTA_INVARIANT[traversal-cardinality]: member %s has no "
+            "scalar traversal cardinality\n",
+            variableNameString.c_str());
+    ROSE_ABORT();
+    __builtin_unreachable();
+  }
+  return *p_traversalCardinality;
+}
+
+TraversalAccessorEnum GrammarString::getTraversalAccessor() const {
+  return p_traversalAccessor;
+}
+
+TraversalStorageEnum GrammarString::getTraversalStorage() const {
+  return p_traversalStorage;
+}
+
+const string &GrammarString::getTraversalElementTypeName() const {
+  return p_traversalElementTypeName;
+}
+
+SchemaStorageEnum GrammarString::getSchemaStorage() const {
+  return p_schemaStorage;
+}
+
+SchemaElementEnum GrammarString::getSchemaElement() const {
+  return p_schemaElement;
+}
+
+const string &GrammarString::getSchemaElementTypeName() const {
+  return p_schemaElementTypeName;
+}
+
 string GrammarString::getFunctionPrototypeString() const {
   // return the prebuild string (from which the keys are computed!)
   // This function returns the "functionNameString" which is used to
@@ -165,29 +205,36 @@ string forLoopBody(string typeName, string variableName, string iteratorName) {
   return returnString;
 }
 
-string conditionalToSetParent(string variableName) {
+string conditionalToSetParent(string variableName, bool ownsType = false) {
   // DQ (8/29/2006): Skip setting the parents of types since they are shared and
-  // it is enforced that they have NULL valued parent pointers.
-  string returnString = "          if ( (" + variableName + " != NULL) && (" +
-                        variableName + "->get_parent() == NULL) && (isSgType(" +
-                        variableName + ") == NULL) ) \n" + "             { \n" +
-                        "               " + variableName +
-                        "->set_parent(result); \n" + "             } \n";
+  // it is enforced that they have NULL valued parent pointers. A field marked
+  // DEF_DELETE + CLONE_TREE is the exception: that metadata declares an
+  // exclusive structural type shell, such as a function declaration's
+  // source-syntax type, and its reciprocal parent must be published here.
+  string returnString =
+      "          if ( (" + variableName + " != NULL) && (" + variableName +
+      "->get_parent() == NULL)" +
+      (ownsType ? " ) \n"
+                : " && (isSgType(" + variableName + ") == NULL) ) \n") +
+      "             { \n" + "               " + variableName +
+      "->set_parent(result); \n" + "             } \n";
 
   return returnString;
 }
 
 string conditionalToCopyVariable(string typeName, string variableNameSource,
-                                 string variableNameCopy, string iteratorName) {
+                                 string variableNameCopy, string iteratorName,
+                                 bool exclusiveOwner) {
   // string returnString = "          " + typeName + " " + variableNameCopy + "
   // = NULL; \n" PC (8/3/2006): Flexibility improvement to copy mechanism
-  string returnString = "          if (" + variableNameSource + " != NULL) \n" +
-                        "             { \n" + "               " +
-                        variableNameCopy + " = static_cast<" + typeName +
-                        ">(help.copyOrLookupAst(" + iteratorName + ")); \n" +
-                        "             } \n" + "            else \n" +
-                        "             { \n" + "               " +
-                        variableNameCopy + " = NULL; \n" + "             } \n";
+  string returnString =
+      "          if (" + variableNameSource + " != NULL) \n" +
+      "             { \n" + "               " + variableNameCopy +
+      " = static_cast<" + typeName + ">(help." +
+      (exclusiveOwner ? "copyOrLookupOwnedAst(" : "copyOrLookupAst(") +
+      iteratorName + ")); \n" + "             } \n" + "            else \n" +
+      "             { \n" + "               " + variableNameCopy +
+      " = NULL; \n" + "             } \n";
   return returnString;
 }
 
@@ -282,8 +329,18 @@ string GrammarString::buildCopyMemberFunctionSetParentSource() {
     return returnString;
   }
 
-  // check if the member is accessed in tree traversal
-  if (toBeTraversed == DEF_TRAVERSAL || toBeCopied == CLONE_TREE) {
+  // Structural ownership, not traversal visibility alone, determines
+  // parentage. Most owned AST edges are traversed. The intentionally hidden
+  // originalExpressionTree and alternativeExpr edges are the other exact
+  // ownership form: DEF_DELETE + CLONE_TREE means the referring expression
+  // exclusively owns the cloned source-spelling subtree even though normal
+  // semantic traversals skip it. Publish the reciprocal parent while the
+  // generated copy function constructs that owner; copy fixup must only
+  // validate this producer contract.
+  const bool ownsCopiedAstSubtree =
+      toBeTraversed == DEF_TRAVERSAL ||
+      (toBeDeleted == DEF_DELETE && toBeCopied == CLONE_TREE);
+  if (ownsCopiedAstSubtree) {
     // Control variables for code generation
     bool typeIsPointerToListOfPointers =
         typeName.find("PtrListPtr") != string::npos;
@@ -369,7 +426,13 @@ string GrammarString::buildCopyMemberFunctionSetParentSource() {
         //      SgStatementPtrList::const_iterator init_stmt_copy_iterator =
         //      init_stmt_copy.begin();
 
-        copyOfList = string("result->get_") + variableName + "()";
+        // The copied children do not acquire their new structural owner until
+        // the loop emitted below.  Calling a public getter here is therefore
+        // invalid for members whose getter checks ownership.  This code is
+        // emitted inside the node's copy member function, so inspect the
+        // freshly assigned data member directly while repairing that transient
+        // construction state.
+        copyOfList = string("result->p_") + variableName;
         iteratorName = variableName + "_iterator";
       }
 
@@ -394,7 +457,9 @@ string GrammarString::buildCopyMemberFunctionSetParentSource() {
           forLoopBody(listElementType, listElementName, iteratorName);
 
       // insert the conditional test (also used below)
-      returnString += conditionalToSetParent(listElementName);
+      returnString +=
+          conditionalToSetParent(listElementName, toBeDeleted == DEF_DELETE &&
+                                                      toBeCopied == CLONE_TREE);
 
       // close off the loop
       returnString += forLoopClosing();
@@ -407,7 +472,10 @@ string GrammarString::buildCopyMemberFunctionSetParentSource() {
 
       string copyOfVariable = variableName + "_copy";
       // insert the conditional test (also used above)
-      returnString += commentString + conditionalToSetParent(copyOfVariable);
+      returnString +=
+          commentString +
+          conditionalToSetParent(copyOfVariable, toBeDeleted == DEF_DELETE &&
+                                                     toBeCopied == CLONE_TREE);
     }
   }
 
@@ -490,32 +558,9 @@ GrammarString::buildCopyMemberFunctionSource(bool buildConstructorArgument) {
 
   if (typeName == "AttachedPreprocessingInfoType*" &&
       variableName == "attachedPreprocessingInfoPtr") {
-    string copyOfVariableName = variableName + "_copy";
-    string sourceVariableName = "p_" + variableName;
-
-    commentString = "  // case: deep copy AttachedPreprocessingInfoType* for " +
-                    variableName + "\n";
-    returnString +=
-        "     " + typeName + " " + copyOfVariableName + " = NULL; \n";
-    returnString += commentString;
-    returnString += "     if (" + sourceVariableName + " != NULL) \n";
-    returnString += "        { \n";
-    returnString += "          " + copyOfVariableName +
-                    " = new AttachedPreprocessingInfoType; \n";
-    returnString +=
-        "          for (AttachedPreprocessingInfoType::const_iterator i = " +
-        sourceVariableName + "->begin(); i != " + sourceVariableName +
-        "->end(); ++i) \n";
-    returnString += "             { \n";
-    returnString +=
-        "               " + copyOfVariableName +
-        "->push_back((*i != NULL) ? new PreprocessingInfo(**i) : NULL); \n";
-    returnString += "             } \n";
-    returnString += "        } \n";
-
     if (buildConstructorArgument == false) {
-      returnString += "     result->p_" + variableName + " = " +
-                      copyOfVariableName + "; \n";
+      returnString +=
+          "     result->cloneAttachedPreprocessingInfoFrom(this); \n";
     }
 
     return returnString;
@@ -653,7 +698,8 @@ GrammarString::buildCopyMemberFunctionSource(bool buildConstructorArgument) {
       string dereferencedIteratorName = string("*") + iteratorName;
       returnString += conditionalToCopyVariable(
           listElementType, listElementName, copyOfListElementName,
-          dereferencedIteratorName);
+          dereferencedIteratorName,
+          toBeDeleted == DEF_DELETE && toBeCopied == CLONE_TREE);
 
       returnString += "          " + variableName + "_copy" + accessOperator +
                       "push_back(" + copyOfListElementName + "); \n";
@@ -669,12 +715,31 @@ GrammarString::buildCopyMemberFunctionSource(bool buildConstructorArgument) {
 
       string variableType = typeName;
       string copyOfVariableName = variableName + "_copy";
-      string sourceVariableName = string("get_") + variableName + "()";
+      string sourceVariableName;
+      switch (getTraversalAccessor()) {
+      case DIRECT_TRAVERSAL_ACCESS:
+        sourceVariableName = string("get_") + variableName + "()";
+        break;
+      case COMPUTED_BASE_TYPE_DECLARATION_ACCESS:
+        sourceVariableName = "compute_baseTypeDefiningDeclaration()";
+        break;
+      case COMPUTED_CLASS_DEFINITION_ACCESS:
+        sourceVariableName = "compute_classDefinition()";
+        break;
+      default:
+        fprintf(stderr,
+                "REX_ROSETTA_INVARIANT[copy-traversal-accessor]: member=%s "
+                "has unknown traversal accessor\n",
+                variableName.c_str());
+        ROSE_ABORT();
+      }
       // insert the conditional test (also used above)
       returnString +=
           commentString +
           conditionalToCopyVariable(variableType, sourceVariableName,
-                                    copyOfVariableName, sourceVariableName);
+                                    copyOfVariableName, sourceVariableName,
+                                    toBeDeleted == DEF_DELETE &&
+                                        toBeCopied == CLONE_TREE);
 
       if (buildConstructorArgument == false) {
         // DQ (3/10/2007): SgFunctionDeclaration has a parameter list that is
@@ -931,11 +996,178 @@ string GrammarString::getBaseClassConstructorSourceParameterString() {
 
 GrammarString::~GrammarString() {}
 
+namespace {
+string trimTypeName(string typeName) {
+  const string whitespace = " \t\n\r";
+  const size_t first = typeName.find_first_not_of(whitespace);
+  if (first == string::npos)
+    return "";
+  const size_t last = typeName.find_last_not_of(whitespace);
+  return typeName.substr(first, last - first + 1);
+}
+
+bool stripExactSuffix(string &value, const string &suffix) {
+  if (value.size() < suffix.size() ||
+      value.compare(value.size() - suffix.size(), suffix.size(), suffix) != 0)
+    return false;
+  value.erase(value.size() - suffix.size());
+  return true;
+}
+} // namespace
+
+void GrammarString::initializeSchemaMetadata() {
+  p_schemaStorage = SCALAR_SCHEMA_STORAGE;
+  p_schemaElement = VALUE_SCHEMA_ELEMENT;
+  p_schemaElementTypeName = trimTypeName(typeNameString);
+
+  string elementType = p_schemaElementTypeName;
+  if (stripExactSuffix(elementType, "PtrListPtr") ||
+      stripExactSuffix(elementType, "PtrVectorPtr")) {
+    p_schemaStorage = POINTER_CONTAINER_SCHEMA_STORAGE;
+    p_schemaElement = POINTER_SCHEMA_ELEMENT;
+  } else {
+    elementType = p_schemaElementTypeName;
+    if (stripExactSuffix(elementType, "PtrList") ||
+        stripExactSuffix(elementType, "PtrVector")) {
+      p_schemaStorage = VALUE_CONTAINER_SCHEMA_STORAGE;
+      p_schemaElement = POINTER_SCHEMA_ELEMENT;
+    } else {
+      elementType = p_schemaElementTypeName;
+      if (stripExactSuffix(elementType, "ListPtr") ||
+          stripExactSuffix(elementType, "VectorPtr")) {
+        p_schemaStorage = POINTER_CONTAINER_SCHEMA_STORAGE;
+      } else {
+        elementType = p_schemaElementTypeName;
+        if (p_schemaElementTypeName.size() < 9 ||
+            p_schemaElementTypeName.compare(p_schemaElementTypeName.size() - 9,
+                                            9, "BitVector") != 0) {
+          if (stripExactSuffix(elementType, "List") ||
+              stripExactSuffix(elementType, "Vector"))
+            p_schemaStorage = VALUE_CONTAINER_SCHEMA_STORAGE;
+        }
+      }
+    }
+  }
+
+  if (p_schemaStorage != SCALAR_SCHEMA_STORAGE) {
+    p_schemaElementTypeName = trimTypeName(elementType);
+    if (p_schemaElementTypeName.empty()) {
+      fprintf(stderr,
+              "REX_ROSETTA_INVARIANT[schema-container-element]: member %s "
+              "has no container element type\n",
+              variableNameString.c_str());
+      ROSE_ABORT();
+    }
+  }
+}
+
+void GrammarString::initializeTraversalMetadata() {
+  p_traversalStorage = NOT_A_TRAVERSAL_MEMBER;
+  p_traversalElementTypeName.clear();
+
+  if (toBeTraversed == NO_TRAVERSAL) {
+    if (p_traversalCardinality.has_value() ||
+        p_traversalAccessor != DIRECT_TRAVERSAL_ACCESS) {
+      fprintf(stderr,
+              "REX_ROSETTA_INVARIANT[traversal-metadata]: non-traversed "
+              "member %s cannot declare traversal behavior\n",
+              variableNameString.c_str());
+      ROSE_ABORT();
+    }
+    return;
+  }
+
+  string typeName = trimTypeName(typeNameString);
+  if (typeName.compare(0, 7, "static ") == 0) {
+    fprintf(stderr,
+            "REX_ROSETTA_INVARIANT[traversal-static-member]: static member "
+            "%s must be excluded from traversal in the schema\n",
+            variableNameString.c_str());
+    ROSE_ABORT();
+  }
+
+  if (p_schemaStorage == POINTER_CONTAINER_SCHEMA_STORAGE) {
+    fprintf(stderr,
+            "REX_ROSETTA_INVARIANT[traversal-container-storage]: traversed "
+            "container %s must use non-null value storage\n",
+            variableNameString.c_str());
+    ROSE_ABORT();
+  }
+
+  if (p_schemaStorage == VALUE_CONTAINER_SCHEMA_STORAGE &&
+      p_schemaElement == POINTER_SCHEMA_ELEMENT) {
+    p_traversalStorage = NODE_POINTER_CONTAINER_TRAVERSAL_MEMBER;
+    p_traversalElementTypeName = p_schemaElementTypeName;
+    if (p_traversalCardinality.has_value()) {
+      fprintf(stderr,
+              "REX_ROSETTA_INVARIANT[traversal-cardinality]: traversed "
+              "container %s cannot declare scalar traversal cardinality\n",
+              variableNameString.c_str());
+      ROSE_ABORT();
+    }
+    if (p_traversalAccessor != DIRECT_TRAVERSAL_ACCESS) {
+      fprintf(stderr,
+              "REX_ROSETTA_INVARIANT[traversal-accessor]: traversed "
+              "container %s cannot use a computed scalar accessor\n",
+              variableNameString.c_str());
+      ROSE_ABORT();
+    }
+  } else {
+    if (p_schemaStorage == VALUE_CONTAINER_SCHEMA_STORAGE) {
+      fprintf(stderr,
+              "REX_ROSETTA_INVARIANT[traversal-container-element]: "
+              "traversed container %s must contain AST pointers\n",
+              variableNameString.c_str());
+      ROSE_ABORT();
+    }
+
+    string elementType = typeName;
+    if (!stripExactSuffix(elementType, "*")) {
+      fprintf(stderr,
+              "REX_ROSETTA_INVARIANT[traversal-scalar-storage]: traversed "
+              "member %s must be an AST pointer or pointer container\n",
+              variableNameString.c_str());
+      ROSE_ABORT();
+    }
+    p_traversalStorage = NODE_POINTER_TRAVERSAL_MEMBER;
+    p_traversalElementTypeName = trimTypeName(elementType);
+    if (!p_traversalCardinality.has_value()) {
+      fprintf(stderr,
+              "REX_ROSETTA_INVARIANT[traversal-cardinality]: traversed "
+              "scalar member %s must explicitly declare REQUIRED or "
+              "OPTIONAL cardinality\n",
+              variableNameString.c_str());
+      ROSE_ABORT();
+    }
+  }
+
+  if (p_traversalElementTypeName.empty() ||
+      p_traversalElementTypeName.back() == '*') {
+    fprintf(stderr,
+            "REX_ROSETTA_INVARIANT[traversal-element-type]: traversal member "
+            "%s has no exact AST element type\n",
+            variableNameString.c_str());
+    ROSE_ABORT();
+  }
+  if (p_traversalAccessor != DIRECT_TRAVERSAL_ACCESS &&
+      p_traversalStorage != NODE_POINTER_TRAVERSAL_MEMBER) {
+    fprintf(stderr,
+            "REX_ROSETTA_INVARIANT[traversal-accessor]: computed traversal "
+            "access requires a scalar AST pointer member\n");
+    ROSE_ABORT();
+  }
+}
+
 GrammarString::GrammarString()
     : pureVirtualFunction(0), functionNameString(""), typeNameString(""),
       variableNameString(""), defaultInitializerString(""),
       p_isInConstructorParameterList(CONSTRUCTOR_PARAMETER),
-      toBeCopied(COPY_DATA), toBeTraversed(DEF_TRAVERSAL), key(0),
+      p_traversalCardinality(std::nullopt),
+      p_traversalAccessor(DIRECT_TRAVERSAL_ACCESS),
+      p_traversalStorage(NOT_A_TRAVERSAL_MEMBER),
+      p_schemaStorage(SCALAR_SCHEMA_STORAGE),
+      p_schemaElement(VALUE_SCHEMA_ELEMENT), toBeCopied(COPY_DATA),
+      toBeTraversed(DEF_TRAVERSAL), key(0),
       automaticGenerationOfDataAccessFunctions(BUILD_ACCESS_FUNCTIONS),
       toBeDeleted(NO_DELETE) {}
 
@@ -946,12 +1178,51 @@ GrammarString::GrammarString(
     const BuildAccessEnum &inputAutomaticGenerationOfDataAccessFunctions,
     const TraversalEnum &toBeTraversedDuringTreeTraversal,
     const DeleteEnum &delete_flag, const CopyConfigEnum &_toBeCopied)
+    : GrammarString(inputTypeNameString, inputVariableNameString,
+                    inputDefaultInitializerString, isConstructorParameter,
+                    inputAutomaticGenerationOfDataAccessFunctions,
+                    toBeTraversedDuringTreeTraversal, delete_flag, _toBeCopied,
+                    std::nullopt, DIRECT_TRAVERSAL_ACCESS) {}
+
+GrammarString::GrammarString(
+    const string &inputTypeNameString, const string &inputVariableNameString,
+    const string &inputDefaultInitializerString,
+    const ConstructParamEnum &isConstructorParameter,
+    const BuildAccessEnum &inputAutomaticGenerationOfDataAccessFunctions,
+    const TraversalEnum &toBeTraversedDuringTreeTraversal,
+    const DeleteEnum &delete_flag, const CopyConfigEnum &_toBeCopied,
+    const TraversalCardinalityEnum &traversalCardinality,
+    const TraversalAccessorEnum &traversalAccessor)
+    : GrammarString(
+          inputTypeNameString, inputVariableNameString,
+          inputDefaultInitializerString, isConstructorParameter,
+          inputAutomaticGenerationOfDataAccessFunctions,
+          toBeTraversedDuringTreeTraversal, delete_flag, _toBeCopied,
+          std::optional<TraversalCardinalityEnum>(traversalCardinality),
+          traversalAccessor) {}
+
+GrammarString::GrammarString(
+    const string &inputTypeNameString, const string &inputVariableNameString,
+    const string &inputDefaultInitializerString,
+    const ConstructParamEnum &isConstructorParameter,
+    const BuildAccessEnum &inputAutomaticGenerationOfDataAccessFunctions,
+    const TraversalEnum &toBeTraversedDuringTreeTraversal,
+    const DeleteEnum &delete_flag, const CopyConfigEnum &_toBeCopied,
+    std::optional<TraversalCardinalityEnum> traversalCardinality,
+    const TraversalAccessorEnum &traversalAccessor)
     : pureVirtualFunction(0), typeNameString(inputTypeNameString),
       variableNameString(inputVariableNameString),
       defaultInitializerString(inputDefaultInitializerString),
       p_isInConstructorParameterList(isConstructorParameter),
-      toBeCopied(_toBeCopied), toBeTraversed(toBeTraversedDuringTreeTraversal),
+      p_traversalCardinality(traversalCardinality),
+      p_traversalAccessor(traversalAccessor),
+      p_traversalStorage(NOT_A_TRAVERSAL_MEMBER),
+      p_schemaStorage(SCALAR_SCHEMA_STORAGE),
+      p_schemaElement(VALUE_SCHEMA_ELEMENT), toBeCopied(_toBeCopied),
+      toBeTraversed(toBeTraversedDuringTreeTraversal),
       toBeDeleted(delete_flag) {
+  initializeSchemaMetadata();
+  initializeTraversalMetadata();
   // string tempString = defaultInitializerString;
   //  printf ("GrammarString constructor: tempString.length() = %d tempString =
   //  %s \n",
@@ -975,7 +1246,12 @@ GrammarString::GrammarString(const string &inputFunctionNameString)
     : pureVirtualFunction(0), functionNameString(inputFunctionNameString),
       typeNameString(""), variableNameString(""), defaultInitializerString(""),
       p_isInConstructorParameterList(CONSTRUCTOR_PARAMETER),
-      toBeCopied(COPY_DATA), toBeTraversed(DEF_TRAVERSAL), key(0),
+      p_traversalCardinality(std::nullopt),
+      p_traversalAccessor(DIRECT_TRAVERSAL_ACCESS),
+      p_traversalStorage(NOT_A_TRAVERSAL_MEMBER),
+      p_schemaStorage(SCALAR_SCHEMA_STORAGE),
+      p_schemaElement(VALUE_SCHEMA_ELEMENT), toBeCopied(COPY_DATA),
+      toBeTraversed(DEF_TRAVERSAL), key(0),
       automaticGenerationOfDataAccessFunctions(BUILD_ACCESS_FUNCTIONS),
       toBeDeleted(NO_DELETE) {
   // Compute the key once as the object is constructed (this is used to test
@@ -988,7 +1264,12 @@ GrammarString::GrammarString(const GrammarString &X)
     : pureVirtualFunction(0), functionNameString(""), typeNameString(""),
       variableNameString(""), defaultInitializerString(""),
       p_isInConstructorParameterList(CONSTRUCTOR_PARAMETER),
-      toBeCopied(X.toBeCopied), toBeTraversed(DEF_TRAVERSAL), key(0),
+      p_traversalCardinality(std::nullopt),
+      p_traversalAccessor(DIRECT_TRAVERSAL_ACCESS),
+      p_traversalStorage(NOT_A_TRAVERSAL_MEMBER),
+      p_schemaStorage(SCALAR_SCHEMA_STORAGE),
+      p_schemaElement(VALUE_SCHEMA_ELEMENT), toBeCopied(X.toBeCopied),
+      toBeTraversed(DEF_TRAVERSAL), key(0),
       automaticGenerationOfDataAccessFunctions(BUILD_ACCESS_FUNCTIONS),
       toBeDeleted(NO_DELETE) {
   // printf ("Calling the GrammarString copy CONSTRUCTOR! \n");
@@ -1014,6 +1295,13 @@ GrammarString &GrammarString::operator=(const GrammarString &X) {
   automaticGenerationOfDataAccessFunctions =
       X.automaticGenerationOfDataAccessFunctions;
   p_isInConstructorParameterList = X.p_isInConstructorParameterList;
+  p_traversalCardinality = X.p_traversalCardinality;
+  p_traversalAccessor = X.p_traversalAccessor;
+  p_traversalStorage = X.p_traversalStorage;
+  p_traversalElementTypeName = X.p_traversalElementTypeName;
+  p_schemaStorage = X.p_schemaStorage;
+  p_schemaElement = X.p_schemaElement;
+  p_schemaElementTypeName = X.p_schemaElementTypeName;
   toBeTraversed = X.toBeTraversed;
   toBeCopied = X.toBeCopied;
   toBeDeleted = X.toBeDeleted;
@@ -1108,6 +1396,7 @@ void GrammarString::setIsInConstructorParameterList(ConstructParamEnum X) {
 
 void GrammarString::setToBeTraversed(const TraversalEnum &X) {
   toBeTraversed = X;
+  initializeTraversalMetadata();
 }
 
 BuildAccessEnum GrammarString::generateDataAccessFunctions() const {
@@ -1190,17 +1479,7 @@ string GrammarString::buildDestructorSource() {
     commentString =
         "  // case: delete AttachedPreprocessingInfoType* contents for " +
         variableName + "\n";
-    returnString += "     if (p_" + variableName + " != NULL) \n";
-    returnString += "        { \n";
-    returnString +=
-        "          for (AttachedPreprocessingInfoType::iterator i = p_" +
-        variableName + "->begin(); i != p_" + variableName + "->end(); ++i) \n";
-    returnString += "             { \n";
-    returnString += "               delete *i; \n";
-    returnString += "             } \n";
-    returnString += "          delete p_" + variableName + "; \n";
-    returnString += "          p_" + variableName + " = NULL; \n";
-    returnString += "        } \n";
+    returnString += "     clearAttachedPreprocessingInfo(); \n";
     returnString = commentString + returnString;
     return returnString;
   }

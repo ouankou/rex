@@ -32,6 +32,62 @@ using namespace std;
 
 // =====================================================================
 
+SgFunctionDeclaration *ASTtools::canonicalFunctionFamilyDeclaration(
+    SgFunctionDeclaration *declaration) {
+  if (declaration == NULL)
+    return NULL;
+
+  if (SgFunctionDeclaration *first = isSgFunctionDeclaration(
+          declaration->get_firstNondefiningDeclaration()))
+    return first;
+
+  if (SgFunctionDeclaration *defining =
+          isSgFunctionDeclaration(declaration->get_definingDeclaration()))
+    return defining;
+
+  return declaration;
+}
+
+bool ASTtools::sameFunctionFamily(SgFunctionDeclaration *lhs,
+                                  SgFunctionDeclaration *rhs) {
+  return lhs != NULL && rhs != NULL &&
+         canonicalFunctionFamilyDeclaration(lhs) ==
+             canonicalFunctionFamilyDeclaration(rhs);
+}
+
+SgFunctionDeclaration *ASTtools::functionOwningHiddenNamedType(SgType *type) {
+  SgType *base = type != NULL ? type->findBaseType() : NULL;
+  SgNamedType *named = isSgNamedType(base);
+  SgDeclarationStatement *declaration =
+      named != NULL ? named->get_declaration() : NULL;
+  if (declaration == NULL)
+    return NULL;
+
+  SgFunctionDeclaration *function =
+      SageInterface::getEnclosingFunctionDeclaration(declaration);
+  if (function == NULL)
+    return NULL;
+
+  for (SgScopeStatement *scope = declaration->get_scope(); scope != NULL;
+       scope = scope->get_scope()) {
+    if (isSgGlobal(scope) != NULL ||
+        isSgNamespaceDefinitionStatement(scope) != NULL)
+      return NULL;
+    if (sameFunctionFamily(
+            SageInterface::getEnclosingFunctionDeclaration(scope, true),
+            function))
+      return function;
+  }
+
+  fprintf(stderr,
+          "REX_OUTLINER_INVARIANT[local-type-owner]: named type=%p "
+          "declaration=%p function=%p has no exact lexical path to its "
+          "owning function\n",
+          static_cast<void *>(base), static_cast<void *>(declaration),
+          static_cast<void *>(function));
+  ROSE_ABORT();
+}
+
 bool ASTtools::isConstMemFunc(const SgFunctionDeclaration *decl) {
   const SgMemberFunctionDeclaration *mf_decl =
       isSgMemberFunctionDeclaration(decl);
@@ -77,6 +133,154 @@ bool ASTtools::isConstObj(const SgType *type) {
   }
   // Default: Assume it's not
   return false;
+}
+
+void ASTtools::publishTemplateParameterPackExpansion(
+    const SgTemplateParameter *parameter, SgTemplateArgument *argument) {
+  if (parameter == nullptr || argument == nullptr) {
+    std::cerr << "REX_OUTLINER_INVARIANT[template-argument-pack-surface]: null "
+                 "template parameter or argument"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  if (argument->get_is_pack_element()) {
+    std::cerr << "REX_OUTLINER_INVARIANT[template-argument-pack-surface]: "
+                 "argument already has a pack-expansion owner"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  if (!parameter->get_is_parameter_pack()) {
+    return;
+  }
+
+  if (argument->get_argumentType() == SgTemplateArgument::type_argument) {
+    SgType *semantic_type = argument->get_type();
+    if (semantic_type == nullptr || semantic_type != parameter->get_type() ||
+        argument->get_sourceSpelledType() != nullptr) {
+      std::cerr
+          << "REX_OUTLINER_INVARIANT[template-argument-pack-surface]: type "
+             "pack argument does not reference its exact parameter type"
+          << std::endl;
+      ROSE_ABORT();
+    }
+
+    // The semantic argument keeps the exact template-parameter type.  Its
+    // spelling surface is a distinct use and must not inherit the declaration
+    // ellipsis, otherwise `T...` becomes `T......` when the argument expansion
+    // is emitted below.
+    if (SgTemplateType *parameter_type = isSgTemplateType(semantic_type)) {
+      SgTemplateType *reference_type =
+          new SgTemplateType(parameter_type->get_name());
+      reference_type->set_template_parameter_position(
+          parameter_type->get_template_parameter_position());
+      reference_type->set_template_parameter_depth(
+          parameter_type->get_template_parameter_depth());
+      const bool has_template_coordinates =
+          parameter_type->get_template_parameter_depth() >= 0 &&
+          parameter_type->get_template_parameter_position() >= 0;
+      const std::optional<SgTemplateType::canonical_source_identity>
+          source_identity = parameter_type->get_canonical_source_identity();
+      if (has_template_coordinates != source_identity.has_value()) {
+        std::cerr << "REX_OUTLINER_INVARIANT[template-argument-pack-identity]: "
+                     "parameter type has mismatched coordinates and canonical "
+                     "source identity"
+                  << std::endl;
+        ROSE_ABORT();
+      }
+      if (source_identity.has_value()) {
+        reference_type->initialize_canonical_source_identity(*source_identity);
+      }
+      reference_type->set_class_type(parameter_type->get_class_type());
+      reference_type->set_parent_class_type(
+          parameter_type->get_parent_class_type());
+      reference_type->set_template_parameter(
+          parameter_type->get_template_parameter());
+      reference_type->get_tpl_args() = parameter_type->get_tpl_args();
+      reference_type->get_part_spec_tpl_args() =
+          parameter_type->get_part_spec_tpl_args();
+      reference_type->set_packed(false);
+      argument->set_sourceSpelledType(reference_type);
+    } else if (isSgNonrealType(semantic_type) == nullptr) {
+      std::cerr
+          << "REX_OUTLINER_INVARIANT[template-argument-pack-surface]: type "
+             "pack has no exact template-parameter type identity"
+          << std::endl;
+      ROSE_ABORT();
+    }
+  }
+
+  argument->set_is_pack_element(true);
+}
+
+SgPointerType *ASTtools::buildAddressOfResultType(SgType *operand_type) {
+  if (operand_type == NULL) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[address-of-result-type]: operand type is "
+            "null\n");
+    ROSE_ABORT();
+  }
+
+  // A typedef or modifier may be the written surface of a reference alias.
+  // Inspect through those transparent layers only to find a reference; when
+  // there is no reference, retain the exact written operand type as the
+  // pointer's base type.
+  SgType *probe = operand_type;
+  std::set<SgType *> visited;
+  while (probe != NULL && visited.insert(probe).second) {
+    if (SgTypedefType *typedef_type = isSgTypedefType(probe)) {
+      probe = typedef_type->get_base_type();
+    } else if (SgModifierType *modifier_type = isSgModifierType(probe)) {
+      probe = modifier_type->get_base_type();
+    } else {
+      break;
+    }
+  }
+  if (probe == NULL ||
+      visited.count(probe) != 0 &&
+          (isSgTypedefType(probe) != NULL || isSgModifierType(probe) != NULL)) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[address-of-result-type]: operand type=%p "
+            "has a null or cyclic transparent type chain\n",
+            static_cast<void *>(operand_type));
+    ROSE_ABORT();
+  }
+
+  SgType *pointee_type = operand_type;
+  if (SgReferenceType *reference_type = isSgReferenceType(probe)) {
+    pointee_type = reference_type->get_base_type();
+  } else if (SgRvalueReferenceType *reference_type =
+                 isSgRvalueReferenceType(probe)) {
+    pointee_type = reference_type->get_base_type();
+  }
+  if (pointee_type == NULL) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[address-of-result-type]: reference "
+            "operand type=%p has no exact referred-to type\n",
+            static_cast<void *>(operand_type));
+    ROSE_ABORT();
+  }
+
+  SgType *canonical_pointee = pointee_type->stripType(
+      SgType::STRIP_TYPEDEF_TYPE | SgType::STRIP_MODIFIER_TYPE);
+  if (canonical_pointee == NULL ||
+      isSgReferenceType(canonical_pointee) != NULL ||
+      isSgRvalueReferenceType(canonical_pointee) != NULL) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[address-of-result-type]: operand type=%p "
+            "would produce a pointer to a reference\n",
+            static_cast<void *>(operand_type));
+    ROSE_ABORT();
+  }
+
+  SgPointerType *result = SgPointerType::createType(pointee_type);
+  if (result == NULL || result->get_base_type() != pointee_type) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[address-of-result-type]: operand type=%p "
+            "did not produce one exact pointer result type\n",
+            static_cast<void *>(operand_type));
+    ROSE_ABORT();
+  }
+  return result;
 }
 
 // ========================================================================
@@ -455,59 +659,12 @@ void ASTtools::setSourcePositionAtRootAndAllChildrenAsTransformation(
     SgNode *root) {
   Rose_STL_Container<SgNode *> nodeList =
       NodeQuery::querySubTree(root, V_SgNode);
+  if (std::find(nodeList.begin(), nodeList.end(), root) == nodeList.end()) {
+    nodeList.push_back(root);
+  }
   for (Rose_STL_Container<SgNode *>::iterator i = nodeList.begin();
        i != nodeList.end(); i++) {
     setSourcePositionAsTransformation(*i);
-  }
-}
-
-namespace {
-void assignFileInfoToPhysicalFile(Sg_File_Info *info, int physical_file_id) {
-  if (info == NULL || physical_file_id < 0)
-    return;
-
-  info->set_file_id(physical_file_id);
-  info->set_physical_file_id(physical_file_id);
-  info->setTransformation();
-  info->setOutputInCodeGeneration();
-}
-} // namespace
-
-void ASTtools::assignGeneratedSubtreeToPhysicalFile(SgNode *root,
-                                                    int physical_file_id) {
-  ROSE_ASSERT(root != NULL);
-  ROSE_ASSERT(physical_file_id >= 0);
-
-  Rose_STL_Container<SgNode *> nodeList =
-      NodeQuery::querySubTree(root, V_SgNode);
-  for (Rose_STL_Container<SgNode *>::iterator i = nodeList.begin();
-       i != nodeList.end(); ++i) {
-    SgNode *node = *i;
-    if (SgLocatedNode *locatedNode = isSgLocatedNode(node)) {
-      locatedNode->setTransformation();
-      locatedNode->setOutputInCodeGeneration();
-      assignFileInfoToPhysicalFile(locatedNode->get_file_info(),
-                                   physical_file_id);
-      assignFileInfoToPhysicalFile(locatedNode->get_startOfConstruct(),
-                                   physical_file_id);
-      assignFileInfoToPhysicalFile(locatedNode->get_endOfConstruct(),
-                                   physical_file_id);
-
-      if (SgExpression *expression = isSgExpression(locatedNode)) {
-        assignFileInfoToPhysicalFile(expression->get_operatorPosition(),
-                                     physical_file_id);
-      }
-    } else if (SgInitializedName *initializedName = isSgInitializedName(node)) {
-      assignFileInfoToPhysicalFile(initializedName->get_file_info(),
-                                   physical_file_id);
-      assignFileInfoToPhysicalFile(initializedName->get_startOfConstruct(),
-                                   physical_file_id);
-      assignFileInfoToPhysicalFile(initializedName->get_endOfConstruct(),
-                                   physical_file_id);
-    } else if (SgPragma *pragma = isSgPragma(node)) {
-      assignFileInfoToPhysicalFile(pragma->get_startOfConstruct(),
-                                   physical_file_id);
-    }
   }
 }
 

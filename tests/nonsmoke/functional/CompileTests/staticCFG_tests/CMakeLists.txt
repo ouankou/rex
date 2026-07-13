@@ -345,15 +345,15 @@ if(ENABLE-FORTRAN)
 
     add_test(
       NAME testStaticCFG_f03_${file_to_test}
-      COMMAND testStaticCFG ${ROSE_FLAGS} -rose:skip_syntax_check
-        -rose:skipfinalCompileStep -rose:fortran_std=f2003
+      COMMAND testStaticCFG ${ROSE_FLAGS} -rose:skipfinalCompileStep
+        -rose:fortran_std=f2003
         -c ${source_path})
     set_tests_properties(testStaticCFG_f03_${file_to_test} PROPERTIES LABELS STATICCFGTEST)
 
     add_test(
       NAME testInterproceduralCFG_f03_${file_to_test}
-      COMMAND testInterproceduralCFG ${ROSE_FLAGS} -rose:skip_syntax_check
-        -rose:skipfinalCompileStep -rose:fortran_std=f2003
+      COMMAND testInterproceduralCFG ${ROSE_FLAGS} -rose:skipfinalCompileStep
+        -rose:fortran_std=f2003
         -c ${source_path})
 
     set_tests_properties(testStaticCFG_f03_${file_to_test} PROPERTIES DEPENDS testInterproceduralCFG_f03_${file_to_test} LABELS STATICCFGTEST )
@@ -381,15 +381,15 @@ if(ENABLE-FORTRAN)
 
     add_test(
       NAME testStaticCFG_f03_${file_to_test}
-      COMMAND testStaticCFG ${ROSE_FLAGS} -rose:skip_syntax_check
-        -rose:skipfinalCompileStep -rose:fortran_std=f2003
+      COMMAND testStaticCFG ${ROSE_FLAGS} -rose:skipfinalCompileStep
+        -rose:fortran_std=f2003
         -c ${source_path})
     set_tests_properties(testStaticCFG_f03_${file_to_test} PROPERTIES LABELS STATICCFGTEST)
 
     add_test(
       NAME testInterproceduralCFG_f03_${file_to_test}
-      COMMAND testInterproceduralCFG ${ROSE_FLAGS} -rose:skip_syntax_check
-        -rose:skipfinalCompileStep -rose:fortran_std=f2003
+      COMMAND testInterproceduralCFG ${ROSE_FLAGS} -rose:skipfinalCompileStep
+        -rose:fortran_std=f2003
         -c ${source_path})
     set_tests_properties(testStaticCFG_f03_${file_to_test} PROPERTIES DEPENDS testInterproceduralCFG_f03_${file_to_test} LABELS STATICCFGTEST)
   endforeach()

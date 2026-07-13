@@ -1,0 +1,4 @@
+cmd = cd ${TARGET} && ${TEST_UNPARSE_HEADERS} ${ROSE_SWITCHES} ${HDR_ROOT_SWITCHES} ${srcdir}/${TARGET}/rex_unparse_single_header_ownership.cpp
+cmd = test -f ${TARGET}/unparsedHeaders/rex_unparse_single_header_ownership.hpp
+cmd = grep -F "rex_single_header_ownership_rename_me_renamed" ${TARGET}/unparsedHeaders/rex_unparse_single_header_ownership.hpp
+cmd = ${CXX} -std=c++17 -fsyntax-only -I${TARGET}/unparsedHeaders ${TARGET}/rose_rex_unparse_single_header_ownership.cpp

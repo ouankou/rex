@@ -1,41 +1,5 @@
 #include "sage3basic.h"
 
-namespace {
-SgType *resolveStoredCallResultType(SgType *type) {
-  if (type == NULL) {
-    return NULL;
-  }
-
-  auto returnFromFunctionLikeType = [](SgType *candidate) -> SgType * {
-    if (candidate == NULL) {
-      return NULL;
-    }
-    if (SgFunctionType *functionType = isSgFunctionType(candidate)) {
-      return functionType->get_return_type();
-    }
-    if (SgMemberFunctionType *memberFunctionType =
-            isSgMemberFunctionType(candidate)) {
-      return memberFunctionType->get_return_type();
-    }
-    return NULL;
-  };
-
-  if (SgType *returnType = returnFromFunctionLikeType(type)) {
-    return returnType;
-  }
-
-  SgType *strippedType = type->stripType(
-      SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
-      SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_POINTER_TYPE |
-      SgType::STRIP_ARRAY_TYPE | SgType::STRIP_TYPEDEF_TYPE);
-  if (SgType *returnType = returnFromFunctionLikeType(strippedType)) {
-    return returnType;
-  }
-
-  return type;
-}
-} // namespace
-
 void SgCallExpression::post_construction_initialization() {
   if (p_function != NULL)
     p_function->set_parent(this);
@@ -55,19 +19,14 @@ SgExpression *SgCallExpression::get_next(int &n) const {
 
 // DQ: trying to remove the nested iterator class
 void SgCallExpression::append_arg(SgExpression *what) {
-  assert(this != NULL);
-
-  // DQ (11/15/2006): avoid setting newArgs this late in the process.
-  ROSE_ASSERT(p_args != NULL);
-  if (p_args == NULL) {
-    // set_args(new SgExprListExp(this->get_file_info()));
-    SgExprListExp *newArgs = new SgExprListExp(this->get_file_info());
-    assert(newArgs != NULL);
-    newArgs->set_endOfConstruct(this->get_file_info());
-    set_args(newArgs);
+  if (p_args == nullptr || what == nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[call-arguments]: %s cannot append argument=%p "
+            "to list=%p; both must be non-null\n",
+            class_name().c_str(), static_cast<void *>(what),
+            static_cast<void *>(p_args));
+    ROSE_ABORT();
   }
-
-  // insert_arg(p_args->end(),what);
   p_args->append_expression(what);
 }
 
@@ -100,8 +59,28 @@ int SgCallExpression::replace_expression(SgExpression *o, SgExpression *n) {
 }
 
 SgType *SgCallExpression::get_type() const {
-  if (SgType *storedType = resolveStoredCallResultType(p_expression_type)) {
-    return storedType;
+  if (p_expression_type == nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[call-result-type]: %s has no exact semantic "
+            "result type\n",
+            class_name().c_str());
+    ROSE_ABORT();
   }
-  return SageBuilder::buildVoidType();
+  if (isSgFunctionType(p_expression_type) != nullptr ||
+      isSgMemberFunctionType(p_expression_type) != nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[call-result-type]: %s stores a callable type "
+            "instead of its exact semantic result type\n",
+            class_name().c_str());
+    ROSE_ABORT();
+  }
+  if (isSgTypeUnknown(p_expression_type) != nullptr ||
+      isSgTypeDefault(p_expression_type) != nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[call-result-type]: %s stores placeholder type "
+            "%s instead of an exact semantic result type\n",
+            class_name().c_str(), p_expression_type->class_name().c_str());
+    ROSE_ABORT();
+  }
+  return p_expression_type;
 }

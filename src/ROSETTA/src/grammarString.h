@@ -14,6 +14,7 @@
 #include <string>
 
 #include <iostream>
+#include <optional>
 
 class AstNodeClass;
 
@@ -34,6 +35,26 @@ public:
 
 private:
   ConstructParamEnum p_isInConstructorParameterList;
+  std::optional<TraversalCardinalityEnum> p_traversalCardinality;
+  TraversalAccessorEnum p_traversalAccessor;
+  TraversalStorageEnum p_traversalStorage;
+  std::string p_traversalElementTypeName;
+  SchemaStorageEnum p_schemaStorage;
+  SchemaElementEnum p_schemaElement;
+  std::string p_schemaElementTypeName;
+
+  void initializeSchemaMetadata();
+  void initializeTraversalMetadata();
+
+  GrammarString(const std::string &inputTypeNameString,
+                const std::string &inputVariableNameString,
+                const std::string &defaultInitializer,
+                const ConstructParamEnum &isConstructorParameter,
+                const BuildAccessEnum &buildAccessFunctions,
+                const TraversalEnum &toBeTraversedDuringTreeTraversal,
+                const DeleteEnum &delete_flag, const CopyConfigEnum &toBeCopied,
+                std::optional<TraversalCardinalityEnum> traversalCardinality,
+                const TraversalAccessorEnum &traversalAccessor);
 
 public:
   CopyConfigEnum toBeCopied; // used to guide cloning of AST nodes
@@ -64,6 +85,16 @@ public:
                 const TraversalEnum &toBeTraversedDuringTreeTraversal,
                 const DeleteEnum &delete_flag,
                 const CopyConfigEnum &toBeCopied);
+  GrammarString(
+      const std::string &inputTypeNameString,
+      const std::string &inputVariableNameString,
+      const std::string &defaultInitializer,
+      const ConstructParamEnum &isConstructorParameter,
+      const BuildAccessEnum &buildAccessFunctions,
+      const TraversalEnum &toBeTraversedDuringTreeTraversal,
+      const DeleteEnum &delete_flag, const CopyConfigEnum &toBeCopied,
+      const TraversalCardinalityEnum &traversalCardinality,
+      const TraversalAccessorEnum &traversalAccessor = DIRECT_TRAVERSAL_ACCESS);
   GrammarString(const GrammarString &X);
   GrammarString &operator=(const GrammarString &X);
 
@@ -110,6 +141,14 @@ public:
 
   void setToBeTraversed(const TraversalEnum &X);
   TraversalEnum getToBeTraversed() const;
+  bool hasTraversalCardinality() const;
+  TraversalCardinalityEnum getTraversalCardinality() const;
+  TraversalAccessorEnum getTraversalAccessor() const;
+  TraversalStorageEnum getTraversalStorage() const;
+  const std::string &getTraversalElementTypeName() const;
+  SchemaStorageEnum getSchemaStorage() const;
+  SchemaElementEnum getSchemaElement() const;
+  const std::string &getSchemaElementTypeName() const;
 
   void setToBeCopied(const CopyConfigEnum &X) { toBeCopied = X; }
   CopyConfigEnum getToBeCopied() const { return toBeCopied; }

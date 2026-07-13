@@ -40,6 +40,8 @@ private:
   // 0)
   std::list<SgNode *> listOfNodesWithoutValidFileInfo;
   std::list<SgNode *> listOfNodesFileInfo;
+  std::unordered_map<std::string, SgDeclarationStatement *>
+      directSourceSurfaceOwners;
 
 public:
   // DQ (10/24/2004): Track count of nodes without proper ending file info
@@ -299,9 +301,6 @@ public:
 };
 
 // DQ (6/26/2006): Added test of parents of IR nodes using memory pool!
-/*! \brief This traversal calles ResetParentPointersInMemoryPool Memory Pool
- * traversal.
- */
 // void testParentPointersInMemoryPool();
 
 /*! \brief This traversal uses the Memory Pool traversal to test parent

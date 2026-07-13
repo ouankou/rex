@@ -5,6 +5,8 @@
 
 #include <list>
 
+#include <optional>
+
 #include <set>
 
 #include <sstream>
@@ -41,6 +43,14 @@ template <typename T> static std::string toStringForRTI(const T &x) {
   std::ostringstream ss;
   ss << x;
   return ss.str();
+}
+
+template <typename T>
+static std::string toStringForRTI(const std::optional<T> &x) {
+  if (!x.has_value()) {
+    return "absent";
+  }
+  return "present(" + toStringForRTI(*x) + ")";
 }
 
 template <typename T>

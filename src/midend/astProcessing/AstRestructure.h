@@ -53,12 +53,6 @@ public:
   // s
   void immediateReplace(SgStatement *astNode, std::string s);
 
-  // attaches a string s to the AST such that when 'unparse' or
-  // unparseToString or unparseToCompleteString is called, the string
-  // 's' is unparsed instead of the subtree with node 'astNode' as
-  // root.  This function allows to replace parts of expressions!
-  static void unparserReplace(SgExpression *astNode, std::string s);
-
   // this replace is delayed until unlock of node astNode is called.
   void delayedReplace(SgNode *astNode, std::string s);
   void lock(SgNode *astNode);   // used by abstract parser

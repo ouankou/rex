@@ -1,10 +1,8 @@
-This directory contains fortran test codes from the gfortran test suit.
+This directory contains Fortran test codes from the gfortran test suite.
 
-The test codes are menat to be run with -rose:skip_syntax_check
-since many will fail with first processin in ROSE for syntax checking using
-gfortran (version 4.2.4; but likely each version of gfortran would
-behave differently).  In the legacy test lists (now mirrored in CMake)
-are the lists of files assigned to the variables:
+Every positive test must pass the pinned Flang frontend's mandatory syntax and
+semantic validation. In the legacy test lists (now mirrored in CMake) are the
+lists of files assigned to the variables:
    F90_TESTCODES_REQUIRED_TO_PASS
 and
    F77_FIXED_FORMAT_TESTCODES_REQUIRED_TO_PASS

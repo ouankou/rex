@@ -22,6 +22,32 @@ using namespace std;
 
 #define SgNULL_FILE Sg_File_Info::generateDefaultFileInfoForTransformationNode()
 
+template <class Node> Node *buildSCGeneratedNode(Node *node) {
+  ROSE_ASSERT(node != NULL);
+  SgLocatedNode *locatedNode = isSgLocatedNode(node);
+  ROSE_ASSERT(locatedNode != NULL);
+  SageInterface::ensureLocatedNodeFileInfoForTransformation(locatedNode);
+  ROSE_ASSERT(locatedNode->get_startOfConstruct() != NULL);
+  ROSE_ASSERT(locatedNode->get_endOfConstruct() != NULL);
+  ROSE_ASSERT(locatedNode->get_startOfConstruct()->get_parent() == locatedNode);
+  ROSE_ASSERT(locatedNode->get_endOfConstruct()->get_parent() == locatedNode);
+  ROSE_ASSERT(locatedNode->isTransformation());
+  if (SgExpression *expression = isSgExpression(locatedNode)) {
+    ROSE_ASSERT(expression->get_operatorPosition() != NULL);
+    ROSE_ASSERT(expression->get_operatorPosition()->get_parent() == expression);
+    ROSE_ASSERT(expression->get_operatorPosition()->isTransformation());
+  }
+  return node;
+}
+
+template <class Node>
+Node *publishSCGeneratedSubtree(Node *node, SgLocatedNode *exactOwner) {
+  ROSE_ASSERT(node != nullptr);
+  ROSE_ASSERT(exactOwner != nullptr);
+  SageInterface::publishGeneratedSubtreeOutputOwner(node, exactOwner);
+  return node;
+}
+
 void MarkSCGenerated(SgNode *n) {
   n->setAttribute("SCGenerated", new AstAttribute);
 }
@@ -90,15 +116,16 @@ SgConditionalExp *createEquivalentConditional(T *booleanOp);
 
 template <>
 inline SgConditionalExp *createEquivalentConditional(SgAndOp *andOp) {
-  SgBoolValExp *zero = new SgBoolValExp(SgNULL_FILE, 0);
-  return new SgConditionalExp(SgNULL_FILE, andOp->get_lhs_operand(),
-                              andOp->get_rhs_operand(), zero);
+  SgBoolValExp *zero = buildSCGeneratedNode(new SgBoolValExp(SgNULL_FILE, 0));
+  return buildSCGeneratedNode(SageBuilder::buildConditionalExp_nfi(
+      andOp->get_lhs_operand(), andOp->get_rhs_operand(), zero,
+      andOp->get_type()));
 }
 
 template <> inline SgConditionalExp *createEquivalentConditional(SgOrOp *orOp) {
-  SgBoolValExp *one = new SgBoolValExp(SgNULL_FILE, 1);
-  return new SgConditionalExp(SgNULL_FILE, orOp->get_lhs_operand(), one,
-                              orOp->get_rhs_operand());
+  SgBoolValExp *one = buildSCGeneratedNode(new SgBoolValExp(SgNULL_FILE, 1));
+  return buildSCGeneratedNode(SageBuilder::buildConditionalExp_nfi(
+      orOp->get_lhs_operand(), one, orOp->get_rhs_operand(), orOp->get_type()));
 }
 
 template <typename T, VariantT V_T, T *(isT)(SgNode *)>
@@ -124,6 +151,7 @@ inline void rewriteConditionals(SgNode *n) {
     condExp->set_parent(booleanOp->get_parent());
     lhs->set_parent(condExp);
     rhs->set_parent(condExp);
+    publishSCGeneratedSubtree(condExp, booleanOp);
 
     // DQ (12/16/2006): Need to handle case where parent is not an expression!
     if (booleanOpParent != NULL)
@@ -149,7 +177,9 @@ inline void rewriteConditionals(SgNode *n) {
 static SgStatement *replaceContinues(SgStatement *stmt,
                                      SgLabelStatement *dest) {
   if (isSgContinueStmt(stmt)) {
-    SgGotoStatement *gotoStmt = new SgGotoStatement(SgNULL_FILE, dest);
+    SgGotoStatement *gotoStmt =
+        buildSCGeneratedNode(new SgGotoStatement(SgNULL_FILE, dest));
+    publishSCGeneratedSubtree(gotoStmt, stmt);
     delete stmt;
     return gotoStmt;
   } else {
@@ -199,12 +229,15 @@ SgExprStatement *splitVarDecl(SgVariableDeclaration *varDecl) {
 
   SgVariableSymbol *var = in->get_scope()->lookup_var_symbol(in->get_name());
 
-  SgVarRefExp *varRefForAssign = new SgVarRefExp(SgNULL_FILE, var);
-  SgAssignOp *assignOp = new SgAssignOp(SgNULL_FILE, varRefForAssign, operand);
+  SgVarRefExp *varRefForAssign =
+      buildSCGeneratedNode(new SgVarRefExp(SgNULL_FILE, var));
+  SgAssignOp *assignOp = buildSCGeneratedNode(new SgAssignOp(
+      SgNULL_FILE, varRefForAssign, operand, varRefForAssign->get_type()));
   varRefForAssign->set_parent(assignOp);
   operand->set_parent(assignOp);
 
-  SgExprStatement *condExprStmt = new SgExprStatement(SgNULL_FILE, assignOp);
+  SgExprStatement *condExprStmt =
+      buildSCGeneratedNode(new SgExprStatement(SgNULL_FILE, assignOp));
   assignOp->set_parent(condExprStmt);
 
   return condExprStmt;
@@ -215,27 +248,33 @@ SgExprStatement *splitVarDecl(SgVariableDeclaration *varDecl) {
  * while) into the body.  Returns replacement condition
  */
 SgStatement *moveConditionToBody(SgStatement *cond, SgBasicBlock *body) {
+  ROSE_ASSERT(cond != nullptr);
+  ROSE_ASSERT(body != nullptr);
+  SgNode *const originalConditionalParent = cond->get_parent();
   SgStatement *newCond;
 
-  SgBoolValExp *trueExp = new SgBoolValExp(SgNULL_FILE, 1);
+  SgBoolValExp *trueExp =
+      buildSCGeneratedNode(new SgBoolValExp(SgNULL_FILE, 1));
 
-  SgExprStatement *trueStmt = new SgExprStatement(SgNULL_FILE, trueExp);
+  SgExprStatement *trueStmt =
+      buildSCGeneratedNode(new SgExprStatement(SgNULL_FILE, trueExp));
   trueExp->set_parent(trueStmt);
 
   newCond = trueStmt;
-  trueStmt->set_parent(cond->get_parent());
+  publishSCGeneratedSubtree(trueStmt, cond);
+  trueStmt->set_parent(originalConditionalParent);
 
-  SgBasicBlock *trueBody = new SgBasicBlock(SgNULL_FILE);
+  SgBasicBlock *trueBody = buildSCGeneratedNode(new SgBasicBlock(SgNULL_FILE));
 
-  SgBreakStmt *breakStmt = new SgBreakStmt(SgNULL_FILE);
-  SgBasicBlock *falseBody = new SgBasicBlock(SgNULL_FILE, breakStmt);
+  SgBreakStmt *breakStmt = buildSCGeneratedNode(new SgBreakStmt(SgNULL_FILE));
+  SgBasicBlock *falseBody =
+      buildSCGeneratedNode(new SgBasicBlock(SgNULL_FILE, breakStmt));
   breakStmt->set_parent(falseBody);
 
-  SgIfStmt *ifStmt = new SgIfStmt(SgNULL_FILE, NULL, trueBody, falseBody);
+  SgIfStmt *ifStmt = buildSCGeneratedNode(
+      new SgIfStmt(SgNULL_FILE, NULL, trueBody, falseBody));
   trueBody->set_parent(ifStmt);
   falseBody->set_parent(ifStmt);
-  body->prepend_statement(ifStmt);
-  ifStmt->set_parent(body);
 
   switch (cond->variantT()) {
   case V_SgExprStatement: {
@@ -262,6 +301,9 @@ SgStatement *moveConditionToBody(SgStatement *cond, SgBasicBlock *body) {
   }
   }
 
+  publishSCGeneratedSubtree(ifStmt, cond);
+  body->prepend_statement(ifStmt);
+  ifStmt->set_parent(body);
   MarkSCGenerated(ifStmt);
   return newCond;
 }
@@ -322,59 +364,69 @@ void initialTransformation(SgNode *n) {
       varNameSS << "rose_sc_bool_" << counter++;
       SgName varName = varNameSS.str();
 
-      SgBoolValExp *falseExp = new SgBoolValExp(SgNULL_FILE, 0);
+      SgBoolValExp *falseExp =
+          buildSCGeneratedNode(new SgBoolValExp(SgNULL_FILE, 0));
 
       SgAssignInitializer *falseAssign =
-          new SgAssignInitializer(SgNULL_FILE, falseExp);
+          buildSCGeneratedNode(new SgAssignInitializer(
+              SgNULL_FILE, falseExp, SgTypeBool::createType()));
       falseExp->set_parent(falseAssign);
 
-      SgInitializedName *in =
-          new SgInitializedName(varName, SgTypeBool::createType(), falseAssign);
-      in->set_file_info(SgNULL_FILE);
-      in->set_scope(ifStmtParent);
-      falseAssign->set_parent(in);
+      SgVariableDeclaration *varDecl = SageBuilder::buildVariableDeclaration(
+          varName, SgTypeBool::createType(), falseAssign, ifStmtParent);
+      ROSE_ASSERT(varDecl != NULL);
+      ROSE_ASSERT(varDecl->get_variables().size() == 1);
+      SgInitializedName *in = varDecl->get_variables().front();
+      ROSE_ASSERT(in != NULL);
+      ROSE_ASSERT(in->get_parent() == varDecl);
+      ROSE_ASSERT(in->get_scope() == ifStmtParent);
+      ROSE_ASSERT(in->get_declptr() != NULL);
+      SgVariableSymbol *varSym =
+          isSgVariableSymbol(in->get_symbol_from_symbol_table());
+      ROSE_ASSERT(varSym != NULL);
 
-      SgVariableDeclaration *varDecl = new SgVariableDeclaration(SgNULL_FILE);
-      varDecl->set_firstNondefiningDeclaration(varDecl);
-      varDecl->get_variables().insert(varDecl->get_variables().end(), in);
-      in->set_parent(varDecl);
-
-      SgVariableSymbol *varSym = new SgVariableSymbol(in);
-      ifStmtParent->insert_symbol(varName, varSym);
-
+      publishSCGeneratedSubtree(varDecl, ifStmt);
       ifStmtParent->get_statements().insert(
           ifStmtParent->get_statements().begin() + ifStmtPos, varDecl);
       varDecl->set_parent(ifStmtParent);
 
-      SgVarRefExp *varRef = new SgVarRefExp(SgNULL_FILE, varSym);
-      SgBoolValExp *trueExp = new SgBoolValExp(SgNULL_FILE, 1);
+      SgVarRefExp *varRef =
+          buildSCGeneratedNode(new SgVarRefExp(SgNULL_FILE, varSym));
+      SgBoolValExp *trueExp =
+          buildSCGeneratedNode(new SgBoolValExp(SgNULL_FILE, 1));
 
-      SgAssignOp *varAssignOp = new SgAssignOp(SgNULL_FILE, varRef, trueExp);
+      SgAssignOp *varAssignOp = buildSCGeneratedNode(
+          new SgAssignOp(SgNULL_FILE, varRef, trueExp, varRef->get_type()));
       varRef->set_parent(varAssignOp);
       trueExp->set_parent(varAssignOp);
 
       SgExprStatement *varAssignStmt =
-          new SgExprStatement(SgNULL_FILE, varAssignOp);
+          buildSCGeneratedNode(new SgExprStatement(SgNULL_FILE, varAssignOp));
       varAssignOp->set_parent(varAssignStmt);
 
-      SgBasicBlock *trueBody = new SgBasicBlock(SgNULL_FILE, varAssignStmt);
+      SgBasicBlock *trueBody =
+          buildSCGeneratedNode(new SgBasicBlock(SgNULL_FILE, varAssignStmt));
       varAssignStmt->set_parent(trueBody);
-      SgBasicBlock *falseBody = new SgBasicBlock(SgNULL_FILE);
+      SgBasicBlock *falseBody =
+          buildSCGeneratedNode(new SgBasicBlock(SgNULL_FILE));
 
-      SgIfStmt *newIfStmt =
-          new SgIfStmt(SgNULL_FILE, condExprStmt, trueBody, falseBody);
+      SgIfStmt *newIfStmt = buildSCGeneratedNode(
+          new SgIfStmt(SgNULL_FILE, condExprStmt, trueBody, falseBody));
       condExprStmt->set_parent(newIfStmt);
       trueBody->set_parent(newIfStmt);
       falseBody->set_parent(newIfStmt);
 
-      varRef = new SgVarRefExp(SgNULL_FILE, varSym);
+      varRef = buildSCGeneratedNode(new SgVarRefExp(SgNULL_FILE, varSym));
 
-      SgExprStatement *exprStmt = new SgExprStatement(SgNULL_FILE, varRef);
+      SgExprStatement *exprStmt =
+          buildSCGeneratedNode(new SgExprStatement(SgNULL_FILE, varRef));
       varRef->set_parent(exprStmt);
 
+      publishSCGeneratedSubtree(exprStmt, ifStmt);
       ifStmt->set_conditional(exprStmt);
       exprStmt->set_parent(ifStmt);
 
+      publishSCGeneratedSubtree(newIfStmt, ifStmt);
       ifStmtParent->get_statements().insert(
           ifStmtParent->get_statements().begin() + ifStmtPos, newIfStmt);
       newIfStmt->set_parent(ifStmtParent);
@@ -405,10 +457,13 @@ void initialTransformation(SgNode *n) {
 
     SgStatement *cond = dowhileStmt->get_condition();
     if (hasSC(cond)) {
-      SgBoolValExp *trueExp = new SgBoolValExp(SgNULL_FILE, 1);
-      SgExprStatement *trueStmt = new SgExprStatement(SgNULL_FILE, trueExp);
+      SgBoolValExp *trueExp =
+          buildSCGeneratedNode(new SgBoolValExp(SgNULL_FILE, 1));
+      SgExprStatement *trueStmt =
+          buildSCGeneratedNode(new SgExprStatement(SgNULL_FILE, trueExp));
       trueExp->set_parent(trueStmt);
 
+      publishSCGeneratedSubtree(trueStmt, dowhileStmt);
       dowhileStmt->set_condition(trueStmt);
       trueStmt->set_parent(dowhileStmt);
 
@@ -418,8 +473,12 @@ void initialTransformation(SgNode *n) {
       labelNameSS << "rose_sc_label_" << counter++;
       SgName labelName = labelNameSS.str();
 
-      SgLabelStatement *labelStmt =
-          new SgLabelStatement(SgNULL_FILE, labelName);
+      SgNullStatement *labeledNullStatement =
+          buildSCGeneratedNode(new SgNullStatement(SgNULL_FILE));
+      SgLabelStatement *labelStmt = buildSCGeneratedNode(
+          new SgLabelStatement(SgNULL_FILE, labelName, labeledNullStatement));
+      labeledNullStatement->set_parent(labelStmt);
+      publishSCGeneratedSubtree(labelStmt, dowhileStmt);
       SageInterface::ensureBasicBlockAsBodyOfDoWhile(dowhileStmt)
           ->append_statement(labelStmt);
       labelStmt->set_parent(dowhileStmt->get_body());
@@ -428,21 +487,25 @@ void initialTransformation(SgNode *n) {
           replaceContinues(dowhileStmt->get_body(), labelStmt));
       dowhileStmt->get_body()->set_parent(dowhileStmt);
 
-      SgBasicBlock *trueBody = new SgBasicBlock(SgNULL_FILE);
+      SgBasicBlock *trueBody =
+          buildSCGeneratedNode(new SgBasicBlock(SgNULL_FILE));
 
-      SgBreakStmt *breakStmt = new SgBreakStmt(SgNULL_FILE);
-      SgBasicBlock *falseBody = new SgBasicBlock(SgNULL_FILE, breakStmt);
+      SgBreakStmt *breakStmt =
+          buildSCGeneratedNode(new SgBreakStmt(SgNULL_FILE));
+      SgBasicBlock *falseBody =
+          buildSCGeneratedNode(new SgBasicBlock(SgNULL_FILE, breakStmt));
       breakStmt->set_parent(falseBody);
 
-      SgIfStmt *ifStmt = new SgIfStmt(SgNULL_FILE, NULL, trueBody, falseBody);
+      SgIfStmt *ifStmt = buildSCGeneratedNode(
+          new SgIfStmt(SgNULL_FILE, NULL, trueBody, falseBody));
       trueBody->set_parent(ifStmt);
       falseBody->set_parent(ifStmt);
+      ifStmt->set_conditional(cond);
+      cond->set_parent(ifStmt);
+      publishSCGeneratedSubtree(ifStmt, dowhileStmt);
       SageInterface::ensureBasicBlockAsBodyOfDoWhile(dowhileStmt)
           ->append_statement(ifStmt);
       ifStmt->set_parent(dowhileStmt->get_body());
-
-      ifStmt->set_conditional(cond);
-      cond->set_parent(ifStmt);
     }
   }
 
@@ -488,15 +551,21 @@ void initialTransformation(SgNode *n) {
     // SgExpressionRoot *forInc = forStmt->get_increment_expr_root();
     SgExpression *forInc = forStmt->get_increment();
     if (hasSC(forInc)) {
-      SgExprStatement *forIncStmt = new SgExprStatement(SgNULL_FILE, forInc);
+      SgExprStatement *forIncStmt =
+          buildSCGeneratedNode(new SgExprStatement(SgNULL_FILE, forInc));
       forInc->set_parent(forIncStmt);
 
       SgBasicBlock *forBody =
           SageInterface::ensureBasicBlockAsBodyOfFor(forStmt);
+      publishSCGeneratedSubtree(forIncStmt, forStmt);
       forBody->append_statement(forIncStmt);
       forIncStmt->set_parent(forBody);
 
-      SgNullExpression *blankIncExpr = new SgNullExpression(SgNULL_FILE);
+      SgNullExpression *blankIncExpr =
+          buildSCGeneratedNode(new SgNullExpression(SgNULL_FILE));
+      blankIncExpr->set_role(
+          SgNullExpression::e_null_expression_syntactic_absence);
+      publishSCGeneratedSubtree(blankIncExpr, forStmt);
 
       // DQ (11/7/2006): modified to reflect removal of SgExpressionRoot IR node
       // SgExpressionRoot *blankIncRoot = new SgExpressionRoot(SgNULL_FILE,
@@ -523,6 +592,7 @@ void initialTransformation(SgNode *n) {
       ROSE_ASSERT(varDeclParent);
 
       SgExprStatement *varAssign = splitVarDecl(varDecl);
+      publishSCGeneratedSubtree(varAssign, varDecl);
       varDeclParent->get_statements().insert(
           ++findIterator(varDeclParent->get_statements(), varDecl), varAssign);
       varAssign->set_parent(varDeclParent);
@@ -600,6 +670,8 @@ void ifConstOptimization(SgExpression *expr) {
 
           if (boolExpr->get_value() != 0) {
             // true branch
+            publishSCGeneratedSubtree(constIfStmt->get_true_body(),
+                                      constIfStmt);
             replacementStmtParent->replace_statement(
                 replacementStmt, constIfStmt->get_true_body());
             delete constIfStmt->get_false_body();
@@ -608,6 +680,7 @@ void ifConstOptimization(SgExpression *expr) {
             SgStatement *falseBranch = constIfStmt->get_false_body();
             if (!falseBranch)
               falseBranch = SageBuilder::buildBasicBlock();
+            publishSCGeneratedSubtree(falseBranch, constIfStmt);
             replacementStmtParent->replace_statement(replacementStmt,
                                                      falseBranch);
             delete constIfStmt->get_true_body();
@@ -677,7 +750,7 @@ bool reduceIfStmtsWithSCchild(SgProject *prj) {
       SgExpression *dummyExpr = commaOpExp->get_lhs_operand();
 
       SgExprStatement *dummyExprStmt =
-          new SgExprStatement(SgNULL_FILE, dummyExpr);
+          buildSCGeneratedNode(new SgExprStatement(SgNULL_FILE, dummyExpr));
       dummyExpr->set_parent(dummyExprStmt);
 
       MarkSCGenerated(dummyExprStmt);
@@ -693,9 +766,11 @@ bool reduceIfStmtsWithSCchild(SgProject *prj) {
       commaOpExp->set_rhs_operand(NULL);
       delete commaOpExp;
 
-      SgBasicBlock *newBB = new SgBasicBlock(SgNULL_FILE, dummyExprStmt);
+      SgBasicBlock *newBB =
+          buildSCGeneratedNode(new SgBasicBlock(SgNULL_FILE, dummyExprStmt));
       dummyExprStmt->set_parent(newBB);
 
+      publishSCGeneratedSubtree(newBB, fullStmt);
       newBB->set_parent(fullStmt->get_parent());
       isSgStatement(fullStmt->get_parent())->replace_statement(fullStmt, newBB);
       newBB->append_statement(fullStmt);
@@ -707,6 +782,15 @@ bool reduceIfStmtsWithSCchild(SgProject *prj) {
     case V_SgConditionalExp: {
       SgConditionalExp *condExp = isSgConditionalExp(expr);
       ROSE_ASSERT(condExp != NULL);
+      condExp->validate();
+      if (condExp->get_operator_kind() !=
+          SgConditionalExp::e_conditional_operator_standard) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[short-circuit-gnu-conditional]: the "
+                "short-circuiting transformation requires an explicit "
+                "evaluation-once lowering for GNU binary conditionals\n");
+        ROSE_ABORT();
+      }
 
       SgStatement *fullStmtParent = isSgStatement(fullStmt->get_parent());
       ROSE_ASSERT(fullStmtParent != NULL);
@@ -716,7 +800,8 @@ bool reduceIfStmtsWithSCchild(SgProject *prj) {
       if (SgBasicBlock *fullStmtBB = isSgBasicBlock(fullStmt)) {
         fullStmtBlock = fullStmtBB;
       } else {
-        fullStmtBlock = new SgBasicBlock(SgNULL_FILE, fullStmt);
+        fullStmtBlock =
+            buildSCGeneratedNode(new SgBasicBlock(SgNULL_FILE, fullStmt));
         // fullStmt->set_parent(fullStmtBlock);
       }
 
@@ -850,12 +935,12 @@ bool reduceIfStmtsWithSCchild(SgProject *prj) {
           delete fullStmtBlockCopy;
         }
       } else {
-        SgExprStatement *conditionExpStmt =
-            new SgExprStatement(SgNULL_FILE, conditionExp);
+        SgExprStatement *conditionExpStmt = buildSCGeneratedNode(
+            new SgExprStatement(SgNULL_FILE, conditionExp));
         conditionExp->set_parent(conditionExpStmt);
 
-        SgIfStmt *ifStmt = new SgIfStmt(SgNULL_FILE, conditionExpStmt,
-                                        fullStmtBlockCopy, fullStmtBlock);
+        SgIfStmt *ifStmt = buildSCGeneratedNode(new SgIfStmt(
+            SgNULL_FILE, conditionExpStmt, fullStmtBlockCopy, fullStmtBlock));
         conditionExpStmt->set_parent(ifStmt);
         fullStmtBlockCopy->set_parent(ifStmt);
         fullStmtBlock->set_parent(ifStmt);
@@ -864,7 +949,8 @@ bool reduceIfStmtsWithSCchild(SgProject *prj) {
         // if the parent statement is an if statement, then it must have an
         // SgBasicBlock which contains the if statement just created as a child
         if (isSgIfStmt(fullStmtParent)) {
-          replacementStmt = new SgBasicBlock(SgNULL_FILE, ifStmt);
+          replacementStmt =
+              buildSCGeneratedNode(new SgBasicBlock(SgNULL_FILE, ifStmt));
           ifStmt->set_parent(replacementStmt);
         } else {
           replacementStmt = ifStmt;
@@ -874,6 +960,7 @@ bool reduceIfStmtsWithSCchild(SgProject *prj) {
       // XXX : this is a kludge
       SgNode *fullStmtParentTmp = fullStmt->get_parent();
       fullStmt->set_parent(fullStmtParent);
+      publishSCGeneratedSubtree(replacementStmt, fullStmt);
       fullStmtParent->replace_statement(fullStmt, replacementStmt);
       fullStmt->set_parent(fullStmtParentTmp);
 

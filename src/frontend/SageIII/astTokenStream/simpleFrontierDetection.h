@@ -3,12 +3,6 @@
 #ifndef SIMPLE_FRONTIER_DETECTION_HEADER
 #define SIMPLE_FRONTIER_DETECTION_HEADER
 
-// DQ (12/1/2013): Added switch to control testing mode for token unparsing.
-// Test codes in the tests/nonsmoke/functional/roseTests/astTokenStreamTests
-// directory turn on this variable so that all regression tests can be processed
-// to mix the unparsing of the token stream with unparsing from the AST.
-extern ROSE_DLL_API bool tokenUnparsingTestingMode;
-
 // The support for unparsing from the token stream is a feature in
 // ROSE to provide a new level of portability for the generated code.
 
@@ -91,9 +85,8 @@ class SimpleFrontierDetectionForTokenStreamMapping
           SimpleFrontierDetectionForTokenStreamMapping_InheritedAttribute,
           SimpleFrontierDetectionForTokenStreamMapping_SynthesizedAttribute> {
 public:
-  int numberOfNodes;
-
-  SimpleFrontierDetectionForTokenStreamMapping(SgSourceFile *sourceFile);
+  explicit SimpleFrontierDetectionForTokenStreamMapping(
+      TokenUnparseFrontierFileContext &frontierContext);
 
   // virtual function must be defined
   SimpleFrontierDetectionForTokenStreamMapping_InheritedAttribute
@@ -109,13 +102,14 @@ public:
           inheritedAttribute,
       SubTreeSynthesizedAttributes synthesizedAttributeList);
 
-  // This is used to test the random association of AST node to either token
-  // unparsing or AST unparsing.
-  int numberOfNodesInSubtree(SgSourceFile *sourceFile);
+private:
+  TokenUnparseFrontierFileContext &frontierContext;
 };
 
 // DQ (5/9/2021): Activate this code.
-void simpleFrontierDetectionForTokenStreamMapping(SgSourceFile *sourceFile,
-                                                  bool traverseHeaderFiles);
+void simpleFrontierDetectionForTokenStreamMapping(
+    SgSourceFile *sourceFile, bool traverseHeaderFiles,
+    TokenUnparseFrontierFileContext &frontierContext,
+    SgNode *traversalRoot = nullptr);
 
 #endif

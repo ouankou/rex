@@ -5,11 +5,24 @@ install(TARGETS generateVirtualCFG DESTINATION bin)
 add_executable(testVirtualCFG testVirtualCFG.C)
 target_link_libraries(testVirtualCFG ROSE_DLL ${link_with_libraries})
 
+add_executable(rex_virtual_cfg_declaration_group
+  rex_virtual_cfg_declaration_group.cpp)
+target_link_libraries(rex_virtual_cfg_declaration_group
+  ROSE_DLL ${link_with_libraries})
+
 set(TESTCODE_INCLUDES
   -I${CMAKE_SOURCE_DIR}/src/frontend/SageIII)
 
-set(ROSE_FLAGS
-   -w -rose:verbose 0 )
+set(ROSE_FLAGS -rose:verbose 0)
+
+add_test(
+  NAME testVirtualCFG_rex_declaration_group
+  COMMAND rex_virtual_cfg_declaration_group ${ROSE_FLAGS}
+    -rose:skipfinalCompileStep
+    -std=gnu++17
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_virtual_cfg_declaration_group_input.cpp)
+set_tests_properties(testVirtualCFG_rex_declaration_group
+  PROPERTIES LABELS "VIRTUALCFGTEST;rex")
 
 # This uses the native Cxx_tests specimen classification.
 
@@ -265,8 +278,8 @@ if(ENABLE-FORTRAN)
     endif()
     add_test(
       NAME testVirtualCFG_F03_${file_to_test}
-      COMMAND testVirtualCFG ${ROSE_FLAGS} -rose:skip_syntax_check
-        -rose:skipfinalCompileStep -rose:fortran_std=f2003
+      COMMAND testVirtualCFG ${ROSE_FLAGS} -rose:skipfinalCompileStep
+        -rose:fortran_std=f2003
         -c ${source_path})
     set_tests_properties(testVirtualCFG_F03_${file_to_test} PROPERTIES LABELS VIRTUALCFGTEST)
   endforeach()
@@ -291,8 +304,8 @@ if(ENABLE-FORTRAN)
     endif()
     add_test(
       NAME testVirtualCFG_F03_${file_to_test}
-      COMMAND testVirtualCFG ${ROSE_FLAGS} -rose:skip_syntax_check
-        -rose:skipfinalCompileStep -rose:fortran_std=f2003
+      COMMAND testVirtualCFG ${ROSE_FLAGS} -rose:skipfinalCompileStep
+        -rose:fortran_std=f2003
         -c ${source_path})
     set_tests_properties(testVirtualCFG_F03_${file_to_test} PROPERTIES LABELS VIRTUALCFGTEST)
   endforeach()

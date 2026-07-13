@@ -45,9 +45,4 @@ void __builtin_va_end(__builtin_va_list);
 void *__builtin_alloca(__SIZE_TYPE__ size);
 #endif
 
-#define __testOverload(expr, expected) ((int)sizeof(((void)(expr)), 0))
-int __checkType();
-int __checkCalleeDefnLine();
-int __cause_xfailure();
-
 #endif

@@ -26,6 +26,7 @@
 class SgExpression;
 class SgNode;
 class SgOmpClause;
+class SgOmpClauseList;
 class SgStatement;
 /** Types and functions to support OpenMP
  *
@@ -323,6 +324,10 @@ bool isDependenceType(omp_construct_enum omp_type);
 
 //! Attach an OpenMP clause to directive
 void addOmpClause(SgStatement *node, SgOmpClause *clause);
+//! Attach a transformation-generated OpenMP clause, assigning exact
+//! source-order provenance when the directive came from combined syntax.
+void addGeneratedOmpClause(SgStatement *node, SgOmpClause *clause);
+SgOmpClauseList *getOmpClauseList(SgStatement *node);
 
 // We use objects of this class to store parameters of those clauses that take
 // one or two additional parameters other than variable or expression list. E.g.

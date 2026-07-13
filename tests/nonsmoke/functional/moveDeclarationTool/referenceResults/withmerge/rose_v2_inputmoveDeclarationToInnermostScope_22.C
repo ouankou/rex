@@ -1,7 +1,6 @@
 
-
 void foobar() {
-  while (true) {
+  while (true){
     if (true) {
     } else if (true) {
       if (true) {
@@ -20,5 +19,3 @@ void foobar() {
   } else {
   }
 }
-
-

@@ -34,9 +34,16 @@
 
 cmake_minimum_required(VERSION 3.15)
 
-set(LLVM_REQUIRED_MAJOR "22" CACHE STRING "Minimum LLVM/Clang major version required by REX")
-if(NOT LLVM_REQUIRED_MAJOR MATCHES "^[0-9]+$")
-  message(FATAL_ERROR "LLVM_REQUIRED_MAJOR must be a numeric major version, got '${LLVM_REQUIRED_MAJOR}'.")
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
+  message(FATAL_ERROR
+    "In-source builds are unsupported because REX generates and removes files "
+    "inside its binary tree. Configure with a separate build directory.")
+endif()
+
+set(LLVM_REQUIRED_MAJOR "22" CACHE STRING "Exact LLVM/Clang major version required by REX")
+if(NOT LLVM_REQUIRED_MAJOR STREQUAL "22")
+  message(FATAL_ERROR
+    "REX is pinned to LLVM/Clang major 22; LLVM_REQUIRED_MAJOR='${LLVM_REQUIRED_MAJOR}' is unsupported.")
 endif()
 
 option(REX_ENABLE_WASM "Build the pure static browser WebAssembly REX demo" FALSE)
@@ -837,13 +844,68 @@ if(DEFINED ENV{LLVM_HOME})
 endif()
 
 # CUDA
-option(ENABLE-CUDA "Enable CUDA analysis" OFF) # OFF because lack of CUDA is not handled properly
+option(ENABLE-CUDA "Enable CUDA analysis" OFF)
 if(REX_ENABLE_WASM)
   set(ENABLE-CUDA OFF CACHE BOOL "Enable CUDA analysis" FORCE)
 endif()
 if(ENABLE-CUDA)
-  find_package(CUDA REQUIRED)
+  if(NOT ENABLE-C)
+    message(FATAL_ERROR "ENABLE-CUDA requires ENABLE-C for the Clang frontend")
+  endif()
+
+  # Clang's CUDA runtime wrapper includes headers supplied by the CUDA math
+  # libraries. Permit an exact toolchain path for installations whose imported
+  # CMake targets do not publish all of those headers (for example, a split
+  # vendor SDK). Otherwise search only the include interface advertised by the
+  # official CUDA::curand target; never guess a vendor-specific layout.
+  set(ROSE_CLANG_CUDA_RUNTIME_INCLUDE_DIR "" CACHE PATH
+    "Directory containing curand_mtgp32_kernel.h for Clang's CUDA runtime wrapper")
+  if(ROSE_CLANG_CUDA_RUNTIME_INCLUDE_DIR)
+    if(NOT IS_ABSOLUTE "${ROSE_CLANG_CUDA_RUNTIME_INCLUDE_DIR}")
+      message(FATAL_ERROR
+        "ROSE_CLANG_CUDA_RUNTIME_INCLUDE_DIR must be an absolute path: "
+        "${ROSE_CLANG_CUDA_RUNTIME_INCLUDE_DIR}")
+    endif()
+    if(NOT EXISTS
+        "${ROSE_CLANG_CUDA_RUNTIME_INCLUDE_DIR}/curand_mtgp32_kernel.h")
+      message(FATAL_ERROR
+        "ROSE_CLANG_CUDA_RUNTIME_INCLUDE_DIR does not contain the header "
+        "required by Clang's CUDA runtime wrapper: "
+        "${ROSE_CLANG_CUDA_RUNTIME_INCLUDE_DIR}/curand_mtgp32_kernel.h")
+    endif()
+  else()
+    find_package(CUDAToolkit REQUIRED)
+    if(NOT TARGET CUDA::curand)
+      message(FATAL_ERROR
+        "CUDAToolkit did not provide the required CUDA::curand target")
+    endif()
+    get_target_property(_rose_cuda_curand_include_dirs
+      CUDA::curand INTERFACE_INCLUDE_DIRECTORIES)
+    if(NOT _rose_cuda_curand_include_dirs)
+      message(FATAL_ERROR
+        "CUDA::curand does not publish any interface include directories")
+    endif()
+    find_path(_rose_cuda_runtime_include_dir
+      NAMES curand_mtgp32_kernel.h
+      PATHS ${_rose_cuda_curand_include_dirs}
+      NO_DEFAULT_PATH)
+    if(NOT _rose_cuda_runtime_include_dir)
+      message(FATAL_ERROR
+        "CUDA::curand does not publish an interface include directory "
+        "containing curand_mtgp32_kernel.h: "
+        "${_rose_cuda_curand_include_dirs}")
+    endif()
+    set(ROSE_CLANG_CUDA_RUNTIME_INCLUDE_DIR
+      "${_rose_cuda_runtime_include_dir}")
+    unset(_rose_cuda_runtime_include_dir CACHE)
+    unset(_rose_cuda_curand_include_dirs)
+  endif()
+
+  message(STATUS
+    "Using Clang CUDA runtime dependency headers: ${ROSE_CLANG_CUDA_RUNTIME_INCLUDE_DIR}")
   set(ROSE_BUILD_CUDA_LANGUAGE_SUPPORT 1)
+else()
+  unset(ROSE_CLANG_CUDA_RUNTIME_INCLUDE_DIR CACHE)
 endif()
 
 # Fortran (disabled by default to avoid requiring a Fortran toolchain for basic builds)
@@ -876,103 +938,163 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
   endif()
 
   set(_flang_search_dirs "")
+  set(_flang_include_candidates "")
+  list(APPEND _flang_search_dirs ${LLVM_LIBRARY_DIRS})
+  list(APPEND _flang_include_candidates ${LLVM_INCLUDE_DIRS})
   if(FLANG_ROOT)
-    list(APPEND _flang_search_dirs "${FLANG_ROOT}/lib" "${FLANG_ROOT}/lib64")
+    if(NOT IS_ABSOLUTE "${FLANG_ROOT}")
+      message(FATAL_ERROR "FLANG_ROOT must be an absolute path: ${FLANG_ROOT}")
+    endif()
+    get_filename_component(_flang_root_real "${FLANG_ROOT}" REALPATH)
+    set(_flang_root_matches_llvm FALSE)
+    foreach(_llvm_library_dir IN LISTS LLVM_LIBRARY_DIRS)
+      if(EXISTS "${_llvm_library_dir}")
+        get_filename_component(_llvm_library_dir_real
+          "${_llvm_library_dir}" REALPATH)
+        get_filename_component(_llvm_prefix_from_lib
+          "${_llvm_library_dir_real}/.." REALPATH)
+        if(_flang_root_real STREQUAL _llvm_prefix_from_lib)
+          set(_flang_root_matches_llvm TRUE)
+        endif()
+      endif()
+    endforeach()
+    if(NOT _flang_root_matches_llvm)
+      message(FATAL_ERROR
+        "FLANG_ROOT must be the same installation prefix as the loaded "
+        "LLVMConfig.cmake. Got '${FLANG_ROOT}'; LLVM library directories are "
+        "'${LLVM_LIBRARY_DIRS}'.")
+    endif()
+    unset(_flang_root_matches_llvm)
+    unset(_flang_root_real)
+    unset(_llvm_library_dir)
+    unset(_llvm_library_dir_real)
+    unset(_llvm_prefix_from_lib)
   endif()
-  if(LLVM_LIBRARY_DIRS)
-    list(APPEND _flang_search_dirs ${LLVM_LIBRARY_DIRS})
+  list(REMOVE_DUPLICATES _flang_search_dirs)
+  if(NOT _flang_search_dirs)
+    message(FATAL_ERROR
+      "No Flang library search directories were provided by FLANG_ROOT or LLVM_LIBRARY_DIRS")
+  endif()
+
+  list(REMOVE_DUPLICATES _flang_include_candidates)
+  if(NOT _flang_include_candidates)
+    message(FATAL_ERROR
+      "No Flang include directories were provided by FLANG_ROOT or LLVM_INCLUDE_DIRS")
+  endif()
+
+  set(_flang_contract_file
+    "${CMAKE_SOURCE_DIR}/cmake/rex_flang_frontend_contract.txt")
+  if(NOT EXISTS "${_flang_contract_file}")
+    message(FATAL_ERROR
+      "REX Flang frontend contract file is missing: ${_flang_contract_file}")
+  endif()
+  file(STRINGS "${_flang_contract_file}" _flang_contract_lines)
+  set(_flang_lib_names "")
+  set(_flang_required_headers "")
+  foreach(_flang_contract_line IN LISTS _flang_contract_lines)
+    string(REGEX REPLACE "[ \t]*#.*$" "" _flang_contract_line
+      "${_flang_contract_line}")
+    string(STRIP "${_flang_contract_line}" _flang_contract_line)
+    if(NOT _flang_contract_line)
+      continue()
+    endif()
+    if(_flang_contract_line MATCHES "^library[ \t]+([^ \t]+)$")
+      list(APPEND _flang_lib_names "${CMAKE_MATCH_1}")
+    elseif(_flang_contract_line MATCHES "^header[ \t]+([^ \t]+)$")
+      list(APPEND _flang_required_headers "${CMAKE_MATCH_1}")
+    else()
+      message(FATAL_ERROR
+        "Malformed REX Flang frontend contract entry: '${_flang_contract_line}'")
+    endif()
+  endforeach()
+  if(NOT _flang_lib_names OR NOT _flang_required_headers)
+    message(FATAL_ERROR
+      "REX Flang frontend contract must declare libraries and headers: ${_flang_contract_file}")
   endif()
   set(FLANG_INCLUDE_DIRS "")
-  if(FLANG_ROOT)
-    list(APPEND FLANG_INCLUDE_DIRS "${FLANG_ROOT}/include")
-  endif()
-  if(LLVM_INCLUDE_DIRS)
-    list(APPEND FLANG_INCLUDE_DIRS ${LLVM_INCLUDE_DIRS})
-  endif()
-  if(NOT FLANG_INCLUDE_DIRS)
-    find_program(ROSE_LLVM_CONFIG_EXECUTABLE NAMES llvm-config-22 llvm-config)
-    if(ROSE_LLVM_CONFIG_EXECUTABLE)
-      execute_process(
-        COMMAND ${ROSE_LLVM_CONFIG_EXECUTABLE} --includedir
-        OUTPUT_VARIABLE _rose_llvm_includedir
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
-      if(_rose_llvm_includedir)
-        set(FLANG_INCLUDE_DIRS "${_rose_llvm_includedir}")
+  foreach(_flang_include_candidate IN LISTS _flang_include_candidates)
+    set(_flang_candidate_complete TRUE)
+    foreach(_flang_required_header IN LISTS _flang_required_headers)
+      if(NOT EXISTS
+          "${_flang_include_candidate}/${_flang_required_header}")
+        set(_flang_candidate_complete FALSE)
+        break()
       endif()
-      unset(_rose_llvm_includedir)
-    endif()
-    unset(ROSE_LLVM_CONFIG_EXECUTABLE)
-  endif()
-  list(REMOVE_DUPLICATES FLANG_INCLUDE_DIRS)
-  set(FLANG_INCLUDE_DIRS "${FLANG_INCLUDE_DIRS}" CACHE INTERNAL "Flang include dirs")
-  set(FLANG_INTRINSIC_INCLUDE_DIR "")
-  foreach(_flang_include_dir IN LISTS FLANG_INCLUDE_DIRS)
-    if(EXISTS "${_flang_include_dir}/flang")
-      set(FLANG_INTRINSIC_INCLUDE_DIR "${_flang_include_dir}/flang")
+    endforeach()
+    if(_flang_candidate_complete)
+      set(FLANG_INCLUDE_DIRS "${_flang_include_candidate}")
       break()
     endif()
   endforeach()
-  if(NOT FLANG_INTRINSIC_INCLUDE_DIR)
+  if(NOT FLANG_INCLUDE_DIRS)
     message(FATAL_ERROR
-      "Flang intrinsic include directory not found under FLANG_INCLUDE_DIRS: "
-      "${FLANG_INCLUDE_DIRS}")
+      "No single Flang include directory contains all required frontend and "
+      "intrinsic headers: ${_flang_include_candidates}")
   endif()
+  set(FLANG_INCLUDE_DIRS "${FLANG_INCLUDE_DIRS}" CACHE INTERNAL
+      "Flang include dirs" FORCE)
+  set(FLANG_INTRINSIC_INCLUDE_DIR "${FLANG_INCLUDE_DIRS}/flang")
   set(FLANG_INTRINSIC_INCLUDE_DIR "${FLANG_INTRINSIC_INCLUDE_DIR}" CACHE INTERNAL
-      "Flang intrinsic module/header include dir")
+      "Flang intrinsic module/header include dir" FORCE)
+  unset(_flang_candidate_complete)
+  unset(_flang_include_candidate)
+  unset(_flang_include_candidates)
+  unset(_flang_contract_file)
+  unset(_flang_contract_line)
+  unset(_flang_contract_lines)
+  unset(_flang_required_header)
+  unset(_flang_required_headers)
 
-  if(NOT DEFINED LLVM_VERSION_MAJOR)
-    if(LLVM_PACKAGE_VERSION)
-      string(REPLACE "." ";" _rose_llvm_version_parts "${LLVM_PACKAGE_VERSION}")
-      list(GET _rose_llvm_version_parts 0 LLVM_VERSION_MAJOR)
-      unset(_rose_llvm_version_parts)
-    endif()
+  if(NOT DEFINED LLVM_VERSION_MAJOR OR
+     NOT "${LLVM_VERSION_MAJOR}" STREQUAL "${LLVM_REQUIRED_MAJOR}")
+    message(FATAL_ERROR
+      "REX requires exactly LLVM ${LLVM_REQUIRED_MAJOR}. Found LLVM '${LLVM_VERSION_MAJOR}'.")
   endif()
 
-  if(DEFINED LLVM_VERSION_MAJOR AND LLVM_VERSION_MAJOR LESS LLVM_REQUIRED_MAJOR)
-    message(FATAL_ERROR "REX requires LLVM ${LLVM_REQUIRED_MAJOR} or newer. Found LLVM ${LLVM_VERSION_MAJOR}.")
-  endif()
-
-  set(_flang_lib_names FortranParser FortranSemantics
-    FortranEvaluate FortranLower FortranDecimal FortranSupport)
-  set(_flang_optional_lib_names FortranCommon FortranRuntime)
+  # REX consumes Flang's parsing, semantic, and expression-evaluation layers.
+  # Do not import or link the lowering layer, whose public interface requires
+  # FIR/MLIR components that the REX frontend does not use.
   set(FLANG_LIBS "")
   set(_flang_missing "")
   foreach(_flang_lib ${_flang_lib_names})
     unset(_flang_lib_path CACHE)
-    find_library(_flang_lib_path NAMES ${_flang_lib} PATHS ${_flang_search_dirs} NO_DEFAULT_PATH)
-    if(NOT _flang_lib_path)
-      find_library(_flang_lib_path NAMES ${_flang_lib})
-    endif()
+    find_library(_flang_lib_path
+      NAMES ${_flang_lib}
+      PATHS ${_flang_search_dirs}
+      NO_DEFAULT_PATH)
     if(_flang_lib_path)
-      list(APPEND FLANG_LIBS ${_flang_lib_path})
+      list(APPEND FLANG_LIBS "${_flang_lib_path}")
     else()
       list(APPEND _flang_missing ${_flang_lib})
     endif()
   endforeach()
   if(_flang_missing)
-    message(FATAL_ERROR "Flang libraries not found: ${_flang_missing}. Set -DFLANG_ROOT=... or disable ENABLE-FORTRAN-FLANG.")
+    message(FATAL_ERROR
+      "Required Flang libraries were not found in ${_flang_search_dirs}: ${_flang_missing}")
   endif()
+  unset(_flang_lib_names)
+  unset(_flang_lib_path CACHE)
+  unset(_flang_missing)
+  unset(_flang_search_dirs)
 
-  foreach(_flang_lib ${_flang_optional_lib_names})
-    unset(_flang_lib_path CACHE)
-    find_library(_flang_lib_path NAMES ${_flang_lib} PATHS ${_flang_search_dirs} NO_DEFAULT_PATH)
-    if(NOT _flang_lib_path)
-      find_library(_flang_lib_path NAMES ${_flang_lib})
-    endif()
-    if(_flang_lib_path)
-      list(APPEND FLANG_LIBS ${_flang_lib_path})
-    endif()
-  endforeach()
-
-  if(LLVM_LIBRARY_DIRS)
-    file(GLOB _rose_flang_rt_candidates
-      "${LLVM_LIBRARY_DIRS}/clang/*/lib/*/libflang_rt.runtime*"
-      "${LLVM_LIBRARY_DIRS}/clang/*/lib/libflang_rt.runtime*")
-    if(_rose_flang_rt_candidates)
-      list(APPEND FLANG_LIBS ${_rose_flang_rt_candidates})
-    endif()
-    unset(_rose_flang_rt_candidates)
+  if(NOT CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES)
+    message(FATAL_ERROR
+      "Cannot locate required Flang dependency libquadmath because the C++ compiler reported no implicit link directories")
   endif()
+  unset(_flang_quadmath_path CACHE)
+  find_library(_flang_quadmath_path
+    NAMES quadmath
+    PATHS ${CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES}
+    NO_DEFAULT_PATH)
+  if(NOT _flang_quadmath_path)
+    message(FATAL_ERROR
+      "Required Flang dependency libquadmath was not found in the C++ compiler's implicit link directories: "
+      "${CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES}")
+  endif()
+  list(APPEND FLANG_LIBS "${_flang_quadmath_path}")
+  message(STATUS
+    "Using required Flang quadmath dependency: ${_flang_quadmath_path}")
+  unset(_flang_quadmath_path CACHE)
 
   include(TestBigEndian)
   test_big_endian(ROSE_FLANG_BIG_ENDIAN)
@@ -1026,6 +1148,31 @@ if(ENABLE-FORTRAN)
   if(NOT "${CMAKE_Fortran_COMPILER_ID}" MATCHES "^(LLVMFlang|Flang)$")
     message(FATAL_ERROR "REX requires LLVM Flang (flang) as the Fortran backend. Found: ${CMAKE_Fortran_COMPILER_ID} (${BACKEND_FORTRAN_COMPILER}).")
   endif()
+  if(NOT CMAKE_Fortran_COMPILER_VERSION MATCHES "^${LLVM_REQUIRED_MAJOR}([.]|$)")
+    message(FATAL_ERROR
+      "REX requires exactly LLVM Flang ${LLVM_REQUIRED_MAJOR} as the Fortran backend. "
+      "Found ${CMAKE_Fortran_COMPILER_VERSION} (${BACKEND_FORTRAN_COMPILER}).")
+  endif()
+  if(NOT LLVM_TOOLS_BINARY_DIR OR
+     NOT IS_ABSOLUTE "${LLVM_TOOLS_BINARY_DIR}")
+    message(FATAL_ERROR
+      "LLVMConfig.cmake must publish an absolute LLVM_TOOLS_BINARY_DIR for the Flang toolchain contract.")
+  endif()
+  get_filename_component(_rose_flang_compiler_real
+    "${BACKEND_FORTRAN_COMPILER}" REALPATH)
+  get_filename_component(_rose_flang_compiler_dir
+    "${_rose_flang_compiler_real}" DIRECTORY)
+  get_filename_component(_rose_llvm_tools_real
+    "${LLVM_TOOLS_BINARY_DIR}" REALPATH)
+  if(NOT "${_rose_flang_compiler_dir}" STREQUAL
+     "${_rose_llvm_tools_real}")
+    message(FATAL_ERROR
+      "The backend Flang compiler and LLVM/Flang frontend libraries must come from one installation. "
+      "Got compiler '${_rose_flang_compiler_real}' and LLVM tools '${_rose_llvm_tools_real}'.")
+  endif()
+  unset(_rose_flang_compiler_dir)
+  unset(_rose_flang_compiler_real)
+  unset(_rose_llvm_tools_real)
   message(STATUS "Using LLVM Flang backend: ${BACKEND_FORTRAN_COMPILER}")
 endif()
 
@@ -1056,25 +1203,55 @@ message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 message(STATUS "LLVM include dirs: ${LLVM_INCLUDE_DIRS}")
 
-# Determine clang major version for conditional library selection.
-if(NOT DEFINED CLANG_VERSION_MAJOR OR CLANG_VERSION_MAJOR STREQUAL "0")
-  if(LLVM_PACKAGE_VERSION)
-    string(REPLACE "." ";" LLVM_VERSION_PARTS "${LLVM_PACKAGE_VERSION}")
-    list(GET LLVM_VERSION_PARTS 0 CLANG_VERSION_MAJOR)
-  else()
-    execute_process(
-      COMMAND "${CMAKE_SOURCE_DIR}/config/getClangMajorVersionNumber.sh"
-      OUTPUT_VARIABLE CLANG_VERSION_MAJOR
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-  endif()
+# ClangConfig loads an exact matching LLVMConfig.  Derive the frontend version
+# only from that typed package contract; a cached/user-provided
+# CLANG_VERSION_MAJOR or a PATH probe must never mask a mismatched package.
+if(NOT DEFINED LLVM_VERSION_MAJOR OR
+   NOT "${LLVM_VERSION_MAJOR}" STREQUAL "${LLVM_REQUIRED_MAJOR}")
+  message(FATAL_ERROR
+    "REX requires exactly LLVM/Clang ${LLVM_REQUIRED_MAJOR}. Found LLVM '${LLVM_VERSION_MAJOR}'.")
 endif()
-if(NOT CLANG_VERSION_MAJOR)
-  set(CLANG_VERSION_MAJOR 0)
-endif()
+set(CLANG_VERSION_MAJOR "${LLVM_VERSION_MAJOR}")
 
-if(CLANG_VERSION_MAJOR LESS LLVM_REQUIRED_MAJOR)
-  message(FATAL_ERROR "REX requires LLVM/Clang ${LLVM_REQUIRED_MAJOR} or newer. Found Clang ${CLANG_VERSION_MAJOR}.")
+# An explicit LLVM_DIR can otherwise override the exact hint embedded in
+# ClangConfig.cmake and silently combine Clang and LLVM packages from distinct
+# installations of the same version. Validate the directories containing the
+# loaded package configs themselves: LLVM_CMAKE_DIR is an internal modules
+# directory and points into the LLVM source tree for build-tree packages.
+if(NOT Clang_DIR OR NOT IS_ABSOLUTE "${Clang_DIR}" OR
+   NOT LLVM_DIR OR NOT IS_ABSOLUTE "${LLVM_DIR}" OR
+   NOT EXISTS "${Clang_DIR}/ClangConfig.cmake" OR
+   NOT EXISTS "${LLVM_DIR}/LLVMConfig.cmake")
+  message(FATAL_ERROR
+    "ClangConfig.cmake and LLVMConfig.cmake must be loaded from absolute package directories. "
+    "Got Clang '${Clang_DIR}' and LLVM '${LLVM_DIR}'.")
 endif()
+get_filename_component(_rose_clang_config_real
+  "${Clang_DIR}/ClangConfig.cmake" REALPATH)
+get_filename_component(_rose_llvm_config_real
+  "${LLVM_DIR}/LLVMConfig.cmake" REALPATH)
+get_filename_component(_rose_clang_package_dir
+  "${_rose_clang_config_real}" DIRECTORY)
+get_filename_component(_rose_llvm_package_dir
+  "${_rose_llvm_config_real}" DIRECTORY)
+get_filename_component(_rose_clang_package_root
+  "${_rose_clang_package_dir}/../../.." REALPATH)
+get_filename_component(_rose_llvm_package_root
+  "${_rose_llvm_package_dir}/../../.." REALPATH)
+if(NOT "${_rose_clang_package_root}" STREQUAL
+   "${_rose_llvm_package_root}")
+  message(FATAL_ERROR
+    "Clang and LLVM package configs must come from one installation. "
+    "Got Clang '${_rose_clang_package_root}' and LLVM '${_rose_llvm_package_root}'.")
+endif()
+set(ROSE_LLVM_PACKAGE_ROOT "${_rose_llvm_package_root}" CACHE INTERNAL
+  "Canonical installation root containing the loaded LLVM and Clang packages" FORCE)
+unset(_rose_clang_package_root)
+unset(_rose_clang_package_dir)
+unset(_rose_clang_config_real)
+unset(_rose_llvm_package_root)
+unset(_rose_llvm_package_dir)
+unset(_rose_llvm_config_real)
 
 # LLVM/Clang headers are added to the specific targets that need them.
 # Avoid forcing LLVM include paths globally to prevent conflicts with
@@ -1127,9 +1304,6 @@ if(NOT REX_ENABLE_WASM AND NOT _rose_shared_llvm_link_item)
     NAMES ${_rose_llvm_candidates}
     PATHS ${LLVM_LIBRARY_DIRS}
     NO_DEFAULT_PATH)
-  if(NOT _rose_shared_llvm_link_item)
-    find_library(_rose_shared_llvm_link_item NAMES ${_rose_llvm_candidates})
-  endif()
 
   set(CMAKE_FIND_LIBRARY_SUFFIXES "${_rose_saved_library_suffixes}")
   unset(_rose_saved_library_suffixes)
@@ -1168,6 +1342,94 @@ if(REX_ENABLE_WASM)
     clangLex
     clangBasic
     clangSupport)
+  foreach(_rose_wasm_clang_target IN LISTS CLANG_LIBS)
+    if(NOT TARGET ${_rose_wasm_clang_target})
+      message(FATAL_ERROR
+        "The exact LLVM/Clang ${LLVM_REQUIRED_MAJOR} WASM package does not export required target "
+        "${_rose_wasm_clang_target}")
+    endif()
+  endforeach()
+  unset(_rose_wasm_clang_target)
+
+  set(_rose_wasm_generated_header_manifest
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/rex_wasm_required_generated_headers.txt")
+  if(NOT EXISTS "${_rose_wasm_generated_header_manifest}")
+    message(FATAL_ERROR
+      "The REX WASM LLVM generated-header manifest is missing: "
+      "${_rose_wasm_generated_header_manifest}")
+  endif()
+  file(STRINGS "${_rose_wasm_generated_header_manifest}"
+    _rose_wasm_generated_header_lines)
+  if(NOT _rose_wasm_generated_header_lines)
+    message(FATAL_ERROR
+      "The REX WASM LLVM generated-header manifest is empty: "
+      "${_rose_wasm_generated_header_manifest}")
+  endif()
+  if(NOT LLVM_BINARY_DIR OR NOT IS_ABSOLUTE "${LLVM_BINARY_DIR}")
+    message(FATAL_ERROR
+      "The exact LLVM ${LLVM_REQUIRED_MAJOR} package must provide an absolute "
+      "LLVM_BINARY_DIR for the REX WASM generated-header contract")
+  endif()
+  set(_rose_wasm_generated_header_count 0)
+  foreach(_rose_wasm_generated_header_line
+      IN LISTS _rose_wasm_generated_header_lines)
+    string(STRIP "${_rose_wasm_generated_header_line}"
+      _rose_wasm_generated_header_line)
+    if(_rose_wasm_generated_header_line STREQUAL "" OR
+       _rose_wasm_generated_header_line MATCHES "^#")
+      continue()
+    endif()
+    if(NOT _rose_wasm_generated_header_line MATCHES
+       "^(nonempty|exists) +([^ ]+)$")
+      message(FATAL_ERROR
+        "Malformed REX WASM LLVM generated-header manifest entry: "
+        "${_rose_wasm_generated_header_line}")
+    endif()
+    set(_rose_wasm_generated_header_policy "${CMAKE_MATCH_1}")
+    set(_rose_wasm_generated_header_relative "${CMAKE_MATCH_2}")
+    if(IS_ABSOLUTE "${_rose_wasm_generated_header_relative}")
+      message(FATAL_ERROR
+        "REX WASM LLVM generated-header manifest entries must be relative: "
+        "${_rose_wasm_generated_header_relative}")
+    endif()
+    if(_rose_wasm_generated_header_relative MATCHES "(^|/)\\.\\.(/|$)" OR
+       _rose_wasm_generated_header_relative MATCHES "\\\\")
+      message(FATAL_ERROR
+        "REX WASM LLVM generated-header manifest entries must remain inside LLVM_BINARY_DIR: "
+        "${_rose_wasm_generated_header_relative}")
+    endif()
+    set(_rose_wasm_generated_header
+      "${LLVM_BINARY_DIR}/${_rose_wasm_generated_header_relative}")
+    if(NOT EXISTS "${_rose_wasm_generated_header}" OR
+       IS_DIRECTORY "${_rose_wasm_generated_header}")
+      message(FATAL_ERROR
+        "The exact LLVM ${LLVM_REQUIRED_MAJOR} WASM build is missing a generated header REX consumes: "
+        "${_rose_wasm_generated_header}")
+    endif()
+    if(_rose_wasm_generated_header_policy STREQUAL "nonempty")
+      file(SIZE "${_rose_wasm_generated_header}"
+        _rose_wasm_generated_header_size)
+      if(_rose_wasm_generated_header_size EQUAL 0)
+        message(FATAL_ERROR
+          "The exact LLVM ${LLVM_REQUIRED_MAJOR} WASM build has an empty generated header that must be nonempty: "
+          "${_rose_wasm_generated_header}")
+      endif()
+    endif()
+    math(EXPR _rose_wasm_generated_header_count
+      "${_rose_wasm_generated_header_count} + 1")
+  endforeach()
+  if(_rose_wasm_generated_header_count EQUAL 0)
+    message(FATAL_ERROR
+      "The REX WASM LLVM generated-header manifest contains no entries")
+  endif()
+  unset(_rose_wasm_generated_header)
+  unset(_rose_wasm_generated_header_count)
+  unset(_rose_wasm_generated_header_line)
+  unset(_rose_wasm_generated_header_lines)
+  unset(_rose_wasm_generated_header_manifest)
+  unset(_rose_wasm_generated_header_policy)
+  unset(_rose_wasm_generated_header_relative)
+  unset(_rose_wasm_generated_header_size)
 else()
   set(CLANG_LIBS
     clangFrontendTool
@@ -1199,32 +1461,14 @@ endif()
 set(_rose_clang_cpp_candidates
   clang-cpp
   clang-cpp${CLANG_VERSION_MAJOR}
-  clang-cpp${LLVM_PACKAGE_VERSION}
-  clang-cpp21)
+  clang-cpp${LLVM_PACKAGE_VERSION})
 set(_rose_clang_cpp_search_dirs
   ${LLVM_LIBRARY_DIRS}
   ${CLANG_LIBRARY_DIRS})
-if(LLVM_DIR)
-  set(_rose_llvm_prefix "")
-  if(EXISTS "${LLVM_DIR}/LLVMConfig.cmake")
-    get_filename_component(_rose_llvm_dir_name "${LLVM_DIR}" NAME)
-    if(_rose_llvm_dir_name STREQUAL "llvm")
-      get_filename_component(_rose_llvm_prefix "${LLVM_DIR}/../../.." ABSOLUTE)
-    elseif(_rose_llvm_dir_name STREQUAL "cmake")
-      get_filename_component(_rose_llvm_prefix "${LLVM_DIR}/.." ABSOLUTE)
-    else()
-      get_filename_component(_rose_llvm_prefix "${LLVM_DIR}/.." ABSOLUTE)
-    endif()
-  elseif(EXISTS "${LLVM_DIR}/lib/cmake/llvm/LLVMConfig.cmake")
-    set(_rose_llvm_prefix "${LLVM_DIR}")
-  else()
-    set(_rose_llvm_prefix "${LLVM_DIR}")
-  endif()
-  if(_rose_llvm_prefix)
-    list(APPEND _rose_clang_cpp_search_dirs
-      "${_rose_llvm_prefix}/lib"
-      "${_rose_llvm_prefix}/lib64")
-  endif()
+if(ROSE_LLVM_PACKAGE_ROOT)
+  list(APPEND _rose_clang_cpp_search_dirs
+    "${ROSE_LLVM_PACKAGE_ROOT}/lib"
+    "${ROSE_LLVM_PACKAGE_ROOT}/lib64")
 endif()
 if(CMAKE_LIBRARY_ARCHITECTURE)
   foreach(_rose_libdir IN LISTS _rose_clang_cpp_search_dirs)
@@ -1247,13 +1491,12 @@ if(UNIX AND NOT APPLE)
   endif()
 endif()
 if(NOT REX_ENABLE_WASM)
+  unset(CLANG_CPP_LIBRARY CACHE)
+  unset(CLANG_CPP_LIBRARY)
   find_library(CLANG_CPP_LIBRARY
     NAMES ${_rose_clang_cpp_candidates}
     PATHS ${_rose_clang_cpp_search_dirs}
     NO_DEFAULT_PATH)
-  if(NOT CLANG_CPP_LIBRARY)
-    find_library(CLANG_CPP_LIBRARY NAMES ${_rose_clang_cpp_candidates})
-  endif()
 endif()
 set(CMAKE_FIND_LIBRARY_SUFFIXES "${_rose_saved_library_suffixes}")
 if(CLANG_CPP_LIBRARY)
@@ -1265,8 +1508,10 @@ if(CLANG_CPP_LIBRARY)
   else()
     message(STATUS "Using shared libclang-cpp: ${CLANG_CPP_LIBRARY}")
   endif()
-elseif(ENABLE-SANITIZER)
-  message(FATAL_ERROR "ENABLE-SANITIZER requires libclang-cpp to avoid ODR mismatches with static Clang libraries. Install libclang-cpp or disable ENABLE-SANITIZER.")
+elseif(NOT REX_ENABLE_WASM)
+  message(FATAL_ERROR
+    "REX requires the shared libclang-cpp from the loaded LLVM/Clang ${LLVM_REQUIRED_MAJOR} installation. "
+    "Searched only: ${_rose_clang_cpp_search_dirs}")
 endif()
 unset(_rose_clang_cpp_candidates)
 unset(_rose_clang_cpp_search_dirs)
@@ -1687,10 +1932,7 @@ if(_rose_memcheck_valgrind)
   foreach(_rose_compiler IN ITEMS
       "${CMAKE_C_COMPILER}"
       "${CMAKE_CXX_COMPILER}"
-      "${CMAKE_Fortran_COMPILER}"
-      "${WITH-ALT-BACKEND-C-COMPILER}"
-      "${WITH-ALT-BACKEND-CXX-COMPILER}"
-      "${WITH-ALT-BACKEND-FORTRAN-COMPILER}")
+      "${CMAKE_Fortran_COMPILER}")
     _rose_append_memcheck_child_skip("${_rose_compiler}")
   endforeach()
   list(REMOVE_DUPLICATES _rose_memcheck_trace_children_skip)
@@ -1760,270 +2002,234 @@ if(REX_ENABLE_WASM AND ENABLE-C)
     "LLVM OpenMP runtime library selected by REX")
 elseif(ENABLE-C)
   set(_rose_llvm_openmp_driver "")
-  if(CMAKE_C_COMPILER_ID STREQUAL "Clang")
-    set(_rose_llvm_openmp_driver "${CMAKE_C_COMPILER}")
+  if(NOT LLVM_TOOLS_BINARY_DIR OR
+     NOT IS_ABSOLUTE "${LLVM_TOOLS_BINARY_DIR}")
+    message(FATAL_ERROR
+      "LLVMConfig.cmake must publish an absolute LLVM_TOOLS_BINARY_DIR for exact OpenMP path resolution.")
   endif()
-  if(NOT _rose_llvm_openmp_driver AND LLVM_TOOLS_BINARY_DIR)
-    find_program(_rose_llvm_openmp_driver
-      NAMES clang-${CLANG_VERSION_MAJOR} clang
-      HINTS "${LLVM_TOOLS_BINARY_DIR}")
-  endif()
-  if(NOT _rose_llvm_openmp_driver)
-    find_program(_rose_llvm_openmp_driver
-      NAMES clang-${CLANG_VERSION_MAJOR} clang)
-  endif()
+  foreach(_rose_llvm_openmp_driver_name IN ITEMS
+      clang-${CLANG_VERSION_MAJOR} clang)
+    if(EXISTS
+       "${LLVM_TOOLS_BINARY_DIR}/${_rose_llvm_openmp_driver_name}")
+      set(_rose_llvm_openmp_driver
+        "${LLVM_TOOLS_BINARY_DIR}/${_rose_llvm_openmp_driver_name}")
+      break()
+    endif()
+  endforeach()
   if(NOT _rose_llvm_openmp_driver)
     message(FATAL_ERROR
-      "Unable to locate a Clang executable to resolve LLVM OpenMP paths.")
+      "The loaded LLVM package has no Clang ${CLANG_VERSION_MAJOR} driver in its tools directory: "
+      "${LLVM_TOOLS_BINARY_DIR}")
+  endif()
+  file(REAL_PATH "${_rose_llvm_openmp_driver}"
+    _rose_llvm_openmp_driver)
+  file(REAL_PATH "${LLVM_TOOLS_BINARY_DIR}"
+    _rose_llvm_openmp_tools_dir)
+  get_filename_component(_rose_llvm_openmp_driver_dir
+    "${_rose_llvm_openmp_driver}" DIRECTORY)
+  if(NOT _rose_llvm_openmp_driver_dir STREQUAL
+     _rose_llvm_openmp_tools_dir)
+    message(FATAL_ERROR
+      "OpenMP path resolution driver must belong to the loaded LLVM package. "
+      "Got '${_rose_llvm_openmp_driver}' and tools directory "
+      "'${_rose_llvm_openmp_tools_dir}'.")
   endif()
   execute_process(
     COMMAND "${_rose_llvm_openmp_driver}" -dumpversion
     OUTPUT_VARIABLE _rose_llvm_openmp_driver_version
     OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_QUIET)
-  if(_rose_llvm_openmp_driver_version)
-    string(REGEX MATCH "^[0-9]+" _rose_llvm_openmp_driver_major
-      "${_rose_llvm_openmp_driver_version}")
-    if(_rose_llvm_openmp_driver_major AND
-       NOT _rose_llvm_openmp_driver_major STREQUAL "${CLANG_VERSION_MAJOR}")
-      message(FATAL_ERROR
-        "OpenMP path resolution driver ${_rose_llvm_openmp_driver} reports "
-        "major version ${_rose_llvm_openmp_driver_major}, but REX is "
-        "configured for LLVM/Clang ${CLANG_VERSION_MAJOR}.")
-    endif()
+    ERROR_VARIABLE _rose_llvm_openmp_driver_error
+    RESULT_VARIABLE _rose_llvm_openmp_driver_status)
+  string(REGEX MATCH "^[0-9]+" _rose_llvm_openmp_driver_major
+    "${_rose_llvm_openmp_driver_version}")
+  if(NOT _rose_llvm_openmp_driver_status EQUAL 0 OR
+     NOT _rose_llvm_openmp_driver_major STREQUAL
+         "${CLANG_VERSION_MAJOR}")
+    message(FATAL_ERROR
+      "OpenMP path resolution driver '${_rose_llvm_openmp_driver}' must report "
+      "Clang major ${CLANG_VERSION_MAJOR}. Got status "
+      "'${_rose_llvm_openmp_driver_status}', version "
+      "'${_rose_llvm_openmp_driver_version}', error "
+      "'${_rose_llvm_openmp_driver_error}'.")
   endif()
 
   execute_process(
     COMMAND "${_rose_llvm_openmp_driver}" --print-resource-dir
     OUTPUT_VARIABLE _rose_clang_resource_dir
     OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_QUIET)
+    ERROR_VARIABLE _rose_clang_resource_error
+    RESULT_VARIABLE _rose_clang_resource_status)
+  if(NOT _rose_clang_resource_status EQUAL 0 OR
+     NOT IS_ABSOLUTE "${_rose_clang_resource_dir}" OR
+     NOT EXISTS "${_rose_clang_resource_dir}")
+    message(FATAL_ERROR
+      "Clang resource directory resolution failed for exact driver "
+      "'${_rose_llvm_openmp_driver}': status "
+      "'${_rose_clang_resource_status}', output "
+      "'${_rose_clang_resource_dir}', error "
+      "'${_rose_clang_resource_error}'.")
+  endif()
+  file(REAL_PATH "${_rose_clang_resource_dir}"
+    _rose_clang_resource_dir)
 
-  set(_rose_llvm_openmp_runtime_names
-    libiomp5.so libomp.so libomp.so.5 libomp5.so libiomp5.a libomp.a)
-  set(_rose_llvm_openmp_runtime_hints "")
-  if(WITH-LLVM-OMP-RUNTIME-LIBRARY)
-    file(TO_CMAKE_PATH "${WITH-LLVM-OMP-RUNTIME-LIBRARY}"
-      ROSE_LLVM_OPENMP_RUNTIME_DIR)
-    list(APPEND _rose_llvm_openmp_runtime_hints
-      "${ROSE_LLVM_OPENMP_RUNTIME_DIR}")
-  endif()
-  foreach(_rose_omp_probe_name IN LISTS _rose_llvm_openmp_runtime_names)
-    execute_process(
-      COMMAND "${_rose_llvm_openmp_driver}" -print-file-name=${_rose_omp_probe_name}
-      OUTPUT_VARIABLE _rose_omp_probe_path
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-      ERROR_QUIET)
-    if(_rose_omp_probe_path)
-      file(TO_CMAKE_PATH "${_rose_omp_probe_path}" _rose_omp_probe_path_norm)
-      if(IS_ABSOLUTE "${_rose_omp_probe_path_norm}" AND
-         EXISTS "${_rose_omp_probe_path_norm}")
-        get_filename_component(_rose_omp_probe_dir
-          "${_rose_omp_probe_path_norm}" DIRECTORY)
-        list(APPEND _rose_llvm_openmp_runtime_hints
-          "${_rose_omp_probe_dir}")
-        unset(_rose_omp_probe_dir)
-      endif()
-      unset(_rose_omp_probe_path_norm)
-    endif()
-    unset(_rose_omp_probe_path)
-  endforeach()
-  if(LLVM_LIBRARY_DIRS)
-    list(APPEND _rose_llvm_openmp_runtime_hints ${LLVM_LIBRARY_DIRS})
-  endif()
-  get_filename_component(_rose_llvm_openmp_driver_dir
-    "${_rose_llvm_openmp_driver}" DIRECTORY)
-  if(_rose_llvm_openmp_driver_dir)
-    list(APPEND _rose_llvm_openmp_runtime_hints
-      "${_rose_llvm_openmp_driver_dir}/../lib"
-      "${_rose_llvm_openmp_driver_dir}/../lib64")
-  endif()
-  foreach(_rose_implicit_libdir IN LISTS
-    CMAKE_C_IMPLICIT_LINK_DIRECTORIES
-    CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES
-    CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES)
-    if(_rose_implicit_libdir)
-      list(APPEND _rose_llvm_openmp_runtime_hints "${_rose_implicit_libdir}")
-    endif()
-  endforeach()
-  if(_rose_clang_resource_dir)
-    get_filename_component(_rose_clang_lib_dir
-      "${_rose_clang_resource_dir}" DIRECTORY)
-    get_filename_component(_rose_clang_lib_dir
-      "${_rose_clang_lib_dir}" DIRECTORY)
-    list(APPEND _rose_llvm_openmp_runtime_hints "${_rose_clang_lib_dir}")
-    unset(_rose_clang_lib_dir)
-  endif()
-  if(CMAKE_LIBRARY_ARCHITECTURE)
-    foreach(_rose_libdir IN LISTS _rose_llvm_openmp_runtime_hints)
-      list(APPEND _rose_llvm_openmp_runtime_hints
-        "${_rose_libdir}/${CMAKE_LIBRARY_ARCHITECTURE}")
-    endforeach()
-  endif()
-  list(REMOVE_DUPLICATES _rose_llvm_openmp_runtime_hints)
-
-  set(ROSE_LLVM_OPENMP_RUNTIME_LIBRARY "")
-  set(_rose_mismatched_openmp_runtime_library "")
-  set(_rose_mismatched_openmp_runtime_major "")
-  foreach(_rose_omp_runtime_dir IN LISTS _rose_llvm_openmp_runtime_hints)
-    foreach(_rose_omp_lib_name IN LISTS _rose_llvm_openmp_runtime_names)
-      if(EXISTS "${_rose_omp_runtime_dir}/${_rose_omp_lib_name}")
-        file(REAL_PATH "${_rose_omp_runtime_dir}/${_rose_omp_lib_name}"
-          _rose_runtime_candidate)
-        set(_rose_runtime_candidate_major "")
-        if(CLANG_VERSION_MAJOR)
-          string(REGEX MATCH "/llvm-([0-9]+)/" _rose_runtime_candidate_match
-            "${_rose_runtime_candidate}")
-          if(_rose_runtime_candidate_match)
-            set(_rose_runtime_candidate_major "${CMAKE_MATCH_1}")
-          endif()
-        endif()
-        if(_rose_runtime_candidate_major AND
-           NOT _rose_runtime_candidate_major STREQUAL "${CLANG_VERSION_MAJOR}")
-          if(NOT _rose_mismatched_openmp_runtime_library)
-            set(_rose_mismatched_openmp_runtime_library
-              "${_rose_runtime_candidate}")
-            set(_rose_mismatched_openmp_runtime_major
-              "${_rose_runtime_candidate_major}")
-          endif()
-          unset(_rose_runtime_candidate)
-          unset(_rose_runtime_candidate_major)
-          unset(_rose_runtime_candidate_match)
-          continue()
-        endif()
-        set(ROSE_LLVM_OPENMP_RUNTIME_LIBRARY "${_rose_runtime_candidate}")
-        unset(_rose_runtime_candidate)
-        unset(_rose_runtime_candidate_major)
-        unset(_rose_runtime_candidate_match)
+  set(_rose_llvm_openmp_package_root "${ROSE_LLVM_PACKAGE_ROOT}")
+  set(_rose_expected_resource_dirs
+    "${_rose_llvm_openmp_package_root}/lib/clang/${CLANG_VERSION_MAJOR}"
+    "${_rose_llvm_openmp_package_root}/lib64/clang/${CLANG_VERSION_MAJOR}")
+  set(_rose_exact_resource_dir "")
+  foreach(_rose_expected_resource_dir IN LISTS _rose_expected_resource_dirs)
+    if(EXISTS "${_rose_expected_resource_dir}")
+      file(REAL_PATH "${_rose_expected_resource_dir}"
+        _rose_expected_resource_dir_real)
+      if(_rose_clang_resource_dir STREQUAL
+         _rose_expected_resource_dir_real)
+        set(_rose_exact_resource_dir "${_rose_expected_resource_dir_real}")
         break()
       endif()
-    endforeach()
-    if(ROSE_LLVM_OPENMP_RUNTIME_LIBRARY)
-      break()
     endif()
   endforeach()
-  if(NOT ROSE_LLVM_OPENMP_RUNTIME_LIBRARY)
-    if(_rose_mismatched_openmp_runtime_library)
-      message(FATAL_ERROR
-        "Found LLVM OpenMP runtime from llvm-${_rose_mismatched_openmp_runtime_major}: "
-        "${_rose_mismatched_openmp_runtime_library}, but REX is configured for "
-        "LLVM/Clang ${CLANG_VERSION_MAJOR}. Install the matching LLVM OpenMP "
-        "runtime (e.g., libomp-${CLANG_VERSION_MAJOR}-dev), or set "
-        "WITH-LLVM-OMP-RUNTIME-LIBRARY.")
-    endif()
-    if(_rose_llvm_openmp_runtime_hints)
-      string(REPLACE ";" "\n  " _rose_openmp_hint_lines
-        "${_rose_llvm_openmp_runtime_hints}")
-    else()
-      set(_rose_openmp_hint_lines "<none>")
-    endif()
+  if(NOT _rose_exact_resource_dir)
+    string(REPLACE ";" "\n  " _rose_expected_resource_lines
+      "${_rose_expected_resource_dirs}")
     message(FATAL_ERROR
-      "LLVM OpenMP runtime library (libiomp5/libomp) not found for LLVM/Clang "
-      "${CLANG_VERSION_MAJOR}. Searched:\n  ${_rose_openmp_hint_lines}\n"
-      "Install libomp-${CLANG_VERSION_MAJOR}-dev (or equivalent), or set "
-      "WITH-LLVM-OMP-RUNTIME-LIBRARY.")
+      "Clang ${CLANG_VERSION_MAJOR} must report the resource directory owned by "
+      "the loaded LLVM package root '${_rose_llvm_openmp_package_root}'. Got "
+      "'${_rose_clang_resource_dir}'; expected one of:\n  "
+      "${_rose_expected_resource_lines}")
+  endif()
+  set(ROSE_LLVM_OPENMP_INCLUDE_DIR
+    "${_rose_exact_resource_dir}/include")
+  if(NOT EXISTS "${ROSE_LLVM_OPENMP_INCLUDE_DIR}/omp.h")
+    message(FATAL_ERROR
+      "The exact Clang ${CLANG_VERSION_MAJOR} resource directory has no OpenMP "
+      "header: '${ROSE_LLVM_OPENMP_INCLUDE_DIR}/omp.h'. Install the matching "
+      "libomp-${CLANG_VERSION_MAJOR}-dev package.")
+  endif()
+  file(REAL_PATH "${ROSE_LLVM_OPENMP_INCLUDE_DIR}"
+    ROSE_LLVM_OPENMP_INCLUDE_DIR)
+
+  set(_rose_llvm_openmp_runtime_names
+    libomp.so libomp.so.5 libomp5.so libiomp5.so libomp.a libiomp5.a)
+  set(_rose_llvm_openmp_runtime_candidates "")
+  if(WITH-LLVM-OMP-RUNTIME-LIBRARY)
+    if(NOT IS_ABSOLUTE "${WITH-LLVM-OMP-RUNTIME-LIBRARY}" OR
+       NOT IS_DIRECTORY "${WITH-LLVM-OMP-RUNTIME-LIBRARY}")
+      message(FATAL_ERROR
+        "WITH-LLVM-OMP-RUNTIME-LIBRARY must name an existing absolute "
+        "directory. Got '${WITH-LLVM-OMP-RUNTIME-LIBRARY}'.")
+    endif()
+    file(REAL_PATH "${WITH-LLVM-OMP-RUNTIME-LIBRARY}"
+      _rose_explicit_openmp_runtime_dir)
+    foreach(_rose_omp_lib_name IN LISTS _rose_llvm_openmp_runtime_names)
+      if(EXISTS "${_rose_explicit_openmp_runtime_dir}/${_rose_omp_lib_name}")
+        file(REAL_PATH
+          "${_rose_explicit_openmp_runtime_dir}/${_rose_omp_lib_name}"
+          _rose_runtime_candidate)
+        list(APPEND _rose_llvm_openmp_runtime_candidates
+          "${_rose_runtime_candidate}")
+      endif()
+    endforeach()
+    if(NOT _rose_llvm_openmp_runtime_candidates)
+      message(FATAL_ERROR
+        "The authoritative WITH-LLVM-OMP-RUNTIME-LIBRARY directory contains "
+        "no LLVM OpenMP runtime: '${_rose_explicit_openmp_runtime_dir}'.")
+    endif()
+  else()
+    foreach(_rose_omp_runtime_dir IN LISTS LLVM_LIBRARY_DIRS)
+      if(NOT IS_ABSOLUTE "${_rose_omp_runtime_dir}" OR
+         NOT IS_DIRECTORY "${_rose_omp_runtime_dir}")
+        message(FATAL_ERROR
+          "LLVMConfig.cmake published an invalid LLVM library directory: "
+          "'${_rose_omp_runtime_dir}'.")
+      endif()
+      foreach(_rose_omp_lib_name IN LISTS _rose_llvm_openmp_runtime_names)
+        if(EXISTS "${_rose_omp_runtime_dir}/${_rose_omp_lib_name}")
+          file(REAL_PATH
+            "${_rose_omp_runtime_dir}/${_rose_omp_lib_name}"
+            _rose_runtime_candidate)
+          list(APPEND _rose_llvm_openmp_runtime_candidates
+            "${_rose_runtime_candidate}")
+        endif()
+      endforeach()
+    endforeach()
+    foreach(_rose_omp_probe_name IN LISTS _rose_llvm_openmp_runtime_names)
+      execute_process(
+        COMMAND "${_rose_llvm_openmp_driver}"
+          -print-file-name=${_rose_omp_probe_name}
+        OUTPUT_VARIABLE _rose_omp_probe_path
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_VARIABLE _rose_omp_probe_error
+        RESULT_VARIABLE _rose_omp_probe_status)
+      if(NOT _rose_omp_probe_status EQUAL 0 OR
+         NOT _rose_omp_probe_path)
+        message(FATAL_ERROR
+          "Clang OpenMP runtime probe failed for '${_rose_omp_probe_name}': "
+          "status '${_rose_omp_probe_status}', output "
+          "'${_rose_omp_probe_path}', error '${_rose_omp_probe_error}'.")
+      endif()
+      file(TO_CMAKE_PATH "${_rose_omp_probe_path}"
+        _rose_omp_probe_path_normalized)
+      if(IS_ABSOLUTE "${_rose_omp_probe_path_normalized}" AND
+         EXISTS "${_rose_omp_probe_path_normalized}")
+        file(REAL_PATH "${_rose_omp_probe_path_normalized}"
+          _rose_runtime_candidate)
+        list(APPEND _rose_llvm_openmp_runtime_candidates
+          "${_rose_runtime_candidate}")
+      endif()
+    endforeach()
+    if(NOT _rose_llvm_openmp_runtime_candidates)
+      message(FATAL_ERROR
+        "The loaded LLVM package and its exact Clang driver provide no OpenMP "
+        "runtime for LLVM/Clang ${CLANG_VERSION_MAJOR}. Install the matching "
+        "libomp-${CLANG_VERSION_MAJOR}-dev package or set the authoritative "
+        "WITH-LLVM-OMP-RUNTIME-LIBRARY directory.")
+    endif()
+  endif()
+  list(REMOVE_DUPLICATES _rose_llvm_openmp_runtime_candidates)
+  list(GET _rose_llvm_openmp_runtime_candidates 0
+    ROSE_LLVM_OPENMP_RUNTIME_LIBRARY)
+
+  set(_rose_llvm_strings
+    "${LLVM_TOOLS_BINARY_DIR}/llvm-strings")
+  if(NOT EXISTS "${_rose_llvm_strings}" OR
+     IS_DIRECTORY "${_rose_llvm_strings}")
+    message(FATAL_ERROR
+      "The loaded LLVM package has no llvm-strings executable at "
+      "'${_rose_llvm_strings}'.")
+  endif()
+  execute_process(
+    COMMAND "${_rose_llvm_strings}" -a
+      "${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}"
+    OUTPUT_VARIABLE _rose_runtime_strings
+    ERROR_VARIABLE _rose_runtime_strings_error
+    RESULT_VARIABLE _rose_runtime_strings_status)
+  if(NOT _rose_runtime_strings_status EQUAL 0)
+    message(FATAL_ERROR
+      "Could not inspect LLVM OpenMP runtime "
+      "'${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}' with exact tool "
+      "'${_rose_llvm_strings}': status '${_rose_runtime_strings_status}', "
+      "error '${_rose_runtime_strings_error}'.")
+  endif()
+  string(REGEX MATCH
+    "LLVM OMP build compiler: Clang [0-9]+[^\r\n]*"
+    _rose_runtime_build_line "${_rose_runtime_strings}")
+  string(REGEX MATCH "Clang ([0-9]+)"
+    _rose_runtime_build_match "${_rose_runtime_build_line}")
+  set(_rose_runtime_llvm_major "${CMAKE_MATCH_1}")
+  if(NOT _rose_runtime_build_line OR
+     NOT _rose_runtime_build_match OR
+     NOT _rose_runtime_llvm_major STREQUAL "${CLANG_VERSION_MAJOR}")
+    message(FATAL_ERROR
+      "OpenMP runtime '${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}' must identify an "
+      "LLVM OMP build compiler with exact Clang major "
+      "${CLANG_VERSION_MAJOR}. Got '${_rose_runtime_build_line}'.")
   endif()
 
-  unset(_rose_mismatched_openmp_runtime_library)
-  unset(_rose_mismatched_openmp_runtime_major)
   get_filename_component(ROSE_LLVM_OPENMP_RUNTIME_DIR
     "${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}" DIRECTORY)
-  set(_rose_runtime_build_line "")
-  if(CLANG_VERSION_MAJOR)
-    set(_rose_runtime_llvm_major "")
-    string(REGEX MATCH "/llvm-([0-9]+)/" _rose_runtime_llvm_match
-      "${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}")
-    if(_rose_runtime_llvm_match)
-      set(_rose_runtime_llvm_major "${CMAKE_MATCH_1}")
-    endif()
-    if(NOT _rose_runtime_llvm_major)
-      find_program(_rose_strings_exec NAMES strings)
-      if(_rose_strings_exec)
-        execute_process(
-          COMMAND "${_rose_strings_exec}" -a "${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}"
-          COMMAND grep -m1 "LLVM OMP build compiler: Clang "
-          OUTPUT_VARIABLE _rose_runtime_build_line
-          OUTPUT_STRIP_TRAILING_WHITESPACE
-          ERROR_QUIET)
-        if(_rose_runtime_build_line)
-          string(REGEX MATCH "Clang ([0-9]+)" _rose_runtime_build_match
-            "${_rose_runtime_build_line}")
-          if(_rose_runtime_build_match)
-            set(_rose_runtime_llvm_major "${CMAKE_MATCH_1}")
-          endif()
-        endif()
-      endif()
-    endif()
-    if(_rose_runtime_llvm_major AND
-       NOT _rose_runtime_llvm_major STREQUAL "${CLANG_VERSION_MAJOR}")
-      message(FATAL_ERROR
-        "Resolved LLVM OpenMP runtime from llvm-${_rose_runtime_llvm_major}: "
-        "${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}, but REX is configured for "
-        "LLVM/Clang ${CLANG_VERSION_MAJOR}. Install the matching LLVM OpenMP "
-        "runtime or set WITH-LLVM-OMP-RUNTIME-LIBRARY.")
-    endif()
-  endif()
-  set(WITH-LLVM-OMP-RUNTIME-LIBRARY "${ROSE_LLVM_OPENMP_RUNTIME_DIR}" CACHE PATH
+  set(WITH-LLVM-OMP-RUNTIME-LIBRARY
+    "${ROSE_LLVM_OPENMP_RUNTIME_DIR}" CACHE PATH
     "LLVM OpenMP runtime library directory" FORCE)
-
-  if(_rose_clang_resource_dir AND EXISTS "${_rose_clang_resource_dir}/include/omp.h")
-    set(ROSE_LLVM_OPENMP_INCLUDE_DIR "${_rose_clang_resource_dir}/include")
-  endif()
-  if(NOT ROSE_LLVM_OPENMP_INCLUDE_DIR AND ROSE_LLVM_OPENMP_RUNTIME_DIR)
-    get_filename_component(_rose_llvm_runtime_prefix
-      "${ROSE_LLVM_OPENMP_RUNTIME_DIR}/.." ABSOLUTE)
-    if(EXISTS "${_rose_llvm_runtime_prefix}/include/omp.h")
-      set(ROSE_LLVM_OPENMP_INCLUDE_DIR "${_rose_llvm_runtime_prefix}/include")
-    endif()
-    if(NOT ROSE_LLVM_OPENMP_INCLUDE_DIR)
-      file(GLOB _rose_runtime_omp_headers
-        "${_rose_llvm_runtime_prefix}/lib/clang/*/include/omp.h")
-      if(_rose_runtime_omp_headers)
-        list(SORT _rose_runtime_omp_headers COMPARE NATURAL)
-        list(GET _rose_runtime_omp_headers -1 _rose_runtime_omp_header)
-        get_filename_component(ROSE_LLVM_OPENMP_INCLUDE_DIR
-          "${_rose_runtime_omp_header}" DIRECTORY)
-      endif()
-      unset(_rose_runtime_omp_header)
-      unset(_rose_runtime_omp_headers)
-    endif()
-    unset(_rose_llvm_runtime_prefix)
-  endif()
-  if(NOT ROSE_LLVM_OPENMP_INCLUDE_DIR)
-    message(FATAL_ERROR
-      "LLVM OpenMP header (omp.h) not found for ${_rose_llvm_openmp_driver}. "
-      "Ensure LLVM's OpenMP headers are installed.")
-  endif()
-
-  file(REAL_PATH "${ROSE_LLVM_OPENMP_INCLUDE_DIR}" ROSE_LLVM_OPENMP_INCLUDE_DIR)
-  if(_rose_clang_resource_dir)
-    set(_rose_clang_resource_include_dir "${_rose_clang_resource_dir}/include")
-    if(EXISTS "${_rose_clang_resource_include_dir}")
-      file(REAL_PATH "${_rose_clang_resource_include_dir}" _rose_clang_resource_include_dir)
-    else()
-      unset(_rose_clang_resource_include_dir)
-    endif()
-  endif()
-
-  # If the only available OpenMP header comes from a different Clang resource
-  # tree than the active frontend, stage a local copy of omp.h and use that
-  # directory instead. This avoids include_next collisions between different
-  # Clang stdint.h versions.
-  if(_rose_clang_resource_include_dir
-     AND NOT ROSE_LLVM_OPENMP_INCLUDE_DIR STREQUAL _rose_clang_resource_include_dir
-     AND ROSE_LLVM_OPENMP_INCLUDE_DIR MATCHES "/lib/clang/.+/include$")
-    set(_rose_staged_openmp_include_dir "${CMAKE_BINARY_DIR}/include-staging/llvm-openmp")
-    file(MAKE_DIRECTORY "${_rose_staged_openmp_include_dir}")
-    configure_file(
-      "${ROSE_LLVM_OPENMP_INCLUDE_DIR}/omp.h"
-      "${_rose_staged_openmp_include_dir}/omp.h"
-      COPYONLY)
-    set(ROSE_LLVM_OPENMP_INCLUDE_DIR "${_rose_staged_openmp_include_dir}")
-    message(STATUS
-      "Staging LLVM OpenMP header to avoid mixed Clang resource headers: "
-      "${ROSE_LLVM_OPENMP_INCLUDE_DIR}")
-    unset(_rose_staged_openmp_include_dir)
-  endif()
 
   set(LLVM_OPENMP_LIB_PATH "${ROSE_LLVM_OPENMP_RUNTIME_DIR}")
   set(LLVM_OPENMP_INCLUDE_PATH "${ROSE_LLVM_OPENMP_INCLUDE_DIR}")
@@ -2041,94 +2247,177 @@ elseif(ENABLE-C)
   message(STATUS "Using LLVM OpenMP header dir: ${ROSE_LLVM_OPENMP_INCLUDE_DIR}")
   unset(_rose_runtime_build_line)
   unset(_rose_runtime_build_match)
-  unset(_rose_strings_exec)
+  unset(_rose_runtime_strings)
+  unset(_rose_runtime_strings_error)
+  unset(_rose_runtime_strings_status)
+  unset(_rose_llvm_strings)
   unset(_rose_runtime_llvm_major)
-  unset(_rose_runtime_llvm_match)
-  unset(_rose_clang_resource_include_dir)
   unset(_rose_clang_resource_dir)
+  unset(_rose_clang_resource_error)
+  unset(_rose_clang_resource_status)
+  unset(_rose_exact_resource_dir)
+  unset(_rose_expected_resource_dir)
+  unset(_rose_expected_resource_dir_real)
+  unset(_rose_expected_resource_dirs)
+  unset(_rose_expected_resource_lines)
+  unset(_rose_llvm_openmp_package_root)
   unset(_rose_llvm_openmp_driver_version)
+  unset(_rose_llvm_openmp_driver_error)
+  unset(_rose_llvm_openmp_driver_status)
   unset(_rose_llvm_openmp_driver_major)
   unset(_rose_llvm_openmp_driver)
   unset(_rose_llvm_openmp_driver_dir)
-  unset(_rose_llvm_openmp_runtime_hints)
-  unset(_rose_openmp_hint_lines)
+  unset(_rose_llvm_openmp_tools_dir)
+  unset(_rose_llvm_openmp_driver_name)
+  unset(_rose_llvm_openmp_runtime_candidates)
+  unset(_rose_llvm_openmp_runtime_names)
+  unset(_rose_explicit_openmp_runtime_dir)
   unset(_rose_omp_runtime_dir)
   unset(_rose_omp_lib_name)
+  unset(_rose_omp_probe_name)
+  unset(_rose_omp_probe_path)
+  unset(_rose_omp_probe_path_normalized)
+  unset(_rose_omp_probe_error)
+  unset(_rose_omp_probe_status)
   unset(_rose_runtime_candidate)
-  unset(_rose_runtime_candidate_major)
-  unset(_rose_runtime_candidate_match)
-  unset(_rose_mismatched_openmp_runtime_library)
-  unset(_rose_mismatched_openmp_runtime_major)
-  unset(_rose_libdir)
-endif()
-
-if(WITH-LLVM-OMP-RUNTIME-LIBRARY AND NOT LLVM_OPENMP_LIB_PATH)
-  set(LLVM_OPENMP_LIB_PATH "${WITH-LLVM-OMP-RUNTIME-LIBRARY}")
 endif()
 
 if(REX_ENABLE_WASM)
+  set(REX_WASM_VIRTUAL_CLANG_C_DRIVER
+    "/rex/bin/clang-${CLANG_VERSION_MAJOR}" CACHE INTERNAL
+    "Exact virtual Clang C driver path used by the REX WASM frontend")
+  set(REX_WASM_VIRTUAL_CLANG_CXX_DRIVER
+    "/rex/bin/clang++-${CLANG_VERSION_MAJOR}" CACHE INTERNAL
+    "Exact virtual Clang C++ driver path used by the REX WASM frontend")
+  set(REX_WASM_VIRTUAL_CLANG_RESOURCE_DIR
+    "/rex/lib/clang/${CLANG_VERSION_MAJOR}" CACHE INTERNAL
+    "Exact virtual Clang resource directory used by the REX WASM frontend")
+
   set(REX_WASM_CLANG_RESOURCE_INPUT "" CACHE PATH
-    "Clang resource directory containing an include/ subtree for the REX WASM package")
-  set(REX_WASM_CLANG_HEADERS_INPUT "" CACHE PATH
-    "Fallback Clang lib/Headers source directory for the REX WASM package")
+    "Exact configured Clang resource directory for the REX WASM package")
+  set(REX_WASM_NATIVE_LLVM_ROOT "" CACHE PATH
+    "Exact native LLVM installation supplying TableGen and the OpenMP resource header")
   set(REX_WASM_OMP_INCLUDE_DIR "" CACHE PATH
-    "Directory containing the LLVM omp.h header for the REX WASM package")
+    "Exact LLVM 22 resource include directory containing omp.h for the REX WASM package")
   option(REX_WASM_PACKAGE_SYSROOT
     "Package the Emscripten sysroot headers into the REX WASM virtual filesystem" FALSE)
   set(REX_WASM_SYSROOT "${EMSCRIPTEN_SYSROOT}" CACHE PATH
     "Optional Emscripten sysroot to package for the REX WASM browser frontend")
 
-  if(NOT REX_WASM_CLANG_RESOURCE_INPUT AND LLVM_LIBRARY_DIRS)
-    foreach(_rose_llvm_lib_dir IN LISTS LLVM_LIBRARY_DIRS)
-      if(EXISTS "${_rose_llvm_lib_dir}/clang/${CLANG_VERSION_MAJOR}/include/stddef.h")
-        set(REX_WASM_CLANG_RESOURCE_INPUT
-          "${_rose_llvm_lib_dir}/clang/${CLANG_VERSION_MAJOR}" CACHE PATH
-          "Clang resource directory containing an include/ subtree for the REX WASM package" FORCE)
-        break()
-      endif()
-    endforeach()
-    unset(_rose_llvm_lib_dir)
+  if(DEFINED REX_WASM_CLANG_HEADERS_INPUT AND
+     NOT "${REX_WASM_CLANG_HEADERS_INPUT}" STREQUAL "")
+    message(FATAL_ERROR
+      "REX_WASM_CLANG_HEADERS_INPUT was removed because source-tree header "
+      "fallbacks produce an incomplete Clang resource directory. Configure "
+      "REX_WASM_CLANG_RESOURCE_INPUT explicitly.")
+  endif()
+  if(NOT REX_WASM_CLANG_RESOURCE_INPUT)
+    message(FATAL_ERROR
+      "REX_ENABLE_WASM requires the exact staged LLVM ${LLVM_REQUIRED_MAJOR} "
+      "Clang resource directory in REX_WASM_CLANG_RESOURCE_INPUT.")
+  endif()
+  if(NOT IS_ABSOLUTE "${REX_WASM_CLANG_RESOURCE_INPUT}")
+    message(FATAL_ERROR
+      "REX_WASM_CLANG_RESOURCE_INPUT must be absolute: "
+      "${REX_WASM_CLANG_RESOURCE_INPUT}")
+  endif()
+  if(NOT EXISTS "${REX_WASM_CLANG_RESOURCE_INPUT}/include/stddef.h")
+    message(FATAL_ERROR
+      "REX_WASM_CLANG_RESOURCE_INPUT does not contain include/stddef.h: "
+      "${REX_WASM_CLANG_RESOURCE_INPUT}")
   endif()
 
-  if(NOT REX_WASM_CLANG_HEADERS_INPUT AND LLVM_CMAKE_DIR)
-    get_filename_component(_rose_llvm_source_root
-      "${LLVM_CMAKE_DIR}/../../.." ABSOLUTE)
-    if(EXISTS "${_rose_llvm_source_root}/clang/lib/Headers/stddef.h")
-      set(REX_WASM_CLANG_HEADERS_INPUT
-        "${_rose_llvm_source_root}/clang/lib/Headers" CACHE PATH
-        "Fallback Clang lib/Headers source directory for the REX WASM package" FORCE)
+  get_filename_component(_rose_wasm_resource_input_real
+    "${REX_WASM_CLANG_RESOURCE_INPUT}" REALPATH)
+  set(_rose_wasm_resource_matches_llvm FALSE)
+  set(_rose_wasm_expected_resource_dirs "")
+  foreach(_rose_llvm_lib_dir IN LISTS LLVM_LIBRARY_DIRS)
+    if(IS_ABSOLUTE "${_rose_llvm_lib_dir}")
+      set(_rose_wasm_expected_resource_dir
+        "${_rose_llvm_lib_dir}/clang/${LLVM_REQUIRED_MAJOR}")
+      list(APPEND _rose_wasm_expected_resource_dirs
+        "${_rose_wasm_expected_resource_dir}")
+      if(EXISTS "${_rose_wasm_expected_resource_dir}")
+        get_filename_component(_rose_wasm_expected_resource_real
+          "${_rose_wasm_expected_resource_dir}" REALPATH)
+        if(_rose_wasm_resource_input_real STREQUAL
+           _rose_wasm_expected_resource_real)
+          set(_rose_wasm_resource_matches_llvm TRUE)
+        endif()
+      endif()
     endif()
-    if(NOT REX_WASM_OMP_INCLUDE_DIR AND
-       EXISTS "${_rose_llvm_source_root}/openmp/runtime/src/include/omp.h")
-      set(REX_WASM_OMP_INCLUDE_DIR
-        "${_rose_llvm_source_root}/openmp/runtime/src/include" CACHE PATH
-        "Directory containing the LLVM omp.h header for the REX WASM package" FORCE)
-    endif()
-    unset(_rose_llvm_source_root)
+  endforeach()
+  if(NOT _rose_wasm_resource_matches_llvm)
+    message(FATAL_ERROR
+      "REX_WASM_CLANG_RESOURCE_INPUT must be the exact LLVM ${LLVM_REQUIRED_MAJOR} "
+      "resource directory from the loaded LLVMConfig.cmake. Got "
+      "'${REX_WASM_CLANG_RESOURCE_INPUT}'; expected one of "
+      "'${_rose_wasm_expected_resource_dirs}'.")
   endif()
 
   if(NOT REX_WASM_OMP_INCLUDE_DIR)
-    foreach(_rose_omp_include_candidate
-        "${LLVM_LIBRARY_DIRS}/clang/${CLANG_VERSION_MAJOR}/include"
-        "/usr/lib/llvm-${CLANG_VERSION_MAJOR}/lib/clang/${CLANG_VERSION_MAJOR}/include"
-        "/usr/lib/llvm-${CLANG_VERSION_MAJOR}/lib/clang/${LLVM_PACKAGE_VERSION}/include")
-      if(EXISTS "${_rose_omp_include_candidate}/omp.h")
-        set(REX_WASM_OMP_INCLUDE_DIR "${_rose_omp_include_candidate}" CACHE PATH
-          "Directory containing the LLVM omp.h header for the REX WASM package" FORCE)
-        break()
-      endif()
-    endforeach()
-    unset(_rose_omp_include_candidate)
-  endif()
-
-  if(NOT REX_WASM_CLANG_RESOURCE_INPUT AND NOT REX_WASM_CLANG_HEADERS_INPUT)
     message(FATAL_ERROR
-      "REX_ENABLE_WASM requires Clang resource headers. Set "
-      "REX_WASM_CLANG_RESOURCE_INPUT or REX_WASM_CLANG_HEADERS_INPUT.")
+      "REX_ENABLE_WASM requires an explicit LLVM ${LLVM_REQUIRED_MAJOR} "
+      "resource include directory in REX_WASM_OMP_INCLUDE_DIR.")
   endif()
-  if(NOT REX_WASM_OMP_INCLUDE_DIR OR NOT EXISTS "${REX_WASM_OMP_INCLUDE_DIR}/omp.h")
+  if(NOT IS_ABSOLUTE "${REX_WASM_OMP_INCLUDE_DIR}" OR
+     NOT EXISTS "${REX_WASM_OMP_INCLUDE_DIR}/omp.h")
     message(FATAL_ERROR
-      "REX_ENABLE_WASM requires an LLVM omp.h header. Set REX_WASM_OMP_INCLUDE_DIR.")
+      "REX_WASM_OMP_INCLUDE_DIR must be an absolute directory containing "
+      "omp.h: ${REX_WASM_OMP_INCLUDE_DIR}")
+  endif()
+  if(NOT REX_WASM_NATIVE_LLVM_ROOT OR
+     NOT IS_ABSOLUTE "${REX_WASM_NATIVE_LLVM_ROOT}")
+    message(FATAL_ERROR
+      "REX_ENABLE_WASM requires the absolute native LLVM ${LLVM_REQUIRED_MAJOR} "
+      "installation in REX_WASM_NATIVE_LLVM_ROOT.")
+  endif()
+  get_filename_component(_rose_wasm_native_llvm_root
+    "${REX_WASM_NATIVE_LLVM_ROOT}" REALPATH)
+  get_filename_component(_rose_wasm_native_omp_include
+    "${_rose_wasm_native_llvm_root}/lib/clang/${LLVM_REQUIRED_MAJOR}/include"
+    REALPATH)
+  get_filename_component(_rose_wasm_omp_include_real
+    "${REX_WASM_OMP_INCLUDE_DIR}" REALPATH)
+  if(NOT "${_rose_wasm_native_omp_include}" STREQUAL
+     "${_rose_wasm_omp_include_real}")
+    message(FATAL_ERROR
+      "REX_WASM_OMP_INCLUDE_DIR must be the exact resource include directory "
+      "from REX_WASM_NATIVE_LLVM_ROOT. Got '${_rose_wasm_omp_include_real}'; "
+      "expected '${_rose_wasm_native_omp_include}'.")
+  endif()
+  set(_rose_wasm_native_llvm_config
+    "${_rose_wasm_native_llvm_root}/lib/cmake/llvm/LLVMConfig.cmake")
+  if(NOT EXISTS "${_rose_wasm_native_llvm_config}")
+    message(FATAL_ERROR
+      "REX_WASM_NATIVE_LLVM_ROOT has no LLVMConfig.cmake: "
+      "${_rose_wasm_native_llvm_config}")
+  endif()
+  file(STRINGS "${_rose_wasm_native_llvm_config}"
+    _rose_wasm_native_package_version_line
+    REGEX "^[ \\t]*set\\(LLVM_PACKAGE_VERSION[ \\t]+[^)]+\\)")
+  if(NOT _rose_wasm_native_package_version_line MATCHES
+     "LLVM_PACKAGE_VERSION[ \\t]+([^ \\t)]+)")
+    message(FATAL_ERROR
+      "Cannot read LLVM_PACKAGE_VERSION from native LLVMConfig.cmake: "
+      "${_rose_wasm_native_llvm_config}")
+  endif()
+  set(_rose_wasm_native_package_version "${CMAKE_MATCH_1}")
+  if(NOT "${_rose_wasm_native_package_version}" STREQUAL
+     "${LLVM_PACKAGE_VERSION}")
+    message(FATAL_ERROR
+      "Native TableGen/OpenMP headers and the WASM LLVM/Clang package must have "
+      "the exact same version. Got native '${_rose_wasm_native_package_version}' "
+      "and WASM '${LLVM_PACKAGE_VERSION}'.")
+  endif()
+  get_filename_component(_rose_wasm_omp_resource_dir
+    "${REX_WASM_OMP_INCLUDE_DIR}/.." REALPATH)
+  get_filename_component(_rose_wasm_omp_resource_major
+    "${_rose_wasm_omp_resource_dir}" NAME)
+  if(NOT _rose_wasm_omp_resource_major STREQUAL LLVM_REQUIRED_MAJOR)
+    message(FATAL_ERROR
+      "REX_WASM_OMP_INCLUDE_DIR must come from an LLVM ${LLVM_REQUIRED_MAJOR} "
+      "Clang resource directory: ${REX_WASM_OMP_INCLUDE_DIR}")
   endif()
   if(REX_WASM_PACKAGE_SYSROOT AND
      (NOT REX_WASM_SYSROOT OR NOT EXISTS "${REX_WASM_SYSROOT}/include"))
@@ -2141,17 +2430,26 @@ if(REX_ENABLE_WASM)
     "Staged Clang resource directory for the REX WASM package")
   file(REMOVE_RECURSE "${REX_WASM_CLANG_RESOURCE_DIR}")
   file(MAKE_DIRECTORY "${REX_WASM_CLANG_RESOURCE_DIR}/include")
-  if(REX_WASM_CLANG_RESOURCE_INPUT)
-    file(COPY "${REX_WASM_CLANG_RESOURCE_INPUT}/include/"
-      DESTINATION "${REX_WASM_CLANG_RESOURCE_DIR}/include")
-  else()
-    file(COPY "${REX_WASM_CLANG_HEADERS_INPUT}/"
-      DESTINATION "${REX_WASM_CLANG_RESOURCE_DIR}/include")
-  endif()
+  file(COPY "${REX_WASM_CLANG_RESOURCE_INPUT}/include/"
+    DESTINATION "${REX_WASM_CLANG_RESOURCE_DIR}/include")
   configure_file(
     "${REX_WASM_OMP_INCLUDE_DIR}/omp.h"
     "${REX_WASM_CLANG_RESOURCE_DIR}/include/omp.h"
     COPYONLY)
+  unset(_rose_llvm_lib_dir)
+  unset(_rose_wasm_expected_resource_dir)
+  unset(_rose_wasm_expected_resource_dirs)
+  unset(_rose_wasm_expected_resource_real)
+  unset(_rose_wasm_native_llvm_config)
+  unset(_rose_wasm_native_llvm_root)
+  unset(_rose_wasm_native_omp_include)
+  unset(_rose_wasm_native_package_version)
+  unset(_rose_wasm_native_package_version_line)
+  unset(_rose_wasm_omp_include_real)
+  unset(_rose_wasm_omp_resource_dir)
+  unset(_rose_wasm_omp_resource_major)
+  unset(_rose_wasm_resource_input_real)
+  unset(_rose_wasm_resource_matches_llvm)
 endif()
 
 set(LIBHARU_ROOT "" CACHE PATH "Optional libharu installation prefix")
@@ -2269,33 +2567,19 @@ endif()
 # Back-end compilers
 ########################################################################################################################
 
-set(WITH-ALT-BACKEND-CXX-COMPILER "" CACHE STRING "Specify an alternative C++ back-end compiler")
-if(WITH-ALT-BACKEND-CXX-COMPILER)
-  if(EXISTS ${WITH-ALT-BACKEND-CXX-COMPILER})
-    set(BACKEND_CXX_COMPILER ${WITH-ALT-BACKEND-CXX-COMPILER})
-  else()
-    message(WARNING "${WITH-ALT-BACKEND-CXX-COMPILER} does not exist; pecify an absolute path to the compiler")
+foreach(_removed_backend_compiler_option IN ITEMS
+    WITH-ALT-BACKEND-C-COMPILER
+    WITH-ALT-BACKEND-CXX-COMPILER
+    WITH-ALT-BACKEND-FORTRAN-COMPILER)
+  if(NOT "${${_removed_backend_compiler_option}}" STREQUAL "")
+    message(FATAL_ERROR
+      "${_removed_backend_compiler_option} was removed because selecting a "
+      "different compiler after language initialization creates an incoherent "
+      "toolchain. Select the exact compiler during the first configure with "
+      "CMAKE_C_COMPILER, CMAKE_CXX_COMPILER, and CMAKE_Fortran_COMPILER.")
   endif()
-endif()
-
-set(WITH-ALT-BACKEND-C-COMPILER "" CACHE STRING "Specify an alternative C back-end compiler")
-if(WITH-ALT-BACKEND-C-COMPILER)
-  if(EXISTS ${WITH-ALT-BACKEND-C-COMPILER})
-    set(BACKEND_C_COMPILER ${WITH-ALT-BACKEND-C-COMPILER})
-    message(STATUS "just set backend C compiler to ${BACKEND_C_COMPILER}")
-  else()
-    message(WARNING "${WITH-ALT-BACKEND-C-COMPILER} does not exist; specify an absolute path to the compiler")
-  endif()
-endif()
-
-set(WITH-ALT-BACKEND-FORTRAN-COMPILER "" CACHE STRING "Specify an alternative fortran back-end compiler")
-if(WITH-ALT-BACKEND-FORTRAN-COMPILER)
-  if(EXISTS ${WITH-ALT-BACKEND-FORTRAN-COMPILER})
-    set(BACKEND_FORTRAN_COMPILER ${WITH-ALT-BACKEND-FORTRAN-COMPILER})
-  else()
-    message(WARNING "${WITH-ALT-BACKEND-FORTRAN-COMPILER} does not exist; specify an absolute path to the compiler")
-  endif()
-endif()
+endforeach()
+unset(_removed_backend_compiler_option)
 
 # define a global variable to collect all common linked third-party libraries for rose (Linux-only)
 if(REX_ENABLE_WASM)
@@ -2499,7 +2783,6 @@ set(ROSE_SOURCE_INCLUDES
   ${ROSE_TOP_SRC_DIR}/src/ROSETTA/src/
   ${ROSE_TOP_SRC_DIR}/src
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII
-  ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/astFixup
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/astPostProcessing
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/includeDirectivesProcessing
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/sageInterface
@@ -2686,10 +2969,11 @@ file(COPY ${ROSE_TOP_SRC_DIR}/src/Rose/SourceLocation.h
      DESTINATION ${CMAKE_BINARY_DIR}/include-staging/Rose)
 
 if(ENABLE-CUDA)
-    execute_process(
-      COMMAND mkdir -p "./include-staging/cuda_HEADERS")
-    execute_process(
-      COMMAND cp ${ROSE_TOP_SRC_DIR}/config/preinclude-cuda.h ./include-staging/cuda_HEADERS)
+  file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include-staging/cuda_HEADERS")
+  configure_file(
+    "${ROSE_TOP_SRC_DIR}/config/preinclude-cuda.h"
+    "${CMAKE_BINARY_DIR}/include-staging/cuda_HEADERS/preinclude-cuda.h"
+    COPYONLY)
 endif()
 
 # Linux-only: fail fast on non-Linux platforms.

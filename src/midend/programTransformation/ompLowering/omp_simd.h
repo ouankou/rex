@@ -4,6 +4,8 @@
 
 #include "Cxx_Grammar.h"
 
+#include <map>
+#include <optional>
 #include <stack>
 
 #include <string>
@@ -35,10 +37,13 @@ enum OpType {
 struct OmpSimdCompiler {
 
 public:
-  explicit OmpSimdCompiler(bool isArm);
+  OmpSimdCompiler();
+  ~OmpSimdCompiler();
+  OmpSimdCompiler(const OmpSimdCompiler &) = delete;
+  OmpSimdCompiler &operator=(const OmpSimdCompiler &) = delete;
 
   // Functions
-  bool omp_simd_pass1();
+  void omp_simd_pass1();
   void omp_simd_pass2();
 
   void omp_simd_build_3addr(SgExpression *rval, SgType *type);
@@ -47,28 +52,30 @@ public:
   void omp_simd_build_scalar_assign(SgExpression *node, SgType *type);
   void omp_simd_build_ptr_assign(SgExpression *pntr_exp, SgType *type);
   SgPntrArrRefExp *omp_simd_convert_ptr(SgExpression *pntr_exp);
-  bool isStridedLoadStore(SgExpression *pntr_exp);
 
-  bool omp_simd_is_load_operand(VariantT val);
-  int omp_simd_get_simdlen(bool safelen);
-  int omp_simd_get_length();
+  unsigned int omp_simd_get_length() const;
 
   // Helper functions
-  SgBasicBlock *getBlock();
-  SgOmpSimdStatement *getTarget();
-  SgForStatement *getForLoop();
+  SgBasicBlock *releaseBlock();
   Rose_STL_Container<SgNode *> *getIR();
-  bool isArm();
   void setTarget(SgOmpSimdStatement *target);
   void setForLoop(SgForStatement *for_loop);
-  void addIR(SgNode *ir);
+  void setInductionSymbol(SgVariableSymbol *symbol);
 
 private:
-  SgBasicBlock *new_block;
+  std::string simdGenName(int type = 0);
+
+  SgBasicBlock *new_block = nullptr;
+  SgBasicBlock *new_block_owner = nullptr;
   SgOmpSimdStatement *target = nullptr;
   SgForStatement *for_loop = nullptr;
-  Rose_STL_Container<SgNode *> *ir_block;
-  bool arm = false;
+  SgVariableSymbol *induction_symbol = nullptr;
+  Rose_STL_Container<SgNode *> *ir_block = nullptr;
+  bool block_released = false;
+  std::optional<unsigned int> simdlen_;
+  std::optional<unsigned int> safelen_;
+  unsigned int next_name_id_ = 0;
+  std::map<std::string, std::string> reduction_map_;
 
   std::stack<std::string> nameStack;
 };
@@ -81,6 +88,6 @@ extern SimdType simd_arch;
 
 void omp_simd_write_intel(SgOmpSimdStatement *target, SgForStatement *for_loop,
                           Rose_STL_Container<SgNode *> *ir_block,
-                          int simd_length);
+                          unsigned int simd_length);
 void omp_simd_write_arm(SgOmpSimdStatement *target, SgForStatement *for_loop,
                         Rose_STL_Container<SgNode *> *ir_block);

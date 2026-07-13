@@ -6,7 +6,7 @@ set(TESTCODES
   k0011.c t0001.c t0002.c t0003.c t0005.c t0006.c t0007.c t0008.c
   t0009.c t0010.c t0011.c t0012.c t0014.c t0015.c t0016.c t0017.c
   t0018.c t0019.c t0020.c t0021.c t0023.c t0024.c t0025.c t0026.c)
-set(ROSE_FLAGS -rose:C  -w)
+set(ROSE_FLAGS -w)
 set(ROSE_GNU89_TESTCODES
   dC0026.c
   dC0027.c
@@ -22,7 +22,7 @@ set(ROSE_GNU89_TESTCODES
   t0016.c
   t0021.c
 )
-set(ELSATEST_C_CONTINUE_ON_ERROR
+set(ELSATEST_C_NEGATIVE
   dC0024.c
   dC0025.c
   t0010.c
@@ -31,11 +31,32 @@ set(ELSATEST_C_CONTINUE_ON_ERROR
 
 function(elsa_c_compile_test input_file)
   set(_rose_flags ${ROSE_FLAGS})
-  if(input_file IN_LIST ELSATEST_C_CONTINUE_ON_ERROR)
-    list(APPEND _rose_flags -rex:clang:continue-on-error)
-  endif()
   set(ROSE_FLAGS ${_rose_flags})
-  compile_test(${input_file} ELSATEST)
+  if(input_file STREQUAL "dC0024.c")
+    set(_expected_diagnostic
+      "error: cannot combine with previous 'int' declaration specifier")
+  elseif(input_file STREQUAL "dC0025.c")
+    set(_expected_diagnostic
+      "error: second parameter of 'main' (argument array) must be of type 'char **'")
+  elseif(input_file STREQUAL "t0010.c")
+    set(_expected_diagnostic
+      "error: incompatible pointer to integer conversion returning 'void *' from a function with result type 'unsigned long'")
+  elseif(input_file STREQUAL "t0026.c")
+    set(_expected_diagnostic "error: conflicting types for 'foo'")
+  else()
+    set(_expected_diagnostic "")
+  endif()
+  if(NOT _expected_diagnostic STREQUAL "")
+    compile_exact_negative_test(${input_file} ELSATEST
+      "${_expected_diagnostic}")
+  elseif(input_file IN_LIST ELSATEST_C_NEGATIVE)
+    message(FATAL_ERROR
+      "No exact ELSA C frontend-negative diagnostic for ${input_file}")
+  else()
+    list(APPEND _rose_flags ${REX_ELSA_SEMANTIC_PROBE_FLAGS})
+    set(ROSE_FLAGS ${_rose_flags})
+    compile_test(${input_file} ELSATEST)
+  endif()
 endfunction()
 
 foreach(file_to_test ${TESTCODES})

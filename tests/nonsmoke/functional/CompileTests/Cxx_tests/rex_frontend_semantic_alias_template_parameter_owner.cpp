@@ -1,0 +1,3 @@
+#include <rex_frontend_semantic_alias_template_parameter_owner.hpp>
+
+RexSemanticAliasResult rex_semantic_alias_template_parameter_owner_result = 5;

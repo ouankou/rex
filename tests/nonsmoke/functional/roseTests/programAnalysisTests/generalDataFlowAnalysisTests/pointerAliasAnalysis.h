@@ -21,14 +21,14 @@ extern int pointerAliasAnalysisDebugLevel;
 */
 struct aliasDerefCount {
   //! The VariableSymbol participating in aliasing
-  SgVariableSymbol *var;
+  SgVariableSymbol *var = nullptr;
   varID vID;
   //! Dereference Level
   //!  *a  +1
   //! **a  +2
   //!   a   0
   //!  &a  -1
-  int derefLevel;
+  int derefLevel = 0;
 
   bool operator==(const aliasDerefCount &that) const {
     assert(this != NULL);

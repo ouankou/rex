@@ -9,6 +9,7 @@ endif()
 if(enable-smaller-generated-files)
 
   set(libgeneratedIR_SRC
+    SgAccessLabelStatement.C
     SgAccessModifier.C
     SgActualArgumentExpression.C
     SgAddOp.C
@@ -34,6 +35,7 @@ if(enable-smaller-generated-files)
     SgAsteriskShapeExp.C
     SgAttribute.C
     SgAttributeSpecificationStatement.C
+    SgAttributedStatement.C
     SgBackspaceStatement.C
     SgBaseClass.C
     SgBaseClassModifier.C
@@ -86,6 +88,7 @@ if(enable-smaller-generated-files)
     SgDeallocateStatement.C
     SgDeclarationModifier.C
     SgDeclarationStatement.C
+    SgDeclarationGroupStatement.C
     SgDefaultOptionStmt.C
     SgDefaultSymbol.C
     SgDefineDirectiveStatement.C
@@ -147,6 +150,7 @@ if(enable-smaller-generated-files)
     SgFunctionRefExp.C
     SgFunctionSymbol.C
     SgFunctionType.C
+    SgFunctionTypeArgument.C
     SgFunctionTypeSymbol.C
     SgFunctionTypeTable.C
     SgGlobal.C
@@ -181,7 +185,6 @@ if(enable-smaller-generated-files)
     SgIntKeyedBidirectionalGraph.C
     SgIntrinsicSymbol.C
     SgIntVal.C
-    SgIOItemExpression.C
     SgIorAssignOp.C
     SgIOStatement.C
     SgLabelRefExp.C
@@ -245,6 +248,7 @@ if(enable-smaller-generated-files)
     SgOmpFirstprivateClause.C
     SgOmpFlushStatement.C
     SgOmpIfClause.C
+    SgOmpIteratorDefinition.C
     SgOmpLastprivateClause.C
     SgOmpMasterStatement.C
     SgOmpNowaitClause.C
@@ -306,6 +310,8 @@ if(enable-smaller-generated-files)
     SgSpawnStmt.C
     SgSpecialFunctionModifier.C
     SgStatement.C
+    SgStatementAttribute.C
+    SgStatementAttributeList.C
     SgStatementExpression.C
     SgStatementFunctionStatement.C
     SgStopOrPauseStatement.C
@@ -339,6 +345,8 @@ if(enable-smaller-generated-files)
     SgTypeChar.C
     SgTypeComplex.C
     SgTypeDefault.C
+    SgTypeFortranAssumed.C
+    SgTypeFortranUnlimitedPolymorphic.C
     SgTypedefDeclaration.C
     SgTypedefSeq.C
     SgTypedefSymbol.C

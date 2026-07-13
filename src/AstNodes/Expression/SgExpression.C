@@ -6,6 +6,87 @@
 
 #include <string>
 
+namespace {
+
+unsigned int
+semanticWrapperBits(SgExpression::semantic_wrapper_mask_enum mask) {
+  return static_cast<unsigned int>(mask);
+}
+
+void validateSemanticWrapperMask(SgExpression::semantic_wrapper_mask_enum mask,
+                                 bool require_single_flag,
+                                 const SgExpression *expression) {
+  const unsigned int bits = semanticWrapperBits(mask);
+  const unsigned int allowed =
+      semanticWrapperBits(SgExpression::e_all_semantic_wrappers);
+  if ((bits & ~allowed) != 0 ||
+      (require_single_flag && (bits == 0 || (bits & (bits - 1)) != 0))) {
+    std::cerr << "REX_AST_INVARIANT[semantic-expression-wrapper]: node="
+              << static_cast<const void *>(expression)
+              << " type=" << expression->class_name()
+              << " has invalid semantic-wrapper mask " << bits << "\n";
+    ROSE_ABORT();
+  }
+}
+
+} // namespace
+
+SgExpression::semantic_wrapper_mask_enum
+SgExpression::get_semantic_wrapper_mask() const {
+  validateSemanticWrapperMask(p_semantic_wrapper_mask, false, this);
+  return p_semantic_wrapper_mask;
+}
+
+void SgExpression::set_semantic_wrapper_mask(semantic_wrapper_mask_enum mask) {
+  validateSemanticWrapperMask(mask, false, this);
+  p_semantic_wrapper_mask = mask;
+}
+
+void SgExpression::add_semantic_wrapper(semantic_wrapper_mask_enum wrapper) {
+  validateSemanticWrapperMask(wrapper, true, this);
+  const unsigned int bits = semanticWrapperBits(get_semantic_wrapper_mask()) |
+                            semanticWrapperBits(wrapper);
+  p_semantic_wrapper_mask = static_cast<semantic_wrapper_mask_enum>(bits);
+}
+
+bool SgExpression::has_semantic_wrapper(
+    semantic_wrapper_mask_enum wrapper) const {
+  validateSemanticWrapperMask(wrapper, true, this);
+  return (semanticWrapperBits(get_semantic_wrapper_mask()) &
+          semanticWrapperBits(wrapper)) != 0;
+}
+
+bool SgExpression::has_semantic_value_type() const {
+  const SgStringVal *stringLiteral = isSgStringVal(this);
+  return (stringLiteral == nullptr || !stringLiteral->get_cxx_unevaluated()) &&
+         isSgExprListExp(this) == nullptr &&
+         isSgCudaKernelExecConfig(this) == nullptr &&
+         isSgRangeExp(this) == nullptr &&
+         isSgSubscriptExpression(this) == nullptr &&
+         isSgDesignator(this) == nullptr && isSgAsmOp(this) == nullptr &&
+         isSgSimpleRequirement(this) == nullptr &&
+         isSgTypeRequirement(this) == nullptr &&
+         isSgCompoundRequirement(this) == nullptr &&
+         isSgNestedRequirement(this) == nullptr &&
+         isSgTypeExpression(this) == nullptr &&
+         isSgNullExpression(this) == nullptr &&
+         isSgFortranCommonBlockRefExp(this) == nullptr &&
+         isSgAsteriskShapeExp(this) == nullptr &&
+         isSgColonShapeExp(this) == nullptr &&
+         isSgAssumedRankExp(this) == nullptr &&
+         isSgImpliedDo(this) == nullptr &&
+         isSgCAFImageSelectorExp(this) == nullptr &&
+         isSgOmpNameExpression(this) == nullptr &&
+         isSgOmpSourceExpression(this) == nullptr &&
+         isSgOmpInductionItem(this) == nullptr &&
+         isSgOmpApplyTransformation(this) == nullptr &&
+         isSgOmpInitModifier(this) == nullptr &&
+         isSgOmpInitModifierList(this) == nullptr &&
+         isSgOmpAppendArgsOperation(this) == nullptr &&
+         isSgOmpMapDistDataPolicy(this) == nullptr &&
+         isSgOmpMapItem(this) == nullptr;
+}
+
 Sg_File_Info *SgExpression::get_file_info() const {
   // DQ (11/8/2006): Note that the frontend translation only uses
   // set_startOfConstruct() and set_endOfConstruct().
@@ -29,128 +110,6 @@ void SgExpression::set_file_info(Sg_File_Info *fileInfo) {
   // Most if not all operator positions will associated with syntax for the
   // operator.
   return set_operatorPosition(fileInfo);
-}
-
-#define DEBUG_SGEXPRESSION_GET_QUALIFIED_NAME_PREFIX 0
-
-SgName SgExpression::get_qualified_name_prefix() const {
-  // DQ (5/29/2011): Added to support for new qualified name generation.
-  // This only applies to specific SgSupport IR nodes:
-  //    SgVarRefExp
-  //    SgFunctionRefExp
-  //    SgMemberFunctionRefExp
-
-#if DEBUG_SGEXPRESSION_GET_QUALIFIED_NAME_PREFIX
-  printf("In get_qualified_name_prefix(): search "
-         "globalQualifiedNameMapForNames: this = %p = %s \n",
-         this, this->class_name().c_str());
-#endif
-
-  // DQ (5/28/2011): We have to handle the name qualification directly since
-  // types can be qualified different and so it depends upon where the type is
-  // referenced.  Thus the qualified name is stored in a map to the IR node that
-  // references the type.
-  SgName nameQualifier;
-  auto const /*iterator*/ i = SgNode::get_globalQualifiedNameMapForNames().find(
-      const_cast<SgExpression *>(this));
-  // ROSE_ASSERT(i != SgNode::get_globalQualifiedNameMapForNames().end());
-
-  if (i != SgNode::get_globalQualifiedNameMapForNames().end()) {
-    nameQualifier = i->second;
-#if DEBUG_SGEXPRESSION_GET_QUALIFIED_NAME_PREFIX
-    printf("In SgExpression::get_qualified_name_prefix(): Found a valid name "
-           "qualification: nameQualifier = %s \n",
-           nameQualifier.str());
-#endif
-  } else {
-    // Preserve explicit source qualifiers when name qualification is absent.
-    auto buildExplicitQualifier = [](const SgStringList &tokens,
-                                     bool explicitGlobal) -> SgName {
-      std::string qualifier;
-      if (explicitGlobal) {
-        qualifier = "::";
-      }
-      for (const std::string &token : tokens) {
-        if (token.empty()) {
-          continue;
-        }
-        if (!qualifier.empty() && qualifier.back() != ':') {
-          qualifier += "::";
-        }
-        qualifier += token;
-        qualifier += "::";
-      }
-      return SgName(qualifier);
-    };
-
-    auto tryExplicitQualifier = [&](const SgStringList &tokens,
-                                    bool explicitGlobal) -> bool {
-      if (tokens.empty() && !explicitGlobal) {
-        return false;
-      }
-      nameQualifier = buildExplicitQualifier(tokens, explicitGlobal);
-      return true;
-    };
-
-    if (const SgTemplateMemberFunctionRefExp *tmpl_member =
-            isSgTemplateMemberFunctionRefExp(this)) {
-      tryExplicitQualifier(
-          tmpl_member->get_explicit_name_qualification_tokens(),
-          tmpl_member->get_explicit_global_qualification());
-    } else if (const SgMemberFunctionRefExp *member_ref =
-                   isSgMemberFunctionRefExp(this)) {
-      tryExplicitQualifier(member_ref->get_explicit_name_qualification_tokens(),
-                           member_ref->get_explicit_global_qualification());
-    } else if (const SgTemplateFunctionRefExp *tmpl_func =
-                   isSgTemplateFunctionRefExp(this)) {
-      tryExplicitQualifier(tmpl_func->get_explicit_name_qualification_tokens(),
-                           tmpl_func->get_explicit_global_qualification());
-    } else if (const SgFunctionRefExp *func_ref = isSgFunctionRefExp(this)) {
-      tryExplicitQualifier(func_ref->get_explicit_name_qualification_tokens(),
-                           func_ref->get_explicit_global_qualification());
-    } else if (const SgVarRefExp *var_ref = isSgVarRefExp(this)) {
-      tryExplicitQualifier(var_ref->get_explicit_name_qualification_tokens(),
-                           var_ref->get_explicit_global_qualification());
-    } else if (const SgNonrealRefExp *nonreal_ref = isSgNonrealRefExp(this)) {
-      tryExplicitQualifier(
-          nonreal_ref->get_explicit_name_qualification_tokens(),
-          nonreal_ref->get_explicit_global_qualification());
-    } else if (const SgEnumVal *enum_val = isSgEnumVal(this)) {
-      tryExplicitQualifier(enum_val->get_explicit_name_qualification_tokens(),
-                           enum_val->get_explicit_global_qualification());
-    }
-#if DEBUG_SGEXPRESSION_GET_QUALIFIED_NAME_PREFIX
-    printf("In SgExpression::get_qualified_name_prefix(): Could NOT find a "
-           "valid name qualification: nameQualifier = %s \n",
-           nameQualifier.str());
-#endif
-  }
-
-#if DEBUG_SGEXPRESSION_GET_QUALIFIED_NAME_PREFIX
-  printf("nameQualifier for SgExpression = %p = %p = %s = %s \n", this,
-         const_cast<SgExpression *>(this), class_name().c_str(),
-         nameQualifier.str());
-#endif
-
-  return nameQualifier;
-}
-
-SgName SgExpression::get_qualified_name_prefix_for_referenced_type() const {
-  // DQ (6/2/2011): Added to support for new qualified name generation.
-
-  // DQ (5/28/2011): We have to handle the name qualification directly since
-  // types can be qualified different and so it depends upon where the type is
-  // referenced.  Thus the qualified name is stored in a map to the IR node that
-  // references the type.
-  SgName nameQualifier;
-  auto const /*iterator*/ i = SgNode::get_globalQualifiedNameMapForTypes().find(
-      const_cast<SgExpression *>(this));
-
-  if (i != SgNode::get_globalQualifiedNameMapForTypes().end()) {
-    nameQualifier = i->second;
-  }
-
-  return nameQualifier;
 }
 
 void SgExpression::post_construction_initialization() {}
@@ -209,6 +168,31 @@ bool SgExpression::get_type_elaboration_required() const {
   ROSE_ABORT();
 
   return false; // p_type_elaboration_required;
+}
+
+bool SgExpression::has_type_qualification_payload() const {
+  switch (variantT()) {
+  case V_SgVarRefExp:
+  case V_SgNonrealRefExp:
+  case V_SgFunctionRefExp:
+  case V_SgMemberFunctionRefExp:
+  case V_SgTemplateFunctionRefExp:
+  case V_SgTemplateMemberFunctionRefExp:
+  case V_SgEnumVal:
+  case V_SgSizeOfOp:
+  case V_SgAlignOfOp:
+  case V_SgTypeIdOp:
+  case V_SgVarArgOp:
+  case V_SgCastExp:
+  case V_SgNewExp:
+  case V_SgConstructorInitializer:
+  case V_SgPseudoDestructorRefExp:
+  case V_SgTypeExpression:
+  case V_SgTypeRequirement:
+    return true;
+  default:
+    return false;
+  }
 }
 
 void SgExpression::set_type_elaboration_required(
@@ -334,18 +318,29 @@ void SgExpression::
 // DQ (9/19/2011): Put back the original code (non-virtual functions) so that we
 // can test against previously passing tests.
 SgExpression *SgExpression::get_originalExpressionTree() const {
-  SgExpression *originalExpressionTree = NULL;
-
-  return originalExpressionTree;
+  return p_originalExpressionTree;
 }
 
-// DQ (9/19/2011): Put back the original code (non-virtual functions) so that we
-// can test against previously passing tests.
-void SgExpression::set_originalExpressionTree(SgExpression *) {
-  printf("ERROR: base function SgExpression::set_originalExpressionTree() "
-         "called for %p = %s \n",
-         this, this->class_name().c_str());
-  ROSE_ABORT();
+void SgExpression::set_originalExpressionTree(SgExpression *source) {
+  if (source == this) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[original-expression-owner]: expression=%p/%s "
+            "cannot own itself as source spelling\n",
+            static_cast<void *>(this), class_name().c_str());
+    ROSE_ABORT();
+  }
+  if (p_originalExpressionTree != nullptr && source != nullptr &&
+      p_originalExpressionTree != source) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[original-expression-owner]: expression=%p/%s "
+            "already owns source=%p/%s and cannot publish source=%p/%s\n",
+            static_cast<void *>(this), class_name().c_str(),
+            static_cast<void *>(p_originalExpressionTree),
+            p_originalExpressionTree->class_name().c_str(),
+            static_cast<void *>(source), source->class_name().c_str());
+    ROSE_ABORT();
+  }
+  p_originalExpressionTree = source;
 }
 
 bool SgExpression::hasExplicitType() {
@@ -355,9 +350,10 @@ bool SgExpression::hasExplicitType() {
   // important.
 
   // This function returns true only if this is either a SgTemplateParameterVal,
-  // SgComplexVal, SgSizeOfOp, SgAlignOfOp, SgTypeIdOp, SgVarArgStartOp,
+  // SgComplexVal, SgThisExp, SgSizeOfOp, SgAlignOfOp, SgTypeIdOp,
+  // SgVarArgStartOp,
   // SgVarArgStartOneOperandOp, SgVarArgOp, SgVarArgEndOp, SgVarArgCopyOp,
-  // SgNewExp, SgRefExp, SgAggregateInitializer, SgCompoundInitializer,
+  // SgNewExp, SgRefExp, SgAggregateInitializer, SgCastExp,
   // SgConstructorInitializer, SgAssignInitializer, SgPseudoDestructorRefExp.
 
   bool returnValue = false;
@@ -366,13 +362,13 @@ bool SgExpression::hasExplicitType() {
   // the type explicitly.
 
   if (isSgTemplateParameterVal(this) != NULL || isSgComplexVal(this) != NULL ||
-      isSgSizeOfOp(this) != NULL || isSgAlignOfOp(this) != NULL ||
-      isSgTypeIdOp(this) != NULL || isSgVarArgStartOp(this) != NULL ||
+      isSgThisExp(this) != NULL || isSgSizeOfOp(this) != NULL ||
+      isSgAlignOfOp(this) != NULL || isSgTypeIdOp(this) != NULL ||
+      isSgVarArgStartOp(this) != NULL ||
       isSgVarArgStartOneOperandOp(this) != NULL || isSgVarArgOp(this) != NULL ||
       isSgVarArgEndOp(this) != NULL || isSgVarArgCopyOp(this) != NULL ||
       isSgNewExp(this) != NULL || isSgRefExp(this) != NULL ||
-      isSgAggregateInitializer(this) != NULL ||
-      isSgCompoundInitializer(this) != NULL ||
+      isSgAggregateInitializer(this) != NULL || isSgCastExp(this) != NULL ||
       // isSgConstructorInitializer(this) != NULL   ||
       // isSgAssignInitializer(this) != NULL        ||
       // isSgPseudoDestructorRefExp(this)  != NULL  ||
@@ -394,7 +390,27 @@ void SgExpression::set_explicitly_stored_type(SgType *type) {
   case V_SgNewExp: {
     SgNewExp *exp = isSgNewExp(this);
     ROSE_ASSERT(exp != NULL);
-    exp->set_specified_type(type);
+    // SgExpression's explicit-type API publishes the expression result type.
+    // A new-expression stores the allocated type instead, and derives its
+    // result as a pointer to that type.  Storing the caller's pointer directly
+    // used to turn a translated `new T` from T* into T**.
+    SgPointerType *resultType = isSgPointerType(type);
+    if (resultType == NULL || resultType->get_base_type() == NULL) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[new-result-type-publication]: new=%p "
+              "requires one exact pointer result type, got %p/%s\n",
+              static_cast<void *>(exp), static_cast<void *>(type),
+              type != NULL ? type->class_name().c_str() : "<null>");
+      ROSE_ABORT();
+    }
+    exp->set_specified_type(resultType->get_base_type());
+    if (exp->get_type() != type) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[new-result-type-publication]: new=%p "
+              "failed exact result=%p publication\n",
+              static_cast<void *>(exp), static_cast<void *>(type));
+      ROSE_ABORT();
+    }
     break;
   }
 
@@ -419,17 +435,27 @@ void SgExpression::set_explicitly_stored_type(SgType *type) {
     break;
   }
 
+  case V_SgThisExp: {
+    SgThisExp *exp = isSgThisExp(this);
+    ROSE_ASSERT(exp != NULL);
+    exp->set_expression_type(type);
+    (void)exp->get_type();
+    break;
+  }
+
   case V_SgSizeOfOp: {
     SgSizeOfOp *exp = isSgSizeOfOp(this);
     ROSE_ASSERT(exp != NULL);
-    exp->set_operand_type(type);
+    exp->set_expression_type(type);
+    (void)exp->get_type();
     break;
   }
 
   case V_SgAlignOfOp: {
     SgAlignOfOp *exp = isSgAlignOfOp(this);
     ROSE_ASSERT(exp != NULL);
-    exp->set_operand_type(type);
+    exp->set_expression_type(type);
+    (void)exp->get_type();
     break;
   }
 
@@ -489,10 +515,11 @@ void SgExpression::set_explicitly_stored_type(SgType *type) {
     break;
   }
 
-  case V_SgCompoundInitializer: {
-    SgCompoundInitializer *exp = isSgCompoundInitializer(this);
+  case V_SgCastExp: {
+    SgCastExp *exp = isSgCastExp(this);
     ROSE_ASSERT(exp != NULL);
-    exp->set_expression_type(type);
+    exp->set_type(type);
+    exp->validate_semantic_conversion();
     break;
   }
 

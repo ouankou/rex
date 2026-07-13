@@ -1,5 +1,4 @@
 
-
 void fallbackSimpleSort(int *fmap, int *eclass, int lo, int hi) {
   int i;
   int tmp;
@@ -8,4 +7,3 @@ void fallbackSimpleSort(int *fmap, int *eclass, int lo, int hi) {
   for (int j = 4; j <= hi && ec_tmp > eclass[fmap[j]]; j += 4)
     fmap[j - 4] = fmap[j];
 }
- 

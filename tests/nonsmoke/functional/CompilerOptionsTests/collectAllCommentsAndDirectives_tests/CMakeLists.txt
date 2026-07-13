@@ -70,7 +70,4 @@ rex_add_collect_comments_tests(REX_COLLECT_COMMENTS_CXX_DEFAULT_POSITIVE_SOURCES
   -std=gnu++14)
 rex_add_collect_comments_tests(REX_CXX_TESTS_GNUXX03_SOURCES -std=gnu++03)
 rex_add_collect_comments_tests(REX_CXX_TESTS_GNUXX17_SOURCES -std=gnu++17)
-rex_add_collect_comments_tests(
-  REX_CXX_TESTS_DELAYED_TEMPLATE_PARSING_SOURCES
-  -std=gnu++14
-  -rex:clang:delayed-template-parsing)
+rex_add_collect_comments_tests(REX_CXX_TESTS_GNUXX20_SOURCES -std=gnu++20)

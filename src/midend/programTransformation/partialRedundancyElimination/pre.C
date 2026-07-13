@@ -2,6 +2,7 @@
 #include "pre.h"
 
 #include "sage3basic.h"
+#include "sageInterface.h"
 
 #include "expressionTreeEqual.h"
 
@@ -185,7 +186,15 @@ public:
     SgExpression *n2 = isSgExpression(n);
     if (n2 && expressionTreeEqual(n2, expr) &&
         isSgExpression(n->get_parent())) {
-      isSgExpression(n->get_parent())->replace_expression(n2, vr);
+      SgTreeCopy copyHelp;
+      SgVarRefExp *replacement = isSgVarRefExp(vr->copy(copyHelp));
+      if (replacement == NULL || replacement->get_parent() != NULL) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[partial-redundancy-replacement]: cache "
+                "reference copy is not one detached expression\n");
+        ROSE_ABORT();
+      }
+      SageInterface::replaceExpression(n2, replacement);
     }
   }
 };
@@ -207,6 +216,16 @@ void PRE::partialRedundancyEliminationOne(SgExpression *expr,
   ROSE_ASSERT(expr != NULL);
   ROSE_ASSERT(root != NULL);
 
+  if (SgCastExp *cast = isSgCastExp(expr)) {
+    cast->validate_semantic_conversion();
+    if (cast->cast_type() == SgCastExp::e_implicit_cast) {
+      // The typed frontend represents value-category and scalar conversions
+      // explicitly.  They are semantic edges of their operand computation,
+      // not independent source computations for PRE to cache.
+      return;
+    }
+  }
+
   vector<SgVariableSymbol *> symbols_in_expression =
       SageInterface::getSymbolsUsedInExpression(expr);
 
@@ -217,6 +236,11 @@ void PRE::partialRedundancyEliminationOne(SgExpression *expr,
   }
 
   // Simple or not user-definable expressions
+  // Lvalue designators name storage.  Without alias and memory-version
+  // analysis, PRE cannot prove that repeated reads from that storage are
+  // equivalent computations, even when their index syntax is identical.
+  if (expr->get_lvalue())
+    return;
   if (isSgVarRefExp(expr))
     return;
   if (isSgValueExp(expr))
@@ -488,36 +512,57 @@ void PRE::partialRedundancyEliminationOne(SgExpression *expr,
     assert(SageInterface::isDefaultConstructible(type));
     // FIXME: assert (isAssignable(type));
     SgVariableDeclaration *decl =
-        new SgVariableDeclaration(SgNULL_FILE, cachevarname, type, NULL);
-    decl->set_definingDeclaration(decl);
+        SageBuilder::buildVariableDeclaration(cachevarname, type, NULL, root);
     SgInitializedName *initname = decl->get_variables().back();
 
     // DQ (10/5/2007): Added an assertion.
     ROSE_ASSERT(initname != NULL);
 
-    decl->addToAttachedPreprocessingInfo(new PreprocessingInfo(
+    initname->set_scope(root);
+    SageInterface::prependStatement(decl, root);
+    SgVariableSymbol *cachevarsym = root->lookup_variable_symbol(cachevarname);
+    if (cachevarsym == NULL || cachevarsym->get_declaration() != initname) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[partial-redundancy-cache-owner]: generated "
+              "cache declaration has no exact published symbol\n");
+      ROSE_ABORT();
+    }
+
+    PreprocessingInfo *cacheComment = new PreprocessingInfo(
         PreprocessingInfo::CplusplusStyleComment,
         (string("// Partial redundancy elimination: ") + cachevarname.str() +
          " is a cache of " + expr->unparseToString())
             .c_str(),
-        "Compiler-Generated in PRE", 0, 0, 0, PreprocessingInfo::before));
-    SgVariableSymbol *cachevarsym = new SgVariableSymbol(initname);
-    decl->set_parent(root);
+        "Compiler-Generated in PRE", 0, 0, 0, PreprocessingInfo::before);
+    ROSE_ASSERT(cacheComment->get_file_info() != NULL);
+    cacheComment->get_file_info()->set_physical_file_id(
+        Sg_File_Info::NULL_FILE_ID);
+    SageInterface::publishGeneratedPreprocessingInfo(cacheComment, decl);
+    decl->addToAttachedPreprocessingInfo(cacheComment);
+    cachevar = SageBuilder::buildVarRefExp(cachevarsym);
+  }
 
-    // DQ (10/5/2007): Added scope (suggested by Jeremiah).
-    initname->set_scope(root);
+  if (!needToMakeCachevar) {
+    return;
+  }
+  ROSE_ASSERT(cachevar != NULL);
 
-    root->get_statements().insert(root->get_statements().begin(), decl);
-
-    root->insert_symbol(cachevarname, cachevarsym);
-    cachevar = new SgVarRefExp(SgNULL_FILE, cachevarsym);
-    cachevar->set_endOfConstruct(SgNULL_FILE);
+  SgTreeCopy expressionTemplateCopy;
+  SgExpression *insertionExpressionTemplate =
+      isSgExpression(expr->copy(expressionTemplateCopy));
+  if (insertionExpressionTemplate == NULL ||
+      insertionExpressionTemplate->get_parent() != NULL) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[partial-redundancy-expression-template]: "
+            "source expression copy is not one detached transaction root\n");
+    ROSE_ABORT();
   }
 
   // Do expression computation replacements
   for (set<SgNode *>::iterator i = replacements.begin();
        i != replacements.end(); ++i) {
-    ReplaceExpressionWithVarrefVisitor(expr, cachevar).traverse(*i, postorder);
+    ReplaceExpressionWithVarrefVisitor(insertionExpressionTemplate, cachevar)
+        .traverse(*i, postorder);
   }
 
   // Do edge insertions
@@ -552,17 +597,22 @@ void PRE::partialRedundancyEliminationOne(SgExpression *expr,
     SgVarRefExp *cachevarCopy = isSgVarRefExp(cachevar->copy(tc1));
     ROSE_ASSERT(cachevarCopy);
     cachevarCopy->set_lvalue(true);
-    SgExpression *operation = new SgAssignOp(SgNULL_FILE, cachevarCopy,
-                                             isSgExpression(expr->copy(tc2)));
+    SgExpression *expressionCopy =
+        isSgExpression(insertionExpressionTemplate->copy(tc2));
+    ROSE_ASSERT(expressionCopy);
+    SgExpression *operation = SageBuilder::buildAssignOp(
+        cachevarCopy, expressionCopy, cachevarCopy->get_type());
     if (isSgExpression(i->first) && !i->second) {
       SgNode *ifp = i->first->get_parent();
-      SgCommaOpExp *comma =
-          new SgCommaOpExp(SgNULL_FILE, isSgExpression(i->first), operation);
-      operation->set_parent(comma);
-      comma->set_parent(ifp);
-      i->first->set_parent(comma);
+      SgStatement *physicalOwner =
+          SageInterface::getEnclosingStatement(i->first);
+      i->first->set_parent(NULL);
+      SgCommaOpExp *comma = SageBuilder::buildCommaOpExp(
+          isSgExpression(i->first), operation, operation->get_type());
+      SageInterface::publishGeneratedSubtreeOutputOwner(comma, physicalOwner);
       if (isSgForStatement(ifp)) {
         isSgForStatement(ifp)->set_increment(comma);
+        comma->set_parent(ifp);
       } else if (isSgBinaryOp(ifp) &&
                  isSgBinaryOp(ifp)->get_lhs_operand() == i->first) {
         isSgBinaryOp(ifp)->set_lhs_operand(comma);
@@ -576,18 +626,26 @@ void PRE::partialRedundancyEliminationOne(SgExpression *expr,
         cerr << ifp->sage_class_name() << endl;
         assert(!"Bad parent type for inserting comma expression");
       }
+      size_t ownerEdges = 0;
+      for (SgNode *successor : ifp->get_traversalSuccessorContainer()) {
+        ownerEdges += successor == comma ? 1 : 0;
+      }
+      if (comma->get_parent() != ifp || ownerEdges != 1) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[partial-redundancy-comma-owner]: "
+                "inserted comma has parent=%p expected=%p edges=%zu\n",
+                static_cast<void *>(comma->get_parent()),
+                static_cast<void *>(ifp), ownerEdges);
+        ROSE_ABORT();
+      }
     } else {
-      SgStatement *the_computation =
-          new SgExprStatement(SgNULL_FILE, operation);
-      operation->set_parent(the_computation);
+      SgStatement *the_computation = SageBuilder::buildExprStatement(operation);
       // printf ("In pre.C: the_computation = %p = %s
       // \n",the_computation,the_computation->class_name().c_str());
 
       if (isSgBasicBlock(i->first) && i->second) {
-        isSgBasicBlock(i->first)->get_statements().insert(
-            isSgBasicBlock(i->first)->get_statements().begin(),
-            the_computation);
-        the_computation->set_parent(i->first);
+        SageInterface::prependStatement(the_computation,
+                                        isSgBasicBlock(i->first));
       } else {
 
         SgForStatement *forStatement = isSgForStatement(i->first->get_parent());
@@ -600,8 +658,9 @@ void PRE::partialRedundancyEliminationOne(SgExpression *expr,
             // This is a special case of a SgExpressionStatement as a target in
             // a SgForStatement printf ("Found special case of target being the
             // test of a SgForStatement \n");
+            SageInterface::publishGeneratedSubtreeOutputOwner(the_computation,
+                                                              possibleTest);
             forStatement->set_test(the_computation);
-            the_computation->set_parent(forStatement);
           }
         } else {
           SgForInitStatement *forInitStatement =
@@ -613,17 +672,20 @@ void PRE::partialRedundancyEliminationOne(SgExpression *expr,
             SgExprStatement *possibleExpression = isSgExprStatement(i->first);
             SgStatementPtrList &statementList =
                 forInitStatement->get_init_stmt();
-            SgStatementPtrList::iterator i = statementList.begin();
+            SgStatementPtrList::iterator statementIterator =
+                statementList.begin();
             bool addToForInitList = false;
-            while ((addToForInitList == false) && (i != statementList.end())) {
-              // if ( *i == possibleVariable )
-              if (*i == possibleVariable || *i == possibleExpression) {
+            while ((addToForInitList == false) &&
+                   (statementIterator != statementList.end())) {
+              // if ( *statementIterator == possibleVariable )
+              if (*statementIterator == possibleVariable ||
+                  *statementIterator == possibleExpression) {
                 // This is a special case of a SgExpressionStatement as a target
                 // in a SgForStatement printf ("Found special case of
                 // SgForInitStatement transformation \n");
                 addToForInitList = true;
               }
-              i++;
+              statementIterator++;
             }
 
             // Only modify the STL list outside of the loop over the list to
@@ -637,19 +699,25 @@ void PRE::partialRedundancyEliminationOne(SgExpression *expr,
               // handled above).
               // printf ("Adding the_computation to the list in the
               // SgForInitStatement \n");
+              SgLocatedNode *physicalOwner = isSgLocatedNode(i->first);
+              ROSE_ASSERT(physicalOwner != NULL);
+              SageInterface::publishGeneratedSubtreeOutputOwner(the_computation,
+                                                                physicalOwner);
               statementList.push_back(the_computation);
               the_computation->set_parent(forInitStatement);
             }
           } else {
-            myStatementInsert(SageInterface::getEnclosingStatement(i->first),
-                              the_computation, i->second, true);
-            the_computation->set_parent(
-                SageInterface::getEnclosingStatement(i->first));
+            SageInterface::insertStatement(
+                SageInterface::getEnclosingStatement(i->first), the_computation,
+                i->second, true);
           }
         }
       }
     }
   }
+
+  SageInterface::deepDelete(insertionExpressionTemplate);
+  SageInterface::deepDelete(cachevar);
 
   // DQ (3/16/2006): debugging code to force failure at inspection point
   if (failAtEndOfFunction == true) {

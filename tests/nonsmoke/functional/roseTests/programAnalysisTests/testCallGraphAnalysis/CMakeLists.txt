@@ -30,6 +30,11 @@ endif()
 add_executable(testNewCallGraph testNewCallGraph.C)
 target_link_libraries(testNewCallGraph ROSE_DLL ${link_with_libraries})
 
+add_executable(rex_callgraph_implicit_conversion
+  rex_callgraph_implicit_conversion.cpp)
+target_link_libraries(rex_callgraph_implicit_conversion
+  ROSE_DLL ${link_with_libraries})
+
 set(_rth ${CMAKE_SOURCE_DIR}/scripts/rth_run.pl)
 set(_exit_status ${CMAKE_SOURCE_DIR}/scripts/test_exit_status)
 
@@ -120,6 +125,7 @@ foreach(answer_file IN LISTS _test04_answer_files)
   endif()
   string(REPLACE "." "_" _name ${_specimen})
   get_filename_component(_base ${_specimen} NAME_WE)
+  rex_get_cxx_specimen_standard_flag(_callgraph_standard_flag ${_specimen})
   add_test(
     NAME callgraph_test04_${_name}
     WORKING_DIRECTORY ${_callgraph_output_dir}
@@ -128,6 +134,7 @@ foreach(answer_file IN LISTS _test04_answer_files)
       OUTPUT=${_base}.o
       ANSWERS=${_test04_answers}
       TESTCG=$<TARGET_FILE:testCG>
+      CXX_STANDARD_FLAG=${_callgraph_standard_flag}
       srcdir=${CMAKE_CURRENT_SOURCE_DIR}
       top_srcdir=${CMAKE_SOURCE_DIR}
       ${_test04_conf}
@@ -152,6 +159,15 @@ add_test(
   WORKING_DIRECTORY ${_callgraph_output_dir}
   COMMAND testNewCallGraph -c ${CMAKE_CURRENT_SOURCE_DIR}/newCallGraph_input_03.C
 )
+
+add_test(
+  NAME rex_callgraph_implicit_conversion
+  WORKING_DIRECTORY ${_callgraph_output_dir}
+  COMMAND $<TARGET_FILE:rex_callgraph_implicit_conversion> -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_callgraph_implicit_conversion_input.cpp
+)
+set_tests_properties(rex_callgraph_implicit_conversion PROPERTIES
+  LABELS "rex;CALLGRAPH;CXX")
 
 get_property(_callgraph_registered_tests DIRECTORY PROPERTY TESTS)
 if(_callgraph_registered_tests)

@@ -571,13 +571,14 @@ set(_filelocation_test_flags
 list(JOIN _filelocation_test_flags " " _filelocation_test_flags_str)
 
 foreach(specimen IN LISTS FILELOCATION_TEST_SOURCES)
+  rex_get_cxx_specimen_standard_flag(_filelocation_standard_flag ${specimen})
   set(_filelocation_target fileLocation_${specimen}.passed)
   add_test(
     NAME fileLocation_${specimen}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
       TITLE="fileLocation ${specimen} [${_filelocation_target}]"
-      EXE="$<TARGET_FILE:fileLocation> ${_filelocation_test_flags_str}"
+      EXE="$<TARGET_FILE:fileLocation> ${_filelocation_standard_flag} ${_filelocation_test_flags_str}"
       INPUT=${_filelocation_tests_dir}/${specimen}
       ${_filelocation_conf}
       ${_filelocation_target}

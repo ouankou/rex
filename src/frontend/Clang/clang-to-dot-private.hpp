@@ -112,8 +112,6 @@
 
 #include <llvm/Config/llvm-config.h>
 
-#include <llvm/Frontend/OpenMP/OMPIRBuilder.h>
-
 #include <llvm/Support/raw_os_ostream.h>
 
 #include <llvm/Support/raw_ostream.h>
@@ -414,9 +412,6 @@ public:
   virtual bool
   VisitImplicitParamDecl(clang::ImplicitParamDecl *implicit_param_decl,
                          NodeDescriptor &node_desc);
-  virtual bool
-  VisitOMPCaptureExprDecl(clang::OMPCapturedExprDecl *omp_capture_expr_decl,
-                          NodeDescriptor &node_desc);
   virtual bool VisitParmVarDecl(clang::ParmVarDecl *param_var_decl,
                                 NodeDescriptor &node_desc);
   virtual bool VisitVarTemplateSpecializationDecl(
@@ -432,23 +427,10 @@ public:
   virtual bool
   VisitIndirectFieldDecl(clang::IndirectFieldDecl *indirect_field_decl,
                          NodeDescriptor &node_desc);
-  virtual bool VisitOMPDeclareMapperDecl(
-      clang::OMPDeclareMapperDecl *omp_declare_mapper_decl,
-      NodeDescriptor &node_desc);
-  virtual bool VisitOMPDeclareReductionDecl(
-      clang::OMPDeclareReductionDecl *omp_declare_reduction_decl,
-      NodeDescriptor &node_desc);
   virtual bool VisitUnresolvedUsingValueDecl(
       clang::UnresolvedUsingValueDecl *unresolved_using_value_decl,
       NodeDescriptor &node_desc);
   // virtual bool VisitObjCPropertyImplDecl
-  virtual bool VisitOMPAllocateDecl(clang::OMPAllocateDecl *omp_allocate_decl,
-                                    NodeDescriptor &node_desc);
-  virtual bool VisitOMPRequiresDecl(clang::OMPRequiresDecl *omp_requires_decl,
-                                    NodeDescriptor &node_desc);
-  virtual bool VisitOMPThreadPrivateDecl(
-      clang::OMPThreadPrivateDecl *omp_thread_private_decl,
-      NodeDescriptor &node_desc);
   virtual bool
   VisitPragmaCommentDecl(clang::PragmaCommentDecl *pragma_comment_decl,
                          NodeDescriptor &node_desc);
@@ -515,103 +497,7 @@ public:
   // virtual bool VisitObjCAtTryStmt
   // virtual bool VisitObjCAutoreleasePoolStmt
   // virtual bool VisitObjCForCollectionStmt
-  virtual bool VisitOMPExecutableDirective(
-      clang::OMPExecutableDirective *omp_executable_directive,
-      NodeDescriptor &node_desc);
-  virtual bool
-  VisitOMPAtomicDirective(clang::OMPAtomicDirective *omp_atomic_directive,
-                          NodeDescriptor &node_desc);
-  virtual bool
-  VisitOMPBarrierDirective(clang::OMPBarrierDirective *omp_barrier_directive,
-                           NodeDescriptor &node_desc);
-  virtual bool
-  VisitOMPCancelDirective(clang::OMPCancelDirective *omp_cancel_directive,
-                          NodeDescriptor &node_desc);
-  virtual bool VisitOMPCancellationPointDirective(
-      clang::OMPCancellationPointDirective *omp_cancellation_point_directive,
-      NodeDescriptor &node_desc);
-  virtual bool
-  VisitOMPCriticalDirective(clang::OMPCriticalDirective *omp_critical_directive,
-                            NodeDescriptor &node_desc);
-  virtual bool
-  VisitOMPFlushDirective(clang::OMPFlushDirective *omp_flush_directive,
-                         NodeDescriptor &node_desc);
-  virtual bool
-  VisitOMPLoopDirective(clang::OMPLoopDirective *omp_loop_directive,
-                        NodeDescriptor &node_desc);
-  virtual bool VisitOMPDistributeDirective(
-      clang::OMPDistributeDirective *omp_distribute_directive,
-      NodeDescriptor &node_desc);
-  virtual bool VisitOMPDistributeParallelForDirective(
-      clang::OMPDistributeParallelForDirective
-          *omp_distribute_parallel_for_directive,
-      NodeDescriptor &node_desc);
-  virtual bool VisitOMPDistributeParallelForSimdDirective(
-      clang::OMPDistributeParallelForSimdDirective
-          *omp_distribute_parallel_for_simd_directive,
-      NodeDescriptor &node_desc);
-  virtual bool VisitOMPDistributeSimdDirective(
-      clang::OMPDistributeSimdDirective *omp_distribute__simd_directive,
-      NodeDescriptor &node_desc);
-  virtual bool VisitOMPForDirective(clang::OMPForDirective *omp_for_directive,
-                                    NodeDescriptor &node_desc);
-  virtual bool
-  VisitOMPForSimdDirective(clang::OMPForSimdDirective *omp_for_simd_directive,
-                           NodeDescriptor &node_desc);
-  // virtual bool
-  // VisitOMPMasterTaskLoopDirective(clang::OMPMasterTaskLoopDirective *
-  // omp_master_task_loop_directive, NodeDescriptor & node_desc); virtual bool
-  // VisitOMPMasterTaskLoopSimdDirective
-  virtual bool VisitOMPParallelForDirective(
-      clang::OMPParallelForDirective *omp_parallel_for_directive,
-      NodeDescriptor &node_desc);
-  virtual bool VisitOMPParallelForSimdDirective(
-      clang::OMPParallelForSimdDirective *omp_parallel_for_simd_directive,
-      NodeDescriptor &node_desc);
-  // virtual bool VisitOMPParallelMasterTaskLoopDirective
-  virtual bool
-  VisitOMPSimdDirective(clang::OMPSimdDirective *omp_simd_directive,
-                        NodeDescriptor &node_desc);
-  virtual bool VisitOMPTargetParallelForDirective(
-      clang::OMPTargetParallelForDirective *omp_target_parallel_for_directive,
-      NodeDescriptor &node_desc);
-  virtual bool VisitOMPTargetParallelForSimdDirective(
-      clang::OMPTargetParallelForSimdDirective
-          *omp_target_parallel_for_simd_directive,
-      NodeDescriptor &node_desc);
-  virtual bool VisitOMPTargetSimdDirective(
-      clang::OMPTargetSimdDirective *omp_target_simd_directive,
-      NodeDescriptor &node_desc);
-  virtual bool VisitOMPTargetTeamsDistributeDirective(
-      clang::OMPTargetTeamsDistributeDirective
-          *omp_target_teams_distribute_directive,
-      NodeDescriptor &node_desc);
-  // virtual bool VisitOMPTargetTeamsDistributeParallelForSimdDirective
-  virtual bool VisitOMPTargetTeamsDistributeSimdDirective(
-      clang::OMPTargetTeamsDistributeSimdDirective
-          *omp_target_teams_distribute_simd_directive,
-      NodeDescriptor &node_desc);
-  virtual bool VisitOMPTaskLoopDirective(
-      clang::OMPTaskLoopDirective *omp_task_loop_directive,
-      NodeDescriptor &node_desc);
-  virtual bool VisitOMPTaskLoopSimdDirective(
-      clang::OMPTaskLoopSimdDirective *omp_task_loop_simd_directive,
-      NodeDescriptor &node_desc);
-  // virtual bool VisitOMPTeamDistributeDirective
-  // virtual bool VisitOMPTeamDistributeParallelForSimdDirective
-  // virtual bool VisitOMPTeamDistributeSimdDirective
-  virtual bool
-  VisitOMPMasterDirective(clang::OMPMasterDirective *omp_master_directive,
-                          NodeDescriptor &node_desc);
-  virtual bool
-  VisitOMPOrderedDirective(clang::OMPOrderedDirective *omp_ordered_directive,
-                           NodeDescriptor &node_desc);
-  virtual bool
-  VisitOMPParallelDirective(clang::OMPParallelDirective *omp_parallel_directive,
-                            NodeDescriptor &node_desc);
-  virtual bool VisitOMPParallelSectionsDirective(
-      clang::OMPParallelSectionsDirective *omp_parallel_sections_directive,
-      NodeDescriptor &node_desc);
+
   virtual bool VisitReturnStmt(clang::ReturnStmt *return_stmt,
                                NodeDescriptor &node_desc);
   virtual bool VisitSEHExceptStmt(clang::SEHExceptStmt *seh_except_stmt,
@@ -875,10 +761,6 @@ public:
   // virtual bool VisitObjCSubscriptRefexpr
   virtual bool VisitOffsetOfExpr(clang::OffsetOfExpr *offset_of_expr,
                                  NodeDescriptor &node_desc);
-  // OMPArraySectionExpr was renamed to ArraySectionExpr
-  virtual bool
-  VisitOMPArraySectionExpr(clang::ArraySectionExpr *omp_array_section_expr,
-                           NodeDescriptor &node_desc);
   virtual bool VisitOpaqueValueExpr(clang::OpaqueValueExpr *opaque_value_expr,
                                     NodeDescriptor &node_desc);
   virtual bool VisitOverloadExpr(clang::OverloadExpr *overload_expr,

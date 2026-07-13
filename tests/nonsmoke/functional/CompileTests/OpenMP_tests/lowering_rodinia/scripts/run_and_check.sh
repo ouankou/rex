@@ -16,7 +16,7 @@ rm -f "${workdir}"/rose_*.c "${workdir}"/rex_lib_*.cu "${workdir}"/run.log
 
 (
   cd "${workdir}"
-  "${parse_omp}" --rex-omp-lowering -w -rose:verbose 0 -c "${input_file}" > run.log 2>&1
+  "${parse_omp}" --rex-omp-lowering -rose:verbose 0 -c "${input_file}" > run.log 2>&1
 )
 
 bash "$(dirname "$0")/verify_outputs.sh" "${case_name}" "${workdir}"

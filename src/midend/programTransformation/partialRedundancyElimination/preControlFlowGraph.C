@@ -89,8 +89,43 @@ void PRE::addEdgeInsertionPoints(PRE::ControlFlowGraph &controlflow) {
       if (expr_parent)
         continue;
       if (isSgExpression(*j)) {
-        expr_parent = isSgStatement((*j)->get_parent());
-        ROSE_ASSERT(expr_parent);
+        expr_parent = SageInterface::getEnclosingStatement(*j);
+        if (expr_parent == NULL) {
+          fprintf(
+              stderr,
+              "REX_AST_INVARIANT[partial-redundancy-cfg-expression-"
+              "owner]: expression=%p/%s parent=%p/%s has no exact "
+              "enclosing statement; source=%p physical=%d "
+              "classification=%u\n",
+              static_cast<void *>(*j), (*j)->class_name().c_str(),
+              static_cast<void *>((*j)->get_parent()),
+              (*j)->get_parent() != NULL
+                  ? (*j)->get_parent()->class_name().c_str()
+                  : "<null>",
+              static_cast<void *>(isSgLocatedNode(*j)->get_file_info()),
+              isSgLocatedNode(*j)->get_file_info() != NULL
+                  ? isSgLocatedNode(*j)->get_file_info()->get_physical_file_id()
+                  : -999,
+              isSgLocatedNode(*j)->get_file_info() != NULL
+                  ? isSgLocatedNode(*j)
+                        ->get_file_info()
+                        ->get_classificationBitField()
+                  : 0);
+          if (SgCommaOpExp *comma = isSgCommaOpExp(*j)) {
+            fprintf(
+                stderr,
+                "REX_AST_INVARIANT[partial-redundancy-cfg-expression-"
+                "owner-detail]: comma lhs=%p/%s lhs-parent=%p "
+                "rhs=%p/%s rhs-parent=%p\n",
+                static_cast<void *>(comma->get_lhs_operand()),
+                comma->get_lhs_operand()->class_name().c_str(),
+                static_cast<void *>(comma->get_lhs_operand()->get_parent()),
+                static_cast<void *>(comma->get_rhs_operand()),
+                comma->get_rhs_operand()->class_name().c_str(),
+                static_cast<void *>(comma->get_rhs_operand()->get_parent()));
+          }
+          ROSE_ABORT();
+        }
       } else {
         if (isSgExprStatement(*j)) {
           expr_parent = isSgStatement((*j)->get_parent());
@@ -153,6 +188,8 @@ void PRE::addEdgeInsertionPoints(PRE::ControlFlowGraph &controlflow) {
               } else {
                 if (isSgIfStmt(expr_parent)->get_false_body() == NULL) {
                   SgBasicBlock *bb = SageBuilder::buildBasicBlock();
+                  SageInterface::publishGeneratedSubtreeOutputOwner(
+                      bb, expr_parent);
                   isSgIfStmt(expr_parent)->set_false_body(bb);
                   bb->set_parent(expr_parent);
                 }
@@ -192,7 +229,8 @@ void PRE::addEdgeInsertionPoints(PRE::ControlFlowGraph &controlflow) {
               break;
             case V_SgExprStatement:
             case V_SgGotoStatement:
-            case V_SgLabelStatement: {
+            case V_SgLabelStatement:
+            case V_SgBasicBlock: {
               expr_parent = isSgStatement(expr_parent->get_parent());
               goto try_next_ancestor;
             }

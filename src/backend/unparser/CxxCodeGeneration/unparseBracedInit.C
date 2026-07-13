@@ -30,14 +30,27 @@ void Unparse_ExprStmt::unparseBracedInit(SgExpression *expr,
          newinfo.SkipClassDefinition() ? "true" : "false");
 #endif
 
-  SgExpressionPtrList &args =
-      braced_init->get_initializers()->get_expressions();
+  SgExprListExp *initializers = braced_init->get_initializers();
+  if (initializers == nullptr) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[braced-initializer-list]: initializer "
+            "has no exact expression list\n");
+    ROSE_ABORT();
+  }
+  const SgExpressionPtrList &args = initializers->get_expressions();
 #if DEBUG__unparseBracedInit
   printf("  args.size() = %zu \n", args.size());
 #endif
 
   curprint("{");
-  for (size_t index = 0; index < args.size(); index++) {
+  for (size_t index = 0; index < args.size(); ++index) {
+    if (args[index] == nullptr) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[braced-initializer-element]: "
+              "initializer element %zu is null\n",
+              index);
+      ROSE_ABORT();
+    }
     unparseExpression(args[index], newinfo);
     if (index != args.size() - 1)
       curprint(", ");

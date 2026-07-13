@@ -8,20 +8,33 @@
 
 #include "sage3basic.h"
 
-#include "OpenACCIR.h"
+#include "OpenACCParser.h"
+#include "accAstConstruction.h"
 
-#include <string>
-#include <utility>
+#include <cstdio>
 
-OpenACCDirective *parseOpenACC(std::string) {
+namespace openacc {
+
+ParseResult parseDirective(std::string_view, ParseOptions) {
+  std::fputs("REX_WASM_INVARIANT[openacc-parser]: OpenACC parsing is not "
+             "available in the WebAssembly frontend\n",
+             stderr);
   ROSE_ABORT();
-  return nullptr;
 }
 
-bool checkOpenACCIR(OpenACCDirective *) { return false; }
+} // namespace openacc
 
-SgStatement *
-convertOpenACCDirective(std::pair<SgPragmaDeclaration *, OpenACCDirective *>) {
+SgStatement *convertOpenACCDirective(SgPragmaDeclaration *,
+                                     const openacc::Directive &) {
+  std::fputs("REX_WASM_INVARIANT[openacc-ast]: OpenACC AST construction is "
+             "not available in the WebAssembly frontend\n",
+             stderr);
   ROSE_ABORT();
-  return nullptr;
+}
+
+void validateOpenACCDirectiveForSage(const openacc::Directive &) {
+  std::fputs("REX_WASM_INVARIANT[openacc-ast]: OpenACC AST validation is not "
+             "available in the WebAssembly frontend\n",
+             stderr);
+  ROSE_ABORT();
 }

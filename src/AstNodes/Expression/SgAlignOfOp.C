@@ -1,15 +1,67 @@
 #include "sage3basic.h"
 
+namespace {
+bool isUnsignedSizeType(SgType *type) {
+  if (type == nullptr) {
+    return false;
+  }
+  type =
+      type->stripType(SgType::STRIP_TYPEDEF_TYPE | SgType::STRIP_MODIFIER_TYPE);
+  return isSgTypeUnsignedChar(type) != nullptr ||
+         isSgTypeUnsignedShort(type) != nullptr ||
+         isSgTypeUnsignedInt(type) != nullptr ||
+         isSgTypeUnsignedLong(type) != nullptr ||
+         isSgTypeUnsignedLongLong(type) != nullptr;
+}
+
+const SgSourceFile *findOwningSourceFile(const SgNode *node) {
+  for (const SgNode *current = node; current != nullptr;
+       current = current->get_parent()) {
+    if (const SgSourceFile *source_file = isSgSourceFile(current)) {
+      return source_file;
+    }
+  }
+  return nullptr;
+}
+} // namespace
+
 SgType *SgAlignOfOp::get_type() const {
-  // This function returns an unsigned integer representing the size of type
-  // (the unsigned int should match size_t, which may or may not be defined).
-
-  ROSE_ASSERT(p_operand_expr != NULL || p_operand_type != NULL);
-
-  SgType *returnType = SgTypeUnsignedInt::createType();
-
-  ROSE_ASSERT(returnType != NULL);
-  return returnType;
+  if ((p_operand_expr == nullptr) == (p_operand_type == nullptr)) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[alignof-operand]: SgAlignOfOp must have exactly "
+            "one expression or type operand\n");
+    ROSE_ABORT();
+  }
+  if (p_operand_expr != nullptr && p_operand_expr->get_parent() != this) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[alignof-operand-owner]: SgAlignOfOp expression "
+            "operand is not owned by the operator\n");
+    ROSE_ABORT();
+  }
+  if (p_type_defining_declaration != nullptr &&
+      (p_operand_type == nullptr ||
+       p_type_defining_declaration->get_parent() != this)) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[alignof-inline-type-owner]: SgAlignOfOp has a "
+            "malformed inline type declaration owner\n");
+    ROSE_ABORT();
+  }
+  const SgSourceFile *source_file = findOwningSourceFile(this);
+  SgType *target_size_type =
+      source_file != nullptr ? source_file->get_target_size_type() : nullptr;
+  if (p_expression_type == nullptr ||
+      isSgTypeUnknown(p_expression_type) != nullptr ||
+      isSgTypeDefault(p_expression_type) != nullptr ||
+      !isUnsignedSizeType(p_expression_type) ||
+      (source_file != nullptr &&
+       (target_size_type == nullptr || !isUnsignedSizeType(target_size_type) ||
+        p_expression_type != target_size_type))) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[alignof-result-type]: SgAlignOfOp has no exact "
+            "unsigned target size_t result type\n");
+    ROSE_ABORT();
+  }
+  return p_expression_type;
 }
 
 // DQ (6/20/2013): Added alignment operator.
@@ -18,17 +70,35 @@ int SgAlignOfOp::replace_expression(SgExpression *o, SgExpression *n) {
   // represent a structural change to the AST, thus it is free to set the parent
   // of the new expression.
 
-  ROSE_ASSERT(o != NULL);
-  ROSE_ASSERT(n != NULL);
-
-  if (get_operand_expr() == o) {
-    set_operand_expr(n);
-    return 1;
-  } else {
-    printf("Warning: inside of SgAlignOfOp::replace_expression original "
-           "SgExpression unidentified \n");
-    return 0;
+  if (o == nullptr || n == nullptr) {
+    fprintf(stderr, "REX_AST_INVARIANT[alignof-replace-operands]: replacement "
+                    "requires non-null old and new expressions\n");
+    ROSE_ABORT();
   }
+  if (get_operand_expr() != o) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[alignof-replace-old-operand]: old expression "
+            "is not the owned alignof operand\n");
+    ROSE_ABORT();
+  }
+  if (o->get_parent() != this) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[alignof-operand-owner]: old alignof operand has "
+            "the wrong structural owner\n");
+    ROSE_ABORT();
+  }
+  if (n != o && n->get_parent() != nullptr) {
+    fprintf(stderr, "REX_AST_INVARIANT[alignof-replace-new-operand-owner]: new "
+                    "alignof operand already has a structural owner\n");
+    ROSE_ABORT();
+  }
+
+  set_operand_expr(n);
+  if (o != n) {
+    o->set_parent(nullptr);
+  }
+  n->set_parent(this);
+  return 1;
 }
 
 // DQ (6/11/2015): Moved these six access functions, they should not be

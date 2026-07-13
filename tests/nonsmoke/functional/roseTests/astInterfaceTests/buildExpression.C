@@ -25,20 +25,26 @@ int main(int argc, char *argv[]) {
       buildMultiplyOp(buildDoubleVal(2.0),
                       buildSubtractOp(buildDoubleVal(1.0),
                                       buildMultiplyOp(buildVarRefExp("gama"),
-                                                      buildVarRefExp("gama"))));
+                                                      buildVarRefExp("gama"),
+                                                      buildDoubleType()),
+                                      buildDoubleType()),
+                      buildDoubleType());
+  SgType *result_type = buildDoubleType();
   SgVariableDeclaration *decl = buildVariableDeclaration(
-      "result", buildDoubleType(), buildAssignInitializer(init_exp));
+      "result", result_type, buildAssignInitializer(init_exp, result_type),
+      body);
 
   SgStatement *laststmt = getLastStatement(topScopeStack());
   insertStatementBefore(laststmt, decl);
 
   // topdown: build expression first, set operands later on
-  SgExpression *init_exp2 = buildMultiplyOp();
-  setLhsOperand(init_exp2, buildVarRefExp("alpha"));
-  setRhsOperand(init_exp2, buildVarRefExp("beta"));
+  SgExpression *init_exp2 = buildMultiplyOp(
+      buildVarRefExp("alpha"), buildVarRefExp("beta"), buildDoubleType());
 
+  SgType *result2_type = buildDoubleType();
   SgVariableDeclaration *decl2 = buildVariableDeclaration(
-      "result2", buildDoubleType(), buildAssignInitializer(init_exp2));
+      "result2", result2_type, buildAssignInitializer(init_exp2, result2_type),
+      body);
   laststmt = getLastStatement(topScopeStack());
   insertStatementBefore(laststmt, decl2);
 
@@ -51,15 +57,16 @@ int main(int argc, char *argv[]) {
   // DQ (3/20/2017): Build value expressions not tested elsewhere.
   SgDoubleVal *real_doubleValue = buildDoubleVal(42.0);
   SgDoubleVal *imaginary_doubleValue = buildDoubleVal(43.0);
-  SgComplexVal *complexValue =
-      buildComplexVal(real_doubleValue, imaginary_doubleValue);
+  SgComplexVal *complexValue = buildComplexVal(
+      real_doubleValue, imaginary_doubleValue, buildDoubleType());
   SgExprStatement *exprStatement_2 = buildExprStatement(complexValue);
   laststmt = getLastStatement(topScopeStack());
   insertStatementBefore(laststmt, exprStatement_2);
 
   // DQ (3/20/2017): Build value expressions not tested elsewhere.
   SgDoubleVal *imaginary_doubleValue_2 = buildDoubleVal(42.0);
-  SgComplexVal *imaginaryValue = buildImaginaryVal(imaginary_doubleValue_2);
+  SgComplexVal *imaginaryValue =
+      buildImaginaryVal(imaginary_doubleValue_2, buildDoubleType());
   SgExprStatement *exprStatement_3 = buildExprStatement(imaginaryValue);
   laststmt = getLastStatement(topScopeStack());
   insertStatementBefore(laststmt, exprStatement_3);
@@ -73,7 +80,7 @@ int main(int argc, char *argv[]) {
   // DQ (3/20/2017): Build value expressions not tested elsewhere.
   SgDoubleVal *imaginary_doubleValue_3 = buildDoubleVal(42.0);
   SgComplexVal *imaginaryValue_3 =
-      buildImaginaryVal_nfi(imaginary_doubleValue_3, "42.0i");
+      buildImaginaryVal(imaginary_doubleValue_3, buildDoubleType(), "42.0i");
   SgExprStatement *exprStatement_5 = buildExprStatement(imaginaryValue_3);
   laststmt = getLastStatement(topScopeStack());
   insertStatementBefore(laststmt, exprStatement_5);

@@ -209,9 +209,7 @@ int main(int argc, char *argv[]) {
   SgProject *project = frontend(argc, argv);
   // Create the global def-use analysis
   EDefUse *defUseAnalysis = new EDefUse(project);
-  if (defUseAnalysis->run(false) == 0) {
-    std::cerr << "EDefUse failed!" << endl;
-  }
+  defUseAnalysis->run(false);
   std::vector<InterproceduralInfo *> ip;
 
   list<SgNode *> functionDeclarations =

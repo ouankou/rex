@@ -30,6 +30,9 @@ public:
   Descriptor *get_annot_descriptor(const OperatorDeclaration &op,
                                    bool insert_if_false = false) {
     DebugLog debugAnnot("-debugannot");
+    if (!op.has_concrete_signature()) {
+      return nullptr;
+    }
     auto *result = known_type(op);
     if (result == 0 && insert_if_false) {
       Descriptor new_annot;

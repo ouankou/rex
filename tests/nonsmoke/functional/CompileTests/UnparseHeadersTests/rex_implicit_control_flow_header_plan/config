@@ -1,0 +1,5 @@
+cmd = cd ${TARGET} && ${TEST_UNPARSE_HEADERS} ${ROSE_SWITCHES} ${HDR_ROOT_SWITCHES} ${srcdir}/${TARGET}/rex_unparse_implicit_control_flow_header_plan.cpp
+cmd = test -f ${TARGET}/unparsedHeaders/rex_unparse_implicit_control_flow_header_plan.hpp
+cmd = grep -F 'if constexpr (sizeof(T) == 0)' ${TARGET}/unparsedHeaders/rex_unparse_implicit_control_flow_header_plan.hpp
+cmd = grep -F 'static_assert(sizeof(T) != 0, "object type must have nonzero size")' ${TARGET}/unparsedHeaders/rex_unparse_implicit_control_flow_header_plan.hpp
+cmd = ${CXX} -std=c++17 -fsyntax-only -I${TARGET}/unparsedHeaders ${TARGET}/rose_rex_unparse_implicit_control_flow_header_plan.cpp

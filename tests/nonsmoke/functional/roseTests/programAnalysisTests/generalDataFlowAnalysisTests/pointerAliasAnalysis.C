@@ -319,8 +319,7 @@ void pointerAliasAnalysisTransfer::computeAliases(pointerAliasLattice *lat,
 //- Alias relations are established only for pointer and references.
 void pointerAliasAnalysisTransfer::processLHS(SgNode *node,
                                               struct aliasDerefCount &arNode) {
-  if (node == NULL)
-    return;
+  ROSE_ASSERT(node != NULL);
 
   SgVariableSymbol *sym = NULL;
   SgVarRefExp *var_exp;
@@ -349,6 +348,13 @@ void pointerAliasAnalysisTransfer::processLHS(SgNode *node,
     processLHS(ptr_exp->get_operand(), arNode);
     derefLevel++;
     arNode.derefLevel += derefLevel;
+    return;
+  } break;
+  case V_SgCastExp: {
+    SgCastExp *cast_exp = isSgCastExp(node);
+    ROSE_ASSERT(cast_exp != NULL);
+    ROSE_ASSERT(cast_exp->get_operand() != NULL);
+    processLHS(cast_exp->get_operand(), arNode);
     return;
   } break;
   case V_SgDotExp:
@@ -381,8 +387,7 @@ void pointerAliasAnalysisTransfer::processLHS(SgNode *node,
 //- Alias relations are established only for pointer and references.
 void pointerAliasAnalysisTransfer::processRHS(SgNode *node,
                                               struct aliasDerefCount &arNode) {
-  if (node == NULL)
-    return;
+  ROSE_ASSERT(node != NULL);
 
   SgVariableSymbol *sym = NULL;
   SgVarRefExp *var_exp;
@@ -440,6 +445,8 @@ void pointerAliasAnalysisTransfer::processRHS(SgNode *node,
 
   case V_SgCastExp: {
     SgCastExp *cast_exp = isSgCastExp(node);
+    ROSE_ASSERT(cast_exp != NULL);
+    ROSE_ASSERT(cast_exp->get_operand() != NULL);
     processRHS(cast_exp->get_operand(), arNode);
     return;
   } break;

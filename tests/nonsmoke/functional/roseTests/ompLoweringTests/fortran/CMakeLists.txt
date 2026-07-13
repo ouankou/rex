@@ -5,15 +5,39 @@ file(GLOB OMP_FORTRAN_ALL_CASES RELATIVE ${_omp_fortran_dir}
   ${_omp_fortran_dir}/*.f
   ${_omp_fortran_dir}/*.f90)
 list(SORT OMP_FORTRAN_ALL_CASES)
+
+# These specimens are required to fail in the Flang frontend and have exact
+# diagnostic tests in CompileTests/OpenMP_tests/fortran.  They cannot enter a
+# lowering semantic comparison because no valid original executable exists.
+list(REMOVE_ITEM OMP_FORTRAN_ALL_CASES
+  allocate_predefined_modifiers.f90
+  allocate_user_defined_modifiers.f90
+  exampleA134f.f90
+  single-copyprivate.f90)
+
+# This is a frontend semantic-identity fixture for DECLARE SIMD and DECLARE
+# VARIANT.  Its dedicated typed-AST test below CompileTests/OpenMP_tests/fortran
+# owns that contract; REX lowering rejects those unsupported declarative
+# transformation directives before changing the AST.
+list(REMOVE_ITEM OMP_FORTRAN_ALL_CASES
+  rex_fortran_openmp_exact_semantic_handoff.f90)
+
+# These are unparser-only lexical fixtures for continued OpenMP directives.
+# Flang 22 cannot generate code for OpenMPUtilityConstruct, and REX does not
+# implement Fortran target offload.  Dedicated continuation-contract tests in
+# CompileTests/OpenMP_tests/fortran check their complete parse/unparse paths and
+# fail hard on any mismatch.
+list(REMOVE_ITEM OMP_FORTRAN_ALL_CASES
+  rex_fortran_openmp_directive_string_continuation.f90
+  rex_fortran_openmp_fixed_directive_continuation.f
+  rex_fortran_openmp_free_directive_continuation.f90)
 set(_omp_fortran_lowering_output_dir
   ${CMAKE_CURRENT_BINARY_DIR}/test-output)
 file(MAKE_DIRECTORY ${_omp_fortran_lowering_output_dir})
 
 # Semantic runs execute lowered and original binaries multiple times and can
 # legitimately run longer when the full OMP lowering suite is parallelized.
-# The semantic harness itself downgrades to successful translation coverage
-# when the original source is not semantically executable under the current
-# Flang/OpenMP toolchain, so every specimen can be registered uniformly.
+# Both the original and lowered source must compile and execute successfully.
 set(OMP_FORTRAN_SEMANTIC_RUN_TIMEOUT_SECONDS 180)
 # run_fortran_semantic_compare.sh executes:
 # 2 binaries (orig/lowered) * 2 thread counts * 3 repeats = 12 total runs.
@@ -93,6 +117,21 @@ function(add_omp_fortran_semantic_test specimen)
   # Total timeout = compile/translation overhead + timed semantic runs.
   math(EXPR _total_timeout
        "${OMP_FORTRAN_SEMANTIC_COMPILE_OVERHEAD_SECONDS} + ${OMP_FORTRAN_SEMANTIC_TOTAL_RUNS} * ${OMP_FORTRAN_SEMANTIC_RUN_TIMEOUT_SECONDS}")
+  set(_oracle_source ${_omp_fortran_dir}/${specimen})
+  if(specimen STREQUAL "requires_dynamic_allocators_type.f90")
+    set(_oracle_source
+      ${CMAKE_CURRENT_SOURCE_DIR}/oracles/rex_fortran_openmp_requires_dynamic_allocators_type_oracle.f90)
+  elseif(specimen STREQUAL "rex_fortran_openmp_allocate_predefined_semantic_positive.f90")
+    set(_oracle_source
+      ${CMAKE_CURRENT_SOURCE_DIR}/oracles/rex_fortran_openmp_allocate_predefined_oracle.f90)
+  elseif(specimen STREQUAL "rex_fortran_openmp_allocate_user_semantic_positive.f90")
+    set(_oracle_source
+      ${CMAKE_CURRENT_SOURCE_DIR}/oracles/rex_fortran_openmp_allocate_user_oracle.f90)
+  endif()
+  if(NOT EXISTS "${_oracle_source}")
+    message(FATAL_ERROR
+      "Fortran OpenMP semantic oracle does not exist: ${_oracle_source}")
+  endif()
   add_test(
     NAME ${_test_name}
     WORKING_DIRECTORY ${_omp_fortran_lowering_output_dir}
@@ -100,6 +139,7 @@ function(add_omp_fortran_semantic_test specimen)
             $<TARGET_FILE:roseomp>
             ${_omp_fortran_compiler}
             ${_omp_fortran_dir}/${specimen}
+            ${_oracle_source}
             ${_workdir}
             sort
             ${_omp_fortran_omp_include}
@@ -149,6 +189,7 @@ function(add_omp_fortran_ast_json_checkpoint_test specimen checkpoint)
             $<TARGET_FILE:roseomp>
             ${_omp_fortran_compiler}
             ${_omp_fortran_dir}/${specimen}
+            ${_omp_fortran_dir}/${specimen}
             ${_workdir}
             sort
             ${_omp_fortran_omp_include}
@@ -179,4 +220,21 @@ if(enable-fortran)
 
   add_omp_fortran_ast_json_checkpoint_test(schedule.f all)
   add_omp_fortran_ast_json_checkpoint_test(exampleA41f.f90 all)
+
+  add_test(
+    NAME omp_lowering_fortran_negative_unsupported_declarative
+    WORKING_DIRECTORY ${_omp_fortran_lowering_output_dir}
+    COMMAND ${BASH_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/run_fortran_lowering_negative.sh
+            $<TARGET_FILE:roseomp>
+            ${_omp_fortran_dir}/rex_fortran_openmp_exact_semantic_handoff.f90
+            ${_omp_fortran_lowering_output_dir}/negative/unsupported-declarative
+            ${_omp_fortran_omp_include}
+            REX_OMP_LOWERING_INVARIANT[unsupported-declarative])
+  _omp_set_test_timeout(
+    omp_lowering_fortran_negative_unsupported_declarative 360)
+  set_property(
+    TEST omp_lowering_fortran_negative_unsupported_declarative
+    APPEND PROPERTY LABELS
+    "${OMP_LOWERING_FORTRAN_LABELS};OMPLOWERING_NEGATIVE;OMPLOWERING_FORTRAN")
 endif()

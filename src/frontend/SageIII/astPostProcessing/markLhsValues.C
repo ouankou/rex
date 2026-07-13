@@ -213,6 +213,8 @@ void MarkLhsValues::visit(SgNode *node) {
       case V_SgCastExp:
       case V_SgMinusOp:
       case V_SgBitComplementOp:
+      case V_SgRealPartOp:
+      case V_SgImagPartOp:
         // case V_SgPlusOp:
         {
           SgExpression *operand = unaryOperator->get_operand();
@@ -237,22 +239,12 @@ void MarkLhsValues::visit(SgNode *node) {
       default: {
         SgExpression *operand = unaryOperator->get_operand();
         ROSE_ASSERT(operand != NULL);
-
-#if WARN_ABOUT_ATYPICAL_LVALUES
-        if (operand->get_lvalue() == true) {
-          printf("Error for operand = %p = %s = %s in unary expression = %s \n",
-                 operand, operand->class_name().c_str(),
-                 SageInterface::get_name(operand).c_str(),
-                 expression->class_name().c_str());
-          unaryOperator->get_startOfConstruct()->display(
-              "Error for operand: operand->get_lvalue() == true: debug");
-        }
-#endif
-
-        // DQ (10/9/2008): What is the date and author for this comment?  Is it
-        // fixed now? Was it made into a test code? Note that this fails for
-        // line 206 of file: include/g++_HEADERS/hdrs1/ext/mt_allocator.h
-        ROSE_ASSERT(operand->get_lvalue() == false);
+        // Unary operators do not impose one cached value category on their
+        // operands: ordinary unary +, -, !, and ~ all accept lvalue operands,
+        // while temporaries are valid in other occurrences.  The frontend owns
+        // that semantic classification; postprocessing enforces structural
+        // ownership instead of overwriting or rejecting it.
+        ROSE_ASSERT(operand->get_parent() == unaryOperator);
       }
       }
     }

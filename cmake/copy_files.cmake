@@ -22,7 +22,6 @@ set(GENERATED_SRC
     ${ROSE_TOP_BINARY_DIR}/src/ROSETTA/src/Cxx_GrammarVariantEnumNames.C
     ${ROSE_TOP_BINARY_DIR}/src/ROSETTA/src/Cxx_GrammarCopyMemberFunctions.C
     ${ROSE_TOP_BINARY_DIR}/src/ROSETTA/src/Cxx_GrammarReturnClassHierarchySubTree.C      
-    ${ROSE_TOP_BINARY_DIR}/src/ROSETTA/src/Cxx_GrammarGetChildIndex.C
     ${ROSE_TOP_BINARY_DIR}/src/ROSETTA/src/Cxx_GrammarReturnDataMemberPointers.C  
     ${ROSE_TOP_BINARY_DIR}/src/ROSETTA/src/Cxx_GrammarRTI.C
     )

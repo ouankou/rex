@@ -13,8 +13,6 @@
 
 #include <string>
 
-#include <unordered_map>
-
 class PreprocessingInfo;
 
 class FileHelper {
@@ -139,19 +137,10 @@ public:
     if (path.empty()) {
       return path;
     }
-    static std::unordered_map<std::string, std::string>
-        normalized_existing_paths;
-    if (auto it = normalized_existing_paths.find(path);
-        it != normalized_existing_paths.end()) {
-      return it->second;
-    }
     if (!fileExists(path)) {
       return path;
     }
-    std::string normalized = normalizePath(path);
-    normalized_existing_paths.emplace(path, normalized);
-    normalized_existing_paths.emplace(normalized, normalized);
-    return normalized;
+    return normalizePath(path);
   }
 
   static std::string

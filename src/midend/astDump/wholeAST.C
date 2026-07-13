@@ -1200,11 +1200,9 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
           "\\N\",sides=8,peripheries=2,color=\"blue\",fillcolor=peru,fontname="
           "\"7x13bold\",fontcolor=black,style=filled";
       string flagString =
-          (variableDeclaration
-               ->get_variableDeclarationContainsBaseTypeDefiningDeclaration() ==
-           true)
-              ? "variableDeclarationContainsBaseTypeDefiningDeclaration"
-              : "!variableDeclarationContainsBaseTypeDefiningDeclaration";
+          variableDeclaration->get_baseTypeDefiningDeclaration() != NULL
+              ? "ownsBaseTypeDefiningDeclaration"
+              : "referencesBaseTypeDeclaration";
       labelWithSourceCode = "\\n  " + flagString + "\\n  " +
                             StringUtility::numberToString(variableDeclaration) +
                             "  ";
@@ -1409,15 +1407,13 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
       // specific details.
       SgStringVal *stringVal = isSgStringVal(valueExp);
       if (stringVal != NULL) {
-        bool is_wchar = stringVal->get_wcharString();
-        bool is_16Bitchar = stringVal->get_is16bitString();
-        bool is_32Bitchar = stringVal->get_is32bitString();
+        labelWithSourceCode += string("\\n literal_encoding = ") +
+                               StringUtility::numberToString(static_cast<int>(
+                                   stringVal->get_literal_encoding())) +
+                               "  ";
         labelWithSourceCode +=
-            string("\\n is_wchar = ") + (is_wchar ? "true" : "false") + "  ";
-        labelWithSourceCode += string("\\n is_16Bitchar = ") +
-                               (is_16Bitchar ? "true" : "false") + "  ";
-        labelWithSourceCode += string("\\n is_32Bitchar = ") +
-                               (is_32Bitchar ? "true" : "false") + "  ";
+            string("\\n is_raw_string = ") +
+            (stringVal->get_isRawString() ? "true" : "false") + "  ";
       }
 
       // DQ (10/4/2010): Output the value so that we can provide more
@@ -1434,12 +1430,10 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
       // DQ (6/5/2011): Output if this is an implicit (compiler generated) or
       // explicit case (non-compiler generated).
       ROSE_ASSERT(castExp->get_startOfConstruct() != NULL);
-      // DQ (7/24/2013): Added support to have more debugging information.
       labelWithSourceCode +=
-          string("\\n castContainsBaseTypeDefiningDeclaration: ") +
-          ((castExp->get_castContainsBaseTypeDefiningDeclaration() == true)
-               ? "true"
-               : "false") +
+          string("\\n owns type defining declaration: ") +
+          ((castExp->get_type_defining_declaration() != NULL) ? "true"
+                                                              : "false") +
           "  ";
       labelWithSourceCode +=
           string("\\n cast is: ") +
@@ -1778,9 +1772,15 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
       case SgTemplateArgument::type_argument:
         typeString = "type_argument";
 
-        // DQ (8/25/2012): Modified to output the string representing the type.
-        typeString += string("\\n type = ") +
-                      templateArgument->get_type()->unparseToString();
+        // A memory-pool graph has no lexical source use site, so a source
+        // spelling (and therefore name qualification) is undefined here.
+        // Report the exact semantic type identity instead of invoking the
+        // source unparser without a qualification context.
+        ASSERT_not_null(templateArgument->get_type());
+        typeString += string("\\n type class = ") +
+                      templateArgument->get_type()->class_name();
+        typeString += string("\\n type identity = ") +
+                      templateArgument->get_type()->get_mangled().str();
         typeString +=
             string("\\n type = ") +
             StringUtility::numberToString(templateArgument->get_type()) + "  ";
@@ -1841,8 +1841,11 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
 
       case SgTemplateParameter::type_parameter:
         typeString = "type_parameter";
-        typeString += string("\\n type = ") +
-                      templateParameter->get_type()->unparseToString();
+        ASSERT_not_null(templateParameter->get_type());
+        typeString += string("\\n type class = ") +
+                      templateParameter->get_type()->class_name();
+        typeString += string("\\n type identity = ") +
+                      templateParameter->get_type()->get_mangled().str();
         typeString +=
             string("\\n type = ") +
             StringUtility::numberToString(templateParameter->get_type()) + "  ";

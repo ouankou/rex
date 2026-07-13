@@ -120,6 +120,34 @@ enum TraversalEnum {
   NO_TRAVERSAL,
 };
 
+enum TraversalCardinalityEnum {
+  REQUIRED_TRAVERSAL_MEMBER,
+  OPTIONAL_TRAVERSAL_MEMBER,
+};
+
+enum TraversalAccessorEnum {
+  DIRECT_TRAVERSAL_ACCESS,
+  COMPUTED_BASE_TYPE_DECLARATION_ACCESS,
+  COMPUTED_CLASS_DEFINITION_ACCESS,
+};
+
+enum TraversalStorageEnum {
+  NOT_A_TRAVERSAL_MEMBER,
+  NODE_POINTER_TRAVERSAL_MEMBER,
+  NODE_POINTER_CONTAINER_TRAVERSAL_MEMBER,
+};
+
+enum SchemaStorageEnum {
+  SCALAR_SCHEMA_STORAGE,
+  VALUE_CONTAINER_SCHEMA_STORAGE,
+  POINTER_CONTAINER_SCHEMA_STORAGE,
+};
+
+enum SchemaElementEnum {
+  VALUE_SCHEMA_ELEMENT,
+  POINTER_SCHEMA_ELEMENT,
+};
+
 enum DeleteEnum { DEF_DELETE, NO_DELETE };
 
 class AstNodeClass;
@@ -311,10 +339,6 @@ public:
                   const std::string &className,
                   const std::string &fileExtension);
 
-  std::string generateTraverseSuccessorForLoopSource(
-      std::string typeString, std::string memberVariableName,
-      std::string successorContainerName,
-      std::string successorContainerAccessOperator);
   // GB (8/1/2007)
   // GB (8/1/2007)
   // DQ (9/28/2022): Fixing compiler warning for argument not used.
@@ -325,14 +349,13 @@ public:
       std::vector<GrammarString *> &traverseDataMemberList,
       const std::string &nodeName);
   std::string generateTraverseSuccessor(GrammarString *gs,
-                                        std::string successorContainerName);
-  std::string generateTraverseSuccessorNamesForLoopSource(
-      std::string typeString, std::string memberVariableName,
-      std::string successorContainerName,
-      std::string successorContainerAccessOperator);
+                                        std::string successorContainerName,
+                                        const std::string &nodeName,
+                                        TraversalCardinalityEnum cardinality);
   std::string
   generateTraverseSuccessorNames(GrammarString *gs,
-                                 std::string successorContainerName);
+                                 std::string successorContainerName,
+                                 TraversalCardinalityEnum cardinality);
 
   std::string generateRTICode(GrammarString *gs,
                               std::string successorContainerName,
@@ -400,10 +423,6 @@ public:
 
   Rose::StringUtility::FileWithLineNumbers
   buildStringForProcessDataMemberReferenceToPointersSource(AstNodeClass &node);
-
-  // DQ (3/7/2007): support for getChildIndex member function
-  Rose::StringUtility::FileWithLineNumbers
-  buildStringForGetChildIndexSource(AstNodeClass &node);
 
   // DQ (9/28/2022): Fixing compiler warning for argument not used.
   // bool buildConstructorParameterList ( AstNodeClass & node,
@@ -499,10 +518,6 @@ public:
   // DQ (12/23/2005): Relocated copy function to a separate file to imrove
   // readability of source code
   void buildCopyMemberFunctions(
-      AstNodeClass &node, Rose::StringUtility::FileWithLineNumbers &outputFile);
-
-  // DQ (3/7/2007): support for getChildIndex member function
-  void buildStringForGetChildIndexSupport(
       AstNodeClass &node, Rose::StringUtility::FileWithLineNumbers &outputFile);
 
   // Uses list of targets and sources stored within each node to drive
@@ -692,18 +707,6 @@ public:
   // current node of the grammar corresponds to a grammar class whose objects
   // may actually occur in an AST.
   bool isAstObject(AstNodeClass &node);
-
-  // MK: We need this function to determine if the object is a pointer to an STL
-  // container
-  bool isSTLContainerPtr(const std::string &typeString);
-
-  // MK: We need this function to determine if the object itself is an STL
-  // container
-  bool isSTLContainer(const std::string &typeString);
-
-  // MK: Method to build the const_iterator declaration for traversing an STL
-  // container PP: changed from iterator to const_iterator
-  std::string getIteratorString(const std::string &typeString);
 
   // DQ (5/24/2005): Added support to output sizes of IR nodes
   std::string buildMemoryStorageEvaluationSupport();

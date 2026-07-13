@@ -23,7 +23,6 @@ struct Declaration {
 };
 
 typedef std::list<struct Declaration *> DeclarationPtrList;
-typedef std::pair<SgFunctionCallExp *, SgExpression *> Fct2Var;
 
 class FunctionCallNormalization : public SgSimpleProcessing {
 public:
@@ -31,8 +30,16 @@ public:
   void visit(SgNode *astNode);
 
 private:
-  void replaceFunctionCallsInExpression(
-      SgNode *, std::map<SgFunctionCallExp *, SgExpression *>);
+  struct FunctionCallReplacement {
+    SgVariableSymbol *symbol;
+    SgType *expressionType;
+    bool dereference;
+  };
+  typedef std::map<SgFunctionCallExp *, FunctionCallReplacement>
+      FunctionCallReplacementMap;
+
+  void replaceFunctionCallsInExpression(SgNode *,
+                                        const FunctionCallReplacementMap &);
 
   // BFS query on an AST
   std::list<SgNode *> BFSQueryForNodes(SgNode *root, VariantT type);

@@ -23,6 +23,8 @@
 
 #include "sageInterface.h"
 
+#include <cstddef>
+
 #include <cstdlib>
 
 #include <set>
@@ -39,6 +41,17 @@ class SgPragmaDeclaration;
 //@}
 
 namespace Outliner {
+struct OutlinedLocalTypeTemplateEntry {
+  SgType *source_type = nullptr;
+  SgType *defining_parameter_type = nullptr;
+  SgFunctionDeclaration *owning_function = nullptr;
+  std::size_t template_parameter_index = 0;
+};
+
+struct OutlinedLocalTypeTemplatePlan {
+  std::vector<OutlinedLocalTypeTemplateEntry> entries;
+};
+
 inline bool isFortranModuleDefinitionScope(const SgScopeStatement *scope) {
   if (scope == nullptr) {
     return false;
@@ -167,6 +180,11 @@ const std::string FIND_FUNCP_DLOPEN = "findFunctionUsingDlopen";
 // Find and call a function through dlopen, using a single function call to
 // implement all logic of parameter packing, lib existence checking etc.
 const std::string FIND_AND_CALL_FUNCP_DLOPEN = "findAndCallFunctionUsingDlopen";
+
+//! Establish the runtime-header dependency required by a generated dlopen call.
+//! Source directives for a separately compiled outlined-function library must
+//! be captured first so this call-site-only dependency cannot leak into it.
+void ensureDlopenSupportHeaderInCallSite(SgScopeStatement *scope);
 
 const std::string DEFAULT_OUTPUT_PATH = "/tmp";
 
@@ -299,6 +317,9 @@ Result outline(SgPragmaDeclaration *s);
  */
 ROSE_DLL_API size_t outlineAll(SgProject *);
 
+//! Return whether a pragma is the outliner's consumed control directive.
+ROSE_DLL_API bool isOutlineDirective(const SgPragmaDeclaration *);
+
 /**
  * \name The following routines, intended for debugging, mirror the
  * core outlining routines above, but only run the outlining
@@ -318,7 +339,8 @@ ROSE_DLL_API size_t preprocessAll(SgProject *);
  *  This routine performs the outlining transformation, including
  *  insertion of the new outlined-function declaration and call.
  */
-Result outlineBlock(SgBasicBlock *b, const std::string &name);
+Result outlineBlock(SgBasicBlock *b, const std::string &name,
+                    const std::vector<PreprocessingInfo> &original_directives);
 
 /*!
  *  \brief Computes the set of variables in 's' that need to be
@@ -362,8 +384,7 @@ ROSE_DLL_API SgSourceFile *getLibSourceFile(SgBasicBlock *target);
  * advantage of also supporting the same include file tree as the original file
  * where the outlined code is being taken from.
  */
-// ROSE_DLL_API void convertFunctionDefinitionsToFunctionPrototypes(SgNode*
-// node);
+// ROSE_DLL_API void replaceFunctionDefinitionsWithDeclarations(SgNode *node);
 
 /*!\brief the lib source file's name convention is rose_input_lib.[c|cxx].
  *
@@ -444,7 +465,8 @@ SgFunctionDeclaration *generateFunction(
         &restoreVars, // variables need to be restored after their clones finish
                       // computation
     SgClassDeclaration *struct_decl, /*optional struct type to wrap parameters*/
-    SgScopeStatement *scope);
+    SgScopeStatement *scope,
+    OutlinedLocalTypeTemplatePlan &local_type_template_plan);
 
 //! Generate packing (wrapping) statements for the variables to be passed
 // return the unique wrapper parameter for the outlined function
@@ -474,7 +496,8 @@ generatePackingStatements(SgStatement *target, ASTtools::VarSymSet_t &syms,
 // );
 ROSE_DLL_API SageInterface::DeferredTransformation
 insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
-       SgBasicBlock *outlining_target);
+       SgBasicBlock *outlining_target,
+       SgFunctionDeclaration *&source_call_declaration);
 
 /*!
  *  \brief Generates a function call parameter list using a set of symbols
@@ -488,11 +511,12 @@ void appendIndividualFunctionCallArgs(
 /*!
  *  \brief Generates a call to an outlined function.
  */
-SgStatement *generateCall(SgFunctionDeclaration *out_func,
-                          const ASTtools::VarSymSet_t &syms,
-                          const std::set<SgInitializedName *> readOnlyVars,
-                          std::string wrapper_arg_name,
-                          SgScopeStatement *scope);
+SgStatement *
+generateCall(SgFunctionDeclaration *source_call_declaration,
+             const ASTtools::VarSymSet_t &syms,
+             const std::set<SgInitializedName *> readOnlyVars,
+             std::string wrapper_arg_name, SgScopeStatement *scope,
+             const OutlinedLocalTypeTemplatePlan &local_type_template_plan);
 
 }; // namespace Outliner
 

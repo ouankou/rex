@@ -1,4 +1,3 @@
-add_subdirectory(astFixup)
 add_subdirectory(astPostProcessing)
 add_subdirectory(sageInterface)
 add_subdirectory(virtualCFG)
@@ -24,7 +23,7 @@ if(TARGET accparser)
     unset(_rose_tests)
   endif()
   set(_accparser_test_runtime_dir ${CMAKE_BINARY_DIR}/tests)
-  foreach(_accparser_exec acc_tester.out acc_roundtrip.out lang_flag_test.out compat_caller.out)
+  foreach(_accparser_exec acc_tester.out acc_roundtrip.out lang_flag_test.out)
     if(TARGET ${_accparser_exec})
       set_target_properties(${_accparser_exec}
         PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${_accparser_test_runtime_dir})
@@ -48,7 +47,6 @@ set(SAGE3_SOURCES
   manglingSupport.C
   sage_support/sage_support.C
   sage_support/cmdline.C
-  sage_support/keep_going.C
   sage_support/ast_memory_cleanup.C
   sage_support/utility_functions.C
   astJson/sageAstJsonApi.cpp
@@ -62,6 +60,7 @@ set(SAGE3_SOURCES
   astJson/sageAstJsonSerializeExternal.cpp
   astJson/sageAstJsonSerializeNodes.cpp
   astJson/sageAstJsonSerializeSupport.cpp
+  openMPConstantInteger.cpp
   fixupCopy_scopes.C
   fixupCopy_symbols.C
   fixupCopy_references.C
@@ -132,6 +131,7 @@ set_source_files_properties(
 ########### next target ###############
 add_library(sage3 OBJECT ${SAGE3_SOURCES})
 add_dependencies(sage3 rosetta_generated)
+target_include_directories(sage3 PRIVATE ${LLVM_INCLUDE_DIRS})
 if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG AND FLANG_INTRINSIC_INCLUDE_DIR)
   target_compile_definitions(sage3 PRIVATE
     "ROSE_FLANG_INTRINSIC_INCLUDEDIR=\"${FLANG_INTRINSIC_INCLUDE_DIR}\"")

@@ -26,6 +26,73 @@ target_link_libraries(taintedFlowAnalysisTest ROSE_DLL ${link_with_libraries})
 add_executable(liveDeadVarAnalysisTest liveDeadVarAnalysisTest.C)
 target_link_libraries(liveDeadVarAnalysisTest ROSE_DLL ${link_with_libraries})
 
+add_executable(rex_virtual_cfg_variable_declaration_child_contract
+  rex_virtual_cfg_variable_declaration_child_contract.cpp)
+target_link_libraries(rex_virtual_cfg_variable_declaration_child_contract
+  ROSE_DLL ${link_with_libraries})
+
+add_test(
+  NAME gdf_rex_virtual_cfg_variable_declaration_child_contract
+  COMMAND $<TARGET_FILE:rex_virtual_cfg_variable_declaration_child_contract>)
+set_tests_properties(
+  gdf_rex_virtual_cfg_variable_declaration_child_contract
+  PROPERTIES LABELS "gdf;rex")
+
+function(add_rex_virtual_cfg_variable_child_death_test test_name mode)
+  if(mode STREQUAL "null")
+    set(_rex_cfg_child "\\(nil\\)/<null>")
+    set(_rex_cfg_entry "\\(nil\\)/<none>")
+    set(_rex_cfg_violation "query is not an exact variable child")
+  elseif(mode STREQUAL "foreign")
+    set(_rex_cfg_child "0x[[:xdigit:]]+/SgBoolValExp")
+    set(_rex_cfg_entry "\\(nil\\)/<none>")
+    set(_rex_cfg_violation "query is not an exact variable child")
+  elseif(mode STREQUAL "wrong-parent")
+    set(_rex_cfg_child "0x[[:xdigit:]]+/SgInitializedName")
+    set(_rex_cfg_entry "0x[[:xdigit:]]+/SgInitializedName")
+    set(_rex_cfg_violation "entry has a foreign parent")
+  elseif(mode STREQUAL "duplicate")
+    set(_rex_cfg_child "0x[[:xdigit:]]+/SgInitializedName")
+    set(_rex_cfg_entry "0x[[:xdigit:]]+/SgInitializedName")
+    set(_rex_cfg_violation "duplicate child identity")
+  else()
+    message(FATAL_ERROR "unknown variable-child death-test mode: ${mode}")
+  endif()
+  add_test(
+    NAME ${test_name}
+    COMMAND ${BASH_EXECUTABLE} -c
+      "ulimit -c 0; log=\"${test_name}.log\"; rm -f \"\$log\"; set +e; \"\$@\" >\"\$log\" 2>&1; status=\$?; set -e; test \"\$status\" -eq 134; test \"\$(grep -Ec -- '^REX_CFG_INVARIANT\\[variable-declaration-child\\]: declaration=0x[[:xdigit:]]+ child=${_rex_cfg_child} entry=${_rex_cfg_entry} violation=${_rex_cfg_violation}; expected one exact owned SgInitializedName CFG child$' \"\$log\")\" -eq 1"
+      dummy
+      $<TARGET_FILE:rex_virtual_cfg_variable_declaration_child_contract>
+      ${mode})
+  set_tests_properties(${test_name} PROPERTIES LABELS "gdf;rex;death")
+  unset(_rex_cfg_child)
+  unset(_rex_cfg_entry)
+  unset(_rex_cfg_violation)
+endfunction()
+
+add_rex_virtual_cfg_variable_child_death_test(
+  gdf_rex_virtual_cfg_null_variable_declaration_child_is_rejected null)
+add_rex_virtual_cfg_variable_child_death_test(
+  gdf_rex_virtual_cfg_foreign_variable_declaration_child_is_rejected foreign)
+add_rex_virtual_cfg_variable_child_death_test(
+  gdf_rex_virtual_cfg_wrong_parent_variable_declaration_child_is_rejected
+  wrong-parent)
+add_rex_virtual_cfg_variable_child_death_test(
+  gdf_rex_virtual_cfg_duplicate_variable_declaration_child_is_rejected
+  duplicate)
+
+add_executable(rex_virtual_cfg_macro_expansion_contract
+  rex_virtual_cfg_macro_expansion_contract.cpp)
+target_link_libraries(rex_virtual_cfg_macro_expansion_contract
+  ROSE_DLL ${link_with_libraries})
+add_test(
+  NAME gdf_rex_virtual_cfg_macro_expansion_contract
+  COMMAND $<TARGET_FILE:rex_virtual_cfg_macro_expansion_contract>)
+set_tests_properties(
+  gdf_rex_virtual_cfg_macro_expansion_contract
+  PROPERTIES LABELS "gdf;rex")
+
 add_executable(pointerAliasAnalysisTest pointerAliasAnalysis.C pointerAliasAnalysisTest.C)
 target_link_libraries(pointerAliasAnalysisTest ROSE_DLL ${link_with_libraries})
 
@@ -49,6 +116,7 @@ set(TAINT_ANALYSIS_SPECIMENS
 
 set(CXX_CONSTPROP_LOCAL_SPECIMENS
   cp_test1.C
+  rex_gdf_macro_expansion_assignment.cpp
 )
 
 set(CXX_LIVENESS_SPECIMENS
@@ -1162,7 +1230,7 @@ foreach(specimen IN LISTS CXX_CONSTPROP_LOCAL_SPECIMENS)
     NAME gdf_constprop_local_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="\"$<TARGET_FILE:constantPropagationTest>\" -c \"${CMAKE_CURRENT_SOURCE_DIR}/${specimen}\""
+      CMD="\"$<TARGET_FILE:constantPropagationTest>\" -std=gnu++14 -c \"${CMAKE_CURRENT_SOURCE_DIR}/${specimen}\""
       ${_exit_status}
       cxxcpls_${specimen}.passed
   )
@@ -1176,7 +1244,7 @@ foreach(specimen IN LISTS CXX_CONSTPROP_SPECIMENS)
     NAME gdf_cxx_constprop_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="\"$<TARGET_FILE:constantPropagationTest>\" -I \"${_cxx_test_dir}\" -c \"${_cxx_test_dir}/${specimen}\""
+      CMD="\"$<TARGET_FILE:constantPropagationTest>\" -std=gnu++14 -I \"${_cxx_test_dir}\" -c \"${_cxx_test_dir}/${specimen}\""
       ${_exit_status}
       cxxcp_${specimen}.passed
   )
@@ -1195,7 +1263,7 @@ foreach(specimen IN LISTS _cxx_constprop_additional_specimens)
     NAME gdf_cxx_constprop_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="\"$<TARGET_FILE:constantPropagationTest>\" -I \"${_cxx_test_dir}\" -c \"${_cxx_test_dir}/${specimen}\""
+      CMD="\"$<TARGET_FILE:constantPropagationTest>\" -std=gnu++14 -I \"${_cxx_test_dir}\" -c \"${_cxx_test_dir}/${specimen}\""
       ${_exit_status}
       cxxcp_${specimen}.passed
   )
@@ -1259,7 +1327,7 @@ foreach(specimen IN LISTS _c99_constprop_additional_specimens)
     NAME gdf_c99_constprop_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="\"$<TARGET_FILE:constantPropagationTest>\" -I \"${_c99_test_dir}\" -c \"${_c99_test_dir}/${specimen}\""
+      CMD="\"$<TARGET_FILE:constantPropagationTest>\" -std=gnu99 -I \"${_c99_test_dir}\" -c \"${_c99_test_dir}/${specimen}\""
       ${_exit_status}
       c99cp_${specimen}.passed
   )
@@ -1310,7 +1378,7 @@ if(enable-fortran)
       NAME gdf_f03_constprop_${_name}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${_rth}
-        CMD="\"$<TARGET_FILE:constantPropagationTest>\" -rose:skip_syntax_check -rose:skipfinalCompileStep -rose:fortran_std=f2003 -c \"${_f03_test_dir}/${specimen}\""
+        CMD="\"$<TARGET_FILE:constantPropagationTest>\" -rose:skipfinalCompileStep -rose:fortran_std=f2003 -c \"${_f03_test_dir}/${specimen}\""
         ${_exit_status}
         f03cp_${specimen}.passed
     )
@@ -1326,7 +1394,7 @@ if(enable-fortran)
       NAME gdf_f03_constprop_${_name}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${_rth}
-        CMD="\"$<TARGET_FILE:constantPropagationTest>\" -rose:skip_syntax_check -rose:skipfinalCompileStep -rose:fortran_std=f2003 -c \"${_f03_test_dir}/${specimen}\""
+        CMD="\"$<TARGET_FILE:constantPropagationTest>\" -rose:skipfinalCompileStep -rose:fortran_std=f2003 -c \"${_f03_test_dir}/${specimen}\""
         ${_exit_status}
         f03cp_${specimen}.passed
     )

@@ -85,7 +85,7 @@ static void append_fortran_external_decl(SgBasicBlock *body,
   SgAttributeSpecificationStatement *external_stmt =
       buildAttributeSpecificationStatement(
           SgAttributeSpecificationStatement::e_externalStatement);
-  SgFunctionRefExp *func_ref = buildFunctionRefExp(func_decl);
+  SgFunctionRefExp *func_ref = buildFortranOutlinedFunctionRef(func_decl);
   external_stmt->get_parameter_list()->prepend_expression(func_ref);
   func_ref->set_parent(external_stmt->get_parameter_list());
 
@@ -227,9 +227,10 @@ static void transOmpTaskForFortran(SgOmpTaskStatement *target) {
   SgExpression *parameter_untied =
       hasClause(target, V_SgOmpUntiedClause) ? buildIntVal(1) : buildIntVal(0);
 
-  SgExprListExp *parameters = buildExprListExp(
-      buildFunctionRefExp(outlined_func), parameter_cpyfn, parameter_arg_size,
-      parameter_arg_align, parameter_if_clause, parameter_untied);
+  SgExprListExp *parameters =
+      buildExprListExp(buildFortranOutlinedFunctionRef(outlined_func),
+                       parameter_cpyfn, parameter_arg_size, parameter_arg_align,
+                       parameter_if_clause, parameter_untied);
   appendExpression(parameters, buildIntVal(static_cast<int>(syms.size() * 3)));
 
   for (ASTtools::VarSymSet_t::iterator iter = syms.begin(); iter != syms.end();
@@ -299,8 +300,10 @@ static void transOmpTaskForC(SgOmpTaskStatement *target) {
   } else {
     SgVarRefExp *data_ref = buildVarRefExp(wrapper_name, task_scope);
     ROSE_ASSERT(data_ref != NULL);
-    parameter_data = buildAddressOfOp(data_ref);
-    parameter_arg_size = buildSizeOfOp(data_ref->get_type());
+    parameter_data =
+        buildAddressOfOp(data_ref, buildPointerType(data_ref->get_type()));
+    parameter_arg_size = buildSizeOfOp(
+        data_ref->get_type(), SageInterface::requireTargetSizeType(task_scope));
     parameter_arg_align = buildIntVal(4);
   }
 
@@ -400,7 +403,8 @@ void OmpSupport::transOmpTask(SgNode *node) {
   // Create the needed structures for this
   //
   // The shareds structure
-  SgClassDeclaration *strPshareds = buildStructDeclaration("shar", g_scope);
+  SgClassDeclaration *strPshareds = buildStructDeclaration(
+      declaration_ownership::sourceLexical(), "shar", g_scope);
   SgClassDefinition *strPsharedsDef = buildClassDefinition(strPshareds);
 
   for (std::string varName : sharedVarRefs) {
@@ -413,14 +417,17 @@ void OmpSupport::transOmpTask(SgNode *node) {
   }
 
   SgTypedefDeclaration *tyPshareds = buildTypedefDeclaration(
-      "pshareds", buildPointerType(strPshareds->get_type()), g_scope, true);
-  tyPshareds->set_declaration(strPshareds);
+      typedef_declaration_ownership::sourceLexical(),
+      SgTypedefDeclaration::e_typedef, "pshareds",
+      buildPointerType(strPshareds->get_type()), g_scope);
 
   // The task structure
-  SgClassDeclaration *taskStruct = buildStructDeclaration("task", g_scope);
+  SgClassDeclaration *taskStruct = buildStructDeclaration(
+      declaration_ownership::sourceLexical(), "task", g_scope);
   SgClassDefinition *taskStructDef = buildClassDefinition(taskStruct);
 
-  SgType *sharedType = buildOpaqueType("pshareds", g_scope);
+  SgType *sharedType = tyPshareds->get_type();
+  ROSE_ASSERT(sharedType != nullptr);
   SgVariableDeclaration *sharedPtr =
       buildVariableDeclaration("shareds", sharedType, NULL, taskStructDef);
   appendStatement(sharedPtr, taskStructDef);
@@ -431,14 +438,19 @@ void OmpSupport::transOmpTask(SgNode *node) {
   appendStatement(dummyPtr, taskStructDef);
 
   SgTypedefDeclaration *taskTypedef = buildTypedefDeclaration(
-      "ptask", buildPointerType(taskStruct->get_type()), g_scope, true);
-  taskTypedef->set_declaration(taskStruct);
+      typedef_declaration_ownership::sourceLexical(),
+      SgTypedefDeclaration::e_typedef, "ptask",
+      buildPointerType(taskStruct->get_type()), g_scope);
 
   // Insert them all
   SgStatement *firstStatement = getFirstStatement(g_scope);
+  removeStatement(strPshareds, false);
   insertStatementAfter(firstStatement, strPshareds);
+  removeStatement(tyPshareds, false);
   insertStatementAfter(strPshareds, tyPshareds);
+  removeStatement(taskStruct, false);
   insertStatementAfter(tyPshareds, taskStruct);
+  removeStatement(taskTypedef, false);
   insertStatementAfter(taskStruct, taskTypedef);
 
   // Insert the function forward declarations
@@ -481,15 +493,17 @@ void OmpSupport::transOmpTask(SgNode *node) {
   // Start with the body
   // First line: int *n = task->shareds->n;
 
-  SgVarRefExp *taskRef = buildOpaqueVarRefExp("task", g_scope);
-  SgVarRefExp *sharedsRef = buildOpaqueVarRefExp("shareds", g_scope);
+  SgVarRefExp *taskRef = nullptr;
+  SgVarRefExp *sharedsRef = nullptr;
   SgArrowExp *arrow2, *arrow1;
 
   for (std::string varName : originalVarRefs) {
-    SgVarRefExp *nRef = buildOpaqueVarRefExp(varName, g_scope);
+    SgVarRefExp *nRef = buildVarRefExp(varName, g_scope);
 
-    arrow2 = buildArrowExp(taskRef, sharedsRef);
-    arrow1 = buildArrowExp(arrow2, nRef);
+    taskRef = buildVarRefExp("task", g_scope);
+    sharedsRef = buildVarRefExp("shareds", g_scope);
+    arrow2 = buildArrowExp(taskRef, sharedsRef, sharedsRef->get_type());
+    arrow1 = buildArrowExp(arrow2, nRef, nRef->get_type());
 
     std::string varName1 = varName + "1";
     SgAssignInitializer *init =
@@ -554,11 +568,16 @@ void OmpSupport::transOmpTask(SgNode *node) {
   }
   ROSE_ASSERT(lhs != NULL);
   std::string name = lhs->get_symbol()->get_name() + "p__";
-  SgVarRefExp *destRef = buildOpaqueVarRefExp(name, g_scope);
+  SgVarRefExp *destRef = buildVarRefExp(name, g_scope);
 
-  arrow2 = buildArrowExp(taskRef, sharedsRef);
-  arrow1 = buildArrowExp(arrow2, destRef);
-  SgPointerDerefExp *deref = buildPointerDerefExp(arrow1);
+  taskRef = buildVarRefExp("task", g_scope);
+  sharedsRef = buildVarRefExp("shareds", g_scope);
+  arrow2 = buildArrowExp(taskRef, sharedsRef, sharedsRef->get_type());
+  arrow1 = buildArrowExp(arrow2, destRef, destRef->get_type());
+  SgPointerType *destination_pointer_type = isSgPointerType(arrow1->get_type());
+  ROSE_ASSERT(destination_pointer_type != nullptr);
+  SgPointerDerefExp *deref =
+      buildPointerDerefExp(arrow1, destination_pointer_type->get_base_type());
 
   SgExprStatement *assignBody = buildAssignStatement(deref, rhs);
   funcDef->append_statement(assignBody);
@@ -575,9 +594,13 @@ void OmpSupport::transOmpTask(SgNode *node) {
 
   // int gtid = *__global_tid;
   SgInitializedName *arg1 = outlined_func->get_args().at(0);
-  SgVarRefExp *arg1Ref = buildOpaqueVarRefExp(arg1->get_name(), g_scope);
+  SgVarRefExp *arg1Ref = buildVarRefExp(arg1->get_name(), g_scope);
 
-  SgPointerDerefExp *gtidDeref = buildPointerDerefExp(arg1Ref);
+  SgPointerType *global_thread_pointer_type =
+      isSgPointerType(arg1Ref->get_type());
+  ROSE_ASSERT(global_thread_pointer_type != nullptr);
+  SgPointerDerefExp *gtidDeref = buildPointerDerefExp(
+      arg1Ref, global_thread_pointer_type->get_base_type());
   SgAssignInitializer *gtidInit =
       buildAssignInitializer(gtidDeref, buildIntType());
   SgVariableDeclaration *gtid =
@@ -585,11 +608,12 @@ void OmpSupport::transOmpTask(SgNode *node) {
   block->append_statement(gtid);
 
   // if (__kmpc_single(NULL, gtid)) { ... }
-  SgVarRefExp *nullRef = buildOpaqueVarRefExp("NULL", g_scope);
-  SgVarRefExp *gtidRef = buildOpaqueVarRefExp("gtid", g_scope);
+  SgVarRefExp *nullRef = buildVarRefExp("NULL", g_scope);
+  SgVarRefExp *gtidRef = buildVarRefExp("gtid", g_scope);
   SgExprListExp *parameters = buildExprListExp(nullRef, gtidRef);
-  SgFunctionCallExp *fcSingle = buildFunctionCallExp(
-      "__kmpc_single", buildIntType(), parameters, g_scope);
+  SgFunctionCallExp *fcSingle =
+      buildFunctionCallExp(getKmpcRuntimeFunctionName("__kmpc_single"),
+                           buildIntType(), parameters, g_scope);
 
   SgBasicBlock *trueBlock = buildBasicBlock();
   SgIfStmt *ifStmt = buildIfStmt(fcSingle, trueBlock, NULL);
@@ -597,10 +621,10 @@ void OmpSupport::transOmpTask(SgNode *node) {
 
   // ptask task;
   // pshareds psh;
-  SgVariableDeclaration *taskDef = buildVariableDeclaration(
-      "task", buildOpaqueType("ptask", g_scope), NULL, g_scope);
-  SgVariableDeclaration *pshDef = buildVariableDeclaration(
-      "psh", buildOpaqueType("pshareds", g_scope), NULL, g_scope);
+  SgVariableDeclaration *taskDef =
+      buildVariableDeclaration("task", taskTypedef->get_type(), NULL, g_scope);
+  SgVariableDeclaration *pshDef =
+      buildVariableDeclaration("psh", tyPshareds->get_type(), NULL, g_scope);
   trueBlock->append_statement(taskDef);
   trueBlock->append_statement(pshDef);
 
@@ -609,41 +633,54 @@ void OmpSupport::transOmpTask(SgNode *node) {
   taskRef = buildVarRefExp("task", g_scope);
 
   // TODO: This needs to be changed. It should be sizeof the types
-  SgSizeOfOp *taskSizeOf = buildSizeOfOp(buildOpaqueType("task", g_scope));
-  SgMultiplyOp *taskSizeMul = buildMultiplyOp(taskSizeOf, buildIntVal(4));
+  SgSizeOfOp *taskSizeOf =
+      buildSizeOfOp(buildVarRefExp("task", g_scope),
+                    SageInterface::requireTargetSizeType(g_scope));
+  SgType *target_size_type = SageInterface::requireTargetSizeType(g_scope);
+  SgMultiplyOp *taskSizeMul =
+      buildMultiplyOp(taskSizeOf, buildIntVal(4), target_size_type);
 
-  SgSizeOfOp *sharSizeOf = buildSizeOfOp(buildOpaqueType("psh", g_scope));
-  SgMultiplyOp *sharSizeMul = buildMultiplyOp(sharSizeOf, buildIntVal(4));
+  SgSizeOfOp *sharSizeOf =
+      buildSizeOfOp(buildVarRefExp("psh", g_scope),
+                    SageInterface::requireTargetSizeType(g_scope));
+  SgMultiplyOp *sharSizeMul =
+      buildMultiplyOp(sharSizeOf, buildIntVal(4), target_size_type);
 
   SgFunctionRefExp *outlinedRef =
       buildFunctionRefExp(outlined_func->get_name(), g_scope);
-  SgAddressOfOp *outlinedAddr = buildAddressOfOp(outlinedRef);
-  parameters = buildExprListExp(nullRef, gtidRef, buildIntVal(1), taskSizeMul,
-                                sharSizeMul, outlinedAddr);
+  SgAddressOfOp *outlinedAddr =
+      buildAddressOfOp(outlinedRef, buildPointerType(outlinedRef->get_type()));
+  parameters = buildExprListExp(buildVarRefExp("NULL", g_scope),
+                                buildVarRefExp("gtid", g_scope), buildIntVal(1),
+                                taskSizeMul, sharSizeMul, outlinedAddr);
 
   SgFunctionCallExp *fcTaskAlloc = buildFunctionCallExp(
-      "__kmpc_omp_task_alloc", buildPointerType(buildVoidType()), parameters,
-      g_scope);
-  SgCastExp *taskCastExp =
-      buildCastExp(fcTaskAlloc, buildOpaqueType("ptask", g_scope));
+      getKmpcRuntimeFunctionName("__kmpc_omp_task_alloc"),
+      buildPointerType(buildVoidType()), parameters, g_scope);
+  SgCastExp *taskCastExp = buildCastExp(fcTaskAlloc, taskTypedef->get_type());
   SgExprStatement *taskAllocAssign = buildAssignStatement(taskRef, taskCastExp);
   trueBlock->append_statement(taskAllocAssign);
 
   // task->shareds->n = n;
   // task->shareds->x = x;
-  arrow2 = buildArrowExp(taskRef, sharedsRef);
   for (std::string varName : sharedVarRefs) {
-    SgVarRefExp *varRef = buildOpaqueVarRefExp(varName, g_scope);
-
-    arrow1 = buildArrowExp(arrow2, varRef);
-    SgExprStatement *arrowAssign = buildAssignStatement(arrow1, varRef);
+    taskRef = buildVarRefExp("task", g_scope);
+    sharedsRef = buildVarRefExp("shareds", g_scope);
+    arrow2 = buildArrowExp(taskRef, sharedsRef, sharedsRef->get_type());
+    SgVarRefExp *memberRef = buildVarRefExp(varName, g_scope);
+    arrow1 = buildArrowExp(arrow2, memberRef, memberRef->get_type());
+    SgExprStatement *arrowAssign =
+        buildAssignStatement(arrow1, buildVarRefExp(varName, g_scope));
     trueBlock->append_statement(arrowAssign);
   }
 
   // __kmpc_omp_task(NULL, gtid, task);
-  parameters = buildExprListExp(nullRef, gtidRef, taskRef);
-  SgExprStatement *ompTask = buildFunctionCallStmt(
-      "__kmpc_omp_task", buildVoidType(), parameters, g_scope);
+  parameters = buildExprListExp(buildVarRefExp("NULL", g_scope),
+                                buildVarRefExp("gtid", g_scope),
+                                buildVarRefExp("task", g_scope));
+  SgExprStatement *ompTask =
+      buildFunctionCallStmt(getKmpcRuntimeFunctionName("__kmpc_omp_task"),
+                            buildVoidType(), parameters, g_scope);
   trueBlock->append_statement(ompTask);
 
   // Move everything inside the body of the if statement
@@ -662,20 +699,23 @@ void OmpSupport::transOmpTask(SgNode *node) {
   // __kmpc_omp_taskwait(NULL, gtid);
   // __kmpc_end_single(NULL, gtid);
   parameters = buildExprListExp(nullRef, gtidRef);
-  SgExprStatement *taskWait = buildFunctionCallStmt(
-      "__kmpc_omp_taskwait", buildVoidType(), parameters, g_scope);
+  SgExprStatement *taskWait =
+      buildFunctionCallStmt(getKmpcRuntimeFunctionName("__kmpc_omp_taskwait"),
+                            buildVoidType(), parameters, g_scope);
   trueBlock->append_statement(taskWait);
 
   parameters = buildExprListExp(nullRef, gtidRef);
-  SgExprStatement *endSingle = buildFunctionCallStmt(
-      "__kmpc_end_single", buildVoidType(), parameters, g_scope);
+  SgExprStatement *endSingle =
+      buildFunctionCallStmt(getKmpcRuntimeFunctionName("__kmpc_end_single"),
+                            buildVoidType(), parameters, g_scope);
   trueBlock->append_statement(endSingle);
 
   // __kmpc_barrier(NULL, gtid);
   // This goes outside the if-statement just after it
   parameters = buildExprListExp(nullRef, gtidRef);
-  SgExprStatement *barrierFc = buildFunctionCallStmt(
-      "__kmpc_barrier", buildVoidType(), parameters, g_scope);
+  SgExprStatement *barrierFc =
+      buildFunctionCallStmt(getKmpcRuntimeFunctionName("__kmpc_barrier"),
+                            buildVoidType(), parameters, g_scope);
   block->append_statement(barrierFc);
 
   //

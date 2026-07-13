@@ -20,6 +20,14 @@ private:
   typedef bool (*TypeTraitFunctionP)(const SgType *const);
   map<string, TypeTraitFunctionP> nameToFpMap;
 
+  static SgType *typeOperand(SgTypeTraitBuiltinOperator *func, size_t index) {
+    ROSE_ASSERT(func != nullptr && index < func->get_args().size());
+    SgTypeExpression *operand = isSgTypeExpression(func->get_args()[index]);
+    ROSE_ASSERT(operand != nullptr && operand->get_parent() == func);
+    ROSE_ASSERT(operand->get_represented_type() != nullptr);
+    return operand->get_represented_type();
+  }
+
   void CallTypeTraitFunction(SgTypeTraitBuiltinOperator *func) {
     string str = func->get_name().getString();
     cout << "\n calling:" << str << ":";
@@ -28,8 +36,7 @@ private:
     if (it != nameToFpMap.end()) {
 
       // found a valid type trait that we can call
-      ROSE_ASSERT(isSgType(func->get_args()[0]));
-      bool val = it->second(isSgType(func->get_args()[0]));
+      bool val = it->second(typeOperand(func, 0));
       cout << val;
       ROSE_ASSERT(val == expectedValue);
 
@@ -41,10 +48,7 @@ private:
 
     if (str == "__is_base_of") {
       // __is_base_of is special since it has a different signature.
-      ROSE_ASSERT(isSgType(func->get_args()[0]));
-      ROSE_ASSERT(isSgType(func->get_args()[1]));
-      bool val = IsBaseOf(isSgType(func->get_args()[0]),
-                          isSgType(func->get_args()[1]));
+      bool val = IsBaseOf(typeOperand(func, 0), typeOperand(func, 1));
       cout << val;
       ROSE_ASSERT(val == expectedValue);
       if (val != expectedValue)

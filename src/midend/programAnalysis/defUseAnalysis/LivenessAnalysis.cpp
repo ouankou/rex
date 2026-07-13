@@ -661,7 +661,28 @@ std::string Support::getAppName(SgFunctionDeclaration *functionDeclaration) {
                                        ->get_traversalSuccessorContainer();
   for (unsigned int i = 0; i < children.size(); i++) {
     SgInitializedName *initName = (SgInitializedName *)children[i];
-    nodeNameApp = nodeNameApp + "" + initName->get_type()->unparseToString();
+    SgType *parameterType = initName->get_type();
+    SgSourceFile *sourceFile =
+        SageInterface::getEnclosingSourceFile(functionDeclaration);
+    SgScopeStatement *scope = SageInterface::getScope(functionDeclaration);
+    if (parameterType == nullptr || sourceFile == nullptr || scope == nullptr ||
+        initName->get_parent() != functionDeclaration->get_parameterList() ||
+        initName->get_declptr() != functionDeclaration) {
+      fprintf(stderr,
+              "REX_DEFUSE_INVARIANT[application-parameter-context]: "
+              "function=%p name=%s parameter=%p has no exact type, source "
+              "file, semantic scope, or declaration ownership\n",
+              static_cast<void *>(functionDeclaration),
+              functionDeclaration->get_name().str(),
+              static_cast<void *>(initName));
+      ROSE_ABORT();
+    }
+    SgUnparse_Info typeInfo;
+    typeInfo.set_current_source_file(sourceFile);
+    typeInfo.set_current_scope(scope);
+    typeInfo.set_template_argument_qualification_context(functionDeclaration);
+    typeInfo.set_reference_node_for_qualification(initName);
+    nodeNameApp += parameterType->unparseToString(&typeInfo);
     if (i != (children.size() - 1))
       nodeNameApp = nodeNameApp + ", ";
     // yed can not handle & signs.. replacing

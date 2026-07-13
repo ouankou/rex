@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 13 ]]; then
-  echo "usage: $0 <semantic-script> <translator> <compiler> <input> <workdir> <mode> <omp_fortran_inc> <omp_runtime_dir> <lowering_inc> <kmpc_fortran_abi_lib> <case_name> <timeout_s> <checkpoint>" >&2
+if [[ $# -ne 14 ]]; then
+  echo "usage: $0 <semantic-script> <translator> <compiler> <input> <oracle_input> <workdir> <mode> <omp_fortran_inc> <omp_runtime_dir> <lowering_inc> <kmpc_fortran_abi_lib> <case_name> <timeout_s> <checkpoint>" >&2
   exit 2
 fi
 
@@ -10,15 +10,16 @@ semantic_script="$1"
 translator="$2"
 compiler="$3"
 input_file="$4"
-workdir="$5"
-mode="$6"
-omp_fortran_inc="$7"
-omp_runtime_dir="$8"
-lowering_inc="$9"
-kmpc_fortran_abi_lib="${10}"
-case_name="${11}"
-timeout_s="${12}"
-checkpoint="${13}"
+oracle_input_file="$5"
+workdir="$6"
+mode="$7"
+omp_fortran_inc="$8"
+omp_runtime_dir="$9"
+lowering_inc="${10}"
+kmpc_fortran_abi_lib="${11}"
+case_name="${12}"
+timeout_s="${13}"
+checkpoint="${14}"
 
 source_name="$(basename "${input_file}")"
 baseline_dir="${workdir}/baseline"
@@ -35,6 +36,7 @@ env -u REX_AST_JSON_CHECKPOINT -u REX_AST_JSON_DIR \
     "${translator}" \
     "${compiler}" \
     "${input_file}" \
+    "${oracle_input_file}" \
     "${baseline_dir}" \
     "${mode}" \
     "${omp_fortran_inc}" \
@@ -49,6 +51,7 @@ env REX_AST_JSON_CHECKPOINT="${checkpoint}" REX_AST_JSON_DIR="${json_dir}" \
     "${translator}" \
     "${compiler}" \
     "${input_file}" \
+    "${oracle_input_file}" \
     "${checkpoint_dir}" \
     "${mode}" \
     "${omp_fortran_inc}" \

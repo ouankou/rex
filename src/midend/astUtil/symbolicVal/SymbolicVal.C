@@ -1,5 +1,7 @@
 #include "SymbolicVal.h"
 
+#include "sage3basic.h"
+
 #include "mlog.h"
 
 #include "BooleanOperators.h"
@@ -305,7 +307,23 @@ SymbolicVal SymbolicValGenerator ::GetSymbolicVal(AstInterface &fa,
   AstNodePtr s1, s2;
   AstInterface::AstNodeList l;
   AstInterface::OperatorEnum opr = (AstInterface::OperatorEnum)0;
-  if (fa.IsConstInt(exp, &val)) {
+  if (SgCastExp *cast = isSgCastExp(exp.get_ptr())) {
+    cast->validate_semantic_conversion();
+    switch (cast->get_semantic_conversion_kind()) {
+    case SgCastExp::e_semantic_conversion_NoOp:
+    case SgCastExp::e_semantic_conversion_LValueToRValue:
+      return GetSymbolicVal(fa, AstNodePtr(cast->get_operand()));
+    default:
+      std::cerr << "REX_SYMBOLIC_INVARIANT[cast-transparency]: cast=" << cast
+                << " surface=" << static_cast<int>(cast->get_cast_type())
+                << " semantic-kind="
+                << static_cast<int>(cast->get_semantic_conversion_kind())
+                << " cannot be represented by SymbolicVal without changing its "
+                   "meaning"
+                << std::endl;
+      ROSE_ABORT();
+    }
+  } else if (fa.IsConstInt(exp, &val)) {
     return new SymbolicConst(val);
   } else if (fa.IsBinaryOp(exp, &opr, &s1, &s2)) {
     SymbolicVal v1 = GetSymbolicVal(fa, s1), v2 = GetSymbolicVal(fa, s2);
@@ -367,13 +385,19 @@ SymbolicVal SymbolicValGenerator ::GetSymbolicVal(AstInterface &fa,
       return new SymbolicFunction(opr, "new", v);
     case AstInterface::UOP_NOT:
       return new SymbolicFunction(opr, "!", v);
+    case AstInterface::UOP_SEMANTIC_CONVERSION:
     case AstInterface::UOP_CAST_C:
     case AstInterface::UOP_CAST_REINTERP:
     case AstInterface::UOP_CAST_STATIC:
     case AstInterface::UOP_CAST_DYNAMIC:
     case AstInterface::UOP_CAST_CONST:
-    case AstInterface::UOP_CAST_SAFE:
-      return v;
+    case AstInterface::UOP_CAST_BUILTIN_BIT:
+    case AstInterface::UOP_CAST_FUNCTIONAL:
+    case AstInterface::UOP_CAST_FUNCTIONAL_LIST:
+      std::cerr << "REX_SYMBOLIC_INVARIANT[cast-transparency]: cast operator "
+                   "escaped exact semantic conversion handling"
+                << std::endl;
+      ROSE_ABORT();
     case AstInterface::UOP_DECR1:
     case AstInterface::UOP_DECR1_POST:
       return new SymbolicFunction(opr, "--", v);

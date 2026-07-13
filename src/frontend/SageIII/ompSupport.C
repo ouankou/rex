@@ -795,22 +795,167 @@ bool isDependenceType(omp_construct_enum omp_type) {
   return result;
 }
 
-void addOmpClause(SgStatement *node, SgOmpClause *clause) {
-  if (isSgOmpClauseStatement(node)) {
-    ((SgOmpClauseStatement *)node)->get_clauses().push_back(clause);
-  } else if (isSgOmpDeclareVariantStatement(node)) {
-    ((SgOmpDeclareVariantStatement *)node)->get_clauses().push_back(clause);
-  } else if (isSgOmpBeginDeclareVariantStatement(node)) {
-    ((SgOmpBeginDeclareVariantStatement *)node)
-        ->get_clauses()
-        .push_back(clause);
-  } else if (isSgOmpDeclareMapperStatement(node)) {
-    ((SgOmpDeclareMapperStatement *)node)->get_clauses().push_back(clause);
-  } else if (isSgOmpClauseBodyStatement(node)) {
-    ((SgOmpClauseBodyStatement *)node)->get_clauses().push_back(clause);
-  } else {
+SgOmpClauseList *getOmpClauseList(SgStatement *node) {
+  SgOmpClauseList *list = NULL;
+  if (SgOmpClauseStatement *stmt = isSgOmpClauseStatement(node)) {
+    list = stmt->get_clause_list();
+  } else if (SgOmpClauseBodyStatement *stmt =
+                 isSgOmpClauseBodyStatement(node)) {
+    list = stmt->get_clause_list();
+  } else if (SgOmpGroupprivateStatement *stmt =
+                 isSgOmpGroupprivateStatement(node)) {
+    list = stmt->get_clause_list();
+  }
+  if (list == NULL || list->get_parent() != node) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[openmp-clause-list]: statement=%p type=%s has "
+            "no valid structural clause-list owner\n",
+            static_cast<void *>(node),
+            node != NULL ? node->class_name().c_str() : "<null>");
     ROSE_ABORT();
+  }
+  return list;
+}
+
+void addOmpClause(SgStatement *node, SgOmpClause *clause) {
+  if (node == NULL || clause == NULL) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[openmp-clause-list]: cannot attach clause=%p "
+            "to statement=%p\n",
+            static_cast<void *>(clause), static_cast<void *>(node));
+    ROSE_ABORT();
+  }
+
+  const auto append_direct_clause = [node,
+                                     clause](SgOmpClausePtrList &clauses) {
+    if (clause->get_parent() != NULL ||
+        std::find(clauses.begin(), clauses.end(), clause) != clauses.end()) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-clause-list]: statement=%p "
+              "type=%s cannot attach an already-owned or duplicate "
+              "clause=%p\n",
+              static_cast<void *>(node), node->class_name().c_str(),
+              static_cast<void *>(clause));
+      ROSE_ABORT();
+    }
+    clauses.push_back(clause);
+    clause->set_parent(node);
   };
+
+  if (isSgOmpClauseStatement(node) || isSgOmpClauseBodyStatement(node) ||
+      isSgOmpGroupprivateStatement(node)) {
+    getOmpClauseList(node)->append_clause(clause);
+  } else if (isSgOmpDeclareSimdStatement(node)) {
+    append_direct_clause(((SgOmpDeclareSimdStatement *)node)->get_clauses());
+  } else if (isSgOmpRequiresStatement(node)) {
+    append_direct_clause(((SgOmpRequiresStatement *)node)->get_clauses());
+  } else if (isSgOmpTaskwaitStatement(node)) {
+    append_direct_clause(((SgOmpTaskwaitStatement *)node)->get_clauses());
+  } else if (isSgOmpDeclareVariantStatement(node)) {
+    append_direct_clause(((SgOmpDeclareVariantStatement *)node)->get_clauses());
+  } else if (isSgOmpBeginDeclareVariantStatement(node)) {
+    append_direct_clause(
+        ((SgOmpBeginDeclareVariantStatement *)node)->get_clauses());
+  } else if (isSgOmpDeclareMapperStatement(node)) {
+    append_direct_clause(((SgOmpDeclareMapperStatement *)node)->get_clauses());
+  } else if (isSgOmpDeclareTargetStatement(node)) {
+    append_direct_clause(((SgOmpDeclareTargetStatement *)node)->get_clauses());
+  } else if (isSgOmpAssumesStatement(node)) {
+    append_direct_clause(((SgOmpAssumesStatement *)node)->get_clauses());
+  } else if (isSgOmpBeginAssumesStatement(node)) {
+    append_direct_clause(((SgOmpBeginAssumesStatement *)node)->get_clauses());
+  } else {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[openmp-clause-list]: statement=%p type=%s "
+            "cannot own OpenMP clauses\n",
+            static_cast<void *>(node),
+            node != NULL ? node->class_name().c_str() : "<null>");
+    ROSE_ABORT();
+  }
+}
+
+void addGeneratedOmpClause(SgStatement *node, SgOmpClause *clause) {
+  if (node == NULL || clause == NULL || clause->get_parent() != NULL) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[generated-openmp-clause]: generated clause=%p "
+            "must be detached before attaching to statement=%p\n",
+            static_cast<void *>(clause), static_cast<void *>(node));
+    ROSE_ABORT();
+  }
+
+  SgOmpBodyStatement *owner = isSgOmpBodyStatement(node);
+  SgOmpBodyStatement *combined_outer = NULL;
+  if (owner != NULL && owner->get_source_form_is_combined()) {
+    combined_outer = owner;
+  } else if (owner != NULL) {
+    SgOmpBodyStatement *parent = isSgOmpBodyStatement(owner->get_parent());
+    if (parent != NULL && parent->get_source_form_is_combined() &&
+        parent->get_body() == owner) {
+      combined_outer = parent;
+    }
+  }
+
+  if (combined_outer == NULL) {
+    if (clause->get_combined_source_order().has_value()) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[generated-openmp-clause]: non-combined "
+              "generated clause already owns combined source provenance\n");
+      ROSE_ABORT();
+    }
+    addOmpClause(node, clause);
+    return;
+  }
+
+  SgOmpClauseBodyStatement *outer_clause_owner =
+      isSgOmpClauseBodyStatement(combined_outer);
+  SgOmpClauseBodyStatement *inner_clause_owner =
+      isSgOmpClauseBodyStatement(combined_outer->get_body());
+  if (isSgOmpParallelStatement(combined_outer) == NULL ||
+      outer_clause_owner == NULL || inner_clause_owner == NULL ||
+      inner_clause_owner->get_parent() != combined_outer) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[generated-openmp-clause]: combined directive "
+            "has no exact outer-parallel/inner-component shape\n");
+    ROSE_ABORT();
+  }
+
+  std::vector<SgOmpClause *> existing;
+  const auto collect = [&existing](SgOmpClauseBodyStatement *statement) {
+    SgOmpClauseList *list = getOmpClauseList(statement);
+    for (SgOmpClause *existing_clause : list->get_clauses()) {
+      if (existing_clause == NULL || existing_clause->get_parent() != list) {
+        fprintf(stderr, "REX_AST_INVARIANT[generated-openmp-clause]: combined "
+                        "component contains a null or misowned clause\n");
+        ROSE_ABORT();
+      }
+      existing.push_back(existing_clause);
+    }
+  };
+  collect(outer_clause_owner);
+  collect(inner_clause_owner);
+
+  std::vector<bool> seen(existing.size(), false);
+  for (SgOmpClause *existing_clause : existing) {
+    const std::optional<std::size_t> &source_order =
+        existing_clause->get_combined_source_order();
+    if (!source_order.has_value() || *source_order >= existing.size() ||
+        seen[*source_order]) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[generated-openmp-clause]: existing combined "
+              "clause provenance is not unique and contiguous\n");
+      ROSE_ABORT();
+    }
+    seen[*source_order] = true;
+  }
+
+  if (clause->get_combined_source_order().has_value()) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[generated-openmp-clause]: new generated clause "
+            "already owns combined source provenance\n");
+    ROSE_ABORT();
+  }
+  clause->initialize_combined_source_order(existing.size());
+  addOmpClause(node, clause);
 }
 
 } // end namespace OmpSupport

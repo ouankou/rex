@@ -29,6 +29,7 @@ public:
 };
 
 class Analysis;
+class SgNode;
 
 namespace Dbg {
 //! Generate dot graphs for an analysis: it handles intra-procedural analysis
@@ -182,6 +183,11 @@ std::string addDOT(std::string dot);
 // written out to Dbg::dbg with no formatting issues. This function can be
 // called on text that has already been escaped with no harm.
 std::string escape(std::string s);
+
+// Render a CFG node for diagnostics. Structural CFG nodes whose concrete
+// syntax belongs to an enclosing construct are identified explicitly instead
+// of being sent through the source unparser as standalone statements.
+std::string diagnosticNodeText(const SgNode *node);
 } // namespace Dbg
 
 #endif

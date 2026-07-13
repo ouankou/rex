@@ -4,7 +4,133 @@ namespace Rose {
 namespace AstJson {
 
 const char *const kFormat = "rex-sage-ast-json";
-const int kSchemaVersion = 27;
+const int kSchemaVersion = 78;
+
+std::optional<unsigned int>
+requiredOptionalUnsignedInteger(const JsonValue &properties,
+                                const std::string &name,
+                                const std::string &context) {
+  const JsonValue &field = properties.at(name);
+  if (field.kind == JsonValue::Kind::Null) {
+    return std::nullopt;
+  }
+  if (field.kind != JsonValue::Kind::Number) {
+    throw std::runtime_error("AST JSON " + context + " has a nonnumeric " +
+                             name);
+  }
+  const int64_t value = field.asInt();
+  if (value < 0 ||
+      static_cast<uint64_t>(value) > std::numeric_limits<unsigned int>::max()) {
+    throw std::runtime_error("AST JSON " + context + " has an invalid " + name);
+  }
+  return static_cast<unsigned int>(value);
+}
+
+std::optional<unsigned int>
+requiredTranslationUnitSourceOrder(const JsonValue &properties,
+                                   const std::string &context) {
+  const std::optional<unsigned int> source_order =
+      requiredOptionalUnsignedInteger(properties,
+                                      "translation_unit_source_order", context);
+  if (source_order.has_value() && *source_order == 0) {
+    throw std::runtime_error("AST JSON " + context +
+                             " has an invalid translation_unit_source_order");
+  }
+  return source_order;
+}
+
+std::optional<unsigned int> requiredOmpDeclareVariantRegionOrdinal(
+    const JsonValue &properties, const std::string &semantic_function_name,
+    const std::string &context) {
+  const std::string source_name =
+      properties.requiredString("omp_declare_variant_source_name");
+  const std::optional<unsigned int> region_ordinal =
+      requiredOptionalUnsignedInteger(
+          properties, "omp_declare_variant_region_ordinal", context);
+  if (source_name.empty() != !region_ordinal.has_value()) {
+    throw std::runtime_error(
+        "AST JSON " + context +
+        " has incomplete OpenMP declare-variant source identity");
+  }
+  if (!source_name.empty() && source_name == semantic_function_name) {
+    throw std::runtime_error(
+        "AST JSON " + context +
+        " has a declare-variant source name equal to its semantic identity");
+  }
+  return region_ordinal;
+}
+
+void restoreTranslationUnitSourceOrder(SgDeclarationStatement *declaration,
+                                       const JsonValue &properties,
+                                       const std::string &context) {
+  if (declaration == nullptr) {
+    throw std::runtime_error("AST JSON " + context +
+                             " requires a declaration statement");
+  }
+  const std::optional<unsigned int> source_order =
+      requiredTranslationUnitSourceOrder(properties, context);
+  if (source_order.has_value()) {
+    declaration->initialize_translation_unit_source_order(*source_order);
+  }
+}
+
+namespace {
+
+bool isValidFortranIdentifier(const std::string &name) {
+  if (name.empty() || !std::isalpha(static_cast<unsigned char>(name.front()))) {
+    return false;
+  }
+  return std::all_of(name.begin() + 1, name.end(), [](unsigned char ch) {
+    return std::isalnum(ch) || ch == '_';
+  });
+}
+
+std::string lowercaseFortranIdentifier(std::string name) {
+  std::transform(name.begin(), name.end(), name.begin(), [](unsigned char ch) {
+    return static_cast<char>(std::tolower(ch));
+  });
+  return name;
+}
+
+} // namespace
+
+void validateFortranProgramNameMetadata(const std::string &opening_name,
+                                        int64_t statement_kind,
+                                        bool named_in_end_statement,
+                                        const std::string &end_statement_name) {
+  if (statement_kind !=
+          SgProgramHeaderStatement::e_implicit_program_statement &&
+      statement_kind !=
+          SgProgramHeaderStatement::e_explicit_program_statement) {
+    throw std::runtime_error(
+        "AST JSON has invalid Fortran PROGRAM-statement metadata");
+  }
+
+  const bool has_end_statement_name = !end_statement_name.empty();
+  if (named_in_end_statement != has_end_statement_name) {
+    throw std::runtime_error(
+        "AST JSON Fortran END PROGRAM name metadata is inconsistent");
+  }
+  if (statement_kind ==
+          SgProgramHeaderStatement::e_implicit_program_statement &&
+      (!opening_name.empty() || has_end_statement_name)) {
+    throw std::runtime_error(
+        "AST JSON implicit Fortran PROGRAM carries a source name");
+  }
+  if (statement_kind ==
+          SgProgramHeaderStatement::e_explicit_program_statement &&
+      !isValidFortranIdentifier(opening_name)) {
+    throw std::runtime_error(
+        "AST JSON explicit Fortran PROGRAM has an invalid source name");
+  }
+  if (has_end_statement_name &&
+      (!isValidFortranIdentifier(end_statement_name) ||
+       lowercaseFortranIdentifier(opening_name) !=
+           lowercaseFortranIdentifier(end_statement_name))) {
+    throw std::runtime_error(
+        "AST JSON END PROGRAM name is invalid or does not match PROGRAM name");
+  }
+}
 
 class JsonParser {
 public:
@@ -467,6 +593,13 @@ std::string rawStringField(const std::string &name, const std::string &value) {
 
 std::string rawIntegerField(const std::string &name, int64_t value) {
   return jsonString(name) + ": " + std::to_string(value);
+}
+
+std::string
+rawOptionalUnsignedIntegerField(const std::string &name,
+                                const std::optional<unsigned int> &value) {
+  return jsonString(name) + ": " +
+         (value.has_value() ? std::to_string(*value) : "null");
 }
 
 std::string rawBoolField(const std::string &name, bool value) {

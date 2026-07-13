@@ -53,11 +53,9 @@ int main(int argc, char *argv[]) {
   // not where it could be located (must be explicitly added to the target
   // scope).
   SgFunctionDeclaration *functionDeclaration = buildDefiningFunctionDeclaration(
-      functionName, return_type, parameter_list, globalScopeOfNewFile);
+      function_declaration_ownership::sourceLexical(), functionName,
+      return_type, parameter_list, globalScopeOfNewFile);
   ROSE_ASSERT(functionDeclaration != NULL);
-
-  // Add the function declearation to the target scope (global scope).
-  SageInterface::appendStatement(functionDeclaration, globalScopeOfNewFile);
 
   // Find the associated nondefining declaration to unparse separately as a
   // function prototype in a header file.

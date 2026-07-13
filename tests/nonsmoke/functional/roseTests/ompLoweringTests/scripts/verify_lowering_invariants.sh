@@ -33,7 +33,11 @@ fi
 # Lowered code should contain at least one OpenMP runtime call for sources
 # that contain runtime-lowered OpenMP directives. Compile-time directives
 # such as threadprivate/requires are excluded from this requirement.
-runtime_count="$(grep -Ec '__kmpc_|\bXOMP_' "${rose_file}" || true)"
+if [[ "${source_name}" =~ \.(f|for|f77|f90|f95|f03|f08)$ ]]; then
+  runtime_count="$(grep -Ec '\brex_kmpc_|\bXOMP_' "${rose_file}" || true)"
+else
+  runtime_count="$(grep -Ec '__kmpc_|\bXOMP_' "${rose_file}" || true)"
+fi
 input_runtime_pragma_count="$(
   grep -Eic '^[[:space:]]*(#[[:space:]]*pragma[[:space:]]+omp[[:space:]]+(parallel|for|sections|single|master|critical|barrier|task|taskwait|atomic|ordered|flush)\b|[!c*]\$omp[[:space:]]+(parallel|do|sections|single|master|critical|barrier|task|taskwait|atomic|ordered|flush)\b)' "${input_file}" || true
 )"

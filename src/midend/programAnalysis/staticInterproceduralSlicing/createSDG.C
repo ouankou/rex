@@ -40,12 +40,7 @@ int main(int argc, char *argv[]) {
 #ifdef NEWDU
   // Create the global def-use analysis
   EDefUse *defUseAnalysis = new EDefUse(project);
-  if (defUseAnalysis->run(false) == 1) {
-    std::cerr
-        << "createSDG:: DFAnalysis failed!  (defUseAnalysis->run(false)==0"
-        << endl;
-    exit(0);
-  }
+  defUseAnalysis->run(false);
 #endif
   string outputFileName =
       (*(*project->get_fileList()).begin())->get_sourceFileNameWithoutPath();

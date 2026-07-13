@@ -78,6 +78,8 @@ found in the directory ROSE/TESTS/KnownBugs/AttachPreprocessingInfo.
 
 #include "ROSE_UNUSED.h"
 
+#include <set>
+
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 
@@ -119,20 +121,26 @@ bool isSameLineNamespaceClosingComment(SgLocatedNode *locatedNode,
     return false;
   }
 
-  Sg_File_Info *namespace_end = namespace_decl->get_endOfConstruct();
-  if (namespace_end == NULL || namespace_end->get_line() <= 0) {
-    if (SgNamespaceDefinitionStatement *namespace_def =
-            namespace_decl->get_definition()) {
-      namespace_end = namespace_def->get_endOfConstruct();
-    }
+  if (!namespace_decl->has_source_fragments()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[namespace-source-fragment]: namespace "
+            "closing-comment anchor has no typed source fragments\n");
+    ROSE_ABORT();
   }
-  if (namespace_end == NULL || namespace_end->get_line() <= 0) {
-    return false;
-  }
+  namespace_decl->validate_source_fragments();
+  SgNamespaceSourceFragment *closing =
+      namespace_decl->get_closing_source_fragment();
+  ROSE_ASSERT(closing != NULL);
+  closing->validate();
+  Sg_File_Info *namespace_end = closing->get_endOfConstruct();
+  ROSE_ASSERT(namespace_end != NULL);
 
   int namespace_end_line = namespace_end->get_physical_line(source_file_id);
   if (namespace_end_line <= 0) {
-    namespace_end_line = namespace_end->get_line();
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[namespace-source-fragment]: namespace "
+            "closing fragment has no exact physical line in output file\n");
+    ROSE_ABORT();
   }
 
   if (namespace_end_line != info->getLineNumber()) {
@@ -143,78 +151,6 @@ bool isSameLineNamespaceClosingComment(SgLocatedNode *locatedNode,
   const int comment_col = info->getColumnNumber();
   return namespace_end_col <= 0 || comment_col <= 0 ||
          namespace_end_col < comment_col;
-}
-
-template <class TemplateDeclT>
-void mirrorTemplateDeclarationTokenMapping(
-    SgSourceFile *sourceFile, TemplateDeclT *decl,
-    std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap) {
-  if (sourceFile == NULL || decl == NULL) {
-    return;
-  }
-
-  if (tokenMap.find(decl) != tokenMap.end() &&
-      decl->get_unparse_template_ast() == false) {
-    return;
-  }
-
-  Sg_File_Info *declInfo = decl->get_file_info();
-  if (declInfo == NULL || declInfo->isCompilerGenerated() ||
-      declInfo->isTransformation() ||
-      declInfo->get_filenameString() != sourceFile->getFileName()) {
-    return;
-  }
-
-  SgTemplateFunctionDefinition *definition =
-      isSgTemplateFunctionDefinition(decl->get_definition());
-  if (definition == NULL) {
-    return;
-  }
-
-  std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator mappingIt =
-      tokenMap.find(definition);
-  if (mappingIt == tokenMap.end() || mappingIt->second == NULL) {
-    return;
-  }
-
-  TokenStreamSequenceToNodeMapping *definitionMapping = mappingIt->second;
-  tokenMap[decl] = TokenStreamSequenceToNodeMapping::createTokenInterval(
-      sourceFile, decl, definitionMapping->leading_whitespace_start,
-      definitionMapping->leading_whitespace_end,
-      definitionMapping->token_subsequence_start,
-      definitionMapping->token_subsequence_end,
-      definitionMapping->trailing_whitespace_start,
-      definitionMapping->trailing_whitespace_end,
-      definitionMapping->else_whitespace_start,
-      definitionMapping->else_whitespace_end);
-}
-
-void repairTemplateFunctionDeclarationTokenMappings(SgSourceFile *sourceFile) {
-  if (sourceFile == NULL) {
-    return;
-  }
-
-  SgGlobal *global = sourceFile->get_globalScope();
-  if (global == NULL) {
-    return;
-  }
-
-  std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap =
-      sourceFile->get_tokenSubsequenceMap();
-
-  Rose_STL_Container<SgNode *> templateFunctions =
-      NodeQuery::querySubTree(global, V_SgTemplateFunctionDeclaration);
-  for (SgNode *node : templateFunctions) {
-    mirrorTemplateDeclarationTokenMapping(
-        sourceFile, isSgTemplateFunctionDeclaration(node), tokenMap);
-  }
-
-  Rose_STL_Container<SgNode *> templateMembers =
-      NodeQuery::querySubTree(global, V_SgTemplateMemberFunctionDeclaration);
-  for (SgNode *node : templateMembers) {
-    mirrorTemplateDeclarationTokenMapping(
-        sourceFile, isSgTemplateMemberFunctionDeclaration(node), tokenMap);
-  }
 }
 
 } // namespace
@@ -320,6 +256,8 @@ AttachPreprocessingInfoTreeTraversalInheritedAttrribute::
   isPartOfTemplateInstantiationDeclaration =
       X.isPartOfTemplateInstantiationDeclaration;
   isPartOfFunctionParameterList = X.isPartOfFunctionParameterList;
+  isPartOfAuxiliaryDeclaration = X.isPartOfAuxiliaryDeclaration;
+  isPartOfSemanticDeclarationScope = X.isPartOfSemanticDeclarationScope;
 }
 
 void AttachPreprocessingInfoTreeTrav::handleBracedScopes(
@@ -760,9 +698,6 @@ void AttachPreprocessingInfoTreeTrav::
                sourceFile->getFileName().c_str());
         printf("sourceFile->get_unparseHeaderFiles()                 = %s \n",
                sourceFile->get_unparseHeaderFiles() ? "true" : "false");
-        printf("sourceFile->get_header_file_unparsing_optimization() = %s \n",
-               sourceFile->get_header_file_unparsing_optimization() ? "true"
-                                                                    : "false");
         printf("currentPreprocessingInfoPtr->getTypeOfDirective() == "
                "PreprocessingInfo::CpreprocessorIncludeDeclaration = %s \n",
                currentPreprocessingInfoPtr->getTypeOfDirective() ==
@@ -1036,15 +971,7 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
       // buildTokenStreamMapping().  We might have to look into that separately.
       // Since it is about as expensive as the cost of the frontend with
       // token-based unparsing. DQ (2/18/2021): We only want to process the
-      // token stream when the unparser will later consult preserved token
-      // mappings, either for full-file `-rose:unparse_tokens` replay or for
-      // partial replay modes that improve source positions from the token
-      // stream. This avoids the historical cost for runs that never consult the
-      // token map.
-      const bool needs_token_mapping =
-          sourceFile->get_unparse_tokens() == true ||
-          sourceFile->get_use_token_stream_to_improve_source_position_info() ==
-              true;
+      const bool needs_token_mapping = sourceFile->get_unparse_tokens();
       if (needs_token_mapping) {
         rosePhaseTrace(
             "buildCommentAndCppDirectiveList.tokenMappingSetup.begin");
@@ -1081,7 +1008,6 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
         // DQ (2/20/2021): This is a pretty expensive operation, about the same
         // cost of the frontend (without the call to this function).
         buildTokenStreamMapping(sourceFile, tokenVector);
-        repairTemplateFunctionDeclarationTokenMappings(sourceFile);
         rosePhaseTrace("buildCommentAndCppDirectiveList.tokenMappingSetup.end");
       } else {
       }
@@ -1275,6 +1201,244 @@ AttachPreprocessingInfoTreeTrav::getListOfAttributes(int currentFileNameId) {
   return currentListOfAttributes;
 }
 
+namespace {
+void validateSemanticDeclarationScopePreprocessingBoundary(
+    SgLocatedNode *node) {
+  SgDeclarationScope *scope = isSgDeclarationScope(node);
+  SgDeclarationScopeList *container = isSgDeclarationScopeList(node);
+  SgFunctionParameterScope *parameterScope = isSgFunctionParameterScope(node);
+  if (scope == NULL && container == NULL && parameterScope == NULL) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[preprocessing-semantic-scope]: node=%p "
+            "is not a typed semantic-scope boundary\n",
+            static_cast<void *>(node));
+    ROSE_ABORT();
+  }
+
+  std::vector<Sg_File_Info *> positions;
+  auto addPosition = [&positions](Sg_File_Info *position) {
+    if (position != NULL && std::find(positions.begin(), positions.end(),
+                                      position) == positions.end()) {
+      positions.push_back(position);
+    }
+  };
+  addPosition(node->get_file_info());
+  addPosition(node->get_startOfConstruct());
+  addPosition(node->get_endOfConstruct());
+  auto exactSemanticPosition = [node](Sg_File_Info *position) {
+    return position != NULL && position->get_parent() == node &&
+           !position->isShared() && position->isCompilerGenerated() &&
+           position->isFrontendSpecific() && !position->isTransformation() &&
+           !position->isSourcePositionUnavailableInFrontend() &&
+           position->isOutputInCodeGeneration() &&
+           position->get_file_id() ==
+               Sg_File_Info::COMPILER_GENERATED_FILE_ID &&
+           position->get_physical_file_id() ==
+               Sg_File_Info::COMPILER_GENERATED_FILE_ID;
+  };
+  AttachedPreprocessingInfoType *records = node->getAttachedPreprocessingInfo();
+  if (positions.empty() ||
+      !std::all_of(positions.begin(), positions.end(), exactSemanticPosition) ||
+      (records != NULL && !records->empty())) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[preprocessing-semantic-scope]: node=%p "
+            "type=%s is not exact preprocessing-free semantic "
+            "infrastructure\n",
+            static_cast<void *>(node), node->class_name().c_str());
+    ROSE_ABORT();
+  }
+
+  if (scope != NULL) {
+    if (SgDeclarationScopeList *owner =
+            isSgDeclarationScopeList(scope->get_parent())) {
+      if (owner->get_parent() == NULL ||
+          std::count(owner->get_scopes().begin(), owner->get_scopes().end(),
+                     scope) != 1) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[preprocessing-semantic-scope]: scope=%p "
+                "has no exact declaration-scope-list owner\n",
+                static_cast<void *>(scope));
+        ROSE_ABORT();
+      }
+      return;
+    }
+    SgDeclarationStatement *owner =
+        isSgDeclarationStatement(scope->get_parent());
+    SgFunctionDeclaration *functionOwner = isSgFunctionDeclaration(owner);
+    if (owner == NULL ||
+        (owner->get_declarationScope() != scope &&
+         owner->get_nonreal_decl_scope() != scope &&
+         owner->get_source_declarator_scope() != scope &&
+         (functionOwner == NULL ||
+          functionOwner->get_function_declarator_scope() != scope))) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[preprocessing-semantic-scope]: scope=%p "
+              "has no exact declaration owner\n",
+              static_cast<void *>(scope));
+      ROSE_ABORT();
+    }
+    return;
+  }
+
+  if (parameterScope != NULL) {
+    SgFunctionDeclaration *functionOwner =
+        isSgFunctionDeclaration(parameterScope->get_parent());
+    SgRequiresExpr *requiresOwner =
+        isSgRequiresExpr(parameterScope->get_parent());
+    const bool exactFunctionRole =
+        functionOwner != NULL &&
+        functionOwner->get_functionParameterScope() == parameterScope &&
+        parameterScope->get_scope() == functionOwner->get_scope();
+    const bool exactRequiresRole =
+        requiresOwner != NULL &&
+        requiresOwner->get_local_parameter_scope() == parameterScope &&
+        parameterScope->get_scope() != NULL;
+    if (exactFunctionRole == exactRequiresRole ||
+        parameterScope->get_construction_physical_output_owner() != NULL ||
+        parameterScope->get_construction_semantic_scope() != NULL) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[preprocessing-semantic-scope]: parameter-"
+              "scope=%p parent=%p function=%p requires=%p semantic=%p "
+              "construction-owner=%p construction-scope=%p has no exact "
+              "completed structural role\n",
+              static_cast<void *>(parameterScope),
+              static_cast<void *>(parameterScope->get_parent()),
+              static_cast<void *>(functionOwner),
+              static_cast<void *>(requiresOwner),
+              static_cast<void *>(parameterScope->get_scope()),
+              static_cast<void *>(
+                  parameterScope->get_construction_physical_output_owner()),
+              static_cast<void *>(
+                  parameterScope->get_construction_semantic_scope()));
+      ROSE_ABORT();
+    }
+    return;
+  }
+
+  SgScopeStatement *owner = isSgScopeStatement(container->get_parent());
+  if (owner == NULL || owner->get_auxiliary_declaration_scopes() != container) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[preprocessing-semantic-scope]: container=%p "
+            "has no exact lexical scope owner\n",
+            static_cast<void *>(container));
+    ROSE_ABORT();
+  }
+  for (SgDeclarationScope *ownedScope : container->get_scopes()) {
+    if (ownedScope == NULL || ownedScope->get_parent() != container ||
+        std::count(container->get_scopes().begin(),
+                   container->get_scopes().end(), ownedScope) != 1) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[preprocessing-semantic-scope]: "
+              "container=%p contains a null, duplicate, or misowned scope\n",
+              static_cast<void *>(container));
+      ROSE_ABORT();
+    }
+  }
+}
+
+bool isStructuralMemberInitializerPreprocessingBoundary(SgNode *node) {
+  SgCtorInitializerList *initializers = isSgCtorInitializerList(node);
+  if (initializers == NULL) {
+    return false;
+  }
+
+  SgMemberFunctionDeclaration *member =
+      isSgMemberFunctionDeclaration(initializers->get_parent());
+  const bool hasTypedRole =
+      member != NULL && member->get_CtorInitializerList() == initializers &&
+      !member->get_specialFunctionModifier().isConstructor() &&
+      initializers->get_ctors().empty();
+  std::vector<Sg_File_Info *> positions;
+  auto addPosition = [&positions](Sg_File_Info *position) {
+    if (position != NULL && std::find(positions.begin(), positions.end(),
+                                      position) == positions.end()) {
+      positions.push_back(position);
+    }
+  };
+  addPosition(initializers->get_file_info());
+  addPosition(initializers->get_startOfConstruct());
+  addPosition(initializers->get_endOfConstruct());
+  const bool hasSemanticProvenance =
+      std::any_of(positions.begin(), positions.end(), [](Sg_File_Info *info) {
+        return info != NULL && info->isCompilerGenerated() &&
+               info->isFrontendSpecific() && !info->isTransformation() &&
+               info->get_file_id() == Sg_File_Info::COMPILER_GENERATED_FILE_ID;
+      });
+  if (!hasTypedRole && !hasSemanticProvenance) {
+    return false;
+  }
+  if (!hasTypedRole) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[preprocessing-member-initializer]: list=%p "
+            "has semantic provenance without one exact empty "
+            "non-constructor owner\n",
+            static_cast<void *>(initializers));
+    ROSE_ABORT();
+  }
+
+  auto exactSemanticPosition = [initializers](Sg_File_Info *position) {
+    return position != NULL && position->get_parent() == initializers &&
+           !position->isShared() && position->isCompilerGenerated() &&
+           position->isFrontendSpecific() && !position->isTransformation() &&
+           !position->isSourcePositionUnavailableInFrontend() &&
+           position->isOutputInCodeGeneration() &&
+           position->get_file_id() ==
+               Sg_File_Info::COMPILER_GENERATED_FILE_ID &&
+           position->get_physical_file_id() ==
+               Sg_File_Info::COMPILER_GENERATED_FILE_ID;
+  };
+  AttachedPreprocessingInfoType *records =
+      initializers->getAttachedPreprocessingInfo();
+  if (positions.empty() ||
+      !std::all_of(positions.begin(), positions.end(), exactSemanticPosition) ||
+      (records != NULL && !records->empty())) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[preprocessing-member-initializer]: list=%p "
+            "is not exact preprocessing-free semantic infrastructure\n",
+            static_cast<void *>(initializers));
+    ROSE_ABORT();
+  }
+  return true;
+}
+
+bool isSemanticTemplateInstantiationDirectivePayload(SgNode *node) {
+  SgDeclarationStatement *declaration = isSgTemplateInstantiationDecl(node);
+  if (declaration == NULL) {
+    declaration = isSgTemplateInstantiationFunctionDecl(node);
+  }
+  if (declaration == NULL) {
+    declaration = isSgTemplateInstantiationMemberFunctionDecl(node);
+  }
+  if (declaration == NULL) {
+    return false;
+  }
+
+  SgTemplateInstantiationDirectiveStatement *directive =
+      isSgTemplateInstantiationDirectiveStatement(declaration->get_parent());
+  if (directive == NULL) {
+    return false;
+  }
+
+  const SgNodePtrList successors = directive->get_traversalSuccessorContainer();
+  AttachedPreprocessingInfoType *records =
+      declaration->getAttachedPreprocessingInfo();
+  if (directive->get_declaration() != declaration ||
+      declaration->get_parent() != directive || successors.size() != 1 ||
+      successors.front() != declaration ||
+      !SageInterface::hasSemanticOnlyFrontendSourcePosition(declaration) ||
+      (records != NULL && !records->empty())) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[preprocessing-template-instantiation-payload]: "
+            "directive=%p payload=%p/%s does not have one exact "
+            "preprocessing-free semantic owner edge\n",
+            static_cast<void *>(directive), static_cast<void *>(declaration),
+            declaration->class_name().c_str());
+    ROSE_ABORT();
+  }
+  return true;
+}
+} // namespace
+
 // Member function: evaluateInheritedAttribute
 AttachPreprocessingInfoTreeTraversalInheritedAttrribute
 AttachPreprocessingInfoTreeTrav::evaluateInheritedAttribute(
@@ -1290,6 +1454,10 @@ AttachPreprocessingInfoTreeTrav::evaluateInheritedAttribute(
   ROSE_ASSERT(sourceFile != NULL);
 
   ROSE_ASSERT(n != NULL);
+  if (inheritedAttribute.isPartOfAuxiliaryDeclaration ||
+      inheritedAttribute.isPartOfSemanticDeclarationScope) {
+    return inheritedAttribute;
+  }
   // printf ("In AttachPreprocessingInfoTreeTrav::evaluateInheritedAttribute():
   // n = %p = %s \n",n,n->class_name().c_str()); SgTemplateFunctionDeclaration*
   // templateDeclaration = isSgTemplateFunctionDeclaration(n);
@@ -1345,6 +1513,115 @@ AttachPreprocessingInfoTreeTrav::evaluateInheritedAttribute(
       (inheritedAttribute.isPartOfTemplateInstantiationDeclaration == true &&
        templateInstantiationDeclaration == NULL)) {
     // #if DEBUG_ATTACH_PREPROCESSING_INFO
+    return inheritedAttribute;
+  }
+
+  if (SgLocatedNode *semanticScope = isSgLocatedNode(isSgDeclarationScope(n))) {
+    validateSemanticDeclarationScopePreprocessingBoundary(semanticScope);
+    inheritedAttribute.isPartOfSemanticDeclarationScope = true;
+    return inheritedAttribute;
+  }
+  if (SgLocatedNode *semanticScopeList =
+          isSgLocatedNode(isSgDeclarationScopeList(n))) {
+    validateSemanticDeclarationScopePreprocessingBoundary(semanticScopeList);
+    inheritedAttribute.isPartOfSemanticDeclarationScope = true;
+    return inheritedAttribute;
+  }
+  if (SgLocatedNode *parameterScope =
+          isSgLocatedNode(isSgFunctionParameterScope(n))) {
+    validateSemanticDeclarationScopePreprocessingBoundary(parameterScope);
+    inheritedAttribute.isPartOfSemanticDeclarationScope = true;
+    return inheritedAttribute;
+  }
+  if (isStructuralMemberInitializerPreprocessingBoundary(n)) {
+    return inheritedAttribute;
+  }
+  // An explicit-instantiation directive is the only lexical surface.  Its
+  // wrapped declaration is typed semantic payload consumed by the directive
+  // unparser; it cannot independently own comments or directives from the
+  // source file.  Validate that producer contract before excluding the complete
+  // payload subtree from preprocessing attachment.
+  if (isSemanticTemplateInstantiationDirectivePayload(n)) {
+    inheritedAttribute.isPartOfTemplateInstantiationDeclaration = true;
+    return inheritedAttribute;
+  }
+
+  // Auxiliary declarations are typed semantic targets for a separate lexical
+  // source surface.  Neither the declaration nor its descendants are legal
+  // anchors for source comments or directives.  Validate that ownership
+  // transaction before excluding the semantic subtree from attachment.
+  SgAuxiliaryDeclarationList *auxiliaryOwner = NULL;
+  SgNode *auxiliaryChild = NULL;
+  std::set<SgNode *> ownershipPath;
+  for (SgNode *current = n; current != NULL; current = current->get_parent()) {
+    if (!ownershipPath.insert(current).second) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[preprocessing-auxiliary-owner]: node=%p "
+              "has a cycle in its ownership path\n",
+              static_cast<void *>(n));
+      ROSE_ABORT();
+    }
+    if (SgAuxiliaryDeclarationList *candidate =
+            isSgAuxiliaryDeclarationList(current)) {
+      auxiliaryOwner = candidate;
+      break;
+    }
+    auxiliaryChild = current;
+  }
+  if (auxiliaryOwner != NULL) {
+    SgScopeStatement *semanticScope =
+        isSgScopeStatement(auxiliaryOwner->get_parent());
+    const SgDeclarationStatementPtrList &declarations =
+        auxiliaryOwner->get_declarations();
+    if (semanticScope == NULL) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[preprocessing-auxiliary-owner]: node=%p "
+              "auxiliary=%p has no exact semantic scope\n",
+              static_cast<void *>(n), static_cast<void *>(auxiliaryOwner));
+      ROSE_ABORT();
+    }
+
+    // The traversal visits the typed container itself before any declaration
+    // child.  Validate every direct edge at that point; there is deliberately
+    // no declaration-shaped child to recover from the parent walk.
+    if (n == auxiliaryOwner) {
+      for (SgDeclarationStatement *declaration : declarations) {
+        if (declaration == NULL ||
+            declaration->get_parent() != auxiliaryOwner ||
+            declaration->get_scope() != semanticScope ||
+            std::count(declarations.begin(), declarations.end(), declaration) !=
+                1) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[preprocessing-auxiliary-owner]: "
+                  "auxiliary=%p declaration=%p scope=%p has no exact direct "
+                  "semantic ownership\n",
+                  static_cast<void *>(auxiliaryOwner),
+                  static_cast<void *>(declaration),
+                  static_cast<void *>(semanticScope));
+          ROSE_ABORT();
+        }
+      }
+      inheritedAttribute.isPartOfAuxiliaryDeclaration = true;
+      return inheritedAttribute;
+    }
+
+    SgDeclarationStatement *semanticDeclaration =
+        isSgDeclarationStatement(auxiliaryChild);
+    if (semanticDeclaration == NULL ||
+        semanticDeclaration->get_parent() != auxiliaryOwner ||
+        semanticDeclaration->get_scope() != semanticScope ||
+        std::count(declarations.begin(), declarations.end(),
+                   semanticDeclaration) != 1) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[preprocessing-auxiliary-owner]: node=%p "
+              "auxiliary=%p declaration=%p scope=%p has no exact semantic "
+              "ownership\n",
+              static_cast<void *>(n), static_cast<void *>(auxiliaryOwner),
+              static_cast<void *>(semanticDeclaration),
+              static_cast<void *>(semanticScope));
+      ROSE_ABORT();
+    }
+    inheritedAttribute.isPartOfAuxiliaryDeclaration = true;
     return inheritedAttribute;
   }
 
@@ -1695,6 +1972,13 @@ AttachPreprocessingInfoTreeTrav::evaluateSynthesizedAttribute(
   // DQ (8/6/2012): Allow those associated with the declaration and not inside
   // of the template declaration.
   ROSE_ASSERT(n != NULL);
+  if (inheritedAttribute.isPartOfAuxiliaryDeclaration ||
+      inheritedAttribute.isPartOfSemanticDeclarationScope) {
+    return returnSynthesizeAttribute;
+  }
+  if (isStructuralMemberInitializerPreprocessingBoundary(n)) {
+    return returnSynthesizeAttribute;
+  }
   // printf ("In
   // AttachPreprocessingInfoTreeTrav::evaluateSynthesizedAttribute(): n = %p =
   // %s \n",n,n->class_name().c_str());
@@ -1765,6 +2049,12 @@ AttachPreprocessingInfoTreeTrav::evaluateSynthesizedAttribute(
     int currentFileNameId = -9;
     if (locatedNode != NULL) {
       ROSE_ASSERT(locatedNode->get_file_info() != NULL);
+      // Preprocessing information is attached by exact physical ownership.
+      // Semantic-only compiler-generated and transformation nodes have no
+      // physical file in which a comment or directive could occur.
+      if (locatedNode->get_file_info()->get_physical_file_id() < 0) {
+        return returnSynthesizeAttribute;
+      }
       // currentFileNameId = locatedNode->get_file_info()->get_file_id();
       currentFileNameId =
           locatedNode->get_file_info()->get_physical_file_id(source_file_id);

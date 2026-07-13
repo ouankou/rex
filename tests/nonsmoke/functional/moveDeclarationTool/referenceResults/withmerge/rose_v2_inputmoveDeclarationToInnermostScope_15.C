@@ -1,16 +1,17 @@
 //Test to make sure we don't get into instantiated template functions
-template<typename T> // better choice
+template <typename T> T GetMax(T a, T b)
+// better choice
 //template <class T>
-T GetMax (T a, T b) {
+{
   T result;
-  result = (a>b)? a : b;
+  result = (a > b)?a : b;
   return (result);
 }
 
-int main()
-{
-  int i=10, j=20,k;
-  k = GetMax(i,j);
-
+int main() {
+  int i = 10;
+  int j = 20;
+  int k;
+  k = GetMax(i, j);
   return 0;
 }

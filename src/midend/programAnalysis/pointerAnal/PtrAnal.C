@@ -9,6 +9,8 @@
 
 #include "ROSE_ASSERT.h"
 
+#include "sage3basic.h"
+
 using namespace std;
 
 DebugLog DebugPtrAnal("-debugptranal");
@@ -84,6 +86,45 @@ std::string PtrAnal::Get_VarName(AstInterface &fa, const AstNodePtr &rhs) {
     return cur.name;
   }
 
+  if (SgCastExp *cast = isSgCastExp(rhs.get_ptr())) {
+    cast->validate_semantic_conversion();
+    const SgCastExp::semantic_conversion_kind_enum conversion =
+        cast->get_semantic_conversion_kind();
+    const bool preserves_pointer_fact =
+        conversion == SgCastExp::e_semantic_conversion_NoOp ||
+        conversion == SgCastExp::e_semantic_conversion_LValueToRValue;
+    const bool is_exact_null =
+        conversion == SgCastExp::e_semantic_conversion_NullToPointer ||
+        conversion == SgCastExp::e_semantic_conversion_NullToMemberPointer;
+    if (preserves_pointer_fact || is_exact_null) {
+      if (cast->cast_type() != SgCastExp::e_implicit_cast) {
+        std::cerr
+            << "REX_AST_INVARIANT[pointer-analysis-conversion]: transparent "
+               "pointer-analysis conversion is source-explicit"
+            << std::endl;
+        ROSE_ABORT();
+      }
+      AstNodePtr operand(cast->get_operand());
+      if (is_exact_null) {
+        int value = 1;
+        if (!fa.IsConstInt(operand, &value) || value != 0) {
+          std::cerr
+              << "REX_AST_INVARIANT[pointer-analysis-null-conversion]: null "
+                 "pointer conversion has a nonzero or nonintegral operand"
+              << std::endl;
+          ROSE_ABORT();
+        }
+      }
+      const std::string operand_name = Get_VarName(fa, operand);
+      NameMap::const_iterator operand_mapping = namemap.find(operand.get_ptr());
+      namemap[rhs.get_ptr()] =
+          operand_mapping != namemap.end()
+              ? operand_mapping->second
+              : VarRef(static_cast<Stmt>(nullptr), operand_name);
+      return operand_name;
+    }
+  }
+
   std::string readname, res;
   AstNodePtr readscope;
   AstNodePtr lhs1, rhs1;
@@ -132,6 +173,34 @@ void PtrAnal::ProcessExpression(AstInterface &fa, const std::string &_modname,
   std::string modname = _modname;
   AstNodePtr p, p1, p2;
   AstInterface::AstNodeList args, out;
+  if (SgCastExp *cast = isSgCastExp(rhs.get_ptr())) {
+    cast->validate_semantic_conversion();
+    const SgCastExp::semantic_conversion_kind_enum conversion =
+        cast->get_semantic_conversion_kind();
+    if (conversion == SgCastExp::e_semantic_conversion_NoOp ||
+        conversion == SgCastExp::e_semantic_conversion_LValueToRValue) {
+      if (cast->cast_type() != SgCastExp::e_implicit_cast) {
+        std::cerr
+            << "REX_AST_INVARIANT[pointer-analysis-conversion]: transparent "
+               "pointer-analysis conversion is source-explicit"
+            << std::endl;
+        ROSE_ABORT();
+      }
+      AstNodePtr operand(cast->get_operand());
+      ProcessExpression(fa, modname, operand);
+      NameMap::const_iterator operand_mapping = namemap.find(operand.get_ptr());
+      if (operand_mapping == namemap.end() ||
+          operand_mapping->second.name == "") {
+        std::cerr
+            << "REX_AST_INVARIANT[pointer-analysis-conversion-map]: exact "
+               "transparent conversion operand has no pointer-analysis fact"
+            << std::endl;
+        ROSE_ABORT();
+      }
+      namemap[rhs.get_ptr()] = operand_mapping->second;
+      return;
+    }
+  }
   if (fa.IsFunctionCall(rhs, &p, &args, &out)) {
     typedef std::pair<AstNodePtr, std::string> RefRec;
     std::list<RefRec> refs;

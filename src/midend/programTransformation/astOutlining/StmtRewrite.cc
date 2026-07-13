@@ -142,9 +142,19 @@ SgBasicBlock *ASTtools::transformToBlockShell(SgBasicBlock *b_orig) {
   // Create new block to store 'T', and move statements to it.
   SgBasicBlock *b_shell = SageBuilder::buildBasicBlock();
   ASSERT_not_null(b_shell);
+  AttachedPreprocessingInfoType moved_inside_preprocessing;
+  SageInterface::cutPreprocessingInfo(b_orig, PreprocessingInfo::inside,
+                                      moved_inside_preprocessing);
   SageInterface::moveStatementsBetweenBlocks(
       b_orig, b_shell); // better implementation by this interface function
-  b_orig->append_statement(b_shell);
-  b_shell->set_parent(b_orig);
+  SageInterface::appendStatement(b_shell, b_orig);
+  // The shell becomes a first-class output scope at this attachment boundary.
+  // Publish its generated surface immediately so later outlining transactions
+  // can prove the exact source owner before moving its contents to a distinct
+  // generated function body.
+  SageInterface::publishGeneratedSubtreeOutputOwner(b_shell, b_orig);
+  SageInterface::pastePreprocessingInfo(b_shell, PreprocessingInfo::inside,
+                                        moved_inside_preprocessing);
+  ROSE_ASSERT(moved_inside_preprocessing.empty());
   return b_shell;
 }

@@ -1,0 +1,9 @@
+#ifndef REX_FRONTEND_FORCED_INCLUDE_VARIABLE_OWNER_HPP
+#define REX_FRONTEND_FORCED_INCLUDE_VARIABLE_OWNER_HPP
+
+#include "rex_frontend_forced_include_nested_owner.hpp"
+
+int rex_frontend_forced_include_variable_owner =
+    rex_frontend_forced_include_nested_value;
+
+#endif

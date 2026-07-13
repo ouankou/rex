@@ -432,10 +432,8 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
       // DQ (11/21/2015): Adding output of
       // typedefBaseTypeContainsDefiningDeclaration field.
       nodelabel +=
-          string(
-              "\\n variableDeclarationContainsBaseTypeDefiningDeclaration = ") +
-          (variableDeclaration
-                   ->get_variableDeclarationContainsBaseTypeDefiningDeclaration()
+          string("\\n ownsBaseTypeDefiningDeclaration = ") +
+          (variableDeclaration->get_baseTypeDefiningDeclaration() != NULL
                ? "true "
                : "false ");
     }
@@ -1274,7 +1272,18 @@ AstDOTGenerationExtended_Defaults::TypeExtraNodeInfo::operator()(SgNode *node) {
   std::ostringstream ss;
 
   if (SgExpression *n = isSgExpression(node)) {
-    ss << n->get_type()->unparseToString() << "\\n";
+    SgType *expressionType = n->get_type();
+    if (expressionType == nullptr) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[dot-expression-type]: "
+              "expression=%p type=%s has no exact semantic value type\n",
+              static_cast<void *>(n), n->class_name().c_str());
+      ROSE_ABORT();
+    }
+    // Value types are semantic identities.  They do not imply a source type
+    // occurrence at the expression node (implicit casts are the common
+    // counterexample), so DOT diagnostics report the typed IR class directly.
+    ss << expressionType->class_name() << "\\n";
   }
 
   return ss.str();

@@ -49,10 +49,6 @@ std::string readFile(const std::string &path) {
 void requireParameterListParents(SgProject *project) {
   ROSE_ASSERT(project != NULL);
 
-  Rose::MemoryPoolTraversalFilter prev_filter =
-      Rose::getMemoryPoolTraversalFilter();
-  Rose::setMemoryPoolTraversalFilter(NULL);
-
   std::map<SgFunctionParameterList *, SgFunctionDeclaration *> owners;
   VariantVector fn_variants(V_SgFunctionDeclaration);
   NodeQuerySynthesizedAttributeType functions =
@@ -89,11 +85,8 @@ void requireParameterListParents(SgProject *project) {
                 << it->second->get_qualified_name().str() << std::endl;
     }
 
-    Rose::setMemoryPoolTraversalFilter(prev_filter);
     ROSE_ABORT();
   }
-
-  Rose::setMemoryPoolTraversalFilter(prev_filter);
 }
 } // namespace
 

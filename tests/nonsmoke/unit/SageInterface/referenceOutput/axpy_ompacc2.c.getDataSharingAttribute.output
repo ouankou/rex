@@ -75,7 +75,11 @@ OpenMP region SgOmpParallelStatement @ 39
 "a"@0:0	shared
 "devid"@0:0	private
 "y"@0:0	map
+"starti"@0:0	private
+"endi"@0:0	private
 "x"@0:0	map
+"starti"@0:0	private
+"endi"@0:0	private
 "a"@0:0	map
 "partsize"@0:0	map
 -----------------------------------------------

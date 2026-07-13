@@ -9,6 +9,8 @@
 
 #include "sageBuilder.h"
 
+#include <algorithm>
+
 #include <iostream>
 
 #include <list>
@@ -178,7 +180,8 @@ buildIndependentTemplateParameter(const SgTemplateParameter *source,
     SgTemplateType *template_type = SageBuilder::buildTemplateType(sage_name);
     ROSE_ASSERT(template_type != NULL);
     result = SageBuilder::buildTemplateParameter(
-        SgTemplateParameter::type_parameter, template_type, sage_name, scope);
+        SgTemplateParameter::type_parameter, template_type, sage_name, scope,
+        source->get_templateParameterKeyword());
     break;
   }
   case SgTemplateParameter::nontype_parameter: {
@@ -188,7 +191,7 @@ buildIndependentTemplateParameter(const SgTemplateParameter *source,
     ROSE_ASSERT(parameter_type != NULL);
     result = SageBuilder::buildTemplateParameter(
         SgTemplateParameter::nontype_parameter, parameter_type, sage_name,
-        scope);
+        scope, SgTemplateParameter::keyword_unspecified);
     break;
   }
   default:
@@ -219,17 +222,231 @@ static SgTemplateParameter *copyTemplateParameterForPrototype(
     unavailable->insert(source_name);
   }
 
-  SgTemplateParameter *param_copy =
-      isSgTemplateParameter(ASTtools::deepCopy(source));
-  ROSE_ASSERT(param_copy != NULL);
-  return param_copy;
+  return SageInterface::cloneDetachedGeneratedTemplateParameter(
+      source, "outliner-prototype-template-parameter");
 }
+
+enum class PrototypeDefinitionPolicy {
+  forbidCrossOutputDefinition,
+  preserveSameOutputFamily,
+};
+
+enum class PrototypeFamilyPolicy {
+  canonicalReplacement,
+  friendMember,
+};
 
 static SgFunctionDeclaration *
 generatePrototype(const SgFunctionDeclaration *full_decl,
-                  SgScopeStatement *scope, bool forceFreeFunctionScope) {
-  if (!full_decl)
-    return 0; // nothing to do
+                  const SageBuilder::function_declaration_ownership &ownership,
+                  SgScopeStatement *scope, bool forceFreeFunctionScope,
+                  PrototypeDefinitionPolicy definitionPolicy,
+                  PrototypeFamilyPolicy familyPolicy) {
+  if (full_decl == NULL || scope == NULL) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[prototype-input]: declaration=%p "
+            "scope=%p must name one exact prototype construction\n",
+            static_cast<const void *>(full_decl), static_cast<void *>(scope));
+    ROSE_ABORT();
+  }
+
+  SgFunctionDeclaration *definition =
+      isSgFunctionDeclaration(full_decl->get_definingDeclaration());
+  SgFunctionDeclaration *priorCanonical =
+      isSgFunctionDeclaration(full_decl->get_firstNondefiningDeclaration());
+  SgSourceFile *definitionFile =
+      SageInterface::getEnclosingSourceFile(full_decl);
+  SgSourceFile *prototypeFile = SageInterface::getEnclosingSourceFile(scope);
+  if (definition == NULL || definition != full_decl || priorCanonical == NULL ||
+      definitionFile == NULL || prototypeFile == NULL) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[prototype-definition-policy]: "
+            "definition=%p canonical=%p definition-file=%p "
+            "prototype-file=%p has no exact construction-time family\n",
+            static_cast<void *>(definition),
+            static_cast<void *>(priorCanonical),
+            static_cast<void *>(definitionFile),
+            static_cast<void *>(prototypeFile));
+    ROSE_ABORT();
+  }
+
+  std::vector<SgFunctionDeclaration *> sameOutputFamily;
+  if (definitionPolicy == PrototypeDefinitionPolicy::preserveSameOutputFamily) {
+    if (definitionFile != prototypeFile) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[prototype-definition-policy]: "
+              "definition=%p and prototype scope=%p belong to distinct "
+              "physical output files\n",
+              static_cast<const void *>(full_decl), static_cast<void *>(scope));
+      ROSE_ABORT();
+    }
+    RoseAst fileAst(prototypeFile);
+    for (RoseAst::iterator node = fileAst.begin(); node != fileAst.end();
+         ++node) {
+      SgFunctionDeclaration *familyMember = isSgFunctionDeclaration(*node);
+      if (familyMember != NULL && familyMember->get_scope() == scope &&
+          familyMember->get_firstNondefiningDeclaration() == priorCanonical) {
+        if (familyMember->get_name() != full_decl->get_name() ||
+            familyMember->get_type() != full_decl->get_type()) {
+          fprintf(stderr,
+                  "REX_OUTLINER_INVARIANT[prototype-definition-policy]: "
+                  "family member=%p differs from definition=%p\n",
+                  static_cast<void *>(familyMember),
+                  static_cast<const void *>(full_decl));
+          ROSE_ABORT();
+        }
+        sameOutputFamily.push_back(familyMember);
+      }
+    }
+    if (std::find(sameOutputFamily.begin(), sameOutputFamily.end(),
+                  full_decl) == sameOutputFamily.end() ||
+        std::find(sameOutputFamily.begin(), sameOutputFamily.end(),
+                  priorCanonical) == sameOutputFamily.end()) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[prototype-definition-policy]: "
+              "destination family omits definition=%p or canonical=%p\n",
+              static_cast<const void *>(full_decl),
+              static_cast<void *>(priorCanonical));
+      ROSE_ABORT();
+    }
+  }
+
+  auto enforce_definition_edge_contract =
+      [&](SgFunctionDeclaration *prototype) -> SgFunctionDeclaration * {
+    ROSE_ASSERT(prototype != NULL);
+    if (definitionPolicy ==
+        PrototypeDefinitionPolicy::preserveSameOutputFamily) {
+      if (prototype->get_scope() != scope ||
+          prototype->get_type() != full_decl->get_type()) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[prototype-definition-policy]: "
+                "prototype=%p does not match the exact destination family\n",
+                static_cast<void *>(prototype));
+        ROSE_ABORT();
+      }
+
+      if (familyPolicy == PrototypeFamilyPolicy::friendMember) {
+        if (prototype->get_firstNondefiningDeclaration() == prototype) {
+          // A source-surface friend may be the first emitted declaration for
+          // a family whose previous canonical declaration was semantic-only.
+          // The builder deliberately replaces that hidden canonical identity;
+          // complete the same construction-time transaction for every prior
+          // destination member.
+          for (SgFunctionDeclaration *familyMember : sameOutputFamily) {
+            familyMember->set_firstNondefiningDeclaration(prototype);
+            if (familyMember != definition)
+              familyMember->set_definingDeclaration(definition);
+          }
+          prototype->set_definingDeclaration(definition);
+          definition->set_firstNondefiningDeclaration(prototype);
+          for (SgFunctionDeclaration *familyMember : sameOutputFamily) {
+            if (familyMember->get_firstNondefiningDeclaration() != prototype ||
+                familyMember->get_definingDeclaration() != definition) {
+              fprintf(stderr,
+                      "REX_OUTLINER_INVARIANT"
+                      "[prototype-definition-policy]: destination friend=%p "
+                      "did not replace semantic canonical=%p for "
+                      "definition=%p\n",
+                      static_cast<void *>(prototype),
+                      static_cast<void *>(priorCanonical),
+                      static_cast<void *>(definition));
+              ROSE_ABORT();
+            }
+          }
+          return prototype;
+        }
+        if (prototype == priorCanonical ||
+            prototype->get_firstNondefiningDeclaration() != priorCanonical ||
+            prototype->get_definingDeclaration() != definition ||
+            definition->get_firstNondefiningDeclaration() != priorCanonical ||
+            priorCanonical->get_definingDeclaration() != definition) {
+          fprintf(
+              stderr,
+              "REX_OUTLINER_INVARIANT[prototype-definition-policy]: "
+              "friend=%p first=%p defining=%p canonical=%p "
+              "canonical-defining=%p definition=%p definition-first=%p "
+              "in the same output family\n",
+              static_cast<void *>(prototype),
+              static_cast<void *>(prototype->get_firstNondefiningDeclaration()),
+              static_cast<void *>(prototype->get_definingDeclaration()),
+              static_cast<void *>(priorCanonical),
+              static_cast<void *>(priorCanonical->get_definingDeclaration()),
+              static_cast<void *>(definition),
+              static_cast<void *>(
+                  definition->get_firstNondefiningDeclaration()));
+          ROSE_ABORT();
+        }
+        return prototype;
+      }
+
+      if (prototype->get_firstNondefiningDeclaration() != prototype) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[prototype-definition-policy]: "
+                "prototype=%p did not become the exact destination "
+                "canonical declaration\n",
+                static_cast<void *>(prototype));
+        ROSE_ABORT();
+      }
+      for (SgFunctionDeclaration *familyMember : sameOutputFamily) {
+        familyMember->set_firstNondefiningDeclaration(prototype);
+        if (familyMember != definition)
+          familyMember->set_definingDeclaration(definition);
+      }
+      prototype->set_definingDeclaration(definition);
+      definition->set_firstNondefiningDeclaration(prototype);
+
+      for (SgFunctionDeclaration *familyMember : sameOutputFamily) {
+        if (familyMember->get_firstNondefiningDeclaration() != prototype ||
+            familyMember->get_definingDeclaration() != definition) {
+          fprintf(stderr,
+                  "REX_OUTLINER_INVARIANT[prototype-definition-policy]: "
+                  "family member=%p did not join prototype=%p definition=%p\n",
+                  static_cast<void *>(familyMember),
+                  static_cast<void *>(prototype),
+                  static_cast<void *>(definition));
+          ROSE_ABORT();
+        }
+      }
+      return prototype;
+    }
+
+    if (definitionFile == prototypeFile) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[prototype-definition-policy]: "
+              "cross-output policy was selected for one physical output "
+              "file\n");
+      ROSE_ABORT();
+    }
+
+    std::set<SgFunctionDeclaration *> source_declarations;
+    source_declarations.insert(prototype);
+    if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
+            prototype->get_firstNondefiningDeclaration()))
+      source_declarations.insert(first_nondef);
+
+    for (SgFunctionDeclaration *source_decl : source_declarations) {
+      if (source_decl == priorCanonical || source_decl == definition) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[prototype-definition-policy]: "
+                "cross-output prototype reused destination declaration=%p\n",
+                static_cast<void *>(source_decl));
+        ROSE_ABORT();
+      }
+      source_decl->set_definingDeclaration(NULL);
+      ROSE_ASSERT(source_decl->get_definingDeclaration() == NULL);
+    }
+    if (full_decl->get_firstNondefiningDeclaration() != priorCanonical ||
+        definition->get_definingDeclaration() != definition) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[prototype-definition-policy]: "
+              "cross-output prototype mutated destination family "
+              "definition=%p canonical=%p\n",
+              static_cast<void *>(definition),
+              static_cast<void *>(priorCanonical));
+      ROSE_ABORT();
+    }
+    return prototype;
+  };
 
   if (SgTemplateFunctionDeclaration *template_decl =
           isSgTemplateFunctionDeclaration(
@@ -237,14 +454,19 @@ generatePrototype(const SgFunctionDeclaration *full_decl,
     SgFunctionType *funcType = template_decl->get_type();
     SgType *return_type = funcType->get_return_type();
     SgFunctionParameterList *paralist =
-        deepCopy<SgFunctionParameterList>(template_decl->get_parameterList());
+        SageBuilder::buildGeneratedFunctionParameterList(
+            template_decl->get_parameterList());
     SgTemplateParameterPtrList *template_params =
         new SgTemplateParameterPtrList();
     std::set<std::string> unavailable_template_names;
     std::set<std::string> *unavailable_template_name_ptr = NULL;
-    if (isClassLikeScope(scope)) {
+    SgScopeStatement *templateContext =
+        ownership.getSourceLexicalOwner() != nullptr
+            ? ownership.getSourceLexicalOwner()
+            : scope;
+    if (isClassLikeScope(templateContext)) {
       unavailable_template_names =
-          collectEnclosingTemplateParameterNames(scope);
+          collectEnclosingTemplateParameterNames(templateContext);
       unavailable_template_name_ptr = &unavailable_template_names;
     }
     size_t template_param_index = 0;
@@ -261,7 +483,7 @@ generatePrototype(const SgFunctionDeclaration *full_decl,
 
     SgTemplateFunctionDeclaration *proto =
         SageBuilder::buildNondefiningTemplateFunctionDeclaration(
-            template_decl->get_name(), return_type, paralist, scope,
+            ownership, template_decl->get_name(), return_type, paralist, scope,
             template_params);
     delete template_params;
     ROSE_ASSERT(proto != NULL);
@@ -282,18 +504,19 @@ generatePrototype(const SgFunctionDeclaration *full_decl,
     }
 
     ROSE_ASSERT(proto->get_firstNondefiningDeclaration() != NULL);
-    return proto;
+    return enforce_definition_edge_contract(proto);
   }
 
   // DQ (2/23/2009): Use this code instead.
   SgFunctionType *funcType = full_decl->get_type();
   SgType *return_type = funcType->get_return_type();
   SgFunctionParameterList *paralist =
-      deepCopy<SgFunctionParameterList>(full_decl->get_parameterList());
+      SageBuilder::buildGeneratedFunctionParameterList(
+          full_decl->get_parameterList());
   SgFunctionDeclaration *proto =
       SageBuilder::buildNondefiningFunctionDeclaration(
-          full_decl->get_name(), return_type, paralist, scope, false, NULL,
-          SgStorageModifier::e_default, forceFreeFunctionScope);
+          ownership, full_decl->get_name(), return_type, paralist, scope, false,
+          NULL, SgStorageModifier::e_default, forceFreeFunctionScope);
   ROSE_ASSERT(proto != NULL);
 
   // Inherit defining function's inline property: avoid linking error when
@@ -348,7 +571,7 @@ generatePrototype(const SgFunctionDeclaration *full_decl,
   // = %s
   // \n",SageInterface::getEnclosingSourceFile(proto->get_firstNondefiningDeclaration())->getFileName().c_str());
 
-  return proto;
+  return enforce_definition_edge_contract(proto);
 }
 
 //! Generates a 'friend' declaration from a given function declaration.
@@ -361,6 +584,25 @@ generateFriendPrototype(const SgFunctionDeclaration *full_decl,
                         SgScopeStatement *scope,
                         SgScopeStatement *class_scope) {
   ROSE_ASSERT(class_scope != NULL);
+
+  SgGlobal *definitionGlobal = SageInterface::getGlobalScope(full_decl);
+  SgGlobal *friendGlobal = SageInterface::getGlobalScope(class_scope);
+  if (definitionGlobal == NULL || friendGlobal == NULL ||
+      friendGlobal != class_scope) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[friend-family-policy]: definition=%p "
+            "definition-global=%p friend-scope=%p friend-global=%p has no "
+            "exact global family\n",
+            static_cast<const void *>(full_decl),
+            static_cast<void *>(definitionGlobal),
+            static_cast<void *>(class_scope),
+            static_cast<void *>(friendGlobal));
+    ROSE_ABORT();
+  }
+  const PrototypeDefinitionPolicy definitionPolicy =
+      definitionGlobal == friendGlobal
+          ? PrototypeDefinitionPolicy::preserveSameOutputFamily
+          : PrototypeDefinitionPolicy::forbidCrossOutputDefinition;
 
   if (enable_debug) {
 #ifdef __linux__
@@ -376,7 +618,10 @@ generateFriendPrototype(const SgFunctionDeclaration *full_decl,
     class_scope->get_file_info()->display();
   }
 
-  SgFunctionDeclaration *proto = generatePrototype(full_decl, scope, true);
+  SgFunctionDeclaration *proto = generatePrototype(
+      full_decl,
+      SageBuilder::function_declaration_ownership::sourceLexicalAtTop(scope),
+      class_scope, true, definitionPolicy, PrototypeFamilyPolicy::friendMember);
   ROSE_ASSERT(proto != NULL);
 
   // Remove any 'extern' modifiers
@@ -384,28 +629,17 @@ generateFriendPrototype(const SgFunctionDeclaration *full_decl,
 
   // Set the 'friend' modifier
   proto->get_declarationModifier().setFriend();
+  SgAccessModifier &friendAccess =
+      proto->get_declarationModifier().get_accessModifier();
+  friendAccess.setNotApplicable();
+  friendAccess.set_is_explicit(false);
 
-  // DQ (2/26/2009): Remove the SgFunctionSymbol since this is a "friend"
-  // function. Since this is a friend we don't want to have the SgFunctionSymbol
-  // in "scope" so remove the symbol.  The SageBuilder function generated the
-  // SgFunctionSymbol and at this point we need to remove it.  Friend function
-  // don't have symbols in the class scope where they may appear as a
-  // declaration.  The SageBuilder function could be provided a parameter to
-  // indicate that a friend function is required, this would then suppress the
-  // construction of the symbol in the scope's symbol table (and the scope of
-  // the function is not the same as the class scope in this case as well.
-  SgFunctionSymbol *friendFunctionSymbol =
-      isSgFunctionSymbol(scope->lookup_symbol(full_decl->get_name()));
-  ROSE_ASSERT(friendFunctionSymbol != NULL);
-  // printf ("@@@@@@@@@@@@ In generateFriendPrototype(): removing
-  // SgFunctionSymbol = %p with friendFunctionSymbol->get_declaration() = %p
-  // \n",friendFunctionSymbol,friendFunctionSymbol->get_declaration());
-  scope->remove_symbol(friendFunctionSymbol);
-
-  {
-    delete friendFunctionSymbol;
-    friendFunctionSymbol = NULL;
-  }
+  // The declaration is lexically owned by the class but semantically belongs
+  // to the class declaration's enclosing scope.  Its symbol is therefore
+  // published in class_scope directly; no class-scope symbol is created and no
+  // late symbol/scope repair is required.
+  ROSE_ASSERT(proto->get_parent() == scope);
+  ROSE_ASSERT(proto->get_scope() == class_scope);
 
   // printf ("In generatePrototype(): Returning SgFunctionDeclaration prototype
   // = %p \n",proto);
@@ -413,7 +647,11 @@ generateFriendPrototype(const SgFunctionDeclaration *full_decl,
   // ROSE_ASSERT(copyDeclarationStatement->get_firstNondefiningDeclaration()->get_definingDeclaration()
   // != NULL);
 
-  ROSE_ASSERT(proto->get_definingDeclaration() == NULL);
+  ROSE_ASSERT(
+      proto->get_definingDeclaration() ==
+      (definitionPolicy == PrototypeDefinitionPolicy::preserveSameOutputFamily
+           ? full_decl
+           : NULL));
   // proto->set_definingDeclaration(full_decl);
 
   return proto;
@@ -421,8 +659,12 @@ generateFriendPrototype(const SgFunctionDeclaration *full_decl,
 
 /*!
  *  \brief Beginning at the given declaration statement, this routine
- *  searches for first declaration in global scope that appears before
- *  this one.
+ *  resolves the exact lexical global insertion boundary for this declaration.
+ *  A declaration owned by SgAuxiliaryDeclarationList is semantic lookup state,
+ *  not a lexical boundary.  A generated source declaration needed by such a
+ *  semantic target must precede the emitted global declaration sequence; the
+ *  first direct declaration is therefore its exact insertion boundary.  A
+ *  null result means the global declaration sequence is empty.
  */
 static SgDeclarationStatement *
 findClosestGlobalInsertPoint(SgDeclarationStatement *f) {
@@ -434,16 +676,52 @@ findClosestGlobalInsertPoint(SgDeclarationStatement *f) {
       closest = isSgDeclarationStatement(cur_parent);
     cur_parent = cur_parent->get_parent();
   }
-  return isSgGlobal(cur_parent) ? closest : 0;
+  SgGlobal *global = isSgGlobal(cur_parent);
+  if (global == NULL)
+    return NULL;
+
+  const SgDeclarationStatementPtrList &declarations =
+      global->getDeclarationList();
+  if (std::find(declarations.begin(), declarations.end(), closest) !=
+      declarations.end())
+    return closest;
+
+  SgAuxiliaryDeclarationList *auxiliary =
+      isSgAuxiliaryDeclarationList(f->get_parent());
+  if (auxiliary == NULL || auxiliary->get_parent() != global ||
+      f->get_scope() != global ||
+      std::count(auxiliary->get_declarations().begin(),
+                 auxiliary->get_declarations().end(), f) != 1) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[global-insertion-boundary]: "
+            "declaration=%p/%s name=%s parent=%p scope=%p has neither one "
+            "direct global source owner nor one exact auxiliary semantic "
+            "owner\n",
+            static_cast<void *>(f), f->class_name().c_str(),
+            SageInterface::get_name(f).c_str(),
+            static_cast<void *>(f->get_parent()),
+            static_cast<void *>(f->get_scope()));
+    ROSE_ABORT();
+  }
+
+  if (!declarations.empty() && declarations.front() == NULL) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[global-insertion-boundary]: global=%p "
+            "contains a null first lexical declaration\n",
+            static_cast<void *>(global));
+    ROSE_ABORT();
+  }
+  return declarations.empty() ? NULL : declarations.front();
 }
 
 static bool declarationAppearsNoLaterThan(SgGlobal *scope,
                                           SgDeclarationStatement *candidate,
                                           SgDeclarationStatement *limit) {
   ROSE_ASSERT(scope != NULL);
-  ROSE_ASSERT(candidate != NULL);
   if (limit == NULL || candidate == limit)
     return true;
+  if (candidate == NULL)
+    return false;
 
   const SgDeclarationStatementPtrList &declarations =
       scope->getDeclarationList();
@@ -455,8 +733,59 @@ static bool declarationAppearsNoLaterThan(SgGlobal *scope,
       return false;
   }
 
-  ROSE_ASSERT(!"candidate or limit declaration is not in the requested scope");
-  return false;
+  SgDeclarationGroupStatement *candidate_group =
+      isSgDeclarationGroupStatement(candidate->get_parent());
+  SgDeclarationGroupStatement *limit_group =
+      isSgDeclarationGroupStatement(limit->get_parent());
+  auto group_member_index = [](SgDeclarationGroupStatement *group,
+                               SgDeclarationStatement *member) {
+    if (group == NULL)
+      return static_cast<size_t>(-1);
+    const SgDeclarationStatementPtrList &members = group->get_declarations();
+    SgDeclarationStatementPtrList::const_iterator position =
+        std::find(members.begin(), members.end(), member);
+    return position != members.end()
+               ? static_cast<size_t>(std::distance(members.begin(), position))
+               : static_cast<size_t>(-1);
+  };
+  fprintf(
+      stderr,
+      "REX_OUTLINER_INVARIANT[prototype-insertion-order]: scope=%p "
+      "candidate=%p/%s name=%s parent=%p/%s grandparent=%p scope=%p "
+      "global=%p group-index=%zu group-size=%zu "
+      "limit=%p/%s name=%s parent=%p/%s grandparent=%p scope=%p "
+      "global=%p group-index=%zu group-size=%zu are not both present in "
+      "the requested global declaration list\n",
+      static_cast<void *>(scope), static_cast<void *>(candidate),
+      candidate->class_name().c_str(),
+      SageInterface::get_name(candidate).c_str(),
+      static_cast<void *>(candidate->get_parent()),
+      candidate->get_parent() != NULL
+          ? candidate->get_parent()->class_name().c_str()
+          : "<null>",
+      static_cast<void *>(candidate->get_parent() != NULL
+                              ? candidate->get_parent()->get_parent()
+                              : NULL),
+      static_cast<void *>(candidate->get_scope()),
+      static_cast<void *>(SageInterface::getGlobalScope(candidate)),
+      group_member_index(candidate_group, candidate),
+      candidate_group != NULL ? candidate_group->get_declarations().size() : 0,
+      static_cast<void *>(limit),
+      limit != NULL ? limit->class_name().c_str() : "<null>",
+      limit != NULL ? SageInterface::get_name(limit).c_str() : "<null>",
+      static_cast<void *>(limit != NULL ? limit->get_parent() : NULL),
+      limit != NULL && limit->get_parent() != NULL
+          ? limit->get_parent()->class_name().c_str()
+          : "<null>",
+      static_cast<void *>(limit != NULL && limit->get_parent() != NULL
+                              ? limit->get_parent()->get_parent()
+                              : NULL),
+      static_cast<void *>(limit != NULL ? limit->get_scope() : NULL),
+      static_cast<void *>(limit != NULL ? SageInterface::getGlobalScope(limit)
+                                        : NULL),
+      group_member_index(limit_group, limit),
+      limit_group != NULL ? limit_group->get_declarations().size() : 0);
+  ROSE_ABORT();
 }
 
 static bool
@@ -503,120 +832,206 @@ static void moveLeadingPreprocessorPrefixForPrototype(SgStatement *src,
     return;
 
   AttachedPreprocessingInfoType moved;
-  AttachedPreprocessingInfoType kept;
   for (AttachedPreprocessingInfoType::size_type i = 0; i < src_info->size();
        ++i) {
     PreprocessingInfo *info = (*src_info)[i];
     if (i <= last_directive && info != NULL &&
         info->getRelativePosition() == PreprocessingInfo::before) {
       moved.push_back(info);
-    } else {
-      kept.push_back(info);
     }
   }
 
-  AttachedPreprocessingInfoType *dest_info = ASTtools::createInfoList(dest);
-  dest_info->insert(dest_info->begin(), moved.begin(), moved.end());
-  src_info->swap(kept);
+  for (AttachedPreprocessingInfoType::reverse_iterator info = moved.rbegin();
+       info != moved.rend(); ++info) {
+    SageInterface::publishPreprocessingInfoPhysicalOutputOwner(*info, dest);
+    src->transferPreprocessingInfo(
+        *info, dest, PreprocessingInfo::before,
+        SgLocatedNode::PreprocessingInfoInsertion::front);
+  }
+}
+
+static SgFunctionDeclaration *
+findExactCanonicalDeclarationInScope(SgFunctionDeclaration *definition,
+                                     const FuncDeclList_t &friend_declarations,
+                                     SgScopeStatement *source_scope) {
+  ROSE_ASSERT(definition != NULL);
+  ROSE_ASSERT(source_scope != NULL);
+
+  SgFunctionDeclaration *result = NULL;
+  auto consider = [&](SgFunctionDeclaration *declaration) {
+    if (declaration == NULL) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[source-prototype-canonical]: source "
+              "declaration family contains a null declaration\n");
+      ROSE_ABORT();
+    }
+    if (declaration->get_scope() != source_scope)
+      return;
+
+    SgFunctionDeclaration *canonical =
+        isSgFunctionDeclaration(declaration->get_firstNondefiningDeclaration());
+    SgFunctionSymbol *symbol =
+        canonical != NULL
+            ? isSgFunctionSymbol(canonical->get_symbol_from_symbol_table())
+            : NULL;
+    SgSymbolTable *symbol_table = source_scope->get_symbol_table();
+    if (canonical == NULL || canonical->get_scope() != source_scope ||
+        canonical->get_firstNondefiningDeclaration() != canonical ||
+        symbol == NULL || symbol->get_symbol_basis() != canonical ||
+        symbol_table == NULL || symbol->get_parent() != symbol_table ||
+        !symbol_table->exists(symbol)) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[source-prototype-canonical]: "
+              "declaration=%p canonical=%p symbol=%p basis=%p scope=%p does "
+              "not identify one exact source declaration family\n",
+              static_cast<void *>(declaration), static_cast<void *>(canonical),
+              static_cast<void *>(symbol),
+              static_cast<void *>(symbol != NULL ? symbol->get_symbol_basis()
+                                                 : NULL),
+              static_cast<void *>(source_scope));
+      ROSE_ABORT();
+    }
+    if (result != NULL && result != canonical) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[source-prototype-canonical]: "
+              "definition=%p has distinct canonical declarations %p and %p "
+              "in source scope=%p\n",
+              static_cast<void *>(definition), static_cast<void *>(result),
+              static_cast<void *>(canonical),
+              static_cast<void *>(source_scope));
+      ROSE_ABORT();
+    }
+    result = canonical;
+  };
+
+  consider(definition);
+  for (SgFunctionDeclaration *friend_declaration : friend_declarations)
+    consider(friend_declaration);
+  return result;
 }
 
 /*!
- *  Traversal to insert a new global prototype.
+ *  \brief Publish the exact namespace-scope prototype at a selected lexical
+ *  boundary.
  *
- *  This traversal searches for the first non-defining declaration for
- *  a given function definition, and inserts a new prototype of that
- *  function into global scope. In addition, it fixes up the
- *  definition's first non-defining declaration field to point to the
- *  new global prototype.
- *
- *  The traversal terminates as soon as the first matching declaration
- *  is found by throwing an exception as a string encoded with the
- *  word "done". The caller must ensure that any other matching
- *  declarations have their first non-defining declaration fields
- *  fixed up as well.
+ *  The boundary is supplied by the typed caller.  Semantic auxiliary
+ *  declarations are deliberately not searched here: they have no source
+ *  position and cannot decide where a declaration must be visible.
  */
-class GlobalProtoInserter : public AstSimpleProcessing {
-public:
-  struct TraversalDone {};
+static SgFunctionDeclaration *
+insertGlobalPrototypeAtBoundary(SgFunctionDeclaration *def_decl,
+                                SgGlobal *scope, SgDeclarationStatement *target,
+                                SgFunctionDeclaration *canonical_target,
+                                bool requires_external_linkage) {
+  SgDeclarationStatement *insert_point =
+      target != NULL ? findClosestGlobalInsertPoint(target) : NULL;
 
-  GlobalProtoInserter(SgFunctionDeclaration *def, SgGlobal *scope,
-                      SgDeclarationStatement *latest_insert_point)
-      : def_decl_(def), glob_scope_(scope),
-        latest_insert_point_(latest_insert_point), proto_(0) {}
+  SageBuilder::function_declaration_ownership ownership =
+      canonical_target != NULL
+          ? insert_point != NULL
+                ? SageBuilder::function_declaration_ownership::
+                      sourceLexicalCanonicalReplacementBefore(
+                          scope, insert_point, canonical_target)
+                : SageBuilder::function_declaration_ownership::
+                      sourceLexicalCanonicalReplacementIn(scope,
+                                                          canonical_target)
+      : insert_point != NULL
+          ? SageBuilder::function_declaration_ownership::sourceLexicalBefore(
+                scope, insert_point)
+          : SageBuilder::function_declaration_ownership::sourceLexicalIn(scope);
+  SgFunctionDeclaration *proto = generatePrototype(
+      def_decl, ownership, scope, false,
+      Outliner::useNewFile
+          ? PrototypeDefinitionPolicy::forbidCrossOutputDefinition
+          : PrototypeDefinitionPolicy::preserveSameOutputFamily,
+      PrototypeFamilyPolicy::canonicalReplacement);
+  ROSE_ASSERT(proto);
 
-  virtual void visit(SgNode *cur_node) {
-    SgFunctionDeclaration *cur_decl = isSgFunctionDeclaration(cur_node);
-    if (cur_decl && cur_decl->get_definingDeclaration() == def_decl_ &&
-        !isSgGlobal(cur_decl->get_parent()))
-    //        && isSgGlobal (cur_decl->get_parent ()) != glob_scope_)
-    {
-      SgDeclarationStatement *insert_point =
-          findClosestGlobalInsertPoint(cur_decl);
-      ROSE_ASSERT(insert_point != NULL);
-      if (!declarationAppearsNoLaterThan(glob_scope_, insert_point,
-                                         latest_insert_point_))
-        return;
+  if (insert_point != NULL)
+    moveLeadingPreprocessorPrefixForPrototype(insert_point, proto);
+  // ROSE_ASSERT(insert_point->get_scope() == scope);
+  ROSE_ASSERT(insert_point == NULL ||
+              find(scope->getDeclarationList().begin(),
+                   scope->getDeclarationList().end(),
+                   insert_point) != scope->getDeclarationList().end());
 
-      proto_ = insertManually(def_decl_, glob_scope_, cur_decl);
-      throw TraversalDone();
-    }
+  ROSE_ASSERT(proto->get_parent() == scope);
+  ROSE_ASSERT(proto->get_scope() == scope);
+
+  Sg_File_Info *scope_file_info = scope->get_file_info();
+  const int scope_physical_file_id =
+      scope_file_info != NULL ? scope_file_info->get_physical_file_id() : -1;
+  if (scope_physical_file_id < 0) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[global-prototype-ownership]: "
+            "prototype=%p name=%s target global scope has no exact "
+            "physical file id\n",
+            static_cast<void *>(proto), proto->get_name().str());
+    ROSE_ABORT();
+  }
+  if (proto->get_file_info() == NULL ||
+      proto->get_file_info()->get_physical_file_id() !=
+          scope_physical_file_id ||
+      !proto->get_file_info()->isTransformation() ||
+      !proto->get_file_info()->isOutputInCodeGeneration()) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[global-prototype-ownership]: "
+            "prototype=%p name=%s was not published by its typed lexical "
+            "builder in physical file=%d\n",
+            static_cast<void *>(proto), proto->get_name().str(),
+            scope_physical_file_id);
+    ROSE_ABORT();
   }
 
-  SgFunctionDeclaration *getProto(void) { return proto_; }
-  const SgFunctionDeclaration *getProto(void) const { return proto_; }
-
-  static SgFunctionDeclaration *
-
-  insertManually(SgFunctionDeclaration *def_decl, SgGlobal *scope,
-                 SgDeclarationStatement *target) {
-    SgFunctionDeclaration *proto = generatePrototype(def_decl, scope, false);
-    ROSE_ASSERT(proto);
-
-    SgDeclarationStatement *insert_point = findClosestGlobalInsertPoint(target);
-    ROSE_ASSERT(insert_point);
-
-    moveLeadingPreprocessorPrefixForPrototype(insert_point, proto);
-    // ROSE_ASSERT(insert_point->get_scope() == scope);
-    ROSE_ASSERT(find(scope->getDeclarationList().begin(),
-                     scope->getDeclarationList().end(),
-                     insert_point) != scope->getDeclarationList().end());
-
-    scope->insert_statement(insert_point, proto, true);
-    proto->set_parent(scope);
-    proto->set_scope(scope);
-
-    if (!Outliner::useNewFile) {
-      // Liao, 12/20/2012. A hidden first non-defining declaration is built when
-      // the defining one is created So the newly generated prototype function
-      // declaration is no longer the first non-defining declaration.
-      SgFunctionDeclaration *first_non_def =
-          isSgFunctionDeclaration(proto->get_firstNondefiningDeclaration());
-      ROSE_ASSERT(first_non_def != NULL);
-      ROSE_ASSERT(first_non_def->get_symbol_from_symbol_table() != NULL);
-      def_decl->set_firstNondefiningDeclaration(first_non_def);
-      // Liao, we have to set it here otherwise it is difficult to find this
-      // prototype later. Using static to avoid name collision
+  if (!Outliner::useNewFile) {
+    SgFunctionDeclaration *first_non_def =
+        isSgFunctionDeclaration(proto->get_firstNondefiningDeclaration());
+    SgFunctionSymbol *symbol =
+        first_non_def != NULL
+            ? isSgFunctionSymbol(first_non_def->get_symbol_from_symbol_table())
+            : NULL;
+    if (first_non_def != proto || symbol == NULL ||
+        symbol->get_symbol_basis() != first_non_def ||
+        def_decl->get_firstNondefiningDeclaration() != first_non_def ||
+        proto->get_definingDeclaration() != def_decl) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[global-prototype-canonical]: "
+              "prototype=%p canonical=%p symbol=%p basis=%p definition=%p "
+              "definition-canonical=%p is not the exact in-file "
+              "declaration family produced by the builder\n",
+              static_cast<void *>(proto), static_cast<void *>(first_non_def),
+              static_cast<void *>(symbol),
+              static_cast<void *>(symbol != NULL ? symbol->get_symbol_basis()
+                                                 : NULL),
+              static_cast<void *>(def_decl),
+              static_cast<void *>(def_decl->get_firstNondefiningDeclaration()));
+      ROSE_ABORT();
+    }
+    if (requires_external_linkage) {
+      const auto hasExternalOrDefaultStorage =
+          [](SgFunctionDeclaration *declaration) {
+            const SgStorageModifier &storage =
+                declaration->get_declarationModifier().get_storageModifier();
+            return storage.isDefault() || storage.isExtern();
+          };
+      if (!hasExternalOrDefaultStorage(proto) ||
+          !hasExternalOrDefaultStorage(def_decl) ||
+          !hasExternalOrDefaultStorage(first_non_def)) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[friend-function-linkage]: "
+                "friend-visible outlined family does not have external or "
+                "default storage\n");
+        ROSE_ABORT();
+      }
+    } else {
       SageInterface::setStatic(proto);
       SageInterface::setStatic(def_decl);
       SageInterface::setStatic(first_non_def);
     }
-
-    return proto;
   }
 
-private:
-  //! Defining declaration.
-  SgFunctionDeclaration *def_decl_;
-
-  //! Global scope.
-  SgGlobal *glob_scope_;
-
-  //! Last global declaration point where the prototype is still visible at use.
-  SgDeclarationStatement *latest_insert_point_;
-
-  //! New global prototype (i.e., new first non-defining declaration).
-  SgFunctionDeclaration *proto_;
-};
+  return proto;
+}
 
 //! Inserts a prototype into the original global scope of the outline target
 static SgFunctionDeclaration *insertGlobalPrototype(
@@ -626,89 +1041,212 @@ static SgFunctionDeclaration *insertGlobalPrototype(
         *default_target) // The enclosing function for the outlining target
 {
   SgFunctionDeclaration *prototype = NULL;
+  SgFunctionDeclaration *source_canonical_before_insertion = NULL;
 
-  if (def && scope) {
-    SgDeclarationStatement *latest_insert_point =
-        default_target != NULL ? findClosestGlobalInsertPoint(default_target)
-                               : NULL;
-    // DQ (3/3/2009): Why does this code use try .. catch blocks (exception
-    // handling)?
-    GlobalProtoInserter ins(def, scope, latest_insert_point);
-    try {
-      ins.traverse(scope, preorder);
-    } catch (GlobalProtoInserter::TraversalDone &) {
-    }
-    prototype = ins.getProto();
-
-    if (!prototype && default_target) // No declaration found
-    {
-      // Liao, 5/19/2009
-      // The prototype has to be inserted to the very first class having a
-      // friend declaration to the outlined function to avoid conflicting type
-      // info. for extern "C" functions. The reason is that there is no way to
-      // use friend and extern "C" together within a class.
-      if (friendFunctionPrototypeList.size() != 0) {
-        vector<SgDeclarationStatement *> origFriends;
-        for (FuncDeclList_t::iterator i = friendFunctionPrototypeList.begin();
-             i != friendFunctionPrototypeList.end(); i++) {
-          SgDeclarationStatement *decl = isSgDeclarationStatement(*i);
-          ROSE_ASSERT(decl != NULL);
-          origFriends.push_back(decl);
-        }
-        vector<SgDeclarationStatement *> sortedFriends =
-            SageInterface::sortSgNodeListBasedOnAppearanceOrderInSource(
-                origFriends);
-
-        SgDeclarationStatement *target = default_target;
-        for (vector<SgDeclarationStatement *>::iterator it =
-                 sortedFriends.begin();
-             it != sortedFriends.end(); ++it) {
-          SgDeclarationStatement *friend_insert_point =
-              findClosestGlobalInsertPoint(*it);
-          ROSE_ASSERT(friend_insert_point != NULL);
-          if (declarationAppearsNoLaterThan(scope, friend_insert_point,
-                                            latest_insert_point)) {
-            target = *it;
-            break;
-          }
-        }
-        prototype = GlobalProtoInserter::insertManually(def, scope, target);
-      } else
-        prototype =
-            GlobalProtoInserter::insertManually(def, scope, default_target);
-    }
+  if (def == NULL || scope == NULL || default_target == NULL) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[global-prototype-input]: definition=%p "
+            "scope=%p default-target=%p must identify one exact source "
+            "prototype transaction\n",
+            static_cast<void *>(def), static_cast<void *>(scope),
+            static_cast<void *>(default_target));
+    ROSE_ABORT();
   }
 
-  // The friend function declarations are linked to the global declarations via
-  // first non-defining declaration links. Fix-up remaining prototypes.
+  source_canonical_before_insertion = findExactCanonicalDeclarationInScope(
+      def, friendFunctionPrototypeList, scope);
+  SgGlobal *definition_global = SageInterface::getGlobalScope(def);
+  const bool fresh_cross_output_source_family =
+      Outliner::useNewFile && definition_global != NULL &&
+      definition_global != scope && friendFunctionPrototypeList.empty();
+  if (source_canonical_before_insertion == NULL &&
+      !fresh_cross_output_source_family) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[source-prototype-canonical]: "
+            "definition=%p definition-global=%p source-global=%p friends=%zu "
+            "has neither an exact source canonical declaration nor one fresh "
+            "cross-output source-family construction\n",
+            static_cast<void *>(def), static_cast<void *>(definition_global),
+            static_cast<void *>(scope), friendFunctionPrototypeList.size());
+    ROSE_ABORT();
+  }
+
+  SgDeclarationStatement *insert_point =
+      findClosestGlobalInsertPoint(default_target);
+  if (insert_point == NULL) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[global-insertion-boundary]: "
+            "default-target=%p has no exact global lexical boundary\n",
+            static_cast<void *>(default_target));
+    ROSE_ABORT();
+  }
+  for (SgFunctionDeclaration *friend_declaration :
+       friendFunctionPrototypeList) {
+    SgDeclarationStatement *friend_insert_point =
+        findClosestGlobalInsertPoint(friend_declaration);
+    if (friend_insert_point == NULL) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[global-insertion-boundary]: "
+              "friend=%p has no exact global lexical owner\n",
+              static_cast<void *>(friend_declaration));
+      ROSE_ABORT();
+    }
+    if (declarationAppearsNoLaterThan(scope, friend_insert_point,
+                                      insert_point)) {
+      insert_point = friend_insert_point;
+    }
+  }
+  prototype = insertGlobalPrototypeAtBoundary(
+      def, scope, insert_point, source_canonical_before_insertion,
+      !friendFunctionPrototypeList.empty());
+
+  // Complete the exact declaration-family transaction for every generated
+  // friend that shared the replaced canonical identity.
   if (prototype != NULL) {
+    SgFunctionDeclaration *canonical =
+        isSgFunctionDeclaration(prototype->get_firstNondefiningDeclaration());
+    SgFunctionSymbol *canonical_symbol =
+        canonical != NULL
+            ? isSgFunctionSymbol(canonical->get_symbol_from_symbol_table())
+            : NULL;
+    SgSymbolTable *canonical_symbol_table = scope->get_symbol_table();
+    if (canonical != prototype || canonical_symbol == NULL ||
+        canonical_symbol->get_symbol_basis() != canonical ||
+        canonical->get_scope() != scope || canonical_symbol_table == NULL ||
+        canonical_symbol->get_parent() != canonical_symbol_table ||
+        !canonical_symbol_table->exists(canonical_symbol) ||
+        (source_canonical_before_insertion != NULL &&
+         source_canonical_before_insertion != canonical &&
+         source_canonical_before_insertion->get_firstNondefiningDeclaration() !=
+             canonical)) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[global-prototype-canonical]: "
+              "prototype=%p canonical=%p symbol=%p basis=%p prior=%p did not "
+              "atomically replace the exact source declaration identity\n",
+              static_cast<void *>(prototype), static_cast<void *>(canonical),
+              static_cast<void *>(canonical_symbol),
+              static_cast<void *>(canonical_symbol != NULL
+                                      ? canonical_symbol->get_symbol_basis()
+                                      : NULL),
+              static_cast<void *>(source_canonical_before_insertion));
+      ROSE_ABORT();
+    }
     // printf ("In insertGlobalPrototype(): proto = %p protos.size() = %"
     // PRIuPTR " \n",prototype,friendFunctionPrototypeList.size());
     for (FuncDeclList_t::iterator i = friendFunctionPrototypeList.begin();
          i != friendFunctionPrototypeList.end(); ++i) {
       SgFunctionDeclaration *proto_i = *i;
-      ROSE_ASSERT(proto_i);
-      proto_i->set_firstNondefiningDeclaration(
-          prototype->get_firstNondefiningDeclaration());
-      ROSE_ASSERT(proto_i->get_declaration_associated_with_symbol() != NULL);
+      SgFunctionDeclaration *prior =
+          proto_i != NULL ? isSgFunctionDeclaration(
+                                proto_i->get_firstNondefiningDeclaration())
+                          : NULL;
+      if (proto_i == NULL || source_canonical_before_insertion == NULL ||
+          (prior != source_canonical_before_insertion && prior != canonical)) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[friend-prototype-canonical]: "
+                "friend=%p prior=%p expected-prior=%p canonical=%p is not a "
+                "member of the exact source declaration family\n",
+                static_cast<void *>(proto_i), static_cast<void *>(prior),
+                static_cast<void *>(source_canonical_before_insertion),
+                static_cast<void *>(canonical));
+        ROSE_ABORT();
+      }
+      proto_i->set_firstNondefiningDeclaration(canonical);
 
       // Only set the friend function prototype to reference the defining
       // declaration of we will NOT be moving the defining declaration to a
       // separate file.
       if (Outliner::useNewFile == false)
         proto_i->set_definingDeclaration(def);
+
+      SgClassDefinition *friend_owner =
+          isSgClassDefinition(proto_i->get_parent());
+      const size_t lexical_memberships =
+          friend_owner != NULL
+              ? static_cast<size_t>(
+                    std::count(friend_owner->get_members().begin(),
+                               friend_owner->get_members().end(), proto_i))
+              : 0;
+      if (proto_i->get_firstNondefiningDeclaration() != canonical ||
+          proto_i->get_scope() != scope || friend_owner == NULL ||
+          lexical_memberships != 1 ||
+          !proto_i->get_declarationModifier().isFriend() ||
+          proto_i->get_name() != canonical->get_name() ||
+          proto_i->get_type() != canonical->get_type() ||
+          proto_i->get_linkage() != canonical->get_linkage() ||
+          canonical_symbol->get_symbol_basis() != canonical ||
+          canonical_symbol->get_parent() != canonical_symbol_table ||
+          !canonical_symbol_table->exists(canonical_symbol) ||
+          (Outliner::useNewFile ? proto_i->get_definingDeclaration() != NULL
+                                : proto_i->get_definingDeclaration() != def)) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[friend-prototype-canonical]: "
+                "friend=%p owner=%p lexical-memberships=%zu semantic-scope=%p "
+                "canonical=%p canonical-symbol=%p basis=%p definition=%p did "
+                "not join the exact source declaration family\n",
+                static_cast<void *>(proto_i), static_cast<void *>(friend_owner),
+                lexical_memberships, static_cast<void *>(proto_i->get_scope()),
+                static_cast<void *>(canonical),
+                static_cast<void *>(canonical_symbol),
+                static_cast<void *>(canonical_symbol->get_symbol_basis()),
+                static_cast<void *>(proto_i->get_definingDeclaration()));
+        ROSE_ABORT();
+      }
+      SgDeclarationStatement *friend_boundary =
+          findClosestGlobalInsertPoint(proto_i);
+      if (friend_boundary == NULL ||
+          !declarationAppearsNoLaterThan(scope, canonical, friend_boundary)) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[friend-prototype-order]: "
+                "canonical=%p linkage=%s was not published before friend=%p "
+                "owner=%p boundary=%p\n",
+                static_cast<void *>(canonical),
+                canonical->get_linkage().c_str(), static_cast<void *>(proto_i),
+                static_cast<void *>(friend_owner),
+                static_cast<void *>(friend_boundary));
+        ROSE_ABORT();
+      }
     }
 
-    // DQ (2/20/2009): Set the non-defining declaration
-    if (def->get_firstNondefiningDeclaration() == NULL) {
-      prototype->set_firstNondefiningDeclaration(prototype);
+    if (prototype->get_parent() != scope ||
+        prototype->get_firstNondefiningDeclaration() != prototype ||
+        (!Outliner::useNewFile &&
+         def->get_firstNondefiningDeclaration() != prototype)) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[global-prototype-canonical]: "
+              "prototype=%p parent=%p scope=%p definition=%p "
+              "definition-canonical=%p lost its exact source family after "
+              "friend publication\n",
+              static_cast<void *>(prototype),
+              static_cast<void *>(prototype->get_parent()),
+              static_cast<void *>(scope), static_cast<void *>(def),
+              static_cast<void *>(def->get_firstNondefiningDeclaration()));
+      ROSE_ABORT();
     }
 
-    // DQ (2/20/2009): Added assertions.
-    ROSE_ASSERT(prototype->get_parent() != NULL);
-    ROSE_ASSERT(prototype->get_firstNondefiningDeclaration() != NULL);
-
-    ROSE_ASSERT(prototype->get_definingDeclaration() != NULL);
+    SgDeclarationStatement *prototype_definition =
+        prototype->get_definingDeclaration();
+    if (Outliner::useNewFile) {
+      if (prototype_definition != NULL) {
+        std::cerr
+            << "REX_OUTLINER_INVARIANT[global-prototype]: a declaration in "
+               "the source file must not retain a defining-declaration edge "
+               "to a definition moved to a separate output file\n";
+        ROSE_ABORT();
+      }
+      SgFunctionDeclaration *source_first_nondef =
+          isSgFunctionDeclaration(prototype->get_firstNondefiningDeclaration());
+      if (source_first_nondef == NULL ||
+          source_first_nondef->get_definingDeclaration() != NULL) {
+        std::cerr << "REX_OUTLINER_INVARIANT[global-prototype]: the source "
+                     "prototype chain retains a cross-file definition edge\n";
+        ROSE_ABORT();
+      }
+    } else if (prototype_definition != def) {
+      std::cerr << "REX_OUTLINER_INVARIANT[global-prototype]: an in-file "
+                   "prototype must refer to its exact function definition\n";
+      ROSE_ABORT();
+    }
   }
 
   // printf ("In insertGlobalPrototype(): Returning global SgFunctionDeclaration
@@ -802,26 +1340,115 @@ findMatchingDefiningClassDeclaration(SgSourceFile *targetFile,
  *  class definition.
  */
 static SgFunctionDeclaration *
-insertFriendDecl(const SgFunctionDeclaration *func,
-                 SgGlobal *scope,            // the relevant class's scope
-                 SgClassDefinition *cls_def) // the class definition in which we
-                                             // insert friend declarations
-{
+insertFriendDecl(const SgFunctionDeclaration *func, SgGlobal *sourceGlobal,
+                 SgClassDefinition *cls_def, FuncDeclList_t &sourceFriends,
+                 FuncDeclList_t &destinationFriends) {
   SgFunctionDeclaration *friend_proto = 0;
 
   if (enable_debug)
     printf("Entering insertFriendDecl(): func = %p \n", func);
 
-  if (func && scope && cls_def) {
-    // Determine insertion point, i.
-    SgDeclarationStatementPtrList &mems = cls_def->get_members();
-    SgDeclarationStatementPtrList::iterator i = mems.begin();
+  if (func && sourceGlobal && cls_def) {
+    SgGlobal *definitionGlobal = SageInterface::getGlobalScope(func);
+    SgGlobal *classGlobal = SageInterface::getGlobalScope(cls_def);
+    if (definitionGlobal == NULL || classGlobal == NULL) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[friend-family-policy]: definition=%p "
+              "definition-global=%p class=%p class-global=%p has no exact "
+              "output family\n",
+              static_cast<const void *>(func),
+              static_cast<void *>(definitionGlobal),
+              static_cast<void *>(cls_def), static_cast<void *>(classGlobal));
+      ROSE_ABORT();
+    }
 
-    // Create the friend declaration.  cls_def: the class definition ,  scope:
-    // the corresponding class's scope
-    friend_proto = generateFriendPrototype(func, cls_def, scope);
+    auto publishFriendFamily = [&](SgFunctionDeclaration *friendDeclaration) {
+      SgGlobal *friendGlobal = SageInterface::getGlobalScope(friendDeclaration);
+      FuncDeclList_t *family = NULL;
+      if (!Outliner::useNewFile || friendGlobal == sourceGlobal) {
+        family = &sourceFriends;
+      } else if (friendGlobal == definitionGlobal) {
+        family = &destinationFriends;
+      } else {
+        // More than one outlined region may already have copied the declaring
+        // class into a different generated translation unit.  A friend added
+        // to that earlier copy is a third, independent physical declaration
+        // family: it grants access in that class definition, but it must not
+        // acquire a defining edge into either the source file or the current
+        // outlined file.
+        SgFunctionDeclaration *canonical = isSgFunctionDeclaration(
+            friendDeclaration->get_firstNondefiningDeclaration());
+        SgFunctionSymbol *symbol =
+            canonical != NULL
+                ? isSgFunctionSymbol(canonical->get_symbol_from_symbol_table())
+                : NULL;
+        SgSymbolTable *table =
+            friendGlobal != NULL ? friendGlobal->get_symbol_table() : NULL;
+        if (friendGlobal == NULL ||
+            friendDeclaration->get_scope() != friendGlobal ||
+            canonical != friendDeclaration ||
+            friendDeclaration->get_definingDeclaration() != NULL ||
+            symbol == NULL || symbol->get_symbol_basis() != canonical ||
+            table == NULL || symbol->get_parent() != table ||
+            !table->exists(symbol)) {
+          fprintf(
+              stderr,
+              "REX_OUTLINER_INVARIANT[friend-independent-family]: "
+              "friend=%p global=%p scope=%p canonical=%p defining=%p "
+              "symbol=%p basis=%p table=%p does not identify one exact "
+              "independent output family\n",
+              static_cast<void *>(friendDeclaration),
+              static_cast<void *>(friendGlobal),
+              static_cast<void *>(friendDeclaration->get_scope()),
+              static_cast<void *>(canonical),
+              static_cast<void *>(friendDeclaration->get_definingDeclaration()),
+              static_cast<void *>(symbol),
+              static_cast<void *>(symbol != NULL ? symbol->get_symbol_basis()
+                                                 : NULL),
+              static_cast<void *>(table));
+          ROSE_ABORT();
+        }
+        return;
+      }
+      if (family == NULL || std::find(family->begin(), family->end(),
+                                      friendDeclaration) != family->end()) {
+        SgSourceFile *friendFile =
+            SageInterface::getEnclosingSourceFile(friendDeclaration);
+        SgSourceFile *sourceFile =
+            SageInterface::getEnclosingSourceFile(sourceGlobal);
+        SgSourceFile *definitionFile =
+            SageInterface::getEnclosingSourceFile(definitionGlobal);
+        SgSourceFile *classFile =
+            SageInterface::getEnclosingSourceFile(classGlobal);
+        fprintf(
+            stderr,
+            "REX_OUTLINER_INVARIANT[friend-family-policy]: friend=%p "
+            "global=%p file=%s source=%p file=%s destination=%p file=%s "
+            "class-global=%p file=%s has no unique exact family\n",
+            static_cast<void *>(friendDeclaration),
+            static_cast<void *>(friendGlobal),
+            friendFile != NULL ? friendFile->getFileName().c_str() : "<null>",
+            static_cast<void *>(sourceGlobal),
+            sourceFile != NULL ? sourceFile->getFileName().c_str() : "<null>",
+            static_cast<void *>(definitionGlobal),
+            definitionFile != NULL ? definitionFile->getFileName().c_str()
+                                   : "<null>",
+            static_cast<void *>(classGlobal),
+            classFile != NULL ? classFile->getFileName().c_str() : "<null>");
+        ROSE_ABORT();
+      }
+      family->push_back(friendDeclaration);
+    };
+
+    // A friend is semantically declared in the global scope belonging to its
+    // exact lexical class.  A copied destination class must never publish its
+    // symbol in the original translation unit.
+    friend_proto = generateFriendPrototype(func, cls_def, classGlobal);
     ROSE_ASSERT(friend_proto != NULL);
-    ROSE_ASSERT(friend_proto->get_definingDeclaration() == NULL);
+    ROSE_ASSERT(friend_proto->get_parent() == cls_def);
+    ROSE_ASSERT(friend_proto->get_scope() == classGlobal);
+    ROSE_ASSERT(cls_def->get_members().front() == friend_proto);
+    publishFriendFamily(friend_proto);
 
     if (enable_debug) {
       printf("In insertFriendDecl(): Built SgFunctionDeclaration: friend_proto "
@@ -841,13 +1468,6 @@ insertFriendDecl(const SgFunctionDeclaration *func,
       }
     }
 
-    // Insert it into the class.
-    if (i != mems.end()) {
-    }
-
-    // DQ (8/6/2019): This is the step we want to defer to later so that we can
-    // support an optimization of where this is done within header files.
-    // cls_def->get_members().insert(i, friend_proto);
     bool includingSelf = true;
     SgSourceFile *sourceFile =
         SageInterface::getEnclosingNode<SgSourceFile>(cls_def, includingSelf);
@@ -876,16 +1496,6 @@ insertFriendDecl(const SgFunctionDeclaration *func,
       // that is processed. This significaly optimizes the performance of tools
       // that are using the outliner.
 
-      // DQ (8/7/2019): Instead, save the information to use later to support
-      // the transformation, *i and friend_proto.
-      // cls_def->get_members().insert(i, friend_proto);
-      //   bool inFront = true;
-      // SgStatement::insert_statement(*i,friend_proto,inFront);
-      // cls_def->get_members().insert(i, friend_proto);
-
-      ROSE_ASSERT(*i != NULL);
-      ROSE_ASSERT(i != mems.end());
-
       if (enable_debug) {
         // DQ (10/8/2019): Output when function declarations are being inserted.
         printf("#################################################### \n");
@@ -894,10 +1504,6 @@ insertFriendDecl(const SgFunctionDeclaration *func,
                friend_proto, cls_def);
         printf("#################################################### \n");
       }
-      // DQ (8/7/2019): This is the only form of insert that appears to work
-      // well.
-      cls_def->get_members().insert(i, friend_proto);
-
       // DQ (1/17/2020): Now we need to see the class definition is from the
       // input file (*.C) file and if so there will be another class definition
       // in the generated file for the outline functions (*_lib.C file). And we
@@ -973,10 +1579,6 @@ insertFriendDecl(const SgFunctionDeclaration *func,
                 matchingClassDefinition->get_file_info()->display();
               }
 
-              SgDeclarationStatementPtrList::iterator i2 =
-                  matchingClassDefinition->get_members().begin();
-              ROSE_ASSERT(i2 != matchingClassDefinition->get_members().end());
-
               // Initially we can test this by making a copy of the pointer, but
               // later it should be deep copy.
               // SgFunctionDeclaration* friendFunction = friend_proto;
@@ -985,20 +1587,47 @@ insertFriendDecl(const SgFunctionDeclaration *func,
               ROSE_ASSERT(alternativeGlobalScope != NULL);
               SgFunctionDeclaration *friendFunction = generateFriendPrototype(
                   func, matchingClassDefinition, alternativeGlobalScope);
-              ;
-
-              matchingClassDefinition->get_members().insert(i2, friendFunction);
+              ROSE_ASSERT(friendFunction->get_parent() ==
+                          matchingClassDefinition);
+              ROSE_ASSERT(friendFunction->get_scope() ==
+                          alternativeGlobalScope);
+              ROSE_ASSERT(matchingClassDefinition->get_members().front() ==
+                          friendFunction);
+              publishFriendFamily(friendFunction);
 
               // Also mark the class definition as transformed.
               matchingClassDefinition->markAsModified();
               ROSE_ASSERT(orig_count + 1 ==
                           matchingClassDefinition->get_members().size());
-              friendFunction->set_parent(matchingClassDefinition);
-              friendFunction->set_scope(alternativeGlobalScope);
-              friendFunction->get_startOfConstruct()->set_physical_filename(
-                  alternativeSourceFile->getFileName().c_str());
-              friendFunction->get_endOfConstruct()->set_physical_filename(
-                  alternativeSourceFile->getFileName().c_str());
+              Sg_File_Info *matching_class_info =
+                  matchingClassDefinition->get_file_info();
+              const int matching_class_physical_id =
+                  matching_class_info != NULL
+                      ? matching_class_info->get_physical_file_id()
+                      : -1;
+              if (matching_class_physical_id < 0) {
+                fprintf(stderr,
+                        "REX_OUTLINER_INVARIANT[friend-ownership]: class=%s "
+                        "in generated source=%s has no exact physical "
+                        "ownership\n",
+                        matchingClassDeclaration->get_name().str(),
+                        alternativeSourceFile->getFileName().c_str());
+                ROSE_ABORT();
+              }
+              if (friendFunction->get_file_info() == NULL ||
+                  friendFunction->get_file_info()->get_physical_file_id() !=
+                      matching_class_physical_id ||
+                  !friendFunction->get_file_info()->isTransformation() ||
+                  !friendFunction->get_file_info()
+                       ->isOutputInCodeGeneration()) {
+                fprintf(stderr,
+                        "REX_OUTLINER_INVARIANT[friend-ownership]: "
+                        "friend=%s was not published by its typed lexical "
+                        "builder in physical file=%d\n",
+                        friendFunction->get_name().str(),
+                        matching_class_physical_id);
+                ROSE_ABORT();
+              }
               friendFunction->markAsModified();
               if (enable_debug) {
                 cout << "after insertion, checking the matching class "
@@ -1017,41 +1646,29 @@ insertFriendDecl(const SgFunctionDeclaration *func,
                   "definition."
                << endl;
       }
-
-    } else {
-      // If we are not unparsing headers we still have to worry about class
-      // declarations that are in the original source file (*.C input file) and
-      // which would be duplicated in the copy of the original source file when
-      // we outline to a separate file.
-
-      if (enable_debug) {
-        // DQ (10/8/2019): Output when function declarations are being inserted.
-        printf("#################################################### \n");
-        printf("Inserting friend_proto = %p into cls_def = %p (this should "
-               "have been defered) \n",
-               friend_proto, cls_def);
-        printf("#################################################### \n");
-      }
-
-      // DQ (8/6/2019): This is the normal (original) behavior.
-      cls_def->get_members().insert(i, friend_proto);
     }
 
-    friend_proto->set_parent(cls_def);
-    friend_proto->set_scope(scope);
-
-    // Address the iterator invalidation caused by the insertion of a new
-    // element into the list. i = mems.begin(); ROSE_ASSERT(*i == friend_proto);
-    // i++;
-
-    // DQ (6/4/2019): The isModified flag is reset by the SageBuilder functions
-    // as part of adding the function. It is however marked as a transformation.
-    // To support the header file unparsing, we also need to set the physical
-    // file name to the header file name.
-    string filename = cls_def->get_startOfConstruct()->get_physical_filename();
-
-    friend_proto->get_startOfConstruct()->set_physical_filename(filename);
-    friend_proto->get_endOfConstruct()->set_physical_filename(filename);
+    Sg_File_Info *class_info = cls_def->get_file_info();
+    const int class_physical_id =
+        class_info != NULL ? class_info->get_physical_file_id() : -1;
+    if (class_physical_id < 0) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[friend-ownership]: target class for "
+              "friend=%s has no exact physical ownership\n",
+              friend_proto->get_name().str());
+      ROSE_ABORT();
+    }
+    if (friend_proto->get_file_info() == NULL ||
+        friend_proto->get_file_info()->get_physical_file_id() !=
+            class_physical_id ||
+        !friend_proto->get_file_info()->isTransformation() ||
+        !friend_proto->get_file_info()->isOutputInCodeGeneration()) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[friend-ownership]: friend=%s was not "
+              "published by its typed lexical builder in physical file=%d\n",
+              friend_proto->get_name().str(), class_physical_id);
+      ROSE_ABORT();
+    }
 
     // DQ (6/4/2019): Need to mark this as a modification, so that it will be
     // detected as something to trigger the output of the header file when the
@@ -1084,24 +1701,29 @@ insertFriendDecl(const SgFunctionDeclaration *func,
  *  as 'private' or 'protected'.
  */
 static bool isProtPriv(const SgDeclarationStatement *decl) {
-
   if (decl) {
-    SgDeclarationStatement *decl_tmp =
-        const_cast<SgDeclarationStatement *>(decl);
-
-    // Liao 3/1/2013. workaround a bug introduced by Dan: only the defining decl
-    // has the correct access modifier.
-    if (decl_tmp->get_definingDeclaration() != NULL) {
-      decl_tmp = decl_tmp->get_definingDeclaration();
-    }
-
-    ROSE_ASSERT(decl_tmp);
     const SgAccessModifier &decl_access_mod =
-        decl_tmp->get_declarationModifier().get_accessModifier();
+        decl->get_declarationModifier().get_accessModifier();
+    const SgDeclarationStatement *const chain_declarations[] = {
+        decl, decl->get_firstNondefiningDeclaration(),
+        decl->get_definingDeclaration()};
+    for (const SgDeclarationStatement *chain_decl : chain_declarations) {
+      if (chain_decl != NULL &&
+          !(chain_decl->get_declarationModifier().get_accessModifier() ==
+            decl_access_mod)) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[declaration-chain-access]: "
+                "declaration=%p/%s chain=%p/%s has incongruent access\n",
+                static_cast<const void *>(decl), decl->class_name().c_str(),
+                static_cast<const void *>(chain_decl),
+                chain_decl->class_name().c_str());
+        ROSE_ABORT();
+      }
+    }
     if (decl_access_mod.isPrivate() || decl_access_mod.isProtected())
       return true;
     if (decl_access_mod.isDefault()) {
-      const SgScopeStatement *decl_scope = decl_tmp->get_scope();
+      const SgScopeStatement *decl_scope = decl->get_scope();
       const SgClassDefinition *class_def = isSgClassDefinition(decl_scope);
       if (class_def != NULL && class_def->get_declaration()->get_class_type() ==
                                    SgClassDeclaration::e_class) {
@@ -1153,6 +1775,70 @@ static SgClassDefinition *isProtPrivMember(SgVarRefExp *v) {
   return NULL; // default: is not
 }
 
+static bool
+hasExactDeclaringClassSurface(SgDeclarationStatement *declaration,
+                              SgClassDefinition *declaringClass,
+                              std::set<SgDeclarationStatement *> &visited) {
+  if (declaration == NULL || declaringClass == NULL ||
+      declaration->get_scope() != declaringClass ||
+      !visited.insert(declaration).second) {
+    return false;
+  }
+
+  if (declaration->get_parent() == declaringClass) {
+    return std::count(declaringClass->get_members().begin(),
+                      declaringClass->get_members().end(), declaration) == 1;
+  }
+
+  if (SgDeclarationGroupStatement *group =
+          isSgDeclarationGroupStatement(declaration->get_parent())) {
+    group->validate();
+    return group->get_scope() == declaringClass &&
+           group->get_parent() == declaringClass &&
+           std::count(group->get_declarations().begin(),
+                      group->get_declarations().end(), declaration) == 1 &&
+           std::count(declaringClass->get_members().begin(),
+                      declaringClass->get_members().end(), group) == 1;
+  }
+
+  if (SgAuxiliaryDeclarationList *auxiliary =
+          isSgAuxiliaryDeclarationList(declaration->get_parent())) {
+    auxiliary->validate_semantic_non_output_role();
+    if (auxiliary->get_parent() != declaringClass ||
+        declaringClass->get_auxiliary_declarations() != auxiliary ||
+        std::count(auxiliary->get_declarations().begin(),
+                   auxiliary->get_declarations().end(), declaration) != 1) {
+      return false;
+    }
+    SgDeclarationStatement *definition =
+        isSgDeclarationStatement(declaration->get_definingDeclaration());
+    return definition != NULL && definition != declaration &&
+           definition->get_firstNondefiningDeclaration() == declaration &&
+           hasExactDeclaringClassSurface(definition, declaringClass, visited);
+  }
+
+  if (SgDeclarationScope *declarationScope =
+          isSgDeclarationScope(declaration->get_parent())) {
+    const std::vector<SgNode *> successors =
+        declarationScope->get_traversalSuccessorContainer();
+    if (std::count(successors.begin(), successors.end(), declaration) != 1) {
+      return false;
+    }
+    SgNode *scopeOwner =
+        SageBuilder::getDeclarationScopeOwner(declarationScope);
+    if (scopeOwner == declaringClass) {
+      return true;
+    }
+    SgDeclarationStatement *ownerDeclaration =
+        isSgDeclarationStatement(scopeOwner);
+    return ownerDeclaration != NULL && ownerDeclaration != declaration &&
+           hasExactDeclaringClassSurface(ownerDeclaration, declaringClass,
+                                         visited);
+  }
+
+  return false;
+}
+
 /*!
  *  \brief Returns 'true' if the given type was declared as a
  *  'protected' or 'private' class member.
@@ -1167,15 +1853,34 @@ static SgClassDefinition *isProtPrivType(SgType *t) {
       SgNamedType *named = isSgNamedType(t);
       ROSE_ASSERT(named);
       SgDeclarationStatement *decl = named->get_declaration();
-      if (decl)
-        if (decl->get_definingDeclaration())
-          decl = decl->get_definingDeclaration();
       if (isProtPriv(decl)) {
-        // if any type in the type chain is private, we return immediately.
-        if (SgClassDefinition *c_d = isSgClassDefinition(decl->get_parent()))
-          return c_d;
-        // if c_d is NULL, we go further to check its base type's access
-        // control;
+        // Access to a non-public named type is granted by the class that owns
+        // the declaration, regardless of whether the type itself is a class,
+        // enum, or typedef.  Using a nested class's own definition here grants
+        // friendship in the wrong class; casting also loses private enum and
+        // typedef declarations entirely.
+        SgClassDefinition *declaring_class =
+            decl != NULL ? isSgClassDefinition(decl->get_scope()) : NULL;
+        std::set<SgDeclarationStatement *> visited;
+        if (declaring_class == NULL ||
+            !hasExactDeclaringClassSurface(decl, declaring_class, visited)) {
+          fprintf(stderr,
+                  "REX_OUTLINER_INVARIANT[private-type-owner]: "
+                  "declaration=%p/%s parent=%p/%s scope=%p/%s is non-public "
+                  "but has no exact declaring-class owner\n",
+                  static_cast<void *>(decl),
+                  decl != NULL ? decl->class_name().c_str() : "<null>",
+                  static_cast<void *>(decl != NULL ? decl->get_parent() : NULL),
+                  decl != NULL && decl->get_parent() != NULL
+                      ? decl->get_parent()->class_name().c_str()
+                      : "<null>",
+                  static_cast<void *>(decl != NULL ? decl->get_scope() : NULL),
+                  decl != NULL && decl->get_scope() != NULL
+                      ? decl->get_scope()->class_name().c_str()
+                      : "<null>");
+          ROSE_ABORT();
+        }
+        return declaring_class;
       }
     }
 
@@ -1374,7 +2079,8 @@ static
       }
       // scope: the global scope in which the symbols should be inserted
       // class definition: the scope in which we insert friend declarations
-      SgFunctionDeclaration *friend_decl = insertFriendDecl(func, scope, *c);
+      SgFunctionDeclaration *friend_decl = insertFriendDecl(
+          func, scope, *c, friends, deferedFriendTransformation.targetFriends);
       ROSE_ASSERT(friend_decl != NULL);
       if (enable_debug) {
         printf("+++++++++++++++++++ friend_decl = %p = %s \n", friend_decl,
@@ -1392,22 +2098,39 @@ static
                isFriend ? "true" : "false",
                isDefiningDeclaration ? "true" : "false");
       }
-      // DQ (2/23/2009): Added assertion.
-      ROSE_ASSERT(friend_decl->get_definingDeclaration() == NULL);
-
-      ROSE_ASSERT(friend_decl->get_scope() == scope);
-
-      // DQ (2/27/2009): If we are outlining to a separate file, then we don't
-      // want to attach a reference to the defining declaration which will be
-      // moved to the different file (violates file consistency rules that are
-      // not well enforced).
-      ROSE_ASSERT(friend_decl->get_definingDeclaration() == NULL);
+      const bool sourceFriend = std::find(friends.begin(), friends.end(),
+                                          friend_decl) != friends.end();
+      const bool destinationFriend =
+          std::find(deferedFriendTransformation.targetFriends.begin(),
+                    deferedFriendTransformation.targetFriends.end(),
+                    friend_decl) !=
+          deferedFriendTransformation.targetFriends.end();
+      SgGlobal *definitionGlobal = SageInterface::getGlobalScope(func);
+      SgFunctionDeclaration *sourceFamilyDefinition =
+          definitionGlobal == scope ? const_cast<SgFunctionDeclaration *>(func)
+                                    : NULL;
+      if (sourceFriend == destinationFriend ||
+          (sourceFriend && (friend_decl->get_scope() != scope ||
+                            friend_decl->get_definingDeclaration() !=
+                                sourceFamilyDefinition)) ||
+          (destinationFriend &&
+           (friend_decl->get_scope() != definitionGlobal ||
+            friend_decl->get_definingDeclaration() != func))) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[friend-family-policy]: friend=%p "
+                "source=%d destination=%d semantic-scope=%p definition=%p "
+                "did not publish one exact output family\n",
+                static_cast<void *>(friend_decl), sourceFriend ? 1 : 0,
+                destinationFriend ? 1 : 0,
+                static_cast<void *>(friend_decl->get_scope()),
+                static_cast<void *>(friend_decl->get_definingDeclaration()));
+        ROSE_ABORT();
+      }
       if (enable_debug)
         printf("friend_decl = %p friend_decl->get_definingDeclaration() = %p "
                "friends list size = %zu \n",
                friend_decl, friend_decl->get_definingDeclaration(),
                friends.size());
-      friends.push_back(friend_decl);
     }
 
     if (enable_debug)
@@ -1432,8 +2155,23 @@ static
     // ROSE_ASSERT(deferedFriendTransformation.targetClasses.size() <= 2);
     // ROSE_ASSERT(deferedFriendTransformation.targetClasses.size() <= 3);
     ROSE_ASSERT(deferedFriendTransformation.targetClasses.size() <= 4);
-    // ROSE_ASSERT(deferedFriendTransformation.targetFriends.size() < 2);
-    ROSE_ASSERT(deferedFriendTransformation.targetFriends.size() == 0);
+    for (SgFunctionDeclaration *destinationFriend :
+         deferedFriendTransformation.targetFriends) {
+      if (destinationFriend == NULL ||
+          SageInterface::getGlobalScope(destinationFriend) !=
+              SageInterface::getGlobalScope(func) ||
+          destinationFriend->get_firstNondefiningDeclaration() !=
+              func->get_firstNondefiningDeclaration() ||
+          destinationFriend->get_definingDeclaration() != func) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[friend-family-policy]: destination "
+                "friend=%p did not join definition=%p canonical=%p\n",
+                static_cast<void *>(destinationFriend),
+                static_cast<void *>(func),
+                static_cast<void *>(func->get_firstNondefiningDeclaration()));
+        ROSE_ABORT();
+      }
+    }
   } else {
     // DQ (1/17/2020): Adding debugging information.
     if (func == NULL) {
@@ -1474,12 +2212,14 @@ static
 // target_outlined_code ) Outliner::DeferredTransformation
 SageInterface::DeferredTransformation
 Outliner::insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
-                 SgBasicBlock *target_outlined_code) {
+                 SgBasicBlock *target_outlined_code,
+                 SgFunctionDeclaration *&source_call_declaration) {
   // Scope is the global scope of the outlined location (could be in a separate
   // file).
   ROSE_ASSERT(func != NULL && scope != NULL);
   ROSE_ASSERT(Outliner::isValidOutliningScope(scope));
   ROSE_ASSERT(target_outlined_code != NULL);
+  source_call_declaration = NULL;
 
   // DQ (9/26/2019): Trying to trace down where there is a
   // SgFunctionParameterList with parent not being set!
@@ -1518,24 +2258,17 @@ Outliner::insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
 
   int enclosingSourceFileId =
       enclosingSourceFile->get_file_info()->get_physical_file_id();
-  int enclosingSourceFileIdFromMap =
-      Sg_File_Info::get_nametofileid_map()[enclosingSourceFile->getFileName()];
-
-  string filenameFromID =
-      Sg_File_Info::getFilenameFromID(enclosingSourceFileId);
+  if (enclosingSourceFileId < 0) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[generated-function-ownership]: "
+            "target source=%s has no exact physical file id\n",
+            enclosingSourceFile->getFileName().c_str());
+    ROSE_ABORT();
+  }
 
   ROSE_ASSERT(func->get_definingDeclaration()->get_file_info() != NULL);
   ROSE_ASSERT(func->get_definingDeclaration()->get_startOfConstruct() != NULL);
   ROSE_ASSERT(func->get_definingDeclaration()->get_endOfConstruct() != NULL);
-
-  // func->get_definingDeclaration()->get_file_info()->set_physical_file_id(enclosingSourceFileId);
-  // func->get_definingDeclaration()->get_startOfConstruct()->set_physical_file_id(enclosingSourceFileId);
-  // func->get_definingDeclaration()->get_endOfConstruct()
-  // ->set_physical_file_id(enclosingSourceFileId);
-  func->get_definingDeclaration()->get_startOfConstruct()->set_physical_file_id(
-      enclosingSourceFileIdFromMap);
-  func->get_definingDeclaration()->get_endOfConstruct()->set_physical_file_id(
-      enclosingSourceFileIdFromMap);
 
   ROSE_ASSERT(func->get_definition()->get_body()->get_parent() ==
               func->get_definition());
@@ -1558,14 +2291,29 @@ Outliner::insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
        }
   */
 
-  // Put the input function into the target scope
-  SageInterface::appendStatement(func, scope);
-  func->set_scope(scope);
-  func->set_parent(scope);
+  // generateFunction() publishes the defining declaration in its final source
+  // scope.  Insertion validates that exact construction-time ownership instead
+  // of transferring it out of a semantic holding container.
+  ROSE_ASSERT(func->get_scope() == scope);
+  ROSE_ASSERT(func->get_parent() == scope);
+  ROSE_ASSERT(scope->statementExistsInScope(func));
 
-  // DQ (11/9/2019): When used in conjunction with header file unparsing we need
-  // to set the physical file id on entirety of the subtree being inserted.
-  SageBuilder::fixupSourcePositionFileSpecification(func, filenameFromID);
+  // generateFunction() and every subsequent body mutation publish or relocate
+  // their exact source surfaces at the point where ownership changes.  This
+  // insertion boundary only validates that completed transaction; republishing
+  // the whole function here would be a late repair that could overwrite stale
+  // physical provenance from an earlier producer.
+  if (func->get_parent() != scope || !scope->statementExistsInScope(func) ||
+      func->get_scope() != scope || func->get_file_info() == NULL ||
+      func->get_file_info()->get_physical_file_id() != enclosingSourceFileId ||
+      !func->get_file_info()->isOutputInCodeGeneration()) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[generated-function-ownership]: "
+            "function=%p name=%s lost exact structural or physical source "
+            "ownership after insertion\n",
+            static_cast<void *>(func), func->get_name().str());
+    ROSE_ABORT();
+  }
 
   // DQ (11/19/2020): DeferredTransformation support was moved to the
   // SageInterface namespace to support more general usage. DQ (8/15/2019):
@@ -1633,6 +2381,18 @@ Outliner::insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
   // insert it into the original global scope
   // No need to generate this declaration if we use the simple call convention.
   if (use_dlopen && !use_dlopen_simple) {
+    SgStatement *insertion_anchor =
+        SageInterface::prepareStatementInsertionAnchor(target_outlined_code);
+    SgScopeStatement *insertion_scope = insertion_anchor->get_scope();
+    if (insertion_scope == NULL) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[dlopen-pointer-insertion]: anchor=%p/%s "
+              "has no exact post-normalization lexical scope\n",
+              static_cast<void *>(insertion_anchor),
+              insertion_anchor->class_name().c_str());
+      ROSE_ABORT();
+    }
+
     // void (*OUT_xxx__p) (void**); // this parameter type depends on the number
     // of variables. If zero variables, empty parameter.
     SgFunctionParameterTypeList *tlist = buildFunctionParameterTypeList();
@@ -1640,8 +2400,8 @@ Outliner::insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
     SgFunctionParameterTypeList *func_para_type_list =
         func->get_type()->get_argument_list();
     if (func_para_type_list->get_arguments().size() > 0)
-      (tlist->get_arguments())
-          .push_back(buildPointerType(buildPointerType(buildVoidType())));
+      tlist->append_argument(
+          buildPointerType(buildPointerType(buildVoidType())));
 
     SgFunctionType *ftype =
         buildFunctionType(buildVoidType(), tlist); // func->get_type();
@@ -1651,22 +2411,10 @@ Outliner::insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
     // SgVariableDeclaration * ptofunc =
     // buildVariableDeclaration(var_name,buildPointerType(ftype), NULL,
     // src_global); prependStatement(ptofunc,src_global);
-    SgVariableDeclaration *ptofunc =
-        buildVariableDeclaration(var_name, buildPointerType(ftype), NULL,
-                                 target_outlined_code->get_scope());
-    int callSitePhysicalFileId =
-        target_outlined_code->get_file_info()->get_physical_file_id();
-    if (callSitePhysicalFileId < 0 && target_func->get_file_info() != NULL) {
-      callSitePhysicalFileId =
-          target_func->get_file_info()->get_physical_file_id();
-    }
-    if (callSitePhysicalFileId >= 0) {
-      ASTtools::assignGeneratedSubtreeToPhysicalFile(ptofunc,
-                                                     callSitePhysicalFileId);
-    }
-
+    SgVariableDeclaration *ptofunc = buildVariableDeclaration(
+        var_name, buildPointerType(ftype), NULL, insertion_scope);
     // prependStatement(ptofunc,target_outlined_code);
-    SageInterface::insertStatementBefore(target_outlined_code, ptofunc);
+    SageInterface::insertStatementBefore(insertion_anchor, ptofunc);
   }
   //   else
   //   Liao, 5/1/2009
@@ -1689,41 +2437,65 @@ Outliner::insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
             ? isSgFunctionDeclaration(sourceFileFunctionPrototype
                                           ->get_firstNondefiningDeclaration())
             : NULL;
-
     SgFunctionSymbol *sourceFileFunctionPrototypeSymbol =
-        isSgFunctionSymbol(src_global->lookup_symbol(func->get_name()));
-    if (sourceFileFunctionPrototypeSymbol == NULL &&
-        source_first_nondef != NULL) {
-      sourceFileFunctionPrototypeSymbol = isSgFunctionSymbol(
-          src_global->find_symbol_from_declaration(source_first_nondef));
+        source_first_nondef != NULL
+            ? isSgFunctionSymbol(
+                  source_first_nondef->get_symbol_from_symbol_table())
+            : NULL;
+    SgFunctionDeclaration *expected_definition =
+        Outliner::useNewFile ? NULL : func;
+    if (sourceFileFunctionPrototype == NULL || source_first_nondef == NULL ||
+        source_first_nondef->get_firstNondefiningDeclaration() !=
+            source_first_nondef ||
+        sourceFileFunctionPrototype->get_firstNondefiningDeclaration() !=
+            source_first_nondef ||
+        sourceFileFunctionPrototypeSymbol == NULL ||
+        sourceFileFunctionPrototypeSymbol->get_declaration() !=
+            source_first_nondef ||
+        sourceFileFunctionPrototype->get_definingDeclaration() !=
+            expected_definition ||
+        source_first_nondef->get_definingDeclaration() != expected_definition) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[source-prototype-chain]: "
+              "prototype=%p canonical=%p symbol=%p symbol-declaration=%p "
+              "prototype-definition=%p canonical-definition=%p "
+              "expected-definition=%p does not identify one exact source "
+              "declaration family\n",
+              static_cast<void *>(sourceFileFunctionPrototype),
+              static_cast<void *>(source_first_nondef),
+              static_cast<void *>(sourceFileFunctionPrototypeSymbol),
+              static_cast<void *>(
+                  sourceFileFunctionPrototypeSymbol != NULL
+                      ? sourceFileFunctionPrototypeSymbol->get_declaration()
+                      : NULL),
+              static_cast<void *>(
+                  sourceFileFunctionPrototype != NULL
+                      ? sourceFileFunctionPrototype->get_definingDeclaration()
+                      : NULL),
+              static_cast<void *>(
+                  source_first_nondef != NULL
+                      ? source_first_nondef->get_definingDeclaration()
+                      : NULL),
+              static_cast<void *>(expected_definition));
+      ROSE_ABORT();
     }
-    if (sourceFileFunctionPrototypeSymbol == NULL &&
-        source_first_nondef != NULL) {
-      sourceFileFunctionPrototypeSymbol = isSgFunctionSymbol(
-          source_first_nondef->get_symbol_from_symbol_table());
+    const SgDeclarationStatementPtrList &source_declarations =
+        src_global->get_declarations();
+    if (source_first_nondef->get_parent() != src_global ||
+        source_first_nondef->get_scope() != src_global ||
+        std::count(source_declarations.begin(), source_declarations.end(),
+                   source_first_nondef) != 1 ||
+        sourceFileFunctionPrototypeSymbol->get_parent() !=
+            src_global->get_symbol_table()) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[source-call-declaration]: canonical=%p "
+              "name=%s has no exact source-global lexical and symbol "
+              "publication\n",
+              static_cast<void *>(source_first_nondef),
+              source_first_nondef->get_name().str());
+      ROSE_ABORT();
     }
-    if (sourceFileFunctionPrototypeSymbol == NULL &&
-        source_first_nondef != NULL) {
-      sourceFileFunctionPrototypeSymbol =
-          new SgFunctionSymbol(source_first_nondef);
-      src_global->insert_symbol(func->get_name(),
-                                sourceFileFunctionPrototypeSymbol);
-    }
-    ROSE_ASSERT(sourceFileFunctionPrototypeSymbol != NULL);
-    // Liao 12/6/2012. The assumption now is changed. A hidden nondefining
-    // declaration is always created when a defining declaration is created. So
-    // the hidden one is the first_nondefining decl associated with the function
-    // symbol. The newly transformation generated function prototype is now
-    // actually the 2nd prototype not directly associated with the func symbol
-    ROSE_ASSERT(sourceFileFunctionPrototypeSymbol->get_declaration() ==
-                sourceFileFunctionPrototype->get_firstNondefiningDeclaration());
-    // ROSE_ASSERT(sourceFileFunctionPrototype->get_firstNondefiningDeclaration()
-    // == sourceFileFunctionPrototype);
-    if (Outliner::useNewFile != true) {
-      ROSE_ASSERT(
-          sourceFileFunctionPrototype->get_firstNondefiningDeclaration() !=
-          sourceFileFunctionPrototype);
-    }
+    source_call_declaration = source_first_nondef;
     // Liao 12/6/2010, this assertion is not right. SageInterface function is
     // smart enough to automatically set the defining declaration for the
     // prototype DQ (2/27/2009): Assert this as a test!
@@ -1744,7 +2516,25 @@ Outliner::insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
     // For template outlined functions we must build a matching template
     // prototype, otherwise wiring defining/nondefining will assert due to a
     // cross-variant definingDeclaration edge.
-    outlinedFileFunctionPrototype = generatePrototype(func, scope, false);
+    SgFunctionDeclaration *destination_canonical =
+        findExactCanonicalDeclarationInScope(
+            func, headerFileTransformation.targetFriends, scope);
+    if (destination_canonical == NULL) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[generated-prototype-canonical]: "
+              "outlined definition=%p name=%s has no exact canonical "
+              "declaration in destination scope=%p\n",
+              static_cast<void *>(func), func->get_name().str(),
+              static_cast<void *>(scope));
+      ROSE_ABORT();
+    }
+    outlinedFileFunctionPrototype = generatePrototype(
+        func,
+        SageBuilder::function_declaration_ownership::
+            sourceLexicalCanonicalReplacementAtTop(scope,
+                                                   destination_canonical),
+        scope, false, PrototypeDefinitionPolicy::preserveSameOutputFamily,
+        PrototypeFamilyPolicy::canonicalReplacement);
     ROSE_ASSERT(outlinedFileFunctionPrototype != NULL);
 
     // Inherit defining function's inline property: avoid linking error when
@@ -1765,14 +2555,9 @@ Outliner::insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
       // instead of the token stream.
       firstStatement->set_containsTransformationToSurroundingWhitespace(true);
     }
-    // scope->append_declaration (outlinedFileFunctionPrototype);
-    SageInterface::prependStatement(outlinedFileFunctionPrototype, scope);
-    // DQ (11/9/2019): When used in conjunction with header file unparsing we
-    // need to set the physical file id on entirety of the subtree being
-    // inserted.
-    SageBuilder::fixupSourcePositionFileSpecification(
-        outlinedFileFunctionPrototype, filenameFromID);
-
+    ROSE_ASSERT(outlinedFileFunctionPrototype->get_parent() == scope);
+    ROSE_ASSERT(scope->getDeclarationList().front() ==
+                outlinedFileFunctionPrototype);
     // DQ (3/17/2021): When using the token-based unparsing we need to set this
     // so that the surrounding whitespace will be unparsed from the AST, instead
     // of the token stream.
@@ -1797,51 +2582,77 @@ Outliner::insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
     // DQ (9/25/2019): The friend functions in the defered transformation
     // structure should be using outlinedFileFunctionPrototype instead.
 
-    ROSE_ASSERT(headerFileTransformation.targetFriends.empty() == true);
     headerFileTransformation.targetFriends.push_back(
         outlinedFileFunctionPrototype);
 
-    // The build function should have build symbol for the symbol table.
-    SgFunctionSymbol *outlinedFileFunctionPrototypeSymbol =
-        isSgFunctionSymbol(scope->lookup_symbol(func->get_name()));
-    ROSE_ASSERT(outlinedFileFunctionPrototypeSymbol != NULL);
-    // This is no longer true when a prototype is created when a defining one is
-    // created.
-    // ROSE_ASSERT(outlinedFileFunctionPrototypeSymbol->get_declaration() ==
-    // outlinedFileFunctionPrototype);
-
-    // The prototype must be connected to the defining declaration for the
-    // outlined function. Some builder paths don't automatically wire this up,
-    // especially for friend-related outlining.
-    if (outlinedFileFunctionPrototype->get_definingDeclaration() == NULL) {
-      outlinedFileFunctionPrototype->set_definingDeclaration(func);
-    } else {
-      // If a defining decl is already attached, it must match.
-      ROSE_ASSERT(outlinedFileFunctionPrototype->get_definingDeclaration() ==
-                  func);
+    // The typed canonical-replacement builder publishes the destination
+    // prototype, its declaration family, and its exact symbol atomically.
+    SgFunctionSymbol *outlinedFileFunctionPrototypeSymbol = isSgFunctionSymbol(
+        outlinedFileFunctionPrototype->get_symbol_from_symbol_table());
+    if (outlinedFileFunctionPrototypeSymbol == NULL ||
+        outlinedFileFunctionPrototypeSymbol->get_symbol_basis() !=
+            outlinedFileFunctionPrototype ||
+        outlinedFileFunctionPrototype->get_firstNondefiningDeclaration() !=
+            outlinedFileFunctionPrototype ||
+        outlinedFileFunctionPrototype->get_definingDeclaration() != func ||
+        func->get_firstNondefiningDeclaration() !=
+            outlinedFileFunctionPrototype ||
+        destination_canonical->get_firstNondefiningDeclaration() !=
+            outlinedFileFunctionPrototype ||
+        outlinedFileFunctionPrototype->get_parent() != scope ||
+        outlinedFileFunctionPrototype->get_scope() != scope) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[generated-prototype-canonical]: "
+              "prototype=%p symbol=%p basis=%p definition=%p "
+              "definition-canonical=%p prior=%p prior-canonical=%p scope=%p "
+              "parent=%p did not publish one exact destination declaration "
+              "family\n",
+              static_cast<void *>(outlinedFileFunctionPrototype),
+              static_cast<void *>(outlinedFileFunctionPrototypeSymbol),
+              static_cast<void *>(
+                  outlinedFileFunctionPrototypeSymbol != NULL
+                      ? outlinedFileFunctionPrototypeSymbol->get_symbol_basis()
+                      : NULL),
+              static_cast<void *>(
+                  outlinedFileFunctionPrototype->get_definingDeclaration()),
+              static_cast<void *>(func->get_firstNondefiningDeclaration()),
+              static_cast<void *>(destination_canonical),
+              static_cast<void *>(
+                  destination_canonical->get_firstNondefiningDeclaration()),
+              static_cast<void *>(scope),
+              static_cast<void *>(outlinedFileFunctionPrototype->get_parent()));
+      ROSE_ABORT();
     }
 
-    // DQ (2/20/2009): ASK LIAO: If func is a defining declaration then
-    // shouldn't the SageBuilder::buildNondefiningFunctionDeclaration() set the
-    // definingDeclaration?
-    // outlinedFileFunctionPrototype->set_definingDeclaration(func);
-    outlinedFileFunctionPrototype->set_parent(scope);
-    outlinedFileFunctionPrototype->set_scope(scope);
-
-    // Set the func_prototype as the first non-defining declaration.
-    // Liao 12/14/2012. the prototype is no longer the first non-defining one.
-    // We have to explicit grab it.
-    SgDeclarationStatement *first_non_def_decl =
-        outlinedFileFunctionPrototype->get_firstNondefiningDeclaration();
-    ROSE_ASSERT(first_non_def_decl != NULL);
-    func->set_firstNondefiningDeclaration(first_non_def_decl);
-
-    ROSE_ASSERT(outlinedFileFunctionPrototype->get_parent() != NULL);
-    ROSE_ASSERT(
-        outlinedFileFunctionPrototype->get_firstNondefiningDeclaration() !=
-        NULL);
-    ROSE_ASSERT(outlinedFileFunctionPrototype->get_definingDeclaration() !=
-                NULL);
+    Sg_File_Info *published_prototype_info =
+        outlinedFileFunctionPrototype->get_file_info();
+    if (published_prototype_info == NULL ||
+        published_prototype_info->get_physical_file_id() !=
+            enclosingSourceFileId ||
+        !published_prototype_info->isTransformation() ||
+        published_prototype_info->isCompilerGenerated() ||
+        !published_prototype_info->isOutputInCodeGeneration()) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[generated-prototype-ownership]: "
+              "prototype=%p expected-physical=%d actual-file='%s' "
+              "actual-physical=%d transformation=%d "
+              "compiler-generated=%d output=%d\n",
+              static_cast<void *>(outlinedFileFunctionPrototype),
+              enclosingSourceFileId,
+              published_prototype_info == NULL
+                  ? "<null>"
+                  : published_prototype_info->get_filenameString().c_str(),
+              published_prototype_info == NULL
+                  ? -1
+                  : published_prototype_info->get_physical_file_id(),
+              published_prototype_info != NULL &&
+                  published_prototype_info->isTransformation(),
+              published_prototype_info != NULL &&
+                  published_prototype_info->isCompilerGenerated(),
+              published_prototype_info != NULL &&
+                  published_prototype_info->isOutputInCodeGeneration());
+      ROSE_ABORT();
+    }
 
     // Add a message to the top of the outlined function that has been added
     SageInterface::addMessageStatement(outlinedFileFunctionPrototype,
@@ -1865,10 +2676,24 @@ Outliner::insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
       // ROSE_ASSERT(sourceFileFunctionPrototype->get_definingDeclaration() !=
       // NULL);
       if (SageInterface::is_Fortran_language() == false) {
-        ROSE_ASSERT(sourceFileFunctionPrototype != NULL);
-        sourceFileFunctionPrototype->set_definingDeclaration(func);
-        ROSE_ASSERT(sourceFileFunctionPrototype->get_definingDeclaration() !=
-                    NULL);
+        if (sourceFileFunctionPrototype == NULL ||
+            sourceFileFunctionPrototype->get_definingDeclaration() != func ||
+            func->get_firstNondefiningDeclaration() !=
+                sourceFileFunctionPrototype
+                    ->get_firstNondefiningDeclaration()) {
+          fprintf(
+              stderr,
+              "REX_OUTLINER_INVARIANT[source-prototype-chain]: in-file "
+              "prototype=%p definition=%p canonical=%p did not retain "
+              "the exact builder-published declaration family\n",
+              static_cast<void *>(sourceFileFunctionPrototype),
+              static_cast<void *>(
+                  sourceFileFunctionPrototype != NULL
+                      ? sourceFileFunctionPrototype->get_definingDeclaration()
+                      : NULL),
+              static_cast<void *>(func->get_firstNondefiningDeclaration()));
+          ROSE_ABORT();
+        }
       }
     }
   }
@@ -1878,6 +2703,19 @@ Outliner::insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
   // No forward declaration is needed for Fortran functions, Liao, 3/11/2009
   // if (SageInterface::is_Fortran_language() != true)
   ROSE_ASSERT(func->get_firstNondefiningDeclaration() != NULL);
+
+  if (SageInterface::is_Fortran_language()) {
+    source_call_declaration =
+        isSgFunctionDeclaration(func->get_firstNondefiningDeclaration());
+  }
+  if (source_call_declaration == NULL) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[source-call-declaration]: outlined "
+            "function=%p name=%s produced no exact source-visible call "
+            "declaration\n",
+            static_cast<void *>(func), func->get_name().str());
+    ROSE_ABORT();
+  }
 
   // DQ (8/15/2019): Adding support to defere the transformations in header
   // files (a performance improvement).

@@ -22,6 +22,7 @@ Write var names:
 	"r"
 --------------------------------------------------
 Function name:"::test_address_of_casts"
+Warning: SageInterface::collectReadWriteRefs() returns false.
 Read references:
 	SgVarRefExp@12:21	"a"
 	SgVarRefExp@13:30	"b"
@@ -34,6 +35,7 @@ Write references:
 	SgVarRefExp@12:21	"a"
 	SgVarRefExp@13:30	"b"
 	SgVarRefExp@15:13	"c"
+Warning: SageInterface::collectReadWriteVariables() returns false.
 Read var names:
 	"a"
 	"b"

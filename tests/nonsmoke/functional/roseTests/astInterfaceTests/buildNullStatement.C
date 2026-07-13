@@ -19,10 +19,8 @@ SimpleInstrumentation::visit (SgNode * astNode)
     SgBasicBlock* block = isSgBasicBlock(astNode);
   if (block != NULL)
     {
-       SgNullStatement* stmt = buildNullStatement();
-       attachArbitraryText(stmt,
-                           "int ROSE_TEST_TLD_DEFINE (counter2, 4, 4) = 100;");
-       prependStatement(stmt,block);
+    SgNullStatement *stmt = buildNullStatement();
+    prependStatement(stmt, block);
     }
 }
 

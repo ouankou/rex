@@ -15,6 +15,8 @@
 
 #include <string>
 
+#include <vector>
+
 #include "Outliner.hh"
 // #include "Transform.hh"
 
@@ -92,6 +94,9 @@ void Outliner::collectVars(
                  inserter(diff_U_L, diff_U_L.begin()), ASTtools::VarSymLess());
   dump(diff_U_L, "U - L = ");
 
+  ASTtools::VarSymSet_t Q;
+  std::map<const SgInitializedName *, const SgVariableSymbol *> q_by_decl;
+
   // if the outlined function is put into a separated file
   // There are two choices for global variables
   // * pass them as parameters anyway to be lazy
@@ -107,7 +112,6 @@ void Outliner::collectVars(
   } else {
     // Q = {symbols defined within the function surrounding 's' that are visible
     // at 's'}, including function parameters
-    ASTtools::VarSymSet_t Q;
     ASTtools::collectLocalVisibleVarSyms(outer_func_s->get_declaration(), s, Q);
     dump(Q, "Q (variables defined within the function surrounding s that are "
             "visible at s) = ");
@@ -119,7 +123,6 @@ void Outliner::collectVars(
     // intersection. Frontend/normalization paths may materialize distinct
     // symbol objects for the same declaration, which would otherwise drop valid
     // captures.
-    std::map<const SgInitializedName *, const SgVariableSymbol *> q_by_decl;
     for (ASTtools::VarSymSet_t::const_iterator i = Q.begin(); i != Q.end();
          ++i) {
       const SgVariableSymbol *sym = *i;
@@ -147,6 +150,78 @@ void Outliner::collectVars(
     dump(syms, "(U - L) InterSection Q [the variables to be passed into the "
                "outlined function]= ");
   }
+
+  if (!SageInterface::is_Fortran_language())
+    return;
+
+  // A Fortran dummy's source declaration may depend on variables that are not
+  // referenced by the outlined statements themselves.  For example, copying
+  // ARRAY(N) into an external outlined procedure requires N in both the call
+  // and the outlined signature.  Close the capture set over exact source-type
+  // references before either interface is planned; assumed-shape conversion
+  // would hide the missing dependency and produce an invalid external
+  // procedure interface.
+  std::vector<const SgVariableSymbol *> pending(syms.begin(), syms.end());
+  std::set<const SgInitializedName *> processed;
+  for (size_t index = 0; index < pending.size(); ++index) {
+    const SgVariableSymbol *captured = pending[index];
+    const SgInitializedName *captured_declaration =
+        captured != NULL ? captured->get_declaration() : NULL;
+    if (captured_declaration == NULL ||
+        !processed.insert(captured_declaration).second)
+      continue;
+
+    SgType *source_type = captured_declaration->get_fortran_source_type();
+    if (source_type == NULL)
+      continue;
+
+    Rose_STL_Container<SgNode *> references =
+        NodeQuery::querySubTree(source_type, V_SgVarRefExp);
+    for (SgNode *node : references) {
+      SgVarRefExp *reference = isSgVarRefExp(node);
+      SgVariableSymbol *dependency =
+          reference != NULL ? reference->get_symbol() : NULL;
+      SgInitializedName *dependency_declaration =
+          dependency != NULL ? dependency->get_declaration() : NULL;
+      if (reference == NULL || dependency == NULL ||
+          dependency_declaration == NULL) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[fortran-type-dependency]: captured "
+                "variable=%p/%s has an unresolved source-type reference\n",
+                static_cast<const void *>(captured_declaration),
+                captured_declaration->get_name().getString().c_str());
+        ROSE_ABORT();
+      }
+      if (dependency_declaration == captured_declaration)
+        continue;
+
+      const SgVariableSymbol *dependency_to_capture = dependency;
+      if (!Outliner::useNewFile) {
+        const auto visible = q_by_decl.find(dependency_declaration);
+        if (visible == q_by_decl.end()) {
+          if (SageInterface::getEnclosingFunctionDefinition(
+                  dependency_declaration) == outer_func_s) {
+            fprintf(stderr,
+                    "REX_OUTLINER_INVARIANT[fortran-type-dependency]: "
+                    "captured variable=%p/%s depends on local variable=%p/%s "
+                    "that is not visible at the outline site\n",
+                    static_cast<const void *>(captured_declaration),
+                    captured_declaration->get_name().getString().c_str(),
+                    static_cast<void *>(dependency_declaration),
+                    dependency_declaration->get_name().getString().c_str());
+            ROSE_ABORT();
+          }
+          continue;
+        }
+        dependency_to_capture = visible->second;
+      }
+
+      const auto inserted = syms.insert(dependency_to_capture);
+      if (inserted.second)
+        pending.push_back(*inserted.first);
+    }
+  }
+  dump(syms, "Fortran source-type dependency closure = ");
 }
 
 // eof

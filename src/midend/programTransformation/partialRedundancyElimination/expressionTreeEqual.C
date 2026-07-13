@@ -46,12 +46,21 @@ bool expressionTreeEqual(SgExpression *a, SgExpression *b) {
   }
   if (isSgConditionalExp(a)) {
     assert(isSgConditionalExp(b));
-    return expressionTreeEqual(isSgConditionalExp(a)->get_conditional_exp(),
-                               isSgConditionalExp(b)->get_conditional_exp()) &&
-           expressionTreeEqual(isSgConditionalExp(a)->get_true_exp(),
-                               isSgConditionalExp(b)->get_true_exp()) &&
-           expressionTreeEqual(isSgConditionalExp(a)->get_false_exp(),
-                               isSgConditionalExp(b)->get_false_exp());
+    SgConditionalExp *conditional_a = isSgConditionalExp(a);
+    SgConditionalExp *conditional_b = isSgConditionalExp(b);
+    conditional_a->validate();
+    conditional_b->validate();
+    if (conditional_a->get_operator_kind() !=
+        conditional_b->get_operator_kind())
+      return false;
+    return expressionTreeEqual(conditional_a->get_conditional_exp(),
+                               conditional_b->get_conditional_exp()) &&
+           (conditional_a->get_operator_kind() ==
+                SgConditionalExp::e_conditional_operator_gnu_binary ||
+            expressionTreeEqual(conditional_a->get_true_exp(),
+                                conditional_b->get_true_exp())) &&
+           expressionTreeEqual(conditional_a->get_false_exp(),
+                               conditional_b->get_false_exp());
   }
   if (isSgDeleteExp(a)) {
     assert(isSgDeleteExp(b));

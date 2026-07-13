@@ -4,7 +4,6 @@ add_library( astTokenStream OBJECT
   frontierDetection.C
   simpleFrontierDetection.C
   artificialFrontier.C
-  previousAndNextNode.C
   maxExtents.C
   detectMacroOrIncludeFileExpansions.C
   detectMacroExpansionsToBeUnparsedAsAstTransformations.C)
@@ -16,7 +15,7 @@ add_dependencies(astTokenStream rosetta_generated)
 
 install(FILES
   linearizeAST.h
-  tokenStreamMapping.h frontierDetection.h simpleFrontierDetection.h previousAndNextNode.h
+  tokenStreamMapping.h frontierDetection.h simpleFrontierDetection.h
   maxExtents.h detectMacroOrIncludeFileExpansions.h artificialFrontier.h
   detectMacroExpansionsToBeUnparsedAsAstTransformations.h
   DESTINATION ${INCLUDE_INSTALL_DIR})

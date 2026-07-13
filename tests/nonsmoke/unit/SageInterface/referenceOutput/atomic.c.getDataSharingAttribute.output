@@ -1,7 +1,6 @@
 -----------------------------------------------
-OpenMP region SgOmpParallelStatement @ 5
-"a"@8:5	shared
-"test"@0:0	private
+OpenMP region SgOmpParallelStatement @ 8
+"a"@11:5	shared
 -----------------------------------------------
-OpenMP region SgOmpAtomicStatement @ 7
-"a"@8:5	shared
+OpenMP region SgOmpAtomicStatement @ 10
+"a"@11:5	shared

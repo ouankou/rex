@@ -15,120 +15,88 @@ void Unparse_ExprStmt::unparseDesignatedInitializer(SgExpression *expr,
   printf("  design_init = %p = %s\n", design_init,
          design_init->class_name().c_str());
 #endif
-  ROSE_ASSERT(design_init->get_designatorList()->get_expressions().empty() ==
-              false);
-
-  SgExpression *designator =
-      design_init->get_designatorList()->get_expressions()[0];
+  ASSERT_not_null(design_init);
+  SgExprListExp *designator_list = design_init->get_designatorList();
+  if (designator_list == nullptr ||
+      designator_list->get_parent() != design_init ||
+      designator_list->get_expressions().empty()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[designator-list]: designated initializer "
+            "has no exact nonempty designator list\n");
+    ROSE_ABORT();
+  }
   SgInitializer *initializer = design_init->get_memberInit();
+  if (initializer == nullptr || initializer->get_parent() != design_init ||
+      initializer->get_type() == nullptr ||
+      isSgTypeUnknown(initializer->get_type()) != nullptr ||
+      isSgTypeDefault(initializer->get_type()) != nullptr) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[designated-member-initializer]: designated "
+            "initializer has no exact owned typed member initializer\n");
+    ROSE_ABORT();
+  }
 #if DEBUG__unparseDesignatedInitializer
-  printf("  designator = %p = %s\n", designator,
-         designator ? designator->class_name().c_str() : "");
   printf("  initializer = %p = %s\n", initializer,
          initializer ? initializer->class_name().c_str() : "");
 #endif
-  SgVarRefExp *varRefExp = isSgVarRefExp(designator);
-  SgSubscriptExpression *subscriptDesignator =
-      isSgSubscriptExpression(designator);
-
-  bool isDataMemberDesignator = (varRefExp != NULL);
-  bool isArrayRangeDesignator = (subscriptDesignator != NULL);
-  bool isAssignInitializer = (isSgAssignInitializer(initializer) != NULL);
-
-  bool isInUnion = false;
-  if (isDataMemberDesignator == true) {
-    SgVariableSymbol *variableSymbol =
-        isSgVariableSymbol(varRefExp->get_symbol());
-    SgClassDefinition *classDefinition =
-        isSgClassDefinition(variableSymbol->get_declaration()->get_scope());
-    SgClassDeclaration *classDeclaration = NULL;
-    if (classDefinition != NULL) {
-      classDeclaration = classDefinition->get_declaration();
+  const SgExpressionPtrList &designators = designator_list->get_expressions();
+  for (size_t index = 0; index < designators.size(); ++index) {
+    SgDesignator *designator = isSgDesignator(designators[index]);
+    if (designator == nullptr || designator->get_parent() != designator_list) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[designator-element]: designator %zu is "
+              "not an exactly owned SgDesignator\n",
+              index);
+      ROSE_ABORT();
     }
-
-    isInUnion =
-        (classDeclaration != NULL &&
-         classDeclaration->get_class_type() == SgClassDeclaration::e_union);
-    if (isInUnion == true) {
-      bool isInFunctionCallArgument =
-          SageInterface::getEnclosingNode<SgFunctionCallExp>(design_init);
-      if (isInFunctionCallArgument == false) {
-        isInUnion = false;
+    designator->validate_designator();
+    SgExpression *first = designator->get_first_expression();
+    switch (designator->get_kind()) {
+    case SgDesignator::e_designator_field: {
+      SgVarRefExp *field = isSgVarRefExp(first);
+      SgVariableSymbol *field_symbol =
+          field != nullptr ? field->get_symbol() : nullptr;
+      SgInitializedName *field_declaration =
+          field_symbol != nullptr ? field_symbol->get_declaration() : nullptr;
+      if (field_declaration == nullptr ||
+          field_declaration->get_name().is_null() ||
+          field_symbol->get_name() != field_declaration->get_name()) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[designator-field]: field designator "
+                "has no exact named variable-symbol identity\n");
+        ROSE_ABORT();
       }
-    }
-
-    if (isInUnion == false) {
       curprint(".");
-      unparseVarRef(designator, info);
+      // C and C++ field-designator grammar accepts an identifier, never a
+      // qualified-id.  The exact field symbol is the typed spelling source;
+      // ordinary variable-reference qualification is invalid in this role.
+      curprint(field_symbol->get_name().str());
+      break;
     }
-  } else if (isArrayRangeDesignator == true) {
-    SgExpression *lower = subscriptDesignator->get_lowerBound();
-    SgExpression *upper = subscriptDesignator->get_upperBound();
-    ASSERT_not_null(lower);
-    ASSERT_not_null(upper);
-    SgExpression *stride = subscriptDesignator->get_stride();
-    ASSERT_not_null(stride);
-    SgIntVal *stride_val = isSgIntVal(stride);
-    // Array range designators must have a unit stride.
-    ROSE_ASSERT(stride_val != nullptr && stride_val->get_value() == 1);
-
-    curprint("[");
-    unparseExpression(lower, info);
-    curprint(" ... ");
-    unparseExpression(upper, info);
-    curprint("]");
-  } else {
-    curprint("[");
-    unparseExpression(designator, info);
-    curprint("]");
-  }
-
-  SgAggregateInitializer *aggregateInitializer =
-      isSgAggregateInitializer(initializer);
-  bool need_explicit_braces_in_aggregateInitializer =
-      (aggregateInitializer != NULL &&
-       aggregateInitializer->get_need_explicit_braces());
-
-  bool need_explicit_braces =
-      (need_explicit_braces_in_aggregateInitializer == false);
-
-  if (need_explicit_braces == true && isAssignInitializer == true) {
-    SgAssignInitializer *assignInitializer = isSgAssignInitializer(initializer);
-    ASSERT_not_null(assignInitializer);
-    SgValueExp *valueExp = isSgValueExp(assignInitializer->get_operand());
-    SgCastExp *castExp = isSgCastExp(assignInitializer->get_operand());
-    SgFunctionRefExp *functionRefExp =
-        isSgFunctionRefExp(assignInitializer->get_operand());
-
-    ASSERT_not_null(assignInitializer->get_operand());
-    ASSERT_not_null(assignInitializer->get_operand()->get_type());
-
-    SgClassType *classType =
-        isSgClassType(assignInitializer->get_operand()->get_type()->stripType(
-            SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
-            SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_TYPEDEF_TYPE));
-    bool isClassType = (classType != NULL);
-
-    if (valueExp != NULL || castExp != NULL || functionRefExp != NULL ||
-        isClassType == true) {
-      need_explicit_braces = false;
+    case SgDesignator::e_designator_array:
+      curprint("[");
+      unparseExpression(first, info);
+      curprint("]");
+      break;
+    case SgDesignator::e_designator_array_range:
+      curprint("[");
+      unparseExpression(first, info);
+      curprint(" ... ");
+      unparseExpression(designator->get_second_expression(), info);
+      curprint("]");
+      break;
+    case SgDesignator::e_designator_unclassified:
+    default:
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[designator-kind]: designator %zu has "
+              "invalid kind=%d\n",
+              index, static_cast<int>(designator->get_kind()));
+      ROSE_ABORT();
     }
   }
 
-  if (!isInUnion) {
-    curprint(" = ");
-    if (need_explicit_braces) {
-      curprint("{");
-    }
-  }
-
+  curprint(" = ");
   unparseExpression(initializer, info);
-
-  if (!isInUnion) {
-    if (need_explicit_braces) {
-      curprint("}");
-    }
-  }
 #if DEBUG__unparseDesignatedInitializer
   printf("Leave unparseDesignatedInitializer()\n");
 #endif

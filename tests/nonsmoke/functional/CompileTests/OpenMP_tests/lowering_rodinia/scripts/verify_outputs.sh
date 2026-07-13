@@ -71,8 +71,8 @@ verify_common_cuda_lowering() {
 
   expect_count "${cu_file}" '#include "rex_nvidia.h"' 1 "device runtime include count"
   expect_count "${cu_file}" 'extern "C"' 1 "device extern C count"
-  expect_count "${cu_file}" '__global__[[:space:]]+void[[:space:]]+OUT__' "${kernel_count}" "device kernel count"
-  expect_count "${cu_file}" '__global__[[:space:]]+void[[:space:]]+OUT__.*\(void[[:space:]]*[*][[:space:]]*__rex_kernel_launch_env' "${kernel_count}" "device hidden launch env parameter count"
+  expect_count "${cu_file}" '__global__[[:space:]]+void[[:space:]]+(__launch_bounds__\([^)]*\)[[:space:]]+)?OUT__' "${kernel_count}" "device kernel count"
+  expect_count "${cu_file}" '__global__[[:space:]]+void[[:space:]]+(__launch_bounds__\([^)]*\)[[:space:]]+)?OUT__.*\(void[[:space:]]*[*][[:space:]]*__rex_kernel_launch_env' "${kernel_count}" "device hidden launch env parameter count"
   expect_count "${cu_file}" 'void[[:space:]]*[*][[:space:]]*__rex_kernel_launch_env,[[:space:]]*void[[:space:]]*[*][[:space:]]*__rex_kernel_launch_env' 0 "duplicate hidden launch env parameter count"
 }
 
@@ -90,6 +90,8 @@ case "${case_name}" in
     rose_file="${workdir}/rose_rodinia_bfs_like.c"
     cu_file="${workdir}/rex_lib_rodinia_bfs_like.cu"
     verify_common_cuda_lowering "${rose_file}" "${cu_file}" 1
+    expect_count "${cu_file}" 'for[[:space:]]*\([^;]*_p_tid[^;]*;[[:space:]]*_p_tid[[:space:]]*<[[:space:]]*RODINIA_BFS_SIZE[[:space:]]*;' 1 "typed private induction condition count"
+    expect_count "${cu_file}" 'for[[:space:]]*\([^;]*;[[:space:]]*tid[[:space:]]*<' 0 "stale source induction condition count"
     ;;
 
   rodinia_gaussian_like)
@@ -187,10 +189,13 @@ case "${case_name}" in
     verify_common_cuda_lowering "${rose_file}" "${cu_file}" 2
     expect_count "${rose_file}" 'kernel_cpu_like[[:space:]]*\([[:space:]]*records,[[:space:]]*nodes,[[:space:]]*count,[[:space:]]*curr_nodes,[[:space:]]*offsets,[[:space:]]*lookup_keys,[[:space:]]*answers[[:space:]]*\)[[:space:]]*;' 2 "first kernel repeated host call count"
     expect_count "${rose_file}" 'kernel_cpu_2_like[[:space:]]*\([[:space:]]*nodes,[[:space:]]*count,[[:space:]]*curr_nodes,[[:space:]]*offsets,[[:space:]]*last_nodes,[[:space:]]*out_begin,[[:space:]]*out_len[[:space:]]*\)[[:space:]]*;' 2 "second kernel repeated host call count"
-    expect_count "${rose_file}" 'int64_t __arg_sizes\[\][[:space:]]*=.*\{[[:space:]]*\(int64_t[[:space:]]*\)0,' 2 "implicit pointer zero-size count"
-    expect_count "${rose_file}" 'int64_t __arg_types\[\][[:space:]]*=.*\{[[:space:]]*544,' 2 "implicit pointer arg-type count"
-    expect_count "${rose_file}" 'int64_t __arg_types\[\].*35' 2 "tofrom arg-type count"
-    expect_count "${rose_file}" 'int64_t __arg_types\[\].*32' 0 "unexpected target-param-only arg types"
+    expect_count "${rose_file}" 'long __arg_sizes\[\][[:space:]]*=.*\{[[:space:]]*\(long[[:space:]]*\)0,' 2 "implicit pointer zero-size count"
+    expect_count "${rose_file}" 'long __arg_types\[\][[:space:]]*=.*\{[[:space:]]*544,' 2 "implicit pointer arg-type count"
+    expect_count "${rose_file}" 'long __arg_types\[\].*35' 2 "tofrom arg-type count"
+    expect_count "${rose_file}" 'long __arg_types\[\].*32' 0 "unexpected target-param-only arg types"
+    expect_count "${cu_file}" 'knode[[:space:]]*\*[[:space:]]*_dev_knodes' 1 "mapped typedef kernel parameter count"
+    expect_count "${cu_file}" 'struct[[:space:]]*\*[[:space:]]*_dev_knodes' 0 "anonymous mapped kernel parameter count"
+    expect_count "${cu_file}" 'const[[:space:]]+knode[[:space:]]*\*[[:space:]]*____rex_ref__dev_knodes' 1 "mapped typedef cached-reference count"
     expect_count "${rose_file}" '//[[:space:]]*main' 1 "host trailing main comment count"
     ;;
 

@@ -2,7 +2,7 @@
 # include(${CMAKE_CURRENT_SOURCE_DIR}/C_Testcodes_bk.cmake)
 
 set(C_TEST_LANG_FLAGS)
-set(C_TEST_ROSE_FLAGS -std=c -w -rose:verbose 0)
+set(C_TEST_ROSE_FLAGS -rose:verbose 0)
 set(ROSE_FLAGS ${C_TEST_ROSE_FLAGS})
 set(C_TEST_TRANSLATOR $<TARGET_FILE:testTranslator>)
 string(JOIN " " _c_tests_lang_flags_str ${C_TEST_LANG_FLAGS})
@@ -16,6 +16,21 @@ if(NOT BASH_EXECUTABLE)
 endif()
 
 set(C_TESTCODES
+  rex_frontend_designated_initializer_chain.c
+  rex_frontend_expression_tag_ownership.c
+  rex_frontend_if_asm_source_provenance.c
+  rex_frontend_inline_tag_ownership.c
+  rex_frontend_promoted_anonymous_member_provenance.c
+  rex_frontend_source_written_builtin_spelling.c
+  rex_frontend_statement_expression_scope.c
+  rex_frontend_tag_redeclaration_ownership.c
+  rex_unparser_macro_expansion_surface.c
+  rex_unparser_enum_include_boundary.c
+  rex_unparser_string_literal_encoding.c
+  rex_unparser_typeof_variable_qualification.c
+  rex_unparser_output_atomicity.c
+  rex_unparser_pragma_boundary_roundtrip.c
+  rex_unparser_preprocessing_roundtrip.c
   YardenPragmaPackExample.c
   Yarden_client.c
   commentTest.c
@@ -1156,6 +1171,8 @@ set(C_TESTCODES_NEGATIVE
   test2015_87.c
   test2015_93.c
   test2016_21.c
+  test2017_02.c
+  test2018_26.c
   test2018_52.c
   test2018_53.c
   test2018_65.c
@@ -1175,13 +1192,30 @@ foreach(file_to_test ${C_TESTCODES})
 endforeach()
 
 foreach(file_to_test ${C_TESTCODES_NEGATIVE})
-  compile_negative_test(${file_to_test} "C_tests")
+  if(file_to_test STREQUAL "test2017_02.c")
+    compile_exact_negative_test(
+      ${file_to_test} "C_tests"
+      "test2017_02.c:90:5: error: cannot redeclare builtin function '__builtin_classify_type'")
+  elseif(file_to_test STREQUAL "test2018_26.c")
+    compile_exact_negative_test(
+      ${file_to_test} "C_tests"
+      "test2018_26.c:29:6: error: conflicting types for '__builtin_ia32_maskloadpd256'")
+  else()
+    compile_negative_test(${file_to_test} "C_tests")
+  endif()
 endforeach()
 
 set(C_TESTCODES_SPECIAL
   callee.c
   caller.c
   needs_reentrant.c
+  rex_frontend_class_include_boundary.c
+  rex_frontend_driver_argument_order.c
+  rex_frontend_generated_typedef_dependency.c
+  rex_frontend_initializer_include_boundary.c
+  rex_frontend_preprocessing_anchor_contract.c
+  rex_frontend_preprocessing_empty_translation_unit.c
+  rex_frontend_preprocessing_terminal_directive.c
   test2003_12.c
   test2005_168.c
   test2008_02.c
@@ -1218,6 +1252,402 @@ rex_register_compile_source_set(REX_C_TESTS_NEGATIVE_SOURCES
 )
 
 set(ROSE_FLAGS ${C_TEST_ROSE_FLAGS})
+
+add_executable(
+  rex_frontend_generated_typedef_dependency_translator
+  rex_frontend_generated_typedef_dependency_translator.cpp
+)
+target_link_libraries(
+  rex_frontend_generated_typedef_dependency_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+add_executable(
+  rex_frontend_multi_tu_tag_identity_translator
+  rex_frontend_multi_tu_tag_identity_translator.cpp
+)
+target_link_libraries(
+  rex_frontend_multi_tu_tag_identity_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+add_test(
+  NAME C_tests_rex_frontend_multi_tu_tag_identity
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND
+    $<TARGET_FILE:rex_frontend_multi_tu_tag_identity_translator>
+    ${C_TEST_ROSE_FLAGS} -rose:skipfinalCompileStep -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_multi_tu_tag_identity_a.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_multi_tu_tag_identity_b.c
+)
+set_tests_properties(
+  C_tests_rex_frontend_multi_tu_tag_identity
+  PROPERTIES
+    LABELS "C_tests;rex;CFE"
+    RESOURCE_LOCK rex_frontend_multi_tu_tag_identity
+)
+
+set(rex_frontend_generated_typedef_dependency_header_dir
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../input_codes/system_header_like)
+add_test(
+  NAME C_tests_rex_frontend_generated_typedef_dependency_structure
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND
+    $<TARGET_FILE:rex_frontend_generated_typedef_dependency_translator>
+    ${C_TEST_ROSE_FLAGS} -rose:skipfinalCompileStep
+    -isystem ${rex_frontend_generated_typedef_dependency_header_dir}
+    -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_generated_typedef_dependency.c
+)
+set_tests_properties(
+  C_tests_rex_frontend_generated_typedef_dependency_structure
+  PROPERTIES LABELS "rex;CFE;C_tests;UNPARSER")
+rex_lock_test_for_input(
+  C_tests_rex_frontend_generated_typedef_dependency_structure
+  rex_frontend_generated_typedef_dependency.c)
+
+add_executable(
+  rex_frontend_inline_tag_ownership_translator
+  rex_frontend_inline_tag_ownership_translator.cpp
+)
+target_link_libraries(
+  rex_frontend_inline_tag_ownership_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+add_test(
+  NAME C_tests_rex_frontend_inline_tag_ownership_structure
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND
+    $<TARGET_FILE:rex_frontend_inline_tag_ownership_translator>
+    ${C_TEST_ROSE_FLAGS} -rose:skipfinalCompileStep
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_inline_tag_ownership.c
+)
+set_tests_properties(
+  C_tests_rex_frontend_inline_tag_ownership_structure
+  PROPERTIES LABELS "rex;CFE;C_tests")
+rex_lock_test_for_input(
+  C_tests_rex_frontend_inline_tag_ownership_structure
+  rex_frontend_inline_tag_ownership.c)
+
+add_test(
+  NAME C_tests_rex_name_qualification_rejects_parameter_list_tag_owner
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "ulimit -c 0; set +e; \"$@\" >rex_name_qualification_parameter_owner.log 2>&1; status=$?; set -e; test $status -eq 134; test \"\$(grep -Ec '^REX_UNPARSE_INVARIANT\\[statement-body-declaration-owner\\]: declaration=0x[[:xdigit:]]+/SgClassDeclaration owner=0x[[:xdigit:]]+/SgFunctionParameterList child=0x[[:xdigit:]]+/SgClassDeclaration occurrences=0 file-info=0x[[:xdigit:]]+ output=1 is not one exact emitted statement body edge$' rex_name_qualification_parameter_owner.log)\" -eq 1"
+    dummy
+    $<TARGET_FILE:rex_frontend_inline_tag_ownership_translator>
+    --corrupt-parameter-tag-owner
+    ${C_TEST_ROSE_FLAGS} -rose:skipfinalCompileStep
+    -Wno-visibility
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_inline_tag_ownership.c
+)
+set_tests_properties(
+  C_tests_rex_name_qualification_rejects_parameter_list_tag_owner
+  PROPERTIES LABELS "rex;CFE;C_tests;UNPARSER;death")
+rex_lock_test_for_input(
+  C_tests_rex_name_qualification_rejects_parameter_list_tag_owner
+  rex_frontend_inline_tag_ownership.c)
+
+add_executable(
+  rex_frontend_expression_tag_ownership_translator
+  rex_frontend_expression_tag_ownership_translator.cpp
+)
+target_link_libraries(
+  rex_frontend_expression_tag_ownership_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+add_test(
+  NAME C_tests_rex_frontend_expression_tag_ownership_structure
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND
+    $<TARGET_FILE:rex_frontend_expression_tag_ownership_translator>
+    ${C_TEST_ROSE_FLAGS} -std=c11
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_expression_tag_ownership.c
+)
+set_tests_properties(
+  C_tests_rex_frontend_expression_tag_ownership_structure
+  PROPERTIES LABELS "rex;CFE;C_tests")
+rex_lock_test_for_input(
+  C_tests_rex_frontend_expression_tag_ownership_structure
+  rex_frontend_expression_tag_ownership.c)
+
+add_test(
+  NAME C_tests_rex_frontend_expression_tag_scope_hard_contract
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND
+    bash -c
+    "ulimit -c 0; set +e; \"$@\" >rex_expression_tag_scope.log 2>&1; status=$?; set -e; test $status -eq 134; test \"\$(grep -Ec '^REX_UNPARSE_INVARIANT\\[declaration-owner\\]: declaration=0x[[:xdigit:]]+/SgClassDeclaration owner-kind=SgCastExp owner=0x[[:xdigit:]]+/SgCastExp typed=0x[[:xdigit:]]+ type=0x[[:xdigit:]]+ type-declaration=0x[[:xdigit:]]+ semantic-scope=0x[[:xdigit:]]+ lexical-scope=0x[[:xdigit:]]+ statement=0x[[:xdigit:]]+ has malformed expression-owned type-definition provenance$' rex_expression_tag_scope.log)\" -eq 1"
+    dummy
+    $<TARGET_FILE:rex_frontend_expression_tag_ownership_translator>
+    --corrupt-expression-tag-scope
+    ${C_TEST_ROSE_FLAGS} -std=c11
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_expression_tag_ownership.c
+)
+set_tests_properties(
+  C_tests_rex_frontend_expression_tag_scope_hard_contract
+  PROPERTIES LABELS "rex;CFE;C_tests;UNPARSER;death")
+rex_lock_test_for_input(
+  C_tests_rex_frontend_expression_tag_scope_hard_contract
+  rex_frontend_expression_tag_ownership.c)
+
+add_executable(
+  rex_frontend_tag_redeclaration_ownership_translator
+  rex_frontend_tag_redeclaration_ownership_translator.cpp
+)
+target_link_libraries(
+  rex_frontend_tag_redeclaration_ownership_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+add_test(
+  NAME C_tests_rex_frontend_tag_redeclaration_ownership_structure
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND
+    $<TARGET_FILE:rex_frontend_tag_redeclaration_ownership_translator>
+    ${C_TEST_ROSE_FLAGS} -rose:skipfinalCompileStep
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_tag_redeclaration_ownership.c
+)
+set_tests_properties(
+  C_tests_rex_frontend_tag_redeclaration_ownership_structure
+  PROPERTIES LABELS "rex;CFE;C_tests")
+rex_lock_test_for_input(
+  C_tests_rex_frontend_tag_redeclaration_ownership_structure
+  rex_frontend_tag_redeclaration_ownership.c)
+
+add_executable(
+  rex_frontend_preprocessing_file_boundary_translator
+  rex_frontend_preprocessing_file_boundary_translator.cpp
+)
+target_link_libraries(
+  rex_frontend_preprocessing_file_boundary_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+add_test(
+  NAME C_tests_rex_frontend_preprocessing_file_boundary_structure
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND
+    $<TARGET_FILE:rex_frontend_preprocessing_file_boundary_translator>
+    ${C_TEST_ROSE_FLAGS} -rose:collectAllCommentsAndDirectives
+    -rose:skipfinalCompileStep -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_unparser_preprocessing_roundtrip.c
+)
+set_tests_properties(
+  C_tests_rex_frontend_preprocessing_file_boundary_structure
+  PROPERTIES LABELS "rex;CFE;C_tests")
+rex_lock_test_for_input(
+  C_tests_rex_frontend_preprocessing_file_boundary_structure
+  rex_unparser_preprocessing_roundtrip.c)
+
+add_executable(
+  rex_frontend_preprocessing_anchor_contract_translator
+  rex_frontend_preprocessing_anchor_contract_translator.cpp
+)
+target_link_libraries(
+  rex_frontend_preprocessing_anchor_contract_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+add_executable(
+  rex_frontend_initializer_include_boundary_translator
+  rex_frontend_initializer_include_boundary_translator.cpp
+)
+target_link_libraries(
+  rex_frontend_initializer_include_boundary_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+add_executable(
+  rex_frontend_class_include_boundary_translator
+  rex_frontend_class_include_boundary_translator.cpp
+)
+target_link_libraries(
+  rex_frontend_class_include_boundary_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+add_executable(
+  rex_frontend_enum_source_ownership_translator
+  rex_frontend_enum_source_ownership_translator.cpp
+)
+target_link_libraries(
+  rex_frontend_enum_source_ownership_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+add_test(
+  NAME C_tests_rex_frontend_enum_source_ownership_structure
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND
+    $<TARGET_FILE:rex_frontend_enum_source_ownership_translator>
+    ${C_TEST_ROSE_FLAGS} -std=c11 -rose:collectAllCommentsAndDirectives
+    -rose:skipfinalCompileStep -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_unparser_enum_include_boundary.c
+)
+set_tests_properties(
+  C_tests_rex_frontend_enum_source_ownership_structure
+  PROPERTIES LABELS "rex;CFE;UNPARSER;C_tests")
+rex_lock_test_for_input(
+  C_tests_rex_frontend_enum_source_ownership_structure
+  rex_unparser_enum_include_boundary.c)
+
+add_test(
+  NAME C_tests_rex_unparser_enum_include_boundary
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "rm -rf rex_unparser_enum_include_boundary && \
+     mkdir rex_unparser_enum_include_boundary && \
+     cd rex_unparser_enum_include_boundary && \
+     $<TARGET_FILE:rex_frontend_enum_source_ownership_translator> ${_c_tests_rose_flags_str} -std=c11 -rose:collectAllCommentsAndDirectives -rose:skipfinalCompileStep -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_unparser_enum_include_boundary.c && \
+     enum_line=\$(grep -n 'enum RexExternalEnumeratorBoundary' rose_rex_unparser_enum_include_boundary.c | head -n1 | cut -d: -f1) && \
+     define_line=\$(grep -n 'define REX_EXTERNAL_ENUMERATOR' rose_rex_unparser_enum_include_boundary.c | head -n1 | cut -d: -f1) && \
+     include_line=\$(grep -n 'rex_unparser_enum_include_entries.def' rose_rex_unparser_enum_include_boundary.c | head -n1 | cut -d: -f1) && \
+     last_line=\$(grep -n 'rex_enum_direct_last' rose_rex_unparser_enum_include_boundary.c | head -n1 | cut -d: -f1) && \
+     terminal_enum_line=\$(grep -n 'enum RexTerminalExternalEnumeratorBoundary' rose_rex_unparser_enum_include_boundary.c | head -n1 | cut -d: -f1) && \
+     terminal_direct_line=\$(grep -n 'rex_enum_terminal_direct' rose_rex_unparser_enum_include_boundary.c | head -n1 | cut -d: -f1) && \
+     terminal_define_line=\$(grep -n 'define REX_TERMINAL_EXTERNAL_ENUMERATOR' rose_rex_unparser_enum_include_boundary.c | head -n1 | cut -d: -f1) && \
+     terminal_include_line=\$(grep -n 'rex_unparser_enum_terminal_include_entries.def' rose_rex_unparser_enum_include_boundary.c | head -n1 | cut -d: -f1) && \
+     test \"\$enum_line\" -le \"\$define_line\" && \
+     test \"\$define_line\" -lt \"\$include_line\" && \
+     test \"\$include_line\" -le \"\$last_line\" && \
+     test \"\$terminal_enum_line\" -le \"\$terminal_direct_line\" && \
+     test \"\$terminal_direct_line\" -le \"\$terminal_define_line\" && \
+     test \"\$terminal_define_line\" -lt \"\$terminal_include_line\" && \
+     ! grep -q 'rex_enum_external_first\|rex_enum_external_second\|rex_enum_terminal_external_first\|rex_enum_terminal_external_second' rose_rex_unparser_enum_include_boundary.c && \
+     ! grep -Eq 'enum[[:space:]]+Rex(External|Terminal)EnumeratorBoundary[[:space:]]*:' rose_rex_unparser_enum_include_boundary.c && \
+     ${CMAKE_C_COMPILER} -std=c11 -I${CMAKE_CURRENT_SOURCE_DIR} -fsyntax-only rose_rex_unparser_enum_include_boundary.c"
+)
+set_tests_properties(
+  C_tests_rex_unparser_enum_include_boundary
+  PROPERTIES LABELS "rex;CFE;UNPARSER;C_tests")
+rex_lock_test_for_input(
+  C_tests_rex_unparser_enum_include_boundary
+  rex_unparser_enum_include_boundary.c)
+
+add_test(
+  NAME C_tests_rex_unparser_rejects_unclassified_enum_source
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "ulimit -c 0; set +e; \"$@\" >rex_unclassified_enum_source.log 2>&1; status=$?; set -e; test $status -eq 134; test \"\$(grep -Ec '^REX_AST_INVARIANT\\[enum-source-ownership\\]: enum=0x[[:xdigit:]]+ name=RexExternalEnumeratorBoundary enumerator index=0 has no exact source role$' rex_unclassified_enum_source.log)\" -eq 1"
+    dummy
+    $<TARGET_FILE:rex_frontend_enum_source_ownership_translator>
+    --corrupt-source-role ${C_TEST_ROSE_FLAGS} -std=c11
+    -rose:collectAllCommentsAndDirectives -rose:skipfinalCompileStep
+    -I${CMAKE_CURRENT_SOURCE_DIR} -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_unparser_enum_include_boundary.c
+)
+set_tests_properties(
+  C_tests_rex_unparser_rejects_unclassified_enum_source
+  PROPERTIES LABELS "rex;CFE;UNPARSER;C_tests;death")
+rex_lock_test_for_input(
+  C_tests_rex_unparser_rejects_unclassified_enum_source
+  rex_unparser_enum_include_boundary.c)
+
+add_test(
+  NAME C_tests_rex_frontend_initializer_include_boundary
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "rm -rf rex_frontend_initializer_include_boundary && \
+     mkdir rex_frontend_initializer_include_boundary && \
+     cd rex_frontend_initializer_include_boundary && \
+     $<TARGET_FILE:rex_frontend_initializer_include_boundary_translator> ${_c_tests_rose_flags_str} -std=c11 -rose:collectAllCommentsAndDirectives -rose:skipfinalCompileStep -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_initializer_include_boundary.c && \
+     declaration_line=\$(grep -n 'rex_initializer_include_records' rose_rex_frontend_initializer_include_boundary.c | head -n1 | cut -d: -f1) && \
+     include_line=\$(grep -n 'rex_frontend_initializer_include_entries.def' rose_rex_frontend_initializer_include_boundary.c | head -n1 | cut -d: -f1) && \
+     scalar_declaration_line=\$(grep -n 'rex_scalar_initializer_include_value' rose_rex_frontend_initializer_include_boundary.c | head -n1 | cut -d: -f1) && \
+     scalar_include_line=\$(grep -n 'rex_frontend_scalar_initializer_value.def' rose_rex_frontend_initializer_include_boundary.c | head -n1 | cut -d: -f1) && \
+     complete_declaration_line=\$(grep -n 'rex_complete_initializer_include_value' rose_rex_frontend_initializer_include_boundary.c | head -n1 | cut -d: -f1) && \
+     complete_include_line=\$(grep -n 'rex_frontend_complete_initializer_value.def' rose_rex_frontend_initializer_include_boundary.c | head -n1 | cut -d: -f1) && \
+     test \"\$declaration_line\" -lt \"\$include_line\" && \
+     test \"\$scalar_declaration_line\" -lt \"\$scalar_include_line\" && \
+     test \"\$complete_declaration_line\" -lt \"\$complete_include_line\" && \
+     test \"\$(grep -c '\"included-first\"' rose_rex_frontend_initializer_include_boundary.c)\" -eq 0 && \
+     test \"\$(grep -c '\"included-second\"' rose_rex_frontend_initializer_include_boundary.c)\" -eq 0 && \
+     test \"\$(grep -c '\"source-tail\"' rose_rex_frontend_initializer_include_boundary.c)\" -eq 1 && \
+     ${CMAKE_C_COMPILER} -std=c11 -I${CMAKE_CURRENT_SOURCE_DIR} -fsyntax-only rose_rex_frontend_initializer_include_boundary.c"
+)
+set_tests_properties(
+  C_tests_rex_frontend_initializer_include_boundary
+  PROPERTIES LABELS "rex;CFE;UNPARSER;C_tests")
+rex_lock_test_for_input(
+  C_tests_rex_frontend_initializer_include_boundary
+  rex_frontend_initializer_include_boundary.c)
+
+add_test(
+  NAME C_tests_rex_frontend_class_include_boundary
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "rm -rf rex_frontend_class_include_boundary && \
+     mkdir rex_frontend_class_include_boundary && \
+     cd rex_frontend_class_include_boundary && \
+     $<TARGET_FILE:rex_frontend_class_include_boundary_translator> ${_c_tests_rose_flags_str} -std=c11 -rose:collectAllCommentsAndDirectives -rose:skipfinalCompileStep -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_class_include_boundary.c && \
+     test \"\$(grep -c 'rex_frontend_class_include_members.def' rose_rex_frontend_class_include_boundary.c)\" -eq 1 && \
+     test \"\$(grep -c 'included_first' rose_rex_frontend_class_include_boundary.c)\" -eq 1 && \
+     test \"\$(grep -c 'included_second' rose_rex_frontend_class_include_boundary.c)\" -eq 0 && \
+     test \"\$(grep -c 'owner_head' rose_rex_frontend_class_include_boundary.c)\" -eq 1 && \
+     test \"\$(grep -c 'owner_tail' rose_rex_frontend_class_include_boundary.c)\" -eq 2 && \
+     ${CMAKE_C_COMPILER} -std=c11 -I${CMAKE_CURRENT_SOURCE_DIR} -fsyntax-only rose_rex_frontend_class_include_boundary.c"
+)
+set_tests_properties(
+  C_tests_rex_frontend_class_include_boundary
+  PROPERTIES LABELS "rex;CFE;UNPARSER;C_tests")
+rex_lock_test_for_input(
+  C_tests_rex_frontend_class_include_boundary
+  rex_frontend_class_include_boundary.c)
+
+foreach(_rex_preprocessing_anchor_input IN ITEMS
+    rex_frontend_preprocessing_anchor_contract.c
+    rex_frontend_preprocessing_empty_translation_unit.c
+    rex_frontend_preprocessing_terminal_directive.c)
+  get_filename_component(
+    _rex_preprocessing_anchor_name
+    ${_rex_preprocessing_anchor_input}
+    NAME_WE
+  )
+  set(_rex_preprocessing_anchor_test
+    C_tests_${_rex_preprocessing_anchor_name}_structure)
+  add_test(
+    NAME ${_rex_preprocessing_anchor_test}
+    WORKING_DIRECTORY ${_c_tests_special_dir}
+    COMMAND
+      $<TARGET_FILE:rex_frontend_preprocessing_anchor_contract_translator>
+      ${C_TEST_ROSE_FLAGS} -std=c11
+      -rose:collectAllCommentsAndDirectives -rose:skipfinalCompileStep
+      -c ${CMAKE_CURRENT_SOURCE_DIR}/${_rex_preprocessing_anchor_input}
+  )
+  set_tests_properties(
+    ${_rex_preprocessing_anchor_test}
+    PROPERTIES LABELS "rex;CFE;C_tests")
+  rex_lock_test_for_input(
+    ${_rex_preprocessing_anchor_test}
+    ${_rex_preprocessing_anchor_input})
+endforeach()
+
+add_test(
+  NAME C_tests_rex_frontend_preprocessing_terminal_directive_roundtrip
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND
+    ${C_TEST_TRANSLATOR} ${C_TEST_ROSE_FLAGS} -std=c11
+    -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_preprocessing_terminal_directive.c
+)
+set_tests_properties(
+  C_tests_rex_frontend_preprocessing_terminal_directive_roundtrip
+  PROPERTIES LABELS "rex;CFE;UNPARSER;C_tests")
+rex_lock_test_for_input(
+  C_tests_rex_frontend_preprocessing_terminal_directive_roundtrip
+  rex_frontend_preprocessing_terminal_directive.c)
 
 set(_c_tests_string_macro [[-DSTRING_MACRO="some_text"]])
 
@@ -1259,6 +1689,71 @@ add_test(
      ${C_TEST_TRANSLATOR} -rose:unparse_in_same_directory_as_input_file ${_c_tests_rose_flags_str} -c test_directory/test2013_73.c -o test_directory/test2013_73.o"
 )
 set_tests_properties(C_tests_build_generated_file_in_same_directory_as_input_file PROPERTIES LABELS C_tests)
+
+add_test(
+  NAME rex_unparser_same_directory_output_safety
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "ulimit -c 0 && \
+     rm -rf rex_unparser_same_directory && \
+     mkdir rex_unparser_same_directory && \
+     cp ${CMAKE_CURRENT_SOURCE_DIR}/test2013_73.c rex_unparser_same_directory/input.c && \
+     before=\$(sha256sum rex_unparser_same_directory/input.c) && \
+     ${C_TEST_TRANSLATOR} -rose:unparse_in_same_directory_as_input_file ${_c_tests_rose_flags_str} -rose:skipfinalCompileStep rex_unparser_same_directory/input.c && \
+     after=\$(sha256sum rex_unparser_same_directory/input.c) && \
+     test \"\$before\" = \"\$after\" && \
+     test -s rex_unparser_same_directory/rose_input.c && \
+     absolute_input=\$(realpath rex_unparser_same_directory/input.c) && \
+     { set +e; ${C_TEST_TRANSLATOR} -rose:output \"\$absolute_input\" ${_c_tests_rose_flags_str} -rose:skipfinalCompileStep \"\$absolute_input\" >rex_unparser_same_directory/alias.log 2>&1; status=\$?; set -e; test \"\$status\" -eq 134; } && \
+     after_rejected=\$(sha256sum rex_unparser_same_directory/input.c) && \
+     test \"\$before\" = \"\$after_rejected\" && \
+     test \"\$(grep -Fxc \"Error: refusing to overwrite unparser input without -rose:unparser:clobber_input_file: \\\"\$absolute_input\\\"\" rex_unparser_same_directory/alias.log)\" -eq 1 && \
+     cp ${CMAKE_CURRENT_SOURCE_DIR}/test2013_73.c rex_unparser_relative_input.c && \
+     ${C_TEST_TRANSLATOR} -rose:unparse_in_same_directory_as_input_file ${_c_tests_rose_flags_str} -rose:skipfinalCompileStep rex_unparser_relative_input.c && \
+     test -s rose_rex_unparser_relative_input.c && \
+     rm -f rex_unparser_relative_input.c rose_rex_unparser_relative_input.c"
+)
+set_tests_properties(rex_unparser_same_directory_output_safety PROPERTIES
+  LABELS "rex;UNPARSER;C_tests")
+
+add_test(
+  NAME C_tests_rex_unparser_preprocessing_roundtrip
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "rm -rf rex_unparser_preprocessing_roundtrip && \
+     mkdir rex_unparser_preprocessing_roundtrip && \
+     cd rex_unparser_preprocessing_roundtrip && \
+     ${C_TEST_TRANSLATOR} ${_c_tests_rose_flags_str} -rose:collectAllCommentsAndDirectives -rose:skipfinalCompileStep ${CMAKE_CURRENT_SOURCE_DIR}/rex_unparser_preprocessing_roundtrip.c && \
+     test \"\$(grep -Fxc '#define REX_UNPARSER_SELF REX_UNPARSER_SELF' rose_rex_unparser_preprocessing_roundtrip.c)\" -eq 1 && \
+     test \"\$(grep -Fxc '#define REX_UNPARSER_INCREMENT(value) ((value) + 1)' rose_rex_unparser_preprocessing_roundtrip.c)\" -eq 1 && \
+     test \"\$(grep -Fxc '#define REX_UNPARSER_CONDITIONAL_IF 0' rose_rex_unparser_preprocessing_roundtrip.c)\" -eq 1 && \
+     test \"\$(grep -Fc '#if 0' rose_rex_unparser_preprocessing_roundtrip.c)\" -eq 1 && \
+     test \"\$(grep -Fc '#if REX_UNPARSER_CONDITIONAL_IF' rose_rex_unparser_preprocessing_roundtrip.c)\" -eq 1 && \
+     test \"\$(grep -Fc '#elif defined(REX_UNPARSER_SELF)' rose_rex_unparser_preprocessing_roundtrip.c)\" -eq 1 && \
+     test \"\$(grep -Fc '#else' rose_rex_unparser_preprocessing_roundtrip.c)\" -eq 2 && \
+     test \"\$(grep -Fc '#endif' rose_rex_unparser_preprocessing_roundtrip.c)\" -eq 3 && \
+     ${CMAKE_C_COMPILER} -std=c11 -I${CMAKE_CURRENT_SOURCE_DIR} -fsyntax-only rose_rex_unparser_preprocessing_roundtrip.c && \
+     ! grep -q 'previously processed\|ignored' rose_rex_unparser_preprocessing_roundtrip.c"
+)
+set_tests_properties(C_tests_rex_unparser_preprocessing_roundtrip PROPERTIES
+  LABELS "rex;UNPARSER;C_tests")
+
+add_test(
+  NAME C_tests_rex_unparser_opencl_attributes
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "rm -rf rex_unparser_opencl_attributes && \
+     mkdir rex_unparser_opencl_attributes && \
+     cd rex_unparser_opencl_attributes && \
+     ${C_TEST_TRANSLATOR} -rose:verbose 0 -rose:skipfinalCompileStep -cl-std=CL2.0 ${CMAKE_CURRENT_SOURCE_DIR}/rex_unparser_opencl_attributes.cl && \
+     test \"\$(grep -Fo '__kernel' rose_rex_unparser_opencl_attributes.cl | wc -l)\" -eq 2 && \
+     test \"\$(grep -Fc 'vec_type_hint(float4)' rose_rex_unparser_opencl_attributes.cl)\" -eq 1 && \
+     test \"\$(grep -Fc 'work_group_size_hint(8, 4, 2)' rose_rex_unparser_opencl_attributes.cl)\" -eq 1 && \
+     test \"\$(grep -Fc 'reqd_work_group_size(16, 2, 1)' rose_rex_unparser_opencl_attributes.cl)\" -eq 1 && \
+     ${C_TEST_TRANSLATOR} -rose:verbose 0 -rose:skipfinalCompileStep -cl-std=CL2.0 rose_rex_unparser_opencl_attributes.cl"
+)
+set_tests_properties(C_tests_rex_unparser_opencl_attributes PROPERTIES
+  LABELS "rex;UNPARSER;C_tests")
 
 add_test(
   NAME C_tests_unparse_includes_option
@@ -1325,7 +1820,7 @@ if(REX_C_TESTS_HOST_IS_X86)
   add_test(
     NAME C_tests_rtd_use
     WORKING_DIRECTORY ${_c_tests_special_dir}
-    COMMAND ${C_TEST_TRANSLATOR} -m32 -mrtd -rose:C89 -c
+    COMMAND ${C_TEST_TRANSLATOR} -m32 -mrtd -std=gnu89 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/test2015_89.c
   )
   set_tests_properties(C_tests_rtd_use PROPERTIES LABELS C_tests)
@@ -1363,11 +1858,83 @@ add_test(
 )
 set_tests_properties(C_tests_optimization_specifier_O2 PROPERTIES LABELS C_tests)
 
+add_test(
+  NAME C_tests_rex_frontend_driver_argument_order
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND ${C_TEST_TRANSLATOR} ${C_TEST_ROSE_FLAGS}
+          -DREX_DRIVER_ARGUMENT_ORDER=1
+          -UREX_DRIVER_ARGUMENT_ORDER
+          -DREX_DRIVER_ARGUMENT_ORDER=2
+          -DREX_DRIVER_ARGUMENT_UNDEFINED
+          -UREX_DRIVER_ARGUMENT_UNDEFINED
+          -c
+          ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_driver_argument_order.c
+)
+set_tests_properties(C_tests_rex_frontend_driver_argument_order
+  PROPERTIES LABELS "C_tests;rex")
+
+set(_rex_frontend_linker_object
+  ${_c_tests_special_dir}/rex_frontend_linker_input.o)
+set(_rex_frontend_linker_archive
+  ${_c_tests_special_dir}/rex_frontend_linker_input.a)
+file(WRITE ${_rex_frontend_linker_object} "")
+file(WRITE ${_rex_frontend_linker_archive} "")
+add_test(
+  NAME C_tests_rex_frontend_distinguishes_linker_inputs
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND ${C_TEST_TRANSLATOR} ${C_TEST_ROSE_FLAGS}
+          -rose:skipfinalCompileStep
+          -DREX_DRIVER_ARGUMENT_ORDER=1
+          -UREX_DRIVER_ARGUMENT_ORDER
+          -DREX_DRIVER_ARGUMENT_ORDER=2
+          -DREX_DRIVER_ARGUMENT_UNDEFINED
+          -UREX_DRIVER_ARGUMENT_UNDEFINED
+          -c
+          ${_rex_frontend_linker_object}
+          ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_driver_argument_order.c
+          ${_rex_frontend_linker_archive}
+)
+set_tests_properties(C_tests_rex_frontend_distinguishes_linker_inputs
+  PROPERTIES LABELS "C_tests;rex")
+
+set(_rex_frontend_option_operand_dir
+  ${_c_tests_special_dir}/rex_frontend_option_operand.c)
+file(MAKE_DIRECTORY ${_rex_frontend_option_operand_dir})
+add_test(
+  NAME C_tests_rex_frontend_exact_option_operand_ownership
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND ${C_TEST_TRANSLATOR} ${C_TEST_ROSE_FLAGS}
+          -rose:skipfinalCompileStep
+          -working-directory ${_rex_frontend_option_operand_dir}
+          -c
+          ${CMAKE_CURRENT_SOURCE_DIR}/test2003_12.c
+)
+set_tests_properties(C_tests_rex_frontend_exact_option_operand_ownership
+  PROPERTIES LABELS "C_tests;rex")
+
+set(_rex_missing_llvm_root
+  "/rex-test-missing-llvm-${LLVM_VERSION_MAJOR}")
+set(_rex_missing_llvm_driver_diagnostic
+  "REX_FRONTEND_INVARIANT[clang-driver-path]: LLVM_DIR selects '${_rex_missing_llvm_root}', but that root has no executable for linked LLVM ${LLVM_VERSION_MAJOR}")
+add_test(
+  NAME C_tests_rex_frontend_exact_llvm_driver
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "ulimit -c 0; log=rex_frontend_exact_llvm_driver.log; expected=\"$1\"; shift; set +e; LLVM_DIR='${_rex_missing_llvm_root}' \"$@\" >\"$log\" 2>&1; status=$?; set -e; test \"$status\" -eq 134; test \"$(grep -Fxc -- \"$expected\" \"$log\")\" -eq 1"
+    dummy
+    "${_rex_missing_llvm_driver_diagnostic}"
+    ${C_TEST_TRANSLATOR} ${C_TEST_ROSE_FLAGS}
+    -rose:skipfinalCompileStep
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_driver_argument_order.c
+)
+set_tests_properties(C_tests_rex_frontend_exact_llvm_driver
+  PROPERTIES LABELS "C_tests;rex;death")
+
 if(REX_C_TESTS_HOST_IS_X86)
   add_test(
     NAME C_tests_mregparm_m32_use
     WORKING_DIRECTORY ${_c_tests_special_dir}
-    COMMAND ${C_TEST_TRANSLATOR} -mregparm=3 -m32 -rose:C89 -c
+    COMMAND ${C_TEST_TRANSLATOR} -mregparm=3 -m32 -std=gnu89 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/test2015_154.c
   )
   set_tests_properties(C_tests_mregparm_m32_use PROPERTIES LABELS C_tests)
@@ -1410,10 +1977,92 @@ set_tests_properties(C_tests_caller_out PROPERTIES LABELS C_tests)
 add_test(
   NAME C_tests_token_mapping
   WORKING_DIRECTORY ${_c_tests_special_dir}
-  COMMAND ${C_TEST_TRANSLATOR} -rose:C89 -rose:unparse_tokens -c
+  COMMAND ${C_TEST_TRANSLATOR} -std=gnu89 -rose:unparse_tokens -c
           ${CMAKE_CURRENT_SOURCE_DIR}/test2003_12.c
 )
 set_tests_properties(C_tests_token_mapping PROPERTIES  LABELS C_tests)
+
+add_test(
+  NAME rex_unparser_output_paths_are_failure_atomic
+  COMMAND
+    ${BASH_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/run_rex_unparser_output_safety.sh
+    ${C_TEST_TRANSLATOR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_unparser_output_atomicity.c
+    ${_c_tests_special_dir}/rex_unparser_output_safety
+)
+set_tests_properties(
+  rex_unparser_output_paths_are_failure_atomic
+  PROPERTIES
+    LABELS "rex;UNPARSER;C_tests"
+    RESOURCE_LOCK rex_unparser_output_safety
+)
+
+add_test(
+  NAME rex_unparser_hard_linked_destination_is_rejected
+  COMMAND
+    ${BASH_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_unparser_hard_linked_destination.sh
+    ${C_TEST_TRANSLATOR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_unparser_output_atomicity.c
+    ${_c_tests_special_dir}/rex_unparser_hard_linked_destination
+)
+set_tests_properties(
+  rex_unparser_hard_linked_destination_is_rejected
+  PROPERTIES
+    LABELS "rex;UNPARSER;C_tests"
+    RESOURCE_LOCK rex_unparser_hard_linked_destination
+)
+
+add_test(
+  NAME rex_unparser_atomic_output_preserves_permissions
+  COMMAND
+    ${BASH_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/run_rex_unparser_output_mode.sh
+    ${C_TEST_TRANSLATOR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_unparser_output_atomicity.c
+    ${_c_tests_special_dir}/rex_unparser_output_mode
+)
+set_tests_properties(
+  rex_unparser_atomic_output_preserves_permissions
+  PROPERTIES
+    LABELS "rex;UNPARSER;C_tests"
+    RESOURCE_LOCK rex_unparser_output_mode
+)
+
+add_test(
+  NAME rex_unparser_atomic_output_retries_stale_collision
+  COMMAND
+    ${BASH_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/run_rex_unparser_output_collision.sh
+    ${C_TEST_TRANSLATOR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_unparser_output_atomicity.c
+    ${_c_tests_special_dir}/rex_unparser_output_collision
+)
+set_tests_properties(
+  rex_unparser_atomic_output_retries_stale_collision
+  PROPERTIES
+    LABELS "rex;UNPARSER;C_tests"
+    RESOURCE_LOCK rex_unparser_output_collision
+)
+
+add_test(
+  NAME rex_unparser_atomic_output_keeps_exclusive_descriptor
+  COMMAND
+    ${BASH_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/run_rex_unparser_staging_descriptor.sh
+    ${C_TEST_TRANSLATOR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_unparser_output_atomicity.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_unparser_staging_close_substitution.c
+    ${CMAKE_C_COMPILER}
+    ${_c_tests_special_dir}/rex_unparser_staging_descriptor
+)
+set_tests_properties(
+  rex_unparser_atomic_output_keeps_exclusive_descriptor
+  PROPERTIES
+    LABELS "rex;UNPARSER;C_tests"
+    RESOURCE_LOCK rex_unparser_staging_descriptor
+)
 
 if(REX_C_TESTS_HOST_IS_X86)
   add_test(
@@ -1428,7 +2077,7 @@ endif()
 add_test(
   NAME C_tests_m32_use
   WORKING_DIRECTORY ${_c_tests_special_dir}
-  COMMAND ${C_TEST_TRANSLATOR} -m32 -rose:C89 -c
+  COMMAND ${C_TEST_TRANSLATOR} -m32 -std=gnu89 -c
           ${CMAKE_CURRENT_SOURCE_DIR}/test2015_95.c
 )
 set_tests_properties(C_tests_m32_use PROPERTIES  LABELS C_tests)
@@ -1441,6 +2090,17 @@ add_test(
 )
 set_tests_properties(C_tests_file_suffix PROPERTIES  LABELS C_tests)
 
+add_test(
+  NAME C_tests_rex_frontend_designated_initializer_ordered_surface
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "${C_TEST_TRANSLATOR} ${_c_tests_lang_flags_str} ${_c_tests_rose_flags_str} -rose:skipfinalCompileStep -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_designated_initializer_chain.c && grep -F '.leaves[1].values[2] = 7' rose_rex_frontend_designated_initializer_chain.c && grep -F '[2 ... 5] = 9' rose_rex_frontend_designated_initializer_chain.c && ${CMAKE_C_COMPILER} -std=gnu11 -c rose_rex_frontend_designated_initializer_chain.c"
+)
+set_tests_properties(
+  C_tests_rex_frontend_designated_initializer_ordered_surface
+  PROPERTIES LABELS "C_tests;rex"
+)
+
 rex_verify_compile_test_source_coverage(
   DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   PROPERTIES
@@ -1448,6 +2108,16 @@ rex_verify_compile_test_source_coverage(
     REX_C89_TESTS_SOURCES
     REX_C_TESTS_X86_ONLY_SOURCES
   IGNORE
+    rex_frontend_generated_typedef_dependency_translator.cpp
+    rex_frontend_inline_tag_ownership_translator.cpp
+    rex_frontend_multi_tu_tag_identity_a.c
+    rex_frontend_multi_tu_tag_identity_b.c
+    rex_frontend_multi_tu_tag_identity_translator.cpp
+    rex_frontend_tag_redeclaration_ownership_translator.cpp
+    rex_unparser_staging_close_substitution.c
+    run_rex_unparser_output_collision.sh
+    run_rex_unparser_output_safety.sh
+    run_rex_unparser_staging_descriptor.sh
     test2014_20_inc.c
     test2014_27_inc.c
     test2014_28_inc.c

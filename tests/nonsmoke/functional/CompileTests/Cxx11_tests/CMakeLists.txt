@@ -6,6 +6,15 @@ set(CXX11_TESTCODES
   test2012_05.C
   test2012_06.C
   test2012_09.C
+  rex_frontend_dependent_friend_type.C
+  rex_frontend_function_type_pack_ownership.cpp
+  rex_frontend_lambda_typedef_signature.cpp
+  rex_frontend_source_less_implicit_parameters.cpp
+  rex_frontend_stmt_owned_semantic_nodes.cpp
+  rex_frontend_using_exact_target_and_qualifier.cpp
+  rex_unparser_alignof_template_default_qualification.cpp
+  rex_unparser_function_return_elaboration_qualification.cpp
+  rex_unparser_trailing_return_source_form.cpp
   rex_test2026_cxx_std_initializer_list_valgrind_defined_reads.cpp
   rex_test2026_atomic_expr_valgrind_defined_reads.cpp
   rex_test2026_function_definition_valgrind_defined_reads.cpp
@@ -991,23 +1000,17 @@ set(CXX11_NEGATIVE_TESTCODES
   # valid Sage tree. Keep them as explicit negative frontend coverage.
   rose-1973.C
   test2012_07.C
+  test2016_35.C
   test2016_36.C
   test2018_100.C
   test2019_313.C
   test2019_315.C
   test2019_463.C
   test2019_488.C
+  test2020_40.C
   test2020_54.C
   test2020_69.C
   test2020_70.C
-  test2020_103.C
-  test2020_104.C
-  test2020_105.C
-  test2020_106.C
-  test2020_107.C
-  test2020_108.C
-  test2020_109.C
-  test2020_110.C
 )
 assert_cxx11_specimens_exist(CXX11_NEGATIVE_TESTCODES)
 set(CXX11_POSITIVE_TESTCODES ${CXX11_TESTCODES})
@@ -1020,8 +1023,7 @@ rex_register_compile_source_set(REX_CXX11_TESTS_CXX03_SOURCES
 rex_register_compile_source_set(REX_CXX11_TESTS_NEGATIVE_SOURCES
   ${CXX11_NEGATIVE_TESTCODES})
 
-set(ROSE_FLAGS_BASE
-  -w -rose:verbose 0 -rose:skip_unparse_asm_commands)
+set(ROSE_FLAGS_BASE -rose:verbose 0)
 set(ROSE_FLAGS_CXX11
   ${ROSE_FLAGS_BASE} -std=c++11)
 set(ROSE_FLAGS_CXX03
@@ -1050,6 +1052,8 @@ set(ROSE_FLAGS ${ROSE_FLAGS_CXX11})
 
 foreach(file_to_test ${CXX11_NEGATIVE_TESTCODES})
   compile_negative_test(${file_to_test} "Cxx11_tests")
+  rex_compile_test_name(_test_name "Cxx11_tests" ${file_to_test})
+  rex_lock_test_for_input(${_test_name} ${file_to_test})
 endforeach()
 
 set(_multi_file_tests
@@ -1067,6 +1071,7 @@ set(_multi_file_tests
   test2019_521_ab;test2019_521a.C;test2019_521b.C
   test2019_522_ab;test2019_522a.C;test2019_522b.C
   test2020_51ab;test2020_51a.C;test2020_51b.C
+  rex_frontend_multi_tu_enum_identity_ab;rex_frontend_multi_tu_enum_identity_a.C;rex_frontend_multi_tu_enum_identity_b.C
 )
 
 list(LENGTH _multi_file_tests _multi_len)
@@ -1098,7 +1103,7 @@ set_tests_properties(Cxx11_tests_test2020_113 PROPERTIES LABELS Cxx11_tests)
 
 add_test(
   NAME Cxx11_tests_c_language_file_as_cxx
-  COMMAND ${translator} ${ROSE_FLAGS_CXX03} -rose:Cxx_only ${ROSE_INCLUDE_FLAGS}
+  COMMAND ${translator} ${ROSE_FLAGS_CXX03} -x c++ ${ROSE_INCLUDE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/C_language_file_1.c
 )
@@ -1106,7 +1111,7 @@ set_tests_properties(Cxx11_tests_c_language_file_as_cxx PROPERTIES LABELS Cxx11_
 
 add_test(
   NAME Cxx11_tests_c_language_file_as_cxx11
-  COMMAND ${translator} ${ROSE_FLAGS_CXX11} -rose:Cxx11_only ${ROSE_INCLUDE_FLAGS}
+  COMMAND ${translator} ${ROSE_FLAGS_CXX11} -x c++ ${ROSE_INCLUDE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/C_language_file_2.c
 )
@@ -1123,3 +1128,156 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/globalVariablesInLambdas_test_01.C
 )
 set_tests_properties(Cxx11_tests_globalVariablesInLambdas PROPERTIES  LABELS Cxx11_tests)
+
+add_executable(
+  rex_frontend_function_type_pack_ownership_translator
+  rex_frontend_function_type_pack_ownership_translator.cpp
+)
+target_link_libraries(
+  rex_frontend_function_type_pack_ownership_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+add_test(
+  NAME Cxx11_tests_rex_frontend_function_type_pack_ownership_structure
+  COMMAND
+    $<TARGET_FILE:rex_frontend_function_type_pack_ownership_translator>
+    ${ROSE_FLAGS_CXX11}
+    -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_function_type_pack_ownership.cpp
+)
+set_tests_properties(
+  Cxx11_tests_rex_frontend_function_type_pack_ownership_structure
+  PROPERTIES LABELS "rex;CFE;UNPARSER;Cxx11_tests"
+)
+rex_lock_test_for_input(
+  Cxx11_tests_rex_frontend_function_type_pack_ownership_structure
+  rex_frontend_function_type_pack_ownership.cpp
+)
+
+add_executable(
+  rex_frontend_stmt_owned_semantic_nodes_translator
+  rex_frontend_stmt_owned_semantic_nodes_translator.cpp
+)
+target_link_libraries(
+  rex_frontend_stmt_owned_semantic_nodes_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+add_test(
+  NAME Cxx11_tests_rex_frontend_stmt_owned_semantic_nodes_structure
+  COMMAND
+    $<TARGET_FILE:rex_frontend_stmt_owned_semantic_nodes_translator>
+    ${ROSE_FLAGS_CXX11}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_stmt_owned_semantic_nodes.cpp
+)
+set_tests_properties(
+  Cxx11_tests_rex_frontend_stmt_owned_semantic_nodes_structure
+  PROPERTIES LABELS "rex;CFE;Cxx11_tests")
+rex_lock_test_for_input(
+  Cxx11_tests_rex_frontend_stmt_owned_semantic_nodes_structure
+  rex_frontend_stmt_owned_semantic_nodes.cpp)
+
+add_executable(
+  rex_unparser_trailing_return_source_form_translator
+  rex_unparser_trailing_return_source_form_translator.cpp
+)
+target_link_libraries(
+  rex_unparser_trailing_return_source_form_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+add_test(
+  NAME Cxx11_tests_rex_unparser_trailing_return_source_form_structure
+  COMMAND
+    $<TARGET_FILE:rex_unparser_trailing_return_source_form_translator>
+    ${ROSE_FLAGS_CXX11}
+    -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_unparser_trailing_return_source_form.cpp
+)
+set_tests_properties(
+  Cxx11_tests_rex_unparser_trailing_return_source_form_structure
+  PROPERTIES LABELS "rex;CFE;UNPARSER;Cxx11_tests"
+)
+rex_lock_test_for_input(
+  Cxx11_tests_rex_unparser_trailing_return_source_form_structure
+  rex_unparser_trailing_return_source_form.cpp
+)
+
+add_executable(
+  rex_frontend_source_less_implicit_parameters_translator
+  rex_frontend_source_less_implicit_parameters_translator.cpp
+)
+target_link_libraries(
+  rex_frontend_source_less_implicit_parameters_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+add_test(
+  NAME Cxx11_tests_rex_frontend_source_less_implicit_parameters_structure
+  COMMAND
+    $<TARGET_FILE:rex_frontend_source_less_implicit_parameters_translator>
+    ${ROSE_FLAGS_CXX11}
+    -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_source_less_implicit_parameters.cpp
+)
+set_tests_properties(
+  Cxx11_tests_rex_frontend_source_less_implicit_parameters_structure
+  PROPERTIES LABELS "rex;CFE;Cxx11_tests"
+)
+rex_lock_test_for_input(
+  Cxx11_tests_rex_frontend_source_less_implicit_parameters_structure
+  rex_frontend_source_less_implicit_parameters.cpp
+)
+
+add_executable(
+  rex_unparser_semantic_nonreal_availability_translator
+  rex_unparser_semantic_nonreal_availability_translator.cpp
+)
+target_link_libraries(
+  rex_unparser_semantic_nonreal_availability_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+add_test(
+  NAME Cxx11_tests_rex_unparser_semantic_nonreal_availability_structure
+  COMMAND
+    $<TARGET_FILE:rex_unparser_semantic_nonreal_availability_translator>
+    ${ROSE_FLAGS_CXX11}
+    -rose:skipfinalCompileStep
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/test2018_105.C
+)
+set_tests_properties(
+  Cxx11_tests_rex_unparser_semantic_nonreal_availability_structure
+  PROPERTIES LABELS "rex;CFE;UNPARSER;Cxx11_tests"
+)
+rex_lock_test_for_input(
+  Cxx11_tests_rex_unparser_semantic_nonreal_availability_structure
+  test2018_105.C
+)
+
+add_executable(
+  rex_unparser_definition_context_shared_type_translator
+  rex_unparser_definition_context_shared_type_translator.cpp)
+target_link_libraries(
+  rex_unparser_definition_context_shared_type_translator
+  ROSE_DLL
+  ${link_with_libraries})
+set(_definition_context_workdir
+  "${CMAKE_CURRENT_BINARY_DIR}/rex_unparser_definition_context_shared_type")
+file(MAKE_DIRECTORY "${_definition_context_workdir}")
+add_test(
+  NAME Cxx11_tests_rex_unparser_definition_context_shared_type
+  COMMAND
+    ${CMAKE_CURRENT_SOURCE_DIR}/run_rex_unparser_definition_context_shared_type.sh
+    $<TARGET_FILE:rex_unparser_definition_context_shared_type_translator>
+    ${CMAKE_CXX_COMPILER}
+    ${_definition_context_workdir}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_unparser_definition_context_shared_type_a.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_unparser_definition_context_shared_type_b.cpp
+    ${ROSE_FLAGS_CXX11}
+    ${ROSE_INCLUDE_FLAGS})
+set_tests_properties(
+  Cxx11_tests_rex_unparser_definition_context_shared_type
+  PROPERTIES LABELS "rex;CFE;UNPARSER;Cxx11_tests")
+unset(_definition_context_workdir)

@@ -2,13 +2,12 @@
 // $Id: AstConsistencyTests.C,v 1.8 2008/01/25 02:25:46 dquinlan Exp $
 
 // tps (01/14/2010) : Switching from rose.h to sage3.
+#include "AstNodes/Expression/OpenMPModifierValidation.h"
 #include "sage3basic.h"
 
 #include "rose_config.h"
 // tps : needed to define this here as it is defined in rose.h
 #include "AstDiagnostics.h"
-
-#include "markCompilerGenerated.h"
 
 #ifndef ASTTESTS_C
 #define ASTTESTS_C
@@ -27,6 +26,8 @@
 
 #include "AstTraversal.h"
 
+#include <sstream>
+
 // This controls output for debugging
 #define WARN_ABOUT_ATYPICAL_LVALUES 0
 
@@ -44,6 +45,60 @@ void rosePhaseTrace(const char *phase) {
     fprintf(stderr, "ROSE_PHASE %s\n", phase);
     fflush(stderr);
   }
+}
+
+bool isOpenmpNonentityDirective(const SgNode *node) {
+  return isSgOmpBeginDeclareVariantStatement(node) != NULL ||
+         isSgOmpEndDeclareVariantStatement(node) != NULL ||
+         isSgOmpDeclareTargetStatement(node) != NULL ||
+         isSgOmpEndDeclareTargetStatement(node) != NULL ||
+         isSgOmpBeginDeclareTargetStatement(node) != NULL ||
+         isSgOmpAssumesStatement(node) != NULL ||
+         isSgOmpBeginAssumesStatement(node) != NULL ||
+         isSgOmpEndAssumesStatement(node) != NULL ||
+         isSgOmpGroupprivateStatement(node) != NULL ||
+         isSgOmpRequiresStatement(node) != NULL;
+}
+
+SgArrayType *ordinaryFortranArrayType(SgType *type) {
+  while (type != nullptr) {
+    if (SgModifierType *modifier = isSgModifierType(type)) {
+      type = modifier->get_base_type();
+      continue;
+    }
+    if (SgPointerType *pointer = isSgPointerType(type)) {
+      type = pointer->get_base_type();
+      continue;
+    }
+    if (SgArrayType *array = isSgArrayType(type)) {
+      if (!array->get_isCoArray()) {
+        return array;
+      }
+      type = array->get_base_type();
+      continue;
+    }
+    return nullptr;
+  }
+  return nullptr;
+}
+
+bool exactFortranRedeclarationIdentity(const SgInitializedName *source,
+                                       const SgInitializedName *canonical) {
+  std::unordered_set<const SgInitializedName *> visited;
+  for (const SgInitializedName *current = source; current != nullptr;
+       current = current->get_prev_decl_item()) {
+    if (!visited.insert(current).second) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[fortran-redeclaration-chain]: object=%p "
+              "name=%s has a cyclic initialized-name chain\n",
+              static_cast<const void *>(source), source->get_name().str());
+      ROSE_ABORT();
+    }
+    if (current == canonical) {
+      return true;
+    }
+  }
+  return false;
 }
 
 struct ChildPointerCollector : SimpleReferenceToPointerHandler {
@@ -103,6 +158,15 @@ SgSymbol *localSymbolForCurrentEntry(SgSymbolTable *symbolTable,
              : nullptr;
 }
 
+bool declarationRequiresExactSourceSurfaceOwner(
+    SgDeclarationStatement *declaration) {
+  return isSgClassDeclaration(declaration) != nullptr ||
+         isSgTemplateFunctionDeclaration(declaration) != nullptr ||
+         isSgTemplateMemberFunctionDeclaration(declaration) != nullptr ||
+         isSgTemplateVariableDeclaration(declaration) != nullptr ||
+         isSgTemplateTypedefDeclaration(declaration) != nullptr;
+}
+
 SgSymbol *localSymbolForCurrentEntry(SgSymbolTable *symbolTable,
                                      const SgName &entryName, SgSymbol *symbol,
                                      SgLabelStatement *labelStatement) {
@@ -115,6 +179,256 @@ SgSymbol *localSymbolForCurrentEntry(SgSymbolTable *symbolTable,
   return labelStatement != nullptr
              ? labelStatement->get_symbol_from_symbol_table()
              : nullptr;
+}
+
+SgDeclarationStatement *
+canonicalTagDeclaration(SgDeclarationStatement *declaration) {
+  if (declaration == nullptr) {
+    return nullptr;
+  }
+  SgDeclarationStatement *first =
+      declaration->get_firstNondefiningDeclaration();
+  return first != nullptr ? first : declaration;
+}
+
+void validateExpressionTypeDefinitionOwner(
+    SgExpression *expression, SgType *operandType,
+    SgExpression *operandExpression,
+    SgDeclarationStatement *typeDefiningDeclaration,
+    bool requireExclusiveTypeOperand, const char *context) {
+  ROSE_ASSERT(expression != nullptr);
+  if (requireExclusiveTypeOperand &&
+      ((operandType == nullptr) == (operandExpression == nullptr))) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[expression-type-definition-owner]: "
+            "context=%s expression=%p/%s does not have exactly one type or "
+            "expression operand\n",
+            context, static_cast<void *>(expression),
+            expression->class_name().c_str());
+    ROSE_ABORT();
+  }
+
+  if (typeDefiningDeclaration == nullptr) {
+    for (SgNode *successor : expression->get_traversalSuccessorContainer()) {
+      if (isSgClassDeclaration(successor) != nullptr ||
+          isSgEnumDeclaration(successor) != nullptr) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[expression-type-definition-owner]: "
+                "context=%s expression=%p/%s traverses a tag declaration "
+                "without publishing its exact typed field\n",
+                context, static_cast<void *>(expression),
+                expression->class_name().c_str());
+        ROSE_ABORT();
+      }
+    }
+    return;
+  }
+
+  if (operandType == nullptr ||
+      typeDefiningDeclaration->get_parent() != expression) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[expression-type-definition-owner]: "
+            "context=%s expression=%p/%s has a defining declaration without "
+            "an exact type operand/target and parent edge\n",
+            context, static_cast<void *>(expression),
+            expression->class_name().c_str());
+    ROSE_ABORT();
+  }
+
+  SgNamedType *namedType = isSgNamedType(operandType->findBaseType());
+  SgDeclarationStatement *typeDeclaration =
+      namedType != nullptr ? namedType->get_declaration() : nullptr;
+  bool exactDefinition = false;
+  bool autonomousDeclaration = true;
+  if (SgClassDeclaration *classDeclaration =
+          isSgClassDeclaration(typeDefiningDeclaration)) {
+    exactDefinition =
+        classDeclaration->get_definition() != nullptr &&
+        classDeclaration->get_definingDeclaration() == classDeclaration;
+    autonomousDeclaration = classDeclaration->get_isAutonomousDeclaration();
+  } else if (SgEnumDeclaration *enumDeclaration =
+                 isSgEnumDeclaration(typeDefiningDeclaration)) {
+    exactDefinition =
+        !enumDeclaration->isForward() &&
+        enumDeclaration->get_definingDeclaration() == enumDeclaration;
+    autonomousDeclaration = enumDeclaration->get_isAutonomousDeclaration();
+  }
+  if (typeDeclaration == nullptr || !exactDefinition ||
+      canonicalTagDeclaration(typeDeclaration) !=
+          canonicalTagDeclaration(typeDefiningDeclaration) ||
+      autonomousDeclaration) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[expression-type-definition-owner]: "
+            "context=%s expression=%p/%s owns a declaration that is not the "
+            "nonautonomous definition of its exact type\n",
+            context, static_cast<void *>(expression),
+            expression->class_name().c_str());
+    ROSE_ABORT();
+  }
+
+  size_t traversalOccurrences = 0;
+  for (SgNode *successor : expression->get_traversalSuccessorContainer()) {
+    if (successor == typeDefiningDeclaration) {
+      ++traversalOccurrences;
+    }
+  }
+  if (traversalOccurrences != 1) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[expression-type-definition-owner]: "
+            "context=%s expression=%p/%s has %zu traversal edges to its "
+            "defining declaration\n",
+            context, static_cast<void *>(expression),
+            expression->class_name().c_str(), traversalOccurrences);
+    ROSE_ABORT();
+  }
+}
+
+void validateVariableBaseTypeDefinitionOwner(
+    SgVariableDeclaration *variableDeclaration) {
+  ROSE_ASSERT(variableDeclaration != nullptr);
+  SgDeclarationStatement *baseTypeNondefiningDeclaration =
+      variableDeclaration->get_baseTypeNondefiningDeclaration();
+  SgDeclarationStatement *baseTypeDefiningDeclaration =
+      variableDeclaration->get_baseTypeDefiningDeclaration();
+  if (baseTypeNondefiningDeclaration != nullptr &&
+      baseTypeDefiningDeclaration != nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[variable-base-type-tag-owner]: variable=%p "
+            "owns both nondefining=%p and defining=%p tag edges\n",
+            static_cast<void *>(variableDeclaration),
+            static_cast<void *>(baseTypeNondefiningDeclaration),
+            static_cast<void *>(baseTypeDefiningDeclaration));
+    ROSE_ABORT();
+  }
+  SgDeclarationStatement *ownedTag = baseTypeNondefiningDeclaration != nullptr
+                                         ? baseTypeNondefiningDeclaration
+                                         : baseTypeDefiningDeclaration;
+  if (ownedTag == nullptr) {
+    for (SgNode *successor :
+         variableDeclaration->get_traversalSuccessorContainer()) {
+      if (isSgClassDeclaration(successor) != nullptr ||
+          isSgEnumDeclaration(successor) != nullptr) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[variable-base-type-tag-owner]: "
+                "variable=%p traverses a tag declaration without publishing "
+                "its exact typed field\n",
+                static_cast<void *>(variableDeclaration));
+        ROSE_ABORT();
+      }
+    }
+    return;
+  }
+
+  bool exactDefinition = false;
+  bool exactNondefining = false;
+  bool autonomousDeclaration = true;
+  if (SgClassDeclaration *classDeclaration = isSgClassDeclaration(ownedTag)) {
+    exactDefinition =
+        classDeclaration->get_definition() != nullptr &&
+        classDeclaration->get_definingDeclaration() == classDeclaration;
+    exactNondefining =
+        classDeclaration->get_definition() == nullptr &&
+        classDeclaration->get_firstNondefiningDeclaration() ==
+            classDeclaration &&
+        classDeclaration->get_definingDeclaration() != classDeclaration;
+    autonomousDeclaration = classDeclaration->get_isAutonomousDeclaration();
+  } else if (SgEnumDeclaration *enumDeclaration =
+                 isSgEnumDeclaration(ownedTag)) {
+    exactDefinition =
+        !enumDeclaration->isForward() &&
+        enumDeclaration->get_definingDeclaration() == enumDeclaration;
+    exactNondefining =
+        enumDeclaration->isForward() &&
+        enumDeclaration->get_firstNondefiningDeclaration() == enumDeclaration &&
+        enumDeclaration->get_definingDeclaration() != enumDeclaration;
+    autonomousDeclaration = enumDeclaration->get_isAutonomousDeclaration();
+  }
+  const bool exactFieldRole = baseTypeNondefiningDeclaration != nullptr
+                                  ? exactNondefining
+                                  : exactDefinition;
+  if (!exactFieldRole || autonomousDeclaration ||
+      ownedTag->get_parent() != variableDeclaration ||
+      variableDeclaration->get_variables().empty()) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[variable-base-type-tag-owner]: variable=%p "
+            "does not own one nonautonomous tag with the exact field role\n",
+            static_cast<void *>(variableDeclaration));
+    ROSE_ABORT();
+  }
+
+  for (SgInitializedName *initializedName :
+       variableDeclaration->get_variables()) {
+    SgType *declaredType =
+        initializedName != nullptr ? initializedName->get_type() : nullptr;
+    SgNamedType *namedBaseType =
+        declaredType != nullptr ? isSgNamedType(declaredType->findBaseType())
+                                : nullptr;
+    SgDeclarationStatement *typeDeclaration =
+        namedBaseType != nullptr ? namedBaseType->get_declaration() : nullptr;
+    if (!SageInterface::isExactTagTypeIdentity(declaredType, ownedTag)) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[variable-base-type-tag-owner]: "
+              "variable=%p initialized-name=%p declared-type=%p/%s "
+              "base-type=%p/%s type-declaration=%p/%s canonical=%p "
+              "owned-tag=%p/%s canonical=%p does not name the owned tag as "
+              "its exact base type\n",
+              static_cast<void *>(variableDeclaration),
+              static_cast<void *>(initializedName),
+              static_cast<void *>(declaredType),
+              declaredType != nullptr ? declaredType->class_name().c_str()
+                                      : "<null>",
+              static_cast<void *>(namedBaseType),
+              namedBaseType != nullptr ? namedBaseType->class_name().c_str()
+                                       : "<null>",
+              static_cast<void *>(typeDeclaration),
+              typeDeclaration != nullptr ? typeDeclaration->class_name().c_str()
+                                         : "<null>",
+              static_cast<void *>(canonicalTagDeclaration(typeDeclaration)),
+              static_cast<void *>(ownedTag), ownedTag->class_name().c_str(),
+              static_cast<void *>(canonicalTagDeclaration(ownedTag)));
+      ROSE_ABORT();
+    }
+  }
+
+  size_t traversalOccurrences = 0;
+  size_t ownedTagPosition = 0;
+  bool sawOwnedTag = false;
+  const SgNodePtrList successors =
+      variableDeclaration->get_traversalSuccessorContainer();
+  for (size_t index = 0; index < successors.size(); ++index) {
+    SgNode *successor = successors[index];
+    if (successor == ownedTag) {
+      ++traversalOccurrences;
+      ownedTagPosition = index;
+      sawOwnedTag = true;
+    } else if ((isSgClassDeclaration(successor) != nullptr ||
+                isSgEnumDeclaration(successor) != nullptr) &&
+               successor->get_parent() == variableDeclaration) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[variable-base-type-tag-owner]: variable=%p "
+              "traverses undeclared owned tag=%p/%s\n",
+              static_cast<void *>(variableDeclaration),
+              static_cast<void *>(successor), successor->class_name().c_str());
+      ROSE_ABORT();
+    }
+  }
+  bool tagPrecedesDeclarators = sawOwnedTag;
+  for (SgInitializedName *initializedName :
+       variableDeclaration->get_variables()) {
+    const auto position =
+        std::find(successors.begin(), successors.end(), initializedName);
+    tagPrecedesDeclarators =
+        tagPrecedesDeclarators && position != successors.end() &&
+        ownedTagPosition < static_cast<size_t>(position - successors.begin());
+  }
+  if (traversalOccurrences != 1 || !tagPrecedesDeclarators) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[variable-base-type-tag-owner]: variable=%p "
+            "has %zu traversal edges to its tag or does not traverse it "
+            "before every declarator\n",
+            static_cast<void *>(variableDeclaration), traversalOccurrences);
+    ROSE_ABORT();
+  }
 }
 } // namespace
 
@@ -812,49 +1126,13 @@ void AstTests::runAllTests(SgProject *sageProject) {
             }
           }
 
-          // DQ (10/20/2004): Added test to find locations where the mangled
-          // template class names might be used in unparsing!
           SgTemplateInstantiationDecl *templateInstantiationDeclaration =
               isSgTemplateInstantiationDecl(declarationStatement);
           if (templateInstantiationDeclaration != NULL) {
-            // if
-            // (templateInstantiationDeclaration->get_nameResetFromMangledForm()
-            // != false)
-            if (templateInstantiationDeclaration
-                    ->get_nameResetFromMangledForm() == false) {
-              // ROSE_ASSERT(templateInstantiationDeclaration->get_nameResetFromMangledForm()
-              // == true);
-              if (SgProject::get_verbose() >= DIAGNOSTICS_VERBOSE_LEVEL + 1) {
-                printf("     Warning : At %p = %s found unset templateName "
-                       "(hidden in type) \n",
-                       templateInstantiationDeclaration,
-                       templateInstantiationDeclaration->get_name().str());
-              } else {
-                // Provide a less verbose level of output, templated types can
-                // be very long!
-                if (SgProject::get_verbose() >= DIAGNOSTICS_VERBOSE_LEVEL) {
-                  // printf ("     Warning : At %p found unset templateName
-                  // \n",templateInstantiationDeclaration);
-                  printf("     Warning (verbose=%d): At %p = %s found unset "
-                         "templateName (hidden in type) \n",
-                         SgProject::get_verbose(),
-                         templateInstantiationDeclaration,
-                         templateInstantiationDeclaration->get_name().str());
-                }
-              }
-            }
-
-            // DQ (6/30/2005): Comment this out, but leave the warning, while we
-            // return to test KULL. DQ (6/20/2005): Reassert this test!
-            // ROSE_ASSERT(templateInstantiationDeclaration->get_nameResetFromMangledForm()
-            // == true);
-
-#if STRICT_ERROR_CHECKING
-            // DQ (10/21/2004): Relax checking to handle SWIG generated file
-            // from Kull (1st SWIG files)
-            ROSE_ASSERT(templateInstantiationDeclaration
-                            ->get_nameResetFromMangledForm() == true);
-#endif
+            const std::string semanticName =
+                templateInstantiationDeclaration->get_name().getString();
+            ROSE_ASSERT(!semanticName.empty());
+            ROSE_ASSERT(semanticName.find('<') != std::string::npos);
           }
           break;
         }
@@ -1009,19 +1287,395 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode *node,
   //      }
   syn.val = syn.val && !problematicNodeFound;
 
-  // Test all traversed nodes to make sure that they have a valid file info
-  // object Note that SgFile and SgProject nodes don't have file info objects
-  // (so skip them)
+  if (SgUsingDeclarationStatement *usingDeclaration =
+          isSgUsingDeclarationStatement(node)) {
+    SgAuxiliaryDeclarationList *auxiliary =
+        isSgAuxiliaryDeclarationList(usingDeclaration->get_parent());
+    if (auxiliary != nullptr) {
+      SgScopeStatement *semanticOwner =
+          isSgScopeStatement(auxiliary->get_parent());
+      const bool hasDeclarationTarget =
+          usingDeclaration->get_declaration() != nullptr;
+      const bool hasInitializedNameTarget =
+          usingDeclaration->get_initializedName() != nullptr;
+      auto isExactSemanticPosition =
+          [usingDeclaration](const Sg_File_Info *position) {
+            return position != nullptr &&
+                   position->get_parent() == usingDeclaration &&
+                   position->isCompilerGenerated() &&
+                   position->isFrontendSpecific() &&
+                   !position->isTransformation() &&
+                   !position->isSourcePositionUnavailableInFrontend() &&
+                   position->isOutputInCodeGeneration();
+          };
+      if (semanticOwner == nullptr ||
+          semanticOwner->get_auxiliary_declarations() != auxiliary ||
+          usingDeclaration->get_scope() != semanticOwner ||
+          std::count(auxiliary->get_declarations().begin(),
+                     auxiliary->get_declarations().end(),
+                     usingDeclaration) != 1 ||
+          semanticOwner->statementExistsInScope(usingDeclaration) ||
+          hasDeclarationTarget == hasInitializedNameTarget ||
+          usingDeclaration->get_definingDeclaration() != usingDeclaration ||
+          usingDeclaration->get_firstNondefiningDeclaration() !=
+              usingDeclaration ||
+          !usingDeclaration->get_source_terminal_name().getString().empty() ||
+          usingDeclaration->get_source_name_qualification_present() ||
+          usingDeclaration->get_source_name_global_qualification() ||
+          !usingDeclaration->get_source_name_qualification_tokens().empty() ||
+          usingDeclaration->get_name_qualification_length() != 0 ||
+          usingDeclaration->get_global_qualification_required() ||
+          usingDeclaration->get_type_elaboration_required() ||
+          usingDeclaration->get_translation_unit_source_order().has_value() ||
+          !isExactSemanticPosition(usingDeclaration->get_file_info()) ||
+          !isExactSemanticPosition(usingDeclaration->get_startOfConstruct()) ||
+          !isExactSemanticPosition(usingDeclaration->get_endOfConstruct())) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[using-semantic-instantiation]: "
+                "declaration=%p parent=%p scope=%p does not have one exact "
+                "source-less auxiliary contract\n",
+                static_cast<void *>(usingDeclaration),
+                static_cast<void *>(usingDeclaration->get_parent()),
+                static_cast<void *>(usingDeclaration->get_scope()));
+        ROSE_ABORT();
+      }
+    } else if (usingDeclaration->get_source_terminal_name()
+                   .getString()
+                   .empty()) {
+      SgDeclarationStatement *targetDeclaration =
+          usingDeclaration->get_declaration();
+      SgInitializedName *targetName = usingDeclaration->get_initializedName();
+      Sg_File_Info *fileInfo = usingDeclaration->get_file_info();
+      fprintf(stderr,
+              "REX_AST_INVARIANT[using-terminal-name]: declaration=%p has no "
+              "exact terminal token\n",
+              static_cast<void *>(usingDeclaration));
+      fprintf(
+          stderr,
+          "REX_AST_DETAIL[using-terminal-name]: declaration=%p "
+          "parent=%p/%s scope=%p target-declaration=%p/%s "
+          "target-name=%p/%s file=%s:%d:%d compiler-generated=%d "
+          "frontend-specific=%d transformation=%d unavailable=%d "
+          "output=%d source-order=%d\n",
+          static_cast<void *>(usingDeclaration),
+          static_cast<void *>(usingDeclaration->get_parent()),
+          usingDeclaration->get_parent() != nullptr
+              ? usingDeclaration->get_parent()->class_name().c_str()
+              : "<null>",
+          static_cast<void *>(usingDeclaration->get_scope()),
+          static_cast<void *>(targetDeclaration),
+          targetDeclaration != nullptr ? targetDeclaration->class_name().c_str()
+                                       : "<null>",
+          static_cast<void *>(targetName),
+          targetName != nullptr ? targetName->get_name().getString().c_str()
+                                : "<null>",
+          fileInfo != nullptr ? fileInfo->get_filenameString().c_str()
+                              : "<null>",
+          fileInfo != nullptr ? fileInfo->get_line() : -1,
+          fileInfo != nullptr ? fileInfo->get_col() : -1,
+          fileInfo != nullptr && fileInfo->isCompilerGenerated(),
+          fileInfo != nullptr && fileInfo->isFrontendSpecific(),
+          fileInfo != nullptr && fileInfo->isTransformation(),
+          fileInfo != nullptr &&
+              fileInfo->isSourcePositionUnavailableInFrontend(),
+          fileInfo != nullptr && fileInfo->isOutputInCodeGeneration(),
+          usingDeclaration->get_translation_unit_source_order().has_value());
+      ROSE_ABORT();
+    }
+  }
 
-  // if ( !isSgFile(node) && !isSgProject(node) )
-  // if ( !isSgFile(node) && !isSgProject(node) && !isSgAsmNode(node))
-  bool isFileNode = isSgFile(node) || isSgProject(node) || isSgFileList(node) ||
-                    isSgDirectory(node);
-  if (!isFileNode) {
-    Sg_File_Info *fileInfo = node->get_file_info();
+  if (SgCastExp *cast = isSgCastExp(node)) {
+    cast->validate_semantic_conversion();
+  }
+
+  if (SgInitializedName *initializedName = isSgInitializedName(node)) {
+    std::set<SgInitializedName *> redeclarationChain;
+    for (SgInitializedName *current = initializedName; current != nullptr;
+         current = current->get_prev_decl_item()) {
+      if (!redeclarationChain.insert(current).second) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[variable-redeclaration-chain]: "
+                "declaration=%p name=%s contains a cycle at %p\n",
+                static_cast<void *>(initializedName),
+                initializedName->get_name().str(),
+                static_cast<void *>(current));
+        ROSE_ABORT();
+      }
+    }
+
+    const bool isCrayPointer =
+        isSgTypeCrayPointer(initializedName->get_fortran_source_type()) !=
+        nullptr;
+    SgInitializedName *pointee = initializedName->get_cray_pointer_pointee();
+    SgExprListExp *crayPointeeShape =
+        initializedName->get_fortran_cray_pointer_pointee_shape();
+    SgType *semanticPointerBase = initializedName->get_type();
+    while (SgModifierType *modifier = isSgModifierType(semanticPointerBase)) {
+      semanticPointerBase = modifier->get_base_type();
+    }
+    SgVariableDeclaration *pointerDeclaration =
+        isSgVariableDeclaration(initializedName->get_parent());
+    SgArrayType *semanticPointeeArray =
+        pointee != nullptr ? ordinaryFortranArrayType(pointee->get_type())
+                           : nullptr;
+    if (isCrayPointer != (pointee != nullptr) || pointee == initializedName ||
+        (pointee != nullptr &&
+         isSgTypeCrayPointer(pointee->get_fortran_source_type()) != nullptr) ||
+        (isCrayPointer &&
+         (pointerDeclaration == nullptr || semanticPointerBase == nullptr ||
+          !initializedName->get_fortran_source_type()
+               ->get_fortran_source_syntax() ||
+          (isSgTypeInt(semanticPointerBase) == nullptr &&
+           isSgTypeSignedInt(semanticPointerBase) == nullptr))) ||
+        (!isCrayPointer && crayPointeeShape != nullptr) ||
+        (crayPointeeShape != nullptr &&
+         (semanticPointeeArray == nullptr ||
+          semanticPointeeArray->get_rank() <= 0 ||
+          crayPointeeShape->get_parent() != initializedName ||
+          crayPointeeShape->get_expressions().empty() ||
+          crayPointeeShape->get_expressions().size() !=
+              static_cast<size_t>(semanticPointeeArray->get_rank()) ||
+          pointee->get_fortran_separate_shape_declaration() !=
+              pointerDeclaration ||
+          !pointee->get_shapeDeferred()))) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[cray-pointer-pair]: pointer=%p name=%s "
+              "type=%s pointee=%p pointee-type=%s shape=%p\n",
+              static_cast<void *>(initializedName),
+              initializedName->get_name().str(),
+              initializedName->get_type() != nullptr
+                  ? initializedName->get_type()->class_name().c_str()
+                  : "<null>",
+              static_cast<void *>(pointee),
+              pointee != nullptr && pointee->get_type() != nullptr
+                  ? pointee->get_type()->class_name().c_str()
+                  : "<null>",
+              static_cast<void *>(crayPointeeShape));
+      ROSE_ABORT();
+    }
+
+    SgStatement *shapeOwner =
+        initializedName->get_fortran_separate_shape_declaration();
+    if (shapeOwner != nullptr) {
+      SgAttributeSpecificationStatement *attributeOwner =
+          isSgAttributeSpecificationStatement(shapeOwner);
+      SgCommonBlock *commonOwner = isSgCommonBlock(shapeOwner);
+      SgVariableDeclaration *crayPointerOwner =
+          isSgVariableDeclaration(shapeOwner);
+      if (shapeOwner->get_scope() == nullptr ||
+          shapeOwner->get_scope() != initializedName->get_scope() ||
+          (attributeOwner == nullptr && commonOwner == nullptr &&
+           crayPointerOwner == nullptr)) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[fortran-separate-shape-owner]: object=%p "
+                "name=%s has malformed owner=%p type=%s\n",
+                static_cast<void *>(initializedName),
+                initializedName->get_name().str(),
+                static_cast<void *>(shapeOwner),
+                shapeOwner->class_name().c_str());
+        ROSE_ABORT();
+      }
+
+      size_t exactReferences = 0;
+      if (crayPointerOwner != nullptr) {
+        if (crayPointerOwner->get_variables().size() != 1) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[fortran-cray-pointer-shape-owner]: "
+                  "object=%p name=%s has malformed Cray POINTER owner=%p\n",
+                  static_cast<void *>(initializedName),
+                  initializedName->get_name().str(),
+                  static_cast<void *>(crayPointerOwner));
+          ROSE_ABORT();
+        }
+        SgInitializedName *pointer = crayPointerOwner->get_variables().front();
+        SgExprListExp *shape =
+            pointer != nullptr
+                ? pointer->get_fortran_cray_pointer_pointee_shape()
+                : nullptr;
+        SgArrayType *semanticArray =
+            ordinaryFortranArrayType(initializedName->get_type());
+        if (pointer == nullptr || pointer->get_parent() != crayPointerOwner ||
+            isSgTypeCrayPointer(pointer->get_fortran_source_type()) ==
+                nullptr ||
+            pointer->get_cray_pointer_pointee() != initializedName ||
+            shape == nullptr || shape->get_parent() != pointer ||
+            semanticArray == nullptr || semanticArray->get_rank() <= 0 ||
+            shape->get_expressions().size() !=
+                static_cast<size_t>(semanticArray->get_rank())) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[fortran-cray-pointer-shape-owner]: "
+                  "object=%p name=%s has malformed Cray POINTER owner=%p\n",
+                  static_cast<void *>(initializedName),
+                  initializedName->get_name().str(),
+                  static_cast<void *>(crayPointerOwner));
+          ROSE_ABORT();
+        }
+        exactReferences = 1;
+      } else if (commonOwner != nullptr) {
+        for (SgCommonBlockObject *block : commonOwner->get_block_list()) {
+          SgExprListExp *objects =
+              block != nullptr ? block->get_variable_reference_list() : nullptr;
+          if (block == nullptr || block->get_parent() != commonOwner ||
+              objects == nullptr || objects->get_parent() != block) {
+            fprintf(stderr,
+                    "REX_AST_INVARIANT[fortran-common-shape-owner]: "
+                    "object=%p name=%s has malformed COMMON owner=%p\n",
+                    static_cast<void *>(initializedName),
+                    initializedName->get_name().str(),
+                    static_cast<void *>(commonOwner));
+            ROSE_ABORT();
+          }
+          for (SgExpression *object : objects->get_expressions()) {
+            SgPntrArrRefExp *arrayReference = isSgPntrArrRefExp(object);
+            SgVarRefExp *variableReference =
+                arrayReference != nullptr
+                    ? isSgVarRefExp(arrayReference->get_lhs_operand())
+                    : nullptr;
+            SgVariableSymbol *symbol = variableReference != nullptr
+                                           ? variableReference->get_symbol()
+                                           : nullptr;
+            if (symbol != nullptr &&
+                symbol->get_declaration() == initializedName) {
+              ++exactReferences;
+            }
+          }
+        }
+      } else {
+        SgExprListExp *parameters = attributeOwner->get_parameter_list();
+        const auto attributeKind = attributeOwner->get_attribute_kind();
+        if ((attributeKind !=
+                 SgAttributeSpecificationStatement::e_dimensionStatement &&
+             attributeKind !=
+                 SgAttributeSpecificationStatement::e_allocatableStatement &&
+             attributeKind !=
+                 SgAttributeSpecificationStatement::e_pointerStatement) ||
+            parameters == nullptr ||
+            parameters->get_parent() != attributeOwner) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[fortran-attribute-shape-owner]: "
+                  "object=%p name=%s has malformed attribute owner=%p\n",
+                  static_cast<void *>(initializedName),
+                  initializedName->get_name().str(),
+                  static_cast<void *>(attributeOwner));
+          ROSE_ABORT();
+        }
+
+        for (SgExpression *parameter : parameters->get_expressions()) {
+          SgPntrArrRefExp *arrayReference = isSgPntrArrRefExp(parameter);
+          SgVarRefExp *variableReference =
+              arrayReference != nullptr
+                  ? isSgVarRefExp(arrayReference->get_lhs_operand())
+                  : nullptr;
+          SgVariableSymbol *symbol = variableReference != nullptr
+                                         ? variableReference->get_symbol()
+                                         : nullptr;
+          if (symbol != nullptr &&
+              symbol->get_declaration() == initializedName) {
+            ++exactReferences;
+          }
+        }
+      }
+      if (exactReferences != 1) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[fortran-separate-shape-owner]: object=%p "
+                "name=%s is referenced %zu times by shape owner=%p\n",
+                static_cast<void *>(initializedName),
+                initializedName->get_name().str(), exactReferences,
+                static_cast<void *>(shapeOwner));
+        ROSE_ABORT();
+      }
+    }
+
+    SgStatement *pointerOwner =
+        initializedName->get_fortran_separate_pointer_declaration();
+    if (pointerOwner != nullptr) {
+      SgAttributeSpecificationStatement *pointerStatement =
+          isSgAttributeSpecificationStatement(pointerOwner);
+      SgExprListExp *parameters = pointerStatement != nullptr
+                                      ? pointerStatement->get_parameter_list()
+                                      : nullptr;
+      SgType *semanticType = initializedName->get_type();
+      SgType *sourceType = initializedName->get_fortran_source_type();
+      while (SgModifierType *modifier = isSgModifierType(semanticType)) {
+        semanticType = modifier->get_base_type();
+      }
+      while (SgModifierType *modifier = isSgModifierType(sourceType)) {
+        sourceType = modifier->get_base_type();
+      }
+      if (pointerStatement == nullptr ||
+          pointerStatement->get_attribute_kind() !=
+              SgAttributeSpecificationStatement::e_pointerStatement ||
+          pointerStatement->get_scope() == nullptr ||
+          pointerStatement->get_scope() != initializedName->get_scope() ||
+          parameters == nullptr ||
+          parameters->get_parent() != pointerStatement ||
+          parameters->get_expressions().empty() ||
+          isSgPointerType(semanticType) == nullptr ||
+          isSgPointerType(sourceType) != nullptr) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[fortran-pointer-owner]: object=%p "
+                "name=%s has malformed POINTER owner=%p\n",
+                static_cast<void *>(initializedName),
+                initializedName->get_name().str(),
+                static_cast<void *>(pointerOwner));
+        ROSE_ABORT();
+      }
+      size_t exactReferences = 0;
+      for (SgExpression *item : parameters->get_expressions()) {
+        SgPntrArrRefExp *arrayReference = isSgPntrArrRefExp(item);
+        SgVarRefExp *variableReference =
+            arrayReference != nullptr
+                ? isSgVarRefExp(arrayReference->get_lhs_operand())
+                : isSgVarRefExp(item);
+        SgVariableSymbol *symbol = variableReference != nullptr
+                                       ? variableReference->get_symbol()
+                                       : nullptr;
+        SgInitializedName *declaration =
+            symbol != nullptr ? symbol->get_declaration() : nullptr;
+        if (item == nullptr || item->get_parent() != parameters ||
+            declaration == nullptr ||
+            declaration->get_fortran_separate_pointer_declaration() !=
+                pointerStatement ||
+            (arrayReference != nullptr &&
+             declaration->get_fortran_separate_shape_declaration() !=
+                 pointerStatement)) {
+          fprintf(stderr, "REX_AST_INVARIANT[fortran-pointer-owner]: POINTER "
+                          "statement contains a malformed or unowned item\n");
+          ROSE_ABORT();
+        }
+        if (exactFortranRedeclarationIdentity(initializedName, declaration)) {
+          ++exactReferences;
+        }
+      }
+      if (exactReferences != 1) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[fortran-pointer-owner]: object=%p "
+                "name=%s is referenced %zu times by POINTER owner=%p\n",
+                static_cast<void *>(initializedName),
+                initializedName->get_name().str(), exactReferences,
+                static_cast<void *>(pointerOwner));
+        ROSE_ABORT();
+      }
+    }
+  }
+
+  // Source positions are a typed AST contract. SgLocatedNode owns source
+  // positions directly, while SgPragma is the one legacy support node that
+  // explicitly owns them. Other SgSupport nodes are semantic structure and
+  // must not be forced into a source classification merely because they are
+  // reachable through an exact traversal edge.
+  const bool isFileNode = isSgFile(node) || isSgProject(node) ||
+                          isSgFileList(node) || isSgDirectory(node);
+  const bool requiresFileInfo =
+      isSgLocatedNode(node) != nullptr || isSgPragma(node) != nullptr;
+  Sg_File_Info *fileInfo = node->get_file_info();
+  if (!isFileNode && requiresFileInfo) {
     if (fileInfo == NULL) {
-      printf("node->get_file_info() == NULL: node is %s \n",
-             node->sage_class_name());
+      fprintf(stderr,
+              "REX_AST_INVARIANT[source-position-owner]: node=%p type=%s "
+              "is a source-position-owning AST category but has no file "
+              "information\n",
+              static_cast<void *>(node), node->sage_class_name());
       ROSE_ABORT();
     } else {
       // A file info object can only be tested for invalid line number
@@ -1033,6 +1687,128 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode *node,
           // \n",node->sage_class_name());
           listOfNodesWithoutValidFileInfo.push_back(node);
           // ROSE_ABORT();
+        }
+      }
+    }
+  } else if (!isFileNode && fileInfo != nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[source-position-owner]: node=%p type=%s is "
+            "not a source-position-owning AST category but publishes file "
+            "information=%p\n",
+            static_cast<void *>(node), node->sage_class_name(),
+            static_cast<void *>(fileInfo));
+    ROSE_ABORT();
+  }
+
+  if (SgDeclarationStatement *declaration = isSgDeclarationStatement(node)) {
+    Sg_File_Info *declarationInfo = declaration->get_file_info();
+    SgScopeStatement *directOwner =
+        isSgScopeStatement(declaration->get_parent());
+    if (declarationRequiresExactSourceSurfaceOwner(declaration) &&
+        declarationInfo != nullptr && directOwner != nullptr &&
+        !declarationInfo->isCompilerGenerated() &&
+        !declarationInfo->isTransformation() &&
+        declarationInfo->get_line() > 0 &&
+        declarationInfo->get_physical_file_id() >= 0) {
+      SgSourceFile *sourceFile =
+          SageInterface::getEnclosingSourceFile(declaration, true);
+      Sg_File_Info *sourceInfo =
+          sourceFile != nullptr ? sourceFile->get_file_info() : nullptr;
+      const bool belongsToPrimarySource =
+          sourceInfo != nullptr && sourceInfo->get_physical_file_id() >= 0 &&
+          sourceInfo->get_physical_file_id() ==
+              declarationInfo->get_physical_file_id();
+      if (belongsToPrimarySource) {
+        if (!declarationInfo->isOutputInCodeGeneration()) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[source-surface-ownership]: "
+                  "declaration=%p type=%s file=%s line=%d col=%d direct "
+                  "scope owner=%p is hidden from code generation\n",
+                  static_cast<void *>(declaration),
+                  declaration->class_name().c_str(),
+                  declarationInfo->get_filenameString().c_str(),
+                  declarationInfo->get_line(), declarationInfo->get_col(),
+                  static_cast<void *>(directOwner));
+          ROSE_ABORT();
+        }
+
+        Sg_File_Info *start = declaration->get_startOfConstruct();
+        Sg_File_Info *end = declaration->get_endOfConstruct();
+        if (start == nullptr || end == nullptr || start->get_line() <= 0 ||
+            end->get_line() <= 0 ||
+            start->get_physical_file_id() !=
+                declarationInfo->get_physical_file_id() ||
+            end->get_physical_file_id() !=
+                declarationInfo->get_physical_file_id()) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[source-surface-range]: declaration=%p "
+                  "type=%s file=%s has no exact primary-source range\n",
+                  static_cast<void *>(declaration),
+                  declaration->class_name().c_str(),
+                  declarationInfo->get_filenameString().c_str());
+          ROSE_ABORT();
+        }
+
+        std::ostringstream key;
+        key << declarationInfo->get_physical_file_id() << ':'
+            << start->get_line() << ':' << start->get_col() << ':'
+            << end->get_line() << ':' << end->get_col() << ':'
+            << static_cast<int>(declaration->variantT());
+        auto inserted =
+            directSourceSurfaceOwners.emplace(key.str(), declaration);
+        if (!inserted.second && inserted.first->second != declaration) {
+          fprintf(
+              stderr,
+              "REX_AST_INVARIANT[duplicate-source-surface]: first=%p "
+              "first-type=%s first-parent=%p/%s first-scope=%p/%s "
+              "first-canonical=%p first-defining=%p first-file-flags="
+              "%d/%d/%d duplicate=%p duplicate-type=%s "
+              "duplicate-parent=%p/%s duplicate-scope=%p/%s "
+              "duplicate-canonical=%p duplicate-defining=%p "
+              "duplicate-file-flags=%d/%d/%d file=%s "
+              "range=%d:%d-%d:%d\n",
+              static_cast<void *>(inserted.first->second),
+              inserted.first->second->class_name().c_str(),
+              static_cast<void *>(inserted.first->second->get_parent()),
+              inserted.first->second->get_parent() != nullptr
+                  ? inserted.first->second->get_parent()->class_name().c_str()
+                  : "<null>",
+              static_cast<void *>(inserted.first->second->get_scope()),
+              inserted.first->second->get_scope() != nullptr
+                  ? inserted.first->second->get_scope()->class_name().c_str()
+                  : "<null>",
+              static_cast<void *>(
+                  inserted.first->second->get_firstNondefiningDeclaration()),
+              static_cast<void *>(
+                  inserted.first->second->get_definingDeclaration()),
+              inserted.first->second->get_file_info()->isCompilerGenerated()
+                  ? 1
+                  : 0,
+              inserted.first->second->get_file_info()->isFrontendSpecific() ? 1
+                                                                            : 0,
+              inserted.first->second->get_file_info()
+                      ->isOutputInCodeGeneration()
+                  ? 1
+                  : 0,
+              static_cast<void *>(declaration),
+              declaration->class_name().c_str(),
+              static_cast<void *>(declaration->get_parent()),
+              declaration->get_parent() != nullptr
+                  ? declaration->get_parent()->class_name().c_str()
+                  : "<null>",
+              static_cast<void *>(declaration->get_scope()),
+              declaration->get_scope() != nullptr
+                  ? declaration->get_scope()->class_name().c_str()
+                  : "<null>",
+              static_cast<void *>(
+                  declaration->get_firstNondefiningDeclaration()),
+              static_cast<void *>(declaration->get_definingDeclaration()),
+              declaration->get_file_info()->isCompilerGenerated() ? 1 : 0,
+              declaration->get_file_info()->isFrontendSpecific() ? 1 : 0,
+              declaration->get_file_info()->isOutputInCodeGeneration() ? 1 : 0,
+              declarationInfo->get_filenameString().c_str(), start->get_line(),
+              start->get_col(), end->get_line(), end->get_col());
+          ROSE_ABORT();
         }
       }
     }
@@ -1077,9 +1853,43 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode *node,
 
     // The type of expression is restricted to a subset of all possible
     // expression (check this)
-    while (isSgCommaOpExp(functionExpression)) {
-      functionExpression =
-          isSgCommaOpExp(functionExpression)->get_rhs_operand();
+    SgNode *functionExpressionOwner = fc;
+    while (true) {
+      if (SgMacroExpansionExp *macro =
+              isSgMacroExpansionExp(functionExpression)) {
+        SgExpression *expanded = macro->get_expanded_expression_checked();
+        if (macro->get_parent() != functionExpressionOwner) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[macro-call-callee]: macro=%p owner=%p "
+                  "spelling='%s' expanded=%p expanded-parent=%p\n",
+                  static_cast<void *>(macro),
+                  static_cast<void *>(functionExpressionOwner),
+                  macro->get_spelling().c_str(), static_cast<void *>(expanded),
+                  expanded != nullptr
+                      ? static_cast<void *>(expanded->get_parent())
+                      : nullptr);
+          ROSE_ABORT();
+        }
+        functionExpressionOwner = macro;
+        functionExpression = expanded;
+        continue;
+      }
+      if (SgCommaOpExp *comma = isSgCommaOpExp(functionExpression)) {
+        SgExpression *rhs = comma->get_rhs_operand();
+        if (rhs == nullptr || rhs->get_parent() != comma) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[comma-call-callee]: comma=%p rhs=%p "
+                  "rhs-parent=%p\n",
+                  static_cast<void *>(comma), static_cast<void *>(rhs),
+                  rhs != nullptr ? static_cast<void *>(rhs->get_parent())
+                                 : nullptr);
+          ROSE_ABORT();
+        }
+        functionExpressionOwner = comma;
+        functionExpression = rhs;
+        continue;
+      }
+      break;
     }
 
     switch (functionExpression->variantT()) {
@@ -1426,6 +2236,33 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode *node,
         SgInitializedNamePtrList::const_iterator result = std::find(
             initNameList.begin(), initNameList.end(), initializedName);
         ROSE_ASSERT(result != initNameList.end());
+      } else if (SgRequiresExpr *requiresExpression =
+                     isSgRequiresExpr(parentParameterList->get_parent())) {
+        SgFunctionParameterScope *parameterScope =
+            requiresExpression->get_local_parameter_scope();
+        SgSymbol *parameterSymbol =
+            parameterScope != NULL
+                ? parameterScope->find_symbol_from_declaration(initializedName)
+                : NULL;
+        if (requiresExpression->get_local_parameter_list() !=
+                parentParameterList ||
+            parameterScope == NULL ||
+            parameterScope->get_parent() != requiresExpression ||
+            initializedName->get_scope() != parameterScope ||
+            parameterSymbol == NULL ||
+            parameterSymbol->get_symbol_basis() != initializedName ||
+            parameterSymbol->get_parent() !=
+                parameterScope->get_symbol_table()) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[requires-local-parameter-owner]: "
+                  "parameter=%p/%s list=%p requires-expression=%p does not "
+                  "have one exact parameter-list, scope, and symbol owner\n",
+                  static_cast<void *>(initializedName),
+                  initializedName->get_name().getString().c_str(),
+                  static_cast<void *>(parentParameterList),
+                  static_cast<void *>(requiresExpression));
+          ROSE_ABORT();
+        }
       } else if (isSgTemplateDeclaration(parentParameterList->get_parent())) {
         // DQ (12/6/2011): Now that we have the template declarations in the
         // AST, this could be a SgTemplateDeclaration.
@@ -1479,6 +2316,26 @@ TestAstProperties::evaluateSynthesizedAttribute(SgNode *node,
              functionDeclaration, functionDeclaration->sage_class_name());
     }
     ROSE_ASSERT(functionDeclaration->get_scope() != NULL);
+    if (SgFunctionDeclaration *pattern =
+            functionDeclaration->get_templateInstantiationPattern()) {
+      ROSE_ASSERT(!functionDeclaration
+                       ->get_template_instantiation_pattern_is_unpublished());
+      ROSE_ASSERT(pattern != functionDeclaration);
+      ROSE_ASSERT(isSgTemplateInstantiationFunctionDecl(functionDeclaration) ==
+                  NULL);
+      ROSE_ASSERT(isSgTemplateInstantiationMemberFunctionDecl(
+                      functionDeclaration) == NULL);
+      ROSE_ASSERT(pattern->get_templateInstantiationPattern() == NULL);
+    }
+    if (functionDeclaration
+            ->get_template_instantiation_pattern_is_unpublished()) {
+      ROSE_ASSERT(functionDeclaration->get_templateInstantiationPattern() ==
+                  NULL);
+      ROSE_ASSERT(isSgTemplateInstantiationFunctionDecl(functionDeclaration) ==
+                  NULL);
+      ROSE_ASSERT(isSgTemplateInstantiationMemberFunctionDecl(
+                      functionDeclaration) == NULL);
+    }
     break;
   }
 
@@ -1585,10 +2442,8 @@ declared in the class are represented outside the class as template
 specializations and are marked as compiler generated.
      - SgClassDefinition
      - SgTemplateInstantiationDefn \n
-         Base classes within class definitions and template instatiation
-definitions are searched and verified to have properly reset template names
-(from original legacy frontend names, see
-         \ref resetTemplateNameTest ).
+         Base classes within class definitions and template instantiation
+definitions are verified to carry complete semantic template-id names.
      - All possible template instantiations \n
         -# These are tested to verify that get_specialization() returns a
 non-default value to verify that some catagory of template specialization has
@@ -1616,22 +2471,41 @@ void TestAstTemplateProperties::visit(SgNode *astNode) {
       templateDeclaration = templateDeclaration->get_definingDeclaration();
     }
 
-    // DQ (8/12/2005): There are non-trivial cases where a template declaration
-    // can be compiler generated (e.g. when it is a nested class)
-    bool couldBeCompilerGenerated = MarkAsCompilerGenerated::
-        templateDeclarationCanBeMarkedAsCompilerGenerated(templateDeclaration);
-
-    if (couldBeCompilerGenerated == false) {
-      // DQ (6/17/2005): Template declarations should not be marked as comiler
-      // generated (only the instantiations are possibly marked as compiler
-      // generated).
+    const bool isAuxiliarySemanticDeclaration =
+        isSgAuxiliaryDeclarationList(templateDeclaration->get_parent()) != NULL;
+    if (!isAuxiliarySemanticDeclaration) {
+      // Source-owned template declarations must retain their frontend source
+      // identity. Only declarations in the explicit auxiliary ownership
+      // channel may be compiler-generated semantic shells.
       if (templateDeclaration->get_file_info()->isCompilerGenerated() == true) {
-        printf("Error: SgTemplateInstantiationDecl's original template "
-               "declaration should not be compiler generated \n");
-        templateDeclaration->get_file_info()->display("debug");
+        fprintf(
+            stderr,
+            "REX_AST_INVARIANT[template-source-ownership]: template=%p "
+            "type=%s name=%s parent=%p parent_type=%s parent_name=%s "
+            "first=%p defining=%p "
+            "line=%d output=%d is compiler-generated without auxiliary "
+            "ownership\n",
+            static_cast<void *>(templateDeclaration),
+            templateDeclaration->class_name().c_str(),
+            SageInterface::get_name(templateDeclaration).c_str(),
+            static_cast<void *>(templateDeclaration->get_parent()),
+            templateDeclaration->get_parent() != NULL
+                ? templateDeclaration->get_parent()->class_name().c_str()
+                : "<null>",
+            isSgClassDefinition(templateDeclaration->get_parent()) != NULL
+                ? isSgClassDefinition(templateDeclaration->get_parent())
+                      ->get_declaration()
+                      ->get_name()
+                      .getString()
+                      .c_str()
+                : "<none>",
+            static_cast<void *>(
+                templateDeclaration->get_firstNondefiningDeclaration()),
+            static_cast<void *>(templateDeclaration->get_definingDeclaration()),
+            templateDeclaration->get_file_info()->get_line(),
+            templateDeclaration->get_file_info()->isOutputInCodeGeneration());
+        ROSE_ABORT();
       }
-      ROSE_ASSERT(templateDeclaration->get_file_info()->isCompilerGenerated() ==
-                  false);
     }
     break;
   }
@@ -1678,18 +2552,42 @@ void TestAstTemplateProperties::visit(SgNode *astNode) {
     }
     // ROSE_ASSERT (s->get_templateDeclaration() != NULL);
 
-    // explicit specializations in the source code should not be marked as
-    // compiler generated
+    // The specialization bit is semantic: it is shared by a written explicit
+    // specialization and by the auxiliary canonical declaration that backs
+    // its redeclaration chain.  Source provenance must therefore be checked
+    // against the declaration's typed owner, not inferred from that bit.
     if (s->isSpecialization() == true || s->isPartialSpecialization() == true) {
-      if (s->get_file_info()->isCompilerGenerated() == true) {
-        printf("SgTemplateInstantiationMemberFunctionDecl (%p) is marked as a "
-               "specialization and compiler generated (not allowed) \n",
-               s);
-        s->get_file_info()->display(
-            "SgTemplateInstantiationMemberFunctionDecl: debug");
-        printf("s->get_name() = %s \n", s->get_name().str());
+      Sg_File_Info *fileInfo = s->get_file_info();
+      const bool auxiliaryOwned =
+          isSgAuxiliaryDeclarationList(s->get_parent()) != nullptr;
+      const bool exactAuxiliaryProvenance =
+          fileInfo != nullptr && fileInfo->isCompilerGenerated() &&
+          fileInfo->isFrontendSpecific() && !fileInfo->isTransformation() &&
+          fileInfo->isOutputInCodeGeneration();
+      const bool exactSourceProvenance =
+          fileInfo != nullptr && !fileInfo->isCompilerGenerated() &&
+          !fileInfo->isFrontendSpecific() && !fileInfo->isTransformation() &&
+          fileInfo->isOutputInCodeGeneration();
+      if ((auxiliaryOwned && !exactAuxiliaryProvenance) ||
+          (!auxiliaryOwned && !exactSourceProvenance)) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[member-specialization-ownership]: "
+                "declaration=%p name=%s parent=%p/%s auxiliary=%d "
+                "compiler-generated=%d frontend=%d transformation=%d "
+                "output=%d has contradictory typed ownership and source "
+                "provenance\n",
+                static_cast<void *>(s), s->get_name().str(),
+                static_cast<void *>(s->get_parent()),
+                s->get_parent() != nullptr
+                    ? s->get_parent()->class_name().c_str()
+                    : "<null>",
+                auxiliaryOwned ? 1 : 0,
+                fileInfo != nullptr && fileInfo->isCompilerGenerated(),
+                fileInfo != nullptr && fileInfo->isFrontendSpecific(),
+                fileInfo != nullptr && fileInfo->isTransformation(),
+                fileInfo != nullptr && fileInfo->isOutputInCodeGeneration());
+        ROSE_ABORT();
       }
-      ROSE_ASSERT(s->get_file_info()->isCompilerGenerated() == false);
     }
 
     break;
@@ -1708,6 +2606,14 @@ void TestAstTemplateProperties::visit(SgNode *astNode) {
       // Check the parent pointer to make sure it is properly set
       ROSE_ASSERT((*i)->get_parent() != NULL);
       ROSE_ASSERT((*i)->get_parent() == classDefinition);
+      const bool sourceQualifierOwnsTerminal =
+          (*i)->get_source_type_qualification_owns_terminal_name();
+      const bool sourceQualifierOwnsArguments =
+          (*i)->get_source_type_qualification_owns_template_arguments();
+      ROSE_ASSERT(!sourceQualifierOwnsArguments || sourceQualifierOwnsTerminal);
+      ROSE_ASSERT(!sourceQualifierOwnsTerminal ||
+                  ((*i)->get_source_type_qualification_present() &&
+                   !(*i)->get_source_type_qualification_tokens().empty()));
 
       // SgExpBaseClass and SgNonrealBaseClass do not populate p_base_class.
       // They carry their own expression/nonreal representation instead.
@@ -1718,7 +2624,6 @@ void TestAstTemplateProperties::visit(SgNode *astNode) {
         continue;
       }
 
-      // Calling resetTemplateName()
       SgClassDeclaration *baseClassDeclaration = (*i)->get_base_class();
       ROSE_ASSERT(baseClassDeclaration != NULL);
       // printf ("In AST Consistancy test: baseClassDeclaration->get_name() = %s
@@ -1726,39 +2631,10 @@ void TestAstTemplateProperties::visit(SgNode *astNode) {
       SgTemplateInstantiationDecl *templateInstantiation =
           isSgTemplateInstantiationDecl(baseClassDeclaration);
       if (templateInstantiation != NULL) {
-        // DQ (2/12/2012): Implemented some diagnostics (fails for
-        // test2004_35.C).
-        if (templateInstantiation->get_nameResetFromMangledForm() == false) {
-          printf("In AST Consistancy test: templateInstantiation = %p = %s \n",
-                 templateInstantiation,
-                 templateInstantiation->class_name().c_str());
-          printf("In AST Consistancy test: "
-                 "templateInstantiation->get_templateName() = %s \n",
-                 templateInstantiation->get_templateName().str());
-          printf("In AST Consistancy test: templateInstantiation->get_name()   "
-                 "      = %s \n",
-                 templateInstantiation->get_name().str());
-          // SageInterface::whereAmI(templateInstantiation);
-
-          // DQ (7/14/2019): Reset the name to see how it would be changed (for
-          // debugging) The fix was to force the new file built in
-          // SageBuilder::buildFile() to call the astPostProcessing() function
-          // which will internally reset the template names.
-
-          // This function will reset nameResetFromMangledForm to true, so we
-          // want to force the failure below.
-          // templateInstantiation->resetTemplateName();
-
-          // Re-output the template name.
-          // printf ("In AST Consistancy test: (after resetTemplateName()):
-          // templateInstantiation->get_templateName() = %s
-          // \n",templateInstantiation->get_templateName().str()); printf ("In
-          // AST Consistancy test: (after resetTemplateName()):
-          // templateInstantiation->get_name()         = %s
-          // \n",templateInstantiation->get_name().str());
-        }
-        ROSE_ASSERT(templateInstantiation->get_nameResetFromMangledForm() ==
-                    true);
+        const std::string semanticName =
+            templateInstantiation->get_name().getString();
+        ROSE_ASSERT(!semanticName.empty());
+        ROSE_ASSERT(semanticName.find('<') != std::string::npos);
       }
     }
     break;
@@ -2527,6 +3403,20 @@ void TestAstForProperlySetDefiningAndNondefiningDeclarations::visit(
   SgDeclarationStatement *definingDeclaration = NULL;
   SgDeclarationStatement *firstNondefiningDeclaration = NULL;
   if (declaration != NULL) {
+    if (SgAccessLabelStatement *label = isSgAccessLabelStatement(declaration)) {
+      label->validate();
+      SgClassDefinition *owner = isSgClassDefinition(label->get_parent());
+      ROSE_ASSERT(owner != NULL);
+      ROSE_ASSERT(label->get_scope() == owner);
+      ROSE_ASSERT(std::count(owner->get_members().begin(),
+                             owner->get_members().end(), label) == 1);
+      return;
+    }
+    if (SgDeclarationGroupStatement *group =
+            isSgDeclarationGroupStatement(declaration)) {
+      group->validate();
+      return;
+    }
     if (declaration->get_scope() == NULL) {
       printf("Error: declaration with NULL scope encountered: %p = %s = %s \n",
              declaration, declaration->class_name().c_str(),
@@ -2541,10 +3431,11 @@ void TestAstForProperlySetDefiningAndNondefiningDeclarations::visit(
         declaration->get_firstNondefiningDeclaration();
 
     if (definingDeclaration == NULL && firstNondefiningDeclaration == NULL) {
-      printf("Error: "
-             "TestAstForProperlySetDefiningAndNondefiningDeclarations::"
-             "visit() --- declaration = %p = %s \n",
-             declaration, declaration->class_name().c_str());
+      fprintf(stderr,
+              "REX_AST_INVARIANT[declaration-chain]: node=%p type=%s name=%s "
+              "has neither a defining nor a first nondefining declaration\n",
+              declaration, declaration->class_name().c_str(),
+              SageInterface::get_name(declaration).c_str());
     }
     ROSE_ASSERT(definingDeclaration != NULL ||
                 firstNondefiningDeclaration != NULL);
@@ -2871,6 +3762,18 @@ void TestAstForProperlySetDefiningAndNondefiningDeclarations::visit(
     }
     // ROSE_ASSERT(firstNondefiningDeclaration != NULL);
     if (firstNondefiningDeclaration == definingDeclaration) {
+      if (SgFunctionDeclaration *function =
+              isSgFunctionDeclaration(declaration)) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[function-declaration-chain]: "
+                "function=%p name=%s first=%p defining=%p must have distinct "
+                "canonical and defining declarations\n",
+                static_cast<void *>(function), function->get_name().str(),
+                static_cast<void *>(firstNondefiningDeclaration),
+                static_cast<void *>(definingDeclaration));
+        ROSE_ABORT();
+      }
+
       // DQ (12/12/2009): Suppress the warning about this for the case of a
       // SgTypedefDeclaration if not set to verbose mode. This is important to
       // reducing the output from the tests of AST merge in the mergeAST_tests
@@ -2890,17 +3793,6 @@ void TestAstForProperlySetDefiningAndNondefiningDeclarations::visit(
                declaration->get_firstNondefiningDeclaration());
         declaration->get_file_info()->display(
             "firstNondefiningDeclaration == definingDeclaration: debug");
-
-        // Liao 12/2/2010
-        //  A test to see if the first nondefining declaration is set to self
-        //  for a defining function declaration
-        SgFunctionDeclaration *func = isSgFunctionDeclaration(declaration);
-        if (func != NULL) {
-          printf("Error: found a defining function declaration with its first "
-                 "nondefining declaration set to itself/(or a defining "
-                 "declaration).\n");
-          // ROSE_ABORT();
-        }
       }
     } // end if nondefining == defining
 
@@ -3661,23 +4553,1398 @@ void TestExpressionTypes::visit(SgNode *node) {
   // DQ (2/21/2006): Test the get_type() member function which is common on many
   // IR nodes printf ("In TestExpressionTypes::visit(): node = %s
   // \n",node->class_name().c_str());
+  if (SgVariableDeclaration *variableDeclaration =
+          isSgVariableDeclaration(node)) {
+    validateVariableBaseTypeDefinitionOwner(variableDeclaration);
+  }
+  if (SgSizeOfOp *sizeOf = isSgSizeOfOp(node)) {
+    validateExpressionTypeDefinitionOwner(
+        sizeOf, sizeOf->get_operand_type(), sizeOf->get_operand_expr(),
+        sizeOf->get_type_defining_declaration(),
+        /*requireExclusiveTypeOperand=*/true, "SgSizeOfOp");
+  }
+  if (SgAlignOfOp *alignOf = isSgAlignOfOp(node)) {
+    validateExpressionTypeDefinitionOwner(
+        alignOf, alignOf->get_operand_type(), alignOf->get_operand_expr(),
+        alignOf->get_type_defining_declaration(),
+        /*requireExclusiveTypeOperand=*/true, "SgAlignOfOp");
+  }
+  if (SgCastExp *cast = isSgCastExp(node)) {
+    validateExpressionTypeDefinitionOwner(
+        cast, cast->get_type(), cast->get_operand(),
+        cast->get_type_defining_declaration(),
+        /*requireExclusiveTypeOperand=*/false, "SgCastExp");
+  }
+  if (SgAttributedStatement *statement = isSgAttributedStatement(node)) {
+    statement->validate();
+  }
+  if (SgDeclarationGroupStatement *group =
+          isSgDeclarationGroupStatement(node)) {
+    group->validate();
+    SgNode *owner = group->get_parent();
+    const SgNodePtrList owner_successors =
+        owner != NULL ? owner->get_traversalSuccessorContainer()
+                      : SgNodePtrList();
+    if (isSgStatement(owner) == NULL ||
+        std::count(owner_successors.begin(), owner_successors.end(), group) !=
+            1) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[declaration-group-owner]: group=%p has "
+              "no exact typed statement owner=%p type=%s\n",
+              static_cast<void *>(group), static_cast<void *>(owner),
+              owner != NULL ? owner->class_name().c_str() : "<null>");
+      ROSE_ABORT();
+    }
+  }
+  if (SgAccessLabelStatement *label = isSgAccessLabelStatement(node)) {
+    label->validate();
+    SgClassDefinition *owner = isSgClassDefinition(label->get_parent());
+    if (owner == NULL || label->get_scope() != owner ||
+        std::count(owner->get_members().begin(), owner->get_members().end(),
+                   label) != 1) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[access-label-owner]: label=%p has no exact "
+              "lexical class-member owner\n",
+              static_cast<void *>(label));
+      ROSE_ABORT();
+    }
+  }
+  if (SgClassDefinition *definition = isSgClassDefinition(node)) {
+    SgClassDeclaration *class_declaration = definition->get_declaration();
+    if (class_declaration == NULL) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[class-definition-declaration]: class=%p "
+              "has no declaration\n",
+              static_cast<void *>(definition));
+      ROSE_ABORT();
+    }
+
+    const bool is_fortran_module =
+        isSgModuleStatement(class_declaration) != NULL;
+    const bool is_fortran_derived_type =
+        isSgDerivedTypeStatement(class_declaration) != NULL;
+    if (is_fortran_module || is_fortran_derived_type) {
+      const SgClassDeclaration::class_types expected_kind =
+          is_fortran_module ? SgClassDeclaration::e_fortran_module
+                            : SgClassDeclaration::e_struct;
+      if (class_declaration->get_class_type() != expected_kind ||
+          !definition->isCaseInsensitive()) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[fortran-definition-kind]: class=%p "
+                "declaration=%p type=%s class-key=%d expected=%d "
+                "case-insensitive=%d\n",
+                static_cast<void *>(definition),
+                static_cast<void *>(class_declaration),
+                class_declaration->class_name().c_str(),
+                static_cast<int>(class_declaration->get_class_type()),
+                static_cast<int>(expected_kind),
+                definition->isCaseInsensitive() ? 1 : 0);
+        ROSE_ABORT();
+      }
+
+      // Fortran MODULE and derived-type accessibility is expressed by typed
+      // PUBLIC/PRIVATE attribute statements and declaration attributes.  It
+      // does not have C++'s lexical access-label state machine.
+      for (SgDeclarationStatement *member : definition->get_members()) {
+        if (member == NULL || isSgAccessLabelStatement(member) != NULL) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[fortran-member-access]: class=%p "
+                  "member=%p type=%s cannot use a C++ access label\n",
+                  static_cast<void *>(definition), static_cast<void *>(member),
+                  member != NULL ? member->class_name().c_str() : "<null>");
+          ROSE_ABORT();
+        }
+        const SgAccessModifier::access_modifier_enum access =
+            member->get_declarationModifier()
+                .get_accessModifier()
+                .get_modifier();
+        switch (access) {
+        case SgAccessModifier::e_private:
+        case SgAccessModifier::e_public:
+        case SgAccessModifier::e_default:
+        case SgAccessModifier::e_not_applicable:
+        case SgAccessModifier::e_undefined:
+          break;
+        default:
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[fortran-member-access]: class=%p "
+                  "member=%p type=%s has invalid access=%d\n",
+                  static_cast<void *>(definition), static_cast<void *>(member),
+                  member->class_name().c_str(), static_cast<int>(access));
+          ROSE_ABORT();
+        }
+      }
+    } else {
+      const bool semantic_template_instantiation =
+          isSgTemplateInstantiationDefn(definition) != NULL &&
+          class_declaration->get_specialization() !=
+              SgDeclarationStatement::e_specialization;
+      const bool semantic_auxiliary_class_definition =
+          SageInterface::hasExactSemanticAuxiliaryOwnership(
+              class_declaration) &&
+          SageInterface::hasSemanticOnlyFrontendSourcePosition(
+              class_declaration) &&
+          SageInterface::hasSemanticOnlyFrontendSourcePosition(definition);
+      // A source-less semantic class has no lexical class body in the Sage
+      // tree.  Its on-demand members still retain Clang's exact effective
+      // access, but manufacturing access-label statements would invent a
+      // second source surface.  Validate that typed effective access directly,
+      // just as for semantic template instantiations.  Source-backed
+      // auxiliary declarations remain on the lexical access-label path.
+      const bool effective_access_only = semantic_template_instantiation ||
+                                         semantic_auxiliary_class_definition;
+      SgAccessModifier::access_modifier_enum current_access;
+      switch (class_declaration->get_class_type()) {
+      case SgClassDeclaration::e_class:
+        current_access = SgAccessModifier::e_private;
+        break;
+      case SgClassDeclaration::e_struct:
+      case SgClassDeclaration::e_union:
+        current_access = SgAccessModifier::e_public;
+        break;
+      default:
+        fprintf(
+            stderr,
+            "REX_AST_INVARIANT[class-member-access]: class=%p has invalid "
+            "class-key=%d\n",
+            static_cast<void *>(definition),
+            static_cast<int>(definition->get_declaration()->get_class_type()));
+        ROSE_ABORT();
+      }
+      for (SgDeclarationStatement *member : definition->get_members()) {
+        if (SgAccessLabelStatement *label = isSgAccessLabelStatement(member)) {
+          if (effective_access_only) {
+            Sg_File_Info *class_info = class_declaration->get_file_info();
+            Sg_File_Info *label_info = label->get_file_info();
+            fprintf(
+                stderr,
+                "REX_AST_INVARIANT[class-member-access]: effective-access-only "
+                "class=%p name=%s source=%s:%d owns "
+                "lexical access label=%p source=%s:%d\n",
+                static_cast<void *>(definition),
+                class_declaration->get_name().str(),
+                class_info != nullptr ? class_info->get_filenameString().c_str()
+                                      : "<null>",
+                class_info != nullptr ? class_info->get_line() : 0,
+                static_cast<void *>(label),
+                label_info != nullptr ? label_info->get_filenameString().c_str()
+                                      : "<null>",
+                label_info != nullptr ? label_info->get_line() : 0);
+            ROSE_ABORT();
+          }
+          label->validate();
+          switch (label->get_label_kind()) {
+          case SgAccessLabelStatement::e_access_label_private:
+            current_access = SgAccessModifier::e_private;
+            break;
+          case SgAccessLabelStatement::e_access_label_protected:
+            current_access = SgAccessModifier::e_protected;
+            break;
+          case SgAccessLabelStatement::e_access_label_public:
+            current_access = SgAccessModifier::e_public;
+            break;
+          }
+          continue;
+        }
+        const SgAccessModifier &access =
+            member->get_declarationModifier().get_accessModifier();
+        if (isSgPragmaDeclaration(member) != nullptr ||
+            isOpenmpNonentityDirective(member)) {
+          if (!access.isNotApplicable() || access.get_is_explicit()) {
+            fprintf(stderr,
+                    "REX_AST_INVARIANT[class-nonentity-access]: member=%p "
+                    "type=%s effective=%d explicit=%d\n",
+                    static_cast<void *>(member), member->class_name().c_str(),
+                    static_cast<int>(access.get_modifier()),
+                    access.get_is_explicit() ? 1 : 0);
+            ROSE_ABORT();
+          }
+          continue;
+        }
+        if (member->get_declarationModifier().isFriend()) {
+          if (!access.isNotApplicable() || access.get_is_explicit()) {
+            fprintf(stderr,
+                    "REX_AST_INVARIANT[class-friend-access]: member=%p "
+                    "type=%s effective=%d explicit=%d\n",
+                    static_cast<void *>(member), member->class_name().c_str(),
+                    static_cast<int>(access.get_modifier()),
+                    access.get_is_explicit() ? 1 : 0);
+            ROSE_ABORT();
+          }
+          continue;
+        }
+        if (effective_access_only) {
+          if (access.get_is_explicit() || access.isUnknown() ||
+              access.isDefault() || access.isNotApplicable()) {
+            fprintf(stderr,
+                    "REX_AST_INVARIANT[class-member-access]: "
+                    "effective-access-only class=%p member=%p/%s has invalid "
+                    "effective "
+                    "access=%d explicit=%d\n",
+                    static_cast<void *>(definition),
+                    static_cast<void *>(member), member->class_name().c_str(),
+                    static_cast<int>(access.get_modifier()),
+                    access.get_is_explicit() ? 1 : 0);
+            ROSE_ABORT();
+          }
+          continue;
+        }
+        if (access.get_is_explicit() ||
+            access.get_modifier() != current_access) {
+          SgClassDeclaration *namedMember = isSgClassDeclaration(member);
+          Sg_File_Info *memberInfo = member->get_file_info();
+          Sg_File_Info *classInfo = class_declaration->get_file_info();
+          fprintf(
+              stderr,
+              "REX_AST_INVARIANT[class-member-access]: class=%p type=%s "
+              "name=%s class-key=%d specialization=%d source=%s:%d "
+              "compiler-generated=%d member=%p type=%s name=%s effective=%d "
+              "explicit=%d lexical=%d source=%s:%d compiler-generated=%d\n",
+              static_cast<void *>(class_declaration),
+              class_declaration->class_name().c_str(),
+              class_declaration->get_name().str(),
+              static_cast<int>(class_declaration->get_class_type()),
+              static_cast<int>(class_declaration->get_specialization()),
+              classInfo != nullptr ? classInfo->get_filenameString().c_str()
+                                   : "<null>",
+              classInfo != nullptr ? classInfo->get_line() : 0,
+              classInfo != nullptr && classInfo->isCompilerGenerated() ? 1 : 0,
+              static_cast<void *>(member), member->class_name().c_str(),
+              namedMember != nullptr ? namedMember->get_name().str() : "",
+              static_cast<int>(access.get_modifier()),
+              access.get_is_explicit() ? 1 : 0,
+              static_cast<int>(current_access),
+              memberInfo != nullptr ? memberInfo->get_filenameString().c_str()
+                                    : "<null>",
+              memberInfo != nullptr ? memberInfo->get_line() : 0,
+              memberInfo != nullptr && memberInfo->isCompilerGenerated() ? 1
+                                                                         : 0);
+          size_t memberIndex = 0;
+          for (SgDeclarationStatement *orderedMember :
+               definition->get_members()) {
+            Sg_File_Info *orderedInfo = orderedMember != nullptr
+                                            ? orderedMember->get_file_info()
+                                            : nullptr;
+            fprintf(stderr,
+                    "REX_AST_INVARIANT[class-member-access-order]: "
+                    "index=%zu member=%p type=%s source=%s:%d\n",
+                    memberIndex++, static_cast<void *>(orderedMember),
+                    orderedMember != nullptr
+                        ? orderedMember->class_name().c_str()
+                        : "<null>",
+                    orderedInfo != nullptr
+                        ? orderedInfo->get_filenameString().c_str()
+                        : "<null>",
+                    orderedInfo != nullptr ? orderedInfo->get_line() : 0);
+          }
+          ROSE_ABORT();
+        }
+      }
+    }
+  }
+  if (SgNamespaceDeclarationStatement *declaration =
+          isSgNamespaceDeclarationStatement(node)) {
+    declaration->validate_source_fragments();
+  }
+  if (SgNamespaceSourceFragment *fragment = isSgNamespaceSourceFragment(node)) {
+    SgNamespaceDeclarationStatement *owner =
+        isSgNamespaceDeclarationStatement(fragment->get_parent());
+    const bool is_introducer =
+        owner != NULL &&
+        owner->get_opening_introducer_source_fragment() == fragment;
+    const bool is_opening =
+        owner != NULL && owner->get_opening_source_fragment() == fragment;
+    const bool is_closing =
+        owner != NULL && owner->get_closing_source_fragment() == fragment;
+    if (static_cast<unsigned int>(is_introducer) +
+            static_cast<unsigned int>(is_opening) +
+            static_cast<unsigned int>(is_closing) !=
+        1) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[namespace-source-fragment-owner]: "
+              "fragment=%p has no unique namespace declaration slot\n",
+              static_cast<void *>(fragment));
+      ROSE_ABORT();
+    }
+    fragment->validate();
+  }
+  if (SgStatementAttributeList *attribute_list =
+          isSgStatementAttributeList(node)) {
+    SgAttributedStatement *owner =
+        isSgAttributedStatement(attribute_list->get_parent());
+    if (owner == NULL || owner->get_attribute_list() != attribute_list) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[statement-attribute-list-owner]: list=%p "
+              "has no exact attributed-statement owner\n",
+              static_cast<void *>(attribute_list));
+      ROSE_ABORT();
+    }
+    attribute_list->validate();
+  }
+  if (SgStatementAttribute *attribute = isSgStatementAttribute(node)) {
+    SgStatementAttributeList *owner =
+        isSgStatementAttributeList(attribute->get_parent());
+    bool found = false;
+    if (owner != NULL) {
+      for (SgStatementAttribute *candidate : owner->get_attributes()) {
+        if (candidate == attribute) {
+          found = true;
+          break;
+        }
+      }
+    }
+    if (!found) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[statement-attribute-list-owner]: "
+              "attribute=%p has no exact structural list owner\n",
+              static_cast<void *>(attribute));
+      ROSE_ABORT();
+    }
+    attribute->validate();
+  }
+
+  if (SgOmpDeclareSimdStatement *stmt = isSgOmpDeclareSimdStatement(node)) {
+    static_cast<void>(stmt->get_mangled_name());
+  }
+  if (SgOmpDeclareVariantStatement *stmt =
+          isSgOmpDeclareVariantStatement(node)) {
+    static_cast<void>(stmt->get_mangled_name());
+  }
+  if (isSgOmpTaskwaitStatement(node) != NULL ||
+      isSgOmpEndAssumeStatement(node) != NULL) {
+    if (isSgOmpExecStatement(node) == NULL ||
+        isSgDeclarationStatement(node) != NULL) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-executable-classification]: "
+              "statement=%p type=%s is not exclusively an OpenMP executable "
+              "statement\n",
+              static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
+    }
+  }
+
+  SgOmpClauseList *owned_clause_list = NULL;
+  bool requires_clause_list = false;
+  if (SgOmpClauseBodyStatement *stmt = isSgOmpClauseBodyStatement(node)) {
+    owned_clause_list = stmt->get_clause_list();
+    requires_clause_list = true;
+  } else if (SgOmpClauseStatement *stmt = isSgOmpClauseStatement(node)) {
+    owned_clause_list = stmt->get_clause_list();
+    requires_clause_list = true;
+  } else if (SgOmpGroupprivateStatement *stmt =
+                 isSgOmpGroupprivateStatement(node)) {
+    owned_clause_list = stmt->get_clause_list();
+    requires_clause_list = true;
+  }
+  if (requires_clause_list && owned_clause_list == NULL) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[openmp-clause-list]: statement=%p type=%s has "
+            "no structural clause-list wrapper\n",
+            static_cast<void *>(node), node->class_name().c_str());
+    ROSE_ABORT();
+  }
+  if (owned_clause_list != NULL) {
+    if (owned_clause_list->get_parent() != node) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-clause-list]: statement=%p type=%s "
+              "does not exclusively own its clause-list wrapper\n",
+              static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
+    }
+    (void)owned_clause_list->get_clauses();
+  }
+
+  if (SgOmpBodyStatement *outer = isSgOmpBodyStatement(node)) {
+    const bool combined = outer->get_source_form_is_combined();
+    SgOmpBodyStatement *combined_owner =
+        isSgOmpBodyStatement(outer->get_parent());
+    const bool nested_combined_component =
+        combined_owner != NULL &&
+        combined_owner->get_source_form_is_combined() &&
+        combined_owner->get_body() == outer;
+
+    if (combined) {
+      SgOmpBodyStatement *inner = isSgOmpBodyStatement(outer->get_body());
+      if (isSgOmpParallelStatement(outer) == NULL || inner == NULL ||
+          inner->get_parent() != outer) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[omp-clause-source-order]: combined "
+                "directive=%p has no exact nested semantic component\n",
+                static_cast<void *>(outer));
+        ROSE_ABORT();
+      }
+
+      std::vector<SgOmpClause *> combined_clauses;
+      auto append_clauses = [&](SgStatement *statement) {
+        SgOmpClauseList *list = NULL;
+        if (SgOmpClauseBodyStatement *body =
+                isSgOmpClauseBodyStatement(statement)) {
+          list = body->get_clause_list();
+        } else if (SgOmpClauseStatement *clause_statement =
+                       isSgOmpClauseStatement(statement)) {
+          list = clause_statement->get_clause_list();
+        }
+        if (list == NULL || list->get_parent() != statement) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[omp-clause-source-order]: combined "
+                  "component=%p has no exact clause-list owner\n",
+                  static_cast<void *>(statement));
+          ROSE_ABORT();
+        }
+        for (SgOmpClause *clause : list->get_clauses()) {
+          if (clause == NULL || clause->get_parent() != list) {
+            fprintf(stderr,
+                    "REX_AST_INVARIANT[omp-clause-source-order]: combined "
+                    "component=%p owns a null or misparented clause\n",
+                    static_cast<void *>(statement));
+            ROSE_ABORT();
+          }
+          combined_clauses.push_back(clause);
+        }
+      };
+      append_clauses(outer);
+      append_clauses(inner);
+
+      std::vector<bool> seen(combined_clauses.size(), false);
+      for (SgOmpClause *clause : combined_clauses) {
+        const std::optional<std::size_t> &source_order =
+            clause->get_combined_source_order();
+        if (!source_order.has_value() ||
+            *source_order >= combined_clauses.size() || seen[*source_order]) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[omp-clause-source-order]: combined "
+                  "directive=%p has absent, duplicate, or out-of-range "
+                  "clause provenance\n",
+                  static_cast<void *>(outer));
+          ROSE_ABORT();
+        }
+        seen[*source_order] = true;
+      }
+    } else if (!nested_combined_component && owned_clause_list != NULL) {
+      for (SgOmpClause *clause : owned_clause_list->get_clauses()) {
+        if (clause != NULL && clause->get_combined_source_order().has_value()) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[omp-clause-source-order]: non-combined "
+                  "directive=%p owns combined clause provenance\n",
+                  static_cast<void *>(outer));
+          ROSE_ABORT();
+        }
+      }
+    }
+  }
+
+  if (SgOmpClauseList *clause_list = isSgOmpClauseList(node)) {
+    SgNode *owner = clause_list->get_parent();
+    const bool valid_owner =
+        (isSgOmpClauseBodyStatement(owner) != NULL &&
+         isSgOmpClauseBodyStatement(owner)->get_clause_list() == clause_list) ||
+        (isSgOmpClauseStatement(owner) != NULL &&
+         isSgOmpClauseStatement(owner)->get_clause_list() == clause_list) ||
+        (isSgOmpGroupprivateStatement(owner) != NULL &&
+         isSgOmpGroupprivateStatement(owner)->get_clause_list() == clause_list);
+    if (!valid_owner) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-clause-list]: list=%p has no exact "
+              "structural statement owner\n",
+              static_cast<void *>(clause_list));
+      ROSE_ABORT();
+    }
+    (void)clause_list->get_clauses();
+  }
+
+  if (SgOmpClause *clause = isSgOmpClause(node)) {
+    SgNode *parent = clause->get_parent();
+    if (isSgOmpClauseBodyStatement(parent) != NULL ||
+        isSgOmpClauseStatement(parent) != NULL ||
+        isSgOmpGroupprivateStatement(parent) != NULL) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-clause-list]: clause=%p type=%s is "
+              "parented directly to a wrapper-based statement\n",
+              static_cast<void *>(clause), clause->class_name().c_str());
+      ROSE_ABORT();
+    }
+    SgOmpClauseList *list = isSgOmpClauseList(parent);
+    SgOmpBodyStatement *owner =
+        list != NULL ? isSgOmpBodyStatement(list->get_parent()) : NULL;
+    SgOmpBodyStatement *combined_owner =
+        owner != NULL ? isSgOmpBodyStatement(owner->get_parent()) : NULL;
+    const bool combined_participant =
+        owner != NULL && (owner->get_source_form_is_combined() ||
+                          (combined_owner != NULL &&
+                           combined_owner->get_source_form_is_combined() &&
+                           combined_owner->get_body() == owner));
+    if (!combined_participant &&
+        clause->get_combined_source_order().has_value()) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[omp-clause-source-order]: non-combined "
+              "clause=%p owns combined source-order provenance\n",
+              static_cast<void *>(clause));
+      ROSE_ABORT();
+    }
+  }
+
+  auto validate_omp_iterator_definitions =
+      [](SgOmpClause *owner, const SgOmpIteratorDefinitionPtrList &definitions,
+         bool required) {
+        if (owner == NULL || required != !definitions.empty()) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[openmp-iterator-definitions]: "
+                  "clause=%p required=%d has invalid definition cardinality\n",
+                  static_cast<void *>(owner), required);
+          ROSE_ABORT();
+        }
+        for (SgOmpIteratorDefinition *definition : definitions) {
+          if (definition == NULL || definition->get_parent() != owner ||
+              std::count(definitions.begin(), definitions.end(), definition) !=
+                  1 ||
+              definition->get_iterator_name() == NULL ||
+              definition->get_iterator_name()->get_spelling().empty() ||
+              definition->get_begin() == NULL ||
+              definition->get_end() == NULL ||
+              (definition->get_iterator_type() != NULL &&
+               definition->get_iterator_type()->get_parent() != definition) ||
+              definition->get_iterator_name()->get_parent() != definition ||
+              definition->get_begin()->get_parent() != definition ||
+              definition->get_end()->get_parent() != definition ||
+              (definition->get_step() != NULL &&
+               definition->get_step()->get_parent() != definition)) {
+            fprintf(stderr,
+                    "REX_AST_INVARIANT[openmp-iterator-definitions]: "
+                    "clause=%p has a malformed or multiply owned typed "
+                    "iterator definition\n",
+                    static_cast<void *>(owner));
+            ROSE_ABORT();
+          }
+          std::set<SgExpression *> fields = {definition->get_iterator_name(),
+                                             definition->get_begin(),
+                                             definition->get_end()};
+          const size_t required_field_count =
+              3 + (definition->get_iterator_type() != NULL) +
+              (definition->get_step() != NULL);
+          if (definition->get_iterator_type() != NULL) {
+            fields.insert(definition->get_iterator_type());
+          }
+          if (definition->get_step() != NULL) {
+            fields.insert(definition->get_step());
+          }
+          if (fields.size() != required_field_count) {
+            fprintf(stderr,
+                    "REX_AST_INVARIANT[openmp-iterator-definitions]: "
+                    "clause=%p aliases one syntax node across iterator "
+                    "roles\n",
+                    static_cast<void *>(owner));
+            ROSE_ABORT();
+          }
+        }
+      };
+
+  if (SgOmpReductionClause *clause = isSgOmpReductionClause(node)) {
+    const bool requires_user_identifier =
+        clause->get_identifier() ==
+        SgOmpClause::e_omp_reduction_user_defined_identifier;
+    SgOmpNameExpression *identifier = clause->get_user_defined_identifier();
+    if (requires_user_identifier != (identifier != NULL) ||
+        (identifier != NULL && (identifier->get_spelling().empty() ||
+                                identifier->get_parent() != clause))) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-reduction-identifier]: clause=%p "
+              "kind and exact user identifier ownership disagree\n",
+              static_cast<void *>(clause));
+      ROSE_ABORT();
+    }
+  }
+  if (SgOmpInReductionClause *clause = isSgOmpInReductionClause(node)) {
+    const bool requires_user_identifier =
+        clause->get_identifier() ==
+        SgOmpClause::e_omp_in_reduction_user_defined_identifier;
+    SgOmpNameExpression *identifier = clause->get_user_defined_identifier();
+    if (requires_user_identifier != (identifier != NULL) ||
+        (identifier != NULL && (identifier->get_spelling().empty() ||
+                                identifier->get_parent() != clause))) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-in-reduction-identifier]: clause=%p "
+              "kind and exact user identifier ownership disagree\n",
+              static_cast<void *>(clause));
+      ROSE_ABORT();
+    }
+  }
+  if (SgOmpTaskReductionClause *clause = isSgOmpTaskReductionClause(node)) {
+    const bool requires_user_identifier =
+        clause->get_identifier() ==
+        SgOmpClause::e_omp_task_reduction_user_defined_identifier;
+    SgOmpNameExpression *identifier = clause->get_user_defined_identifier();
+    if (requires_user_identifier != (identifier != NULL) ||
+        (identifier != NULL && (identifier->get_spelling().empty() ||
+                                identifier->get_parent() != clause))) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-task-reduction-identifier]: "
+              "clause=%p kind and exact user identifier ownership disagree\n",
+              static_cast<void *>(clause));
+      ROSE_ABORT();
+    }
+  }
+  if (SgOmpMapClause *clause = isSgOmpMapClause(node)) {
+    switch (clause->get_operation()) {
+    case SgOmpClause::e_omp_map_unknown:
+    case SgOmpClause::e_omp_map_alloc:
+    case SgOmpClause::e_omp_map_to:
+    case SgOmpClause::e_omp_map_from:
+    case SgOmpClause::e_omp_map_tofrom:
+    case SgOmpClause::e_omp_map_storage:
+    case SgOmpClause::e_omp_map_release:
+    case SgOmpClause::e_omp_map_delete:
+    case SgOmpClause::e_omp_map_present:
+    case SgOmpClause::e_omp_map_self:
+      break;
+    default:
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-map-operation]: clause=%p has an "
+              "invalid typed operation\n",
+              static_cast<void *>(clause));
+      ROSE_ABORT();
+    }
+    const SgOmpClause::omp_map_modifier_enum modifiers[] = {
+        clause->get_modifier1(), clause->get_modifier2(),
+        clause->get_modifier3()};
+    bool saw_unspecified_modifier = false;
+    std::set<int> unique_modifiers;
+    size_t mapper_modifier_count = 0;
+    size_t iterator_modifier_count = 0;
+    for (SgOmpClause::omp_map_modifier_enum modifier : modifiers) {
+      switch (modifier) {
+      case SgOmpClause::e_omp_map_modifier_unspecified:
+        saw_unspecified_modifier = true;
+        continue;
+      case SgOmpClause::e_omp_map_modifier_always:
+      case SgOmpClause::e_omp_map_modifier_close:
+      case SgOmpClause::e_omp_map_modifier_present:
+      case SgOmpClause::e_omp_map_modifier_self:
+      case SgOmpClause::e_omp_map_modifier_mapper:
+      case SgOmpClause::e_omp_map_modifier_iterator:
+        break;
+      default:
+        fprintf(stderr,
+                "REX_AST_INVARIANT[openmp-map-modifier]: clause=%p has an "
+                "invalid typed modifier\n",
+                static_cast<void *>(clause));
+        ROSE_ABORT();
+      }
+      if (saw_unspecified_modifier ||
+          !unique_modifiers.insert(static_cast<int>(modifier)).second) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[openmp-map-modifier]: clause=%p has a "
+                "non-contiguous or duplicate modifier\n",
+                static_cast<void *>(clause));
+        ROSE_ABORT();
+      }
+      mapper_modifier_count +=
+          modifier == SgOmpClause::e_omp_map_modifier_mapper ? 1 : 0;
+      iterator_modifier_count +=
+          modifier == SgOmpClause::e_omp_map_modifier_iterator ? 1 : 0;
+    }
+    SgOmpNameExpression *mapper_identifier = clause->get_mapper_identifier();
+    if (mapper_modifier_count > 1 || iterator_modifier_count > 1 ||
+        (mapper_modifier_count == 1) != (mapper_identifier != NULL) ||
+        (mapper_identifier != NULL &&
+         (mapper_identifier->get_spelling().empty() ||
+          mapper_identifier->get_parent() != clause))) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-map-payload]: clause=%p has "
+              "invalid mapper or iterator discriminator state\n",
+              static_cast<void *>(clause));
+      ROSE_ABORT();
+    }
+    validate_omp_iterator_definitions(clause,
+                                      clause->get_iterator_definitions(),
+                                      iterator_modifier_count == 1);
+  }
+  if (SgOmpDependClause *clause = isSgOmpDependClause(node)) {
+    const bool requires_iterator = clause->get_depend_modifier() ==
+                                   SgOmpClause::e_omp_depend_modifier_iterator;
+    if (clause->get_depend_modifier() !=
+            SgOmpClause::e_omp_depend_modifier_unspecified &&
+        !requires_iterator) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-depend-iterator]: clause=%p has an "
+              "invalid typed modifier\n",
+              static_cast<void *>(clause));
+      ROSE_ABORT();
+    }
+    switch (clause->get_dependence_type()) {
+    case SgOmpClause::e_omp_depend_in:
+    case SgOmpClause::e_omp_depend_out:
+    case SgOmpClause::e_omp_depend_inout:
+    case SgOmpClause::e_omp_depend_inoutset:
+    case SgOmpClause::e_omp_depend_mutexinoutset:
+    case SgOmpClause::e_omp_depend_depobj:
+    case SgOmpClause::e_omp_depend_source:
+    case SgOmpClause::e_omp_depend_sink:
+      break;
+    default:
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-depend-type]: clause=%p has an "
+              "invalid typed dependence kind\n",
+              static_cast<void *>(clause));
+      ROSE_ABORT();
+    }
+    validate_omp_iterator_definitions(
+        clause, clause->get_iterator_definitions(), requires_iterator);
+    const bool requires_sink_vectors =
+        clause->get_dependence_type() == SgOmpClause::e_omp_depend_sink;
+    SgExprListExp *sink_vectors = clause->get_sink_vectors();
+    if (requires_sink_vectors != (sink_vectors != NULL) ||
+        (sink_vectors != NULL && (sink_vectors->get_parent() != clause ||
+                                  sink_vectors->get_expressions().empty()))) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-depend-sink]: clause=%p kind and "
+              "nonempty exact sink-vector ownership disagree\n",
+              static_cast<void *>(clause));
+      ROSE_ABORT();
+    }
+    if (sink_vectors != NULL) {
+      const SgExpressionPtrList &vectors = sink_vectors->get_expressions();
+      for (SgExpression *vector : vectors) {
+        if (vector == NULL || vector->get_parent() != sink_vectors ||
+            std::count(vectors.begin(), vectors.end(), vector) != 1) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[openmp-depend-sink]: clause=%p has a "
+                  "null, aliased, or incorrectly owned sink vector\n",
+                  static_cast<void *>(clause));
+          ROSE_ABORT();
+        }
+      }
+    }
+  }
+  if (SgOmpAffinityClause *clause = isSgOmpAffinityClause(node)) {
+    const bool requires_iterator =
+        clause->get_affinity_modifier() ==
+        SgOmpClause::e_omp_affinity_modifier_iterator;
+    if (clause->get_affinity_modifier() !=
+            SgOmpClause::e_omp_affinity_modifier_unspecified &&
+        !requires_iterator) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-affinity-iterator]: clause=%p has "
+              "an invalid typed modifier\n",
+              static_cast<void *>(clause));
+      ROSE_ABORT();
+    }
+    validate_omp_iterator_definitions(
+        clause, clause->get_iterator_definitions(), requires_iterator);
+  }
+  if (SgOmpToClause *clause = isSgOmpToClause(node)) {
+    if (clause->get_kind() != SgOmpClause::e_omp_to_kind_unknown &&
+        clause->get_kind() != SgOmpClause::e_omp_to_kind_mapper &&
+        clause->get_kind() != SgOmpClause::e_omp_to_kind_iterator &&
+        clause->get_kind() != SgOmpClause::e_omp_to_kind_present) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-to-kind]: clause=%p has an invalid "
+              "typed kind\n",
+              static_cast<void *>(clause));
+      ROSE_ABORT();
+    }
+    const bool requires_mapper =
+        clause->get_kind() == SgOmpClause::e_omp_to_kind_mapper;
+    SgOmpNameExpression *mapper_identifier = clause->get_mapper_identifier();
+    if (requires_mapper != (mapper_identifier != NULL) ||
+        (mapper_identifier != NULL &&
+         (mapper_identifier->get_spelling().empty() ||
+          mapper_identifier->get_parent() != clause)) ||
+        (clause->get_declare_target_extended_list() &&
+         (clause->get_kind() != SgOmpClause::e_omp_to_kind_unknown ||
+          mapper_identifier != NULL ||
+          !clause->get_iterator_definitions().empty()))) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-to-payload]: clause=%p has "
+              "incompatible typed payloads\n",
+              static_cast<void *>(clause));
+      ROSE_ABORT();
+    }
+    validate_omp_iterator_definitions(
+        clause, clause->get_iterator_definitions(),
+        clause->get_kind() == SgOmpClause::e_omp_to_kind_iterator);
+  }
+  if (SgOmpFromClause *clause = isSgOmpFromClause(node)) {
+    if (clause->get_kind() != SgOmpClause::e_omp_from_kind_unknown &&
+        clause->get_kind() != SgOmpClause::e_omp_from_kind_mapper &&
+        clause->get_kind() != SgOmpClause::e_omp_from_kind_iterator &&
+        clause->get_kind() != SgOmpClause::e_omp_from_kind_present) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-from-kind]: clause=%p has an invalid "
+              "typed kind\n",
+              static_cast<void *>(clause));
+      ROSE_ABORT();
+    }
+    const bool requires_mapper =
+        clause->get_kind() == SgOmpClause::e_omp_from_kind_mapper;
+    SgOmpNameExpression *mapper_identifier = clause->get_mapper_identifier();
+    if (requires_mapper != (mapper_identifier != NULL) ||
+        (mapper_identifier != NULL &&
+         (mapper_identifier->get_spelling().empty() ||
+          mapper_identifier->get_parent() != clause))) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-from-payload]: clause=%p has "
+              "incompatible typed payloads\n",
+              static_cast<void *>(clause));
+      ROSE_ABORT();
+    }
+    validate_omp_iterator_definitions(
+        clause, clause->get_iterator_definitions(),
+        clause->get_kind() == SgOmpClause::e_omp_from_kind_iterator);
+  }
+
+  if (SgOmpFlushStatement *stmt = isSgOmpFlushStatement(node)) {
+    if (stmt->get_variable_list() == NULL ||
+        stmt->get_variable_list()->get_parent() != stmt) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-flush-variable-list]: statement=%p "
+              "has invalid structural variable-list ownership\n",
+              static_cast<void *>(stmt));
+      ROSE_ABORT();
+    }
+    (void)stmt->get_variables();
+  }
+  if (SgOmpAllocateStatement *stmt = isSgOmpAllocateStatement(node)) {
+    if (stmt->get_variable_list() == NULL ||
+        stmt->get_variable_list()->get_parent() != stmt) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-allocate-variable-list]: statement=%p "
+              "has invalid structural variable-list ownership\n",
+              static_cast<void *>(stmt));
+      ROSE_ABORT();
+    }
+    (void)stmt->get_variables();
+  }
+
+  if (SgOmpAllocateClause *clause = isSgOmpAllocateClause(node)) {
+    SgExpression *user_defined_modifier = clause->get_user_defined_modifier();
+    SgExpression *alignment = clause->get_alignment();
+    const bool requires_user_defined_modifier =
+        clause->get_modifier() ==
+        SgOmpClause::e_omp_allocate_user_defined_modifier;
+    if (requires_user_defined_modifier != (user_defined_modifier != NULL) ||
+        (user_defined_modifier != NULL &&
+         user_defined_modifier->get_parent() != clause) ||
+        (alignment != NULL && alignment->get_parent() != clause) ||
+        (clause->get_uses_allocator_modifier_syntax() &&
+         clause->get_modifier() ==
+             SgOmpClause::e_omp_allocate_modifier_unknown) ||
+        (alignment != NULL &&
+         clause->get_modifier() !=
+             SgOmpClause::e_omp_allocate_modifier_unknown &&
+         !clause->get_uses_allocator_modifier_syntax())) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-allocate-modifier]: clause=%p "
+              "modifier=%d has invalid singular modifier ownership\n",
+              static_cast<void *>(clause),
+              static_cast<int>(clause->get_modifier()));
+      ROSE_ABORT();
+    }
+  }
+
+  if (SgOmpInductionClause *clause = isSgOmpInductionClause(node)) {
+    for (SgOmpInductionItem *item : clause->get_items()) {
+      if (item == NULL || item->get_parent() != clause) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[openmp-induction-items]: clause=%p has "
+                "a null item or an item with the wrong parent\n",
+                static_cast<void *>(clause));
+        ROSE_ABORT();
+      }
+    }
+  }
+  if (SgOmpApplyClause *clause = isSgOmpApplyClause(node)) {
+    if (clause->get_transformations().empty() && clause->get_label().empty()) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-apply-transformations]: clause=%p "
+              "has neither a label nor a transformation\n",
+              static_cast<void *>(clause));
+      ROSE_ABORT();
+    }
+    for (SgOmpApplyTransformation *item : clause->get_transformations()) {
+      if (item == NULL || item->get_parent() != clause) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[openmp-apply-transformations]: clause=%p "
+                "has a null transformation or one with the wrong parent\n",
+                static_cast<void *>(clause));
+        ROSE_ABORT();
+      }
+    }
+  }
+  if (SgOmpInitClause *clause = isSgOmpInitClause(node)) {
+    std::string detail;
+    if (!Rose::OpenMP::Detail::validateInitClause(clause, &detail)) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-init]: clause=%p is malformed: %s\n",
+              static_cast<void *>(clause), detail.c_str());
+      ROSE_ABORT();
+    }
+  }
+  if (SgOmpAdjustArgsClause *clause = isSgOmpAdjustArgsClause(node)) {
+    std::string detail;
+    if (!Rose::OpenMP::Detail::validateAdjustArgsClause(clause, &detail)) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-adjust-args]: clause=%p is "
+              "malformed: %s\n",
+              static_cast<void *>(clause), detail.c_str());
+      ROSE_ABORT();
+    }
+  }
+  if (SgOmpAppendArgsClause *clause = isSgOmpAppendArgsClause(node)) {
+    std::string detail;
+    if (!Rose::OpenMP::Detail::validateAppendArgsClause(clause, &detail)) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-append-args]: clause=%p is "
+              "malformed: %s\n",
+              static_cast<void *>(clause), detail.c_str());
+      ROSE_ABORT();
+    }
+  }
+  if (SgOmpVariablesClause *clause = isSgOmpVariablesClause(node)) {
+    if (clause->get_has_source_variables_override() !=
+        (clause->get_source_variables() != NULL)) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-source-variable-override]: "
+              "clause=%p discriminator and owned source list disagree\n",
+              static_cast<void *>(clause));
+      ROSE_ABORT();
+    }
+    if (isSgOmpMapClause(clause) != NULL) {
+      SgExprListExp *variables = clause->get_variables();
+      if (variables == NULL || variables->get_parent() != clause ||
+          variables->get_expressions().empty()) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[openmp-map-items]: clause=%p has no "
+                "nonempty exactly owned variable list\n",
+                static_cast<void *>(clause));
+        ROSE_ABORT();
+      }
+      for (SgExpression *expression : variables->get_expressions()) {
+        SgOmpMapItem *item = isSgOmpMapItem(expression);
+        if (item == NULL || item->get_parent() != variables ||
+            item->get_expression() == NULL ||
+            item->get_expression()->get_parent() != item) {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[openmp-map-items]: clause=%p has a "
+                  "non-wrapper item or invalid locator ownership\n",
+                  static_cast<void *>(clause));
+          ROSE_ABORT();
+        }
+        for (SgOmpMapDistDataPolicy *policy : item->get_policies()) {
+          if (policy == NULL || policy->get_parent() != item) {
+            fprintf(stderr,
+                    "REX_AST_INVARIANT[openmp-map-policies]: item=%p has a "
+                    "null policy or invalid policy ownership\n",
+                    static_cast<void *>(item));
+            ROSE_ABORT();
+          }
+        }
+      }
+    }
+  }
+
+  if (SgOmpIteratorDefinition *definition = isSgOmpIteratorDefinition(node)) {
+    SgOmpClause *owner = isSgOmpClause(definition->get_parent());
+    const SgOmpIteratorDefinitionPtrList *definitions = NULL;
+    if (SgOmpMapClause *clause = isSgOmpMapClause(owner)) {
+      definitions = &clause->get_iterator_definitions();
+    } else if (SgOmpDependClause *clause = isSgOmpDependClause(owner)) {
+      definitions = &clause->get_iterator_definitions();
+    } else if (SgOmpAffinityClause *clause = isSgOmpAffinityClause(owner)) {
+      definitions = &clause->get_iterator_definitions();
+    } else if (SgOmpToClause *clause = isSgOmpToClause(owner)) {
+      definitions = &clause->get_iterator_definitions();
+    } else if (SgOmpFromClause *clause = isSgOmpFromClause(owner)) {
+      definitions = &clause->get_iterator_definitions();
+    }
+    if (definitions == NULL ||
+        std::count(definitions->begin(), definitions->end(), definition) != 1 ||
+        definition->get_iterator_name() == NULL ||
+        definition->get_begin() == NULL || definition->get_end() == NULL ||
+        definition->get_iterator_name()->get_spelling().empty() ||
+        (definition->get_iterator_type() != NULL &&
+         definition->get_iterator_type()->get_parent() != definition) ||
+        definition->get_iterator_name()->get_parent() != definition ||
+        definition->get_begin()->get_parent() != definition ||
+        definition->get_end()->get_parent() != definition ||
+        (definition->get_step() != NULL &&
+         definition->get_step()->get_parent() != definition)) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-iterator-definition]: "
+              "definition=%p has invalid clause membership or child "
+              "ownership\n",
+              static_cast<void *>(definition));
+      ROSE_ABORT();
+    }
+    std::set<SgExpression *> fields = {definition->get_iterator_name(),
+                                       definition->get_begin(),
+                                       definition->get_end()};
+    const size_t required_field_count =
+        3 + (definition->get_iterator_type() != NULL) +
+        (definition->get_step() != NULL);
+    if (definition->get_iterator_type() != NULL) {
+      fields.insert(definition->get_iterator_type());
+    }
+    if (definition->get_step() != NULL) {
+      fields.insert(definition->get_step());
+    }
+    if (fields.size() != required_field_count) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-iterator-definition]: "
+              "definition=%p aliases one syntax node across iterator roles\n",
+              static_cast<void *>(definition));
+      ROSE_ABORT();
+    }
+  }
+
   SgExpression *expression = isSgExpression(node);
 
-  // DQ(11/6/2016): Debugging failing mergeTest_133.C that is only demonstrated
-  // using Address Sanitizer and setting the memory pool length to be 1.  Using
-  // this value below to control calling the SgStringVal::get_type() function
-  // appears to be all the is required to fix the memory error. At present I
-  // still don't understand the problem, but it apears to have to do with the
-  // allocation of the SgIntVal object used within the SgStringType.  Note that
-  // at present this is a memory error associated only with the regression tests
-  // in the mergeAST_tests directory.  The failing tests are reproducable, but
-  // only on an odd subset of machines and at present (before this fix) only in
-  // tests run using CMake.
-  bool skipProblemExpresion = (isSgStringVal(expression) != NULL);
+  if (SgOmpMapItem *item = isSgOmpMapItem(expression)) {
+    SgExprListExp *variables = isSgExprListExp(item->get_parent());
+    SgOmpMapClause *clause =
+        variables != NULL ? isSgOmpMapClause(variables->get_parent()) : NULL;
+    if (clause == NULL || clause->get_variables() != variables ||
+        std::find(variables->get_expressions().begin(),
+                  variables->get_expressions().end(),
+                  item) == variables->get_expressions().end() ||
+        item->get_expression() == NULL ||
+        item->get_expression()->get_parent() != item) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-map-item]: item=%p has invalid map "
+              "clause, list, or locator ownership\n",
+              static_cast<void *>(item));
+      ROSE_ABORT();
+    }
+    for (SgOmpMapDistDataPolicy *policy : item->get_policies()) {
+      if (policy == NULL || policy->get_parent() != item) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[openmp-map-item]: item=%p has a null or "
+                "incorrectly owned policy\n",
+                static_cast<void *>(item));
+        ROSE_ABORT();
+      }
+    }
+    return;
+  }
 
-  // DQ(11/6/2016): Debugging failing mergeTest_133.C: restrict to exclude
-  // calling SgStringVal::get_type(). if (expression != NULL)
-  if (expression != NULL && skipProblemExpresion == false) {
+  if (SgOmpMapDistDataPolicy *policy = isSgOmpMapDistDataPolicy(expression)) {
+    SgOmpMapItem *item = isSgOmpMapItem(policy->get_parent());
+    const bool listed =
+        item != NULL &&
+        std::find(item->get_policies().begin(), item->get_policies().end(),
+                  policy) != item->get_policies().end();
+    SgExpression *argument = policy->get_expression();
+    bool valid_payload = false;
+    switch (policy->get_policy()) {
+    case SgOmpClause::e_omp_map_dist_data_duplicate:
+      valid_payload = argument == NULL;
+      break;
+    case SgOmpClause::e_omp_map_dist_data_block:
+    case SgOmpClause::e_omp_map_dist_data_cyclic:
+      valid_payload = argument == NULL || argument->get_parent() == policy;
+      break;
+    default:
+      valid_payload = false;
+      break;
+    }
+    if (!listed || !valid_payload) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-map-policy]: policy=%p has invalid "
+              "item membership, kind, payload, or ownership\n",
+              static_cast<void *>(policy));
+      ROSE_ABORT();
+    }
+    return;
+  }
+
+  if (SgOmpInitModifierList *modifier_list =
+          isSgOmpInitModifierList(expression)) {
+    SgOmpInitClause *clause = isSgOmpInitClause(modifier_list->get_parent());
+    SgOmpAppendArgsOperation *operation =
+        isSgOmpAppendArgsOperation(modifier_list->get_parent());
+    const bool owned_by_init =
+        clause != NULL && clause->get_modifier_list() == modifier_list;
+    const bool owned_by_append =
+        operation != NULL && operation->get_modifier_list() == modifier_list;
+    if (owned_by_init == owned_by_append) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-init-modifier-list]: list=%p has "
+              "invalid init or append_args ownership\n",
+              static_cast<void *>(modifier_list));
+      ROSE_ABORT();
+    }
+    for (SgOmpInitModifier *modifier : modifier_list->get_modifiers()) {
+      if (modifier == NULL || modifier->get_parent() != modifier_list) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[openmp-init-modifier-list]: list=%p has "
+                "a null modifier or invalid modifier ownership\n",
+                static_cast<void *>(modifier_list));
+        ROSE_ABORT();
+      }
+    }
+    return;
+  }
+
+  if (SgOmpAppendArgsOperation *operation =
+          isSgOmpAppendArgsOperation(expression)) {
+    SgOmpAppendArgsClause *clause =
+        isSgOmpAppendArgsClause(operation->get_parent());
+    if (clause == NULL ||
+        std::count(clause->get_interop_operations().begin(),
+                   clause->get_interop_operations().end(), operation) != 1 ||
+        operation->get_modifier_list() == NULL ||
+        operation->get_modifier_list()->get_parent() != operation) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-append-args-operation]: operation=%p "
+              "has invalid clause membership or modifier-list ownership\n",
+              static_cast<void *>(operation));
+      ROSE_ABORT();
+    }
+    return;
+  }
+
+  if (SgOmpInductionItem *item = isSgOmpInductionItem(expression)) {
+    SgOmpInductionClause *clause = isSgOmpInductionClause(item->get_parent());
+    if (clause == NULL ||
+        std::find(clause->get_items().begin(), clause->get_items().end(),
+                  item) == clause->get_items().end() ||
+        item->get_expression() == NULL ||
+        item->get_expression()->get_parent() != item) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-induction-item]: item=%p has invalid "
+              "clause ownership or semantic expression ownership\n",
+              static_cast<void *>(item));
+      ROSE_ABORT();
+    }
+    const bool has_label = !item->get_label().empty();
+    if ((item->get_kind() == SgOmpClause::e_omp_induction_item_binding) !=
+            has_label ||
+        (item->get_kind() != SgOmpClause::e_omp_induction_item_step &&
+         item->get_kind() != SgOmpClause::e_omp_induction_item_binding &&
+         item->get_kind() != SgOmpClause::e_omp_induction_item_expression)) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-induction-item]: item=%p has an "
+              "invalid kind/label combination\n",
+              static_cast<void *>(item));
+      ROSE_ABORT();
+    }
+    return;
+  }
+
+  if (SgOmpApplyTransformation *item = isSgOmpApplyTransformation(expression)) {
+    SgOmpApplyClause *clause = isSgOmpApplyClause(item->get_parent());
+    SgOmpApplyTransformationPtrList::const_iterator position;
+    if (clause != NULL) {
+      position = std::find(clause->get_transformations().begin(),
+                           clause->get_transformations().end(), item);
+    }
+    if (clause == NULL || position == clause->get_transformations().end() ||
+        (item->get_argument() != NULL &&
+         item->get_argument()->get_parent() != item) ||
+        (item->get_nested_apply() != NULL &&
+         item->get_nested_apply()->get_parent() != item) ||
+        (position == clause->get_transformations().begin()
+             ? item->get_separator() != SgOmpClause::e_omp_clause_separator_none
+             : item->get_separator() !=
+                       SgOmpClause::e_omp_clause_separator_comma &&
+                   item->get_separator() !=
+                       SgOmpClause::e_omp_clause_separator_space)) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-apply-transformation]: item=%p has "
+              "invalid ownership or separator\n",
+              static_cast<void *>(item));
+      ROSE_ABORT();
+    }
+    const bool plain =
+        item->get_kind() == SgOmpClause::e_omp_apply_transform_unroll ||
+        item->get_kind() == SgOmpClause::e_omp_apply_transform_unroll_full ||
+        item->get_kind() == SgOmpClause::e_omp_apply_transform_reverse ||
+        item->get_kind() == SgOmpClause::e_omp_apply_transform_interchange ||
+        item->get_kind() == SgOmpClause::e_omp_apply_transform_nothing;
+    const bool argument =
+        item->get_kind() == SgOmpClause::e_omp_apply_transform_unroll_partial ||
+        item->get_kind() == SgOmpClause::e_omp_apply_transform_tile_sizes;
+    const bool nested =
+        item->get_kind() == SgOmpClause::e_omp_apply_transform_nested_apply;
+    const bool named =
+        item->get_kind() == SgOmpClause::e_omp_apply_transform_named;
+    if ((!plain && !argument && !nested && !named) ||
+        (plain &&
+         (!item->get_transformation_name().empty() ||
+          item->get_argument() != NULL || item->get_nested_apply() != NULL)) ||
+        (argument &&
+         (!item->get_transformation_name().empty() ||
+          item->get_argument() == NULL || item->get_nested_apply() != NULL)) ||
+        (nested &&
+         (!item->get_transformation_name().empty() ||
+          item->get_argument() != NULL || item->get_nested_apply() == NULL)) ||
+        (named &&
+         (item->get_transformation_name().empty() ||
+          item->get_argument() != NULL || item->get_nested_apply() != NULL))) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-apply-transformation]: item=%p has "
+              "an invalid kind/payload combination\n",
+              static_cast<void *>(item));
+      ROSE_ABORT();
+    }
+    return;
+  }
+
+  if (SgOmpInitModifier *modifier = isSgOmpInitModifier(expression)) {
+    SgOmpInitModifierList *modifier_list =
+        isSgOmpInitModifierList(modifier->get_parent());
+    SgOmpInitClause *clause =
+        modifier_list != NULL ? isSgOmpInitClause(modifier_list->get_parent())
+                              : NULL;
+    SgOmpAppendArgsOperation *operation =
+        modifier_list != NULL
+            ? isSgOmpAppendArgsOperation(modifier_list->get_parent())
+            : NULL;
+    const bool owned_by_init =
+        clause != NULL && clause->get_modifier_list() == modifier_list;
+    const bool owned_by_append =
+        operation != NULL && operation->get_modifier_list() == modifier_list;
+    if (modifier_list == NULL || owned_by_init == owned_by_append ||
+        std::find(modifier_list->get_modifiers().begin(),
+                  modifier_list->get_modifiers().end(),
+                  modifier) == modifier_list->get_modifiers().end() ||
+        std::count(modifier_list->get_modifiers().begin(),
+                   modifier_list->get_modifiers().end(), modifier) != 1 ||
+        (modifier->get_expression() != NULL &&
+         modifier->get_expression()->get_parent() != modifier)) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-init-modifier]: modifier=%p has "
+              "invalid init or append_args membership or expression "
+              "ownership\n",
+              static_cast<void *>(modifier));
+      ROSE_ABORT();
+    }
+    const bool expression_modifier =
+        modifier->get_kind() == SgOmpClause::e_omp_init_modifier_prefer_type ||
+        modifier->get_kind() == SgOmpClause::e_omp_init_modifier_depinfo_in ||
+        modifier->get_kind() == SgOmpClause::e_omp_init_modifier_depinfo_out ||
+        modifier->get_kind() ==
+            SgOmpClause::e_omp_init_modifier_depinfo_inout ||
+        modifier->get_kind() ==
+            SgOmpClause::e_omp_init_modifier_depinfo_inoutset ||
+        modifier->get_kind() ==
+            SgOmpClause::e_omp_init_modifier_depinfo_mutexinoutset;
+    const bool plain =
+        modifier->get_kind() == SgOmpClause::e_omp_init_modifier_depobj ||
+        modifier->get_kind() == SgOmpClause::e_omp_init_modifier_interop ||
+        modifier->get_kind() == SgOmpClause::e_omp_init_modifier_target ||
+        modifier->get_kind() == SgOmpClause::e_omp_init_modifier_targetsync;
+    if ((!expression_modifier && !plain) ||
+        (expression_modifier && modifier->get_expression() == NULL) ||
+        (plain && modifier->get_expression() != NULL)) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-init-modifier]: modifier=%p has an "
+              "invalid kind/payload combination\n",
+              static_cast<void *>(modifier));
+      ROSE_ABORT();
+    }
+    return;
+  }
+
+  if (expression != NULL) {
+    SgOmpVariablesClause *clause =
+        isSgOmpVariablesClause(expression->get_parent());
+    size_t registeredDirectEdgeCount = 0;
+    if (clause != NULL) {
+      const std::vector<SgNode *> successors =
+          clause->get_traversalSuccessorContainer();
+      registeredDirectEdgeCount = static_cast<size_t>(
+          std::count(successors.begin(), successors.end(), expression));
+      if (registeredDirectEdgeCount > 1) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[openmp-direct-expression-owner]: "
+                "expression=%p type=%s occurs %zu times as a direct "
+                "structural child of clause=%p type=%s\n",
+                static_cast<void *>(expression),
+                expression->class_name().c_str(), registeredDirectEdgeCount,
+                static_cast<void *>(clause), clause->class_name().c_str());
+        ROSE_ABORT();
+      }
+    }
+    SgOmpAllocateClause *allocate_clause = isSgOmpAllocateClause(clause);
+    const bool registered_allocate_modifier =
+        allocate_clause != NULL &&
+        allocate_clause->get_user_defined_modifier() == expression;
+    const bool registered_allocate_alignment =
+        allocate_clause != NULL &&
+        allocate_clause->get_alignment() == expression;
+    if (registered_allocate_modifier) {
+      if (allocate_clause->get_modifier() !=
+          SgOmpClause::e_omp_allocate_user_defined_modifier) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[openmp-allocate-modifier]: clause=%p "
+                "owns a user-defined modifier expression with modifier "
+                "kind=%d\n",
+                static_cast<void *>(allocate_clause),
+                static_cast<int>(allocate_clause->get_modifier()));
+        ROSE_ABORT();
+      }
+    } else if (registered_allocate_alignment) {
+      if (expression->get_parent() != allocate_clause) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[openmp-allocate-alignment]: clause=%p "
+                "has invalid alignment ownership\n",
+                static_cast<void *>(allocate_clause));
+        ROSE_ABORT();
+      }
+    } else if (clause != NULL && registeredDirectEdgeCount != 1 &&
+               (isSgExprListExp(expression) == NULL ||
+                (clause->get_variables() != expression &&
+                 clause->get_source_variables() != expression))) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-variable-list-owner]: expression=%p "
+              "type=%s is an unregistered direct child of clause=%p type=%s "
+              "instead of a typed direct field or a member of one of its "
+              "SgExprListExp wrappers\n",
+              static_cast<void *>(expression), expression->class_name().c_str(),
+              static_cast<void *>(clause), clause->class_name().c_str());
+      ROSE_ABORT();
+    }
+  }
+  if (expression != NULL) {
+    SgExprListExp *list = isSgExprListExp(expression->get_parent());
+    if (list != NULL && isSgOmpVariablesClause(list->get_parent()) != NULL &&
+        std::find(list->get_expressions().begin(),
+                  list->get_expressions().end(),
+                  expression) == list->get_expressions().end()) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[openmp-variable-list-membership]: "
+              "expression=%p type=%s names an OpenMP variable-list parent "
+              "but is absent from that list\n",
+              static_cast<void *>(expression),
+              expression->class_name().c_str());
+      ROSE_ABORT();
+    }
+  }
+
+  // A common-block designator is syntax naming a Fortran storage entity in a
+  // directive clause, not a value expression. Validate its typed semantic edge
+  // and ownership without asking it for a fabricated value type.
+  if (SgFortranCommonBlockRefExp *reference =
+          isSgFortranCommonBlockRefExp(expression)) {
+    SageInterface::validateFortranCommonBlockRef(reference);
+    SgExprListExp *list = isSgExprListExp(reference->get_parent());
+    SgNode *clause = list != NULL ? list->get_parent() : NULL;
+    if (isSgOmpVariablesClause(clause) == NULL &&
+        isSgAccVariablesClause(clause) == NULL &&
+        isSgOmpThreadprivateStatement(reference->get_parent()) == NULL) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[fortran-common-block-context]: reference=%p "
+              "name=/%s/ parent=%p clause=%p is not a directive "
+              "variable-list operand\n",
+              static_cast<void *>(reference), reference->get_use_name().str(),
+              static_cast<void *>(reference->get_parent()),
+              static_cast<void *>(clause));
+      ROSE_ABORT();
+    }
+    return;
+  }
+
+  if (expression != NULL && expression->has_semantic_value_type()) {
     // DQ (10/31/2016): Testing to debug mergeTest_04.C and mergeTest_111.C.
 
     // printf ("TestExpressionTypes::visit(): before calling
@@ -3714,7 +5981,7 @@ void TestExpressionTypes::visit(SgNode *node) {
     if (type->variantT() == V_SgArrayType ||
         type->variantT() == V_SgTypeString) {
       SgExpression *parentExpr = isSgExpression(expression->get_parent());
-      if (parentExpr != NULL &&
+      if (parentExpr != NULL && parentExpr->has_semantic_value_type() &&
           !(
               // DQ (10/31/2015): I think this is fixing the same issue (and
               // resulted in a conflict).
@@ -3769,9 +6036,128 @@ void TestExpressionTypes::visit(SgNode *node) {
     break;
   }
   case V_SgTemplateArgument: {
-    SgTemplateArgument *x = isSgTemplateArgument(node);
-    ROSE_ASSERT(x->get_type() != NULL);
-    type = x->get_type();
+    SgTemplateArgument *argument = isSgTemplateArgument(node);
+    ROSE_ASSERT(argument != nullptr);
+    auto fail_malformed_argument = [&](const char *detail) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[template-argument-payload]: argument=%p "
+              "kind=%d %s\n",
+              static_cast<void *>(argument),
+              static_cast<int>(argument->get_argumentType()), detail);
+      ROSE_ABORT();
+    };
+    switch (argument->get_argumentType()) {
+    case SgTemplateArgument::type_argument:
+      if (argument->get_type() == nullptr ||
+          argument->get_expression() != nullptr ||
+          argument->get_initializedName() != nullptr ||
+          argument->get_templateDeclaration() != nullptr) {
+        fail_malformed_argument(
+            "type argument does not own exactly one type payload");
+      }
+      type = argument->get_type();
+      break;
+    case SgTemplateArgument::nontype_argument: {
+      const bool hasExpression = argument->get_expression() != nullptr;
+      const bool hasInitializedName =
+          argument->get_initializedName() != nullptr;
+      if (hasExpression == hasInitializedName ||
+          argument->get_templateDeclaration() != nullptr) {
+        fail_malformed_argument(
+            "nontype argument does not own exactly one value payload");
+      }
+      SgType *payloadType = hasExpression
+                                ? argument->get_expression()->get_type()
+                                : argument->get_initializedName()->get_type();
+      if (argument->get_type() == nullptr || payloadType == nullptr ||
+          !SageInterface::cxxNonTypeTemplateArgumentTypeConversionIsExact(
+              payloadType, argument->get_type())) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[template-argument-payload-type]: "
+                "argument=%p declared=%p/%s payload=%p/%s\n",
+                static_cast<void *>(argument),
+                static_cast<void *>(argument->get_type()),
+                argument->get_type() != nullptr
+                    ? argument->get_type()->class_name().c_str()
+                    : "<null>",
+                static_cast<void *>(payloadType),
+                payloadType != nullptr ? payloadType->class_name().c_str()
+                                       : "<null>");
+        fail_malformed_argument(
+            "nontype argument has no equivalent value-payload type");
+      }
+      type = payloadType;
+      break;
+    }
+    case SgTemplateArgument::template_template_argument: {
+      SgDeclarationStatement *templateDeclaration =
+          argument->get_templateDeclaration();
+      if (argument->get_type() != nullptr ||
+          argument->get_expression() != nullptr ||
+          argument->get_initializedName() != nullptr ||
+          templateDeclaration == nullptr) {
+        fail_malformed_argument(
+            "template argument does not own exactly one declaration payload");
+      }
+      if (SgTemplateClassDeclaration *classDeclaration =
+              isSgTemplateClassDeclaration(templateDeclaration)) {
+        type = classDeclaration->get_type();
+      } else if (SgTemplateTypedefDeclaration *typedefDeclaration =
+                     isSgTemplateTypedefDeclaration(templateDeclaration)) {
+        type = typedefDeclaration->get_type();
+      } else if (SgTemplateDeclaration *templateParameterDeclaration =
+                     isSgTemplateDeclaration(templateDeclaration)) {
+        // A template-template parameter owns an SgTemplateDeclaration as its
+        // exact semantic identity.  That generic declaration deliberately has
+        // no SgType (its get_type() is a hard-error API); validate the complete
+        // declaration/symbol publication instead of manufacturing a type.
+        SgDeclarationScope *scope =
+            isSgDeclarationScope(templateParameterDeclaration->get_scope());
+        SgTemplateSymbol *symbol =
+            scope != nullptr
+                ? isSgTemplateSymbol(templateParameterDeclaration
+                                         ->get_symbol_from_symbol_table())
+                : nullptr;
+        if (templateParameterDeclaration->get_template_kind() !=
+                SgTemplateDeclaration::e_template_class ||
+            templateParameterDeclaration->get_name().getString().empty() ||
+            scope == nullptr ||
+            templateParameterDeclaration->get_parent() != scope ||
+            templateParameterDeclaration->get_firstNondefiningDeclaration() !=
+                templateParameterDeclaration ||
+            templateParameterDeclaration->get_definingDeclaration() !=
+                nullptr ||
+            symbol == nullptr ||
+            symbol->get_declaration() != templateParameterDeclaration ||
+            symbol->get_parent() != scope->get_symbol_table() ||
+            !scope->symbol_exists(symbol)) {
+          fail_malformed_argument(
+              "template-template parameter declaration lacks exact scope, "
+              "symbol, or declaration-family identity");
+        }
+      } else if (SgNonrealDecl *nonrealDeclaration =
+                     isSgNonrealDecl(templateDeclaration)) {
+        type = nonrealDeclaration->get_type();
+      } else {
+        fail_malformed_argument(
+            "declaration payload is not a template-bearing AST category");
+      }
+      if (type == nullptr &&
+          isSgTemplateDeclaration(templateDeclaration) == nullptr) {
+        fail_malformed_argument(
+            "declaration payload has no exact associated template type");
+      }
+      break;
+    }
+    case SgTemplateArgument::start_of_pack_expansion_argument:
+      fail_malformed_argument(
+          "synthetic pack marker escaped template-argument construction");
+      break;
+    case SgTemplateArgument::argument_undefined:
+    default:
+      fail_malformed_argument("argument has an undefined payload kind");
+      break;
+    }
     break;
   }
   case V_SgVariableDefinition: {
@@ -3990,20 +6376,9 @@ void TestLValues::visit(SgNode *node) {
     case V_SgCastExp: {
       SgCastExp *castExp = isSgCastExp(node);
       ROSE_ASSERT(castExp);
-      switch (castExp->cast_type()) {
-      case SgCastExp::e_C_style_cast:
-      case SgCastExp::e_const_cast:
-      case SgCastExp::e_static_cast:
-      case SgCastExp::e_dynamic_cast:
-      case SgCastExp::e_reinterpret_cast:
-        verifiedLValue = SageInterface::isReferenceType(castExp->get_type());
-        break;
-      case SgCastExp::e_unknown:
-      case SgCastExp::e_default:
-      default:
-        verifiedLValue = false;
-        break;
-      }
+      castExp->validate_semantic_conversion();
+      verifiedLValue =
+          castExp->get_value_category() == SgCastExp::e_value_category_lvalue;
       break;
     }
     case V_SgCommaOpExp: {
@@ -4093,10 +6468,11 @@ void TestLValues::visit(SgNode *node) {
     }
     case V_SgConditionalExp: {
       SgConditionalExp *cond = isSgConditionalExp(node);
-      verifiedLValue = (cond->get_true_exp()->isLValue() &&
-                        cond->get_false_exp()->isLValue()) &&
-                       (cond->get_true_exp()->get_type() ==
-                        cond->get_false_exp()->get_type());
+      cond->validate();
+      SgExpression *true_value = cond->get_true_value_exp();
+      verifiedLValue =
+          (true_value->isLValue() && cond->get_false_exp()->isLValue()) &&
+          (true_value->get_type() == cond->get_false_exp()->get_type());
       break;
     }
     case V_SgShortVal:
@@ -4172,7 +6548,6 @@ void TestLValues::visit(SgNode *node) {
     case V_SgAsteriskShapeExp:
     case V_SgAssumedRankExp:
     case V_SgImpliedDo:
-    case V_SgIOItemExpression:
     case V_SgStatementExpression:
     case V_SgAsmOp:
     case V_SgLabelRefExp:
@@ -4242,6 +6617,7 @@ void TestMangledNames::visit(SgNode *node) {
   string mangledName;
   SgDeclarationStatement *declarationStatement = isSgDeclarationStatement(node);
   SgNonrealDecl *nrdecl = isSgNonrealDecl(node);
+  const bool openmpNonentityDirective = isOpenmpNonentityDirective(node);
   if (declarationStatement != NULL) {
     // DQ (1/12/13): Added fix for scopes that may have been deleted (happens
     // where astDelete mechanism is used) mangledName =
@@ -4257,7 +6633,7 @@ void TestMangledNames::visit(SgNode *node) {
       isDeletedNode = true;
     }
 
-    if (isDeletedNode == false) {
+    if (isDeletedNode == false && !openmpNonentityDirective) {
       mangledName = declarationStatement->get_mangled_name().getString();
     } else {
       printf("WARNING: evaluation of the mangled name for a declaration in a "
@@ -4502,6 +6878,7 @@ void TestParentPointersInMemoryPool::visit(SgNode *node) {
     case V_SgSourceFile:
     case V_SgUnknownFile:
     case V_SgTypedefSeq:
+    case V_SgFunctionTypeArgument:
     case V_SgFunctionParameterTypeList:
     case V_SgPragma:
     case V_SgBaseClass:
@@ -5285,7 +7662,17 @@ void TestLValueExpressions::visit(SgNode *node) {
     if (unaryOperator != NULL) {
       switch (expression->variantT()) {
         // IR nodes that should have a valid lvalue
-        // What about SgAddressOfOp?
+      case V_SgAddressOfOp: {
+        SgExpression *operand = unaryOperator->get_operand();
+        ROSE_ASSERT(operand != NULL);
+        // Address-of accepts object lvalues, function designators, and
+        // qualified member-function designators. The legacy p_lvalue cache is
+        // contextual and therefore has no single valid value for this whole
+        // operand family. Clang has already validated the operand category;
+        // the AST contract here is exact structural ownership.
+        ROSE_ASSERT(operand->get_parent() == unaryOperator);
+        break;
+      }
 
       case V_SgMinusMinusOp:
       case V_SgPlusPlusOp: {
@@ -5338,6 +7725,8 @@ void TestLValueExpressions::visit(SgNode *node) {
       case V_SgCastExp:
       case V_SgMinusOp:
       case V_SgBitComplementOp:
+      case V_SgRealPartOp:
+      case V_SgImagPartOp:
         // case V_SgPlusOp:
         {
           SgExpression *operand = unaryOperator->get_operand();
@@ -5362,18 +7751,7 @@ void TestLValueExpressions::visit(SgNode *node) {
       default: {
         SgExpression *operand = unaryOperator->get_operand();
         ROSE_ASSERT(operand != NULL);
-
-#if WARN_ABOUT_ATYPICAL_LVALUES
-        if (operand->get_lvalue() == true) {
-          printf("Error for operand = %p = %s = %s in unary expression = %s \n",
-                 operand, operand->class_name().c_str(),
-                 SageInterface::get_name(operand).c_str(),
-                 expression->class_name().c_str());
-          unaryOperator->get_startOfConstruct()->display(
-              "Error for operand: operand->get_lvalue() == true: debug");
-        }
-#endif
-        ROSE_ASSERT(operand->get_lvalue() == false);
+        ROSE_ASSERT(operand->get_parent() == unaryOperator);
       }
       }
     }
@@ -5851,26 +8229,34 @@ void TestForSourcePosition::testFileInfo(Sg_File_Info *fileInfo) {
       isShared == false && isSourcePositionUnavailableInFrontend == false &&
       isTransformation == false) {
     if (fileInfo->get_filenameString() == "") {
-      fileInfo->display("In TestForSourcePosition::visit(): debug");
-
       SgNode *node = fileInfo->get_parent();
       ROSE_ASSERT(node != NULL);
-
-      printf("Error: detected a source position with empty filename: node = %p "
-             "= %s \n",
-             node, node->class_name().c_str());
+      fprintf(stderr,
+              "REX_AST_INVARIANT[source-position]: node=%p type=%s has an "
+              "empty filename line=%d column=%d physical-id=%d\n",
+              static_cast<void *>(node), node->class_name().c_str(),
+              fileInfo->get_line(), fileInfo->get_col(),
+              fileInfo->get_physical_file_id());
       ROSE_ABORT();
     }
 
     if (fileInfo->get_physical_file_id() < 0) {
-      fileInfo->display("In TestForSourcePosition::visit(): debug");
-
       SgNode *node = fileInfo->get_parent();
       ROSE_ASSERT(node != NULL);
-
-      printf("Error: detected a source position with inconsistant physical "
-             "file id: node = %p = %s \n",
-             node, node->class_name().c_str());
+      fprintf(
+          stderr,
+          "REX_AST_INVARIANT[source-position]: node=%p type=%s "
+          "name=%s file=%s line=%d column=%d physical-id=%d "
+          "compiler-generated=%d frontend-specific=%d "
+          "transformation=%d output=%d\n",
+          static_cast<void *>(node), node->class_name().c_str(),
+          isSgDeclarationStatement(node) != nullptr
+              ? SageInterface::get_name(isSgDeclarationStatement(node)).c_str()
+              : "",
+          fileInfo->get_filenameString().c_str(), fileInfo->get_line(),
+          fileInfo->get_col(), fileInfo->get_physical_file_id(),
+          fileInfo->isCompilerGenerated(), fileInfo->isFrontendSpecific(),
+          fileInfo->isTransformation(), fileInfo->isOutputInCodeGeneration());
       ROSE_ABORT();
     }
   }

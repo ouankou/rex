@@ -49,7 +49,11 @@ OpenMP region SgOmpParallelStatement @ 83
 "a"@0:0	shared
 "tid"@0:0	private
 "y_ompacc"@0:0	map
+"offset"@0:0	map
+"size"@0:0	map
 "x"@0:0	map
+"offset"@0:0	map
+"size"@0:0	map
 "a"@0:0	map
 "size"@0:0	map
 "offset"@0:0	map

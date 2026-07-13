@@ -1,5 +1,4 @@
 
-
 void foobar() {
   for (int i = 0; i < 42; i++) {
     int ii;
@@ -8,9 +7,9 @@ void foobar() {
     /* comment comment comment */
     int k = ii;
     if (k >= 42) {
+      int m;
       int *array;
-      int m = array[k];
+      m = MACRO(k);
     }
   }
 }
- 

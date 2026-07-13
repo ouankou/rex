@@ -1,3 +1,4 @@
+#include "ompAstConstruction.h"
 #include "sageAstJsonPrivate.h"
 
 namespace Rose {
@@ -86,9 +87,7 @@ AstFileRecord parseAstFileJson(const std::string &json,
     record.flags = node_value.at("flags");
     record.location = node_value.at("location");
     record.properties = node_value.at("properties");
-    record.preprocessing = record.properties.find("preprocessing") != nullptr
-                               ? *record.properties.find("preprocessing")
-                               : JsonValue::arrayValue({});
+    record.preprocessing = record.properties.at("preprocessing");
 
     const JsonValue &edges = node_value.at("edges");
     if (edges.kind != JsonValue::Kind::Array) {
@@ -97,7 +96,7 @@ AstFileRecord parseAstFileJson(const std::string &json,
     for (const JsonValue &edge_value : edges.array) {
       EdgeRecord edge;
       edge.field = edge_value.at("field").asString();
-      edge.index = static_cast<uint64_t>(edge_value.intOr("index", 0));
+      edge.index = static_cast<uint64_t>(edge_value.requiredInt("index"));
       edge.target = static_cast<uint64_t>(edge_value.at("target").asInt());
       record.edges.push_back(std::move(edge));
     }
@@ -121,30 +120,13 @@ AstFileRecord parseAstFileJson(const std::string &json,
 
 void appendComparableValue(std::ostream &out, const JsonValue &value);
 
-bool isDerivedTypeTextObject(const JsonValue &value) {
-  if (value.kind != JsonValue::Kind::Object ||
-      !value.boolOr("present", false)) {
-    return false;
-  }
-  const std::string kind = value.stringOr("kind");
-  return kind == "SgPointerType" || kind == "SgPointerMemberType" ||
-         kind == "SgReferenceType" || kind == "SgRvalueReferenceType" ||
-         kind == "SgArrayType" || kind == "SgModifierType" ||
-         kind == "SgFunctionType" || kind == "SgMemberFunctionType";
-}
-
-void appendComparableObject(std::ostream &out, const JsonValue &value,
-                            const std::set<std::string> &ignored_keys = {}) {
+void appendComparableObject(std::ostream &out, const JsonValue &value) {
   if (value.kind != JsonValue::Kind::Object) {
     throw std::runtime_error("AST JSON comparable value is not an object");
   }
   out << '{';
   bool first = true;
   for (const auto &entry : value.object) {
-    if (ignored_keys.count(entry.first) != 0 || entry.first == "declaration" ||
-        (entry.first == "text" && isDerivedTypeTextObject(value))) {
-      continue;
-    }
     if (!first) {
       out << ',';
     }
@@ -185,29 +167,6 @@ void appendComparableValue(std::ostream &out, const JsonValue &value) {
   }
 }
 
-void appendComparablePreprocessing(std::ostream &out, const JsonValue &value) {
-  if (value.kind != JsonValue::Kind::Array) {
-    appendComparableValue(out, value);
-    return;
-  }
-  std::vector<std::string> entries;
-  entries.reserve(value.array.size());
-  for (const JsonValue &entry : value.array) {
-    std::ostringstream item;
-    appendComparableValue(item, entry);
-    entries.push_back(item.str());
-  }
-  std::sort(entries.begin(), entries.end());
-  out << '[';
-  for (size_t i = 0; i < entries.size(); ++i) {
-    if (i != 0) {
-      out << ',';
-    }
-    out << entries[i];
-  }
-  out << ']';
-}
-
 void appendComparableProperties(std::ostream &out, const JsonValue &value) {
   if (value.kind != JsonValue::Kind::Object) {
     throw std::runtime_error("AST JSON properties value is not an object");
@@ -215,107 +174,14 @@ void appendComparableProperties(std::ostream &out, const JsonValue &value) {
   out << '{';
   bool first = true;
   for (const auto &entry : value.object) {
-    if (entry.first == "unparse") {
-      continue;
-    }
     if (!first) {
       out << ',';
     }
     out << jsonString(entry.first) << ':';
-    if (entry.first == "preprocessing") {
-      appendComparablePreprocessing(out, entry.second);
-    } else {
-      appendComparableValue(out, entry.second);
-    }
+    appendComparableValue(out, entry.second);
     first = false;
   }
   out << '}';
-}
-
-bool hasEdgeTarget(const NodeRecord &record, const std::string &field,
-                   uint64_t target) {
-  for (const EdgeRecord &candidate : record.edges) {
-    if (candidate.field == field && candidate.target == target) {
-      return true;
-    }
-  }
-  return false;
-}
-
-uint64_t firstEdgeTarget(const NodeRecord &record, const std::string &field) {
-  for (const EdgeRecord &candidate : record.edges) {
-    if (candidate.field == field) {
-      return candidate.target;
-    }
-  }
-  return 0;
-}
-
-bool isScopeDerivedFromParentChain(
-    const NodeRecord &record, const EdgeRecord &edge,
-    const std::unordered_map<uint64_t, const NodeRecord *> &records_by_id) {
-  if (edge.field != "scope") {
-    return false;
-  }
-
-  std::unordered_set<uint64_t> seen;
-  uint64_t current = firstEdgeTarget(record, "parent");
-  while (current != 0 && seen.insert(current).second) {
-    if (current == edge.target) {
-      return true;
-    }
-
-    auto found = records_by_id.find(current);
-    if (found == records_by_id.end()) {
-      return false;
-    }
-    current = firstEdgeTarget(*found->second, "parent");
-  }
-
-  return false;
-}
-
-bool isInitializedNameScopeDerivedFromDeclaration(
-    const NodeRecord &record, const EdgeRecord &edge,
-    const std::unordered_map<uint64_t, const NodeRecord *> &records_by_id) {
-  if (record.kind != "SgInitializedName" || edge.field != "scope") {
-    return false;
-  }
-  const uint64_t decl_id = firstEdgeTarget(record, "declptr");
-  if (decl_id == 0) {
-    return false;
-  }
-  auto found = records_by_id.find(decl_id);
-  if (found == records_by_id.end()) {
-    return false;
-  }
-  const NodeRecord &decl_record = *found->second;
-  return hasEdgeTarget(decl_record, "scope", edge.target) ||
-         hasEdgeTarget(decl_record, "parent", edge.target);
-}
-
-bool ignoreComparableEdge(
-    const NodeRecord &record, const EdgeRecord &edge,
-    const std::unordered_map<uint64_t, const NodeRecord *> &records_by_id) {
-  if (edge.field == "parent") {
-    return true;
-  }
-  if (edge.field == "scope" && hasEdgeTarget(record, "parent", edge.target)) {
-    return true;
-  }
-  if (isScopeDerivedFromParentChain(record, edge, records_by_id)) {
-    return true;
-  }
-  if (isInitializedNameScopeDerivedFromDeclaration(record, edge,
-                                                   records_by_id)) {
-    return true;
-  }
-  if (edge.target == record.id &&
-      (edge.field == "firstNondefiningDeclaration" ||
-       edge.field == "definingDeclaration")) {
-    return true;
-  }
-  return false;
 }
 
 std::string semanticSignature(const AstFileRecord &ast) {
@@ -327,12 +193,6 @@ std::string semanticSignature(const AstFileRecord &ast) {
   out << "metadata=";
   appendComparableObject(out, ast.metadata);
   out << '\n';
-
-  std::unordered_map<uint64_t, const NodeRecord *> records_by_id;
-  records_by_id.reserve(ast.nodes.size());
-  for (const NodeRecord &record : ast.nodes) {
-    records_by_id.emplace(record.id, &record);
-  }
 
   for (const NodeRecord &record : ast.nodes) {
     out << "node " << record.id << ' ' << record.kind << ' ' << record.variant
@@ -347,12 +207,7 @@ std::string semanticSignature(const AstFileRecord &ast) {
     appendComparableProperties(out, record.properties);
     out << '\n';
 
-    std::vector<EdgeRecord> edges;
-    for (const EdgeRecord &edge : record.edges) {
-      if (!ignoreComparableEdge(record, edge, records_by_id)) {
-        edges.push_back(edge);
-      }
-    }
+    std::vector<EdgeRecord> edges = record.edges;
     std::sort(edges.begin(), edges.end(),
               [](const EdgeRecord &lhs, const EdgeRecord &rhs) {
                 if (lhs.field != rhs.field) {
@@ -412,6 +267,15 @@ bool nodeParentChainReferencesSourceFile(SgNode *node, SgSourceFile *file) {
   return false;
 }
 
+bool declarationReferencesSourceFile(SgDeclarationStatement *declaration,
+                                     SgSourceFile *file) {
+  if (declaration == nullptr || file == nullptr) {
+    return false;
+  }
+  return nodeParentChainReferencesSourceFile(declaration, file) ||
+         nodeParentChainReferencesSourceFile(declaration->get_scope(), file);
+}
+
 bool symbolReferencesSourceFile(SgSymbol *symbol, SgSourceFile *file) {
   if (symbol == nullptr || file == nullptr) {
     return false;
@@ -419,8 +283,9 @@ bool symbolReferencesSourceFile(SgSymbol *symbol, SgSourceFile *file) {
   if (nodeParentChainReferencesSourceFile(symbol, file)) {
     return true;
   }
-  return nodeParentChainReferencesSourceFile(
-      const_cast<SgNode *>(symbolBasis(symbol)), file);
+  SgNode *basis = const_cast<SgNode *>(symbolBasis(symbol));
+  return nodeParentChainReferencesSourceFile(basis, file) ||
+         declarationReferencesSourceFile(isSgDeclarationStatement(basis), file);
 }
 
 struct SourceFileReferenceScanner {
@@ -467,20 +332,20 @@ struct SourceFileReferenceScanner {
       return references(modifier->get_base_type());
     }
     if (SgTypedefType *typedef_type = isSgTypedefType(type)) {
-      return nodeParentChainReferencesSourceFile(
-          typedef_type->get_declaration(), file);
+      return declarationReferencesSourceFile(typedef_type->get_declaration(),
+                                             file);
     }
     if (SgClassType *class_type = isSgClassType(type)) {
-      return nodeParentChainReferencesSourceFile(class_type->get_declaration(),
-                                                 file);
+      return declarationReferencesSourceFile(class_type->get_declaration(),
+                                             file);
     }
     if (SgEnumType *enum_type = isSgEnumType(type)) {
-      return nodeParentChainReferencesSourceFile(enum_type->get_declaration(),
-                                                 file);
+      return declarationReferencesSourceFile(enum_type->get_declaration(),
+                                             file);
     }
     if (SgNonrealType *nonreal_type = isSgNonrealType(type)) {
-      return nodeParentChainReferencesSourceFile(
-          nonreal_type->get_declaration(), file);
+      return declarationReferencesSourceFile(nonreal_type->get_declaration(),
+                                             file);
     }
     if (SgTemplateType *template_type = isSgTemplateType(type)) {
       return references(template_type->get_class_type()) ||
@@ -510,7 +375,8 @@ struct SourceFileReferenceScanner {
       return false;
     }
     if (SgDeclType *decl_type = isSgDeclType(type)) {
-      return references(decl_type->get_base_expression());
+      return references(decl_type->get_base_expression()) ||
+             references(decl_type->get_base_type());
     }
 
     return false;
@@ -554,10 +420,14 @@ struct SourceFileReferenceScanner {
     }
     if (SgFunctionRefExp *ref = isSgFunctionRefExp(expr)) {
       return symbolReferencesSourceFile(ref->get_symbol(), file) ||
+             symbolReferencesSourceFile(
+                 ref->get_fortran_source_visible_symbol(), file) ||
              references(ref->get_type());
     }
     if (SgTemplateFunctionRefExp *ref = isSgTemplateFunctionRefExp(expr)) {
       return symbolReferencesSourceFile(ref->get_symbol(), file) ||
+             nodeParentChainReferencesSourceFile(
+                 ref->get_semantic_function_declaration(), file) ||
              references(ref->get_type());
     }
     if (SgMemberFunctionRefExp *ref = isSgMemberFunctionRefExp(expr)) {
@@ -567,6 +437,8 @@ struct SourceFileReferenceScanner {
     if (SgTemplateMemberFunctionRefExp *ref =
             isSgTemplateMemberFunctionRefExp(expr)) {
       return symbolReferencesSourceFile(ref->get_symbol_i(), file) ||
+             nodeParentChainReferencesSourceFile(
+                 ref->get_semantic_member_function_declaration(), file) ||
              references(ref->get_type());
     }
     if (SgClassNameRefExp *ref = isSgClassNameRefExp(expr)) {
@@ -575,6 +447,10 @@ struct SourceFileReferenceScanner {
     }
     if (SgNonrealRefExp *ref = isSgNonrealRefExp(expr)) {
       return symbolReferencesSourceFile(ref->get_symbol(), file) ||
+             nodeParentChainReferencesSourceFile(
+                 ref->get_resolved_function_declaration(), file) ||
+             nodeParentChainReferencesSourceFile(
+                 ref->get_resolved_variable_declaration(), file) ||
              references(ref->get_type());
     }
     if (SgThisExp *this_expr = isSgThisExp(expr)) {
@@ -596,8 +472,29 @@ struct SourceFileReferenceScanner {
     if (SgNewExp *new_expr = isSgNewExp(expr)) {
       return references(new_expr->get_specified_type());
     }
+    if (SgPseudoDestructorRefExp *pseudo = isSgPseudoDestructorRefExp(expr)) {
+      return references(pseudo->get_object_type()) ||
+             references(pseudo->get_type());
+    }
+    if (SgSizeOfOp *size_of = isSgSizeOfOp(expr)) {
+      return references(size_of->get_operand_type()) ||
+             references(size_of->get_operand_expr());
+    }
+    if (SgAlignOfOp *align_of = isSgAlignOfOp(expr)) {
+      return references(align_of->get_operand_type()) ||
+             references(align_of->get_operand_expr());
+    }
     if (SgTypeExpression *type_expr = isSgTypeExpression(expr)) {
-      return references(type_expr->get_type());
+      return references(type_expr->get_represented_type());
+    }
+    if (SgFortranCommonBlockRefExp *common =
+            isSgFortranCommonBlockRefExp(expr)) {
+      SageInterface::validateFortranCommonBlockRef(common);
+      return nodeParentChainReferencesSourceFile(common->get_common_block(),
+                                                 file);
+    }
+    if (!expressionCarriesSemanticType(expr)) {
+      return false;
     }
     return references(expr->get_type());
   }
@@ -676,12 +573,37 @@ void replaceFileInProject(SgSourceFile *old_file, SgSourceFile *new_file) {
   }
   ROSE_ASSERT(replaced);
 
+  SgFileList *external_files = old_file->get_frontendExternalFileList();
+  if (new_file->get_frontendExternalFileList() != nullptr) {
+    throw std::runtime_error(
+        "AST JSON replacement source file unexpectedly owns frontend-external "
+        "files");
+  }
+  if (external_files != nullptr) {
+    if (external_files->get_parent() != old_file ||
+        external_files->get_listOfFiles().empty()) {
+      throw std::runtime_error(
+          "AST JSON source file has malformed frontend-external ownership "
+          "during replacement");
+    }
+    for (SgFile *external_file : external_files->get_listOfFiles()) {
+      if (external_file == nullptr ||
+          external_file->get_parent() != external_files) {
+        throw std::runtime_error(
+            "AST JSON source file has a malformed frontend-external child "
+            "during replacement");
+      }
+    }
+    old_file->set_frontendExternalFileList(nullptr);
+    new_file->set_frontendExternalFileList(external_files);
+    external_files->set_parent(new_file);
+  }
   new_file->set_parent(file_list_node);
   if (new_file->get_globalScope() != nullptr) {
     new_file->get_globalScope()->set_parent(new_file);
   }
+  OmpSupport::discardOpenMPProducerSemanticRecords(old_file);
   old_file->set_parent(nullptr);
-  purgeStaleCheckpointTypeCaches(old_file);
 }
 
 std::vector<std::string> commandLineFromMetadata(const JsonValue &metadata) {
@@ -694,7 +616,7 @@ std::vector<std::string> commandLineFromMetadata(const JsonValue &metadata) {
   }
   if (result.empty()) {
     result.push_back("cc");
-    result.push_back(metadata.stringOr("source_file"));
+    result.push_back(metadata.requiredString("source_file"));
   }
   return result;
 }

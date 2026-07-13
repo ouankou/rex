@@ -26,10 +26,11 @@ int main(int argc, char *argv[]) {
   SgGlobal *global_scope = source_file->get_globalScope();
   ROSE_ASSERT(global_scope != NULL);
 
-  SageBuilder::pushScopeStack(global_scope);
-  SgEmptyDeclaration *dummy_decl = SageBuilder::buildEmptyDeclaration();
-  SageBuilder::popScopeStack();
+  SgEmptyDeclaration *dummy_decl = SageBuilder::buildEmptyDeclaration(
+      SgEmptyDeclaration::e_empty_declaration_zero_width_source_replacement);
   ROSE_ASSERT(dummy_decl != NULL);
+  ROSE_ASSERT(dummy_decl->get_parent() == NULL);
+  ROSE_ASSERT(!dummy_decl->hasExplicitScope());
   if (Sg_File_Info *info = dummy_decl->get_file_info()) {
     info->setCompilerGenerated();
     info->unsetOutputInCodeGeneration();

@@ -42,6 +42,7 @@ jobs:
             cd /opt/rex/src
             CTEST_JOBS="$(nproc)"
             ctest --test-dir build \
+              --no-tests=error \
               -R "rex|astInterface|OMPLOWERING_RODINIA_" \
               --output-on-failure \
               -j"${CTEST_JOBS}"
@@ -58,6 +59,7 @@ jobs:
             cd /opt/rex/src
             CTEST_JOBS="$(nproc)"
             ctest --test-dir build \
+              --no-tests=error \
               -R "rex|astInterface|OMPLOWERING_RODINIA_" \
               --output-on-failure \
               -j"${CTEST_JOBS}"

@@ -8,10 +8,23 @@ using namespace SageInterface;
 
 namespace OmpSupport {
 
+bool isOmpContextSelectorMetadataDirective(const SgNode *node) {
+  for (const SgNode *owner = node; owner != nullptr;
+       owner = owner->get_parent()) {
+    if (isSgOmpContextSelector(owner) != nullptr) {
+      return true;
+    }
+  }
+  return false;
+}
+
 namespace {
 SgVarRefExp *extractVarRefFromExpression(SgExpression *expr) {
   if (expr == nullptr) {
     return nullptr;
+  }
+  if (SgOmpMapItem *item = isSgOmpMapItem(expr)) {
+    return extractVarRefFromExpression(item->get_expression());
   }
   if (SgVarRefExp *vref = isSgVarRefExp(expr)) {
     return vref;
@@ -144,17 +157,89 @@ void analyzeOmpMetadirective(SgNode *node) {
   ROSE_ASSERT(variant_body != NULL);
   SgIfStmt *if_stmt = NULL;
   SgIfStmt *previous_if_stmt = NULL;
+  auto requireRuntimeCondition = [](SgOmpWhenClause *when_clause) {
+    if (when_clause == nullptr) {
+      std::cerr << "REX_OMP_LOWERING_INVARIANT[metadirective]: null when "
+                   "clause\n";
+      ROSE_ABORT();
+    }
+    SgExpression *condition = nullptr;
+    const SgOmpContextSelectorSetPtrList &sets =
+        when_clause->get_context_selector_sets();
+    if (sets.size() != 1) {
+      std::cerr << "REX_OMP_LOWERING_INVARIANT[metadirective]: when clause "
+                   "must own exactly one selector set\n";
+      ROSE_ABORT();
+    }
+    for (SgOmpContextSelectorSet *set : sets) {
+      if (set == nullptr ||
+          set->get_set_kind() != SgOmpClause::e_omp_context_selector_set_user) {
+        std::cerr << "REX_OMP_LOWERING_UNSUPPORTED[metadirective]: lowering "
+                     "requires a sole user condition selector\n";
+        ROSE_ABORT();
+      }
+      const SgOmpContextSelectorPtrList &selectors = set->get_selectors();
+      SgOmpContextSelector *selector =
+          selectors.size() == 1 ? selectors.front() : nullptr;
+      const SgOmpContextSelectorPropertyPtrList *properties =
+          selector != nullptr ? &selector->get_properties() : nullptr;
+      SgOmpContextSelectorProperty *property =
+          properties != nullptr && properties->size() == 1 ? properties->front()
+                                                           : nullptr;
+      if (selector == nullptr || selector->get_parent() != set ||
+          selector->get_selector_kind() !=
+              SgOmpClause::e_omp_context_trait_condition ||
+          selector->get_score() != nullptr ||
+          selector->get_construct_directive() != nullptr ||
+          !selector->get_implementation_defined_name().is_null() ||
+          property == nullptr || property->get_parent() != selector ||
+          property->get_expression() == nullptr ||
+          property->get_expression()->get_parent() != property ||
+          property->get_context_kind() !=
+              SgOmpClause::e_omp_when_context_kind_unknown ||
+          property->get_context_vendor() !=
+              SgOmpClause::e_omp_when_context_vendor_unspecified ||
+          property->get_atomic_default_mem_order() !=
+              SgOmpClause::e_omp_atomic_default_mem_order_kind_unspecified ||
+          condition != nullptr) {
+        std::cerr << "REX_OMP_LOWERING_UNSUPPORTED[metadirective]: user set "
+                     "must contain one unscored condition\n";
+        ROSE_ABORT();
+      }
+      condition = property->get_expression();
+    }
+    if (condition == nullptr) {
+      std::cerr << "REX_OMP_LOWERING_INVARIANT[metadirective]: user condition "
+                   "is absent\n";
+      ROSE_ABORT();
+    }
+    SgExpression *copied_condition = SageInterface::copyExpression(condition);
+    if (copied_condition == nullptr || copied_condition == condition ||
+        copied_condition->get_parent() != nullptr) {
+      std::cerr << "REX_OMP_LOWERING_INVARIANT[metadirective]: condition "
+                   "copy is not a detached expression\n";
+      ROSE_ABORT();
+    }
+    return copied_condition;
+  };
   if (hasClause(target, V_SgOmpWhenClause)) {
     Rose_STL_Container<SgOmpClause *> clauses =
         getClause(target, V_SgOmpWhenClause);
     SgOmpWhenClause *when_clause = isSgOmpWhenClause(clauses[0]);
-    SgExpression *condition_expression = when_clause->get_user_condition();
+    SgExpression *condition_expression = requireRuntimeCondition(when_clause);
     SgExprStatement *condition_statement =
         buildExprStatement(condition_expression);
     variant_directive = when_clause->get_variant_directive();
-    ((SgOmpBodyStatement *)variant_directive)->set_body(variant_body);
-    setOneSourcePositionForTransformation(variant_directive);
     if (variant_directive) {
+      SgOmpBodyStatement *variant_body_statement =
+          isSgOmpBodyStatement(variant_directive);
+      if (variant_body_statement == nullptr) {
+        std::cerr << "REX_OMP_LOWERING_INVARIANT[metadirective]: variant "
+                     "directive cannot own a body\n";
+        ROSE_ABORT();
+      }
+      variant_body_statement->set_body(variant_body);
+      setOneSourcePositionForTransformation(variant_directive);
       variant_body->set_parent(variant_directive);
       if_stmt = buildIfStmt(condition_statement, variant_directive, body);
     } else {
@@ -164,15 +249,22 @@ void analyzeOmpMetadirective(SgNode *node) {
     for (unsigned int i = 1; i < clauses.size(); i++) {
       previous_if_stmt = if_stmt;
       when_clause = isSgOmpWhenClause(clauses[i]);
-      condition_expression = when_clause->get_user_condition();
+      condition_expression = requireRuntimeCondition(when_clause);
       condition_statement = buildExprStatement(condition_expression);
       variant_directive = when_clause->get_variant_directive();
-      variant_directive->set_parent(target->get_parent());
       variant_body = copyStatement(body);
-      ((SgOmpBodyStatement *)variant_directive)->set_body(variant_body);
-      setOneSourcePositionForTransformation(variant_directive);
       ROSE_ASSERT(variant_body != NULL);
       if (variant_directive) {
+        SgOmpBodyStatement *variant_body_statement =
+            isSgOmpBodyStatement(variant_directive);
+        if (variant_body_statement == nullptr) {
+          std::cerr << "REX_OMP_LOWERING_INVARIANT[metadirective]: variant "
+                       "directive cannot own a body\n";
+          ROSE_ABORT();
+        }
+        variant_directive->set_parent(target->get_parent());
+        variant_body_statement->set_body(variant_body);
+        setOneSourcePositionForTransformation(variant_directive);
         variant_body->set_parent(variant_directive);
         if_stmt = buildIfStmt(condition_statement, variant_directive, NULL);
       } else {
@@ -219,7 +311,10 @@ void normalizeOmpLoop(SgStatement *node) {
     SgOmpClause::omp_schedule_kind_enum sg_kind = s_clause->get_kind();
     if (!s_clause->get_chunk_size() &&
         scheduleKindUsesImplicitChunkOne(sg_kind)) {
-      s_clause->set_chunk_size(buildIntVal(1));
+      SgExpression *chunk_size = buildIntVal(1);
+      s_clause->set_chunk_size(chunk_size);
+      chunk_size->set_parent(s_clause);
+      SageInterface::publishGeneratedSubtreeOutputOwner(chunk_size, s_clause);
     }
   } else {
     SgOmpClause::omp_schedule_modifier_enum sg_modifier1 =
@@ -234,8 +329,8 @@ void normalizeOmpLoop(SgStatement *node) {
 
     ROSE_ASSERT(sg_clause);
     setOneSourcePositionForTransformation(sg_clause);
-    target->get_clauses().push_back(sg_clause);
-    sg_clause->set_parent(target);
+    addGeneratedOmpClause(target, sg_clause);
+    SageInterface::publishGeneratedSubtreeOutputOwner(sg_clause, target);
   }
 }
 
@@ -258,6 +353,9 @@ int patchUpPrivateVariables(SgFile *file) {
   for (Rose_STL_Container<SgNode *>::iterator nodeListIterator =
            node_list.begin();
        nodeListIterator != node_list.end(); nodeListIterator++) {
+    if (isOmpContextSelectorMetadataDirective(*nodeListIterator)) {
+      continue;
+    }
     SgStatement *omp_loop = isSgStatement(*nodeListIterator);
     ROSE_ASSERT(omp_loop != NULL);
     result += patchUpPrivateVariables(omp_loop);
@@ -268,23 +366,60 @@ int patchUpPrivateVariables(SgFile *file) {
 //! Collect threadprivate variables within the current project, return a set
 //! to avoid duplicated elements
 std::set<SgInitializedName *> collectThreadprivateVariables() {
-  // Do the actual collection only once
-  static bool calledOnce = false;
-  static set<SgInitializedName *> result;
-
-  if (calledOnce)
-    return result;
-  calledOnce = true;
+  set<SgInitializedName *> result;
   std::vector<SgOmpThreadprivateStatement *> tp_stmts =
       getSgNodeListFromMemoryPool<SgOmpThreadprivateStatement>();
   std::vector<SgOmpThreadprivateStatement *>::const_iterator c_iter;
   for (c_iter = tp_stmts.begin(); c_iter != tp_stmts.end(); c_iter++) {
     SgExpressionPtrList refs = (*c_iter)->get_variables();
     SgInitializedNamePtrList var_list; // = (*c_iter)->get_variables();
-    for (size_t j = 0; j < refs.size(); j++)
+    for (size_t j = 0; j < refs.size(); j++) {
       if (SgVarRefExp *vref = extractVarRefFromExpression(refs[j])) {
+        if (vref->get_symbol() == nullptr ||
+            vref->get_symbol()->get_declaration() == nullptr) {
+          fprintf(stderr,
+                  "REX_OMP_LOWERING_INVARIANT[threadprivate-collection]: "
+                  "variable item=%zu has no exact declaration identity\n",
+                  j);
+          ROSE_ABORT();
+        }
         var_list.push_back(vref->get_symbol()->get_declaration());
+      } else if (SgFortranCommonBlockRefExp *common =
+                     isSgFortranCommonBlockRefExp(refs[j])) {
+        validateFortranCommonBlockRef(common);
+        SgExprListExp *members =
+            common->get_common_block()->get_variable_reference_list();
+        if (members == nullptr || members->get_expressions().empty()) {
+          fprintf(stderr,
+                  "REX_OMP_LOWERING_INVARIANT[threadprivate-collection]: "
+                  "COMMON /%s/ has no exact member list\n",
+                  common->get_use_name().getString().c_str());
+          ROSE_ABORT();
+        }
+        for (SgExpression *member : members->get_expressions()) {
+          SgVarRefExp *member_ref = isSgVarRefExp(member);
+          SgVariableSymbol *member_symbol =
+              member_ref != nullptr ? member_ref->get_symbol() : nullptr;
+          if (member_symbol == nullptr ||
+              member_symbol->get_declaration() == nullptr) {
+            fprintf(stderr,
+                    "REX_OMP_LOWERING_INVARIANT[threadprivate-collection]: "
+                    "COMMON /%s/ contains a member without exact variable "
+                    "identity\n",
+                    common->get_use_name().getString().c_str());
+            ROSE_ABORT();
+          }
+          var_list.push_back(member_symbol->get_declaration());
+        }
+      } else {
+        fprintf(stderr,
+                "REX_OMP_LOWERING_INVARIANT[threadprivate-collection]: "
+                "item=%zu is %s instead of one exact variable or COMMON "
+                "reference\n",
+                j, refs[j] != nullptr ? refs[j]->sage_class_name() : "null");
+        ROSE_ABORT();
       }
+    }
     std::copy(var_list.begin(), var_list.end(),
               std::inserter(result, result.end()));
   }
@@ -509,6 +644,9 @@ int patchUpFirstprivateVariables(SgFile *file) {
       NodeQuery::querySubTree(file, V_SgOmpTaskStatement);
   Rose_STL_Container<SgNode *>::iterator iter = nodeList.begin();
   for (; iter != nodeList.end(); iter++) {
+    if (isOmpContextSelectorMetadataDirective(*iter)) {
+      continue;
+    }
     SgOmpTaskStatement *target = isSgOmpTaskStatement(*iter);
     SgScopeStatement *directive_scope = target->get_scope();
     SgStatement *body = target->get_body();
@@ -536,11 +674,14 @@ int patchUpFirstprivateVariables(SgFile *file) {
       if (SageInterface::isUseByAddressVariableRef(var_ref))
         continue;
       // Skip variables already with explicit data-sharing attributes
-      VariantVector vv(V_SgOmpDefaultClause);
+      VariantVector vv;
       vv.push_back(V_SgOmpPrivateClause);
       vv.push_back(V_SgOmpSharedClause);
       vv.push_back(V_SgOmpFirstprivateClause);
+      vv.push_back(V_SgOmpCopyinClause);
       if (isInClauseVariableList(init_var, target, vv))
+        continue;
+      if (isThreadprivate(var_ref->get_symbol()))
         continue;
       // Skip variables which are class/structure members: part of another
       // variable
@@ -572,6 +713,9 @@ int patchUpImplicitMappingVariables(SgFile *file) {
 
   Rose_STL_Container<SgNode *>::iterator iter = node_list.begin();
   for (iter = node_list.begin(); iter != node_list.end(); iter++) {
+    if (isOmpContextSelectorMetadataDirective(*iter)) {
+      continue;
+    }
     SgOmpClauseBodyStatement *target = NULL;
     target = isSgOmpClauseBodyStatement(*iter);
     SgScopeStatement *directive_scope = target->get_scope();
@@ -598,7 +742,7 @@ int patchUpImplicitMappingVariables(SgFile *file) {
         continue;
 
       // Skip variables already with explicit data-sharing attributes
-      VariantVector vv(V_SgOmpDefaultClause);
+      VariantVector vv;
       vv.push_back(V_SgOmpPrivateClause);
       vv.push_back(V_SgOmpSharedClause);
       vv.push_back(V_SgOmpFirstprivateClause);
@@ -618,9 +762,6 @@ int patchUpImplicitMappingVariables(SgFile *file) {
       ROSE_ASSERT(sym != NULL);
 
       SgOmpMapClause *map_clause = NULL;
-      std::map<SgSymbol *,
-               std::vector<std::pair<SgExpression *, SgExpression *>>>
-          array_dimensions;
       SgExprListExp *explist = NULL;
 
       if (hasClause(target, V_SgOmpMapClause)) {
@@ -638,7 +779,6 @@ int patchUpImplicitMappingVariables(SgFile *file) {
               temp_map_clause->get_operation() ==
                   SgOmpClause::e_omp_map_unknown) {
             map_clause = temp_map_clause;
-            array_dimensions = map_clause->get_array_dimensions();
             explist = map_clause->get_variables();
             break;
           }
@@ -651,8 +791,7 @@ int patchUpImplicitMappingVariables(SgFile *file) {
         map_clause = new SgOmpMapClause(explist, sg_type);
         explist->set_parent(map_clause);
         setOneSourcePositionForTransformation(map_clause);
-        map_clause->set_parent(target);
-        target->get_clauses().push_back(map_clause);
+        addGeneratedOmpClause(target, map_clause);
       }
 
       bool has_mapped = false;
@@ -668,28 +807,30 @@ int patchUpImplicitMappingVariables(SgFile *file) {
       }
 
       if (has_mapped == false) {
+        SgExpression *locator = buildVarRefExp(var_ref->get_symbol());
         SgType *orig_type = sym->get_type();
         SgArrayType *a_type = isSgArrayType(orig_type);
         if (a_type != NULL) {
-          std::vector<SgExpression *> dims = get_C_array_dimensions(a_type);
-          SgExpression *array_length = NULL;
-          for (std::vector<SgExpression *>::const_iterator iter = dims.begin();
-               iter != dims.end(); iter++) {
-            SgExpression *length_exp = *iter;
-            // TODO: get_C_array_dimensions returns one extra null expression
-            // somehow.
-            if (!isSgNullExpression(length_exp))
-              array_length = length_exp;
+          SgExpression *array_length = a_type->get_index();
+          if (array_length == nullptr ||
+              isSgNullExpression(array_length) != nullptr) {
+            fprintf(stderr,
+                    "REX_OMP_INVARIANT[implicit-map-array-bound]: array=%s "
+                    "has no exact outer bound\n",
+                    sym->get_name().getString().c_str());
+            ROSE_ABORT();
           }
-          ROSE_ASSERT(array_length != NULL);
-          SgVariableSymbol *array_symbol = var_ref->get_symbol();
-
-          SgExpression *lower_exp = buildIntVal(0);
-          array_dimensions[array_symbol].push_back(
-              std::make_pair(lower_exp, array_length));
-          map_clause->set_array_dimensions(array_dimensions);
+          locator = buildPntrArrRefExp(
+              locator,
+              buildSubscriptExpression_nfi(
+                  buildIntVal(0), copyExpression(array_length), buildIntVal(1)),
+              a_type->get_base_type());
         }
-        explist->append_expression(buildVarRefExp(var_ref->get_symbol()));
+        setSourcePositionForTransformation(locator);
+        SgOmpMapItem *map_item = new SgOmpMapItem(locator);
+        locator->set_parent(map_item);
+        setOneSourcePositionForTransformation(map_item);
+        explist->append_expression(map_item);
         markImplicitTargetMapVariable(target, init_var);
       }
       result++;
@@ -711,6 +852,9 @@ int patchUpImplicitSharedVariables(SgFile *file) {
 
   Rose_STL_Container<SgNode *>::iterator iter = node_list.begin();
   for (iter = node_list.begin(); iter != node_list.end(); iter++) {
+    if (isOmpContextSelectorMetadataDirective(*iter)) {
+      continue;
+    }
     SgOmpClauseBodyStatement *target = NULL;
     target = isSgOmpClauseBodyStatement(*iter);
     SgScopeStatement *directive_scope = target->get_scope();
@@ -737,11 +881,14 @@ int patchUpImplicitSharedVariables(SgFile *file) {
         continue;
 
       // Skip variables already with explicit data-sharing attributes
-      VariantVector vv(V_SgOmpDefaultClause);
+      VariantVector vv;
       vv.push_back(V_SgOmpPrivateClause);
       vv.push_back(V_SgOmpSharedClause);
       vv.push_back(V_SgOmpFirstprivateClause);
+      vv.push_back(V_SgOmpCopyinClause);
       if (isInClauseVariableList(init_var, target, vv))
+        continue;
+      if (isThreadprivate(var_ref->get_symbol()))
         continue;
       // Skip variables which are class/structure members: part of another
       // variable
@@ -777,6 +924,9 @@ int normalizeOmpMapVariables(SgFile *file, VariantVector clause_vv,
 
   Rose_STL_Container<SgNode *>::iterator iter;
   for (iter = node_list.begin(); iter != node_list.end(); iter++) {
+    if (isOmpContextSelectorMetadataDirective(*iter)) {
+      continue;
+    }
     SgOmpClauseBodyStatement *target = isSgOmpClauseBodyStatement(*iter);
     SgStatement *body = target->get_body();
     ROSE_ASSERT(body != NULL);
@@ -820,9 +970,12 @@ int normalizeOmpMapVariables(SgFile *file, VariantVector clause_vv,
     for (size_t i = 0; i < all_vars.size(); i++) {
       if (isInClauseVariableList(all_vars[i], target, V_SgOmpMapClause))
         continue;
-      SgVarRefExp *var_ref = buildVarRefExp(all_vars[i]);
-      explist->append_expression(var_ref);
-      var_ref->set_parent(map_clause);
+      SgVarRefExp *locator = buildVarRefExp(all_vars[i]);
+      setSourcePositionForTransformation(locator);
+      SgOmpMapItem *map_item = new SgOmpMapItem(locator);
+      locator->set_parent(map_item);
+      setOneSourcePositionForTransformation(map_item);
+      explist->append_expression(map_item);
       markImplicitTargetMapVariable(target, all_vars[i]);
       has_mapped = true;
     }
@@ -830,8 +983,7 @@ int normalizeOmpMapVariables(SgFile *file, VariantVector clause_vv,
     if (has_map_to_clause == false && has_mapped == true) {
       setOneSourcePositionForTransformation(map_clause);
       explist->set_parent(map_clause);
-      map_clause->set_parent(target);
-      target->get_clauses().push_back(map_clause);
+      addGeneratedOmpClause(target, map_clause);
     }
   }
   return result;
@@ -860,11 +1012,31 @@ bool isInOmpTargetRegion(SgStatement *node) {
 // set the parent and children of a given OpenMP executable directive node
 void setOmpRelationship(SgStatement *parent, SgStatement *child) {
   SgOmpExecStatement *omp_parent = isSgOmpExecStatement(parent);
-  ROSE_ASSERT(omp_parent != NULL);
-  SgStatementPtrList &children = omp_parent->get_omp_children();
-  children.push_back(child);
-
   SgOmpExecStatement *omp_child = isSgOmpExecStatement(child);
+  if (omp_parent == NULL || omp_child == NULL || omp_parent == omp_child ||
+      getOmpParent(child) != parent || omp_child->get_omp_parent() != NULL) {
+    fprintf(stderr,
+            "REX_OMP_INVARIANT[statement-tree-edge]: parent=%p/%s "
+            "child=%p/%s structural-parent=%p semantic-parent=%p does not "
+            "identify one fresh exact OpenMP relationship\n",
+            static_cast<void *>(parent),
+            parent != NULL ? parent->class_name().c_str() : "<null>",
+            static_cast<void *>(child),
+            child != NULL ? child->class_name().c_str() : "<null>",
+            static_cast<void *>(child != NULL ? getOmpParent(child) : NULL),
+            static_cast<void *>(omp_child != NULL ? omp_child->get_omp_parent()
+                                                  : NULL));
+    ROSE_ABORT();
+  }
+  SgStatementPtrList &children = omp_parent->get_omp_children();
+  if (std::find(children.begin(), children.end(), child) != children.end()) {
+    fprintf(stderr,
+            "REX_OMP_INVARIANT[statement-tree-edge]: parent=%p child=%p "
+            "already has a semantic child edge\n",
+            static_cast<void *>(parent), static_cast<void *>(child));
+    ROSE_ABORT();
+  }
+  children.push_back(child);
   omp_child->set_omp_parent(parent);
 }
 
@@ -883,8 +1055,71 @@ SgStatement *getOmpParent(SgStatement *node) {
 // traverse the SgNode AST and fill the information of OpenMP executable
 // directive parent and children.
 void createOmpStatementTree(SgSourceFile *file) {
+  if (file == NULL) {
+    fprintf(stderr,
+            "REX_OMP_INVARIANT[statement-tree-root]: null source file\n");
+    ROSE_ABORT();
+  }
   Rose_STL_Container<SgNode *> node_list =
       NodeQuery::querySubTree(file, V_SgOmpExecStatement);
+  node_list.erase(std::remove_if(node_list.begin(), node_list.end(),
+                                 [](const SgNode *node) {
+                                   return isOmpContextSelectorMetadataDirective(
+                                       node);
+                                 }),
+                  node_list.end());
+
+  // This routine is the sole producer of the semantic OpenMP tree. Detach both
+  // sides of every prior relationship before rebuilding from structural
+  // ownership. Some former semantic parents can already be detached from the
+  // project after lowering moved their bodies, so clearing only the attached
+  // children's back-pointers would leave stale reverse edges in those parents.
+  for (SgNode *raw_node : node_list) {
+    SgOmpExecStatement *node = isSgOmpExecStatement(raw_node);
+    if (node == NULL) {
+      fprintf(stderr,
+              "REX_OMP_INVARIANT[statement-tree-node]: query returned a "
+              "non-OpenMP executable node=%p\n",
+              static_cast<void *>(raw_node));
+      ROSE_ABORT();
+    }
+    SgStatement *old_parent = node->get_omp_parent();
+    if (old_parent != NULL) {
+      SgOmpExecStatement *old_parent_exec = isSgOmpExecStatement(old_parent);
+      if (old_parent_exec == NULL || !SgNode::isLiveNode(old_parent_exec) ||
+          std::count(old_parent_exec->get_omp_children().begin(),
+                     old_parent_exec->get_omp_children().end(), node) != 1) {
+        fprintf(stderr,
+                "REX_OMP_INVARIANT[statement-tree-detach]: node=%p has "
+                "malformed prior semantic parent=%p\n",
+                static_cast<void *>(node), static_cast<void *>(old_parent));
+        ROSE_ABORT();
+      }
+      SgStatementPtrList &old_siblings = old_parent_exec->get_omp_children();
+      old_siblings.erase(
+          std::find(old_siblings.begin(), old_siblings.end(), node));
+      node->set_omp_parent(NULL);
+    }
+  }
+
+  for (SgNode *raw_node : node_list) {
+    SgOmpExecStatement *node = isSgOmpExecStatement(raw_node);
+    ROSE_ASSERT(node != NULL);
+    for (SgStatement *old_child : node->get_omp_children()) {
+      SgOmpExecStatement *old_child_exec = isSgOmpExecStatement(old_child);
+      if (old_child_exec == NULL || !SgNode::isLiveNode(old_child_exec) ||
+          old_child_exec->get_omp_parent() != node) {
+        fprintf(stderr,
+                "REX_OMP_INVARIANT[statement-tree-detach]: node=%p has "
+                "malformed prior semantic child=%p\n",
+                static_cast<void *>(node), static_cast<void *>(old_child));
+        ROSE_ABORT();
+      }
+      old_child_exec->set_omp_parent(NULL);
+    }
+    node->get_omp_children().clear();
+  }
+
   Rose_STL_Container<SgNode *>::reverse_iterator node_list_iterator;
   for (node_list_iterator = node_list.rbegin();
        node_list_iterator != node_list.rend(); node_list_iterator++) {
@@ -894,6 +1129,44 @@ void createOmpStatementTree(SgSourceFile *file) {
       setOmpRelationship(parent, node);
     } else {
       node->set_omp_parent(parent);
+    }
+  }
+
+  for (SgNode *raw_node : node_list) {
+    SgOmpExecStatement *node = isSgOmpExecStatement(raw_node);
+    ROSE_ASSERT(node != NULL);
+    SgStatement *expected_parent = getOmpParent(node);
+    if (node->get_omp_parent() != expected_parent) {
+      fprintf(stderr,
+              "REX_OMP_INVARIANT[statement-tree-validation]: node=%p "
+              "expected-parent=%p semantic-parent=%p\n",
+              static_cast<void *>(node), static_cast<void *>(expected_parent),
+              static_cast<void *>(node->get_omp_parent()));
+      ROSE_ABORT();
+    }
+    if (expected_parent != NULL) {
+      SgOmpExecStatement *omp_parent = isSgOmpExecStatement(expected_parent);
+      ROSE_ASSERT(omp_parent != NULL);
+      if (std::count(omp_parent->get_omp_children().begin(),
+                     omp_parent->get_omp_children().end(), node) != 1) {
+        fprintf(stderr,
+                "REX_OMP_INVARIANT[statement-tree-validation]: node=%p "
+                "does not have one exact reverse child edge in parent=%p\n",
+                static_cast<void *>(node),
+                static_cast<void *>(expected_parent));
+        ROSE_ABORT();
+      }
+    }
+    for (SgStatement *child : node->get_omp_children()) {
+      SgOmpExecStatement *omp_child = isSgOmpExecStatement(child);
+      if (omp_child == NULL || omp_child->get_omp_parent() != node ||
+          getOmpParent(child) != node) {
+        fprintf(stderr,
+                "REX_OMP_INVARIANT[statement-tree-validation]: parent=%p "
+                "contains malformed child=%p\n",
+                static_cast<void *>(node), static_cast<void *>(child));
+        ROSE_ABORT();
+      }
     }
   }
 }
@@ -915,9 +1188,10 @@ void setOmpNumTeams(SgNode *node) {
   } else {
     num_teams_expression = buildIntVal(256);
     num_teams_clause = new SgOmpNumTeamsClause(num_teams_expression);
-    addOmpClause(target, num_teams_clause);
-    num_teams_clause->set_parent(target);
+    num_teams_expression->set_parent(num_teams_clause);
     setOneSourcePositionForTransformation(num_teams_clause);
+    addGeneratedOmpClause(target, num_teams_clause);
+    SageInterface::publishGeneratedSubtreeOutputOwner(num_teams_clause, target);
   }
 }
 
@@ -938,9 +1212,11 @@ void setOmpNumThreads(SgNode *node) {
   } else {
     num_threads_expression = buildIntVal(128);
     num_threads_clause = new SgOmpNumThreadsClause(num_threads_expression);
-    addOmpClause(target, num_threads_clause);
-    num_threads_clause->set_parent(target);
+    num_threads_expression->set_parent(num_threads_clause);
     setOneSourcePositionForTransformation(num_threads_clause);
+    addGeneratedOmpClause(target, num_threads_clause);
+    SageInterface::publishGeneratedSubtreeOutputOwner(num_threads_clause,
+                                                      target);
   }
 }
 
@@ -951,6 +1227,9 @@ void normalizeOmpTargetOffloadingUnits(SgFile *file) {
   Rose_STL_Container<SgNode *>::iterator iter;
   SgOmpExecStatement *parent = NULL;
   for (iter = omp_nodes.begin(); iter != omp_nodes.end(); iter++) {
+    if (isOmpContextSelectorMetadataDirective(*iter)) {
+      continue;
+    }
     SgOmpExecStatement *node = isSgOmpExecStatement(*iter);
     ROSE_ASSERT(node != NULL);
     // It doesn't need to check whether the directive is a variant because
@@ -1029,6 +1308,9 @@ void analyze_omp(SgSourceFile *file) {
       NodeQuery::querySubTree(file, loop_directive_vv);
   for (node_list_iterator = node_list.begin();
        node_list_iterator != node_list.end(); node_list_iterator++) {
+    if (isOmpContextSelectorMetadataDirective(*node_list_iterator)) {
+      continue;
+    }
     SgStatement *node = isSgStatement(*node_list_iterator);
     ROSE_ASSERT(node != NULL);
     normalizeOmpLoop(node);

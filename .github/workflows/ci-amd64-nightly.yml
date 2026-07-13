@@ -25,7 +25,7 @@ jobs:
       TARGET_PLATFORM: linux/amd64
 
     steps:
-    - name: Run core tests from prebuilt image (${{ env.TARGET_ARCH }})
+    - name: Run retained fragile tests from prebuilt image (${{ env.TARGET_ARCH }})
       if: ${{ !env.ACT }}
       run: |
         set -euo pipefail
@@ -35,14 +35,14 @@ jobs:
           bash -lc '
             set -euo pipefail
             cd /opt/rex/src
-            CTEST_JOBS="$(nproc)"
-            ctest --test-dir build \
-              -R "rex|astInterface|OMPLOWERING_RODINIA_" \
-              --output-on-failure \
-              -j"${CTEST_JOBS}"
+            python3 scripts/run_ctest_name_set.py \
+              --test-dir build \
+              --manifest tests/fragile/unparser_hardening_full.txt \
+              --include-regex "rex|astInterface|OMPLOWERING_RODINIA_" \
+              --jobs "$(nproc)"
           '
 
-    - name: Run core tests from local dev image (${{ env.TARGET_ARCH }})
+    - name: Run retained fragile tests from local dev image (${{ env.TARGET_ARCH }})
       if: ${{ env.ACT }}
       run: |
         set -euo pipefail
@@ -51,9 +51,9 @@ jobs:
           bash -lc '
             set -euo pipefail
             cd /opt/rex/src
-            CTEST_JOBS="$(nproc)"
-            ctest --test-dir build \
-              -R "rex|astInterface|OMPLOWERING_RODINIA_" \
-              --output-on-failure \
-              -j"${CTEST_JOBS}"
+            python3 scripts/run_ctest_name_set.py \
+              --test-dir build \
+              --manifest tests/fragile/unparser_hardening_full.txt \
+              --include-regex "rex|astInterface|OMPLOWERING_RODINIA_" \
+              --jobs "$(nproc)"
           '

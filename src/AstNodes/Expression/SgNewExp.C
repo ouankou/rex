@@ -3,7 +3,17 @@
 void SgNewExp::post_construction_initialization() {
   if (p_constructor_args) {
     p_constructor_args->set_parent(this);
-    p_constructor_args->set_need_paren(true);
+    // The constructor initializer owns the exact new-initializer delimiters
+    // through need_parenthesis_after_name/is_braced_initialized.  Generic
+    // expression grouping belongs on the enclosing SgNewExp (for example,
+    // `(new T())`), never on its constructor_args edge.  Setting need_paren
+    // here used to make the unparser emit `new T(())`.
+    if (p_constructor_args->get_need_paren()) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[new-constructor-source-form]: constructor "
+              "initializer cannot own generic expression parentheses\n");
+      ROSE_ABORT();
+    }
   }
 
   if (p_builtin_args) {

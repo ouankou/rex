@@ -405,7 +405,13 @@ EdgeConditionKind CFGEdge::condition() const {
     }
   } else if (isSgConditionalExp(srcNode) && srcIndex == 1) {
     SgConditionalExp *ce = isSgConditionalExp(srcNode);
-    if (ce->get_true_exp() == tgtNode) {
+    ce->validate();
+    if ((ce->get_operator_kind() ==
+             SgConditionalExp::e_conditional_operator_standard &&
+         ce->get_true_exp() == tgtNode) ||
+        (ce->get_operator_kind() ==
+             SgConditionalExp::e_conditional_operator_gnu_binary &&
+         tgtNode == ce && tgtIndex == 2)) {
       return eckTrue;
     } else if (ce->get_false_exp() == tgtNode) {
       return eckFalse;
@@ -522,6 +528,7 @@ SgExpression *CFGEdge::conditionBasedOn() const {
     return isSgComputedGotoStatement(srcNode)->get_label_index();
   } else if (isSgConditionalExp(srcNode) && srcIndex == 1) {
     SgConditionalExp *ce = isSgConditionalExp(srcNode);
+    ce->validate();
     return ce->get_conditional_exp();
   } else if (isSgAndOp(srcNode) && srcIndex == 1) {
     return isSgAndOp(srcNode)->get_lhs_operand();

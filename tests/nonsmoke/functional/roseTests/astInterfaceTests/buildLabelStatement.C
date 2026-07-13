@@ -7,6 +7,7 @@
 //-------------------------------------------------------------------
 #include "rose.h"
 
+#include <cstdlib>
 #include <string>
 using namespace SageBuilder;
 using namespace SageInterface;
@@ -14,9 +15,12 @@ using namespace SageInterface;
 int main(int argc, char *argv[]) {
   // grab the scope in which AST will be added
   SgProject *project = frontend(argc, argv);
+  if (std::getenv("REX_TEST_REJECT_NULL_LABEL_CHILD") != nullptr)
+    buildLabelStatement("invalid", nullptr);
   //------------------------------------------------
   // bottom up build, no previous knowledge of target scope
-  SgLabelStatement *label_stmt_1 = buildLabelStatement("L1");
+  SgLabelStatement *label_stmt_1 =
+      buildLabelStatement("L1", buildNullStatement());
 
   SgFunctionDefinition *funcDef = findMain(project)->get_definition();
   ROSE_ASSERT(funcDef);
@@ -25,8 +29,9 @@ int main(int argc, char *argv[]) {
   //------------------------------------------------
   // top down set implicit target scope info. in scope stack.
   pushScopeStack(body);
-  SgLabelStatement *label_stmt_2 = buildLabelStatement("L2");
-  // prependStatement (label_stmt_2);
+  SgLabelStatement *label_stmt_2 =
+      buildLabelStatement("L2", buildNullStatement());
+  // prependStatement(label_stmt_2, body);
   insertStatementAfter(label_stmt_1, label_stmt_2);
   popScopeStack();
 

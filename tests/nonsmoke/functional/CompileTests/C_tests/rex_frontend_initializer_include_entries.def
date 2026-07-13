@@ -1,0 +1,2 @@
+REX_INITIALIZER_INCLUDE_ENTRY("included-first", 11)
+REX_INITIALIZER_INCLUDE_ENTRY("included-second", 22)

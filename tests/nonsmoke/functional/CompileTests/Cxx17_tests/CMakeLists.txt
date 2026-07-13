@@ -70,11 +70,13 @@ set(CXX17_TESTCODES
   test2018_71.C
   test2018_72.C
   test2018_73.C
+  rex_exact_special_expression_result_types.cpp
+  rex_frontend_recursive_default_argument_publication.cpp
   test2018_03.C
   test2018_12.C
 )
 
-set(ROSE_FLAGS -w -rose:verbose 0 -std=c++17)
+set(ROSE_FLAGS -rose:verbose 0 -std=c++17)
 
 rex_register_compile_source_set(REX_CXX17_TESTS_SOURCES ${CXX17_TESTCODES})
 
@@ -96,3 +98,55 @@ endforeach()
 foreach(file_to_test ${CXX17_NEGATIVE_TESTCODES})
   compile_negative_test(${file_to_test} "Cxx17_tests")
 endforeach()
+
+add_executable(
+  rex_exact_special_expression_result_types_translator
+  rex_exact_special_expression_result_types_translator.cpp
+)
+target_link_libraries(
+  rex_exact_special_expression_result_types_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+add_test(
+  NAME Cxx17_tests_rex_exact_special_expression_result_types_ast_json
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND
+    $<TARGET_FILE:rex_exact_special_expression_result_types_translator>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep
+    -rex:ast-json-checkpoint=pre-omp-construction
+    -rex:ast-json-dir=rex_exact_special_expression_result_types_json
+    ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_exact_special_expression_result_types.cpp
+)
+set_tests_properties(
+  Cxx17_tests_rex_exact_special_expression_result_types_ast_json
+  PROPERTIES LABELS "Cxx17_tests;rex;CFE;ASTJSON"
+)
+rex_lock_test_for_input(
+  Cxx17_tests_rex_exact_special_expression_result_types_ast_json
+  rex_exact_special_expression_result_types.cpp
+)
+
+add_test(
+  NAME Cxx17_tests_rex_frontend_recursive_default_argument_publication_structure
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND
+    $<TARGET_FILE:rex_frontend_function_publication_contract_translator>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep -rose:skip_unparse
+    ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_recursive_default_argument_publication.cpp
+)
+set_tests_properties(
+  Cxx17_tests_rex_frontend_recursive_default_argument_publication_structure
+  PROPERTIES LABELS "Cxx17_tests;rex;CFE"
+)
+rex_lock_test_for_input(
+  Cxx17_tests_rex_frontend_recursive_default_argument_publication_structure
+  rex_frontend_recursive_default_argument_publication.cpp
+)

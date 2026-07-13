@@ -933,46 +933,6 @@ void Grammar::buildStringForProcessDataMemberReferenceToPointersSupport(
 }
 
 StringUtility::FileWithLineNumbers
-Grammar::buildStringForGetChildIndexSource(AstNodeClass &node) {
-  // DQ (3/7/2007): Added support for getting the index position associated with
-  // the list of IR nodes children in any IR node.
-
-  string isClassNameFunctionTemplateFileName =
-      "../Grammar/grammarGetChildIndex.macro";
-  StringUtility::FileWithLineNumbers returnString =
-      readFileWithPos(isClassNameFunctionTemplateFileName);
-
-  string dataMemberSpecificString = node.buildChildIndex();
-
-  returnString = GrammarString::copyEdit(returnString, "$CODE_STRING",
-                                         dataMemberSpecificString.c_str());
-  returnString =
-      GrammarString::copyEdit(returnString, "$CLASSNAME", node.getName());
-  returnString =
-      GrammarString::copyEdit(returnString, "$GRAMMAR_PREFIX_", "Sg");
-
-  return returnString;
-}
-
-void Grammar::buildStringForGetChildIndexSupport(
-    AstNodeClass &node, StringUtility::FileWithLineNumbers &outputFile) {
-  StringUtility::FileWithLineNumbers editString =
-      buildStringForGetChildIndexSource(node);
-
-  outputFile += editString;
-
-  // Call this function recursively on the children of this node in the tree
-  vector<AstNodeClass *>::iterator treeNodeIterator;
-  for (treeNodeIterator = node.subclasses.begin();
-       treeNodeIterator != node.subclasses.end(); treeNodeIterator++) {
-    ROSE_ASSERT((*treeNodeIterator) != NULL);
-    ROSE_ASSERT((*treeNodeIterator)->getBaseClass() != NULL);
-
-    buildStringForGetChildIndexSupport(**treeNodeIterator, outputFile);
-  }
-}
-
-StringUtility::FileWithLineNumbers
 Grammar::buildStringForSource(AstNodeClass &node) {
   // This function adds in the source code specific to a node in the
   // tree that represents the hierachy of the grammer's implementation.
@@ -1092,9 +1052,7 @@ bool generate_override_keyword(AstNodeClass &node, GrammarString &data) {
       (nodeName == "FunctionDeclaration" && variableNameString == "name") ||
       (nodeName == "InquireStatement" && variableNameString == "name") ||
       (nodeName == "OmpCriticalStatement" && variableNameString == "name") ||
-      (nodeName == "OmpDepobjStatement" && variableNameString == "name") ||
       (nodeName == "EnumVal" && variableNameString == "name") ||
-      (nodeName == "IOItemExpression" && variableNameString == "name") ||
       (nodeName == "AsmOp" && variableNameString == "name") ||
       (nodeName == "UnknownArrayOrFunctionReference" &&
        variableNameString == "name") ||
@@ -1170,9 +1128,7 @@ bool generate_override_keyword_for_set_functions(AstNodeClass &node,
       (nodeName == "FunctionDeclaration" && variableNameString == "name") ||
       (nodeName == "InquireStatement" && variableNameString == "name") ||
       (nodeName == "OmpCriticalStatement" && variableNameString == "name") ||
-      (nodeName == "OmpDepobjStatement" && variableNameString == "name") ||
       (nodeName == "EnumVal" && variableNameString == "name") ||
-      (nodeName == "IOItemExpression" && variableNameString == "name") ||
       (nodeName == "AsmOp" && variableNameString == "name") ||
       (nodeName == "UnknownArrayOrFunctionReference" &&
        variableNameString == "name") ||
@@ -2976,6 +2932,8 @@ void Grammar::buildCode() {
       "#ifndef $IFDEF_MARKER_H \n"
       "#define $IFDEF_MARKER_H \n\n"
       "\n"
+      "#include <memory>\n"
+      "#include <optional>\n"
       "#include <string>\n\n";
 
   string footerString = "\n\n\n#endif // ifndef IFDEF_MARKER_H \n\n\n";
@@ -3313,24 +3271,6 @@ void Grammar::buildCode() {
       getGrammarName() + "ProcessDataMemberReferenceToPointers", ".C");
 
   // --------------------------------------------
-  // generate code for getChildIndex at IR nodes
-  // --------------------------------------------
-  StringUtility::FileWithLineNumbers ROSE_GetChildIndexSourceFile;
-
-  ROSE_GetChildIndexSourceFile.push_back(
-      StringUtility::StringWithLineNumber(includeHeaderString, "", 1));
-  // Now build the source code for the terminals and non-terminals in the
-  // grammar
-  ROSE_ASSERT(rootNode != NULL);
-
-  buildStringForGetChildIndexSupport(*rootNode, ROSE_GetChildIndexSourceFile);
-  if (verbose)
-    cout << "DONE: buildStringForGetChildIndexSupport()" << endl;
-
-  Grammar::writeFile(ROSE_GetChildIndexSourceFile, target_directory,
-                     getGrammarName() + "GetChildIndex", ".C");
-
-  // --------------------------------------------
   // generate code for the copy member functions
   // --------------------------------------------
   StringUtility::FileWithLineNumbers ROSE_CopyMemberFunctionsSourceFile;
@@ -3357,6 +3297,7 @@ void Grammar::buildCode() {
   // Write header string to file (it's the same string as above, we just reuse
   // it)
   ROSE_treeTraversalFunctionsSourceFile << includeHeaderString;
+  ROSE_treeTraversalFunctionsSourceFile << "#include <set>\n\n";
 
   // DQ (12/31/2005): Insert "using namespace std;" into the source file (but
   // never into the header files!)
@@ -3385,6 +3326,7 @@ void Grammar::buildCode() {
   ROSE_ASSERT(ROSE_treeTraversalClassHeaderFile.good() == true);
   ROSE_treeTraversalClassHeaderFile
       << "// GENERATED HEADER FILE --- DO NOT MODIFY!" << endl
+      << "#include <cstddef>" << endl
       << endl;
   ROSE_treeTraversalClassHeaderFile
       << naiveTraverseGrammar(*rootNode, &Grammar::EnumStringForNode);
@@ -3503,137 +3445,13 @@ Grammar::getGrammarNodeInfo(AstNodeClass *grammarnode) {
            includeList.begin();
        stringListIterator != includeList.end(); stringListIterator++) {
     if ((*stringListIterator)->getToBeTraversed() == DEF_TRAVERSAL) {
-      string stype = typeStringOfGrammarString(*stringListIterator);
-      if (isSTLContainer(stype.c_str())) {
+      if ((*stringListIterator)->getTraversalStorage() ==
+          NODE_POINTER_CONTAINER_TRAVERSAL_MEMBER) {
         info.numContainerMembers++;
       } else {
         info.numSingleDataMembers++;
-        // GB (8/16/2007): added sanity check
-        if (info.numContainerMembers > 0) {
-          cout << "Error: in grammar tree node " << grammarnode->getName()
-               << ": single member "
-               << (*stringListIterator)->variableNameString
-               << " marked for traversal follows a container also marked "
-               << "for traversal, that's not allowed" << endl;
-          ROSE_ASSERT((info.numSingleDataMembers > 0
-                           ? info.numContainerMembers == 0
-                           : true));
-        }
       }
     }
-  }
-  if (info.numSingleDataMembers > 0 && info.numContainerMembers > 0) {
-    // GB (9/11/2007): After a discussion with Dan and Markus we decided that
-    // having both single and container members will be allowed temporarily, but
-    // only for SgVariableDeclaration. (SgTypedefDeclaration was also involved
-    // in the traversal island issue, but it does not have a container member,
-    // so we need not mention it in this code.) This has since been generalized
-    // to permit declarations with a dedicated nonreal declaration scope.
-    std::string nodeName = grammarnode->getName();
-
-    // DQ (2/7/2011): Added message to report which nodes are in violation of
-    // ROSETTA rules.
-
-    /* MS (10/8/2015): turned off the warning. This doesn't break
-     anything except the enums for synthesized attributes access. But those
-     will be removed. */
-    //   printf ("Warning: Detected node violating ROSETTA rules (some
-    //   exceptions are allowed): nodeName = %s, num-trav-datam:%d,
-    //   num-trav-container:%d\n",nodeName.c_str(),info.numSingleDataMembers,info.numContainerMembers);
-
-    // DQ (2/7/2011): Added SgExprListExp to the list so that we can support
-    // originalExpressionTree data member in SgExpression. Liao I made more
-    // exceptions for some OpenMP specific nodes for now The traversal generator
-    // has already been changed accordingly.
-    //    std::cout << "both single and container members in node " << nodeName
-    //    << std::endl;
-    auto isDerivedFrom = [](AstNodeClass *node, const std::string &base_name) {
-      for (AstNodeClass *current = node; current != nullptr;
-           current = current->getBaseClass()) {
-        if (current->getName() == base_name) {
-          return true;
-        }
-      }
-      return false;
-    };
-    bool is_declaration = isDerivedFrom(grammarnode, "SgDeclarationStatement");
-    ROSE_ASSERT(
-        is_declaration ||
-        nodeName == "SgVariableDeclaration"
-        // DQ (12/21/2011): Added exception for SgTemplateVariableDeclaration
-        // derived from SgVariableDeclaration.
-        || nodeName == "SgTemplateVariableDeclaration" ||
-        nodeName == "SgOmpExecStatement" || nodeName == "SgOmpForStatement" ||
-        nodeName == "SgOmpWhenClause" || nodeName == "SgOmpMatchClause" ||
-        nodeName == "SgOmpClauseBodyStatement" ||
-        nodeName == "SgOmpClauseStatement" ||
-        nodeName == "SgAccClauseBodyStatement" ||
-        nodeName == "SgAccClauseStatement" ||
-        nodeName == "SgAccParallelStatement" ||
-        nodeName == "SgAccParallelLoopStatement" ||
-        nodeName == "SgAccDataStatement" ||
-        nodeName == "SgAccKernelsStatement" ||
-        nodeName == "SgAccAtomicStatement" ||
-        nodeName == "SgAccEnterDataStatement" ||
-        nodeName == "SgAccExitDataStatement" ||
-        nodeName == "SgAccRoutineStatement" ||
-        nodeName == "SgAccWaitStatement" || nodeName == "SgAccCacheStatement" ||
-        nodeName == "SgOmpMetadirectiveStatement" ||
-        nodeName == "SgOmpParallelStatement" ||
-        nodeName == "SgOmpTeamsStatement" ||
-        nodeName == "SgOmpCancellationPointStatement" ||
-        nodeName == "SgOmpDeclareMapperStatement" ||
-        nodeName == "SgOmpCancelStatement" ||
-        nodeName == "SgOmpTaskgroupStatement" ||
-        nodeName == "SgOmpDispatchStatement" ||
-        nodeName == "SgOmpDepobjStatement" ||
-        nodeName == "SgOmpDistributeStatement" ||
-        nodeName == "SgOmpWorkdistributeStatement" ||
-        nodeName == "SgOmpLoopStatement" ||
-        nodeName == "SgOmpOrderedStatement" ||
-        nodeName == "SgOmpOrderedDependStatement" ||
-        nodeName == "SgOmpScanStatement" ||
-        nodeName == "SgOmpTaskloopStatement" ||
-        nodeName == "SgOmpTargetEnterDataStatement" ||
-        nodeName == "SgOmpTargetExitDataStatement" ||
-        nodeName == "SgOmpCriticalStatement" ||
-        nodeName == "SgOmpSectionsStatement" ||
-        nodeName == "SgOmpTargetStatement" ||
-        nodeName == "SgOmpTargetDataStatement" ||
-        nodeName == "SgOmpTargetParallelForStatement" ||
-        nodeName == "SgOmpTargetUpdateStatement" ||
-        nodeName == "SgOmpTargetParallelStatement" ||
-        nodeName == "SgOmpDistributeSimdStatement" ||
-        nodeName == "SgOmpDistributeParallelForStatement" ||
-        nodeName == "SgOmpDistributeParallelForSimdStatement" ||
-        nodeName == "SgOmpTaskloopSimdStatement" ||
-        nodeName == "SgOmpTargetParallelForSimdStatement" ||
-        nodeName == "SgOmpTargetParallelLoopStatement" ||
-        nodeName == "SgOmpTargetSimdStatement" ||
-        nodeName == "SgOmpTargetTeamsStatement" ||
-        nodeName == "SgOmpTargetTeamsDistributeStatement" ||
-        nodeName == "SgOmpTargetTeamsWorkdistributeStatement" ||
-        nodeName == "SgOmpTargetTeamsDistributeSimdStatement" ||
-        nodeName == "SgOmpTargetTeamsLoopStatement" ||
-        nodeName == "SgOmpTargetTeamsDistributeParallelForStatement" ||
-        nodeName == "SgOmpTargetTeamsDistributeParallelForSimdStatement" ||
-        nodeName == "SgOmpMasterTaskloopSimdStatement" ||
-        nodeName == "SgOmpParallelMasterTaskloopStatement" ||
-        nodeName == "SgOmpParallelMasterTaskloopSimdStatement" ||
-        nodeName == "SgOmpTeamsDistributeStatement" ||
-        nodeName == "SgOmpTeamsDistributeSimdStatement" ||
-        nodeName == "SgOmpTeamsDistributeParallelForStatement" ||
-        nodeName == "SgOmpTeamsDistributeParallelForSimdStatement" ||
-        nodeName == "SgOmpTeamsLoopStatement" ||
-        nodeName == "SgOmpParallelMasterStatement" ||
-        nodeName == "SgOmpMasterTaskloopStatement" ||
-        nodeName == "SgOmpParallelLoopStatement" ||
-        nodeName == "SgOmpSingleStatement" ||
-        nodeName == "SgOmpSimdStatement" || nodeName == "SgOmpTaskStatement" ||
-        nodeName == "SgOmpForSimdStatement" || nodeName == "SgOmpDoStatement" ||
-        nodeName == "SgOmpAtomicStatement" ||
-        nodeName == "SgOmpUnrollStatement" ||
-        nodeName == "SgOmpTileStatement" || nodeName == "SgExprListExp");
   }
   return info;
 }
@@ -3731,6 +3549,56 @@ string Grammar::generateRTICode(GrammarString *gs,
 //======================================================================
 // BUILD TRAVERSAL SUCCESSOR CONTAINER CREATION CODE
 //======================================================================
+namespace {
+string traversalAccessExpression(const GrammarString *member) {
+  switch (member->getTraversalAccessor()) {
+  case DIRECT_TRAVERSAL_ACCESS:
+    return "p_" + member->getVariableNameString();
+  case COMPUTED_BASE_TYPE_DECLARATION_ACCESS:
+    return "compute_baseTypeDefiningDeclaration()";
+  case COMPUTED_CLASS_DEFINITION_ACCESS:
+    return "compute_classDefinition()";
+  }
+  fprintf(stderr,
+          "REX_ROSETTA_INVARIANT[traversal-accessor]: unknown typed traversal "
+          "accessor for member %s\n",
+          member->getVariableNameString().c_str());
+  ROSE_ABORT();
+}
+
+TraversalCardinalityEnum
+effectiveTraversalCardinality(const AstNodeClass &node,
+                              const GrammarString *member) {
+  ROSE_ASSERT(member != nullptr);
+  const auto &overrides = node.getTraversalCardinalityOverrides();
+  const auto override = overrides.find(member->getVariableNameString());
+  if (member->getTraversalStorage() ==
+      NODE_POINTER_CONTAINER_TRAVERSAL_MEMBER) {
+    if (override != overrides.end()) {
+      fprintf(stderr,
+              "REX_ROSETTA_INVARIANT[traversal-cardinality-override]: node=%s "
+              "member=%s is a container traversal edge\n",
+              node.getName().c_str(), member->getVariableNameString().c_str());
+      ROSE_ABORT();
+    }
+    // Containers have dynamic cardinality; this value is never consulted by
+    // their generation path.
+    return REQUIRED_TRAVERSAL_MEMBER;
+  }
+  if (override == overrides.end()) {
+    return member->getTraversalCardinality();
+  }
+  if (member->getTraversalStorage() != NODE_POINTER_TRAVERSAL_MEMBER) {
+    fprintf(stderr,
+            "REX_ROSETTA_INVARIANT[traversal-cardinality-override]: node=%s "
+            "member=%s is not one scalar traversal edge\n",
+            node.getName().c_str(), member->getVariableNameString().c_str());
+    ROSE_ABORT();
+  }
+  return override->second;
+}
+} // namespace
+
 // MS: This method is used to write the individual tree traversal functions to
 // the specified output file. It only generates the code for creating a
 // container of successors (of AST nodes) at run time.
@@ -3767,15 +3635,22 @@ void Grammar::buildTreeTraversalFunctions(
         traverseDataMemberList.push_back(*stringListIterator);
       }
     }
-    int nonreal_index = -1;
-    for (size_t i = 0; i < traverseDataMemberList.size(); ++i) {
-      if (traverseDataMemberList[i]->getVariableNameString() ==
-          "nonreal_decl_scope") {
-        nonreal_index = static_cast<int>(i);
-        break;
+    for (const auto &overrideEntry : node.getTraversalCardinalityOverrides()) {
+      const std::string &memberName = overrideEntry.first;
+      const size_t matchingMembers = std::count_if(
+          traverseDataMemberList.begin(), traverseDataMemberList.end(),
+          [&](const GrammarString *member) {
+            return member != nullptr &&
+                   member->getVariableNameString() == memberName;
+          });
+      if (matchingMembers != 1) {
+        fprintf(stderr,
+                "REX_ROSETTA_INVARIANT[traversal-cardinality-override]: "
+                "node=%s member=%s matches %zu traversed schema edges\n",
+                node.getName().c_str(), memberName.c_str(), matchingMembers);
+        ROSE_ABORT();
       }
     }
-    bool has_nonreal_decl_scope = nonreal_index >= 0;
     // start: generate get_traversalSuccessorContainer() method
     outputFile << "vector<" << grammarPrefixName << "Node*>\n"
                << node.getName()
@@ -3796,50 +3671,12 @@ void Grammar::buildTreeTraversalFunctions(
                                                    node.getName())
           << ");\n";
     }
-    for (vector<GrammarString *>::iterator iter =
-             traverseDataMemberList.begin();
-         iter != traverseDataMemberList.end(); iter++) {
-      // GB (8/13/2007): When generating traversal successors, the right thing
-      // is almost always a call to generateTraverseSuccessor(), but there are a
-      // few cases where we need extra logic. At the moment these are the type
-      // definitions that may occur in typedef or variable declarations.
-      GrammarString *gs = *iter;
-      string nodeName = node.getName();
-      string memberVariableName = gs->getVariableNameString();
-      if (nodeName == "SgTypedefDeclaration" &&
-          memberVariableName == "declaration") {
-        outputFile << successorContainerName
-                   << ".push_back(compute_baseTypeDefiningDeclaration());\n";
-      } else if ((nodeName == "SgVariableDeclaration" ||
-                  nodeName == "SgTemplateVariableDeclaration") &&
-                 memberVariableName == "baseTypeDefiningDeclaration") {
-        outputFile << successorContainerName
-                   << ".push_back(compute_baseTypeDefiningDeclaration());\n";
-      }
-      // GB (09/26/2007): This case used to be handled by
-      // AstSuccessorsSelectors, but that's no good with the index based
-      // traversals. Only traverse a class declaration's definition member if
-      // the isForward flag is false.
-      else if ((nodeName == "SgClassDeclaration" ||
-                nodeName == "SgTemplateInstantiationDecl") &&
-               memberVariableName == "definition") {
-        outputFile << successorContainerName
-                   << ".push_back(compute_classDefinition());\n";
-      }
-      // DQ (10/12/2014): Added case to supress handling of the builtin types in
-      // the ROSE SgType IR nodes.
-      else if ((gs->getTypeNameString() == "static $CLASSNAME*") &&
-               memberVariableName == "builtin_type") {
-        outputFile << "  // suppress handling of builtin_type date members \n";
-      } else if (memberVariableName == "nonreal_decl_scope") {
-        outputFile << "if (p_nonreal_decl_scope != NULL) "
-                   << successorContainerName
-                   << ".push_back(p_nonreal_decl_scope);\n";
-      } else {
-        // normal case
-        outputFile << generateTraverseSuccessor(*iter, successorContainerName);
-      }
-    }
+    if (!traverseDataMemberList.empty())
+      outputFile << "  set<SgNode*> traversalSuccessorIdentities;\n";
+    for (GrammarString *member : traverseDataMemberList)
+      outputFile << generateTraverseSuccessor(
+          member, successorContainerName, node.getName(),
+          effectiveTraversalCardinality(node, member));
     outputFile << "return " << successorContainerName << ";\n}\n";
     // end: generate get_traversalSuccessorContainer() method
 
@@ -3847,31 +3684,26 @@ void Grammar::buildTreeTraversalFunctions(
     outputFile << "vector<string>\n"
                << node.getName()
                << "::get_traversalSuccessorNamesContainer() const {\n"
+               << "const size_t validatedSuccessorCount = "
+                  "get_traversalSuccessorContainer().size();\n"
                << "vector<string> " << successorContainerName << ";\n";
-    // GB (8/16/2007): Moved the variable i here. It is initialized to the
-    // number of single traversal successors and will be the starting index for
-    // the numbering of container successors (if any).
-    GrammarNodeInfo info = getGrammarNodeInfo(&node);
-    if (info.numContainerMembers) {
-      outputFile << "int i = "
-                 << StringUtility::numberToString(info.numSingleDataMembers)
-                 << ";\n";
-    }
+    if (!traverseDataMemberList.empty())
+      outputFile << "size_t i = 0;\n";
     for (vector<GrammarString *>::iterator iter =
              traverseDataMemberList.begin();
          iter != traverseDataMemberList.end(); iter++) {
-      GrammarString *gs = *iter;
-      string memberVariableName = gs->getVariableNameString();
-      if (memberVariableName == "nonreal_decl_scope") {
-        outputFile << "if (p_nonreal_decl_scope != NULL) "
-                   << successorContainerName
-                   << ".push_back(\"p_nonreal_decl_scope\");\n";
-      } else {
-        outputFile << generateTraverseSuccessorNames(gs,
-                                                     successorContainerName);
-      }
+      outputFile << generateTraverseSuccessorNames(
+          *iter, successorContainerName,
+          effectiveTraversalCardinality(node, *iter));
     }
-    outputFile << "return " << successorContainerName
+    outputFile << "if (" << successorContainerName
+               << ".size() != validatedSuccessorCount) {\n"
+               << "  cerr << \"REX_AST_INVARIANT[traversal-successor-names]: "
+                  "schema name count disagrees with validated successors for "
+               << node.getName() << "\" << endl;\n"
+               << "  ROSE_ABORT();\n"
+               << "}\n"
+               << "return " << successorContainerName
                << ";\n}\n"; // end of function
     // end: generate get_traversalSuccessorNamesContainer() method
 
@@ -3880,18 +3712,7 @@ void Grammar::buildTreeTraversalFunctions(
     outputFile << "size_t\n"
                << node.getName()
                << "::get_numberOfTraversalSuccessors() const {\n";
-    if (traverseDataMemberList.size() > 0) {
-      outputFile
-          << "return "
-          // DQ (9/28/2022): Fixing compiler warning for argument not used.
-          // << generateNumberOfSuccessorsComputation(traverseDataMemberList,
-          // successorContainerName)
-          << generateNumberOfSuccessorsComputation(traverseDataMemberList,
-                                                   node.getName())
-          << ";\n";
-    } else {
-      outputFile << "return 0;\n";
-    }
+    outputFile << "return get_traversalSuccessorContainer().size();\n";
     outputFile << "}\n";
     // end: generate get_numberOfTraversalSuccessors() method
 
@@ -3900,166 +3721,15 @@ void Grammar::buildTreeTraversalFunctions(
     outputFile << "SgNode *\n"
                << node.getName()
                << "::get_traversalSuccessorByIndex(size_t idx) const {\n";
-    if (has_nonreal_decl_scope) {
-      outputFile << "if (p_nonreal_decl_scope == NULL && idx >= "
-                 << StringUtility::numberToString(nonreal_index)
-                 << ") idx++;\n";
-    }
-    if (traverseDataMemberList.size() > 0) {
-      GrammarString *gs = traverseDataMemberList.front();
-      string typeString = gs->getTypeNameString();
-      int container_index = -1;
-      bool container_is_ptr = false;
-      GrammarString *container_gs = nullptr;
-      for (size_t i = 0; i < traverseDataMemberList.size(); ++i) {
-        GrammarString *member = traverseDataMemberList[i];
-        string member_type = member->getTypeNameString();
-        if (isSTLContainerPtr(member_type.c_str())) {
-          container_index = static_cast<int>(i);
-          container_is_ptr = true;
-          container_gs = member;
-          break;
-        }
-        if (isSTLContainer(member_type.c_str())) {
-          container_index = static_cast<int>(i);
-          container_is_ptr = false;
-          container_gs = member;
-          break;
-        }
-      }
-      // Exceptional case first: SgVariableDeclaration, which has a fixed member
-      // (that we compute using a special function) followed by a container. if
-      // (string(node.getName()) == "SgVariableDeclaration")
-      if (string(node.getName()) == "SgVariableDeclaration" ||
-          string(node.getName()) == "SgTemplateVariableDeclaration") {
-        outputFile << "if (idx == 0) return p_nonreal_decl_scope;\n"
-                   << "else if (idx == 1) return "
-                      "compute_baseTypeDefiningDeclaration();\n"
-                   << "else if (idx == 2) return p_requiresClause;\n"
-                   << "else return p_variables[idx-3];\n";
-      } else if (container_gs != nullptr && container_index > 0) {
-        outputFile << "if (idx < "
-                   << StringUtility::numberToString(container_index) << ") {\n"
-                   << "switch (idx) {\n";
-        vector<GrammarString *>::iterator iter;
-        size_t counter = 0;
-        for (iter = traverseDataMemberList.begin();
-             iter != traverseDataMemberList.end() &&
-             counter < static_cast<size_t>(container_index);
-             ++iter, ++counter) {
-          string memberVariableName = (*iter)->getVariableNameString();
-          if (string(node.getName()) == "SgTypedefDeclaration" &&
-              memberVariableName == "declaration") {
-            outputFile << "case " << StringUtility::numberToString(counter)
-                       << ": "
-                       << "return compute_baseTypeDefiningDeclaration();\n";
-          } else if ((string(node.getName()) == "SgClassDeclaration" ||
-                      string(node.getName()) ==
-                          "SgTemplateInstantiationDecl") &&
-                     memberVariableName == "definition") {
-            outputFile << "case " << StringUtility::numberToString(counter)
-                       << ": "
-                       << "return compute_classDefinition();\n";
-          } else {
-            outputFile << "case " << StringUtility::numberToString(counter)
-                       << ": "
-                       << "ROSE_ASSERT(p_" << memberVariableName
-                       << " == NULL || p_" << memberVariableName
-                       << " != NULL); return p_" << memberVariableName << ";\n";
-          }
-        }
-        outputFile << "default: cout << \"invalid index \" << idx << "
-                   << "\" in get_traversalSuccessorByIndex()\" << "
-                      "endl;\n"
-                   << "ROSE_ABORT();\n"
-                   << "return NULL;\n"
-                   << "}\n"
-                   << "} else {\n"
-                   << "size_t container_idx = idx - "
-                   << StringUtility::numberToString(container_index) << ";\n";
-        string memberVariableName = container_gs->getVariableNameString();
-        if (container_is_ptr) {
-          outputFile << "ROSE_ASSERT(container_idx < p_" << memberVariableName
-                     << "->size());\n"
-                     << "return (*p_" << memberVariableName
-                     << ")[container_idx];\n";
-        } else {
-          outputFile << "ROSE_ASSERT(container_idx < p_" << memberVariableName
-                     << ".size());\n"
-                     << "return p_" << memberVariableName
-                     << "[container_idx];\n";
-        }
-        outputFile << "}\n";
-      } else if (isSTLContainerPtr(typeString.c_str())) {
-        outputFile << "ROSE_ASSERT(idx < p_" << gs->getVariableNameString()
-                   << "->size());\n";
-        outputFile << "return (*p_" << gs->getVariableNameString()
-                   << ")[idx];\n";
-      } else if (isSTLContainer(typeString.c_str())) {
-        outputFile << "ROSE_ASSERT(idx < p_" << gs->getVariableNameString()
-                   << ".size());\n";
-        outputFile << "return p_" << gs->getVariableNameString() << "[idx];\n";
-      } else {
-        // Fixed members, generate a switch.
-        outputFile << "switch (idx) {\n";
-        vector<GrammarString *>::iterator iter;
-        size_t counter = 0;
-        for (iter = traverseDataMemberList.begin();
-             iter != traverseDataMemberList.end(); ++iter) {
-          string memberVariableName = (*iter)->getVariableNameString();
-          // Special case: SgTypedefDeclaration has a member that is computed
-          // using a special function.
-          if (string(node.getName()) == "SgTypedefDeclaration" &&
-              memberVariableName == "declaration") {
-            outputFile << "case " << StringUtility::numberToString(counter++)
-                       << ": "
-                       << "return compute_baseTypeDefiningDeclaration();\n";
-          }
-          // Special case: SgClassDeclaration has a member that is computed
-          // using a special function. That member is inherited by
-          // SgTemplateInstantiationDecl!
-          else if ((string(node.getName()) == "SgClassDeclaration" ||
-                    string(node.getName()) == "SgTemplateInstantiationDecl") &&
-                   memberVariableName == "definition") {
-            outputFile << "case " << StringUtility::numberToString(counter++)
-                       << ": "
-                       << "return compute_classDefinition();\n";
-          } else {
-            // DQ (4/22/2014): Added code to allow valgrind to detect
-            // unitialized variables. outputFile << "case " <<
-            // StringUtility::numberToString(counter++) << ": " << "return p_"
-            // << memberVariableName << ";\n";
-            outputFile << "case " << StringUtility::numberToString(counter++)
-                       << ": "
-                       << "ROSE_ASSERT(p_" << memberVariableName
-                       << " == NULL || p_" << memberVariableName
-                       << " != NULL); return p_" << memberVariableName << ";\n";
-          }
-        }
-        // Reaching the default case is an error.
-        outputFile << "default: cout << \"invalid index \" << idx << "
-                   << "\" in get_traversalSuccessorByIndex()\" << "
-                      "endl;\n"
-                   << "ROSE_ABORT();\n"
-                   // DQ (8/31/2009): Added return statement to avoid
-                   // legacy frontend warning when compiling ROSE with
-                   // ROSE.
-                   << "return NULL;\n";
-        // Close the switch.
-        outputFile << "}\n";
-      }
-    } else {
-      // There are no successors, so calling this function was an error.
-      // Complain.
-      outputFile << "cout << \"error: get_traversalSuccessorByIndex "
-                    "called on node of type \" << \""
-                 << node.getName()
-                 << "\" << \" that has no successors!\" << endl;\n"
-                 << "ROSE_ABORT();\n"
-                 // DQ (8/31/2009): Added return statement to avoid legacy
-                 // frontend warning when compiling ROSE with ROSE.
-                 << "return NULL;\n";
-    }
+    outputFile << "const SgNodePtrList successors = "
+                  "get_traversalSuccessorContainer();\n"
+               << "if (idx >= successors.size()) {\n"
+               << "  cerr << \"REX_AST_INVARIANT[traversal-successor-index]: "
+                  "invalid index \" << idx << \" for "
+               << node.getName() << "\" << endl;\n"
+               << "  ROSE_ABORT();\n"
+               << "}\n"
+               << "return successors[idx];\n";
     outputFile << "}\n";
     // end: generate get_traversalSuccessorByIndex() method
 
@@ -4067,173 +3737,25 @@ void Grammar::buildTreeTraversalFunctions(
     // GB (09/25/2007): Added this method.
     outputFile << "size_t\n"
                << node.getName() << "::get_childIndex(SgNode *child) const {\n";
-    if (has_nonreal_decl_scope) {
-      outputFile << "auto adjust_index = [&](size_t idx) -> size_t {\n"
-                 << "  if (idx == static_cast<size_t>(-1)) return idx;\n"
-                 << "  if (p_nonreal_decl_scope == NULL && idx > "
-                 << StringUtility::numberToString(nonreal_index)
-                 << ") return idx - 1;\n"
-                 << "  return idx;\n"
-                 << "};\n";
-    }
-    string childIndexReturnPrefix =
-        has_nonreal_decl_scope ? "return adjust_index(" : "return ";
-    string childIndexReturnSuffix = has_nonreal_decl_scope ? ");\n" : ";\n";
-    if (traverseDataMemberList.size() > 0) {
-      GrammarString *gs = traverseDataMemberList.front();
-      string typeString = gs->getTypeNameString();
-      int container_index = -1;
-      bool container_is_ptr = false;
-      GrammarString *container_gs = nullptr;
-      for (size_t i = 0; i < traverseDataMemberList.size(); ++i) {
-        GrammarString *member = traverseDataMemberList[i];
-        string member_type = member->getTypeNameString();
-        if (isSTLContainerPtr(member_type.c_str())) {
-          container_index = static_cast<int>(i);
-          container_is_ptr = true;
-          container_gs = member;
-          break;
-        }
-        if (isSTLContainer(member_type.c_str())) {
-          container_index = static_cast<int>(i);
-          container_is_ptr = false;
-          container_gs = member;
-          break;
-        }
-      }
-      // Exceptional case first: SgVariableDeclaration, which has a fixed member
-      // (that we compute using a special function) followed by a container. if
-      // (string(node.getName()) == "SgVariableDeclaration")
-      if (string(node.getName()) == "SgVariableDeclaration" ||
-          string(node.getName()) == "SgTemplateVariableDeclaration") {
-        outputFile << "if (child == p_nonreal_decl_scope) "
-                   << childIndexReturnPrefix << "0" << childIndexReturnSuffix
-                   << "else if (child == "
-                      "compute_baseTypeDefiningDeclaration()) "
-                   << childIndexReturnPrefix << "1" << childIndexReturnSuffix
-                   << "else if (child == p_requiresClause) "
-                   << childIndexReturnPrefix << "2" << childIndexReturnSuffix
-                   << "else {\n"
-                   << "SgInitializedNamePtrList::const_iterator itr = "
-                      "find(p_variables.begin(), p_variables.end(), child);\n"
-                   << "if (itr != p_variables.end()) " << childIndexReturnPrefix
-                   << "(itr - p_variables.begin()) + 3"
-                   << childIndexReturnSuffix << "else "
-                   << childIndexReturnPrefix << "(size_t) -1"
-                   << childIndexReturnSuffix << "}\n";
-      } else if (container_gs != nullptr && container_index > 0) {
-        vector<GrammarString *>::iterator iter;
-        size_t counter = 0;
-        for (iter = traverseDataMemberList.begin();
-             iter != traverseDataMemberList.end() &&
-             counter < static_cast<size_t>(container_index);
-             ++iter, ++counter) {
-          string memberVariableName = (*iter)->getVariableNameString();
-          if (string(node.getName()) == "SgTypedefDeclaration" &&
-              memberVariableName == "declaration") {
-            outputFile << "if (child == compute_baseTypeDefiningDeclaration()) "
-                       << childIndexReturnPrefix
-                       << StringUtility::numberToString(counter)
-                       << childIndexReturnSuffix << "else ";
-          } else if ((string(node.getName()) == "SgClassDeclaration" ||
-                      string(node.getName()) ==
-                          "SgTemplateInstantiationDecl") &&
-                     memberVariableName == "definition") {
-            outputFile << "if (child == compute_classDefinition()) "
-                       << childIndexReturnPrefix
-                       << StringUtility::numberToString(counter)
-                       << childIndexReturnSuffix << "else ";
-          } else {
-            outputFile << "if (child == p_" << memberVariableName << ") "
-                       << childIndexReturnPrefix
-                       << StringUtility::numberToString(counter)
-                       << childIndexReturnSuffix << "else ";
-          }
-        }
-        string memberVariableName = container_gs->getVariableNameString();
-        string begin = container_is_ptr
-                           ? "p_" + memberVariableName + "->begin()"
-                           : "p_" + memberVariableName + ".begin()";
-        string end = container_is_ptr ? "p_" + memberVariableName + "->end()"
-                                      : "p_" + memberVariableName + ".end()";
-        outputFile << "{\n"
-                   << getIteratorString(
-                          container_gs->getTypeNameString().c_str())
-                   << " itr = find(" << begin << ", " << end << ", child);\n"
-                   << "if (itr != " << end << ") " << childIndexReturnPrefix
-                   << "(itr - " << begin << ") + "
-                   << StringUtility::numberToString(container_index)
-                   << childIndexReturnSuffix << "else "
-                   << childIndexReturnPrefix << "(size_t) -1"
-                   << childIndexReturnSuffix << "}\n";
-      } else if (isSTLContainerPtr(typeString.c_str())) {
-        string memberVariableName = gs->getVariableNameString();
-        string begin = "p_" + memberVariableName + "->begin()";
-        string end = "p_" + memberVariableName + "->end()";
-        outputFile << getIteratorString(typeString.c_str()) << " itr = find("
-                   << begin << ", " << end << ", child);\n"
-                   << "if (itr != " << end << ") " << childIndexReturnPrefix
-                   << "itr - " << begin << childIndexReturnSuffix << "else "
-                   << childIndexReturnPrefix << "(size_t) -1"
-                   << childIndexReturnSuffix;
-      } else if (isSTLContainer(typeString.c_str())) {
-        string memberVariableName = gs->getVariableNameString();
-        string begin = "p_" + memberVariableName + ".begin()";
-        string end = "p_" + memberVariableName + ".end()";
-        outputFile << getIteratorString(typeString.c_str()) << " itr = find("
-                   << begin << ", " << end << ", child);\n"
-                   << "if (itr != " << end << ") " << childIndexReturnPrefix
-                   << "itr - " << begin << childIndexReturnSuffix << "else "
-                   << childIndexReturnPrefix << "(size_t) -1"
-                   << childIndexReturnSuffix;
-      } else {
-        // Fixed members, generate an if-else ladder.
-        vector<GrammarString *>::iterator iter;
-        size_t counter = 0;
-        for (iter = traverseDataMemberList.begin();
-             iter != traverseDataMemberList.end(); ++iter) {
-          string memberVariableName = (*iter)->getVariableNameString();
-          // Special case: SgTypedefDeclaration has a member that is computed
-          // using a special function.
-          if (string(node.getName()) == "SgTypedefDeclaration" &&
-              memberVariableName == "declaration") {
-            outputFile << "if (child == compute_baseTypeDefiningDeclaration()) "
-                       << childIndexReturnPrefix
-                       << StringUtility::numberToString(counter++)
-                       << childIndexReturnSuffix << "else ";
-          }
-          // Special case: SgClassDeclaration has a member that is computed
-          // using a special function.
-          if ((string(node.getName()) == "SgClassDeclaration" ||
-               string(node.getName()) == "SgTemplateInstantiationDecl") &&
-              memberVariableName == "definition") {
-            outputFile << "if (child == compute_classDefinition()) "
-                       << childIndexReturnPrefix
-                       << StringUtility::numberToString(counter++)
-                       << childIndexReturnSuffix << "else ";
-          } else {
-            outputFile << "if (child == p_" << memberVariableName << ") "
-                       << childIndexReturnPrefix
-                       << StringUtility::numberToString(counter++)
-                       << childIndexReturnSuffix << "else ";
-          }
-        }
-        // If execution reaches this point, it's not my child.
-        outputFile << childIndexReturnPrefix << "(size_t) -1"
-                   << childIndexReturnSuffix;
-      }
-    } else {
-      // There are no successors, so calling this function was an error.
-      // Complain.
-      outputFile << "cout << \"error: get_childIndex called on node of "
-                    "type \" << \""
-                 << node.getName()
-                 << "\" << \" that has no successors!\" << endl;\n"
-                 << "ROSE_ABORT();\n"
-                 // DQ (8/30/2009): Added return statement to avoid legacy
-                 // frontend warning when compiling ROSE with ROSE.
-                 << "return 0; \n";
-    }
+    outputFile
+        << "if (child == NULL) {\n"
+        << "  cerr << \"REX_AST_INVARIANT[traversal-child-index]: "
+           "null child query for "
+        << node.getName() << "\" << endl;\n"
+        << "  ROSE_ABORT();\n"
+        << "}\n"
+        << "const SgNodePtrList successors = "
+           "get_traversalSuccessorContainer();\n"
+        << "const auto childPosition = "
+           "std::find(successors.begin(), successors.end(), child);\n"
+        << "if (childPosition == successors.end()) {\n"
+        << "  cerr << \"REX_AST_INVARIANT[traversal-child-index]: "
+           "foreign child query for "
+        << node.getName() << "\" << endl;\n"
+        << "  ROSE_ABORT();\n"
+        << "}\n"
+        << "return static_cast<size_t>(std::distance(successors.begin(), "
+           "childPosition));\n";
     outputFile << "}\n";
     // end: generate get_childIndex() method
   } else {
@@ -4245,9 +3767,7 @@ void Grammar::buildTreeTraversalFunctions(
 
     outputFile << "vector<" << grammarPrefixName << "Node*>\n"
                << node.getName()
-               << "::get_traversalSuccessorContainer() const {\n"
-               << "vector<" << grammarPrefixName << "Node*> "
-               << successorContainerName << ";\n";
+               << "::get_traversalSuccessorContainer() const {\n";
     outputFile
         << "   cerr << \"Internal error(!): called tree traversal mechanism "
            "for illegal object: \" << endl\n"
@@ -4255,12 +3775,11 @@ void Grammar::buildTreeTraversalFunctions(
         << "\" << endl << \"dynamic:  \" << this->sage_class_name() << endl;\n"
         << "cerr << \"Aborting ...\" << endl;\n"
         << "ROSE_ABORT();\n"
-        << "return " << successorContainerName << ";\n }\n\n";
+        << "__builtin_unreachable();\n }\n\n";
 
     outputFile << "vector<string>\n"
                << node.getName()
-               << "::get_traversalSuccessorNamesContainer() const {\n"
-               << "vector<string> " << successorContainerName << ";\n";
+               << "::get_traversalSuccessorNamesContainer() const {\n";
     outputFile
         << "   cerr << \"Internal error(!): called tree traversal mechanism "
            "for illegal object: \" << endl\n"
@@ -4268,7 +3787,7 @@ void Grammar::buildTreeTraversalFunctions(
         << "\" << endl << \"dynamic:  \" << this->sage_class_name() << endl;\n"
         << "cerr << \"Aborting ...\" << endl;\n"
         << "ROSE_ABORT();\n"
-        << "return " << successorContainerName << ";\n }\n\n";
+        << "__builtin_unreachable();\n }\n\n";
 
     // GB (09/25/2007): Added implementations for the new methods
     // get_numberOfTraversalSuccessors, get_traversalSuccessorByIndex, and
@@ -4283,7 +3802,7 @@ void Grammar::buildTreeTraversalFunctions(
                   "this->sage_class_name() << endl;\n"
                << "cerr << \"Aborting ...\" << endl;\n"
                << "ROSE_ABORT();\n"
-               << "return 42;\n }\n\n";
+               << "__builtin_unreachable();\n }\n\n";
 
     outputFile << "SgNode*\n"
                << node.getName()
@@ -4295,7 +3814,7 @@ void Grammar::buildTreeTraversalFunctions(
         << "\" << endl << \"dynamic:  \" << this->sage_class_name() << endl;\n"
         << "cerr << \"Aborting ...\" << endl;\n"
         << "ROSE_ABORT();\n"
-        << "return NULL;\n }\n\n";
+        << "__builtin_unreachable();\n }\n\n";
 
     outputFile << "size_t\n"
                << node.getName() << "::get_childIndex(SgNode *) const {\n";
@@ -4306,7 +3825,7 @@ void Grammar::buildTreeTraversalFunctions(
         << "\" << endl << \"dynamic:  \" << this->sage_class_name() << endl;\n"
         << "cerr << \"Aborting ...\" << endl;\n"
         << "ROSE_ABORT();\n"
-        << "return 42;\n }\n\n";
+        << "__builtin_unreachable();\n }\n\n";
   }
 
   // Traverse all nodes of the grammar recursively and build the tree traversal
@@ -4326,44 +3845,11 @@ void Grammar::buildTreeTraversalFunctions(
 // traversalSuccessorContainer Code Generation //
 /////////////////////////////////////////////////
 
-// MS: 06/28/02: factored out the loop code generation
-string Grammar::generateTraverseSuccessorForLoopSource(
-    string typeString, string memberVariableName, string successorContainerName,
-    string successorContainerAccessOperator) {
-  string travSuccSource = "";
-  travSuccSource += "   {\n";
-  // Build the declaration of the STL iterator
-  travSuccSource +=
-      "     " + string(getIteratorString(typeString.c_str())) + " iter;\n";
-  // Build the loop for iterating on the container
-
-  // DQ (3/22/2007): Added error checking on pointer data members.
-  if (successorContainerAccessOperator == "->")
-    travSuccSource +=
-        "     ROSE_ASSERT(p_" + string(memberVariableName) + " != NULL);\n";
-  travSuccSource += "     for (iter = p_" + string(memberVariableName) +
-                    successorContainerAccessOperator + "begin();" +
-                    " iter != p_" + string(memberVariableName) +
-                    successorContainerAccessOperator + "end(); iter++)\n";
-
-  // Check whether the STL container contains pointers or not
-  if (typeString.find("PtrList") != string::npos ||
-      typeString.find("PtrVector") != string::npos)
-    travSuccSource +=
-        "          " + successorContainerName +
-        ".push_back(*iter);\n"; // It contains pointers to AST objects
-  else
-    travSuccSource += "          " + successorContainerName +
-                      ".push_back(&(*iter));\n"; // It contains AST objects
-  travSuccSource += "        }\n";
-  return travSuccSource;
-}
-
 // GB (8/16/2007): Generate the pre-allocation of the traversal successor
 // container. We know the size beforehand, so calling reserve saves some time
 // as it avoids repeated reallocations on push_back. The size of the container
-// is the sum of the number of single members and the size of the optional
-// container member.
+// is an upper bound: the number of scalar members plus the sizes of pointer
+// containers. Optional null scalar members may leave unused capacity.
 // DQ (9/28/2022): Fixing compiler warning for argument not used.
 // string Grammar::generateNumberOfSuccessorsComputation(
 // vector<GrammarString*>& traverseDataMemberList, string
@@ -4371,46 +3857,22 @@ string Grammar::generateTraverseSuccessorForLoopSource(
 string Grammar::generateNumberOfSuccessorsComputation(
     vector<GrammarString *> &traverseDataMemberList,
     const std::string &nodeName) {
+  static_cast<void>(nodeName);
   stringstream travSuccSource;
   if (!traverseDataMemberList.empty()) {
-    vector<GrammarString *>::iterator iter;
-    int singleSuccessors = 0, containerSuccessors = 0;
-    for (iter = traverseDataMemberList.begin();
-         iter != traverseDataMemberList.end(); ++iter) {
-      string typeString = (*iter)->getTypeNameString();
-      string memberVariableName = (*iter)->getVariableNameString();
-      if (isSTLContainerPtr(typeString)) {
-        containerSuccessors++;
-        travSuccSource << "p_" << memberVariableName << "->size() + ";
-      } else if (isSTLContainer(typeString)) {
-        containerSuccessors++;
+    int singleSuccessors = 0;
+    for (GrammarString *member : traverseDataMemberList) {
+      const string memberVariableName = member->getVariableNameString();
+      if (member->getTraversalStorage() ==
+          NODE_POINTER_CONTAINER_TRAVERSAL_MEMBER) {
         travSuccSource << "p_" << memberVariableName << ".size() + ";
-      } else if (memberVariableName == "nonreal_decl_scope") {
-        travSuccSource << "(p_nonreal_decl_scope != NULL ? 1 : 0) + ";
       } else {
         singleSuccessors++;
-        // If this is a single successor, no container may come before
-        // it as that would break the traversal successor enums.
-        if (containerSuccessors > 0) {
-          cout << "Error: traversal successor " << memberVariableName << " in "
-               << nodeName << " is preceded by a container that is also "
-               << "traversed; this is not allowed";
-          ROSE_ASSERT((singleSuccessors > 0 ? containerSuccessors == 0 : true));
-        }
-      }
-      if (containerSuccessors > 1) {
-        cout << "Error: traversal successor (" << memberVariableName << ") in "
-             << nodeName
-             << " is a container preceded by another container that is "
-             << "also traversed; this is not allowed";
-        ROSE_ASSERT(containerSuccessors <= 1);
       }
     }
 
-    // In general, the result of this function will be something like
-    // 'p_foo.size()+42' or '+23'. The + is unary or binary depending on
-    // context, no need to worry about it. It is forbidden to have more than one
-    // container.
+    // Sum all dynamic containers plus the fixed successors.  Traversal order
+    // is the schema declaration order and is independent of container count.
     travSuccSource << singleSuccessors;
   }
   return travSuccSource.str();
@@ -4418,163 +3880,109 @@ string Grammar::generateNumberOfSuccessorsComputation(
 
 // MS: 03/11/02: new TraversalMechanism
 // generate source for adding successors of a node to the successors container.
-string Grammar::generateTraverseSuccessor(GrammarString *gs,
-                                          string successorContainerName) {
-  string memberVariableName = gs->getVariableNameString();
-  string typeString = gs->getTypeNameString();
-
-  // MS: sstream should be used here in future
-  string travSuccSource = "";
-
-  if (isSTLContainerPtr(typeString)) {
-    travSuccSource += generateTraverseSuccessorForLoopSource(
-        typeString, memberVariableName, successorContainerName, "->");
-  } else {
-    if (isSTLContainer(typeString)) {
-      travSuccSource += generateTraverseSuccessorForLoopSource(
-          typeString, memberVariableName, successorContainerName, ".");
-    } else {
-      // ***********************************************************************
-      // The data member to be visited is not a container (it is a single
-      // object)
-      // ***********************************************************************
-      // Check if the data member has a pointer type in which case
-      // we need the "->" operator. Otherwise we need the "." operator
-      if (typeString.find('*') != string::npos) {
-        travSuccSource += successorContainerName + ".push_back(p_" +
-                          memberVariableName +
-                          ");\n"; // It is a pointer to an AST object
-      } else {
-        // Does this ever occur?
-        travSuccSource += successorContainerName + ".push_back(&p_" +
-                          memberVariableName + ");\n"; // It is an AST object
-      }
-    }
+string Grammar::generateTraverseSuccessor(
+    GrammarString *gs, string successorContainerName, const string &nodeName,
+    TraversalCardinalityEnum cardinality) {
+  const string memberName = gs->getVariableNameString();
+  const string expression = traversalAccessExpression(gs);
+  const string successorName = "traversalSuccessor_" + memberName;
+  const string identityCheck =
+      "if (!traversalSuccessorIdentities.insert(" + successorName +
+      ").second) {\n"
+      "  cerr << \"REX_AST_INVARIANT[traversal-duplicate-successor]: "
+      "duplicate successor identity in " +
+      nodeName + ".p_" + memberName +
+      "\" << endl;\n"
+      "  ROSE_ABORT();\n"
+      "}\n";
+  if (gs->getTraversalStorage() == NODE_POINTER_CONTAINER_TRAVERSAL_MEMBER) {
+    return "for (auto *" + successorName + " : p_" + memberName +
+           ") {\n"
+           "if (" +
+           successorName +
+           " == NULL) {\n"
+           "  cerr << \"REX_AST_INVARIANT[traversal-null-"
+           "successor]: null successor in " +
+           nodeName + ".p_" + memberName +
+           "\" << endl;\n"
+           "  ROSE_ABORT();\n"
+           "}\n" +
+           identityCheck + "  " + successorContainerName + ".push_back(" +
+           successorName + ");\n}\n";
   }
-
-  return travSuccSource;
-}
-
-// -------------------------------------------------------------------------------------
-// generate a container with Names of the traversed members for a better output
-// (DOT/PDF)
-// -------------------------------------------------------------------------------------
-// MS: 06/28/02
-string Grammar::generateTraverseSuccessorNamesForLoopSource(
-    string typeString, string memberVariableName, string successorContainerName,
-    string successorContainerAccessOperator) {
-  string travSuccSource = "";
-  travSuccSource += "   {\n";
-  // Build the declaration of the STL iterator
-  travSuccSource +=
-      "     " + string(getIteratorString(typeString.c_str())) + "  iter;\n";
-  // GB (8/16/2007): Moved this declaration up to the beginning of the
-  // function because we do not necessarily want to count from 0, depending on
-  // the other members.
-  // travSuccSource += "  int i=0;\n";
-
-  // Build the loop for iterating on the container
-  // DQ (3/22/2007): Added error checking on pointer data members.
-  if (successorContainerAccessOperator == "->")
-    travSuccSource +=
-        "     ROSE_ASSERT(p_" + string(memberVariableName) + " != NULL);\n";
-  travSuccSource += "     for (iter = p_" + string(memberVariableName) +
-                    successorContainerAccessOperator + "begin();" +
-                    " iter != p_" + string(memberVariableName) +
-                    successorContainerAccessOperator +
-                    "end(); (iter++,i++)) {\n";
-
-  // Check whether the STL container contains pointers or not
-  travSuccSource += "char buf[20];\n";
-  if (typeString.find("PtrList") != string::npos ||
-      typeString.find("PtrVector") != string::npos) {
-    travSuccSource +=
-        "snprintf(buf,sizeof(buf),\"*[%d]\",i);\n"; // pointers are represented
-                                                    // as '*'
-    travSuccSource +=
-        successorContainerName +
-        ".push_back(buf);\n"; // It contains pointers to AST objects
-  } else {
-    travSuccSource += "snprintf(buf,sizeof(buf),\"[%d]\",i);\n";
-    travSuccSource += successorContainerName +
-                      ".push_back(buf);\n"; // It contains AST objects
+  if (cardinality == OPTIONAL_TRAVERSAL_MEMBER) {
+    return "auto *const " + successorName + " = " + expression +
+           ";\n"
+           "if (" +
+           successorName + " != NULL) {\n" + identityCheck + "  " +
+           successorContainerName + ".push_back(" + successorName + ");\n}\n";
   }
-
-  travSuccSource += "        }\n   }\n";
-  return travSuccSource;
+  return "auto *const " + successorName + " = " + expression +
+         ";\n"
+         "if (" +
+         successorName +
+         " == NULL) {\n"
+         "  cerr << \"REX_AST_INVARIANT[traversal-required-"
+         "successor]: required successor " +
+         nodeName + ".p_" + memberName +
+         " is null\" << endl;\n"
+         "  ROSE_ABORT();\n"
+         "}\n" +
+         identityCheck + successorContainerName + ".push_back(" +
+         successorName + ");\n";
 }
 
 // MS: 06/28/02:
 // generate source for adding successor names of a node to the successornames
 // container.
-string Grammar::generateTraverseSuccessorNames(GrammarString *gs,
-                                               string successorContainerName) {
-  string memberVariableName = gs->getVariableNameString();
-  string typeString = gs->getTypeNameString();
-
-  // MS: sstream should be used here in future
-  string travSuccSource = "";
-  if (isSTLContainerPtr(typeString)) {
-    travSuccSource = generateTraverseSuccessorNamesForLoopSource(
-        typeString, memberVariableName, successorContainerName, "->");
-  } else if (isSTLContainer(typeString)) {
-    travSuccSource = generateTraverseSuccessorNamesForLoopSource(
-        typeString, memberVariableName, successorContainerName, ".");
-  } else {
-    // ***********************************************************************
-    // The data member to be visited is not a container (it is a single object)
-    // ***********************************************************************
-    // Check if the data member has a pointer type in which case
-    // we need the "->" operator. Otherwise we need the "." operator
-    if (typeString.find('*') != string::npos) {
-      travSuccSource = successorContainerName + ".push_back(\"p_" +
-                       memberVariableName +
-                       "\");\n"; // It is a pointer to an AST object
-    } else {
-      // Does this ever occur?
-      travSuccSource = successorContainerName + ".push_back(\"&p_" +
-                       memberVariableName + "\");\n"; // It is an AST object
-    }
+string
+Grammar::generateTraverseSuccessorNames(GrammarString *gs,
+                                        string successorContainerName,
+                                        TraversalCardinalityEnum cardinality) {
+  const string memberName = gs->getVariableNameString();
+  if (gs->getTraversalStorage() == NODE_POINTER_CONTAINER_TRAVERSAL_MEMBER) {
+    return "for (size_t member_index = 0; member_index < p_" + memberName +
+           ".size(); ++member_index, ++i) {\n"
+           "  char buf[64];\n"
+           "  snprintf(buf, sizeof(buf), \"*[%zu]\", i);\n  " +
+           successorContainerName + ".push_back(buf);\n}\n";
   }
-  return travSuccSource;
+  const string statement =
+      successorContainerName + ".push_back(\"p_" + memberName + "\"); ++i;\n";
+  if (cardinality == OPTIONAL_TRAVERSAL_MEMBER)
+    return "if (" + traversalAccessExpression(gs) + " != NULL) {\n  " +
+           statement + "}\n";
+  return statement;
 }
 
 void Grammar::buildEnumForNode(AstNodeClass &node, string &allEnumsString) {
-  GrammarNodeInfo info = getGrammarNodeInfo(&node);
-  // GB (8/16/2007): The distinction between container and non-container nodes
-  // has been dropped, and so has this code. Instead, we now generate enums
-  // even for nodes that contain containers; the enum for the container member
-  // is then the index of the first element of that container, which is neat!
-  // It also means that we can only allow at most one container per node,
-  // since the enums for further containers would not correspond to their
-  // first elements.
-  if (info.numContainerMembers > 1) {
-    cout << "Error: grammar node (" << node.getName()
-         << ") has more than one container member" << endl;
-    ROSE_ASSERT(info.numContainerMembers <= 1);
+  vector<GrammarString *> fixedPrefix;
+  for (GrammarString *member : classMemberIncludeList(node)) {
+    if (member->getToBeTraversed() != DEF_TRAVERSAL)
+      continue;
+    if (member->getTraversalStorage() ==
+            NODE_POINTER_CONTAINER_TRAVERSAL_MEMBER ||
+        effectiveTraversalCardinality(node, member) ==
+            OPTIONAL_TRAVERSAL_MEMBER)
+      break;
+    fixedPrefix.push_back(member);
   }
+  if (fixedPrefix.empty())
+    return;
 
-  vector<GrammarString *> includeList = classMemberIncludeList(node);
-  vector<GrammarString *>::iterator stringListIterator;
-  if (!includeList.empty()) {
-    bool isFirst = true;
-    for (stringListIterator = includeList.begin();
-         stringListIterator != includeList.end(); stringListIterator++) {
-      if ((*stringListIterator)->getToBeTraversed() == DEF_TRAVERSAL) {
-        if (isFirst) {
-          allEnumsString += string("enum E_") + node.getName() + " \n{\n";
-        } else {
-          allEnumsString += ", ";
-        }
-        isFirst = false;
-        allEnumsString += string(node.getName()) + "_" +
-                          (*stringListIterator)->getVariableNameString();
-      }
-    }
-    if (!isFirst) {
-      allEnumsString += "};\n";
-    }
+  const string enumName = "E_" + node.getName();
+  allEnumsString += "enum class " + enumName + " : std::size_t\n{\n";
+  for (size_t i = 0; i < fixedPrefix.size(); ++i) {
+    if (i != 0)
+      allEnumsString += ", ";
+    allEnumsString +=
+        node.getName() + "_" + fixedPrefix[i]->getVariableNameString();
   }
+  allEnumsString += "\n};\n";
+  allEnumsString += "static constexpr std::size_t rosettaTraversalIndex(" +
+                    enumName +
+                    " member) noexcept\n{\n  return "
+                    "static_cast<std::size_t>(member);\n}\n";
 }
 
 string Grammar::EnumStringForNode(AstNodeClass &node, string s) {
@@ -4667,37 +4075,6 @@ vector<GrammarString *> Grammar::classMemberIncludeList(AstNodeClass &node) {
 // treat several classes as special cases ...
 bool Grammar::isAstObject(AstNodeClass &node) {
   return node.getCanHaveInstances();
-}
-
-// MK: We need this function to determine if the object
-// is a pointer to an STL container
-bool Grammar::isSTLContainerPtr(const string &typeString) {
-  return typeString.size() >= 3 &&
-         typeString.substr(typeString.size() - 3) == "Ptr" &&
-         isSTLContainer(typeString.substr(0, typeString.size() - 3));
-}
-
-// MK: We need this function to determine if the object
-// is an STL container
-bool Grammar::isSTLContainer(const string &typeString) {
-  if (typeString.size() >= 4 &&
-      typeString.substr(typeString.size() - 4) == "List")
-    return true;
-  if (typeString.size() >= 9 &&
-      typeString.substr(typeString.size() - 9) == "BitVector")
-    return false;
-  if (typeString.size() >= 6 &&
-      typeString.substr(typeString.size() - 6) == "Vector")
-    return true;
-  return false;
-}
-
-string Grammar::getIteratorString(const string &typeString) {
-  string ts = typeString;
-  if (ts.size() >= 3 && ts.substr(ts.size() - 3) == "Ptr") {
-    ts = ts.substr(0, ts.size() - 3);
-  }
-  return ts + "::const_iterator";
 }
 
 AstNodeClass *lookupTerminal(const vector<AstNodeClass *> &tl,

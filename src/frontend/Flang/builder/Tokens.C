@@ -7,6 +7,8 @@
 
 #include "Tokens.h"
 
+#include "ROSE_ABORT.h"
+
 #include <iostream>
 
 #include <sstream>
@@ -16,30 +18,22 @@ namespace builder {
 
 TokenStream::TokenStream(std::istringstream &is) {
   std::vector<std::string> row(6);
-  int error = 0;
 
   while (is.peek() != std::istream::traits_type::eof()) {
     // Read type and line,column information
     for (int i = 0; i < 5; i++) {
       row[i].clear(); // clear old string
-      if ((error = getTokenElement(is, row[i])) < 0)
-        break;
+      getTokenElement(is, row[i]);
     }
 
     // Read lexeme
+    row[5].clear();
     TokenKind type = static_cast<TK>(std::stoi(row[0]));
-    if (!error && type == TokenKind::comment) {
-      row[5].clear(); // clear old string
-      error = getTokenComment(is, row[5]);
+    if (type == TokenKind::comment) {
+      getTokenComment(is, row[5]);
     }
 
-    if (!error) {
-      // Append the token
-      tokens_.emplace_back(Token{row});
-    } else {
-      std::cerr << "TokenStream:: WARNING, error occurred, skipping row\n";
-      break;
-    }
+    tokens_.emplace_back(Token{row});
   }
   next_ = 0;
 }
@@ -47,47 +41,50 @@ TokenStream::TokenStream(std::istringstream &is) {
 TokenStream::TokenStream(std::vector<Token> tokens)
     : tokens_(std::move(tokens)), next_(0) {}
 
-int TokenStream::getTokenElement(std::istream &is, std::string &word) {
+void TokenStream::getTokenElement(std::istream &is, std::string &word) {
   char c;
 
   while (is.get(c)) {
     if (c != ',')
       word.append(1, c);
     else
-      return 0; // success
+      return;
   }
-  std::cerr
-      << "TokenStream::getTokenElement: WARNING, error finding token element\n";
-  return 1; // failure
+  std::cerr << "REX_FLANG_INVARIANT[token-stream-element]: unterminated "
+               "token row"
+            << std::endl;
+  ROSE_ABORT();
 }
 
-int TokenStream::getTokenComment(std::istream &is, std::string &comment) {
+void TokenStream::getTokenComment(std::istream &is, std::string &comment) {
   char c, terminal;
-  int error = 1;
 
   // Get comment terminal (percent or quote).
-  if (is.get(terminal)) {
-    if (terminal == '%' || terminal == '"') {
-      comment.append(1, terminal);
-    }
-    error = 0;
+  if (!is.get(terminal) || (terminal != '%' && terminal != '"')) {
+    std::cerr << "REX_FLANG_INVARIANT[token-stream-comment]: missing percent "
+                 "or quote delimiter"
+              << std::endl;
+    ROSE_ABORT();
   }
+  comment.append(1, terminal);
 
-  if (!error) {
-    while (is.get(c)) {
-      comment.append(1, c);
-      if (c == terminal && is.get(c)) {
-        if (c == '\n')
-          return 0; // success
+  while (is.get(c)) {
+    comment.append(1, c);
+    if (c == terminal) {
+      if (!is.get(c) || c != '\n') {
+        std::cerr << "REX_FLANG_INVARIANT[token-stream-comment]: closing "
+                     "delimiter is not followed by a newline"
+                  << std::endl;
+        ROSE_ABORT();
       }
+      return;
     }
   }
 
-  // Report an error
-  std::cerr << "TokenStream::getTokenComment: WARNING, error finding comment, "
-               "lexeme will be empty\n";
-  comment.clear();
-  return 1; // failure
+  std::cerr << "REX_FLANG_INVARIANT[token-stream-comment]: unterminated "
+               "comment lexeme"
+            << std::endl;
+  ROSE_ABORT();
 }
 
 std::ostream &operator<<(std::ostream &os, const Token &tk) {

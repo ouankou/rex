@@ -3,6 +3,18 @@ add_executable(copyExample copyExample.C)
 target_link_libraries(copyExample ROSE_DLL ${CMAKE_THREAD_LIBS_INIT})
 add_executable(copyLoops copyLoops.C)
 target_link_libraries(copyLoops ROSE_DLL ${CMAKE_THREAD_LIBS_INIT})
+add_executable(rex_copy_located_end_contract
+               rex_copy_located_end_contract.cpp)
+target_link_libraries(rex_copy_located_end_contract
+                      ROSE_DLL ${CMAKE_THREAD_LIBS_INIT})
+add_executable(rex_copy_explicit_scope_contract
+               rex_copy_explicit_scope_contract.cpp)
+target_link_libraries(rex_copy_explicit_scope_contract
+                      ROSE_DLL ${CMAKE_THREAD_LIBS_INIT})
+add_executable(rex_copy_structural_ownership_contract
+               rex_copy_structural_ownership_contract.cpp)
+target_link_libraries(rex_copy_structural_ownership_contract
+                      ROSE_DLL ${CMAKE_THREAD_LIBS_INIT})
 add_executable(copyBlocks copyBlocks.C)
 target_link_libraries(copyBlocks ROSE_DLL ${CMAKE_THREAD_LIBS_INIT})
 add_executable(copyFunctionDefinitions copyFunctionDefinitions.C)
@@ -24,6 +36,11 @@ install(TARGETS copyExample copyLoops copyBlocks copyFunctionDefinitions DESTINA
     copytest2014_01.C copytest2014_02.C copyExampleInput.C)
 
   set(COPYAST_CXX_TESTCODES
+    rex_frontend_declaration_scope_contract.cpp
+    rex_frontend_implicit_control_flow_scope.cpp
+    rex_frontend_new_initializer_source_form.cpp
+    rex_frontend_explicit_instantiation_identity.cpp
+    rex_frontend_function_explicit_instantiation_identity.cpp
     test_CplusplusMacro_Cpp.C test2001_01.C test2001_02.C test2001_03.C
     test2001_04.C test2001_05.C test2001_06.C test2001_07.C test2001_08.C
     test2001_09.C test2001_10.C test2001_14.C test2001_15.C test2001_17.C
@@ -198,7 +215,7 @@ if(NOT REX_COPYAST_HOST_IS_X86)
   list(REMOVE_ITEM _copyast_additional_cxx_tests ${COPYAST_CXX_TESTCODES_X86_ONLY})
 endif()
 
-set(ROSE_FLAGS  -rose:verbose 0 )
+set(ROSE_FLAGS -rose:verbose 0 -std=gnu++14)
 
 set(ROSE_TEST_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/rose_output)
 file(MAKE_DIRECTORY ${ROSE_TEST_OUTPUT_DIR})
@@ -222,6 +239,154 @@ add_test(
           -c ${CMAKE_CURRENT_SOURCE_DIR}/copytest2007_60.C
 )
 set_tests_properties(copyAST_copyLoops PROPERTIES LABELS COPYASTTEST)
+
+add_test(
+  NAME copyAST_rex_copy_located_end_contract
+  COMMAND rex_copy_located_end_contract)
+set_tests_properties(
+  copyAST_rex_copy_located_end_contract
+  PROPERTIES LABELS "COPYASTTEST;rex")
+
+add_test(
+  NAME copyAST_rex_missing_located_end_is_rejected
+  COMMAND ${BASH_EXECUTABLE} -c
+    "ulimit -c 0; log=copyAST_rex_missing_located_end_is_rejected.log; rm -f \"\$log\"; set +e; \"\$@\" >\"\$log\" 2>&1; status=\$?; set -e; test \"\$status\" -eq 134; test \"\$(grep -Ec '^REX_COPY_INVARIANT\\[located-end-position\\]: source=0x[[:xdigit:]]+/SgNullStatement has no endOfConstruct$' \"\$log\")\" -eq 1"
+    dummy
+    $<TARGET_FILE:rex_copy_located_end_contract>
+    --reject-missing-end-position)
+set_tests_properties(
+  copyAST_rex_missing_located_end_is_rejected
+  PROPERTIES LABELS "COPYASTTEST;rex;death")
+
+add_test(
+  NAME copyAST_rex_nondefining_class_definition_is_rejected
+  COMMAND ${BASH_EXECUTABLE} -c
+    "ulimit -c 0; log=copyAST_rex_nondefining_class_definition_is_rejected.log; rm -f \"\$log\"; set +e; \"\$@\" >\"\$log\" 2>&1; status=\$?; set -e; test \"\$status\" -eq 134; test \"\$(grep -Ec '^REX_COPY_INVARIANT\\[class-definition-owner\\]: definition=0x[[:xdigit:]]+ parent=0x[[:xdigit:]]+/SgClassDeclaration parent-definition=0x[[:xdigit:]]+ defining-declaration=\\(nil\\)$' \"\$log\")\" -eq 1"
+    dummy
+    $<TARGET_FILE:rex_copy_located_end_contract>
+    --reject-nondefining-class-definition)
+set_tests_properties(
+  copyAST_rex_nondefining_class_definition_is_rejected
+  PROPERTIES LABELS "COPYASTTEST;rex;death")
+
+add_test(
+  NAME copyAST_rex_external_explicit_scope_identity
+  COMMAND
+    rex_copy_explicit_scope_contract
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_copy_explicit_scope_contract_input.cpp)
+set_tests_properties(
+  copyAST_rex_external_explicit_scope_identity
+  PROPERTIES LABELS "COPYASTTEST;rex")
+
+add_test(
+  NAME copyAST_rex_internal_missing_explicit_scope_map_is_rejected
+  COMMAND ${BASH_EXECUTABLE} -c
+    "ulimit -c 0; log=copyAST_rex_internal_missing_explicit_scope_map_is_rejected.log; rm -f \"\$log\"; set +e; \"\$@\" >\"\$log\" 2>&1; status=\$?; set -e; test \"\$status\" -eq 134; test \"\$(grep -Ec '^REX_COPY_INVARIANT\\[semantic-edge-external\\]: relation=explicit-declaration-scope source=0x[[:xdigit:]]+/SgFunctionDefinition copy-edge=0x[[:xdigit:]]+/SgFunctionDefinition mapped=\\(nil\\) inside-transaction=1$' \"\$log\")\" -eq 1"
+    dummy
+    $<TARGET_FILE:rex_copy_explicit_scope_contract>
+    --reject-internal-missing-scope-map
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_copy_explicit_scope_contract_input.cpp)
+set_tests_properties(
+  copyAST_rex_internal_missing_explicit_scope_map_is_rejected
+  PROPERTIES LABELS "COPYASTTEST;rex;death")
+
+add_test(
+  NAME copyAST_rex_structural_ownership_contract
+  COMMAND
+    rex_copy_structural_ownership_contract
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_copy_structural_ownership_contract_input.cpp)
+set_tests_properties(
+  copyAST_rex_structural_ownership_contract
+  PROPERTIES LABELS "COPYASTTEST;rex")
+
+add_test(
+  NAME copyAST_rex_detached_function_parameter_list_contract
+  COMMAND
+    rex_copy_structural_ownership_contract
+    --validate-detached-parameter-list
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_copy_structural_ownership_contract_input.cpp)
+set_tests_properties(
+  copyAST_rex_detached_function_parameter_list_contract
+  PROPERTIES LABELS "COPYASTTEST;rex")
+
+add_test(
+  NAME copyAST_rex_function_owner_cycle_copy_contract
+  COMMAND
+    rex_copy_structural_ownership_contract
+    --validate-function-owner-cycle
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_copy_structural_ownership_contract_input.cpp)
+set_tests_properties(
+  copyAST_rex_function_owner_cycle_copy_contract
+  PROPERTIES LABELS "COPYASTTEST;rex")
+
+add_test(
+  NAME copyAST_rex_template_default_type_copy_contract
+  COMMAND
+    rex_copy_structural_ownership_contract
+    --validate-template-default-type
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_copy_structural_ownership_contract_input.cpp)
+set_tests_properties(
+  copyAST_rex_template_default_type_copy_contract
+  PROPERTIES LABELS "COPYASTTEST;rex")
+
+add_test(
+  NAME copyAST_rex_separate_file_catch_scope_contract
+  COMMAND
+    rex_copy_structural_ownership_contract
+    --validate-separate-file-catch
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_copy_structural_ownership_contract_input.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_copy_separate_file_catch_contract_target.cpp)
+set_tests_properties(
+  copyAST_rex_separate_file_catch_scope_contract
+  PROPERTIES LABELS "COPYASTTEST;rex")
+
+set(_copyast_structural_invalid_modes
+  reject-template-semantic-edge
+  reject-missing-owned-scope
+  reject-catch-semantic-edge)
+set(_copyast_structural_invalid_diagnostics
+  "^REX_COPY_INVARIANT\\[semantic-edge-remap\\]: relation=template-parameter-declaration source=0x[[:xdigit:]]+/SgTemplateDeclaration provisional=\\(nil\\)/<null> expected=0x[[:xdigit:]]+/SgTemplateDeclaration$"
+  "^REX_COPY_INVARIANT\\[owned-declaration-scope-null\\]: context=owned-nonreal-declaration-scope original=0x[[:xdigit:]]+/SgTemplateClassDeclaration scope=0x[[:xdigit:]]+ copy=0x[[:xdigit:]]+/SgTemplateClassDeclaration scope=\\(nil\\)$"
+  "^REX_COPY_INVARIANT\\[semantic-edge-remap\\]: relation=catch-handler-try source=0x[[:xdigit:]]+/SgTryStmt provisional=\\(nil\\)/<null> expected=0x[[:xdigit:]]+/SgTryStmt$")
+list(LENGTH _copyast_structural_invalid_modes
+  _copyast_structural_invalid_mode_count)
+list(LENGTH _copyast_structural_invalid_diagnostics
+  _copyast_structural_invalid_diagnostic_count)
+if(NOT _copyast_structural_invalid_mode_count EQUAL
+   _copyast_structural_invalid_diagnostic_count)
+  message(FATAL_ERROR
+    "Copy structural hard-contract tables have different lengths")
+endif()
+math(EXPR _copyast_structural_invalid_last
+  "${_copyast_structural_invalid_mode_count} - 1")
+foreach(_copyast_structural_invalid_index
+        RANGE ${_copyast_structural_invalid_last})
+  list(GET _copyast_structural_invalid_modes
+    ${_copyast_structural_invalid_index} _mode)
+  list(GET _copyast_structural_invalid_diagnostics
+    ${_copyast_structural_invalid_index} _diagnostic)
+  string(REPLACE "-" "_" _suffix "${_mode}")
+  add_test(
+    NAME copyAST_rex_structural_${_suffix}_is_rejected
+    COMMAND ${BASH_EXECUTABLE} -c
+      "ulimit -c 0; log=copyAST_rex_structural_${_suffix}_is_rejected.log; rm -f \"\$log\"; set +e; \"\$@\" >\"\$log\" 2>&1; status=\$?; set -e; test \"\$status\" -eq 134; test \"\$(grep -Ec '${_diagnostic}' \"\$log\")\" -eq 1"
+      dummy
+      $<TARGET_FILE:rex_copy_structural_ownership_contract>
+      --${_mode}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_copy_structural_ownership_contract_input.cpp)
+  set_tests_properties(
+    copyAST_rex_structural_${_suffix}_is_rejected
+    PROPERTIES LABELS "COPYASTTEST;rex;death")
+endforeach()
+unset(_copyast_structural_invalid_modes)
+unset(_copyast_structural_invalid_diagnostics)
+unset(_copyast_structural_invalid_mode_count)
+unset(_copyast_structural_invalid_diagnostic_count)
+unset(_copyast_structural_invalid_last)
+unset(_copyast_structural_invalid_index)
+unset(_mode)
+unset(_diagnostic)
+unset(_suffix)
 
 add_test(
   NAME copyAST_copyBlocks

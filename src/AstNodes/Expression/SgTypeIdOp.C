@@ -1,28 +1,17 @@
 #include "sage3basic.h"
 
 SgType *SgTypeIdOp::get_type() const {
-
-  // get_type on SgTypeIdOp must always return a const reference to
-  // "std::type_info"
-
-  // The result type is stored explicitly at construction time.
-  SgType *returnType = get_expression_type();
-  ROSE_ASSERT(returnType && "SgTypeIdOp expression_type is NULL");
-
-  SgReferenceType *refType = isSgReferenceType(returnType);
-  SgType *baseType = (refType != NULL) ? refType->get_base_type() : returnType;
-  if (!SageInterface::isConstType(baseType)) {
-    baseType = SageBuilder::buildConstType(baseType);
-    ROSE_ASSERT(baseType);
+  SgType *resultType = get_expression_type();
+  SgReferenceType *referenceType = isSgReferenceType(resultType);
+  if (referenceType == nullptr || referenceType->get_base_type() == nullptr ||
+      !SageInterface::isConstType(referenceType->get_base_type()) ||
+      isSgTypeUnknown(resultType) != nullptr ||
+      isSgTypeDefault(resultType) != nullptr) {
+    std::cerr << "REX_AST_INVARIANT[typeid-result-type]: typeid expression "
+                 "must store its exact const reference result type\n";
+    ROSE_ABORT();
   }
-
-  if (refType == NULL || baseType != refType->get_base_type()) {
-    SgReferenceType *constRefType = SageBuilder::buildReferenceType(baseType);
-    ROSE_ASSERT(constRefType);
-    return constRefType;
-  }
-
-  return returnType;
+  return resultType;
 }
 
 // DQ (6/11/2015): Moved these six access functions, they should not be

@@ -34,9 +34,22 @@ using namespace std;
 ofstream ofile;
 
 // a helper function
-string toString(SgVarRefExp *ref) {
+string toString(const SageInterface::VariableReferenceUse &use,
+                SgSourceFile *sourceFile) {
+  SgVarRefExp *ref = use.reference();
+  ROSE_ASSERT(ref != NULL);
+  ROSE_ASSERT(sourceFile != NULL);
+  ROSE_ASSERT(ref->get_symbol() != NULL);
+  SgInitializedName *declaration = ref->get_symbol()->get_declaration();
+  ROSE_ASSERT(declaration != NULL);
+  SgStatement *useSite = use.statement();
+  ROSE_ASSERT(useSite != NULL);
+  SgUnparse_Info info;
+  info.set_current_source_file(sourceFile);
+  info.set_template_argument_qualification_context(useSite);
+  info.set_reference_node_for_qualification(ref);
   string ret;
-  ret += ref->unparseToString();
+  ret += ref->unparseToString(&info);
   ret += "@";
   ret += std::to_string(ref->get_file_info()->get_line());
   ret += ":";
@@ -65,7 +78,7 @@ int main(int argc, char *argv[]) {
 
   // our tests only use one single file for now.
   SgFilePtrList fl = project->get_files();
-  SgFile *firstfile = fl[0];
+  SgSourceFile *firstfile = isSgSourceFile(fl[0]);
   ROSE_ASSERT(firstfile != NULL);
 
   string filename =
@@ -106,17 +119,17 @@ int main(int argc, char *argv[]) {
     //  annotations query pointers for aliasing info. find all variable
     //  references  set1 ,  query mutual relation out put the pair if true
     //  relation is found.
-    std::vector<SgVarRefExp *> refs;
-    SageInterface::collectVarRefs(body, refs);
+    std::vector<SageInterface::VariableReferenceUse> uses;
+    SageInterface::collectVariableReferenceUses(body, uses);
 
-    for (size_t i = 0; i < refs.size(); i++)
-      for (size_t j = 0; j < refs.size(); j++) {
+    for (size_t i = 0; i < uses.size(); i++)
+      for (size_t j = 0; j < uses.size(); j++) {
         if (i >= j)
           continue; // only need to enumerate half.
         // we want to test what will happen if ref1 == ref2
         SgVarRefExp *ref1, *ref2;
-        ref1 = refs[i];
-        ref2 = refs[j];
+        ref1 = uses[i].reference();
+        ref2 = uses[j].reference();
         // skip references to the same variable
         if (ref1->get_symbol() == ref2->get_symbol())
           continue;
@@ -124,9 +137,11 @@ int main(int argc, char *argv[]) {
         AstNodePtr node1 = AstNodePtrImpl(ref1);
         AstNodePtr node2 = AstNodePtrImpl(ref2);
         if (array_interface.may_alias(fa, node1, node2))
-          ofile << toString(ref1) << " <--> " << toString(ref2) << endl;
+          ofile << toString(uses[i], firstfile) << " <--> "
+                << toString(uses[j], firstfile) << endl;
         else
-          ofile << toString(ref1) << " No Aliasing  " << toString(ref2) << endl;
+          ofile << toString(uses[i], firstfile) << " No Aliasing  "
+                << toString(uses[j], firstfile) << endl;
       }
   }
 

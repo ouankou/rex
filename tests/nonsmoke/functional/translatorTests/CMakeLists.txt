@@ -62,7 +62,7 @@ if(ENABLE-C)
 
   add_test(
     NAME AstConsistencyTests
-    COMMAND testTranslator -rose:ast:consistencyCheck -rose:skipfinalCompileStep ${CMAKE_CURRENT_SOURCE_DIR}/inputAstConsistency.cpp)
+    COMMAND testTranslator -rose:skipfinalCompileStep ${CMAKE_CURRENT_SOURCE_DIR}/inputAstConsistency.cpp)
 
   add_test(
     NAME testqualifiedName

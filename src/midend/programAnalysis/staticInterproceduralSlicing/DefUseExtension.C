@@ -128,6 +128,13 @@ bool calcUseDefs(SgNode *node, bool getDef, bool getIndirect) {
   bool isVariable = true;
   finished = isSgStatement(parent);
   while (!finished) {
+    if (parent == NULL) {
+      fprintf(stderr,
+              "REX_SLICING_INVARIANT[def-use-parent-chain]: var-ref=%p "
+              "reached a null parent before an enclosing statement\n",
+              static_cast<void *>(node));
+      ROSE_ABORT();
+    }
     //      cout <<"\t"<<depth<<": "<<parent->unparseToString()<<endl;
     if (isAssignmentExpr(parent) &&
         isSgBinaryOp(parent)->get_lhs_operand() == current) {
@@ -139,7 +146,9 @@ bool calcUseDefs(SgNode *node, bool getDef, bool getIndirect) {
     }
     // where in the -> or . op are we
     else if (isSgDotExp(parent) || isSgArrowExp(parent)) {
-      if (isSgBinaryOp(node->get_parent())->get_lhs_operand() == current) {
+      SgBinaryOp *memberAccess = isSgBinaryOp(parent);
+      ROSE_ASSERT(memberAccess != NULL);
+      if (memberAccess->get_lhs_operand() == current) {
         indirect |= true;
       } else {
         isVariable = false;
@@ -148,7 +157,9 @@ bool calcUseDefs(SgNode *node, bool getDef, bool getIndirect) {
     }
     // array deref op a[]
     else if (isSgPntrArrRefExp(parent)) {
-      if (isSgBinaryOp(node->get_parent())->get_lhs_operand() == current) {
+      SgBinaryOp *subscript = isSgBinaryOp(parent);
+      ROSE_ASSERT(subscript != NULL);
+      if (subscript->get_lhs_operand() == current) {
         indirect |= true;
       } else {
         use[indirect] = true;

@@ -28,15 +28,15 @@ bash "${script_dir}/run_translate_only.sh" "${translator}" "${input_file}" \
 
 grep -Fq '__arg_num = 0;' "${rose_file}" || \
   fail "missing dynamic mapper argument counting"
-grep -Fq '__rex_mapper_section_index_0 < (int64_t )n' "${rose_file}" || \
+grep -Eq '__rex_mapper_section_index_0 < \(long[[:space:]]*\)n' "${rose_file}" || \
   fail "missing mapper element-expansion loop over runtime section length"
-grep -Fq '&v[0 + (long long )__rex_mapper_section_index_0].len' "${rose_file}" || \
+grep -Eq '&v\[0 \+ \(long long[[:space:]]*\)__rex_mapper_section_index_0\]\.len' "${rose_file}" || \
   fail "missing lowered mapper member address for per-element expansion"
-grep -Fq 'v[0 + (long long )__rex_mapper_section_index_0].data + 0' "${rose_file}" || \
+grep -Eq 'v\[0 \+ \(long long[[:space:]]*\)__rex_mapper_section_index_0\]\.data;' "${rose_file}" || \
   fail "missing lowered mapper data expansion for per-element section mapping"
-grep -Fq 'sizeof(float ) * v[0 + (long long )__rex_mapper_section_index_0].len' "${rose_file}" || \
+grep -Eq 'sizeof\(float[[:space:]]*\) \* v\[0 \+ \(long long[[:space:]]*\)__rex_mapper_section_index_0\]\.len' "${rose_file}" || \
   fail "missing lowered mapper-derived per-element array size expression"
-grep -Fq 'malloc(sizeof(void *) * __arg_num)' "${rose_file}" || \
+grep -Eq 'malloc\(sizeof\(void[[:space:]]*\*[[:space:]]*\)[[:space:]]*\*[[:space:]]*__arg_num\)' "${rose_file}" || \
   fail "missing dynamic mapper runtime argument allocation"
 
 if grep -Fq 'void *__args[] = {v};' "${rose_file}"; then

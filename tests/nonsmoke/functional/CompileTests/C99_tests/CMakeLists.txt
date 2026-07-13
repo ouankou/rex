@@ -26,12 +26,11 @@ set(files_to_test
 )
 
 set(negative_files
-  complex_01.c
   complex_02.c
 )
 list(REMOVE_ITEM files_to_test ${negative_files})
 
-set(ROSE_FLAGS -rose:verbose 0 -rose:C99  -w )
+set(ROSE_FLAGS -rose:verbose 0 -std=gnu99 -w)
 
 rex_register_compile_source_set(REX_C99_TESTS_SOURCES
   ${files_to_test}

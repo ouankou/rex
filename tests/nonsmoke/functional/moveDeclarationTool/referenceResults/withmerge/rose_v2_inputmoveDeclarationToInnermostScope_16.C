@@ -8,4 +8,3 @@ void foobar(int e) {
     int d = 1;
   }
 }
-

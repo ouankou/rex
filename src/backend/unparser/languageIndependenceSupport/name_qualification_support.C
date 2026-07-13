@@ -5,6 +5,9 @@
 
 #include "unparser.h"
 
+#include <algorithm>
+#include <optional>
+
 using namespace std;
 
 namespace {
@@ -29,198 +32,166 @@ referencedDeclarationForTemplateArgument(const SgTemplateArgument *arg) {
   }
 }
 
-SgScopeStatement *
-scopeForTemplateArgumentQualification(SgDeclarationStatement *declaration) {
-  if (declaration == NULL) {
-    return NULL;
-  }
-
-  SgScopeStatement *scope = declaration->get_scope();
-  ASSERT_not_null(scope);
-
-  SgNonrealDecl *nrdecl = isSgNonrealDecl(declaration);
-  while (nrdecl != NULL) {
-    if (nrdecl->get_is_template_param()) {
-      SgScopeStatement *param_scope = nrdecl->get_scope();
-      if (SgDeclarationScope *decl_scope = isSgDeclarationScope(param_scope)) {
-        scope = decl_scope;
-      } else {
-        scope = param_scope;
-      }
-      ASSERT_not_null(scope);
-      break;
+std::optional<bool>
+exactSourceTypeElaboration(const SgNode *constReferenceNode) {
+  SgNode *referenceNode = const_cast<SgNode *>(constReferenceNode);
+  if (SgFunctionDeclaration *function =
+          isSgFunctionDeclaration(referenceNode)) {
+    const auto sourceKind = function->get_source_return_type_elaboration_kind();
+    if (sourceKind ==
+        SgFunctionDeclaration::e_source_return_type_elaboration_unspecified) {
+      return std::nullopt;
     }
-
-    if (nrdecl->get_templateDeclaration() == NULL) {
-      SgDeclarationScope *decl_scope =
-          isSgDeclarationScope(nrdecl->get_scope());
-      if (decl_scope == NULL) {
-        scope = nrdecl->get_scope();
-        ASSERT_not_null(scope);
-        break;
-      }
-
-      SgNode *decl_scope_parent = decl_scope->get_parent();
-      ASSERT_not_null(decl_scope_parent);
-
-      if (SgNonrealDecl *nr_parent = isSgNonrealDecl(decl_scope_parent)) {
-        ROSE_ASSERT(nr_parent != nrdecl);
-        nrdecl = nr_parent;
-      } else {
-        SgScopeStatement *parent_scope = isSgScopeStatement(decl_scope_parent);
-        if (parent_scope == NULL) {
-          parent_scope = SageInterface::getEnclosingScope(decl_scope_parent);
-        }
-        ASSERT_not_null(parent_scope);
-        scope = parent_scope;
-        break;
-      }
-    } else {
-      scope = nrdecl->get_templateDeclaration()->get_scope();
-      ASSERT_not_null(scope);
-      break;
+    const bool expected =
+        sourceKind !=
+        SgFunctionDeclaration::e_source_return_type_elaboration_none;
+    const bool payload =
+        function->get_type_elaboration_required_for_return_type();
+    if (payload != expected) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[function-return-source-type]: "
+              "function=%p/%s source-kind=%d contradicts its typed boolean "
+              "payload=%d\n",
+              static_cast<void *>(function), function->get_name().str(),
+              static_cast<int>(sourceKind), payload ? 1 : 0);
+      ROSE_ABORT();
     }
+    return expected;
   }
 
-  return scope;
-}
-
-std::string
-nameForTemplateArgumentQualificationScope(SgScopeStatement *scope,
-                                          SgScopeStatement *&next_scope) {
-  if (scope == NULL) {
-    next_scope = NULL;
-    return "";
+  SgNonrealDecl::source_elaboration_kind_enum sourceKind =
+      SgNonrealDecl::e_source_elaboration_unspecified;
+  bool payload = false;
+  bool ownsSourceKind = false;
+  if (SgCastExp *cast = isSgCastExp(referenceNode)) {
+    sourceKind = cast->get_source_type_elaboration_kind();
+    payload = cast->get_type_elaboration_required();
+    ownsSourceKind = true;
+  } else if (SgConstructorInitializer *constructor =
+                 isSgConstructorInitializer(referenceNode)) {
+    sourceKind = constructor->get_source_type_elaboration_kind();
+    payload = constructor->get_type_elaboration_required();
+    ownsSourceKind = true;
+  } else if (SgSizeOfOp *sizeofOperation = isSgSizeOfOp(referenceNode)) {
+    sourceKind = sizeofOperation->get_source_type_elaboration_kind();
+    payload = sizeofOperation->get_type_elaboration_required();
+    ownsSourceKind = true;
+  } else if (SgAlignOfOp *alignofOperation = isSgAlignOfOp(referenceNode)) {
+    sourceKind = alignofOperation->get_source_type_elaboration_kind();
+    payload = alignofOperation->get_type_elaboration_required();
+    ownsSourceKind = true;
+  }
+  if (!ownsSourceKind ||
+      sourceKind == SgNonrealDecl::e_source_elaboration_unspecified) {
+    return std::nullopt;
   }
 
-  next_scope = scope->get_scope();
-  std::string scope_name;
-
-  if (SgDeclarationScope *decl_scope = isSgDeclarationScope(scope)) {
-    if (SgNonrealDecl *nrdecl = isSgNonrealDecl(scope->get_parent())) {
-      SgName nonreal_name = nrdecl->get_name();
-      if (!nrdecl->get_tpl_args().empty()) {
-        nonreal_name = SageBuilder::appendTemplateArgumentsToName(
-            nonreal_name, nrdecl->get_tpl_args());
-      }
-      scope_name = nonreal_name.getString();
-      if (SgScopeStatement *nr_scope = nrdecl->get_scope()) {
-        next_scope = nr_scope;
-      }
-    } else if (next_scope == NULL) {
-      next_scope = SageInterface::getEnclosingScope(scope);
-    }
-  } else if (SgNamespaceDefinitionStatement *ns_def =
-                 isSgNamespaceDefinitionStatement(scope)) {
-    SgNamespaceDeclarationStatement *ns_decl =
-        ns_def->get_namespaceDeclaration();
-    ASSERT_not_null(ns_decl);
-    if (!ns_decl->get_isUnnamedNamespace()) {
-      scope_name = ns_decl->get_name().getString();
-    }
-  } else if (SgTemplateInstantiationDefn *inst_def =
-                 isSgTemplateInstantiationDefn(scope)) {
-    SgTemplateInstantiationDecl *inst_decl =
-        isSgTemplateInstantiationDecl(inst_def->get_declaration());
-    ASSERT_not_null(inst_decl);
-    scope_name = inst_decl->get_name().getString();
-  } else if (SgTemplateClassDefinition *template_def =
-                 isSgTemplateClassDefinition(scope)) {
-    SgTemplateClassDeclaration *template_decl = template_def->get_declaration();
-    ASSERT_not_null(template_decl);
-    scope_name = template_decl->get_name().getString();
-  } else if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
-    SgClassDeclaration *class_decl = class_def->get_declaration();
-    ASSERT_not_null(class_decl);
-    if (!class_decl->get_isUnNamed()) {
-      scope_name = class_decl->get_name().getString();
-    }
-  } else if (isSgGlobal(scope) == NULL) {
-    scope_name = SageInterface::get_name(scope);
+  const bool expected = sourceKind != SgNonrealDecl::e_source_elaboration_none;
+  if (payload != expected) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[source-type-elaboration]: reference=%p/%s "
+            "source-kind=%d contradicts its typed boolean payload=%d\n",
+            static_cast<void *>(referenceNode),
+            referenceNode->class_name().c_str(), static_cast<int>(sourceKind),
+            payload ? 1 : 0);
+    ROSE_ABORT();
   }
-
-  if (scope_name == "undefined_name") {
-    scope_name.clear();
-  }
-
-  if (scope_name.rfind("__anonymous_0x", 0) == 0) {
-    scope_name.clear();
-  }
-
-  if (scope_name.rfind("0x", 0) == 0 && isSgGlobal(scope) == NULL) {
-    scope_name.clear();
-  }
-
-  return scope_name;
-}
-
-SgName synthesizeTemplateArgumentQualifier(SgTemplateArgument *arg) {
-  if (arg == NULL) {
-    return SgName();
-  }
-
-  int qualification_length = arg->get_name_qualification_length_for_type();
-  bool global_qualification = arg->get_global_qualification_required_for_type();
-
-  if (qualification_length <= 0 && !global_qualification) {
-    qualification_length = arg->get_name_qualification_length();
-    global_qualification = arg->get_global_qualification_required();
-  }
-
-  if (qualification_length <= 0 && !global_qualification) {
-    return SgName();
-  }
-
-  SgDeclarationStatement *declaration =
-      referencedDeclarationForTemplateArgument(arg);
-  if (declaration == NULL) {
-    return SgName();
-  }
-
-  SgScopeStatement *scope = scopeForTemplateArgumentQualification(declaration);
-  if (scope == NULL) {
-    return SgName();
-  }
-
-  std::vector<std::string> components;
-  while (scope != NULL &&
-         static_cast<int>(components.size()) < qualification_length) {
-    if (isSgGlobal(scope) != NULL) {
-      break;
-    }
-
-    SgScopeStatement *next_scope = NULL;
-    std::string scope_name =
-        nameForTemplateArgumentQualificationScope(scope, next_scope);
-    if (!scope_name.empty()) {
-      components.push_back(scope_name);
-    }
-
-    if (next_scope == scope) {
-      break;
-    }
-    scope = next_scope;
-  }
-
-  if (components.empty() && !global_qualification) {
-    return SgName();
-  }
-
-  std::string qualifier;
-  if (global_qualification) {
-    qualifier = "::";
-  }
-
-  for (std::vector<std::string>::reverse_iterator i = components.rbegin();
-       i != components.rend(); ++i) {
-    qualifier += *i;
-    qualifier += "::";
-  }
-
-  return SgName(qualifier);
+  return expected;
 }
 
 } // namespace
+
+SgStatement *
+exactQualificationUseSiteForEmission(const SgNode *node,
+                                     SgStatement *emissionStatement) {
+  ASSERT_not_null(node);
+
+  auto normalizeSemanticDeclaratorState =
+      [](SgStatement *statement) -> SgStatement * {
+    SgVariableDefinition *definition = isSgVariableDefinition(statement);
+    if (definition == nullptr) {
+      return statement;
+    }
+    SgInitializedName *name = isSgInitializedName(definition->get_parent());
+    SgVariableDeclaration *declaration =
+        name != nullptr ? isSgVariableDeclaration(name->get_parent()) : nullptr;
+    if (name == nullptr || name->get_definition() != definition ||
+        declaration == nullptr ||
+        std::count(declaration->get_variables().begin(),
+                   declaration->get_variables().end(), name) != 1) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[qualification-emission-owner]: "
+              "variable-definition=%p has no exact emitting declaration\n",
+              static_cast<void *>(definition));
+      ROSE_ABORT();
+    }
+    return declaration;
+  };
+
+  auto isSemanticOnlyDeclaration = [](const SgStatement *statement) {
+    const SgDeclarationStatement *declaration =
+        isSgDeclarationStatement(const_cast<SgStatement *>(statement));
+    if (declaration == nullptr) {
+      return false;
+    }
+    if (isSgAuxiliaryDeclarationList(declaration->get_parent()) != nullptr) {
+      return true;
+    }
+    return isSgNonrealDecl(const_cast<SgDeclarationStatement *>(declaration)) !=
+               nullptr &&
+           isSgDeclarationScope(declaration->get_parent()) != nullptr;
+  };
+
+  SgStatement *structuralStatement = isSgStatement(const_cast<SgNode *>(node));
+  if (structuralStatement == nullptr) {
+    structuralStatement =
+        SageInterface::getEnclosingStatement(const_cast<SgNode *>(node));
+  }
+  structuralStatement = normalizeSemanticDeclaratorState(structuralStatement);
+  emissionStatement = normalizeSemanticDeclaratorState(emissionStatement);
+
+  if (isSgStatement(const_cast<SgNode *>(node)) != nullptr &&
+      structuralStatement != nullptr &&
+      !isSemanticOnlyDeclaration(structuralStatement)) {
+    return structuralStatement;
+  }
+
+  // Expressions are exclusively owned syntax nodes unless their statement
+  // owner is explicitly semantic-only.  Other qualification reference nodes
+  // (base-class edges, template arguments, function-type positions, and
+  // initialized names) are emitted by the statement carried in the unparse
+  // context rather than by their structural support-node parent.
+  if (isSgExpression(const_cast<SgNode *>(node)) != nullptr &&
+      structuralStatement != nullptr &&
+      !isSemanticOnlyDeclaration(structuralStatement)) {
+    return structuralStatement;
+  }
+
+  if (emissionStatement != nullptr &&
+      !isSemanticOnlyDeclaration(emissionStatement) &&
+      emissionStatement != structuralStatement) {
+    return emissionStatement;
+  }
+
+  if (structuralStatement != nullptr &&
+      !isSemanticOnlyDeclaration(structuralStatement)) {
+    return structuralStatement;
+  }
+
+  fprintf(stderr,
+          "REX_UNPARSE_INVARIANT[contextual-name-qualification]: node=%p/%s "
+          "structural-statement=%p/%s emission-statement=%p/%s has no exact "
+          "source emission use site\n",
+          static_cast<const void *>(node), node->class_name().c_str(),
+          static_cast<void *>(structuralStatement),
+          structuralStatement != nullptr
+              ? structuralStatement->class_name().c_str()
+              : "<null>",
+          static_cast<void *>(emissionStatement),
+          emissionStatement != nullptr ? emissionStatement->class_name().c_str()
+                                       : "<null>");
+  ROSE_ABORT();
+}
 
 // DQ (5/11/2011): New name qualification for ROSE (the 4th try).
 // This is a part of a rewrite of the name qualification support in ROSE with
@@ -239,202 +210,559 @@ SgName synthesizeTemplateArgumentQualifier(SgTemplateArgument *arg) {
 //    No, this works,
 //       but might not generate the minimum length qualified name.
 
-SgName Unparser_Nameq::lookup_generated_qualified_name(SgNode *referencedNode) {
-  // These are all of the types of IR nodes that can reference anything that is
-  // qualified. It is a longer list than I expected (or designed for initially),
-  // but still not unreasonable.
+void NameQualificationContext::clear() {
+  qualifications.clear();
+  nameChannelQualifications.clear();
+  typeChannelQualifications.clear();
+  pointerMemberBaseQualifications.clear();
+}
 
-  SgName nameQualifier;
-
-  if (referencedNode == NULL) {
-    // DQ (6/25/2011): This is the case of the using the unparseToString()
-    // function.  Our more sophisticated name qualification support is not
-    // possible to support in this case (because we don;'t have the scope from
-    // which to compute the qualified name) and so a fully qualified name is
-    // generated by default.
-
-    // printf ("Note that info.set_reference_node_for_qualification(SgNode*)
-    // should have been called before calling this function. \n"); DQ
-    // (6/23/2011): This test fails this assertion:
-    // tests/nonsmoke/functional/roseTests/programAnalysisTests/testCallGraphAnalysis/test3.C
-    // but allow it to pass as a test.
-    // printf ("WARNING: referencedNode in
-    // Unparser_Nameq::lookup_generated_qualified_name() should be a valid
-    // pointer! \n");
-    return nameQualifier;
+void NameQualificationContext::recordChannel(
+    std::map<Key, NameQualificationResult> &channel, const char *channelName,
+    const SgNode *node, const SgStatement *useSiteStatement,
+    const NameQualificationResult &result) {
+  ASSERT_not_null(channelName);
+  ASSERT_not_null(node);
+  ASSERT_not_null(useSiteStatement);
+  const Key key(node, useSiteStatement);
+  auto existing = channel.find(key);
+  if (existing == channel.end()) {
+    channel.emplace(key, result);
+    return;
   }
-  ASSERT_not_null(referencedNode);
-
-  // TV (10/24/2018): (ROSE-1399) unparsing template from AST requires to
-  // namequal expressions in template arguments
-  SgExpression *expr = isSgExpression(referencedNode);
-  if (expr != NULL) {
-    nameQualifier = expr->get_qualified_name_prefix_for_referenced_type();
-    return nameQualifier;
-  }
-
-  switch (referencedNode->variantT()) {
-  case V_SgInitializedName: {
-    SgInitializedName *initializedName = isSgInitializedName(referencedNode);
-    nameQualifier = initializedName->get_qualified_name_prefix_for_type();
-    break;
-  }
-
-    // DQ (12/29/2011): Added cases for new template IR nodes.
-  case V_SgTemplateFunctionDeclaration:
-  case V_SgTemplateMemberFunctionDeclaration:
-
-  case V_SgFunctionDeclaration:
-  case V_SgMemberFunctionDeclaration:
-  case V_SgTemplateInstantiationFunctionDecl:
-  case V_SgTemplateInstantiationMemberFunctionDecl: {
-    SgFunctionDeclaration *node = isSgFunctionDeclaration(referencedNode);
-    nameQualifier = node->get_qualified_name_prefix_for_return_type();
-    break;
-  }
-
-    // DQ (11/3/2014): Added support for templated typedef (part of C++11
-    // support).
-  case V_SgTemplateTypedefDeclaration:
-  case V_SgTemplateInstantiationTypedefDeclaration:
-  case V_SgTypedefDeclaration: {
-    SgTypedefDeclaration *node = isSgTypedefDeclaration(referencedNode);
-    nameQualifier = node->get_qualified_name_prefix_for_base_type();
-    break;
-  }
-
-    // DQ (2/18/2019): Adding support for name qualification of enum declaration
-    // in typedef declarations (and SgClassDeclaration,
-    // SgTemplateInstantiationDecl).
-  case V_SgTemplateInstantiationDecl:
-  case V_SgClassDeclaration:
-  case V_SgEnumDeclaration: {
-    // SgEnumDeclaration* node = isSgEnumDeclaration(referencedNode);
-    SgDeclarationStatement *node = isSgDeclarationStatement(referencedNode);
-    // DQ (2/18/2019): If this works then we might want to generate an
-    // associated get_qualified_name_prefix_for_base_type() function for the
-    // SgEnumDeclaration. nameQualifier =
-    // node->get_qualified_name_prefix_for_base_type();
-
-    // std::map<SgNode*,std::string>::iterator i =
-    // SgNode::get_globalQualifiedNameMapForTypes().find(const_cast<SgTypedefDeclaration*>(this));
-    // std::map<SgNode*,std::string>::iterator i =
-    // SgNode::get_globalQualifiedNameMapForTypes().find(node);
-    // std::map<SgNode*,std::string>::iterator i =
-    // SgNode::get_qualifiedNameMapForNames().find(node);
-    SgUnorderedMapNodeToString::iterator i =
-        SgNode::get_globalQualifiedNameMapForNames().find(node);
-
-    // if (i != SgNode::get_globalQualifiedNameMapForTypes().end())
-    if (i != SgNode::get_globalQualifiedNameMapForNames().end()) {
-      // DQ (2/22/2019): Added assertion.
-      ROSE_ASSERT(node == i->first);
-
-      nameQualifier = i->second;
-    } else {
+  if (existing->second.qualifier != result.qualifier ||
+      existing->second.length != result.length ||
+      existing->second.global != result.global ||
+      existing->second.typeElaboration != result.typeElaboration) {
+    fprintf(
+        stderr,
+        "REX_UNPARSE_INVARIANT[contextual-name-qualification]: %s "
+        "channel has conflicting records for node=%p/%s use-site=%p/%s "
+        "existing=(qualifier='%s',length=%d,global=%d,elaboration=%d) "
+        "new=(qualifier='%s',length=%d,global=%d,elaboration=%d)\n",
+        channelName, static_cast<const void *>(node),
+        node->class_name().c_str(), static_cast<const void *>(useSiteStatement),
+        useSiteStatement->class_name().c_str(),
+        existing->second.qualifier.c_str(), existing->second.length,
+        existing->second.global ? 1 : 0,
+        existing->second.typeElaboration ? 1 : 0, result.qualifier.c_str(),
+        result.length, result.global ? 1 : 0, result.typeElaboration ? 1 : 0);
+    if (const SgVarRefExp *reference =
+            isSgVarRefExp(const_cast<SgNode *>(node))) {
+      SgVariableSymbol *symbol = reference->get_symbol();
+      SgInitializedName *declaration =
+          symbol != nullptr ? symbol->get_declaration() : nullptr;
+      Sg_File_Info *referenceInfo = reference->get_file_info();
+      Sg_File_Info *useInfo = useSiteStatement->get_file_info();
+      fprintf(
+          stderr,
+          "REX_UNPARSE_INVARIANT[contextual-name-qualification-detail]: "
+          "variable=%s reference-source=%s:%d:%d parent=%p/%s "
+          "declaration=%p parent=%p/%s scope=%p/%s "
+          "use-source=%s:%d:%d\n",
+          symbol != nullptr ? symbol->get_name().str() : "<null>",
+          referenceInfo != nullptr ? referenceInfo->get_filenameString().c_str()
+                                   : "<unknown>",
+          referenceInfo != nullptr ? referenceInfo->get_line() : -1,
+          referenceInfo != nullptr ? referenceInfo->get_col() : -1,
+          static_cast<void *>(reference->get_parent()),
+          reference->get_parent() != nullptr
+              ? reference->get_parent()->class_name().c_str()
+              : "<null>",
+          static_cast<void *>(declaration),
+          declaration != nullptr
+              ? static_cast<void *>(declaration->get_parent())
+              : nullptr,
+          declaration != nullptr && declaration->get_parent() != nullptr
+              ? declaration->get_parent()->class_name().c_str()
+              : "<null>",
+          declaration != nullptr ? static_cast<void *>(declaration->get_scope())
+                                 : nullptr,
+          declaration != nullptr && declaration->get_scope() != nullptr
+              ? declaration->get_scope()->class_name().c_str()
+              : "<null>",
+          useInfo != nullptr ? useInfo->get_filenameString().c_str()
+                             : "<unknown>",
+          useInfo != nullptr ? useInfo->get_line() : -1,
+          useInfo != nullptr ? useInfo->get_col() : -1);
     }
-
-    break;
-  }
-
-  case V_SgNonrealDecl: {
-    SgNonrealDecl *node = isSgNonrealDecl(referencedNode);
-    SgUnorderedMapNodeToString::iterator i =
-        SgNode::get_globalQualifiedNameMapForNames().find(node);
-    if (i != SgNode::get_globalQualifiedNameMapForNames().end()) {
-      ROSE_ASSERT(node == i->first);
-      nameQualifier = i->second;
-    }
-    break;
-  }
-
-  case V_SgTemplateArgument: {
-    SgTemplateArgument *node = isSgTemplateArgument(referencedNode);
-    nameQualifier = node->get_qualified_name_prefix_for_type();
-    break;
-  }
-
-    // DQ (7/13/2013): I think we need this here, but wait until we generate the
-    // error to drive it to be introduced. Also this does not permit handling of
-    // multiple types requiring different name qualification (same as for throw
-    // support). DQ (7/12/2013): Added support to type trait builtin functions
-  case V_SgTypeTraitBuiltinOperator:
-
-  case V_SgAssignInitializer:
-
-    // DQ (8/19/2013): Added support for constructor initializers that might
-    // have an associated qualified name string associated with the templated
-    // class or instantiated template class.
-  case V_SgConstructorInitializer:
-
-    // DQ (9/5/2015): I think this is the support we need for test2015_57.C
-    // (compound literals used as expressions).
-  case V_SgAggregateInitializer:
-
-    // DQ (9/12/2016): Adding support for whatever types are used within alignOf
-    // operators.
-  case V_SgAlignOfOp:
-
-    // DQ (1/19/2019): Added support for SgDotExp (required for some
-    // unparseToString_tests test codes (e.g. test2010_24.C, and a dozen
-    // others).
-  case V_SgDotExp:
-
-  case V_SgTypeIdOp:
-  case V_SgSizeOfOp:
-  case V_SgNewExp:
-  case V_SgCastExp: {
-    // SgCastExp* node = isSgCastExp(referencedNode);
-    SgExpression *node = isSgExpression(referencedNode);
-    nameQualifier = node->get_qualified_name_prefix_for_referenced_type();
-    break;
-  }
-  case V_SgClassType: {
-    // These can appear in throw expression lists...ignore for now...
-    // SgType* node = isSgType(referencedNode);
-    // nameQualifier = node->get_qualified_name_prefix_for_type();
-    // printf ("WARNING: Note that qualified types in throw expression lists are
-    // not yet supported... \n");
-    break;
-  }
-
-  case V_SgFunctionType: {
-    // These can appear in typedefs of function pointers...ignore for now...
-    // SgType* node = isSgType(referencedNode);
-    // nameQualifier = node->get_qualified_name_prefix_for_type();
-    // printf ("WARNING: Note that qualified types in function pointer typedefs
-    // are not yet supported... \n");
-    break;
-  }
-
-  case V_SgTypedefType: {
-    // These can appear in typedef types...ignore for now...
-    // SgType* node = isSgType(referencedNode);
-    // nameQualifier = node->get_qualified_name_prefix_for_type();
-    // printf ("WARNING: Note that qualified types in typedef types are not yet
-    // supported... \n");
-    break;
-  }
-
-  case V_SgPointerMemberType: {
-    SgPointerMemberType *node = isSgPointerMemberType(referencedNode);
-    // nameQualifier = node->get_qualified_name_prefix_for_type();
-
-    // nameQualifier = node->get_qualified_name_prefix_for_base_type();
-    nameQualifier = node->get_qualified_name_prefix_for_class_of();
-    break;
-  }
-
-  default: {
-    printf("In Unparser_Nameq::lookup_generated_qualified_name(): Sorry not "
-           "implemented case of name qualification for "
-           "info.get_reference_node_for_qualification() = %s \n",
-           referencedNode->class_name().c_str());
     ROSE_ABORT();
   }
+}
+
+NameQualificationResult NameQualificationContext::lookupChannel(
+    const std::map<Key, NameQualificationResult> &channel,
+    const char *channelName, const SgNode *node,
+    const SgStatement *useSiteStatement) const {
+  ASSERT_not_null(channelName);
+  ASSERT_not_null(node);
+  ASSERT_not_null(useSiteStatement);
+  auto result = channel.find(Key(node, useSiteStatement));
+  if (result == channel.end()) {
+    const SgNode *parent = node->get_parent();
+    const SgInitializedName *initializedName =
+        isSgInitializedName(const_cast<SgNode *>(node));
+    const SgVarRefExp *variableReference =
+        isSgVarRefExp(const_cast<SgNode *>(node));
+    const SgVariableSymbol *variableSymbol =
+        variableReference != nullptr ? variableReference->get_symbol()
+                                     : nullptr;
+    const SgInitializedName *variableName =
+        variableSymbol != nullptr ? variableSymbol->get_declaration() : nullptr;
+    const SgLocatedNode *locatedNode =
+        isSgLocatedNode(const_cast<SgNode *>(node));
+    const Sg_File_Info *nodeStart =
+        initializedName != nullptr
+            ? initializedName->get_startOfConstruct()
+            : (locatedNode != nullptr ? locatedNode->get_startOfConstruct()
+                                      : nullptr);
+    const Sg_File_Info *useStart = useSiteStatement->get_startOfConstruct();
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[required-name-qualification]: required "
+            "contextual qualification is missing\n");
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[contextual-name-qualification]: requested "
+            "%s-channel record is missing for node=%p/%s name=%s parent=%p/%s "
+            "declaration=%p/%s declaration-parent=%p/%s node-line=%d "
+            "use-site=%p/%s use-line=%d\n",
+            channelName, static_cast<const void *>(node),
+            node->class_name().c_str(),
+            initializedName != nullptr
+                ? initializedName->get_name().str()
+                : (variableName != nullptr ? variableName->get_name().str()
+                                           : "<unknown-name>"),
+            static_cast<const void *>(parent),
+            parent != nullptr ? parent->class_name().c_str() : "<null>",
+            static_cast<const void *>(variableName),
+            variableName != nullptr ? variableName->class_name().c_str()
+                                    : "<null>",
+            static_cast<const void *>(
+                variableName != nullptr ? variableName->get_parent() : nullptr),
+            variableName != nullptr && variableName->get_parent() != nullptr
+                ? variableName->get_parent()->class_name().c_str()
+                : "<null>",
+            nodeStart != nullptr ? nodeStart->get_raw_line() : 0,
+            static_cast<const void *>(useSiteStatement),
+            useSiteStatement->class_name().c_str(),
+            useStart != nullptr ? useStart->get_raw_line() : 0);
+    fprintf(
+        stderr,
+        "REX_UNPARSE_INVARIANT[contextual-name-qualification]: "
+        "structural use site=%p/%s recorded use sites for this "
+        "node:",
+        static_cast<void *>(
+            SageInterface::getEnclosingStatement(const_cast<SgNode *>(node))),
+        SageInterface::getEnclosingStatement(const_cast<SgNode *>(node)) !=
+                nullptr
+            ? SageInterface::getEnclosingStatement(const_cast<SgNode *>(node))
+                  ->class_name()
+                  .c_str()
+            : "<null>");
+    for (const auto &entry : channel) {
+      if (entry.first.first == node) {
+        fprintf(stderr, " %p/%s(parent=%p/%s)",
+                static_cast<const void *>(entry.first.second),
+                entry.first.second->class_name().c_str(),
+                static_cast<const void *>(entry.first.second->get_parent()),
+                entry.first.second->get_parent() != nullptr
+                    ? entry.first.second->get_parent()->class_name().c_str()
+                    : "<null>");
+      }
+    }
+    fprintf(stderr, "\n");
+    ROSE_ABORT();
+  }
+  return result->second;
+}
+
+void NameQualificationContext::recordName(
+    const SgNode *node, const SgStatement *useSiteStatement,
+    const NameQualificationResult &result) {
+  recordChannel(nameChannelQualifications, "name", node, useSiteStatement,
+                result);
+}
+
+NameQualificationResult NameQualificationContext::lookupName(
+    const SgNode *node, const SgStatement *useSiteStatement) const {
+  return lookupChannel(nameChannelQualifications, "name", node,
+                       useSiteStatement);
+}
+
+void NameQualificationContext::recordType(
+    const SgNode *node, const SgStatement *useSiteStatement,
+    const NameQualificationResult &result) {
+  recordChannel(typeChannelQualifications, "type", node, useSiteStatement,
+                result);
+}
+
+NameQualificationResult NameQualificationContext::lookupType(
+    const SgNode *node, const SgStatement *useSiteStatement) const {
+  return lookupChannel(typeChannelQualifications, "type", node,
+                       useSiteStatement);
+}
+
+bool NameQualificationContext::containsName(
+    const SgNode *node, const SgStatement *useSiteStatement) const {
+  ASSERT_not_null(node);
+  ASSERT_not_null(useSiteStatement);
+  return nameChannelQualifications.find(Key(node, useSiteStatement)) !=
+         nameChannelQualifications.end();
+}
+
+bool NameQualificationContext::containsType(
+    const SgNode *node, const SgStatement *useSiteStatement) const {
+  ASSERT_not_null(node);
+  ASSERT_not_null(useSiteStatement);
+  return typeChannelQualifications.find(Key(node, useSiteStatement)) !=
+         typeChannelQualifications.end();
+}
+
+bool NameQualificationContext::containsPointerMemberBase(
+    const SgNode *node, const SgStatement *useSiteStatement) const {
+  ASSERT_not_null(node);
+  ASSERT_not_null(useSiteStatement);
+  return pointerMemberBaseQualifications.find(Key(node, useSiteStatement)) !=
+         pointerMemberBaseQualifications.end();
+}
+
+bool NameQualificationContext::contains(
+    const SgNode *node, const SgStatement *useSiteStatement) const {
+  ASSERT_not_null(node);
+  ASSERT_not_null(useSiteStatement);
+  return qualifications.find(Key(node, useSiteStatement)) !=
+         qualifications.end();
+}
+
+void NameQualificationContext::record(const SgNode *node,
+                                      const SgStatement *useSiteStatement,
+                                      const NameQualificationResult &result) {
+  ASSERT_not_null(node);
+  ASSERT_not_null(useSiteStatement);
+  const Key key(node, useSiteStatement);
+  auto existing = qualifications.find(key);
+  if (existing == qualifications.end()) {
+    qualifications.emplace(key, result);
+    return;
   }
 
-  return nameQualifier;
+  if (existing->second.qualifier != result.qualifier ||
+      existing->second.length != result.length ||
+      existing->second.global != result.global ||
+      existing->second.typeElaboration != result.typeElaboration) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[contextual-name-qualification]: "
+            "node=%p(%s) use=%p(%s) has conflicting records "
+            "old={qualifier='%s',length=%d,global=%d,elaboration=%d} "
+            "new={qualifier='%s',length=%d,global=%d,elaboration=%d}\n",
+            static_cast<const void *>(node), node->class_name().c_str(),
+            static_cast<const void *>(useSiteStatement),
+            useSiteStatement->class_name().c_str(),
+            existing->second.qualifier.c_str(), existing->second.length,
+            existing->second.global ? 1 : 0,
+            existing->second.typeElaboration ? 1 : 0, result.qualifier.c_str(),
+            result.length, result.global ? 1 : 0,
+            result.typeElaboration ? 1 : 0);
+    ROSE_ABORT();
+  }
+}
+
+NameQualificationResult
+NameQualificationContext::lookup(const SgNode *node,
+                                 const SgStatement *useSiteStatement) const {
+  ASSERT_not_null(node);
+  ASSERT_not_null(useSiteStatement);
+  const Key key(node, useSiteStatement);
+  auto result = qualifications.find(key);
+  if (result == qualifications.end()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[required-name-qualification]: required "
+            "contextual qualification is missing\n");
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[contextual-name-qualification]: "
+            "node=%p(%s) parent=%p parent-type=%s requested-use=%p "
+            "requested-use-type=%s has no exact contextual "
+            "qualification; recorded-use-sites:",
+            static_cast<const void *>(node), node->class_name().c_str(),
+            static_cast<const void *>(node->get_parent()),
+            node->get_parent() != nullptr
+                ? node->get_parent()->class_name().c_str()
+                : "<null>",
+            static_cast<const void *>(useSiteStatement),
+            useSiteStatement->class_name().c_str());
+    for (const auto &entry : qualifications) {
+      if (entry.first.first == node) {
+        fprintf(stderr, " %p(%s,name=%s)",
+                static_cast<const void *>(entry.first.second),
+                entry.first.second != nullptr
+                    ? entry.first.second->class_name().c_str()
+                    : "<null>",
+                entry.first.second != nullptr
+                    ? SageInterface::get_name(entry.first.second).c_str()
+                    : "<null>");
+      }
+    }
+    fprintf(stderr, "\n");
+    SgTemplateArgument *argument =
+        isSgTemplateArgument(const_cast<SgNode *>(node));
+    if (argument != nullptr) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[contextual-name-qualification]: "
+              "template-argument-kind=%d\n",
+              static_cast<int>(argument->get_argumentType()));
+      if (SgTemplateType *parentTemplateType =
+              isSgTemplateType(argument->get_parent())) {
+        const SgTemplateArgumentPtrList &arguments =
+            parentTemplateType->get_tpl_args();
+        fprintf(
+            stderr,
+            "REX_UNPARSE_INVARIANT[contextual-name-qualification]: "
+            "parent-template-type=%p name=%s depth=%d position=%d "
+            "arguments=%zu contains=%d template-parameter=%p\n",
+            static_cast<void *>(parentTemplateType),
+            parentTemplateType->get_name().getString().c_str(),
+            parentTemplateType->get_template_parameter_depth(),
+            parentTemplateType->get_template_parameter_position(),
+            arguments.size(),
+            std::find(arguments.begin(), arguments.end(), argument) !=
+                    arguments.end()
+                ? 1
+                : 0,
+            static_cast<void *>(parentTemplateType->get_template_parameter()));
+      }
+    }
+    if (argument != nullptr) {
+      if (SgDeclarationStatement *referenced =
+              referencedDeclarationForTemplateArgument(argument)) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[contextual-name-qualification]: "
+                "referenced-declaration=%p type=%s name=%s scope=%p(%s)\n",
+                static_cast<void *>(referenced),
+                referenced->class_name().c_str(),
+                SageInterface::get_name(referenced).c_str(),
+                static_cast<void *>(referenced->get_scope()),
+                referenced->get_scope() != nullptr
+                    ? referenced->get_scope()->class_name().c_str()
+                    : "<null>");
+      }
+    }
+    if (SgDeclarationStatement *use_declaration = isSgDeclarationStatement(
+            const_cast<SgStatement *>(useSiteStatement))) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[contextual-name-qualification]: "
+              "use-name=%s use-scope=%p(%s)\n",
+              SageInterface::get_name(use_declaration).c_str(),
+              static_cast<void *>(use_declaration->get_scope()),
+              use_declaration->get_scope() != nullptr
+                  ? use_declaration->get_scope()->class_name().c_str()
+                  : "<null>");
+    }
+    if (argument != nullptr) {
+      if (SgNonrealDecl *parent_nonreal =
+              isSgNonrealDecl(argument->get_parent())) {
+        const auto &arguments = parent_nonreal->get_tpl_args();
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[contextual-name-qualification]: "
+                "parent-nonreal-name=%s semantic-name=%s arguments=%zu "
+                "contains=%d\n",
+                parent_nonreal->get_name().getString().c_str(),
+                parent_nonreal->get_semantic_name().getString().c_str(),
+                arguments.size(),
+                std::find(arguments.begin(), arguments.end(), argument) !=
+                        arguments.end()
+                    ? 1
+                    : 0);
+      } else if (SgTemplateInstantiationDecl *parent_instantiation =
+                     isSgTemplateInstantiationDecl(argument->get_parent())) {
+        const auto &arguments = parent_instantiation->get_templateArguments();
+        const auto &deduced_arguments =
+            parent_instantiation->get_deducedTemplateArguments();
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[contextual-name-qualification]: "
+                "parent-instantiation-name=%s template-name=%s arguments=%zu "
+                "contains=%d deduced-arguments=%zu deduced-contains=%d\n",
+                parent_instantiation->get_name().getString().c_str(),
+                parent_instantiation->get_templateName().getString().c_str(),
+                arguments.size(),
+                std::find(arguments.begin(), arguments.end(), argument) !=
+                        arguments.end()
+                    ? 1
+                    : 0,
+                deduced_arguments.size(),
+                std::find(deduced_arguments.begin(), deduced_arguments.end(),
+                          argument) != deduced_arguments.end()
+                    ? 1
+                    : 0);
+      }
+    }
+    if (argument != nullptr) {
+      fprintf(
+          stderr,
+          "REX_UNPARSE_INVARIANT[contextual-name-qualification]: "
+          "type=%p(%s) expression=%p(%s) initialized-name=%p(%s) "
+          "template-declaration=%p(%s)\n",
+          static_cast<void *>(argument->get_type()),
+          argument->get_type() != nullptr
+              ? argument->get_type()->class_name().c_str()
+              : "<null>",
+          static_cast<void *>(argument->get_expression()),
+          argument->get_expression() != nullptr
+              ? argument->get_expression()->class_name().c_str()
+              : "<null>",
+          static_cast<void *>(argument->get_initializedName()),
+          argument->get_initializedName() != nullptr
+              ? argument->get_initializedName()->get_name().getString().c_str()
+              : "<null>",
+          static_cast<void *>(argument->get_templateDeclaration()),
+          argument->get_templateDeclaration() != nullptr
+              ? argument->get_templateDeclaration()->class_name().c_str()
+              : "<null>");
+      if (SgTemplateType *argumentTemplateType =
+              isSgTemplateType(argument->get_type())) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[contextual-name-qualification]: "
+                "argument-template-type=%p name=%s depth=%d position=%d "
+                "arguments=%zu template-parameter=%p\n",
+                static_cast<void *>(argumentTemplateType),
+                argumentTemplateType->get_name().getString().c_str(),
+                argumentTemplateType->get_template_parameter_depth(),
+                argumentTemplateType->get_template_parameter_position(),
+                argumentTemplateType->get_tpl_args().size(),
+                static_cast<void *>(
+                    argumentTemplateType->get_template_parameter()));
+      }
+    }
+    ROSE_ABORT();
+  }
+
+  return result->second;
+}
+
+void NameQualificationContext::recordPointerMemberBase(
+    const SgNode *node, const SgStatement *useSiteStatement,
+    const NameQualificationResult &result) {
+  ASSERT_not_null(node);
+  ASSERT_not_null(isSgPointerMemberType(const_cast<SgNode *>(node)));
+  ASSERT_not_null(useSiteStatement);
+  const Key key(node, useSiteStatement);
+  auto existing = pointerMemberBaseQualifications.find(key);
+  if (existing == pointerMemberBaseQualifications.end()) {
+    pointerMemberBaseQualifications.emplace(key, result);
+    return;
+  }
+
+  if (existing->second.qualifier != result.qualifier ||
+      existing->second.length != result.length ||
+      existing->second.global != result.global ||
+      existing->second.typeElaboration != result.typeElaboration) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[contextual-pointer-member-base-"
+            "qualification]: node=%p(%s) use=%p(%s) has conflicting "
+            "records old={qualifier='%s',length=%d,global=%d,elaboration=%d} "
+            "new={qualifier='%s',length=%d,global=%d,elaboration=%d}\n",
+            static_cast<const void *>(node), node->class_name().c_str(),
+            static_cast<const void *>(useSiteStatement),
+            useSiteStatement->class_name().c_str(),
+            existing->second.qualifier.c_str(), existing->second.length,
+            existing->second.global ? 1 : 0,
+            existing->second.typeElaboration ? 1 : 0, result.qualifier.c_str(),
+            result.length, result.global ? 1 : 0,
+            result.typeElaboration ? 1 : 0);
+    ROSE_ABORT();
+  }
+}
+
+NameQualificationResult NameQualificationContext::lookupPointerMemberBase(
+    const SgNode *node, const SgStatement *useSiteStatement) const {
+  ASSERT_not_null(node);
+  ASSERT_not_null(isSgPointerMemberType(const_cast<SgNode *>(node)));
+  ASSERT_not_null(useSiteStatement);
+  const Key key(node, useSiteStatement);
+  auto result = pointerMemberBaseQualifications.find(key);
+  if (result == pointerMemberBaseQualifications.end()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[contextual-pointer-member-base-"
+            "qualification]: node=%p(%s) parent=%p parent-type=%s "
+            "requested-use=%p requested-use-type=%s has no exact contextual "
+            "base-type qualification; recorded-use-sites:",
+            static_cast<const void *>(node), node->class_name().c_str(),
+            static_cast<const void *>(node->get_parent()),
+            node->get_parent() != nullptr
+                ? node->get_parent()->class_name().c_str()
+                : "<null>",
+            static_cast<const void *>(useSiteStatement),
+            useSiteStatement->class_name().c_str());
+    for (const auto &entry : pointerMemberBaseQualifications) {
+      if (entry.first.first == node) {
+        fprintf(stderr, " %p(%s)",
+                static_cast<const void *>(entry.first.second),
+                entry.first.second->class_name().c_str());
+      }
+    }
+    fprintf(stderr, "\n");
+    ROSE_ABORT();
+  }
+  return result->second;
+}
+
+NameQualificationResult Unparser_Nameq::lookup_qualification(
+    const SgNode *node, const SgStatement *useSiteStatement) const {
+  return nameQualifications.lookup(node, useSiteStatement);
+}
+
+NameQualificationResult Unparser_Nameq::lookup_name_qualification(
+    const SgNode *node, const SgStatement *useSiteStatement) const {
+  return nameQualifications.lookupName(node, useSiteStatement);
+}
+
+NameQualificationResult Unparser_Nameq::lookup_type_qualification(
+    const SgNode *node, const SgStatement *useSiteStatement) const {
+  NameQualificationResult result =
+      nameQualifications.lookupType(node, useSiteStatement);
+  if (const std::optional<bool> sourceElaboration =
+          exactSourceTypeElaboration(node)) {
+    result.typeElaboration = *sourceElaboration;
+  }
+  return result;
+}
+
+NameQualificationResult Unparser_Nameq::lookup_type_qualification_for_output(
+    const SgNode *node, const SgStatement *useSiteStatement,
+    bool skipGeneratedQualification) const {
+  ASSERT_not_null(node);
+  NameQualificationResult result =
+      skipGeneratedQualification
+          ? NameQualificationResult{"", 0, false, false}
+          : lookup_type_qualification(node, useSiteStatement);
+  if (const std::optional<bool> sourceElaboration =
+          exactSourceTypeElaboration(node)) {
+    result.typeElaboration = *sourceElaboration;
+  }
+  if (const SgTemplateArgument *templateArgument =
+          isSgTemplateArgument(const_cast<SgNode *>(node))) {
+    if (templateArgument->get_source_type_qualification_present()) {
+      if (templateArgument->get_sourceSpelledType() == nullptr) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[template-argument-source-type]: "
+                "argument=%p owns exact source qualification without an exact "
+                "source-spelled type\n",
+                static_cast<const void *>(templateArgument));
+        ROSE_ABORT();
+      }
+      // The elaborated keyword is source syntax owned by this exact template
+      // argument. Skipping generated qualification cannot discard source
+      // syntax, and contextual qualification cannot replace the immutable
+      // TypeLoc spelling recorded by the frontend.
+      result.typeElaboration =
+          templateArgument->get_type_elaboration_required();
+    }
+  }
+  return result;
+}
+
+NameQualificationResult
+Unparser_Nameq::lookup_pointer_member_base_qualification(
+    const SgNode *node, const SgStatement *useSiteStatement) const {
+  return nameQualifications.lookupPointerMemberBase(node, useSiteStatement);
 }
 
 // DQ (3/14/2019): Adding debugging support to output the map of names.

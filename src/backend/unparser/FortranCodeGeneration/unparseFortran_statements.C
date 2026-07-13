@@ -6,7 +6,6 @@
 
 #include "sage3basic.h"
 
-#include "FortranLineWrapSupport.h"
 #include "unparser.h"
 
 #include <cctype>
@@ -29,6 +28,291 @@ constexpr bool keywordsAreUpperCase{false}; // should be a command-line option
 constexpr bool flangParser{false};
 constexpr bool keywordsAreUpperCase{true};
 #endif
+
+bool fortranSeparateStatementOwnsArrayShape(
+    const SgInitializedName *initializedName);
+bool fortranSeparatePointerStatementOwnsPointerAttribute(
+    const SgInitializedName *initializedName);
+
+namespace {
+struct FortranTypeSurface {
+  SgType *base = nullptr;
+  size_t ordinaryRank = 0;
+  bool pointer = false;
+};
+
+FortranTypeSurface decomposeFortranTypeSurface(SgType *type) {
+  FortranTypeSurface result;
+  while (type != nullptr) {
+    if (SgModifierType *modifier = isSgModifierType(type)) {
+      type = modifier->get_base_type();
+      continue;
+    }
+    if (SgPointerType *pointer = isSgPointerType(type)) {
+      result.pointer = true;
+      type = pointer->get_base_type();
+      continue;
+    }
+    if (SgArrayType *array = isSgArrayType(type)) {
+      if (!array->get_isCoArray()) {
+        result.ordinaryRank += array->get_rank();
+      }
+      type = array->get_base_type();
+      continue;
+    }
+    result.base = type;
+    return result;
+  }
+  return result;
+}
+
+bool exactFortranRedeclarationIdentity(const SgInitializedName *source,
+                                       const SgInitializedName *canonical) {
+  std::unordered_set<const SgInitializedName *> visited;
+  for (const SgInitializedName *current = source; current != nullptr;
+       current = current->get_prev_decl_item()) {
+    if (!visited.insert(current).second) {
+      std::cerr << "REX_UNPARSE_INVARIANT[fortran-redeclaration-chain]: "
+                   "variable="
+                << source->get_name()
+                << " has a cyclic initialized-name chain\n";
+      ROSE_ABORT();
+    }
+    if (current == canonical) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool fortranSourceTypeMatchesSemanticType(
+    const SgInitializedName *initializedName) {
+  ASSERT_not_null(initializedName);
+  SgType *source = initializedName->get_fortran_source_type();
+  SgType *semantic = initializedName->get_type();
+  if (source != nullptr && source == semantic) {
+    SgVariableDeclaration *declaration =
+        isSgVariableDeclaration(initializedName->get_parent());
+    auto is_transformation_position = [](const Sg_File_Info *position,
+                                         const SgNode *owner) {
+      return position != nullptr && position->get_parent() == owner &&
+             position->isTransformation() && !position->isCompilerGenerated() &&
+             !position->isFrontendSpecific() &&
+             !position->isSourcePositionUnavailableInFrontend() &&
+             position->isOutputInCodeGeneration();
+    };
+    const bool exact_generated_source_surface =
+        declaration != nullptr &&
+        declaration->get_fortran_declaration_origin() ==
+            SgVariableDeclaration::e_fortran_source_declaration &&
+        !semantic->get_fortran_source_syntax() &&
+        is_transformation_position(declaration->get_file_info(), declaration) &&
+        is_transformation_position(declaration->get_startOfConstruct(),
+                                   declaration) &&
+        is_transformation_position(declaration->get_endOfConstruct(),
+                                   declaration) &&
+        is_transformation_position(initializedName->get_file_info(),
+                                   initializedName) &&
+        is_transformation_position(initializedName->get_startOfConstruct(),
+                                   initializedName) &&
+        is_transformation_position(initializedName->get_endOfConstruct(),
+                                   initializedName);
+    return exact_generated_source_surface ||
+           SageInterface::fortranSourceTypeMatchesSemanticType(source,
+                                                               semantic);
+  }
+  if (isSgTypeCrayPointer(source) != nullptr) {
+    const FortranTypeSurface semanticSurface =
+        decomposeFortranTypeSurface(semantic);
+    return source->get_fortran_source_syntax() &&
+           semanticSurface.base != nullptr &&
+           (isSgTypeInt(semanticSurface.base) != nullptr ||
+            isSgTypeSignedInt(semanticSurface.base) != nullptr) &&
+           initializedName->get_cray_pointer_pointee() != nullptr;
+  }
+
+  const FortranTypeSurface sourceSurface = decomposeFortranTypeSurface(source);
+  const FortranTypeSurface semanticSurface =
+      decomposeFortranTypeSurface(semantic);
+  const bool separateStatementOwnsShape =
+      fortranSeparateStatementOwnsArrayShape(initializedName);
+  const bool separateStatementOwnsPointer =
+      fortranSeparatePointerStatementOwnsPointerAttribute(initializedName);
+  if (const SgFunctionType *semanticProcedure =
+          isSgFunctionType(semanticSurface.base)) {
+    const SgFunctionType *sourceProcedure =
+        isSgFunctionType(sourceSurface.base);
+    const bool exactProcedureSource =
+        sourceProcedure != nullptr
+            ? sourceProcedure == semanticProcedure
+            : (sourceSurface.base != nullptr &&
+               semanticProcedure->get_return_type() != nullptr &&
+               SageInterface::fortranSourceTypeMatchesSemanticType(
+                   sourceSurface.base, semanticProcedure->get_return_type()));
+    return sourceSurface.base != nullptr &&
+           (sourceSurface.pointer == semanticSurface.pointer ||
+            (separateStatementOwnsPointer && !sourceSurface.pointer &&
+             semanticSurface.pointer)) &&
+           sourceSurface.ordinaryRank == 0 &&
+           semanticSurface.ordinaryRank == 0 && exactProcedureSource;
+  }
+  return sourceSurface.base != nullptr && semanticSurface.base != nullptr &&
+         (sourceSurface.pointer == semanticSurface.pointer ||
+          (separateStatementOwnsPointer && !sourceSurface.pointer &&
+           semanticSurface.pointer)) &&
+         (sourceSurface.ordinaryRank == semanticSurface.ordinaryRank ||
+          (separateStatementOwnsShape && sourceSurface.ordinaryRank == 0 &&
+           semanticSurface.ordinaryRank > 0)) &&
+         SageInterface::fortranSourceTypeMatchesSemanticType(
+             sourceSurface.base, semanticSurface.base);
+}
+
+const SgOmpClausePtrList &
+requiredFortranOmpClauses(SgStatement *owner, SgOmpClauseList *clause_list) {
+  if (owner == nullptr || clause_list == nullptr ||
+      clause_list->get_parent() != owner) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[openmp-clause-list]: Fortran statement "
+            "type=%s has no exact clause-list owner\n",
+            owner != nullptr ? owner->class_name().c_str() : "<null>");
+    ROSE_ABORT();
+  }
+  return clause_list->get_clauses();
+}
+
+bool isValidFortranIdentifier(const SgName &name) {
+  const std::string text = name.getString();
+  if (text.empty() || !std::isalpha(static_cast<unsigned char>(text.front()))) {
+    return false;
+  }
+  return std::all_of(text.begin() + 1, text.end(), [](unsigned char ch) {
+    return std::isalnum(ch) || ch == '_';
+  });
+}
+
+bool isValidFortranSubmoduleParent(const SgName &name) {
+  const std::string text = name.getString();
+  const size_t separator = text.find(':');
+  if (separator == std::string::npos) {
+    return isValidFortranIdentifier(name);
+  }
+  if (separator == 0 || separator + 1 >= text.size() ||
+      text.find(':', separator + 1) != std::string::npos) {
+    return false;
+  }
+  return isValidFortranIdentifier(SgName(text.substr(0, separator))) &&
+         isValidFortranIdentifier(SgName(text.substr(separator + 1)));
+}
+
+void requireFortranSourceDeclarationSurface(
+    SgVariableDeclaration *declaration) {
+  ASSERT_not_null(declaration);
+  switch (declaration->get_fortran_declaration_origin()) {
+  case SgVariableDeclaration::e_fortran_source_declaration:
+    for (SgInitializedName *name : declaration->get_variables()) {
+      if (name == nullptr || name->get_type() == nullptr ||
+          name->get_fortran_source_type() == nullptr ||
+          !fortranSourceTypeMatchesSemanticType(name)) {
+        SgType *semanticType = name != nullptr ? name->get_type() : nullptr;
+        SgType *sourceType =
+            name != nullptr ? name->get_fortran_source_type() : nullptr;
+        const FortranTypeSurface semanticSurface =
+            decomposeFortranTypeSurface(semanticType);
+        const FortranTypeSurface sourceSurface =
+            decomposeFortranTypeSurface(sourceType);
+        std::cerr << "REX_UNPARSE_INVARIANT[fortran-source-type]: source "
+                     "declaration has a missing or contradictory "
+                     "semantic/source type pair"
+                  << std::endl;
+        std::cerr << "REX_UNPARSE_DETAIL[fortran-source-type]: declaration="
+                  << declaration << " name=" << name << " ('"
+                  << (name != nullptr ? name->get_name().getString()
+                                      : std::string("<null>"))
+                  << "') semantic=" << semanticType << "/"
+                  << (semanticType != nullptr ? semanticType->class_name()
+                                              : std::string("<null>"))
+                  << " source=" << sourceType << "/"
+                  << (sourceType != nullptr ? sourceType->class_name()
+                                            : std::string("<null>"))
+                  << " semantic-base=" << semanticSurface.base << "/"
+                  << (semanticSurface.base != nullptr
+                          ? semanticSurface.base->class_name()
+                          : std::string("<null>"))
+                  << " source-base=" << sourceSurface.base << "/"
+                  << (sourceSurface.base != nullptr
+                          ? sourceSurface.base->class_name()
+                          : std::string("<null>"))
+                  << " semantic-rank=" << semanticSurface.ordinaryRank
+                  << " source-rank=" << sourceSurface.ordinaryRank
+                  << " semantic-pointer=" << semanticSurface.pointer
+                  << " source-pointer=" << sourceSurface.pointer << std::endl;
+        ROSE_ABORT();
+      }
+    }
+    return;
+  case SgVariableDeclaration::e_fortran_semantic_only_declaration:
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-declaration-origin]: "
+                 "semantic-only declaration reached a source-emission list"
+              << std::endl;
+    ROSE_ABORT();
+  case SgVariableDeclaration::e_fortran_pending_source_declaration:
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-declaration-origin]: pending "
+                 "source declaration reached the unparser"
+              << std::endl;
+    ROSE_ABORT();
+  default:
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-declaration-origin]: invalid "
+                 "value="
+              << static_cast<int>(declaration->get_fortran_declaration_origin())
+              << std::endl;
+    ROSE_ABORT();
+  }
+}
+
+bool isFixedFortranOutput(const Unparser *unparser) {
+  ASSERT_not_null(unparser);
+  ASSERT_not_null(unparser->currentFile);
+  switch (unparser->currentFile->get_outputFormat()) {
+  case SgFile::e_fixed_form_output_format:
+    return true;
+  case SgFile::e_free_form_output_format:
+    return false;
+  default:
+    std::cerr << "Error: Fortran output format must be resolved before "
+                 "unparsing"
+              << std::endl;
+    ROSE_ABORT();
+  }
+}
+
+bool hasExplicitProgramStatement(const SgProgramHeaderStatement *program) {
+  ASSERT_not_null(program);
+  switch (program->get_program_statement_kind()) {
+  case SgProgramHeaderStatement::e_explicit_program_statement:
+    return true;
+  case SgProgramHeaderStatement::e_implicit_program_statement:
+    return false;
+  default:
+    std::cerr << "Error: Fortran main program has no PROGRAM-statement "
+                 "metadata"
+              << std::endl;
+    ROSE_ABORT();
+  }
+}
+
+bool blockDataHasName(const SgProcedureHeaderStatement *procedure) {
+  ASSERT_not_null(procedure);
+  switch (procedure->get_block_data_name_kind()) {
+  case SgProcedureHeaderStatement::e_named_block_data:
+    return true;
+  case SgProcedureHeaderStatement::e_unnamed_block_data:
+    return false;
+  default:
+    std::cerr << "Error: BLOCK DATA has no source-name metadata" << std::endl;
+    ROSE_ABORT();
+  }
+}
+} // namespace
 
 // Unparse language keywords
 void FortranCodeGeneration_locatedNode::curprint_keyword(
@@ -81,12 +365,7 @@ void FortranCodeGeneration_locatedNode::unparseStatementNumbersSupport(
     return;
   }
 
-  // Let the default be fixed format for now (just for fun)
-  bool fixedFormat = (unp->currentFile == nullptr) ||
-                     (unp->currentFile->get_outputFormat() ==
-                      SgFile::e_unknown_output_format) ||
-                     (unp->currentFile->get_outputFormat() ==
-                      SgFile::e_fixed_form_output_format);
+  const bool fixedFormat = isFixedFortranOutput(unp);
 
   if (numeric_label_exp != nullptr) {
     SgLabelSymbol *numeric_label_symbol = numeric_label_exp->get_symbol();
@@ -144,8 +423,6 @@ void FortranCodeGeneration_locatedNode::unparseStatementNumbers(
   // DQ (11/29/2008): If this is a CPP directive then don't output statement
   // number or the white space for then in fixed format mode.
   if (isSgC_PreprocessorDirectiveStatement(stmt) != nullptr) {
-    printf(
-        "This is a CPP directive, skip leading white space in unparsing. \n");
     return;
   }
   if (flangParser && isSgLabelStatement(stmt) != nullptr) {
@@ -161,7 +438,7 @@ void FortranCodeGeneration_locatedNode::unparseStatementNumbers(
   } else {
     SgProgramHeaderStatement *program_header = isSgProgramHeaderStatement(stmt);
     if (program_header != nullptr) {
-      if (program_header->get_name() != ROSE_IMPLICIT_FORTRAN_PROGRAM_NAME) {
+      if (hasExplicitProgramStatement(program_header)) {
         // If this is a program name that will be output then format the start
         // of the output (in case there is a label or this is fixed format).
         unparseStatementNumbersSupport(stmt->get_numeric_label(), info);
@@ -203,6 +480,9 @@ void FortranCodeGeneration_locatedNode::unparseLanguageSpecificStatement(
     break;
   case V_SgVariableDefinition:
     unparseVarDefnStmt(stmt, info);
+    break;
+  case V_SgEnumDeclaration:
+    unparseEnumDeclStmt(stmt, info);
     break;
   case V_SgParameterStatement:
     unparseParamDeclStmt(stmt, info);
@@ -387,8 +667,6 @@ void FortranCodeGeneration_locatedNode::unparseLanguageSpecificStatement(
     unparseGotoStmt(isSgGotoStatement(stmt), info);
     break;
 
-    // Rasmussen (10/02/2018): This is temporary fix (actual ForAllStatements
-    // aren't created)
   case V_SgForAllStatement:
     unparseForAllStatement(stmt, info);
     break;
@@ -452,11 +730,16 @@ void FortranCodeGeneration_locatedNode::unparseFortranIncludeLine(
                                    // does not contain the include statement
     return;
   SgFortranIncludeLine *includeLine = isSgFortranIncludeLine(stmt);
+  ASSERT_not_null(includeLine);
+
+  const string includeFileName = includeLine->get_filename();
+  if (includeFileName.empty()) {
+    std::cerr << "Error: Fortran INCLUDE statement has an empty filename"
+              << std::endl;
+    ROSE_ABORT();
+  }
 
   curprint("include ");
-
-  // Use the include path captured in the source.
-  string includeFileName = includeLine->get_filename();
 
   curprint("\"");
   curprint(includeFileName);
@@ -470,6 +753,11 @@ void FortranCodeGeneration_locatedNode::unparseEntryStatement(
   // This is much like a function declaration inside of an existing function
 
   SgEntryStatement *entryStatement = isSgEntryStatement(stmt);
+  ASSERT_not_null(entryStatement);
+  if (entryStatement->get_name().is_null()) {
+    std::cerr << "Error: Fortran ENTRY statement has no name" << std::endl;
+    ROSE_ABORT();
+  }
 
   curprint("entry ");
   curprint(entryStatement->get_name());
@@ -497,10 +785,24 @@ void FortranCodeGeneration_locatedNode::unparseContainsStatement(
 void FortranCodeGeneration_locatedNode::unparseNamelistStatement(
     SgStatement *stmt, SgUnparse_Info &) {
   SgNamelistStatement *namelistStatement = isSgNamelistStatement(stmt);
+  ASSERT_not_null(namelistStatement);
+
+  SgNameGroupPtrList &groupList = namelistStatement->get_group_list();
+  if (groupList.empty()) {
+    std::cerr << "Error: Fortran NAMELIST statement has no groups" << std::endl;
+    ROSE_ABORT();
+  }
+  for (SgNameGroup *nameGroup : groupList) {
+    if (nameGroup == nullptr || nameGroup->get_group_name().empty() ||
+        nameGroup->get_name_list().empty()) {
+      std::cerr << "Error: malformed group in Fortran NAMELIST statement"
+                << std::endl;
+      ROSE_ABORT();
+    }
+  }
 
   curprint("namelist ");
 
-  SgNameGroupPtrList &groupList = namelistStatement->get_group_list();
   SgNameGroupPtrList::iterator i = groupList.begin();
   while (i != groupList.end()) {
     SgNameGroup *nameGroup = *i;
@@ -532,9 +834,8 @@ void FortranCodeGeneration_locatedNode::unparseFormatItemList(
   SgFormatItemPtrList &formatList = formatItemList->get_format_item_list();
   SgFormatItemPtrList::iterator i = formatList.begin();
   while (i != formatList.end()) {
-    bool skip_comma = false;
-
     SgFormatItem *formatItem = *i;
+    ASSERT_not_null(formatItem);
 
     // The default value is "-1" so zero should be an invalid value
     int repeat_specification = formatItem->get_repeat_specification();
@@ -551,25 +852,36 @@ void FortranCodeGeneration_locatedNode::unparseFormatItemList(
       SgStringVal *stringValue = isSgStringVal(formatItem->get_data());
       ASSERT_not_null(stringValue);
 
-      // The string is stored without quotes, and we put them back on as
-      // required in code generation
       string str;
-      if (stringValue->get_usesSingleQuotes()) {
-        str = string("\'") + stringValue->get_value() + string("\'");
-      } else {
-        if (stringValue->get_usesDoubleQuotes()) {
-          str = string("\"") + stringValue->get_value() + string("\"");
-        } else {
-          // Normally if usesSingleQuotes == false we use double quotes, but
-          // that would be a mistake since this is not a string literal used in
-          // the format statement. At some point we want to classify this, since
-          // it is a specific kind of edit descriptor (see R1005, R1011, R1013,
-          // R1015, R1016, R1017, R1018).
-
-          str = stringValue->get_value();
-        }
+      const bool usesSingleQuotes = stringValue->get_usesSingleQuotes();
+      const bool usesDoubleQuotes = stringValue->get_usesDoubleQuotes();
+      const char delimiter = stringValue->get_stringDelimiter();
+      const bool isHollerith = !usesSingleQuotes && !usesDoubleQuotes &&
+                               (delimiter == 'H' || delimiter == 'h');
+      const bool isUnquoted =
+          !usesSingleQuotes && !usesDoubleQuotes && delimiter == 0;
+      if ((!isUnquoted && !isHollerith && !usesSingleQuotes &&
+           !usesDoubleQuotes) ||
+          (usesSingleQuotes && delimiter != '\'') ||
+          (usesDoubleQuotes && delimiter != '"') ||
+          (usesSingleQuotes && usesDoubleQuotes)) {
+        std::cerr << "REX_UNPARSE_INVARIANT[fortran-format-string]: format "
+                     "descriptor has contradictory typed delimiter ownership"
+                  << std::endl;
+        ROSE_ABORT();
       }
-      curprint(str);
+      if (usesSingleQuotes) {
+        unp->emitFortranCharacterLiteral(stringValue->get_value(), '\'');
+      } else if (usesDoubleQuotes) {
+        unp->emitFortranCharacterLiteral(stringValue->get_value(), '"');
+      } else if (isHollerith) {
+        str = StringUtility::numberToString(stringValue->get_value().size()) +
+              delimiter + stringValue->get_value();
+        curprintLiteral(str);
+      } else {
+        str = stringValue->get_value();
+        curprintLiteral(str);
+      }
 
     } else {
       if (formatItem->get_format_item_list() != nullptr) {
@@ -577,19 +889,16 @@ void FortranCodeGeneration_locatedNode::unparseFormatItemList(
         unparseFormatItemList(formatItem->get_format_item_list(), info);
         curprint(")");
       } else {
-        // This is the case of "format (10/)" which processes "10" and "/"
-        // separately (I think this is a bug, see test2007_241.f).
-
-        printf("Error: both get_data() and get_format_item_list() are NULL \n");
-
-        // In this case we want to avoid "10,/" to be  output!
-        skip_comma = true;
+        std::cerr << "Error: malformed SgFormatItem has neither data nor a "
+                     "nested item list"
+                  << std::endl;
+        ROSE_ABORT();
       }
     }
 
     i++;
 
-    if (i != formatList.end() && skip_comma == false) {
+    if (i != formatList.end()) {
       curprint(",");
     }
   }
@@ -601,6 +910,8 @@ void FortranCodeGeneration_locatedNode::unparseFormatStatement(
   // is not really interpreted as a literal in the Fortram grammar (I think).
 
   SgFormatStatement *formatStatement = isSgFormatStatement(stmt);
+  ASSERT_not_null(formatStatement);
+  ASSERT_not_null(formatStatement->get_format_item_list());
   curprint("format ( ");
 
   SgFormatItemList *formatItemList = formatStatement->get_format_item_list();
@@ -613,273 +924,391 @@ void FortranCodeGeneration_locatedNode::unparseFormatStatement(
 void FortranCodeGeneration_locatedNode::unparseImportStatement(
     SgStatement *stmt, SgUnparse_Info &info) {
   SgImportStatement *importStatement = isSgImportStatement(stmt);
-  SgExpressionPtrList &importList = importStatement->get_import_list();
-  auto isValidImportItem = [](SgExpression *expr) -> bool {
-    if (SgVarRefExp *varRef = isSgVarRefExp(expr)) {
-      SgVariableSymbol *rawSymbol = varRef->get_symbol();
-      if (rawSymbol == nullptr) {
-        return false;
-      }
-      SgVariableSymbol *varSymbol = isSgVariableSymbol(rawSymbol);
-      if (varSymbol == nullptr) {
-        return false;
-      }
-      if (varSymbol->get_declaration() == nullptr) {
-        return false;
-      }
-    }
-    return true;
-  };
-
-  std::size_t validItems = 0;
-  for (SgExpression *expr : importList) {
-    if (isValidImportItem(expr)) {
-      ++validItems;
+  ASSERT_not_null(importStatement);
+  const SgStringList &importList = importStatement->get_import_list();
+  for (const std::string &name : importList) {
+    if (name.empty()) {
+      std::cerr
+          << "[REX-UNPARSER-MALFORMED-IMPORT-NAME] IMPORT name is empty\n";
+      ROSE_ABORT();
     }
   }
 
   curprint("import ");
-  if (validItems > 0) {
+  if (!importList.empty()) {
     curprint(":: ");
   }
 
   bool needComma = false;
-  for (SgExpression *expr : importList) {
-    if (!isValidImportItem(expr)) {
-      continue;
-    }
+  for (const std::string &name : importList) {
     if (needComma) {
       curprint(", ");
     }
-    unparseExpression(expr, info);
+    curprint(name);
     needComma = true;
   }
 
   unp->cur.insert_newline(1);
 }
 
-bool unparseDimensionStatementForArrayVariable(
-    SgPntrArrRefExp *arrayReference) {
-  // If an array variable has an explicit variable declaration (in the code)
-  // then the dimension information will be output there.  If not then we have
-  // to output the dimension statement and an entry for this variable.
-
-  ASSERT_not_null(arrayReference);
-  SgVarRefExp *variableReference =
-      isSgVarRefExp(arrayReference->get_lhs_operand());
-  ASSERT_not_null(variableReference);
-  SgVariableSymbol *variableSymbol = variableReference->get_symbol();
-  ASSERT_not_null(variableSymbol);
-  SgInitializedName *variableName = variableSymbol->get_declaration();
-  ASSERT_not_null(variableName);
-
-  SgVariableDeclaration *variableDeclaration =
-      isSgVariableDeclaration(variableName->get_parent());
-
-  auto hasExplicitlyUnparsedDeclaration =
-      [](SgVariableDeclaration *decl) -> bool {
-    if (decl == nullptr) {
-      return false;
+namespace {
+SgArrayType *findOrdinaryFortranArrayType(SgType *type) {
+  while (type != nullptr) {
+    if (SgModifierType *modifier = isSgModifierType(type)) {
+      type = modifier->get_base_type();
+      continue;
     }
-    constexpr const char *kFortranImplicitDeclAttr =
-        "rose_fortran_implicit_declaration";
-    constexpr const char *kFortranEmitImplicitDeclAttr =
-        "rose_fortran_emit_implicit_declaration";
-    return decl->getAttribute(kFortranImplicitDeclAttr) == nullptr ||
-           decl->getAttribute(kFortranEmitImplicitDeclAttr) != nullptr;
-  };
-
-  // If there is a SgVariableDeclaration then it is simpler to look for it in
-  // the scope, else we have to look at each variable declaration for the
-  // SgInitializedName (which is only more expensive).
-  bool foundArrayVariableDeclaration = false;
-  if (variableDeclaration != nullptr) {
-    SgScopeStatement *variableScope = variableDeclaration->get_scope();
-    switch (variableScope->variantT()) {
-    case V_SgBasicBlock: {
-      SgBasicBlock *basicBlock = isSgBasicBlock(variableScope);
-      SgStatementPtrList statementList = basicBlock->get_statements();
-      SgStatementPtrList::iterator i =
-          find(statementList.begin(), statementList.end(), variableDeclaration);
-      foundArrayVariableDeclaration =
-          (i != statementList.end()) &&
-          hasExplicitlyUnparsedDeclaration(variableDeclaration);
-      break;
+    if (SgPointerType *pointer = isSgPointerType(type)) {
+      type = pointer->get_base_type();
+      continue;
     }
-    case V_SgFunctionParameterScope: {
-      SgFunctionParameterScope *paramScope =
-          isSgFunctionParameterScope(variableScope);
-      SgDeclarationStatementPtrList &declarationList =
-          paramScope->getDeclarationList();
-      SgDeclarationStatementPtrList::iterator i = find(
-          declarationList.begin(), declarationList.end(), variableDeclaration);
-      foundArrayVariableDeclaration =
-          (i != declarationList.end()) &&
-          hasExplicitlyUnparsedDeclaration(variableDeclaration);
-      break;
+    if (SgArrayType *array = isSgArrayType(type)) {
+      if (!array->get_isCoArray()) {
+        return array;
+      }
+      type = array->get_base_type();
+      continue;
     }
+    return nullptr;
+  }
+  return nullptr;
+}
+} // namespace
 
-    default: {
-      printf("Default reached, variableScope = %p = %s \n", variableScope,
-             variableScope->class_name().c_str());
+bool fortranAttributeStatementOwnsArrayShape(
+    const SgInitializedName *initializedName) {
+  ASSERT_not_null(initializedName);
+  SgAttributeSpecificationStatement *dimension =
+      isSgAttributeSpecificationStatement(
+          initializedName->get_fortran_separate_shape_declaration());
+  if (dimension == nullptr) {
+    return false;
+  }
+  const auto kind = dimension->get_attribute_kind();
+  if ((kind != SgAttributeSpecificationStatement::e_dimensionStatement &&
+       kind != SgAttributeSpecificationStatement::e_allocatableStatement &&
+       kind != SgAttributeSpecificationStatement::e_pointerStatement) ||
+      findOrdinaryFortranArrayType(initializedName->get_type()) == nullptr) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-attribute-shape-source]: "
+                 "variable="
+              << initializedName->get_name()
+              << " has an attribute shape owner but no exact ordinary array "
+                 "type and supported attribute statement\n";
+    ROSE_ABORT();
+  }
+
+  SgExprListExp *parameters = dimension->get_parameter_list();
+  if (parameters == nullptr || parameters->get_parent() != dimension ||
+      parameters->get_expressions().empty()) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-attribute-shape-source]: "
+                 "variable="
+              << initializedName->get_name()
+              << " points to an attribute statement without a nonempty owned "
+                 "parameter list\n";
+    ROSE_ABORT();
+  }
+
+  size_t matchingItems = 0;
+  for (SgExpression *item : parameters->get_expressions()) {
+    SgPntrArrRefExp *arrayReference = isSgPntrArrRefExp(item);
+    if (arrayReference == nullptr) {
+      SgVarRefExp *scalarReference = isSgVarRefExp(item);
+      SgVariableSymbol *scalarSymbol =
+          scalarReference != nullptr ? scalarReference->get_symbol() : nullptr;
+      SgInitializedName *scalarDeclaration =
+          scalarSymbol != nullptr ? scalarSymbol->get_declaration() : nullptr;
+      const bool scalarOwnedByAttribute =
+          scalarDeclaration != nullptr &&
+          scalarDeclaration->get_fortran_separate_shape_declaration() !=
+              dimension &&
+          (kind == SgAttributeSpecificationStatement::e_allocatableStatement ||
+           (kind == SgAttributeSpecificationStatement::e_pointerStatement &&
+            scalarDeclaration->get_fortran_separate_pointer_declaration() ==
+                dimension));
+      if (!scalarOwnedByAttribute || item == nullptr ||
+          item->get_parent() != parameters || scalarReference == nullptr ||
+          scalarSymbol == nullptr || scalarDeclaration == nullptr ||
+          scalarDeclaration->get_scope() != scalarSymbol->get_scope()) {
+        std::cerr << "REX_UNPARSE_INVARIANT[fortran-attribute-shape-source]: "
+                     "attribute statement contains a malformed typed scalar "
+                     "declarator\n";
+        ROSE_ABORT();
+      }
+      continue;
+    }
+    SgVarRefExp *variableReference =
+        isSgVarRefExp(arrayReference->get_lhs_operand());
+    SgVariableSymbol *symbol = variableReference != nullptr
+                                   ? variableReference->get_symbol()
+                                   : nullptr;
+    SgExprListExp *shape = isSgExprListExp(arrayReference->get_rhs_operand());
+    if (arrayReference->get_parent() != parameters ||
+        variableReference == nullptr || symbol == nullptr || shape == nullptr ||
+        variableReference->get_parent() != arrayReference ||
+        shape->get_parent() != arrayReference ||
+        shape->get_expressions().empty()) {
+      std::cerr << "REX_UNPARSE_INVARIANT[fortran-attribute-shape-source]: "
+                   "attribute statement contains a malformed typed array "
+                   "declarator\n";
       ROSE_ABORT();
     }
+    if (symbol->get_declaration() == initializedName) {
+      ++matchingItems;
     }
-  } else {
-    // There was no variable declaration found though the symbol, so we have to
-    // look for the SgInitializedName in each SgVariableDeclaration.  However
-    // there will be at least two (and hopefully no more) SgInitializedName
-    // objects for a function parameter if it also has an explicit declaration
-    // in a SgVariableDeclaration. It would be cleaner to have one, and it could
-    // be consistant with old Style K&R C, however it is not clear if this would
-    // be a problem for where we would visit the IR node twice in the
-    // traversals.  Need to look at the implementation of the old style C
-    // function parameter handling.
+  }
+  if (matchingItems != 1) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-attribute-shape-source]: "
+                 "variable="
+              << initializedName->get_name()
+              << " is not owned by exactly one item in its linked attribute "
+                 "statement\n";
+    ROSE_ABORT();
+  }
+  return true;
+}
 
-    SgScopeStatement *variableScope = variableName->get_scope();
+bool fortranSeparatePointerStatementOwnsPointerAttribute(
+    const SgInitializedName *initializedName) {
+  ASSERT_not_null(initializedName);
+  SgStatement *owner =
+      initializedName->get_fortran_separate_pointer_declaration();
+  if (owner == nullptr) {
+    return false;
+  }
+  SgAttributeSpecificationStatement *pointerStatement =
+      isSgAttributeSpecificationStatement(owner);
+  SgExprListExp *parameters = pointerStatement != nullptr
+                                  ? pointerStatement->get_parameter_list()
+                                  : nullptr;
+  const FortranTypeSurface source =
+      decomposeFortranTypeSurface(initializedName->get_fortran_source_type());
+  const FortranTypeSurface semantic =
+      decomposeFortranTypeSurface(initializedName->get_type());
+  SgVariableDeclaration *variableDeclaration =
+      isSgVariableDeclaration(initializedName->get_parent());
+  const bool semanticOnlySource =
+      variableDeclaration != nullptr &&
+      variableDeclaration->get_fortran_declaration_origin() ==
+          SgVariableDeclaration::e_fortran_semantic_only_declaration &&
+      initializedName->get_fortran_source_type() == nullptr;
+  if (pointerStatement == nullptr ||
+      pointerStatement->get_attribute_kind() !=
+          SgAttributeSpecificationStatement::e_pointerStatement ||
+      pointerStatement->get_scope() == nullptr ||
+      pointerStatement->get_scope() != initializedName->get_scope() ||
+      parameters == nullptr || parameters->get_parent() != pointerStatement ||
+      parameters->get_expressions().empty() ||
+      (!semanticOnlySource && source.base == nullptr) ||
+      semantic.base == nullptr || source.pointer || !semantic.pointer) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-pointer-source]: variable="
+              << initializedName->get_name()
+              << " has no exact separate POINTER statement and semantic "
+                 "pointer wrapper\n";
+    ROSE_ABORT();
+  }
 
-    if (SgFunctionParameterScope *paramScope =
-            isSgFunctionParameterScope(variableScope)) {
-      SgDeclarationStatementPtrList &declarationList =
-          paramScope->getDeclarationList();
-      for (SgDeclarationStatement *decl : declarationList) {
-        SgVariableDeclaration *variableDeclaration =
-            isSgVariableDeclaration(decl);
-        if (variableDeclaration == nullptr) {
-          continue;
-        }
-        SgInitializedNamePtrList &variableList =
-            variableDeclaration->get_variables();
-        SgInitializedNamePtrList::iterator i =
-            find(variableList.begin(), variableList.end(), variableName);
-        foundArrayVariableDeclaration =
-            (i != variableList.end()) &&
-            hasExplicitlyUnparsedDeclaration(variableDeclaration);
-      }
-    } else {
-      SgFunctionDefinition *functionDefinition =
-          isSgFunctionDefinition(variableScope);
-      if (functionDefinition != nullptr) {
-        SgBasicBlock *basicBlock = functionDefinition->get_body();
-        ASSERT_not_null(basicBlock);
-        SgStatementPtrList statementList = basicBlock->get_statements();
-
-        SgStatementPtrList::iterator i = statementList.begin();
-        while (i != statementList.end()) {
-          SgVariableDeclaration *variableDeclaration =
-              isSgVariableDeclaration(*i);
-          if (variableDeclaration != nullptr) {
-            SgInitializedNamePtrList &variableList =
-                variableDeclaration->get_variables();
-            SgInitializedNamePtrList::iterator i =
-                find(variableList.begin(), variableList.end(), variableName);
-
-            foundArrayVariableDeclaration =
-                (i != variableList.end()) &&
-                hasExplicitlyUnparsedDeclaration(variableDeclaration);
-          }
-
-          i++;
-        }
-      } else if (SgBasicBlock *basicBlock = isSgBasicBlock(variableScope)) {
-        SgStatementPtrList statementList = basicBlock->get_statements();
-        for (SgStatement *stmt : statementList) {
-          SgVariableDeclaration *variableDeclaration =
-              isSgVariableDeclaration(stmt);
-          if (variableDeclaration == nullptr) {
-            continue;
-          }
-          SgInitializedNamePtrList &variableList =
-              variableDeclaration->get_variables();
-          SgInitializedNamePtrList::iterator i =
-              find(variableList.begin(), variableList.end(), variableName);
-          foundArrayVariableDeclaration =
-              (i != variableList.end()) &&
-              hasExplicitlyUnparsedDeclaration(variableDeclaration);
-        }
-      } else {
-        printf("Default reached, variableScope = %p = %s \n", variableScope,
-               variableScope->class_name().c_str());
+  size_t matchingItems = 0;
+  for (SgExpression *item : parameters->get_expressions()) {
+    SgPntrArrRefExp *arrayReference = isSgPntrArrRefExp(item);
+    SgVarRefExp *variableReference =
+        arrayReference != nullptr
+            ? isSgVarRefExp(arrayReference->get_lhs_operand())
+            : isSgVarRefExp(item);
+    SgVariableSymbol *symbol = variableReference != nullptr
+                                   ? variableReference->get_symbol()
+                                   : nullptr;
+    SgInitializedName *declaration =
+        symbol != nullptr ? symbol->get_declaration() : nullptr;
+    if (item == nullptr || item->get_parent() != parameters ||
+        variableReference == nullptr || symbol == nullptr ||
+        declaration == nullptr ||
+        declaration->get_fortran_separate_pointer_declaration() !=
+            pointerStatement) {
+      std::cerr << "REX_UNPARSE_INVARIANT[fortran-pointer-source]: POINTER "
+                   "statement contains a malformed or unowned typed entity\n";
+      ROSE_ABORT();
+    }
+    if (arrayReference != nullptr) {
+      SgExprListExp *shape = isSgExprListExp(arrayReference->get_rhs_operand());
+      if (variableReference->get_parent() != arrayReference ||
+          shape == nullptr || shape->get_parent() != arrayReference ||
+          shape->get_expressions().empty() ||
+          declaration->get_fortran_separate_shape_declaration() !=
+              pointerStatement ||
+          !fortranAttributeStatementOwnsArrayShape(declaration)) {
+        std::cerr
+            << "REX_UNPARSE_INVARIANT[fortran-pointer-source]: shaped POINTER "
+               "entity has no exact deferred-shape source ownership\n";
         ROSE_ABORT();
       }
     }
+    if (exactFortranRedeclarationIdentity(initializedName, declaration)) {
+      ++matchingItems;
+    }
   }
-
-  // If we found the variation declaration then we do NOT need to output the
-  // dimension statement (since the array will be dimensioned in the variable
-  // declaration).
-  return (foundArrayVariableDeclaration == false);
+  if (matchingItems != 1) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-pointer-source]: variable="
+              << initializedName->get_name()
+              << " is not owned by exactly one item in its linked POINTER "
+                 "statement\n";
+    ROSE_ABORT();
+  }
+  return true;
 }
 
-bool unparseDimensionStatement(SgStatement *stmt) {
-  // DQ (12/9/2007): If the dimension statement is what declares a variable
-  // (array) then we need it, else it is redundant (and an error) when used with
-  // the dimensioning specification in the variable declaration (which will be
-  // built from the type information in the variable declaration.
-
-  SgAttributeSpecificationStatement *attributeSpecificationStatement =
-      isSgAttributeSpecificationStatement(stmt);
-
-  bool unparseDimensionStatementResult = false;
-
-  ROSE_ASSERT(attributeSpecificationStatement->get_attribute_kind() ==
-              SgAttributeSpecificationStatement::e_dimensionStatement);
-
-  ASSERT_not_null(attributeSpecificationStatement->get_parameter_list());
-  SgExpressionPtrList &parameterList =
-      attributeSpecificationStatement->get_parameter_list()->get_expressions();
-  SgExpressionPtrList::iterator i = parameterList.begin();
-
-  // Loop over the array variables and see if there is an explicit declaration
-  // for it. If so then the dimension information will be output in the
-  // associated SgVariableDeclaration.
-  while (i != parameterList.end()) {
-    SgPntrArrRefExp *arrayReference = isSgPntrArrRefExp(*i);
-    ASSERT_not_null(arrayReference);
-    bool unparseForArrayVariable =
-        unparseDimensionStatementForArrayVariable(arrayReference);
-
-    if (unparseForArrayVariable)
-      unparseDimensionStatementResult = true;
-    i++;
+bool fortranCommonStatementOwnsArrayShape(
+    const SgInitializedName *initializedName) {
+  ASSERT_not_null(initializedName);
+  SgCommonBlock *common = isSgCommonBlock(
+      initializedName->get_fortran_separate_shape_declaration());
+  if (common == nullptr) {
+    return false;
+  }
+  if (findOrdinaryFortranArrayType(initializedName->get_type()) == nullptr ||
+      common->get_block_list().empty()) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-common-shape-source]: "
+                 "variable="
+              << initializedName->get_name()
+              << " has a COMMON shape owner but no exact ordinary array type "
+                 "and COMMON statement\n";
+    ROSE_ABORT();
   }
 
-  return unparseDimensionStatementResult;
+  size_t matchingItems = 0;
+  for (SgCommonBlockObject *block : common->get_block_list()) {
+    SgExprListExp *objects =
+        block != nullptr ? block->get_variable_reference_list() : nullptr;
+    if (block == nullptr || block->get_parent() != common ||
+        objects == nullptr || objects->get_parent() != block ||
+        objects->get_expressions().empty()) {
+      std::cerr << "REX_UNPARSE_INVARIANT[fortran-common-shape-source]: "
+                   "COMMON statement contains a malformed typed object list\n";
+      ROSE_ABORT();
+    }
+    for (SgExpression *object : objects->get_expressions()) {
+      SgPntrArrRefExp *arrayReference = isSgPntrArrRefExp(object);
+      if (arrayReference == nullptr) {
+        if (isSgVarRefExp(object) == nullptr ||
+            object->get_parent() != objects) {
+          std::cerr
+              << "REX_UNPARSE_INVARIANT[fortran-common-shape-source]: "
+                 "COMMON object has no exact typed scalar or array surface\n";
+          ROSE_ABORT();
+        }
+        continue;
+      }
+      SgVarRefExp *variableReference =
+          isSgVarRefExp(arrayReference->get_lhs_operand());
+      SgVariableSymbol *symbol = variableReference != nullptr
+                                     ? variableReference->get_symbol()
+                                     : nullptr;
+      SgExprListExp *shape = isSgExprListExp(arrayReference->get_rhs_operand());
+      if (arrayReference->get_parent() != objects ||
+          variableReference == nullptr || symbol == nullptr ||
+          shape == nullptr || shape->get_expressions().empty()) {
+        std::cerr << "REX_UNPARSE_INVARIANT[fortran-common-shape-source]: "
+                     "COMMON statement contains a malformed typed array "
+                     "declarator\n";
+        ROSE_ABORT();
+      }
+      if (symbol->get_declaration() == initializedName) {
+        ++matchingItems;
+      }
+    }
+  }
+  if (matchingItems != 1) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-common-shape-source]: "
+                 "variable="
+              << initializedName->get_name()
+              << " is not owned by exactly one shaped item in its linked "
+                 "COMMON statement\n";
+    ROSE_ABORT();
+  }
+  return true;
+}
+
+bool fortranCrayPointerStatementOwnsArrayShape(
+    const SgInitializedName *initializedName) {
+  ASSERT_not_null(initializedName);
+  SgVariableDeclaration *pointerDeclaration = isSgVariableDeclaration(
+      initializedName->get_fortran_separate_shape_declaration());
+  if (pointerDeclaration == nullptr) {
+    return false;
+  }
+  SgArrayType *semanticArray =
+      findOrdinaryFortranArrayType(initializedName->get_type());
+  SgScopeStatement *scope = initializedName->get_scope();
+  if (semanticArray == nullptr || semanticArray->get_rank() <= 0 ||
+      scope == nullptr || pointerDeclaration->get_scope() != scope ||
+      pointerDeclaration->get_fortran_declaration_origin() !=
+          SgVariableDeclaration::e_fortran_source_declaration ||
+      pointerDeclaration->get_variables().size() != 1) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-cray-pointer-shape-source]: "
+                 "pointee="
+              << initializedName->get_name()
+              << " has no exact shaped Cray POINTER owner\n";
+    ROSE_ABORT();
+  }
+
+  SgInitializedName *pointer = pointerDeclaration->get_variables().front();
+  SgExprListExp *shape = pointer != nullptr
+                             ? pointer->get_fortran_cray_pointer_pointee_shape()
+                             : nullptr;
+  if (pointer == nullptr || pointer->get_parent() != pointerDeclaration ||
+      pointer->get_scope() != scope ||
+      isSgTypeCrayPointer(pointer->get_fortran_source_type()) == nullptr ||
+      pointer->get_cray_pointer_pointee() != initializedName ||
+      shape == nullptr || shape->get_parent() != pointer ||
+      shape->get_expressions().empty() ||
+      shape->get_expressions().size() !=
+          static_cast<std::size_t>(semanticArray->get_rank()) ||
+      !initializedName->get_shapeDeferred()) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-cray-pointer-shape-source]: "
+                 "pointee="
+              << initializedName->get_name()
+              << " is not owned by one exact typed Cray POINTER array "
+                 "declarator\n";
+    ROSE_ABORT();
+  }
+  return true;
+}
+
+bool fortranSeparateStatementOwnsArrayShape(
+    const SgInitializedName *initializedName) {
+  ASSERT_not_null(initializedName);
+  SgStatement *owner =
+      initializedName->get_fortran_separate_shape_declaration();
+  if (owner == nullptr) {
+    return false;
+  }
+  if (isSgAttributeSpecificationStatement(owner) != nullptr) {
+    return fortranAttributeStatementOwnsArrayShape(initializedName);
+  }
+  if (isSgCommonBlock(owner) != nullptr) {
+    return fortranCommonStatementOwnsArrayShape(initializedName);
+  }
+  if (isSgVariableDeclaration(owner) != nullptr) {
+    return fortranCrayPointerStatementOwnsArrayShape(initializedName);
+  }
+  std::cerr << "REX_UNPARSE_INVARIANT[fortran-separate-shape-source]: "
+               "variable="
+            << initializedName->get_name()
+            << " has an unsupported separate-shape statement owner\n";
+  ROSE_ABORT();
 }
 
 void FortranCodeGeneration_locatedNode::unparseAttributeSpecificationStatement(
     SgStatement *stmt, SgUnparse_Info &info) {
   SgAttributeSpecificationStatement *attributeSpecificationStatement =
       isSgAttributeSpecificationStatement(stmt);
-
-  if (attributeSpecificationStatement->get_attribute_kind() ==
-      SgAttributeSpecificationStatement::e_dimensionStatement) {
-    // The dimension statement will have changed the type and the original
-    // declaration will have been output with the dimension computed as part of
-    // the type. The only exception is that there may have been no explicit
-    // declaration (only an implicit declaration from the dimension statement).
-
-    // DQ (12/9/2007):
-    // This test checks if we will need a dimension statement, we still might
-    // not want all entries in the dimension statement to be unparsed (because
-    // some, but not all, might have appeared in an explicit declaration
-    // previously. I hate this part of Fortran!
-
-    if (unparseDimensionStatement(stmt) == false) {
-      // Output the new line so that we leave a hole where the dimension
-      // statement was and don't screwup the formatting of the labels (in
-      // columns 1-6) curprint("! Skipping output of dimension statement
-      // (handled in declaration)");
-      unp->cur.insert_newline(1);
-      return;
-    }
-  }
+  ASSERT_not_null(attributeSpecificationStatement);
 
   string name;
   switch (attributeSpecificationStatement->get_attribute_kind()) {
   case SgAttributeSpecificationStatement::e_unknown_attribute_spec:
-    name = "unknown_attribute";
-    break;
+    std::cerr << "Error: unknown SgAttributeSpecificationStatement kind"
+              << std::endl;
+    ROSE_ABORT();
   case SgAttributeSpecificationStatement::e_accessStatement_private:
     name = "private";
     break;
@@ -935,8 +1364,9 @@ void FortranCodeGeneration_locatedNode::unparseAttributeSpecificationStatement(
     name = "volatile";
     break;
   case SgAttributeSpecificationStatement::e_last_attribute_spec:
-    name = "last_attribute";
-    break;
+    std::cerr << "Error: sentinel SgAttributeSpecificationStatement kind"
+              << std::endl;
+    ROSE_ABORT();
 
   default: {
     printf("Error: default reached %d \n",
@@ -996,6 +1426,11 @@ void FortranCodeGeneration_locatedNode::unparseAttributeSpecificationStatement(
     ASSERT_not_null(attributeSpecificationStatement->get_bind_list());
     ROSE_ASSERT(
         attributeSpecificationStatement->get_declarationModifier().isBind());
+    if (attributeSpecificationStatement->get_linkage().empty()) {
+      std::cerr << "Error: Fortran BIND statement has no language binding spec"
+                << std::endl;
+      ROSE_ABORT();
+    }
 
     curprint("(");
     curprint(attributeSpecificationStatement->get_linkage());
@@ -1003,6 +1438,9 @@ void FortranCodeGeneration_locatedNode::unparseAttributeSpecificationStatement(
       curprint(",NAME=\"");
       curprint(attributeSpecificationStatement->get_binding_label());
       curprint("\"");
+    }
+    if (attributeSpecificationStatement->get_binding_cdefined()) {
+      curprint(",CDEFINED");
     }
     curprint(")");
   }
@@ -1057,10 +1495,48 @@ void FortranCodeGeneration_locatedNode::unparseAttributeSpecificationStatement(
             ->get_expressions();
     SgExpressionPtrList::iterator i = functionNameList.begin();
     while (i != functionNameList.end()) {
-      SgFunctionRefExp *functionRefExp = isSgFunctionRefExp(*i);
-      ASSERT_not_null(functionRefExp);
-
-      SgName name = functionRefExp->get_symbol()->get_name();
+      SgName name;
+      if (SgFunctionRefExp *functionRefExp = isSgFunctionRefExp(*i)) {
+        SgFunctionSymbol *symbol = functionRefExp->get_symbol();
+        SgFunctionDeclaration *declaration =
+            symbol != nullptr ? symbol->get_declaration() : nullptr;
+        if (declaration == nullptr || declaration->get_type() == nullptr ||
+            isSgFunctionType(declaration->get_type()) == nullptr) {
+          std::cerr << "REX_UNPARSE_INVARIANT[fortran-external-entity]: "
+                       "EXTERNAL function reference has no complete "
+                       "procedure symbol and type\n";
+          ROSE_ABORT();
+        }
+        name = symbol->get_name();
+      } else if (SgVarRefExp *variableRefExp = isSgVarRefExp(*i)) {
+        SgVariableSymbol *symbol = variableRefExp->get_symbol();
+        SgInitializedName *declaration =
+            symbol != nullptr ? symbol->get_declaration() : nullptr;
+        SgType *type =
+            declaration != nullptr ? declaration->get_type() : nullptr;
+        SgType *procedureType =
+            type != nullptr ? type->stripType(SgType::STRIP_MODIFIER_TYPE |
+                                              SgType::STRIP_POINTER_TYPE)
+                            : nullptr;
+        if (declaration == nullptr || procedureType == nullptr ||
+            isSgFunctionType(procedureType) == nullptr) {
+          std::cerr << "REX_UNPARSE_INVARIANT[fortran-external-entity]: "
+                       "EXTERNAL variable reference is not a complete typed "
+                       "procedure entity\n";
+          ROSE_ABORT();
+        }
+        name = symbol->get_name();
+      } else {
+        std::cerr << "REX_UNPARSE_INVARIANT[fortran-external-entity]: "
+                     "EXTERNAL list contains neither a function nor a typed "
+                     "procedure-entity reference\n";
+        ROSE_ABORT();
+      }
+      if (name.is_null()) {
+        std::cerr << "REX_UNPARSE_INVARIANT[fortran-external-entity]: "
+                     "EXTERNAL procedure entity has no exact name\n";
+        ROSE_ABORT();
+      }
       curprint(name);
 
       i++;
@@ -1132,8 +1608,10 @@ void FortranCodeGeneration_locatedNode::unparseAttributeSpecificationStatement(
         }
 
         case SgDataStatementValue::e_implied_do: {
-          printf("Error: value_kind == e_implied_do (not yet supported) \n");
-          break;
+          std::cerr << "Error: SgDataStatementValue implied-do has no "
+                       "structured unparser representation"
+                    << std::endl;
+          ROSE_ABORT();
         }
 
         default: {
@@ -1158,35 +1636,83 @@ void FortranCodeGeneration_locatedNode::unparseAttributeSpecificationStatement(
 
   if (attributeSpecificationStatement->get_attribute_kind() ==
       SgAttributeSpecificationStatement::e_dimensionStatement) {
-    ASSERT_not_null(attributeSpecificationStatement->get_parameter_list());
+    SgExprListExp *parameters =
+        attributeSpecificationStatement->get_parameter_list();
+    if (parameters == nullptr ||
+        parameters->get_parent() != attributeSpecificationStatement ||
+        parameters->get_expressions().empty()) {
+      std::cerr << "REX_UNPARSE_INVARIANT[fortran-dimension-source]: "
+                   "DIMENSION statement has no nonempty owned parameter list\n";
+      ROSE_ABORT();
+    }
 
-    ASSERT_not_null(attributeSpecificationStatement->get_parameter_list());
-    SgExpressionPtrList &parameterList =
-        attributeSpecificationStatement->get_parameter_list()
-            ->get_expressions();
-    SgExpressionPtrList::iterator i = parameterList.begin();
-
-    // Loop over the array variables and see if there is an explicit declaration
-    // for it. If so then this SgPntrArrRefExp will be output in this dimension
-    // statement, else the dimension information was output as part of the
-    // variable declaration.
-    bool unparseComma = false;
-    while (i != parameterList.end()) {
-      SgPntrArrRefExp *arrayReference = isSgPntrArrRefExp(*i);
-      ASSERT_not_null(arrayReference);
-
-      bool unparseForArrayVariable =
-          unparseDimensionStatementForArrayVariable(arrayReference);
-      if (unparseForArrayVariable) {
-        if (unparseComma) {
-          curprint(", ");
-        }
-
-        unparseComma = true;
-        unparseExpression(arrayReference, info);
+    const SgExpressionPtrList &parameterList = parameters->get_expressions();
+    for (size_t i = 0; i < parameterList.size(); ++i) {
+      SgPntrArrRefExp *arrayReference = isSgPntrArrRefExp(parameterList[i]);
+      SgVarRefExp *variableReference =
+          arrayReference != nullptr
+              ? isSgVarRefExp(arrayReference->get_lhs_operand())
+              : nullptr;
+      SgVariableSymbol *symbol = variableReference != nullptr
+                                     ? variableReference->get_symbol()
+                                     : nullptr;
+      SgInitializedName *initializedName =
+          symbol != nullptr ? symbol->get_declaration() : nullptr;
+      if (arrayReference == nullptr ||
+          arrayReference->get_parent() != parameters ||
+          initializedName == nullptr ||
+          initializedName->get_fortran_separate_shape_declaration() !=
+              attributeSpecificationStatement ||
+          !fortranAttributeStatementOwnsArrayShape(initializedName)) {
+        std::cerr << "REX_UNPARSE_INVARIANT[fortran-dimension-source]: "
+                     "DIMENSION item does not have an exact variable-to-"
+                     "statement ownership edge\n";
+        ROSE_ABORT();
       }
+      if (i != 0) {
+        curprint(", ");
+      }
+      unparseExpression(arrayReference, info);
+    }
+  }
 
-      i++;
+  if (attributeSpecificationStatement->get_attribute_kind() ==
+      SgAttributeSpecificationStatement::e_pointerStatement) {
+    SgExprListExp *parameters =
+        attributeSpecificationStatement->get_parameter_list();
+    if (parameters == nullptr ||
+        parameters->get_parent() != attributeSpecificationStatement ||
+        parameters->get_expressions().empty()) {
+      std::cerr << "REX_UNPARSE_INVARIANT[fortran-pointer-source]: POINTER "
+                   "statement has no nonempty owned parameter list\n";
+      ROSE_ABORT();
+    }
+    const SgExpressionPtrList &items = parameters->get_expressions();
+    for (size_t index = 0; index < items.size(); ++index) {
+      SgPntrArrRefExp *arrayReference = isSgPntrArrRefExp(items[index]);
+      SgVarRefExp *variableReference =
+          arrayReference != nullptr
+              ? isSgVarRefExp(arrayReference->get_lhs_operand())
+              : isSgVarRefExp(items[index]);
+      SgVariableSymbol *symbol = variableReference != nullptr
+                                     ? variableReference->get_symbol()
+                                     : nullptr;
+      SgInitializedName *initializedName =
+          symbol != nullptr ? symbol->get_declaration() : nullptr;
+      if (items[index] == nullptr || items[index]->get_parent() != parameters ||
+          initializedName == nullptr ||
+          initializedName->get_fortran_separate_pointer_declaration() !=
+              attributeSpecificationStatement ||
+          !fortranSeparatePointerStatementOwnsPointerAttribute(
+              initializedName)) {
+        std::cerr << "REX_UNPARSE_INVARIANT[fortran-pointer-source]: POINTER "
+                     "item has no exact variable-to-statement ownership edge\n";
+        ROSE_ABORT();
+      }
+      if (index != 0) {
+        curprint(", ");
+      }
+      unparseExpression(items[index], info);
     }
   }
 
@@ -1234,6 +1760,8 @@ void FortranCodeGeneration_locatedNode::unparseImplicitStmt(
     curprint(" ");
 
     switch (implicitStatement->get_implicit_spec()) {
+    case SgImplicitStatement::e_none:
+      break;
     case SgImplicitStatement::e_none_external:
       curprint(" (EXTERNAL)");
       break;
@@ -1244,7 +1772,9 @@ void FortranCodeGeneration_locatedNode::unparseImplicitStmt(
       curprint(" (EXTERNAL, TYPE)");
       break;
     default:
-      break;
+      std::cerr << "Error: invalid IMPLICIT NONE specifier in Fortran AST"
+                << std::endl;
+      ROSE_ABORT();
     }
   } else {
     // This is a range such as "DOUBLE PRECISION (D-E)" or a singleton such as
@@ -1252,12 +1782,9 @@ void FortranCodeGeneration_locatedNode::unparseImplicitStmt(
 
     SgInitializedNamePtrList &nameList = implicitStatement->get_variables();
     if (nameList.empty()) {
-      // For now I just want to skip where alternative implicit rules are
-      // specified.
-      if (SgProject::get_verbose() >= 1)
-        printf(
-            "***** WARNING: in unparser NON \"IMPLICT NONE\" STATEMENT NOT YET "
-            "FINISHED (skipped, default implicit type rules apply) *****\n");
+      std::cerr << "Error: non-NONE SgImplicitStatement has no type ranges"
+                << std::endl;
+      ROSE_ABORT();
     } else {
       ROSE_ASSERT(nameList.empty() == false);
 
@@ -1268,8 +1795,12 @@ void FortranCodeGeneration_locatedNode::unparseImplicitStmt(
       // DQ (12/2/2010): New code to handle implicit statements.
       while (i != nameList.end()) {
         SgInitializedName *implicitTypeName = *i;
+        ASSERT_not_null(implicitTypeName);
 
-        unp->u_fortran_type->unparseType(implicitTypeName->get_type(), info);
+        SgUnparse_Info typeInfo(info);
+        typeInfo.set_reference_node_for_qualification(implicitTypeName);
+        unp->u_fortran_type->unparseType(implicitTypeName->get_type(),
+                                         typeInfo);
         curprint("(");
         curprint(implicitTypeName->get_name().str());
         curprint(")");
@@ -1286,7 +1817,10 @@ void FortranCodeGeneration_locatedNode::unparseImplicitStmt(
 
 void FortranCodeGeneration_locatedNode::unparseBlockDataStmt(SgStatement *,
                                                              SgUnparse_Info &) {
-  printf("Sorry, unparseBlockDataStmt() not implemented \n");
+  std::cerr << "Error: legacy SgBlockDataStatement cannot represent a complete "
+               "BLOCK DATA program unit; use SgProcedureHeaderStatement"
+            << std::endl;
+  ROSE_ABORT();
 }
 
 void FortranCodeGeneration_locatedNode::unparseStatementFunctionStmt(
@@ -1305,7 +1839,9 @@ void FortranCodeGeneration_locatedNode::unparseStatementFunctionStmt(
   if (params != nullptr) {
     for (SgInitializedName *arg : params->get_args()) {
       if (arg == nullptr) {
-        continue;
+        std::cerr << "Error: null argument in Fortran statement function"
+                  << std::endl;
+        ROSE_ABORT();
       }
       if (needComma) {
         curprint(", ");
@@ -1367,8 +1903,6 @@ void FortranCodeGeneration_locatedNode::unparseWhereStmt(SgStatement *stmt,
       ROSE_ASSERT(statementList.size() == 1);
       SgStatement *statement = *(statementList.begin());
       ASSERT_not_null(statement);
-      printf("Output false statement = %p = %s \n", statement,
-             statement->class_name().c_str());
       SgUnparse_Info info_without_formating(info);
       info_without_formating.set_SkipFormatting();
       unparseStatement(statement, info_without_formating);
@@ -1593,23 +2127,39 @@ void FortranCodeGeneration_locatedNode::unparseModuleStmt(
 
   SgModuleStatement *mod = isSgModuleStatement(stmt);
   ROSE_ASSERT(mod);
-
-  bool isSubmodule = false;
-  std::string parentName;
-  if (AstAttribute *attr = mod->getAttribute("rose_fortran_submodule_parent")) {
-    if (auto *parentAttr =
-            dynamic_cast<AstValueAttribute<std::string> *>(attr)) {
-      parentName = parentAttr->get();
-      isSubmodule = !parentName.empty();
-    }
+  if (mod->get_name().is_null()) {
+    std::cerr << "Error: Fortran MODULE or SUBMODULE has no name" << std::endl;
+    ROSE_ABORT();
   }
 
-  if (isSubmodule) {
+  const SgName &parentName = mod->get_fortran_submodule_parent();
+  bool isSubmodule = false;
+  switch (mod->get_fortran_module_kind()) {
+  case SgModuleStatement::e_fortran_submodule:
+    isSubmodule = true;
+    if (!isValidFortranSubmoduleParent(parentName)) {
+      std::cerr << "REX_UNPARSE_INVARIANT[fortran-submodule-parent]: invalid "
+                   "parent='"
+                << parentName.getString() << "'" << std::endl;
+      ROSE_ABORT();
+    }
     curprint("SUBMODULE (");
-    curprint(parentName);
+    curprint(parentName.getString());
     curprint(") ");
-  } else {
+    break;
+  case SgModuleStatement::e_fortran_module:
+    if (!parentName.is_null()) {
+      std::cerr << "REX_UNPARSE_INVARIANT[fortran-module-kind]: MODULE has "
+                   "unexpected submodule parent='"
+                << parentName.getString() << "'" << std::endl;
+      ROSE_ABORT();
+    }
     curprint("MODULE ");
+    break;
+  default:
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-module-kind]: invalid value="
+              << static_cast<int>(mod->get_fortran_module_kind()) << std::endl;
+    ROSE_ABORT();
   }
   curprint(mod->get_name().str());
 
@@ -1639,6 +2189,45 @@ void FortranCodeGeneration_locatedNode::unparseProgHdrStmt(
 
   SgProgramHeaderStatement *proghdr = isSgProgramHeaderStatement(stmt);
   ASSERT_not_null(proghdr);
+  const bool lacksSourceName =
+      SageInterface::isFortranProgramUnitWithoutSourceName(proghdr);
+  const bool hasProgramStatement = hasExplicitProgramStatement(proghdr);
+  if (hasProgramStatement == lacksSourceName) {
+    std::cerr << "REX_UNPARSE_INVARIANT[program-source-name]: PROGRAM "
+                 "statement metadata disagrees with public source-name "
+                 "presence\n";
+    ROSE_ABORT();
+  }
+  if (hasProgramStatement && !isValidFortranIdentifier(proghdr->get_name())) {
+    std::cerr << "Error: explicit Fortran PROGRAM has an invalid source name"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  if (proghdr->isForward() || proghdr->get_definition() == nullptr) {
+    std::cerr << "Error: Fortran PROGRAM header must own a definition"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  const SgName endStatementName = proghdr->get_end_statement_name();
+  const bool hasEndStatementName = !endStatementName.getString().empty();
+  if (proghdr->get_named_in_end_statement() != hasEndStatementName) {
+    std::cerr << "REX_UNPARSE_INVARIANT[program-end-name]: END PROGRAM name "
+                 "metadata is inconsistent\n";
+    ROSE_ABORT();
+  }
+  if (hasEndStatementName && !hasProgramStatement) {
+    std::cerr << "REX_UNPARSE_INVARIANT[program-end-name]: implicit Fortran "
+                 "main program has a named END PROGRAM\n";
+    ROSE_ABORT();
+  }
+  if (hasEndStatementName &&
+      (!isValidFortranIdentifier(endStatementName) ||
+       !namesMatch(proghdr->get_name().str(), endStatementName.str()))) {
+    std::cerr << "REX_UNPARSE_INVARIANT[program-end-name]: END PROGRAM name '"
+              << endStatementName << "' is invalid or does not match PROGRAM "
+              << "name '" << proghdr->get_name() << "'\n";
+    ROSE_ABORT();
+  }
 
   if (!proghdr->isForward() && proghdr->get_definition() != nullptr &&
       !info.SkipFunctionDefinition()) {
@@ -1655,14 +2244,13 @@ void FortranCodeGeneration_locatedNode::unparseProgHdrStmt(
 
     unparseStatementNumbersSupport(proghdr->get_end_numeric_label(), info);
 
-    // This is a special name for the case where the program header should not
-    // be output (it did not appear in the original source file).
-    if (proghdr->get_name() != ROSE_IMPLICIT_FORTRAN_PROGRAM_NAME) {
+    if (hasProgramStatement) {
       // The "END" has just been output by the unparsing of the
       // SgFunctionDefinition so just add "PROGRAM <name>".
-      curprint("END PROGRAM ");
-      if (proghdr->get_named_in_end_statement()) {
-        curprint(proghdr->get_name().str());
+      curprint("END PROGRAM");
+      if (hasEndStatementName) {
+        curprint(" ");
+        curprint(endStatementName.str());
       }
 
       // Output 2 new lines to better separate functions visually in the output
@@ -1671,18 +2259,15 @@ void FortranCodeGeneration_locatedNode::unparseProgHdrStmt(
     } else {
       // And "end" is always required even if the program-stmt is not explicitly
       // used.
-      curprint("END ");
+      curprint("END");
 
       // Added to fix problem reported by Liao (email 12/28/2007).
       unp->cur.insert_newline(1);
     }
   } else {
-    // Output the forward declaration only
-
-    // This is a special name for the case where the program header should not
-    // be output (it did not appear in the original source file).
-    if (proghdr->get_name() != ROSE_IMPLICIT_FORTRAN_PROGRAM_NAME) {
-      // Are there possible qualifiers that we are missing?
+    // Output only the header syntax while the definition is being emitted by
+    // the enclosing SgFunctionDefinition traversal.
+    if (hasProgramStatement) {
       curprint("PROGRAM ");
       curprint(proghdr->get_name().str());
     }
@@ -1703,21 +2288,47 @@ void FortranCodeGeneration_locatedNode::unparseInterfaceStmt(
   SgInterfaceStatement *interfaceStatement = isSgInterfaceStatement(stmt);
   ASSERT_not_null(interfaceStatement);
 
+  for (SgInterfaceBody *body : interfaceStatement->get_interface_body_list()) {
+    if (body == nullptr ||
+        (body->get_use_function_name() &&
+         body->get_function_name().is_null()) ||
+        (!body->get_use_function_name() &&
+         body->get_functionDeclaration() == nullptr)) {
+      std::cerr << "Error: malformed entry in Fortran INTERFACE body"
+                << std::endl;
+      ROSE_ABORT();
+    }
+  }
+
   string nm = interfaceStatement->get_name().str();
   curprint("INTERFACE ");
 
   switch (interfaceStatement->get_generic_spec()) {
   case SgInterfaceStatement::e_named_interface_type: {
+    if (nm.empty()) {
+      std::cerr << "Error: named Fortran INTERFACE has no name" << std::endl;
+      ROSE_ABORT();
+    }
     curprint(nm);
     break;
   }
   case SgInterfaceStatement::e_operator_interface_type: {
+    if (nm.empty()) {
+      std::cerr << "Error: operator Fortran INTERFACE has no operator name"
+                << std::endl;
+      ROSE_ABORT();
+    }
     curprint("operator(");
     curprint(nm);
     curprint(")");
     break;
   }
   case SgInterfaceStatement::e_assignment_interface_type: {
+    if (nm.empty()) {
+      std::cerr << "Error: assignment Fortran INTERFACE has no generic name"
+                << std::endl;
+      ROSE_ABORT();
+    }
     curprint("assignment(");
     curprint(nm);
     curprint(")");
@@ -1755,21 +2366,18 @@ void FortranCodeGeneration_locatedNode::unparseInterfaceStmt(
           isSgProcedureHeaderStatement(functionDeclaration);
       if (procHeader != nullptr && procHeader->get_definition() == nullptr) {
         SgUnparse_Info ninfo(info);
+        // INTERFACE bodies use a direct procedure-header dispatch so their
+        // specification declarations can be emitted explicitly below.  That
+        // bypasses the common statement dispatcher; preserve its fixed-form
+        // label-field contract here before writing the header.
+        unparseStatementNumbers(procHeader, ninfo);
         unparseProcHdrStmt(procHeader, ninfo);
 
         if (SgFunctionParameterScope *paramScope =
                 procHeader->get_functionParameterScope()) {
-          constexpr const char *kFortranImplicitDeclAttr =
-              "rose_fortran_implicit_declaration";
-          constexpr const char *kFortranEmitImplicitDeclAttr =
-              "rose_fortran_emit_implicit_declaration";
           for (SgStatement *specStmt : paramScope->generateStatementList()) {
             if (auto *varDecl = isSgVariableDeclaration(specStmt)) {
-              if (varDecl->getAttribute(kFortranImplicitDeclAttr) != nullptr &&
-                  varDecl->getAttribute(kFortranEmitImplicitDeclAttr) ==
-                      nullptr) {
-                continue;
-              }
+              requireFortranSourceDeclarationSurface(varDecl);
             }
             unparseStatement(specStmt, info);
           }
@@ -1780,8 +2388,13 @@ void FortranCodeGeneration_locatedNode::unparseInterfaceStmt(
           endKind = " FUNCTION";
         } else if (procHeader->isSubroutine()) {
           endKind = "SUBROUTINE";
-        } else {
+        } else if (procHeader->isBlockData()) {
           endKind = "BLOCK DATA";
+        } else {
+          std::cerr << "Error: INTERFACE body procedure has unknown Fortran "
+                       "subprogram kind"
+                    << std::endl;
+          ROSE_ABORT();
         }
         unparseStatementNumbersSupport(procHeader->get_end_numeric_label(),
                                        info);
@@ -1817,6 +2430,15 @@ void FortranCodeGeneration_locatedNode::unparseCommonBlock(
   curprint("COMMON ");
 
   SgCommonBlockObjectPtrList &blockList = commonBlock->get_block_list();
+  if (blockList.empty()) {
+    std::cerr << "Error: Fortran COMMON statement has no block objects"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  for (SgCommonBlockObject *block : blockList) {
+    ASSERT_not_null(block);
+    ASSERT_not_null(block->get_variable_reference_list());
+  }
   SgCommonBlockObjectPtrList::iterator i = blockList.begin();
   while (i != blockList.end()) {
     curprint("/");
@@ -1890,18 +2512,96 @@ void FortranCodeGeneration_locatedNode::unparseCommonBlock(
   unp->cur.insert_newline(1);
 }
 
+void FortranCodeGeneration_locatedNode::unparseEnumDeclStmt(
+    SgStatement *stmt, SgUnparse_Info &info) {
+  SgEnumDeclaration *enumDecl = isSgEnumDeclaration(stmt);
+  ASSERT_not_null(enumDecl);
+  enumDecl->validate_enumerator_source_ownership();
+  if (enumDecl->get_definingDeclaration() != enumDecl) {
+    std::cerr << "REX_UNPARSER_INVARIANT[fortran-enum]: statement list "
+                 "contains a nondefining ENUM declaration\n";
+    ROSE_ABORT();
+  }
+  SgEnumDeclaration *firstNondef =
+      isSgEnumDeclaration(enumDecl->get_firstNondefiningDeclaration());
+  if (firstNondef == nullptr ||
+      firstNondef->get_definingDeclaration() != enumDecl ||
+      firstNondef->get_scope() != enumDecl->get_scope()) {
+    std::cerr << "REX_UNPARSER_INVARIANT[fortran-enum]: malformed ENUM "
+                 "declaration chain\n";
+    ROSE_ABORT();
+  }
+  if (enumDecl->get_enumerators().empty()) {
+    std::cerr << "REX_UNPARSER_INVARIANT[fortran-enum]: ENUM declaration has "
+                 "no enumerators\n";
+    ROSE_ABORT();
+  }
+
+  curprint("ENUM, BIND(C)");
+  unp->cur.insert_newline(1);
+  for (SgInitializedName *enumerator : enumDecl->get_enumerators()) {
+    if (enumerator == nullptr || enumerator->get_parent() != enumDecl ||
+        enumerator->get_scope() != enumDecl->get_scope() ||
+        enumerator->get_name().is_null()) {
+      std::cerr << "REX_UNPARSER_INVARIANT[fortran-enum]: malformed "
+                   "enumerator ownership or name\n";
+      ROSE_ABORT();
+    }
+    SgAssignInitializer *initializer =
+        isSgAssignInitializer(enumerator->get_initializer());
+    SgEnumVal *value = initializer != nullptr
+                           ? isSgEnumVal(initializer->get_operand_i())
+                           : nullptr;
+    SgEnumDeclaration *valueDecl =
+        value != nullptr ? value->get_declaration() : nullptr;
+    if (initializer == nullptr || value == nullptr || valueDecl == nullptr ||
+        valueDecl->get_definingDeclaration() != enumDecl ||
+        value->get_name() != enumerator->get_name()) {
+      std::cerr << "REX_UNPARSER_INVARIANT[fortran-enum]: enumerator '"
+                << enumerator->get_name()
+                << "' has no exact semantic integer initializer\n";
+      ROSE_ABORT();
+    }
+
+    unparseAttachedPreprocessingInfo(enumerator, info,
+                                     PreprocessingInfo::before);
+    curprint("ENUMERATOR :: ");
+    curprint(enumerator->get_name().str());
+    curprint(" = ");
+    curprint(std::to_string(value->get_value()));
+    unparseAttachedPreprocessingInfo(enumerator, info,
+                                     PreprocessingInfo::after);
+    unp->cur.insert_newline(1);
+  }
+  unparseAttachedPreprocessingInfo(enumDecl, info, PreprocessingInfo::inside);
+  curprint("END ENUM");
+  unp->cur.insert_newline(1);
+}
+
 void FortranCodeGeneration_locatedNode::unparseVarDeclStmt(
     SgStatement *stmt, SgUnparse_Info &info) {
   // Sage node corresponds to Fortran variable declaration
 
   SgVariableDeclaration *vardecl = isSgVariableDeclaration(stmt);
   ASSERT_not_null(vardecl);
+  requireFortranSourceDeclarationSurface(vardecl);
+  if (vardecl->get_variables().empty()) {
+    std::cerr << "Error: Fortran variable declaration has no entities"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  for (SgInitializedName *variable : vardecl->get_variables()) {
+    ASSERT_not_null(variable);
+    if (variable->get_name().is_null()) {
+      std::cerr << "Error: unnamed entity in Fortran variable declaration"
+                << std::endl;
+      ROSE_ABORT();
+    }
+  }
 
   // In Fortran we should never have to deal with a type declaration
   // inside a variable declaration (e.g. struct A { int x; } a;)
-  ROSE_ASSERT(
-      vardecl->get_variableDeclarationContainsBaseTypeDefiningDeclaration() ==
-      false);
+  ROSE_ASSERT(vardecl->get_baseTypeDefiningDeclaration() == nullptr);
 
   // Build a new SgUnparse_Info object to represent formatting options
   // for this statement
@@ -1941,17 +2641,18 @@ void FortranCodeGeneration_locatedNode::unparseVarDeclStmt(
 
 void FortranCodeGeneration_locatedNode::unparseVarDefnStmt(SgStatement *stmt,
                                                            SgUnparse_Info &) {
-  // Sage node has no Fortran correspondence
-  SgVariableDefinition *vardefn_stmt = isSgVariableDefinition(stmt);
-  ASSERT_not_null(vardefn_stmt);
-  ROSE_ASSERT(false && "FortranCodeGeneration_locatedNode::unparseVarDefnStmt");
+  ASSERT_not_null(isSgVariableDefinition(stmt));
+  std::cerr << "Error: SgVariableDefinition has no Fortran source spelling"
+            << std::endl;
+  ROSE_ABORT();
 }
 
 void FortranCodeGeneration_locatedNode::unparseParamDeclStmt(SgStatement *,
                                                              SgUnparse_Info &) {
-  // Sage node corresponds to Fortran parameter declaration
-  ROSE_ASSERT(false &&
-              "FortranCodeGeneration_locatedNode::unparseParamDeclStmt");
+  std::cerr << "Error: SgParameterStatement must not reach the Fortran "
+               "unparser"
+            << std::endl;
+  ROSE_ABORT();
 }
 
 void FortranCodeGeneration_locatedNode::unparseUseStmt(SgStatement *stmt,
@@ -1960,6 +2661,18 @@ void FortranCodeGeneration_locatedNode::unparseUseStmt(SgStatement *stmt,
 
   SgUseStatement *useStmt = isSgUseStatement(stmt);
   ASSERT_not_null(useStmt);
+  if (useStmt->get_name().is_null()) {
+    std::cerr << "Error: Fortran USE statement has no module name" << std::endl;
+    ROSE_ABORT();
+  }
+  for (SgRenamePair *renamePair : useStmt->get_rename_list()) {
+    if (renamePair == nullptr || renamePair->get_use_name().is_null() ||
+        (renamePair->isRename() && renamePair->get_local_name().is_null())) {
+      std::cerr << "Error: malformed rename entry in Fortran USE statement"
+                << std::endl;
+      ROSE_ABORT();
+    }
+  }
 
   curprint("USE ");
 
@@ -2013,72 +2726,45 @@ void FortranCodeGeneration_locatedNode::unparseBasicBlockStmt(
   SgBasicBlock *block = isSgBasicBlock(bb);
   ASSERT_not_null(block);
 
+  const bool isFortranBlock = block->get_is_fortran_block_construct();
+  const std::string blockName = block->get_fortran_block_construct_name();
+  if (!isFortranBlock && !blockName.empty()) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-block-role]: ordinary basic "
+                 "block owns a Fortran construct name\n";
+    ROSE_ABORT();
+  }
+  if (isFortranBlock) {
+    SgScopeStatement *semanticScope = block->get_scope();
+    SgNode *structuralOwner = block->get_parent();
+    const bool directScopeOwner =
+        structuralOwner == semanticScope && semanticScope != nullptr &&
+        semanticScope != block && semanticScope->statementExistsInScope(block);
+    SgOmpBodyStatement *ompOwner = isSgOmpBodyStatement(structuralOwner);
+    const bool exactOpenMPBodyOwner =
+        ompOwner != nullptr && ompOwner->get_body() == block &&
+        semanticScope != nullptr && semanticScope != block &&
+        ompOwner->get_parent() == semanticScope &&
+        semanticScope->statementExistsInScope(ompOwner);
+    if (!directScopeOwner && !exactOpenMPBodyOwner) {
+      std::cerr << "REX_UNPARSE_INVARIANT[fortran-block-owner]: Fortran "
+                   "BLOCK has no exact lexical owner\n";
+      ROSE_ABORT();
+    }
+    if (!blockName.empty()) {
+      curprint(blockName + ": ");
+    }
+    curprint("BLOCK");
+    unp->cur.insert_newline(1);
+  }
+
   // space here is required to get "else if" blocks formatted correctly (at
   // least).
   unp->cur.format(block, info, FORMAT_BEFORE_BASIC_BLOCK1);
 
-  SgStatement *first_stmt = nullptr;
-  int first_line = -1;
-  for (SgStatement *stmt : block->get_statements()) {
-    if (stmt == nullptr) {
-      continue;
-    }
-    Sg_File_Info *stmt_info = stmt->get_file_info();
-    if (stmt_info == nullptr || stmt_info->get_line() <= 0) {
-      continue;
-    }
-    if (first_line < 0 || stmt_info->get_line() < first_line) {
-      first_line = stmt_info->get_line();
-      first_stmt = stmt;
-    }
-  }
-  if (first_stmt != nullptr && first_line > 0) {
-    AttachedPreprocessingInfoType *block_info =
-        block->getAttachedPreprocessingInfo();
-    if (block_info != nullptr && !block_info->empty()) {
-      AttachedPreprocessingInfoType to_move;
-      for (auto it = block_info->begin(); it != block_info->end();) {
-        PreprocessingInfo *pi = *it;
-        if (pi != nullptr &&
-            pi->getRelativePosition() == PreprocessingInfo::inside &&
-            pi->getLineNumber() > 0 && pi->getLineNumber() < first_line) {
-          to_move.push_back(pi);
-          it = block_info->erase(it);
-          continue;
-        }
-        ++it;
-      }
-      PreprocessingInfo *prev = nullptr;
-      for (PreprocessingInfo *pi : to_move) {
-        if (prev == nullptr) {
-          first_stmt->addToAttachedPreprocessingInfo(pi,
-                                                     PreprocessingInfo::before);
-        } else {
-          first_stmt->insertToAttachedPreprocessingInfo(pi, prev);
-        }
-        pi->setRelativePosition(PreprocessingInfo::before);
-        prev = pi;
-      }
-    }
-  }
-
-  constexpr const char *kFortranImplicitDeclAttr =
-      "rose_fortran_implicit_declaration";
-  constexpr const char *kFortranEmitImplicitDeclAttr =
-      "rose_fortran_emit_implicit_declaration";
   for (auto stmt : block->get_statements()) {
     ASSERT_not_null(stmt);
     if (auto *varDecl = isSgVariableDeclaration(stmt)) {
-      if (varDecl->getAttribute(kFortranImplicitDeclAttr) != nullptr &&
-          varDecl->getAttribute(kFortranEmitImplicitDeclAttr) == nullptr) {
-        unparseAttachedPreprocessingInfo(varDecl, info,
-                                         PreprocessingInfo::before);
-        unparseAttachedPreprocessingInfo(varDecl, info,
-                                         PreprocessingInfo::inside);
-        unparseAttachedPreprocessingInfo(varDecl, info,
-                                         PreprocessingInfo::after);
-        continue;
-      }
+      requireFortranSourceDeclarationSurface(varDecl);
     }
     // FMZ: for module file, only output the variable declarations (not
     // definitions) Pei-Hung (05/23/2019) Need to add SgUseStatement,
@@ -2099,6 +2785,16 @@ void FortranCodeGeneration_locatedNode::unparseBasicBlockStmt(
   //    c$OMP END PARALLEL
   //          END
   unparseAttachedPreprocessingInfo(block, info, PreprocessingInfo::inside);
+
+  if (isFortranBlock) {
+    unparseStatementNumbersSupport(block->get_fortran_block_end_numeric_label(),
+                                   info);
+    curprint("END BLOCK");
+    if (!blockName.empty()) {
+      curprint(" " + blockName);
+    }
+    unp->cur.insert_newline(1);
+  }
 }
 
 bool hasCStyleElseIfConstruction(SgIfStmt *parentIfStatement) {
@@ -2208,6 +2904,7 @@ void FortranCodeGeneration_locatedNode::unparseIfStmt(SgStatement *stmt,
     // This branch taken for an if-then-stmt.
     // Note that the string label if output before "IF", not after "THEN"
     curprint("THEN");
+    unp->cur.insert_newline(1);
     unparseStatement(if_stmt->get_true_body(), info);
   } else {
     if (if_stmt->get_use_then_keyword()) {
@@ -2219,6 +2916,7 @@ void FortranCodeGeneration_locatedNode::unparseIfStmt(SgStatement *stmt,
       // Output the if-construct-name string after THEN if needed
       if (if_stmt->get_string_label().empty() == false)
         curprint(" " + if_stmt->get_string_label());
+      unp->cur.insert_newline(1);
       unparseStatement(if_stmt->get_true_body(), info);
     } else {
       // IF statement branch (not if-construct)
@@ -2441,12 +3139,35 @@ void FortranCodeGeneration_locatedNode::unparseDoStmt(SgStatement *stmt,
   // initialization, condition and update expressions into a triplet.
   // We assume that these statements are of a very restricted form.
   SgExpression *initExp = doloop->get_initialization();
+  ASSERT_not_null(initExp);
 
   SgExpression *condExp = doloop->get_bound();
   ASSERT_not_null(condExp);
 
   SgExpression *updateExp = doloop->get_increment();
   ASSERT_not_null(updateExp);
+
+  SgStatement *body = doloop->get_body();
+  ASSERT_not_null(body);
+  if (!doloop->get_has_end_statement()) {
+    if (doloop->get_end_numeric_label() == nullptr) {
+      std::cerr << "Error: Fortran DO has neither END DO nor a terminal label"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    SgLabelSymbol *endLabelSymbol =
+        doloop->get_end_numeric_label()->get_symbol();
+    SgStatement *endLabelStmt = endLabelSymbol != nullptr
+                                    ? endLabelSymbol->get_fortran_statement()
+                                    : nullptr;
+    if (endLabelStmt == nullptr || endLabelStmt == doloop ||
+        isSgNullStatement(endLabelStmt) != nullptr) {
+      std::cerr << "Error: Fortran labeled DO has no resolved terminal "
+                   "statement"
+                << std::endl;
+      ROSE_ABORT();
+    }
+  }
 
   if (doloop->get_string_label().empty() == false) {
     // Output the string label
@@ -2480,7 +3201,6 @@ void FortranCodeGeneration_locatedNode::unparseDoStmt(SgStatement *stmt,
   }
 
   // loop body (must always exist)
-  SgStatement *body = doloop->get_body();
   unparseStatement(body, info);
 
   ASSERT_not_null(unp);
@@ -2493,20 +3213,7 @@ void FortranCodeGeneration_locatedNode::unparseDoStmt(SgStatement *stmt,
 
   // DQ (12/26/2007): handling cases where enddo is not in the source code and
   // not required (stmt vs. construct)
-  bool output_enddo = doloop->get_has_end_statement();
-  if (output_enddo == false && doloop->get_end_numeric_label() != nullptr) {
-    SgLabelSymbol *endLabelSymbol =
-        doloop->get_end_numeric_label()->get_symbol();
-    SgStatement *endLabelStmt = endLabelSymbol != nullptr
-                                    ? endLabelSymbol->get_fortran_statement()
-                                    : nullptr;
-    if (endLabelStmt == nullptr || endLabelStmt == doloop ||
-        isSgNullStatement(endLabelStmt) != nullptr) {
-      output_enddo = true;
-    }
-  }
-
-  if (output_enddo) {
+  if (doloop->get_has_end_statement()) {
     unparseStatementNumbersSupport(doloop->get_end_numeric_label(), info);
 
     curprint("END DO");
@@ -2597,6 +3304,7 @@ void FortranCodeGeneration_locatedNode::unparseSwitchStmt(
   // Sage node corresponds to Fortran 'select'
   SgSwitchStatement *switch_stmt = isSgSwitchStatement(stmt);
   ASSERT_not_null(switch_stmt);
+  ASSERT_not_null(switch_stmt->get_body());
 
   if (switch_stmt->get_string_label().empty() == false) {
     // Output the string label
@@ -2611,9 +3319,7 @@ void FortranCodeGeneration_locatedNode::unparseSwitchStmt(
   unparseExpression(expressionStatement->get_expression(), info);
   curprint(")");
 
-  if (switch_stmt->get_body()) {
-    unparseStatement(switch_stmt->get_body(), info);
-  }
+  unparseStatement(switch_stmt->get_body(), info);
 
   unparseStatementNumbersSupport(switch_stmt->get_end_numeric_label(), info);
 
@@ -2633,6 +3339,8 @@ void FortranCodeGeneration_locatedNode::unparseCaseStmt(SgStatement *stmt,
   // Sage node corresponds to Fortran 'case'
   SgCaseOptionStmt *case_stmt = isSgCaseOptionStmt(stmt);
   ASSERT_not_null(case_stmt);
+  ASSERT_not_null(case_stmt->get_key());
+  ASSERT_not_null(case_stmt->get_body());
 
   curprint("CASE (");
   unparseExpression(case_stmt->get_key(), info);
@@ -2643,9 +3351,7 @@ void FortranCodeGeneration_locatedNode::unparseCaseStmt(SgStatement *stmt,
     curprint(" " + case_stmt->get_case_construct_name());
   }
 
-  if (case_stmt->get_body()) {
-    unparseStatement(case_stmt->get_body(), info);
-  }
+  unparseStatement(case_stmt->get_body(), info);
 }
 
 void FortranCodeGeneration_locatedNode::unparseDefaultStmt(
@@ -2653,6 +3359,7 @@ void FortranCodeGeneration_locatedNode::unparseDefaultStmt(
   // Sage node corresponds to Fortran 'case default'
   SgDefaultOptionStmt *default_stmt = isSgDefaultOptionStmt(stmt);
   ASSERT_not_null(default_stmt);
+  ASSERT_not_null(default_stmt->get_body());
 
   curprint("CASE DEFAULT");
 
@@ -2661,9 +3368,7 @@ void FortranCodeGeneration_locatedNode::unparseDefaultStmt(
     curprint(" " + default_stmt->get_default_construct_name());
   }
 
-  if (default_stmt->get_body()) {
-    unparseStatement(default_stmt->get_body(), info);
-  }
+  unparseStatement(default_stmt->get_body(), info);
 }
 
 void FortranCodeGeneration_locatedNode::unparseBreakStmt(SgStatement *stmt,
@@ -2706,11 +3411,7 @@ void FortranCodeGeneration_locatedNode::unparseLabelStmt(
     // The SgLabelStatement is used for the label
     const std::string label = labelStmt->get_label().getString();
     if (!label.empty()) {
-      bool fixedFormat = (unp->currentFile == nullptr) ||
-                         (unp->currentFile->get_outputFormat() ==
-                          SgFile::e_unknown_output_format) ||
-                         (unp->currentFile->get_outputFormat() ==
-                          SgFile::e_fixed_form_output_format);
+      const bool fixedFormat = isFixedFortranOutput(unp);
       if (fixedFormat) {
         std::string labelText = label + " ";
         while (labelText.size() < 6) {
@@ -2721,21 +3422,26 @@ void FortranCodeGeneration_locatedNode::unparseLabelStmt(
         curprint(label + " ");
       }
     } else {
-      // For Flang-built ASTs, a label may be recorded as a numeric label.
-      // Fall back to the numeric label when no string label is present.
+      if (labelStmt->get_numeric_label() == nullptr) {
+        std::cerr << "Error: SgLabelStatement has neither a string nor a "
+                     "numeric Fortran label"
+                  << std::endl;
+        ROSE_ABORT();
+      }
       unparseStatementNumbersSupport(labelStmt->get_numeric_label(), info);
     }
     if (labelStmt->get_statement() != nullptr) {
       unparseLanguageSpecificStatement(labelStmt->get_statement(), info);
     } else {
-      curprint_keyword("CONTINUE", info);
-      unp->cur.insert_newline(1);
+      std::cerr << "Error: SgLabelStatement has no labeled statement"
+                << std::endl;
+      ROSE_ABORT();
     }
   } else {
-    // This IR node corresponds to Fortran 'label CONTINUE' statement
-    // TODO: rethink label handling in old parser
-    curprint_keyword("CONTINUE", info);
-    unp->cur.insert_newline(1);
+    std::cerr << "Error: legacy SgLabelStatement lacks structured Fortran "
+                 "label ownership"
+              << std::endl;
+    ROSE_ABORT();
   }
 }
 
@@ -2870,17 +3576,15 @@ void FortranCodeGeneration_locatedNode::unparsePrintStatement(
       iolist != nullptr && !iolist->get_expressions().empty();
 
   SgExpression *fmt = printStatement->get_format();
-  if (fmt != nullptr) {
-    unparseExpression(fmt, info);
-    if (has_items) {
-      curprint(", ");
-    }
-  } else {
-    // Default if we don't have a valid format
-    curprint("*");
-    if (has_items) {
-      curprint(", ");
-    }
+  if (fmt == nullptr) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-print-format]: PRINT statement "
+            "has no exact format expression\n");
+    ROSE_ABORT();
+  }
+  unparseExpression(fmt, info);
+  if (has_items) {
+    curprint(", ");
   }
 
   if (has_items) {
@@ -2967,8 +3671,10 @@ void FortranCodeGeneration_locatedNode::unparseReadStatement(
     // Added missing items to the io-control-spec-list [Rasmussen, 2019.05.31]
 
     unparse_IO_Control_Support("FMT", readStatement->get_format(), false, info);
-    unparse_IO_Control_Support("NML", readStatement->get_namelist(), false,
-                               info);
+    if (!readStatement->get_namelist().empty()) {
+      curprint(", NML=");
+      curprint(readStatement->get_namelist());
+    }
     unparse_IO_Control_Support("ADVANCE", readStatement->get_advance(), false,
                                info);
     unparse_IO_Control_Support("ASYNCHRONOUS",
@@ -3009,8 +3715,10 @@ void FortranCodeGeneration_locatedNode::unparseWriteStatement(
   unparse_IO_Support(stmt, false, info);
 
   unparse_IO_Control_Support("FMT", writeStatement->get_format(), false, info);
-  unparse_IO_Control_Support("NML", writeStatement->get_namelist(), false,
-                             info);
+  if (!writeStatement->get_namelist().empty()) {
+    curprint(", NML=");
+    curprint(writeStatement->get_namelist());
+  }
   unparse_IO_Control_Support("ADVANCE", writeStatement->get_advance(), false,
                              info);
   unparse_IO_Control_Support("ASYNCHRONOUS", writeStatement->get_asynchronous(),
@@ -3276,22 +3984,46 @@ void FortranCodeGeneration_locatedNode::unparseEndfileStatement(
 
 void FortranCodeGeneration_locatedNode::unparseWaitStatement(
     SgStatement *stmt, SgUnparse_Info &info) {
-  // Sage node corresponds to Fortran input/output statement
   SgWaitStatement *waitStatement = isSgWaitStatement(stmt);
   ASSERT_not_null(waitStatement);
+
+  auto requireExactChildOwner = [&](SgExpression *expression, const char *name,
+                                    bool required) {
+    if (expression == nullptr) {
+      if (required) {
+        std::cerr << "REX_UNPARSE_INVARIANT[fortran-wait-spec]: WAIT spec '"
+                  << name << "' is required but absent\n";
+        ROSE_ABORT();
+      }
+      return;
+    }
+    if (expression->get_parent() != waitStatement) {
+      std::cerr << "REX_UNPARSE_INVARIANT[fortran-wait-spec]: WAIT spec '"
+                << name << "' does not have exact statement ownership\n";
+      ROSE_ABORT();
+    }
+  };
+  requireExactChildOwner(waitStatement->get_unit(), "UNIT", true);
+  requireExactChildOwner(waitStatement->get_end(), "END", false);
+  requireExactChildOwner(waitStatement->get_eor(), "EOR", false);
+  requireExactChildOwner(waitStatement->get_err(), "ERR", false);
+  requireExactChildOwner(waitStatement->get_id(), "ID", false);
+  requireExactChildOwner(waitStatement->get_iomsg(), "IOMSG", false);
+  requireExactChildOwner(waitStatement->get_iostat(), "IOSTAT", false);
+  if (waitStatement->get_io_stmt_list() != nullptr) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-wait-spec]: WAIT statement "
+                 "cannot own an I/O item list\n";
+    ROSE_ABORT();
+  }
 
   curprint("WAIT (");
 
   unparse_IO_Support(stmt, false, info);
+  unparse_IO_Control_Support("END", waitStatement->get_end(), false, info);
+  unparse_IO_Control_Support("EOR", waitStatement->get_eor(), false, info);
+  unparse_IO_Control_Support("ID", waitStatement->get_id(), false, info);
 
   curprint(") ");
-
-  SgExprListExp *iolist = waitStatement->get_io_stmt_list();
-  if (iolist != nullptr) {
-    // DQ (3/28/2017): Eliminate warning of overloaded virtual function in base
-    // class (from Clang). unparseExprList(iolist, info, false /*paren*/);
-    unparseExprList(iolist, info);
-  }
 
   unp->cur.insert_newline(1);
 }
@@ -3558,24 +4290,25 @@ void FortranCodeGeneration_locatedNode::unparsePragmaDeclStmt(
   SgPragma *pragma = pragmaDeclaration->get_pragma();
   ASSERT_not_null(pragma);
 
-  string txt = pragma->get_pragma();
-  string lower_txt = txt;
-  for (char &ch : lower_txt) {
-    ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-  }
-  size_t first = lower_txt.find_first_not_of(" \t");
-  if (first == string::npos) {
-    first = 0;
-  }
-  bool is_openmp_or_acc = lower_txt.compare(first, 3, "omp") == 0 ||
-                          lower_txt.compare(first, 3, "acc") == 0 ||
-                          lower_txt.compare(first, 3, "cuf") == 0;
-  AstAttribute *att = stmt->getAttribute("OmpAttributeList");
-  if (att || is_openmp_or_acc)
-    curprint("!$");
-  else
+  switch (pragmaDeclaration->get_fortran_directive_family()) {
+  case SgPragmaDeclaration::e_fortran_directive_none:
     curprint("!pragma ");
-  curprint(txt);
+    break;
+  case SgPragmaDeclaration::e_fortran_directive_openmp:
+  case SgPragmaDeclaration::e_fortran_directive_ompx:
+  case SgPragmaDeclaration::e_fortran_directive_openacc:
+  case SgPragmaDeclaration::e_fortran_directive_cuda:
+    curprint("!$");
+    break;
+  default:
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-pragma-family]: pragma has "
+                 "invalid family="
+              << static_cast<int>(
+                     pragmaDeclaration->get_fortran_directive_family())
+              << std::endl;
+    ROSE_ABORT();
+  }
+  curprint(pragma->get_pragma());
   curprint("\n");
 }
 
@@ -3642,7 +4375,8 @@ void FortranCodeGeneration_locatedNode::unparseStringAttr(SgTypeString *type,
 }
 
 void FortranCodeGeneration_locatedNode::unparseEntityTypeAttr(
-    SgType *type, SgUnparse_Info &info, bool oneVarOnly) {
+    SgType *type, SgUnparse_Info &info, bool oneVarOnly,
+    bool emitDimensionShape) {
   if (type->get_isCoArray()) {
     SgType *baseType;
     SgArrayType *arrayType = nullptr;
@@ -3653,13 +4387,15 @@ void FortranCodeGeneration_locatedNode::unparseEntityTypeAttr(
       baseType = arrayType->get_base_type();
     }
     if (isSgPointerType(type))
-      unparseEntityTypeAttr(baseType, info, oneVarOnly);
+      unparseEntityTypeAttr(baseType, info, oneVarOnly, emitDimensionShape);
     else if (isSgTypeString(baseType)) {
       unparseArrayAttr(arrayType, info, oneVarOnly); // print codimension
       unparseStringAttr(isSgTypeString(baseType), info, oneVarOnly);
     } else if (isSgArrayType(baseType)) {
       SgArrayType *arrayBaseType = isSgArrayType(baseType);
-      unparseArrayAttr(arrayBaseType, info, oneVarOnly);
+      if (arrayBaseType->get_isCoArray() || emitDimensionShape) {
+        unparseArrayAttr(arrayBaseType, info, oneVarOnly);
+      }
       unparseArrayAttr(arrayType, info, oneVarOnly); // print codimension
       SgTypeString *stringType = isSgTypeString(arrayBaseType->get_base_type());
       if (stringType)
@@ -3668,13 +4404,15 @@ void FortranCodeGeneration_locatedNode::unparseEntityTypeAttr(
       unparseArrayAttr(arrayType, info, oneVarOnly); // print codimension
   } else if (isSgArrayType(type)) {
     SgArrayType *arrayType = isSgArrayType(type);
-    unparseArrayAttr(arrayType, info, oneVarOnly);
+    if (arrayType->get_isCoArray() || emitDimensionShape) {
+      unparseArrayAttr(arrayType, info, oneVarOnly);
+    }
     SgTypeString *stringType = isSgTypeString(arrayType->get_base_type());
     if (stringType)
       unparseStringAttr(stringType, info, oneVarOnly);
   } else if (isSgPointerType(type))
     unparseEntityTypeAttr(isSgPointerType(type)->get_base_type(), info,
-                          oneVarOnly);
+                          oneVarOnly, emitDimensionShape);
   else if (isSgTypeString(type))
     unparseStringAttr(isSgTypeString(type), info, oneVarOnly);
 }
@@ -3689,9 +4427,20 @@ void FortranCodeGeneration_locatedNode::unparseVarDecl(
   //   <type> <attributes> :: <variable>
 
   SgName name = initializedName->get_name();
-  SgType *type = initializedName->get_type();
+  SgType *semanticType = initializedName->get_type();
+  SgType *type = initializedName->get_fortran_source_type();
   SgInitializer *init = initializedName->get_initializer();
-  ROSE_ASSERT(type);
+  if (semanticType == nullptr || type == nullptr ||
+      !fortranSourceTypeMatchesSemanticType(initializedName)) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-source-type]: variable '"
+              << name
+              << "' has no exact compatible semantic/source type pair\n";
+    ROSE_ABORT();
+  }
+  const bool emitDimensionShape =
+      !fortranSeparateStatementOwnsArrayShape(initializedName);
+  SgUnparse_Info typeInfo(info);
+  typeInfo.set_reference_node_for_qualification(initializedName);
 
   // Find out how many variables are declared in the given stmt:
   SgVariableDeclaration *variableDeclaration = isSgVariableDeclaration(stmt);
@@ -3704,11 +4453,11 @@ void FortranCodeGeneration_locatedNode::unparseVarDecl(
     if (numVar > 1) {
       SgType *baseType = type->stripType(SgType::STRIP_ARRAY_TYPE);
       unp->u_fortran_type->unparseType(
-          baseType, info, false); // do not print type attributes such as
-                                  // dimension, length on the left of ::
+          baseType, typeInfo, false); // do not print type attributes such as
+                                      // dimension, length on the left of ::
     } else {
       unp->u_fortran_type->unparseType(
-          type, info, true); // print type attribute on the left of ::
+          type, typeInfo, true); // print type attribute on the left of ::
     }
 
     if (variableDeclaration->get_declarationModifier()
@@ -3835,7 +4584,10 @@ void FortranCodeGeneration_locatedNode::unparseVarDecl(
           nullptr) {
         curprint(", PRIVATE");
       } else {
-        printf("Warning: statement marked as private in non-module scope \n");
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[fortran-access]: private variable "
+                "declaration occurs outside a module\n");
+        ROSE_ABORT();
       }
     }
 
@@ -3898,37 +4650,59 @@ void FortranCodeGeneration_locatedNode::unparseVarDecl(
       curprint(" (");
     }
   }
-  // FMZ
-  // FIXME: currenly use "prev_decl_item" to denote the pointee
   curprint(name.str());
 
   if (isSgTypeCrayPointer(type) != nullptr) {
-    SgInitializedName *pointeeVar = initializedName->get_prev_decl_item();
-    ASSERT_not_null(pointeeVar);
+    SgInitializedName *pointeeVar = initializedName->get_cray_pointer_pointee();
+    SgExprListExp *pointeeShape =
+        initializedName->get_fortran_cray_pointer_pointee_shape();
+    if (pointeeVar == nullptr ||
+        (pointeeShape != nullptr) !=
+            (pointeeVar->get_fortran_separate_shape_declaration() ==
+             variableDeclaration) ||
+        (pointeeShape != nullptr &&
+         !fortranCrayPointerStatementOwnsArrayShape(pointeeVar))) {
+      std::cerr << "REX_UNPARSE_INVARIANT[fortran-cray-pointer-source]: "
+                   "pointer="
+                << initializedName->get_name()
+                << " has no exact typed scalar or shaped pointee source\n";
+      ROSE_ABORT();
+    }
     SgName pointeeName = pointeeVar->get_name();
     curprint(",");
     curprint(pointeeName.str());
-    // Avoid repeating array bounds on the Cray pointer statement when the
-    // pointee is already declared with a shape.
+    if (pointeeShape != nullptr) {
+      curprint("(");
+      unparseExprList(pointeeShape, info);
+      curprint(")");
+    }
     curprint(") ");
   } else
-    unparseEntityTypeAttr(type, info, numVar == 1);
+    unparseEntityTypeAttr(type, info, numVar == 1, emitDimensionShape);
 
   // Unparse the initializers if any exist
   // printf ("In
   // FortranCodeGeneration_locatedNode::unparseVarDecl(initializedName=%p):
   // variable initializer = %p \n",initializedName,init);
   if (init != nullptr) {
-    if (isSgPointerType(type)) { // this is a pointer null-init; OFP 0.8.2 has
-                                 // yet to implement pointer => init-data-object
-      // TODO: need an IR to model pointer initialization, something like
-      // SgPointerInitializer.
-      curprint(" => NULL()");
-
+    SgInitializer *initializer = isSgInitializer(init);
+    ASSERT_not_null(initializer);
+    if (isSgPointerType(semanticType)) {
+      curprint(" => ");
+      auto *assignInitializer = isSgAssignInitializer(initializer);
+      if (assignInitializer == nullptr ||
+          assignInitializer->get_operand() == nullptr) {
+        std::cerr << "Error: malformed Fortran pointer initializer"
+                  << std::endl;
+        ROSE_ABORT();
+      }
+      if (isSgNullExpression(assignInitializer->get_operand())) {
+        curprint("NULL()");
+      } else {
+        unparseExpression(initializer, info);
+      }
     } else {
       curprint(" = ");
-      SgInitializer *initializer = isSgInitializer(init);
-      ASSERT_not_null(initializer);
       unparseExpression(initializer, info);
     }
   }
@@ -3962,15 +4736,21 @@ void FortranCodeGeneration_locatedNode::printDeclModifier(
 
 void FortranCodeGeneration_locatedNode::printAccessModifier(
     SgDeclarationStatement *, SgUnparse_Info &) {
-  // FIXME: this will look different for full-featured Fortran
   printf("Access modifiers are handled differently for Fortran, this function "
          "printAccessModifier() should not be called! \n");
+  ROSE_ABORT();
 }
 
 void FortranCodeGeneration_locatedNode::unparseBindAttribute(
     SgDeclarationStatement *declaration) {
+  ASSERT_not_null(declaration);
   // Code generation support for "bind" attribute
   if (declaration->get_declarationModifier().isBind()) {
+    if (declaration->get_linkage().empty()) {
+      std::cerr << "Error: Fortran BIND attribute has no language binding spec"
+                << std::endl;
+      ROSE_ABORT();
+    }
     curprint(" bind(");
 
     curprint(declaration->get_linkage());
@@ -3979,6 +4759,9 @@ void FortranCodeGeneration_locatedNode::unparseBindAttribute(
       curprint(",NAME=\"");
       curprint(declaration->get_binding_label());
       curprint("\"");
+    }
+    if (declaration->get_binding_cdefined()) {
+      curprint(",CDEFINED");
     }
     curprint(")");
   }
@@ -3999,6 +4782,184 @@ void FortranCodeGeneration_locatedNode::unparseProcHdrStmt(
   SgProcedureHeaderStatement *procedureHeader =
       isSgProcedureHeaderStatement(stmt);
   ASSERT_not_null(procedureHeader);
+  const auto sourceForm = procedureHeader->get_fortran_procedure_source_form();
+  if (sourceForm ==
+      SgProcedureHeaderStatement::e_fortran_procedure_source_form_unknown) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-procedure-source-form]: "
+                 "procedure '"
+              << procedureHeader->get_name()
+              << "' has no exact semantic or lexical source form\n";
+    ROSE_ABORT();
+  }
+  if (sourceForm == SgProcedureHeaderStatement::
+                        e_fortran_procedure_source_form_semantic_only) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-procedure-source-owner]: "
+                 "semantic-only procedure '"
+              << procedureHeader->get_name()
+              << "' reached a source-emission list\n";
+    ROSE_ABORT();
+  }
+  if (sourceForm ==
+      SgProcedureHeaderStatement::
+          e_fortran_procedure_source_form_compiler_module_header) {
+    std::cerr << "REX_UNPARSE_INVARIANT[compiler-module-procedure-output]: "
+                 "non-emittable compiler module procedure '"
+              << procedureHeader->get_name()
+              << "' reached a source-emission list\n";
+    ROSE_ABORT();
+  }
+
+  const bool typeDeclaration =
+      sourceForm == SgProcedureHeaderStatement::
+                        e_fortran_procedure_source_form_type_declaration ||
+      sourceForm == SgProcedureHeaderStatement::
+                        e_fortran_procedure_source_form_type_external;
+  if (typeDeclaration) {
+    const bool sourceExternal =
+        sourceForm == SgProcedureHeaderStatement::
+                          e_fortran_procedure_source_form_type_external;
+    SgScopeStatement *scope = isSgScopeStatement(procedureHeader->get_parent());
+    SgFunctionDeclaration *canonical = isSgFunctionDeclaration(
+        procedureHeader->get_firstNondefiningDeclaration());
+    SgFunctionSymbol *symbol =
+        canonical != nullptr
+            ? isSgFunctionSymbol(canonical->get_symbol_from_symbol_table())
+            : nullptr;
+    SgFunctionType *functionType = procedureHeader->get_type();
+    SgType *returnType =
+        functionType != nullptr ? functionType->get_return_type() : nullptr;
+    SgFunctionType *sourceFunctionType = procedureHeader->get_type_syntax();
+    SgType *sourceReturnType = sourceFunctionType != nullptr
+                                   ? sourceFunctionType->get_return_type()
+                                   : nullptr;
+    const bool sourceFunctionMatches =
+        SageInterface::fortranSourceFunctionResultMatchesSemanticResult(
+            sourceFunctionType, functionType);
+    Sg_File_Info *sourceInfo = procedureHeader->get_file_info();
+    const bool markedExternal = procedureHeader->get_declarationModifier()
+                                    .get_storageModifier()
+                                    .isExtern();
+    if (!procedureHeader->isForward() ||
+        procedureHeader->get_definition() != nullptr ||
+        !procedureHeader->isFunction() || scope == nullptr ||
+        procedureHeader->get_scope() != scope ||
+        !scope->statementExistsInScope(procedureHeader) ||
+        canonical == nullptr || symbol == nullptr ||
+        symbol->get_declaration() != canonical ||
+        symbol->get_scope() != scope || functionType == nullptr ||
+        returnType == nullptr || isSgTypeVoid(returnType) != nullptr ||
+        !procedureHeader->get_type_syntax_is_available() ||
+        sourceFunctionType == nullptr || sourceReturnType == nullptr ||
+        isSgTypeVoid(sourceReturnType) != nullptr || !sourceFunctionMatches ||
+        procedureHeader->get_orig_return_type() != sourceReturnType ||
+        sourceInfo == nullptr || sourceInfo->isCompilerGenerated() ||
+        !sourceInfo->isOutputInCodeGeneration() ||
+        markedExternal != sourceExternal) {
+      std::cerr << "REX_UNPARSE_INVARIANT[fortran-procedure-type-source]: "
+                   "typed procedure declaration '"
+                << procedureHeader->get_name().getString()
+                << "' has malformed lexical ownership, source provenance, "
+                   "or canonical function identity\n";
+      ROSE_ABORT();
+    }
+
+    SgUnparse_Info typeInfo(info);
+    typeInfo.set_reference_node_for_qualification(procedureHeader);
+    unp->u_fortran_type->unparseType(sourceReturnType, typeInfo, true);
+    if (sourceExternal) {
+      curprint(", EXTERNAL");
+    }
+    if (procedureHeader->get_declarationModifier()
+            .get_typeModifier()
+            .isIntrinsic()) {
+      curprint(", INTRINSIC");
+    }
+    if (procedureHeader->get_declarationModifier()
+            .get_accessModifier()
+            .isPrivate()) {
+      if (SageInterface::getEnclosingModuleStatement(procedureHeader) ==
+          nullptr) {
+        std::cerr << "REX_UNPARSE_INVARIANT[fortran-procedure-access]: "
+                     "private typed procedure declaration occurs outside a "
+                     "module\n";
+        ROSE_ABORT();
+      }
+      curprint(", PRIVATE");
+    } else if (procedureHeader->get_declarationModifier()
+                   .get_accessModifier()
+                   .isPublic() &&
+               SageInterface::getEnclosingModuleStatement(procedureHeader) !=
+                   nullptr) {
+      curprint(", PUBLIC");
+    }
+    if (procedureHeader->get_declarationModifier().isBind()) {
+      curprint(", ");
+      unparseBindAttribute(procedureHeader);
+    }
+    curprint(" :: ");
+    curprint(procedureHeader->get_name().str());
+    unp->cur.insert_newline(1);
+    return;
+  }
+
+  if (sourceForm !=
+      SgProcedureHeaderStatement::e_fortran_procedure_source_form_header) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-procedure-source-form]: "
+                 "procedure '"
+              << procedureHeader->get_name()
+              << "' has an invalid source-form value\n";
+    ROSE_ABORT();
+  }
+  if (!procedureHeader->isForward() &&
+      procedureHeader->get_definition() == nullptr) {
+    std::cerr << "Error: defining Fortran procedure header has no definition"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  SageInterface::isFortranProgramUnitWithoutSourceName(procedureHeader);
+  if (!procedureHeader->isBlockData() &&
+      procedureHeader->get_name().is_null()) {
+    std::cerr << "Error: Fortran procedure header has no name" << std::endl;
+    ROSE_ABORT();
+  }
+  if (procedureHeader->isBlockData()) {
+    const bool hasBlockDataName = blockDataHasName(procedureHeader);
+    if (procedureHeader->isForward()) {
+      std::cerr << "Error: BLOCK DATA cannot be a forward declaration"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    if (hasBlockDataName && procedureHeader->get_name().is_null()) {
+      std::cerr << "Error: named BLOCK DATA has no declaration name"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    if (!hasBlockDataName && !procedureHeader->get_name().is_null()) {
+      std::cerr << "Error: unnamed BLOCK DATA carries a public declaration "
+                   "name"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    if (hasBlockDataName &&
+        !isValidFortranIdentifier(procedureHeader->get_name())) {
+      std::cerr << "Error: named BLOCK DATA has an invalid source name"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    if (!hasBlockDataName && procedureHeader->get_named_in_end_statement()) {
+      std::cerr << "Error: unnamed BLOCK DATA has a named END BLOCK DATA"
+                << std::endl;
+      ROSE_ABORT();
+    }
+  } else {
+    if (procedureHeader->get_block_data_name_kind() !=
+        SgProcedureHeaderStatement::e_unknown_block_data_name_kind) {
+      std::cerr << "Error: non-BLOCK-DATA procedure carries BLOCK DATA name "
+                   "metadata"
+                << std::endl;
+      ROSE_ABORT();
+    }
+  }
 
   string typeOfFunction;
   if (procedureHeader->isFunction()) {
@@ -4066,37 +5027,105 @@ void FortranCodeGeneration_locatedNode::unparseProcHdrStmt(
       curprint("attributes(grid_global) ");
     }
 
-    // FMZ (5/13/2010): If there is declaration of "result", we need to check if
-    // the
-    //                  type of the function is already declared by the "result"
     bool need_type = true;
-    string result_name_str;
-
-    if (procedureHeader->get_result_name() != nullptr) {
-      SgInitializedName *rslt_name = procedureHeader->get_result_name();
-      SgDeclarationStatement *rslt_decl = rslt_name->get_definition();
-
-      // check declaraion stmts
-      if (rslt_decl != nullptr) {
+    if (SgInitializedName *result = procedureHeader->get_result_name()) {
+      SgVariableDeclaration *owner =
+          isSgVariableDeclaration(result->get_parent());
+      if (owner == nullptr || result->get_type() == nullptr) {
+        std::cerr << "REX_UNPARSE_INVARIANT[fortran-function-result-owner]: "
+                     "function result has no exact variable declaration "
+                     "owner\n";
+        ROSE_ABORT();
+      }
+      const bool sourceDeclared = result->get_fortran_source_type() != nullptr;
+      if (sourceDeclared) {
+        SgScopeStatement *scope = owner->get_scope();
+        Sg_File_Info *sourceInfo = owner->get_file_info();
+        if (owner->get_fortran_declaration_origin() !=
+                SgVariableDeclaration::e_fortran_source_declaration ||
+            scope == nullptr || owner->get_parent() != scope ||
+            !scope->statementExistsInScope(owner) || sourceInfo == nullptr ||
+            sourceInfo->isCompilerGenerated() ||
+            !sourceInfo->isOutputInCodeGeneration() ||
+            !fortranSourceTypeMatchesSemanticType(result)) {
+          std::cerr
+              << "REX_UNPARSE_INVARIANT[fortran-function-result-source]: "
+              << "procedure=" << procedureHeader->get_name()
+              << " result=" << result->get_name() << " owner=" << owner
+              << " origin="
+              << static_cast<int>(owner->get_fortran_declaration_origin())
+              << " parent=" << owner->get_parent() << " scope=" << scope
+              << " statement-owned="
+              << (scope != nullptr && scope->statementExistsInScope(owner))
+              << " source-info=" << sourceInfo << " compiler-generated="
+              << (sourceInfo != nullptr && sourceInfo->isCompilerGenerated())
+              << " output="
+              << (sourceInfo != nullptr &&
+                  sourceInfo->isOutputInCodeGeneration())
+              << " type-match=" << fortranSourceTypeMatchesSemanticType(result)
+              << " parameter-scope="
+              << procedureHeader->get_functionParameterScope()
+              << " has malformed lexical or type ownership\n";
+          ROSE_ABORT();
+        }
         need_type = false;
-        result_name_str = rslt_name->get_name().str();
+      } else {
+        SgAuxiliaryDeclarationList *auxiliary =
+            isSgAuxiliaryDeclarationList(owner->get_parent());
+        SgScopeStatement *scope =
+            auxiliary != nullptr ? isSgScopeStatement(auxiliary->get_parent())
+                                 : nullptr;
+        if (owner->get_fortran_declaration_origin() !=
+                SgVariableDeclaration::e_fortran_semantic_only_declaration ||
+            scope == nullptr ||
+            scope->get_auxiliary_declarations() != auxiliary) {
+          std::cerr
+              << "REX_UNPARSE_INVARIANT[fortran-function-result-owner]: "
+                 "non-source function result is not semantic-only auxiliary "
+                 "state\n";
+          ROSE_ABORT();
+        }
       }
     }
 
     if (procedureHeader->isFunction() && need_type) {
-      // Unparse the return type
-      SgFunctionType *functionType = procedureHeader->get_type();
-      ASSERT_not_null(functionType);
-      SgType *returnType = functionType->get_return_type();
-      ASSERT_not_null(returnType);
-
-      unp->u_fortran_type->unparseType(returnType, info);
+      const auto sourceSpec = procedureHeader->get_fortran_result_type_spec();
+      if (sourceSpec ==
+          SgProcedureHeaderStatement::e_fortran_result_type_spec_unknown) {
+        if (procedureHeader->get_type_syntax() != nullptr ||
+            procedureHeader->get_type_syntax_is_available()) {
+          std::cerr
+              << "REX_UNPARSE_INVARIANT[fortran-procedure-prefix-type]: "
+                 "untyped function header owns source result type state\n";
+          ROSE_ABORT();
+        }
+      } else {
+        SgFunctionType *semanticType = procedureHeader->get_type();
+        SgFunctionType *sourceType = procedureHeader->get_type_syntax();
+        SgType *sourceReturn =
+            sourceType != nullptr ? sourceType->get_return_type() : nullptr;
+        if (semanticType == nullptr || sourceType == nullptr ||
+            sourceReturn == nullptr ||
+            !procedureHeader->get_type_syntax_is_available() ||
+            !SageInterface::fortranSourceFunctionResultMatchesSemanticResult(
+                sourceType, semanticType) ||
+            procedureHeader->get_orig_return_type() != sourceReturn) {
+          std::cerr
+              << "REX_UNPARSE_INVARIANT[fortran-procedure-prefix-type]: "
+                 "typed function header has no exact source/semantic result "
+                 "type contract\n";
+          ROSE_ABORT();
+        }
+        SgUnparse_Info returnTypeInfo(info);
+        returnTypeInfo.set_reference_node_for_qualification(procedureHeader);
+        unp->u_fortran_type->unparseType(sourceReturn, returnTypeInfo);
+        curprint(" ");
+      }
     }
 
     if (procedureHeader->isBlockData()) {
       curprint(typeOfFunction);
-      if (procedureHeader->get_name().str() !=
-          std::string{"BlockDataNameNotPresent__"}) {
+      if (blockDataHasName(procedureHeader)) {
         curprint(" ");
         curprint(procedureHeader->get_name().str());
       }
@@ -4133,6 +5162,10 @@ void FortranCodeGeneration_locatedNode::unparseFuncDefnStmt(
     SgStatement *stmt, SgUnparse_Info &info) {
   SgFunctionDefinition *funcdefn_stmt = isSgFunctionDefinition(stmt);
   ASSERT_not_null(funcdefn_stmt);
+  if (funcdefn_stmt->get_body() == nullptr) {
+    std::cerr << "Error: Fortran function definition has no body" << std::endl;
+    ROSE_ABORT();
+  }
 
   // Unparse any comments of directives attached to the SgFunctionParameterList
   ASSERT_not_null(funcdefn_stmt->get_declaration());
@@ -4151,13 +5184,9 @@ void FortranCodeGeneration_locatedNode::unparseFuncDefnStmt(
   info.set_declstatement_ptr(nullptr);
   info.set_declstatement_ptr(funcdefn_stmt->get_declaration());
 
-  SgUnparse_Info commentInfo(info);
-  commentInfo.unset_SkipFunctionDefinition();
-  unparseAttachedPreprocessingInfo(declstmt, commentInfo,
-                                   PreprocessingInfo::before);
-
   // Emit numeric labels after leading comments for Fortran defining
-  // declarations.
+  // declarations. Leading preprocessing information is emitted by the common
+  // statement path before dispatching this defining declaration.
   unparseStatementNumbers(declstmt, info);
   if (isSgProgramHeaderStatement(declstmt) != nullptr) {
     unparseProgHdrStmt(declstmt, info);
@@ -4165,9 +5194,6 @@ void FortranCodeGeneration_locatedNode::unparseFuncDefnStmt(
     ASSERT_not_null(isSgProcedureHeaderStatement(declstmt));
     unparseProcHdrStmt(declstmt, info);
   }
-
-  unparseAttachedPreprocessingInfo(declstmt, commentInfo,
-                                   PreprocessingInfo::after);
 
   // Un-mark that we are unparsing a function declaration (or member function
   // declaration)
@@ -4177,14 +5203,7 @@ void FortranCodeGeneration_locatedNode::unparseFuncDefnStmt(
   SgUnparse_Info ninfo(info);
 
   // now the body of the function
-  if (funcdefn_stmt->get_body()) {
-    unparseStatement(funcdefn_stmt->get_body(), ninfo);
-  } else {
-    curprint(string("{}"));
-    printf(
-        "Error: Should be an error to not have a function body in the AST \n");
-    ROSE_ABORT();
-  }
+  unparseStatement(funcdefn_stmt->get_body(), ninfo);
 
   // Unparse any comments of directives attached to the SgFunctionParameterList
   unparseAttachedPreprocessingInfo(
@@ -4207,6 +5226,12 @@ void FortranCodeGeneration_locatedNode::unparseFunctionArgs(
 
   SgInitializedNamePtrList::iterator p = funcdecl_stmt->get_args().begin();
   while (p != funcdecl_stmt->get_args().end()) {
+    ASSERT_not_null(*p);
+    if ((*p)->get_name().is_null()) {
+      std::cerr << "Error: unnamed dummy argument in Fortran procedure"
+                << std::endl;
+      ROSE_ABORT();
+    }
     unparseFunctionParameterDeclaration(funcdecl_stmt, *p, false, info);
 
     // Move to the next argument
@@ -4253,6 +5278,17 @@ void FortranCodeGeneration_locatedNode::unparseClassDeclStmt_derivedType(
     SgStatement *stmt, SgUnparse_Info &info) {
   SgDerivedTypeStatement *classdecl_stmt = isSgDerivedTypeStatement(stmt);
   ASSERT_not_null(classdecl_stmt);
+  if (classdecl_stmt->get_name().is_null()) {
+    std::cerr << "Error: Fortran derived type declaration has no name"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  if (!classdecl_stmt->isForward() &&
+      classdecl_stmt->get_definition() == nullptr) {
+    std::cerr << "Error: defining Fortran derived type has no definition"
+              << std::endl;
+    ROSE_ABORT();
+  }
 
   if (!classdecl_stmt->isForward() && classdecl_stmt->get_definition() &&
       !info.SkipClassDefinition()) {
@@ -4300,9 +5336,10 @@ void FortranCodeGeneration_locatedNode::unparseClassDeclStmt_derivedType(
           nullptr) {
         curprint(", PUBLIC");
       } else {
-        printf("Warning: statement marked as public in non-module scope in "
-               "FortranCodeGeneration_locatedNode::unparseClassDeclStmt_"
-               "derivedType(). \n");
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[fortran-access]: public derived type "
+                "occurs outside a module\n");
+        ROSE_ABORT();
       }
     }
 
@@ -4314,7 +5351,10 @@ void FortranCodeGeneration_locatedNode::unparseClassDeclStmt_derivedType(
           nullptr) {
         curprint(", PRIVATE");
       } else {
-        printf("Warning: statement marked as private in non-module scope \n");
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[fortran-access]: private derived type "
+                "occurs outside a module\n");
+        ROSE_ABORT();
       }
     }
 
@@ -4325,7 +5365,10 @@ void FortranCodeGeneration_locatedNode::unparseClassDeclStmt_derivedType(
         // I think that bind implies "BIND(C)"
         curprint(", BIND(C)");
       } else {
-        printf("Warning: statement marked as bind in non-module scope \n");
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[fortran-bind]: BIND derived type "
+                "occurs outside a module\n");
+        ROSE_ABORT();
       }
     }
 
@@ -4346,28 +5389,25 @@ void FortranCodeGeneration_locatedNode::unparseClassDeclStmt_derivedType(
       // The EXTENDS keyword is only permitted within Modules
       if (SageInterface::getEnclosingModuleStatement(classdecl_stmt) !=
           nullptr) {
-        curprint(", EXTENDS(");
-        if (!extendsName.empty()) {
-          curprint(extendsName);
-        } else {
-          curprint("PARENT-TYPE-NAME-NOT-IMPLEMENTED");
+        if (extendsName.empty()) {
+          std::cerr << "Error: EXTENDS modifier has no base-class edge"
+                    << std::endl;
+          ROSE_ABORT();
         }
+        curprint(", EXTENDS(");
+        curprint(extendsName);
         curprint(")");
       } else {
-        printf("Warning: statement marked as extends in non-module scope \n");
+        std::cerr << "Error: EXTENDS modifier occurs outside a module"
+                  << std::endl;
+        ROSE_ABORT();
       }
     }
 
     if (classdecl_stmt->get_declarationModifier()
             .get_typeModifier()
             .isAbstract()) {
-      // The ABSTRACT keyword is only permitted within Modules
-      if (SageInterface::getEnclosingModuleStatement(classdecl_stmt) !=
-          nullptr) {
-        curprint(", ABSTRACT");
-      } else {
-        printf("Warning: statement marked as abstract in non-module scope \n");
-      }
+      curprint(", ABSTRACT");
     }
 
     // DQ (8/28/2010): I think this is require to separate type attribute
@@ -4382,6 +5422,16 @@ void FortranCodeGeneration_locatedNode::unparseClassDeclStmt_module(
     SgStatement *stmt, SgUnparse_Info &info) {
   SgModuleStatement *classdecl_stmt = isSgModuleStatement(stmt);
   ASSERT_not_null(classdecl_stmt);
+  if (classdecl_stmt->get_name().is_null()) {
+    std::cerr << "Error: Fortran MODULE declaration has no name" << std::endl;
+    ROSE_ABORT();
+  }
+  if (!classdecl_stmt->isForward() &&
+      classdecl_stmt->get_definition() == nullptr) {
+    std::cerr << "Error: defining Fortran MODULE declaration has no definition"
+              << std::endl;
+    ROSE_ABORT();
+  }
 
   if (!classdecl_stmt->isForward() && classdecl_stmt->get_definition() &&
       !info.SkipClassDefinition()) {
@@ -4431,6 +5481,12 @@ void FortranCodeGeneration_locatedNode::unparseClassDefnStmt(
     SgStatement *stmt, SgUnparse_Info &info) {
   SgClassDefinition *classdefn_stmt = isSgClassDefinition(stmt);
   ASSERT_not_null(classdefn_stmt);
+  if (classdefn_stmt->get_packingAlignment() != 0) {
+    std::cerr << "Error: C/C++ packing alignment reached a Fortran type "
+                 "definition"
+              << std::endl;
+    ROSE_ABORT();
+  }
 
   SgUnparse_Info ninfo(info);
 
@@ -4468,14 +5524,6 @@ void FortranCodeGeneration_locatedNode::unparseClassDefnStmt(
   // being unparsed! DQ (11/22/2003): Control unparsing of the {} part of the
   // definition
   if (info.SkipBasicBlock() == false) {
-    // DQ (6/14/2006): Add packing pragma support (explicitly set the packing
-    // alignment to the default, part of packing pragma normalization).
-    unsigned int packingAlignment = classdefn_stmt->get_packingAlignment();
-    if (packingAlignment != 0) {
-      curprint(string("\n#pragma pack(") +
-               StringUtility::numberToString(packingAlignment) + string(")"));
-    }
-
     ninfo.set_isUnsetAccess();
     unp->cur.format(classdefn_stmt, info, FORMAT_BEFORE_BASIC_BLOCK1);
     unp->cur.format(classdefn_stmt, info, FORMAT_AFTER_BASIC_BLOCK1);
@@ -4519,8 +5567,19 @@ void FortranCodeGeneration_locatedNode::unparseClassDefnStmt(
 void FortranCodeGeneration_locatedNode::unparseAllocateStatement(
     SgStatement *stmt, SgUnparse_Info &info) {
   SgAllocateStatement *s = isSgAllocateStatement(stmt);
+  ASSERT_not_null(s);
   SgExprListExp *exprList = s->get_expr_list();
   ASSERT_not_null(exprList);
+
+  const SgExpressionPtrList &allocationExpressions =
+      exprList->get_expressions();
+  if (allocationExpressions.empty() ||
+      (allocationExpressions.size() == 1 &&
+       isSgTypeExpression(allocationExpressions.front()) != nullptr)) {
+    std::cerr << "Error: Fortran ALLOCATE statement has no allocation objects"
+              << std::endl;
+    ROSE_ABORT();
+  }
 
   curprint("allocate( ");
 
@@ -4587,8 +5646,14 @@ void FortranCodeGeneration_locatedNode::unparseAllocateStatement(
 void FortranCodeGeneration_locatedNode::unparseDeallocateStatement(
     SgStatement *stmt, SgUnparse_Info &info) {
   SgDeallocateStatement *s = isSgDeallocateStatement(stmt);
+  ASSERT_not_null(s);
   SgExprListExp *exprList = s->get_expr_list();
   ASSERT_not_null(exprList);
+  if (exprList->get_expressions().empty()) {
+    std::cerr << "Error: Fortran DEALLOCATE statement has no objects"
+              << std::endl;
+    ROSE_ABORT();
+  }
 
   curprint("deallocate( ");
 
@@ -4637,73 +5702,9 @@ void FortranCodeGeneration_locatedNode::unparseWithTeamStatement(
   unp->cur.insert_newline(1);
 }
 
-// TODO: This code is identical to
-// 'UnparseLanguageIndependentConstructs::curprint'. Factor this!
 void FortranCodeGeneration_locatedNode::curprint(const std::string &str) const {
 #if USE_RICE_FORTRAN_WRAPPING
-
-  if (unp->currentFile != nullptr && unp->currentFile->get_Fortran_only()) {
-    if (unp->cur.get_linewrap() <= 0) {
-      unp->u_sage->curprint(str);
-      return;
-    }
-
-    // determine line wrapping parameters -- 'pos' variables are one-based
-    bool is_fixed_format = unp->currentFile->get_outputFormat() ==
-                           SgFile::e_fixed_form_output_format;
-    bool is_free_format = unp->currentFile->get_outputFormat() ==
-                          SgFile::e_free_form_output_format;
-    int usable_cols =
-        (is_fixed_format ? MAX_F90_LINE_LEN_FIXED
-         : is_free_format
-             ? MAX_F90_LINE_LEN_FREE - 1 // reserve a column in free-format for
-                                         // possible trailing '&'
-             : unp->cur.get_linewrap());
-    usable_cols = FortranLineWrapSupport::clampUsableColumnsToConfiguredWrap(
-        usable_cols, unp->cur.get_linewrap());
-
-    // check whether line wrapping is needed
-    int used_cols = unp->cur.current_col(); // 'current_col' is zero-based
-    int free_cols = usable_cols - used_cols;
-    if (str.size() > free_cols) {
-      if (FortranLineWrapSupport::isDirectiveChunk(str, used_cols)) {
-        unp->u_sage->curprint(str);
-        return;
-      }
-
-      if (is_fixed_format) {
-        // only noncomment lines need wrapping
-        if (!(used_cols == 0 && str[0] != ' ')) {
-          // warn if successful wrapping is impossible
-          if (6 + str.size() > usable_cols)
-            printf("Warning: can't wrap long line in Fortran fixed format "
-                   "(continuation + text is longer than a line)\n");
-
-          // emit fixed-format line continuation
-          unp->cur.insert_newline(1);
-          unp->u_sage->curprint("     &");
-        }
-      } else if (is_free_format) {
-        if (FortranLineWrapSupport::isCommentLine(str)) {
-          unp->u_sage->curprint(str);
-          return;
-        }
-        // warn if successful wrapping is impossible
-        if (str.size() > usable_cols)
-          printf("Warning: can't wrap long line in Fortran free format (text "
-                 "is longer than a line)\n");
-
-        // emit free-format line continuation even if result will still be too
-        // long
-        unp->u_sage->curprint("&");
-        unp->cur.insert_newline(1);
-        unp->u_sage->curprint("&");
-      } else
-        printf("Warning: long line not wrapped (unknown output format)\n");
-    }
-  }
-
-  unp->u_sage->curprint(str);
+  unp->emitFortranText(str);
 
 #else // ! USE_RICE_FORTRAN_WRAPPING
 
@@ -4739,174 +5740,46 @@ void FortranCodeGeneration_locatedNode::curprint(const std::string &str) const {
 }
 
 void FortranCodeGeneration_locatedNode::unparseOmpPrefix(SgUnparse_Info &info) {
+  unp->requireFortranDirectiveKind(Unparser::FortranDirectiveKind::openmp);
+  if (unp->cur.get_compact_output()) {
+    unp->cur.begin_compact_directive();
+  }
   curprint(string("!$omp "));
 }
 
-static std::string collapseFortranContinuationText(std::string text) {
-  if (text.empty()) {
-    return text;
-  }
-
-  size_t pos = 0;
-  while ((pos = text.find("\r\n", pos)) != std::string::npos) {
-    text.replace(pos, 2, "\n");
-  }
-
-  pos = 0;
-  while ((pos = text.find("&\n&", pos)) != std::string::npos) {
-    text.erase(pos, 3);
-  }
-
-  if (text.size() >= 2 && text[text.size() - 2] == '\r' &&
-      text[text.size() - 1] == '\n') {
-    text.erase(text.size() - 2);
-  } else if (!text.empty() && (text.back() == '\n' || text.back() == '\r')) {
-    text.pop_back();
-  }
-
-  return text;
-}
-
-static void trimLeadingWhitespace(std::string &text) {
-  const size_t first_non_space = text.find_first_not_of(" \t\r\n");
-  if (first_non_space == std::string::npos) {
-    text.clear();
-    return;
-  }
-  if (first_non_space > 0) {
-    text.erase(0, first_non_space);
-  }
-}
-
-static std::string unparseFortranOmpClauseToString(SgOmpClause *clause,
-                                                   const SgUnparse_Info &info) {
-  ASSERT_not_null(clause);
-
-  bool auto_keyword = false;
-  bool linefile = false;
-  bool use_overloaded_operators = false;
-  bool num = false;
-  bool this_keyword = true;
-  bool caststring = false;
-  bool debug = false;
-  bool class_mode = false;
-  bool forced_transformation_format = false;
-  bool unparse_includes = false;
-  Unparser_Opt rose_options(auto_keyword, linefile, use_overloaded_operators,
-                            num, this_keyword, caststring, debug, class_mode,
-                            forced_transformation_format, unparse_includes);
-
-  std::ostringstream output;
-  std::string filename = "defaultFileNameInFortranOmpClauseToString.f90";
-  SgSourceFile *source_file = info.get_current_source_file();
-  if (source_file == nullptr) {
-    source_file = SageInterface::getEnclosingSourceFile(clause);
-  }
-  if (source_file != nullptr) {
-    if (source_file->get_file_info() != nullptr &&
-        !source_file->get_file_info()->get_filenameString().empty()) {
-      filename = source_file->get_file_info()->get_filenameString();
-    } else if (!source_file->get_sourceFileNameWithPath().empty()) {
-      filename = source_file->get_sourceFileNameWithPath();
-    }
-  }
-
-  Unparser rose_unparser(&output, filename, rose_options);
-  if (source_file != nullptr) {
-    rose_unparser.currentFile = source_file;
-  }
-
-  SgUnparse_Info clause_info(info);
-  clause_info.set_language(SgFile::e_Fortran_language);
-  if (source_file != nullptr) {
-    clause_info.set_current_source_file(source_file);
-  }
-
-  rose_unparser.u_fortran_locatedNode->unparseOmpClause(clause, clause_info);
-  return output.str();
-}
-
 static bool fortranOmpDirectiveUsesExplicitEnd(SgStatement *stmt) {
-  if (stmt == nullptr) {
-    return false;
-  }
-
-  static const char *const kOmpFortranEndAttributeName = "omp_fortran_end";
-  static const char *const kOmpExplicitEndAttributeName = "omp_explicit_end";
-  if (stmt->getAttribute(kOmpFortranEndAttributeName) != nullptr) {
+  ASSERT_not_null(stmt);
+  switch (stmt->get_directive_end_kind()) {
+  case SgStatement::e_directive_end_explicit:
     return true;
-  }
-  if (stmt->getAttribute(kOmpExplicitEndAttributeName) != nullptr) {
-    return true;
-  }
-
-  switch (stmt->variantT()) {
-  // OpenMP Fortran permits implicit end for these constructs.  The attribute
-  // checks above still preserve explicit source END directives.
-  case V_SgOmpParallelStatement:
-  case V_SgOmpDoStatement:
-  case V_SgOmpLoopStatement:
-  case V_SgOmpTaskloopStatement:
-  case V_SgOmpTaskloopSimdStatement:
-  case V_SgOmpTargetParallelForStatement:
-  case V_SgOmpTargetParallelForSimdStatement:
-  case V_SgOmpTargetParallelLoopStatement:
-  case V_SgOmpTargetSimdStatement:
-  case V_SgOmpTargetTeamsDistributeStatement:
-  case V_SgOmpTargetTeamsDistributeSimdStatement:
-  case V_SgOmpTargetTeamsDistributeParallelForStatement:
-  case V_SgOmpTargetTeamsDistributeParallelForSimdStatement:
-  case V_SgOmpTeamsDistributeStatement:
-  case V_SgOmpTeamsDistributeSimdStatement:
-  case V_SgOmpTeamsDistributeParallelForStatement:
-  case V_SgOmpTeamsDistributeParallelForSimdStatement:
-  case V_SgOmpDistributeSimdStatement:
-  case V_SgOmpDistributeParallelForStatement:
-  case V_SgOmpDistributeParallelForSimdStatement:
-    return false;
-
-  // Combined forms are represented as nested parallel/do statements in Sage,
-  // so the source-end attribute decides whether to emit a combined END line.
-  case V_SgOmpCriticalStatement:
-  case V_SgOmpSectionsStatement:
-  case V_SgOmpMasterStatement:
-  case V_SgOmpOrderedStatement:
-  case V_SgOmpTargetTeamsWorkdistributeStatement:
-  case V_SgOmpWorkdistributeStatement:
-  case V_SgOmpWorkshareStatement:
-  case V_SgOmpSingleStatement:
-  case V_SgOmpTargetDataStatement:
-  case V_SgOmpTargetParallelStatement:
-  case V_SgOmpTargetTeamsStatement:
-  case V_SgOmpTeamsStatement:
-  case V_SgOmpParallelMasterStatement:
-  case V_SgOmpMasterTaskloopStatement:
-  case V_SgOmpMasterTaskloopSimdStatement:
-  case V_SgOmpParallelMasterTaskloopStatement:
-  case V_SgOmpParallelMasterTaskloopSimdStatement:
-    return true;
-  case V_SgOmpTaskStatement:
+  case SgStatement::e_directive_end_implicit:
+  case SgStatement::e_directive_end_not_applicable:
     return false;
   default:
-    return false;
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-directive-end-kind]: "
+                 "statement="
+              << stmt->class_name() << " has invalid value="
+              << static_cast<int>(stmt->get_directive_end_kind()) << std::endl;
+    ROSE_ABORT();
   }
 }
 
 static bool fortranOmpCanEmitEndDirectivePrefix(SgStatement *stmt) {
-  if (stmt == nullptr) {
-    return false;
-  }
+  ASSERT_not_null(stmt);
 
   switch (stmt->variantT()) {
   case V_SgOmpParallelStatement:
   case V_SgOmpCriticalStatement:
   case V_SgOmpSectionsStatement:
   case V_SgOmpMasterStatement:
+  case V_SgOmpMaskedStatement:
   case V_SgOmpOrderedStatement:
   case V_SgOmpWorkshareStatement:
   case V_SgOmpSingleStatement:
   case V_SgOmpTaskStatement:
+  case V_SgOmpTaskgroupStatement:
   case V_SgOmpDoStatement:
+  case V_SgOmpForSimdStatement:
   case V_SgOmpAtomicStatement:
   case V_SgOmpTargetStatement:
   case V_SgOmpTargetDataStatement:
@@ -4932,6 +5805,8 @@ static bool fortranOmpCanEmitEndDirectivePrefix(SgStatement *stmt) {
   case V_SgOmpParallelMasterStatement:
   case V_SgOmpMasterTaskloopStatement:
   case V_SgOmpMasterTaskloopSimdStatement:
+  case V_SgOmpMaskedTaskloopStatement:
+  case V_SgOmpMaskedTaskloopSimdStatement:
   case V_SgOmpParallelMasterTaskloopStatement:
   case V_SgOmpParallelMasterTaskloopSimdStatement:
   case V_SgOmpMetadirectiveStatement:
@@ -4946,15 +5821,14 @@ static bool fortranOmpCanEmitEndDirectivePrefix(SgStatement *stmt) {
 }
 
 static bool fortranOmpMovesClausesToEnd(SgStatement *stmt) {
-  if (stmt == nullptr) {
-    return false;
-  }
+  ASSERT_not_null(stmt);
 
   switch (stmt->variantT()) {
   case V_SgOmpSectionsStatement:
   case V_SgOmpSingleStatement:
   case V_SgOmpWorkshareStatement:
   case V_SgOmpDoStatement:
+  case V_SgOmpForSimdStatement:
   case V_SgOmpTargetTeamsWorkdistributeStatement:
   case V_SgOmpWorkdistributeStatement:
   case V_SgOmpLoopStatement:
@@ -4965,24 +5839,124 @@ static bool fortranOmpMovesClausesToEnd(SgStatement *stmt) {
   }
 }
 
-static bool fortranOmpJoinsFirstClauseWithoutSpace(SgStatement *stmt) {
-  static const char *const kOmpFortranJoinFirstClauseAttrName =
-      "omp_fortran_join_first_clause";
-  return stmt != nullptr &&
-         stmt->getAttribute(kOmpFortranJoinFirstClauseAttrName) != nullptr;
+static bool fortranOmpUsesDoDirectiveSpelling(SgStatement *stmt) {
+  ASSERT_not_null(stmt);
+  switch (stmt->get_omp_fortran_spelling()) {
+  case SgStatement::e_omp_fortran_spelling_do:
+    return true;
+  case SgStatement::e_omp_fortran_spelling_not_applicable:
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-openmp-spelling]: statement="
+              << stmt->class_name() << " has no exact DO-family source spelling"
+              << std::endl;
+    ROSE_ABORT();
+  default:
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-openmp-spelling]: statement="
+              << stmt->class_name() << " has invalid value="
+              << static_cast<int>(stmt->get_omp_fortran_spelling())
+              << std::endl;
+    ROSE_ABORT();
+  }
 }
 
-static bool fortranOmpUsesDoDirectiveSpelling(SgStatement *stmt) {
-  static const char *const kOmpFortranDoDirectiveAttrName =
-      "omp_fortran_do_directive";
-  return stmt != nullptr &&
-         stmt->getAttribute(kOmpFortranDoDirectiveAttrName) != nullptr;
+static SgStatement *fortranOmpDirectiveLexicalOwner(SgStatement *stmt) {
+  ASSERT_not_null(stmt);
+  if (SgOmpContextSelector *selector =
+          isSgOmpContextSelector(stmt->get_parent())) {
+    SgOmpContextSelectorSet *set =
+        isSgOmpContextSelectorSet(selector->get_parent());
+    SgOmpClause *clause =
+        set != nullptr ? isSgOmpClause(set->get_parent()) : nullptr;
+    SgStatement *owner =
+        clause != nullptr ? isSgStatement(clause->get_parent()) : nullptr;
+    if (selector->get_selector_kind() !=
+            SgOmpClause::e_omp_context_trait_construct ||
+        selector->get_construct_directive() != stmt || set == nullptr ||
+        (isSgOmpMatchClause(clause) == nullptr &&
+         isSgOmpWhenClause(clause) == nullptr) ||
+        owner == nullptr) {
+      std::cerr
+          << "REX_UNPARSE_INVARIANT[fortran-openmp-nested-directive-owner]: "
+             "construct-selector directive has no exact lexical owner"
+          << std::endl;
+      ROSE_ABORT();
+    }
+    return owner;
+  }
+  if (SgOmpWhenClause *when = isSgOmpWhenClause(stmt->get_parent())) {
+    SgOmpClauseList *list = isSgOmpClauseList(when->get_parent());
+    SgStatement *owner =
+        list != nullptr ? isSgStatement(list->get_parent()) : nullptr;
+    const SgOmpClausePtrList *clauses =
+        list != nullptr ? &list->get_clauses() : nullptr;
+    if (when->get_variant_directive() != stmt || list == nullptr ||
+        owner == nullptr || OmpSupport::getOmpClauseList(owner) != list ||
+        clauses == nullptr ||
+        std::find(clauses->begin(), clauses->end(), when) == clauses->end()) {
+      std::cerr
+          << "REX_UNPARSE_INVARIANT[fortran-openmp-nested-directive-owner]: "
+             "WHEN variant directive has no exact lexical owner"
+          << std::endl;
+      ROSE_ABORT();
+    }
+    return owner;
+  }
+  return stmt;
 }
 
 // Just skip nowait and copyprivate clauses for Fortran
 void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
     SgStatement *stmt, SgUnparse_Info &info) {
   ASSERT_not_null(stmt);
+  unp->requireFortranDirectiveKind(Unparser::FortranDirectiveKind::openmp);
+  SgSourceFile *source_file = info.get_current_source_file();
+  if (source_file == nullptr || source_file != unp->currentFile ||
+      !source_file->get_Fortran_only()) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-openmp-clause-context]: "
+                 "directive has no exact active Fortran source file"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  if (info.get_language() != SgFile::e_Fortran_language) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-openmp-clause-context]: "
+                 "directive has a non-Fortran language context"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  SgScopeStatement *activeScope = info.get_current_scope();
+  SgSourceFile *activeScopeSource =
+      activeScope != nullptr
+          ? SageInterface::getEnclosingSourceFile(activeScope)
+          : nullptr;
+  if (activeScope == nullptr || activeScopeSource != source_file) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-openmp-clause-context]: "
+                 "directive has no exact source scope"
+              << std::endl;
+    std::cerr << "REX_UNPARSE_DETAIL[fortran-openmp-clause-context]: "
+                 "active-scope="
+              << activeScope << "/"
+              << (activeScope != nullptr ? activeScope->class_name() : "<null>")
+              << " active-scope-source=" << activeScopeSource << std::endl;
+    ROSE_ABORT();
+  }
+  SgStatement *lexicalOwner = fortranOmpDirectiveLexicalOwner(stmt);
+  SgScopeStatement *directiveScope = lexicalOwner->get_scope();
+  SgSourceFile *directiveSource =
+      directiveScope != nullptr
+          ? SageInterface::getEnclosingSourceFile(directiveScope)
+          : nullptr;
+  if (directiveScope == nullptr || directiveSource != source_file) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-openmp-clause-context]: "
+                 "directive has no exact source scope"
+              << std::endl;
+    std::cerr << "REX_UNPARSE_DETAIL[fortran-openmp-clause-context]: directive="
+              << stmt << "/" << stmt->class_name()
+              << " active-source=" << source_file
+              << " directive-scope=" << directiveScope << "/"
+              << (directiveScope != nullptr ? directiveScope->class_name()
+                                            : "<null>")
+              << " directive-source=" << directiveSource << std::endl;
+    ROSE_ABORT();
+  }
   // optional clauses
   SgOmpDeclareVariantStatement *declare_variant_stmt =
       isSgOmpDeclareVariantStatement(stmt);
@@ -4991,8 +5965,9 @@ void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
   SgOmpDeclareMapperStatement *mapper_stmt =
       isSgOmpDeclareMapperStatement(stmt);
   const SgOmpClausePtrList *clause_ptr_list = nullptr;
-  if (isSgOmpClauseBodyStatement(stmt)) {
-    clause_ptr_list = &isSgOmpClauseBodyStatement(stmt)->get_clauses();
+  if (SgOmpClauseBodyStatement *body_stmt = isSgOmpClauseBodyStatement(stmt)) {
+    clause_ptr_list =
+        &requiredFortranOmpClauses(body_stmt, body_stmt->get_clause_list());
   } else if (isSgOmpDeclareSimdStatement(stmt)) {
     clause_ptr_list = &isSgOmpDeclareSimdStatement(stmt)->get_clauses();
   } else if (declare_variant_stmt != nullptr) {
@@ -5005,22 +5980,52 @@ void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
     clause_ptr_list = &isSgOmpDeclareTargetStatement(stmt)->get_clauses();
   } else if (isSgOmpTaskwaitStatement(stmt)) {
     clause_ptr_list = &isSgOmpTaskwaitStatement(stmt)->get_clauses();
-  } else if (isSgOmpClauseStatement(stmt)) {
-    clause_ptr_list = &isSgOmpClauseStatement(stmt)->get_clauses();
+  } else if (SgOmpClauseStatement *clause_stmt = isSgOmpClauseStatement(stmt)) {
+    clause_ptr_list =
+        &requiredFortranOmpClauses(clause_stmt, clause_stmt->get_clause_list());
   } else if (isSgOmpRequiresStatement(stmt)) {
     clause_ptr_list = &isSgOmpRequiresStatement(stmt)->get_clauses();
+  } else if (isSgOmpAssumesStatement(stmt)) {
+    clause_ptr_list = &isSgOmpAssumesStatement(stmt)->get_clauses();
+  } else if (isSgOmpBeginAssumesStatement(stmt)) {
+    clause_ptr_list = &isSgOmpBeginAssumesStatement(stmt)->get_clauses();
+  } else if (SgOmpGroupprivateStatement *groupprivate_stmt =
+                 isSgOmpGroupprivateStatement(stmt)) {
+    clause_ptr_list = &requiredFortranOmpClauses(
+        groupprivate_stmt, groupprivate_stmt->get_clause_list());
+  }
+
+  const bool has_explicit_end = fortranOmpDirectiveUsesExplicitEnd(stmt);
+  if (has_explicit_end && !fortranOmpCanEmitEndDirectivePrefix(stmt)) {
+    std::cerr << "Error: unsupported explicit END form for "
+              << stmt->class_name() << std::endl;
+    ROSE_ABORT();
   }
 
   if (mapper_stmt != nullptr) {
+    if (mapper_stmt->get_mapper_type() == nullptr ||
+        mapper_stmt->get_mapper_variable() == nullptr) {
+      std::cerr << "Error: Fortran DECLARE MAPPER lacks a type or mapper "
+                   "variable"
+                << std::endl;
+      ROSE_ABORT();
+    }
     curprint(" (");
     switch (mapper_stmt->get_identifier()) {
     case SgOmpClause::e_omp_declare_mapper_identifier_default:
-      curprint("default: ");
+      if (mapper_stmt->get_identifier_is_explicit()) {
+        curprint("default: ");
+      }
       break;
     case SgOmpClause::e_omp_declare_mapper_identifier_user:
-      if (mapper_stmt->get_user_defined_identifier() != nullptr) {
-        unparseExpression(mapper_stmt->get_user_defined_identifier(), info);
+      if (!mapper_stmt->get_identifier_is_explicit() ||
+          mapper_stmt->get_user_defined_identifier() == nullptr) {
+        std::cerr << "Error: user-named Fortran DECLARE MAPPER has no "
+                     "explicit identifier"
+                  << std::endl;
+        ROSE_ABORT();
       }
+      unparseExpression(mapper_stmt->get_user_defined_identifier(), info);
       curprint(": ");
       break;
     case SgOmpClause::e_omp_declare_mapper_identifier_unspecified:
@@ -5032,7 +6037,7 @@ void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
       SgType *mapper_type = nullptr;
       if (SgTypeExpression *type_expr =
               isSgTypeExpression(mapper_stmt->get_mapper_type())) {
-        mapper_type = type_expr->get_type()->stripType(
+        mapper_type = type_expr->get_represented_type()->stripType(
             SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
             SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_TYPEDEF_TYPE);
       } else {
@@ -5062,45 +6067,22 @@ void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
     SgOmpClausePtrList::const_iterator i;
     bool first_clause = true;
     const bool move_nowait_to_end = fortranOmpMovesClausesToEnd(stmt) &&
-                                    fortranOmpDirectiveUsesExplicitEnd(stmt) &&
+                                    has_explicit_end &&
                                     fortranOmpCanEmitEndDirectivePrefix(stmt);
     for (i = clause_ptr_list->begin(); i != clause_ptr_list->end(); i++) {
       SgOmpClause *c_clause = *i;
+      ASSERT_not_null(c_clause);
       if ((isSgOmpNowaitClause(c_clause) ||
            isSgOmpCopyprivateClause(c_clause)) &&
           move_nowait_to_end) {
         continue;
       }
       SgUnparse_Info clause_info(info);
-      SgNode *clause_context = stmt != nullptr
-                                   ? static_cast<SgNode *>(stmt)
-                                   : static_cast<SgNode *>(c_clause);
-      if (SgSourceFile *source_file =
-              SageInterface::getEnclosingSourceFile(clause_context)) {
-        clause_info.set_current_source_file(source_file);
-      }
-      SgScopeStatement *scope = info.get_current_scope();
-      if (scope == nullptr) {
-        scope = SageInterface::getEnclosingScope(stmt);
-      }
-      if (scope != nullptr) {
-        clause_info.set_current_scope(scope);
-      }
-      clause_info.set_language(SgFile::e_Fortran_language);
-      std::string clause_text = collapseFortranContinuationText(
-          unparseFortranOmpClauseToString(c_clause, clause_info));
       if (first_clause) {
-        if (fortranOmpJoinsFirstClauseWithoutSpace(stmt)) {
-          trimLeadingWhitespace(clause_text);
-          curprint("&");
-          unp->u_sage->curprint_newline();
-          curprint("&");
-        } else {
-          curprint(" ");
-        }
+        curprint(" ");
         first_clause = false;
       }
-      curprint(clause_text);
+      unparseOmpClause(c_clause, clause_info);
     }
   }
   if (isSgOmpDeclareTargetStatement(stmt)) {
@@ -5131,14 +6113,19 @@ void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
 void FortranCodeGeneration_locatedNode::unparseOmpEndDirectiveClauses(
     SgStatement *stmt, SgUnparse_Info &info) {
   ASSERT_not_null(stmt);
-  if (!fortranOmpDirectiveUsesExplicitEnd(stmt) ||
-      !fortranOmpCanEmitEndDirectivePrefix(stmt)) {
+  unp->requireFortranDirectiveKind(Unparser::FortranDirectiveKind::openmp);
+  if (!fortranOmpDirectiveUsesExplicitEnd(stmt)) {
     return;
   }
+  if (!fortranOmpCanEmitEndDirectivePrefix(stmt)) {
+    std::cerr << "Error: unsupported explicit OpenMP END directive for "
+              << stmt->class_name() << std::endl;
+    ROSE_ABORT();
+  }
   // optional clauses
-  if (isSgOmpClauseBodyStatement(stmt)) {
+  if (SgOmpClauseBodyStatement *body_stmt = isSgOmpClauseBodyStatement(stmt)) {
     const SgOmpClausePtrList &clause_ptr_list =
-        isSgOmpClauseBodyStatement(stmt)->get_clauses();
+        requiredFortranOmpClauses(body_stmt, body_stmt->get_clause_list());
     SgOmpClausePtrList::const_iterator i;
     bool first_clause = true;
     const bool single_space_nowait = isSgOmpSectionsStatement(stmt) != nullptr;
@@ -5165,6 +6152,8 @@ void FortranCodeGeneration_locatedNode::unparseOmpThreadprivateStatement(
   ASSERT_not_null(stmt);
   SgOmpThreadprivateStatement *s = isSgOmpThreadprivateStatement(stmt);
   ASSERT_not_null(s);
+  Unparser::FortranDirectiveContextGuard directiveContext(
+      unp, Unparser::FortranDirectiveKind::openmp);
   unparseOmpDirectivePrefixAndName(stmt, info);
   curprint(string(" ("));
   SgExpressionPtrList::iterator p = s->get_variables().begin();
@@ -5186,15 +6175,17 @@ void FortranCodeGeneration_locatedNode::unparseOmpFlushStatement(
   ASSERT_not_null(stmt);
   SgOmpFlushStatement *s = isSgOmpFlushStatement(stmt);
   ASSERT_not_null(s);
+  Unparser::FortranDirectiveContextGuard directiveContext(
+      unp, Unparser::FortranDirectiveKind::openmp);
 
   unparseOmpDirectivePrefixAndName(stmt, info);
-  if (s->get_clauses().size() != 0) {
+  if (!requiredFortranOmpClauses(s, s->get_clause_list()).empty()) {
     unparseOmpBeginDirectiveClauses(stmt, info);
   }
   if (s->get_variables().size() > 0) {
     curprint(string(" ("));
   }
-  SgExpressionPtrList::iterator p = s->get_variables().begin();
+  SgExpressionPtrList::const_iterator p = s->get_variables().begin();
   while (p != s->get_variables().end()) {
     ASSERT_not_null(*p);
     unparseExpression(*p, info);
@@ -5213,9 +6204,14 @@ void FortranCodeGeneration_locatedNode::unparseOmpFlushStatement(
 void FortranCodeGeneration_locatedNode::unparseOmpEndDirectivePrefixAndName(
     SgStatement *stmt, SgUnparse_Info &info) {
   ASSERT_not_null(stmt);
-  if (!fortranOmpDirectiveUsesExplicitEnd(stmt) ||
-      !fortranOmpCanEmitEndDirectivePrefix(stmt)) {
+  unp->requireFortranDirectiveKind(Unparser::FortranDirectiveKind::openmp);
+  if (!fortranOmpDirectiveUsesExplicitEnd(stmt)) {
     return;
+  }
+  if (!fortranOmpCanEmitEndDirectivePrefix(stmt)) {
+    std::cerr << "Error: unsupported explicit OpenMP END directive for "
+              << stmt->class_name() << std::endl;
+    ROSE_ABORT();
   }
   unp->u_sage->curprint_newline();
   switch (stmt->variantT()) {
@@ -5243,6 +6239,11 @@ void FortranCodeGeneration_locatedNode::unparseOmpEndDirectivePrefixAndName(
   case V_SgOmpMasterStatement: {
     unparseOmpPrefix(info);
     curprint(string("end master"));
+    break;
+  }
+  case V_SgOmpMaskedStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end masked"));
     break;
   }
   case V_SgOmpOrderedStatement: {
@@ -5391,9 +6392,19 @@ void FortranCodeGeneration_locatedNode::unparseOmpEndDirectivePrefixAndName(
     curprint(string("end master taskloop"));
     break;
   }
+  case V_SgOmpMaskedTaskloopStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end masked taskloop"));
+    break;
+  }
   case V_SgOmpMasterTaskloopSimdStatement: {
     unparseOmpPrefix(info);
     curprint(string("end master taskloop simd"));
+    break;
+  }
+  case V_SgOmpMaskedTaskloopSimdStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end masked taskloop simd"));
     break;
   }
   case V_SgOmpParallelMasterTaskloopStatement: {
@@ -5426,9 +6437,19 @@ void FortranCodeGeneration_locatedNode::unparseOmpEndDirectivePrefixAndName(
     curprint(string("end task"));
     break;
   }
+  case V_SgOmpTaskgroupStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end taskgroup"));
+    break;
+  }
   case V_SgOmpDoStatement: {
     unparseOmpPrefix(info);
     curprint(string("end do"));
+    break;
+  }
+  case V_SgOmpForSimdStatement: {
+    unparseOmpPrefix(info);
+    curprint(string("end do simd"));
     break;
   }
   case V_SgOmpAtomicStatement: {
@@ -5447,18 +6468,26 @@ void FortranCodeGeneration_locatedNode::unparseOmpEndDirectivePrefixAndName(
     break;
   }
   default:
-    break;
+    std::cerr << "Error: missing Fortran spelling for explicit OpenMP END "
+                 "directive "
+              << stmt->class_name() << std::endl;
+    ROSE_ABORT();
   } // end switch
 }
 
 // OpenACC support
 void FortranCodeGeneration_locatedNode::unparseAccPrefix(SgUnparse_Info &info) {
+  unp->requireFortranDirectiveKind(Unparser::FortranDirectiveKind::openacc);
+  if (unp->cur.get_compact_output()) {
+    unp->cur.begin_compact_directive();
+  }
   curprint(string("!$acc "));
 }
 
 void FortranCodeGeneration_locatedNode::unparseAccBeginDirectiveClauses(
     SgStatement *stmt, SgUnparse_Info &info) {
   ASSERT_not_null(stmt);
+  unp->requireFortranDirectiveKind(Unparser::FortranDirectiveKind::openacc);
   const SgAccClausePtrList *clause_ptr_list = nullptr;
   if (SgAccClauseBodyStatement *bodystmt = isSgAccClauseBodyStatement(stmt)) {
     clause_ptr_list = &bodystmt->get_clauses();
@@ -5467,14 +6496,45 @@ void FortranCodeGeneration_locatedNode::unparseAccBeginDirectiveClauses(
   }
   if (clause_ptr_list != nullptr) {
     for (SgAccClause *c_clause : *clause_ptr_list) {
+      ASSERT_not_null(c_clause);
       unparseAccClause(c_clause, info);
     }
+  }
+}
+
+static bool fortranAccRequiresEndProvenance(SgStatement *stmt) {
+  ASSERT_not_null(stmt);
+  switch (stmt->variantT()) {
+  case V_SgAccParallelStatement:
+  case V_SgAccParallelLoopStatement:
+  case V_SgAccDataStatement:
+  case V_SgAccKernelsStatement:
+    return true;
+  case V_SgAccAtomicStatement: {
+    SgAccAtomicStatement *atomic = isSgAccAtomicStatement(stmt);
+    ASSERT_not_null(atomic);
+    for (SgAccClause *clause : atomic->get_clauses()) {
+      if (clause == nullptr || clause->get_parent() != atomic) {
+        std::cerr << "REX_UNPARSE_INVARIANT[openacc-clause-owner]: atomic "
+                     "directive has a null or misowned clause"
+                  << std::endl;
+        ROSE_ABORT();
+      }
+      if (isSgAccCaptureClause(clause) != nullptr) {
+        return true;
+      }
+    }
+    return false;
+  }
+  default:
+    return false;
   }
 }
 
 void FortranCodeGeneration_locatedNode::unparseAccEndDirectivePrefixAndName(
     SgStatement *stmt, SgUnparse_Info &info) {
   ASSERT_not_null(stmt);
+  unp->requireFortranDirectiveKind(Unparser::FortranDirectiveKind::openacc);
   unp->u_sage->curprint_newline();
   unparseAccPrefix(info);
   switch (stmt->variantT()) {
@@ -5490,24 +6550,72 @@ void FortranCodeGeneration_locatedNode::unparseAccEndDirectivePrefixAndName(
   case V_SgAccKernelsStatement:
     curprint(string("end kernels"));
     break;
-  default:
+  case V_SgAccAtomicStatement:
+    curprint(string("end atomic"));
     break;
+  default:
+    std::cerr << "Error: missing Fortran spelling for explicit OpenACC END "
+                 "directive "
+              << stmt->class_name() << std::endl;
+    ROSE_ABORT();
+  }
+}
+
+static bool fortranAccEmitsExplicitEnd(SgStatement *stmt) {
+  ASSERT_not_null(stmt);
+  switch (stmt->get_directive_end_kind()) {
+  case SgStatement::e_directive_end_explicit:
+    return true;
+  case SgStatement::e_directive_end_implicit:
+    if (isSgAccParallelLoopStatement(stmt) == nullptr) {
+      std::cerr << "REX_UNPARSE_INVARIANT[fortran-directive-end-kind]: "
+                   "statement="
+                << stmt->class_name() << " cannot omit its source END directive"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    return false;
+  case SgStatement::e_directive_end_not_applicable:
+    if (fortranAccRequiresEndProvenance(stmt)) {
+      std::cerr << "REX_UNPARSE_INVARIANT[fortran-directive-end-kind]: "
+                   "statement="
+                << stmt->class_name() << " has no exact source END provenance"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    return false;
+  default:
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-directive-end-kind]: "
+                 "statement="
+              << stmt->class_name() << " has invalid value="
+              << static_cast<int>(stmt->get_directive_end_kind()) << std::endl;
+    ROSE_ABORT();
   }
 }
 
 void FortranCodeGeneration_locatedNode::unparseAccGenericStatement(
     SgStatement *stmt, SgUnparse_Info &info) {
   ASSERT_not_null(stmt);
-  unparseAccDirectivePrefixAndName(stmt, info);
-  unparseAccBeginDirectiveClauses(stmt, info);
-  unp->u_sage->curprint_newline();
+  // Source END provenance is part of the directive's typed identity. Validate
+  // it before emitting the begin directive or traversing its body so malformed
+  // directives cannot be hidden by an unrelated descendant failure.
+  const bool emit_explicit_end = fortranAccEmitsExplicitEnd(stmt);
+  {
+    Unparser::FortranDirectiveContextGuard directiveContext(
+        unp, Unparser::FortranDirectiveKind::openacc);
+    unparseAccDirectivePrefixAndName(stmt, info);
+    unparseAccBeginDirectiveClauses(stmt, info);
+    unp->u_sage->curprint_newline();
+  }
 
   if (SgAccBodyStatement *b_stmt = isSgAccBodyStatement(stmt)) {
     SgUnparse_Info ninfo(info);
     unparseStatement(b_stmt->get_body(), ninfo);
   }
 
-  if (stmt->getAttribute("acc_fortran_end") != NULL) {
+  if (emit_explicit_end) {
+    Unparser::FortranDirectiveContextGuard directiveContext(
+        unp, Unparser::FortranDirectiveKind::openacc);
     unparseAccEndDirectivePrefixAndName(stmt, info);
     unp->u_sage->curprint_newline();
   }
@@ -5519,9 +6627,13 @@ void FortranCodeGeneration_locatedNode::unparseOmpDoStatement(
   SgOmpDoStatement *d_stmt = isSgOmpDoStatement(stmt);
   ASSERT_not_null(d_stmt);
 
-  unparseOmpDirectivePrefixAndName(stmt, info);
-  unparseOmpBeginDirectiveClauses(stmt, info);
-  unp->u_sage->curprint_newline();
+  {
+    Unparser::FortranDirectiveContextGuard directiveContext(
+        unp, Unparser::FortranDirectiveKind::openmp);
+    unparseOmpDirectivePrefixAndName(stmt, info);
+    unparseOmpBeginDirectiveClauses(stmt, info);
+    unp->u_sage->curprint_newline();
+  }
 
   SgUnparse_Info ninfo(info);
   if (d_stmt->get_body()) {
@@ -5532,9 +6644,13 @@ void FortranCodeGeneration_locatedNode::unparseOmpDoStatement(
     ROSE_ABORT();
   }
 
-  // unparse the end directive and name
-  unparseOmpEndDirectivePrefixAndName(stmt, info);
+  {
+    Unparser::FortranDirectiveContextGuard directiveContext(
+        unp, Unparser::FortranDirectiveKind::openmp);
+    // unparse the end directive and name
+    unparseOmpEndDirectivePrefixAndName(stmt, info);
 
-  // unparse the end directive's clause
-  unparseOmpEndDirectiveClauses(stmt, info);
+    // unparse the end directive's clause
+    unparseOmpEndDirectiveClauses(stmt, info);
+  }
 }

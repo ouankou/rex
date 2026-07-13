@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
   // try to add something into the new file
   SgGlobal *global = sgfile->get_globalScope();
   SgVariableDeclaration *varDecl =
-      buildVariableDeclaration("i", buildIntType());
+      buildVariableDeclaration("i", buildIntType(), nullptr, global);
   appendStatement(varDecl, isSgScopeStatement(global));
 
   // test copy across SgFile
@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
   // try to add something into the new file
   SgGlobal *global2 = sgfile2->get_globalScope();
   SgVariableDeclaration *varDecl2 =
-      buildVariableDeclaration("j", buildIntType());
+      buildVariableDeclaration("j", buildIntType(), nullptr, global2);
   appendStatement(varDecl2, isSgScopeStatement(global2));
 
   // test AST copy across SgFile
@@ -68,7 +68,7 @@ int main(int argc, char *argv[]) {
       isSgSourceFile(buildFile(fileName2, fileName3, project));
   SgGlobal *global3 = sgfile3->get_globalScope();
   SgVariableDeclaration *varDecl3 =
-      buildVariableDeclaration("y", buildIntType());
+      buildVariableDeclaration("y", buildIntType(), nullptr, global3);
   appendStatement(varDecl3, isSgScopeStatement(global3));
   // test AST copy across SgSourceFile
   SgStatement *varDecl4_cp = deepCopy<SgStatement>(stmt1);
@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
   // try to add something into the new file
   SgGlobal *global4 = sgfile4->get_globalScope();
   SgVariableDeclaration *varDecl4 =
-      buildVariableDeclaration("z", buildIntType());
+      buildVariableDeclaration("z", buildIntType(), nullptr, global4);
   appendStatement(varDecl4, isSgScopeStatement(global4));
 
   SgProject *project4 = sgfile4->get_project();

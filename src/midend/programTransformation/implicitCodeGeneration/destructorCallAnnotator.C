@@ -61,13 +61,11 @@ std::ostream &operator<<(std::ostream &os, const Rose_STL_Container<T> &list) {
 }
 
 std::ostream &operator<<(std::ostream &os, SgNode *node) {
-  os << node->class_name();
-  if (SgLocatedNode *ln = isSgLocatedNode(node)) {
-    Sg_File_Info *fi = ln->get_file_info();
-    os << "(" << fi->get_filename() << ":" << fi->get_line() << ":"
-       << fi->get_col() << ") ";
+  ROSE_ASSERT(node != nullptr);
+  os << node->class_name() << "@" << static_cast<void *>(node);
+  if (SgInitializedName *initializedName = isSgInitializedName(node)) {
+    os << "(name=" << initializedName->get_name().getString() << ")";
   }
-  os << node->unparseToCompleteString();
   return os;
 }
 
@@ -552,7 +550,8 @@ public:
         for (in_list::iterator i = ctors.begin(); i != ctors.end(); ++i) {
           SgExpression *dtorExp = buildDestructorExpr(*i);
           ROSE_ASSERT(dtorExp);
-          retExp = new SgCommaOpExp(SgNULL_FILE, retExp, dtorExp);
+          retExp = new SgCommaOpExp(SgNULL_FILE, retExp, dtorExp,
+                                    dtorExp->get_type());
           dtorExp->set_parent(retExp);
         }
 

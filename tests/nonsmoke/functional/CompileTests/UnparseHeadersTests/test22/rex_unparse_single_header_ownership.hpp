@@ -1,0 +1,6 @@
+#ifndef REX_UNPARSE_SINGLE_HEADER_OWNERSHIP_HPP
+#define REX_UNPARSE_SINGLE_HEADER_OWNERSHIP_HPP
+
+int rex_single_header_ownership_rename_me;
+
+#endif

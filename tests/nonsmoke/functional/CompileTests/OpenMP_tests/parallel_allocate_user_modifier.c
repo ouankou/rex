@@ -1,7 +1,7 @@
-#include <stdio.h>
-#ifdef _OPENMP
 #include <omp.h>
-#endif
+#include <stdio.h>
+
+omp_allocator_handle_t user_modi = omp_default_mem_alloc;
 
 int main() {
   int a, b, c;

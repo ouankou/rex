@@ -124,9 +124,12 @@ SgType *SageBuilder::buildFortranImplicitType(SgName sg_name) {
   return returnType;
 }
 
-SgAttributeSpecificationStatement *
-SageBuilder::buildAttributeSpecificationStatement(
-    SgAttributeSpecificationStatement::attribute_spec_enum kind) {
+namespace {
+enum class AttributeSpecificationProvenance { source_pending, transformation };
+
+SgAttributeSpecificationStatement *buildAttributeSpecificationStatementImpl(
+    SgAttributeSpecificationStatement::attribute_spec_enum kind,
+    AttributeSpecificationProvenance provenance) {
   SgAttributeSpecificationStatement *attributeSpecificationStatement =
       new SgAttributeSpecificationStatement();
   ROSE_ASSERT(attributeSpecificationStatement != NULL);
@@ -141,27 +144,57 @@ SageBuilder::buildAttributeSpecificationStatement(
   switch (kind) {
   case SgAttributeSpecificationStatement::e_accessStatement_private:
   case SgAttributeSpecificationStatement::e_accessStatement_public:
+  case SgAttributeSpecificationStatement::e_intrinsicStatement:
+    break;
   case SgAttributeSpecificationStatement::e_parameterStatement:
   case SgAttributeSpecificationStatement::e_externalStatement:
   case SgAttributeSpecificationStatement::e_dimensionStatement:
-  case SgAttributeSpecificationStatement::e_allocatableStatement: {
+  case SgAttributeSpecificationStatement::e_allocatableStatement:
+  case SgAttributeSpecificationStatement::e_pointerStatement: {
     SgExprListExp *parameterList{SageBuilder::buildExprListExp_nfi()};
     attributeSpecificationStatement->set_parameter_list(parameterList);
     parameterList->set_parent(attributeSpecificationStatement);
-    setSourcePositionForTransformation(parameterList);
+    if (provenance == AttributeSpecificationProvenance::source_pending) {
+      SageBuilder::requireFreshNfiExpressionSourceState(
+          parameterList,
+          "source-pending attribute specification parameter list");
+    } else {
+      setOneSourcePositionForTransformation(parameterList);
+    }
     break;
   }
   case SgAttributeSpecificationStatement::e_dataStatement:
     break;
   default:
-    cerr << "SageBuilder::buildAttributeSpecificationStatement(), unhandled "
-            "attribute specification kind:"
+    cerr << "SageBuilder attribute specification builder received unhandled "
+            "kind:"
          << kind << endl;
     ROSE_ABORT();
     break;
   }
-  setSourcePositionForTransformation(attributeSpecificationStatement);
   return attributeSpecificationStatement;
+}
+} // namespace
+
+SgAttributeSpecificationStatement *
+SageBuilder::buildAttributeSpecificationStatement(
+    SgAttributeSpecificationStatement::attribute_spec_enum kind) {
+  SgAttributeSpecificationStatement *statement =
+      buildAttributeSpecificationStatementImpl(
+          kind, AttributeSpecificationProvenance::transformation);
+  setOneSourcePositionForTransformation(statement);
+  return statement;
+}
+
+SgAttributeSpecificationStatement *
+SageBuilder::buildAttributeSpecificationStatement_nfi(
+    SgAttributeSpecificationStatement::attribute_spec_enum kind) {
+  SgAttributeSpecificationStatement *statement =
+      buildAttributeSpecificationStatementImpl(
+          kind, AttributeSpecificationProvenance::source_pending);
+  requireFreshNfiLocatedNodeSourceState(
+      statement, "buildAttributeSpecificationStatement_nfi");
+  return statement;
 }
 
 //! Build Fortran include line
@@ -173,6 +206,16 @@ SageBuilder::buildFortranIncludeLine(std::string filename) {
   result->set_definingDeclaration(result);
   result->set_firstNondefiningDeclaration(result);
   setSourcePositionForTransformation(result);
+  return result;
+}
+
+SgFortranIncludeLine *
+SageBuilder::buildFortranIncludeLine_nfi(std::string filename) {
+  SgFortranIncludeLine *result = new SgFortranIncludeLine(filename);
+  ASSERT_not_null(result);
+  result->set_definingDeclaration(result);
+  result->set_firstNondefiningDeclaration(result);
+  requireFreshNfiLocatedNodeSourceState(result, "buildFortranIncludeLine_nfi");
   return result;
 }
 //! Build a Fortran common block, possibly with a name

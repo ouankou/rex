@@ -31,13 +31,13 @@ int main(int argc, char *argv[]) {
                                     liveOuts);
     cout << "Live-in variables are:";
     for (iter = liveIns.begin(); iter != liveIns.end(); iter++) {
-      cout << " " << (*iter)->unparseToString() << " ";
+      cout << " " << (*iter)->get_name().getString() << " ";
     }
     cout << endl;
 
     cout << "Live-out variables are:";
     for (iter = liveOuts.begin(); iter != liveOuts.end(); iter++) {
-      cout << " " << (*iter)->unparseToString() << " ";
+      cout << " " << (*iter)->get_name().getString() << " ";
     }
     cout << endl;
   } else

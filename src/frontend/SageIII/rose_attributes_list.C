@@ -2,7 +2,10 @@
 
 #include "rose_attributes_list.h"
 
+#include <cctype>
+#include <cstring>
 #include <errno.h>
+#include <limits>
 
 // DQ (10/14/2010):  This should only be included by source files that require
 // it. This fixed a reported bug which caused conflicts with configure-time
@@ -39,7 +42,8 @@ unsigned int PreprocessingInfo::packed_size() const {
                             /* string size and string */ sizeof(unsigned int) +
                             internalString.size() + sizeof(numberOfLines) +
                             sizeof(whatSortOfDirective) +
-                            sizeof(relativePosition) +
+                            sizeof(relativePosition) + sizeof(outputPlacement) +
+                            sizeof(p_isTransformation) +
                             sizeof(lineNumberForCompilerGeneratedLinemarker) +
                             /* string size and string */ sizeof(unsigned int) +
                             filenameForCompilerGeneratedLinemarker.size() +
@@ -107,6 +111,11 @@ char *PreprocessingInfo::packed() const {
   storePointer += sizeof(DirectiveType);
   memcpy(storePointer, (char *)(&relativePosition), sizeof(relativePosition));
   storePointer += sizeof(RelativePositionType);
+  memcpy(storePointer, (char *)(&outputPlacement), sizeof(outputPlacement));
+  storePointer += sizeof(OutputPlacementType);
+  memcpy(storePointer, (char *)(&p_isTransformation),
+         sizeof(p_isTransformation));
+  storePointer += sizeof(p_isTransformation);
   memcpy(storePointer, (char *)(&stringSize), sizeof(stringSize));
   storePointer += sizeof(stringSize);
   memcpy(storePointer, saveString, stringSize);
@@ -148,6 +157,11 @@ void PreprocessingInfo::unpacked(char *storePointer) {
   storePointer += sizeof(DirectiveType);
   memcpy((char *)(&relativePosition), storePointer, sizeof(relativePosition));
   storePointer += sizeof(RelativePositionType);
+  memcpy((char *)(&outputPlacement), storePointer, sizeof(outputPlacement));
+  storePointer += sizeof(OutputPlacementType);
+  memcpy((char *)(&p_isTransformation), storePointer,
+         sizeof(p_isTransformation));
+  storePointer += sizeof(p_isTransformation);
   int stringSize = 0;
   memcpy((char *)(&stringSize), storePointer, sizeof(stringSize));
   storePointer += sizeof(stringSize);
@@ -168,7 +182,8 @@ void PreprocessingInfo::unpacked(char *storePointer) {
 
 // #endif
 
-PreprocessingInfo::PreprocessingInfo() {
+PreprocessingInfo::PreprocessingInfo()
+    : outputPlacement(source_position), attachedOwner(nullptr) {
   // Set these values so that they are not set to zero (a valid value) if a
   // PreprocessingInfo object is reused
 
@@ -203,7 +218,8 @@ PreprocessingInfo::PreprocessingInfo(
     )
     : file_info(NULL),
       // lineNumber(line_no), columnNumber (col_no),
-      numberOfLines(nol), whatSortOfDirective(dt), relativePosition(relPos) {
+      numberOfLines(nol), whatSortOfDirective(dt), relativePosition(relPos),
+      outputPlacement(source_position), attachedOwner(nullptr) {
   // DQ (10/29/2007): Test the filename is a way similar to how it is failing in
   // lower level code
   if (inputFileName == "NULL_FILE") {
@@ -248,12 +264,13 @@ PreprocessingInfo::PreprocessingInfo(
   // macros.
   if (whatSortOfDirective ==
       PreprocessingInfo::CpreprocessorDefineDeclaration) {
-    string name = getMacroName();
+    (void)getMacroName();
   }
 }
 
 // Copy constructor
-PreprocessingInfo::PreprocessingInfo(const PreprocessingInfo &prepInfo) {
+PreprocessingInfo::PreprocessingInfo(const PreprocessingInfo &prepInfo)
+    : outputPlacement(prepInfo.outputPlacement), attachedOwner(nullptr) {
   ROSE_ASSERT(prepInfo.file_info != NULL);
   file_info = new Sg_File_Info(*(prepInfo.file_info));
 
@@ -276,7 +293,7 @@ PreprocessingInfo::PreprocessingInfo(const PreprocessingInfo &prepInfo) {
   // macros.
   if (whatSortOfDirective ==
       PreprocessingInfo::CpreprocessorDefineDeclaration) {
-    string name = getMacroName();
+    (void)getMacroName();
   }
 }
 
@@ -362,6 +379,9 @@ string PreprocessingInfo::directiveTypeName(const DirectiveType &directive) {
   case CplusplusStyleComment:
     returnString = "CplusplusStyleComment";
     break;
+  case CpreprocessorBlankLine:
+    returnString = "CpreprocessorBlankLine";
+    break;
   case CpreprocessorIncludeDeclaration:
     returnString = "CpreprocessorIncludeDeclaration";
     break;
@@ -401,20 +421,17 @@ string PreprocessingInfo::directiveTypeName(const DirectiveType &directive) {
   case CpreprocessorLineDeclaration:
     returnString = "CpreprocessorLineDeclaration";
     break;
-  case ClinkageSpecificationStart:
-    returnString = "ClinkageSpecificationStart";
-    break;
-  case ClinkageSpecificationEnd:
-    returnString = "ClinkageSpecificationEnd";
+  case CpreprocessorPragmaDeclaration:
+    returnString = "CpreprocessorPragmaDeclaration";
     break;
   case CpreprocessorErrorDeclaration:
-    returnString = "CpreprocessorErrorCDeclaration";
+    returnString = "CpreprocessorErrorDeclaration";
     break;
   case CpreprocessorWarningDeclaration:
     returnString = "CpreprocessorWarningDeclaration";
     break;
   case CpreprocessorEmptyDeclaration:
-    returnString = "CpreprocessorEmptyCDeclaration";
+    returnString = "CpreprocessorEmptyDeclaration";
     break;
   case CSkippedToken:
     returnString = "CSkippedToken";
@@ -422,10 +439,9 @@ string PreprocessingInfo::directiveTypeName(const DirectiveType &directive) {
   case CMacroCall:
     returnString = "CMacroCall";
     break;
-  case LineReplacement:
-    returnString = "LineReplacement";
+  case CMacroCallStatement:
+    returnString = "CMacroCallStatement";
     break;
-
     // DQ (11/17/2008): Added support for #ident
   case CpreprocessorIdentDeclaration:
     returnString = "CpreprocessorIdentDeclaration";
@@ -553,7 +569,87 @@ PreprocessingInfo::getRelativePosition(void) const {
 void PreprocessingInfo::setRelativePosition(RelativePositionType relPos) {
   ASSERT_this();
 
+  if (attachedOwner != nullptr && relPos != relativePosition) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[preprocessing-attached-position]: attached "
+            "record position cannot change outside its owner transaction\n");
+    ROSE_ABORT();
+  }
+
   relativePosition = relPos;
+}
+
+PreprocessingInfo::OutputPlacementType
+PreprocessingInfo::getOutputPlacement() const {
+  ASSERT_this();
+  if (outputPlacement != source_position &&
+      outputPlacement != attached_output_boundary &&
+      outputPlacement != attached_output_trailing_line) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[preprocessing-output-placement]: record=%p "
+            "has invalid placement=%d\n",
+            static_cast<const void *>(this), static_cast<int>(outputPlacement));
+    ROSE_ABORT();
+  }
+  return outputPlacement;
+}
+
+void PreprocessingInfo::setOutputPlacement(OutputPlacementType placement) {
+  ASSERT_this();
+  if ((placement != source_position && placement != attached_output_boundary &&
+       placement != attached_output_trailing_line) ||
+      (outputPlacement != source_position && outputPlacement != placement)) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[preprocessing-output-placement]: record=%p "
+            "cannot transition from placement=%d to placement=%d\n",
+            static_cast<void *>(this), static_cast<int>(outputPlacement),
+            static_cast<int>(placement));
+    ROSE_ABORT();
+  }
+  outputPlacement = placement;
+}
+
+SgLocatedNode *PreprocessingInfo::getAttachedOwner() const {
+  ASSERT_this();
+  return attachedOwner;
+}
+
+void PreprocessingInfo::claimAttachedOwner(SgLocatedNode *owner) {
+  ASSERT_this();
+  if (owner == nullptr || attachedOwner != nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[preprocessing-attachment-owner]: record is "
+            "not uniquely detached\n");
+    ROSE_ABORT();
+  }
+  attachedOwner = owner;
+}
+
+void PreprocessingInfo::releaseAttachedOwner(SgLocatedNode *owner) {
+  ASSERT_this();
+  if (owner == nullptr || attachedOwner != owner) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[preprocessing-attachment-owner]: record=%p "
+            "current-owner=%p release-owner=%p does not own the record\n",
+            static_cast<void *>(this), static_cast<void *>(attachedOwner),
+            static_cast<void *>(owner));
+    ROSE_ABORT();
+  }
+  attachedOwner = nullptr;
+}
+
+void PreprocessingInfo::changeAttachedPosition(SgLocatedNode *owner,
+                                               RelativePositionType position) {
+  ASSERT_this();
+  if (owner == nullptr || attachedOwner != owner) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[preprocessing-attached-position]: record=%p "
+            "current-owner=%p requested-owner=%p cannot change position\n",
+            static_cast<void *>(this), static_cast<void *>(attachedOwner),
+            static_cast<void *>(owner));
+    ROSE_ABORT();
+  }
+  relativePosition = position;
 }
 
 int PreprocessingInfo::getStringLength(void) const {
@@ -562,10 +658,20 @@ int PreprocessingInfo::getStringLength(void) const {
   return internalString.length();
 }
 
+bool PreprocessingInfo::has_file_info() const {
+  ASSERT_this();
+  return file_info != NULL;
+}
+
 Sg_File_Info *PreprocessingInfo::get_file_info() const {
   ASSERT_this();
 
-  ROSE_ASSERT(file_info != NULL);
+  if (file_info == NULL) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[preprocessing-source-provenance]: "
+            "preprocessing entry has no source or transformation file info\n");
+    ROSE_ABORT();
+  }
   return file_info;
 }
 
@@ -647,10 +753,198 @@ void PreprocessingInfo::set_optionalflagsForCompilerGeneratedLinemarker(
   optionalflagsForCompilerGeneratedLinemarker = x;
 }
 
-// DQ (1/19/2014): List the acceptable leading possible characters to any CPP
-// macro only once to aboud errors.
-#define CPP_MACRO_ALPHABET                                                     \
-  "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+namespace {
+
+struct PhaseTwoSpelling {
+  std::string logical;
+  std::vector<size_t> rawOffsets;
+};
+
+struct MacroDefinitionSpelling {
+  std::string logicalName;
+  size_t rawNameBegin;
+  size_t rawNameEnd;
+};
+
+std::string diagnosticDirectiveSpelling(const std::string &spelling) {
+  std::string result;
+  result.reserve(spelling.size());
+  for (char character : spelling) {
+    switch (character) {
+    case '\n':
+      result += "\\n";
+      break;
+    case '\r':
+      result += "\\r";
+      break;
+    case '\t':
+      result += "\\t";
+      break;
+    default:
+      result += character;
+      break;
+    }
+  }
+  return result;
+}
+
+[[noreturn]] void failMacroDefinitionSpelling(const char *reason,
+                                              const std::string &spelling) {
+  ASSERT_not_null(reason);
+  const std::string diagnosticSpelling = diagnosticDirectiveSpelling(spelling);
+  fprintf(stderr,
+          "REX_FRONTEND_INVARIANT[macro-definition-spelling]: reason=%s "
+          "spelling=%s\n",
+          reason, diagnosticSpelling.c_str());
+  ROSE_ABORT();
+}
+
+bool isHorizontalWhitespace(char character) {
+  return character == ' ' || character == '\t' || character == '\f' ||
+         character == '\v';
+}
+
+PhaseTwoSpelling deletePhaseTwoLineSplices(const std::string &spelling) {
+  PhaseTwoSpelling result;
+  result.logical.reserve(spelling.size());
+  result.rawOffsets.reserve(spelling.size());
+
+  for (size_t raw = 0; raw < spelling.size();) {
+    if (spelling[raw] == '\\' && raw + 1 < spelling.size()) {
+      if (spelling[raw + 1] == '\n') {
+        raw += 2;
+        continue;
+      }
+      if (spelling[raw + 1] == '\r' && raw + 2 < spelling.size() &&
+          spelling[raw + 2] == '\n') {
+        raw += 3;
+        continue;
+      }
+    }
+
+    result.rawOffsets.push_back(raw);
+    result.logical += spelling[raw];
+    ++raw;
+  }
+
+  return result;
+}
+
+bool skipMacroDefinitionTrivia(const std::string &spelling, size_t &cursor,
+                               const std::string &diagnosticSpelling) {
+  bool skipped = false;
+  while (cursor < spelling.size()) {
+    if (isHorizontalWhitespace(spelling[cursor])) {
+      ++cursor;
+      skipped = true;
+      continue;
+    }
+    if (spelling.compare(cursor, 2, "/*") == 0) {
+      const size_t commentEnd = spelling.find("*/", cursor + 2);
+      if (commentEnd == std::string::npos) {
+        failMacroDefinitionSpelling("unterminated-comment", diagnosticSpelling);
+      }
+      cursor = commentEnd + 2;
+      skipped = true;
+      continue;
+    }
+    break;
+  }
+  return skipped;
+}
+
+bool isMacroIdentifierStart(unsigned char character) {
+  return character == '_' || character == '$' || std::isalpha(character) ||
+         character >= 0x80;
+}
+
+bool isMacroIdentifierContinuation(unsigned char character) {
+  return isMacroIdentifierStart(character) || std::isdigit(character);
+}
+
+size_t consumeUniversalCharacterName(const std::string &spelling,
+                                     size_t cursor) {
+  if (cursor + 1 >= spelling.size() || spelling[cursor] != '\\' ||
+      (spelling[cursor + 1] != 'u' && spelling[cursor + 1] != 'U')) {
+    return cursor;
+  }
+  const size_t digitCount = spelling[cursor + 1] == 'u' ? 4 : 8;
+  if (cursor + 2 + digitCount > spelling.size()) {
+    return cursor;
+  }
+  for (size_t index = cursor + 2; index < cursor + 2 + digitCount; ++index) {
+    if (!std::isxdigit(static_cast<unsigned char>(spelling[index]))) {
+      return cursor;
+    }
+  }
+  return cursor + 2 + digitCount;
+}
+
+MacroDefinitionSpelling
+parseMacroDefinitionSpelling(const std::string &spelling) {
+  const PhaseTwoSpelling phaseTwo = deletePhaseTwoLineSplices(spelling);
+  const std::string &logical = phaseTwo.logical;
+  size_t cursor = 0;
+  skipMacroDefinitionTrivia(logical, cursor, spelling);
+  if (cursor >= logical.size() || logical[cursor] != '#') {
+    failMacroDefinitionSpelling("missing-hash", spelling);
+  }
+  ++cursor;
+  skipMacroDefinitionTrivia(logical, cursor, spelling);
+
+  constexpr char keyword[] = "define";
+  constexpr size_t keywordLength = sizeof(keyword) - 1;
+  if (logical.compare(cursor, keywordLength, keyword) != 0) {
+    failMacroDefinitionSpelling("missing-define-keyword", spelling);
+  }
+  cursor += keywordLength;
+  if (!skipMacroDefinitionTrivia(logical, cursor, spelling)) {
+    failMacroDefinitionSpelling("missing-name-separator", spelling);
+  }
+  if (cursor >= logical.size()) {
+    failMacroDefinitionSpelling("missing-macro-name", spelling);
+  }
+
+  const size_t nameBegin = cursor;
+  const size_t universalEnd = consumeUniversalCharacterName(logical, cursor);
+  if (universalEnd != cursor) {
+    cursor = universalEnd;
+  } else if (isMacroIdentifierStart(
+                 static_cast<unsigned char>(logical[cursor]))) {
+    ++cursor;
+  } else {
+    failMacroDefinitionSpelling("invalid-macro-name", spelling);
+  }
+
+  while (cursor < logical.size()) {
+    const size_t continuationEnd =
+        consumeUniversalCharacterName(logical, cursor);
+    if (continuationEnd != cursor) {
+      cursor = continuationEnd;
+      continue;
+    }
+    if (!isMacroIdentifierContinuation(
+            static_cast<unsigned char>(logical[cursor]))) {
+      break;
+    }
+    ++cursor;
+  }
+
+  ASSERT_require(nameBegin < cursor);
+  ASSERT_require(cursor <= phaseTwo.rawOffsets.size());
+  const size_t rawNameBegin = phaseTwo.rawOffsets[nameBegin];
+  const size_t rawNameEnd = phaseTwo.rawOffsets[cursor - 1] + 1;
+  const std::string logicalName = logical.substr(nameBegin, cursor - nameBegin);
+  const PhaseTwoSpelling exactRawName = deletePhaseTwoLineSplices(
+      spelling.substr(rawNameBegin, rawNameEnd - rawNameBegin));
+  if (exactRawName.logical != logicalName) {
+    failMacroDefinitionSpelling("macro-name-offset-mismatch", spelling);
+  }
+
+  return {logicalName, rawNameBegin, rawNameEnd};
+}
+
+} // namespace
 
 std::string PreprocessingInfo::getMacroName() {
   // This function is only supporting the retrival of the macro name for #define
@@ -658,288 +952,25 @@ std::string PreprocessingInfo::getMacroName() {
 
 #define DEBUG_MACRO_NAME 0
 
-  std::string macroName = "unknown CPP directive";
-  if (this->getTypeOfDirective() ==
+  if (this->getTypeOfDirective() !=
       PreprocessingInfo::CpreprocessorDefineDeclaration) {
-    string s = internalString;
-    string defineSubString = "define";
-#if DEBUG_MACRO_NAME
-    printf("s = %s \n", s.c_str());
-#endif
-    size_t lengthOfDefineSubstring = defineSubString.length();
-    size_t startOfDefineSubstring = s.find(defineSubString);
-
-    // DQ (1/13/2014): trap out cases where the CPP directive has been marked as
-    // a #defin CPP directive, but does not contain the substring "define".
-    // ROSE_ASSERT(startOfDefineSubstring != string::npos);
-    if (startOfDefineSubstring != string::npos) {
-      size_t endOfDefineSubstring =
-          startOfDefineSubstring + lengthOfDefineSubstring;
-#if DEBUG_MACRO_NAME
-      printf("   --- startOfDefineSubstring = %" PRIuPTR
-             " endOfDefineSubstring = %" PRIuPTR " \n",
-             startOfDefineSubstring, endOfDefineSubstring);
-#endif
-      string substring = s.substr(endOfDefineSubstring);
-
-      string cpp_macro_alphabet = CPP_MACRO_ALPHABET;
-      ROSE_ASSERT(cpp_macro_alphabet.length() == 53);
-
-      // size_t startOfMacroName =
-      // s.find_first_of("_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",endOfDefineSubstring);
-      size_t startOfMacroName =
-          s.find_first_of(cpp_macro_alphabet, endOfDefineSubstring);
-      size_t endOfMacroName = s.find_first_of(" (\t", startOfMacroName);
-#if DEBUG_MACRO_NAME
-      printf("   --- startOfMacroName = %" PRIuPTR " endOfMacroName = %" PRIuPTR
-             " \n",
-             startOfMacroName, endOfMacroName);
-#endif
-      // DQ (1/19/2014): Added assertion.
-      ROSE_ASSERT(startOfMacroName != string::npos);
-
-      size_t macroNameLength = (endOfMacroName - startOfMacroName);
-#if DEBUG_MACRO_NAME
-      printf("   --- macroNameLength = %" PRIuPTR " \n", macroNameLength);
-#endif
-      macroName = s.substr(startOfMacroName, macroNameLength);
-#if DEBUG_MACRO_NAME
-      printf("   --- macroName = %s \n", macroName.c_str());
-#endif
-    } else {
-      printf("WARNING: In PreprocessingInfo::getMacroName(): 'define' keyword "
-             "not identified in CpreprocessorDefineDeclaration type CPP "
-             "directive: returning 'unknown' \n");
-    }
-  } else {
-    // DQ (12/30/2013): I think I want this to be an error for now.
-    printf("ERROR: In PreprocessingInfo::getMacroName(): "
-           "(this->getTypeOfDirective() != "
-           "PreprocessingInfo::CpreprocessorDefineDeclaration): returning "
-           "error -- %s \n",
-           macroName.c_str());
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[macro-definition-kind]: directive=%s "
+            "cannot provide a #define macro name\n",
+            directiveTypeName(this->getTypeOfDirective()).c_str());
     ROSE_ABORT();
   }
 
-  return macroName;
-}
-
-bool PreprocessingInfo::isSelfReferential() {
-  // DQ (12/30/2013): Adding support to supress output of macros that are
-  // self-referential. e.g. "#define foo X->foo", which would be expanded a
-  // second time in the backend processing. Note that if we don't output the
-  // #define, then we still might have a problem if there was code that depended
-  // upon a "#ifdef foo".  So this handling is not without some risk, but it
-  // always better to use the token stream unparsing for these cases.
-
-#define DEBUG_SELF_REFERENTIAL_MACRO 0
-
-  bool result = true;
-
-  if (this->getTypeOfDirective() ==
-      PreprocessingInfo::CpreprocessorDefineDeclaration) {
-    result = true;
-    string macroName = getMacroName();
-#if DEBUG_SELF_REFERENTIAL_MACRO
-    printf("   --- macroName = %s macroName.length() = %" PRIuPTR " \n",
-           macroName.c_str(), macroName.length());
-#endif
-    string s = internalString;
-
-    // DQ (1/13/2014):if the macro name is "n" then the "n" in "define" will be
-    // found by mistake.
-    string defineSubstring = "define";
-    size_t startOfMacro_define_Substring = s.find(defineSubstring);
-
-    // DQ (1/13/2014): This case could happen if we had a macro marked as
-    // #define, but it was not properly formed (getMacroName() returns "unknown
-    // CPP directive"). ROSE_ASSERT(startOfMacroSubstring != string::npos);
-    if (startOfMacro_define_Substring == string::npos) {
-      printf(
-          "WARNING: In PreprocessingInfo::isSelfReferential(): (return false): "
-          "\"define\" substring not found in CPP #define directitve = %s \n",
-          s.c_str());
-      return false;
-    }
-
-    size_t endOfMacro_define_Substring =
-        startOfMacro_define_Substring + defineSubstring.length();
-#if DEBUG_SELF_REFERENTIAL_MACRO
-    printf("   --- startOfMacro_define_Substring = %" PRIuPTR
-           " endOfMacro_define_Substring = %" PRIuPTR " \n",
-           startOfMacro_define_Substring, endOfMacro_define_Substring);
+  const MacroDefinitionSpelling spelling =
+      parseMacroDefinitionSpelling(internalString);
+#if DEBUG_MACRO_NAME
+  printf("s = %s \n", internalString.c_str());
+  printf("   --- macroName = %s raw range = [%" PRIuPTR ", %" PRIuPTR ") \n",
+         spelling.logicalName.c_str(), spelling.rawNameBegin,
+         spelling.rawNameEnd);
 #endif
 
-    // DQ (1/13/2014):if the macro name is "n" then the "n" in "define" will be
-    // found by mistake. size_t startOfMacroSubstring  = s.find(macroName);
-    size_t startOfMacroSubstring =
-        s.find(macroName, endOfMacro_define_Substring);
-
-    // DQ (1/13/2014): This case could happen if we had a macro marked as
-    // #define, but it was not properly formed (getMacroName() returns "unknown
-    // CPP directive"). ROSE_ASSERT(startOfMacroSubstring != string::npos);
-    if (startOfMacroSubstring == string::npos) {
-      printf(
-          "WARNING: In PreprocessingInfo::isSelfReferential(): (return false): "
-          "macroName = %s not found in CPP #define directitve = %s \n",
-          macroName.c_str(), s.c_str());
-      return false;
-    }
-
-    size_t endOfMacroSubstring =
-        startOfMacroSubstring + (macroName.length() - 1);
-#if DEBUG_SELF_REFERENTIAL_MACRO
-    printf("   --- startOfMacroSubstring = %" PRIuPTR
-           " endOfMacroSubstring = %" PRIuPTR " \n",
-           startOfMacroSubstring, endOfMacroSubstring);
-#endif
-    // size_t secondReferenceToMacroSubstring =
-    // s.find(macroName,endOfMacroSubstring);
-    size_t secondReferenceToMacroSubstring =
-        s.find(macroName, endOfMacroSubstring + 1);
-#if DEBUG_SELF_REFERENTIAL_MACRO
-    printf("   --- secondReferenceToMacroSubstring = %" PRIuPTR " \n",
-           secondReferenceToMacroSubstring);
-#endif
-    result = (secondReferenceToMacroSubstring != string::npos);
-#if DEBUG_SELF_REFERENTIAL_MACRO
-    printf("   --- result = %s \n", result ? "true" : "false");
-#endif
-
-    if (secondReferenceToMacroSubstring != string::npos) {
-      string cpp_macro_alphabet = CPP_MACRO_ALPHABET;
-      ROSE_ASSERT(cpp_macro_alphabet.length() == 53);
-
-#if DEBUG_SELF_REFERENTIAL_MACRO
-      printf("   --- Double check for self-referencing macro: macroName = %s s "
-             "= %s ",
-             macroName.c_str(), s.c_str());
-#endif
-      // DQ (1/9/2014): Detect a prefix at the start of the second referenced
-      // string to make sure it is not embedded in another string. e.g. test for
-      // cases such as "#define ABC __ABC" which is not a self-referential
-      // macro.
-      size_t characterBeforeSecondReferenceToMacroSubstring =
-          secondReferenceToMacroSubstring - 1;
-      ROSE_ASSERT(endOfMacroSubstring <
-                  characterBeforeSecondReferenceToMacroSubstring);
-      string beforeSecondReferenceToMacroSubstring =
-          s.substr(endOfMacroSubstring + 1,
-                   (characterBeforeSecondReferenceToMacroSubstring -
-                    endOfMacroSubstring));
-      // size_t find_last_not_of (const string& str, size_t pos = npos) const;
-      // size_t characterBeforeSecondReferenceToMacroSubstring =
-      // s.find_last_not_of("_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",characterBeforeSecondReferenceToMacroSubstring);
-      // size_t nonWhiteSpaceCharacterBeforeSecondReferenceToMacroSubstring =
-      // beforeSecondReferenceToMacroSubstring.find_last_not_of("_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ");
-      size_t nonWhiteSpaceCharacterBeforeSecondReferenceToMacroSubstring =
-          beforeSecondReferenceToMacroSubstring.find_last_not_of(
-              cpp_macro_alphabet);
-#if DEBUG_SELF_REFERENTIAL_MACRO
-      printf("   --- characterBeforeSecondReferenceToMacroSubstring            "
-             "  = %" PRIuPTR " \n",
-             characterBeforeSecondReferenceToMacroSubstring);
-      printf("   --- beforeSecondReferenceToMacroSubstring                     "
-             "  = %s \n",
-             beforeSecondReferenceToMacroSubstring.c_str());
-      printf(
-          "   --- nonWhiteSpaceCharacterBeforeSecondReferenceToMacroSubstring "
-          "= %" PRIuPTR " \n",
-          nonWhiteSpaceCharacterBeforeSecondReferenceToMacroSubstring);
-#endif
-      ROSE_ASSERT(nonWhiteSpaceCharacterBeforeSecondReferenceToMacroSubstring !=
-                  string::npos);
-      size_t
-          nonWhiteSpaceCharacterBeforeSecondReferenceToMacroSubstring_relativeToInternalString =
-              nonWhiteSpaceCharacterBeforeSecondReferenceToMacroSubstring +
-              endOfMacroSubstring + 1;
-#if DEBUG_SELF_REFERENTIAL_MACRO
-      printf(
-          "   --- "
-          "nonWhiteSpaceCharacterBeforeSecondReferenceToMacroSubstring_"
-          "relativeToInternalString = %" PRIuPTR " \n",
-          nonWhiteSpaceCharacterBeforeSecondReferenceToMacroSubstring_relativeToInternalString);
-#endif
-      // if (nonWhiteSpaceCharacterBeforeSecondReferenceToMacroSubstring <
-      // characterBeforeSecondReferenceToMacroSubstring)
-      if (nonWhiteSpaceCharacterBeforeSecondReferenceToMacroSubstring_relativeToInternalString <
-          characterBeforeSecondReferenceToMacroSubstring) {
-        // This is a case like: "#define ABC __ABC" which is not a
-        // self-referential macro.
-#if DEBUG_SELF_REFERENTIAL_MACRO
-        printf("   --- Detected case of macro renaming: \"#define ABC __ABC\": "
-               "not a self-referencing macro (set result = false) \n");
-#endif
-        result = false;
-      }
-
-      // DQ (1/9/2014): Detect a suffix on the macro name such that it would be
-      // a renamed macro instead of a self-referential macro.
-      ROSE_ASSERT(secondReferenceToMacroSubstring != string::npos);
-      size_t endOfSecondReferenceToMacroSubstring =
-          secondReferenceToMacroSubstring + macroName.length() - 1;
-      ROSE_ASSERT(endOfSecondReferenceToMacroSubstring != string::npos);
-      ROSE_ASSERT(endOfSecondReferenceToMacroSubstring <= s.length());
-#if DEBUG_SELF_REFERENTIAL_MACRO
-      printf("   --- endOfSecondReferenceToMacroSubstring = %" PRIuPTR " \n",
-             endOfSecondReferenceToMacroSubstring);
-#endif
-      string afterSecondReferenceToMacroSubstring =
-          s.substr(endOfSecondReferenceToMacroSubstring + 1,
-                   (s.length() - endOfSecondReferenceToMacroSubstring));
-#if DEBUG_SELF_REFERENTIAL_MACRO
-      printf("   --- afterSecondReferenceToMacroSubstring = %s \n",
-             afterSecondReferenceToMacroSubstring.c_str());
-#endif
-      // size_t startOfRemainderSubstring =
-      // s.find_first_of("_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",endOfSecondReferenceToMacroSubstring+1);
-      size_t startOfRemainderSubstring = s.find_first_of(
-          cpp_macro_alphabet, endOfSecondReferenceToMacroSubstring + 1);
-      size_t endOfRemainderSubstring =
-          s.find_first_of(" (\t\n\0", endOfSecondReferenceToMacroSubstring);
-#if DEBUG_SELF_REFERENTIAL_MACRO
-      printf("   --- startOfRemainderSubstring = %" PRIuPTR
-             " endOfRemainderSubstring = %" PRIuPTR " \n",
-             startOfRemainderSubstring, endOfRemainderSubstring);
-#endif
-      // DQ (1/2/2014): Handle the special case of macro pasting "#define foo(X)
-      // foo##X" if (s[endOfSecondReferenceToMacroSubstring+1] == '#' &&
-      // s[endOfSecondReferenceToMacroSubstring+2] == '#')
-      if (startOfRemainderSubstring < endOfRemainderSubstring) {
-        // Detected case of macro pasting.  since the secondary reference to the
-        // macro name is modified to be different from the primary macro name
-        // this is not a case of self-referencing macro.
-#if DEBUG_SELF_REFERENTIAL_MACRO
-        printf("   --- Detected case of macro pasting, not a self-referencing "
-               "macro (set result = false) \n");
-#endif
-        result = false;
-      } else {
-        // Detect second kind of macro pasting.
-
-        // DQ (1/6/2014): Macro pasting is used in libwww application in the
-        // forms:
-        //    --- #define NS(x) x ## NS
-        //    --- #define ns(x) x ## _ns
-        // And we have to allow this since it does not appear to build a
-        // self-referenced macro name.
-        size_t startOfPastingSubstring = s.find("##");
-        if (startOfPastingSubstring != string::npos) {
-#if DEBUG_SELF_REFERENTIAL_MACRO
-          printf("   --- Detected 2nd kind of case of macro pasting, not a "
-                 "self-referencing macro (set result = false) \n");
-#endif
-          result = false;
-        }
-      }
-    }
-  } else {
-    // We might want test for #ifdef that was associated with an ignored
-    // #define...but for now we ignore this case.
-    result = false;
-  }
-
-  return result;
+  return spelling.logicalName;
 }
 
 // DQ (1/15/2015): Adding support for token-based unparsing. Access function for
@@ -1119,8 +1150,8 @@ void ROSEAttributesList::display(const string &label) {
   ASSERT_this();
 
   // fprintf(outFile,"\n%s: \n", getFileName() );
-  vector<PreprocessingInfo *>::iterator j = attributeList.begin();
-  for (j = attributeList.begin(); j != attributeList.end(); j++) {
+  for (size_t index = 0; index < attributeList.size(); ++index) {
+    PreprocessingInfo *entry = attributeList[index];
     // printf("  %s\n",( (*j)->stringPointer );
 
     // DQ (12/19/2008): Modified to report NULL pointers
@@ -1128,19 +1159,21 @@ void ROSEAttributesList::display(const string &label) {
     // printf("LineNumber: %5d:
     // %s\n",(*j)->getLineNumber(),(*j)->getString().c_str());
     printf("-----------------------\n");
-    if (*j != NULL) {
-      printf(
-          "Directive Type: %s; Relative position: %s; \nLine:%5d; Column:%5d; "
-          "String: %s\n",
-          PreprocessingInfo::directiveTypeName((*j)->getTypeOfDirective())
-              .c_str(),
-          PreprocessingInfo::relativePositionName((*j)->getRelativePosition())
-              .c_str(),
-          (*j)->getLineNumber(), (*j)->getColumnNumber(),
-          (*j)->getString().c_str());
-    } else {
-      printf("Warning: PreprocessingInfo *j == NULL \n");
+    if (entry == NULL) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[preprocessing-list-entry]: display "
+              "label=%s contains null entry index=%zu\n",
+              label.c_str(), index);
+      ROSE_ABORT();
     }
+    printf("Directive Type: %s; Relative position: %s; \nLine:%5d; Column:%5d; "
+           "String: %s\n",
+           PreprocessingInfo::directiveTypeName(entry->getTypeOfDirective())
+               .c_str(),
+           PreprocessingInfo::relativePositionName(entry->getRelativePosition())
+               .c_str(),
+           entry->getLineNumber(), entry->getColumnNumber(),
+           entry->getString().c_str());
   }
 
   printf("END: ROSEAttributesList::display (label = %s) \n", label.c_str());
@@ -1220,28 +1253,8 @@ bool ROSEAttributesList::isFortran90Comment(const string &line) {
   // Fortran statement are not yet captured, but that would be
   // handled by this function (later).
 
-  bool isComment = false;
-
-  char firstNonBlankCharacter = line[0];
-  size_t i = 0;
-  size_t lineLength = line.length();
-
-  // Loop over any leading blank spaces.
-  while (i < lineLength && firstNonBlankCharacter == ' ') {
-    firstNonBlankCharacter = line[i];
-    i++;
-  }
-
-  // The character "!" starts a comment if only blanks are in the leading white
-  // space.
-  if (firstNonBlankCharacter == '!') {
-    // printf ("This is a F90 style comment: line = %s length = %" PRIuPTR "
-    // \n",line.c_str(),line.length());
-    isComment = true;
-  }
-
-  // return isFortran77Comment(line);
-  return isComment;
+  const size_t firstNonBlank = line.find_first_not_of(" \t\r");
+  return firstNonBlank != string::npos && line[firstNonBlank] == '!';
 }
 
 bool ROSEAttributesList::isFortran77Comment(const string &line) {
@@ -1254,26 +1267,24 @@ bool ROSEAttributesList::isFortran77Comment(const string &line) {
   // the whole line is a comment. Also, more subtle, if it is a blank line then
   // it is a comment, so save the blank lines too.
 
-  bool isComment = false;
+  if (line.find_first_not_of(" \t\r") == string::npos) {
+    return true;
+  }
 
-  char firstCharacter = line[0];
+  bool isComment = false;
+  const unsigned char firstCharacter = static_cast<unsigned char>(line.front());
+  if (firstCharacter != ' ' && firstCharacter != '\t' &&
+      (firstCharacter < 0x20 || firstCharacter > 0x7e)) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[fortran-fixed-source-byte]: "
+            "first-byte=%u is not printable ASCII, space, or tab\n",
+            static_cast<unsigned int>(firstCharacter));
+    ROSE_ABORT();
+  }
   if (firstCharacter != ' ' /* SPACE */ && firstCharacter != '\n' /* CR  */ &&
       firstCharacter != '\0' /* NUL   */ && firstCharacter != '\t' /* TAB */) {
     // This has something in the first column, so it might be a comment (check
     // further)...
-
-    // Error checking on first character, I believe we can't enforce this, but I
-    // would like to have it be a warning.
-    if (!(firstCharacter >= ' ') || !(firstCharacter < 126)) {
-      printf("Warning: firstCharacter = %d (not an acceptable character value "
-             "for Fortran) line.length() = %" PRIuPTR " \n",
-             (int)firstCharacter, line.length());
-    }
-
-    // Error checking on first character
-    // DQ (5/15/2008): The filter is in the conditional above and is not
-    // required to be repeated. ROSE_ASSERT(firstCharacter >= ' ' &&
-    // firstCharacter < 126);
 
 #define RELAXED_FORTRAN_COMMENT_SPECIFICATION 1
 #if RELAXED_FORTRAN_COMMENT_SPECIFICATION
@@ -1318,305 +1329,112 @@ bool ROSEAttributesList::isFortran77Comment(const string &line) {
 bool ROSEAttributesList::isCppDirective(
     const string &line, PreprocessingInfo::DirectiveType &cppDeclarationKind,
     std::string &restOfTheLine) {
-  // This function tests if a string is a CPP directive (the first line of a CPP
-  // directive).
+  cppDeclarationKind = PreprocessingInfo::CpreprocessorUnknownDeclaration;
+  restOfTheLine.clear();
 
-  bool cppDirective = false;
-  bool isLikelyCppDirective = false;
-
-  char firstNonBlankCharacter = line[0];
-  size_t i = 0;
-  size_t lineLength = line.length();
-
-  // Loop through any initial white space.
-  while (i < lineLength && firstNonBlankCharacter == ' ') {
-    firstNonBlankCharacter = line[i];
-    i++;
+  const PhaseTwoSpelling phaseTwo = deletePhaseTwoLineSplices(line);
+  const string &logicalLine = phaseTwo.logical;
+  size_t cursor = logicalLine.find_first_not_of(" \t");
+  if (cursor == string::npos || logicalLine[cursor] != '#') {
+    return false;
+  }
+  ++cursor;
+  cursor = logicalLine.find_first_not_of(" \t", cursor);
+  if (cursor == string::npos) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[preprocessing-directive-kind]: hash "
+            "directive has no identifier\n");
+    ROSE_ABORT();
   }
 
-  // The character "!" starts a comment if only blanks are in the leading white
-  // space.
-
-  // DQ (12/9/2016): Eliminating a warning that we want to be an error:
-  // -Werror=unused-but-set-variable.
-#if DEBUG_CPP_DIRECTIVE_COLLECTION
-  int positionofHashCharacter = -1;
-#endif
-
-  if (firstNonBlankCharacter == '#') {
-#if DEBUG_CPP_DIRECTIVE_COLLECTION
-    // printf ("This is a CPP directive: i = %d lineCounter = %d line = %s
-    // length = %" PRIuPTR " \n",i,lineCounter,line.c_str(),line.length());
-#endif
-    isLikelyCppDirective = true;
-
-    // DQ (12/9/2016): Eliminating a warning that we want to be an error:
-    // -Werror=unused-but-set-variable.
-#if DEBUG_CPP_DIRECTIVE_COLLECTION
-    positionofHashCharacter = i;
-#endif
+  if (std::isdigit(static_cast<unsigned char>(logicalLine[cursor]))) {
+    cppDeclarationKind =
+        PreprocessingInfo::CpreprocessorCompilerGeneratedLinemarker;
+    restOfTheLine = logicalLine.substr(cursor);
+    return true;
   }
 
-#if DEBUG_CPP_DIRECTIVE_COLLECTION
-  printf("i = %" PRIuPTR " positionofHashCharacter = %d \n", i,
-         positionofHashCharacter);
-#endif
-
-  // DQ (12/9/2016): Eliminating a warning that we want to be an error:
-  // -Werror=unused-but-set-variable.
-#if DEBUG_CPP_DIRECTIVE_COLLECTION
-  bool hasLineContinuation = false;
-#endif
-
-  // DQ (4/21/2009): Fixed possible buffer underflow...
-  // char lastCharacter = line[lineLength-1];
-  char lastCharacter = (lineLength > 0) ? line[lineLength - 1] : '\0';
-  if (lastCharacter == '\\') {
-#if DEBUG_CPP_DIRECTIVE_COLLECTION
-    // DQ (12/9/2016): Eliminating a warning that we want to be an error:
-    // -Werror=unused-but-set-variable.
-    hasLineContinuation = true;
-#endif
+  const size_t identifierStart = cursor;
+  while (cursor < logicalLine.size()) {
+    const unsigned char character =
+        static_cast<unsigned char>(logicalLine[cursor]);
+    if (!std::isalnum(character) && character != '_') {
+      break;
+    }
+    ++cursor;
+  }
+  if (cursor == identifierStart) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[preprocessing-directive-kind]: hash "
+            "directive starts with invalid identifier character\n");
+    ROSE_ABORT();
   }
 
-#if DEBUG_CPP_DIRECTIVE_COLLECTION
-  printf("hasLineContinuation = %s \n", hasLineContinuation ? "true" : "false");
-#endif
-
-  // int numberOfLines = 1;
-
-  if (isLikelyCppDirective == true) {
-    // PreprocessingInfo(DirectiveType, const std::string & inputString, const
-    // std::string & filenameString,
-    //      int line_no , int col_no, int nol, RelativePositionType relPos, bool
-    //      copiedFlag, bool unparsedFlag);
-
-    // firstNonBlankCharacter = ' ';
-    // printf ("firstNonBlankCharacter = %c \n",firstNonBlankCharacter);
-    bool spaceAfterHash = false;
-
-    // DQ (12/16/2008): Added support for tabs between "#" and the directive
-    // identifier. Note that Fortran modes of CPP should not allow any
-    // whitespace here.
-    while ((i < lineLength && (firstNonBlankCharacter == ' ' ||
-                               firstNonBlankCharacter == '\t')) ||
-           firstNonBlankCharacter == '#') {
-#if DEBUG_CPP_DIRECTIVE_COLLECTION
-      printf("Looping over # or white space between # and CPP directive i = "
-             "%" PRIuPTR " \n",
-             i);
-#endif
-      firstNonBlankCharacter = line[i];
-      if (spaceAfterHash == false)
-        spaceAfterHash = (firstNonBlankCharacter == ' ');
-
-      i++;
+  const string identifier =
+      logicalLine.substr(identifierStart, cursor - identifierStart);
+  restOfTheLine = logicalLine.substr(cursor);
+  if (identifier == "include") {
+    cppDeclarationKind = PreprocessingInfo::CpreprocessorIncludeDeclaration;
+  } else if (identifier == "includenext" || identifier == "include_next") {
+    cppDeclarationKind = PreprocessingInfo::CpreprocessorIncludeNextDeclaration;
+  } else if (identifier == "define") {
+    cppDeclarationKind = PreprocessingInfo::CpreprocessorDefineDeclaration;
+  } else if (identifier == "undef") {
+    cppDeclarationKind = PreprocessingInfo::CpreprocessorUndefDeclaration;
+  } else if (identifier == "ifdef") {
+    cppDeclarationKind = PreprocessingInfo::CpreprocessorIfdefDeclaration;
+  } else if (identifier == "ifndef") {
+    cppDeclarationKind = PreprocessingInfo::CpreprocessorIfndefDeclaration;
+  } else if (identifier == "if") {
+    cppDeclarationKind = PreprocessingInfo::CpreprocessorIfDeclaration;
+  } else if (identifier == "else") {
+    cppDeclarationKind = PreprocessingInfo::CpreprocessorElseDeclaration;
+  } else if (identifier == "elif") {
+    cppDeclarationKind = PreprocessingInfo::CpreprocessorElifDeclaration;
+  } else if (identifier == "endif") {
+    cppDeclarationKind = PreprocessingInfo::CpreprocessorEndifDeclaration;
+  } else if (identifier == "end") {
+    const size_t suffix = restOfTheLine.find_first_not_of(" \t");
+    if (suffix == string::npos || restOfTheLine.compare(suffix, 2, "if") != 0 ||
+        (suffix + 2 < restOfTheLine.size() &&
+         (std::isalnum(static_cast<unsigned char>(restOfTheLine[suffix + 2])) ||
+          restOfTheLine[suffix + 2] == '_'))) {
+      fprintf(stderr, "REX_FRONTEND_INVARIANT[preprocessing-directive-kind]: "
+                      "unsupported hash directive=end\n");
+      ROSE_ABORT();
     }
-
-    int positionOfFirstCharacterOfCppIdentifier = i - 1;
-
-#if DEBUG_CPP_DIRECTIVE_COLLECTION
-    printf(
-        "positionOfFirstCharacterOfCppIdentifier = %d spaceAfterHash = %s \n",
-        positionOfFirstCharacterOfCppIdentifier,
-        spaceAfterHash ? "true" : "false");
-#endif
-    // Need to back up one!
-    i = positionOfFirstCharacterOfCppIdentifier;
-
-    char nonBlankCharacter = line[positionOfFirstCharacterOfCppIdentifier];
-    int positionOfLastCharacterOfCppIdentifier =
-        positionOfFirstCharacterOfCppIdentifier;
-    // while (i < lineLength &&
-    // isLegalCharacterForCppIndentifier(nonBlankCharacter) == true))
-    while (i <= lineLength &&
-           (((nonBlankCharacter >= 'a' && nonBlankCharacter <= 'z') == true) ||
-            (nonBlankCharacter >= '0' && nonBlankCharacter <= '9') == true)) {
-      nonBlankCharacter = line[i];
-#if DEBUG_CPP_DIRECTIVE_COLLECTION
-      printf("In loop: i = %" PRIuPTR " lineLength = %" PRIuPTR
-             " nonBlankCharacter = %c \n",
-             i, lineLength,
-             isprint(nonBlankCharacter) ? nonBlankCharacter : '.');
-#endif
-      i++;
-    }
-
-#if DEBUG_CPP_DIRECTIVE_COLLECTION
-    printf("i = %" PRIuPTR " \n", i);
-#endif
-
-    // Need to backup two (for example if this is the end of the line, as in
-    // "#endif")
-    positionOfLastCharacterOfCppIdentifier = i - 2;
-
-#if DEBUG_CPP_DIRECTIVE_COLLECTION
-    printf("positionOfLastCharacterOfCppIdentifier = %d \n",
-           positionOfLastCharacterOfCppIdentifier);
-#endif
-    int cppIdentifierLength = (positionOfLastCharacterOfCppIdentifier -
-                               positionOfFirstCharacterOfCppIdentifier) +
-                              1;
-    string cppIndentifier = line.substr(positionOfFirstCharacterOfCppIdentifier,
-                                        cppIdentifierLength);
-
-    // Some names will convert to integer values
-#if DEBUG_CPP_DIRECTIVE_COLLECTION
-    long integerValue = -1;
-#endif
-    if (spaceAfterHash == true) {
-      // This is likely going to be a number but test2005_92.C demonstrates a
-      // case where this is not true.
-
-      // printf ("firstNonBlankCharacter = %c \n",firstNonBlankCharacter);
-      // ROSE_ASSERT(firstNonBlankCharacter == '\"');
-      // The modern way to handle conversion of string to integer value is to
-      // use strtol(), and not atoi().  But atoi() is simpler.
-      const char *str = cppIndentifier.c_str();
-      int size = strlen(str) + 1;
-      char *buffer = new char[size];
-
-      // Make a copy of the pointer so that we can always delete the memory that
-      // was allocated.
-      char *original_buffer = buffer;
-
-      // We should initialize "buffer" to all Nul chars (this includes a null
-      // terminator and the end of the string).
-      for (int j = 0; j < size; j++)
-        buffer[j] = '\0';
-
-      // strtol will put the string into buffer if str is not a number and 2nd
-      // parameter is not NULL.
-      errno = 0;
-
-      // integerValue = strtol(str,NULL,10);
-
-      // DQ (12/9/2016): Eliminating a warning that we want to be an error:
-      // -Werror=unused-but-set-variable. integerValue = strtol(str,&buffer,10);
-      strtol(str, &buffer, 10);
-
-      // Setting and checking errno does not appear to work for the detection of
-      // errors in the use of strtol
-      if (errno != 0) {
-        printf(
-            "Using errno: This was not a valid string (errno = %d returned) \n",
-            errno);
-      }
-
-      bool isANumber = true;
-      if (strcmp(str, buffer) == 0) {
-        // printf ("Using strcmp(): This was not a valid string (buffer = %s
-        // returned) \n",buffer);
-        isANumber = false;
-      }
-      // printf ("cppIndentifier = %s integerValue = %ld
-      // \n",cppIndentifier.c_str(),integerValue);
-
-      // Avoid memory leak!
-
-      // DQ (11/4/2016): This needs to be an array delete (caught by Address
-      // Sanitizer). delete original_buffer;
-      delete[] original_buffer;
-
-      original_buffer = NULL;
-      buffer = NULL;
-
-      // This value will be a constant value used to identify a numerical value.
-      // This value should be a macro defined in some centralized location.
-      if (isANumber == true) {
-        cppIndentifier = "numeric value";
-
-        // Allow the line number to be a part of the restOfTheLine so it can be
-        // processed separately. printf ("cppIdentifierLength = %d
-        // \n",cppIdentifierLength); printf ("Before being reset:
-        // positionOfLastCharacterOfCppIdentifier = %d
-        // \n",positionOfLastCharacterOfCppIdentifier);
-        positionOfLastCharacterOfCppIdentifier -= cppIdentifierLength;
-        // printf ("After being reset: positionOfLastCharacterOfCppIdentifier =
-        // %d \n",positionOfLastCharacterOfCppIdentifier);
-      } else {
-        // printf ("This is not a number: cppIndentifier = %s
-        // \n",cppIndentifier.c_str());
-      }
-    }
-
-#if DEBUG_CPP_DIRECTIVE_COLLECTION
-    printf("cppIdentifierLength = %d cppIndentifier = %s integerValue = %ld \n",
-           cppIdentifierLength, cppIndentifier.c_str(), integerValue);
-#endif
-
-    // classify the CCP directive
-    if (cppIndentifier == "include") {
-      cppDeclarationKind = PreprocessingInfo::CpreprocessorIncludeDeclaration;
-    }
-    // Is it "includenext" or "include_next", we need more agressive tests!
-    else if (cppIndentifier == "includenext") {
-      cppDeclarationKind =
-          PreprocessingInfo::CpreprocessorIncludeNextDeclaration;
-    } else if (cppIndentifier == "define") {
-      cppDeclarationKind = PreprocessingInfo::CpreprocessorDefineDeclaration;
-    } else if (cppIndentifier == "undef") {
-      cppDeclarationKind = PreprocessingInfo::CpreprocessorUndefDeclaration;
-    } else if (cppIndentifier == "ifdef") {
-      cppDeclarationKind = PreprocessingInfo::CpreprocessorIfdefDeclaration;
-    } else if (cppIndentifier == "ifndef") {
-      cppDeclarationKind = PreprocessingInfo::CpreprocessorIfndefDeclaration;
-    } else if (cppIndentifier == "if") {
-      cppDeclarationKind = PreprocessingInfo::CpreprocessorIfDeclaration;
-    } else if (cppIndentifier == "else") {
-      cppDeclarationKind = PreprocessingInfo::CpreprocessorElseDeclaration;
-    } else if (cppIndentifier == "elif") {
-      cppDeclarationKind = PreprocessingInfo::CpreprocessorElifDeclaration;
-    } else if (cppIndentifier == "endif") {
-      cppDeclarationKind = PreprocessingInfo::CpreprocessorEndifDeclaration;
-    } else if (cppIndentifier == "end if") {
-      cppDeclarationKind = PreprocessingInfo::CpreprocessorEnd_ifDeclaration;
-    } else if (cppIndentifier == "line") {
-      cppDeclarationKind = PreprocessingInfo::CpreprocessorLineDeclaration;
-    } else if (cppIndentifier == "error") {
-      cppDeclarationKind = PreprocessingInfo::CpreprocessorErrorDeclaration;
-    } else if (cppIndentifier == "warning") {
-      cppDeclarationKind = PreprocessingInfo::CpreprocessorWarningDeclaration;
-    } else if (cppIndentifier == "pragma") {
-      // Ignore case of #pragma, since it is not a CPP directive and is handled
-      // by the C language definition only.
-      cppDeclarationKind = PreprocessingInfo::CpreprocessorUnknownDeclaration;
-    } else if (cppIndentifier == "ident") {
-      // Ignore case of #ident
-      cppDeclarationKind = PreprocessingInfo::CpreprocessorIdentDeclaration;
-    }
-    // Recognize the case of a numeric value...set if there was white space
-    // following the '#' and then a numeric (integer) value.
-    else if (cppIndentifier == "numeric value") {
-      // DQ (11/17/2008): This handles the case CPP declarations
-      // such as: "# 1 "test2008_05.F90"", "# 1 "<built-in>"",
-      // "# 1 "<command line>"" "# 1 "test2008_05.F90""
-      cppDeclarationKind =
-          PreprocessingInfo::CpreprocessorCompilerGeneratedLinemarker;
-    } else {
-      // This case should be an error...
-      // Liao, 5/13/2009
-      // This should not be an error. Any weird string can show up in a block of
-      // /* */ Check the test input:
-      // tests/nonsmoke/functional/CompileTests/C_tests/test2009_01.c
-      cppDeclarationKind = PreprocessingInfo::CpreprocessorUnknownDeclaration;
-    }
-
-    // Collect the rest of the line: (line length - next character position)
-    // + 1.
-    int restOfTheLineLength =
-        (lineLength - (positionOfLastCharacterOfCppIdentifier + 1)) + 1;
-    restOfTheLine = line.substr(positionOfLastCharacterOfCppIdentifier + 1,
-                                restOfTheLineLength);
-
-    // Set the return value
-    if (cppDeclarationKind !=
-        PreprocessingInfo::CpreprocessorUnknownDeclaration) {
-      cppDirective = true;
-    }
+    cppDeclarationKind = PreprocessingInfo::CpreprocessorEnd_ifDeclaration;
+  } else if (identifier == "line") {
+    cppDeclarationKind = PreprocessingInfo::CpreprocessorLineDeclaration;
+  } else if (identifier == "error") {
+    cppDeclarationKind = PreprocessingInfo::CpreprocessorErrorDeclaration;
+  } else if (identifier == "warning") {
+    cppDeclarationKind = PreprocessingInfo::CpreprocessorWarningDeclaration;
+  } else if (identifier == "pragma") {
+    cppDeclarationKind = PreprocessingInfo::CpreprocessorPragmaDeclaration;
+  } else if (identifier == "ident") {
+    cppDeclarationKind = PreprocessingInfo::CpreprocessorIdentDeclaration;
+  } else {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[preprocessing-directive-kind]: "
+            "unsupported hash directive=%s\n",
+            identifier.c_str());
+    ROSE_ABORT();
   }
+  return true;
+}
 
-  return cppDirective;
+static bool preprocessingLineHasContinuation(const string &line) {
+  size_t end = line.size();
+  if (end > 0 && line[end - 1] == '\r') {
+    --end;
+  }
+  return end > 0 && line[end - 1] == '\\';
+}
+
+static bool preprocessingLineStartsHashDirective(const string &line) {
+  const size_t firstNonBlank = line.find_first_not_of(" \t");
+  return firstNonBlank != string::npos && line[firstNonBlank] == '#';
 }
 
 void ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST(
@@ -1650,7 +1468,7 @@ void ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST(
   const PreprocessingInfo::DirectiveType commentKind =
       PreprocessingInfo::FortranStyleComment;
   string line;
-  size_t colNumber = 0;
+  constexpr int colNumber = 1;
 
 #if DEBUG_CPP_DIRECTIVE_COLLECTION
   printf(
@@ -1659,24 +1477,54 @@ void ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST(
       filename.c_str());
 #endif
 
+  errno = 0;
   ifstream targetFile(filename.c_str());
   if (targetFile.is_open()) {
     // The first line is defined to be line 1, line zero does not exist  and is
     // an error value. This synch's the line numbering convention of the OFP
     // with the line numbering convention for CPP directives and comments.
     int lineCounter = 1;
-    while (targetFile.eof() == false) {
+    while (getline(targetFile, line)) {
 #if DEBUG_CPP_DIRECTIVE_COLLECTION
       printf("\nAt top of loop over lines in the file ... lineCounter = %d \n",
              lineCounter);
 #endif
-      getline(targetFile, line);
-
 #if DEBUG_CPP_DIRECTIVE_COLLECTION
       // Debugging output
       cout << "collect CPP directives: " << line << endl;
 #endif
       int numberOfLines = 1;
+
+      if (preprocessingLineStartsHashDirective(line)) {
+        string physicalLine = line;
+        while (preprocessingLineHasContinuation(physicalLine)) {
+          string nextLine;
+          if (!getline(targetFile, nextLine)) {
+            if (targetFile.bad()) {
+              fprintf(stderr,
+                      "REX_FRONTEND_INVARIANT[preprocessing-source-read]: "
+                      "file=%s failed while reading continuation after "
+                      "line=%d\n",
+                      filename.c_str(), lineCounter + numberOfLines - 1);
+            } else {
+              fprintf(stderr,
+                      "REX_FRONTEND_INVARIANT[preprocessing-continuation]: "
+                      "file=%s line=%d ends in a continuation at end of "
+                      "file\n",
+                      filename.c_str(), lineCounter + numberOfLines - 1);
+            }
+            ROSE_ABORT();
+          }
+
+          // Preserve the physical-line boundary in the directive spelling.
+          line += "\n" + nextLine;
+          physicalLine = nextLine;
+          ++numberOfLines;
+        }
+
+        // printf ("After processing continuation lines: line.length() = %"
+        // PRIuPTR " line = %s \n",line.length(),line.c_str());
+      }
 
       string restOfTheLine;
       PreprocessingInfo::DirectiveType cppDeclarationKind =
@@ -1690,21 +1538,6 @@ void ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST(
              cppDirective ? "true" : "false",
              PreprocessingInfo::directiveTypeName(cppDeclarationKind).c_str());
 #endif
-
-      if (cppDirective == true) {
-        if (line[line.length() - 1] == '\\') {
-          string nextLine;
-          while (line[line.length() - 1] == '\\') {
-            getline(targetFile, nextLine);
-
-            // Add linefeed to force nextLine onto the next line when output.
-            line += "\n" + nextLine;
-          }
-        }
-
-        // printf ("After processing continuation lines: line.length() = %"
-        // PRIuPTR " line = %s \n",line.length(),line.c_str());
-      }
 
       // DQ (11/17/2008): Refactored the code to make it simpler to add here!
       // If this is not a CPP directive, then check if it is a comment (note
@@ -1754,8 +1587,8 @@ void ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST(
         }
       }
 
-      // Note that #pragma maps to CpreprocessorUnknownDeclaration so ignore
-      // that case!
+      // Ordinary source lines are intentionally absent; every classified
+      // directive and fixed/free-form comment is preserved exactly once.
       if (cppDeclarationKind !=
           PreprocessingInfo::CpreprocessorUnknownDeclaration) {
         PreprocessingInfo *cppDirective = new PreprocessingInfo(
@@ -1767,90 +1600,76 @@ void ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST(
         // generated linemarkers (e.g. "# <line number> <filename> <flags>").
         if (cppDeclarationKind ==
             PreprocessingInfo::CpreprocessorCompilerGeneratedLinemarker) {
-          // Gather the line number, filename, and any optional flags.
-          // printf ("\nProcessing a CpreprocessorCompilerGeneratedLinemarker:
-          // restOfTheLine = %s \n",restOfTheLine.c_str());
-
-          // The IR node has not been build yet, we have to save the required
-          // information into the PreprocessingInfo object.
-          // SgLinemarkerDirectiveStatement* linemarkerDirective =
-          // isSgLinemarkerDirectiveStatement(cppDirective);
-          // ROSE_ASSERT(linemarkerDirective != NULL);
-
-          size_t i = 0;
-          size_t positionOfFirstCharacterOfIntegerValue = 0;
-          size_t lineLength = restOfTheLine.length();
-          char nonBlankCharacter = restOfTheLine[0];
-          while (i <= lineLength && (nonBlankCharacter >= '0' &&
-                                     nonBlankCharacter <= '9') == true) {
-            nonBlankCharacter = restOfTheLine[i];
-            i++;
+          size_t cursor = 0;
+          int linemarkerLine = 0;
+          while (
+              cursor < restOfTheLine.size() &&
+              std::isdigit(static_cast<unsigned char>(restOfTheLine[cursor]))) {
+            const int digit = restOfTheLine[cursor] - '0';
+            if (linemarkerLine >
+                (std::numeric_limits<int>::max() - digit) / 10) {
+              fprintf(stderr,
+                      "REX_FRONTEND_INVARIANT[preprocessing-linemarker]: "
+                      "file=%s line=%d line number is out of range\n",
+                      filename.c_str(), lineCounter);
+              ROSE_ABORT();
+            }
+            linemarkerLine = linemarkerLine * 10 + digit;
+            ++cursor;
           }
 
-          // Need to backup two (for example if this is the end of the line, as
-          // in "#endif")
-          size_t positionOfLastCharacterOfIntegerValue = i - 2;
+          while (
+              cursor < restOfTheLine.size() &&
+              (restOfTheLine[cursor] == ' ' || restOfTheLine[cursor] == '\t')) {
+            ++cursor;
+          }
+          if (cursor == restOfTheLine.size() || restOfTheLine[cursor] != '"') {
+            fprintf(stderr,
+                    "REX_FRONTEND_INVARIANT[preprocessing-linemarker]: "
+                    "file=%s line=%d has no quoted filename\n",
+                    filename.c_str(), lineCounter);
+            ROSE_ABORT();
+          }
 
-          int lineNumberLength = (positionOfLastCharacterOfIntegerValue -
-                                  positionOfFirstCharacterOfIntegerValue) +
-                                 1;
-          string cppIndentifier = restOfTheLine.substr(
-              positionOfFirstCharacterOfIntegerValue, lineNumberLength);
+          const size_t filenameStart = cursor;
+          bool escaped = false;
+          ++cursor;
+          for (; cursor < restOfTheLine.size(); ++cursor) {
+            const char character = restOfTheLine[cursor];
+            if (character == '"' && !escaped) {
+              break;
+            }
+            if (character == '\\') {
+              escaped = !escaped;
+            } else {
+              escaped = false;
+            }
+          }
+          if (cursor == restOfTheLine.size()) {
+            fprintf(stderr,
+                    "REX_FRONTEND_INVARIANT[preprocessing-linemarker]: "
+                    "file=%s line=%d has no closing filename quote\n",
+                    filename.c_str(), lineCounter);
+            ROSE_ABORT();
+          }
 
-          // Some names will convert to integer values
-          long integerValue = -1;
-
-          // printf ("firstNonBlankCharacter = %c \n",firstNonBlankCharacter);
-          // ROSE_ASSERT(firstNonBlankCharacter == '\"');
-          // The modern way to handle conversion of string to integer value is
-          // to use strtol(), and not atoi().  But atoi() is simpler.
-          const char *str = cppIndentifier.c_str();
-
-          // strtol will put the string into buffer if str is not a number and
-          // 2nd parameter is not NULL.
-          integerValue = strtol(str, NULL, 10);
           cppDirective->set_lineNumberForCompilerGeneratedLinemarker(
-              integerValue);
+              linemarkerLine);
+          cppDirective->set_filenameForCompilerGeneratedLinemarker(
+              restOfTheLine.substr(filenameStart, cursor - filenameStart + 1));
 
-          size_t remainingLineLength =
-              (lineLength - positionOfLastCharacterOfIntegerValue) - 1;
-          string remainingLine = restOfTheLine.substr(
-              positionOfLastCharacterOfIntegerValue + 1, remainingLineLength);
-          size_t positionOfFirstQuote = remainingLine.find('"');
-
-          // Liao, 5/13/2009
-          // "#  1 2 3" can show up in a comment block /* */,
-          // In this case it is not a CPP generated linemarker at all.
-          // We should allow to skip this line as tested in
-          // tests/nonsmoke/functional/CompileTests/C_tests/test2009_02.c
-          if (positionOfFirstQuote == string::npos) {
-            // rollback and skip to the next line
-            delete cppDirective;
-            continue;
+          ++cursor;
+          while (
+              cursor < restOfTheLine.size() &&
+              (restOfTheLine[cursor] == ' ' || restOfTheLine[cursor] == '\t')) {
+            ++cursor;
           }
-
-          size_t positionOfLastQuote = remainingLine.rfind('"');
-          ROSE_ASSERT(positionOfLastQuote != string::npos);
-          int filenameLength = (positionOfLastQuote - positionOfFirstQuote) + 1;
-          string filename =
-              remainingLine.substr(positionOfFirstQuote, filenameLength);
-
-          cppDirective->set_filenameForCompilerGeneratedLinemarker(filename);
-
-          // Add 1 to move past the last quote and 1 more to move beyond any
-          // white space.
-          string optionalFlags;
-          if (positionOfLastQuote + 2 < remainingLineLength) {
-            optionalFlags = remainingLine.substr(positionOfLastQuote + 2);
-          }
-
-          // printf ("optionalFlags = %s \n",optionalFlags.c_str());
           cppDirective->set_optionalflagsForCompilerGeneratedLinemarker(
-              optionalFlags);
+              restOfTheLine.substr(cursor));
         }
       }
 
-      lineCounter++;
+      lineCounter += numberOfLines;
 
       // printf ("increment lineCounter = %d \n",lineCounter);
 #if DEBUG_CPP_DIRECTIVE_COLLECTION
@@ -1860,11 +1679,25 @@ void ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST(
 #endif
     }
 
+    if (targetFile.bad()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[preprocessing-source-read]: file=%s "
+              "failed after line=%d\n",
+              filename.c_str(), lineCounter - 1);
+      ROSE_ABORT();
+    }
+
     // printf ("Closing file \n");
     targetFile.close();
   } else {
-    cerr << "Warning: unable to open target source file: " << filename << "\n";
-    // ROSE_ABORT();
+    const int openError = errno;
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[preprocessing-source-open]: file=%s "
+            "errno=%d message=%s\n",
+            filename.c_str(), openError,
+            openError != 0 ? std::strerror(openError)
+                           : "input stream did not report an OS error");
+    ROSE_ABORT();
   }
 }
 

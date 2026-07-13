@@ -82,7 +82,7 @@ static SgExprStatement *createAssignment(const SgInitializedName *name,
   ROSE_ASSERT(v);
 
   // Build assignment expression
-  SgAssignOp *assign_op = SageBuilder::buildAssignOp(v, rhs_op);
+  SgAssignOp *assign_op = SageBuilder::buildAssignOp(v, rhs_op, v->get_type());
   ROSE_ASSERT(assign_op);
 
   // Build expression statement
@@ -118,7 +118,6 @@ static bool appendAssignment(const SgInitializedName *name,
 }
 
 namespace {
-
 struct SourceExtent {
   std::string filename;
   int first_line = std::numeric_limits<int>::max();
@@ -212,7 +211,6 @@ void moveParentInsidePreprocInfoToWrapper(SgStatement *statement,
   }
 
   AttachedPreprocessingInfoType moved_info;
-  AttachedPreprocessingInfoType kept_info;
   int open_if_depth = 0;
   bool moving_if_group = false;
 
@@ -239,8 +237,6 @@ void moveParentInsidePreprocInfoToWrapper(SgStatement *statement,
 
     if (move_info) {
       moved_info.push_back(info);
-    } else {
-      kept_info.push_back(info);
     }
   }
 
@@ -248,11 +244,12 @@ void moveParentInsidePreprocInfoToWrapper(SgStatement *statement,
     return;
   }
 
-  *parent_info = kept_info;
-  AttachedPreprocessingInfoType *wrapper_info =
-      ASTtools::createInfoList(wrapper);
-  std::copy(moved_info.begin(), moved_info.end(),
-            std::back_inserter(*wrapper_info));
+  for (PreprocessingInfo *info : moved_info) {
+    SageInterface::publishPreprocessingInfoPhysicalOutputOwner(info, wrapper);
+    parent->transferPreprocessingInfo(
+        info, wrapper, info->getRelativePosition(),
+        SgLocatedNode::PreprocessingInfoInsertion::back);
+  }
 }
 
 } // namespace
@@ -283,8 +280,7 @@ SgBasicBlock *Outliner::Preprocess::normalizeVarDecl(SgVariableDeclaration *s) {
   } while (i != vars_orig.end());
 
   // Insert block of assignments after the variable declaration.
-  s_scope->insert_statement(s, assigns_new, false);
-  assigns_new->set_parent(s_scope); // needed?
+  SageInterface::insertStatementAfter(s, assigns_new);
   return assigns_new;
 }
 
@@ -299,12 +295,11 @@ SgBasicBlock *Outliner::Preprocess::createBlock(SgStatement *s) {
     ROSE_ASSERT(b_new);
     SgStatement *parent = isSgStatement(s->get_parent());
     ROSE_ASSERT(parent);
+    SageInterface::replaceStatement(s, b_new);
     moveParentInsidePreprocInfoToWrapper(s, parent, b_new);
     ASTtools::moveUpPreprocInfo(b_new, s);
-    SageInterface::replaceStatement(s, b_new);
     // insert s to b_new
-    b_new->append_statement(s);
-    s->set_parent(b_new);
+    SageInterface::appendStatement(s, b_new);
     s_outline = b_new;
   }
   return isSgBasicBlock(s_outline);

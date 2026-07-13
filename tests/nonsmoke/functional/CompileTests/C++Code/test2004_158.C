@@ -2,6 +2,8 @@
 // Need to build test code to test different sorts of casts.
 // I suspect that ROSE is unparsing all casts as a simple C cast (which is none to clever!)
 
+#include <cstdint>
+
 // C style cast!
 int x = 42;
 // float y = (float) x;
@@ -31,7 +33,7 @@ void foo()
      void* malloc(int);
      int *ptr = static_cast<int*>(malloc(100));
 
-     int x = reinterpret_cast<int>(ptr);
+     std::uintptr_t x = reinterpret_cast<std::uintptr_t>(ptr);
 
      float f;
      Y y(f);  // cast of function parameter

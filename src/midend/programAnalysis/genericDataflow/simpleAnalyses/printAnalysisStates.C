@@ -19,7 +19,7 @@ void printAnalysisStates::visit(const Function &func, const DataflowNode &n,
   ostringstream funcName;
   funcName << "function " << func.get_name().getString() << "() node=["
            << n.getNode()->class_name() << " | "
-           << Dbg::escape(n.getNode()->unparseToString()) << " | "
+           << Dbg::escape(Dbg::diagnosticNodeText(n.getNode())) << " | "
            << n.getIndex() << "] state=" << (&state) << " n=" << (&n)
            << " sgn=" << n.getNode() << " creator=" << creator;
   Dbg::enterFunc(funcName.str());

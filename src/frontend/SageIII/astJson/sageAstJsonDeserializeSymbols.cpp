@@ -7,13 +7,13 @@ void restoreLabelSymbolFields(SgLabelSymbol *symbol, const JsonValue &json) {
   if (symbol == nullptr) {
     return;
   }
-  symbol->set_numeric_label_value(json.intOr(
-      "label_numeric_label_value", symbol->get_numeric_label_value()));
+  symbol->set_numeric_label_value(
+      json.requiredInt("label_numeric_label_value"));
   symbol->set_label_type(static_cast<SgLabelSymbol::label_type_enum>(
-      json.intOr("label_type", static_cast<int>(symbol->get_label_type()))));
+      json.requiredInt("label_type")));
   if (symbol->get_declaration() == nullptr &&
       symbol->get_numeric_label_value() <= 0 &&
-      json.stringOr("symbol_name").empty()) {
+      json.requiredString("symbol_name").empty()) {
     if (SgLabelStatement *label =
             isSgLabelStatement(symbol->get_fortran_statement())) {
       symbol->set_declaration(label);
@@ -43,7 +43,7 @@ SgLabelSymbol *existingLabelSymbolFromJson(const JsonValue &json,
   if (scope == nullptr) {
     return nullptr;
   }
-  const std::string name = json.stringOr("symbol_name");
+  const std::string name = json.requiredString("symbol_name");
   if (name.empty()) {
     return nullptr;
   }
@@ -83,7 +83,7 @@ std::string inferredSymbolKindForBasis(SgNode *basis) {
 
 SgSymbol *symbolFromJson(const JsonValue &json, const NodeMap &nodes) {
   const uint64_t declaration_id =
-      static_cast<uint64_t>(json.intOr("symbol_declaration", 0));
+      static_cast<uint64_t>(json.requiredInt("symbol_declaration"));
   if (declaration_id == 0) {
     SgSymbol *external_symbol = createExternalSymbolFromJson(json, nodes);
     if (external_symbol != nullptr) {
@@ -131,6 +131,12 @@ SgSymbol *symbolFromJson(const JsonValue &json, const NodeMap &nodes) {
         (symbol = scope->find_symbol_from_declaration(decl)) != nullptr) {
       return symbol;
     }
+  } else if (SgDeclarationStatement *decl = isSgDeclarationStatement(basis)) {
+    SgScopeStatement *scope = decl->get_scope();
+    if (scope != nullptr &&
+        (symbol = scope->find_symbol_from_declaration(decl)) != nullptr) {
+      return symbol;
+    }
   } else if (isSgLabelStatement(basis) != nullptr ||
              isSgStatement(basis) != nullptr) {
     if (SgLabelSymbol *label = existingLabelSymbolFromJson(json, basis)) {
@@ -139,23 +145,78 @@ SgSymbol *symbolFromJson(const JsonValue &json, const NodeMap &nodes) {
     }
   }
 
-  std::string kind = json.stringOr("symbol_kind");
-  if (kind.empty()) {
-    kind = inferredSymbolKindForBasis(basis);
+  std::ostringstream message;
+  message << "AST JSON internal symbol reference has no exact restored "
+             "symbol-table binding";
+  message << " kind=" << json.requiredString("symbol_kind");
+  message << " name=" << json.requiredString("symbol_name");
+  message << " basis=" << basis->sage_class_name();
+  message << " basis_id=" << declaration_id;
+  throw std::runtime_error(message.str());
+}
+
+SgSymbol *exactBoundSymbolFromJson(const JsonValue &json,
+                                   const NodeMap &nodes) {
+  if (json.kind == JsonValue::Kind::Null) {
+    return nullptr;
   }
-  if (kind.empty()) {
-    throw std::runtime_error("AST JSON cannot infer symbol kind for basis: " +
-                             std::string(basis->sage_class_name()));
-  }
-  symbol = createSymbolForKindAndBasis(kind, basis);
-  if (SgLabelSymbol *label_symbol = isSgLabelSymbol(symbol)) {
-    restoreLabelSymbolFields(label_symbol, json);
-  }
-  if (symbol == nullptr || symbol->get_symbol_basis() == nullptr) {
+  if (json.kind != JsonValue::Kind::Object) {
     throw std::runtime_error(
-        "AST JSON cannot reconstruct detached symbol reference: " + kind);
+        "AST JSON exact symbol reference is neither null nor an object");
   }
-  return symbol;
+
+  const JsonValue &symbol_json = json.at("symbol");
+  const std::string expected_kind = symbol_json.requiredString("symbol_kind");
+  const std::string expected_basis_name =
+      symbol_json.requiredString("symbol_name");
+  const uint64_t basis_id =
+      static_cast<uint64_t>(symbol_json.requiredInt("symbol_declaration"));
+  SgNode *expected_basis = basis_id != 0 ? nodeById(nodes, basis_id) : nullptr;
+
+  const uint64_t scope_id =
+      static_cast<uint64_t>(json.requiredInt("binding_scope"));
+  if (scope_id == 0) {
+    throw std::runtime_error(
+        "AST JSON exact symbol reference has a null binding scope");
+  }
+  SgScopeStatement *scope = nodeByIdAs<SgScopeStatement>(nodes, scope_id);
+  SgSymbolTable *table = scope->get_symbol_table();
+  if (table == nullptr || table->get_table() == nullptr) {
+    throw std::runtime_error(
+        "AST JSON exact symbol binding scope has no restored symbol table");
+  }
+
+  const SgName binding_name(json.requiredString("binding_name"));
+  SgSymbol *result = nullptr;
+  size_t matches = 0;
+  for (const auto &entry : *table->get_table()) {
+    SgSymbol *candidate = entry.second;
+    if (entry.first != binding_name || candidate == nullptr ||
+        candidate->class_name() != expected_kind) {
+      continue;
+    }
+    const SgNode *candidate_basis = symbolBasis(candidate);
+    const bool basis_matches =
+        expected_basis != nullptr
+            ? candidate_basis == expected_basis
+            : candidate_basis != nullptr &&
+                  symbolName(candidate) == expected_basis_name;
+    if (basis_matches) {
+      result = candidate;
+      ++matches;
+    }
+  }
+  if (result == nullptr || matches != 1) {
+    std::ostringstream message;
+    message << "AST JSON failed to restore one exact symbol binding";
+    message << " scope=" << scope->sage_class_name();
+    message << " name=" << binding_name.getString();
+    message << " kind=" << expected_kind;
+    message << " basis_name=" << expected_basis_name;
+    message << " matches=" << matches;
+    throw std::runtime_error(message.str());
+  }
+  return result;
 }
 
 SgSymbol *createSymbolForKindAndBasis(const std::string &kind, SgNode *basis) {
@@ -258,6 +319,27 @@ SgSymbol *createExternalSymbolFromJson(const JsonValue &json,
   if (basis == nullptr) {
     return nullptr;
   }
+  if (SgFunctionDeclaration *function = isSgFunctionDeclaration(basis)) {
+    SgFunctionDeclaration *canonical_declaration =
+        isSgFunctionDeclaration(function->get_firstNondefiningDeclaration());
+    SgScopeStatement *scope = canonical_declaration != nullptr
+                                  ? canonical_declaration->get_scope()
+                                  : nullptr;
+    SgSymbol *canonical_symbol =
+        scope != nullptr
+            ? scope->find_symbol_from_declaration(canonical_declaration)
+            : nullptr;
+    if (canonical_symbol == nullptr || canonical_symbol->class_name() != kind ||
+        canonical_symbol->get_symbol_basis() != canonical_declaration ||
+        canonical_symbol->get_parent() != scope->get_symbol_table() ||
+        !scope->get_symbol_table()->exists(canonical_symbol)) {
+      throw std::runtime_error(
+          "AST JSON external function symbol has no exact canonical "
+          "declaration-owned binding: " +
+          kind);
+    }
+    return canonical_symbol;
+  }
   SgSymbol *symbol = createSymbolForKindAndBasis(kind, basis);
   if (symbol == nullptr || symbol->get_symbol_basis() == nullptr) {
     throw std::runtime_error(
@@ -266,29 +348,60 @@ SgSymbol *createExternalSymbolFromJson(const JsonValue &json,
   return symbol;
 }
 
-void attachExternalSymbolBasisToScope(SgSymbol *symbol,
-                                      SgScopeStatement *scope) {
-  if (symbol == nullptr || scope == nullptr) {
-    return;
+void validateExternalSymbolBasisOwnership(SgSymbol *symbol) {
+  if (symbol == nullptr) {
+    throw std::runtime_error("AST JSON cannot validate a null external symbol");
   }
   SgNode *basis = symbol->get_symbol_basis();
   if (SgFunctionDeclaration *decl = isSgFunctionDeclaration(basis)) {
-    if (isAstJsonExternalFunction(decl)) {
-      decl->set_scope(scope);
+    SgAuxiliaryDeclarationList *auxiliary =
+        isSgAuxiliaryDeclarationList(decl->get_parent());
+    SgScopeStatement *scope = decl->get_scope();
+    if (isAstJsonExternalFunction(decl) &&
+        (auxiliary == nullptr || scope == nullptr ||
+         auxiliary->get_parent() != scope ||
+         scope->get_auxiliary_declarations() != auxiliary ||
+         isSgGlobal(scope) == nullptr || scope->get_parent() != nullptr ||
+         std::count(auxiliary->get_declarations().begin(),
+                    auxiliary->get_declarations().end(), decl) != 1)) {
+      throw std::runtime_error(
+          "AST JSON external function shell has no isolated semantic root");
     }
-  } else if (SgModuleStatement *module = isSgModuleStatement(basis)) {
-    if (isAstJsonExternalModule(module)) {
-      module->set_scope(scope);
-      if (module->get_parent() == nullptr) {
-        module->set_parent(scope);
-      }
+  }
+  if (SgModuleStatement *module = isSgModuleStatement(basis)) {
+    if (isAstJsonExternalModule(module) &&
+        (module->get_scope() != nullptr || module->get_parent() != nullptr)) {
+      throw std::runtime_error(
+          "AST JSON external module shell is not detached");
     }
-  } else if (SgClassDeclaration *decl = isSgClassDeclaration(basis)) {
-    if (isAstJsonExternalClassDeclaration(decl)) {
-      decl->set_scope(scope);
-      if (decl->get_parent() == nullptr) {
-        decl->set_parent(scope);
+  }
+  if (SgClassDeclaration *decl = isSgClassDeclaration(basis)) {
+    if (!isAstJsonExternalClassDeclaration(decl)) {
+      return;
+    }
+    SgScopeStatement *scope = decl->get_scope();
+    if (scope == nullptr || decl->get_parent() != scope) {
+      throw std::runtime_error(
+          "AST JSON external class shell does not belong to its isolated "
+          "semantic scope");
+    }
+    SgGlobal *external_global = isSgGlobal(scope);
+    if (SgClassDefinition *module_definition = isSgClassDefinition(scope)) {
+      SgModuleStatement *module =
+          isSgModuleStatement(module_definition->get_declaration());
+      if (module == nullptr || !isAstJsonExternalModule(module) ||
+          module_definition->get_parent() != module ||
+          module->get_scope() != module->get_parent()) {
+        throw std::runtime_error(
+            "AST JSON external class shell has an invalid external module "
+            "owner");
       }
+      external_global = isSgGlobal(module->get_parent());
+    }
+    if (external_global == nullptr ||
+        external_global->get_parent() != nullptr) {
+      throw std::runtime_error(
+          "AST JSON external class shell has no isolated semantic root");
     }
   }
 }
@@ -332,9 +445,40 @@ SgSymbol *resolveExistingSymbolFromJson(const JsonValue &json,
   if (symbol == nullptr) {
     throw std::runtime_error(
         "AST JSON failed to resolve serialized symbol reference: " +
-        json.stringOr("symbol_name"));
+        json.requiredString("symbol_name"));
   }
   return symbol;
+}
+
+SgFunctionSymbol *functionReferenceSemanticSymbolFromJson(
+    const JsonValue &semantic_symbol,
+    const JsonValue &source_visible_symbol_record,
+    SgFunctionSymbol *source_visible_symbol, const NodeMap &nodes) {
+  if (source_visible_symbol != nullptr) {
+    const JsonValue *source_visible_symbol_json =
+        source_visible_symbol_record.find("symbol");
+    if (source_visible_symbol_json == nullptr) {
+      throw std::runtime_error(
+          "AST JSON Fortran source-visible function symbol has no symbol "
+          "record");
+    }
+    if (source_visible_symbol_json->exactlyEquals(semantic_symbol)) {
+      return source_visible_symbol;
+    }
+  }
+
+  SgSymbol *resolved = resolveExistingSymbolFromJson(semantic_symbol, nodes);
+  SgFunctionSymbol *function_symbol = isSgFunctionSymbol(resolved);
+  if (function_symbol == nullptr ||
+      function_symbol->class_name() !=
+          semantic_symbol.requiredString("symbol_kind") ||
+      function_symbol->get_name().getString() !=
+          semantic_symbol.requiredString("symbol_name")) {
+    throw std::runtime_error(
+        "AST JSON SgFunctionRefExp semantic symbol did not resolve to its "
+        "exact serialized kind and name");
+  }
+  return function_symbol;
 }
 
 struct DeferredSymbolTableEntry {
@@ -540,19 +684,21 @@ SgSymbol *createDeferredSymbolTableSymbol(const JsonValue &entry,
     }
     SgAliasSymbol *symbol =
         new SgAliasSymbol(resolveExistingSymbolFromJson(*target, nodes),
-                          entry.boolOr("alias_is_renamed", false),
-                          SgName(entry.stringOr("alias_new_name")));
-    if (const JsonValue *causal_nodes = entry.find("alias_causal_nodes")) {
-      if (causal_nodes->kind != JsonValue::Kind::Array) {
+                          entry.requiredBool("alias_is_renamed"),
+                          SgName(entry.requiredString("alias_new_name")));
+    const JsonValue &causal_nodes = entry.at("alias_causal_nodes");
+    if (causal_nodes.kind != JsonValue::Kind::Array ||
+        causal_nodes.array.empty()) {
+      throw std::runtime_error(
+          "AST JSON alias_causal_nodes field is not a non-empty array");
+    }
+    for (const JsonValue &node_id : causal_nodes.array) {
+      const uint64_t id = static_cast<uint64_t>(node_id.asInt());
+      if (id == 0) {
         throw std::runtime_error(
-            "AST JSON alias_causal_nodes field is not an array");
+            "AST JSON SgAliasSymbol has a null causal node");
       }
-      for (const JsonValue &node_id : causal_nodes->array) {
-        const uint64_t id = static_cast<uint64_t>(node_id.asInt());
-        if (id != 0) {
-          symbol->get_causal_nodes().push_back(nodeById(nodes, id));
-        }
-      }
+      symbol->get_causal_nodes().push_back(nodeById(nodes, id));
     }
     return symbol;
   }
@@ -562,12 +708,40 @@ SgSymbol *createDeferredSymbolTableSymbol(const JsonValue &entry,
       throw std::runtime_error(
           "AST JSON SgRenameSymbol table entry has no original_symbol");
     }
-    SgNode *basis = nodeById(
-        nodes, static_cast<uint64_t>(
-                   entry.at("symbol").at("symbol_declaration").asInt()));
-    return new SgRenameSymbol(isSgFunctionDeclaration(basis),
-                              resolveExistingSymbolFromJson(*original, nodes),
-                              SgName(entry.stringOr("rename_new_name")));
+    SgSymbol *originalSymbol = resolveExistingSymbolFromJson(*original, nodes);
+    SgFunctionDeclaration *originalBasis = isSgFunctionDeclaration(
+        originalSymbol != nullptr ? originalSymbol->get_symbol_basis()
+                                  : nullptr);
+    const JsonValue &serializedSymbol = entry.at("symbol");
+    const int64_t rawBasisId =
+        serializedSymbol.at("symbol_declaration").asInt();
+    if (rawBasisId < 0 || originalBasis == nullptr) {
+      throw std::runtime_error(
+          "AST JSON SgRenameSymbol has no exact function basis");
+    }
+
+    SgFunctionDeclaration *basis = originalBasis;
+    if (rawBasisId != 0) {
+      basis = nodeByIdAs<SgFunctionDeclaration>(
+          nodes, static_cast<uint64_t>(rawBasisId));
+      if (basis != originalBasis) {
+        throw std::runtime_error(
+            "AST JSON SgRenameSymbol basis diverges from its original "
+            "symbol");
+      }
+    } else {
+      const JsonValue *external = serializedSymbol.find("external_function");
+      if (external == nullptr ||
+          external->requiredString("name") !=
+              originalBasis->get_name().getString() ||
+          external->requiredString("kind") != originalBasis->class_name()) {
+        throw std::runtime_error(
+            "AST JSON external SgRenameSymbol payload diverges from its "
+            "original function");
+      }
+    }
+    return new SgRenameSymbol(basis, originalSymbol,
+                              SgName(entry.requiredString("rename_new_name")));
   }
   throw std::runtime_error("AST JSON deferred symbol kind is unsupported: " +
                            kind);
@@ -579,7 +753,16 @@ void restoreSerializedSymbolTables(const AstFileRecord &ast,
   std::vector<ExpectedSymbolTablePreference> expected_preferences;
 
   for (const NodeRecord &record : ast.nodes) {
-    SgScopeStatement *scope = isSgScopeStatement(nodeById(nodes, record.id));
+    auto restored_node = nodes.find(record.id);
+    if (restored_node == nodes.end()) {
+      if (record.properties.find("symbol_table") != nullptr) {
+        throw std::runtime_error("AST JSON scope was not built before its "
+                                 "symbol-table reconstruction: " +
+                                 record.kind);
+      }
+      continue;
+    }
+    SgScopeStatement *scope = isSgScopeStatement(restored_node->second);
     if (scope == nullptr) {
       continue;
     }
@@ -594,8 +777,8 @@ void restoreSerializedSymbolTables(const AstFileRecord &ast,
         std::max<int>(17, static_cast<int>(entries.array.size() * 2 + 1));
     SgSymbolTable *table = new SgSymbolTable(table_size);
     table->set_parent(scope);
-    table->setCaseInsensitive(record.properties.boolOr(
-        "case_insensitive", table->isCaseInsensitive()));
+    table->setCaseInsensitive(
+        record.properties.requiredBool("case_insensitive"));
     scope->set_symbol_table(table);
 
     std::vector<const JsonValue *> insertion_entries;
@@ -610,8 +793,8 @@ void restoreSerializedSymbolTables(const AstFileRecord &ast,
           const std::string rhs_name = rhs->at("entry_name").asString();
           const std::string lhs_kind = lhs->at("symbol_kind").asString();
           const std::string rhs_kind = rhs->at("symbol_kind").asString();
-          const bool lhs_preferred = lhs->boolOr("lookup_preferred", false);
-          const bool rhs_preferred = rhs->boolOr("lookup_preferred", false);
+          const bool lhs_preferred = lhs->requiredBool("lookup_preferred");
+          const bool rhs_preferred = rhs->requiredBool("lookup_preferred");
           if (lhs_name != rhs_name) {
             return lhs_name < rhs_name;
           }
@@ -658,11 +841,11 @@ void restoreSerializedSymbolTables(const AstFileRecord &ast,
           throw std::runtime_error(
               "AST JSON failed to reconstruct external symbol table entry");
         }
-        attachExternalSymbolBasisToScope(symbol, scope);
+        validateExternalSymbolBasisOwnership(symbol);
         table->insert(entry_name, symbol);
         expected_preferences.push_back(
             {table, entry_name, symbol,
-             entry.boolOr("lookup_preferred", false)});
+             entry.requiredBool("lookup_preferred")});
         continue;
       }
       if (basis_id == 0) {
@@ -681,22 +864,21 @@ void restoreSerializedSymbolTables(const AstFileRecord &ast,
         throw std::runtime_error(message.str());
       }
       if (SgNamespaceSymbol *namespace_symbol = isSgNamespaceSymbol(symbol)) {
-        namespace_symbol->set_isAlias(entry.boolOr(
-            "namespace_is_alias", namespace_symbol->get_isAlias()));
+        namespace_symbol->set_isAlias(entry.requiredBool("namespace_is_alias"));
         namespace_symbol->set_declaration(
             isSgNamespaceDeclarationStatement(basis));
         const uint64_t alias_id = static_cast<uint64_t>(
-            entry.intOr("namespace_alias_declaration", 0));
+            entry.requiredInt("namespace_alias_declaration"));
         if (alias_id != 0) {
           namespace_symbol->set_aliasDeclaration(
               nodeByIdAs<SgNamespaceAliasDeclarationStatement>(nodes,
                                                                alias_id));
         }
       }
-      attachExternalSymbolBasisToScope(symbol, scope);
+      validateExternalSymbolBasisOwnership(symbol);
       table->insert(entry_name, symbol);
       expected_preferences.push_back(
-          {table, entry_name, symbol, entry.boolOr("lookup_preferred", false)});
+          {table, entry_name, symbol, entry.requiredBool("lookup_preferred")});
     }
   }
 
@@ -709,12 +891,70 @@ void restoreSerializedSymbolTables(const AstFileRecord &ast,
       throw std::runtime_error(
           "AST JSON failed to reconstruct deferred symbol table entry");
     }
-    attachExternalSymbolBasisToScope(
-        symbol, isSgScopeStatement(deferred.table->get_parent()));
+    validateExternalSymbolBasisOwnership(symbol);
     deferred.table->insert(deferred.entry_name, symbol);
     expected_preferences.push_back(
         {deferred.table, deferred.entry_name, symbol,
-         deferred.entry_json->boolOr("lookup_preferred", false)});
+         deferred.entry_json->requiredBool("lookup_preferred")});
+  }
+
+  struct AnonymousFortranProgramUnitSymbol {
+    SgScopeStatement *scope = nullptr;
+    SgName internal_key;
+    SgFunctionSymbol *symbol = nullptr;
+  };
+  std::unordered_map<SgFunctionDeclaration *, AnonymousFortranProgramUnitSymbol>
+      anonymous_fortran_program_unit_symbols;
+  for (const auto &entry : nodes) {
+    SgFunctionDeclaration *declaration = isSgFunctionDeclaration(entry.second);
+    if (declaration == nullptr ||
+        !SageInterface::isFortranProgramUnitWithoutSourceName(declaration)) {
+      continue;
+    }
+    SgScopeStatement *scope = declaration->get_scope();
+    if (scope == nullptr || scope->get_symbol_table() == nullptr) {
+      throw std::runtime_error(
+          "AST JSON anonymous Fortran program unit has no symbol scope");
+    }
+    SgFunctionDeclaration *basis =
+        isSgFunctionDeclaration(declaration->get_firstNondefiningDeclaration());
+    if (basis == nullptr) {
+      basis = declaration;
+    }
+    const SgName internalKey =
+        SageInterface::getFortranProgramUnitSymbolTableKey(declaration);
+    auto reconstructed = anonymous_fortran_program_unit_symbols.find(basis);
+    if (reconstructed != anonymous_fortran_program_unit_symbols.end()) {
+      const AnonymousFortranProgramUnitSymbol &record = reconstructed->second;
+      if (record.scope != scope || record.internal_key != internalKey ||
+          record.symbol == nullptr ||
+          record.symbol->get_declaration() != basis ||
+          scope->get_symbol_table()->find_function(internalKey) !=
+              record.symbol ||
+          scope->find_symbol_from_declaration(basis) != record.symbol) {
+        throw std::runtime_error(
+            "AST JSON anonymous Fortran program-unit declaration chain does "
+            "not resolve to one exact reconstructed symbol");
+      }
+      continue;
+    }
+    if (scope->get_symbol_table()->find_function(internalKey) != nullptr ||
+        scope->find_symbol_from_declaration(basis) != nullptr) {
+      throw std::runtime_error(
+          "AST JSON anonymous Fortran program-unit internal symbol already "
+          "exists before reconstruction");
+    }
+    SgFunctionSymbol *symbol = new SgFunctionSymbol(basis);
+    scope->insert_symbol(internalKey, symbol);
+    if (scope->get_symbol_table()->find_function(internalKey) != symbol ||
+        scope->find_symbol_from_declaration(basis) != symbol ||
+        symbol->get_declaration() != basis) {
+      throw std::runtime_error(
+          "AST JSON anonymous Fortran program-unit symbol was not published "
+          "with its exact declaration-chain identity");
+    }
+    anonymous_fortran_program_unit_symbols.emplace(
+        basis, AnonymousFortranProgramUnitSymbol{scope, internalKey, symbol});
   }
 
   enforceSymbolTablePreferences(expected_preferences);
@@ -770,123 +1010,20 @@ SgNonrealSymbol *nonrealSymbolForDeclaration(SgNonrealDecl *decl) {
   return new SgNonrealSymbol(decl);
 }
 
-std::map<SgSymbol *, std::vector<std::pair<SgExpression *, SgExpression *>>>
-arrayDimensionsFromJson(const JsonValue &json, const NodeMap &nodes) {
-  std::map<SgSymbol *, std::vector<std::pair<SgExpression *, SgExpression *>>>
-      result;
-  if (json.kind != JsonValue::Kind::Array) {
-    return result;
-  }
-  for (const JsonValue &entry : json.array) {
-    const JsonValue *symbol_json = entry.find("symbol");
-    if (symbol_json == nullptr) {
-      continue;
-    }
-    SgSymbol *symbol = symbolFromJson(*symbol_json, nodes);
-    if (symbol == nullptr) {
-      throw std::runtime_error(
-          "AST JSON failed to resolve OMP array-section symbol");
-    }
-    std::vector<std::pair<SgExpression *, SgExpression *>> bounds;
-    const JsonValue *bounds_json = entry.find("bounds");
-    if (bounds_json != nullptr && bounds_json->kind == JsonValue::Kind::Array) {
-      for (const JsonValue &bound : bounds_json->array) {
-        const JsonValue *lower_json = bound.find("lower");
-        const JsonValue *upper_json = bound.find("upper");
-        bounds.emplace_back(
-            lower_json != nullptr ? expressionFromRef(*lower_json, nodes)
-                                  : nullptr,
-            upper_json != nullptr ? expressionFromRef(*upper_json, nodes)
-                                  : nullptr);
-      }
-    }
-    result[symbol] = std::move(bounds);
-  }
-  return result;
-}
-
-std::map<
-    SgSymbol *,
-    std::vector<std::pair<SgOmpClause::omp_map_dist_data_enum, SgExpression *>>>
-distDataPoliciesFromJson(const JsonValue &json, const NodeMap &nodes) {
-  std::map<SgSymbol *,
-           std::vector<
-               std::pair<SgOmpClause::omp_map_dist_data_enum, SgExpression *>>>
-      result;
-  if (json.kind != JsonValue::Kind::Array) {
-    return result;
-  }
-  for (const JsonValue &entry : json.array) {
-    const JsonValue *symbol_json = entry.find("symbol");
-    if (symbol_json == nullptr) {
-      continue;
-    }
-    SgSymbol *symbol = symbolFromJson(*symbol_json, nodes);
-    if (symbol == nullptr) {
-      throw std::runtime_error(
-          "AST JSON failed to resolve OMP dist-data symbol");
-    }
-    std::vector<std::pair<SgOmpClause::omp_map_dist_data_enum, SgExpression *>>
-        policies;
-    const JsonValue *policies_json = entry.find("policies");
-    if (policies_json != nullptr &&
-        policies_json->kind == JsonValue::Kind::Array) {
-      for (const JsonValue &policy : policies_json->array) {
-        const JsonValue *expr_json = policy.find("expression");
-        policies.emplace_back(static_cast<SgOmpClause::omp_map_dist_data_enum>(
-                                  policy.intOr("policy", 0)),
-                              expr_json != nullptr
-                                  ? expressionFromRef(*expr_json, nodes)
-                                  : nullptr);
-      }
-    }
-    result[symbol] = std::move(policies);
-  }
-  return result;
-}
-
-std::list<std::list<SgExpression *>> iteratorFromJson(const JsonValue &json,
-                                                      const NodeMap &nodes) {
-  std::list<std::list<SgExpression *>> result;
-  if (json.kind != JsonValue::Kind::Array) {
-    return result;
-  }
-  for (const JsonValue &iterator_json : json.array) {
-    std::list<SgExpression *> iterator;
-    if (iterator_json.kind == JsonValue::Kind::Array) {
-      for (const JsonValue &expr_json : iterator_json.array) {
-        iterator.push_back(expressionFromRef(expr_json, nodes));
-      }
-    }
-    result.push_back(std::move(iterator));
-  }
-  return result;
-}
-
-std::list<SgExpression *> expressionListFromJson(const JsonValue &json,
-                                                 const NodeMap &nodes) {
-  std::list<SgExpression *> result;
-  if (json.kind != JsonValue::Kind::Array) {
-    return result;
-  }
-  for (const JsonValue &expr_json : json.array) {
-    result.push_back(expressionFromRef(expr_json, nodes));
-  }
-  return result;
-}
-
 SgTemplateArgumentPtrList templateArgumentListFromJson(const JsonValue &json,
                                                        const NodeMap &nodes,
                                                        SgNode *parent) {
   SgTemplateArgumentPtrList result;
   if (json.kind != JsonValue::Kind::Array) {
-    return result;
+    throw std::runtime_error("AST JSON template argument list is not an array");
   }
   for (const JsonValue &arg_json : json.array) {
-    const uint64_t id = static_cast<uint64_t>(arg_json.asInt());
-    if (id == 0) {
-      continue;
+    const int64_t raw_id = arg_json.asInt();
+    if (raw_id <= 0) {
+      throw std::runtime_error(
+          "AST JSON template argument ID must be positive");
     }
+    const uint64_t id = static_cast<uint64_t>(raw_id);
     SgTemplateArgument *argument = nodeByIdAs<SgTemplateArgument>(nodes, id);
     argument->set_parent(parent);
     result.push_back(argument);
@@ -894,10 +1031,10 @@ SgTemplateArgumentPtrList templateArgumentListFromJson(const JsonValue &json,
   return result;
 }
 
-std::list<SgOmpUsesAllocatorsDefination *>
+SgOmpUsesAllocatorsDefinationPtrList
 usesAllocatorsDefinitionsFromJson(const JsonValue &json, const NodeMap &nodes,
                                   SgOmpUsesAllocatorsClause *parent) {
-  std::list<SgOmpUsesAllocatorsDefination *> result;
+  SgOmpUsesAllocatorsDefinationPtrList result;
   if (json.kind != JsonValue::Kind::Array) {
     return result;
   }
@@ -922,188 +1059,100 @@ void applyOmpAuxiliaryState(const AstFileRecord &ast, const NodeMap &nodes) {
     if (SgOmpClause *clause = isSgOmpClause(node)) {
       clause->set_directive_name_modifier(
           static_cast<SgOmpClause::omp_directive_name_modifier_enum>(
-              p.intOr("directive_name_modifier", 0)));
+              p.requiredInt("directive_name_modifier")));
+    }
+    if (SgOmpDirectiveKindClause *clause = isSgOmpDirectiveKindClause(node)) {
+      clause->validate_directive_kinds();
     }
 
-    if (SgOmpMapClause *clause = isSgOmpMapClause(node)) {
-      clause->set_operation(static_cast<SgOmpClause::omp_map_operator_enum>(
-          p.intOr("operation", SgOmpClause::e_omp_map_unknown)));
-      clause->set_modifier1(static_cast<SgOmpClause::omp_map_modifier_enum>(
-          p.intOr("modifier1", SgOmpClause::e_omp_map_modifier_unspecified)));
-      clause->set_modifier2(static_cast<SgOmpClause::omp_map_modifier_enum>(
-          p.intOr("modifier2", SgOmpClause::e_omp_map_modifier_unspecified)));
-      clause->set_modifier3(static_cast<SgOmpClause::omp_map_modifier_enum>(
-          p.intOr("modifier3", SgOmpClause::e_omp_map_modifier_unspecified)));
-      if (const JsonValue *mapper = p.find("mapper_identifier")) {
-        clause->set_mapper_identifier(expressionFromRef(*mapper, nodes));
-      }
-      if (const JsonValue *dims = p.find("array_dimensions")) {
-        clause->set_array_dimensions(arrayDimensionsFromJson(*dims, nodes));
-      }
-      if (const JsonValue *policies = p.find("dist_data_policies")) {
-        clause->set_dist_data_policies(
-            distDataPoliciesFromJson(*policies, nodes));
-      }
-      if (const JsonValue *iterator = p.find("iterator")) {
-        clause->set_iterator(iteratorFromJson(*iterator, nodes));
-      }
-    } else if (SgOmpDependClause *clause = isSgOmpDependClause(node)) {
-      clause->set_depend_modifier(
-          static_cast<SgOmpClause::omp_depend_modifier_enum>(
-              p.intOr("depend_modifier",
-                      SgOmpClause::e_omp_depend_modifier_unspecified)));
-      clause->set_dependence_type(
-          static_cast<SgOmpClause::omp_dependence_type_enum>(p.intOr(
-              "dependence_type", SgOmpClause::e_omp_depend_unspecified)));
-      if (const JsonValue *dims = p.find("array_dimensions")) {
-        clause->set_array_dimensions(arrayDimensionsFromJson(*dims, nodes));
-      }
-      if (const JsonValue *iterator = p.find("iterator")) {
-        clause->set_iterator(iteratorFromJson(*iterator, nodes));
-      }
-      if (const JsonValue *vec = p.find("vec")) {
-        clause->set_vec(expressionListFromJson(*vec, nodes));
-      }
-    } else if (SgOmpAffinityClause *clause = isSgOmpAffinityClause(node)) {
-      clause->set_affinity_modifier(
-          static_cast<SgOmpClause::omp_affinity_modifier_enum>(
-              p.intOr("affinity_modifier",
-                      SgOmpClause::e_omp_affinity_modifier_unspecified)));
-      if (const JsonValue *dims = p.find("array_dimensions")) {
-        clause->set_array_dimensions(arrayDimensionsFromJson(*dims, nodes));
-      }
-      if (const JsonValue *iterator = p.find("iterator")) {
-        clause->set_iterator(iteratorFromJson(*iterator, nodes));
-      }
-    } else if (SgOmpToClause *clause = isSgOmpToClause(node)) {
-      clause->set_kind(static_cast<SgOmpClause::omp_to_kind_enum>(
-          p.intOr("kind", SgOmpClause::e_omp_to_kind_unknown)));
-      if (const JsonValue *mapper = p.find("mapper_identifier")) {
-        clause->set_mapper_identifier(expressionFromRef(*mapper, nodes));
-      }
-      if (const JsonValue *dims = p.find("array_dimensions")) {
-        clause->set_array_dimensions(arrayDimensionsFromJson(*dims, nodes));
-      }
-      if (const JsonValue *iterator = p.find("iterator")) {
-        clause->set_iterator(iteratorFromJson(*iterator, nodes));
-      }
-    } else if (SgOmpFromClause *clause = isSgOmpFromClause(node)) {
-      clause->set_kind(static_cast<SgOmpClause::omp_from_kind_enum>(
-          p.intOr("kind", SgOmpClause::e_omp_from_kind_unknown)));
-      if (const JsonValue *mapper = p.find("mapper_identifier")) {
-        clause->set_mapper_identifier(expressionFromRef(*mapper, nodes));
-      }
-      if (const JsonValue *dims = p.find("array_dimensions")) {
-        clause->set_array_dimensions(arrayDimensionsFromJson(*dims, nodes));
-      }
-      if (const JsonValue *iterator = p.find("iterator")) {
-        clause->set_iterator(iteratorFromJson(*iterator, nodes));
-      }
-    } else if (SgOmpOrderClause *clause = isSgOmpOrderClause(node)) {
-      clause->set_kind(static_cast<SgOmpClause::omp_order_kind_enum>(
-          p.intOr("kind", SgOmpClause::e_omp_order_kind_unspecified)));
+    if (SgOmpOrderClause *clause = isSgOmpOrderClause(node)) {
+      clause->set_kind(
+          static_cast<SgOmpClause::omp_order_kind_enum>(p.requiredInt("kind")));
       clause->set_modifier(static_cast<SgOmpClause::omp_order_modifier_enum>(
-          p.intOr("modifier", SgOmpClause::e_omp_order_modifier_unspecified)));
+          p.requiredInt("modifier")));
     } else if (SgOmpAtomicDefaultMemOrderClause *clause =
                    isSgOmpAtomicDefaultMemOrderClause(node)) {
       clause->set_kind(
-          static_cast<
-              SgOmpClause::omp_atomic_default_mem_order_kind_enum>(p.intOr(
-              "kind",
-              SgOmpClause::e_omp_atomic_default_mem_order_kind_unspecified)));
+          static_cast<SgOmpClause::omp_atomic_default_mem_order_kind_enum>(
+              p.requiredInt("kind")));
     } else if (SgOmpDefaultmapClause *clause = isSgOmpDefaultmapClause(node)) {
       clause->set_behavior(
-          static_cast<SgOmpClause::omp_defaultmap_behavior_enum>(p.intOr(
-              "behavior", SgOmpClause::e_omp_defaultmap_behavior_unspecified)));
+          static_cast<SgOmpClause::omp_defaultmap_behavior_enum>(
+              p.requiredInt("behavior")));
       clause->set_category(
-          static_cast<SgOmpClause::omp_defaultmap_category_enum>(p.intOr(
-              "category", SgOmpClause::e_omp_defaultmap_category_unspecified)));
+          static_cast<SgOmpClause::omp_defaultmap_category_enum>(
+              p.requiredInt("category")));
     } else if (SgOmpBindClause *clause = isSgOmpBindClause(node)) {
       clause->set_binding(static_cast<SgOmpClause::omp_bind_binding_enum>(
-          p.intOr("binding", SgOmpClause::e_omp_bind_binding_unspecified)));
+          p.requiredInt("binding")));
     } else if (SgOmpFailClause *clause = isSgOmpFailClause(node)) {
       clause->set_memory_order(
           static_cast<SgOmpClause::omp_fail_memory_order_kind_enum>(
-              p.intOr("memory_order",
-                      SgOmpClause::e_omp_fail_memory_order_kind_unspecified)));
+              p.requiredInt("memory_order")));
     } else if (SgOmpLinearClause *clause = isSgOmpLinearClause(node)) {
       clause->set_modifier(static_cast<SgOmpClause::omp_linear_modifier_enum>(
-          p.intOr("modifier", SgOmpClause::e_omp_linear_modifier_unspecified)));
+          p.requiredInt("modifier")));
     } else if (SgOmpReductionClause *clause = isSgOmpReductionClause(node)) {
       clause->set_modifier(
-          static_cast<SgOmpClause::omp_reduction_modifier_enum>(p.intOr(
-              "modifier", SgOmpClause::e_omp_reduction_modifier_unknown)));
+          static_cast<SgOmpClause::omp_reduction_modifier_enum>(
+              p.requiredInt("modifier")));
       clause->set_identifier(
           static_cast<SgOmpClause::omp_reduction_identifier_enum>(
-              p.intOr("identifier", SgOmpClause::e_omp_reduction_unknown)));
+              p.requiredInt("identifier")));
     } else if (SgOmpAllocateClause *clause = isSgOmpAllocateClause(node)) {
       clause->set_modifier(static_cast<SgOmpClause::omp_allocate_modifier_enum>(
-          p.intOr("modifier", SgOmpClause::e_omp_allocate_modifier_unknown)));
+          p.requiredInt("modifier")));
     } else if (SgOmpAllocatorClause *clause = isSgOmpAllocatorClause(node)) {
       clause->set_modifier(
-          static_cast<SgOmpClause::omp_allocator_modifier_enum>(p.intOr(
-              "modifier", SgOmpClause::e_omp_allocator_modifier_unknown)));
+          static_cast<SgOmpClause::omp_allocator_modifier_enum>(
+              p.requiredInt("modifier")));
     } else if (SgOmpAdjustArgsClause *clause = isSgOmpAdjustArgsClause(node)) {
       clause->set_modifier(
-          static_cast<SgOmpClause::omp_adjust_args_modifier_enum>(p.intOr(
-              "modifier", SgOmpClause::e_omp_adjust_args_modifier_unknown)));
+          static_cast<SgOmpClause::omp_adjust_args_modifier_enum>(
+              p.requiredInt("modifier")));
     } else if (SgOmpInReductionClause *clause =
                    isSgOmpInReductionClause(node)) {
       clause->set_identifier(
           static_cast<SgOmpClause::omp_in_reduction_identifier_enum>(
-              p.intOr("identifier",
-                      SgOmpClause::e_omp_in_reduction_identifier_unspecified)));
+              p.requiredInt("identifier")));
     } else if (SgOmpTaskReductionClause *clause =
                    isSgOmpTaskReductionClause(node)) {
       clause->set_identifier(
-          static_cast<SgOmpClause::omp_task_reduction_identifier_enum>(p.intOr(
-              "identifier",
-              SgOmpClause::e_omp_task_reduction_identifier_unspecified)));
+          static_cast<SgOmpClause::omp_task_reduction_identifier_enum>(
+              p.requiredInt("identifier")));
     } else if (SgOmpDepobjUpdateClause *clause =
                    isSgOmpDepobjUpdateClause(node)) {
       clause->set_modifier(static_cast<SgOmpClause::omp_depobj_modifier_enum>(
-          p.intOr("modifier", SgOmpClause::e_omp_depobj_modifier_unknown)));
+          p.requiredInt("modifier")));
     } else if (SgOmpDistScheduleClause *clause =
                    isSgOmpDistScheduleClause(node)) {
       clause->set_kind(static_cast<SgOmpClause::omp_dist_schedule_kind_enum>(
-          p.intOr("kind", SgOmpClause::e_omp_dist_schedule_kind_unspecified)));
+          p.requiredInt("kind")));
     } else if (SgOmpNumTasksClause *clause = isSgOmpNumTasksClause(node)) {
       clause->set_modifier(
-          static_cast<SgOmpClause::omp_num_tasks_modifier_enum>(p.intOr(
-              "modifier", SgOmpClause::e_omp_num_tasks_modifier_unspecified)));
+          static_cast<SgOmpClause::omp_num_tasks_modifier_enum>(
+              p.requiredInt("modifier")));
     } else if (SgOmpGrainsizeClause *clause = isSgOmpGrainsizeClause(node)) {
       clause->set_modifier(
-          static_cast<SgOmpClause::omp_grainsize_modifier_enum>(p.intOr(
-              "modifier", SgOmpClause::e_omp_grainsize_modifier_unspecified)));
-    } else if (SgOmpWhenClause *clause = isSgOmpWhenClause(node)) {
-      clause->set_target_device_selector(p.boolOr(
-          "target_device_selector", clause->get_target_device_selector()));
-      clause->set_device_kind(
-          static_cast<SgOmpClause::omp_when_context_kind_enum>(p.intOr(
-              "device_kind", SgOmpClause::e_omp_when_context_kind_unknown)));
-      clause->set_implementation_vendor(
-          static_cast<SgOmpClause::omp_when_context_vendor_enum>(
-              p.intOr("implementation_vendor",
-                      SgOmpClause::e_omp_when_context_vendor_unspecified)));
+          static_cast<SgOmpClause::omp_grainsize_modifier_enum>(
+              p.requiredInt("modifier")));
     } else if (SgOmpUsesAllocatorsDefination *definition =
                    isSgOmpUsesAllocatorsDefination(node)) {
       definition->set_allocator(
           static_cast<SgOmpClause::omp_uses_allocators_allocator_enum>(
-              p.intOr("allocator",
-                      SgOmpClause::e_omp_uses_allocators_allocator_unknown)));
+              p.requiredInt("allocator")));
     } else if (SgOmpUsesAllocatorsClause *clause =
                    isSgOmpUsesAllocatorsClause(node)) {
       if (const JsonValue *definitions =
               p.find("uses_allocators_definitions")) {
-        clause->set_uses_allocators_defination(
-            usesAllocatorsDefinitionsFromJson(*definitions, nodes, clause));
+        clause->get_uses_allocators_defination() =
+            usesAllocatorsDefinitionsFromJson(*definitions, nodes, clause);
       }
     } else if (SgOmpDeclareMapperStatement *stmt =
                    isSgOmpDeclareMapperStatement(node)) {
       stmt->set_identifier(
-          static_cast<SgOmpClause::omp_declare_mapper_identifier_enum>(p.intOr(
-              "identifier",
-              SgOmpClause::e_omp_declare_mapper_identifier_unspecified)));
+          static_cast<SgOmpClause::omp_declare_mapper_identifier_enum>(
+              p.requiredInt("identifier")));
     }
   }
 }

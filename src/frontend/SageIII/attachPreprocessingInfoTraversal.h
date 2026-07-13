@@ -70,6 +70,15 @@ public:
     // Pei-Hung (09/17/2020): We need to check if SgInitializedName is part of
     // SgFunctionParameterList and the comment will not be attached to it.
     isPartOfFunctionParameterList = false;
+
+    // Auxiliary declarations are semantic-only identities owned by a typed
+    // non-lexical container.  Their complete subtree is excluded from source
+    // preprocessing attachment in both traversal directions.
+    isPartOfAuxiliaryDeclaration = false;
+
+    // Declaration scopes and their lists are compiler/frontend semantic
+    // signature infrastructure, never lexical preprocessing anchors.
+    isPartOfSemanticDeclarationScope = false;
   }
 
   // DQ (8/6/2012): Added copy constructor.
@@ -88,6 +97,9 @@ public:
   // Pei-Hung (09/17/2020): We need to check if SgInitializedName is part of
   // SgFunctionParameterList and the comment will not be attached to it.
   bool isPartOfFunctionParameterList;
+
+  bool isPartOfAuxiliaryDeclaration;
+  bool isPartOfSemanticDeclarationScope;
 };
 
 // This is an empty class, meaning that we could likely just have implemented

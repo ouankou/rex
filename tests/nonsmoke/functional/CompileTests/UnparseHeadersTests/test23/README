@@ -1,0 +1,9 @@
+This death regression includes one mutable physical header in two distinct
+lexical scopes under different macro definitions.  The transformation
+therefore produces two non-equivalent typed lexical subtrees for one physical
+output file.
+
+The header planner must reject that contradiction from canonical AST
+properties, edges, types, symbols, and source identity.  It must not compare
+unparsed strings, and it must continue to accept repeated occurrences whose
+typed lexical subtrees are equivalent.

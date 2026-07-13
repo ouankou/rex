@@ -8,7 +8,7 @@ void foo(int iend, int ist) {
   {
 #pragma omp single
     printf("Using %d threads.\n", omp_get_num_threads());
-#pragma omp allocate(i) allocator(pteam_mem_alloc)
+#pragma omp allocate(i) allocator(omp_pteam_mem_alloc)
     for (i = iend; i >= ist; i--) {
       printf("Iteration %d is carried out by thread %d\n", i,
              omp_get_thread_num());

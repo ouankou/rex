@@ -127,12 +127,13 @@ class NormalizeLoopTraverse : public ProcessAstTree<AstNodePtr> {
           return true;
         }
         fa.ReplaceAst(
-            incr, AstNodePtrImpl(new SgPlusAssignOp(
-                      GetFileInfo(),
-                      isSgExpression(
-                          AstNodePtrImpl(fa.CopyAstTree(testlhs)).get_ptr()),
-                      isSgExpression(
-                          AstNodePtrImpl(fa.CreateConstInt(1)).get_ptr()))));
+            incr,
+            AstNodePtrImpl(new SgPlusAssignOp(
+                GetFileInfo(),
+                isSgExpression(
+                    AstNodePtrImpl(fa.CopyAstTree(testlhs)).get_ptr()),
+                isSgExpression(AstNodePtrImpl(fa.CreateConstInt(1)).get_ptr()),
+                isSgExpression(incr.get_ptr())->get_type())));
         break;
       case V_SgMinusMinusOp:
         if (!fa.IsSameVarRef(
@@ -142,12 +143,13 @@ class NormalizeLoopTraverse : public ProcessAstTree<AstNodePtr> {
           return true;
         }
         fa.ReplaceAst(
-            incr, AstNodePtrImpl(new SgPlusAssignOp(
-                      GetFileInfo(),
-                      isSgExpression(
-                          AstNodePtrImpl(fa.CopyAstTree(testlhs)).get_ptr()),
-                      isSgExpression(
-                          AstNodePtrImpl(fa.CreateConstInt(-1)).get_ptr()))));
+            incr,
+            AstNodePtrImpl(new SgPlusAssignOp(
+                GetFileInfo(),
+                isSgExpression(
+                    AstNodePtrImpl(fa.CopyAstTree(testlhs)).get_ptr()),
+                isSgExpression(AstNodePtrImpl(fa.CreateConstInt(-1)).get_ptr()),
+                isSgExpression(incr.get_ptr())->get_type())));
         break;
       default:
         succ = false;

@@ -1,36 +1,26 @@
-/* unparser.h
- * This header file contains the class declaration for the newest unparser. Six
- * C files include this header file: unparser.C, modified_sage.C,
- * unparse_stmt.C, unparse_expr.C, unparse_type.C, and unparse_sym.C.
- */
+/* Unparser output formatting declarations. */
 
 #ifndef UNPARSER_FORMAT_H
 #define UNPARSER_FORMAT_H
 
-// #include "sage3.h"
-// #include "roseInternal.h"
+#define KAI_NONSTD_IOSTREAM 1
+#include <iostream>
+#include <optional>
+#include <string>
 
-#include "unparser.h"
-class SgScopeStatement;
+#include "unparseFormatHelp.h"
+#include "unparseFormatTypes.h"
 
 class SgLocatedNode;
+class SgScopeStatement;
+class SgUnparse_Info;
 class Unparser;
 
-#define KAI_NONSTD_IOSTREAM 1
-// #include IOSTREAM_HEADER_FILE
-#include <iostream>
-
-// DQ (1/26/2009): a value of 1000 is too small for Fortran code (see
-// test2009_09.f; from Bill Henshaw) This value is now increased to 1,000,000.
-// If this is too small then likely we want to know about it anyway! #define
-// MAXCHARSONLINE 1000
 #define MAXCHARSONLINE 1000000
 
 #define MAXINDENT 60
 
-// DQ: Try out a larger setting
 #define TABINDENT 2
-// #define TABINDENT 5
 
 // Used in unparser.C in functions Unparser::count_digits(<type>)
 // default was 10, but that is too small for float, double, and long double
@@ -46,38 +36,39 @@ class Unparser;
 // (if it were to be then it is regenerated in exponential notation).
 #define MAX_DIGITS_DISPLAY 32
 
-// DQ (3/16/2006): Added comments.
-// These control how indentation and newlines are added in the
-// pre and post processing of each statement.
-typedef enum Format_Opt {
-  FORMAT_BEFORE_DIRECTIVE,
-  FORMAT_AFTER_DIRECTIVE,
-  FORMAT_BEFORE_STMT,
-  FORMAT_AFTER_STMT,
-  FORMAT_BEFORE_BASIC_BLOCK1,
-  FORMAT_AFTER_BASIC_BLOCK1,
-  FORMAT_BEFORE_BASIC_BLOCK2,
-  FORMAT_AFTER_BASIC_BLOCK2,
-  FORMAT_BEFORE_NESTED_STATEMENT,
-  FORMAT_AFTER_NESTED_STATEMENT
-} FormatOpt;
-
-#include "unparseFormatHelp.h"
 class UnparseFormat {
   int currentLine;   //! stores current line number being unparsed
   int currentIndent; //! indent of the current line
   int chars_on_line; //! the number of characters printed on the line
   int stmtIndent;    //! the current indent for statement
-  int linewrap;      //! the characters allowed perline before wraping the line
-  int userDefinedLinewrap; //! user defined line wrap; used to restore linewrap
-                           //! when needed.
+  std::optional<int>
+      linewrap; //! the enabled positive line width, or disabled wrapping
+  std::optional<int>
+      userDefinedLinewrap; //! caller-selected wrap mode restored after
+                           //! temporary formatter overrides
   int indentstop;          //! the number of spaces allowed for indenting
   SgLocatedNode *prevnode; //! The previous SgLocatedNode unparsed
   std::ostream *os;        //! the directed output for the current file
+  // Non-owning. The caller may reuse one formatting policy across every file
+  // in a project and remains responsible for its lifetime.
   UnparseFormatHelp *formatHelpInfo;
+  bool compactOutput;
+  bool compactFinalized;
+  bool compactPendingSpace;
+  bool compactHasPreviousInputCharacter;
+  char compactPreviousInputCharacter;
+  bool compactDirectiveActive;
+  std::string compactDirectiveBuffer;
+  int normalPendingSpaces;
 
-  // void insert_newline(int i = 1, int indent = -1);
   void insert_space(int);
+  void emitCompactText(const std::string &text);
+  void emitCompactCharacter(char ch);
+  void requireCompactOutputWritable() const;
+  void resolveCompactPendingSpace(char nextCharacter);
+  void bufferNormalSpace();
+  void discardNormalPendingSpaces();
+  void flushNormalPendingSpaces();
 
   //! make the output nicer
   void removeTrailingZeros(char *inputString);
@@ -107,16 +98,12 @@ public:
 
   // DQ (2/16/2004): Make this part of the public interface (to control
   // old-style K&R C function definitions)
-  void insert_newline(int i = 1, int indent = -1);
+  void insert_newline(int count = 1, std::optional<int> indent = std::nullopt);
 
-  // DQ (12/10/2014): Reset the chars_on_line to zero, used in token based
-  // unparsing to reset the formatting for AST subtrees unparsed using the AST
-  // in conjunction with the token based unparsing.
-  void reset_chars_on_line();
-
-  // Keep formatting state synchronized when code is written directly to the
-  // ostream instead of through UnparseFormat::operator<<.
-  void account_for_raw_text(const std::string &text);
+  // Emit an exact token/preprocessing payload while preserving formatter
+  // ordering and position state. Raw whitespace owns its boundary, so it
+  // supersedes any pending syntactic separator.
+  void emit_raw_text(const std::string &text);
 
 public:
   UnparseFormat(std::ostream *_os = nullptr, UnparseFormatHelp *help = nullptr);
@@ -129,22 +116,47 @@ public:
   void format(SgLocatedNode *, SgUnparse_Info &info,
               FormatOpt opt = FORMAT_BEFORE_STMT);
 
-  void flush() { os->flush(); }
+  void flush();
 
-  void set_linewrap(int w); // { linewrap = w; } // no wrapping if linewrap <= 0
-  int get_linewrap() const; // { return linewrap; }
+  void set_linewrap(std::optional<int> width);
+  void disable_linewrap();
+  std::optional<int> get_linewrap() const;
 
-  void set_indentstop(int s) { indentstop = s; }
+  // Enable the lexical, emission-time formatter used by diagnostic
+  // unparseToString calls. This must be selected before any output is emitted.
+  void set_compact_output(bool enabled);
+  bool get_compact_output() const { return compactOutput; }
+  void finalize_compact_output();
+
+  // Emit one already validated source-language literal token. Compact output
+  // preserves the token byte-for-byte instead of trying to infer literal
+  // boundaries from the generic output byte stream.
+  void emit_literal(const std::string &text);
+
+  // Emit one validated, line-oriented directive in the dense diagnostic
+  // representation.  The directive owns both of its logical line boundaries,
+  // so those boundaries are not inferred from generic whitespace.  File
+  // unparsing continues to use the ordinary line-oriented formatter.
+  void emit_compact_directive(const std::string &text);
+
+  // Assemble a typed directive through the ordinary expression/clause
+  // unparsers, then commit it atomically with its mandatory logical line
+  // boundaries. Nested or unterminated assembly is malformed formatter state.
+  void begin_compact_directive();
+  void finish_compact_directive();
+  bool has_compact_directive() const { return compactDirectiveActive; }
+
+  // Source-owned comments and line-oriented preprocessing payloads are
+  // incompatible with compact diagnostic output. Typed AST directives may
+  // provide their own explicit single-logical-line representation instead.
+  void require_noncompact_category(const char *category) const;
+
   int get_indentstop() const { return indentstop; }
 
   // DQ (3/18/2006): Added to support presentation and debugging of formatting
   std::string formatOptionToString(FormatOpt opt);
   // DQ (6/6/2007): Debugging support for hidden list data held in scopes
   void outputHiddenListData(Unparser *unp, SgScopeStatement *inputScope);
-
-  // DQ (9/30/2013): We need access to the std::ostream* os so that we can
-  // support token output without interpretation of line endings.
-  std::ostream *output_stream() { return os; }
 };
 
 #endif
