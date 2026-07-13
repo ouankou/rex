@@ -268,10 +268,16 @@ public:
   }
   // Conditionals (condE ? trueE : falseE)
   void visit(SgConditionalExp *sgn) {
+    sgn->validate();
     // The arguments are used
     ldva.used(sgn->get_conditional_exp());
-    ldva.used(sgn->get_true_exp());
+    if (sgn->get_operator_kind() ==
+        SgConditionalExp::e_conditional_operator_standard)
+      ldva.used(sgn->get_true_exp());
     ldva.used(sgn->get_false_exp());
+  }
+  void visit(SgMacroExpansionExp *sgn) {
+    ldva.used(sgn->get_expanded_expression_checked());
   }
   // Delete
   void visit(SgDeleteExp *sgn) {

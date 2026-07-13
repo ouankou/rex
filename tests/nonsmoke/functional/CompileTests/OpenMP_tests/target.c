@@ -1,3 +1,5 @@
+enum { test = 1 };
+
 int main(int argc, char* argv[])
 {
   int i;

@@ -41,7 +41,7 @@ template <typename T>
 class A_T
 {
 public:
-  int foo (T x) { return (int)x; }
+  long foo(T x) { return (long)x; }
 };
 
 template class A_T<int>;

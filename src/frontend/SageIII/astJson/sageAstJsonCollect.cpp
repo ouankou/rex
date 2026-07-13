@@ -1,9 +1,344 @@
+#include "AstNodes/Expression/OpenMPModifierValidation.h"
+#include "ompAstConstruction.h"
 #include "sageAstJsonPrivate.h"
 
 namespace Rose {
 namespace AstJson {
 
 SgSourceFile *collectionBoundaryFile = nullptr;
+SgNode *collectionBoundaryRoot = nullptr;
+
+namespace {
+thread_local bool pointerMemberTypeSerializationIdentityActive = false;
+thread_local std::unordered_map<const SgPointerMemberType *, uint64_t>
+    pointerMemberTypeSerializationIdentities;
+thread_local std::unordered_map<uint64_t, const SgPointerMemberType *>
+    pointerMemberTypeSerializationReverseIdentities;
+thread_local bool arrayTypeSerializationIdentityActive = false;
+thread_local std::unordered_map<const SgArrayType *, uint64_t>
+    arrayTypeSerializationIdentities;
+thread_local std::unordered_map<uint64_t, const SgArrayType *>
+    arrayTypeSerializationReverseIdentities;
+
+uint64_t
+pointerMemberTypeSerializationIdentity(const SgPointerMemberType *type) {
+  if (!pointerMemberTypeSerializationIdentityActive || type == nullptr) {
+    throw std::runtime_error(
+        "AST JSON pointer-member serialization identity has no active exact "
+        "type graph");
+  }
+  auto found = pointerMemberTypeSerializationIdentities.find(type);
+  if (found != pointerMemberTypeSerializationIdentities.end()) {
+    return found->second;
+  }
+  const uint64_t identity =
+      pointerMemberJsonIdentity(const_cast<SgPointerMemberType *>(type));
+  if (!pointerMemberTypeSerializationIdentities.emplace(type, identity)
+           .second ||
+      !pointerMemberTypeSerializationReverseIdentities.emplace(identity, type)
+           .second) {
+    throw std::runtime_error(
+        "AST JSON pointer-member serialization identity names distinct exact "
+        "types");
+  }
+  return identity;
+}
+
+uint64_t arrayTypeSerializationIdentity(const SgArrayType *type) {
+  if (!arrayTypeSerializationIdentityActive || type == nullptr ||
+      type->get_fortran_source_syntax()) {
+    throw std::runtime_error(
+        "AST JSON semantic array serialization identity has no active exact "
+        "array type graph");
+  }
+  auto found = arrayTypeSerializationIdentities.find(type);
+  if (found != arrayTypeSerializationIdentities.end()) {
+    return found->second;
+  }
+  const uint64_t identity =
+      semanticArrayJsonIdentity(const_cast<SgArrayType *>(type));
+  if (!arrayTypeSerializationIdentities.emplace(type, identity).second ||
+      !arrayTypeSerializationReverseIdentities.emplace(identity, type).second) {
+    throw std::runtime_error(
+        "AST JSON semantic array serialization identity names distinct exact "
+        "types");
+  }
+  return identity;
+}
+
+bool supportsFortranSourceSyntaxIdentity(const SgType *type) {
+  return isSgTypeBool(type) != nullptr || isSgTypeChar(type) != nullptr ||
+         isSgTypeInt(type) != nullptr || isSgTypeUnsignedInt(type) != nullptr ||
+         isSgTypeFloat(type) != nullptr || isSgTypeDouble(type) != nullptr ||
+         isSgTypeString(type) != nullptr || isSgTypeComplex(type) != nullptr ||
+         isSgTypeFortranAssumed(type) != nullptr ||
+         isSgTypeFortranUnlimitedPolymorphic(type) != nullptr ||
+         isSgTypeCrayPointer(type) != nullptr ||
+         isSgPointerType(type) != nullptr || isSgArrayType(type) != nullptr ||
+         isSgModifierType(type) != nullptr || isSgFunctionType(type) != nullptr;
+}
+
+bool hasFortranFoldedSelectorValue(const SgExpression *expression) {
+  return expression != nullptr &&
+         expression->get_fortran_integer_constant_value_is_available();
+}
+
+void validateFortranSourceSyntaxStructure(const SgType *type) {
+  if (type == nullptr || !type->get_fortran_source_syntax()) {
+    return;
+  }
+  auto require_source_base = [](const SgType *base, const char *owner) {
+    if (base == nullptr || (!base->get_fortran_source_syntax() &&
+                            isSgNamedType(base) == nullptr)) {
+      throw std::runtime_error(std::string("AST JSON source ") + owner +
+                               " has a semantic base type");
+    }
+  };
+
+  if (isSgTypeBool(type) != nullptr || isSgTypeInt(type) != nullptr ||
+      isSgTypeUnsignedInt(type) != nullptr || isSgTypeFloat(type) != nullptr) {
+    if (type->get_type_kind() != nullptr &&
+        !hasFortranFoldedSelectorValue(type->get_type_kind())) {
+      throw std::runtime_error(
+          "AST JSON source intrinsic KIND selector has no folded value");
+    }
+  } else if (const SgTypeString *string_type = isSgTypeString(type)) {
+    const SgExpression *length = string_type->get_lengthExpression();
+    if (string_type->get_fortran_dynamic_length_pending()) {
+      throw std::runtime_error(
+          "AST JSON source CHARACTER type has an unresolved semantic length");
+    }
+    if (string_type->get_type_kind() != nullptr &&
+        !hasFortranFoldedSelectorValue(string_type->get_type_kind())) {
+      throw std::runtime_error(
+          "AST JSON source CHARACTER KIND selector has no folded value");
+    }
+    if (length != nullptr && isSgAsteriskShapeExp(length) == nullptr &&
+        isSgColonShapeExp(length) == nullptr) {
+      const bool has_folded_value = hasFortranFoldedSelectorValue(length);
+      if ((!has_folded_value &&
+           length->get_fortran_integer_constant_value() != 0) ||
+          (isSgValueExp(length) != nullptr && !has_folded_value)) {
+        throw std::runtime_error(
+            "AST JSON source CHARACTER LEN selector has invalid exact-value "
+            "metadata");
+      }
+    }
+  } else if (const SgTypeComplex *complex = isSgTypeComplex(type)) {
+    const SgType *base = complex->get_base_type();
+    require_source_base(base, "COMPLEX type");
+    if (complex->get_type_kind() != nullptr &&
+        !hasFortranFoldedSelectorValue(complex->get_type_kind())) {
+      throw std::runtime_error(
+          "AST JSON source COMPLEX KIND selector has no folded value");
+    }
+    if (complex->get_fortran_fixed_kind_value_is_available() &&
+        (isSgTypeDouble(base) == nullptr ||
+         !base->get_fortran_fixed_kind_value_is_available() ||
+         base->get_fortran_fixed_kind_value() !=
+             complex->get_fortran_fixed_kind_value())) {
+      throw std::runtime_error(
+          "AST JSON fixed source COMPLEX type has a contradictory component "
+          "KIND");
+    }
+  } else if (isSgTypeFortranAssumed(type) != nullptr ||
+             isSgTypeFortranUnlimitedPolymorphic(type) != nullptr) {
+    if (type->get_type_kind() != nullptr || type->get_hasTypeKindStar() ||
+        type->get_fortran_fixed_kind_value_is_available() ||
+        type->get_fortran_fixed_kind_value() != 0) {
+      throw std::runtime_error(
+          "AST JSON Fortran assumed type owns an intrinsic selector");
+    }
+  } else if (isSgTypeCrayPointer(type) != nullptr) {
+    if (type->get_type_kind() != nullptr || type->get_hasTypeKindStar() ||
+        type->get_fortran_fixed_kind_value_is_available() ||
+        type->get_fortran_fixed_kind_value() != 0) {
+      throw std::runtime_error(
+          "AST JSON source Cray pointer type owns an intrinsic selector");
+    }
+  } else if (const SgPointerType *pointer = isSgPointerType(type)) {
+    require_source_base(pointer->get_base_type(), "pointer");
+  } else if (const SgArrayType *array = isSgArrayType(type)) {
+    require_source_base(array->get_base_type(), "array");
+  } else if (const SgModifierType *modifier = isSgModifierType(type)) {
+    require_source_base(modifier->get_base_type(), "modifier");
+  } else if (const SgFunctionType *function = isSgFunctionType(type)) {
+    require_source_base(function->get_return_type(), "function type");
+  }
+}
+} // namespace
+
+PointerMemberTypeSerializationIdentityGuard::
+    PointerMemberTypeSerializationIdentityGuard() {
+  if (pointerMemberTypeSerializationIdentityActive ||
+      !pointerMemberTypeSerializationIdentities.empty() ||
+      !pointerMemberTypeSerializationReverseIdentities.empty()) {
+    throw std::runtime_error(
+        "AST JSON pointer-member serialization graph is already active");
+  }
+  pointerMemberTypeSerializationIdentityActive = true;
+}
+
+PointerMemberTypeSerializationIdentityGuard::
+    ~PointerMemberTypeSerializationIdentityGuard() {
+  pointerMemberTypeSerializationIdentities.clear();
+  pointerMemberTypeSerializationReverseIdentities.clear();
+  pointerMemberTypeSerializationIdentityActive = false;
+}
+
+ArrayTypeSerializationIdentityGuard::ArrayTypeSerializationIdentityGuard() {
+  if (arrayTypeSerializationIdentityActive ||
+      !arrayTypeSerializationIdentities.empty() ||
+      !arrayTypeSerializationReverseIdentities.empty()) {
+    throw std::runtime_error(
+        "AST JSON semantic array serialization graph is already active");
+  }
+  arrayTypeSerializationIdentityActive = true;
+}
+
+ArrayTypeSerializationIdentityGuard::~ArrayTypeSerializationIdentityGuard() {
+  arrayTypeSerializationIdentities.clear();
+  arrayTypeSerializationReverseIdentities.clear();
+  arrayTypeSerializationIdentityActive = false;
+}
+
+void validateTemplateParameterContract(const SgTemplateParameter *parameter,
+                                       const std::string &context) {
+  if (parameter == nullptr) {
+    throw std::runtime_error("AST JSON " + context +
+                             " has a null SgTemplateParameter");
+  }
+
+  auto fail = [&](const std::string &detail) {
+    throw std::runtime_error("AST JSON " + context + " " + detail);
+  };
+  auto require_no_non_type_fields = [&]() {
+    if (parameter->get_initializedName() != nullptr ||
+        parameter->get_expression() != nullptr ||
+        parameter->get_defaultExpressionParameter() != nullptr) {
+      fail("template parameter kind owns non-type parameter fields");
+    }
+  };
+  auto require_no_source_template_declaration = [&]() {
+    if (parameter->get_sourceSpelledTemplateDeclaration() != nullptr) {
+      fail("non-template parameter owns a source-spelled template "
+           "declaration");
+    }
+  };
+  auto require_source_keyword = [&]() {
+    if (parameter->get_templateParameterKeyword() !=
+            SgTemplateParameter::keyword_class &&
+        parameter->get_templateParameterKeyword() !=
+            SgTemplateParameter::keyword_typename) {
+      fail("template parameter has no exact source keyword");
+    }
+  };
+  auto validate_coordinate_identity = [&](SgType *type) {
+    SgTemplateType *template_type = isSgTemplateType(type);
+    if (template_type == nullptr) {
+      return;
+    }
+    const int depth = template_type->get_template_parameter_depth();
+    const int position = template_type->get_template_parameter_position();
+    if ((depth < 0) != (position < 0)) {
+      fail("template type has a partial depth/position coordinate");
+    }
+    if (depth >= 0 &&
+        !template_type->get_canonical_source_identity().has_value()) {
+      fail("coordinate template type has no canonical source identity");
+    }
+  };
+
+  switch (parameter->get_parameterType()) {
+  case SgTemplateParameter::type_parameter:
+    require_source_keyword();
+    if (isSgTemplateType(parameter->get_type()) == nullptr &&
+        isSgNonrealType(parameter->get_type()) == nullptr) {
+      fail("type parameter has no exact template-parameter type");
+    }
+    if (parameter->get_templateDeclaration() != nullptr) {
+      fail("type parameter owns a template declaration");
+    }
+    require_no_source_template_declaration();
+    require_no_non_type_fields();
+    if (parameter->get_defaultTemplateDeclarationParameter() != nullptr) {
+      fail("type parameter owns a template-template default");
+    }
+    if ((parameter->get_typeConstraint() == nullptr) !=
+        (parameter->get_sourceTypeConstraint() == nullptr)) {
+      fail("type parameter has mismatched semantic/source constraints");
+    }
+    validate_coordinate_identity(parameter->get_type());
+    break;
+
+  case SgTemplateParameter::nontype_parameter: {
+    if (parameter->get_templateParameterKeyword() !=
+        SgTemplateParameter::keyword_unspecified) {
+      fail("non-type parameter owns a type-parameter keyword");
+    }
+    if (parameter->get_type() == nullptr) {
+      fail("non-type parameter has no semantic type");
+    }
+    if (parameter->get_templateDeclaration() != nullptr) {
+      fail("non-type parameter owns a template declaration");
+    }
+    require_no_source_template_declaration();
+    const bool has_initialized_name =
+        parameter->get_initializedName() != nullptr;
+    const bool has_expression = parameter->get_expression() != nullptr;
+    if (has_initialized_name == has_expression) {
+      fail("non-type parameter must own exactly one declaration or expression");
+    }
+    if (has_initialized_name &&
+        parameter->get_initializedName()->get_type() != parameter->get_type()) {
+      fail("non-type parameter declaration has a different semantic type");
+    }
+    if (parameter->get_defaultTypeParameter() != nullptr ||
+        parameter->get_defaultTemplateDeclarationParameter() != nullptr) {
+      fail("non-type parameter owns a default for another parameter kind");
+    }
+    if (parameter->get_sourceTypeConstraint() != nullptr) {
+      fail("non-type parameter owns a separate source constraint instead of "
+           "spelling it through its declared placeholder type");
+    }
+    break;
+  }
+
+  case SgTemplateParameter::template_parameter:
+    require_source_keyword();
+    if (isSgTemplateType(parameter->get_type()) == nullptr) {
+      fail("template-template parameter has no exact SgTemplateType");
+    }
+    if (isSgTemplateDeclaration(parameter->get_templateDeclaration()) ==
+        nullptr) {
+      fail("template-template parameter has no exact SgTemplateDeclaration");
+    }
+    if (SgTemplateDeclaration *source_declaration =
+            parameter->get_sourceSpelledTemplateDeclaration()) {
+      if (source_declaration == parameter->get_templateDeclaration() ||
+          source_declaration->get_parent() != parameter ||
+          source_declaration->get_scope() == nullptr) {
+        fail("template-template parameter has a malformed source-spelled "
+             "template declaration");
+      }
+    }
+    require_no_non_type_fields();
+    if (parameter->get_defaultTypeParameter() != nullptr) {
+      fail("template-template parameter owns a type default");
+    }
+    if (SgDeclarationStatement *default_declaration =
+            parameter->get_defaultTemplateDeclarationParameter()) {
+      if (isSgTemplateDeclaration(default_declaration) == nullptr) {
+        fail("template-template default is not an exact SgTemplateDeclaration");
+      }
+    }
+    validate_coordinate_identity(parameter->get_type());
+    break;
+
+  default:
+    fail("has an unknown parameter kind");
+  }
+}
 
 uint64_t varRefSymbolDeclarationId(
     SgVarRefExp *ref, const std::unordered_map<const SgNode *, uint64_t> &ids) {
@@ -60,7 +395,6 @@ uint64_t varRefSymbolDeclarationId(
     append_source_file("ref_file", ref);
     message << " ref_inside_boundary="
             << (insideCollectionBoundary(ref) ? "true" : "false");
-    message << " ref_text=" << ref->unparseToString();
     throw std::runtime_error(message.str());
   }
   return id;
@@ -75,13 +409,146 @@ rawTypeJson(SgType *type,
   } else {
     fields.push_back(rawBoolField("present", true));
     fields.push_back(rawStringField("kind", type->sage_class_name()));
-    fields.push_back(rawStringField("text", jsonTypeText(type)));
+    if (type->get_fortran_source_syntax() &&
+        !supportsFortranSourceSyntaxIdentity(type)) {
+      throw std::runtime_error(
+          "AST JSON type has an invalid Fortran source-syntax identity");
+    }
+    if (const SgTypeString *string_type = isSgTypeString(type);
+        string_type != nullptr &&
+        string_type->get_fortran_dynamic_length_pending()) {
+      throw std::runtime_error(
+          "AST JSON CHARACTER type has an unresolved semantic length");
+    }
+    if (const SgTypeString *string_type = isSgTypeString(type);
+        string_type != nullptr &&
+        string_type->get_fortran_dynamic_result_length() &&
+        (type->get_fortran_source_syntax() ||
+         string_type->get_lengthExpression() != nullptr)) {
+      throw std::runtime_error(
+          "AST JSON dynamic CHARACTER result type has contradictory source "
+          "or selector state");
+    }
+    if ((isSgTypeFortranAssumed(type) != nullptr ||
+         isSgTypeFortranUnlimitedPolymorphic(type) != nullptr) &&
+        (type->get_type_kind() != nullptr || type->get_hasTypeKindStar() ||
+         type->get_fortran_fixed_kind_value_is_available() ||
+         type->get_fortran_fixed_kind_value() != 0)) {
+      throw std::runtime_error(
+          "AST JSON Fortran assumed type owns an intrinsic selector");
+    }
+    const bool semanticSelectorMetadata =
+        !type->get_fortran_source_syntax() &&
+        ((type->get_type_kind() != nullptr &&
+          type->get_type_kind()
+              ->get_fortran_integer_constant_value_is_available()) ||
+         (isSgTypeString(type) != nullptr &&
+          isSgTypeString(type)->get_lengthExpression() != nullptr &&
+          isSgTypeString(type)
+              ->get_lengthExpression()
+              ->get_fortran_integer_constant_value_is_available()));
+    if (semanticSelectorMetadata) {
+      throw std::runtime_error(
+          "AST JSON semantic type owns source selector metadata");
+    }
+    const bool ownsDirectKind =
+        isSgTypeBool(type) != nullptr || isSgTypeInt(type) != nullptr ||
+        isSgTypeUnsignedInt(type) != nullptr ||
+        isSgTypeFloat(type) != nullptr || isSgTypeString(type) != nullptr;
+    if (type->get_type_kind() != nullptr && !ownsDirectKind &&
+        isSgTypeComplex(type) == nullptr) {
+      throw std::runtime_error(
+          "AST JSON type owns a KIND selector outside an eligible type");
+    }
+    validateFortranSourceSyntaxStructure(type);
+    fields.push_back(rawBoolField("fortran_source_syntax",
+                                  type->get_fortran_source_syntax()));
+    if (SgArrayType *semantic_array = isSgArrayType(type);
+        semantic_array != nullptr &&
+        !semantic_array->get_fortran_source_syntax()) {
+      fields.push_back(
+          rawIntegerField("semantic_array_identity",
+                          static_cast<int64_t>(
+                              arrayTypeSerializationIdentity(semantic_array))));
+    }
 
-    if (SgPointerMemberType *member_pointer = isSgPointerMemberType(type)) {
+    const bool fixedFortranKindEligible =
+        isSgTypeDouble(type) != nullptr || isSgTypeComplex(type) != nullptr;
+    const bool fixedFortranKindAvailable =
+        type->get_fortran_fixed_kind_value_is_available();
+    const std::int64_t fixedFortranKind = type->get_fortran_fixed_kind_value();
+    if ((!fixedFortranKindAvailable && fixedFortranKind != 0) ||
+        (fixedFortranKindAvailable && !type->get_fortran_source_syntax()) ||
+        (!fixedFortranKindEligible &&
+         (fixedFortranKindAvailable || fixedFortranKind != 0))) {
+      throw std::runtime_error(
+          "AST JSON type has invalid fixed Fortran KIND metadata");
+    }
+    if (fixedFortranKindEligible) {
+      fields.push_back(rawBoolField("fortran_fixed_kind_value_is_available",
+                                    fixedFortranKindAvailable));
+      fields.push_back(
+          rawIntegerField("fortran_fixed_kind_value", fixedFortranKind));
+    }
+
+    const bool hasPrimitiveFortranKind =
+        isSgTypeBool(type) != nullptr || isSgTypeInt(type) != nullptr ||
+        isSgTypeUnsignedInt(type) != nullptr || isSgTypeFloat(type) != nullptr;
+    const bool starKindEligible = hasPrimitiveFortranKind ||
+                                  isSgTypeString(type) != nullptr ||
+                                  isSgTypeComplex(type) != nullptr;
+    if (type->get_hasTypeKindStar() &&
+        (!type->get_fortran_source_syntax() || !starKindEligible)) {
+      throw std::runtime_error(
+          "AST JSON type has source-only star KIND metadata without an "
+          "eligible Fortran source type");
+    }
+    if (hasPrimitiveFortranKind) {
+      fields.push_back(jsonString("type_kind") + ": " +
+                       rawTypeOwnedExpressionRef(type->get_type_kind(), ids));
+      fields.push_back(
+          rawBoolField("has_type_kind_star", type->get_hasTypeKindStar()));
+    }
+
+    if (SgAutoType *auto_type = isSgAutoType(type)) {
+      const bool is_constrained = auto_type->get_is_constrained();
+      const std::string &source_constraint_spelling =
+          auto_type->get_source_constraint_spelling();
+      if (is_constrained != !source_constraint_spelling.empty()) {
+        throw std::runtime_error(
+            "AST JSON SgAutoType constraint state has no exact source "
+            "spelling");
+      }
+      fields.push_back(rawBoolField("is_constrained", is_constrained));
+      fields.push_back(rawStringField("source_constraint_spelling",
+                                      source_constraint_spelling));
+    } else if (SgPointerMemberType *member_pointer =
+                   isSgPointerMemberType(type)) {
+      fields.push_back(rawIntegerField(
+          "pointer_member_identity",
+          static_cast<int64_t>(
+              pointerMemberTypeSerializationIdentity(member_pointer))));
+      fields.push_back(rawBoolField(
+          "semantic_canonical",
+          SgPointerMemberType::isCanonicalSemanticType(member_pointer)));
       fields.push_back(jsonString("base") + ": " +
                        rawTypeJson(member_pointer->get_base_type(), ids));
       fields.push_back(jsonString("class_type") + ": " +
                        rawTypeJson(member_pointer->get_class_type(), ids));
+      fields.push_back(rawBoolField(
+          "source_class_type_is_unqualified_injected_name",
+          member_pointer
+              ->get_source_class_type_is_unqualified_injected_name()));
+      fields.push_back(rawBoolField(
+          "source_base_type_qualification_present",
+          member_pointer->get_source_base_type_qualification_present()));
+      fields.push_back(rawBoolField(
+          "source_base_type_global_qualification",
+          member_pointer->get_source_base_type_global_qualification()));
+      fields.push_back(
+          jsonString("source_base_type_qualification_tokens") + ": " +
+          rawStringListJson(
+              member_pointer->get_source_base_type_qualification_tokens()));
     } else if (SgPointerType *pointer = isSgPointerType(type)) {
       fields.push_back(jsonString("base") + ": " +
                        rawTypeJson(pointer->get_base_type(), ids));
@@ -99,12 +566,16 @@ rawTypeJson(SgType *type,
       fields.push_back(
           jsonString("type_kind") + ": " +
           rawTypeOwnedExpressionRef(string_type->get_type_kind(), ids));
+      fields.push_back(rawBoolField("has_type_kind_star",
+                                    string_type->get_hasTypeKindStar()));
+      fields.push_back(
+          rawBoolField("fortran_dynamic_result_length",
+                       string_type->get_fortran_dynamic_result_length()));
     } else if (SgTypeComplex *complex_type = isSgTypeComplex(type)) {
       fields.push_back(jsonString("base") + ": " +
                        rawTypeJson(complex_type->get_base_type(), ids));
-      fields.push_back(
-          jsonString("type_kind") + ": " +
-          rawTypeOwnedExpressionRef(complex_type->get_type_kind(), ids));
+      fields.push_back(rawBoolField("has_type_kind_star",
+                                    complex_type->get_hasTypeKindStar()));
     } else if (SgArrayType *array = isSgArrayType(type)) {
       fields.push_back(jsonString("base") + ": " +
                        rawTypeJson(array->get_base_type(), ids));
@@ -137,8 +608,7 @@ rawTypeJson(SgType *type,
           canonicalTypedefDeclarationId(ids, typedef_declaration);
       if (declaration_id == 0) {
         std::ostringstream message;
-        message << "AST JSON SgTypedefType declaration was not collected: "
-                << jsonTypeText(type);
+        message << "AST JSON SgTypedefType declaration was not collected";
         if (typedef_declaration != nullptr) {
           message << " declaration=" << typedef_declaration->get_name();
           if (SgNode *parent = typedef_declaration->get_parent()) {
@@ -214,8 +684,7 @@ rawTypeJson(SgType *type,
                            rawExternalClassDeclarationJson(decl));
         } else {
           std::ostringstream message;
-          message << "AST JSON SgClassType declaration was not collected: "
-                  << jsonTypeText(type);
+          message << "AST JSON SgClassType declaration was not collected";
           if (decl != nullptr) {
             message << " declaration=" << decl->get_name();
             if (SgNode *parent = decl->get_parent()) {
@@ -284,8 +753,7 @@ rawTypeJson(SgType *type,
       }
       if (declaration_id == 0) {
         throw std::runtime_error(
-            "AST JSON SgEnumType declaration was not collected: " +
-            jsonTypeText(type));
+            "AST JSON SgEnumType declaration was not collected");
       }
       fields.push_back(rawIntegerField("declaration", declaration_id));
       fields.push_back(rawBoolField("autonomous_declaration",
@@ -295,8 +763,7 @@ rawTypeJson(SgType *type,
           idFor(ids, nonreal_type->get_declaration());
       if (declaration_id == 0) {
         throw std::runtime_error(
-            "AST JSON SgNonrealType declaration was not collected: " +
-            jsonTypeText(type));
+            "AST JSON SgNonrealType declaration was not collected");
       }
       fields.push_back(rawIntegerField("declaration", declaration_id));
       fields.push_back(
@@ -308,14 +775,46 @@ rawTypeJson(SgType *type,
           rawTypeOwnedExpressionRef(decl_type->get_base_expression(), ids));
       fields.push_back(
           rawBoolField("is_gnu_decltype", decl_type->get_is_gnu_decltype()));
-      if (SgExpression *base_expression = decl_type->get_base_expression()) {
-        fields.push_back(jsonString("base_type") + ": " +
-                         rawTypeJson(base_expression->get_type(), ids));
-      } else {
-        fields.push_back(jsonString("base_type") + ": " +
-                         rawTypeJson(nullptr, ids));
+      fields.push_back(jsonString("base_type") + ": " +
+                       rawTypeJson(decl_type->get_base_type(), ids));
+    } else if (SgTypeOfType *typeof_type = isSgTypeOfType(type)) {
+      SgExpression *base_expression = typeof_type->get_base_expression();
+      SgType *base_type = typeof_type->get_base_type();
+      if (base_type == nullptr ||
+          (base_expression != nullptr &&
+           base_expression->get_parent() != typeof_type)) {
+        throw std::runtime_error(
+            "AST JSON SgTypeOfType has no exact typed operand ownership");
       }
+      fields.push_back(jsonString("base_expression") + ": " +
+                       rawTypeOwnedExpressionRef(base_expression, ids));
+      fields.push_back(jsonString("base_type") + ": " +
+                       rawTypeJson(base_type, ids));
     } else if (SgTemplateType *template_type = isSgTemplateType(type)) {
+      const auto &source_identity =
+          template_type->get_canonical_source_identity();
+      if (source_identity.has_value()) {
+        filenameForFileId(source_identity->expansion_file_id,
+                          "SgTemplateType expansion identity");
+        filenameForFileId(source_identity->spelling_file_id,
+                          "SgTemplateType spelling identity");
+        fields.push_back(
+            jsonString("canonical_source_identity") + ": {" +
+            rawIntegerField("expansion_file_id",
+                            source_identity->expansion_file_id) +
+            ", " +
+            rawIntegerField("expansion_file_offset",
+                            source_identity->expansion_file_offset) +
+            ", " +
+            rawIntegerField("spelling_file_id",
+                            source_identity->spelling_file_id) +
+            ", " +
+            rawIntegerField("spelling_file_offset",
+                            source_identity->spelling_file_offset) +
+            "}");
+      } else {
+        fields.push_back(jsonString("canonical_source_identity") + ": null");
+      }
       fields.push_back(
           rawStringField("name", template_type->get_name().getString()));
       fields.push_back(
@@ -324,6 +823,21 @@ rawTypeJson(SgType *type,
       fields.push_back(
           rawIntegerField("template_parameter_depth",
                           template_type->get_template_parameter_depth()));
+      const uint64_t template_parameter_id =
+          idFor(ids, template_type->get_template_parameter());
+      if (template_type->get_template_parameter() != nullptr &&
+          template_parameter_id == 0) {
+        throw std::runtime_error(
+            "AST JSON SgTemplateType parameter was not collected");
+      }
+      fields.push_back(
+          rawIntegerField("template_parameter", template_parameter_id));
+      fields.push_back(rawBoolField("packed", template_type->get_packed()));
+      if (!template_type->get_tpl_args().empty() ||
+          !template_type->get_part_spec_tpl_args().empty()) {
+        throw std::runtime_error(
+            "AST JSON SgTemplateType argument identity is not represented");
+      }
       fields.push_back(jsonString("class_type") + ": " +
                        rawTypeJson(template_type->get_class_type(), ids));
       fields.push_back(
@@ -396,179 +910,6 @@ rawTypeJson(SgType *type,
   return result;
 }
 
-std::string rawOmpArrayDimensionsJson(
-    const std::map<SgSymbol *,
-                   std::vector<std::pair<SgExpression *, SgExpression *>>>
-        &array_dimensions,
-    const std::unordered_map<const SgNode *, uint64_t> &ids) {
-  std::vector<std::pair<std::string, std::string>> entries;
-  for (const auto &entry : array_dimensions) {
-    std::vector<std::string> fields;
-    const uint64_t declaration_id = idFor(ids, symbolBasis(entry.first));
-    fields.push_back(jsonString("symbol") + ": " +
-                     rawSymbolRef(entry.first, ids));
-    std::ostringstream bounds;
-    bounds << jsonString("bounds") << ": [";
-    if (!entry.second.empty()) {
-      bounds << '\n';
-      for (size_t i = 0; i < entry.second.size(); ++i) {
-        std::vector<std::string> bound_fields;
-        bound_fields.push_back(jsonString("lower") + ": " +
-                               rawExpressionRef(entry.second[i].first, ids));
-        bound_fields.push_back(jsonString("upper") + ": " +
-                               rawExpressionRef(entry.second[i].second, ids));
-        writeRawObject(bounds, 10, bound_fields, i + 1 != entry.second.size());
-      }
-      indent(bounds, 8);
-    }
-    bounds << "]";
-    fields.push_back(bounds.str());
-
-    std::ostringstream item;
-    writeRawObject(item, 0, fields, false);
-    std::ostringstream key;
-    key << std::setw(20) << std::setfill('0') << declaration_id << ':'
-        << symbolName(entry.first);
-    entries.emplace_back(key.str(), item.str());
-  }
-  std::sort(
-      entries.begin(), entries.end(),
-      [](const auto &lhs, const auto &rhs) { return lhs.first < rhs.first; });
-
-  std::ostringstream out;
-  out << "[";
-  if (!entries.empty()) {
-    out << '\n';
-    for (size_t i = 0; i < entries.size(); ++i) {
-      indent(out, 6);
-      out << entries[i].second;
-      if (i + 1 != entries.size()) {
-        out << ',';
-      }
-      out << '\n';
-    }
-    indent(out, 4);
-  }
-  out << "]";
-  return out.str();
-}
-
-std::string rawOmpDistDataPoliciesJson(
-    const std::map<SgSymbol *,
-                   std::vector<std::pair<SgOmpClause::omp_map_dist_data_enum,
-                                         SgExpression *>>> &policies,
-    const std::unordered_map<const SgNode *, uint64_t> &ids) {
-  std::vector<std::pair<std::string, std::string>> entries;
-  for (const auto &entry : policies) {
-    std::vector<std::string> fields;
-    const uint64_t declaration_id = idFor(ids, symbolBasis(entry.first));
-    fields.push_back(jsonString("symbol") + ": " +
-                     rawSymbolRef(entry.first, ids));
-    std::ostringstream policy_json;
-    policy_json << jsonString("policies") << ": [";
-    if (!entry.second.empty()) {
-      policy_json << '\n';
-      for (size_t i = 0; i < entry.second.size(); ++i) {
-        std::vector<std::string> policy_fields;
-        policy_fields.push_back(
-            rawIntegerField("policy", static_cast<int>(entry.second[i].first)));
-        policy_fields.push_back(jsonString("expression") + ": " +
-                                rawExpressionRef(entry.second[i].second, ids));
-        writeRawObject(policy_json, 10, policy_fields,
-                       i + 1 != entry.second.size());
-      }
-      indent(policy_json, 8);
-    }
-    policy_json << "]";
-    fields.push_back(policy_json.str());
-
-    std::ostringstream item;
-    writeRawObject(item, 0, fields, false);
-    std::ostringstream key;
-    key << std::setw(20) << std::setfill('0') << declaration_id << ':'
-        << symbolName(entry.first);
-    entries.emplace_back(key.str(), item.str());
-  }
-  std::sort(
-      entries.begin(), entries.end(),
-      [](const auto &lhs, const auto &rhs) { return lhs.first < rhs.first; });
-
-  std::ostringstream out;
-  out << "[";
-  if (!entries.empty()) {
-    out << '\n';
-    for (size_t i = 0; i < entries.size(); ++i) {
-      indent(out, 6);
-      out << entries[i].second;
-      if (i + 1 != entries.size()) {
-        out << ',';
-      }
-      out << '\n';
-    }
-    indent(out, 4);
-  }
-  out << "]";
-  return out.str();
-}
-
-std::string
-rawOmpIteratorJson(const std::list<std::list<SgExpression *>> &iterators,
-                   const std::unordered_map<const SgNode *, uint64_t> &ids) {
-  std::ostringstream out;
-  out << "[";
-  if (!iterators.empty()) {
-    out << '\n';
-    size_t outer_index = 0;
-    for (const std::list<SgExpression *> &iterator : iterators) {
-      indent(out, 6);
-      out << "[";
-      if (!iterator.empty()) {
-        out << '\n';
-        size_t inner_index = 0;
-        for (SgExpression *expr : iterator) {
-          indent(out, 8);
-          out << rawExpressionRef(expr, ids);
-          if (++inner_index != iterator.size()) {
-            out << ',';
-          }
-          out << '\n';
-        }
-        indent(out, 6);
-      }
-      out << "]";
-      if (++outer_index != iterators.size()) {
-        out << ',';
-      }
-      out << '\n';
-    }
-    indent(out, 4);
-  }
-  out << "]";
-  return out.str();
-}
-
-std::string rawOmpExpressionListJson(
-    const std::list<SgExpression *> &expressions,
-    const std::unordered_map<const SgNode *, uint64_t> &ids) {
-  std::ostringstream out;
-  out << "[";
-  if (!expressions.empty()) {
-    out << '\n';
-    size_t index = 0;
-    for (SgExpression *expr : expressions) {
-      indent(out, 6);
-      out << rawExpressionRef(expr, ids);
-      if (++index != expressions.size()) {
-        out << ',';
-      }
-      out << '\n';
-    }
-    indent(out, 4);
-  }
-  out << "]";
-  return out.str();
-}
-
 std::string rawTemplateArgumentListJson(
     const SgTemplateArgumentPtrList &arguments,
     const std::unordered_map<const SgNode *, uint64_t> &ids) {
@@ -578,8 +919,14 @@ std::string rawTemplateArgumentListJson(
     out << '\n';
     size_t index = 0;
     for (SgTemplateArgument *argument : arguments) {
+      const uint64_t id = idFor(ids, argument);
+      if (argument == nullptr || id == 0) {
+        throw std::runtime_error(
+            "AST JSON template argument list has no exact collected typed "
+            "argument");
+      }
       indent(out, 6);
-      out << idFor(ids, argument);
+      out << id;
       if (++index != arguments.size()) {
         out << ',';
       }
@@ -591,45 +938,8 @@ std::string rawTemplateArgumentListJson(
   return out.str();
 }
 
-std::string
-rawTypeTraitArgsJson(const SgNodePtrList &args,
-                     const std::unordered_map<const SgNode *, uint64_t> &ids) {
-  std::ostringstream out;
-  out << "[";
-  if (!args.empty()) {
-    out << '\n';
-    for (size_t i = 0; i < args.size(); ++i) {
-      indent(out, 6);
-      out << "{\n";
-      if (SgType *type = isSgType(args[i])) {
-        writeStringField(out, 8, "kind", "type");
-        indent(out, 8);
-        out << jsonString("type") << ": " << rawTypeJson(type, ids) << '\n';
-      } else {
-        const uint64_t id = idFor(ids, args[i]);
-        if (id == 0) {
-          throw std::runtime_error(
-              std::string("AST JSON type trait argument was not collected: ") +
-              (args[i] != nullptr ? args[i]->sage_class_name() : "<null>"));
-        }
-        writeStringField(out, 8, "kind", "node");
-        writeIntegerField(out, 8, "node", id, false);
-      }
-      indent(out, 6);
-      out << '}';
-      if (i + 1 != args.size()) {
-        out << ',';
-      }
-      out << '\n';
-    }
-    indent(out, 4);
-  }
-  out << "]";
-  return out.str();
-}
-
 std::string rawOmpUsesAllocatorsDefinitionsJson(
-    const std::list<SgOmpUsesAllocatorsDefination *> &definitions,
+    const SgOmpUsesAllocatorsDefinationPtrList &definitions,
     const std::unordered_map<const SgNode *, uint64_t> &ids) {
   std::ostringstream out;
   out << "[";
@@ -664,6 +974,12 @@ std::string rawAstAttributesJson(SgNode *node) {
   if (attributes != nullptr && attributes->size() != 0) {
     std::vector<std::string> entries;
     for (const std::string &name : attributes->getAttributeIdentifiers()) {
+      if (name == kAstJsonExternalFunctionAttribute ||
+          name == kAstJsonExternalModuleAttribute ||
+          name == kAstJsonExternalClassDeclarationAttribute ||
+          name == kAstJsonExternalSourceFileAttribute) {
+        continue;
+      }
       AstAttribute *attribute = node->getAttribute(name);
       if (AstIntAttribute *int_attribute =
               dynamic_cast<AstIntAttribute *>(attribute)) {
@@ -684,15 +1000,9 @@ std::string rawAstAttributesJson(SgNode *node) {
         std::ostringstream item;
         writeRawObject(item, 0, fields, false);
         entries.push_back(item.str());
-      } else if (name == "acc_fortran_end" || name == "omp_fortran_end" ||
-                 name == "fortran_keep_openmp_pragma" ||
-                 name == "omp_declare_target_extended_list") {
-        std::vector<std::string> fields;
-        fields.push_back(rawStringField("name", name));
-        fields.push_back(rawStringField("type", "AstMarkerAttribute"));
-        std::ostringstream item;
-        writeRawObject(item, 0, fields, false);
-        entries.push_back(item.str());
+      } else {
+        throw std::runtime_error("AST JSON cannot preserve attribute '" + name +
+                                 "' on " + node->class_name());
       }
     }
     if (!entries.empty()) {
@@ -716,9 +1026,10 @@ std::string rawAstAttributesJson(SgNode *node) {
 void addExpressionType(
     std::vector<std::string> &fields, SgExpression *expr,
     const std::unordered_map<const SgNode *, uint64_t> &ids) {
-  if (expr != nullptr) {
-    fields.push_back(jsonString("type") + ": " +
-                     rawTypeJson(expr->get_type(), ids));
+  if (expressionCarriesSemanticType(expr)) {
+    SgType *type = expr->get_type();
+    validateExactSemanticExpressionType(expr, type, "serialization");
+    fields.push_back(jsonString("type") + ": " + rawTypeJson(type, ids));
   }
 }
 
@@ -742,19 +1053,46 @@ void addReferenceQualificationFields(std::vector<std::string> &fields, T *ref) {
 
 void addExpressionQualificationFields(std::vector<std::string> &fields,
                                       SgExpression *expr) {
-  if (SgVarRefExp *ref = isSgVarRefExp(expr)) {
-    if (isAnonymousDataMemberReference(ref)) {
-      fields.push_back(rawIntegerField("name_qualification_length", 0));
-      fields.push_back(rawBoolField("type_elaboration_required", false));
-      fields.push_back(rawBoolField("global_qualification_required", false));
-      fields.push_back(
-          rawIntegerField("explicit_name_qualification_length", -1));
-      fields.push_back(rawBoolField("explicit_global_qualification", false));
-      fields.push_back(jsonString("explicit_name_qualification_tokens") + ": " +
-                       rawStringListJson(SgStringList()));
-    } else {
-      addReferenceQualificationFields(fields, ref);
-    }
+  if (SgPseudoDestructorRefExp *pseudo = isSgPseudoDestructorRefExp(expr)) {
+    fields.push_back(rawIntegerField("name_qualification_length",
+                                     pseudo->get_name_qualification_length()));
+    fields.push_back(rawBoolField("type_elaboration_required",
+                                  pseudo->get_type_elaboration_required()));
+    fields.push_back(rawBoolField("global_qualification_required",
+                                  pseudo->get_global_qualification_required()));
+  } else if (SgTypeExpression *typeExpression = isSgTypeExpression(expr)) {
+    fields.push_back(
+        rawIntegerField("name_qualification_length",
+                        typeExpression->get_name_qualification_length()));
+    fields.push_back(
+        rawBoolField("type_elaboration_required",
+                     typeExpression->get_type_elaboration_required()));
+    fields.push_back(
+        rawBoolField("global_qualification_required",
+                     typeExpression->get_global_qualification_required()));
+  } else if (SgNewExp *newExpression = isSgNewExp(expr)) {
+    fields.push_back(
+        rawIntegerField("name_qualification_length",
+                        newExpression->get_name_qualification_length()));
+    fields.push_back(
+        rawBoolField("type_elaboration_required",
+                     newExpression->get_type_elaboration_required()));
+    fields.push_back(
+        rawBoolField("global_qualification_required",
+                     newExpression->get_global_qualification_required()));
+    fields.push_back(
+        rawBoolField("explicit_name_qualification_present",
+                     newExpression->get_explicit_name_qualification_present()));
+    fields.push_back(
+        rawBoolField("explicit_global_qualification",
+                     newExpression->get_explicit_global_qualification()));
+    fields.push_back(
+        jsonString("explicit_name_qualification_tokens") + ": " +
+        rawStringListJson(
+            newExpression->get_explicit_name_qualification_tokens()));
+  } else if (SgVarRefExp *ref = isSgVarRefExp(expr)) {
+    validateAnonymousDataMemberReferenceQualification(ref);
+    addReferenceQualificationFields(fields, ref);
   } else if (SgFunctionRefExp *ref = isSgFunctionRefExp(expr)) {
     addReferenceQualificationFields(fields, ref);
   } else if (SgTemplateFunctionRefExp *ref = isSgTemplateFunctionRefExp(expr)) {
@@ -790,7 +1128,35 @@ void restoreReferenceQualificationFields(T *ref, const JsonValue &properties) {
 
 void restoreExpressionQualificationFields(SgExpression *expr,
                                           const JsonValue &properties) {
-  if (SgVarRefExp *ref = isSgVarRefExp(expr)) {
+  if (SgPseudoDestructorRefExp *pseudo = isSgPseudoDestructorRefExp(expr)) {
+    pseudo->set_name_qualification_length(
+        static_cast<int>(properties.requiredInt("name_qualification_length")));
+    pseudo->set_type_elaboration_required(
+        properties.requiredBool("type_elaboration_required"));
+    pseudo->set_global_qualification_required(
+        properties.requiredBool("global_qualification_required"));
+  } else if (SgTypeExpression *typeExpression = isSgTypeExpression(expr)) {
+    typeExpression->set_name_qualification_length(
+        static_cast<int>(properties.requiredInt("name_qualification_length")));
+    typeExpression->set_type_elaboration_required(
+        properties.requiredBool("type_elaboration_required"));
+    typeExpression->set_global_qualification_required(
+        properties.requiredBool("global_qualification_required"));
+  } else if (SgNewExp *newExpression = isSgNewExp(expr)) {
+    newExpression->set_name_qualification_length(
+        static_cast<int>(properties.requiredInt("name_qualification_length")));
+    newExpression->set_type_elaboration_required(
+        properties.requiredBool("type_elaboration_required"));
+    newExpression->set_global_qualification_required(
+        properties.requiredBool("global_qualification_required"));
+    newExpression->set_explicit_name_qualification_present(
+        properties.requiredBool("explicit_name_qualification_present"));
+    newExpression->set_explicit_global_qualification(
+        properties.requiredBool("explicit_global_qualification"));
+    newExpression->set_explicit_name_qualification_tokens(
+        stringListFromJson(properties.at("explicit_name_qualification_tokens"),
+                           "explicit_name_qualification_tokens"));
+  } else if (SgVarRefExp *ref = isSgVarRefExp(expr)) {
     restoreReferenceQualificationFields(ref, properties);
   } else if (SgFunctionRefExp *ref = isSgFunctionRefExp(expr)) {
     restoreReferenceQualificationFields(ref, properties);
@@ -863,6 +1229,8 @@ void addLocatedPreprocessing(std::vector<std::string> &fields,
                       rawFileInfoJson(info->get_file_info()));
       entry.push_back(rawIntegerField("lines", info->getNumberOfLines()));
       entry.push_back(rawBoolField("transformation", info->isTransformation()));
+      entry.push_back(rawIntegerField(
+          "output_placement", static_cast<int>(info->getOutputPlacement())));
       preprocessing_entries.push_back(std::move(entry));
     }
     if (!preprocessing_entries.empty()) {
@@ -899,12 +1267,8 @@ void writeFileInfoJson(std::ostream &out, int level, const Sg_File_Info *info,
     writeStringField(out, level + 2, "physical_raw_filename",
                      physical_raw_filename);
     writeIntegerField(out, level + 2, "physical_file_id", physical_file_id);
-    const int *physical_internal_file_id =
-        const_cast<Sg_File_Info *>(info)->get_physical_file_id_reference();
     writeIntegerField(out, level + 2, "physical_internal_file_id",
-                      physical_internal_file_id != nullptr
-                          ? *physical_internal_file_id
-                          : physical_file_id);
+                      info->get_raw_physical_file_id());
     writeIntegerField(out, level + 2, "line", info->get_line());
     writeIntegerField(out, level + 2, "column", info->get_col());
     writeIntegerField(out, level + 2, "raw_line", info->get_raw_line());
@@ -942,6 +1306,7 @@ void writeFileInfoJson(std::ostream &out, int level, const Sg_File_Info *info,
 SgProject *currentDeserializationProject = nullptr;
 SgNode *currentAuxiliaryOwner = nullptr;
 std::vector<std::string> currentAuxiliaryTypeStack;
+thread_local std::unordered_set<SgNode *> *currentExpandedSubtrees = nullptr;
 std::unordered_map<SgSourceFile *, std::vector<SgClassDeclaration *>>
     currentDeserializationClassDeclarationCache;
 
@@ -976,6 +1341,15 @@ CollectionBoundaryGuard::~CollectionBoundaryGuard() {
   collectionBoundaryFile = previous_;
 }
 
+SubtreeBoundaryGuard::SubtreeBoundaryGuard(SgNode *root)
+    : previous_(collectionBoundaryRoot) {
+  collectionBoundaryRoot = root;
+}
+
+SubtreeBoundaryGuard::~SubtreeBoundaryGuard() {
+  collectionBoundaryRoot = previous_;
+}
+
 DeserializationProjectGuard::DeserializationProjectGuard(SgProject *project)
     : previous_(currentDeserializationProject) {
   currentDeserializationProject = project;
@@ -997,6 +1371,21 @@ public:
 
 private:
   SgNode *previous_;
+};
+
+class SubtreeExpansionGuard {
+public:
+  explicit SubtreeExpansionGuard(std::unordered_set<SgNode *> &expanded) {
+    if (currentExpandedSubtrees != nullptr || !expanded.empty()) {
+      throw std::runtime_error("AST JSON subtree collection is already active");
+    }
+    currentExpandedSubtrees = &expanded;
+  }
+
+  ~SubtreeExpansionGuard() { currentExpandedSubtrees = nullptr; }
+
+  SubtreeExpansionGuard(const SubtreeExpansionGuard &) = delete;
+  SubtreeExpansionGuard &operator=(const SubtreeExpansionGuard &) = delete;
 };
 
 class AuxiliaryTypeGuard {
@@ -1035,11 +1424,10 @@ bool isStructuralAstChildOfParent(SgNode *node) {
   return false;
 }
 
-bool hasNonStructuralExternalMarkerAncestor(SgNode *node) {
+bool hasExternalMarkerAncestor(SgNode *node) {
   for (SgNode *current = node; current != nullptr;
        current = current->get_parent()) {
-    if (isAstJsonExternalMarker(current) &&
-        !isStructuralAstChildOfParent(current)) {
+    if (isAstJsonExternalMarker(current)) {
       return true;
     }
   }
@@ -1048,7 +1436,7 @@ bool hasNonStructuralExternalMarkerAncestor(SgNode *node) {
 
 void addSingleNode(SgNode *node, std::vector<SgNode *> &nodes,
                    std::unordered_set<SgNode *> &seen) {
-  if (hasNonStructuralExternalMarkerAncestor(node)) {
+  if (hasExternalMarkerAncestor(node)) {
     return;
   }
   if (SgVarRefExp *ref = isSgVarRefExp(node)) {
@@ -1092,18 +1480,34 @@ void addSubtreeNodes(SgNode *root, std::vector<SgNode *> &nodes,
   if (root == nullptr || !insideCollectionBoundary(root)) {
     return;
   }
-  addSingleNode(root, nodes, seen);
-  if (isSgBaseClass(root) != nullptr) {
-    return;
+  if (currentExpandedSubtrees == nullptr) {
+    throw std::runtime_error(
+        "AST JSON subtree collection has no active expansion graph");
   }
-  RoseAst ast(root);
-  for (RoseAst::iterator it = ast.begin().withoutNullValues(); it != ast.end();
-       ++it) {
-    if (insideCollectionBoundary(*it)) {
-      addSingleNode(*it, nodes, seen);
+  // RoseAst requests each successor by index. Generated nodes with large
+  // child vectors rebuild their complete traversal-successor container for
+  // every index, making auxiliary declaration lists quadratic. Snapshot each
+  // node's structural successors exactly once across the complete collection
+  // and walk that explicit graph.
+  std::vector<SgNode *> pending{root};
+  while (!pending.empty()) {
+    SgNode *current = pending.back();
+    pending.pop_back();
+    if (current == nullptr || !insideCollectionBoundary(current) ||
+        !currentExpandedSubtrees->insert(current).second) {
+      continue;
     }
-    if (isSgBaseClass(*it) != nullptr) {
-      it.skipChildrenOnForward();
+    addSingleNode(current, nodes, seen);
+    if (isSgBaseClass(current) != nullptr) {
+      continue;
+    }
+    const std::vector<SgNode *> successors =
+        current->get_traversalSuccessorContainer();
+    for (auto successor = successors.rbegin(); successor != successors.rend();
+         ++successor) {
+      if (*successor != nullptr) {
+        pending.push_back(*successor);
+      }
     }
   }
 }
@@ -1125,11 +1529,43 @@ void addReferencedSymbolBasis(const SgSymbol *symbol,
                               std::vector<SgNode *> &nodes,
                               std::unordered_set<SgNode *> &seen) {
   SgNode *basis = const_cast<SgNode *>(symbolBasis(symbol));
-  if (hasNonStructuralExternalMarkerAncestor(basis)) {
+  if (hasExternalMarkerAncestor(basis)) {
     return;
   }
   addSubtreeNodes(basis, nodes, seen);
   addNodeAncestors(basis, nodes, seen);
+}
+
+void addExactBoundSymbolDependency(const SgSymbol *symbol,
+                                   std::vector<SgNode *> &nodes,
+                                   std::unordered_set<SgNode *> &seen) {
+  if (symbol == nullptr) {
+    return;
+  }
+  SgSymbolTable *table = isSgSymbolTable(symbol->get_parent());
+  SgScopeStatement *scope =
+      table != nullptr ? isSgScopeStatement(table->get_parent()) : nullptr;
+  size_t occurrences = 0;
+  if (table != nullptr && table->get_table() != nullptr) {
+    for (const auto &entry : *table->get_table()) {
+      occurrences += entry.second == symbol ? 1 : 0;
+    }
+  }
+  if (scope == nullptr || occurrences != 1 ||
+      !insideCollectionBoundary(scope)) {
+    std::ostringstream message;
+    message << "AST JSON exact symbol dependency has no unique in-file "
+               "visibility owner";
+    message << " symbol=" << symbol->class_name();
+    message << " name=" << symbol->get_name().getString();
+    message << " table=" << table;
+    message << " scope=" << scope;
+    message << " occurrences=" << occurrences;
+    throw std::runtime_error(message.str());
+  }
+  addReferencedSymbolBasis(symbol, nodes, seen);
+  addSingleNode(scope, nodes, seen);
+  addNodeAncestors(scope, nodes, seen);
 }
 
 void addExpressionSymbolDependencies(SgNode *node, std::vector<SgNode *> &nodes,
@@ -1159,10 +1595,23 @@ void addOmpAuxiliaryNodes(SgNode *node, std::vector<SgNode *> &nodes,
                           std::unordered_set<SgNode *> &seen) {
   AuxiliaryOwnerGuard owner_guard(node);
   if (SgNode *parent = node != nullptr ? node->get_parent() : nullptr) {
-    if (isSgType(parent) == nullptr && isSgFileList(parent) == nullptr &&
-        isSgProject(parent) == nullptr) {
+    if (node != collectionBoundaryRoot && isSgType(parent) == nullptr &&
+        isSgFileList(parent) == nullptr && isSgProject(parent) == nullptr) {
       addSubtreeNodes(parent, nodes, seen);
     }
+  }
+  if (SgInitializedName *name = isSgInitializedName(node)) {
+    addExactBoundSymbolDependency(
+        name->get_fortran_source_derived_type_symbol(), nodes, seen);
+  }
+  if (SgProcedureHeaderStatement *procedure =
+          isSgProcedureHeaderStatement(node)) {
+    addExactBoundSymbolDependency(
+        procedure->get_fortran_source_derived_type_symbol(), nodes, seen);
+  }
+  if (SgAggregateInitializer *aggregate = isSgAggregateInitializer(node)) {
+    addExactBoundSymbolDependency(
+        aggregate->get_fortran_source_derived_type_symbol(), nodes, seen);
   }
 
   auto add_expression_with_owner = [&](SgExpression *expr) {
@@ -1185,6 +1634,24 @@ void addOmpAuxiliaryNodes(SgNode *node, std::vector<SgNode *> &nodes,
   };
 
   std::function<void(SgType *)> add_type;
+  auto add_template_argument = [&](SgTemplateArgument *argument) {
+    if (argument == nullptr) {
+      throw std::runtime_error(
+          "AST JSON template argument list contains a null typed argument");
+    }
+    addSubtreeNodes(argument, nodes, seen);
+    add_type(argument->get_type());
+    add_type(argument->get_sourceSpelledType());
+    add_expression_with_owner(argument->get_expression());
+    addSubtreeNodes(argument->get_templateDeclaration(), nodes, seen);
+    addSubtreeNodes(argument->get_initializedName(), nodes, seen);
+  };
+  auto add_template_arguments =
+      [&](const SgTemplateArgumentPtrList &arguments) {
+        for (SgTemplateArgument *argument : arguments) {
+          add_template_argument(argument);
+        }
+      };
   auto add_type_owned_expression_dependencies = [&](SgExpression *expr) {
     if (expr == nullptr) {
       return;
@@ -1195,13 +1662,29 @@ void addOmpAuxiliaryNodes(SgNode *node, std::vector<SgNode *> &nodes,
       if (current == nullptr) {
         return;
       }
-      if (SgNewExp *new_expr = isSgNewExp(current)) {
+      if (SgFortranCommonBlockRefExp *common =
+              isSgFortranCommonBlockRefExp(current)) {
+        SageInterface::validateFortranCommonBlockRef(common);
+      } else if (SgNewExp *new_expr = isSgNewExp(current)) {
         add_type(new_expr->get_specified_type());
-      } else {
+      } else if (SgPseudoDestructorRefExp *pseudo =
+                     isSgPseudoDestructorRefExp(current)) {
+        add_type(pseudo->get_object_type());
+        add_type(pseudo->get_type());
+      } else if (SgSizeOfOp *size_of = isSgSizeOfOp(current)) {
+        add_type(size_of->get_operand_type());
+        add_type(size_of->get_type());
+      } else if (SgAlignOfOp *align_of = isSgAlignOfOp(current)) {
+        add_type(align_of->get_operand_type());
+        add_type(align_of->get_type());
+      } else if (expressionCarriesSemanticType(current)) {
         add_type(current->get_type());
       }
       if (SgTypeExpression *type_expr = isSgTypeExpression(current)) {
-        add_type(type_expr->get_type());
+        add_type(type_expr->get_represented_type());
+      }
+      if (SgNonrealRefExp *reference = isSgNonrealRefExp(current)) {
+        add_template_arguments(reference->get_templateArguments());
       }
     };
 
@@ -1239,7 +1722,6 @@ void addOmpAuxiliaryNodes(SgNode *node, std::vector<SgNode *> &nodes,
       add_type_owned_expression_dependencies(string_type->get_type_kind());
     } else if (SgTypeComplex *complex_type = isSgTypeComplex(type)) {
       add_type(complex_type->get_base_type());
-      add_type_owned_expression_dependencies(complex_type->get_type_kind());
     } else if (SgArrayType *array = isSgArrayType(type)) {
       add_type(array->get_base_type());
       add_type_owned_expression_dependencies(array->get_index());
@@ -1255,6 +1737,8 @@ void addOmpAuxiliaryNodes(SgNode *node, std::vector<SgNode *> &nodes,
     } else if (SgNonrealType *nonreal_type = isSgNonrealType(type)) {
       addSubtreeNodes(nonreal_type->get_declaration(), nodes, seen);
     } else if (SgTemplateType *template_type = isSgTemplateType(type)) {
+      addSubtreeNodes(template_type->get_template_parameter(), nodes, seen);
+      addNodeAncestors(template_type->get_template_parameter(), nodes, seen);
       add_type(template_type->get_class_type());
       add_type(template_type->get_parent_class_type());
     } else if (SgMemberFunctionType *member_type =
@@ -1270,26 +1754,51 @@ void addOmpAuxiliaryNodes(SgNode *node, std::vector<SgNode *> &nodes,
         add_type(arg_type);
       }
     } else if (SgDeclType *decl_type = isSgDeclType(type)) {
+      add_type(decl_type->get_base_type());
       add_type_owned_expression_dependencies(decl_type->get_base_expression());
     }
   };
-  auto add_template_argument = [&](auto &self,
-                                   SgTemplateArgument *argument) -> void {
-    if (argument == nullptr) {
-      return;
-    }
-    addSubtreeNodes(argument, nodes, seen);
-    add_type(argument->get_type());
-    add_expression_with_owner(argument->get_expression());
-    addSubtreeNodes(argument->get_templateDeclaration(), nodes, seen);
-    addSubtreeNodes(argument->get_initializedName(), nodes, seen);
-  };
-  auto add_template_arguments =
-      [&](const SgTemplateArgumentPtrList &arguments) {
-        for (SgTemplateArgument *argument : arguments) {
-          add_template_argument(add_template_argument, argument);
+  if (SgPragmaDeclaration *pragma = isSgPragmaDeclaration(node)) {
+    OpenMPProducerSemanticRecords records =
+        OmpSupport::snapshotOpenMPProducerSemanticRecords(pragma);
+    auto add_semantic_node = [&](SgNode *semantic_node, SgSymbol *symbol) {
+      if (symbol != nullptr) {
+        addExactBoundSymbolDependency(symbol, nodes, seen);
+      }
+      if (semantic_node != nullptr && semantic_node != symbol) {
+        addSubtreeNodes(semantic_node, nodes, seen);
+        addNodeAncestors(semantic_node, nodes, seen);
+      }
+    };
+    if (records.openacc_cxx_semantic_bindings.has_value()) {
+      for (const OpenACCCxxExactSemanticBindings::ExpressionBindings &
+               expression : records.openacc_cxx_semantic_bindings->bindings()) {
+        for (const OpenACCCxxExactSemanticBindings::Binding &binding :
+             expression.identifiers()) {
+          add_semantic_node(binding.semanticNode(), binding.symbol());
         }
-      };
+        for (const OmpExactSubexpressionType &subexpression :
+             expression.subexpressions()) {
+          add_type(subexpression.resultType());
+        }
+      }
+    }
+    if (records.fortran_exact_semantic_bindings.has_value()) {
+      add_type(records.fortran_exact_semantic_bindings->defaultIntegerType());
+      for (const OmpFortranExactSemanticBindings::Binding &binding :
+           records.fortran_exact_semantic_bindings->bindings()) {
+        add_semantic_node(binding.semanticNode(), binding.symbol());
+        add_type(binding.directiveLocalType());
+      }
+      for (const OmpFortranExactSemanticBindings::ExpressionTypes &expression :
+           records.fortran_exact_semantic_bindings->expressions()) {
+        for (const OmpExactSubexpressionType &subexpression :
+             expression.subexpressions()) {
+          add_type(subexpression.resultType());
+        }
+      }
+    }
+  }
   auto add_template_parameter = [&](auto &self,
                                     SgTemplateParameter *parameter) -> void {
     if (parameter == nullptr) {
@@ -1300,8 +1809,11 @@ void addOmpAuxiliaryNodes(SgNode *node, std::vector<SgNode *> &nodes,
     add_type(parameter->get_defaultTypeParameter());
     add_expression_with_owner(parameter->get_expression());
     add_expression_with_owner(parameter->get_typeConstraint());
+    add_expression_with_owner(parameter->get_sourceTypeConstraint());
     add_expression_with_owner(parameter->get_defaultExpressionParameter());
     addSubtreeNodes(parameter->get_templateDeclaration(), nodes, seen);
+    addSubtreeNodes(parameter->get_sourceSpelledTemplateDeclaration(), nodes,
+                    seen);
     addSubtreeNodes(parameter->get_defaultTemplateDeclarationParameter(), nodes,
                     seen);
     addSubtreeNodes(parameter->get_initializedName(), nodes, seen);
@@ -1315,25 +1827,63 @@ void addOmpAuxiliaryNodes(SgNode *node, std::vector<SgNode *> &nodes,
 
   if (SgExpression *expr = isSgExpression(node)) {
     addSubtreeNodes(expr->get_originalExpressionTree(), nodes, seen);
-    if (SgNewExp *new_expr = isSgNewExp(expr)) {
+    if (SgFortranCommonBlockRefExp *common =
+            isSgFortranCommonBlockRefExp(expr)) {
+      SageInterface::validateFortranCommonBlockRef(common);
+      addSubtreeNodes(common->get_common_block(), nodes, seen);
+    } else if (SgNewExp *new_expr = isSgNewExp(expr)) {
       add_type(new_expr->get_specified_type());
-    } else {
+    } else if (SgPseudoDestructorRefExp *pseudo =
+                   isSgPseudoDestructorRefExp(expr)) {
+      add_type(pseudo->get_object_type());
+      add_type(pseudo->get_type());
+    } else if (SgSizeOfOp *size_of = isSgSizeOfOp(expr)) {
+      add_type(size_of->get_operand_type());
+      add_type(size_of->get_type());
+    } else if (SgAlignOfOp *align_of = isSgAlignOfOp(expr)) {
+      add_type(align_of->get_operand_type());
+      add_type(align_of->get_type());
+    } else if (expressionCarriesSemanticType(expr)) {
       add_type(expr->get_type());
     }
+    if (SgCastExp *cast = isSgCastExp(expr)) {
+      add_type(cast->get_source_type());
+      for (SgType *base_type : cast->get_conversion_base_path()) {
+        add_type(base_type);
+      }
+    }
     if (SgTypeExpression *type_expr = isSgTypeExpression(expr)) {
-      add_type(type_expr->get_type());
+      add_type(type_expr->get_represented_type());
+    }
+    if (SgTypeRequirement *type_requirement = isSgTypeRequirement(expr)) {
+      add_type(type_requirement->get_required_type());
     }
     if (SgVarRefExp *ref = isSgVarRefExp(expr)) {
       addReferencedSymbolBasis(ref->get_symbol(), nodes, seen);
     } else if (SgFunctionRefExp *ref = isSgFunctionRefExp(expr)) {
       addReferencedSymbolBasis(ref->get_symbol(), nodes, seen);
+      addReferencedSymbolBasis(ref->get_fortran_source_visible_symbol(), nodes,
+                               seen);
     } else if (SgTemplateFunctionRefExp *ref =
                    isSgTemplateFunctionRefExp(expr)) {
       addReferencedSymbolBasis(ref->get_symbol(), nodes, seen);
+      addSubtreeNodes(ref->get_semantic_function_declaration(), nodes, seen);
+      addNodeAncestors(ref->get_semantic_function_declaration(), nodes, seen);
     } else if (SgMemberFunctionRefExp *ref = isSgMemberFunctionRefExp(expr)) {
       addReferencedSymbolBasis(ref->get_symbol_i(), nodes, seen);
+    } else if (SgTemplateMemberFunctionRefExp *ref =
+                   isSgTemplateMemberFunctionRefExp(expr)) {
+      addReferencedSymbolBasis(ref->get_symbol(), nodes, seen);
+      addSubtreeNodes(ref->get_semantic_member_function_declaration(), nodes,
+                      seen);
+      addNodeAncestors(ref->get_semantic_member_function_declaration(), nodes,
+                       seen);
     } else if (SgNonrealRefExp *ref = isSgNonrealRefExp(expr)) {
       addReferencedSymbolBasis(ref->get_symbol(), nodes, seen);
+      addSubtreeNodes(ref->get_resolved_function_declaration(), nodes, seen);
+      addNodeAncestors(ref->get_resolved_function_declaration(), nodes, seen);
+      addSubtreeNodes(ref->get_resolved_variable_declaration(), nodes, seen);
+      addNodeAncestors(ref->get_resolved_variable_declaration(), nodes, seen);
       add_template_arguments(ref->get_templateArguments());
     } else if (SgThisExp *this_expr = isSgThisExp(expr)) {
       addReferencedSymbolBasis(this_expr->get_class_symbol(), nodes, seen);
@@ -1342,32 +1892,133 @@ void addOmpAuxiliaryNodes(SgNode *node, std::vector<SgNode *> &nodes,
                    isSgConstructorInitializer(expr)) {
       addSubtreeNodes(init->get_declaration(), nodes, seen);
     }
-    if (SgTypeTraitBuiltinOperator *op = isSgTypeTraitBuiltinOperator(expr)) {
-      for (SgNode *arg : op->get_args()) {
-        if (SgType *type_arg = isSgType(arg)) {
-          add_type(type_arg);
-        } else {
-          addSubtreeNodes(arg, nodes, seen);
-        }
-      }
-    }
+  }
+  if (SgSourceFile *file = isSgSourceFile(node)) {
+    add_type(file->get_target_size_type());
   }
   if (SgInitializedName *name = isSgInitializedName(node)) {
     add_type(name->get_typeptr());
+    add_type(name->get_fortran_source_type());
+    add_type(name->get_cxx_source_type());
+    if (collectionBoundaryFile != nullptr &&
+        collectionBoundaryFile->get_inputLanguage() ==
+            SgFile::e_Fortran_language) {
+      if (isSgFunctionParameterList(name->get_parent()) != nullptr &&
+          (name->get_fortran_source_type() != nullptr ||
+           name->get_fortran_source_derived_type_symbol() != nullptr ||
+           name->get_fortran_type_spec() !=
+               SgInitializedName::e_fortran_type_spec_default ||
+           !name->get_fortran_procedure_interface().is_null() ||
+           name->get_fortran_separate_shape_declaration() != nullptr ||
+           name->get_fortran_separate_pointer_declaration() != nullptr ||
+           name->get_cray_pointer_pointee() != nullptr ||
+           name->get_fortran_cray_pointer_pointee_shape() != nullptr ||
+           name->get_shapeDeferred())) {
+        throw std::runtime_error("AST JSON Fortran procedure parameter owns "
+                                 "declaration-statement source syntax");
+      }
+      if (SgVariableDeclaration *declaration =
+              isSgVariableDeclaration(name->get_parent())) {
+        switch (declaration->get_fortran_declaration_origin()) {
+        case SgVariableDeclaration::e_fortran_source_declaration:
+          if (name->get_type() == nullptr ||
+              name->get_fortran_source_type() == nullptr) {
+            throw std::runtime_error(
+                "AST JSON Fortran source declaration has no exact "
+                "semantic/source type pair");
+          }
+          break;
+        case SgVariableDeclaration::e_fortran_semantic_only_declaration:
+          if (name->get_fortran_source_type() != nullptr) {
+            throw std::runtime_error(
+                "AST JSON semantic-only Fortran declaration owns a source "
+                "type surface");
+          }
+          if (name->get_cray_pointer_pointee() != nullptr ||
+              name->get_fortran_cray_pointer_pointee_shape() != nullptr ||
+              name->get_fortran_separate_shape_declaration() != nullptr ||
+              name->get_fortran_separate_pointer_declaration() != nullptr ||
+              name->get_shapeDeferred()) {
+            throw std::runtime_error(
+                "AST JSON semantic-only Fortran declaration owns Cray "
+                "pointer or separate-shape source state");
+          }
+          break;
+        case SgVariableDeclaration::e_fortran_pending_source_declaration:
+          throw std::runtime_error(
+              "AST JSON pending Fortran source declaration escaped the "
+              "frontend");
+        default:
+          throw std::runtime_error(
+              "AST JSON Fortran declaration has an invalid typed origin");
+        }
+      }
+    }
     addSubtreeNodes(name->get_declptr(), nodes, seen);
     addSubtreeNodes(name->get_definition(), nodes, seen);
     addSubtreeNodes(name->get_prev_decl_item(), nodes, seen);
+    addSubtreeNodes(name->get_cray_pointer_pointee(), nodes, seen);
+    addNodeAncestors(name->get_cray_pointer_pointee(), nodes, seen);
+    addSubtreeNodes(name->get_fortran_cray_pointer_pointee_shape(), nodes,
+                    seen);
+    addSubtreeNodes(name->get_fortran_separate_shape_declaration(), nodes,
+                    seen);
+    addNodeAncestors(name->get_fortran_separate_shape_declaration(), nodes,
+                     seen);
+    addSubtreeNodes(name->get_fortran_separate_pointer_declaration(), nodes,
+                    seen);
+    addNodeAncestors(name->get_fortran_separate_pointer_declaration(), nodes,
+                     seen);
   }
   if (SgVariableDefinition *def = isSgVariableDefinition(node)) {
     addSubtreeNodes(def->get_vardefn(), nodes, seen);
     addSubtreeNodes(def->get_bitfield(), nodes, seen);
+  }
+  if (SgVariableDeclaration *decl = isSgVariableDeclaration(node)) {
+    for (SgTemplateParameterList *header :
+         decl->get_sourceSpelledTemplateHeaders()) {
+      if (header == nullptr || header->get_parent() != decl) {
+        throw std::runtime_error(
+            "AST JSON variable source template header is not owned by its "
+            "exact SgVariableDeclaration");
+      }
+      addSubtreeNodes(header, nodes, seen);
+    }
+    add_type(decl->get_sourceSpelledTemplateOwnerType());
+  }
+  if (SgClassDeclaration *decl = isSgClassDeclaration(node)) {
+    for (SgTemplateParameterList *header :
+         decl->get_sourceSpelledTemplateHeaders()) {
+      if (header == nullptr || header->get_parent() != decl) {
+        throw std::runtime_error(
+            "AST JSON class source template header is not owned by its exact "
+            "SgClassDeclaration");
+      }
+      addSubtreeNodes(header, nodes, seen);
+    }
+  }
+  if (SgFunctionDeclaration *decl = isSgFunctionDeclaration(node)) {
+    for (SgTemplateParameterList *header :
+         decl->get_sourceSpelledTemplateHeaders()) {
+      if (header == nullptr || header->get_parent() != decl) {
+        throw std::runtime_error(
+            "AST JSON function source template header is not owned by its "
+            "exact SgFunctionDeclaration");
+      }
+      addSubtreeNodes(header, nodes, seen);
+    }
   }
   if (SgTypedefDeclaration *decl = isSgTypedefDeclaration(node)) {
     add_type(decl->get_base_type());
   }
   if (SgFunctionDeclaration *decl = isSgFunctionDeclaration(node)) {
     add_type(decl->get_type());
+    add_type(decl->get_type_syntax());
+    addSubtreeNodes(decl->get_parameterList(), nodes, seen);
+    addSubtreeNodes(decl->get_parameterList_syntax(), nodes, seen);
     addSubtreeNodes(decl->get_functionParameterScope(), nodes, seen);
+    addSubtreeNodes(decl->get_function_declarator_scope(), nodes, seen);
+    addSubtreeNodes(decl->get_templateInstantiationPattern(), nodes, seen);
   }
   if (SgDeclarationStatement *decl = isSgDeclarationStatement(node)) {
     addSubtreeNodes(decl->get_scope(), nodes, seen);
@@ -1389,13 +2040,55 @@ void addOmpAuxiliaryNodes(SgNode *node, std::vector<SgNode *> &nodes,
     add_template_arguments(decl->get_tpl_args());
     add_expression_with_owner(decl->get_conceptConstraint());
   }
+  if (SgFunctionDefinition *def = isSgFunctionDefinition(node)) {
+    if (def->get_construction_physical_output_owner() != nullptr ||
+        !def->get_fortran_construction_name().getString().empty()) {
+      throw std::runtime_error(
+          "AST JSON reached a function definition with an unconsumed "
+          "Fortran construction transaction");
+    }
+  }
   if (SgClassDefinition *def = isSgClassDefinition(node)) {
+    if (def->get_construction_physical_output_owner() != nullptr) {
+      SgClassDeclaration *decl = def->get_declaration();
+      Sg_File_Info *source =
+          decl != nullptr ? decl->get_startOfConstruct() : nullptr;
+      std::ostringstream message;
+      message << "AST JSON reached class definition=" << def << " name="
+              << (decl != nullptr ? decl->get_name().getString()
+                                  : std::string("<missing>"))
+              << " declaration-parent="
+              << (decl != nullptr ? decl->get_parent() : nullptr)
+              << " declaration-parent-class="
+              << (decl != nullptr && decl->get_parent() != nullptr
+                      ? decl->get_parent()->class_name()
+                      : std::string("<missing>"))
+              << " autonomous="
+              << (decl != nullptr && decl->get_isAutonomousDeclaration() ? 1
+                                                                         : 0)
+              << " parent=" << def->get_parent() << " parent-class="
+              << (def->get_parent() != nullptr ? def->get_parent()->class_name()
+                                               : std::string("<missing>"))
+              << " transaction-owner="
+              << def->get_construction_physical_output_owner()
+              << " transaction-owner-class="
+              << def->get_construction_physical_output_owner()->class_name()
+              << " source="
+              << (source != nullptr ? source->get_filenameString()
+                                    : std::string("<missing>"))
+              << ':' << (source != nullptr ? source->get_line() : -1) << ':'
+              << (source != nullptr ? source->get_col() : -1)
+              << " with an unconsumed physical-output construction "
+                 "transaction";
+      throw std::runtime_error(message.str());
+    }
     for (SgBaseClass *base : def->get_inheritances()) {
       addSingleNode(base, nodes, seen);
     }
   }
   if (SgBaseClass *base = isSgBaseClass(node)) {
     addSubtreeNodes(base->get_base_class(), nodes, seen);
+    add_type(base->get_source_type());
     if (SgExpBaseClass *expr_base = isSgExpBaseClass(base)) {
       add_expression_with_owner(expr_base->get_base_class_exp());
     }
@@ -1405,6 +2098,7 @@ void addOmpAuxiliaryNodes(SgNode *node, std::vector<SgNode *> &nodes,
   }
   if (SgTemplateInstantiationDecl *decl = isSgTemplateInstantiationDecl(node)) {
     add_template_arguments(decl->get_templateArguments());
+    add_template_arguments(decl->get_semanticTemplateArguments());
     add_template_arguments(decl->get_deducedTemplateArguments());
     addSubtreeNodes(decl->get_templateDeclaration(), nodes, seen);
     addSubtreeNodes(decl->get_specializedTemplateDeclaration(), nodes, seen);
@@ -1422,6 +2116,10 @@ void addOmpAuxiliaryNodes(SgNode *node, std::vector<SgNode *> &nodes,
     add_template_arguments(decl->get_deducedTemplateArguments());
     addSubtreeNodes(decl->get_templateDeclaration(), nodes, seen);
     addSubtreeNodes(decl->get_specializedTemplateDeclaration(), nodes, seen);
+    for (SgDeclarationStatement *candidate :
+         decl->get_dependentTemplateCandidates()) {
+      addSubtreeNodes(candidate, nodes, seen);
+    }
   }
   if (SgTemplateInstantiationMemberFunctionDecl *decl =
           isSgTemplateInstantiationMemberFunctionDecl(node)) {
@@ -1446,6 +2144,7 @@ void addOmpAuxiliaryNodes(SgNode *node, std::vector<SgNode *> &nodes,
   if (SgTemplateClassDeclaration *decl = isSgTemplateClassDeclaration(node)) {
     add_template_parameters(decl->get_templateParameters());
     add_template_arguments(decl->get_templateSpecializationArguments());
+    addSubtreeNodes(decl->get_specializedTemplateDeclaration(), nodes, seen);
     add_expression_with_owner(decl->get_requiresClause());
   }
   if (SgTemplateFunctionDeclaration *decl =
@@ -1467,40 +2166,37 @@ void addOmpAuxiliaryNodes(SgNode *node, std::vector<SgNode *> &nodes,
     }
   }
   if (SgTemplateArgument *argument = isSgTemplateArgument(node)) {
-    add_template_argument(add_template_argument, argument);
+    add_template_argument(argument);
   }
   if (SgTemplateParameter *parameter = isSgTemplateParameter(node)) {
     add_template_parameter(add_template_parameter, parameter);
   }
-  auto add_dimension_map = [&](const auto &dimension_map) {
-    for (const auto &entry : dimension_map) {
-      addReferencedSymbolBasis(entry.first, nodes, seen);
-      for (const auto &bound : entry.second) {
-        add_expression_with_owner(bound.first);
-        add_expression_with_owner(bound.second);
-      }
-    }
-  };
-  auto add_iterators = [&](const std::list<std::list<SgExpression *>> &lists) {
-    for (const std::list<SgExpression *> &list : lists) {
-      for (SgExpression *expr : list) {
-        add_expression_with_owner(expr);
-      }
-    }
-  };
   auto add_clause_list = [&](const SgOmpClausePtrList &clauses) {
     for (SgOmpClause *clause : clauses) {
       addSubtreeNodes(clause, nodes, seen);
     }
   };
 
-  if (SgOmpClauseStatement *stmt = isSgOmpClauseStatement(node)) {
-    add_clause_list(stmt->get_clauses());
-  } else if (SgOmpClauseBodyStatement *stmt =
-                 isSgOmpClauseBodyStatement(node)) {
+  if (SgOmpDeclareSimdStatement *stmt = isSgOmpDeclareSimdStatement(node)) {
+    if (stmt->get_function_ref() == nullptr ||
+        stmt->get_function_ref()->get_parent() != stmt) {
+      throw std::runtime_error(
+          "AST JSON declare simd statement has no required exact target");
+    }
+    add_expression_with_owner(stmt->get_function_ref());
     add_clause_list(stmt->get_clauses());
   }
-  if (SgOmpDeclareSimdStatement *stmt = isSgOmpDeclareSimdStatement(node)) {
+  if (SgOmpDeclareVariantStatement *stmt =
+          isSgOmpDeclareVariantStatement(node)) {
+    if (stmt->get_base_function_ref() == nullptr ||
+        stmt->get_base_function_ref()->get_parent() != stmt ||
+        stmt->get_variant_function_ref() == nullptr ||
+        stmt->get_variant_function_ref()->get_parent() != stmt) {
+      throw std::runtime_error(
+          "AST JSON declare variant statement has no required exact target");
+    }
+    add_expression_with_owner(stmt->get_base_function_ref());
+    add_expression_with_owner(stmt->get_variant_function_ref());
     add_clause_list(stmt->get_clauses());
   }
   if (SgOmpDeclareMapperStatement *stmt = isSgOmpDeclareMapperStatement(node)) {
@@ -1513,36 +2209,6 @@ void addOmpAuxiliaryNodes(SgNode *node, std::vector<SgNode *> &nodes,
     add_clause_list(stmt->get_clauses());
   }
 
-  if (SgOmpMapClause *clause = isSgOmpMapClause(node)) {
-    addSubtreeNodes(clause->get_variables(), nodes, seen);
-    addSubtreeNodes(clause->get_mapper_identifier(), nodes, seen);
-    add_dimension_map(clause->get_array_dimensions());
-    for (const auto &entry : clause->get_dist_data_policies()) {
-      addReferencedSymbolBasis(entry.first, nodes, seen);
-      for (const auto &policy : entry.second) {
-        addSubtreeNodes(policy.second, nodes, seen);
-      }
-    }
-    add_iterators(clause->get_iterator());
-  } else if (SgOmpDependClause *clause = isSgOmpDependClause(node)) {
-    add_dimension_map(clause->get_array_dimensions());
-    for (SgExpression *expr : clause->get_vec()) {
-      add_expression_with_owner(expr);
-    }
-    add_iterators(clause->get_iterator());
-  } else if (SgOmpAffinityClause *clause = isSgOmpAffinityClause(node)) {
-    add_dimension_map(clause->get_array_dimensions());
-    add_iterators(clause->get_iterator());
-  } else if (SgOmpToClause *clause = isSgOmpToClause(node)) {
-    addSubtreeNodes(clause->get_mapper_identifier(), nodes, seen);
-    add_dimension_map(clause->get_array_dimensions());
-    add_iterators(clause->get_iterator());
-  } else if (SgOmpFromClause *clause = isSgOmpFromClause(node)) {
-    addSubtreeNodes(clause->get_mapper_identifier(), nodes, seen);
-    add_dimension_map(clause->get_array_dimensions());
-    add_iterators(clause->get_iterator());
-  }
-
   if (SgOmpVariablesClause *clause = isSgOmpVariablesClause(node)) {
     addSubtreeNodes(clause->get_variables(), nodes, seen);
   }
@@ -1552,47 +2218,67 @@ void addOmpAuxiliaryNodes(SgNode *node, std::vector<SgNode *> &nodes,
   if (SgOmpExpressionClause *clause = isSgOmpExpressionClause(node)) {
     add_expression_with_owner(clause->get_expression());
   }
-  if (SgOmpReductionClause *clause = isSgOmpReductionClause(node)) {
-    add_expression_with_owner(clause->get_user_defined_identifier());
-  }
   if (SgOmpAllocateClause *clause = isSgOmpAllocateClause(node)) {
     add_expression_with_owner(clause->get_user_defined_modifier());
+    add_expression_with_owner(clause->get_alignment());
   }
   if (SgOmpAllocatorClause *clause = isSgOmpAllocatorClause(node)) {
     add_expression_with_owner(clause->get_user_defined_modifier());
   }
-  if (SgOmpAdjustArgsClause *clause = isSgOmpAdjustArgsClause(node)) {
-    add_expression_with_owner(clause->get_user_defined_modifier());
-  }
-  if (SgOmpInReductionClause *clause = isSgOmpInReductionClause(node)) {
-    add_expression_with_owner(clause->get_user_defined_identifier());
-  }
-  if (SgOmpTaskReductionClause *clause = isSgOmpTaskReductionClause(node)) {
-    add_expression_with_owner(clause->get_user_defined_identifier());
-  }
-  if (SgOmpWhenClause *clause = isSgOmpWhenClause(node)) {
-    add_expression_with_owner(clause->get_user_condition());
-    add_expression_with_owner(clause->get_user_condition_score());
-    add_expression_with_owner(clause->get_device_arch());
-    add_expression_with_owner(clause->get_device_isa());
-    add_expression_with_owner(clause->get_device_num());
-    add_expression_with_owner(clause->get_implementation_user_defined());
-    add_expression_with_owner(clause->get_implementation_extension());
-    addSubtreeNodes(clause->get_variant_directive(), nodes, seen);
-    for (SgStatement *directive : clause->get_construct_directives()) {
-      addSubtreeNodes(directive, nodes, seen);
+  if (SgOmpInitClause *clause = isSgOmpInitClause(node)) {
+    std::string detail;
+    if (!Rose::OpenMP::Detail::validateInitClause(clause, &detail)) {
+      throw std::runtime_error("AST JSON malformed SgOmpInitClause: " + detail);
     }
   }
+  if (SgOmpAdjustArgsClause *clause = isSgOmpAdjustArgsClause(node)) {
+    std::string detail;
+    if (!Rose::OpenMP::Detail::validateAdjustArgsClause(clause, &detail)) {
+      throw std::runtime_error("AST JSON malformed SgOmpAdjustArgsClause: " +
+                               detail);
+    }
+  }
+  if (SgOmpAppendArgsClause *clause = isSgOmpAppendArgsClause(node)) {
+    std::string detail;
+    if (!Rose::OpenMP::Detail::validateAppendArgsClause(clause, &detail)) {
+      throw std::runtime_error("AST JSON malformed SgOmpAppendArgsClause: " +
+                               detail);
+    }
+    for (SgOmpAppendArgsOperation *operation :
+         clause->get_interop_operations()) {
+      addSubtreeNodes(operation, nodes, seen);
+    }
+  }
+  if (SgOmpContextSelectorProperty *property =
+          isSgOmpContextSelectorProperty(node)) {
+    add_expression_with_owner(property->get_expression());
+    add_expression_with_owner(property->get_requires_expression());
+  }
+  if (SgOmpContextSelector *selector = isSgOmpContextSelector(node)) {
+    validateOmpContextSelector(selector);
+    add_expression_with_owner(selector->get_score());
+    for (SgOmpContextSelectorProperty *property : selector->get_properties()) {
+      addSubtreeNodes(property, nodes, seen);
+    }
+    addSubtreeNodes(selector->get_construct_directive(), nodes, seen);
+  }
+  if (SgOmpContextSelectorSet *set = isSgOmpContextSelectorSet(node)) {
+    validateOmpContextSelectorSet(set);
+    for (SgOmpContextSelector *selector : set->get_selectors()) {
+      addSubtreeNodes(selector, nodes, seen);
+    }
+  }
+  if (SgOmpWhenClause *clause = isSgOmpWhenClause(node)) {
+    validateOmpContextSelectorSets(clause->get_context_selector_sets(), clause);
+    for (SgOmpContextSelectorSet *set : clause->get_context_selector_sets()) {
+      addSubtreeNodes(set, nodes, seen);
+    }
+    addSubtreeNodes(clause->get_variant_directive(), nodes, seen);
+  }
   if (SgOmpMatchClause *clause = isSgOmpMatchClause(node)) {
-    add_expression_with_owner(clause->get_user_condition());
-    add_expression_with_owner(clause->get_user_condition_score());
-    add_expression_with_owner(clause->get_device_arch());
-    add_expression_with_owner(clause->get_device_isa());
-    add_expression_with_owner(clause->get_device_num());
-    add_expression_with_owner(clause->get_implementation_user_defined());
-    add_expression_with_owner(clause->get_implementation_extension());
-    for (SgStatement *directive : clause->get_construct_directives()) {
-      addSubtreeNodes(directive, nodes, seen);
+    validateOmpContextSelectorSets(clause->get_context_selector_sets(), clause);
+    for (SgOmpContextSelectorSet *set : clause->get_context_selector_sets()) {
+      addSubtreeNodes(set, nodes, seen);
     }
   }
   if (SgOmpUsesAllocatorsDefination *definition =
@@ -1637,6 +2323,9 @@ void addOmpAuxiliaryNodes(SgNode *node, std::vector<SgNode *> &nodes,
   if (SgStatement *stmt = isSgStatement(node)) {
     addSubtreeNodes(stmt->get_numeric_label(), nodes, seen);
   }
+  if (SgBasicBlock *stmt = isSgBasicBlock(node)) {
+    addSubtreeNodes(stmt->get_fortran_block_end_numeric_label(), nodes, seen);
+  }
   if (SgWhileStmt *stmt = isSgWhileStmt(node)) {
     addSubtreeNodes(stmt->get_end_numeric_label(), nodes, seen);
   }
@@ -1675,12 +2364,41 @@ void addExpressionSymbolDependencies(SgNode *node, std::vector<SgNode *> &nodes,
       addSubtreeNodes(symbol->get_declaration(), nodes, seen);
       addNodeAncestors(symbol->get_declaration(), nodes, seen);
     }
+    SgFunctionSymbol *sourceVisible = ref->get_fortran_source_visible_symbol();
+    addReferencedSymbolBasis(sourceVisible, nodes, seen);
+    if (sourceVisible != nullptr &&
+        !isAstJsonExternalFunction(sourceVisible->get_declaration())) {
+      addSubtreeNodes(sourceVisible->get_declaration(), nodes, seen);
+      addNodeAncestors(sourceVisible->get_declaration(), nodes, seen);
+    }
   } else if (SgTemplateFunctionRefExp *ref = isSgTemplateFunctionRefExp(expr)) {
     addReferencedSymbolBasis(ref->get_symbol(), nodes, seen);
+    addSubtreeNodes(ref->get_semantic_function_declaration(), nodes, seen);
+    addNodeAncestors(ref->get_semantic_function_declaration(), nodes, seen);
   } else if (SgMemberFunctionRefExp *ref = isSgMemberFunctionRefExp(expr)) {
     addReferencedSymbolBasis(ref->get_symbol_i(), nodes, seen);
+  } else if (SgTemplateMemberFunctionRefExp *ref =
+                 isSgTemplateMemberFunctionRefExp(expr)) {
+    addReferencedSymbolBasis(ref->get_symbol(), nodes, seen);
+    addSubtreeNodes(ref->get_semantic_member_function_declaration(), nodes,
+                    seen);
+    addNodeAncestors(ref->get_semantic_member_function_declaration(), nodes,
+                     seen);
   } else if (SgNonrealRefExp *ref = isSgNonrealRefExp(expr)) {
     addReferencedSymbolBasis(ref->get_symbol(), nodes, seen);
+    SgFunctionDeclaration *resolved_function =
+        ref->get_resolved_function_declaration();
+    if (resolved_function != nullptr &&
+        !isAstJsonExternalFunction(resolved_function)) {
+      addSubtreeNodes(resolved_function, nodes, seen);
+      addNodeAncestors(resolved_function, nodes, seen);
+    }
+    SgTemplateVariableDeclaration *resolved_variable =
+        ref->get_resolved_variable_declaration();
+    if (resolved_variable != nullptr) {
+      addSubtreeNodes(resolved_variable, nodes, seen);
+      addNodeAncestors(resolved_variable, nodes, seen);
+    }
   } else if (SgThisExp *this_expr = isSgThisExp(expr)) {
     addReferencedSymbolBasis(this_expr->get_class_symbol(), nodes, seen);
     addReferencedSymbolBasis(this_expr->get_nonreal_symbol(), nodes, seen);
@@ -1717,6 +2435,60 @@ void addScopeSymbolTableDependencies(SgNode *node, std::vector<SgNode *> &nodes,
   }
 }
 
+std::string auxiliaryTypeSortKey(SgType *type) {
+  if (type == nullptr) {
+    return "<null>";
+  }
+
+  std::ostringstream key;
+  key << type->sage_class_name();
+  if (SgPointerMemberType *member_pointer = isSgPointerMemberType(type)) {
+    key << '<' << auxiliaryTypeSortKey(member_pointer->get_base_type()) << ','
+        << auxiliaryTypeSortKey(member_pointer->get_class_type()) << '>';
+  } else if (SgPointerType *pointer = isSgPointerType(type)) {
+    key << '<' << auxiliaryTypeSortKey(pointer->get_base_type()) << '>';
+  } else if (SgReferenceType *reference = isSgReferenceType(type)) {
+    key << '<' << auxiliaryTypeSortKey(reference->get_base_type()) << '>';
+  } else if (SgRvalueReferenceType *reference = isSgRvalueReferenceType(type)) {
+    key << '<' << auxiliaryTypeSortKey(reference->get_base_type()) << '>';
+  } else if (SgModifierType *modifier = isSgModifierType(type)) {
+    key << '<' << auxiliaryTypeSortKey(modifier->get_base_type()) << '>';
+  } else if (SgArrayType *array = isSgArrayType(type)) {
+    key << '<' << auxiliaryTypeSortKey(array->get_base_type()) << '>';
+  } else if (SgTypedefType *typedef_type = isSgTypedefType(type)) {
+    if (SgTypedefDeclaration *decl =
+            isSgTypedefDeclaration(typedef_type->get_declaration())) {
+      key << ':' << decl->get_name().getString();
+    }
+  } else if (SgClassType *class_type = isSgClassType(type)) {
+    if (SgClassDeclaration *decl =
+            isSgClassDeclaration(class_type->get_declaration())) {
+      key << ':' << decl->get_name().getString();
+    }
+  } else if (SgEnumType *enum_type = isSgEnumType(type)) {
+    if (SgEnumDeclaration *decl =
+            isSgEnumDeclaration(enum_type->get_declaration())) {
+      key << ':' << decl->get_name().getString();
+    }
+  } else if (SgNonrealType *nonreal_type = isSgNonrealType(type)) {
+    if (SgNonrealDecl *decl =
+            isSgNonrealDecl(nonreal_type->get_declaration())) {
+      key << ':' << decl->get_semantic_name().getString();
+    }
+  } else if (SgTemplateType *template_type = isSgTemplateType(type)) {
+    key << ':' << template_type->get_name().getString() << ':'
+        << template_type->get_template_parameter_depth() << ':'
+        << template_type->get_template_parameter_position();
+  } else if (SgFunctionType *function_type = isSgFunctionType(type)) {
+    key << '<' << auxiliaryTypeSortKey(function_type->get_return_type());
+    for (SgType *argument : function_type->get_arguments()) {
+      key << ',' << auxiliaryTypeSortKey(argument);
+    }
+    key << '>';
+  }
+  return key.str();
+}
+
 std::string auxiliaryNodeSortKey(SgNode *node) {
   std::ostringstream key;
   key << (node != nullptr ? node->sage_class_name() : "") << '|';
@@ -1734,10 +2506,11 @@ std::string auxiliaryNodeSortKey(SgNode *node) {
     key << decl->get_name().getString();
   } else if (SgTemplateArgument *argument = isSgTemplateArgument(node)) {
     key << argument->get_argumentType() << ':'
-        << jsonTypeText(argument->get_type());
+        << auxiliaryTypeSortKey(argument->get_type());
+    key << ':' << auxiliaryTypeSortKey(argument->get_sourceSpelledType());
     if (argument->get_expression() != nullptr) {
       key << ':' << argument->get_expression()->sage_class_name() << ':'
-          << argument->get_expression()->unparseToString();
+          << safeNodeText(argument->get_expression());
     }
   } else if (SgIntVal *value = isSgIntVal(node)) {
     key << value->get_value() << ':' << value->get_valueString();
@@ -1762,10 +2535,15 @@ std::string auxiliaryNodeSortKey(SgNode *node) {
   return key.str();
 }
 
-std::vector<SgNode *> collectNodes(SgNode *root) {
-  CollectionBoundaryGuard boundary(isSgSourceFile(root));
+std::vector<SgNode *> collectNodes(SgNode *root,
+                                   SgSourceFile *collectionBoundary) {
+  CollectionBoundaryGuard boundary(collectionBoundary != nullptr
+                                       ? collectionBoundary
+                                       : isSgSourceFile(root));
   std::vector<SgNode *> nodes;
   std::unordered_set<SgNode *> seen;
+  std::unordered_set<SgNode *> expanded;
+  SubtreeExpansionGuard expansion_guard(expanded);
   addSubtreeNodes(root, nodes, seen);
   if (SgSourceFile *file = isSgSourceFile(root)) {
     for (SgToken *token : file->get_token_list()) {
@@ -1789,37 +2567,6 @@ std::vector<SgNode *> collectNodes(SgNode *root) {
                             auxiliaryNodeSortKey(rhs);
                    });
   return nodes;
-}
-
-void clearGlobalQualificationState() {
-  SgNode::get_globalQualifiedNameMapForNames().clear();
-  SgNode::get_globalQualifiedNameMapForTypes().clear();
-  SgNode::get_globalQualifiedNameMapForTemplateHeaders().clear();
-  SgNode::get_globalTypeNameMap().clear();
-  SgNode::get_globalQualifiedNameMapForMapsOfTypes().clear();
-}
-
-GlobalQualificationStateSnapshot::GlobalQualificationStateSnapshot()
-    : names(SgNode::get_globalQualifiedNameMapForNames()),
-      types(SgNode::get_globalQualifiedNameMapForTypes()),
-      template_headers(SgNode::get_globalQualifiedNameMapForTemplateHeaders()),
-      type_names(SgNode::get_globalTypeNameMap()),
-      type_maps(SgNode::get_globalQualifiedNameMapForMapsOfTypes()) {}
-
-GlobalQualificationStateSnapshot::~GlobalQualificationStateSnapshot() {
-  restore();
-}
-
-void GlobalQualificationStateSnapshot::restore() {
-  if (restored) {
-    return;
-  }
-  SgNode::get_globalQualifiedNameMapForNames() = names;
-  SgNode::get_globalQualifiedNameMapForTypes() = types;
-  SgNode::get_globalQualifiedNameMapForTemplateHeaders() = template_headers;
-  SgNode::get_globalTypeNameMap() = type_names;
-  SgNode::get_globalQualifiedNameMapForMapsOfTypes() = type_maps;
-  restored = true;
 }
 
 std::string safeNodeText(SgNode *node) {

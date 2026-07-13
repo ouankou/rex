@@ -8,7 +8,5 @@ int foobar() {
     if (pid == -1) {
     }
   }
-  return 0;
+  return (0);
 }
-
-

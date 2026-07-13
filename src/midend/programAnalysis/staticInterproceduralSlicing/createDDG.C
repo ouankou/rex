@@ -41,11 +41,7 @@ int main(int argc, char *argv[]) {
 #ifdef NEWDU
   EDefUse *edu = new EDefUse(project);
   // Create the global def-use analysis
-  if (edu->run(false) == 1) {
-    std::cerr << "createDDG:: DFAnalysis failed!  -- edu->run(false)==0"
-              << endl;
-    exit(0);
-  }
+  edu->run(false);
 #endif
   std::vector<InterproceduralInfo *> ip;
 

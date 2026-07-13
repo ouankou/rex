@@ -6,6 +6,51 @@ target_link_libraries(roseomp ROSE_DLL ${link_with_libraries})
 add_executable(roseompacc roseompacc.C)
 target_link_libraries(roseompacc ROSE_DLL ${link_with_libraries})
 
+add_executable(rex_omp_simd_addr3_translator
+               rex_omp_simd_addr3_translator.C)
+target_include_directories(
+  rex_omp_simd_addr3_translator
+  PRIVATE ${CMAKE_SOURCE_DIR}/src/midend/programTransformation/ompLowering)
+target_link_libraries(rex_omp_simd_addr3_translator
+                      ROSE_DLL ${link_with_libraries})
+
+add_executable(rex_omp_associated_loop_contract
+               rex_omp_associated_loop_contract.cpp)
+target_include_directories(
+  rex_omp_associated_loop_contract
+  PRIVATE ${CMAKE_SOURCE_DIR}/src/midend/programTransformation/ompLowering)
+target_link_libraries(rex_omp_associated_loop_contract
+                      ROSE_DLL ${link_with_libraries})
+
+add_executable(rex_omp_copy_semantic_edges
+               rex_omp_copy_semantic_edges.cpp)
+target_link_libraries(rex_omp_copy_semantic_edges
+                      ROSE_DLL ${link_with_libraries})
+
+add_executable(rex_omp_clause_copy_identity
+               rex_omp_clause_copy_identity.cpp)
+target_include_directories(
+  rex_omp_clause_copy_identity
+  PRIVATE ${CMAKE_SOURCE_DIR}/src/midend/programTransformation/ompLowering)
+target_link_libraries(rex_omp_clause_copy_identity
+                      ROSE_DLL ${link_with_libraries})
+
+add_executable(rex_omp_runtime_int64_contract
+               rex_omp_runtime_int64_contract.cpp)
+target_include_directories(
+  rex_omp_runtime_int64_contract
+  PRIVATE ${CMAKE_SOURCE_DIR}/src/midend/programTransformation/ompLowering)
+target_link_libraries(rex_omp_runtime_int64_contract
+                      ROSE_DLL ${link_with_libraries})
+
+add_executable(rex_omp_intel_simd_identity_contract
+               rex_omp_intel_simd_identity_contract.cpp)
+target_include_directories(
+  rex_omp_intel_simd_identity_contract
+  PRIVATE ${CMAKE_SOURCE_DIR}/src/midend/programTransformation/ompLowering)
+target_link_libraries(rex_omp_intel_simd_identity_contract
+                      ROSE_DLL ${link_with_libraries})
+
 find_program(BASH_EXECUTABLE bash)
 if(NOT BASH_EXECUTABLE)
   message(FATAL_ERROR "bash not found; ompLoweringTests require bash")
@@ -28,6 +73,193 @@ set(_omp_deterministic_script
 set(_omp_lowering_test_output_dir
   ${CMAKE_CURRENT_BINARY_DIR}/test-output)
 file(MAKE_DIRECTORY ${_omp_lowering_test_output_dir})
+
+set(_omp_associated_loop_contract_input
+  ${CMAKE_CURRENT_SOURCE_DIR}/rex_omp_associated_loop_contract_input.cpp)
+set(_omp_runtime_int64_contract_input
+  ${CMAKE_CURRENT_SOURCE_DIR}/rex_omp_runtime_int64_contract_input.c)
+set(_omp_intel_simd_identity_contract_input
+  ${CMAKE_CURRENT_SOURCE_DIR}/rex_omp_intel_simd_identity_contract_input.c)
+set(_omp_clause_copy_identity_input
+  ${CMAKE_CURRENT_SOURCE_DIR}/rex_omp_clause_copy_identity_input.c)
+
+foreach(_abi IN ITEMS lp64 ilp32)
+  add_test(
+    NAME omp_lowering_rex_runtime_int64_${_abi}_contract
+    WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+    COMMAND $<TARGET_FILE:rex_omp_runtime_int64_contract>
+            --${_abi}
+            ${_omp_runtime_int64_contract_input})
+  set_tests_properties(
+    omp_lowering_rex_runtime_int64_${_abi}_contract
+    PROPERTIES LABELS "rex;OMPLOWERING;OMPLOWERING_CONTRACT")
+endforeach()
+
+foreach(_identity IN ITEMS vec ptr part)
+  add_test(
+    NAME omp_lowering_rex_intel_simd_${_identity}_identity_contract
+    WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+    COMMAND $<TARGET_FILE:rex_omp_intel_simd_identity_contract>
+            --${_identity}
+            ${_omp_intel_simd_identity_contract_input})
+  set_tests_properties(
+    omp_lowering_rex_intel_simd_${_identity}_identity_contract
+    PROPERTIES LABELS "rex;OMPLOWERING;OMPLOWERING_SIMD;OMPLOWERING_CONTRACT")
+endforeach()
+
+add_test(
+  NAME omp_lowering_rex_intel_simd_missing_output_identity_is_rejected
+  WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "ulimit -c 0; log=rex_intel_simd_missing_output.log; set +e; \"$@\" --missing-output \"${_omp_intel_simd_identity_contract_input}\" >\"$log\" 2>&1; status=$?; set -e; test $status -eq 134; test \"$(grep -Ec '^REX_OMP_LOWERING_INVARIANT\\[intel-simd-store-ownership\\]: generated original symbol=0x[[:xdigit:]]+ name=__generated_unbound has no exact output identity$' \"$log\")\" -eq 1"
+    dummy
+    $<TARGET_FILE:rex_omp_intel_simd_identity_contract>)
+set_tests_properties(
+  omp_lowering_rex_intel_simd_missing_output_identity_is_rejected
+  PROPERTIES LABELS "rex;death;OMPLOWERING;OMPLOWERING_SIMD;OMPLOWERING_CONTRACT")
+
+add_test(
+  NAME omp_lowering_rex_clause_copy_identity_shadowed_repeated
+  WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+  COMMAND $<TARGET_FILE:rex_omp_clause_copy_identity>
+          --accept-shadowed-repeated
+          ${_omp_clause_copy_identity_input})
+set_tests_properties(
+  omp_lowering_rex_clause_copy_identity_shadowed_repeated
+  PROPERTIES LABELS "rex;OpenMP;OMPLOWERING;OMPLOWERING_CONTRACT")
+
+add_test(
+  NAME omp_lowering_rex_clause_copy_identity_missing_map_is_rejected
+  WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "ulimit -c 0; log=rex_omp_clause_copy_identity_missing_map.log; rm -f \"$log\"; set +e; \"$@\" --reject-missing-directive-map \"${_omp_clause_copy_identity_input}\" >\"$log\" 2>&1; status=$?; set -e; test $status -eq 134; test \"$(grep -Ec '^REX_OMP_LOWERING_INVARIANT\\[outlined-clause-copy-identity\\]: role=directive original=0x[[:xdigit:]]+ type=SgOmpParallelStatement mapped=\\(nil\\) type=<null> has no exact nonidentity typed copy$' \"$log\")\" -eq 1"
+    dummy
+    $<TARGET_FILE:rex_omp_clause_copy_identity>)
+set_tests_properties(
+  omp_lowering_rex_clause_copy_identity_missing_map_is_rejected
+  PROPERTIES LABELS "rex;death;OpenMP;OMPLOWERING;OMPLOWERING_CONTRACT")
+
+add_test(
+  NAME omp_lowering_rex_openmp_copy_semantic_edges
+  WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+  COMMAND $<TARGET_FILE:rex_omp_copy_semantic_edges>
+          --openmp
+          ${CMAKE_CURRENT_SOURCE_DIR}/rex_omp_copy_semantic_edges_input.c)
+set_tests_properties(
+  omp_lowering_rex_openmp_copy_semantic_edges
+  PROPERTIES LABELS "rex;OMPLOWERING;OMPLOWERING_CONTRACT")
+
+add_test(
+  NAME omp_lowering_rex_openacc_copy_semantic_edges
+  WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+  COMMAND $<TARGET_FILE:rex_omp_copy_semantic_edges>
+          --openacc
+          ${CMAKE_CURRENT_SOURCE_DIR}/rex_acc_copy_semantic_edges_input.c)
+set_tests_properties(
+  omp_lowering_rex_openacc_copy_semantic_edges
+  PROPERTIES LABELS "rex;OpenACC;OMPLOWERING_CONTRACT")
+
+add_test(
+  NAME omp_lowering_rex_openmp_declaration_copy_semantic_edges
+  WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+  COMMAND $<TARGET_FILE:rex_omp_copy_semantic_edges>
+          --openmp-declarations
+          ${CMAKE_CURRENT_SOURCE_DIR}/rex_omp_declaration_copy_semantic_edges_input.c)
+set_tests_properties(
+  omp_lowering_rex_openmp_declaration_copy_semantic_edges
+  PROPERTIES LABELS "rex;OpenMP;OMPLOWERING_CONTRACT")
+
+foreach(_positive_mode IN ITEMS
+    accept-direct
+    accept-basic-block
+    accept-transform-wrapper
+    accept-cxx-constexpr-factor
+    accept-cxx-const-factor)
+  add_test(
+    NAME omp_lowering_rex_associated_loop_${_positive_mode}
+    WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+    COMMAND $<TARGET_FILE:rex_omp_associated_loop_contract>
+            --${_positive_mode}
+            ${_omp_associated_loop_contract_input})
+  set_tests_properties(
+    omp_lowering_rex_associated_loop_${_positive_mode}
+    PROPERTIES LABELS "rex;OMPLOWERING;OMPLOWERING_CONTRACT")
+endforeach()
+
+add_test(
+  NAME omp_lowering_rex_c_const_integral_constant_is_rejected
+  WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "ulimit -c 0; log=rex_c_const_integral_constant.log; set +e; \"$@\" --reject-c-const-factor \"${CMAKE_CURRENT_SOURCE_DIR}/rex_omp_c_const_integral_constant_input.c\" >\"$log\" 2>&1; status=$?; set -e; test $status -eq 134; test \"$(grep -Ec '^REX_OMP_LOWERING_INVARIANT\\[unroll-factor\\]: expression=0x[[:xdigit:]]+ kind=SgVarRefExp is not one exact positive target-ABI integral constant in \\[1,18446744073709551615\\]$' \"$log\")\" -eq 1"
+    dummy
+    $<TARGET_FILE:rex_omp_associated_loop_contract>)
+set_tests_properties(
+  omp_lowering_rex_c_const_integral_constant_is_rejected
+  PROPERTIES LABELS "rex;death;OMPLOWERING;OMPLOWERING_CONTRACT")
+
+set(_omp_associated_loop_death_cases
+  "ambiguous|reject-ambiguous-block"
+  "non_loop|reject-non-loop"
+  "wrong_root|reject-wrong-root"
+  "wrong_parent|reject-parent"
+  "parallel_wrapper|reject-parallel-wrapper"
+  "task_wrapper|reject-task-wrapper"
+  "critical_wrapper|reject-critical-wrapper"
+  "attributed_wrapper|reject-attributed-wrapper"
+  "cycle|reject-cycle"
+  "continue|reject-continue"
+  "stale_constant_symbol|reject-stale-constant-symbol")
+foreach(_case IN LISTS _omp_associated_loop_death_cases)
+  string(REPLACE "|" ";" _fields "${_case}")
+  list(GET _fields 0 _name)
+  list(GET _fields 1 _mode)
+  if(_name STREQUAL "ambiguous")
+    set(_expected_diagnostic
+      "^REX_OMP_LOWERING_INVARIANT\\[associated-loop-contract\\]: associated-loop block=0x[[:xdigit:]]+ contains 2 statements instead of one exact child$")
+  elseif(_name STREQUAL "non_loop")
+    set(_expected_diagnostic
+      "^REX_OMP_LOWERING_INVARIANT\\[associated-loop-contract\\]: associated-loop path reaches unsupported node=0x[[:xdigit:]]+ kind=SgNullStatement$")
+  elseif(_name STREQUAL "wrong_root")
+    set(_expected_diagnostic
+      "^REX_OMP_LOWERING_INVARIANT\\[associated-loop-contract\\]: expected root=0x[[:xdigit:]]+ does not match directive=0x[[:xdigit:]]+ exact body=0x[[:xdigit:]]+$")
+  elseif(_name STREQUAL "wrong_parent")
+    set(_expected_diagnostic
+      "^REX_OMP_LOWERING_INVARIANT\\[associated-loop-contract\\]: child=0x[[:xdigit:]]+ kind=SgForStatement parent=0x[[:xdigit:]]+ does not match exact owner=0x[[:xdigit:]]+$")
+  elseif(_name STREQUAL "parallel_wrapper")
+    set(_expected_diagnostic
+      "^REX_OMP_LOWERING_INVARIANT\\[associated-loop-contract\\]: OpenMP wrapper=0x[[:xdigit:]]+ kind=SgOmpParallelStatement is not admitted by associated-loop path contract=1$")
+  elseif(_name STREQUAL "task_wrapper")
+    set(_expected_diagnostic
+      "^REX_OMP_LOWERING_INVARIANT\\[associated-loop-contract\\]: OpenMP wrapper=0x[[:xdigit:]]+ kind=SgOmpTaskStatement is not admitted by associated-loop path contract=1$")
+  elseif(_name STREQUAL "critical_wrapper")
+    set(_expected_diagnostic
+      "^REX_OMP_LOWERING_INVARIANT\\[associated-loop-contract\\]: OpenMP wrapper=0x[[:xdigit:]]+ kind=SgOmpCriticalStatement is not admitted by associated-loop path contract=1$")
+  elseif(_name STREQUAL "attributed_wrapper")
+    set(_expected_diagnostic
+      "^REX_OMP_LOWERING_INVARIANT\\[associated-loop-contract\\]: attributed statement=0x[[:xdigit:]]+ is an explicit semantic/source wrapper and is not supported on an associated-loop path$")
+  elseif(_name STREQUAL "cycle")
+    set(_expected_diagnostic
+      "^REX_OMP_LOWERING_INVARIANT\\[associated-loop-contract\\]: associated-loop owner chain is cyclic at node=0x[[:xdigit:]]+ kind=SgBasicBlock$")
+  elseif(_name STREQUAL "continue")
+    set(_expected_diagnostic
+      "^REX_AST_INVARIANT\\[loop-unrolling-continue\\]: loop=0x[[:xdigit:]]+ contains a continue targeting the loop\\; grouped unrolling cannot preserve that control edge$")
+  elseif(_name STREQUAL "stale_constant_symbol")
+    set(_expected_diagnostic
+      "^REX_OMP_LOWERING_INVARIANT\\[unroll-factor\\]: expression=0x[[:xdigit:]]+ kind=SgVarRefExp is not one exact positive target-ABI integral constant in \\[1,18446744073709551615\\]$")
+  else()
+    message(FATAL_ERROR "unmapped associated-loop death case: ${_name}")
+  endif()
+  add_test(
+    NAME omp_lowering_rex_associated_loop_${_name}_is_rejected
+    WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+    COMMAND ${BASH_EXECUTABLE} -c
+      "ulimit -c 0; log=rex_associated_loop_${_name}.log; set +e; \"$@\" --${_mode} \"${_omp_associated_loop_contract_input}\" >\"$log\" 2>&1; status=$?; set -e; test $status -eq 134; test \"$(grep -Ec '${_expected_diagnostic}' \"$log\")\" -eq 1"
+      dummy
+      $<TARGET_FILE:rex_omp_associated_loop_contract>)
+  set_tests_properties(
+    omp_lowering_rex_associated_loop_${_name}_is_rejected
+    PROPERTIES LABELS "rex;death;OMPLOWERING;OMPLOWERING_CONTRACT")
+endforeach()
 
 set(_omp_legacy_labels
   OMPLOWERING
@@ -214,6 +446,8 @@ set(OMP_C_COMPILE_BASE_CASES
   ompfor8.c
   parallel_pragma.c
   private-duplicate.c
+  rex_omp_lowering_loop_transform_ownership.c
+  rex_openmp_ordered_map_sections.c
   single2.c
   sizeof.c
   staticChunk.c
@@ -229,7 +463,6 @@ set(OMP_C_RUNTIME_BASE_CASES
   3loops.c
   array_init.c
   array_init_2.c
-  atomic.c
   barrier.c
   critical.c
   critical_orphaned.c
@@ -286,6 +519,7 @@ set(OMP_C_RUNTIME_BASE_CASES
   reduction-classic.c
   reduction.c
   reduction2.c
+  rex_omp_unroll_exact_boundary.c
   rice1.c
   section.c
   section1.c
@@ -317,6 +551,7 @@ set(OMP_CXX_RUNTIME_BASE_CASES
   objectLastprivate.cpp
   orphanedAtomic.cpp
   preprocessingInfo2.cpp
+  rex_omp_lowering_typed_transform_constants.cpp
   task_link.cpp
   task_link2.cpp
   task_tree.cpp)
@@ -346,6 +581,8 @@ set(OMP_C_SEMANTIC_CASES
   parallel-reduction.c
   parallel-reduction2.c
   parallelfor2.c
+  rex_omp_lowering_loop_transform_ownership.c
+  rex_omp_unroll_exact_boundary.c
   reduction.c
   single.c)
 
@@ -355,7 +592,8 @@ set(OMP_CXX_SEMANTIC_CASES
   objectLastprivate.cpp
   objectPrivate.cpp
   orphanedAtomic.cpp
-  preprocessingInfo2.cpp)
+  preprocessingInfo2.cpp
+  rex_omp_lowering_typed_transform_constants.cpp)
 
 set(OMP_C_INVARIANT_CASES
   barrier.c
@@ -377,6 +615,8 @@ set(OMP_C_INVARIANT_CASES
   parallel-reduction2.c
   parallelfor2.c
   private.c
+  rex_omp_lowering_loop_transform_ownership.c
+  rex_omp_unroll_exact_boundary.c
   reduction.c
   single.c
   single3.c
@@ -391,7 +631,8 @@ set(OMP_CXX_INVARIANT_CASES
   objectLastprivate.cpp
   objectPrivate.cpp
   orphanedAtomic.cpp
-  preprocessingInfo2.cpp)
+  preprocessingInfo2.cpp
+  rex_omp_lowering_typed_transform_constants.cpp)
 
 set(OMP_C_ALL_CASES ${OMP_C_COMPILE_BASE_CASES} ${OMP_C_RUNTIME_BASE_CASES})
 set(OMP_CXX_ALL_CASES ${OMP_CXX_COMPILE_BASE_CASES} ${OMP_CXX_RUNTIME_BASE_CASES})
@@ -470,6 +711,106 @@ if(NOT _omp_c_semantic_enabled)
 endif()
 
 if(ENABLE-C)
+  if(_omp_c_semantic_enabled)
+    add_omp_semantic_test(
+      omp_lowering_c_semantic_rex_omp_simd_ordered_runtime_c
+      $<TARGET_FILE:rex_omp_simd_addr3_translator>
+      ${CMAKE_C_COMPILER}
+      rex_omp_simd_ordered_runtime.c
+      exact
+      c
+      simd_addr3/rex_omp_simd_ordered_runtime_c)
+  endif()
+
+  set(_omp_simd_length_cases
+    "absent|rex_omp_simd_length_absent.c|_mm512_loadu_ps"
+    "simdlen|rex_omp_simd_length_simdlen.c|_mm256_loadu_ps"
+    "safelen|rex_omp_simd_length_safelen.c|_mm_loadu_ps"
+    "both|rex_omp_simd_length_both.c|_mm_loadu_ps")
+  foreach(_case IN LISTS _omp_simd_length_cases)
+    string(REPLACE "|" ";" _fields "${_case}")
+    list(GET _fields 0 _name)
+    list(GET _fields 1 _source)
+    list(GET _fields 2 _intrinsic)
+    set(_output
+      ${_omp_lowering_test_output_dir}/rose_rex_omp_simd_length_${_name}.c)
+    add_test(
+      NAME omp_lowering_rex_simd_length_${_name}
+      WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+      COMMAND ${BASH_EXECUTABLE} -c
+        "set -e; output=\"$1\"; expected=\"$2\"; shift 2; rm -f \"$output\"; \"$@\" -rose:simd:intel-avx -rose:openmp:lowering -rose:skipfinalCompileStep -rose:verbose 0 -rose:output \"$output\" -c \"${_omp_test_dir}/${_source}\"; test -s \"$output\"; grep -Fq \"$expected\" \"$output\""
+        dummy
+        ${_output}
+        ${_intrinsic}
+        $<TARGET_FILE:rex_omp_simd_addr3_translator>)
+    set_tests_properties(
+      omp_lowering_rex_simd_length_${_name}
+      PROPERTIES LABELS "rex;OMPLOWERING;OMPLOWERING_SIMD")
+  endforeach()
+
+  set(_omp_simd_two_region_output
+      ${_omp_lowering_test_output_dir}/rose_rex_omp_simd_two_region_reduction.c)
+  add_test(
+    NAME omp_lowering_rex_simd_two_region_reduction_ownership
+    WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+    COMMAND ${BASH_EXECUTABLE} -c
+      "set -e; output=\"$1\"; shift; rm -f \"$output\"; MALLOC_PERTURB_=165 \"$@\" -rose:simd:intel-avx -rose:openmp:lowering -rose:skipfinalCompileStep -rose:verbose 0 -rose:output \"$output\" -c \"${_omp_test_dir}/rex_omp_simd_two_region_reduction.c\"; test -s \"$output\"; test \"$(grep -Fc '_mm512_setzero_ps' \"$output\")\" -eq 2"
+      dummy
+      ${_omp_simd_two_region_output}
+      $<TARGET_FILE:rex_omp_simd_addr3_translator>)
+  set_tests_properties(
+    omp_lowering_rex_simd_two_region_reduction_ownership
+    PROPERTIES LABELS "rex;OMPLOWERING;OMPLOWERING_SIMD")
+
+  set(_omp_simd_death_cases
+    "strided|rex_omp_simd_strided_invalid.c|^REX_OMP_LOWERING_INVARIANT\\[omp-simd-address\\]: node=0x[[:xdigit:]]+ kind=SgMultiplyOp uses a non-affine index operation$"
+    "runtime_index|rex_omp_simd_runtime_index_invalid.c|^REX_OMP_LOWERING_INVARIANT\\[omp-simd-address\\]: expression=0x[[:xdigit:]]+ kind=SgCastExp is not one exact target-ABI integral constant expression$"
+    "mixed_type|rex_omp_simd_mixed_type_invalid.c|^REX_OMP_LOWERING_INVARIANT\\[omp-simd-type\\]: node=0x[[:xdigit:]]+ kind=SgCastExp is not an exact no-op scalar cast$"
+    "mixed_lane_width|rex_omp_simd_mixed_lane_width_invalid.c|^REX_OMP_LOWERING_INVARIANT\\[intel-simd-width\\]: region mixes 32-bit and 64-bit lane widths before emission$"
+    "value_cast|rex_omp_simd_value_cast_invalid.c|^REX_OMP_LOWERING_INVARIANT\\[omp-simd-type\\]: node=0x[[:xdigit:]]+ kind=SgCastExp is not an exact no-op scalar cast$"
+    "induction_scalar|rex_omp_simd_induction_scalar_invalid.c|^REX_OMP_LOWERING_INVARIANT\\[omp-simd-expression\\]: node=0x[[:xdigit:]]+ kind=SgVarRefExp uses the induction variable as a scalar broadcast$"
+    "length_order|rex_omp_simd_length_order_invalid.c|^REX_OMP_LOWERING_INVARIANT\\[omp-simd-length\\]: node=0x[[:xdigit:]]+ kind=SgOmpSimdStatement has simdlen greater than safelen$"
+    "duplicate_length_clause|rex_omp_simd_length_duplicate_invalid.c|^  0:0: duplicate unique clause [[:punct:]]simdlen[[:punct:]]$"
+    "length_unsupported|rex_omp_simd_length_unsupported_invalid.c|^REX_OMP_LOWERING_INVARIANT\\[omp-simd-length\\]: node=0x[[:xdigit:]]+ kind=SgOmpSimdStatement requests a width unsupported by the exact Intel SIMD backend$"
+    "safelen_too_small|rex_omp_simd_safelen_too_small_invalid.c|^REX_OMP_LOWERING_INVARIANT\\[omp-simd-length\\]: node=0x[[:xdigit:]]+ kind=SgOmpSimdStatement has no Intel SIMD width that satisfies safelen$")
+  foreach(_case IN LISTS _omp_simd_death_cases)
+    string(REPLACE "|" ";" _fields "${_case}")
+    list(GET _fields 0 _name)
+    list(GET _fields 1 _source)
+    list(GET _fields 2 _expected_diagnostic)
+    add_test(
+      NAME omp_lowering_rex_simd_${_name}_is_rejected
+      WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+      COMMAND ${BASH_EXECUTABLE} -c
+        "ulimit -c 0; log=rex_simd_${_name}.log; set +e; \"$@\" -rose:simd:intel-avx -rose:openmp:lowering -rose:skipfinalCompileStep -rose:verbose 0 -c \"${_omp_test_dir}/${_source}\" >\"$log\" 2>&1; status=$?; set -e; test $status -eq 134; test \"$(grep -Ec '${_expected_diagnostic}' \"$log\")\" -eq 1"
+        dummy
+        $<TARGET_FILE:rex_omp_simd_addr3_translator>)
+    set_tests_properties(
+      omp_lowering_rex_simd_${_name}_is_rejected
+      PROPERTIES LABELS "rex;death;OMPLOWERING;OMPLOWERING_SIMD")
+  endforeach()
+
+  set(_omp_integral_constant_death_cases
+    "plain_char|rex_omp_unroll_plain_char_invalid.c|^REX_OMP_LOWERING_INVARIANT\\[integral-constant-abi\\]: type=0x[[:xdigit:]]+ kind=SgTypeChar has no persisted target signedness contract$"
+    "wchar|rex_omp_unroll_wchar_invalid.cpp|^REX_OMP_LOWERING_INVARIANT\\[integral-constant-abi\\]: type=0x[[:xdigit:]]+ kind=SgTypeWchar has no persisted target signedness contract$"
+    "negative_shift|rex_omp_unroll_negative_shift_invalid.c|^REX_OMP_LOWERING_INVARIANT\\[integral-constant-shift\\]: negative signed right shift has no persisted target policy$")
+  foreach(_case IN LISTS _omp_integral_constant_death_cases)
+    string(REPLACE "|" ";" _fields "${_case}")
+    list(GET _fields 0 _name)
+    list(GET _fields 1 _source)
+    list(GET _fields 2 _expected_diagnostic)
+    add_test(
+      NAME omp_lowering_rex_integral_constant_${_name}_is_rejected
+      WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+      COMMAND ${BASH_EXECUTABLE} -c
+        "ulimit -c 0; log=rex_integral_constant_${_name}.log; set +e; \"$@\" -rose:openmp:lowering -rose:skipfinalCompileStep -rose:verbose 0 -c \"${_omp_test_dir}/${_source}\" >\"$log\" 2>&1; status=$?; set -e; test $status -eq 134; test \"$(grep -Ec '${_expected_diagnostic}' \"$log\")\" -eq 1"
+        dummy
+        $<TARGET_FILE:roseomp>)
+    set_tests_properties(
+      omp_lowering_rex_integral_constant_${_name}_is_rejected
+      PROPERTIES LABELS "rex;death;OMPLOWERING;OMPLOWERING_CONSTANT")
+  endforeach()
+
   foreach(_case_entry IN LISTS OMP_LEGACY_CASE_MATRIX)
     string(REPLACE "|" ";" _case_fields "${_case_entry}")
     list(GET _case_fields 0 testcode)
@@ -535,6 +876,37 @@ if(ENABLE-C)
     endif()
   endforeach()
 
+  set(_loop_transform_ownership_name
+      rex_omp_lowering_loop_transform_ownership_c)
+  if(_omp_c_semantic_enabled)
+    set(_loop_transform_ownership_translate_test
+        omp_lowering_c_semantic_${_loop_transform_ownership_name})
+    set(_loop_transform_ownership_generated_source
+        ${_omp_lowering_test_output_dir}/legacy_semantic/c/${_loop_transform_ownership_name}/rose_rex_omp_lowering_loop_transform_ownership.c)
+  else()
+    set(_loop_transform_ownership_translate_test
+        omp_lowering_c_compile_only_${_loop_transform_ownership_name})
+    set(_loop_transform_ownership_generated_source
+        ${_omp_lowering_test_output_dir}/legacy_compile_only/c/${_loop_transform_ownership_name}/rose_rex_omp_lowering_loop_transform_ownership.c)
+  endif()
+  add_test(
+    NAME omp_lowering_c_generated_compile_${_loop_transform_ownership_name}
+    COMMAND ${CMAKE_C_COMPILER}
+            -std=c11
+            -fsyntax-only
+            -I${_omp_lowering_inc}
+            ${_loop_transform_ownership_generated_source})
+  set_tests_properties(
+    omp_lowering_c_generated_compile_${_loop_transform_ownership_name}
+    PROPERTIES
+      DEPENDS ${_loop_transform_ownership_translate_test})
+  _omp_set_test_timeout(
+    omp_lowering_c_generated_compile_${_loop_transform_ownership_name} 120)
+  set_property(
+    TEST omp_lowering_c_generated_compile_${_loop_transform_ownership_name}
+    APPEND PROPERTY LABELS
+           "${_omp_legacy_labels};OMPLOWERING_GENERATED_COMPILE")
+
   foreach(testcode IN LISTS OMP_ACC_C_CASES)
     _omp_sanitize_name(_omp_name ${testcode})
     add_omp_translate_only_test(
@@ -554,31 +926,35 @@ if(ENABLE-C)
   endforeach()
 
   add_test(
-    NAME omp_lowering_mapper_semantic_declare_mapper_target_update
+    NAME omp_lowering_mapper_semantic_rex_openmp_target_update_distinct_items
     WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
     COMMAND ${BASH_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_mapper_lowering_check.sh
             $<TARGET_FILE:roseomp>
-            ${_omp_test_dir}/declare_mapper_target_update.c
-            ${_omp_lowering_test_output_dir}/mapper_semantic/declare_mapper_target_update
-            declare_mapper_target_update.c)
-  _omp_set_test_timeout(omp_lowering_mapper_semantic_declare_mapper_target_update 540)
-  _label_omp_semantic(omp_lowering_mapper_semantic_declare_mapper_target_update)
+            ${_omp_test_dir}/rex_openmp_target_update_distinct_items.c
+            ${_omp_lowering_test_output_dir}/mapper_semantic/rex_openmp_target_update_distinct_items
+            rex_openmp_target_update_distinct_items.c)
+  _omp_set_test_timeout(
+    omp_lowering_mapper_semantic_rex_openmp_target_update_distinct_items 540)
+  _label_omp_semantic(
+    omp_lowering_mapper_semantic_rex_openmp_target_update_distinct_items)
 
   add_test(
-    NAME ASTJSON_omp_lowering_mapper_semantic_declare_mapper_target_update
+    NAME ASTJSON_omp_lowering_mapper_semantic_rex_openmp_target_update_distinct_items
     WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
     COMMAND ${BASH_EXECUTABLE}
             ${_omp_mapper_checkpoint_script}
             $<TARGET_FILE:roseomp>
-            ${_omp_test_dir}/declare_mapper_target_update.c
-            ${_omp_lowering_test_output_dir}/ast-json/mapper_semantic/declare_mapper_target_update
-            declare_mapper_target_update.c)
+            ${_omp_test_dir}/rex_openmp_target_update_distinct_items.c
+            ${_omp_lowering_test_output_dir}/ast-json/mapper_semantic/rex_openmp_target_update_distinct_items
+            rex_openmp_target_update_distinct_items.c)
   set_tests_properties(
-    ASTJSON_omp_lowering_mapper_semantic_declare_mapper_target_update
+    ASTJSON_omp_lowering_mapper_semantic_rex_openmp_target_update_distinct_items
     PROPERTIES
       LABELS "ASTJSON;OMPLOWERING;OMPLOWERING_SEMANTIC")
-  _omp_set_test_timeout(ASTJSON_omp_lowering_mapper_semantic_declare_mapper_target_update 540)
+  _omp_set_test_timeout(
+    ASTJSON_omp_lowering_mapper_semantic_rex_openmp_target_update_distinct_items
+    540)
 
   add_test(
     NAME omp_lowering_rex_test2026_deterministic_capture_order_cpp
@@ -627,6 +1003,18 @@ if(ENABLE-C)
     PROPERTIES
       LABELS "ASTJSON;OMPLOWERING;OMPLOWERING_DETERMINISTIC")
   _omp_set_test_timeout(ASTJSON_omp_lowering_rex_test2026_deterministic_root_order_cpp 540)
+
+  add_test(
+    NAME omp_acc_lowering_c_typed_launch_bounds
+    WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+    COMMAND ${BASH_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_rex_typed_launch_bounds_check.sh
+            $<TARGET_FILE:roseompacc>
+            ${_omp_test_dir}/rex_omp_lowering_typed_launch_bounds.c
+            ${_omp_lowering_test_output_dir}/acc_c/typed_launch_bounds
+            rex_omp_lowering_typed_launch_bounds.c)
+  _omp_set_test_timeout(omp_acc_lowering_c_typed_launch_bounds 540)
+  _label_omp_compile_only(omp_acc_lowering_c_typed_launch_bounds)
 
   add_test(
     NAME omp_acc_lowering_c_compile_only_target_literal_scalar

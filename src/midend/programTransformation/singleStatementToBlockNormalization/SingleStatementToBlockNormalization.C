@@ -131,6 +131,12 @@ SingleStatementToBlockNormalizer::~SingleStatementToBlockNormalizer() {
   delete singleStatementToBlock;
 }
 void SingleStatementToBlockNormalizer::Normalize(SgNode *node) {
+  if (isSgProject(node) != nullptr) {
+    fprintf(stderr,
+            "REX_TRANSFORMATION_INVARIANT[single-statement-normalization]: "
+            "project roots require NormalizeInputFiles\n");
+    ROSE_ABORT();
+  }
   traverse(node, postorder);
   SingleStatementToBlockVisitor *visitor =
       dynamic_cast<SingleStatementToBlockVisitor *>(singleStatementToBlock);
@@ -145,7 +151,7 @@ void SingleStatementToBlockNormalizer::NormalizeWithinFile(SgNode *node) {
   visitor->Normalize();
 }
 void SingleStatementToBlockNormalizer::NormalizeInputFiles(SgProject *project) {
-  traverse(project, postorder);
+  traverseInputFiles(project, postorder);
   SingleStatementToBlockVisitor *visitor =
       dynamic_cast<SingleStatementToBlockVisitor *>(singleStatementToBlock);
   ROSE_ASSERT(visitor);

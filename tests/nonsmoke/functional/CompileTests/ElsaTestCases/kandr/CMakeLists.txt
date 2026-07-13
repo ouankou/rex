@@ -1,7 +1,15 @@
-set(ROSE_FLAGS -rose:C -w -std=gnu89)
+set(ROSE_FLAGS -w -std=gnu89)
+list(APPEND ROSE_FLAGS ${REX_ELSA_SEMANTIC_PROBE_FLAGS})
 
 set(TESTCODES t0001.c t0002.c t0003.c t0004.c)
+set(_elsa_kandr_path_qualified_testcodes t0001.c t0002.c t0003.c)
 
 foreach(file_to_test ${TESTCODES})
+  if(file_to_test IN_LIST _elsa_kandr_path_qualified_testcodes)
+    set(REX_COMPILE_TEST_NAME_PREFIX ELSATEST_kandr)
+  else()
+    unset(REX_COMPILE_TEST_NAME_PREFIX)
+  endif()
   compile_test(${file_to_test} ELSATEST)
 endforeach()
+unset(REX_COMPILE_TEST_NAME_PREFIX)

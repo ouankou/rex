@@ -24,7 +24,7 @@ int main(int argc, char *argv[]) {
   if (SageInterface::isCanonicalForLoop((SgForStatement *)stmt, &ivar, &lb, &ub,
                                         &step, &lbody, &isIncremental)) {
     cout << "Found a canonical for loop: " << endl;
-    cout << "loop index variable is:" << ivar->unparseToString()
+    cout << "loop index variable is:" << ivar->get_name().str()
          << "\n bound 1 is:" << lb->unparseToString()
          << "\n bound 2 is:" << ub->unparseToString()
          << "\n step is:" << step->unparseToString()

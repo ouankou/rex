@@ -16,8 +16,10 @@ SgRangeExp *SgRangeExp::append(SgExpression *exp) {
     p_stride = p_end;
     p_end = exp;
   } else {
-    // cannot do more appends. Max 3 items allowed. Raise an error
-    return NULL;
+    fprintf(stderr,
+            "REX_AST_INVARIANT[range-arity]: SgRangeExp cannot own more "
+            "than start, stride, and end expressions\n");
+    ROSE_ABORT();
   }
 
   exp->set_parent(this);

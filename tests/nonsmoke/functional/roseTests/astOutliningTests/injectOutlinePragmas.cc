@@ -71,16 +71,14 @@ static void insertOutlineDirectives(RandomStmtSelector::StmtSet_t &S) {
 
       // Generate pragma, randomly choosing between
       // pass-by-reference or pass-by-pointer outlining styles.
-      SgPragma *pragma = new SgPragma("rose_outline", ASTtools::newFileInfo());
-      ROSE_ASSERT(pragma);
       SgPragmaDeclaration *pragma_decl =
-          new SgPragmaDeclaration(ASTtools::newFileInfo(), pragma);
+          SageBuilder::buildPragmaDeclaration("rose_outline", b);
       ROSE_ASSERT(pragma_decl);
+      SageInterface::publishGeneratedSubtreeOutputOwner(pragma_decl, s);
 
       // Insert pragma
       ASTtools::moveBeforePreprocInfo(s, pragma_decl);
       isSgStatement(b)->insert_statement(s, pragma_decl, true);
-      pragma_decl->set_parent(b);
 
       string comment("Randomly selected outline target: ");
       comment += ASTtools::toStringFileLoc(s);

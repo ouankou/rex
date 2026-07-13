@@ -59,7 +59,7 @@ function(rex_uninit_test_name out_var prefix source_rel)
   set(${out_var} "${prefix}_${_name}" PARENT_SCOPE)
 endfunction()
 
-function(rex_add_uninit_cxx_tests property_name will_fail)
+function(rex_add_uninit_cxx_tests property_name frontend_negative)
   set(_group_flags ${ARGN})
   rex_get_registered_compile_source_set(_sources ${property_name})
   foreach(source_rel IN LISTS _sources)
@@ -68,20 +68,30 @@ function(rex_add_uninit_cxx_tests property_name will_fail)
     get_filename_component(_source_dir ${_source_path} DIRECTORY)
     rex_get_cxx_specimen_extra_flags(_extra_frontend_flags ${_source_name})
     rex_uninit_test_name(_test_name uninit_fields_cxx ${source_rel})
-    add_test(
-      NAME ${_test_name}
-      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND $<TARGET_FILE:testUninitializedFields>
+    set(_test_command
+      $<TARGET_FILE:testUninitializedFields>
         ${_uninit_flags}
         ${_group_flags}
         ${_extra_frontend_flags}
         -DTEST_STRING_MACRO="Thu Apr 14 08:18:33 PDT 2005"
         -I${_source_dir}
         ${_uninit_includes}
-        -c ${_source_path}
-    )
-    if(${will_fail})
-      set_tests_properties(${_test_name} PROPERTIES WILL_FAIL TRUE)
+        -c ${_source_path})
+    if(frontend_negative)
+      rex_get_clang_frontend_negative_diagnostic(
+        _expected_diagnostic "${_source_path}")
+      rex_add_clang_frontend_negative_test(
+        ${_test_name}
+        uninitializedField
+        ${CMAKE_CURRENT_BINARY_DIR}
+        ${_test_name}.frontend-negative.log
+        "${_expected_diagnostic}"
+        ${_test_command})
+    else()
+      add_test(
+        NAME ${_test_name}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMAND ${_test_command})
     endif()
     if(REX_EXTENDED_TEST_TIMEOUTS AND
        source_rel IN_LIST _uninit_cxx_extended_instrumented_timeout_sources)
@@ -95,7 +105,7 @@ function(rex_add_uninit_cxx_tests property_name will_fail)
   endforeach()
 endfunction()
 
-function(rex_add_uninit_c_copy_tests prefix property_name will_fail)
+function(rex_add_uninit_c_copy_tests prefix property_name frontend_negative)
   set(_group_flags ${ARGN})
   rex_get_registered_compile_source_set(_sources ${property_name})
   foreach(source_rel IN LISTS _sources)
@@ -104,10 +114,8 @@ function(rex_add_uninit_c_copy_tests prefix property_name will_fail)
     get_filename_component(_source_dir ${_source_path} DIRECTORY)
     rex_get_cxx_specimen_extra_flags(_extra_frontend_flags ${_source_name})
     rex_uninit_test_name(_test_name ${prefix} ${source_rel})
-    add_test(
-      NAME ${_test_name}
-      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND ${BASH_EXECUTABLE} -c
+    set(_test_command
+      ${BASH_EXECUTABLE} -c
         "cp \"$1\" \"$2\" && shift 2 && \"$@\""
         dummy
         ${_source_path}
@@ -120,10 +128,22 @@ function(rex_add_uninit_c_copy_tests prefix property_name will_fail)
         -I${_source_dir}
         ${_uninit_includes}
         -c
-        ${_test_name}.temp.c
-    )
-    if(${will_fail})
-      set_tests_properties(${_test_name} PROPERTIES WILL_FAIL TRUE)
+        ${_test_name}.temp.c)
+    if(frontend_negative)
+      rex_get_clang_frontend_negative_diagnostic(
+        _expected_diagnostic "${_source_path}")
+      rex_add_clang_frontend_negative_test(
+        ${_test_name}
+        uninitializedField
+        ${CMAKE_CURRENT_BINARY_DIR}
+        ${_test_name}.frontend-negative.log
+        "${_expected_diagnostic}"
+        ${_test_command})
+    else()
+      add_test(
+        NAME ${_test_name}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMAND ${_test_command})
     endif()
   endforeach()
 endfunction()
@@ -170,7 +190,7 @@ function(rex_add_uninit_cxx20_module_test)
   )
 endfunction()
 
-function(rex_add_uninit_fortran_tests prefix property_name will_fail)
+function(rex_add_uninit_fortran_tests prefix property_name)
   set(_group_flags ${ARGN})
   rex_get_registered_compile_source_set(_sources ${property_name})
   foreach(source_rel IN LISTS _sources)
@@ -186,9 +206,9 @@ function(rex_add_uninit_fortran_tests prefix property_name will_fail)
         ${_extra_frontend_flags}
         -c ${_source_path}
     )
-    if(${will_fail})
-      set_tests_properties(${_test_name} PROPERTIES WILL_FAIL TRUE)
-    endif()
+    set_property(
+      GLOBAL APPEND PROPERTY REX_UNINIT_FORTRAN_TEST_RECORDS
+      "${source_rel}|${_test_name}")
   endforeach()
 endfunction()
 
@@ -211,26 +231,11 @@ if(NOT _uninit_skip_all)
     -std=gnu++14)
   rex_add_uninit_cxx_tests(REX_CXX_TESTS_GNUXX03_SOURCES FALSE -std=gnu++03)
   rex_add_uninit_cxx_tests(REX_CXX_TESTS_GNUXX17_SOURCES FALSE -std=gnu++17)
-  rex_add_uninit_cxx_tests(
-    REX_CXX_TESTS_DELAYED_TEMPLATE_PARSING_SOURCES
-    FALSE
-    -std=gnu++14
-    -rex:clang:delayed-template-parsing)
+  rex_add_uninit_cxx_tests(REX_CXX_TESTS_GNUXX20_SOURCES FALSE -std=gnu++20)
   rex_add_uninit_cxx_tests(REX_CXX03_TESTS_SOURCES FALSE -std=c++03)
   rex_filter_negative_sources(REX_UNINIT_CXX11_TESTS_CXX11_POSITIVE_SOURCES
     REX_CXX11_TESTS_CXX11_SOURCES
     REX_CXX11_TESTS_NEGATIVE_SOURCES)
-  rex_get_registered_compile_source_set(_cxx11_uninit_positive
-    REX_UNINIT_CXX11_TESTS_CXX11_POSITIVE_SOURCES)
-  list(APPEND _cxx11_uninit_positive Cxx11_tests/test2019_315.C)
-  list(REMOVE_DUPLICATES _cxx11_uninit_positive)
-  set_property(GLOBAL PROPERTY REX_UNINIT_CXX11_TESTS_CXX11_POSITIVE_SOURCES
-    ${_cxx11_uninit_positive})
-  rex_get_registered_compile_source_set(_cxx11_uninit_negative
-    REX_CXX11_TESTS_NEGATIVE_SOURCES)
-  list(REMOVE_ITEM _cxx11_uninit_negative Cxx11_tests/test2019_315.C)
-  set_property(GLOBAL PROPERTY REX_UNINIT_CXX11_TESTS_NEGATIVE_SOURCES
-    ${_cxx11_uninit_negative})
   rex_add_uninit_cxx_tests(REX_UNINIT_CXX11_TESTS_CXX11_POSITIVE_SOURCES FALSE
     -std=c++11)
   rex_add_uninit_cxx_tests(REX_UNINIT_CXX11_TESTS_NEGATIVE_SOURCES TRUE -std=c++11)
@@ -287,28 +292,41 @@ if(NOT _uninit_skip_all)
   rex_filter_negative_sources(REX_UNINIT_C99_POSITIVE_SOURCES
     REX_C99_TESTS_SOURCES
     REX_C99_TESTS_NEGATIVE_SOURCES)
-  rex_add_uninit_c_copy_tests(uninit_fields_c99 REX_UNINIT_C99_POSITIVE_SOURCES FALSE -rose:C99)
-  rex_add_uninit_c_copy_tests(uninit_fields_c99 REX_C99_TESTS_NEGATIVE_SOURCES TRUE -rose:C99)
+  rex_add_uninit_c_copy_tests(uninit_fields_c99 REX_UNINIT_C99_POSITIVE_SOURCES FALSE -std=gnu99)
+  rex_add_uninit_c_copy_tests(uninit_fields_c99 REX_C99_TESTS_NEGATIVE_SOURCES TRUE -std=gnu99)
 
 if(enable-fortran)
     rex_filter_negative_sources(REX_UNINIT_FORTRAN_F90_POSITIVE_SOURCES
       REX_FORTRAN_F90_SOURCES
       REX_FORTRAN_F90_NEGATIVE_SOURCES)
+    rex_get_registered_compile_source_set(_fortran_f2018_frontend_only_sources
+      REX_FORTRAN_F2018_FRONTEND_ONLY_SOURCES)
+    rex_get_registered_compile_source_set(_fortran_f90_positive_sources
+      REX_UNINIT_FORTRAN_F90_POSITIVE_SOURCES)
+    if(_fortran_f2018_frontend_only_sources)
+      list(REMOVE_ITEM _fortran_f90_positive_sources
+        ${_fortran_f2018_frontend_only_sources})
+      set_property(GLOBAL PROPERTY REX_UNINIT_FORTRAN_F90_POSITIVE_SOURCES
+        ${_fortran_f90_positive_sources})
+    endif()
     rex_add_uninit_fortran_tests(uninit_fields_f90
-      REX_UNINIT_FORTRAN_F90_POSITIVE_SOURCES FALSE
+      REX_UNINIT_FORTRAN_F90_POSITIVE_SOURCES
       -rose:fortran_std=f90)
+    rex_add_uninit_fortran_tests(uninit_fields_f90
+      REX_FORTRAN_F2018_FRONTEND_ONLY_SOURCES
+      -rose:skipfinalCompileStep
+      -rose:fortran_std=f2018)
     rex_filter_negative_sources(REX_UNINIT_FORTRAN_F77_POSITIVE_SOURCES
       REX_FORTRAN_F77_SOURCES
       REX_FORTRAN_F77_NEGATIVE_SOURCES)
     rex_add_uninit_fortran_tests(uninit_fields_f77
-      REX_UNINIT_FORTRAN_F77_POSITIVE_SOURCES FALSE
+      REX_UNINIT_FORTRAN_F77_POSITIVE_SOURCES
       -rose:fortran_std=f77)
     rex_filter_negative_sources(REX_UNINIT_FORTRAN_F03_POSITIVE_SOURCES
       REX_FORTRAN_F03_SOURCES
       REX_FORTRAN_F03_NEGATIVE_SOURCES)
     rex_add_uninit_fortran_tests(uninit_fields_f03
-      REX_UNINIT_FORTRAN_F03_POSITIVE_SOURCES FALSE
-      -rose:skip_syntax_check
+      REX_UNINIT_FORTRAN_F03_POSITIVE_SOURCES
       -rose:skipfinalCompileStep
       -rose:fortran_std=f2003)
 endif()
@@ -317,9 +335,62 @@ if(NOT _uninit_skip_all)
   get_property(_uninit_registered_tests DIRECTORY PROPERTY TESTS)
   foreach(_test IN LISTS _uninit_registered_tests)
     if(_test MATCHES "^uninit_fields_")
-      set_property(TEST ${_test} APPEND PROPERTY ENVIRONMENT
-                   "ROSE_TEST_OUTPUT_DIR=${_uninit_output_dir}")
+      set(_test_output_dir ${_uninit_output_dir}/${_test})
+      file(MAKE_DIRECTORY ${_test_output_dir})
+      set_tests_properties(${_test} PROPERTIES
+        WORKING_DIRECTORY ${_test_output_dir}
+        ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_test_output_dir}")
     endif()
+  endforeach()
+
+  get_property(
+    _fortran_module_chains GLOBAL PROPERTY REX_FORTRAN_MODULE_CHAINS)
+  get_property(
+    _uninit_fortran_test_records
+    GLOBAL PROPERTY REX_UNINIT_FORTRAN_TEST_RECORDS)
+  foreach(_chain IN LISTS _fortran_module_chains)
+    string(REPLACE "|" ";" _chain_fields "${_chain}")
+    list(GET _chain_fields 0 _producer_source)
+    list(GET _chain_fields 1 _consumer_source)
+    list(GET _chain_fields 2 _fixture)
+    set(_uninit_fixture rex_uninit_${_fixture})
+    unset(_producer_test)
+    unset(_consumer_test)
+
+    foreach(_record IN LISTS _uninit_fortran_test_records)
+      string(REPLACE "|" ";" _record_fields "${_record}")
+      list(GET _record_fields 0 _record_source)
+      list(GET _record_fields 1 _record_test)
+      if("${_record_source}" STREQUAL "${_producer_source}")
+        set(_producer_test ${_record_test})
+      elseif("${_record_source}" STREQUAL "${_consumer_source}")
+        set(_consumer_test ${_record_test})
+      endif()
+    endforeach()
+
+    if(NOT _producer_test OR NOT _consumer_test)
+      message(FATAL_ERROR
+        "Uninitialized-field module chain '${_fixture}' has no exact "
+        "producer and consumer tests")
+    endif()
+
+    set(_chain_output_dir
+        ${_uninit_output_dir}/module-chains/${_uninit_fixture})
+    file(MAKE_DIRECTORY ${_chain_output_dir})
+    set_tests_properties(
+      ${_producer_test}
+      PROPERTIES
+        WORKING_DIRECTORY ${_chain_output_dir}
+        ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_chain_output_dir}"
+        FIXTURES_SETUP ${_uninit_fixture}
+        RESOURCE_LOCK ${_uninit_fixture})
+    set_tests_properties(
+      ${_consumer_test}
+      PROPERTIES
+        WORKING_DIRECTORY ${_chain_output_dir}
+        ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_chain_output_dir}"
+        FIXTURES_REQUIRED ${_uninit_fixture}
+        RESOURCE_LOCK ${_uninit_fixture})
   endforeach()
 endif()
 

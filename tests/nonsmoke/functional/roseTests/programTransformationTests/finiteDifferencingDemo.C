@@ -1,47 +1,77 @@
 #include "rose.h"
 
+#include "RoseAst.h"
 #include "finiteDifferencing.h"
 
 #include <memory>
 
 using namespace std;
 
-std::vector<SgExpression *> exprs;
-
-class FindMinusVisitor : public AstSimpleProcessing {
-public:
-  virtual void visit(SgNode *n) {
-    SgMinusOp *n2 = isSgMinusOp(n);
-    if (n2) {
-      exprs.push_back(n2->get_operand());
-      // cout << "Minus found around " << n2->get_operand()->unparseToString()
-      // << endl;
+void requireGeneratedPreprocessingOwnership(SgNode *root,
+                                            const std::string &marker) {
+  size_t matches = 0;
+  RoseAst ast(root);
+  for (RoseAst::iterator current = ast.begin(); current != ast.end();
+       ++current) {
+    SgLocatedNode *owner = isSgLocatedNode(*current);
+    if (owner == nullptr || owner->getAttachedPreprocessingInfo() == nullptr) {
+      continue;
+    }
+    for (PreprocessingInfo *record : *owner->getAttachedPreprocessingInfo()) {
+      if (record == nullptr ||
+          record->getString().find(marker) == std::string::npos) {
+        continue;
+      }
+      ++matches;
+      Sg_File_Info *ownerInfo = owner->get_file_info();
+      Sg_File_Info *recordInfo = record->get_file_info();
+      if (SageInterface::getEnclosingSourceFile(owner, true) == nullptr ||
+          ownerInfo == nullptr || recordInfo == nullptr ||
+          ownerInfo->isShared() || recordInfo->isShared() ||
+          ownerInfo->get_physical_file_id() < 0 ||
+          recordInfo->get_physical_file_id() !=
+              ownerInfo->get_physical_file_id() ||
+          recordInfo->get_physical_filename() !=
+              Sg_File_Info::getFilenameFromID(
+                  ownerInfo->get_physical_file_id()) ||
+          !record->isTransformation() || recordInfo->isTransformation() ||
+          recordInfo->isCompilerGenerated() ||
+          !recordInfo->isOutputInCodeGeneration()) {
+        fprintf(stderr,
+                "REX_TEST_ERROR: generated finite-differencing preprocessing "
+                "has no exact physical owner owner=%p record=%p "
+                "owner-shared=%d record-shared=%d owner-physical=%d "
+                "record-physical=%d owner-filename=%s record-filename=%s "
+                "record-transformation=%d info-transformation=%d "
+                "info-compiler=%d info-output=%d\n",
+                static_cast<void *>(ownerInfo), static_cast<void *>(recordInfo),
+                ownerInfo != nullptr && ownerInfo->isShared() ? 1 : 0,
+                recordInfo != nullptr && recordInfo->isShared() ? 1 : 0,
+                ownerInfo != nullptr ? ownerInfo->get_physical_file_id() : -1,
+                recordInfo != nullptr ? recordInfo->get_physical_file_id() : -1,
+                ownerInfo != nullptr ? Sg_File_Info::getFilenameFromID(
+                                           ownerInfo->get_physical_file_id())
+                                           .c_str()
+                                     : "<null>",
+                recordInfo != nullptr ? recordInfo->get_filenameString().c_str()
+                                      : "<null>",
+                record->isTransformation() ? 1 : 0,
+                recordInfo != nullptr && recordInfo->isTransformation() ? 1 : 0,
+                recordInfo != nullptr && recordInfo->isCompilerGenerated() ? 1
+                                                                           : 0,
+                recordInfo != nullptr && recordInfo->isOutputInCodeGeneration()
+                    ? 1
+                    : 0);
+        ROSE_ABORT();
+      }
     }
   }
-};
-
-std::vector<SgExpression *> bang_exprs;
-
-class FindNotVisitor : public AstSimpleProcessing {
-public:
-  virtual void visit(SgNode *n) {
-    SgNotOp *n2 = isSgNotOp(n);
-    if (n2) {
-      bang_exprs.push_back(n2->get_operand());
-    }
+  if (matches == 0) {
+    fprintf(stderr, "REX_TEST_ERROR: finite differencing generated no owned "
+                    "preprocessing record\n");
+    ROSE_ABORT();
   }
-};
-
-vector<SgFunctionDefinition *> functions;
-
-class FindFunctionsVis : public AstSimpleProcessing {
-public:
-  virtual void visit(SgNode *n) {
-    if (isSgFunctionDefinition(n)) {
-      functions.push_back(isSgFunctionDefinition(n));
-    }
-  }
-};
+}
 
 int main(int argc, char *argv[]) {
   // Main Function for default example ROSE Preprocessor
@@ -52,55 +82,13 @@ int main(int argc, char *argv[]) {
   // more source files.
   SgProject *sageProject = frontend(argc, argv);
 
-  moveForDeclaredVariables(sageProject);
+  // Exercise the production finite-differencing entry point.  The former
+  // driver inferred candidate expressions from incidental SgMinusOp/SgNotOp
+  // nodes and therefore depended on malformed frontend AST shapes instead of
+  // the transformation's typed candidate analysis.
+  simpleIndexFiniteDifferencing(sageProject);
 
-  SgNode *tempProject = sageProject;
-  std::unique_ptr<RewriteRule> algebraicRules(getAlgebraicRules());
-  rewrite(algebraicRules.get(), tempProject);
-  sageProject = isSgProject(tempProject);
-  ROSE_ASSERT(sageProject);
-
-  FindFunctionsVis().traverse(sageProject, preorder);
-
-  for (unsigned int x = 0; x < functions.size(); ++x) {
-    SgBasicBlock *body = functions[x]->get_body();
-
-    exprs.clear();
-    FindMinusVisitor().traverse(body, preorder);
-
-    for (unsigned int i = 0; i < exprs.size(); ++i) {
-      SgStatement *stmt =
-          isSgStatement(exprs[i]->get_parent()->get_parent()->get_parent());
-      if (stmt)
-        SageInterface::myRemoveStatement(stmt);
-      std::unique_ptr<RewriteRule> finiteDifferencingRules(
-          getFiniteDifferencingRules());
-      doFiniteDifferencingOne(exprs[i], body, finiteDifferencingRules.get());
-    }
-
-    bang_exprs.clear();
-    FindNotVisitor().traverse(body, preorder);
-
-    for (unsigned int i = 0; i < bang_exprs.size(); ++i) {
-      SgStatement *bang_stmt = isSgStatement(
-          bang_exprs[i]->get_parent()->get_parent()->get_parent());
-      if (!bang_stmt)
-        continue;
-      SgBasicBlock *bb = isSgBasicBlock(bang_stmt->get_parent());
-      if (!bb)
-        continue;
-      SgVarRefExp *vr = isSgVarRefExp(bang_exprs[i]);
-      if (!vr)
-        continue;
-      SageInterface::myRemoveStatement(bang_stmt);
-      simpleUndoFiniteDifferencingOne(bb, vr);
-    }
-    SgNode *tempBody = body;
-    std::unique_ptr<RewriteRule> bodyAlgebraicRules(getAlgebraicRules());
-    rewrite(bodyAlgebraicRules.get(), tempBody);
-    body = isSgBasicBlock(tempBody);
-    ROSE_ASSERT(body);
-  }
+  requireGeneratedPreprocessingOwnership(sageProject, "Finite differencing:");
 
   // AstPDFGeneration().generateInputFiles(sageProject);
 

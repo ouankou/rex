@@ -14,20 +14,30 @@ void SgTemplateMemberFunctionRefExp::set_symbol(
 }
 
 // DQ (2/8/2009): I always wanted to have this function!
-SgTemplateMemberFunctionDeclaration *
+SgMemberFunctionDeclaration *
 SgTemplateMemberFunctionRefExp::getAssociatedMemberFunctionDeclaration() const {
-  // This is helpful in chasing down the associated declaration to this member
-  // function reference.
-  SgTemplateMemberFunctionDeclaration *returnMemberFunctionDeclaration = NULL;
-  SgTemplateMemberFunctionSymbol *memberFunctionSymbol = this->get_symbol();
-
-  ROSE_ASSERT(memberFunctionSymbol != NULL);
-
-  if (memberFunctionSymbol != NULL)
-    returnMemberFunctionDeclaration = isSgTemplateMemberFunctionDeclaration(
-        memberFunctionSymbol->get_declaration());
-
-  return returnMemberFunctionDeclaration;
+  SgTemplateMemberFunctionSymbol *memberFunctionSymbol = get_symbol();
+  SgMemberFunctionDeclaration *sourceTemplate =
+      memberFunctionSymbol != nullptr
+          ? isSgMemberFunctionDeclaration(
+                memberFunctionSymbol->get_declaration())
+          : nullptr;
+  SgMemberFunctionDeclaration *semanticFunction =
+      get_semantic_member_function_declaration();
+  if (memberFunctionSymbol == nullptr || sourceTemplate == nullptr ||
+      isSgTemplateMemberFunctionDeclaration(sourceTemplate) == nullptr ||
+      semanticFunction == nullptr || semanticFunction->get_type() == nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[template-member-function-reference]: "
+            "reference=%p symbol=%p source-template=%p semantic-function=%p "
+            "has no exact source and semantic callable identities\n",
+            static_cast<const void *>(this),
+            static_cast<void *>(memberFunctionSymbol),
+            static_cast<void *>(sourceTemplate),
+            static_cast<void *>(semanticFunction));
+    ROSE_ABORT();
+  }
+  return semanticFunction;
 }
 
 // DQ (6/11/2015): Moved these six access functions, they should not be

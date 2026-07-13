@@ -1,58 +1,68 @@
-Unparsed: SgFunctionDeclaration int foo(){double A4;double MmP;double lP;double Lambdasun;((2 * MmP) *(3.14159265358979323846 / 180.0));(MmP *(3.14159265358979323846 / 180.0));return 0;}
-          SgFunctionDeclaration SgFunctionParameterList SgFunctionDefinition SgBasicBlock SgVariableDeclaration SgInitializedName SgVariableDeclaration SgInitializedName SgVariableDeclaration SgInitializedName SgVariableDeclaration SgInitializedName SgExprStatement SgCastExp SgIntVal 2 SgMultiplyOp SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0 SgExprStatement SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0 SgReturnStmt SgIntVal 0 
-Unparsed: SgFunctionParameterList 
-          SgFunctionParameterList 
-Unparsed: SgFunctionDefinition int foo(){double A4;double MmP;double lP;double Lambdasun;((2 * MmP) *(3.14159265358979323846 / 180.0));(MmP *(3.14159265358979323846 / 180.0));return 0;}
-          SgFunctionDefinition SgBasicBlock SgVariableDeclaration SgInitializedName SgVariableDeclaration SgInitializedName SgVariableDeclaration SgInitializedName SgVariableDeclaration SgInitializedName SgExprStatement SgCastExp SgIntVal 2 SgMultiplyOp SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0 SgExprStatement SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0 SgReturnStmt SgIntVal 0 
-Unparsed: SgBasicBlock {double A4;double MmP;double lP;double Lambdasun;((2 * MmP) *(3.14159265358979323846 / 180.0));(MmP *(3.14159265358979323846 / 180.0));return 0;}
-          SgBasicBlock SgVariableDeclaration SgInitializedName SgVariableDeclaration SgInitializedName SgVariableDeclaration SgInitializedName SgVariableDeclaration SgInitializedName SgExprStatement SgCastExp SgIntVal 2 SgMultiplyOp SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0 SgExprStatement SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0 SgReturnStmt SgIntVal 0 
+Unparsed: SgFunctionDeclaration int foo(){double A4, MmP, lP, Lambdasun;((2 * MmP) *(3.14159265358979323846 / 180.0));((MmP) *(3.14159265358979323846 / 180.0));return 0;}
+          SgFunctionDeclaration SgFunctionParameterList SgDeclarationScope SgFunctionDefinition SgBasicBlock SgDeclarationGroupStatement SgVariableDeclaration SgInitializedName SgVariableDefinition SgVariableDeclaration SgInitializedName SgVariableDefinition SgVariableDeclaration SgInitializedName SgVariableDefinition SgVariableDeclaration SgInitializedName SgVariableDefinition SgExprStatement SgCastExp SgIntVal 2 SgMultiplyOp SgCastExp SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0 SgExprStatement SgCastExp SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0 SgReturnStmt SgIntVal 0
+Unparsed: SgFunctionParameterList <owned-syntax-container>
+          SgFunctionParameterList
+Unparsed: SgFunctionDefinition int foo(){double A4, MmP, lP, Lambdasun;((2 * MmP) *(3.14159265358979323846 / 180.0));((MmP) *(3.14159265358979323846 / 180.0));return 0;}
+          SgFunctionDefinition SgBasicBlock SgDeclarationGroupStatement SgVariableDeclaration SgInitializedName SgVariableDefinition SgVariableDeclaration SgInitializedName SgVariableDefinition SgVariableDeclaration SgInitializedName SgVariableDefinition SgVariableDeclaration SgInitializedName SgVariableDefinition SgExprStatement SgCastExp SgIntVal 2 SgMultiplyOp SgCastExp SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0 SgExprStatement SgCastExp SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0 SgReturnStmt SgIntVal 0
+Unparsed: SgBasicBlock {double A4, MmP, lP, Lambdasun;((2 * MmP) *(3.14159265358979323846 / 180.0));((MmP) *(3.14159265358979323846 / 180.0));return 0;}
+          SgBasicBlock SgDeclarationGroupStatement SgVariableDeclaration SgInitializedName SgVariableDefinition SgVariableDeclaration SgInitializedName SgVariableDefinition SgVariableDeclaration SgInitializedName SgVariableDefinition SgVariableDeclaration SgInitializedName SgVariableDefinition SgExprStatement SgCastExp SgIntVal 2 SgMultiplyOp SgCastExp SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0 SgExprStatement SgCastExp SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0 SgReturnStmt SgIntVal 0
+Unparsed: SgDeclarationGroupStatement double A4, MmP, lP, Lambdasun;
+          SgDeclarationGroupStatement SgVariableDeclaration SgInitializedName SgVariableDefinition SgVariableDeclaration SgInitializedName SgVariableDefinition SgVariableDeclaration SgInitializedName SgVariableDefinition SgVariableDeclaration SgInitializedName SgVariableDefinition
 Unparsed: SgVariableDeclaration double A4;
-          SgVariableDeclaration SgInitializedName 
+          SgVariableDeclaration SgInitializedName SgVariableDefinition
 Unparsed: SgInitializedName A4
-          SgInitializedName 
+          SgInitializedName SgVariableDefinition
+Unparsed: SgVariableDefinition
+          SgVariableDefinition
 Unparsed: SgVariableDeclaration double MmP;
-          SgVariableDeclaration SgInitializedName 
+          SgVariableDeclaration SgInitializedName SgVariableDefinition
 Unparsed: SgInitializedName MmP
-          SgInitializedName 
+          SgInitializedName SgVariableDefinition
+Unparsed: SgVariableDefinition
+          SgVariableDefinition
 Unparsed: SgVariableDeclaration double lP;
-          SgVariableDeclaration SgInitializedName 
+          SgVariableDeclaration SgInitializedName SgVariableDefinition
 Unparsed: SgInitializedName lP
-          SgInitializedName 
+          SgInitializedName SgVariableDefinition
+Unparsed: SgVariableDefinition
+          SgVariableDefinition
 Unparsed: SgVariableDeclaration double Lambdasun;
-          SgVariableDeclaration SgInitializedName 
+          SgVariableDeclaration SgInitializedName SgVariableDefinition
 Unparsed: SgInitializedName Lambdasun
-          SgInitializedName 
+          SgInitializedName SgVariableDefinition
+Unparsed: SgVariableDefinition
+          SgVariableDefinition
 Unparsed: SgExprStatement ((2 * MmP) *(3.14159265358979323846 / 180.0));
-          SgExprStatement SgCastExp SgIntVal 2 SgMultiplyOp SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0 
+          SgExprStatement SgCastExp SgIntVal 2 SgMultiplyOp SgCastExp SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0
 Unparsed: SgMultiplyOp ((2 * MmP) *(3.14159265358979323846 / 180.0))
-          SgCastExp SgIntVal 2 SgMultiplyOp SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0 
+          SgCastExp SgIntVal 2 SgMultiplyOp SgCastExp SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0
 Unparsed: SgMultiplyOp (2 * MmP)
-          SgCastExp SgIntVal 2 SgMultiplyOp SgVarRefExp 
+          SgCastExp SgIntVal 2 SgMultiplyOp SgCastExp SgVarRefExp
 Unparsed: SgIntVal 2
-          SgIntVal 2 
+          SgIntVal 2
 Unparsed: SgVarRefExp MmP
-          SgVarRefExp 
+          SgVarRefExp
 Unparsed: SgDivideOp (3.14159265358979323846 / 180.0)
-          SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0 
+          SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0
 Unparsed: SgDoubleVal 3.14159265358979323846
-          SgDoubleVal 3.14159265358979323846 
+          SgDoubleVal 3.14159265358979323846
 Unparsed: SgDoubleVal 180.0
-          SgDoubleVal 180.0 
-Unparsed: SgExprStatement (MmP *(3.14159265358979323846 / 180.0));
-          SgExprStatement SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0 
-Unparsed: SgMultiplyOp (MmP *(3.14159265358979323846 / 180.0))
-          SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0 
-Unparsed: SgVarRefExp MmP
-          SgVarRefExp 
+          SgDoubleVal 180.0
+Unparsed: SgExprStatement ((MmP) *(3.14159265358979323846 / 180.0));
+          SgExprStatement SgCastExp SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0
+Unparsed: SgMultiplyOp ((MmP) *(3.14159265358979323846 / 180.0))
+          SgCastExp SgVarRefExp SgMultiplyOp SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0
+Unparsed: SgVarRefExp (MmP)
+          SgVarRefExp
 Unparsed: SgDivideOp (3.14159265358979323846 / 180.0)
-          SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0 
+          SgDoubleVal 3.14159265358979323846 SgDivideOp SgDoubleVal 180.0
 Unparsed: SgDoubleVal 3.14159265358979323846
-          SgDoubleVal 3.14159265358979323846 
+          SgDoubleVal 3.14159265358979323846
 Unparsed: SgDoubleVal 180.0
-          SgDoubleVal 180.0 
+          SgDoubleVal 180.0
 Unparsed: SgReturnStmt return 0;
-          SgReturnStmt SgIntVal 0 
+          SgReturnStmt SgIntVal 0
 Unparsed: SgIntVal 0
-          SgIntVal 0 
-Unparsed: SgEmptyDeclaration 
-          SgEmptyDeclaration 
+          SgIntVal 0
+Unparsed: SgEmptyDeclaration ;
+          SgEmptyDeclaration

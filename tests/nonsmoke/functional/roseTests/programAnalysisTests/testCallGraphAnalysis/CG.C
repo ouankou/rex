@@ -36,6 +36,8 @@
 
 #include <map>
 
+#include <set>
+
 #include <stdlib.h>
 
 #include <string>
@@ -51,25 +53,160 @@ std::string stripGlobalModifer(std::string str) {
   return str;
 };
 
-static void normalizeTemplateNamesForDump(SgFunctionDeclaration *funcDecl) {
+static void validateTemplateNamesForDump(SgFunctionDeclaration *funcDecl) {
   if (funcDecl == NULL) {
     return;
   }
 
   if (SgTemplateInstantiationFunctionDecl *inst_func =
           isSgTemplateInstantiationFunctionDecl(funcDecl)) {
-    inst_func->resetTemplateName();
+    ROSE_ASSERT(inst_func->get_name().getString().find('<') !=
+                std::string::npos);
   } else if (SgTemplateInstantiationMemberFunctionDecl *inst_member =
                  isSgTemplateInstantiationMemberFunctionDecl(funcDecl)) {
-    inst_member->resetTemplateName();
+    const bool has_function_template_arguments =
+        !inst_member->get_templateArguments().empty() ||
+        !inst_member->get_deducedTemplateArguments().empty();
+    if (has_function_template_arguments) {
+      ROSE_ASSERT(inst_member->get_name().getString().find('<') !=
+                  std::string::npos);
+    }
     if (SgTemplateInstantiationDecl *inst_class = isSgTemplateInstantiationDecl(
             inst_member->get_associatedClassDeclaration())) {
-      inst_class->resetTemplateName();
+      ROSE_ASSERT(inst_class->get_name().getString().find('<') !=
+                  std::string::npos);
     }
   }
 }
 
 static std::string templateArgumentNameForDump(SgTemplateArgument *arg);
+
+static SgFunctionDeclaration *
+canonicalFunctionFamilyForDump(SgFunctionDeclaration *declaration) {
+  ROSE_ASSERT(declaration != NULL);
+  if (SgFunctionDeclaration *first = isSgFunctionDeclaration(
+          declaration->get_firstNondefiningDeclaration())) {
+    return first;
+  }
+  return declaration;
+}
+
+static bool functionInstantiationHasExplicitSourceIdentity(
+    SgFunctionDeclaration *declaration) {
+  ROSE_ASSERT(declaration != NULL);
+  if (declaration->get_specialization() ==
+      SgDeclarationStatement::e_specialization) {
+    return true;
+  }
+  if (SgTemplateInstantiationFunctionDecl *instantiation =
+          isSgTemplateInstantiationFunctionDecl(declaration)) {
+    if (instantiation->get_template_argument_list_is_explicit()) {
+      return true;
+    }
+  } else if (SgTemplateInstantiationMemberFunctionDecl *instantiation =
+                 isSgTemplateInstantiationMemberFunctionDecl(declaration)) {
+    if (instantiation->get_template_argument_list_is_explicit()) {
+      return true;
+    }
+  }
+
+  static bool initialized = false;
+  static std::set<SgFunctionDeclaration *> explicitSourceFamilies;
+  if (!initialized) {
+    initialized = true;
+    VariantVector variants(V_SgNonrealRefExp);
+    for (SgNode *node : NodeQuery::queryMemoryPool(variants)) {
+      SgNonrealRefExp *reference = isSgNonrealRefExp(node);
+      if (reference == NULL ||
+          !reference->get_explicit_template_argument_list()) {
+        continue;
+      }
+      SgFunctionDeclaration *resolved =
+          reference->get_resolved_function_declaration();
+      if (resolved != NULL) {
+        explicitSourceFamilies.insert(canonicalFunctionFamilyForDump(resolved));
+      }
+    }
+  }
+  return explicitSourceFamilies.count(
+             canonicalFunctionFamilyForDump(declaration)) != 0;
+}
+
+static SgType *uniqueDeducedSourceTypedefForDump(SgTemplateArgument *argument) {
+  ROSE_ASSERT(argument != NULL);
+  SgFunctionDeclaration *specialization =
+      isSgFunctionDeclaration(argument->get_parent());
+  SgType *semanticType = argument->get_type();
+  if (specialization == NULL || semanticType == NULL ||
+      argument->get_explicitlySpecified()) {
+    return NULL;
+  }
+
+  SgType *canonicalSemanticType = semanticType->stripTypedefsAndModifiers();
+  SgTypedefType *uniqueSourceType = NULL;
+  VariantVector callVariants(V_SgFunctionCallExp);
+  for (SgNode *node : NodeQuery::queryMemoryPool(callVariants)) {
+    SgFunctionCallExp *call = isSgFunctionCallExp(node);
+    if (call == NULL || call->get_function() == NULL ||
+        call->get_args() == NULL) {
+      continue;
+    }
+    SgExpression *callee = CallTargetSet::unwrapExactImplicitCalleeConversions(
+        call->get_function());
+    SgFunctionDeclaration *resolved = NULL;
+    if (SgTemplateFunctionRefExp *reference =
+            isSgTemplateFunctionRefExp(callee)) {
+      resolved = reference->get_semantic_function_declaration();
+      if (resolved == NULL) {
+        resolved = reference->getAssociatedFunctionDeclaration();
+      }
+    } else if (SgTemplateMemberFunctionRefExp *reference =
+                   isSgTemplateMemberFunctionRefExp(callee)) {
+      resolved = reference->get_semantic_member_function_declaration();
+      if (resolved == NULL) {
+        resolved = reference->getAssociatedMemberFunctionDeclaration();
+      }
+    } else if (SgNonrealRefExp *reference = isSgNonrealRefExp(callee)) {
+      resolved = reference->get_resolved_function_declaration();
+    }
+    if (resolved == NULL ||
+        canonicalFunctionFamilyForDump(resolved) !=
+            canonicalFunctionFamilyForDump(specialization)) {
+      continue;
+    }
+
+    for (SgExpression *callArgument : call->get_args()->get_expressions()) {
+      while (SgCastExp *cast = isSgCastExp(callArgument)) {
+        cast->validate_semantic_conversion();
+        if (cast->get_cast_type() != SgCastExp::e_implicit_cast ||
+            cast->get_operand() == NULL ||
+            cast->get_operand()->get_parent() != cast) {
+          break;
+        }
+        callArgument = cast->get_operand();
+      }
+      SgType *sourceType =
+          callArgument != NULL ? callArgument->get_type() : NULL;
+      if (sourceType == NULL ||
+          sourceType->stripTypedefsAndModifiers() != canonicalSemanticType) {
+        continue;
+      }
+      SgType *sourceSurface = sourceType->stripType(
+          SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
+          SgType::STRIP_RVALUE_REFERENCE_TYPE);
+      SgTypedefType *sourceTypedef = isSgTypedefType(sourceSurface);
+      if (sourceTypedef == NULL) {
+        continue;
+      }
+      if (uniqueSourceType != NULL && uniqueSourceType->get_declaration() !=
+                                          sourceTypedef->get_declaration()) {
+        return NULL;
+      }
+      uniqueSourceType = sourceTypedef;
+    }
+  }
+  return uniqueSourceType;
+}
 
 static std::string templateArgumentListForDump(
     const SgTemplateArgumentPtrList &templateArguments) {
@@ -103,11 +240,6 @@ static std::string templateArgumentListForDump(
 static std::string qualifiedClassNameForDump(SgClassDeclaration *classDecl) {
   ROSE_ASSERT(classDecl != NULL);
 
-  if (SgClassDeclaration *first =
-          isSgClassDeclaration(classDecl->get_firstNondefiningDeclaration())) {
-    classDecl = first;
-  }
-
   if (SgTemplateInstantiationDecl *inst_decl =
           isSgTemplateInstantiationDecl(classDecl)) {
     SgName base_name = inst_decl->get_templateName();
@@ -129,6 +261,28 @@ static std::string qualifiedClassNameForDump(SgClassDeclaration *classDecl) {
     return class_name;
   }
 
+  SgScopeStatement *scope = classDecl->get_scope();
+  SgClassDeclaration *owner = NULL;
+  if (SgClassDefinition *definition = isSgClassDefinition(scope)) {
+    owner = definition->get_declaration();
+  } else if (SgTemplateClassDefinition *definition =
+                 isSgTemplateClassDefinition(scope)) {
+    owner = definition->get_declaration();
+  } else if (SgTemplateInstantiationDefn *definition =
+                 isSgTemplateInstantiationDefn(scope)) {
+    owner = isSgClassDeclaration(definition->get_declaration());
+  }
+  if (owner != NULL && owner != classDecl) {
+    return qualifiedClassNameForDump(owner) +
+           "::" + classDecl->get_name().getString();
+  }
+
+  if (SgClassDeclaration *first =
+          isSgClassDeclaration(classDecl->get_firstNondefiningDeclaration())) {
+    if (first != classDecl) {
+      return qualifiedClassNameForDump(first);
+    }
+  }
   return classDecl->get_qualified_name().getString();
 }
 
@@ -137,45 +291,299 @@ static std::string templateArgumentNameForDump(SgTemplateArgument *arg) {
 
   switch (arg->get_argumentType()) {
   case SgTemplateArgument::type_argument: {
-    SgType *type = arg->get_type();
-    if (SgNamedType *named_type = isSgNamedType(type)) {
-      if (SgClassDeclaration *class_decl =
-              isSgClassDeclaration(named_type->get_declaration())) {
-        return stripGlobalModifer(qualifiedClassNameForDump(class_decl));
-      }
-      if (SgTypedefDeclaration *typedef_decl =
-              isSgTypedefDeclaration(named_type->get_declaration())) {
-        return stripGlobalModifer(
-            typedef_decl->get_qualified_name().getString());
-      }
-      if (SgEnumDeclaration *enum_decl =
-              isSgEnumDeclaration(named_type->get_declaration())) {
-        return stripGlobalModifer(enum_decl->get_qualified_name().getString());
-      }
+    SgType *type = arg->get_sourceSpelledType();
+    if (type == NULL) {
+      type = uniqueDeducedSourceTypedefForDump(arg);
     }
-    return stripGlobalModifer(arg->unparseToString());
+    if (type == NULL) {
+      type = arg->get_type();
+    }
+    std::function<bool(SgType *, std::string &)> exactSemanticTypeName =
+        [&](SgType *current, std::string &result) {
+          ROSE_ASSERT(current != NULL);
+          if (SgNamedType *named_type = isSgNamedType(current)) {
+            if (SgClassDeclaration *class_decl =
+                    isSgClassDeclaration(named_type->get_declaration())) {
+              if (SgTemplateInstantiationDecl *instantiation =
+                      isSgTemplateInstantiationDecl(class_decl)) {
+                result = qualifiedClassNameForDump(instantiation);
+                return true;
+              }
+              result = stripGlobalModifer(
+                  class_decl->get_qualified_name().getString());
+              return true;
+            }
+            if (SgTypedefDeclaration *typedef_decl =
+                    isSgTypedefDeclaration(named_type->get_declaration())) {
+              result = stripGlobalModifer(
+                  typedef_decl->get_qualified_name().getString());
+              return true;
+            }
+            if (SgEnumDeclaration *enum_decl =
+                    isSgEnumDeclaration(named_type->get_declaration())) {
+              result = stripGlobalModifer(
+                  enum_decl->get_qualified_name().getString());
+              return true;
+            }
+            return false;
+          }
+          if (SgPointerType *pointer = isSgPointerType(current)) {
+            if (!exactSemanticTypeName(pointer->get_base_type(), result)) {
+              return false;
+            }
+            result += "*";
+            return true;
+          }
+          if (SgReferenceType *reference = isSgReferenceType(current)) {
+            if (!exactSemanticTypeName(reference->get_base_type(), result)) {
+              return false;
+            }
+            result += "&";
+            return true;
+          }
+          if (SgRvalueReferenceType *reference =
+                  isSgRvalueReferenceType(current)) {
+            if (!exactSemanticTypeName(reference->get_base_type(), result)) {
+              return false;
+            }
+            result += "&&";
+            return true;
+          }
+          if (SgModifierType *modifier = isSgModifierType(current)) {
+            if (!exactSemanticTypeName(modifier->get_base_type(), result)) {
+              return false;
+            }
+            const SgConstVolatileModifier &cv =
+                modifier->get_typeModifier().get_constVolatileModifier();
+            std::string prefix;
+            if (cv.isConst()) {
+              prefix += "const ";
+            }
+            if (cv.isVolatile()) {
+              prefix += "volatile ";
+            }
+            result = prefix + result;
+            return true;
+          }
+          if (isSgTypeVoid(current)) {
+            result = "void";
+            return true;
+          }
+          if (isSgTypeBool(current)) {
+            result = "bool";
+            return true;
+          }
+          if (isSgTypeChar(current)) {
+            result = "char";
+            return true;
+          }
+          if (isSgTypeSignedChar(current)) {
+            result = "signed char";
+            return true;
+          }
+          if (isSgTypeUnsignedChar(current)) {
+            result = "unsigned char";
+            return true;
+          }
+          if (isSgTypeShort(current)) {
+            result = "short";
+            return true;
+          }
+          if (isSgTypeUnsignedShort(current)) {
+            result = "unsigned short";
+            return true;
+          }
+          if (isSgTypeInt(current)) {
+            result = "int";
+            return true;
+          }
+          if (isSgTypeUnsignedInt(current)) {
+            result = "unsigned int";
+            return true;
+          }
+          if (isSgTypeLong(current)) {
+            result = "long";
+            return true;
+          }
+          if (isSgTypeUnsignedLong(current)) {
+            result = "unsigned long";
+            return true;
+          }
+          if (isSgTypeLongLong(current)) {
+            result = "long long";
+            return true;
+          }
+          if (isSgTypeUnsignedLongLong(current)) {
+            result = "unsigned long long";
+            return true;
+          }
+          if (isSgTypeFloat(current)) {
+            result = "float";
+            return true;
+          }
+          if (isSgTypeDouble(current)) {
+            result = "double";
+            return true;
+          }
+          if (isSgTypeLongDouble(current)) {
+            result = "long double";
+            return true;
+          }
+          if (isSgTypeWchar(current)) {
+            result = "wchar_t";
+            return true;
+          }
+          if (isSgTypeChar16(current)) {
+            result = "char16_t";
+            return true;
+          }
+          if (isSgTypeChar32(current)) {
+            result = "char32_t";
+            return true;
+          }
+          return false;
+        };
+
+    std::string exactTypeName;
+    if (exactSemanticTypeName(type, exactTypeName)) {
+      return exactTypeName;
+    }
+    fprintf(stderr,
+            "REX_CALLGRAPH_INVARIANT[template-argument-dump]: type argument "
+            "has unsupported exact type=%p/%s\n",
+            static_cast<void *>(type),
+            type != NULL ? type->class_name().c_str() : "<null>");
+    ROSE_ABORT();
   }
 
-  case SgTemplateArgument::nontype_argument:
-  case SgTemplateArgument::template_template_argument:
+  case SgTemplateArgument::nontype_argument: {
+    ROSE_ASSERT(arg->get_expression() != NULL ||
+                arg->get_initializedName() != NULL);
+    ROSE_ASSERT(arg->get_expression() == NULL ||
+                arg->get_initializedName() == NULL);
+    if (SgExpression *expression = arg->get_expression()) {
+      std::function<std::string(SgExpression *)> exactExpressionName =
+          [&](SgExpression *current) -> std::string {
+        ROSE_ASSERT(current != NULL);
+        if (SgCastExp *cast = isSgCastExp(current)) {
+          cast->validate_semantic_conversion();
+          if (cast->get_cast_type() != SgCastExp::e_implicit_cast ||
+              cast->get_operand() == NULL ||
+              cast->get_operand()->get_parent() != cast) {
+            fprintf(stderr,
+                    "REX_CALLGRAPH_INVARIANT[template-argument-dump]: "
+                    "non-type argument contains a non-implicit or malformed "
+                    "cast\n");
+            ROSE_ABORT();
+          }
+          return exactExpressionName(cast->get_operand());
+        }
+        if (SgAddressOfOp *address = isSgAddressOfOp(current)) {
+          if (address->get_operand() == NULL ||
+              address->get_operand()->get_parent() != address) {
+            fprintf(stderr, "REX_CALLGRAPH_INVARIANT[template-argument-dump]: "
+                            "address argument has no exact owned operand\n");
+            ROSE_ABORT();
+          }
+          return "&" + exactExpressionName(address->get_operand());
+        }
+        if (SgIntVal *value = isSgIntVal(current)) {
+          return value->get_valueString();
+        }
+        if (SgVarRefExp *reference = isSgVarRefExp(current)) {
+          SgVariableSymbol *symbol = reference->get_symbol();
+          SgInitializedName *declaration =
+              symbol != NULL ? symbol->get_declaration() : NULL;
+          if (declaration == NULL) {
+            fprintf(stderr, "REX_CALLGRAPH_INVARIANT[template-argument-dump]: "
+                            "variable reference has no exact declaration\n");
+            ROSE_ABORT();
+          }
+          return stripGlobalModifer(
+              declaration->get_qualified_name().getString());
+        }
+        if (SgMemberFunctionRefExp *reference =
+                isSgMemberFunctionRefExp(current)) {
+          SgMemberFunctionDeclaration *declaration =
+              reference->getAssociatedMemberFunctionDeclaration();
+          if (declaration == NULL) {
+            fprintf(stderr,
+                    "REX_CALLGRAPH_INVARIANT[template-argument-dump]: "
+                    "member-function reference has no exact declaration\n");
+            ROSE_ABORT();
+          }
+          return stripGlobalModifer(
+              declaration->get_qualified_name().getString());
+        }
+        if (SgFunctionRefExp *reference = isSgFunctionRefExp(current)) {
+          SgFunctionDeclaration *declaration =
+              reference->getAssociatedFunctionDeclaration();
+          if (declaration == NULL) {
+            fprintf(stderr, "REX_CALLGRAPH_INVARIANT[template-argument-dump]: "
+                            "function reference has no exact declaration\n");
+            ROSE_ABORT();
+          }
+          return stripGlobalModifer(
+              declaration->get_qualified_name().getString());
+        }
+        fprintf(stderr,
+                "REX_CALLGRAPH_INVARIANT[template-argument-dump]: non-type "
+                "argument has unsupported exact expression=%p/%s\n",
+                static_cast<void *>(current), current->class_name().c_str());
+        ROSE_ABORT();
+      };
+      return exactExpressionName(expression);
+    }
+    return stripGlobalModifer(
+        arg->get_initializedName()->get_name().getString());
+  }
+
+  case SgTemplateArgument::template_template_argument: {
+    SgTemplateDeclaration *declaration =
+        isSgTemplateDeclaration(arg->get_templateDeclaration());
+    ROSE_ASSERT(declaration != NULL);
+    return stripGlobalModifer(declaration->get_qualified_name().getString());
+  }
+
   case SgTemplateArgument::argument_undefined:
   case SgTemplateArgument::start_of_pack_expansion_argument:
   default:
-    return stripGlobalModifer(arg->unparseToString());
+    ROSE_ABORT();
   }
 }
 
 static std::string qualifiedDumpName(SgFunctionDeclaration *funcDecl) {
   ROSE_ASSERT(funcDecl != NULL);
-  normalizeTemplateNamesForDump(funcDecl);
+  validateTemplateNamesForDump(funcDecl);
 
   if (SgTemplateInstantiationMemberFunctionDecl *inst_member =
           isSgTemplateInstantiationMemberFunctionDecl(funcDecl)) {
     SgClassDeclaration *assoc_class =
         isSgClassDeclaration(inst_member->get_associatedClassDeclaration());
     ROSE_ASSERT(assoc_class != NULL);
+    SgName base_name = inst_member->get_templateName();
+    if (base_name.is_null()) {
+      base_name = inst_member->get_name();
+    }
+    std::string member_name = base_name.getString();
+    if (functionInstantiationHasExplicitSourceIdentity(inst_member)) {
+      member_name +=
+          templateArgumentListForDump(inst_member->get_templateArguments());
+      while (!member_name.empty() && member_name.back() == ' ') {
+        member_name.pop_back();
+      }
+    }
     return stripGlobalModifer(qualifiedClassNameForDump(assoc_class) +
-                              "::" + inst_member->get_name().getString());
+                              "::" + member_name);
+  }
+
+  if (SgMemberFunctionDeclaration *member =
+          isSgMemberFunctionDeclaration(funcDecl)) {
+    SgClassDeclaration *associatedClass =
+        isSgClassDeclaration(member->get_associatedClassDeclaration());
+    ROSE_ASSERT(associatedClass != NULL);
+    return stripGlobalModifer(qualifiedClassNameForDump(associatedClass) +
+                              "::" + member->get_name().getString());
   }
 
   if (SgTemplateInstantiationFunctionDecl *inst_func =
@@ -254,7 +662,37 @@ void sortedCallGraphDump(string fileName, SgIncidenceDirectedGraph *cg) {
     }
 
     calledNodes.sort(nodeCompareGraph);
-    calledNodes.unique();
+    calledNodes.unique([](SgGraphNode *left, SgGraphNode *right) {
+      if (nodeCompareGraph(left, right) || nodeCompareGraph(right, left)) {
+        return false;
+      }
+      SgFunctionDeclaration *leftDeclaration =
+          isSgFunctionDeclaration(left->get_SgNode());
+      SgFunctionDeclaration *rightDeclaration =
+          isSgFunctionDeclaration(right->get_SgNode());
+      ROSE_ASSERT(leftDeclaration != NULL);
+      ROSE_ASSERT(rightDeclaration != NULL);
+      auto isFunctionTemplateInstantiation =
+          [](SgFunctionDeclaration *declaration) {
+            if (isSgTemplateInstantiationFunctionDecl(declaration) != NULL) {
+              return true;
+            }
+            SgTemplateInstantiationMemberFunctionDecl *member =
+                isSgTemplateInstantiationMemberFunctionDecl(declaration);
+            return member != NULL &&
+                   (!member->get_templateArguments().empty() ||
+                    !member->get_deducedTemplateArguments().empty());
+          };
+      const bool leftInstantiation =
+          isFunctionTemplateInstantiation(leftDeclaration);
+      const bool rightInstantiation =
+          isFunctionTemplateInstantiation(rightDeclaration);
+      if (leftDeclaration->get_specialFunctionModifier().isConstructor() ||
+          rightDeclaration->get_specialFunctionModifier().isConstructor()) {
+        return false;
+      }
+      return leftInstantiation != rightInstantiation;
+    });
 
     // Output the unique graph
     SgFunctionDeclaration *cur_function =
@@ -319,14 +757,14 @@ struct OnlyCurrentDirectory {
     // any file.  The call graph layer always uses the first non-defining
     // declaration, thus we won't always see a valid file, in which case we need
     // to get the file name from the defining declaration.
-    string sourceFilename = node->get_file_info()->get_filename();
-    if (sourceFilename.empty() || 0 == sourceFilename.compare("NULL_FILE")) {
+    string sourceFilename = node->get_file_info()->get_physical_filename();
+    if (sourceFilename.empty()) {
       SgFunctionDeclaration *defdecl =
           isSgFunctionDeclaration(node->get_definingDeclaration());
-      if (defdecl)
-        sourceFilename = defdecl->get_file_info()->get_filename();
+      if (defdecl != NULL && defdecl->get_file_info() != NULL)
+        sourceFilename = defdecl->get_file_info()->get_physical_filename();
     }
-    if (sourceFilename.empty() || 0 == sourceFilename.compare("NULL_FILE")) {
+    if (sourceFilename.empty()) {
       return false;
     }
 
@@ -375,16 +813,8 @@ struct OnlyCurrentDirectory {
         printf("   --- secondaryTestSrcDir = %s \n",
                secondaryTestSrcDir.c_str());
 #endif
-        if (root_exists(secondaryTestSrcDir) &&
-            rosePathIsWithinTree(secondaryTestSrcDir, sourceFilename)) {
-          retval = true;
-        } else {
-          // DQ (9/1/2016): Test if this is a template instantiation from a
-          // template that would be true using our filter.
-          retval = SageInterface::
-              isTemplateInstantiationFromTemplateDeclarationSatisfyingFilter(
-                  node, this);
-        }
+        retval = root_exists(secondaryTestSrcDir) &&
+                 rosePathIsWithinTree(secondaryTestSrcDir, sourceFilename);
       }
     }
 

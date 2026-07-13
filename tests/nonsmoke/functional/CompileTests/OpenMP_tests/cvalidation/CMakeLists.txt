@@ -19,7 +19,7 @@ list(APPEND TESTCODES
   single_nowait.c single_private.c main.c omp_pragma_example1.c
   omp_pragma_example2.c)
 
-set(ROSE_FLAGS -rose:C_only -w -rose:verbose 0
+set(ROSE_FLAGS -rose:verbose 0
                -rose:openmp -rose:openmp:ast_only)
 
 foreach(file_to_test ${TESTCODES})

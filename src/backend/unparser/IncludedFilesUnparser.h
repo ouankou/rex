@@ -1,6 +1,8 @@
+#include <list>
+#include <map>
 #include <set>
-
 #include <string>
+#include <utility>
 
 // DQ (11/19/2018): Commented this out to fix thisi issue.
 // DQ (9/7/2018): We should not have a using namespace directive in a header
@@ -40,6 +42,17 @@ private:
   // this scope contains the included file). But note that not all of the scopes
   // in this map might require unparsing.
   std::map<std::string, SgScopeStatement *> unparseScopesMap;
+  std::map<std::string, std::map<unsigned int, std::set<SgScopeStatement *>>>
+      unparseScopeCandidatesMap;
+  std::map<std::string, std::map<unsigned int, std::set<SgScopeStatement *>>>
+      preprocessingUnparseScopeCandidatesMap;
+  std::map<std::string,
+           std::map<unsigned int, std::map<SgScopeStatement *, SgNode *>>>
+      unparseScopeCandidateOriginsMap;
+  std::map<std::string,
+           std::map<unsigned int, std::map<SgScopeStatement *, SgNode *>>>
+      preprocessingUnparseScopeCandidateOriginsMap;
+  std::map<std::string, unsigned int> unparseOccurrenceMap;
 
   // DQ (9/7/2018): Adding map to connect filenames to there associated
   // SgSourceFile IR nodes (built in the frontend). Note that the SgSourceFile
@@ -56,6 +69,23 @@ private:
   std::set<std::string>
       newFilesToUnparse; // this is a temporary storage that needs to be
                          // accessible across several methods
+
+  // All planning state belongs to one project/unparse invocation.  This used
+  // to be process-global, which made a second project observe filenames and
+  // dangling SgSourceFile pointers from the first project.
+  std::set<std::string> modifiedFiles;
+  std::set<std::string> filesWithMarkedTransformations;
+  std::set<std::string> allFiles;
+  std::set<std::string> filesToUnparse;
+  std::set<std::string> filesWithUpdatedIncludePaths;
+  std::list<std::pair<int, std::string>> includeCompilerPaths;
+  std::map<std::string, std::string> unparseMap;
+  std::map<std::string, std::set<std::string>> includingPathsMap;
+  std::map<std::string, std::set<PreprocessingInfo *>>
+      includingPreprocessingInfos;
+  std::map<const PreprocessingInfo *, std::string> includeRewrites;
+  std::set<std::string> filesToCopy;
+  std::map<std::string, SgSourceFile *> unparseSourceFileMap;
 
   void prepareForNewIteration();
   void initializeFilesToUnparse();
@@ -82,7 +112,10 @@ private:
   void collectNotUnparsedFilesThatRequireUnparsingToAvoidFileNameCollisions();
   void addIncludeCompilerPath(int upFolderCount,
                               const std::string &includeCompilerPath);
-  void addToUnparseScopesMap(const std::string &fileName, SgNode *startNode);
+  void addToUnparseScopesMap(const std::string &fileName, SgNode *startNode,
+                             unsigned int physicalFileOccurrence,
+                             bool preprocessingOnly);
+  void validateUnparseScopeCandidates();
 
   // DQ (11/19/2018): We need to copy some unmodified files to the new
   // unparseHeadersDirectory, so that they will be picked up where we can't
@@ -92,8 +125,6 @@ private:
 
   // DQ (11/19/2018): This function initializes the data member: filesToCopy.
   void collectAdditionalListOfHeaderFilesToCopy();
-  void collectNewFilesToCopy(const std::string &includedFile,
-                             PreprocessingInfo *includingPreprocessingInfo);
 
 protected:
   void visit(SgNode *astNode);
@@ -109,6 +140,7 @@ public:
   std::string getUnparseRootPath();
   std::map<std::string, std::string> getUnparseMap();
   std::map<std::string, SgScopeStatement *> getUnparseScopesMap();
+  std::map<std::string, unsigned int> getUnparseOccurrenceMap();
   std::list<std::string> getIncludeCompilerOptions();
 
   // DQ (9/7/2018): Added to support retrival of SgSourceFile built in the
@@ -116,26 +148,12 @@ public:
   std::map<std::string, SgSourceFile *> getUnparseSourceFileMap();
 
   std::set<std::string> getFilesToCopy();
+  const std::set<std::string> &getFilesWithMarkedTransformations() const;
+  const std::set<std::string> &getFilesWithUpdatedIncludePaths() const;
+  const std::map<const PreprocessingInfo *, std::string> &
+  getIncludeRewrites() const;
   std::string
   getCopiedFileOutputPath(const std::string &absoluteFileName) const;
 
-  // DQ (2/22/2021): Make these static so that we can refer to them within tools
-  // to support diffs.
-  static std::set<std::string> modifiedFiles;
-  static std::set<std::string> filesWithMarkedTransformations;
-  static std::set<std::string> allFiles;
-  static std::set<std::string> filesToUnparse;
-  static std::set<std::string> filesWithUpdatedIncludePaths;
-  static std::list<std::pair<int, std::string>> includeCompilerPaths;
-  static std::map<std::string, std::string> unparseMap;
-  static std::map<std::string, std::set<std::string>> includingPathsMap;
-  static std::set<std::string> filesToCopy;
-
-  // DQ (2/23/2021): Make these static so that we can refer to them within tools
-  // to support diffs.
-  static std::map<std::string, SgSourceFile *> unparseSourceFileMap;
-
-  // DQ (2/22/2021): Moved tis to be public.
-  // void printDiagnosticOutput();
-  static void printDiagnosticOutput();
+  void printDiagnosticOutput();
 };

@@ -31,9 +31,8 @@ class Z : public Y
        // will be an "int" instead of a "myNumberType"
           typedef ::numberType numberType;
 
-       // Note also that if Z were not derived from Y then 
-          typedef numberType numberType;
-       // could have been used to refer to myNumberType
+          // If Z were not derived from Y, "typedef numberType numberType;"
+          // could instead have been used to refer to myNumberType.
 
           void foo()
              {
@@ -48,4 +47,3 @@ class Z : public Y
 #else
   #warning "Not tested on gnu 4.0 or greater versions"
 #endif
-

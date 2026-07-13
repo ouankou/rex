@@ -4,8 +4,8 @@
 // info.
 //   - extern int i;
 //   - int i;
-// - bottomup construction: build vardecl directly, then insert it into scope
-//   - int j;
+// Every declaration is built with its exact semantic scope and remains
+// structurally detached until explicit insertion.
 // SageBuilder contains the AST nodes/subtrees builders
 // SageInterface contains any other AST utitily tools
 //-------------------------------------------------------------------
@@ -26,38 +26,41 @@ int main(int argc, char *argv[]) {
   // SageBuilder::clearScopeStack();
   // SageBuilder::pushScopeStack (globalScope);
 
-  // bottom up for volatile int j; no previous knowledge of target scope
-  SgVariableDeclaration *varDecl0 =
-      buildVariableDeclaration("j", buildVolatileType(buildIntType()));
+  // volatile int j;
+  SgVariableDeclaration *varDecl0 = buildVariableDeclaration(
+      "j", buildVolatileType(buildIntType()), nullptr, globalScope);
 
   // const int jc = 0;
-  SgVariableDeclaration *varDecl0c =
-      buildVariableDeclaration("jc", buildConstType(buildIntType()),
-                               buildAssignInitializer(buildIntVal(0)));
+  SgType *varDecl0c_type = buildConstType(buildIntType());
+  SgVariableDeclaration *varDecl0c = buildVariableDeclaration(
+      "jc", varDecl0c_type,
+      buildAssignInitializer(buildIntVal(0), varDecl0c_type), globalScope);
 
   // int * restrict p;
   SgVariableDeclaration *varDecl0p = buildVariableDeclaration(
       "jp",
       //    buildRestrictType(buildIntType()));
-      buildRestrictType(buildPointerType(buildIntType())));
+      buildRestrictType(buildPointerType(buildIntType())), nullptr,
+      globalScope);
 
   // top down for others; set implicit target scope info. in scope stack.
   pushScopeStack(isSgScopeStatement(globalScope));
 
   // extern int i;
-  SgVariableDeclaration *varDecl =
-      buildVariableDeclaration(SgName("i"), buildIntType());
+  SgVariableDeclaration *varDecl = buildVariableDeclaration(
+      SgName("i"), buildIntType(), nullptr, globalScope);
   ((varDecl->get_declarationModifier()).get_storageModifier()).setExtern();
-  appendStatement(varDecl);
+  appendStatement(varDecl, globalScope);
   // two ways to build a same declaration
   // int i;
   SgVariableDeclaration *varDecl2 =
-      buildVariableDeclaration(SgName("i"), buildIntType());
+      buildVariableRedeclaration(SgName("i"), buildIntType(), nullptr,
+                                 globalScope, varDecl->get_variables().front());
 
-  appendStatement(varDecl2);
+  appendStatement(varDecl2, globalScope);
   insertStatementAfter(varDecl2, varDecl0);
-  prependStatement(varDecl0c);
-  prependStatement(varDecl0p);
+  prependStatement(varDecl0c, globalScope);
+  prependStatement(varDecl0p, globalScope);
 
   popScopeStack();
 

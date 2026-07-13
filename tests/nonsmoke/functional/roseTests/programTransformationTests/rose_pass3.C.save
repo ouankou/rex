@@ -1,26 +1,26 @@
-extern int min(int ,int );
+extern int min(int , int );
 
-void dgemm(double *a,double *b,double *c,int n)
+void dgemm(double *a, double *b, double *c, int n)
 {
-// Partial redundancy elimination: cachevar__10 is a cache of _var_0 + 15
+  // Partial redundancy elimination: cachevar__10 is a cache of (_var_0 + 15)
   int cachevar__10;
-// Partial redundancy elimination: cachevar__9 is a cache of cachevar__8 + i
+  // Partial redundancy elimination: cachevar__9 is a cache of cachevar__8 + i
   int cachevar__9;
-// Partial redundancy elimination: cachevar__8 is a cache of _var_2 * n
+  // Partial redundancy elimination: cachevar__8 is a cache of _var_2 * n
   int cachevar__8;
-// Partial redundancy elimination: cachevar__7 is a cache of cachevar__6 + i
+  // Partial redundancy elimination: cachevar__7 is a cache of cachevar__6 + i
   int cachevar__7;
-// Partial redundancy elimination: cachevar__6 is a cache of j * n
+  // Partial redundancy elimination: cachevar__6 is a cache of j * n
   int cachevar__6;
-// Partial redundancy elimination: cachevar__5 is a cache of n + -16
+  // Partial redundancy elimination: cachevar__5 is a cache of (n + -16)
   int cachevar__5;
-// Partial redundancy elimination: cachevar__4 is a cache of cachevar__3 + i
+  // Partial redundancy elimination: cachevar__4 is a cache of cachevar__3 + i
   int cachevar__4;
-// Partial redundancy elimination: cachevar__3 is a cache of k * n
+  // Partial redundancy elimination: cachevar__3 is a cache of k * n
   int cachevar__3;
-// Partial redundancy elimination: cachevar__2 is a cache of _var_1 + 15
+  // Partial redundancy elimination: cachevar__2 is a cache of (_var_1 + 15)
   int cachevar__2;
-// Partial redundancy elimination: cachevar__1 is a cache of -1 + n
+  // Partial redundancy elimination: cachevar__1 is a cache of -1 + n
   int cachevar__1;
   int _var_1;
   int _var_0;
@@ -34,9 +34,8 @@ void dgemm(double *a,double *b,double *c,int n)
           cachevar__3 = k * n;
           cachevar__4 = cachevar__3 + i;
           int dummy_1 = cachevar__4;
-          cachevar__5 = n + -16;
-          for (j = _var_0; j <= min(cachevar__5, _var_0); j += 16) {
-            int _var_2 = j;
+          for (j = _var_0, cachevar__5 = n + -16; j <= min(cachevar__5, _var_0); j += 16) {
+            int _var_2 = (j);
             cachevar__3 = k * n;
             cachevar__4 = cachevar__3 + i;
             cachevar__6 = j * n;

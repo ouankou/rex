@@ -4,17 +4,21 @@
 
 #include <assert.h>
 #include <stdarg.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+extern int omp_get_thread_num(void);
+
 /*
  * Flang lowers external procedure calls using the Fortran ABI:
  * scalar arguments are passed by reference and symbol names are suffixed with
- * an underscore. REX emits Fortran calls to __kmpc_* entry points, so this
- * file provides ABI adapters (__kmpc_*_) that translate Fortran call
- * conventions to the LLVM OpenMP C runtime ABI.
+ * an underscore. LLVM entry points begin with underscores, which are not
+ * valid standard Fortran identifiers. REX therefore emits rex_kmpc_* calls,
+ * and this file exports the compiler-mangled rex_kmpc_*_ ABI adapters that
+ * translate Fortran call conventions to the LLVM OpenMP C runtime ABI.
  */
 
 enum { REX_FORTRAN_FORK_MAX_ARGS = 64 };
@@ -292,7 +296,8 @@ static void call_kmpc_fork_call(int nargs, kmpc_micro_t microtask,
   }
 }
 
-void __kmpc_fork_call_(int *loc_ref, int *nargs_ref, void (*microtask)(), ...) {
+void rex_kmpc_fork_call_(int *loc_ref, int *nargs_ref, void (*microtask)(),
+                         ...) {
   (void)loc_ref;
 
   if (nargs_ref == NULL || microtask == NULL) {
@@ -320,18 +325,18 @@ void __kmpc_fork_call_(int *loc_ref, int *nargs_ref, void (*microtask)(), ...) {
   call_kmpc_fork_call(nargs, (kmpc_micro_t)microtask, fork_args);
 }
 
-int __kmpc_global_thread_num_(int *loc_ref) {
+int rex_kmpc_global_thread_num_(int *loc_ref) {
   (void)loc_ref;
   return __kmpc_global_thread_num(NULL);
 }
 
-void __kmpc_push_num_threads_(int *loc_ref, int *gtid_ref,
-                              int *num_threads_ref) {
+void rex_kmpc_push_num_threads_(int *loc_ref, int *gtid_ref,
+                                int *num_threads_ref) {
   (void)loc_ref;
   __kmpc_push_num_threads(NULL, *gtid_ref, *num_threads_ref);
 }
 
-void __kmpc_barrier_(int *loc_ref, int *gtid_ref) {
+void rex_kmpc_barrier_(int *loc_ref, int *gtid_ref) {
   (void)loc_ref;
   __kmpc_barrier(NULL, *gtid_ref);
 }
@@ -363,48 +368,182 @@ void xomp_critical_end(int *lock_ref) {
 
 void xomp_flush(void) { __kmpc_flush(NULL); }
 
-void __kmpc_flush_(int *loc_ref) {
+void rex_kmpc_flush_(int *loc_ref) {
   (void)loc_ref;
   xomp_flush();
 }
 
-int __kmpc_single_(int *loc_ref, int *gtid_ref) {
+int rex_kmpc_single_(int *loc_ref, int *gtid_ref) {
   (void)loc_ref;
   return __kmpc_single(NULL, *gtid_ref);
 }
 
-int __kmpc_master_(int *loc_ref, int *gtid_ref) {
+int rex_kmpc_master_(int *loc_ref, int *gtid_ref) {
   (void)loc_ref;
   return __kmpc_master(NULL, *gtid_ref);
 }
 
-void __kmpc_end_master_(int *loc_ref, int *gtid_ref) {
+void rex_kmpc_end_master_(int *loc_ref, int *gtid_ref) {
   (void)loc_ref;
   __kmpc_end_master(NULL, *gtid_ref);
 }
 
-void __kmpc_end_single_(int *loc_ref, int *gtid_ref) {
+void rex_kmpc_end_single_(int *loc_ref, int *gtid_ref) {
   (void)loc_ref;
   __kmpc_end_single(NULL, *gtid_ref);
 }
 
-int __kmpc_serialized_parallel_(int *loc_ref, int *gtid_ref) {
+int rex_kmpc_serialized_parallel_(int *loc_ref, int *gtid_ref) {
   (void)loc_ref;
   return __kmpc_serialized_parallel(NULL, *gtid_ref);
 }
 
-void __kmpc_end_serialized_parallel_(int *loc_ref, int *gtid_ref) {
+void rex_kmpc_end_serialized_parallel_(int *loc_ref, int *gtid_ref) {
   (void)loc_ref;
   __kmpc_end_serialized_parallel(NULL, *gtid_ref);
 }
 
-void __kmpc_atomic_start_(void) { __kmpc_atomic_start(); }
+void rex_kmpc_atomic_start_(void) { __kmpc_atomic_start(); }
 
-void __kmpc_atomic_end_(void) { __kmpc_atomic_end(); }
+void rex_kmpc_atomic_end_(void) { __kmpc_atomic_end(); }
 
-void __kmpc_omp_taskwait_(int *loc_ref, int *gtid_ref) {
+void rex_kmpc_omp_taskwait_(int *loc_ref, int *gtid_ref) {
   (void)loc_ref;
   (void)__kmpc_omp_taskwait(NULL, *gtid_ref);
+}
+
+void rex_kmpc_taskgroup_(int *loc_ref, int *gtid_ref) {
+  (void)loc_ref;
+  if (gtid_ref == NULL) {
+    fprintf(stderr,
+            "REX Fortran OpenMP lowering: null taskgroup thread identity\n");
+    ROSE_ABORT();
+  }
+  __kmpc_taskgroup(NULL, *gtid_ref);
+}
+
+void rex_kmpc_end_taskgroup_(int *loc_ref, int *gtid_ref) {
+  (void)loc_ref;
+  if (gtid_ref == NULL) {
+    fprintf(stderr,
+            "REX Fortran OpenMP lowering: null taskgroup thread identity\n");
+    ROSE_ABORT();
+  }
+  __kmpc_end_taskgroup(NULL, *gtid_ref);
+}
+
+typedef struct rex_fortran_threadprivate_cache {
+  void *original;
+  size_t size;
+  void **runtime_cache;
+  struct rex_fortran_threadprivate_cache *next;
+} rex_fortran_threadprivate_cache_t;
+
+static atomic_flag rex_fortran_threadprivate_cache_lock = ATOMIC_FLAG_INIT;
+static rex_fortran_threadprivate_cache_t *rex_fortran_threadprivate_caches;
+
+static void rex_lock_threadprivate_cache(void) {
+  while (atomic_flag_test_and_set_explicit(
+      &rex_fortran_threadprivate_cache_lock, memory_order_acquire)) {
+  }
+}
+
+static void rex_unlock_threadprivate_cache(void) {
+  atomic_flag_clear_explicit(&rex_fortran_threadprivate_cache_lock,
+                             memory_order_release);
+}
+
+static rex_fortran_threadprivate_cache_t *
+rex_get_threadprivate_cache(void *original, size_t size) {
+  if (original == NULL || size == 0) {
+    fprintf(stderr,
+            "REX Fortran OpenMP lowering: invalid threadprivate object\n");
+    ROSE_ABORT();
+  }
+  rex_lock_threadprivate_cache();
+  rex_fortran_threadprivate_cache_t *entry = rex_fortran_threadprivate_caches;
+  while (entry != NULL && entry->original != original)
+    entry = entry->next;
+  if (entry != NULL && entry->size != size) {
+    rex_unlock_threadprivate_cache();
+    fprintf(stderr,
+            "REX Fortran OpenMP lowering: inconsistent threadprivate object "
+            "size\n");
+    ROSE_ABORT();
+  }
+  if (entry == NULL) {
+    entry = (rex_fortran_threadprivate_cache_t *)calloc(1, sizeof(*entry));
+    if (entry == NULL) {
+      rex_unlock_threadprivate_cache();
+      fprintf(stderr,
+              "REX Fortran OpenMP lowering: threadprivate cache allocation "
+              "failed\n");
+      ROSE_ABORT();
+    }
+    entry->original = original;
+    entry->size = size;
+    entry->next = rex_fortran_threadprivate_caches;
+    rex_fortran_threadprivate_caches = entry;
+  }
+  rex_unlock_threadprivate_cache();
+  return entry;
+}
+
+static void *rex_get_threadprivate_storage(void *original, size_t size) {
+  rex_fortran_threadprivate_cache_t *entry =
+      rex_get_threadprivate_cache(original, size);
+  const int gtid = __kmpc_global_thread_num(NULL);
+  void *storage = __kmpc_threadprivate_cached(NULL, gtid, original, size,
+                                              &entry->runtime_cache);
+  if (storage == NULL) {
+    fprintf(stderr, "REX Fortran OpenMP lowering: runtime returned null "
+                    "threadprivate storage\n");
+    ROSE_ABORT();
+  }
+  return storage;
+}
+
+void rex_kmpc_threadprivate_load_(void *original, void *local,
+                                  int64_t *size_ref) {
+  if (local == NULL || size_ref == NULL || *size_ref <= 0) {
+    fprintf(stderr,
+            "REX Fortran OpenMP lowering: invalid threadprivate load\n");
+    ROSE_ABORT();
+  }
+  const size_t size = (size_t)*size_ref;
+  memcpy(local, rex_get_threadprivate_storage(original, size), size);
+}
+
+void rex_kmpc_threadprivate_copyin_(void *original, void *local,
+                                    int64_t *size_ref) {
+  if (original == NULL || local == NULL || size_ref == NULL || *size_ref <= 0) {
+    fprintf(stderr,
+            "REX Fortran OpenMP lowering: invalid threadprivate copyin\n");
+    ROSE_ABORT();
+  }
+  const size_t size = (size_t)*size_ref;
+  void *storage = rex_get_threadprivate_storage(original, size);
+  memcpy(storage, original, size);
+  memcpy(local, original, size);
+}
+
+void rex_kmpc_threadprivate_store_(void *original, void *local,
+                                   int64_t *size_ref) {
+  if (original == NULL || local == NULL || size_ref == NULL || *size_ref <= 0) {
+    fprintf(stderr,
+            "REX Fortran OpenMP lowering: invalid threadprivate store\n");
+    ROSE_ABORT();
+  }
+  const size_t size = (size_t)*size_ref;
+  void *storage = rex_get_threadprivate_storage(original, size);
+  memcpy(storage, local, size);
+  if (omp_get_thread_num() == 0)
+    memcpy(original, local, size);
+}
+
+void rex_kmpc_threadprivate_barrier_(void) {
+  const int gtid = __kmpc_global_thread_num(NULL);
+  __kmpc_barrier(NULL, gtid);
 }
 
 typedef int (*rex_kmp_routine_entry_t)(int, void *);
@@ -644,57 +783,57 @@ xomp_task_fail:
   ROSE_ABORT();
 }
 
-void __kmpc_for_static_init_4_(int *loc_ref, int *gtid_ref, int *sched_ref,
-                               int *last_iter_ref, int *lower_ref,
-                               int *upper_ref, int *stride_ref, int *incr_ref,
-                               int *chunk_ref) {
+void rex_kmpc_for_static_init_4_(int *loc_ref, int *gtid_ref, int *sched_ref,
+                                 int *last_iter_ref, int *lower_ref,
+                                 int *upper_ref, int *stride_ref, int *incr_ref,
+                                 int *chunk_ref) {
   (void)loc_ref;
   __kmpc_for_static_init_4(NULL, *gtid_ref, *sched_ref, last_iter_ref,
                            lower_ref, upper_ref, stride_ref, *incr_ref,
                            *chunk_ref);
 }
 
-void __kmpc_for_static_init_8_(int *loc_ref, int *gtid_ref, int *sched_ref,
-                               int *last_iter_ref, int64_t *lower_ref,
-                               int64_t *upper_ref, int64_t *stride_ref,
-                               int64_t *incr_ref, int64_t *chunk_ref) {
+void rex_kmpc_for_static_init_8_(int *loc_ref, int *gtid_ref, int *sched_ref,
+                                 int *last_iter_ref, int64_t *lower_ref,
+                                 int64_t *upper_ref, int64_t *stride_ref,
+                                 int64_t *incr_ref, int64_t *chunk_ref) {
   (void)loc_ref;
   __kmpc_for_static_init_8(NULL, *gtid_ref, *sched_ref, last_iter_ref,
                            lower_ref, upper_ref, stride_ref, *incr_ref,
                            *chunk_ref);
 }
 
-void __kmpc_for_static_fini_(int *loc_ref, int *gtid_ref) {
+void rex_kmpc_for_static_fini_(int *loc_ref, int *gtid_ref) {
   (void)loc_ref;
   __kmpc_for_static_fini(NULL, *gtid_ref);
 }
 
-void __kmpc_dispatch_init_4_(int *loc_ref, int *gtid_ref, int *sched_ref,
-                             int *lower_ref, int *upper_ref, int *stride_ref,
-                             int *chunk_ref) {
+void rex_kmpc_dispatch_init_4_(int *loc_ref, int *gtid_ref, int *sched_ref,
+                               int *lower_ref, int *upper_ref, int *stride_ref,
+                               int *chunk_ref) {
   (void)loc_ref;
   __kmpc_dispatch_init_4(NULL, *gtid_ref, *sched_ref, *lower_ref, *upper_ref,
                          *stride_ref, *chunk_ref);
 }
 
-void __kmpc_dispatch_init_8_(int *loc_ref, int *gtid_ref, int *sched_ref,
-                             int64_t *lower_ref, int64_t *upper_ref,
-                             int64_t *stride_ref, int64_t *chunk_ref) {
+void rex_kmpc_dispatch_init_8_(int *loc_ref, int *gtid_ref, int *sched_ref,
+                               int64_t *lower_ref, int64_t *upper_ref,
+                               int64_t *stride_ref, int64_t *chunk_ref) {
   (void)loc_ref;
   __kmpc_dispatch_init_8(NULL, *gtid_ref, *sched_ref, *lower_ref, *upper_ref,
                          *stride_ref, *chunk_ref);
 }
 
-int __kmpc_dispatch_next_4_(int *loc_ref, int *gtid_ref, int *last_iter_ref,
-                            int *lower_ref, int *upper_ref, int *stride_ref) {
+int rex_kmpc_dispatch_next_4_(int *loc_ref, int *gtid_ref, int *last_iter_ref,
+                              int *lower_ref, int *upper_ref, int *stride_ref) {
   (void)loc_ref;
   return __kmpc_dispatch_next_4(NULL, *gtid_ref, last_iter_ref, lower_ref,
                                 upper_ref, stride_ref);
 }
 
-int __kmpc_dispatch_next_8_(int *loc_ref, int *gtid_ref, int *last_iter_ref,
-                            int64_t *lower_ref, int64_t *upper_ref,
-                            int64_t *stride_ref) {
+int rex_kmpc_dispatch_next_8_(int *loc_ref, int *gtid_ref, int *last_iter_ref,
+                              int64_t *lower_ref, int64_t *upper_ref,
+                              int64_t *stride_ref) {
   (void)loc_ref;
   return __kmpc_dispatch_next_8(NULL, *gtid_ref, last_iter_ref, lower_ref,
                                 upper_ref, stride_ref);

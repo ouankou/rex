@@ -27,7 +27,7 @@ bash "${script_dir}/run_and_check.sh" "${parse_omp}" "${input_file}" \
   "${parse_omp}" --rex-omp-lowering \
     -rex:ast-json-checkpoint=post-omp-lowering \
     "-rex:ast-json-dir=${json_dir}" \
-    -w -rose:verbose 0 -c "${input_file}" > run.log 2>&1
+    -rose:verbose 0 -c "${input_file}" > run.log 2>&1
 )
 
 bash "${script_dir}/verify_outputs.sh" "${case_name}" "${checkpoint_dir}"

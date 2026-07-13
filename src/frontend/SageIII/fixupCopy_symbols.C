@@ -3,11 +3,395 @@
 
 #include "fixupCopy.h"
 
+#include <unordered_set>
+
 // This file implementes support for the AST copy fixup.  It is specific to:
 // 1) Construction of symbols, and
 // 2) setup of symbol tables
 
 namespace {
+
+SgNode *requireExactCopiedSymbolChild(const SgNode *originalOwner,
+                                      const SgNode *originalChild,
+                                      SgNode *copiedOwner, SgNode *copiedChild,
+                                      SgCopyHelp &help, const char *relation) {
+  ASSERT_not_null(originalOwner);
+  ASSERT_not_null(originalChild);
+  ASSERT_not_null(copiedOwner);
+  ASSERT_not_null(relation);
+  SgCopyHelp::copiedNodeMapTypeIterator mapping =
+      help.get_copiedNodeMap().find(const_cast<SgNode *>(originalChild));
+  SgNode *expected =
+      mapping != help.get_copiedNodeMap().end() ? mapping->second : nullptr;
+  if (expected == nullptr || expected == originalChild ||
+      expected != copiedChild || originalChild->get_parent() != originalOwner ||
+      copiedChild == nullptr || copiedChild->get_parent() != copiedOwner ||
+      copiedChild->variantT() != originalChild->variantT()) {
+    fprintf(
+        stderr,
+        "REX_COPY_INVARIANT[symbol-child-map]: relation=%s "
+        "original-owner=%p/%s child=%p/%s parent=%p copy-owner=%p/%s "
+        "child=%p/%s parent=%p expected=%p\n",
+        relation, static_cast<const void *>(originalOwner),
+        originalOwner->class_name().c_str(),
+        static_cast<const void *>(originalChild),
+        originalChild->class_name().c_str(),
+        static_cast<void *>(originalChild->get_parent()),
+        static_cast<void *>(copiedOwner), copiedOwner->class_name().c_str(),
+        static_cast<void *>(copiedChild),
+        copiedChild != nullptr ? copiedChild->class_name().c_str() : "<null>",
+        static_cast<void *>(copiedChild != nullptr ? copiedChild->get_parent()
+                                                   : nullptr),
+        static_cast<void *>(expected));
+    ROSE_ABORT();
+  }
+  return copiedChild;
+}
+
+void fixupExactCopiedSupportSymbols(
+    const SgNode *original, SgNode *copy, SgCopyHelp &help,
+    std::unordered_set<const SgNode *> &active) {
+  ASSERT_not_null(original);
+  ASSERT_not_null(copy);
+  if (!active.insert(original).second) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[support-symbol-cycle]: original=%p/%s "
+            "copy=%p/%s\n",
+            static_cast<const void *>(original), original->class_name().c_str(),
+            static_cast<void *>(copy), copy->class_name().c_str());
+    ROSE_ABORT();
+  }
+
+  const Rose_STL_Container<SgNode *> originalChildren =
+      const_cast<SgNode *>(original)->get_traversalSuccessorContainer();
+  const Rose_STL_Container<SgNode *> copiedChildren =
+      copy->get_traversalSuccessorContainer();
+  if (originalChildren.size() != copiedChildren.size()) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[support-symbol-arity]: original=%p/%s "
+            "children=%zu copy=%p/%s children=%zu\n",
+            static_cast<const void *>(original), original->class_name().c_str(),
+            originalChildren.size(), static_cast<void *>(copy),
+            copy->class_name().c_str(), copiedChildren.size());
+    ROSE_ABORT();
+  }
+  for (size_t index = 0; index < originalChildren.size(); ++index) {
+    SgNode *originalChild = originalChildren[index];
+    SgNode *copiedChild = copiedChildren[index];
+    if ((originalChild == nullptr) != (copiedChild == nullptr)) {
+      fprintf(
+          stderr,
+          "REX_COPY_INVARIANT[support-symbol-null-child]: owner=%p/%s "
+          "copy=%p/%s index=%zu original-child=%p copy-child=%p\n",
+          static_cast<const void *>(original), original->class_name().c_str(),
+          static_cast<void *>(copy), copy->class_name().c_str(), index,
+          static_cast<void *>(originalChild), static_cast<void *>(copiedChild));
+      ROSE_ABORT();
+    }
+    if (originalChild == nullptr) {
+      continue;
+    }
+    requireExactCopiedSymbolChild(original, originalChild, copy, copiedChild,
+                                  help, "support-symbol-child");
+    if (isSgExpression(originalChild) != nullptr ||
+        isSgStatement(originalChild) != nullptr) {
+      originalChild->fixupCopy_symbols(copiedChild, help);
+    } else {
+      if (const SgLocatedNode *originalLocated =
+              isSgLocatedNode(originalChild)) {
+        originalLocated->SgLocatedNode::fixupCopy_symbols(copiedChild, help);
+      }
+      fixupExactCopiedSupportSymbols(originalChild, copiedChild, help, active);
+    }
+  }
+  active.erase(original);
+}
+
+void fixupExactCopiedSupportSymbols(const SgNode *original, SgNode *copy,
+                                    SgCopyHelp &help) {
+  std::unordered_set<const SgNode *> active;
+  fixupExactCopiedSupportSymbols(original, copy, help, active);
+}
+
+void fixupExactCopiedOwnedSuccessorSymbols(const SgNode *original, SgNode *copy,
+                                           SgCopyHelp &help,
+                                           const char *relation) {
+  ASSERT_not_null(original);
+  ASSERT_not_null(copy);
+  ASSERT_not_null(relation);
+  SgCopyHelp::copiedNodeMapTypeIterator mapping =
+      help.get_copiedNodeMap().find(const_cast<SgNode *>(original));
+  SgNode *expected =
+      mapping != help.get_copiedNodeMap().end() ? mapping->second : nullptr;
+  if (expected == nullptr || expected == original || expected != copy ||
+      copy->variantT() != original->variantT()) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[owned-symbol-root]: relation=%s source=%p/%s "
+            "copy=%p/%s expected=%p/%s\n",
+            relation, static_cast<const void *>(original),
+            original->class_name().c_str(), static_cast<void *>(copy),
+            copy->class_name().c_str(), static_cast<void *>(expected),
+            expected != nullptr ? expected->class_name().c_str() : "<null>");
+    ROSE_ABORT();
+  }
+  fixupExactCopiedSupportSymbols(original, copy, help);
+}
+
+void requireExactCopiedSymbolRoot(const SgNode *original, SgNode *copy,
+                                  SgCopyHelp &help, const char *relation) {
+  ASSERT_not_null(original);
+  ASSERT_not_null(copy);
+  ASSERT_not_null(relation);
+  SgCopyHelp::copiedNodeMapTypeIterator mapping =
+      help.get_copiedNodeMap().find(const_cast<SgNode *>(original));
+  SgNode *expected =
+      mapping != help.get_copiedNodeMap().end() ? mapping->second : nullptr;
+  if (expected == nullptr || expected == original || expected != copy ||
+      copy->variantT() != original->variantT()) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[symbol-root-map]: relation=%s "
+            "original=%p/%s copy=%p/%s expected=%p/%s\n",
+            relation, static_cast<const void *>(original),
+            original->class_name().c_str(), static_cast<void *>(copy),
+            copy->class_name().c_str(), static_cast<void *>(expected),
+            expected != nullptr ? expected->class_name().c_str() : "<null>");
+    ROSE_ABORT();
+  }
+}
+
+bool hasNonidentityMappedSymbolOwner(const SgNode *node, SgCopyHelp &help) {
+  std::unordered_set<const SgNode *> visited;
+  for (const SgNode *current = node; current != nullptr;
+       current = current->get_parent()) {
+    if (!visited.insert(current).second) {
+      fprintf(stderr,
+              "REX_COPY_INVARIANT[symbol-semantic-owner-cycle]: node=%p/%s "
+              "current=%p/%s\n",
+              static_cast<const void *>(node), node->class_name().c_str(),
+              static_cast<const void *>(current),
+              current->class_name().c_str());
+      ROSE_ABORT();
+    }
+    SgCopyHelp::copiedNodeMapTypeIterator mapping =
+        help.get_copiedNodeMap().find(const_cast<SgNode *>(current));
+    if (mapping != help.get_copiedNodeMap().end() &&
+        mapping->second != current) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void requireExactCopiedOrExternalSymbolEdge(const SgNode *originalEdge,
+                                            const SgNode *copiedEdge,
+                                            SgCopyHelp &help,
+                                            const char *relation) {
+  ASSERT_not_null(relation);
+  if (originalEdge == nullptr) {
+    if (copiedEdge != nullptr) {
+      fprintf(stderr,
+              "REX_COPY_INVARIANT[symbol-semantic-null]: relation=%s "
+              "copy-edge=%p/%s\n",
+              relation, static_cast<const void *>(copiedEdge),
+              copiedEdge->class_name().c_str());
+      ROSE_ABORT();
+    }
+    return;
+  }
+
+  SgCopyHelp::copiedNodeMapTypeIterator mapping =
+      help.get_copiedNodeMap().find(const_cast<SgNode *>(originalEdge));
+  if (mapping != help.get_copiedNodeMap().end() &&
+      mapping->second != originalEdge) {
+    if (mapping->second == nullptr || copiedEdge != mapping->second ||
+        copiedEdge->variantT() != originalEdge->variantT()) {
+      fprintf(stderr,
+              "REX_COPY_INVARIANT[symbol-semantic-map]: relation=%s "
+              "source=%p/%s copy-edge=%p/%s expected=%p/%s\n",
+              relation, static_cast<const void *>(originalEdge),
+              originalEdge->class_name().c_str(),
+              static_cast<const void *>(copiedEdge),
+              copiedEdge != nullptr ? copiedEdge->class_name().c_str()
+                                    : "<null>",
+              static_cast<void *>(mapping->second),
+              mapping->second != nullptr ? mapping->second->class_name().c_str()
+                                         : "<null>");
+      ROSE_ABORT();
+    }
+    return;
+  }
+
+  if (copiedEdge != originalEdge ||
+      hasNonidentityMappedSymbolOwner(originalEdge, help)) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[symbol-semantic-external]: relation=%s "
+            "source=%p/%s copy-edge=%p/%s inside-transaction=%d\n",
+            relation, static_cast<const void *>(originalEdge),
+            originalEdge->class_name().c_str(),
+            static_cast<const void *>(copiedEdge),
+            copiedEdge != nullptr ? copiedEdge->class_name().c_str() : "<null>",
+            hasNonidentityMappedSymbolOwner(originalEdge, help) ? 1 : 0);
+    ROSE_ABORT();
+  }
+}
+
+SgTemplateParameterPtrList *
+templateParameterListForSymbolFixup(SgDeclarationStatement *declaration) {
+  ASSERT_not_null(declaration);
+  switch (declaration->variantT()) {
+  case V_SgTemplateDeclaration:
+    return &isSgTemplateDeclaration(declaration)->get_templateParameters();
+  case V_SgTemplateClassDeclaration:
+    return &isSgTemplateClassDeclaration(declaration)->get_templateParameters();
+  case V_SgTemplateFunctionDeclaration:
+    return &isSgTemplateFunctionDeclaration(declaration)
+                ->get_templateParameters();
+  case V_SgTemplateMemberFunctionDeclaration:
+    return &isSgTemplateMemberFunctionDeclaration(declaration)
+                ->get_templateParameters();
+  case V_SgTemplateVariableDeclaration:
+    return &isSgTemplateVariableDeclaration(declaration)
+                ->get_templateParameters();
+  case V_SgTemplateTypedefDeclaration:
+    return &isSgTemplateTypedefDeclaration(declaration)
+                ->get_templateParameters();
+  case V_SgNonrealDecl:
+    return &isSgNonrealDecl(declaration)->get_tpl_params();
+  default:
+    return nullptr;
+  }
+}
+
+void fixupExactCopiedTemplateParameterSymbols(
+    const SgDeclarationStatement *originalDeclaration,
+    SgDeclarationStatement *copiedDeclaration, SgCopyHelp &help) {
+  SgTemplateParameterPtrList *originalParameters =
+      templateParameterListForSymbolFixup(
+          const_cast<SgDeclarationStatement *>(originalDeclaration));
+  SgTemplateParameterPtrList *copiedParameters =
+      templateParameterListForSymbolFixup(copiedDeclaration);
+  if ((originalParameters == nullptr) != (copiedParameters == nullptr)) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[template-parameter-symbol-kind]: "
+            "original=%p/%s copy=%p/%s\n",
+            static_cast<const void *>(originalDeclaration),
+            originalDeclaration->class_name().c_str(),
+            static_cast<void *>(copiedDeclaration),
+            copiedDeclaration->class_name().c_str());
+    ROSE_ABORT();
+  }
+  if (originalParameters == nullptr) {
+    return;
+  }
+  if (originalParameters->size() != copiedParameters->size()) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[template-parameter-symbol-count]: "
+            "original=%p count=%zu copy=%p count=%zu\n",
+            static_cast<const void *>(originalDeclaration),
+            originalParameters->size(), static_cast<void *>(copiedDeclaration),
+            copiedParameters->size());
+    ROSE_ABORT();
+  }
+  for (size_t index = 0; index < originalParameters->size(); ++index) {
+    SgTemplateParameter *originalParameter = (*originalParameters)[index];
+    SgTemplateParameter *copiedParameter = (*copiedParameters)[index];
+    requireExactCopiedSymbolChild(originalDeclaration, originalParameter,
+                                  copiedDeclaration, copiedParameter, help,
+                                  "template-parameter");
+    originalParameter->fixupCopy_symbols(copiedParameter, help);
+  }
+}
+
+void fixupExactCopiedOwnedDeclarationScopeSymbols(
+    const SgDeclarationStatement *originalDeclaration,
+    SgDeclarationStatement *copiedDeclaration, SgCopyHelp &help) {
+  SgDeclarationScope *originalScope =
+      originalDeclaration->get_nonreal_decl_scope();
+  SgDeclarationScope *copiedScope = copiedDeclaration->get_nonreal_decl_scope();
+  if ((originalScope == nullptr) != (copiedScope == nullptr)) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[owned-declaration-scope-symbol-null]: "
+            "original=%p scope=%p copy=%p scope=%p\n",
+            static_cast<const void *>(originalDeclaration),
+            static_cast<void *>(originalScope),
+            static_cast<void *>(copiedDeclaration),
+            static_cast<void *>(copiedScope));
+    ROSE_ABORT();
+  }
+  if (originalScope == nullptr) {
+    return;
+  }
+  requireExactCopiedSymbolChild(originalDeclaration, originalScope,
+                                copiedDeclaration, copiedScope, help,
+                                "owned-declaration-scope");
+  const SgDeclarationStatementPtrList &originalChildren =
+      originalScope->get_declarations();
+  const SgDeclarationStatementPtrList &copiedChildren =
+      copiedScope->get_declarations();
+  if (originalChildren.size() != copiedChildren.size()) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[owned-declaration-scope-symbol-count]: "
+            "original=%p count=%zu copy=%p count=%zu\n",
+            static_cast<void *>(originalScope), originalChildren.size(),
+            static_cast<void *>(copiedScope), copiedChildren.size());
+    ROSE_ABORT();
+  }
+  for (size_t index = 0; index < originalChildren.size(); ++index) {
+    SgDeclarationStatement *originalChild = originalChildren[index];
+    SgDeclarationStatement *copiedChild = copiedChildren[index];
+    requireExactCopiedSymbolChild(originalScope, originalChild, copiedScope,
+                                  copiedChild, help,
+                                  "owned-declaration-scope-declaration");
+    originalChild->fixupCopy_symbols(copiedChild, help);
+  }
+  originalScope->fixupCopy_symbols(copiedScope, help);
+}
+
+void fixupExactCopiedFunctionDeclaratorScopeSymbols(
+    const SgFunctionDeclaration *originalDeclaration,
+    SgFunctionDeclaration *copiedDeclaration, SgCopyHelp &help) {
+  SgDeclarationScope *originalScope =
+      originalDeclaration->get_function_declarator_scope();
+  SgDeclarationScope *copiedScope =
+      copiedDeclaration->get_function_declarator_scope();
+  if ((originalScope == nullptr) != (copiedScope == nullptr)) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[function-declarator-scope-symbol-null]: "
+            "original=%p scope=%p copy=%p scope=%p\n",
+            static_cast<const void *>(originalDeclaration),
+            static_cast<void *>(originalScope),
+            static_cast<void *>(copiedDeclaration),
+            static_cast<void *>(copiedScope));
+    ROSE_ABORT();
+  }
+  if (originalScope == nullptr) {
+    return;
+  }
+  requireExactCopiedSymbolChild(originalDeclaration, originalScope,
+                                copiedDeclaration, copiedScope, help,
+                                "function-declarator-scope");
+  const SgDeclarationStatementPtrList &originalChildren =
+      originalScope->get_declarations();
+  const SgDeclarationStatementPtrList &copiedChildren =
+      copiedScope->get_declarations();
+  if (originalChildren.size() != copiedChildren.size()) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[function-declarator-scope-symbol-count]: "
+            "original=%p count=%zu copy=%p count=%zu\n",
+            static_cast<void *>(originalScope), originalChildren.size(),
+            static_cast<void *>(copiedScope), copiedChildren.size());
+    ROSE_ABORT();
+  }
+  for (size_t index = 0; index < originalChildren.size(); ++index) {
+    SgDeclarationStatement *originalChild = originalChildren[index];
+    SgDeclarationStatement *copiedChild = copiedChildren[index];
+    requireExactCopiedSymbolChild(originalScope, originalChild, copiedScope,
+                                  copiedChild, help,
+                                  "function-declarator-scope-declaration");
+    originalChild->fixupCopy_symbols(copiedChild, help);
+  }
+  originalScope->fixupCopy_symbols(copiedScope, help);
+}
 
 void fixupCanonicalStatementCopiesForSymbols(
     const SgStatementPtrList &statementList_original,
@@ -68,6 +452,226 @@ void fixupCanonicalDeclarationCopiesForSymbols(
   }
 }
 
+void fixupAuxiliaryDeclarationScopeCopiesForSymbols(
+    const SgScopeStatement *originalOwner, SgScopeStatement *copiedOwner,
+    SgCopyHelp &help) {
+  ROSE_ASSERT(originalOwner != NULL);
+  ROSE_ASSERT(copiedOwner != NULL);
+
+  SgDeclarationScopeList *originalContainer =
+      originalOwner->get_auxiliary_declaration_scopes();
+  SgDeclarationScopeList *copiedContainer =
+      copiedOwner->get_auxiliary_declaration_scopes();
+  if ((originalContainer == NULL) != (copiedContainer == NULL)) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[auxiliary-scope-symbol-container]: "
+            "original=%p container=%p copy=%p container=%p\n",
+            static_cast<const void *>(originalOwner),
+            static_cast<void *>(originalContainer),
+            static_cast<void *>(copiedOwner),
+            static_cast<void *>(copiedContainer));
+    ROSE_ABORT();
+  }
+  if (originalContainer == NULL) {
+    return;
+  }
+
+  SgCopyHelp::copiedNodeMapTypeIterator containerCopy =
+      help.get_copiedNodeMap().find(originalContainer);
+  const SgDeclarationScopePtrList &originalScopes =
+      originalContainer->get_scopes();
+  const SgDeclarationScopePtrList &copiedScopes = copiedContainer->get_scopes();
+  if (containerCopy == help.get_copiedNodeMap().end() ||
+      containerCopy->second != copiedContainer ||
+      originalContainer->get_parent() != originalOwner ||
+      copiedContainer->get_parent() != copiedOwner ||
+      originalScopes.size() != copiedScopes.size()) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[auxiliary-scope-symbol-owner]: original=%p "
+            "container=%p parent=%p scopes=%zu copy=%p container=%p "
+            "parent=%p scopes=%zu mapped=%p\n",
+            static_cast<const void *>(originalOwner),
+            static_cast<void *>(originalContainer),
+            static_cast<void *>(originalContainer->get_parent()),
+            originalScopes.size(), static_cast<void *>(copiedOwner),
+            static_cast<void *>(copiedContainer),
+            static_cast<void *>(copiedContainer->get_parent()),
+            copiedScopes.size(),
+            static_cast<void *>(containerCopy != help.get_copiedNodeMap().end()
+                                    ? containerCopy->second
+                                    : NULL));
+    ROSE_ABORT();
+  }
+
+  for (size_t scopeIndex = 0; scopeIndex < originalScopes.size();
+       ++scopeIndex) {
+    SgDeclarationScope *originalScope = originalScopes[scopeIndex];
+    SgDeclarationScope *copiedScope = copiedScopes[scopeIndex];
+    SgCopyHelp::copiedNodeMapTypeIterator scopeCopy =
+        help.get_copiedNodeMap().find(originalScope);
+    if (originalScope == NULL || copiedScope == NULL ||
+        scopeCopy == help.get_copiedNodeMap().end() ||
+        scopeCopy->second != copiedScope ||
+        originalScope->get_parent() != originalContainer ||
+        copiedScope->get_parent() != copiedContainer) {
+      fprintf(stderr,
+              "REX_COPY_INVARIANT[auxiliary-scope-symbol-map]: index=%zu "
+              "original=%p parent=%p copy=%p parent=%p mapped=%p\n",
+              scopeIndex, static_cast<void *>(originalScope),
+              static_cast<void *>(
+                  originalScope != NULL ? originalScope->get_parent() : NULL),
+              static_cast<void *>(copiedScope),
+              static_cast<void *>(
+                  copiedScope != NULL ? copiedScope->get_parent() : NULL),
+              static_cast<void *>(scopeCopy != help.get_copiedNodeMap().end()
+                                      ? scopeCopy->second
+                                      : NULL));
+      ROSE_ABORT();
+    }
+
+    const SgDeclarationStatementPtrList &originalDeclarations =
+        originalScope->get_declarations();
+    const SgDeclarationStatementPtrList &copiedDeclarations =
+        copiedScope->get_declarations();
+    if (originalDeclarations.size() != copiedDeclarations.size()) {
+      fprintf(stderr,
+              "REX_COPY_INVARIANT[auxiliary-scope-symbol-declarations]: "
+              "scope=%p count=%zu copy=%p count=%zu\n",
+              static_cast<void *>(originalScope), originalDeclarations.size(),
+              static_cast<void *>(copiedScope), copiedDeclarations.size());
+      ROSE_ABORT();
+    }
+    for (size_t declarationIndex = 0;
+         declarationIndex < originalDeclarations.size(); ++declarationIndex) {
+      SgDeclarationStatement *originalDeclaration =
+          originalDeclarations[declarationIndex];
+      SgDeclarationStatement *copiedDeclaration =
+          copiedDeclarations[declarationIndex];
+      SgCopyHelp::copiedNodeMapTypeIterator declarationCopy =
+          help.get_copiedNodeMap().find(originalDeclaration);
+      if (originalDeclaration == NULL || copiedDeclaration == NULL ||
+          declarationCopy == help.get_copiedNodeMap().end() ||
+          declarationCopy->second != copiedDeclaration ||
+          originalDeclaration->get_parent() != originalScope ||
+          copiedDeclaration->get_parent() != copiedScope) {
+        fprintf(stderr,
+                "REX_COPY_INVARIANT[auxiliary-scope-symbol-declaration-map]: "
+                "scope-index=%zu declaration-index=%zu original=%p "
+                "parent=%p copy=%p parent=%p mapped=%p\n",
+                scopeIndex, declarationIndex,
+                static_cast<void *>(originalDeclaration),
+                static_cast<void *>(originalDeclaration != NULL
+                                        ? originalDeclaration->get_parent()
+                                        : NULL),
+                static_cast<void *>(copiedDeclaration),
+                static_cast<void *>(copiedDeclaration != NULL
+                                        ? copiedDeclaration->get_parent()
+                                        : NULL),
+                static_cast<void *>(declarationCopy !=
+                                            help.get_copiedNodeMap().end()
+                                        ? declarationCopy->second
+                                        : NULL));
+        ROSE_ABORT();
+      }
+      originalDeclaration->fixupCopy_symbols(copiedDeclaration, help);
+    }
+
+    originalScope->fixupCopy_symbols(copiedScope, help);
+  }
+}
+
+void fixupAuxiliaryDeclarationCopiesForSymbols(
+    const SgScopeStatement *originalOwner, SgScopeStatement *copiedOwner,
+    SgCopyHelp &help) {
+  ROSE_ASSERT(originalOwner != NULL);
+  ROSE_ASSERT(copiedOwner != NULL);
+
+  SgAuxiliaryDeclarationList *originalContainer =
+      originalOwner->get_auxiliary_declarations();
+  SgAuxiliaryDeclarationList *copiedContainer =
+      copiedOwner->get_auxiliary_declarations();
+  if ((originalContainer == NULL) != (copiedContainer == NULL)) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[auxiliary-declaration-symbol-container]: "
+            "original=%p container=%p copy=%p container=%p\n",
+            static_cast<const void *>(originalOwner),
+            static_cast<void *>(originalContainer),
+            static_cast<void *>(copiedOwner),
+            static_cast<void *>(copiedContainer));
+    ROSE_ABORT();
+  }
+  if (originalContainer == NULL) {
+    return;
+  }
+
+  SgCopyHelp::copiedNodeMapTypeIterator containerCopy =
+      help.get_copiedNodeMap().find(originalContainer);
+  const SgDeclarationStatementPtrList &originalDeclarations =
+      originalContainer->get_declarations();
+  const SgDeclarationStatementPtrList &copiedDeclarations =
+      copiedContainer->get_declarations();
+  if (containerCopy == help.get_copiedNodeMap().end() ||
+      containerCopy->second != copiedContainer ||
+      originalContainer->get_parent() != originalOwner ||
+      copiedContainer->get_parent() != copiedOwner ||
+      originalDeclarations.size() != copiedDeclarations.size()) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[auxiliary-declaration-symbol-owner]: "
+            "original=%p container=%p parent=%p count=%zu copy=%p "
+            "container=%p parent=%p count=%zu mapped=%p\n",
+            static_cast<const void *>(originalOwner),
+            static_cast<void *>(originalContainer),
+            static_cast<void *>(originalContainer->get_parent()),
+            originalDeclarations.size(), static_cast<void *>(copiedOwner),
+            static_cast<void *>(copiedContainer),
+            static_cast<void *>(copiedContainer->get_parent()),
+            copiedDeclarations.size(),
+            static_cast<void *>(containerCopy != help.get_copiedNodeMap().end()
+                                    ? containerCopy->second
+                                    : NULL));
+    ROSE_ABORT();
+  }
+
+  for (size_t index = 0; index < originalDeclarations.size(); ++index) {
+    SgDeclarationStatement *originalDeclaration = originalDeclarations[index];
+    SgDeclarationStatement *copiedDeclaration = copiedDeclarations[index];
+    SgCopyHelp::copiedNodeMapTypeIterator declarationCopy =
+        help.get_copiedNodeMap().find(originalDeclaration);
+    if (originalDeclaration == NULL || copiedDeclaration == NULL ||
+        declarationCopy == help.get_copiedNodeMap().end() ||
+        declarationCopy->second != copiedDeclaration ||
+        originalDeclaration->get_parent() != originalContainer ||
+        copiedDeclaration->get_parent() != copiedContainer ||
+        originalDeclaration->get_scope() != originalOwner ||
+        copiedDeclaration->get_scope() != copiedOwner) {
+      fprintf(
+          stderr,
+          "REX_COPY_INVARIANT[auxiliary-declaration-symbol-map]: "
+          "index=%zu original=%p parent=%p scope=%p copy=%p parent=%p "
+          "scope=%p mapped=%p\n",
+          index, static_cast<void *>(originalDeclaration),
+          static_cast<void *>(originalDeclaration != NULL
+                                  ? originalDeclaration->get_parent()
+                                  : NULL),
+          static_cast<void *>(originalDeclaration != NULL
+                                  ? originalDeclaration->get_scope()
+                                  : NULL),
+          static_cast<void *>(copiedDeclaration),
+          static_cast<void *>(copiedDeclaration != NULL
+                                  ? copiedDeclaration->get_parent()
+                                  : NULL),
+          static_cast<void *>(copiedDeclaration != NULL
+                                  ? copiedDeclaration->get_scope()
+                                  : NULL),
+          static_cast<void *>(declarationCopy != help.get_copiedNodeMap().end()
+                                  ? declarationCopy->second
+                                  : NULL));
+      ROSE_ABORT();
+    }
+    originalDeclaration->fixupCopy_symbols(copiedDeclaration, help);
+  }
+}
+
 void mirrorNamespaceFragmentSymbolsToGlobalDefinition(
     SgNamespaceDefinitionStatement *namespaceDefinition) {
   ROSE_ASSERT(namespaceDefinition != NULL);
@@ -116,6 +720,7 @@ void mirrorNamespaceFragmentSymbolsToGlobalDefinition(
     }
 
     SgAliasSymbol *aliasSymbol = new SgAliasSymbol(localSymbol);
+    aliasSymbol->get_causal_nodes().push_back(globalDefinition);
     globalTable->insert(aliasSymbol->get_name(), aliasSymbol);
     aliasSymbol->set_parent(globalTable);
   }
@@ -147,6 +752,210 @@ void SgStatement::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
   SgLocatedNode::fixupCopy_symbols(copy, help);
 }
 
+void SgOmpClauseStatement::fixupCopy_symbols(SgNode *copy,
+                                             SgCopyHelp &help) const {
+  SgStatement::fixupCopy_symbols(copy, help);
+  fixupExactCopiedOwnedSuccessorSymbols(this, copy, help,
+                                        "openmp-clause-statement");
+}
+
+void SgOmpTaskwaitStatement::fixupCopy_symbols(SgNode *copy,
+                                               SgCopyHelp &help) const {
+  SgStatement::fixupCopy_symbols(copy, help);
+  fixupExactCopiedOwnedSuccessorSymbols(this, copy, help,
+                                        "openmp-taskwait-statement");
+}
+
+void SgAccClauseStatement::fixupCopy_symbols(SgNode *copy,
+                                             SgCopyHelp &help) const {
+  SgStatement::fixupCopy_symbols(copy, help);
+  fixupExactCopiedOwnedSuccessorSymbols(this, copy, help,
+                                        "openacc-clause-statement");
+}
+
+void SgOmpBodyStatement::fixupCopy_symbols(SgNode *copy,
+                                           SgCopyHelp &help) const {
+  SgOmpBodyStatement *copiedBodyOwner = isSgOmpBodyStatement(copy);
+  if (copiedBodyOwner == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[openmp-body-symbol-kind]: original=%p/%s "
+            "copy=%p/%s\n",
+            static_cast<const void *>(this), class_name().c_str(),
+            static_cast<void *>(copy),
+            copy != nullptr ? copy->class_name().c_str() : "<null>");
+    ROSE_ABORT();
+  }
+  SgStatement *originalBody = get_body();
+  SgStatement *copiedBody = copiedBodyOwner->get_body();
+  if ((originalBody == nullptr) != (copiedBody == nullptr)) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[openmp-body-symbol-null]: original=%p body=%p "
+            "copy=%p body=%p\n",
+            static_cast<const void *>(this), static_cast<void *>(originalBody),
+            static_cast<void *>(copiedBodyOwner),
+            static_cast<void *>(copiedBody));
+    ROSE_ABORT();
+  }
+  if (originalBody != nullptr) {
+    requireExactCopiedSymbolChild(this, originalBody, copiedBodyOwner,
+                                  copiedBody, help, "openmp-body-symbol");
+    originalBody->fixupCopy_symbols(copiedBody, help);
+  }
+  SgStatement::fixupCopy_symbols(copy, help);
+}
+
+void SgAccBodyStatement::fixupCopy_symbols(SgNode *copy,
+                                           SgCopyHelp &help) const {
+  SgAccBodyStatement *copiedBodyOwner = isSgAccBodyStatement(copy);
+  if (copiedBodyOwner == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[openacc-body-symbol-kind]: original=%p/%s "
+            "copy=%p/%s\n",
+            static_cast<const void *>(this), class_name().c_str(),
+            static_cast<void *>(copy),
+            copy != nullptr ? copy->class_name().c_str() : "<null>");
+    ROSE_ABORT();
+  }
+  SgStatement *originalBody = get_body();
+  SgStatement *copiedBody = copiedBodyOwner->get_body();
+  if ((originalBody == nullptr) != (copiedBody == nullptr)) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[openacc-body-symbol-null]: original=%p body=%p "
+            "copy=%p body=%p\n",
+            static_cast<const void *>(this), static_cast<void *>(originalBody),
+            static_cast<void *>(copiedBodyOwner),
+            static_cast<void *>(copiedBody));
+    ROSE_ABORT();
+  }
+  if (originalBody != nullptr) {
+    requireExactCopiedSymbolChild(this, originalBody, copiedBodyOwner,
+                                  copiedBody, help, "openacc-body-symbol");
+    originalBody->fixupCopy_symbols(copiedBody, help);
+  }
+  SgStatement::fixupCopy_symbols(copy, help);
+}
+
+void SgOmpClauseBodyStatement::fixupCopy_symbols(SgNode *copy,
+                                                 SgCopyHelp &help) const {
+  SgOmpClauseBodyStatement *copiedClauseBody = isSgOmpClauseBodyStatement(copy);
+  if (copiedClauseBody == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[openmp-clause-symbol-kind]: original=%p/%s "
+            "copy=%p/%s\n",
+            static_cast<const void *>(this), class_name().c_str(),
+            static_cast<void *>(copy),
+            copy != nullptr ? copy->class_name().c_str() : "<null>");
+    ROSE_ABORT();
+  }
+  SgOmpBodyStatement::fixupCopy_symbols(copy, help);
+  const SgOmpClauseList *originalClauses = get_clause_list();
+  SgOmpClauseList *copiedClauses = copiedClauseBody->get_clause_list();
+  requireExactCopiedSymbolChild(this, originalClauses, copiedClauseBody,
+                                copiedClauses, help,
+                                "openmp-clause-list-symbol");
+  fixupExactCopiedSupportSymbols(originalClauses, copiedClauses, help);
+}
+
+void SgAccClauseBodyStatement::fixupCopy_symbols(SgNode *copy,
+                                                 SgCopyHelp &help) const {
+  SgAccClauseBodyStatement *copiedClauseBody = isSgAccClauseBodyStatement(copy);
+  if (copiedClauseBody == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[openacc-clause-symbol-kind]: original=%p/%s "
+            "copy=%p/%s\n",
+            static_cast<const void *>(this), class_name().c_str(),
+            static_cast<void *>(copy),
+            copy != nullptr ? copy->class_name().c_str() : "<null>");
+    ROSE_ABORT();
+  }
+  SgAccBodyStatement::fixupCopy_symbols(copy, help);
+  const SgAccClausePtrList &originalClauses = get_clauses();
+  const SgAccClausePtrList &copiedClauses = copiedClauseBody->get_clauses();
+  if (originalClauses.size() != copiedClauses.size()) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[openacc-clause-symbol-count]: original=%p "
+            "clauses=%zu copy=%p clauses=%zu\n",
+            static_cast<const void *>(this), originalClauses.size(),
+            static_cast<void *>(copiedClauseBody), copiedClauses.size());
+    ROSE_ABORT();
+  }
+  for (size_t index = 0; index < originalClauses.size(); ++index) {
+    SgAccClause *originalClause = originalClauses[index];
+    SgAccClause *copiedClause = copiedClauses[index];
+    requireExactCopiedSymbolChild(this, originalClause, copiedClauseBody,
+                                  copiedClause, help, "openacc-clause-symbol");
+    fixupExactCopiedSupportSymbols(originalClause, copiedClause, help);
+  }
+}
+
+void SgOmpDeclareSimdStatement::fixupCopy_symbols(SgNode *copy,
+                                                  SgCopyHelp &help) const {
+  SgDeclarationStatement::fixupCopy_symbols(copy, help);
+  fixupExactCopiedOwnedSuccessorSymbols(this, copy, help,
+                                        "openmp-declare-simd");
+}
+
+void SgOmpDeclareVariantStatement::fixupCopy_symbols(SgNode *copy,
+                                                     SgCopyHelp &help) const {
+  SgDeclarationStatement::fixupCopy_symbols(copy, help);
+  fixupExactCopiedOwnedSuccessorSymbols(this, copy, help,
+                                        "openmp-declare-variant");
+}
+
+void SgOmpBeginDeclareVariantStatement::fixupCopy_symbols(
+    SgNode *copy, SgCopyHelp &help) const {
+  SgDeclarationStatement::fixupCopy_symbols(copy, help);
+  fixupExactCopiedOwnedSuccessorSymbols(this, copy, help,
+                                        "openmp-begin-declare-variant");
+}
+
+void SgOmpDeclareMapperStatement::fixupCopy_symbols(SgNode *copy,
+                                                    SgCopyHelp &help) const {
+  SgDeclarationStatement::fixupCopy_symbols(copy, help);
+  fixupExactCopiedOwnedSuccessorSymbols(this, copy, help,
+                                        "openmp-declare-mapper");
+}
+
+void SgOmpDeclareTargetStatement::fixupCopy_symbols(SgNode *copy,
+                                                    SgCopyHelp &help) const {
+  SgDeclarationStatement::fixupCopy_symbols(copy, help);
+  fixupExactCopiedOwnedSuccessorSymbols(this, copy, help,
+                                        "openmp-declare-target");
+}
+
+void SgOmpRequiresStatement::fixupCopy_symbols(SgNode *copy,
+                                               SgCopyHelp &help) const {
+  SgDeclarationStatement::fixupCopy_symbols(copy, help);
+  fixupExactCopiedOwnedSuccessorSymbols(this, copy, help, "openmp-requires");
+}
+
+void SgOmpAssumesStatement::fixupCopy_symbols(SgNode *copy,
+                                              SgCopyHelp &help) const {
+  SgDeclarationStatement::fixupCopy_symbols(copy, help);
+  fixupExactCopiedOwnedSuccessorSymbols(this, copy, help, "openmp-assumes");
+}
+
+void SgOmpBeginAssumesStatement::fixupCopy_symbols(SgNode *copy,
+                                                   SgCopyHelp &help) const {
+  SgDeclarationStatement::fixupCopy_symbols(copy, help);
+  fixupExactCopiedOwnedSuccessorSymbols(this, copy, help,
+                                        "openmp-begin-assumes");
+}
+
+void SgOmpGroupprivateStatement::fixupCopy_symbols(SgNode *copy,
+                                                   SgCopyHelp &help) const {
+  SgDeclarationStatement::fixupCopy_symbols(copy, help);
+  fixupExactCopiedOwnedSuccessorSymbols(this, copy, help,
+                                        "openmp-groupprivate");
+}
+
+void SgOmpThreadprivateStatement::fixupCopy_symbols(SgNode *copy,
+                                                    SgCopyHelp &help) const {
+  SgDeclarationStatement::fixupCopy_symbols(copy, help);
+  fixupExactCopiedOwnedSuccessorSymbols(this, copy, help,
+                                        "openmp-threadprivate");
+}
+
 void SgExpression::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
 #if DEBUG_FIXUP_COPY
   printf("Inside of SgExpression::fixupCopy_symbols() for %p = %s copy = %p \n",
@@ -171,6 +980,12 @@ void SgExpression::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
   SgLocatedNode::fixupCopy_symbols(copy, help);
 }
 
+void SgThisExp::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
+  SgExpression::fixupCopy_symbols(copy, help);
+  SgThisExp *copiedThis = isSgThisExp(copy);
+  requireExactCopiedSymbolRoot(this, copiedThis, help, "this-expression");
+}
+
 void SgLocatedNode::fixupCopy_symbols(SgNode *, SgCopyHelp &) const {
 #if DEBUG_FIXUP_COPY
   printf(
@@ -192,6 +1007,10 @@ void SgScopeStatement::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
   SgScopeStatement *copyScopeStatement = isSgScopeStatement(copy);
   ROSE_ASSERT(copyScopeStatement != NULL);
 
+  fixupAuxiliaryDeclarationScopeCopiesForSymbols(this, copyScopeStatement,
+                                                 help);
+  fixupAuxiliaryDeclarationCopiesForSymbols(this, copyScopeStatement, help);
+
   // Canonical copied scopes can now be reached from multiple original edges
   // (e.g., declaration links reusing an already-copied subtree). Once a copied
   // scope's symbol table has been rebuilt, revisiting it should be a no-op.
@@ -199,11 +1018,10 @@ void SgScopeStatement::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
     return;
   }
 
-  SageInterface::rebuildSymbolTable(copyScopeStatement);
-
-  // DQ (3/1/2009): After rebuilding the symbol table, we have to reset
-  // references to old symbols (from the original symbol table) to the new
-  // symbols just built.
+  // The source symbol table is the semantic inventory for this scope.  Copy
+  // its exact entries; rescanning lexical statements loses symbols whose
+  // declarations are owned by typed edges, namespace reopenings, catch
+  // conditions, or compiler-generated semantic nodes.
   SageInterface::fixupReferencesToSymbols(this, copyScopeStatement, help);
 
   // printf ("\nLeaving SgScopeStatement::fixupCopy_symbols() for %p = %s copy =
@@ -283,6 +1101,19 @@ void SgDeclarationStatement::fixupCopy_symbols(SgNode *copy,
          this->get_firstNondefiningDeclaration());
 #endif
 
+  SgDeclarationStatement *copiedDeclaration = isSgDeclarationStatement(copy);
+  if (copiedDeclaration == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[declaration-symbol-copy]: original=%p/%s "
+            "copy=%p\n",
+            static_cast<const void *>(this), class_name().c_str(),
+            static_cast<void *>(copy));
+    ROSE_ABORT();
+  }
+  requireExactCopiedSymbolRoot(this, copiedDeclaration, help, "declaration");
+  fixupExactCopiedOwnedDeclarationScopeSymbols(this, copiedDeclaration, help);
+  fixupExactCopiedTemplateParameterSymbols(this, copiedDeclaration, help);
+
   // Call the base class fixupCopy member function (this will setup the parent)
   SgStatement::fixupCopy_symbols(copy, help);
 }
@@ -301,6 +1132,9 @@ void SgFunctionDeclaration::fixupCopy_symbols(SgNode *copy,
 
   // Call the base class fixupCopy member function
   SgDeclarationStatement::fixupCopy_symbols(copy, help);
+
+  fixupExactCopiedFunctionDeclaratorScopeSymbols(this, functionDeclaration_copy,
+                                                 help);
 
   // Setup the scopes of the SgInitializedName objects in the paraleter list
   ROSE_ASSERT(get_parameterList() != NULL);
@@ -420,6 +1254,24 @@ void SgMemberFunctionDeclaration::fixupCopy_symbols(SgNode *copy,
   SgFunctionDeclaration::fixupCopy_symbols(copy, help);
 }
 
+void SgTemplateParameter::fixupCopy_symbols(SgNode *copy,
+                                            SgCopyHelp &help) const {
+  SgTemplateParameter *copiedParameter = isSgTemplateParameter(copy);
+  if (copiedParameter == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[template-parameter-symbol-copy]: "
+            "original=%p copy=%p\n",
+            static_cast<const void *>(this), static_cast<void *>(copy));
+    ROSE_ABORT();
+  }
+  requireExactCopiedSymbolRoot(this, copiedParameter, help,
+                               "template-parameter");
+  requireExactCopiedOrExternalSymbolEdge(
+      get_templateDeclaration(), copiedParameter->get_templateDeclaration(),
+      help, "template-parameter-declaration");
+  fixupExactCopiedSupportSymbols(this, copiedParameter, help);
+}
+
 void SgTemplateDeclaration::fixupCopy_symbols(SgNode *copy,
                                               SgCopyHelp &help) const {
 #if DEBUG_FIXUP_COPY
@@ -530,17 +1382,33 @@ void SgVariableDeclaration::fixupCopy_symbols(SgNode *copy,
       isSgVariableDeclaration(copy);
   ROSE_ASSERT(variableDeclaration_copy != NULL);
 
-  // DQ (10/14/2007): Handle the case of a type defined in the base type of the
-  // typedef (similar problem for SgVariableDeclaration). printf ("this = %p
-  // this->get_variableDeclarationContainsBaseTypeDefiningDeclaration() = %s
-  // \n",this,this->get_variableDeclarationContainsBaseTypeDefiningDeclaration()
-  // ? "true" : "false");
-  if (this->get_variableDeclarationContainsBaseTypeDefiningDeclaration() ==
-      true) {
-    ROSE_ASSERT(
-        variableDeclaration_copy
-            ->get_variableDeclarationContainsBaseTypeDefiningDeclaration() ==
-        true);
+  SgDeclarationStatement *baseTypeNondefiningOriginal =
+      get_baseTypeNondefiningDeclaration();
+  SgDeclarationStatement *baseTypeNondefiningCopy =
+      variableDeclaration_copy->get_baseTypeNondefiningDeclaration();
+  if ((baseTypeNondefiningOriginal == NULL) !=
+      (baseTypeNondefiningCopy == NULL)) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[variable-base-type-forward-symbol-null]: "
+            "source=%p child=%p copy=%p child=%p\n",
+            static_cast<const void *>(this),
+            static_cast<void *>(baseTypeNondefiningOriginal),
+            static_cast<void *>(variableDeclaration_copy),
+            static_cast<void *>(baseTypeNondefiningCopy));
+    ROSE_ABORT();
+  }
+  if (baseTypeNondefiningOriginal != NULL) {
+    requireExactCopiedSymbolChild(
+        this, baseTypeNondefiningOriginal, variableDeclaration_copy,
+        baseTypeNondefiningCopy, help, "variable-base-type-forward");
+    baseTypeNondefiningOriginal->fixupCopy_symbols(baseTypeNondefiningCopy,
+                                                   help);
+  }
+
+  // Preserve symbols for the exact inline base-type definition child.
+  if (this->get_baseTypeDefiningDeclaration() != NULL) {
+    ROSE_ASSERT(variableDeclaration_copy->get_baseTypeDefiningDeclaration() !=
+                NULL);
     SgDeclarationStatement *baseTypeDeclaration_original =
         this->get_baseTypeDefiningDeclaration();
     SgDeclarationStatement *baseTypeDeclaration_copy =
@@ -670,21 +1538,14 @@ void SgBaseClass::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
   SgNonrealBaseClass *nrBaseClass_copy = isSgNonrealBaseClass(copy);
 
   if (this->get_base_class() != NULL) {
-    ROSE_ASSERT(baseClass_copy->get_base_class());
-
     ROSE_ASSERT(nrBaseClass == NULL);
     ROSE_ASSERT(nrBaseClass_copy == NULL);
-
-    this->get_base_class()->fixupCopy_symbols(baseClass_copy->get_base_class(),
-                                              help);
+    ROSE_ASSERT(baseClass_copy->get_base_class() != NULL);
   } else if (nrBaseClass != NULL) {
     ROSE_ASSERT(nrBaseClass->get_base_class_nonreal() != NULL);
 
     ROSE_ASSERT(nrBaseClass_copy != NULL);
     ROSE_ASSERT(nrBaseClass_copy->get_base_class_nonreal() != NULL);
-
-    nrBaseClass->get_base_class_nonreal()->fixupCopy_symbols(
-        nrBaseClass_copy->get_base_class_nonreal(), help);
   } else {
     ROSE_ABORT();
   }
@@ -1046,14 +1907,43 @@ void SgCatchStatementSeq::fixupCopy_symbols(SgNode *copy,
   SgStatement::fixupCopy_symbols(copy, help);
 
   SgCatchStatementSeq *catchStatement_copy = isSgCatchStatementSeq(copy);
-  ROSE_ASSERT(catchStatement_copy != NULL);
+  if (catchStatement_copy == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[catch-sequence-symbol-copy]: original=%p "
+            "copy=%p\n",
+            static_cast<const void *>(this), static_cast<void *>(copy));
+    ROSE_ABORT();
+  }
+  requireExactCopiedSymbolRoot(this, catchStatement_copy, help,
+                               "catch-sequence");
 
-  printf("SgCatchStatementSeq::fixupCopy_symbols(): Sorry not implemented \n");
-
-  // The relavant data member here is a SgStatementPtrList p_catch_statement_seq
-
-  // ROSE_ASSERT(this->get_body() != NULL);
-  // this->get_body()->fixupCopy_symbols(catchStatement_copy->get_body(),help);
+  const SgStatementPtrList &originalCatches = get_catch_statement_seq();
+  const SgStatementPtrList &copiedCatches =
+      catchStatement_copy->get_catch_statement_seq();
+  if (originalCatches.size() != copiedCatches.size()) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[catch-sequence-symbol-count]: original=%p "
+            "count=%zu copy=%p count=%zu\n",
+            static_cast<const void *>(this), originalCatches.size(),
+            static_cast<void *>(catchStatement_copy), copiedCatches.size());
+    ROSE_ABORT();
+  }
+  for (size_t index = 0; index < originalCatches.size(); ++index) {
+    SgCatchOptionStmt *originalCatch =
+        isSgCatchOptionStmt(originalCatches[index]);
+    SgCatchOptionStmt *copiedCatch = isSgCatchOptionStmt(copiedCatches[index]);
+    if (originalCatch == nullptr || copiedCatch == nullptr) {
+      fprintf(stderr,
+              "REX_COPY_INVARIANT[catch-handler-symbol-kind]: index=%zu "
+              "original=%p copy=%p\n",
+              index, static_cast<void *>(originalCatches[index]),
+              static_cast<void *>(copiedCatches[index]));
+      ROSE_ABORT();
+    }
+    requireExactCopiedSymbolChild(this, originalCatch, catchStatement_copy,
+                                  copiedCatch, help, "catch-handler");
+    originalCatch->fixupCopy_symbols(copiedCatch, help);
+  }
 }
 
 void SgWhileStmt::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
@@ -1127,10 +2017,37 @@ void SgTryStmt::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
   SgStatement::fixupCopy_symbols(copy, help);
 
   SgTryStmt *tryStatement_copy = isSgTryStmt(copy);
-  ROSE_ASSERT(tryStatement_copy != NULL);
-
-  ROSE_ASSERT(this->get_body() != NULL);
-  this->get_body()->fixupCopy_symbols(tryStatement_copy->get_body(), help);
+  if (tryStatement_copy == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[try-statement-symbol-copy]: original=%p "
+            "copy=%p\n",
+            static_cast<const void *>(this), static_cast<void *>(copy));
+    ROSE_ABORT();
+  }
+  requireExactCopiedSymbolRoot(this, tryStatement_copy, help, "try-statement");
+  SgStatement *originalBody = get_body();
+  SgStatement *copiedBody = tryStatement_copy->get_body();
+  SgCatchStatementSeq *originalCatches = get_catch_statement_seq_root();
+  SgCatchStatementSeq *copiedCatches =
+      tryStatement_copy->get_catch_statement_seq_root();
+  if (originalBody == nullptr || copiedBody == nullptr ||
+      originalCatches == nullptr || copiedCatches == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[try-statement-symbol-children]: original=%p "
+            "body=%p catches=%p copy=%p body=%p catches=%p\n",
+            static_cast<const void *>(this), static_cast<void *>(originalBody),
+            static_cast<void *>(originalCatches),
+            static_cast<void *>(tryStatement_copy),
+            static_cast<void *>(copiedBody),
+            static_cast<void *>(copiedCatches));
+    ROSE_ABORT();
+  }
+  requireExactCopiedSymbolChild(this, originalBody, tryStatement_copy,
+                                copiedBody, help, "try-body");
+  requireExactCopiedSymbolChild(this, originalCatches, tryStatement_copy,
+                                copiedCatches, help, "try-catches");
+  originalBody->fixupCopy_symbols(copiedBody, help);
+  originalCatches->fixupCopy_symbols(copiedCatches, help);
 }
 
 void SgCatchOptionStmt::fixupCopy_symbols(SgNode *copy,
@@ -1141,24 +2058,60 @@ void SgCatchOptionStmt::fixupCopy_symbols(SgNode *copy,
          this, this->class_name().c_str(), copy);
 #endif
 
-  printf("SgCatchOptionStmt::fixupCopy_symbols(): Sorry not implemented \n");
-
   SgScopeStatement::fixupCopy_symbols(copy, help);
 
   SgCatchOptionStmt *catchOptionStatement_copy = isSgCatchOptionStmt(copy);
-  ROSE_ASSERT(catchOptionStatement_copy != NULL);
+  if (catchOptionStatement_copy == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[catch-handler-symbol-copy]: original=%p "
+            "copy=%p\n",
+            static_cast<const void *>(this), static_cast<void *>(copy));
+    ROSE_ABORT();
+  }
+  requireExactCopiedSymbolRoot(this, catchOptionStatement_copy, help,
+                               "catch-handler");
+  SgTryStmt *originalTry = get_trystmt();
+  SgTryStmt *copiedTry = catchOptionStatement_copy->get_trystmt();
+  if (originalTry == nullptr || copiedTry == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[catch-handler-symbol-try]: original=%p "
+            "try=%p copy=%p try=%p\n",
+            static_cast<const void *>(this), static_cast<void *>(originalTry),
+            static_cast<void *>(catchOptionStatement_copy),
+            static_cast<void *>(copiedTry));
+    ROSE_ABORT();
+  }
+  requireExactCopiedOrExternalSymbolEdge(originalTry, copiedTry, help,
+                                         "catch-handler-try");
 
-  ROSE_ASSERT(this->get_trystmt() != NULL);
-  // I think this might cause endless recursion, so comment out for now!
-  // this->get_trystmt()->fixupCopy_symbols(catchOptionStatement_copy->get_trystmt(),help);
-
-  ROSE_ASSERT(this->get_condition() != NULL);
-  this->get_condition()->fixupCopy_symbols(
-      catchOptionStatement_copy->get_condition(), help);
-
-  ROSE_ASSERT(this->get_body() != NULL);
-  this->get_body()->fixupCopy_symbols(catchOptionStatement_copy->get_body(),
-                                      help);
+  SgVariableDeclaration *originalCondition = get_condition();
+  SgVariableDeclaration *copiedCondition =
+      catchOptionStatement_copy->get_condition();
+  SgStatement *originalBody = get_body();
+  SgStatement *copiedBody = catchOptionStatement_copy->get_body();
+  if ((originalCondition == nullptr) != (copiedCondition == nullptr) ||
+      originalBody == nullptr || copiedBody == nullptr) {
+    fprintf(
+        stderr,
+        "REX_COPY_INVARIANT[catch-handler-symbol-children]: original=%p "
+        "condition=%p body=%p copy=%p condition=%p body=%p\n",
+        static_cast<const void *>(this), static_cast<void *>(originalCondition),
+        static_cast<void *>(originalBody),
+        static_cast<void *>(catchOptionStatement_copy),
+        static_cast<void *>(copiedCondition), static_cast<void *>(copiedBody));
+    ROSE_ABORT();
+  }
+  if (originalCondition != nullptr) {
+    requireExactCopiedSymbolChild(this, originalCondition,
+                                  catchOptionStatement_copy, copiedCondition,
+                                  help, "catch-handler-condition");
+  }
+  requireExactCopiedSymbolChild(this, originalBody, catchOptionStatement_copy,
+                                copiedBody, help, "catch-handler-body");
+  if (originalCondition != nullptr) {
+    originalCondition->fixupCopy_symbols(copiedCondition, help);
+  }
+  originalBody->fixupCopy_symbols(copiedBody, help);
 }
 
 void SgCaseOptionStmt::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
@@ -1197,9 +2150,23 @@ void SgDefaultOptionStmt::fixupCopy_symbols(SgNode *copy,
                                       help);
 }
 
-void SgTemplateArgument::fixupCopy_symbols(SgNode *copy, SgCopyHelp &) const {
+void SgTemplateArgument::fixupCopy_symbols(SgNode *copy,
+                                           SgCopyHelp &help) const {
   SgTemplateArgument *templateArgument_copy = isSgTemplateArgument(copy);
-  ROSE_ASSERT(templateArgument_copy != NULL);
+  if (templateArgument_copy == nullptr) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[template-argument-symbol-copy]: "
+            "original=%p copy=%p\n",
+            static_cast<const void *>(this), static_cast<void *>(copy));
+    ROSE_ABORT();
+  }
+  requireExactCopiedSymbolRoot(this, templateArgument_copy, help,
+                               "template-argument");
+  requireExactCopiedOrExternalSymbolEdge(
+      get_templateDeclaration(),
+      templateArgument_copy->get_templateDeclaration(), help,
+      "template-argument-declaration");
+  fixupExactCopiedSupportSymbols(this, templateArgument_copy, help);
 
 #if DEBUG_FIXUP_COPY
   printf("\nIn SgTemplateArgument::fixupCopy_symbols(): this = %p = %s copy = "

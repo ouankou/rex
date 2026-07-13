@@ -54,8 +54,10 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeSignedShort8) {
   EXPECT_EQ(is<SgTypeSignedShort>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeUnsigned128bitInteger9) {
-  SgTypeUnsigned128bitInteger *p = SageBuilder::buildUnsigned128bitIntegerType();
+TEST(GeneratedSageBuilderBuildTypeTestSuite,
+     buildSgTypeUnsigned128bitInteger9) {
+  SgTypeUnsigned128bitInteger *p =
+      SageBuilder::buildUnsigned128bitIntegerType();
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeUnsigned128bitInteger>(p), true);
 }
@@ -102,7 +104,9 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeUnsignedChar16) {
   EXPECT_EQ(is<SgTypeUnsignedChar>(p), true);
 }
 /*
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeString17){  SgTypeString *p = SageBuilder::buildStringType();  ASSERT_EQ(isNull(p), false);  EXPECT_EQ(is<SgTypeString>(p), true);}
+TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeString17){  SgTypeString
+*p = SageBuilder::buildStringType();  ASSERT_EQ(isNull(p), false);
+EXPECT_EQ(is<SgTypeString>(p), true);}
 */
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeFloat18) {
   SgTypeFloat *p = SageBuilder::buildFloatType();
@@ -129,19 +133,22 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgPointerType21) {
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgReferenceType22) {
-  SgReferenceType *p = SageBuilder::buildReferenceType(SageBuilder::buildIntType());
+  SgReferenceType *p =
+      SageBuilder::buildReferenceType(SageBuilder::buildIntType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgRvalueReferenceType23) {
-  SgRvalueReferenceType *p = SageBuilder::buildRvalueReferenceType(SageBuilder::buildIntType());
+  SgRvalueReferenceType *p =
+      SageBuilder::buildRvalueReferenceType(SageBuilder::buildIntType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgRvalueReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType24) {
-  SgModifierType *p = SageBuilder::buildModifierType(SageBuilder::buildIntType());
+  SgModifierType *p = SageBuilder::buildModifierType(
+      SageBuilder::buildIntType(), SgTypeModifier());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
@@ -153,16 +160,18 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType25) {
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType26) {
-  SgModifierType *p = SageBuilder::buildVolatileType(SageBuilder::buildIntType());
+  SgModifierType *p =
+      SageBuilder::buildVolatileType(SageBuilder::buildIntType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType27){
-  EXPECT_DEATH( SageBuilder::buildRestrictType(SageBuilder::buildIntType()), "");
-//  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildIntType());
-//  ASSERT_EQ(isNull(p), false);
-//  EXPECT_EQ(is<SgModifierType>(p), true);
+TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType27) {
+  EXPECT_DEATH(SageBuilder::buildRestrictType(SageBuilder::buildIntType()), "");
+  //  SgModifierType *p =
+  //  SageBuilder::buildRestrictType(SageBuilder::buildIntType());
+  //  ASSERT_EQ(isNull(p), false);
+  //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex33) {
@@ -172,31 +181,36 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex33) {
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeImaginary34) {
-  SgTypeImaginary *p = SageBuilder::buildImaginaryType(SageBuilder::buildIntType());
+  SgTypeImaginary *p =
+      SageBuilder::buildImaginaryType(SageBuilder::buildIntType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeImaginary>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgPointerType35) {
-  SgPointerType *p = SageBuilder::buildPointerType(SageBuilder::buildLongType());
+  SgPointerType *p =
+      SageBuilder::buildPointerType(SageBuilder::buildLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgPointerType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgReferenceType36) {
-  SgReferenceType *p = SageBuilder::buildReferenceType(SageBuilder::buildLongType());
+  SgReferenceType *p =
+      SageBuilder::buildReferenceType(SageBuilder::buildLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgRvalueReferenceType37) {
-  SgRvalueReferenceType *p = SageBuilder::buildRvalueReferenceType(SageBuilder::buildLongType());
+  SgRvalueReferenceType *p =
+      SageBuilder::buildRvalueReferenceType(SageBuilder::buildLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgRvalueReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType38) {
-  SgModifierType *p = SageBuilder::buildModifierType(SageBuilder::buildLongType());
+  SgModifierType *p = SageBuilder::buildModifierType(
+      SageBuilder::buildLongType(), SgTypeModifier());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
@@ -208,696 +222,816 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType39) {
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType40) {
-  SgModifierType *p = SageBuilder::buildVolatileType(SageBuilder::buildLongType());
+  SgModifierType *p =
+      SageBuilder::buildVolatileType(SageBuilder::buildLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType41){
-  EXPECT_DEATH(SageBuilder::buildRestrictType(SageBuilder::buildLongType()), "");
-//  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildLongType());
-//  ASSERT_EQ(isNull(p), false);
-//  EXPECT_EQ(is<SgModifierType>(p), true);
+TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType41) {
+  EXPECT_DEATH(SageBuilder::buildRestrictType(SageBuilder::buildLongType()),
+               "");
+  //  SgModifierType *p =
+  //  SageBuilder::buildRestrictType(SageBuilder::buildLongType());
+  //  ASSERT_EQ(isNull(p), false);
+  //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex47) {
-  SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildLongType());
+  SgTypeComplex *p =
+      SageBuilder::buildComplexType(SageBuilder::buildLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeComplex>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeImaginary48) {
-  SgTypeImaginary *p = SageBuilder::buildImaginaryType(SageBuilder::buildLongType());
+  SgTypeImaginary *p =
+      SageBuilder::buildImaginaryType(SageBuilder::buildLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeImaginary>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgPointerType49) {
-  SgPointerType *p = SageBuilder::buildPointerType(SageBuilder::buildLongLongType());
+  SgPointerType *p =
+      SageBuilder::buildPointerType(SageBuilder::buildLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgPointerType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgReferenceType50) {
-  SgReferenceType *p = SageBuilder::buildReferenceType(SageBuilder::buildLongLongType());
+  SgReferenceType *p =
+      SageBuilder::buildReferenceType(SageBuilder::buildLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgRvalueReferenceType51) {
-  SgRvalueReferenceType *p = SageBuilder::buildRvalueReferenceType(SageBuilder::buildLongLongType());
+  SgRvalueReferenceType *p =
+      SageBuilder::buildRvalueReferenceType(SageBuilder::buildLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgRvalueReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType52) {
-  SgModifierType *p = SageBuilder::buildModifierType(SageBuilder::buildLongLongType());
+  SgModifierType *p = SageBuilder::buildModifierType(
+      SageBuilder::buildLongLongType(), SgTypeModifier());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType53) {
-  SgModifierType *p = SageBuilder::buildConstType(SageBuilder::buildLongLongType());
+  SgModifierType *p =
+      SageBuilder::buildConstType(SageBuilder::buildLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType54) {
-  SgModifierType *p = SageBuilder::buildVolatileType(SageBuilder::buildLongLongType());
+  SgModifierType *p =
+      SageBuilder::buildVolatileType(SageBuilder::buildLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType55){
-  EXPECT_DEATH(SageBuilder::buildRestrictType(SageBuilder::buildLongLongType()), "");
-//  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildLongLongType());
-//  ASSERT_EQ(isNull(p), false);
-//  EXPECT_EQ(is<SgModifierType>(p), true);
+TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType55) {
+  EXPECT_DEATH(SageBuilder::buildRestrictType(SageBuilder::buildLongLongType()),
+               "");
+  //  SgModifierType *p =
+  //  SageBuilder::buildRestrictType(SageBuilder::buildLongLongType());
+  //  ASSERT_EQ(isNull(p), false);
+  //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex61) {
-  SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildLongLongType());
+  SgTypeComplex *p =
+      SageBuilder::buildComplexType(SageBuilder::buildLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeComplex>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeImaginary62) {
-  SgTypeImaginary *p = SageBuilder::buildImaginaryType(SageBuilder::buildLongLongType());
+  SgTypeImaginary *p =
+      SageBuilder::buildImaginaryType(SageBuilder::buildLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeImaginary>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgPointerType63) {
-  SgPointerType *p = SageBuilder::buildPointerType(SageBuilder::buildShortType());
+  SgPointerType *p =
+      SageBuilder::buildPointerType(SageBuilder::buildShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgPointerType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgReferenceType64) {
-  SgReferenceType *p = SageBuilder::buildReferenceType(SageBuilder::buildShortType());
+  SgReferenceType *p =
+      SageBuilder::buildReferenceType(SageBuilder::buildShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgRvalueReferenceType65) {
-  SgRvalueReferenceType *p = SageBuilder::buildRvalueReferenceType(SageBuilder::buildShortType());
+  SgRvalueReferenceType *p =
+      SageBuilder::buildRvalueReferenceType(SageBuilder::buildShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgRvalueReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType66) {
-  SgModifierType *p = SageBuilder::buildModifierType(SageBuilder::buildShortType());
+  SgModifierType *p = SageBuilder::buildModifierType(
+      SageBuilder::buildShortType(), SgTypeModifier());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType67) {
-  SgModifierType *p = SageBuilder::buildConstType(SageBuilder::buildShortType());
+  SgModifierType *p =
+      SageBuilder::buildConstType(SageBuilder::buildShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType68) {
-  SgModifierType *p = SageBuilder::buildVolatileType(SageBuilder::buildShortType());
+  SgModifierType *p =
+      SageBuilder::buildVolatileType(SageBuilder::buildShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType69){
-  EXPECT_DEATH(SageBuilder::buildRestrictType(SageBuilder::buildShortType()), "");
-//  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildShortType());
-//  ASSERT_EQ(isNull(p), false);
-//  EXPECT_EQ(is<SgModifierType>(p), true);
+TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType69) {
+  EXPECT_DEATH(SageBuilder::buildRestrictType(SageBuilder::buildShortType()),
+               "");
+  //  SgModifierType *p =
+  //  SageBuilder::buildRestrictType(SageBuilder::buildShortType());
+  //  ASSERT_EQ(isNull(p), false);
+  //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex75) {
-  SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildShortType());
+  SgTypeComplex *p =
+      SageBuilder::buildComplexType(SageBuilder::buildShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeComplex>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeImaginary76) {
-  SgTypeImaginary *p = SageBuilder::buildImaginaryType(SageBuilder::buildShortType());
+  SgTypeImaginary *p =
+      SageBuilder::buildImaginaryType(SageBuilder::buildShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeImaginary>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgPointerType77) {
-  SgPointerType *p = SageBuilder::buildPointerType(SageBuilder::buildSigned128bitIntegerType());
+  SgPointerType *p = SageBuilder::buildPointerType(
+      SageBuilder::buildSigned128bitIntegerType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgPointerType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgReferenceType78) {
-  SgReferenceType *p = SageBuilder::buildReferenceType(SageBuilder::buildSigned128bitIntegerType());
+  SgReferenceType *p = SageBuilder::buildReferenceType(
+      SageBuilder::buildSigned128bitIntegerType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgRvalueReferenceType79) {
   SgRvalueReferenceType *p = SageBuilder::buildRvalueReferenceType(
-                               SageBuilder::buildSigned128bitIntegerType());
+      SageBuilder::buildSigned128bitIntegerType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgRvalueReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType80) {
-  SgModifierType *p = SageBuilder::buildModifierType(SageBuilder::buildSigned128bitIntegerType());
+  SgModifierType *p = SageBuilder::buildModifierType(
+      SageBuilder::buildSigned128bitIntegerType(), SgTypeModifier());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType81) {
-  SgModifierType *p = SageBuilder::buildConstType(SageBuilder::buildSigned128bitIntegerType());
+  SgModifierType *p =
+      SageBuilder::buildConstType(SageBuilder::buildSigned128bitIntegerType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType82) {
-  SgModifierType *p = SageBuilder::buildVolatileType(SageBuilder::buildSigned128bitIntegerType());
+  SgModifierType *p = SageBuilder::buildVolatileType(
+      SageBuilder::buildSigned128bitIntegerType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType83){
-  EXPECT_DEATH(SageBuilder::buildRestrictType(SageBuilder::buildSigned128bitIntegerType()), "");
-//  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildSigned128bitIntegerType());
-//  ASSERT_EQ(isNull(p), false);
-//  EXPECT_EQ(is<SgModifierType>(p), true);
+TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType83) {
+  EXPECT_DEATH(SageBuilder::buildRestrictType(
+                   SageBuilder::buildSigned128bitIntegerType()),
+               "");
+  //  SgModifierType *p =
+  //  SageBuilder::buildRestrictType(SageBuilder::buildSigned128bitIntegerType());
+  //  ASSERT_EQ(isNull(p), false);
+  //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex89) {
-  SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildSigned128bitIntegerType());
+  SgTypeComplex *p = SageBuilder::buildComplexType(
+      SageBuilder::buildSigned128bitIntegerType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeComplex>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeImaginary90) {
-  SgTypeImaginary *p = SageBuilder::buildImaginaryType(SageBuilder::buildSigned128bitIntegerType());
+  SgTypeImaginary *p = SageBuilder::buildImaginaryType(
+      SageBuilder::buildSigned128bitIntegerType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeImaginary>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgPointerType91) {
-  SgPointerType *p = SageBuilder::buildPointerType(SageBuilder::buildSignedIntType());
+  SgPointerType *p =
+      SageBuilder::buildPointerType(SageBuilder::buildSignedIntType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgPointerType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgReferenceType92) {
-  SgReferenceType *p = SageBuilder::buildReferenceType(SageBuilder::buildSignedIntType());
+  SgReferenceType *p =
+      SageBuilder::buildReferenceType(SageBuilder::buildSignedIntType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgRvalueReferenceType93) {
-  SgRvalueReferenceType *p = SageBuilder::buildRvalueReferenceType(SageBuilder::buildSignedIntType());
+  SgRvalueReferenceType *p =
+      SageBuilder::buildRvalueReferenceType(SageBuilder::buildSignedIntType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgRvalueReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType94) {
-  SgModifierType *p = SageBuilder::buildModifierType(SageBuilder::buildSignedIntType());
+  SgModifierType *p = SageBuilder::buildModifierType(
+      SageBuilder::buildSignedIntType(), SgTypeModifier());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType95) {
-  SgModifierType *p = SageBuilder::buildConstType(SageBuilder::buildSignedIntType());
+  SgModifierType *p =
+      SageBuilder::buildConstType(SageBuilder::buildSignedIntType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType96) {
-  SgModifierType *p = SageBuilder::buildVolatileType(SageBuilder::buildSignedIntType());
+  SgModifierType *p =
+      SageBuilder::buildVolatileType(SageBuilder::buildSignedIntType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType97){
-  EXPECT_DEATH(SageBuilder::buildRestrictType(SageBuilder::buildSignedIntType()), "");
-//  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildSignedIntType());
-//  ASSERT_EQ(isNull(p), false);
-//  EXPECT_EQ(is<SgModifierType>(p), true);
+TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType97) {
+  EXPECT_DEATH(
+      SageBuilder::buildRestrictType(SageBuilder::buildSignedIntType()), "");
+  //  SgModifierType *p =
+  //  SageBuilder::buildRestrictType(SageBuilder::buildSignedIntType());
+  //  ASSERT_EQ(isNull(p), false);
+  //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex103) {
-  SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildSignedIntType());
+  SgTypeComplex *p =
+      SageBuilder::buildComplexType(SageBuilder::buildSignedIntType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeComplex>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeImaginary104) {
-  SgTypeImaginary *p = SageBuilder::buildImaginaryType(SageBuilder::buildSignedIntType());
+  SgTypeImaginary *p =
+      SageBuilder::buildImaginaryType(SageBuilder::buildSignedIntType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeImaginary>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgPointerType105) {
-  SgPointerType *p = SageBuilder::buildPointerType(SageBuilder::buildSignedLongType());
+  SgPointerType *p =
+      SageBuilder::buildPointerType(SageBuilder::buildSignedLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgPointerType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgReferenceType106) {
-  SgReferenceType *p = SageBuilder::buildReferenceType(SageBuilder::buildSignedLongType());
+  SgReferenceType *p =
+      SageBuilder::buildReferenceType(SageBuilder::buildSignedLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgRvalueReferenceType107) {
-  SgRvalueReferenceType *p = SageBuilder::buildRvalueReferenceType(
-                               SageBuilder::buildSignedLongType());
+  SgRvalueReferenceType *p =
+      SageBuilder::buildRvalueReferenceType(SageBuilder::buildSignedLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgRvalueReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType108) {
-  SgModifierType *p = SageBuilder::buildModifierType(SageBuilder::buildSignedLongType());
+  SgModifierType *p = SageBuilder::buildModifierType(
+      SageBuilder::buildSignedLongType(), SgTypeModifier());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType109) {
-  SgModifierType *p = SageBuilder::buildConstType(SageBuilder::buildSignedLongType());
+  SgModifierType *p =
+      SageBuilder::buildConstType(SageBuilder::buildSignedLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType110) {
-  SgModifierType *p = SageBuilder::buildVolatileType(SageBuilder::buildSignedLongType());
+  SgModifierType *p =
+      SageBuilder::buildVolatileType(SageBuilder::buildSignedLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType111){
-  EXPECT_DEATH(SageBuilder::buildRestrictType(SageBuilder::buildSignedLongType()), "");
-//  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildSignedLongType());
-//  ASSERT_EQ(isNull(p), false);
-//  EXPECT_EQ(is<SgModifierType>(p), true);
+TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType111) {
+  EXPECT_DEATH(
+      SageBuilder::buildRestrictType(SageBuilder::buildSignedLongType()), "");
+  //  SgModifierType *p =
+  //  SageBuilder::buildRestrictType(SageBuilder::buildSignedLongType());
+  //  ASSERT_EQ(isNull(p), false);
+  //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex117) {
-  SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildSignedLongType());
+  SgTypeComplex *p =
+      SageBuilder::buildComplexType(SageBuilder::buildSignedLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeComplex>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeImaginary118) {
-  SgTypeImaginary *p = SageBuilder::buildImaginaryType(SageBuilder::buildSignedLongType());
+  SgTypeImaginary *p =
+      SageBuilder::buildImaginaryType(SageBuilder::buildSignedLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeImaginary>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgPointerType119) {
-  SgPointerType *p = SageBuilder::buildPointerType(SageBuilder::buildSignedLongLongType());
+  SgPointerType *p =
+      SageBuilder::buildPointerType(SageBuilder::buildSignedLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgPointerType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgReferenceType120) {
-  SgReferenceType *p = SageBuilder::buildReferenceType(SageBuilder::buildSignedLongLongType());
+  SgReferenceType *p =
+      SageBuilder::buildReferenceType(SageBuilder::buildSignedLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgRvalueReferenceType121) {
   SgRvalueReferenceType *p = SageBuilder::buildRvalueReferenceType(
-                               SageBuilder::buildSignedLongLongType());
+      SageBuilder::buildSignedLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgRvalueReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType122) {
-  SgModifierType *p = SageBuilder::buildModifierType(SageBuilder::buildSignedLongLongType());
+  SgModifierType *p = SageBuilder::buildModifierType(
+      SageBuilder::buildSignedLongLongType(), SgTypeModifier());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType123) {
-  SgModifierType *p = SageBuilder::buildConstType(SageBuilder::buildSignedLongLongType());
+  SgModifierType *p =
+      SageBuilder::buildConstType(SageBuilder::buildSignedLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType124) {
-  SgModifierType *p = SageBuilder::buildVolatileType(SageBuilder::buildSignedLongLongType());
+  SgModifierType *p =
+      SageBuilder::buildVolatileType(SageBuilder::buildSignedLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType125){
-  EXPECT_DEATH(SageBuilder::buildRestrictType(SageBuilder::buildSignedLongLongType()),"");
-//  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildSignedLongLongType());
-//  ASSERT_EQ(isNull(p), false);
-//  EXPECT_EQ(is<SgModifierType>(p), true);
+TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType125) {
+  EXPECT_DEATH(
+      SageBuilder::buildRestrictType(SageBuilder::buildSignedLongLongType()),
+      "");
+  //  SgModifierType *p =
+  //  SageBuilder::buildRestrictType(SageBuilder::buildSignedLongLongType());
+  //  ASSERT_EQ(isNull(p), false);
+  //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex131) {
-  SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildSignedLongLongType());
+  SgTypeComplex *p =
+      SageBuilder::buildComplexType(SageBuilder::buildSignedLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeComplex>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeImaginary132) {
-  SgTypeImaginary *p = SageBuilder::buildImaginaryType(SageBuilder::buildSignedLongLongType());
+  SgTypeImaginary *p =
+      SageBuilder::buildImaginaryType(SageBuilder::buildSignedLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeImaginary>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgPointerType133) {
-  SgPointerType *p = SageBuilder::buildPointerType(SageBuilder::buildSignedShortType());
+  SgPointerType *p =
+      SageBuilder::buildPointerType(SageBuilder::buildSignedShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgPointerType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgReferenceType134) {
-  SgReferenceType *p = SageBuilder::buildReferenceType(SageBuilder::buildSignedShortType());
+  SgReferenceType *p =
+      SageBuilder::buildReferenceType(SageBuilder::buildSignedShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgRvalueReferenceType135) {
   SgRvalueReferenceType *p = SageBuilder::buildRvalueReferenceType(
-                               SageBuilder::buildSignedShortType());
+      SageBuilder::buildSignedShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgRvalueReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType136) {
-  SgModifierType *p = SageBuilder::buildModifierType(SageBuilder::buildSignedShortType());
+  SgModifierType *p = SageBuilder::buildModifierType(
+      SageBuilder::buildSignedShortType(), SgTypeModifier());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType137) {
-  SgModifierType *p = SageBuilder::buildConstType(SageBuilder::buildSignedShortType());
+  SgModifierType *p =
+      SageBuilder::buildConstType(SageBuilder::buildSignedShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType138) {
-  SgModifierType *p = SageBuilder::buildVolatileType(SageBuilder::buildSignedShortType());
+  SgModifierType *p =
+      SageBuilder::buildVolatileType(SageBuilder::buildSignedShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType139){
-  EXPECT_DEATH(SageBuilder::buildRestrictType(SageBuilder::buildSignedShortType()), "");
-//  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildSignedShortType());
-//  ASSERT_EQ(isNull(p), false);
-//  EXPECT_EQ(is<SgModifierType>(p), true);
+TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType139) {
+  EXPECT_DEATH(
+      SageBuilder::buildRestrictType(SageBuilder::buildSignedShortType()), "");
+  //  SgModifierType *p =
+  //  SageBuilder::buildRestrictType(SageBuilder::buildSignedShortType());
+  //  ASSERT_EQ(isNull(p), false);
+  //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex145) {
-  SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildSignedShortType());
+  SgTypeComplex *p =
+      SageBuilder::buildComplexType(SageBuilder::buildSignedShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeComplex>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeImaginary146) {
-  SgTypeImaginary *p = SageBuilder::buildImaginaryType(SageBuilder::buildSignedShortType());
+  SgTypeImaginary *p =
+      SageBuilder::buildImaginaryType(SageBuilder::buildSignedShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeImaginary>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgPointerType147) {
-  SgPointerType *p = SageBuilder::buildPointerType(SageBuilder::buildUnsigned128bitIntegerType());
+  SgPointerType *p = SageBuilder::buildPointerType(
+      SageBuilder::buildUnsigned128bitIntegerType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgPointerType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgReferenceType148) {
-  SgReferenceType *p = SageBuilder::buildReferenceType(SageBuilder::buildUnsigned128bitIntegerType());
+  SgReferenceType *p = SageBuilder::buildReferenceType(
+      SageBuilder::buildUnsigned128bitIntegerType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgRvalueReferenceType149) {
   SgRvalueReferenceType *p = SageBuilder::buildRvalueReferenceType(
-                               SageBuilder::buildUnsigned128bitIntegerType());
+      SageBuilder::buildUnsigned128bitIntegerType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgRvalueReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType150) {
-  SgModifierType *p = SageBuilder::buildModifierType(SageBuilder::buildUnsigned128bitIntegerType());
+  SgModifierType *p = SageBuilder::buildModifierType(
+      SageBuilder::buildUnsigned128bitIntegerType(), SgTypeModifier());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType151) {
-  SgModifierType *p = SageBuilder::buildConstType(SageBuilder::buildUnsigned128bitIntegerType());
+  SgModifierType *p = SageBuilder::buildConstType(
+      SageBuilder::buildUnsigned128bitIntegerType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType152) {
-  SgModifierType *p = SageBuilder::buildVolatileType(SageBuilder::buildUnsigned128bitIntegerType());
+  SgModifierType *p = SageBuilder::buildVolatileType(
+      SageBuilder::buildUnsigned128bitIntegerType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType153){
-  EXPECT_DEATH(SageBuilder::buildRestrictType(SageBuilder::buildUnsigned128bitIntegerType()), "");
-//  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildUnsigned128bitIntegerType());
-//  ASSERT_EQ(isNull(p), false);
-//  EXPECT_EQ(is<SgModifierType>(p), true);
+TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType153) {
+  EXPECT_DEATH(SageBuilder::buildRestrictType(
+                   SageBuilder::buildUnsigned128bitIntegerType()),
+               "");
+  //  SgModifierType *p =
+  //  SageBuilder::buildRestrictType(SageBuilder::buildUnsigned128bitIntegerType());
+  //  ASSERT_EQ(isNull(p), false);
+  //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex159) {
-  SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildUnsigned128bitIntegerType());
+  SgTypeComplex *p = SageBuilder::buildComplexType(
+      SageBuilder::buildUnsigned128bitIntegerType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeComplex>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeImaginary160) {
-  SgTypeImaginary *p = SageBuilder::buildImaginaryType(SageBuilder::buildUnsigned128bitIntegerType());
+  SgTypeImaginary *p = SageBuilder::buildImaginaryType(
+      SageBuilder::buildUnsigned128bitIntegerType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeImaginary>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgPointerType161) {
-  SgPointerType *p = SageBuilder::buildPointerType(SageBuilder::buildUnsignedIntType());
+  SgPointerType *p =
+      SageBuilder::buildPointerType(SageBuilder::buildUnsignedIntType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgPointerType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgReferenceType162) {
-  SgReferenceType *p = SageBuilder::buildReferenceType(SageBuilder::buildUnsignedIntType());
+  SgReferenceType *p =
+      SageBuilder::buildReferenceType(SageBuilder::buildUnsignedIntType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgRvalueReferenceType163) {
   SgRvalueReferenceType *p = SageBuilder::buildRvalueReferenceType(
-                               SageBuilder::buildUnsignedIntType());
+      SageBuilder::buildUnsignedIntType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgRvalueReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType164) {
-  SgModifierType *p = SageBuilder::buildModifierType(SageBuilder::buildUnsignedIntType());
+  SgModifierType *p = SageBuilder::buildModifierType(
+      SageBuilder::buildUnsignedIntType(), SgTypeModifier());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType165) {
-  SgModifierType *p = SageBuilder::buildConstType(SageBuilder::buildUnsignedIntType());
+  SgModifierType *p =
+      SageBuilder::buildConstType(SageBuilder::buildUnsignedIntType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType166) {
-  SgModifierType *p = SageBuilder::buildVolatileType(SageBuilder::buildUnsignedIntType());
+  SgModifierType *p =
+      SageBuilder::buildVolatileType(SageBuilder::buildUnsignedIntType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType167){
-  EXPECT_DEATH(SageBuilder::buildRestrictType(SageBuilder::buildUnsignedIntType()), "");
-//  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildUnsignedIntType());
-//  ASSERT_EQ(isNull(p), false);
-//  EXPECT_EQ(is<SgModifierType>(p), true);
+TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType167) {
+  EXPECT_DEATH(
+      SageBuilder::buildRestrictType(SageBuilder::buildUnsignedIntType()), "");
+  //  SgModifierType *p =
+  //  SageBuilder::buildRestrictType(SageBuilder::buildUnsignedIntType());
+  //  ASSERT_EQ(isNull(p), false);
+  //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex173) {
-  SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildUnsignedIntType());
+  SgTypeComplex *p =
+      SageBuilder::buildComplexType(SageBuilder::buildUnsignedIntType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeComplex>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeImaginary174) {
-  SgTypeImaginary *p = SageBuilder::buildImaginaryType(SageBuilder::buildUnsignedIntType());
+  SgTypeImaginary *p =
+      SageBuilder::buildImaginaryType(SageBuilder::buildUnsignedIntType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeImaginary>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgPointerType175) {
-  SgPointerType *p = SageBuilder::buildPointerType(SageBuilder::buildUnsignedLongType());
+  SgPointerType *p =
+      SageBuilder::buildPointerType(SageBuilder::buildUnsignedLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgPointerType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgReferenceType176) {
-  SgReferenceType *p = SageBuilder::buildReferenceType(SageBuilder::buildUnsignedLongType());
+  SgReferenceType *p =
+      SageBuilder::buildReferenceType(SageBuilder::buildUnsignedLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgRvalueReferenceType177) {
   SgRvalueReferenceType *p = SageBuilder::buildRvalueReferenceType(
-                               SageBuilder::buildUnsignedLongType());
+      SageBuilder::buildUnsignedLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgRvalueReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType178) {
-  SgModifierType *p = SageBuilder::buildModifierType(SageBuilder::buildUnsignedLongType());
+  SgModifierType *p = SageBuilder::buildModifierType(
+      SageBuilder::buildUnsignedLongType(), SgTypeModifier());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType179) {
-  SgModifierType *p = SageBuilder::buildConstType(SageBuilder::buildUnsignedLongType());
+  SgModifierType *p =
+      SageBuilder::buildConstType(SageBuilder::buildUnsignedLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType180) {
-  SgModifierType *p = SageBuilder::buildVolatileType(SageBuilder::buildUnsignedLongType());
+  SgModifierType *p =
+      SageBuilder::buildVolatileType(SageBuilder::buildUnsignedLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType181){
-  EXPECT_DEATH(SageBuilder::buildRestrictType(SageBuilder::buildUnsignedLongType()), "");
-//  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildUnsignedLongType());
-//  ASSERT_EQ(isNull(p), false);
-//  EXPECT_EQ(is<SgModifierType>(p), true);
+TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType181) {
+  EXPECT_DEATH(
+      SageBuilder::buildRestrictType(SageBuilder::buildUnsignedLongType()), "");
+  //  SgModifierType *p =
+  //  SageBuilder::buildRestrictType(SageBuilder::buildUnsignedLongType());
+  //  ASSERT_EQ(isNull(p), false);
+  //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex187) {
-  SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildUnsignedLongType());
+  SgTypeComplex *p =
+      SageBuilder::buildComplexType(SageBuilder::buildUnsignedLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeComplex>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeImaginary188) {
-  SgTypeImaginary *p = SageBuilder::buildImaginaryType(SageBuilder::buildUnsignedLongType());
+  SgTypeImaginary *p =
+      SageBuilder::buildImaginaryType(SageBuilder::buildUnsignedLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeImaginary>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgPointerType189) {
-  SgPointerType *p = SageBuilder::buildPointerType(SageBuilder::buildUnsignedLongLongType());
+  SgPointerType *p =
+      SageBuilder::buildPointerType(SageBuilder::buildUnsignedLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgPointerType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgReferenceType190) {
-  SgReferenceType *p = SageBuilder::buildReferenceType(SageBuilder::buildUnsignedLongLongType());
+  SgReferenceType *p =
+      SageBuilder::buildReferenceType(SageBuilder::buildUnsignedLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgRvalueReferenceType191) {
   SgRvalueReferenceType *p = SageBuilder::buildRvalueReferenceType(
-                               SageBuilder::buildUnsignedLongLongType());
+      SageBuilder::buildUnsignedLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgRvalueReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType192) {
-  SgModifierType *p = SageBuilder::buildModifierType(SageBuilder::buildUnsignedLongLongType());
+  SgModifierType *p = SageBuilder::buildModifierType(
+      SageBuilder::buildUnsignedLongLongType(), SgTypeModifier());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType193) {
-  SgModifierType *p = SageBuilder::buildConstType(SageBuilder::buildUnsignedLongLongType());
+  SgModifierType *p =
+      SageBuilder::buildConstType(SageBuilder::buildUnsignedLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType194) {
-  SgModifierType *p = SageBuilder::buildVolatileType(SageBuilder::buildUnsignedLongLongType());
+  SgModifierType *p =
+      SageBuilder::buildVolatileType(SageBuilder::buildUnsignedLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType195){
- EXPECT_DEATH(SageBuilder::buildRestrictType(SageBuilder::buildUnsignedLongLongType()), "");
-//  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildUnsignedLongLongType());
-//  ASSERT_EQ(isNull(p), false);
-//  EXPECT_EQ(is<SgModifierType>(p), true);
+TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType195) {
+  EXPECT_DEATH(
+      SageBuilder::buildRestrictType(SageBuilder::buildUnsignedLongLongType()),
+      "");
+  //  SgModifierType *p =
+  //  SageBuilder::buildRestrictType(SageBuilder::buildUnsignedLongLongType());
+  //  ASSERT_EQ(isNull(p), false);
+  //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex201) {
-  SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildUnsignedLongLongType());
+  SgTypeComplex *p =
+      SageBuilder::buildComplexType(SageBuilder::buildUnsignedLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeComplex>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeImaginary202) {
-  SgTypeImaginary *p = SageBuilder::buildImaginaryType(SageBuilder::buildUnsignedLongLongType());
+  SgTypeImaginary *p =
+      SageBuilder::buildImaginaryType(SageBuilder::buildUnsignedLongLongType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeImaginary>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgPointerType203) {
-  SgPointerType *p = SageBuilder::buildPointerType(SageBuilder::buildUnsignedShortType());
+  SgPointerType *p =
+      SageBuilder::buildPointerType(SageBuilder::buildUnsignedShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgPointerType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgReferenceType204) {
-  SgReferenceType *p = SageBuilder::buildReferenceType(SageBuilder::buildUnsignedShortType());
+  SgReferenceType *p =
+      SageBuilder::buildReferenceType(SageBuilder::buildUnsignedShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgRvalueReferenceType205) {
   SgRvalueReferenceType *p = SageBuilder::buildRvalueReferenceType(
-                               SageBuilder::buildUnsignedShortType());
+      SageBuilder::buildUnsignedShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgRvalueReferenceType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType206) {
-  SgModifierType *p = SageBuilder::buildModifierType(SageBuilder::buildUnsignedShortType());
+  SgModifierType *p = SageBuilder::buildModifierType(
+      SageBuilder::buildUnsignedShortType(), SgTypeModifier());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType207) {
-  SgModifierType *p = SageBuilder::buildConstType(SageBuilder::buildUnsignedShortType());
+  SgModifierType *p =
+      SageBuilder::buildConstType(SageBuilder::buildUnsignedShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType208) {
-  SgModifierType *p = SageBuilder::buildVolatileType(SageBuilder::buildUnsignedShortType());
+  SgModifierType *p =
+      SageBuilder::buildVolatileType(SageBuilder::buildUnsignedShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType209){
-  EXPECT_DEATH(SageBuilder::buildRestrictType(SageBuilder::buildUnsignedShortType()), "");
-//  SgModifierType *p = SageBuilder::buildRestrictType(SageBuilder::buildUnsignedShortType());
-//  ASSERT_EQ(isNull(p), false);
-//  EXPECT_EQ(is<SgModifierType>(p), true);
+TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgModifierType209) {
+  EXPECT_DEATH(
+      SageBuilder::buildRestrictType(SageBuilder::buildUnsignedShortType()),
+      "");
+  //  SgModifierType *p =
+  //  SageBuilder::buildRestrictType(SageBuilder::buildUnsignedShortType());
+  //  ASSERT_EQ(isNull(p), false);
+  //  EXPECT_EQ(is<SgModifierType>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeComplex215) {
-  SgTypeComplex *p = SageBuilder::buildComplexType(SageBuilder::buildUnsignedShortType());
+  SgTypeComplex *p =
+      SageBuilder::buildComplexType(SageBuilder::buildUnsignedShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeComplex>(p), true);
 }
 
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeImaginary216) {
-  SgTypeImaginary *p = SageBuilder::buildImaginaryType(SageBuilder::buildUnsignedShortType());
+  SgTypeImaginary *p =
+      SageBuilder::buildImaginaryType(SageBuilder::buildUnsignedShortType());
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeImaginary>(p), true);
 }
-

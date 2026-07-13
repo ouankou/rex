@@ -18,6 +18,30 @@
 
 #include "testSupport.h"
 
+namespace {
+
+struct TypeTestTranslationUnit {
+  SgProject *project;
+  SgGlobal *global;
+};
+
+TypeTestTranslationUnit
+buildTypeTestTranslationUnit(const std::string &filename) {
+  SgProject *project = new SgProject();
+  ROSE_ASSERT(project != nullptr);
+  project->get_fileList().clear();
+  project->set_compileOnly(true);
+  project->get_originalCommandLineArgumentList() = {"c++", "-c"};
+  SgSourceFile *source =
+      SageBuilder::buildGeneratedSourceFile(filename, project);
+  ROSE_ASSERT(source != nullptr);
+  ROSE_ASSERT(source->get_project() == project);
+  ROSE_ASSERT(source->get_globalScope() != nullptr);
+  return {project, source->get_globalScope()};
+}
+
+} // namespace
+
 TEST(SageInterfaceTypeEquivalence, HandlesEmptyInput) {
   ::SgTypeInt *int_t1 = SageBuilder::buildIntType();
   bool tcRes = SageInterface::checkTypesAreEqual(int_t1, NULL);
@@ -293,27 +317,29 @@ TEST(SageInterfaceTypeEquivalence, ConstCharArrayCharArrayAreUnequal) {
  * Typedef tests
  */
 TEST(SageInterfaceTypeEquivalence, TypedefTypesAreEqual) {
-  ::SgGlobal *global = new SgGlobal();
-  ::SgBasicBlock *bb = SageBuilder::buildBasicBlock();
-  bb->set_parent(global);
+  TypeTestTranslationUnit unit =
+      buildTypeTestTranslationUnit("types_are_equal_typedef.cpp");
   ::SgTypedefDeclaration *t_1 = SageBuilder::buildTypedefDeclaration(
-      "MyInt", SageBuilder::buildIntType(), bb);
+      SageBuilder::typedef_declaration_ownership::semanticAuxiliary(),
+      SgTypedefDeclaration::e_typedef, "MyInt", SageBuilder::buildIntType(),
+      unit.global);
   ::SgTypeInt *t_2 = SageBuilder::buildIntType();
   bool tcRef = SageInterface::checkTypesAreEqual(t_1->get_type(), t_2);
   EXPECT_EQ(tcRef, true);
-  delete global;
+  delete unit.project;
 }
 
 TEST(SageInterfaceTypeEquivalence, TypedefTypesAreUnequal) {
-  ::SgGlobal *global = new SgGlobal();
-  ::SgBasicBlock *bb = SageBuilder::buildBasicBlock();
-  bb->set_parent(global);
+  TypeTestTranslationUnit unit =
+      buildTypeTestTranslationUnit("types_are_unequal_typedef.cpp");
   ::SgTypedefDeclaration *t_1 = SageBuilder::buildTypedefDeclaration(
-      "MyInt", SageBuilder::buildIntType(), bb);
+      SageBuilder::typedef_declaration_ownership::semanticAuxiliary(),
+      SgTypedefDeclaration::e_typedef, "MyInt", SageBuilder::buildIntType(),
+      unit.global);
   ::SgTypeChar *t_2 = SageBuilder::buildCharType();
   bool tcRef = SageInterface::checkTypesAreEqual(t_1->get_type(), t_2);
   EXPECT_EQ(tcRef, false);
-  delete global;
+  delete unit.project;
 }
 
 // #if 0

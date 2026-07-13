@@ -360,29 +360,94 @@ set(GFORTRAN_DG_F03_TESTCODES
   structure_constructor_1.f03 structure_constructor_2.f03
 structure_constructor_5.f03 value_7.f03)
 
-set(ROSE_FLAGS -rose:verbose 0 -rose:skip_syntax_check
-               -rose:skipfinalCompileStep -rose:detect_dangling_pointers 1
+set(ROSE_FLAGS -rose:verbose 0 -rose:skipfinalCompileStep
+               -rose:detect_dangling_pointers 1
                -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_BINARY_DIR})
 set(_gfortran_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
 file(MAKE_DIRECTORY ${_gfortran_output_dir})
 list(APPEND ROSE_FLAGS -I${_gfortran_output_dir} -outputdir ${_gfortran_output_dir})
 
+set(_gfortran_dg_frontend_negative_tests
+  and_or_xor.f90
+  bessel_2.f90
+  gamma_1.f90
+  namelist_59.f90
+  transfer_array_intrinsic_2.f90
+  fmt_error_9.f
+  g77_intrinsics_sub.f
+  imag_1.f
+  pr41011.f)
+
+function(gfortran_dg_frontend_negative_contract
+         input_file output_diagnostic output_count)
+  set(_count 1)
+  if(input_file STREQUAL "and_or_xor.f90")
+    set(_diagnostic "Actual argument for 'i=' has bad type 'LOGICAL(1)'")
+    set(_count 3)
+  elseif(input_file STREQUAL "bessel_2.f90")
+    set(_diagnostic "No explicit type declared for 'besj0'")
+  elseif(input_file STREQUAL "gamma_1.f90")
+    set(_diagnostic "'lgamma' is not a known intrinsic procedure")
+  elseif(input_file STREQUAL "namelist_59.f90")
+    set(_diagnostic "The entity 'cmd' with an explicit SAVE attribute must be a variable, procedure pointer, or COMMON block")
+  elseif(input_file STREQUAL "transfer_array_intrinsic_2.f90")
+    set(_diagnostic "Dimension 1 of left-hand side has extent 2, but right-hand side has extent 4")
+  elseif(input_file STREQUAL "fmt_error_9.f")
+    set(_diagnostic "Expected ',' or ')' in format expression")
+    set(_count 2)
+  elseif(input_file STREQUAL "g77_intrinsics_sub.f")
+    set(_diagnostic "Keyword 'status=' may not appear in a reference to a procedure with an implicit interface")
+    set(_count 7)
+  elseif(input_file STREQUAL "imag_1.f")
+    set(_diagnostic "No explicit type declared for 'imagpart'")
+  elseif(input_file STREQUAL "pr41011.f")
+    set(_diagnostic "'dcdx' is not a callable procedure")
+  else()
+    message(FATAL_ERROR
+      "No exact gfortran.dg frontend rejection registered for ${input_file}")
+  endif()
+  set(${output_diagnostic} "${_diagnostic}" PARENT_SCOPE)
+  set(${output_count} "${_count}" PARENT_SCOPE)
+endfunction()
+
+function(gfortran_dg_test input_file fortran_standard)
+  rex_gfortran_suite_test_name(_test_name gfortran_dg "${input_file}")
+  if(input_file IN_LIST _gfortran_dg_frontend_negative_tests)
+    gfortran_dg_frontend_negative_contract(
+      "${input_file}" _expected_diagnostic _expected_count)
+    get_filename_component(_source_stem "${input_file}" NAME_WE)
+    rex_add_flang_frontend_negative_test(
+      ${_test_name}
+      GFORTRANSUITE
+      ${_gfortran_output_dir}
+      ${input_file}.frontend-negative.log
+      ${_source_stem}
+      "${_expected_diagnostic}"
+      ${_expected_count}
+      $<TARGET_FILE:testTranslator>
+      ${ROSE_FLAGS}
+      -rose:fortran_std=${fortran_standard}
+      -c ${CMAKE_CURRENT_SOURCE_DIR}/${input_file})
+  else()
+    add_test(
+      NAME ${_test_name}
+      COMMAND testTranslator ${ROSE_FLAGS}
+              -rose:fortran_std=${fortran_standard} -c
+              ${CMAKE_CURRENT_SOURCE_DIR}/${input_file})
+    set_tests_properties(
+      ${_test_name}
+      PROPERTIES
+        LABELS GFORTRANSUITE
+        WORKING_DIRECTORY ${_gfortran_output_dir})
+  endif()
+endfunction()
+
 foreach(file_to_test ${GFORTRAN_DG_F90_TESTCODES})
-  add_test(
-    NAME GFORTRANSUITE_${file_to_test}
-    COMMAND testTranslator ${ROSE_FLAGS} -rose:fortran_std=f90 -c
-            ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
-  set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
-    WORKING_DIRECTORY ${_gfortran_output_dir})
+  gfortran_dg_test("${file_to_test}" f90)
 endforeach()
 
 foreach(file_to_test ${GFORTRAN_DG_F77_FIXED_FORMAT_TESTCODES})
-  add_test(
-    NAME GFORTRANSUITE_${file_to_test}
-    COMMAND testTranslator ${ROSE_FLAGS} -rose:fortran_std=f77 -c
-            ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
-  set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
-    WORKING_DIRECTORY ${_gfortran_output_dir})
+  gfortran_dg_test("${file_to_test}" f77)
 endforeach()
 
 set(_gfortran_f90_additional_tests
@@ -396,12 +461,7 @@ set(_gfortran_f90_additional_tests
 )
 
 foreach(file_to_test ${_gfortran_f90_additional_tests})
-  add_test(
-    NAME GFORTRANSUITE_${file_to_test}
-    COMMAND testTranslator ${ROSE_FLAGS} -rose:fortran_std=f90 -c
-            ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
-  set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
-    WORKING_DIRECTORY ${_gfortran_output_dir})
+  gfortran_dg_test("${file_to_test}" f90)
 endforeach()
 
 set(_gfortran_f77_additional_tests
@@ -475,16 +535,14 @@ foreach(file_to_test ${_gfortran_additional_c_tests})
     WORKING_DIRECTORY ${_gfortran_output_dir})
 endforeach()
 
-# Note: If using gfortran version greater then 4.1, we can't call it with Fortran 2003 code since it is so buggy.
-#       So we use -rose:skip_syntax_check to avoid the frontend syntax checking and -rose:skipfinalCompileStep
-#       to avoid processing the generated code (which would have the same problem).  It is easier to just use
-#       the version 4.1 gfortran which has better Fortran 2003 syntax checking support. This problem is confirmed
-#       on versions of gfortran 4.2 and 4.3.
+# These imported Fortran 2003 specimens must pass the pinned Flang frontend's
+# mandatory syntax and semantic validation.  Backend compilation remains
+# disabled because these tests only exercise REX translation.
 foreach(file_to_test ${GFORTRAN_DG_F03_TESTCODES})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
-    COMMAND testTranslator ${ROSE_FLAGS} -rose:skip_syntax_check
-            -rose:skipfinalCompileStep -rose:fortran_std=f2003 -c
+    COMMAND testTranslator ${ROSE_FLAGS} -rose:skipfinalCompileStep
+            -rose:fortran_std=f2003 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
     WORKING_DIRECTORY ${_gfortran_output_dir})
@@ -500,8 +558,8 @@ set(_gfortran_f03_additional_tests
 foreach(file_to_test ${_gfortran_f03_additional_tests})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
-    COMMAND testTranslator ${ROSE_FLAGS} -rose:skip_syntax_check
-            -rose:skipfinalCompileStep -rose:fortran_std=f2003 -c
+    COMMAND testTranslator ${ROSE_FLAGS} -rose:skipfinalCompileStep
+            -rose:fortran_std=f2003 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
     WORKING_DIRECTORY ${_gfortran_output_dir})

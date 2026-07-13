@@ -1,8 +1,7 @@
-/*! \brief  test SageBuilder::buildAssignStatement() and buildVarRefExp()
- *   It shows
- *   - the normal order of building variable declaration and assignment
- *   - the reversed order of building assignment(variable reference) and
- * variable declaration
+/*! \brief Test SageBuilder::buildAssignStatement() and buildVarRefExp().
+ *
+ * Variable references are built only after their declaration is installed in
+ * the owning scope, so malformed placeholder symbols are never required.
  */
 #include "rose.h"
 
@@ -21,7 +20,7 @@ int main(int argc, char *argv[]) {
   pushScopeStack(body);
   // int i;
   SgVariableDeclaration *varDecl2 =
-      buildVariableDeclaration(SgName("i"), buildIntType());
+      buildVariableDeclaration(SgName("i"), buildIntType(), nullptr, body);
 
   // insert before the last return statement
   SgStatement *lastStmt = getLastStatement(topScopeStack());
@@ -35,18 +34,8 @@ int main(int argc, char *argv[]) {
   lastStmt = getLastStatement(topScopeStack());
   insertStatement(lastStmt, assignStmt);
 
-  // build varRef before the variable is declared
-  //   j=-1;  int j;
-  SgExpression *lhs2 = buildVarRefExp("j");
-  // SgExpression* lhs2 = buildVarRefExp(string("j"));
-  SgExpression *rhs2 = buildIntVal(-1);
-  SgExprStatement *assignStmt2 = buildAssignStatement(lhs2, rhs2);
-
-  lastStmt = getLastStatement(topScopeStack());
-  insertStatement(lastStmt, assignStmt2);
-
   SgVariableDeclaration *varDecl_j =
-      buildVariableDeclaration(SgName("j"), buildIntType());
+      buildVariableDeclaration(SgName("j"), buildIntType(), nullptr, body);
 
   // insert after the first statement
   SgStatement *firstStmt = getFirstStatement(topScopeStack());
@@ -54,9 +43,12 @@ int main(int argc, char *argv[]) {
   // insertBefore=true, bool autoMovePreprocessingInfo=true)
   insertStatement(firstStmt, varDecl_j, false);
 
-  // for reversed order building variable references and declarations
-  cout << "fixed " << fixVariableReferences(topScopeStack())
-       << " variable references." << endl;
+  SgExpression *lhs2 = buildVarRefExp(varDecl_j);
+  SgExpression *rhs2 = buildIntVal(-1);
+  SgExprStatement *assignStmt2 = buildAssignStatement(lhs2, rhs2);
+  lastStmt = getLastStatement(topScopeStack());
+  insertStatement(lastStmt, assignStmt2);
+
   popScopeStack();
 
   AstTests::runAllTests(project);

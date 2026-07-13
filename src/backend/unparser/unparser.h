@@ -1,11 +1,9 @@
-/* unparser.h
- * This header file contains the class declaration for the newest unparser. Six
- * C files include this header file: unparser.C, modified_sage.C,
- * unparse_stmt.C, unparse_expr.C, unparse_type.C, and unparse_sym.C.
- */
+/* Core unparser declarations shared by the backend implementation units. */
 
 #ifndef UNPARSER_H
 #define UNPARSER_H
+
+#include <map>
 
 #include "unparse_format.h"
 
@@ -24,31 +22,21 @@
 
 #include "unparse_debug.h"
 
-#include "unparse_sym.h"
-
 #include "unparseFortran.h"
 
 #include "unparseFortran_types.h"
 
 #include "UnparserDelegate.h"
 
-#include "UnparserFortran.h"
-
-// DQ (7/20/2008): New mechanism to permit unparsing of arbitrary strings at IR
-// nodes. This is intended to suppport non standard backend compiler
-// annotations.
-#include "astUnparseAttribute.h"
-
-#include "includeFileSupport.h"
-
 class Unparser_Nameq;
 class Unparse_Debug;
 class Unparse_MOD_SAGE;
+class PreprocessingInfo;
+class TokenUnparseFrontierContext;
+struct TokenUnparseFrontierFileContext;
 
-// Macro used for debugging.  If true it fixes the anonymous typedef and
-// anonymous declaration bugs, but causes several other problems.  If false,
-// everything works except the anonymous typedef and anonymous declaration bugs.
-#define ANONYMOUS_TYPEDEF_FIX false
+using UnparsePreprocessingInfoRewriteMap =
+    std::map<const PreprocessingInfo *, std::string>;
 
 // Whether to use Rice's code to wrap long lines in Fortran.
 #define USE_RICE_FORTRAN_WRAPPING                                              \
@@ -81,39 +69,6 @@ class Unparse_MOD_SAGE;
  * convert the stream output to a string.
  */
 std::string get_output_filename(SgFile &file);
-//! returns the name of type t
-std::string get_type_name(SgType *t);
-
-inline bool hasGeneratedAnonymousNamePrefix(const std::string &name) {
-  static constexpr char kGeneratedAnonymousNamePrefix[] = "__anonymous_0x";
-  return name.compare(0, sizeof(kGeneratedAnonymousNamePrefix) - 1,
-                      kGeneratedAnonymousNamePrefix) == 0;
-}
-
-inline bool hasGeneratedAnonymousNamePrefix(const SgName &name) {
-  return hasGeneratedAnonymousNamePrefix(name.getString());
-}
-
-//! Unparse the declaration as a string for use in prototypes within the AST
-//! rewrite mechanism prefix mechanism
-ROSE_DLL_API std::string
-unparseDeclarationToString(SgDeclarationStatement *declaration,
-                           bool unparseAsDeclaration = true);
-
-//! Unparse the header of the scope statement (used in the prefix generation to
-//! permit context to be accounted for the in generation of AST fragements from
-//! strings, e.g. for cases in SgSwitchStatement).
-std::string
-unparseScopeStatementWithoutBasicBlockToString(SgScopeStatement *scope);
-
-//! Unparse header of statements that have bodies (but are not scopes) (e.g.
-//! SgDefaultOptionStmt)
-std::string unparseStatementWithoutBasicBlockToString(SgStatement *statement);
-
-// DQ (3/14/2021): Output include saved in the SgIncludeFile about first and
-// last computed statements in each header file. void
-// outputFirstAndLastIncludeFileInfo();
-void outputFirstAndLastIncludeFileInfo(SgSourceFile *sourceFile);
 
 /** @brief Backend C and C++ code generator.
  *
@@ -142,9 +97,32 @@ void outputFirstAndLastIncludeFileInfo(SgSourceFile *sourceFile);
  */
 class Unparser {
 public:
+  enum class FortranDirectiveKind { none, openmp, openacc };
+
+  class FortranDirectiveContextGuard {
+  public:
+    FortranDirectiveContextGuard(Unparser *unparser, FortranDirectiveKind kind);
+    ~FortranDirectiveContextGuard();
+
+    FortranDirectiveContextGuard(const FortranDirectiveContextGuard &) = delete;
+    FortranDirectiveContextGuard &
+    operator=(const FortranDirectiveContextGuard &) = delete;
+
+  private:
+    Unparser *unparser_ = nullptr;
+    FortranDirectiveKind kind_ = FortranDirectiveKind::none;
+    FortranDirectiveKind previous_ = FortranDirectiveKind::none;
+    bool active_ = false;
+  };
+
+  struct FortranLineWrapLayout {
+    bool fixedFormat = false;
+    int physicalColumns = 0;
+    int textColumns = 0;
+  };
+
   Unparse_Type *u_type;
   Unparser_Nameq *u_name;
-  Unparse_Sym *u_sym;
   Unparse_Debug *u_debug;
   Unparse_MOD_SAGE *u_sage;
   Unparse_ExprStmt *u_exprStmt;
@@ -183,13 +161,6 @@ public:
   //! delegate unparser that can be used to replace the output of this unparser
   UnparseDelegate *delegate;
 
-  // DQ (10/23/2006): Moved to be private after Thomas noticed this was
-  // incorrectly marked public in this program vizualization.
-  //! compiler generated code statements are pushed into a temporary queue so
-  //! that they can be output after any statements attached to the next
-  //! statements and before the next statement
-  std::list<SgStatement *> compilerGeneratedStatementQueue;
-
 private:
   // DQ (12/5/2006): Output information that can be used to colorize properties
   // of generated code (useful for debugging).
@@ -199,14 +170,26 @@ private:
   // for highlighting (useful for debugging).
   int generateSourcePositionCodes;
 
-  // DQ (5/8/2010): Added support to force unparser to reset the source positon
-  // in the AST (this is the only side-effect in unparsing).
-  bool p_resetSourcePosition;
+  NameQualificationContext ownedNameQualifications;
+  NameQualificationContext *nameQualifications;
+  const UnparsePreprocessingInfoRewriteMap *preprocessingInfoRewrites;
+  const TokenUnparseFrontierContext *tokenUnparseFrontiers;
+  struct PreprocessingInfoReceipt {
+    const SgLocatedNode *owner;
+    int relativePosition;
+  };
+  std::map<const PreprocessingInfo *, PreprocessingInfoReceipt>
+      preprocessingInfoReceipts;
+  FortranDirectiveKind fortranDirectiveKind;
+  void emitFortranRawText(const std::string &text);
 
 public:
   //! constructor
   Unparser(std::ostream *localStream, std::string filename, Unparser_Opt info,
-           UnparseFormatHelp *h = nullptr, UnparseDelegate *delegate = nullptr);
+           UnparseFormatHelp *h = nullptr, UnparseDelegate *delegate = nullptr,
+           const UnparsePreprocessingInfoRewriteMap *rewrites = nullptr,
+           NameQualificationContext *nameQualifications = nullptr,
+           const TokenUnparseFrontierContext *tokenFrontiers = nullptr);
 
   //! destructor
   virtual ~Unparser();
@@ -217,6 +200,25 @@ public:
   //! get the output stream wrapper
   UnparseFormat &get_output_stream();
 
+  NameQualificationContext &get_name_qualification_context();
+
+  std::string preprocessingInfoText(const PreprocessingInfo *info) const;
+  void claimPreprocessingInfoReceipt(const PreprocessingInfo *record,
+                                     const SgLocatedNode *owner,
+                                     int relativePosition);
+  const TokenUnparseFrontierFileContext &
+  tokenUnparseFrontier(SgSourceFile *sourceFile) const;
+  const TokenUnparseFrontierContext &tokenUnparseContext() const;
+
+  FortranDirectiveKind getFortranDirectiveKind() const;
+  void setFortranDirectiveKind(FortranDirectiveKind kind);
+  void requireFortranDirectiveKind(FortranDirectiveKind kind) const;
+  const char *fortranDirectiveContinuationPrefix(bool fixedFormat) const;
+  FortranLineWrapLayout fortranLineWrapLayout() const;
+  void emitFortranText(const std::string &text);
+  void emitFortranComment(const std::string &text);
+  void emitFortranCharacterLiteral(const std::string &value, char delimiter);
+
   //! true if SgLocatedNode is part of a transformation on the AST
   bool isPartOfTransformation(SgLocatedNode *n);
 
@@ -224,25 +226,11 @@ public:
   //! template instatiation)
   bool isCompilerGenerated(SgLocatedNode *n);
 
-  //! counts the number of lines in one directive
-  int line_count(char *);
-
-  //! Used to decide which include files (most often header files) will be
-  //! unparsed
-  bool containsLanguageStatements(char *fileName);
-
-  //! special case of extern "C" { \n\#include "foo.h" }
-  bool includeFileIsSurroundedByExternCBraces(char *tempFilename);
-
-  //! incomplete-documentation
-  bool isASecondaryFile(SgStatement *stmt);
-
   //! friend string globalUnparseToString ( SgNode* astNode );
 
   void unparseFile(SgSourceFile *file, SgUnparse_Info &info,
                    SgScopeStatement *unparseScope = nullptr);
   //! remove unneccessary white space to build a condensed string
-  static std::string removeUnwantedWhiteSpace(const std::string &X);
 
   // DQ (12/5/2006): Output separate file containing source position information
   // for highlighting (useful for debugging).
@@ -251,48 +239,35 @@ public:
   void set_embedColorCodesInGeneratedCode(int x);
   void set_generateSourcePositionCodes(int x);
 
-  // DQ (5/8/2010): Added support to force unparser to reset the source positon
-  // in the AST (this is the only side-effect in unparsing).
-  void set_resetSourcePosition(bool x);
-  bool get_resetSourcePosition();
-
-  // DQ (5/8/2010): Added support to force unparser to reset the source positon
-  // in the AST (this is the only side-effect in unparsing).
-  //! Reset the Sg_File_Info to reference the unparsed (generated) source code.
-  void resetSourcePosition(SgStatement *stmt);
-
-  // DQ (9/30/2013): Unparse the file using the token stream (stored in the
-  // SgFile).
-  void unparseFileUsingTokenStream(
-      SgSourceFile *file, const std::string *outputFilenameOverride = nullptr);
-
-  // DQ (9/30/2013): Supporting function for evaluating token source position
-  // information.
-  static int getNumberOfLines(std::string s);
-  static int getColumnNumberOfEndOfString(std::string s);
-
   // DQ (8/7/2018): Refactored code for name qualification (so that we can call
   // it once before all files are unparsed (where we unparse multiple files
   // because fo the use of header file unparsing)).
-  static void computeNameQualification(SgSourceFile *file);
+  static void
+  computeNameQualification(SgSourceFile *file,
+                           NameQualificationContext &nameQualifications);
 };
 
-// DQ (5/8/2010): Refactored code to generate the Unparser object.
-void resetSourcePositionToGeneratedCode(SgFile *file,
-                                        UnparseFormatHelp *unparseHelp);
+//! User callable function available if compilation using the backend compiler
+//! is not required.
+ROSE_DLL_API void unparseFile(
+    SgFile *file, UnparseFormatHelp *unparseHelp = nullptr,
+    UnparseDelegate *delegate = nullptr,
+    SgScopeStatement *unparseScope = nullptr,
+    const UnparsePreprocessingInfoRewriteMap *preprocessingInfoRewrites =
+        nullptr,
+    const std::string *outputFilenameOverride = nullptr,
+    NameQualificationContext *nameQualifications = nullptr,
+    TokenUnparseFrontierContext *tokenFrontiers = nullptr,
+    unsigned int physicalFileOccurrence = 0);
 
 //! User callable function available if compilation using the backend compiler
 //! is not required.
-ROSE_DLL_API void unparseFile(SgFile *file,
-                              UnparseFormatHelp *unparseHelp = nullptr,
-                              UnparseDelegate *delegate = nullptr,
-                              SgScopeStatement *unparseScope = nullptr);
-
-//! User callable function available if compilation using the backend compiler
-//! is not required.
-ROSE_DLL_API void unparseIncludedFiles(SgProject *project,
-                                       UnparseFormatHelp *unparseHelp = nullptr,
-                                       UnparseDelegate *delegate = nullptr);
+ROSE_DLL_API void unparseIncludedFiles(
+    SgProject *project, UnparseFormatHelp *unparseHelp = nullptr,
+    UnparseDelegate *delegate = nullptr,
+    UnparsePreprocessingInfoRewriteMap *preprocessingInfoRewrites = nullptr,
+    NameQualificationContext *nameQualifications = nullptr,
+    TokenUnparseFrontierContext *tokenFrontiers = nullptr);
 
 //! User callable function available if compilation using the backend compiler
 //! is not required.
@@ -304,13 +279,22 @@ ROSE_DLL_API void unparseProject(SgProject *project,
 //! generation).
 void unparseDirectory(SgDirectory *directory,
                       UnparseFormatHelp *unparseHelp = nullptr,
-                      UnparseDelegate *delegate = nullptr);
+                      UnparseDelegate *delegate = nullptr,
+                      const UnparsePreprocessingInfoRewriteMap
+                          *preprocessingInfoRewrites = nullptr,
+                      NameQualificationContext *nameQualifications = nullptr,
+                      TokenUnparseFrontierContext *tokenFrontiers = nullptr);
 
 // DQ (1/19/2010): Added support for refactored handling directories of files.
 //! Support for refactored handling directories of files.
 void unparseFileList(SgFileList *fileList,
                      UnparseFormatHelp *unparseFormatHelp = nullptr,
-                     UnparseDelegate *unparseDelegate = nullptr);
+                     UnparseDelegate *unparseDelegate = nullptr,
+                     const UnparsePreprocessingInfoRewriteMap
+                         *preprocessingInfoRewrites = nullptr,
+                     NameQualificationContext *nameQualifications = nullptr,
+                     const std::string *outputDirectoryOverride = nullptr,
+                     TokenUnparseFrontierContext *tokenFrontiers = nullptr);
 
 // DQ (10/1/2019): Adding support to generate SgSourceFile for individual header
 // files on demand. This is required for the optimization of the header files

@@ -24,6 +24,8 @@ FunctionEvaluationOrderTraversal::evaluateInheritedAttribute(
   SgConditionalExp *parentSgConditionalExp =
       astNode->get_parent() ? isSgConditionalExp(astNode->get_parent())
                             : nullptr;
+  if (parentSgConditionalExp != nullptr)
+    parentSgConditionalExp->validate();
   SgAndOp *parentAndOp =
       astNode->get_parent() ? isSgAndOp(astNode->get_parent()) : nullptr;
   SgOrOp *parentOrOp =

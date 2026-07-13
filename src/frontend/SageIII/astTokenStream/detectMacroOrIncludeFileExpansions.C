@@ -1,5 +1,3 @@
-#include "previousAndNextNode.h"
-
 #include "sage3basic.h"
 
 #include "tokenStreamMapping.h"
@@ -134,20 +132,20 @@ bool isMacroDefinedAt(const MacroDirectiveMap &directives,
 }
 } // namespace
 
-MacroExpansion::MacroExpansion(const string &name)
-    : macro_name(name), shared(false) {
-  // This is the default source position (for postions in legacy frontend number
-  // system is line 1 and column 1 (emacs is different and starts at (0,0)
-  // coordinates).
-  line = 0;
-  column = 0;
-
-  // Default position is -1, since zero is the first token in the token
-  // sequence.
-  token_start = -1;
-  token_end = -1;
-
-  isTransformed = false;
+MacroExpansion::MacroExpansion(
+    const string &name, const TokenStreamHalfOpenInterval &token_interval,
+    int line, int column)
+    : macro_name(name), shared(false), line(line), column(column),
+      token_interval(token_interval), isTransformed(false) {
+  if (macro_name.empty() || line <= 0 || column < 0 ||
+      token_interval.begin < 0 || token_interval.end <= token_interval.begin) {
+    fprintf(stderr,
+            "REX_TOKEN_INVARIANT[macro-expansion-identity]: name=%s "
+            "source=%d:%d interval=[%d,%d) is incomplete\n",
+            macro_name.c_str(), line, column, token_interval.begin,
+            token_interval.end);
+    ROSE_ABORT();
+  }
 }
 
 // Inherited attribute member functions
@@ -226,17 +224,10 @@ DetectMacroOrIncludeFileExpansions::evaluateInheritedAttribute(
     printf("In evaluateInheritedAttribute(): currentStatement = %p = %s \n",
            currentStatement, currentStatement->class_name().c_str());
 #endif
-    string name = "";
-    int token_subsequence_start = 0;
-    int token_subsequence_end = 0;
-
-    // I don't think this function needs to have this complex of an API (FIXME)
 #if USE_STATEMENT_LEVEL_RESOLUTION
-    MacroExpansion *macroExpansion = isPartOfMacroExpansion(
-        currentStatement, name, token_subsequence_start, token_subsequence_end);
+    MacroExpansion *macroExpansion = isPartOfMacroExpansion(currentStatement);
 #else
-    MacroExpansion *macroExpansion = isPartOfMacroExpansion(
-        locatedNode, name, token_subsequence_start, token_subsequence_end);
+    MacroExpansion *macroExpansion = isPartOfMacroExpansion(locatedNode);
 #endif
 
 #if DEBUG_MARCO_EXPANSION_DETECTION
@@ -347,15 +338,13 @@ DetectMacroOrIncludeFileExpansions::evaluateInheritedAttribute(
 
 #if USE_STATEMENT_LEVEL_RESOLUTION
 MacroExpansion *DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(
-    SgLocatedNode * /*locatedNode*/, std::string & /*name*/,
-    int & /*startingToken*/, int & /*endingToken*/) {
+    SgLocatedNode * /*locatedNode*/) {
   printf("Not implemented! \n");
   ROSE_ABORT();
 }
 #else
 MacroExpansion *DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(
-    SgStatement * /*currentStatement*/, std::string & /*name*/,
-    int & /*startingToken*/, int & /*endingToken*/) {
+    SgStatement * /*currentStatement*/) {
   printf("Not implemented! \n");
   ROSE_ABORT();
 }
@@ -363,12 +352,10 @@ MacroExpansion *DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(
 
 #if USE_STATEMENT_LEVEL_RESOLUTION
 MacroExpansion *DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(
-    SgStatement *currentStatement, std::string &name, int &startingToken,
-    int &endingToken)
+    SgStatement *currentStatement)
 #else
 MacroExpansion *DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(
-    SgLocatedNode *locatedNode, std::string &name, int &startingToken,
-    int &endingToken)
+    SgLocatedNode *locatedNode)
 #endif
 {
 
@@ -376,8 +363,6 @@ MacroExpansion *DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(
 
   // This function detects a macro expansion if the current statement is a part
   // of one.
-
-  // NOTE: I don't think this function needs to have this API (FIXME)
 
 #if !USE_STATEMENT_LEVEL_RESOLUTION
   SgStatement *currentStatement = isSgStatement(locatedNode);
@@ -411,8 +396,7 @@ MacroExpansion *DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(
 
   MacroExpansion *macroExpansion = nullptr;
   TokenStreamSequenceToNodeMapping *tokenStreamSequence = nullptr;
-  int token_subsequence_start = -1;
-  int token_subsequence_end = -1;
+  TokenStreamHalfOpenInterval token_subsequence;
   string macroNameFromTokens;
 
   std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator tokenMapIt =
@@ -420,14 +404,29 @@ MacroExpansion *DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(
   if (tokenMapIt != tokenStreamSequenceMap.end() &&
       tokenMapIt->second != nullptr) {
     tokenStreamSequence = tokenMapIt->second;
-    token_subsequence_start = tokenStreamSequence->token_subsequence_start;
-    token_subsequence_end = tokenStreamSequence->token_subsequence_end;
+    const TokenStreamHalfOpenInterval &core =
+        tokenStreamSequence->halfOpenInterval(
+            TokenStreamIntervalKind::token_subsequence);
+    if (core.empty()) {
+      if (!sourceFile->get_token_list().empty() ||
+          isSgGlobal(currentStatement) == nullptr) {
+        fprintf(stderr,
+                "REX_TOKEN_INVARIANT[macro-expansion]: statement=%p/%s has "
+                "an empty required token interval outside an empty-file "
+                "global root\n",
+                static_cast<void *>(currentStatement),
+                currentStatement->class_name().c_str());
+        ROSE_ABORT();
+      }
+      return nullptr;
+    }
+    token_subsequence = core;
 
     SgTokenPtrList &roseTokenList = sourceFile->get_token_list();
-    if (roseTokenList.empty() == false && token_subsequence_start >= 0 &&
-        token_subsequence_start < static_cast<int>(roseTokenList.size())) {
+    if (roseTokenList.empty() == false && token_subsequence.begin >= 0 &&
+        token_subsequence.begin < static_cast<int>(roseTokenList.size())) {
       SgToken *tokenAssociatedWithMacroCall =
-          roseTokenList[token_subsequence_start];
+          roseTokenList[token_subsequence.begin];
       if (tokenAssociatedWithMacroCall != nullptr) {
         macroNameFromTokens = tokenAssociatedWithMacroCall->get_lexeme_string();
       }
@@ -473,7 +472,8 @@ MacroExpansion *DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(
   if (is_macro_expansion) {
     // Filter out the only case of a single character statement ";", that I know
     // of at the moment.
-    bool detectedNullExpression = false;
+    bool detectedNullExpression =
+        isSgNullStatement(currentStatement) != nullptr;
     SgExprStatement *expressionStatement = isSgExprStatement(currentStatement);
     if (expressionStatement != nullptr) {
       detectedNullExpression =
@@ -494,79 +494,83 @@ MacroExpansion *DetectMacroOrIncludeFileExpansions::isPartOfMacroExpansion(
       if (tokenStreamSequence != nullptr) {
         SgTokenPtrList &roseTokenList = sourceFile->get_token_list();
         bool has_valid_token_subsequence =
-            roseTokenList.empty() == false && token_subsequence_start >= 0 &&
-            token_subsequence_end >= token_subsequence_start &&
-            token_subsequence_end < static_cast<int>(roseTokenList.size());
+            roseTokenList.empty() == false && token_subsequence.begin >= 0 &&
+            token_subsequence.end > token_subsequence.begin &&
+            token_subsequence.end <= static_cast<int>(roseTokenList.size());
 
-        if (has_valid_token_subsequence) {
-          startingToken = token_subsequence_start;
-          endingToken = token_subsequence_end;
+        if (!has_valid_token_subsequence) {
+          fprintf(stderr,
+                  "REX_TOKEN_INVARIANT[macro-expansion]: statement=%p/%s "
+                  "interval=[%d,%d) is outside token-count=%zu\n",
+                  static_cast<void *>(currentStatement),
+                  currentStatement->class_name().c_str(),
+                  token_subsequence.begin, token_subsequence.end,
+                  roseTokenList.size());
+          ROSE_ABORT();
         }
 
         // Only the first token will represent the macro name
 
-        SgToken *tokenAssociatedWithMacroCall = nullptr;
-        if (has_valid_token_subsequence) {
-          tokenAssociatedWithMacroCall = roseTokenList[token_subsequence_start];
-          ASSERT_not_null(tokenAssociatedWithMacroCall);
-        }
+        SgToken *tokenAssociatedWithMacroCall =
+            roseTokenList[token_subsequence.begin];
+        ASSERT_not_null(tokenAssociatedWithMacroCall);
 
-        string macroName =
-            macroNameFromTokens.empty() == false ? macroNameFromTokens
-            : tokenAssociatedWithMacroCall != nullptr
-                ? tokenAssociatedWithMacroCall->get_lexeme_string()
-                : string();
+        string macroName = macroNameFromTokens;
+        if (macroName.empty()) {
+          fprintf(stderr,
+                  "REX_TOKEN_INVARIANT[macro-expansion-identity]: "
+                  "statement=%p/%s interval=[%d,%d) has an empty macro "
+                  "identifier token\n",
+                  static_cast<void *>(currentStatement),
+                  currentStatement->class_name().c_str(),
+                  token_subsequence.begin, token_subsequence.end);
+          ROSE_ABORT();
+        }
 #if DEBUG_IS_PART_OF_MACRO_EXPANSION
         printf("   --- macro name = %s \n", macroName.c_str());
 #endif
-        name = macroName;
-
 #if USE_STATEMENT_LEVEL_RESOLUTION
         // Statement level resolution does not have this strange constraint.
-        macroExpansion = new MacroExpansion(macroName);
-        if (has_valid_token_subsequence) {
-          macroExpansion->token_start = token_subsequence_start;
-          macroExpansion->token_end = token_subsequence_end;
-        }
+        macroExpansion = new MacroExpansion(
+            macroName, token_subsequence, start->get_line(), start->get_col());
 #else
         // Add restriction that size of macro declaration name is greater than 1
         // (this avoids since length characters being interpreted as macros in
         // the expression mode).
         size_t macro_definition_length = macroName.length();
         if (macro_definition_length > 1) {
-          macroExpansion = new MacroExpansion(macroName);
-          if (has_valid_token_subsequence) {
-            macroExpansion->token_start = token_subsequence_start;
-            macroExpansion->token_end = token_subsequence_end;
-          }
+          macroExpansion =
+              new MacroExpansion(macroName, token_subsequence,
+                                 start->get_line(), start->get_col());
         }
 #endif
 #if DEBUG_IS_PART_OF_MACRO_EXPANSION
-        printf(
-            "   --- token_subsequence_start = %d token_subsequence_end = %d \n",
-            token_subsequence_start, token_subsequence_end);
+        printf("   --- token_subsequence = [%d,%d)\n", token_subsequence.begin,
+               token_subsequence.end);
 #endif
       } else {
 #if DEBUG_IS_PART_OF_MACRO_EXPANSION
         printf("   --- No mapping from the current statement to the token "
                "sequence is available \n");
 #endif
-        // No mapping from the current statement to the token sequence is
-        // available, so we don't know the name.
-        macroExpansion = new MacroExpansion("");
+        // A source-position heuristic without an exact token owner is not a
+        // macro identity.  Another statement from the same written expansion
+        // may publish the exact invocation; the transformation pass completes
+        // that expansion by source coordinate.
+        return nullptr;
       }
 
 #if USE_STATEMENT_LEVEL_RESOLUTION
       ASSERT_not_null(macroExpansion);
 
       // Fill in the line and column information for the macro expansion.
-      macroExpansion->line = start->get_line();
-      macroExpansion->column = start->get_col();
+      ROSE_ASSERT(macroExpansion->line == start->get_line());
+      ROSE_ASSERT(macroExpansion->column == start->get_col());
 #else
       // If the macro name is length one then the macroExpansion == null.
       if (macroExpansion != nullptr) {
-        macroExpansion->line = start->get_line();
-        macroExpansion->column = start->get_col();
+        ROSE_ASSERT(macroExpansion->line == start->get_line());
+        ROSE_ASSERT(macroExpansion->column == start->get_col());
       }
 #endif
     }
@@ -598,6 +602,17 @@ DetectMacroOrIncludeFileExpansions::evaluateSynthesizedAttribute(
 }
 
 void detectMacroOrIncludeFileExpansions(SgSourceFile *sourceFile) {
+  ASSERT_not_null(sourceFile);
+  std::map<SgStatement *, MacroExpansion *> &macroExpansionMap =
+      sourceFile->get_macroExpansionMap();
+  if (!macroExpansionMap.empty()) {
+    fprintf(stderr,
+            "REX_TOKEN_INVARIANT[macro-expansion-publication]: file=%s "
+            "already contains %zu published macro-expansion associations\n",
+            sourceFile->getFileName().c_str(), macroExpansionMap.size());
+    ROSE_ABORT();
+  }
+
   map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenStreamSequenceMap =
       sourceFile->get_tokenSubsequenceMap();
 
@@ -621,19 +636,6 @@ void detectMacroOrIncludeFileExpansions(SgSourceFile *sourceFile) {
          "= %zu \n",
          macroExpansionStack.size());
 #endif
-
-  std::map<SgStatement *, MacroExpansion *> &macroExpansionMap =
-      sourceFile->get_macroExpansionMap();
-
-  // DQ (1/24/2021): This fails (as it should) for several tests in the
-  // codeSegregation tool. Because in these tests there are macro definitions on
-  // the command line, I think this is OK. This map should not have any
-  // macroExpansion objects in it at this point.
-  if (macroExpansionMap.empty() == false) {
-    printf("Note: In detectMacroOrIncludeFileExpansions(): "
-           "macroExpansionMap.empty() == false (used to be an assertion) \n");
-  }
-  // ROSE_ASSERT(macroExpansionMap.empty() == true);
 
   for (size_t i = 0; i < macroExpansionStack.size(); i++) {
     MacroExpansion *macroExpansion = macroExpansionStack[i];

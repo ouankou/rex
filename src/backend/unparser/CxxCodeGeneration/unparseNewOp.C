@@ -50,22 +50,45 @@ void Unparse_ExprStmt::unparseNewOp(SgExpression *expr, SgUnparse_Info &info) {
 
   newinfo.set_reference_node_for_qualification(new_op);
   ASSERT_not_null(newinfo.get_reference_node_for_qualification());
+  if (new_op->get_array_bound_is_implicit()) {
+    SgArrayType *array_type = isSgArrayType(new_op->get_specified_type());
+    SgValueExp *inferred_bound =
+        array_type != nullptr ? isSgValueExp(array_type->get_index()) : nullptr;
+    if (inferred_bound == nullptr ||
+        inferred_bound->get_literal_spelling_form() !=
+            SgValueExp::e_literal_canonical_generated ||
+        inferred_bound->get_file_info() == nullptr ||
+        !inferred_bound->get_file_info()->isCompilerGenerated()) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[new-inferred-array-bound]: "
+              "new-expression=%p marks an implicit array bound without one "
+              "typed canonical generated size\n",
+              static_cast<void *>(new_op));
+      ROSE_ABORT();
+    }
+    newinfo.set_supressArrayBound();
+  }
   unp->u_type->unparseType(new_operator_specified_type, newinfo);
 
   if (add_parenthesis_around_type)
     curprint(") ");
 
-  if (new_op->get_constructor_args() != NULL) {
-    if (SgExprListExp *expr_list =
-            isSgExprListExp(new_op->get_constructor_args())) {
-      if (expr_list->get_expressions().empty()) {
-        curprint("()");
-      } else {
-        unparseExpression(expr_list, newinfo);
-      }
-    } else {
-      unparseExpression(new_op->get_constructor_args(), newinfo);
+  if (SgConstructorInitializer *constructor_args =
+          new_op->get_constructor_args()) {
+    if (constructor_args->get_parent() != new_op ||
+        constructor_args->get_need_paren()) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[new-constructor-source-form]: "
+              "new-expression=%p constructor=%p parent=%p "
+              "generic-parentheses=%d does not have one exact typed source "
+              "form\n",
+              static_cast<void *>(new_op),
+              static_cast<void *>(constructor_args),
+              static_cast<void *>(constructor_args->get_parent()),
+              constructor_args->get_need_paren());
+      ROSE_ABORT();
     }
+    unparseExpression(constructor_args, newinfo);
   }
 
   if (new_op->get_builtin_args() != NULL) {

@@ -2,6 +2,10 @@
 #ifndef TOKEN_STREAM_SEQUENCE_MAPPING_HEADER
 #define TOKEN_STREAM_SEQUENCE_MAPPING_HEADER
 
+#include "tokenStreamInterval.h"
+
+#include <optional>
+
 class TokenStreamSequenceToNodeMapping_key {
   // The purpose of this class is to support when to share the
   // TokenStreamSequenceToNodeMapping objects across multiple IR nodes of the
@@ -30,6 +34,15 @@ public:
   bool operator<(const TokenStreamSequenceToNodeMapping_key &X) const;
 };
 
+class TokenStreamMappingConstructionAccess;
+class TokenStreamMappingContractTestAccess;
+
+class TokenStreamMappingConstructionKey {
+  TokenStreamMappingConstructionKey() = default;
+  friend class TokenStreamMappingConstructionAccess;
+  friend class TokenStreamMappingContractTestAccess;
+};
+
 class TokenStreamSequenceToNodeMapping {
   // This is the principal data structure used in the token mapping.
 
@@ -44,18 +57,14 @@ public:
   // Pointer to the AST IR node.
   SgNode *node;
 
-  // leading whitespace
-  int leading_whitespace_start, leading_whitespace_end;
+  const TokenStreamHalfOpenInterval &
+  halfOpenInterval(TokenStreamIntervalKind kind) const;
 
-  // start,end of token subsequence (associated with specified node(s)).
-  int token_subsequence_start, token_subsequence_end;
-
-  // trailing whitespace
-  int trailing_whitespace_start, trailing_whitespace_end;
-
-  // DQ (12/31/2014): Added to support the middle subsequence of tokens in the
-  // SgIfStmt as a special case.
-  int else_whitespace_start, else_whitespace_end;
+  static TokenStreamSequenceToNodeMapping *createPublished(
+      SgNode *node, const TokenStreamHalfOpenInterval &leading_whitespace,
+      const TokenStreamHalfOpenInterval &token_subsequence,
+      const TokenStreamHalfOpenInterval &trailing_whitespace,
+      const TokenStreamHalfOpenInterval &else_whitespace, size_t token_count);
 
   // Currently some normalized parts of the ROSE AST can share the same
   // TokenStreamSequenceToNodeMapping data structure.  The best example
@@ -89,35 +98,104 @@ public:
                   TokenStreamSequenceToNodeMapping *>
       tokenSequencePool;
 
-  // Constructor
+private:
+  class TokenMappingDraft {
+  public:
+    TokenMappingDraft(
+        const TokenStreamHalfOpenInterval &token_subsequence,
+        std::optional<TokenStreamHalfOpenInterval> leading_whitespace,
+        std::optional<TokenStreamHalfOpenInterval> trailing_whitespace,
+        std::optional<TokenStreamHalfOpenInterval> else_whitespace);
+
+    const TokenStreamHalfOpenInterval &tokenSubsequence() const;
+    const std::optional<TokenStreamHalfOpenInterval> &leadingWhitespace() const;
+    const std::optional<TokenStreamHalfOpenInterval> &
+    trailingWhitespace() const;
+    const std::optional<TokenStreamHalfOpenInterval> &elseWhitespace() const;
+
+    void replaceTokenSubsequence(
+        const TokenStreamHalfOpenInterval &token_subsequence);
+    void replaceLeadingWhitespace(
+        std::optional<TokenStreamHalfOpenInterval> leading_whitespace);
+    void replaceTrailingWhitespace(
+        std::optional<TokenStreamHalfOpenInterval> trailing_whitespace);
+    void replaceElseWhitespace(
+        std::optional<TokenStreamHalfOpenInterval> else_whitespace);
+
+    bool active() const;
+    void finish();
+
+  private:
+    TokenStreamHalfOpenInterval token_subsequence_;
+    std::optional<TokenStreamHalfOpenInterval> leading_whitespace_;
+    std::optional<TokenStreamHalfOpenInterval> trailing_whitespace_;
+    std::optional<TokenStreamHalfOpenInterval> else_whitespace_;
+    bool active_ = true;
+  };
+
+  TokenMappingDraft construction_;
+  TokenStreamHalfOpenInterval leading_whitespace_interval_;
+  TokenStreamHalfOpenInterval token_subsequence_interval_;
+  TokenStreamHalfOpenInterval trailing_whitespace_interval_;
+  TokenStreamHalfOpenInterval else_whitespace_interval_;
+  bool published_;
+
   TokenStreamSequenceToNodeMapping(
-      SgNode *n, int input_leading_whitespace_start,
-      int input_leading_whitespace_end, int input_token_subsequence_start,
-      int input_token_subsequence_end, int input_trailing_whitespace_start,
-      int input_trailing_whitespace_end, int input_else_whitespace_start,
-      int input_else_whitespace_end);
+      SgNode *n, const TokenStreamHalfOpenInterval &token_subsequence,
+      std::optional<TokenStreamHalfOpenInterval> leading_whitespace,
+      std::optional<TokenStreamHalfOpenInterval> trailing_whitespace,
+      std::optional<TokenStreamHalfOpenInterval> else_whitespace);
 
-  // Constructor
-  TokenStreamSequenceToNodeMapping(const TokenStreamSequenceToNodeMapping &X);
+  TokenStreamSequenceToNodeMapping(const TokenStreamSequenceToNodeMapping &) =
+      delete;
+  TokenStreamSequenceToNodeMapping &
+  operator=(const TokenStreamSequenceToNodeMapping &) = delete;
 
-  // DQ (4/21/2021): We need to make this dependent on the SgSourceFile so that
-  // we can support multiple files (e.g. header files). Factory interval
-  // generator for new intervals (token sequences). static
-  // TokenStreamSequenceToNodeMapping* createTokenInterval (SgNode* n,
-  //      int input_leading_whitespace_start, int input_leading_whitespace_end,
-  //      int input_token_subsequence_start, int input_token_subsequence_end,
-  //      int input_trailing_whitespace_start, int
-  //      input_trailing_whitespace_end, int input_else_whitespace_start, int
-  //      input_else_whitespace_end);
+  // Intern token mappings by their required core interval. Construction keeps
+  // optional whitespace as complete ranges and publishes all intervals once.
   static TokenStreamSequenceToNodeMapping *createTokenInterval(
-      SgSourceFile *sourceFile, SgNode *n, int input_leading_whitespace_start,
-      int input_leading_whitespace_end, int input_token_subsequence_start,
-      int input_token_subsequence_end, int input_trailing_whitespace_start,
-      int input_trailing_whitespace_end, int input_else_whitespace_start,
-      int input_else_whitespace_end);
+      SgSourceFile *sourceFile, SgNode *n,
+      const TokenStreamHalfOpenInterval &token_subsequence,
+      std::optional<TokenStreamHalfOpenInterval> leading_whitespace,
+      std::optional<TokenStreamHalfOpenInterval> trailing_whitespace,
+      std::optional<TokenStreamHalfOpenInterval> else_whitespace);
 
+  static TokenStreamHalfOpenInterval
+  requiredInclusiveDraftInterval(SgNode *node, const char *name, int start,
+                                 int inclusive_end);
+  static std::optional<TokenStreamHalfOpenInterval>
+  optionalInclusiveDraftInterval(SgNode *node, const char *name, int start,
+                                 int inclusive_end);
+  static void requireDirectOwnerInterval(
+      SgNode *node, const char *source_file,
+      std::optional<TokenStreamHalfOpenInterval> interval);
+
+  void publishHalfOpenIntervals(size_t token_count);
+
+public:
+  TokenMappingDraft &constructionState(TokenStreamMappingConstructionKey);
+  const TokenMappingDraft &
+      constructionState(TokenStreamMappingConstructionKey) const;
+
+private:
+  friend class TokenStreamMappingConstructionAccess;
+  friend class TokenStreamMappingContractTestAccess;
+
+public:
   void display(std::string label) const;
 };
+
+// An empty token core is a first-class state only for the two published roots
+// of a translation unit whose token stream is empty. Consumers use this
+// predicate instead of independently weakening their nonempty-surface checks.
+bool isExactEmptyTranslationUnitTokenMapping(
+    SgSourceFile *sourceFile, SgStatement *statement,
+    TokenStreamSequenceToNodeMapping *mapping);
+
+// Remove the one bidirectional token association owned by a statement that is
+// leaving the AST.  Generated/unmapped nodes are valid no-op inputs; a partial
+// map/reverse-map association is always malformed.
+void detachTokenMappingForRemovedNode(SgSourceFile *sourceFile, SgNode *node);
 
 class Graph_TokenMappingTraversal : public AstSimpleProcessing {
 public:

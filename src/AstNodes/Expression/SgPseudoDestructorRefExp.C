@@ -1,9 +1,16 @@
 #include "sage3basic.h"
 
 void SgPseudoDestructorRefExp::post_construction_initialization() {
-  SgMemberFunctionType *memFnType =
-      new SgMemberFunctionType(SgTypeVoid::createType(), false, p_object_type);
-  set_expression_type(memFnType);
+  SgMemberFunctionType *callableType =
+      isSgMemberFunctionType(p_expression_type);
+  if (p_object_type == nullptr || isSgTypeUnknown(p_object_type) != nullptr ||
+      isSgTypeDefault(p_object_type) != nullptr || callableType == nullptr ||
+      isSgTypeVoid(callableType->get_return_type()) == nullptr) {
+    std::cerr << "REX_AST_INVARIANT[pseudo-destructor-type-producer]: "
+                 "pseudo-destructor requires an exact object type and void "
+                 "member-function result type\n";
+    ROSE_ABORT();
+  }
 }
 
 // DQ (1/18/2020): Adding name qualification support to

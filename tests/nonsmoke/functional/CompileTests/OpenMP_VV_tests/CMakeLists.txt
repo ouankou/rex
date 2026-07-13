@@ -12,9 +12,17 @@ set(OMPVV_EXTRACT_SCRIPT
 set(OMPVV_RUN_SCRIPT
     "${CMAKE_CURRENT_SOURCE_DIR}/run_ompvv_5_0_case.sh")
 set(OMPVV_NEGATIVE_PARSE_SCRIPT
-    "${CMAKE_CURRENT_SOURCE_DIR}/run_ompvv_parse_must_fail.sh")
+    "${CMAKE_CURRENT_SOURCE_DIR}/rex_ompvv_parse_must_fail.sh")
+set(OMPVV_EXTRACTOR_CASE_SCRIPT
+    "${CMAKE_CURRENT_SOURCE_DIR}/run_ompvv_extractor_case.sh")
 set(OMPVV_ROOT "${CMAKE_SOURCE_DIR}/tests/external/OpenMP_VV")
 set(OMPVV_SUPPORT_ROOT "${OMPVV_ROOT}/ompvv")
+
+# Keep malformed imported specimens as hard-negative coverage. These are
+# rejected by the OpenMP 6.0 directive/clause applicability rules and must not
+# be silently accepted merely to preserve an upstream positive-test label.
+set(OMPVV_EXPECTED_INVALID_SOURCES
+    "6.0/taskgraph/test_taskgraph_target.c")
 
 if(NOT EXISTS "${OMPVV_EXTRACT_SCRIPT}")
   message(FATAL_ERROR "OpenMP_VV extractor script missing: ${OMPVV_EXTRACT_SCRIPT}")
@@ -28,6 +36,10 @@ if(NOT EXISTS "${OMPVV_NEGATIVE_PARSE_SCRIPT}")
   message(FATAL_ERROR "OpenMP_VV negative parser script missing: ${OMPVV_NEGATIVE_PARSE_SCRIPT}")
 endif()
 
+if(NOT EXISTS "${OMPVV_EXTRACTOR_CASE_SCRIPT}")
+  message(FATAL_ERROR "OpenMP_VV extractor test script missing: ${OMPVV_EXTRACTOR_CASE_SCRIPT}")
+endif()
+
 if(NOT EXISTS "${OMPVV_SUPPORT_ROOT}")
   message(FATAL_ERROR "OpenMP_VV support tree not found: ${OMPVV_SUPPORT_ROOT}")
 endif()
@@ -39,10 +51,26 @@ add_test(
   WORKING_DIRECTORY "${OMPVV_NEGATIVE_OUTPUT_ROOT}"
   COMMAND ${BASH_EXECUTABLE} "${OMPVV_NEGATIVE_PARSE_SCRIPT}"
           "$<TARGET_FILE:parseOmp>"
-          "${CMAKE_CURRENT_SOURCE_DIR}/negative/bad_openmp_directive.F90")
+          "${CMAKE_CURRENT_SOURCE_DIR}/negative/bad_openmp_directive.F90"
+          "REX_FLANG_INVARIANT[source-stream-directive]: REX OpenMP parser did not produce one typed Fortran directive"
+          "  1:32: syntax error, unexpected EXPR_STRING")
 set_tests_properties(OMPVV_negative_bad_fortran_directive_parse_failure
   PROPERTIES LABELS "OMPVV;OMPVV_negative"
              ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${OMPVV_NEGATIVE_OUTPUT_ROOT}")
+
+set(OMPVV_EXTRACTOR_OUTPUT_ROOT
+    "${CMAKE_CURRENT_BINARY_DIR}/extractor-test-output")
+file(MAKE_DIRECTORY "${OMPVV_EXTRACTOR_OUTPUT_ROOT}")
+add_test(
+  NAME OMPVV_rex_directive_extractor_continuation_reassembly
+  WORKING_DIRECTORY "${OMPVV_EXTRACTOR_OUTPUT_ROOT}"
+  COMMAND ${BASH_EXECUTABLE} "${OMPVV_EXTRACTOR_CASE_SCRIPT}"
+          "${OMPVV_EXTRACT_SCRIPT}"
+          "${CMAKE_CURRENT_SOURCE_DIR}/extractor/rex_openmp_vv_continuation_reassembly.F90"
+          "${CMAKE_CURRENT_SOURCE_DIR}/extractor/rex_openmp_vv_continuation_reassembly.F90.output"
+          "rex_openmp_vv_continuation_reassembly.F90.output")
+set_tests_properties(OMPVV_rex_directive_extractor_continuation_reassembly
+  PROPERTIES LABELS "OMPVV;OMPVV_extractor")
 
 function(add_ompvv_version_tests version)
   string(REPLACE "." "_" version_tag "${version}")
@@ -86,21 +114,21 @@ function(add_ompvv_version_tests version)
       message(FATAL_ERROR "Missing OpenMP_VV ${version} reference output: ${reference_file}")
     endif()
 
-    get_filename_component(work_subdir "${file_to_test}" DIRECTORY)
     get_filename_component(source_basename "${file_to_test}" NAME)
     get_filename_component(source_extension "${source_file}" EXT)
-
-    set(workdir "${output_root}/${work_subdir}")
-    file(MAKE_DIRECTORY "${workdir}")
-
-    set(rose_file "rose_${source_basename}")
-    set(output_file "${rose_file}.output")
-    set(diff_file "${output_file}.diff")
+    get_filename_component(source_directory "${source_file}" DIRECTORY)
 
     set(safe_name "${file_to_test}")
     string(REPLACE "/" "_" safe_name "${safe_name}")
     string(REPLACE "." "_" safe_name "${safe_name}")
     string(REPLACE "-" "_" safe_name "${safe_name}")
+
+    set(workdir "${output_root}/${safe_name}")
+    file(MAKE_DIRECTORY "${workdir}")
+
+    set(rose_file "rose_${source_basename}")
+    set(output_file "${rose_file}.output")
+    set(diff_file "${output_file}.diff")
 
     set(rose_flags
         -rose:openmp:ast_only
@@ -118,6 +146,26 @@ function(add_ompvv_version_tests version)
         OR source_extension STREQUAL ".f90"
         OR source_extension STREQUAL ".F90")
       list(APPEND rose_flags -cpp)
+    endif()
+
+    set(versioned_source "${version}/${file_to_test}")
+    if(versioned_source IN_LIST OMPVV_EXPECTED_INVALID_SOURCES)
+      add_test(
+        NAME OMPVV_${version_tag}_${safe_name}
+        WORKING_DIRECTORY "${workdir}"
+        COMMAND ${BASH_EXECUTABLE} "${OMPVV_NEGATIVE_PARSE_SCRIPT}"
+                "$<TARGET_FILE:parseOmp>"
+                "${source_file}"
+                "REX_OMP_AST_INVARIANT[parser]: OpenMP parser rejected ' omp target nowait map(tofrom: y) depend(out: y) shared(y)'"
+                "  1:50: syntax error, unexpected SHARED, expecting end of file"
+                "-I${source_root}"
+                "-I${OMPVV_SUPPORT_ROOT}"
+                "-I${source_directory}"
+                ${rose_flags})
+      set_tests_properties(OMPVV_${version_tag}_${safe_name}
+        PROPERTIES LABELS "OMPVV;OMPVV_${version_tag};OMPVV_negative"
+                   ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${workdir}")
+      continue()
     endif()
 
     add_test(

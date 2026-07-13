@@ -51,7 +51,9 @@ void visitorTraversal::visit (SgNode*n)
       if(!expr)
             printf("can't do that!\n");
 
-      SgVariableDeclaration *dec = buildVariableDeclaration("tmp", buildIntType(), buildAssignInitializer(expr));
+      SgType *tmp_type = buildIntType();
+      SgVariableDeclaration *dec = buildVariableDeclaration(
+          "tmp", tmp_type, buildAssignInitializer(expr, tmp_type), block);
 
       insertStatementBefore(s/*getPreviousStatement(topScopeStack()), dec*/,dec);
      

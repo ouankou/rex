@@ -12,7 +12,14 @@ SgTemplateClassDeclaration *findTemplateClass(SgProject *project,
   auto decls = NodeQuery::querySubTree(project, V_SgTemplateClassDeclaration);
   for (SgNode *n : decls) {
     auto *decl = isSgTemplateClassDeclaration(n);
-    if (decl != nullptr && decl->get_name().getString() == name) {
+    if (decl != nullptr && decl->get_name().getString() == name &&
+        decl->get_definition() != nullptr) {
+      ROSE_ASSERT(decl->get_definingDeclaration() == decl);
+      SgTemplateClassDeclaration *first =
+          isSgTemplateClassDeclaration(decl->get_firstNondefiningDeclaration());
+      ROSE_ASSERT(first != nullptr);
+      ROSE_ASSERT(first != decl);
+      ROSE_ASSERT(first->get_definingDeclaration() == decl);
       return decl;
     }
   }

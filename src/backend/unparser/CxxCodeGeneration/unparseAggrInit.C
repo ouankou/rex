@@ -5,314 +5,151 @@
 
 #include "rose_config.h"
 
-static bool sharesSameStatement(SgExpression *, SgType *expressionType) {
-  // DQ (7/29/2013): This function supports the structural analysis to determine
-  // when we have to output the type definition or just the type name for a
-  // compound literal.
-
-  bool result = false;
-  SgNamedType *namedType = isSgNamedType(expressionType);
-
-  // DQ (9/14/2013): I think this is a better implementation (test2012_46.c was
-  // failing before). This permits both test2013_70.c and test2012_46.c to
-  // unparse properly, where the two were previously mutually exclusive.
-  if (namedType != NULL) {
-    ASSERT_not_null(namedType->get_declaration());
-    SgDeclarationStatement *declarationStatementDefiningType =
-        namedType->get_declaration();
-    SgDeclarationStatement *definingDeclarationStatementDefiningType =
-        declarationStatementDefiningType->get_definingDeclaration();
-    SgClassDeclaration *classDeclaration =
-        isSgClassDeclaration(definingDeclarationStatementDefiningType);
-
-    // DQ (3/26/2015): Need to handle case where isAutonomousDeclaration() ==
-    // true, but we still don't want to unparse the definition.
-    bool isDeclarationPartOfTypedefDeclaration = false;
-    bool isDeclarationPartOfVariableDeclaration = false;
-    if (classDeclaration != NULL) {
-      SgNode *decl_parent = classDeclaration->get_parent();
-      SgVariableDeclaration *parent_var = isSgVariableDeclaration(decl_parent);
-      if (parent_var != NULL) {
-        Sg_File_Info *parent_fi = parent_var->get_file_info();
-        if (parent_fi != NULL && parent_fi->isCompilerGenerated() &&
-            parent_fi->isOutputInCodeGeneration() == false) {
-          // Hidden compiler-generated decls shouldn't suppress inline
-          // definitions.
-          parent_var = NULL;
-        }
-      }
-      isDeclarationPartOfVariableDeclaration = (parent_var != NULL);
-      isDeclarationPartOfTypedefDeclaration =
-          isSgTypedefDeclaration(decl_parent);
-    }
-
-    if (classDeclaration != NULL &&
-        classDeclaration->get_isAutonomousDeclaration() == false &&
-        isDeclarationPartOfVariableDeclaration == false &&
-        isDeclarationPartOfTypedefDeclaration == false) {
-      // This declaration IS defined imbedded in another statement.
-      result = true;
-    } else {
-      // This declaration is NOT defined imbedded in another statement.
-      result = false;
-    }
-  }
-  return result;
-}
+#include <algorithm>
+#include <unordered_set>
 
 static bool
 compoundLiteralContainsBaseTypeDefinition(SgAggregateInitializer *aggr_init,
-                                          bool &known,
-                                          SgVariableDeclaration **owner_decl) {
-  known = false;
-  if (owner_decl != NULL) {
-    *owner_decl = NULL;
-  }
+                                          SgVariableDeclaration *&owner_decl) {
+  ASSERT_not_null(aggr_init);
+  owner_decl = nullptr;
 
   SgInitializedName *initialized_name =
       isSgInitializedName(aggr_init->get_parent());
-  if (initialized_name == NULL) {
-    return false;
+  if (initialized_name == nullptr) {
+    fprintf(stderr, "REX_UNPARSE_INVARIANT[compound-literal-owner]: aggregate "
+                    "initializer has no exact initialized-name owner\n");
+    ROSE_ABORT();
   }
 
   SgVariableDeclaration *variable_declaration =
       isSgVariableDeclaration(initialized_name->get_parent());
-  if (variable_declaration == NULL) {
+  if (variable_declaration == nullptr) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[compound-literal-owner]: initialized "
+            "name has no exact variable-declaration owner\n");
+    ROSE_ABORT();
+  }
+  owner_decl = variable_declaration;
+
+  // A compound literal is represented by one exact auxiliary declaration. Its
+  // structural ownership and typed base-definition edge, not a late output
+  // suppression flag or ancestry/name heuristic, determine whether the source
+  // spelled an inline tag definition.
+  Sg_File_Info *file_info = variable_declaration->get_file_info();
+  SgAuxiliaryDeclarationList *auxiliary_owner =
+      isSgAuxiliaryDeclarationList(variable_declaration->get_parent());
+  SgScopeStatement *semantic_scope = variable_declaration->get_scope();
+  if (file_info == nullptr || !file_info->isCompilerGenerated() ||
+      auxiliary_owner == nullptr || semantic_scope == nullptr ||
+      auxiliary_owner->get_parent() != semantic_scope ||
+      initialized_name->get_scope() != semantic_scope ||
+      initialized_name->get_initializer() != aggr_init) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[compound-literal-owner]: compound literal "
+            "does not have one exact auxiliary compiler-generated "
+            "declaration owner\n");
+    ROSE_ABORT();
+  }
+
+  const bool contains_definition =
+      variable_declaration->get_baseTypeDefiningDeclaration() != nullptr;
+  return contains_definition;
+}
+
+static bool isIncludeDirective(const PreprocessingInfo *info) {
+  if (info == nullptr) {
     return false;
   }
-  if (owner_decl != NULL) {
-    *owner_decl = variable_declaration;
-  }
-
-  // Compound literals are backed by a hidden compiler-generated declaration.
-  // When the original source spelled a fresh tag definition inside the type-id,
-  // the frontend records it here; otherwise we should reuse the existing type
-  // name and skip re-emitting a nested definition.
-  Sg_File_Info *file_info = variable_declaration->get_file_info();
-  if (file_info != NULL && file_info->isCompilerGenerated() &&
-      file_info->isOutputInCodeGeneration() == false) {
-    known = true;
-    return variable_declaration
-        ->get_variableDeclarationContainsBaseTypeDefiningDeclaration();
-  }
-
-  return false;
+  const PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
+  return type == PreprocessingInfo::CpreprocessorIncludeDeclaration ||
+         type == PreprocessingInfo::CpreprocessorIncludeNextDeclaration;
 }
 
-static bool containsIncludeDirective(SgLocatedNode *locatedNode) {
-  bool returnResult = false;
-  AttachedPreprocessingInfoType *comments =
-      locatedNode->getAttachedPreprocessingInfo();
-
-  if (comments != NULL) {
-    AttachedPreprocessingInfoType::iterator i;
-    for (i = comments->begin(); i != comments->end(); i++) {
-      ASSERT_not_null((*i));
-      if (locatedNode->get_startOfConstruct()->isSameFile(
-              (*i)->get_file_info()) == true) {
-        // This should also be true.
-        ROSE_ASSERT(locatedNode->get_endOfConstruct()->isSameFile(
-                        (*i)->get_file_info()) == true);
-      }
-
-      if (*(locatedNode->get_startOfConstruct()) <= *((*i)->get_file_info()) &&
-          *(locatedNode->get_endOfConstruct()) >= *((*i)->get_file_info())) {
-        // Then the comment is in between the start of the construct and the end
-        // of the construct.
-        if ((*i)->getTypeOfDirective() ==
-            PreprocessingInfo::CpreprocessorIncludeDeclaration) {
-          returnResult = true;
-        }
-      }
-    }
-  }
-
-  return returnResult;
-}
-
-static void removeIncludeDirective(SgLocatedNode *locatedNode) {
-  //   bool returnResult = false;
-  AttachedPreprocessingInfoType *comments =
-      locatedNode->getAttachedPreprocessingInfo();
-  AttachedPreprocessingInfoType includeDirectiveList;
-
-  if (comments != NULL) {
-    for (AttachedPreprocessingInfoType::iterator i = comments->begin();
-         i != comments->end(); i++) {
-      ASSERT_not_null((*i));
-      if (locatedNode->get_startOfConstruct()->isSameFile(
-              (*i)->get_file_info()) == true) {
-        // This should also be true.
-        ROSE_ASSERT(locatedNode->get_endOfConstruct()->isSameFile(
-                        (*i)->get_file_info()) == true);
-      }
-
-      if (*(locatedNode->get_startOfConstruct()) <= *((*i)->get_file_info()) &&
-          *(locatedNode->get_endOfConstruct()) >= *((*i)->get_file_info())) {
-        // Then the comment is in between the start of the construct and the end
-        // of the construct.
-        if ((*i)->getTypeOfDirective() ==
-            PreprocessingInfo::CpreprocessorIncludeDeclaration) {
-          //                       returnResult = true;
-          includeDirectiveList.push_back(*i);
-        }
-      }
-    }
-
-    // Remove the list of include directives.
-    for (AttachedPreprocessingInfoType::iterator i =
-             includeDirectiveList.begin();
-         i != includeDirectiveList.end(); i++) {
-      comments->erase(find(comments->begin(), comments->end(), *i));
-    }
-  } else {
-  }
-}
-
-///! Inspect the structure of this initialization is to see if it is using the
-/// C++11 initialization features for structs.
-static bool uses_cxx11_initialization(SgNode *n) {
-  // SgInitializer* initializerChain[3] = { NULL, NULL, NULL };
-  std::vector<SgInitializer *> initializerChain;
-  bool returnValue = false;
-
-  // This version starts at the second in the chain of three
-  // SgAggregateInitializer IR nodes. It initializes the first intry in the
-  // chain through accessing the parents and the last two from the current node
-  // and it's children.
-
-  class InitializerTraversal : public AstSimpleProcessing {
-  private:
-    std::vector<SgInitializer *> &initializerChain;
-    int counter;
-
-  public:
-    InitializerTraversal(std::vector<SgInitializer *> &x)
-        : initializerChain(x), counter(1) {}
-    void visit(SgNode *node) {
-      ASSERT_not_null(node);
-      SgInitializer *initializer = isSgInitializer(node);
-      if (initializer != NULL && counter < 3) {
-        // initializerChain[counter] = initializer;
-        initializerChain.push_back(initializer);
-        counter++;
-      }
+static size_t validateAggregateInitializerIncludeBoundaries(
+    SgAggregateInitializer *aggregateInitializer,
+    const SgExpressionPtrList &elements, bool hasExplicitBraces) {
+  ASSERT_not_null(aggregateInitializer);
+  Sg_File_Info *aggregateStart = aggregateInitializer->get_startOfConstruct();
+  Sg_File_Info *aggregateEnd = aggregateInitializer->get_endOfConstruct();
+  auto sourceLess = [](Sg_File_Info *lhs, Sg_File_Info *rhs) {
+    return lhs->get_line() < rhs->get_line() ||
+           (lhs->get_line() == rhs->get_line() &&
+            lhs->get_col() < rhs->get_col());
+  };
+  auto validateSourcePosition = [&](PreprocessingInfo *info) {
+    Sg_File_Info *includePosition =
+        info != nullptr ? info->get_file_info() : nullptr;
+    if (aggregateStart == nullptr || aggregateEnd == nullptr ||
+        includePosition == nullptr || aggregateStart->get_line() <= 0 ||
+        aggregateStart->get_col() <= 0 || aggregateEnd->get_line() <= 0 ||
+        aggregateEnd->get_col() <= 0 || includePosition->get_line() <= 0 ||
+        includePosition->get_col() <= 0 ||
+        aggregateStart->get_physical_file_id() < 0 ||
+        aggregateEnd->get_physical_file_id() < 0 ||
+        includePosition->get_physical_file_id() < 0 ||
+        !aggregateStart->isSameFile(*aggregateEnd) ||
+        !aggregateStart->isSameFile(*includePosition) ||
+        !sourceLess(aggregateStart, includePosition) ||
+        !sourceLess(includePosition, aggregateEnd)) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[initializer-include-boundary]: include "
+              "is not strictly inside its aggregate source interval\n");
+      ROSE_ABORT();
     }
   };
 
-  SgExprListExp *expressonList = isSgExprListExp(n->get_parent());
-  if (expressonList != NULL) {
-    SgAggregateInitializer *aggregateInitializer =
-        isSgAggregateInitializer(expressonList->get_parent());
-    if (aggregateInitializer != NULL) {
-      initializerChain.push_back(aggregateInitializer);
-
-      ROSE_ASSERT(initializerChain.size() == 1);
-
-      // Now buid the traveral object and call the traversal (preorder) on the
-      // AST subtree.
-      InitializerTraversal traversal(initializerChain);
-      traversal.traverse(n, preorder);
+  std::unordered_set<PreprocessingInfo *> claimedIncludes;
+  auto validateOwner = [&](SgLocatedNode *owner,
+                           PreprocessingInfo::RelativePositionType position) {
+    AttachedPreprocessingInfoType *attached =
+        owner != nullptr ? owner->getAttachedPreprocessingInfo() : nullptr;
+    if (attached == nullptr) {
+      return;
     }
-  }
-
-  ROSE_ASSERT(initializerChain.size() <= 3);
-
-  if (initializerChain.size() == 3) {
-    // Check the order of the initializers.
-    SgAggregateInitializer *agregateInitializer_0 =
-        isSgAggregateInitializer(initializerChain[0]);
-    SgAggregateInitializer *agregateInitializer_1 =
-        isSgAggregateInitializer(initializerChain[1]);
-    SgAggregateInitializer *agregateInitializer_2 =
-        isSgAggregateInitializer(initializerChain[2]);
-    if (agregateInitializer_0 != NULL && agregateInitializer_1 != NULL &&
-        agregateInitializer_2 != NULL) {
-      SgType *agregateInitializer_type_0 =
-          isSgClassType(agregateInitializer_0->get_type());
-      SgType *agregateInitializer_type_1 =
-          isSgArrayType(agregateInitializer_1->get_type());
-      SgType *agregateInitializer_type_2 =
-          isSgClassType(agregateInitializer_2->get_type());
-      SgClassType *classType_0 = isSgClassType(agregateInitializer_type_0);
-      SgArrayType *arrayType_1 = isSgArrayType(agregateInitializer_type_1);
-      SgClassType *classType_2 = isSgClassType(agregateInitializer_type_2);
-
-      if (classType_0 != NULL && arrayType_1 != NULL && classType_2 != NULL) {
-        returnValue = true;
-      } else {
+    for (PreprocessingInfo *info : *attached) {
+      ASSERT_not_null(info);
+      if (!isIncludeDirective(info)) {
+        continue;
       }
-    }
-  }
-
-  // DQ (6/27/2018): check if this is part of a template instantiation that
-  // would require the class name in the initializer to trigger the
-  // instantiation.
-  SgAggregateInitializer *aggregateInitializer = isSgAggregateInitializer(n);
-  if (aggregateInitializer != NULL) {
-    SgExprListExp *expListExp =
-        isSgExprListExp(aggregateInitializer->get_parent());
-    if (expListExp != NULL) {
-      SgFunctionCallExp *functionCall =
-          isSgFunctionCallExp(expListExp->get_parent());
-
-      if (functionCall != NULL) {
-        SgExpression *functionExpression = functionCall->get_function();
-        SgFunctionRefExp *functionRefExp =
-            isSgFunctionRefExp(functionCall->get_function());
-        SgMemberFunctionRefExp *memberFunctionRefExp =
-            isSgMemberFunctionRefExp(functionCall->get_function());
-
-        SgArrowExp *arrowExpression = isSgArrowExp(functionExpression);
-        SgDotExp *dotExpression = isSgDotExp(functionExpression);
-
-        SgExpression *rhs = NULL;
-        if (arrowExpression != NULL) {
-          rhs = arrowExpression->get_rhs_operand();
-        }
-        if (dotExpression != NULL) {
-          rhs = dotExpression->get_rhs_operand();
-        }
-
-        if (functionRefExp == NULL && memberFunctionRefExp == NULL) {
-          // Get the pointer from the rhs.
-          functionRefExp = isSgFunctionRefExp(rhs);
-          memberFunctionRefExp = isSgMemberFunctionRefExp(rhs);
-        }
-
-        // DQ (6/27/2018): This assertion fails for test2018_111.C.
-        // ASSERT_not_null(functionRefExp);
-
-        SgFunctionDeclaration *functionDeclaration = NULL;
-        if (functionRefExp != NULL) {
-          SgFunctionSymbol *functionSymbol = functionRefExp->get_symbol();
-          // SgFunctionDeclaration* functionDeclaration =
-          // functionSymbol->get_declaration();
-          functionDeclaration = functionSymbol->get_declaration();
-        }
-
-        if (memberFunctionRefExp != NULL) {
-          SgMemberFunctionSymbol *functionSymbol =
-              memberFunctionRefExp->get_symbol();
-          // SgFunctionDeclaration* functionDeclaration =
-          // functionSymbol->get_declaration();
-          functionDeclaration = functionSymbol->get_declaration();
-        }
-
-        if (functionDeclaration != NULL) {
-
-          bool isTemplateInstantiation =
-              SageInterface::isTemplateInstantiationNode(functionDeclaration);
-          if (isTemplateInstantiation == true) {
-            // This might be overly general.
-            returnValue = true;
-          }
-        }
+      // An aggregate expression can itself be a direct element of an outer
+      // aggregate.  A `before` include on that node is the outer aggregate's
+      // typed boundary, not an `inside` boundary of this aggregate.  Likewise,
+      // an `inside` include on a nested aggregate belongs to the nested
+      // aggregate rather than to its parent's element boundary.  Select only
+      // the exact relative-position role owned by this validation pass.
+      if (info->getRelativePosition() != position) {
+        continue;
       }
+      if (!hasExplicitBraces || !claimedIncludes.insert(info).second) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[initializer-include-boundary]: "
+                "owner=%p/%s relative=%d expected-relative=%d include=%s "
+                "has no unique typed aggregate-interior boundary\n",
+                static_cast<void *>(owner), owner->class_name().c_str(),
+                static_cast<int>(info->getRelativePosition()),
+                static_cast<int>(position), info->getString().c_str());
+        ROSE_ABORT();
+      }
+      validateSourcePosition(info);
     }
-  }
+  };
 
-  return returnValue;
+  validateOwner(aggregateInitializer, PreprocessingInfo::inside);
+  SgExprListExp *initializerList = aggregateInitializer->get_initializers();
+  ASSERT_not_null(initializerList);
+  for (SgExpression *element : elements) {
+    ASSERT_not_null(element);
+    if (element->get_parent() != initializerList) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[aggregate-initializer-element-owner]: "
+              "direct initializer element does not belong to the exact "
+              "expression list\n");
+      ROSE_ABORT();
+    }
+    validateOwner(element, PreprocessingInfo::before);
+  }
+  return claimedIncludes.size();
 }
 
 #define DEBUG__unparseAggrInit 0
@@ -327,23 +164,45 @@ void Unparse_ExprStmt::unparseAggrInit(SgExpression *expr,
       aggr_init->get_startOfConstruct()->isCompilerGenerated();
   printf("Enter Unparse_ExprStmt::unparseAggrInit():\n");
   printf("  aggr_init = %p = %s\n", aggr_init, aggr_init->class_name().c_str());
-  printf("    ->get_uses_compound_literal() = %s\n",
-         aggr_init->get_uses_compound_literal() ? "true" : "false");
+  printf("    ->get_source_form() = %d\n",
+         static_cast<int>(aggr_init->get_source_form()));
   printf("  compiler_generated = %s\n", compiler_generated ? "true" : "false");
 #endif
 
-  bool need_cxx11_class_specifier = uses_cxx11_initialization(expr);
-
-  SgSourceFile *sourceFile = info.get_current_source_file();
-  if ((sourceFile != NULL) &&
-      !(sourceFile->get_Cxx11_only() || sourceFile->get_Cxx14_only())) {
-    need_cxx11_class_specifier = false;
+  const SgAggregateInitializer::aggregate_initializer_source_form_enum
+      source_form = aggr_init->get_source_form();
+  bool need_explicit_braces = false;
+  bool need_typed_brace_prefix = false;
+  bool is_compound_literal = false;
+  switch (source_form) {
+  case SgAggregateInitializer::e_aggregate_initializer_source_braced:
+    need_explicit_braces = true;
+    break;
+  case SgAggregateInitializer::e_aggregate_initializer_source_unbraced:
+    break;
+  case SgAggregateInitializer::e_aggregate_initializer_source_typed_braced:
+    need_explicit_braces = true;
+    need_typed_brace_prefix = true;
+    break;
+  case SgAggregateInitializer::e_aggregate_initializer_source_compound_literal:
+    need_explicit_braces = true;
+    is_compound_literal = true;
+    break;
+  case SgAggregateInitializer::e_aggregate_initializer_source_fortran:
+  case SgAggregateInitializer::e_aggregate_initializer_source_fortran_structure:
+  case SgAggregateInitializer::e_aggregate_initializer_source_unclassified:
+  default:
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[aggregate-initializer-source-form]: "
+            "C/C++ aggregate initializer has invalid source form=%d\n",
+            static_cast<int>(source_form));
+    ROSE_ABORT();
   }
 
   SgUnparse_Info newinfo2(info);
   newinfo2.set_inAggregateInitializer();
 
-  if (aggr_init->get_uses_compound_literal() == true) {
+  if (is_compound_literal) {
     // This aggregate initializer is using a compound literal and so we need to
     // output the type. This looks like an explict cast, but is not a cast
     // internally in the language, just that this is how compound literals are
@@ -355,32 +214,29 @@ void Unparse_ExprStmt::unparseAggrInit(SgExpression *expr,
            aggr_init->get_type()->class_name().c_str());
 #endif
 
-    bool known_compound_literal_layout = false;
     SgVariableDeclaration *compound_literal_var_decl = NULL;
-    bool shares = compoundLiteralContainsBaseTypeDefinition(
-        aggr_init, known_compound_literal_layout, &compound_literal_var_decl);
-    if (!known_compound_literal_layout) {
-      shares = sharesSameStatement(aggr_init, aggr_init->get_type());
-    }
+    const bool contains_base_type_definition =
+        compoundLiteralContainsBaseTypeDefinition(aggr_init,
+                                                  compound_literal_var_decl);
 #if DEBUG__unparseAggrInit
-    printf("  shares = %s \n", shares ? "true" : "false");
+    printf("  contains_base_type_definition = %s \n",
+           contains_base_type_definition ? "true" : "false");
 #endif
-    if (shares) {
+    if (contains_base_type_definition) {
       newinfo2.unset_SkipClassDefinition();
       newinfo2.unset_SkipEnumDefinition();
-      if (compound_literal_var_decl != NULL) {
-        newinfo2.set_declstatement_ptr(compound_literal_var_decl);
-        if (SgDeclarationStatement *base_type_defn_decl =
-                compound_literal_var_decl->get_baseTypeDefiningDeclaration()) {
-          if (isSgClassDeclaration(base_type_defn_decl) != NULL) {
-            newinfo2.set_useAlternativeDefiningDeclaration();
-            newinfo2.set_declstatement_associated_with_type(
-                base_type_defn_decl);
-          } else if (SgEnumDeclaration *enum_decl =
-                         isSgEnumDeclaration(base_type_defn_decl)) {
-            newinfo2.set_declaration_of_context(enum_decl);
-          }
-        }
+      ASSERT_not_null(compound_literal_var_decl);
+      newinfo2.set_declstatement_ptr(compound_literal_var_decl);
+      SgDeclarationStatement *base_type_defn_decl =
+          compound_literal_var_decl->get_baseTypeDefiningDeclaration();
+      ASSERT_not_null(base_type_defn_decl);
+      if (isSgClassDeclaration(base_type_defn_decl) == nullptr &&
+          isSgEnumDeclaration(base_type_defn_decl) == nullptr) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[compound-literal-definition]: inline "
+                "base-type definition is neither a class nor enum "
+                "declaration\n");
+        ROSE_ABORT();
       }
     } else {
       newinfo2.set_SkipClassDefinition();
@@ -400,10 +256,6 @@ void Unparse_ExprStmt::unparseAggrInit(SgExpression *expr,
     curprint(")");
   }
 
-  // DQ (9/29/2012): We don't want to use the explicit "{}" inside of function
-  // argument lists (see C test code: test2012_10.c).
-  bool need_explicit_braces = aggr_init->get_need_explicit_braces();
-
 #if DEBUG__unparseAggrInit
   printf("  need_explicit_braces     = %s \n",
          need_explicit_braces ? "true" : "false");
@@ -415,41 +267,167 @@ void Unparse_ExprStmt::unparseAggrInit(SgExpression *expr,
          newinfo2.inAggregateInitializer() ? "true" : "false");
 #endif
 
-  SgExpressionPtrList &list = aggr_init->get_initializers()->get_expressions();
-  if (need_cxx11_class_specifier && need_explicit_braces) {
-    ASSERT_not_null(aggr_init);
-    SgClassType *classType = isSgClassType(aggr_init->get_type());
-
-    if (classType != nullptr) {
-      newinfo2.set_SkipClassSpecifier();
-      unp->u_type->outputType<SgAggregateInitializer>(aggr_init, classType,
-                                                      newinfo2);
+  SgExprListExp *initializers = aggr_init->get_initializers();
+  if (initializers == nullptr) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[aggregate-initializer-list]: initializer "
+            "has no exact expression list\n");
+    ROSE_ABORT();
+  }
+  const SgExpressionPtrList &list = initializers->get_expressions();
+  if (need_typed_brace_prefix) {
+    SgType *source_type = aggr_init->get_type();
+    if (source_type == nullptr || isSgTypeUnknown(source_type) != nullptr ||
+        isSgTypeDefault(source_type) != nullptr) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[aggregate-initializer-prefix-type]: "
+              "typed braced initializer has no exact semantic type\n");
+      ROSE_ABORT();
     }
+    newinfo2.set_SkipClassSpecifier();
+    unp->u_type->outputType<SgAggregateInitializer>(aggr_init, source_type,
+                                                    newinfo2);
   }
 
   if (need_explicit_braces) {
     curprint("{");
   }
 
-  if (containsIncludeDirective(aggr_init)) {
-#if DEBUG__unparseAggrInit
-    printf("  Found an include directive to be removed \n");
-#endif
-    removeIncludeDirective(aggr_init);
+  // Validate element existence before any optional preprocessing-boundary
+  // traversal.  A null child is a malformed aggregate AST in its own right;
+  // letting the include validator discover it first obscures the producer
+  // contract with an unrelated boundary diagnostic.
+  for (size_t index = 0; index < list.size(); ++index) {
+    if (list[index] == nullptr) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[aggregate-initializer-element]: "
+              "initializer element %zu is null\n",
+              index);
+      ROSE_ABORT();
+    }
+  }
+
+  const size_t initializerIncludeCount =
+      validateAggregateInitializerIncludeBoundaries(aggr_init, list,
+                                                    need_explicit_braces);
+  const SgUnsignedCharList &sourceElementRoles =
+      aggr_init->get_source_element_roles();
+  if ((initializerIncludeCount == 0 && !sourceElementRoles.empty()) ||
+      (initializerIncludeCount != 0 &&
+       sourceElementRoles.size() != list.size())) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[initializer-element-source-role]: "
+            "initializer=%p includes=%zu elements=%zu roles=%zu does not "
+            "publish one exact include-expansion ownership map\n",
+            static_cast<void *>(aggr_init), initializerIncludeCount,
+            list.size(), sourceElementRoles.size());
+    ROSE_ABORT();
   }
 
 #if DEBUG__unparseAggrInit
   printf("  list.size() = %zu \n", list.size());
 #endif
 
+  bool priorAstElementWithoutIncludeBoundary = false;
   for (size_t index = 0; index < list.size(); index++) {
-    if (index > 0) {
+    const unsigned char sourceElementRole =
+        sourceElementRoles.empty()
+            ? static_cast<unsigned char>(
+                  SgAggregateInitializer::e_source_element_ast)
+            : sourceElementRoles[index];
+    const bool isAstElementRole =
+        sourceElementRole == SgAggregateInitializer::e_source_element_ast ||
+        sourceElementRole ==
+            SgAggregateInitializer::e_source_element_ast_after_owner_separator;
+    const bool isIncludeElementRole =
+        sourceElementRole ==
+            SgAggregateInitializer::e_source_element_include_expansion ||
+        sourceElementRole ==
+            SgAggregateInitializer::
+                e_source_element_include_expansion_after_owner_separator;
+    const bool hasOwnerSeparator =
+        sourceElementRole == SgAggregateInitializer::
+                                 e_source_element_ast_after_owner_separator ||
+        sourceElementRole ==
+            SgAggregateInitializer::
+                e_source_element_include_expansion_after_owner_separator;
+    if (!isAstElementRole && !isIncludeElementRole) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[initializer-element-source-role]: "
+              "initializer=%p element=%zu has invalid role=%u\n",
+              static_cast<void *>(aggr_init), index,
+              static_cast<unsigned>(sourceElementRole));
+      ROSE_ABORT();
+    }
+    if (hasOwnerSeparator && index == 0) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[initializer-element-source-role]: "
+              "initializer=%p first element cannot follow an owner-file "
+              "separator\n",
+              static_cast<void *>(aggr_init));
+      ROSE_ABORT();
+    }
+    if (sourceElementRole == SgAggregateInitializer::
+                                 e_source_element_ast_after_owner_separator &&
+        priorAstElementWithoutIncludeBoundary) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[initializer-element-source-role]: "
+              "initializer=%p element=%zu publishes an owner-file boundary "
+              "between two AST-owned elements\n",
+              static_cast<void *>(aggr_init), index);
+      ROSE_ABORT();
+    }
+    if (hasOwnerSeparator) {
+      curprint(", ");
+    }
+    if (isIncludeElementRole) {
+      SgExpression *element = list[index];
+      size_t beforeIncludeCount = 0;
+      if (AttachedPreprocessingInfoType *attached =
+              element->getAttachedPreprocessingInfo()) {
+        beforeIncludeCount = static_cast<size_t>(std::count_if(
+            attached->begin(), attached->end(), [](PreprocessingInfo *info) {
+              return isIncludeDirective(info) &&
+                     info->getRelativePosition() == PreprocessingInfo::before;
+            }));
+      }
+      const bool startsIncludeOwnedRun = index == 0 ||
+                                         beforeIncludeCount != 0 ||
+                                         priorAstElementWithoutIncludeBoundary;
+      if (startsIncludeOwnedRun && beforeIncludeCount == 0) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[initializer-element-source-role]: "
+                "initializer=%p include-owned run at element=%zu has no "
+                "exact attached include boundary\n",
+                static_cast<void *>(aggr_init), index);
+        ROSE_ABORT();
+      }
+      unparseAttachedPreprocessingInfo(element, info,
+                                       PreprocessingInfo::before);
+      priorAstElementWithoutIncludeBoundary = false;
+      continue;
+    }
+    if (priorAstElementWithoutIncludeBoundary && !hasOwnerSeparator) {
       curprint(", ");
     }
     SgExpression *element = list[index];
+    if (element == nullptr) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[aggregate-initializer-element]: "
+              "initializer element %zu is null\n",
+              index);
+      ROSE_ABORT();
+    }
     SgType *etype = element->get_type();
+    if (etype == nullptr || isSgTypeUnknown(etype) != nullptr ||
+        isSgTypeDefault(etype) != nullptr) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[aggregate-initializer-element-type]: "
+              "initializer element %zu has no exact semantic type\n",
+              index);
+      ROSE_ABORT();
+    }
 
-    SgAggregateInitializer *aggr_init = isSgAggregateInitializer(element);
     SgConstructorInitializer *ctor_init = isSgConstructorInitializer(element);
 
     bool element_compiler_generated = element->isCompilerGenerated();
@@ -461,13 +439,12 @@ void Unparse_ExprStmt::unparseAggrInit(SgExpression *expr,
            element_compiler_generated ? "true" : "false");
 #endif
     if (ctor_init != nullptr && element_compiler_generated) {
-      break;
-    }
-
-    if (need_cxx11_class_specifier && aggr_init && isSgClassType(etype)) {
-      newinfo2.set_SkipClassSpecifier();
-      unp->u_type->outputType<SgAggregateInitializer>(aggr_init, etype,
-                                                      newinfo2);
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[aggregate-initializer-source-element]: "
+              "compiler-generated constructor element %zu reached source "
+              "aggregate emission\n",
+              index);
+      ROSE_ABORT();
     }
 
     SgUnparse_Info newinfo(info);
@@ -480,6 +457,7 @@ void Unparse_ExprStmt::unparseAggrInit(SgExpression *expr,
            newinfo.SkipClassDefinition() ? "true" : "false");
 #endif
     unparseExpression(element, newinfo);
+    priorAstElementWithoutIncludeBoundary = true;
   }
 
   unparseAttachedPreprocessingInfo(aggr_init, info, PreprocessingInfo::inside);

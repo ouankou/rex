@@ -1,0 +1,2 @@
+!$omp begin metadirective when(implementation={vendor(amd)}:parallel do num_threads(8))
+!$ompx implementation_extension payload

@@ -96,12 +96,30 @@ bool isHiddenType(const SgType *type) {
   return false;
 }
 
+static bool
+isSupportedFunctionLocalType(const SgType *type,
+                             SgFunctionDeclaration *enclosingFunction) {
+  if (!isHiddenType(type))
+    return true;
+
+  if (!SageInterface::is_Cxx_language() || Outliner::enable_classic ||
+      !Outliner::useParameterWrapper)
+    return false;
+
+  SgFunctionDeclaration *owner =
+      ASTtools::functionOwningHiddenNamedType(const_cast<SgType *>(type));
+  return owner != NULL &&
+         ASTtools::sameFunctionFamily(owner, enclosingFunction);
+}
+
 /*!
- *  \brief Returns 'true' if the given statement, 's', has a variable
- *  reference or declaration whose type is 'hidden', in the sense
- *  specified by \ref ASTtools::isHiddenType ().
+ *  \brief Returns 'true' if the given statement has a variable reference or
+ *  declaration whose function-local type cannot be carried by the explicit
+ *  outlined-function template channel.
  */
-static bool doesRefHiddenTypes(const SgStatement *s) {
+static bool
+doesRefUnsupportedHiddenTypes(const SgStatement *s,
+                              SgFunctionDeclaration *enclosingFunction) {
   typedef Rose_STL_Container<SgNode *> NodeList_t;
   NodeList_t refs =
       NodeQuery::querySubTree(const_cast<SgStatement *>(s), V_SgVarRefExp);
@@ -109,7 +127,7 @@ static bool doesRefHiddenTypes(const SgStatement *s) {
     const SgVarRefExp *ref = isSgVarRefExp(*i);
     ROSE_ASSERT(ref);
     const SgType *type = ref->get_type();
-    if (isHiddenType(type))
+    if (!isSupportedFunctionLocalType(type, enclosingFunction))
       return true;
   }
 
@@ -121,7 +139,7 @@ static bool doesRefHiddenTypes(const SgStatement *s) {
     const SgInitializedNamePtrList &names = decl->get_variables();
     for (SgInitializedNamePtrList::const_iterator v = names.begin();
          v != names.end(); ++v)
-      if (isHiddenType((*v)->get_type()))
+      if (!isSupportedFunctionLocalType((*v)->get_type(), enclosingFunction))
         return true;
   }
 
@@ -390,9 +408,12 @@ bool Outliner::isOutlineable(const SgStatement *s, bool verbose) {
     return false;
   }
 
-  if (doesRefHiddenTypes(s)) {
+  if (doesRefUnsupportedHiddenTypes(
+          s, const_cast<SgFunctionDeclaration *>(decl))) {
     if (verbose)
-      cerr << "*** Statement must not reference hidden types. ***" << endl;
+      cerr << "*** Function-local types require the exact C++ template "
+              "parameter wrapper channel. ***"
+           << endl;
     return false;
   }
 

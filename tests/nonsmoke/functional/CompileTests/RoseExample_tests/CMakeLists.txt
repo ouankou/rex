@@ -15,7 +15,10 @@ set(_rose_example_extended_instrumented_timeout_sources
   test2006_43.C
 )
 
-set(ROSE_FLAGS  -w )
+# These specimens consume REX's public C++ headers.  Their language contract is
+# therefore the same C++ standard as the exported REX ABI, independently of the
+# older input-dialect default used by generic historical C++ specimens.
+set(ROSE_FLAGS -w -std=c++${CMAKE_CXX_STANDARD})
 
 foreach(file_to_test ${files_to_test})
   if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test}")

@@ -5,18 +5,14 @@ void SgTypeTraitBuiltinOperator::post_construction_initialization() {
 }
 
 SgType *SgTypeTraitBuiltinOperator::get_type() const {
-  // DQ (7/12/2013): These functions will almost always return a boolean type,
-  // but not always.
-
-  SgType *returnType = NULL;
-
-  if (get_name() == "__underlying_type") {
-    // This returns an actual type and it is not clear now to handle this.
-    returnType = SgTypeDefault::createType();
-  } else {
-    returnType = SgTypeBool::createType();
+  if (p_expression_type == nullptr ||
+      isSgTypeUnknown(p_expression_type) != nullptr ||
+      isSgTypeDefault(p_expression_type) != nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[typed-builtin-result-type]: builtin=%s has no "
+            "exact semantic result type\n",
+            get_name().getString().c_str());
+    ROSE_ABORT();
   }
-
-  ROSE_ASSERT(returnType != NULL);
-  return returnType;
+  return p_expression_type;
 }

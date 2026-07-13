@@ -95,12 +95,7 @@ void SystemDependenceGraph::parseProject(SgProject *project) {
 #ifdef NEWDU
   // Create the global def-use analysis
   EDefUse *defUseAnalysis = new EDefUse(project);
-  if (defUseAnalysis->run(false) == 1) {
-    std::cerr << "SystemDependenceGraph :: DFAnalysis failed!  -- "
-                 "defUseAnalysis->run(false)==0"
-              << endl;
-    exit(0);
-  }
+  defUseAnalysis->run(false);
 #endif
   // restrict to only aclually called functions an the main function,
   // find all function calls ->get the function defintion and add it to the set

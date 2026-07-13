@@ -130,11 +130,8 @@ void addExternalScopeContracts(SgProject *project, SgSourceFile *file) {
 
   SgFunctionParameterScope *external_scope =
       external_peer->get_functionParameterScope();
-  if (external_scope == nullptr) {
-    external_scope = new SgFunctionParameterScope();
-    external_peer->set_functionParameterScope(external_scope);
-  }
-  external_scope->set_parent(external_peer);
+  ROSE_ASSERT(external_scope != nullptr);
+  ROSE_ASSERT(external_scope->get_parent() == external_peer);
   requireSourcePosition(external_scope);
 
   SgUseStatement *use_stmt =
@@ -162,8 +159,25 @@ void addExternalScopeContracts(SgProject *project, SgSourceFile *file) {
       new SgRenameSymbol(target, original_symbol, SgName("renamed_original"));
   external_table->insert(SgName("renamed_original"), rename_symbol);
 
+  SgFunctionParameterScope *target_scope = target->get_functionParameterScope();
+  ROSE_ASSERT(target_scope != nullptr);
+  ROSE_ASSERT(target_scope != external_scope);
+  ROSE_ASSERT(target_scope->get_parent() == target);
+  for (SgInitializedName *parameter : target->get_parameterList()->get_args()) {
+    ROSE_ASSERT(parameter != nullptr);
+    SgVariableSymbol *symbol =
+        isSgVariableSymbol(parameter->get_symbol_from_symbol_table());
+    ROSE_ASSERT(symbol != nullptr);
+    target_scope->remove_symbol(symbol);
+    external_scope->insert_symbol(symbol->get_name(), symbol);
+    parameter->set_scope(external_scope);
+    ROSE_ASSERT(parameter->get_symbol_from_symbol_table() == symbol);
+  }
   target->set_firstNondefiningDeclaration(external_peer);
   target->set_functionParameterScope(external_scope);
+  target_scope->set_parent(nullptr);
+  SageInterface::deleteAST(
+      target_scope, SageInterface::DeleteAstMode::kSkipExternalReferences);
 }
 
 void verifyContractJson(const std::filesystem::path &dir) {

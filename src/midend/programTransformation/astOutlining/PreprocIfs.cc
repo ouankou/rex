@@ -9,7 +9,7 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 
-#include "sageBuilder.h"
+#include "sageInterface.h"
 
 #include <algorithm>
 
@@ -197,12 +197,8 @@ static void genCloseDirectives(const CPreproc::If::Case *c,
         PreprocessingInfo::CpreprocessorEndifDeclaration, closer,
         string("transformation"), 0, 0, 1 /* no. of lines */, pos);
     ROSE_ASSERT(d);
-
-    // DQ (3/12/2019): We need to mark the added comments and CPP directives as
-    // a transformation so that then can be output. This is a result of a fix to
-    // support the correct handling of comments and CPP directives for shared IR
-    // nodes as happen when multiple files are used on the command line.
-    d->get_file_info()->setTransformation();
+    ROSE_ASSERT(d->get_file_info() != NULL);
+    d->get_file_info()->set_physical_file_id(Sg_File_Info::NULL_FILE_ID);
 
     D.push_back(d);
 
@@ -236,12 +232,8 @@ static void genOpenDirectives(const CPreproc::If::Case *c,
         string("transformation"), 0, 0, 1 /* no. of lines */, pos);
 
     ROSE_ASSERT(d);
-
-    // DQ (3/12/2019): We need to mark the added comments and CPP directives as
-    // a transformation so that then can be output. This is a result of a fix to
-    // support the correct handling of comments and CPP directives for shared IR
-    // nodes as happen when multiple files are used on the command line.
-    d->get_file_info()->setTransformation();
+    ROSE_ASSERT(d->get_file_info() != NULL);
+    d->get_file_info()->set_physical_file_id(Sg_File_Info::NULL_FILE_ID);
 
     d->setRelativePosition(pos);
     D.push_back(d);
@@ -261,9 +253,44 @@ static PreprocessingInfo::RelativePositionType getRelPos(ContextPosType pos) {
   case e_beforeLastInBlock:
     return PreprocessingInfo::inside;
   default:
-    break;
+    fprintf(stderr,
+            "REX_AST_INVARIANT[outliner-preprocessing-position]: invalid "
+            "context position=%d\n",
+            static_cast<int>(pos));
+    ROSE_ABORT();
   }
-  return PreprocessingInfo::defaultValue;
+}
+
+static void publishDirectives(PreprocInfoList_t &directives,
+                              SgLocatedNode *owner) {
+  ROSE_ASSERT(owner != NULL);
+  for (PreprocessingInfo *directive : directives) {
+    ROSE_ASSERT(directive != NULL);
+    SageInterface::publishGeneratedPreprocessingInfo(directive, owner);
+  }
+}
+
+static void attachDirectivesAtBack(PreprocInfoList_t &directives,
+                                   SgLocatedNode *owner) {
+  publishDirectives(directives, owner);
+  for (PreprocessingInfo *directive : directives) {
+    owner->attachPreprocessingInfo(
+        directive, directive->getRelativePosition(),
+        SgLocatedNode::PreprocessingInfoInsertion::back);
+  }
+  directives.clear();
+}
+
+static void attachDirectivesAtFront(PreprocInfoList_t &directives,
+                                    SgLocatedNode *owner) {
+  publishDirectives(directives, owner);
+  for (PreprocInfoList_t::reverse_iterator directive = directives.rbegin();
+       directive != directives.rend(); ++directive) {
+    owner->attachPreprocessingInfo(
+        *directive, (*directive)->getRelativePosition(),
+        SgLocatedNode::PreprocessingInfoInsertion::front);
+  }
+  directives.clear();
 }
 
 /*!
@@ -272,33 +299,42 @@ static PreprocessingInfo::RelativePositionType getRelPos(ContextPosType pos) {
  *  statement.
  */
 static void insertMiddle(PreprocInfoList_t &D, SgStatement *s) {
-  AttachedPreprocessingInfoType *info = ASTtools::createInfoList(s);
-  ROSE_ASSERT(info);
-  AttachedPreprocessingInfoType::iterator ins_pos = info->begin();
-  while (ins_pos != info->end()) {
-    if ((*ins_pos)->getRelativePosition() != PreprocessingInfo::before)
-      break; // Found insertion point.
-    ++ins_pos;
+  publishDirectives(D, s);
+  AttachedPreprocessingInfoType *info = s->getAttachedPreprocessingInfo();
+  PreprocessingInfo *anchor = NULL;
+  if (info != NULL) {
+    for (PreprocessingInfo *candidate : *info) {
+      if (candidate->getRelativePosition() != PreprocessingInfo::before) {
+        anchor = candidate;
+        break;
+      }
+    }
   }
 
-  if (ins_pos == info->end())
-    copy(D.begin(), D.end(), back_inserter(*info));
-  else
-    copy(D.begin(), D.end(), inserter(*info, ins_pos));
+  for (PreprocessingInfo *directive : D) {
+    if (anchor != NULL) {
+      s->attachPreprocessingInfoRelative(
+          directive, directive->getRelativePosition(), anchor, false);
+    } else {
+      s->attachPreprocessingInfo(
+          directive, directive->getRelativePosition(),
+          SgLocatedNode::PreprocessingInfoInsertion::back);
+    }
+  }
+  D.clear();
 }
 
-//! Returns 'true' if the given statement will not be unparsed.
-static bool isHiddenStmt(const SgStatement *s) {
-  if (s) {
-    const Sg_File_Info *info = s->get_file_info();
-    ROSE_ASSERT(info);
-    if (info->get_filenameString() == "NULL_FILE" ||
-        !info->isOutputInCodeGeneration())
-      return true;
+//! Returns 'true' if the statement deliberately contributes no lexical output.
+static bool isNonOutputStatement(const SgStatement *statement) {
+  ROSE_ASSERT(statement != NULL);
+  const Sg_File_Info *info = statement->get_file_info();
+  if (info == NULL) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[preprocessing-owner]: first statement "
+            "has no source information\n");
+    ROSE_ABORT();
   }
-
-  // Default: Assume not.
-  return false;
+  return !info->isOutputInCodeGeneration();
 }
 
 /*!
@@ -314,37 +350,12 @@ static void prependAtFirstStatement(PreprocInfoList_t &D, SgBasicBlock *b) {
   SgStatement *s = *(stmts.begin());
   ROSE_ASSERT(s);
 
-  if (isHiddenStmt(s)) {
-    /*! \note This code handles a somewhat esoteric special case in
-     * which the statement 's' will not be unparsed, and so any
-     * preprocessing information attached to it would also go
-     * unparsed. This occurred in
-     * CompileTests/Cxx_tests/test2001_09.C, where an implicit
-     * return statement (represented explicitly in the tree but
-     * unparsed) was being outlined.
-     */
-    SgStatement *s_blank = SageBuilder::buildNullStatement();
-    ROSE_ASSERT(s_blank);
-
-    // DQ (9/26/2007): Moved from std::list to std::vector uniformly in ROSE.
-    // stmts.push_front (s_blank);
-    stmts.insert(stmts.begin(), s_blank);
-
-    s_blank->set_parent(b);
-
-    // DQ (9/26/2007): Moved from std::list to std::vector uniformly in ROSE.
-    //   printf ("Commentout out front_inserter since it is unavailable in
-    //   std::vector \n");
-    // copy (D.rbegin (), D.rend (), front_inserter (*ASTtools::createInfoList
-    // (s_blank)));
-
-    // Liao (10/3/2007), append elements for a vector
-    AttachedPreprocessingInfoType *info = ASTtools::createInfoList(s_blank);
-    for (PreprocInfoList_t::reverse_iterator i = D.rbegin(); i != D.rend(); i++)
-      info->insert(info->begin(), *i);
-
-  } else // Attach at the front of preprocessing info at 's'.
-  {
+  if (isNonOutputStatement(s)) {
+    // A non-output semantic child cannot own emitted preprocessing.  The
+    // enclosing lexical block is the exact owner of the beginning-of-block
+    // surface; no fabricated null statement is needed.
+    insertMiddle(D, b);
+  } else { // Attach at the front of preprocessing info at 's'.
     // DQ (9/26/2007): Moved from std::list to std::vector uniformly in ROSE.
     //   printf ("Commentout out front_inserter since it is unavailable in
     //   std::vector \n");
@@ -352,17 +363,20 @@ static void prependAtFirstStatement(PreprocInfoList_t &D, SgBasicBlock *b) {
     // (s)));
 
     // Liao (10/3/2007), append elements for a vector
-    AttachedPreprocessingInfoType *info = ASTtools::createInfoList(s);
-    for (PreprocInfoList_t::reverse_iterator i = D.rbegin(); i != D.rend(); i++)
-      info->insert(info->begin(), *i);
+    attachDirectivesAtFront(D, s);
   }
 }
 
 //! Inserts preprocessing info objects into a basic block.
 static void insertContext(PreprocInfoList_t &D, ContextPosType pos,
                           SgBasicBlock *b) {
-  if (D.empty() || !b)
-    return; // no work
+  if (b == nullptr) {
+    fprintf(stderr, "REX_AST_INVARIANT[outliner-preprocessing-owner]: context "
+                    "insertion requires a basic block\n");
+    ROSE_ABORT();
+  }
+  if (D.empty())
+    return;
 
   switch (pos) {
   case e_beforeBlock: {
@@ -373,15 +387,13 @@ static void insertContext(PreprocInfoList_t &D, ContextPosType pos,
     // (b)));
 
     // Liao (10/3/2007), append elements for a vector
-    AttachedPreprocessingInfoType *info = ASTtools::createInfoList(b);
-    for (PreprocInfoList_t::reverse_iterator i = D.rbegin(); i != D.rend(); i++)
-      info->insert(info->begin(), *i);
+    attachDirectivesAtFront(D, b);
 
     break;
   }
 
   case e_lastInBlock:
-    copy(D.begin(), D.end(), back_inserter(*ASTtools::createInfoList(b)));
+    attachDirectivesAtBack(D, b);
     break;
   case e_firstInBlock: {
     if (b->get_statements().empty())
@@ -393,7 +405,11 @@ static void insertContext(PreprocInfoList_t &D, ContextPosType pos,
     insertMiddle(D, b);
     break;
   default:
-    break;
+    fprintf(stderr,
+            "REX_AST_INVARIANT[outliner-preprocessing-position]: invalid "
+            "context position=%d\n",
+            static_cast<int>(pos));
+    ROSE_ABORT();
   }
 }
 

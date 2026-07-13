@@ -1,16 +1,15 @@
 
-/* unparser.h
- * This header file contains the class declaration for the newest unparser. Six
- * C files include this header file: unparser.C, modified_sage.C,
- * unparse_stmt.C, unparse_expr.C, unparse_type.C, and unparse_sym.C.
- */
+/* Language-independent unparser declarations. */
 
 #ifndef UNPARSER_LANGUAGE_INDEPENDENT_SUPPORT
 #define UNPARSER_LANGUAGE_INDEPENDENT_SUPPORT
 
-#include <cstdint>
+#include <cstdio>
 #include <iomanip>
+#include <limits>
+#include <locale>
 #include <map>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <string>
@@ -33,6 +32,7 @@ class SgIfStmt;
 class SgInitializedName;
 class SgLocatedNode;
 class SgNamespaceDefinitionStatement;
+class SgNamespaceDeclarationStatement;
 class SgNode;
 class SgOmpClause;
 class SgAccClause;
@@ -44,6 +44,7 @@ class SgStatement;
 class SgThisExp;
 class SgUnparse_Info;
 class SgValue;
+class SgValueExp;
 
 /* support for handling precedence and associativity */
 typedef int PrecedenceSpecifier;
@@ -60,22 +61,36 @@ class Unparser;
 // This is a base class for the language dependent parts of the unparser.
 class UnparseLanguageIndependentConstructs {
 protected:
-  struct PartialTokenUnparseFrontierCache {
-    const std::map<SgStatement *, FrontierNode *> *frontier_nodes = nullptr;
-    size_t frontier_size = 0;
-    uint64_t ast_modification_sequence = 0;
-    std::set<SgStatement *> statements_requiring_partial_token_unparse;
-  };
-
   Unparser *unp;
   std::string currentOutputFileName;
-  std::map<SgSourceFile *, PartialTokenUnparseFrontierCache>
-      partialTokenUnparseFrontierCacheByFile;
+  std::set<const SgStatement *> statementsWithTokenEmittedLeadingPreprocessing;
+  std::set<const SgStatement *> statementsWithTokenEmittedTrailingWhitespace;
+  struct LineDirectiveLocation {
+    std::string filename;
+    unsigned int line;
+
+    bool operator==(const LineDirectiveLocation &other) const {
+      return filename == other.filename && line == other.line;
+    }
+  };
+  std::optional<LineDirectiveLocation> previousLineDirectiveLocation;
 
   bool frontierRequiresPartialTokenUnparse(SgSourceFile *sourceFile,
                                            SgStatement *candidate);
 
 public:
+  enum namespace_source_fragment_state_enum {
+    e_namespace_source_fragment_complete,
+    e_namespace_source_fragment_introducer_only,
+    e_namespace_source_fragment_open_only,
+    e_namespace_source_fragment_close_only,
+    e_namespace_source_fragment_neither
+  };
+
+  namespace_source_fragment_state_enum namespaceSourceFragmentState(
+      const SgNamespaceDeclarationStatement *declaration,
+      const SgUnparse_Info &info) const;
+
   // DQ (12/6/2014): This type permits specification of what bounds to use in
   // the specifiation of token stream subsequence boundaries.
   enum token_sequence_position_enum_type {
@@ -165,9 +180,6 @@ public:
 
   void unparseOneElemConInit(SgConstructorInitializer *con_init,
                              SgUnparse_Info &info);
-  //! get the filename from a SgStatement Object
-  std::string getFileName(SgNode *stmt);
-
   //! get the filename from the SgFile Object
   std::string getFileName();
 
@@ -200,19 +212,36 @@ public:
              << std::flush; // Distinguish integer and floating-point numbers
     return myStream.str(); // Returns the string form of the stringstream object
   }
+  template <typename T>
+  std::string canonicalFloatingLiteral(T value,
+                                       const std::string &suffix) const {
+    std::ostringstream stream;
+    stream.imbue(std::locale::classic());
+    stream << std::defaultfloat
+           << std::setprecision(std::numeric_limits<T>::max_digits10) << value;
+    if (stream.fail()) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[floating-literal]: cannot produce a "
+              "canonical round-trip spelling for a generated value\n");
+      ROSE_ABORT();
+    }
+    std::string spelling = stream.str();
+    if (spelling.find_first_of(".eE") == std::string::npos) {
+      spelling += ".0";
+    }
+    return spelling + suffix;
+  }
+  void requireGeneratedCanonicalLiteralSpelling(const SgValueExp *value) const;
+  SgExpression *validatedOriginalExpressionSource(SgExpression *owner,
+                                                  const char *consumer) const;
   void curprint(const std::string &str) const;
+  void curprintLiteral(const std::string &text) const;
   void printOutComments(SgLocatedNode *locatedNode) const;
-
-  //! Unparser support for compiler-generated statments
-  void outputCompilerGeneratedStatements(SgUnparse_Info &info);
 
   //! This function unparses any attached comments or CPP directives.
   virtual void unparseAttachedPreprocessingInfo(
       SgLocatedNode *stmt, SgUnparse_Info &info,
       PreprocessingInfo::RelativePositionType whereToUnparse);
-  virtual bool unparseLineReplacement(SgLocatedNode *stmt,
-                                      SgUnparse_Info &info);
-
   bool RemoveArgs(SgExpression *expr);
 
   //! Support for Fortran numeric labels (can appear on any statement), this is
@@ -347,6 +376,8 @@ public:
                                                 SgUnparse_Info &info);
   virtual void unparseOmpExpressionClause(SgOmpClause *clause,
                                           SgUnparse_Info &info);
+  virtual void unparseOmpDirectiveKindClause(SgOmpClause *clause,
+                                             SgUnparse_Info &info);
   virtual void unparseOmpDepobjUpdateClause(SgOmpClause *clause,
                                             SgUnparse_Info &info);
   virtual void unparseOmpClause(SgOmpClause *clause, SgUnparse_Info &info);
@@ -395,10 +426,7 @@ public:
                                           SgUnparse_Info &info);
 
   virtual void unparseMapDistDataPoliciesToString(
-      std::vector<
-          std::pair<SgOmpClause::omp_map_dist_data_enum, SgExpression *>>
-          policies,
-      SgUnparse_Info &info);
+      const SgOmpMapDistDataPolicyPtrList &policies, SgUnparse_Info &info);
 
   bool isTransformed(SgStatement *stmt);
   void markGeneratedFile() const;
@@ -410,6 +438,9 @@ public:
       SgNamespaceDefinitionStatement *&namespaceDefn, int debugSupport = 0);
 
   // Support for language-independent precedence
+  static constexpr PrecedenceSpecifier additiveOperatorPrecedence() {
+    return 13;
+  }
   virtual bool requiresParentheses(SgExpression *expr, SgUnparse_Info &info);
   virtual PrecedenceSpecifier getPrecedence(SgExpression *exp);
   virtual AssociativitySpecifier getAssociativity(SgExpression *exp);
@@ -432,40 +463,19 @@ public:
 
   // DQ (11/4/2014): Unparse a partial sequence of tokens up to the next AST
   // node.
-  int unparseStatementFromTokenStreamForNodeContainingTransformation(
-      SgSourceFile *sourceFile, SgStatement *stmt, SgUnparse_Info &info,
-      bool &lastStatementOfGlobalScopeUnparsedUsingTokenStream,
-      unparsed_as_enum_type unparsed_as);
+  bool canPartiallyReplayStatementTokens(SgSourceFile *sourceFile,
+                                         SgStatement *stmt);
 
   bool canBeUnparsedFromTokenStream(SgSourceFile *sourceFile,
                                     SgStatement *stmt);
-
-  // DQ (1/6/2021): Adding support to detect use of unparseToString()
-  // functionality.  This is required to avoid premature saving of state
-  // regarding the static previouslyUnparsedTokenSubsequences which is required
-  // to support multiple statements (e.g. a variable declarations with
-  // containing multiple variables which translates (typically) to multiple
-  // variable declarations (each with one variable) within the AST). DQ
-  // (11/29/2013): Added support to detect redundant statements (e.g. variable
-  // declarations with multiple variables that are mapped to a single token
-  // sequence). bool redundantStatementMappingToTokenSequence(SgSourceFile*
-  // sourceFile, SgStatement* stmt);
-  bool redundantStatementMappingToTokenSequence(SgSourceFile *sourceFile,
-                                                SgStatement *stmt,
-                                                SgUnparse_Info &info);
 
   // DQ (11/30/2013): Adding support to suppress redundant unparsing of CPP
   // directives and comments. bool
   // isTransitionFromTokenUnparsingToASTunparsing(SgStatement* statement);
 
-  // DQ (1/23/2014): This function support detecting when the supress the output
-  // of the SgDotExp in the access of data members from un-named unions.
-  bool isDotExprWithAnonymousUnion(SgExpression *expr);
-
   // DQ (9/3/2014): Adding support to supress output of SgThisExp as part of
   // support for C++11 lambda functions code generation.
-  bool isImplicitArrowExpWithinLambdaFunction(SgExpression *expr,
-                                              SgUnparse_Info &info);
+  bool suppressImplicitObjectAccess(SgExpression *expr);
 
   // DQ (11/13/2014): Detect when to unparse the leading and trailing edge
   // tokens for attached CPP directives and comments.

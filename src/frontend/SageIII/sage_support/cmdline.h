@@ -56,8 +56,6 @@ NormalizeIncludePathOptions(std::vector<std::string> &argv);
  */
 void StripRoseOptions(std::vector<std::string> &argv);
 
-void ProcessKeepGoing(SgProject *project, std::vector<std::string> &argv);
-
 namespace Unparser {
 static const std::string option_prefix = "-rose:unparser:";
 

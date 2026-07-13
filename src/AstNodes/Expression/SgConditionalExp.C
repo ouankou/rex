@@ -9,82 +9,101 @@ void SgConditionalExp::post_construction_initialization() {
     p_false_exp->set_parent(this);
 }
 
+void SgConditionalExp::validate() const {
+  const bool exact_condition =
+      p_conditional_exp != nullptr && p_conditional_exp->get_parent() == this;
+  const bool exact_true =
+      p_true_exp != nullptr && p_true_exp->get_parent() == this;
+  const bool exact_false =
+      p_false_exp != nullptr && p_false_exp->get_parent() == this;
+  const bool exact_type = p_expression_type != nullptr &&
+                          isSgTypeUnknown(p_expression_type) == nullptr &&
+                          isSgTypeDefault(p_expression_type) == nullptr;
+
+  switch (p_operator_kind) {
+  case e_conditional_operator_standard:
+    if (!exact_condition || !exact_true || !exact_false ||
+        p_conditional_exp == p_true_exp || p_conditional_exp == p_false_exp ||
+        p_true_exp == p_false_exp) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[conditional-expression]: standard "
+              "conditional=%p requires three exclusively owned operands and "
+              "one exact result type\n",
+              static_cast<const void *>(this));
+      ROSE_ABORT();
+    }
+    if (!exact_type) {
+      fprintf(stderr, "REX_AST_INVARIANT[conditional-result-type]: conditional "
+                      "expression has no exact semantic result type\n");
+      ROSE_ABORT();
+    }
+    return;
+
+  case e_conditional_operator_gnu_binary:
+    if (!exact_condition || p_true_exp != nullptr || !exact_false ||
+        p_conditional_exp == p_false_exp) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[conditional-expression]: GNU binary "
+              "conditional=%p requires one common operand, no duplicated "
+              "true operand, one false operand, and one exact result type\n",
+              static_cast<const void *>(this));
+      ROSE_ABORT();
+    }
+    if (!exact_type) {
+      fprintf(stderr, "REX_AST_INVARIANT[conditional-result-type]: conditional "
+                      "expression has no exact semantic result type\n");
+      ROSE_ABORT();
+    }
+    return;
+
+  case e_conditional_operator_unclassified:
+  default:
+    fprintf(stderr,
+            "REX_AST_INVARIANT[conditional-expression]: conditional=%p has "
+            "no exact operator kind\n",
+            static_cast<const void *>(this));
+    ROSE_ABORT();
+  }
+}
+
+SgExpression *SgConditionalExp::get_true_value_exp() const {
+  validate();
+  return p_operator_kind == e_conditional_operator_gnu_binary
+             ? p_conditional_exp
+             : p_true_exp;
+}
+
 SgType *SgConditionalExp::get_type() const {
-  // In this function we want to return the type of the true of false option but
-  // it only makes sense for them to be the same type.
-
-  // DQ (1/14/2006): p_expression_type has been removed, we have to compute the
-  // appropriate type (IR specific code) printf ("SgConditionalExp::get_type():
-  // p_expression_type has been removed, we have to compute the appropriate type
-  // \n");
-
-  // Jeremiah (7/20/2006): Despite the comments, SOURCE_CONDITIONAL_EXPRESSION
-  // refers to a p_expression_type member, but then ignores it.  I think you may
-  // want to store the type explicitly for this operator, as computing it is
-  // difficult (requires handling user-defined conversions and such).  The
-  // return type can be either the true or false types, and they can be
-  // different.
-
-  ROSE_ASSERT(p_true_exp != NULL);
-  ROSE_ASSERT(p_false_exp != NULL);
-
-  SgType *trueType = p_true_exp->get_type();
-  ROSE_ASSERT(trueType != NULL);
-
-#if PRINT_DEVELOPER_WARNINGS
-  SgType *falseType = p_false_exp->get_type();
-  ROSE_ASSERT(falseType != NULL);
-
-  string expression_type_name = "NULL";
-  if (p_expression_type != NULL)
-    expression_type_name = p_expression_type->class_name();
-
-  // ROSE_ASSERT(trueType == falseType);
-  if (trueType != falseType) {
-    printf("Warning: In SgConditionalExp::get_type(): trueType = %s != "
-           "falseType = %s  (p_expression_type = %s) \n",
-           trueType->class_name().c_str(), falseType->class_name().c_str(),
-           expression_type_name.c_str());
-    // get_file_info()->display("Warning: In SgConditionalExp::get_type():
-    // trueType != falseType");
+  validate();
+  if (p_expression_type == nullptr ||
+      isSgTypeUnknown(p_expression_type) != nullptr ||
+      isSgTypeDefault(p_expression_type) != nullptr) {
+    fprintf(stderr, "REX_AST_INVARIANT[conditional-result-type]: conditional "
+                    "expression has no exact semantic result type\n");
+    ROSE_ABORT();
   }
-#endif
-
-  // Prefer an explicitly stored expression type when available. This is
-  // required for correct typing when conditional operands undergo implicit
-  // conversions (e.g., const qualifications).
-  SgType *returnType =
-      (p_expression_type != NULL) ? p_expression_type : trueType;
-
-  // PC (10/12/2009): If returnType is in fact an SgArrayType it will undergo
-  // array-to-pointer conversion
-  SgType *retElemType = SageInterface::getElementType(returnType);
-  if (retElemType != NULL) {
-    returnType = SgPointerType::createType(retElemType);
-  }
-
-  ROSE_ASSERT(returnType != NULL);
-  return returnType;
+  return p_expression_type;
 }
 
 SgExpression *SgConditionalExp::get_next(int &n) const {
-  SgExpression *tmp = NULL;
-  switch (n) {
-  case 0:
-    tmp = get_conditional_exp();
-    n++;
-    break;
-  case 1:
-    tmp = get_true_exp();
-    n++;
-    break;
-  case 2:
-    tmp = get_false_exp();
-    n++;
-    break;
+  validate();
+  while (n < 3) {
+    SgExpression *tmp = nullptr;
+    switch (n++) {
+    case 0:
+      tmp = get_conditional_exp();
+      break;
+    case 1:
+      tmp = get_true_exp();
+      break;
+    case 2:
+      tmp = get_false_exp();
+      break;
+    }
+    if (tmp != nullptr)
+      return tmp;
   }
-
-  return tmp;
+  return nullptr;
 }
 
 int SgConditionalExp::replace_expression(SgExpression *o, SgExpression *n) {
@@ -94,20 +113,24 @@ int SgConditionalExp::replace_expression(SgExpression *o, SgExpression *n) {
 
   ROSE_ASSERT(o != NULL);
   ROSE_ASSERT(n != NULL);
+  validate();
 
   if (get_conditional_exp() == o) {
     set_conditional_exp(n);
     n->set_parent(this);
+    validate();
     return 1;
   } else {
     if (get_true_exp() == o) {
       set_true_exp(n);
       n->set_parent(this);
+      validate();
       return 1;
     } else {
       if (get_false_exp() == o) {
         set_false_exp(n);
         n->set_parent(this);
+        validate();
         return 1;
       } else {
         return 0;

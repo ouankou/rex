@@ -74,6 +74,10 @@ HEADER_LABEL_SYMBOL_START
        // SgLabelSymbol ( const SgName & name );
           SgLabelSymbol ( SgInitializedName* initializedName );
 
+      //! Labels are scoped by their exact label-namespace symbol table, not
+      //! by the labeled statement's lexical scope.
+          SgScopeStatement* get_scope() const override;
+
 HEADER_LABEL_SYMBOL_END
 
 
@@ -93,6 +97,10 @@ HEADER_ALIAS_SYMBOL_START
 
       //! Where possible extract the declaration from the aliased symbol
           SgDeclarationStatement* get_declaration() const;
+
+      //! An alias is visible in the exact symbol table that owns the alias,
+      //! not in the canonical target declaration's scope.
+          SgScopeStatement* get_scope() const override;
 HEADER_ALIAS_SYMBOL_END
 
 HEADER_RENAME_SYMBOL_START
@@ -100,6 +108,10 @@ HEADER_RENAME_SYMBOL_START
       //! For a chain of aliased symbols the last link may be a SgRenameSymbol, this
       //! function returns the declaration in the last (non-aliased and not renamed) symbol.
       //  SgSymbol* get_base() const;
+
+      //! A renamed symbol is semantically visible in the exact symbol table
+      //! that owns the rename, not in the original declaration's scope.
+          SgScopeStatement* get_scope() const override;
 
 HEADER_RENAME_SYMBOL_END
 
@@ -617,6 +629,27 @@ SgLabelSymbol::get_symbol_basis() const
      return returnStatement;
    }
 
+SgScopeStatement*
+SgLabelSymbol::get_scope() const
+   {
+     SgSymbolTable* symbolTable = isSgSymbolTable(get_parent());
+     SgScopeStatement* scope = symbolTable != NULL
+                                  ? isSgScopeStatement(symbolTable->get_parent())
+                                  : NULL;
+     if (symbolTable == NULL || scope == NULL ||
+         scope->get_symbol_table() != symbolTable)
+        {
+          fprintf(stderr,
+                  "REX_SYMBOL_INVARIANT[label-semantic-scope]: label=%p "
+                  "parent=%p must belong to one exact scope-owned symbol "
+                  "table before scope lookup\n",
+                  static_cast<const void*>(this),
+                  static_cast<void*>(get_parent()));
+          ROSE_ABORT();
+        }
+     return scope;
+   }
+
 SgType*
 SgLabelSymbol::get_type() const
    {
@@ -844,6 +877,35 @@ SgAliasSymbol::get_type() const
      return get_alias()->get_type();
    }
 
+SgScopeStatement*
+SgAliasSymbol::get_scope() const
+   {
+     SgSymbolTable* table = isSgSymbolTable(get_parent());
+     SgScopeStatement* scope =
+         table != NULL ? isSgScopeStatement(table->get_parent()) : NULL;
+     size_t occurrences = 0;
+     if (table != NULL && table->get_table() != NULL)
+        {
+          for (const auto &entry : *table->get_table())
+             {
+               if (entry.second == this)
+                  ++occurrences;
+             }
+        }
+     if (scope == NULL || occurrences != 1)
+        {
+          fprintf(stderr,
+                  "REX_SYMBOL_INVARIANT[alias-symbol-scope]: symbol=%p "
+                  "name='%s' table=%p scope=%p occurrences=%zu has no exact "
+                  "visibility owner\n",
+                  static_cast<const void*>(this), get_name().str(),
+                  static_cast<void*>(table), static_cast<void*>(scope),
+                  occurrences);
+          ROSE_ABORT();
+        }
+     return scope;
+   }
+
 SgSymbol*
 SgAliasSymbol::get_base() const
    {
@@ -1044,6 +1106,29 @@ SgRenameSymbol::get_type() const
      return get_original_symbol()->get_type();
    }
 
+   SgScopeStatement *SgRenameSymbol::get_scope() const {
+     SgSymbolTable *table = isSgSymbolTable(get_parent());
+     SgScopeStatement *scope =
+         table != NULL ? isSgScopeStatement(table->get_parent()) : NULL;
+     size_t occurrences = 0;
+     if (table != NULL && table->get_table() != NULL) {
+       for (const auto &entry : *table->get_table()) {
+         if (entry.second == this)
+           ++occurrences;
+       }
+     }
+     if (scope == NULL || occurrences != 1) {
+       fprintf(stderr,
+               "REX_SYMBOL_INVARIANT[rename-symbol-scope]: symbol=%p "
+               "name='%s' table=%p scope=%p occurrences=%zu has no exact "
+               "visibility owner\n",
+               static_cast<const void *>(this), get_name().str(),
+               static_cast<void *>(table), static_cast<void *>(scope),
+               occurrences);
+       ROSE_ABORT();
+     }
+     return scope;
+   }
 
 SOURCE_RENAME_SYMBOL_END
 

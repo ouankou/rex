@@ -17,7 +17,9 @@ target_compile_features(rex_wasm PRIVATE cxx_std_17)
 target_include_directories(rex_wasm PRIVATE
   "${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/accparser/src")
 target_compile_definitions(rex_wasm PRIVATE
-  "REX_WASM_CLANG_RESOURCE_DIR=\"/rex/lib/clang/${CLANG_VERSION_MAJOR}\"")
+  "REX_WASM_CLANG_C_DRIVER=\"${REX_WASM_VIRTUAL_CLANG_C_DRIVER}\""
+  "REX_WASM_CLANG_CXX_DRIVER=\"${REX_WASM_VIRTUAL_CLANG_CXX_DRIVER}\""
+  "REX_WASM_CLANG_RESOURCE_DIR=\"${REX_WASM_VIRTUAL_CLANG_RESOURCE_DIR}\"")
 
 set_target_properties(rex_wasm PROPERTIES
   OUTPUT_NAME "rex_wasm"
@@ -27,10 +29,16 @@ set_target_properties(rex_wasm PROPERTIES
 set(REX_WASM_PRELOADS
   "--preload-file=${CMAKE_BINARY_DIR}/include-staging@/rex/include-staging")
 
-if(REX_WASM_CLANG_RESOURCE_DIR)
-  list(APPEND REX_WASM_PRELOADS
-    "--preload-file=${REX_WASM_CLANG_RESOURCE_DIR}@/rex/lib/clang/${CLANG_VERSION_MAJOR}")
+if(NOT REX_WASM_CLANG_RESOURCE_DIR OR
+   NOT IS_DIRECTORY "${REX_WASM_CLANG_RESOURCE_DIR}" OR
+   NOT EXISTS "${REX_WASM_CLANG_RESOURCE_DIR}/include/stddef.h" OR
+   NOT EXISTS "${REX_WASM_CLANG_RESOURCE_DIR}/include/omp.h")
+  message(FATAL_ERROR
+    "REX WASM requires the complete staged Clang resource directory: "
+    "${REX_WASM_CLANG_RESOURCE_DIR}")
 endif()
+list(APPEND REX_WASM_PRELOADS
+  "--preload-file=${REX_WASM_CLANG_RESOURCE_DIR}@${REX_WASM_VIRTUAL_CLANG_RESOURCE_DIR}")
 
 if(REX_WASM_PACKAGE_SYSROOT AND REX_WASM_SYSROOT)
   set(_rex_wasm_sysroot_preload "${CMAKE_BINARY_DIR}/wasm-resource/sysroot")

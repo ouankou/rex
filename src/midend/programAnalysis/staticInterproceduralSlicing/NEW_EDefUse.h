@@ -16,7 +16,7 @@ protected:
   DefUseAnalysis *internalDefUse;
 
 public:
-  int run(bool debug);
+  void run(bool debug);
   // get the vector of defining and usage nodes for a specific node and a
   // initializedName
   std::vector<SgNode *> getDefFor(SgNode *node, SgInitializedName *initName);

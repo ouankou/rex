@@ -99,6 +99,18 @@ Function::Function(SgFunctionDefinition *sample) {
 }
 
 Function::Function(SgFunctionCallExp *funcCall) {
+  // The declaration edge is the typed semantic call target.  In particular,
+  // a deduced SgTemplateFunctionRefExp deliberately retains the primary
+  // template symbol for source spelling while its associated declaration is
+  // the concrete specialization.  Consulting the spelling symbol first would
+  // therefore turn a concrete call into a call to a non-callable template
+  // pattern.
+  if (SgFunctionDeclaration *associated_decl =
+          funcCall->getAssociatedFunctionDeclaration()) {
+    init(associated_decl);
+    return;
+  }
+
   // Some frontends remove all SgPointerDerefExp nodes from an expression like
   // this:
   //    void f() { (****f)(); }
@@ -112,17 +124,19 @@ Function::Function(SgFunctionCallExp *funcCall) {
     return;
   }
 
-  if (SgFunctionDeclaration *associated_decl =
-          funcCall->getAssociatedFunctionDeclaration()) {
-    init(associated_decl);
-    return;
-  }
-
   decl = NULL;
 }
 
 void Function::init(SgFunctionDeclaration *sample) {
-  assert(!isSgTemplateFunctionDeclaration(sample));
+  if (sample == nullptr || isSgTemplateFunctionDeclaration(sample) != nullptr) {
+    fprintf(stderr,
+            "REX_CALLGRAPH_INVARIANT[traversal-callable]: graph "
+            "declaration=%p/%s name=%s is not one exact concrete callable\n",
+            static_cast<void *>(sample),
+            sample != nullptr ? sample->class_name().c_str() : "<null>",
+            sample != nullptr ? sample->get_name().str() : "<null>");
+    ROSE_ABORT();
+  }
   // SgName mangledName = sample->get_mangled_name();
   // def = NULL;
 

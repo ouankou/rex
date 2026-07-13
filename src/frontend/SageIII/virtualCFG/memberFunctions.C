@@ -7,6 +7,7 @@
 #endif
 
 #include <algorithm>
+#include <initializer_list>
 #include <vector>
 using namespace std;
 
@@ -440,9 +441,7 @@ bool SgStatement::cfgIsIndexInteresting(unsigned int idx) const {
 
 unsigned int SgStatement::cfgFindChildIndex(SgNode *n) {
   // Default -- overridden in some cases
-  size_t idx = this->getChildIndex(n);
-  ASSERT_require(idx != Rose::INVALID_INDEX); // Not found
-  return idx;
+  return this->get_childIndex(n);
 }
 
 unsigned int SgStatement::cfgFindNextChildIndex(SgNode *n) {
@@ -497,6 +496,31 @@ unsigned int SgBasicBlock::cfgIndexForEnd() const {
 }
 
 bool SgBasicBlock::cfgIsIndexInteresting(unsigned int) const { return false; }
+
+unsigned int SgBasicBlock::cfgFindChildIndex(SgNode *child) {
+  SgStatement *statement = isSgStatement(child);
+  if (statement == nullptr || statement->get_parent() != this) {
+    fprintf(stderr,
+            "REX_CFG_INVARIANT[basic-block-child]: block=%p child=%p/%s is "
+            "not an exact owned statement\n",
+            static_cast<void *>(this), static_cast<void *>(child),
+            child != nullptr ? child->class_name().c_str() : "<null>");
+    ROSE_ABORT();
+  }
+
+  const SgStatementPtrList &statements = get_statements();
+  const auto position = std::find(statements.begin(), statements.end(), child);
+  if (position == statements.end()) {
+    fprintf(stderr,
+            "REX_CFG_INVARIANT[basic-block-child]: block=%p child=%p/%s has "
+            "the block as parent but is absent from its statement list\n",
+            static_cast<void *>(this), static_cast<void *>(child),
+            child->class_name().c_str());
+    ROSE_ABORT();
+  }
+
+  return static_cast<unsigned int>(std::distance(statements.begin(), position));
+}
 
 std::vector<CFGEdge> SgBasicBlock::cfgOutEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
@@ -1180,6 +1204,9 @@ std::vector<CFGEdge>
 SgMemberFunctionDeclaration::cfgOutEdges(unsigned int idx) {
   ASSERT_require(idx == 0);
   std::vector<CFGEdge> result;
+  if (isSgDeclarationGroupStatement(this->get_parent()) != nullptr) {
+    makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
+  }
   return result;
 }
 
@@ -1187,6 +1214,9 @@ std::vector<CFGEdge> SgMemberFunctionDeclaration::cfgInEdges(unsigned int idx) {
   ASSERT_require(idx == 0);
   std::vector<CFGEdge> result;
   addIncomingFortranGotos(this, idx, result);
+  if (isSgDeclarationGroupStatement(this->get_parent()) != nullptr) {
+    makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
+  }
   return result;
 }
 
@@ -1195,14 +1225,52 @@ unsigned int SgVariableDeclaration::cfgIndexForEnd() const {
 }
 
 unsigned int SgVariableDeclaration::cfgFindChildIndex(SgNode *n) {
-  size_t idx = this->get_childIndex(n);
-  ROSE_ASSERT(idx != Rose::INVALID_INDEX); // Not found
-  size_t offset = 2;                       // base type + requires clause
-  if (this->get_nonreal_decl_scope() != nullptr) {
-    offset += 1;
+  const SgInitializedNamePtrList &variables = this->get_variables();
+  size_t child_index = variables.size();
+  const char *violation = nullptr;
+  SgInitializedName *violating_entry = nullptr;
+
+  for (size_t index = 0; index < variables.size(); ++index) {
+    SgInitializedName *entry = variables[index];
+    if (entry == nullptr) {
+      violation = "null entry";
+      break;
+    }
+    if (entry->get_parent() != this) {
+      violation = "entry has a foreign parent";
+      violating_entry = entry;
+      break;
+    }
+    if (entry == n) {
+      if (child_index != variables.size()) {
+        violation = "duplicate child identity";
+        violating_entry = entry;
+        break;
+      }
+      child_index = index;
+    }
   }
-  ROSE_ASSERT(idx >= offset);
-  return idx - offset;
+
+  if (violation == nullptr &&
+      (n == nullptr || isSgInitializedName(n) == nullptr ||
+       child_index == variables.size())) {
+    violation = "query is not an exact variable child";
+  }
+
+  if (violation != nullptr) {
+    fprintf(stderr,
+            "REX_CFG_INVARIANT[variable-declaration-child]: "
+            "declaration=%p child=%p/%s entry=%p/%s violation=%s; "
+            "expected one exact owned SgInitializedName CFG child\n",
+            static_cast<void *>(this), static_cast<void *>(n),
+            n != nullptr ? n->class_name().c_str() : "<null>",
+            static_cast<void *>(violating_entry),
+            violating_entry != nullptr ? violating_entry->class_name().c_str()
+                                       : "<none>",
+            violation);
+    ROSE_ABORT();
+  }
+  return static_cast<unsigned int>(child_index);
 }
 
 std::vector<CFGEdge> SgVariableDeclaration::cfgOutEdges(unsigned int idx) {
@@ -2089,6 +2157,18 @@ SgStaticAssertionDeclaration::cfgInEdges(unsigned int idx) {
   return result;
 }
 
+unsigned int SgFriendTypeDeclaration::cfgIndexForEnd() const {
+  return simpleDeclarationCfgIndexForEnd(this);
+}
+
+std::vector<CFGEdge> SgFriendTypeDeclaration::cfgOutEdges(unsigned int idx) {
+  return simpleDeclarationCfgOutEdges(this, idx);
+}
+
+std::vector<CFGEdge> SgFriendTypeDeclaration::cfgInEdges(unsigned int idx) {
+  return simpleDeclarationCfgInEdges(this, idx);
+}
+
 unsigned int SgTypedefDeclaration::cfgIndexForEnd() const {
   return simpleDeclarationCfgIndexForEnd(this);
 }
@@ -2154,6 +2234,77 @@ std::vector<CFGEdge> SgEmptyDeclaration::cfgOutEdges(unsigned int idx) {
 
 std::vector<CFGEdge> SgEmptyDeclaration::cfgInEdges(unsigned int idx) {
   return simpleDeclarationCfgInEdges(this, idx);
+}
+
+unsigned int SgAccessLabelStatement::cfgIndexForEnd() const {
+  validate();
+  return simpleDeclarationCfgIndexForEnd(this);
+}
+
+std::vector<CFGEdge> SgAccessLabelStatement::cfgOutEdges(unsigned int idx) {
+  validate();
+  return simpleDeclarationCfgOutEdges(this, idx);
+}
+
+std::vector<CFGEdge> SgAccessLabelStatement::cfgInEdges(unsigned int idx) {
+  validate();
+  return simpleDeclarationCfgInEdges(this, idx);
+}
+
+unsigned int SgDeclarationGroupStatement::cfgIndexForEnd() const {
+  validate();
+  return get_declarations().size();
+}
+
+bool SgDeclarationGroupStatement::cfgIsIndexInteresting(
+    unsigned int index) const {
+  validate();
+  ASSERT_require(index <= get_declarations().size());
+  return false;
+}
+
+unsigned int SgDeclarationGroupStatement::cfgFindChildIndex(SgNode *child) {
+  validate();
+  SgDeclarationStatement *declaration = isSgDeclarationStatement(child);
+  ASSERT_not_null(declaration);
+  const SgDeclarationStatementPtrList &declarations = get_declarations();
+  const auto position =
+      std::find(declarations.begin(), declarations.end(), declaration);
+  ASSERT_require(position != declarations.end());
+  return std::distance(declarations.begin(), position);
+}
+
+std::vector<CFGEdge>
+SgDeclarationGroupStatement::cfgOutEdges(unsigned int index) {
+  validate();
+  const SgDeclarationStatementPtrList &declarations = get_declarations();
+  std::vector<CFGEdge> result;
+  if (index < declarations.size()) {
+    makeEdge(CFGNode(this, index), declarations[index]->cfgForBeginning(),
+             result);
+  } else if (index == declarations.size()) {
+    makeEdge(CFGNode(this, index), getNodeJustAfterInContainer(this), result);
+  } else {
+    ROSE_ABORT();
+  }
+  return result;
+}
+
+std::vector<CFGEdge>
+SgDeclarationGroupStatement::cfgInEdges(unsigned int index) {
+  validate();
+  const SgDeclarationStatementPtrList &declarations = get_declarations();
+  std::vector<CFGEdge> result;
+  addIncomingFortranGotos(this, index, result);
+  if (index == 0) {
+    makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, index), result);
+  } else if (index <= declarations.size()) {
+    makeEdge(declarations[index - 1]->cfgForEnd(), CFGNode(this, index),
+             result);
+  } else {
+    ROSE_ABORT();
+  }
+  return result;
 }
 
 unsigned int SgUsingDeclarationStatement::cfgIndexForEnd() const {
@@ -2346,6 +2497,89 @@ std::vector<CFGEdge> SgUnlockStatement::cfgInEdges(unsigned int idx) {
 
 static const unsigned int numberOfFortranIOCommonEdges = 5;
 
+static unsigned int findExactFortranIOChildIndex(
+    SgIOStatement *statement, SgNode *child,
+    std::initializer_list<SgExpression *> statement_specific_children) {
+  ASSERT_not_null(statement);
+  ASSERT_not_null(child);
+
+  unsigned int index = 0;
+  for (SgExpression *candidate : statement_specific_children) {
+    if (candidate == child)
+      return index;
+    ++index;
+  }
+
+  for (SgExpression *candidate : std::initializer_list<SgExpression *>{
+           statement->get_io_stmt_list(), statement->get_unit(),
+           statement->get_iostat(), statement->get_err(),
+           statement->get_iomsg()}) {
+    if (candidate == child)
+      return index;
+    ++index;
+  }
+
+  fprintf(stderr,
+          "REX_CFG_INVARIANT[fortran-io-child]: statement=%p/%s child=%p/%s "
+          "is not one of the exact executable I/O operands\n",
+          static_cast<void *>(statement), statement->class_name().c_str(),
+          static_cast<void *>(child), child->class_name().c_str());
+  ROSE_ABORT();
+}
+
+unsigned int SgIOStatement::cfgFindChildIndex(SgNode *child) {
+  return findExactFortranIOChildIndex(this, child, {});
+}
+
+unsigned int SgPrintStatement::cfgFindChildIndex(SgNode *child) {
+  return findExactFortranIOChildIndex(this, child, {get_format()});
+}
+
+unsigned int SgReadStatement::cfgFindChildIndex(SgNode *child) {
+  return findExactFortranIOChildIndex(
+      this, child,
+      {get_format(), get_advance(), get_asynchronous(), get_blank(),
+       get_decimal(), get_delim(), get_end(), get_eor(), get_id(), get_pad(),
+       get_pos(), get_rec(), get_round(), get_sign(), get_size()});
+}
+
+unsigned int SgWriteStatement::cfgFindChildIndex(SgNode *child) {
+  return findExactFortranIOChildIndex(
+      this, child,
+      {get_format(), get_advance(), get_asynchronous(), get_blank(),
+       get_decimal(), get_delim(), get_end(), get_eor(), get_id(), get_pad(),
+       get_pos(), get_rec(), get_round(), get_sign(), get_size()});
+}
+
+unsigned int SgOpenStatement::cfgFindChildIndex(SgNode *child) {
+  return findExactFortranIOChildIndex(
+      this, child,
+      {get_file(), get_status(), get_access(), get_form(), get_recl(),
+       get_blank(), get_position(), get_action(), get_delim(), get_pad(),
+       get_round(), get_sign(), get_asynchronous()});
+}
+
+unsigned int SgCloseStatement::cfgFindChildIndex(SgNode *child) {
+  return findExactFortranIOChildIndex(this, child, {get_status()});
+}
+
+unsigned int SgInquireStatement::cfgFindChildIndex(SgNode *child) {
+  return findExactFortranIOChildIndex(
+      this, child,
+      {get_file(),      get_access(),      get_form(),         get_recl(),
+       get_blank(),     get_exist(),       get_opened(),       get_number(),
+       get_named(),     get_name(),        get_sequential(),   get_direct(),
+       get_formatted(), get_unformatted(), get_nextrec(),      get_position(),
+       get_action(),    get_read(),        get_write(),        get_readwrite(),
+       get_delim(),     get_pad(),         get_asynchronous(), get_decimal(),
+       get_stream(),    get_size(),        get_pending()});
+}
+
+unsigned int SgWaitStatement::cfgFindChildIndex(SgNode *child) {
+  return findExactFortranIOChildIndex(this, child,
+                                      {get_end(), get_eor(), get_id()});
+}
+
 static bool handleFortranIOCommonOutEdges(SgIOStatement *me, unsigned int idx,
                                           unsigned int numChildren,
                                           vector<CFGEdge> &result) {
@@ -2438,67 +2672,63 @@ std::vector<CFGEdge> SgPrintStatement::cfgInEdges(unsigned int idx) {
 }
 
 unsigned int SgReadStatement::cfgIndexForEnd() const {
-  return numberOfFortranIOCommonEdges + 16;
+  return numberOfFortranIOCommonEdges + 15;
 }
 
 std::vector<CFGEdge> SgReadStatement::cfgOutEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
-  if (handleFortranIOCommonOutEdges(this, idx, 16, result))
+  if (handleFortranIOCommonOutEdges(this, idx, 15, result))
     return result;
   switch (idx) {
   case 0:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_format(), result);
     break;
   case 1:
-    addOutEdgeOrBypassForExpressionChild(this, idx, this->get_namelist(),
-                                         result);
-    break;
-  case 2:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_advance(),
                                          result);
     break;
-  case 3:
+  case 2:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_asynchronous(),
                                          result);
     break;
-  case 4:
+  case 3:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_blank(), result);
     break;
-  case 5:
+  case 4:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_decimal(),
                                          result);
     break;
-  case 6:
+  case 5:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_delim(), result);
     break;
-  case 7:
+  case 6:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_end(), result);
     break;
-  case 8:
+  case 7:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_eor(), result);
     break;
-  case 9:
+  case 8:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_id(), result);
     break;
-  case 10:
+  case 9:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_pad(), result);
     break;
-  case 11:
+  case 10:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_pos(), result);
     break;
-  case 12:
+  case 11:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_rec(), result);
     break;
-  case 13:
+  case 12:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_round(), result);
     break;
-  case 14:
+  case 13:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_sign(), result);
     break;
-  case 15:
+  case 14:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_size(), result);
     break;
-  case numberOfFortranIOCommonEdges + 16: {
+  case numberOfFortranIOCommonEdges + 15: {
     makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
     break;
   }
@@ -2511,7 +2741,7 @@ std::vector<CFGEdge> SgReadStatement::cfgOutEdges(unsigned int idx) {
 std::vector<CFGEdge> SgReadStatement::cfgInEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
   addIncomingFortranGotos(this, idx, result);
-  if (handleFortranIOCommonInEdges(this, idx, 16, result))
+  if (handleFortranIOCommonInEdges(this, idx, 15, result))
     return result;
   switch (idx) {
   case 0: {
@@ -2522,50 +2752,46 @@ std::vector<CFGEdge> SgReadStatement::cfgInEdges(unsigned int idx) {
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_format(), result);
     break;
   case 2:
-    addInEdgeOrBypassForExpressionChild(this, idx, this->get_namelist(),
-                                        result);
-    break;
-  case 3:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_advance(), result);
     break;
-  case 4:
+  case 3:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_asynchronous(),
                                         result);
     break;
-  case 5:
+  case 4:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_blank(), result);
     break;
-  case 6:
+  case 5:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_decimal(), result);
     break;
-  case 7:
+  case 6:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_delim(), result);
     break;
-  case 8:
+  case 7:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_end(), result);
     break;
-  case 9:
+  case 8:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_eor(), result);
     break;
-  case 10:
+  case 9:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_id(), result);
     break;
-  case 11:
+  case 10:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_pad(), result);
     break;
-  case 12:
+  case 11:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_pos(), result);
     break;
-  case 13:
+  case 12:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_rec(), result);
     break;
-  case 14:
+  case 13:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_round(), result);
     break;
-  case 15:
+  case 14:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_sign(), result);
     break;
-  case 16:
+  case 15:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_size(), result);
     break;
   default:
@@ -2575,67 +2801,63 @@ std::vector<CFGEdge> SgReadStatement::cfgInEdges(unsigned int idx) {
 }
 
 unsigned int SgWriteStatement::cfgIndexForEnd() const {
-  return numberOfFortranIOCommonEdges + 16;
+  return numberOfFortranIOCommonEdges + 15;
 }
 
 std::vector<CFGEdge> SgWriteStatement::cfgOutEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
-  if (handleFortranIOCommonOutEdges(this, idx, 16, result))
+  if (handleFortranIOCommonOutEdges(this, idx, 15, result))
     return result;
   switch (idx) {
   case 0:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_format(), result);
     break;
   case 1:
-    addOutEdgeOrBypassForExpressionChild(this, idx, this->get_namelist(),
-                                         result);
-    break;
-  case 2:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_advance(),
                                          result);
     break;
-  case 3:
+  case 2:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_asynchronous(),
                                          result);
     break;
-  case 4:
+  case 3:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_blank(), result);
     break;
-  case 5:
+  case 4:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_decimal(),
                                          result);
     break;
-  case 6:
+  case 5:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_delim(), result);
     break;
-  case 7:
+  case 6:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_end(), result);
     break;
-  case 8:
+  case 7:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_eor(), result);
     break;
-  case 9:
+  case 8:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_id(), result);
     break;
-  case 10:
+  case 9:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_pad(), result);
     break;
-  case 11:
+  case 10:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_pos(), result);
     break;
-  case 12:
+  case 11:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_rec(), result);
     break;
-  case 13:
+  case 12:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_round(), result);
     break;
-  case 14:
+  case 13:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_sign(), result);
     break;
-  case 15:
+  case 14:
     addOutEdgeOrBypassForExpressionChild(this, idx, this->get_size(), result);
     break;
-  case numberOfFortranIOCommonEdges + 16: {
+  case numberOfFortranIOCommonEdges + 15: {
     makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
     break;
   }
@@ -2648,7 +2870,7 @@ std::vector<CFGEdge> SgWriteStatement::cfgOutEdges(unsigned int idx) {
 std::vector<CFGEdge> SgWriteStatement::cfgInEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
   addIncomingFortranGotos(this, idx, result);
-  if (handleFortranIOCommonInEdges(this, idx, 16, result))
+  if (handleFortranIOCommonInEdges(this, idx, 15, result))
     return result;
   switch (idx) {
   case 0: {
@@ -2659,50 +2881,46 @@ std::vector<CFGEdge> SgWriteStatement::cfgInEdges(unsigned int idx) {
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_format(), result);
     break;
   case 2:
-    addInEdgeOrBypassForExpressionChild(this, idx, this->get_namelist(),
-                                        result);
-    break;
-  case 3:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_advance(), result);
     break;
-  case 4:
+  case 3:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_asynchronous(),
                                         result);
     break;
-  case 5:
+  case 4:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_blank(), result);
     break;
-  case 6:
+  case 5:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_decimal(), result);
     break;
-  case 7:
+  case 6:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_delim(), result);
     break;
-  case 8:
+  case 7:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_end(), result);
     break;
-  case 9:
+  case 8:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_eor(), result);
     break;
-  case 10:
+  case 9:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_id(), result);
     break;
-  case 11:
+  case 10:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_pad(), result);
     break;
-  case 12:
+  case 11:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_pos(), result);
     break;
-  case 13:
+  case 12:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_rec(), result);
     break;
-  case 14:
+  case 13:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_round(), result);
     break;
-  case 15:
+  case 14:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_sign(), result);
     break;
-  case 16:
+  case 15:
     addInEdgeOrBypassForExpressionChild(this, idx, this->get_size(), result);
     break;
   default:
@@ -3222,15 +3440,24 @@ std::vector<CFGEdge> SgEndfileStatement::cfgInEdges(unsigned int idx) {
 }
 
 unsigned int SgWaitStatement::cfgIndexForEnd() const {
-  return numberOfFortranIOCommonEdges + 0;
+  return numberOfFortranIOCommonEdges + 3;
 }
 
 std::vector<CFGEdge> SgWaitStatement::cfgOutEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
-  if (handleFortranIOCommonOutEdges(this, idx, 0, result))
+  if (handleFortranIOCommonOutEdges(this, idx, 3, result))
     return result;
   switch (idx) {
-  case numberOfFortranIOCommonEdges + 0: {
+  case 0:
+    addOutEdgeOrBypassForExpressionChild(this, idx, this->get_end(), result);
+    break;
+  case 1:
+    addOutEdgeOrBypassForExpressionChild(this, idx, this->get_eor(), result);
+    break;
+  case 2:
+    addOutEdgeOrBypassForExpressionChild(this, idx, this->get_id(), result);
+    break;
+  case numberOfFortranIOCommonEdges + 3: {
     makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
     break;
   }
@@ -3243,13 +3470,22 @@ std::vector<CFGEdge> SgWaitStatement::cfgOutEdges(unsigned int idx) {
 std::vector<CFGEdge> SgWaitStatement::cfgInEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
   addIncomingFortranGotos(this, idx, result);
-  if (handleFortranIOCommonInEdges(this, idx, 0, result))
+  if (handleFortranIOCommonInEdges(this, idx, 3, result))
     return result;
   switch (idx) {
   case 0: {
     makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
     break;
   }
+  case 1:
+    addInEdgeOrBypassForExpressionChild(this, idx, this->get_end(), result);
+    break;
+  case 2:
+    addInEdgeOrBypassForExpressionChild(this, idx, this->get_eor(), result);
+    break;
+  case 3:
+    addInEdgeOrBypassForExpressionChild(this, idx, this->get_id(), result);
+    break;
   default:
     ROSE_ASSERT(!"Invalid index for SgWaitStatement");
   }
@@ -3940,7 +4176,6 @@ unsigned int SgExpression::cfgFindChildIndex(SgNode *n) {
 
   // Default -- overridden in some cases
   size_t idx = this->get_childIndex(n);
-  ROSE_ASSERT(idx != Rose::INVALID_INDEX); // Not found
   return idx;
 }
 
@@ -4024,6 +4259,72 @@ std::vector<CFGEdge> SgExpression::cfgInEdges(unsigned int idx) {
   std::cerr << "Bad expression case " << this->class_name()
             << " in cfgInEdges()" << std::endl;
   ROSE_ABORT();
+}
+
+unsigned int SgMacroExpansionExp::cfgIndexForEnd() const { return 1; }
+
+bool SgMacroExpansionExp::cfgIsIndexInteresting(unsigned int index) const {
+  ASSERT_require(index <= cfgIndexForEnd());
+  // This node records the source spelling of an already represented semantic
+  // expression.  It is an ownership envelope, not an additional execution
+  // step in the control-flow graph.
+  return false;
+}
+
+std::vector<CFGEdge> SgMacroExpansionExp::cfgOutEdges(unsigned int idx) {
+  std::vector<CFGEdge> result;
+  SgExpression *expanded = get_expanded_expression_checked();
+  switch (idx) {
+  case 0:
+    makeEdge(CFGNode(this, idx), expanded->cfgForBeginning(), result);
+    break;
+  case 1:
+    makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
+    break;
+  default:
+    fprintf(stderr,
+            "REX_CFG_INVARIANT[macro-expansion-index]: expression=%p "
+            "spelling=%s has invalid outgoing index=%u\n",
+            static_cast<void *>(this), get_spelling().c_str(), idx);
+    ROSE_ABORT();
+  }
+  return result;
+}
+
+std::vector<CFGEdge> SgMacroExpansionExp::cfgInEdges(unsigned int idx) {
+  std::vector<CFGEdge> result;
+  SgExpression *expanded = get_expanded_expression_checked();
+  switch (idx) {
+  case 0:
+    makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
+    break;
+  case 1:
+    makeEdge(expanded->cfgForEnd(), CFGNode(this, idx), result);
+    break;
+  default:
+    fprintf(stderr,
+            "REX_CFG_INVARIANT[macro-expansion-index]: expression=%p "
+            "spelling=%s has invalid incoming index=%u\n",
+            static_cast<void *>(this), get_spelling().c_str(), idx);
+    ROSE_ABORT();
+  }
+  return result;
+}
+
+unsigned int SgSourceLocationBuiltinExp::cfgIndexForEnd() const { return 0; }
+
+std::vector<CFGEdge> SgSourceLocationBuiltinExp::cfgOutEdges(unsigned int idx) {
+  std::vector<CFGEdge> result;
+  ASSERT_require(idx == 0);
+  makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
+  return result;
+}
+
+std::vector<CFGEdge> SgSourceLocationBuiltinExp::cfgInEdges(unsigned int idx) {
+  std::vector<CFGEdge> result;
+  ASSERT_require(idx == 0);
+  makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
+  return result;
 }
 
 unsigned int SgUnaryOp::cfgIndexForEnd() const { return 1; }
@@ -4818,10 +5119,13 @@ bool SgConditionalExp::cfgIsIndexInteresting(unsigned int idx) const {
 }
 
 unsigned int SgConditionalExp::cfgFindChildIndex(SgNode *n) {
+  validate();
   if (n == this->get_conditional_exp()) {
     return 0;
   } else {
-    if (n == this->get_true_exp() || n == this->get_false_exp()) {
+    if ((get_operator_kind() == e_conditional_operator_standard &&
+         n == this->get_true_exp()) ||
+        n == this->get_false_exp()) {
       return 1;
     } else {
       ROSE_ASSERT(!"Bad child in conditional expression");
@@ -4831,6 +5135,7 @@ unsigned int SgConditionalExp::cfgFindChildIndex(SgNode *n) {
 }
 
 std::vector<CFGEdge> SgConditionalExp::cfgOutEdges(unsigned int idx) {
+  validate();
   std::vector<CFGEdge> result;
   switch (idx) {
   case 0:
@@ -4838,8 +5143,12 @@ std::vector<CFGEdge> SgConditionalExp::cfgOutEdges(unsigned int idx) {
              result);
     break;
   case 1:
-    makeEdge(CFGNode(this, idx), this->get_true_exp()->cfgForBeginning(),
-             result);
+    if (get_operator_kind() == e_conditional_operator_standard) {
+      makeEdge(CFGNode(this, idx), this->get_true_exp()->cfgForBeginning(),
+               result);
+    } else {
+      makeEdge(CFGNode(this, idx), CFGNode(this, 2), result);
+    }
     makeEdge(CFGNode(this, idx), this->get_false_exp()->cfgForBeginning(),
              result);
     break;
@@ -4853,6 +5162,7 @@ std::vector<CFGEdge> SgConditionalExp::cfgOutEdges(unsigned int idx) {
 }
 
 std::vector<CFGEdge> SgConditionalExp::cfgInEdges(unsigned int idx) {
+  validate();
   std::vector<CFGEdge> result;
   switch (idx) {
   case 0:
@@ -4863,7 +5173,11 @@ std::vector<CFGEdge> SgConditionalExp::cfgInEdges(unsigned int idx) {
              result);
     break;
   case 2:
-    makeEdge(this->get_true_exp()->cfgForEnd(), CFGNode(this, idx), result);
+    if (get_operator_kind() == e_conditional_operator_standard) {
+      makeEdge(this->get_true_exp()->cfgForEnd(), CFGNode(this, idx), result);
+    } else {
+      makeEdge(CFGNode(this, 1), CFGNode(this, idx), result);
+    }
     makeEdge(this->get_false_exp()->cfgForEnd(), CFGNode(this, idx), result);
     break;
   default:
@@ -5110,39 +5424,6 @@ std::vector<CFGEdge> SgBracedInitializer::cfgInEdges(unsigned int idx) {
     break;
   default:
     ROSE_ASSERT(!"Bad index for SgBracedInitializer");
-  }
-
-  return result;
-}
-
-std::vector<CFGEdge> SgCompoundInitializer::cfgOutEdges(unsigned int idx) {
-  std::vector<CFGEdge> result;
-  switch (idx) {
-  case 0:
-    makeEdge(CFGNode(this, idx), this->get_initializers()->cfgForBeginning(),
-             result);
-    break;
-  case 1:
-    makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
-    break;
-  default:
-    ROSE_ASSERT(!"Bad index for SgCompoundInitializer");
-  }
-
-  return result;
-}
-
-std::vector<CFGEdge> SgCompoundInitializer::cfgInEdges(unsigned int idx) {
-  std::vector<CFGEdge> result;
-  switch (idx) {
-  case 0:
-    makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
-    break;
-  case 1:
-    makeEdge(this->get_initializers()->cfgForEnd(), CFGNode(this, idx), result);
-    break;
-  default:
-    ROSE_ASSERT(!"Bad index for SgCompoundInitializer");
   }
 
   return result;
@@ -5666,10 +5947,18 @@ unsigned int SgOmpClauseBodyStatement::cfgFindChildIndex(SgNode *n) {
     return 0;
   }
 
-  const SgOmpClausePtrList &clauses = this->get_clauses();
-  if (std::find(clauses.begin(), clauses.end(), n) != clauses.end()) {
-    // Clauses are modeled as a single reserved CFG slot even though the CFG
-    // does not currently emit executable clause-list edges.
+  SgOmpClauseList *clause_list = this->get_clause_list();
+  if (clause_list == nullptr || clause_list->get_parent() != this) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[openmp-clause-list]: CFG statement=%p has "
+            "no exact clause-list owner\n",
+            static_cast<void *>(this));
+    ROSE_ABORT();
+  }
+  (void)clause_list->get_clauses();
+  if (n == clause_list) {
+    // The structural clause-list wrapper occupies one reserved CFG slot even
+    // though the CFG does not currently emit executable clause-list edges.
     return 1;
   }
 
@@ -5682,8 +5971,16 @@ unsigned int SgOmpClauseBodyStatement::cfgFindNextChildIndex(SgNode *n) {
     return 2;
   }
 
-  const SgOmpClausePtrList &clauses = this->get_clauses();
-  if (std::find(clauses.begin(), clauses.end(), n) != clauses.end()) {
+  SgOmpClauseList *clause_list = this->get_clause_list();
+  if (clause_list == nullptr || clause_list->get_parent() != this) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[openmp-clause-list]: CFG statement=%p has "
+            "no exact clause-list owner\n",
+            static_cast<void *>(this));
+    ROSE_ABORT();
+  }
+  (void)clause_list->get_clauses();
+  if (n == clause_list) {
     return 2;
   }
 
@@ -6033,37 +6330,18 @@ bool SgFunctionCallExp::isChildUsedAsLValue(const SgExpression *child) const {
 /*! std:5.4 par:1; std:5.2.11 par:1; std:5.2.9 par:1; std:5.2.7 par:2;
  * std:5.2.10 par:1 */
 bool SgCastExp::isLValue() const {
-  switch (cast_type()) {
-  case e_C_style_cast:
-    if (SageInterface::isReferenceType(get_type())) /*! std:5.4 par:1 */
-      return true;
-    else
-      return false;
-  case e_const_cast:
-    if (SageInterface::isReferenceType(get_type())) /*! std:5.2.11 par:1 */
-      return true;
-    else
-      return false;
-  case e_static_cast:
-    if (SageInterface::isReferenceType(get_type())) /*! std:5.2.9 par:1 */
-      return true;
-    else
-      return false;
-  case e_dynamic_cast:
-    if (SageInterface::isReferenceType(get_type())) /*! std:5.2.7 par:2 */
-      return true;
-    else
-      return false;
-  case e_reinterpret_cast:
-    if (SageInterface::isReferenceType(get_type())) /*! std:5.2.10 par:1 */
-      return true;
-    else
-      return false;
-  case e_unknown:
-  case e_default:
-  default:
+  validate_semantic_conversion();
+  switch (get_value_category()) {
+  case e_value_category_lvalue:
+    return true;
+  case e_value_category_xvalue:
+  case e_value_category_prvalue:
     return false;
+  case e_value_category_unclassified:
+  case e_value_category_last:
+    ROSE_ABORT();
   }
+  ROSE_ABORT();
 }
 
 bool SgCastExp::isChildUsedAsLValue(const SgExpression *child) const {
@@ -6129,11 +6407,16 @@ bool SgCompoundLiteralExp::isChildUsedAsLValue(
 
 /*! std:5.16 par:4 */
 bool SgConditionalExp::isLValue() const {
-  if (get_true_exp()->isLValue() && get_false_exp()->isLValue()) {
+  validate();
+  SgExpression *true_value =
+      get_operator_kind() == e_conditional_operator_gnu_binary
+          ? get_conditional_exp()
+          : get_true_exp();
+  if (true_value->isLValue() && get_false_exp()->isLValue()) {
     // TODO: king84
     // need to make sure they are of the same type, possibly without
     // cv-qualifiers
-    if (get_true_exp()->get_type() == get_false_exp()->get_type())
+    if (true_value->get_type() == get_false_exp()->get_type())
       return true;
     else
       return false;
@@ -6143,9 +6426,13 @@ bool SgConditionalExp::isLValue() const {
 
 /*! std:5.16 par:4 */
 bool SgConditionalExp::isChildUsedAsLValue(const SgExpression *child) const {
-  if (get_conditional_exp() == child)
-    return false;
-  else if (get_true_exp() == child || get_false_exp() == child) {
+  validate();
+  if (get_conditional_exp() == child) {
+    return get_operator_kind() == e_conditional_operator_gnu_binary &&
+           isUsedAsLValue();
+  } else if ((get_operator_kind() == e_conditional_operator_standard &&
+              get_true_exp() == child) ||
+             get_false_exp() == child) {
     if (isUsedAsLValue())
       return true;
     else

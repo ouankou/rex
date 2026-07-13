@@ -1,0 +1,2 @@
+REX_TERMINAL_EXTERNAL_ENUMERATOR(rex_enum_terminal_external_first)
+REX_TERMINAL_EXTERNAL_ENUMERATOR(rex_enum_terminal_external_second)

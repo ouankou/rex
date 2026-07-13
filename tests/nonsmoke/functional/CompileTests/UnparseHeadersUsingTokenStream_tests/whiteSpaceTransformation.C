@@ -1,6 +1,7 @@
 
-// Generate a patch to segregate code into a base code and a code with enhansed capabilities.
-// Note generation of the patch requires output using the token stream (-rose:unparse_tokens).
+// Generate a patch to segregate code into a base code and a code with enhansed
+// capabilities. Note generation of the patch requires output using the token
+// stream (-rose:unparse_tokens).
 
 #include "whiteSpaceTransformation.h"
 
@@ -12,84 +13,71 @@ using namespace SageInterface;
 string prefixForFunctions = "abc_function_";
 string prefixForVariables = "abc_var_";
 
-WhiteSpaceInheritedAttribute::WhiteSpaceInheritedAttribute ()
-   : foundSegragationBoundary_start(false),
-     astNode(NULL),
-     segregateThisNode(false),
-     foundSegregatedNode(false)
-   {
-   }
+WhiteSpaceInheritedAttribute::WhiteSpaceInheritedAttribute()
+    : foundSegragationBoundary_start(false), astNode(NULL),
+      segregateThisNode(false), foundSegregatedNode(false) {}
 
-WhiteSpaceInheritedAttribute::WhiteSpaceInheritedAttribute ( const WhiteSpaceInheritedAttribute & X )
-   {
-     foundSegragationBoundary_start = X.foundSegragationBoundary_start;
-     astNode                        = X.astNode;
-     segregateThisNode              = X.segregateThisNode;
-     foundSegregatedNode            = X.foundSegregatedNode;
-   }
+WhiteSpaceInheritedAttribute::WhiteSpaceInheritedAttribute(
+    const WhiteSpaceInheritedAttribute &X) {
+  foundSegragationBoundary_start = X.foundSegragationBoundary_start;
+  astNode = X.astNode;
+  segregateThisNode = X.segregateThisNode;
+  foundSegregatedNode = X.foundSegregatedNode;
+}
 
-   WhiteSpaceSynthesizedAttribute::WhiteSpaceSynthesizedAttribute()
-       : foundSegragationBoundary_start(false),
-         foundSegragationBoundary_end(false), astNode(NULL),
-         segregateThisNode(false), containsSegregatedNode(false) {}
+WhiteSpaceSynthesizedAttribute::WhiteSpaceSynthesizedAttribute()
+    : foundSegragationBoundary_start(false),
+      foundSegragationBoundary_end(false), astNode(NULL),
+      segregateThisNode(false), containsSegregatedNode(false) {}
 
-   WhiteSpaceSynthesizedAttribute::WhiteSpaceSynthesizedAttribute(
-       SgNode *input_astNode)
-       : foundSegragationBoundary_start(false),
-         foundSegragationBoundary_end(false), astNode(input_astNode),
-         segregateThisNode(false), containsSegregatedNode(false) {}
+WhiteSpaceSynthesizedAttribute::WhiteSpaceSynthesizedAttribute(
+    SgNode *input_astNode)
+    : foundSegragationBoundary_start(false),
+      foundSegragationBoundary_end(false), astNode(input_astNode),
+      segregateThisNode(false), containsSegregatedNode(false) {}
 
-   WhiteSpaceSynthesizedAttribute::WhiteSpaceSynthesizedAttribute(
-       const WhiteSpaceSynthesizedAttribute &X)
-       : foundSegragationBoundary_start(X.foundSegragationBoundary_start),
-         foundSegragationBoundary_end(X.foundSegragationBoundary_end),
-         astNode(X.astNode), segregateThisNode(X.segregateThisNode),
-         containsSegregatedNode(X.containsSegregatedNode) {}
+WhiteSpaceSynthesizedAttribute::WhiteSpaceSynthesizedAttribute(
+    const WhiteSpaceSynthesizedAttribute &X)
+    : foundSegragationBoundary_start(X.foundSegragationBoundary_start),
+      foundSegragationBoundary_end(X.foundSegragationBoundary_end),
+      astNode(X.astNode), segregateThisNode(X.segregateThisNode),
+      containsSegregatedNode(X.containsSegregatedNode) {}
 
-   WhiteSpaceSynthesizedAttribute &WhiteSpaceSynthesizedAttribute::operator=(
-       const WhiteSpaceSynthesizedAttribute &X) {
-     foundSegragationBoundary_start = X.foundSegragationBoundary_start;
-     foundSegragationBoundary_end   = X.foundSegragationBoundary_end;
-     astNode                        = X.astNode;
-     segregateThisNode              = X.segregateThisNode;
-     containsSegregatedNode         = X.containsSegregatedNode;
+WhiteSpaceSynthesizedAttribute &WhiteSpaceSynthesizedAttribute::operator=(
+    const WhiteSpaceSynthesizedAttribute &X) {
+  foundSegragationBoundary_start = X.foundSegragationBoundary_start;
+  foundSegragationBoundary_end = X.foundSegragationBoundary_end;
+  astNode = X.astNode;
+  segregateThisNode = X.segregateThisNode;
+  containsSegregatedNode = X.containsSegregatedNode;
 
-     return *this;
-   }
+  return *this;
+}
 
-   Segregation_Attribute::Segregation_Attribute() {}
+Segregation_Attribute::Segregation_Attribute() {}
 
-   Segregation_Attribute::~Segregation_Attribute() {}
+Segregation_Attribute::~Segregation_Attribute() {}
 
-   std::string Segregation_Attribute::toString() { return ""; }
+std::string Segregation_Attribute::toString() { return ""; }
 
-   std::string Segregation_Attribute::additionalNodeOptions() { return ""; }
+std::string Segregation_Attribute::additionalNodeOptions() { return ""; }
 
-   std::vector<AstAttribute::AttributeEdgeInfo>
-   Segregation_Attribute::additionalEdgeInfo() {
-     std::vector<AstAttribute::AttributeEdgeInfo> returnValue;
+std::vector<AstAttribute::AttributeEdgeInfo>
+Segregation_Attribute::additionalEdgeInfo() {
+  std::vector<AstAttribute::AttributeEdgeInfo> returnValue;
 
-     return returnValue;
-   }
+  return returnValue;
+}
 
-   Traversal::~Traversal() {
-     for (std::pair<SgNode *, SgNode *> *interval : intervalList) {
-       delete interval;
-     }
-   }
+Traversal::~Traversal() {
+  for (std::pair<SgNode *, SgNode *> *interval : intervalList) {
+    delete interval;
+  }
+}
 
-std::string
-Segregation_Attribute::get_name()
-   {
-     return "color";
-   }
+std::string Segregation_Attribute::get_name() { return "color"; }
 
-
-std::string
-Segregation_Attribute::get_color()
-   {
-     return "blue";
-   }
+std::string Segregation_Attribute::get_color() { return "blue"; }
 
 bool nameHasPrefix(const string &name, const string &prefix) {
 
@@ -121,346 +109,340 @@ bool nameHasPrefix(const string &name, const string &prefix) {
   return returnValue;
 }
 
-WhiteSpaceInheritedAttribute
-Traversal::evaluateInheritedAttribute (
-     SgNode* astNode,
-     WhiteSpaceInheritedAttribute inheritedAttribute )
-   {
-     WhiteSpaceInheritedAttribute result;
+WhiteSpaceInheritedAttribute Traversal::evaluateInheritedAttribute(
+    SgNode *astNode, WhiteSpaceInheritedAttribute inheritedAttribute) {
+  WhiteSpaceInheritedAttribute result;
 
-     result.astNode = astNode;
+  result.astNode = astNode;
 
-     ROSE_ASSERT(result.astNode != NULL);
+  ROSE_ASSERT(result.astNode != NULL);
 
-     result.foundSegregatedNode = false;
+  result.foundSegregatedNode = false;
 
-     SgFunctionDeclaration* functionDeclaration = isSgFunctionDeclaration(astNode);
-     if (functionDeclaration != NULL)
-        {
-       // Check for the function to have the prefix we are looking for.
-          string functionName = functionDeclaration->get_name();
-          bool isMatchingFunction = nameHasPrefix(functionName,prefixForFunctions);
-          if (isMatchingFunction == true)
-             {
-               printf ("Found matching function name: name = %s \n",functionName.c_str());
+  SgFunctionDeclaration *functionDeclaration = isSgFunctionDeclaration(astNode);
+  if (functionDeclaration != NULL) {
+    // Check for the function to have the prefix we are looking for.
+    string functionName = functionDeclaration->get_name();
+    bool isMatchingFunction = nameHasPrefix(functionName, prefixForFunctions);
+    if (isMatchingFunction == true) {
+      printf("Found matching function name: name = %s \n",
+             functionName.c_str());
 
-            // result.foundSegragationBoundary_start = true;
-               result.foundSegregatedNode = true;
+      // result.foundSegragationBoundary_start = true;
+      result.foundSegregatedNode = true;
 
-            // Find the associatedSymbol
-               SgFunctionSymbol* functionSymbol = NULL;
+      // Find the associatedSymbol
+      SgFunctionSymbol *functionSymbol = NULL;
 
-            // Save the associated symbol
-               symbolSet.insert(functionSymbol);
-             }
-        }
+      // Save the associated symbol
+      symbolSet.insert(functionSymbol);
+    }
+  }
 
-     SgVariableDeclaration* variableDeclaration = isSgVariableDeclaration(astNode);
-     if (variableDeclaration != NULL)
-        {
-       // Check for the function to have the prefix we are looking for.
-          SgInitializedNamePtrList & variableList = variableDeclaration->get_variables();
-          for (size_t i=0; i < variableList.size(); i++)
-             {
-               SgInitializedName* initializedName = variableList[i];
-               ROSE_ASSERT(initializedName != NULL);
+  SgVariableDeclaration *variableDeclaration = isSgVariableDeclaration(astNode);
+  if (variableDeclaration != NULL) {
+    // Check for the function to have the prefix we are looking for.
+    SgInitializedNamePtrList &variableList =
+        variableDeclaration->get_variables();
+    for (size_t i = 0; i < variableList.size(); i++) {
+      SgInitializedName *initializedName = variableList[i];
+      ROSE_ASSERT(initializedName != NULL);
 
-               string variableName = initializedName->get_name();
-               bool isMatchingVariable =
-                   nameHasPrefix(variableName, prefixForVariables);
-               if (isMatchingVariable == true) {
-                 // result.foundSegragationBoundary_start = true;
-                    result.foundSegregatedNode = true;
+      string variableName = initializedName->get_name();
+      bool isMatchingVariable = nameHasPrefix(variableName, prefixForVariables);
+      if (isMatchingVariable == true) {
+        // result.foundSegragationBoundary_start = true;
+        result.foundSegregatedNode = true;
 
-                 // DQ (11/24/2018): Distinguish between statements that should be segregated, 
-                 // and statements containing nodes to be segregated.
-                    result.segregateThisNode   = true;
+        // DQ (11/24/2018): Distinguish between statements that should be
+        // segregated, and statements containing nodes to be segregated.
+        result.segregateThisNode = true;
 
-                 // Find the associatedSymbol
-                    SgVariableSymbol* variableSymbol = NULL;
+        // Find the associatedSymbol
+        SgVariableSymbol *variableSymbol = NULL;
 
-                 // Save the associated symbol
-                    symbolSet.insert(variableSymbol);
-               }
-             }
-        }
+        // Save the associated symbol
+        symbolSet.insert(variableSymbol);
+      }
+    }
+  }
 
-     SgFunctionRefExp* functionRefExp = isSgFunctionRefExp(astNode);
-     if (functionRefExp != NULL)
-        {
-       // Look for symbols associated with functions we put into the symbolSet.
-       // Need to handle where we might not yet have seen the declaration (in classes) 
-       // and so the symbol has not yet been collected.
+  SgFunctionRefExp *functionRefExp = isSgFunctionRefExp(astNode);
+  if (functionRefExp != NULL) {
+    // Look for symbols associated with functions we put into the symbolSet.
+    // Need to handle where we might not yet have seen the declaration (in
+    // classes) and so the symbol has not yet been collected.
 
-          SgFunctionSymbol* functionSymbol = functionRefExp->get_symbol();
-          ROSE_ASSERT(functionSymbol != NULL);
-          if (symbolSet.find(functionSymbol) != symbolSet.end())
-             {
-               result.foundSegregatedNode = true;
-             }
-            else
-             {
-            // Double check the associated declaration (in case we are in a class).
-               string functionName = functionSymbol->get_name();
-               bool isMatchingFunction = nameHasPrefix(functionName,prefixForFunctions);
-               if (isMatchingFunction == true)
-                  {
-                    result.foundSegregatedNode = true;
-                  }
-             }
-        }
+    SgFunctionSymbol *functionSymbol = functionRefExp->get_symbol();
+    ROSE_ASSERT(functionSymbol != NULL);
+    if (symbolSet.find(functionSymbol) != symbolSet.end()) {
+      result.foundSegregatedNode = true;
+    } else {
+      // Double check the associated declaration (in case we are in a class).
+      string functionName = functionSymbol->get_name();
+      bool isMatchingFunction = nameHasPrefix(functionName, prefixForFunctions);
+      if (isMatchingFunction == true) {
+        result.foundSegregatedNode = true;
+      }
+    }
+  }
 
-     SgVarRefExp* varRefExp = isSgVarRefExp(astNode);
-     if (varRefExp != NULL)
-        {
-       // Look for symbols associated with variables we put into the symbolSet.
-       // Need to handle where we might not yet have seen the declaration (in classes) 
-       // and so the symbol has not yet been collected.
+  SgVarRefExp *varRefExp = isSgVarRefExp(astNode);
+  if (varRefExp != NULL) {
+    // Look for symbols associated with variables we put into the symbolSet.
+    // Need to handle where we might not yet have seen the declaration (in
+    // classes) and so the symbol has not yet been collected.
 
-          SgVariableSymbol* variableSymbol = varRefExp->get_symbol();
-          ROSE_ASSERT(variableSymbol != NULL);
-          if (symbolSet.find(variableSymbol) != symbolSet.end())
-             {
-               result.foundSegregatedNode = true;
-             }
-            else
-             {
-            // Double check the associated declaration (in case we are in a class).
-               string variableName = variableSymbol->get_name();
-               bool isMatchingVariable = nameHasPrefix(variableName,prefixForVariables);
-               if (isMatchingVariable == true)
-                  {
-                    result.foundSegregatedNode = true;
-                  }
-             }
-        }
+    SgVariableSymbol *variableSymbol = varRefExp->get_symbol();
+    ROSE_ASSERT(variableSymbol != NULL);
+    if (symbolSet.find(variableSymbol) != symbolSet.end()) {
+      result.foundSegregatedNode = true;
+    } else {
+      // Double check the associated declaration (in case we are in a class).
+      string variableName = variableSymbol->get_name();
+      bool isMatchingVariable = nameHasPrefix(variableName, prefixForVariables);
+      if (isMatchingVariable == true) {
+        result.foundSegregatedNode = true;
+      }
+    }
+  }
 
-     ROSE_ASSERT(result.astNode != NULL);
+  ROSE_ASSERT(result.astNode != NULL);
 
-     if (result.foundSegregatedNode == true) {
-     }
+  if (result.foundSegregatedNode == true) {
+  }
 
-     return result;
-   }
+  return result;
+}
 
-
-WhiteSpaceSynthesizedAttribute
-Traversal::evaluateSynthesizedAttribute (
-     SgNode* astNode,
-     WhiteSpaceInheritedAttribute inheritedAttribute,
-     SynthesizedAttributesList childAttributes )
-   {
+WhiteSpaceSynthesizedAttribute Traversal::evaluateSynthesizedAttribute(
+    SgNode *astNode, WhiteSpaceInheritedAttribute inheritedAttribute,
+    SynthesizedAttributesList childAttributes) {
   // SynthesizedAttribute localResult(astNode);
   // localResult.astNode = astNode;
   // ROSE_ASSERT(localResult.astNode != NULL);
 
-     ROSE_ASSERT(astNode != NULL);
-     WhiteSpaceSynthesizedAttribute localResult(astNode);
+  ROSE_ASSERT(astNode != NULL);
+  WhiteSpaceSynthesizedAttribute localResult(astNode);
 
-  // Even if there are no children, we need to transfer the state to the synthisized attribute.
-     if (inheritedAttribute.foundSegregatedNode == true) {
-       localResult.containsSegregatedNode = true;
-     }
+  // Even if there are no children, we need to transfer the state to the
+  // synthisized attribute.
+  if (inheritedAttribute.foundSegregatedNode == true) {
+    localResult.containsSegregatedNode = true;
+  }
 
-     if (inheritedAttribute.segregateThisNode == true) {
-       localResult.segregateThisNode = true;
-     }
+  if (inheritedAttribute.segregateThisNode == true) {
+    localResult.segregateThisNode = true;
+  }
 
-     bool contiguousRegion = false;
+  bool contiguousRegion = false;
 
-     pair<SgNode*,SgNode*>* interval = NULL;
+  pair<SgNode *, SgNode *> *interval = NULL;
 
   // We only want to mark intervales within scopes.
-     SgScopeStatement* scope = isSgScopeStatement(astNode);
-     if (scope != NULL) {
+  SgScopeStatement *scope = isSgScopeStatement(astNode);
+  if (scope != NULL) {
 
-       WhiteSpaceSynthesizedAttribute *previous_child = NULL;
-       for (size_t i = 0; i < childAttributes.size(); i++) {
-         WhiteSpaceSynthesizedAttribute &child = childAttributes[i];
-         // If any of the child nodes have a detected segregated region, then
-         // this IR node is marked as containing a segregated region. if
-         // (child.containsSegregatedNode == true)
-         if (child.segregateThisNode == true) {
-           // This synthesized attribute may contain more than one interval of
-           // segregated nodes (statements).
-           localResult.containsSegregatedNode = true;
+    WhiteSpaceSynthesizedAttribute *previous_child = NULL;
+    for (size_t i = 0; i < childAttributes.size(); i++) {
+      WhiteSpaceSynthesizedAttribute &child = childAttributes[i];
+      // If any of the child nodes have a detected segregated region, then
+      // this IR node is marked as containing a segregated region. if
+      // (child.containsSegregatedNode == true)
+      if (child.segregateThisNode == true) {
+        // This synthesized attribute may contain more than one interval of
+        // segregated nodes (statements).
+        localResult.containsSegregatedNode = true;
 
-           if (contiguousRegion == false) {
-             contiguousRegion = true;
+        if (contiguousRegion == false) {
+          contiguousRegion = true;
 
-             // If we are starting an interval, then interval must be NULL.
-             ROSE_ASSERT(interval == NULL);
-             if (interval == NULL) {
-               ROSE_ASSERT(child.astNode != NULL);
-               interval = new pair<SgNode *, SgNode *>(child.astNode, NULL);
+          // If we are starting an interval, then interval must be NULL.
+          ROSE_ASSERT(interval == NULL);
+          if (interval == NULL) {
+            ROSE_ASSERT(child.astNode != NULL);
+            interval = new pair<SgNode *, SgNode *>(child.astNode, NULL);
 
-               ROSE_ASSERT((*interval).first != NULL);
-               if ((*interval).first != child.astNode) {
-                 printf("(*interval).first = %p = %s \n", (*interval).first,
-                        (*interval).first->class_name().c_str());
-                 printf("astNode = %p = %s \n", child.astNode,
-                        child.astNode->class_name().c_str());
-               }
-               ROSE_ASSERT((*interval).first == child.astNode);
-             }
+            ROSE_ASSERT((*interval).first != NULL);
+            if ((*interval).first != child.astNode) {
+              printf("(*interval).first = %p = %s \n", (*interval).first,
+                     (*interval).first->class_name().c_str());
+              printf("astNode = %p = %s \n", child.astNode,
+                     child.astNode->class_name().c_str());
+            }
+            ROSE_ASSERT((*interval).first == child.astNode);
+          }
 
-             ROSE_ASSERT((*interval).first != NULL);
-             ROSE_ASSERT(astNode != NULL);
+          ROSE_ASSERT((*interval).first != NULL);
+          ROSE_ASSERT(astNode != NULL);
 
-             ROSE_ASSERT(interval != NULL);
+          ROSE_ASSERT(interval != NULL);
 
-             // Look for the last elsment in the child list (
-             if (i == childAttributes.size() - 1) {
-               (*interval).second = child.astNode;
+          // Look for the last elsment in the child list (
+          if (i == childAttributes.size() - 1) {
+            (*interval).second = child.astNode;
 
-               ROSE_ASSERT((*interval).first != NULL);
-               ROSE_ASSERT((*interval).second == child.astNode);
-               intervalList.push_back(interval);
+            ROSE_ASSERT((*interval).first != NULL);
+            ROSE_ASSERT((*interval).second == child.astNode);
+            intervalList.push_back(interval);
 
-               // Reset the interval used to store segregated regions.
-               interval = NULL;
-             }
-           } else {
-             ROSE_ASSERT(interval != NULL);
+            // Reset the interval used to store segregated regions.
+            interval = NULL;
+          }
+        } else {
+          ROSE_ASSERT(interval != NULL);
 
-             // Look for the last elsment in the child list (
-             if (i == childAttributes.size() - 1) {
-               (*interval).second = child.astNode;
+          // Look for the last elsment in the child list (
+          if (i == childAttributes.size() - 1) {
+            (*interval).second = child.astNode;
 
-               ROSE_ASSERT((*interval).first != NULL);
-               ROSE_ASSERT((*interval).second == child.astNode);
+            ROSE_ASSERT((*interval).first != NULL);
+            ROSE_ASSERT((*interval).second == child.astNode);
 
-               printf("Push the segregated interval onto a list \n");
-               intervalList.push_back(interval);
+            printf("Push the segregated interval onto a list \n");
+            intervalList.push_back(interval);
 
-               // Reset the interval used to store segregated regions.
-               interval = NULL;
-             }
-           }
+            // Reset the interval used to store segregated regions.
+            interval = NULL;
+          }
+        }
 
-         } else {
-           contiguousRegion = false;
+      } else {
+        contiguousRegion = false;
 
-           // Push interval.
-           // ROSE_ASSERT(interval != NULL);
-           if (interval != NULL) {
-             ROSE_ASSERT(child.astNode != NULL);
+        // Push interval.
+        // ROSE_ASSERT(interval != NULL);
+        if (interval != NULL) {
+          ROSE_ASSERT(child.astNode != NULL);
 
-             // DQ (11/28/2018): We want the previous node that was a part of
-             // the interval, not the first node that is NOT a part of the
-             // interval.
-             // (*interval).second = child.astNode;
-             ROSE_ASSERT(previous_child != NULL);
-             (*interval).second = previous_child->astNode;
+          // DQ (11/28/2018): We want the previous node that was a part of
+          // the interval, not the first node that is NOT a part of the
+          // interval.
+          // (*interval).second = child.astNode;
+          ROSE_ASSERT(previous_child != NULL);
+          (*interval).second = previous_child->astNode;
 
-             ROSE_ASSERT((*interval).first != NULL);
-             // ROSE_ASSERT((*interval).second == child.astNode);
-             ROSE_ASSERT((*interval).second == previous_child->astNode);
-             intervalList.push_back(interval);
+          ROSE_ASSERT((*interval).first != NULL);
+          // ROSE_ASSERT((*interval).second == child.astNode);
+          ROSE_ASSERT((*interval).second == previous_child->astNode);
+          intervalList.push_back(interval);
 
-             // Reset the interval used to store segregated regions.
-             interval = NULL;
-             previous_child = NULL;
-           }
-         }
+          // Reset the interval used to store segregated regions.
+          interval = NULL;
+          previous_child = NULL;
+        }
+      }
 
-         // DQ (11/28/2018): Remember the previous child so that we can close
-         // off the interval where it is identified.
-         previous_child = &child;
-       }
+      // DQ (11/28/2018): Remember the previous child so that we can close
+      // off the interval where it is identified.
+      previous_child = &child;
+    }
 
-     } else {
-       for (size_t i = 0; i < childAttributes.size(); i++) {
-         WhiteSpaceSynthesizedAttribute &child = childAttributes[i];
+  } else {
+    for (size_t i = 0; i < childAttributes.size(); i++) {
+      WhiteSpaceSynthesizedAttribute &child = childAttributes[i];
 
-         if (child.containsSegregatedNode == true) {
-           localResult.containsSegregatedNode = true;
+      if (child.containsSegregatedNode == true) {
+        localResult.containsSegregatedNode = true;
 
-           // Mark the SgExprStatement as (segregateThisNode == true) if child
-           // node is marked (containsSegregatedNode == true).
-           SgExprStatement *expressionStatement = isSgExprStatement(astNode);
-           if (expressionStatement != NULL) {
-             localResult.segregateThisNode = true;
-           }
-         }
-       }
-     }
+        // Mark the SgExprStatement as (segregateThisNode == true) if child
+        // node is marked (containsSegregatedNode == true).
+        SgExprStatement *expressionStatement = isSgExprStatement(astNode);
+        if (expressionStatement != NULL) {
+          localResult.segregateThisNode = true;
+        }
+      }
+    }
+  }
 
-     ROSE_ASSERT(localResult.astNode != NULL);
+  ROSE_ASSERT(localResult.astNode != NULL);
 
-     return localResult;
-   }
+  return localResult;
+}
 
-
-int
-main ( int argc, char* argv[] )
-   {
+int main(int argc, char *argv[]) {
   // Build the abstract syntax tree
-     SgProject* project = frontend(argc,argv);
-     ROSE_ASSERT (project != NULL);
+  SgProject *project = frontend(argc, argv);
+  ROSE_ASSERT(project != NULL);
 
   // Build the inherited attribute
-     WhiteSpaceInheritedAttribute inheritedAttribute;
+  WhiteSpaceInheritedAttribute inheritedAttribute;
 
   // Define the traversal
-     Traversal treeTraversal;
+  Traversal treeTraversal;
 
   // Call the traversal starting at the project (root) node of the AST
-  // Note that this tool must traverse the whole AST (including all header files).
-  // However, we will limit processing to the source files (and header files) 
-  // that are within the specified source tree structure.
+  // Note that this tool must traverse the whole AST (including all header
+  // files). However, we will limit processing to the source files (and header
+  // files) that are within the specified source tree structure.
   // treeTraversal.traverseInputFiles(project,inheritedAttribute);
   // treeTraversal.traverseInputFiles(project,inheritedAttribute);
   // treeTraversal.traverse(project,inheritedAttribute);
-     WhiteSpaceSynthesizedAttribute localResult = treeTraversal.traverse(project,inheritedAttribute);
+  WhiteSpaceSynthesizedAttribute localResult =
+      treeTraversal.traverse(project, inheritedAttribute);
 
-     for (size_t i = 0; i < treeTraversal.intervalList.size(); i++) {
-       SgNode *startingNode = treeTraversal.intervalList[i]->first;
-       ROSE_ASSERT(startingNode != NULL);
+  for (size_t i = 0; i < treeTraversal.intervalList.size(); i++) {
+    SgNode *startingNode = treeTraversal.intervalList[i]->first;
+    ROSE_ASSERT(startingNode != NULL);
 
-       SgNode *endingNode = treeTraversal.intervalList[i]->second;
-       ROSE_ASSERT(endingNode != NULL);
+    SgNode *endingNode = treeTraversal.intervalList[i]->second;
+    ROSE_ASSERT(endingNode != NULL);
 
-       SgStatement *startingStatement = isSgStatement(startingNode);
-       ROSE_ASSERT(startingStatement != NULL);
+    SgStatement *startingStatement = isSgStatement(startingNode);
+    ROSE_ASSERT(startingStatement != NULL);
 
-       SgStatement *endingStatement = isSgStatement(endingNode);
-       ROSE_ASSERT(endingStatement != NULL);
-       string starting_comment = "// START OF INTERVAL";
-       string ending_comment = "// END OF INTERVAL";
-       // SageInterface::addMessageStatement(startingStatement,starting_comment);
-       // SageInterface::addMessageStatement(endingStatement,ending_comment);
+    SgStatement *endingStatement = isSgStatement(endingNode);
+    ROSE_ASSERT(endingStatement != NULL);
+    string starting_comment = "// START OF INTERVAL";
+    string ending_comment = "// END OF INTERVAL";
+    // SageInterface::addMessageStatement(startingStatement,starting_comment);
+    // SageInterface::addMessageStatement(endingStatement,ending_comment);
 
-          int physical_fileName_id = startingStatement->get_file_info()->get_physical_file_id();
-          string physical_fileName = startingStatement->get_file_info()->getFilenameFromID(physical_fileName_id);
+    int physical_fileName_id =
+        startingStatement->get_file_info()->get_physical_file_id();
+    string physical_fileName =
+        startingStatement->get_file_info()->getFilenameFromID(
+            physical_fileName_id);
 
-          string opening_message = "#ifdef SEGREGATE_CODE";
-          string closing_message = "#endif";
+    string opening_message = "#ifdef SEGREGATE_CODE";
+    string closing_message = "#endif";
 
-          PreprocessingInfo* opening_cpp_directive = new PreprocessingInfo(PreprocessingInfo::CpreprocessorIfdefDeclaration,opening_message,physical_fileName,0,0,1,PreprocessingInfo::before);
-          PreprocessingInfo* closing_cpp_directive = new PreprocessingInfo(PreprocessingInfo::CpreprocessorIfdefDeclaration,closing_message,physical_fileName,0,0,1,PreprocessingInfo::after);
+    PreprocessingInfo *opening_cpp_directive = new PreprocessingInfo(
+        PreprocessingInfo::CpreprocessorIfdefDeclaration, opening_message,
+        physical_fileName, 0, 0, 1, PreprocessingInfo::before);
+    PreprocessingInfo *closing_cpp_directive = new PreprocessingInfo(
+        PreprocessingInfo::CpreprocessorIfdefDeclaration, closing_message,
+        physical_fileName, 0, 0, 1, PreprocessingInfo::after);
+    SageInterface::publishGeneratedPreprocessingInfo(opening_cpp_directive,
+                                                     startingStatement);
+    SageInterface::publishGeneratedPreprocessingInfo(closing_cpp_directive,
+                                                     endingStatement);
 
-          startingStatement->addToAttachedPreprocessingInfo(opening_cpp_directive,PreprocessingInfo::before);
-          endingStatement->addToAttachedPreprocessingInfo(
-              closing_cpp_directive, PreprocessingInfo::after);
-          // Mark the nodes so that the token based unparsing will output
-          // updated surrounding whitespace.
-          startingStatement->setTransformation();
-          endingStatement->setTransformation();
+    startingStatement->addToAttachedPreprocessingInfo(
+        opening_cpp_directive, PreprocessingInfo::before);
+    endingStatement->addToAttachedPreprocessingInfo(closing_cpp_directive,
+                                                    PreprocessingInfo::after);
+    // Mark the nodes so that the token based unparsing will output
+    // updated surrounding whitespace.
+    SageInterface::markNodeToBeUnparsed(startingStatement,
+                                        physical_fileName_id);
+    SageInterface::markNodeToBeUnparsed(endingStatement, physical_fileName_id);
+    startingStatement->set_containsTransformationToSurroundingWhitespace(true);
+    endingStatement->set_containsTransformationToSurroundingWhitespace(true);
 
-          // Mark the nodes so that the token based unparsing will output
-          // updated surrounding whitespace.
-          startingStatement->set_isModified(true);
-          endingStatement->set_isModified(true);
+    // Mark the nodes so that the token based unparsing will output
+    // updated surrounding whitespace.
+    startingStatement->set_isModified(true);
+    endingStatement->set_isModified(true);
 
-          // Mark the nodes so that the token based unparsing will output
-          // updated surrounding whitespace.
-          startingStatement->setOutputInCodeGeneration();
-          endingStatement->setOutputInCodeGeneration();
-     }
+    // Mark the nodes so that the token based unparsing will output
+    // updated surrounding whitespace.
+    startingStatement->setOutputInCodeGeneration();
+    endingStatement->setOutputInCodeGeneration();
+  }
 
-  // This program only does analysis, so it need not call the backend to generate code.
-  // return 0;
-  // Only output code if there was a transformation that was done.
-     return backend(project);
-   }
+  // This program only does analysis, so it need not call the backend to
+  // generate code. return 0; Only output code if there was a transformation
+  // that was done.
+  return backend(project);
+}

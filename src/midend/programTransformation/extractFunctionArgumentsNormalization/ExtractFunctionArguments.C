@@ -39,9 +39,22 @@ bool containsOverloadedOperatorCall(SgExpression *expression) {
   return false;
 }
 
-std::pair<SgVariableDeclaration *, SgExpression *>
-createTempVariableAndReferenceByMovingExpression(SgExpression *expression,
-                                                 SgScopeStatement *scope) {
+bool sourceSupportsDeducedTemporaryType(SgNode *node) {
+  SgSourceFile *source = SageInterface::getEnclosingSourceFile(node);
+  if (source == nullptr || !source->get_Cxx_only()) {
+    return false;
+  }
+
+  return source->get_Cxx11_only() || source->get_Cxx11_gnu_only() ||
+         source->get_Cxx14_only() || source->get_Cxx14_gnu_only() ||
+         source->get_Cxx17_only() || source->get_Cxx17_gnu_only() ||
+         source->get_Cxx20_only() || source->get_Cxx20_gnu_only() ||
+         source->get_Cxx23_only() || source->get_Cxx23_gnu_only() ||
+         source->get_Cxx26_only() || source->get_Cxx26_gnu_only();
+}
+
+SgVariableDeclaration *createTempVariableDeclaration(SgExpression *expression,
+                                                     SgScopeStatement *scope) {
   ROSE_ASSERT(expression != NULL);
   ROSE_ASSERT(scope != NULL);
 
@@ -59,15 +72,50 @@ createTempVariableAndReferenceByMovingExpression(SgExpression *expression,
 
   std::string name = SageInterface::generateUniqueVariableName(scope);
 
-  SgAssignInitializer *initializer = SageBuilder::buildAssignInitializer();
   SgVariableDeclaration *tempVarDeclaration =
-      SageBuilder::buildVariableDeclaration(name, variableType, initializer,
-                                            scope);
+      SageBuilder::buildUnpublishedVariableDeclaration(name, variableType,
+                                                       nullptr, scope);
   ROSE_ASSERT(tempVarDeclaration != NULL);
+  SgInitializedName *temporary = tempVarDeclaration->get_decl_item(name);
+  if (temporary == nullptr || temporary->get_type() != variableType ||
+      tempVarDeclaration->get_parent() != nullptr ||
+      scope->find_symbol_from_declaration(temporary) != nullptr) {
+    fprintf(stderr,
+            "REX_NORMALIZATION_INVARIANT[temporary-type]: declaration=%p "
+            "name=%s is not one detached unpublished semantic temporary\n",
+            static_cast<void *>(tempVarDeclaration), name.c_str());
+    ROSE_ABORT();
+  }
 
-  SgExpression *varRefExpression =
-      SageBuilder::buildVarRefExp(tempVarDeclaration);
-  return std::make_pair(tempVarDeclaration, varRefExpression);
+  // A converted argument can carry an implementation-owned typedef spelling
+  // (for example vector<T>::size_type), and a dependent call can have Clang's
+  // explicit __dependent_type semantic placeholder.  Neither is a lexical
+  // type-id at the insertion scope.  In C++11 and later, retain the exact
+  // semantic type on the initialized name while recording a corresponding
+  // deduced source type (`auto`, `auto&`, or `auto&&`) as its independent
+  // source surface. The initializer then performs language deduction at the
+  // new declaration site without manufacturing a name that was never visible
+  // there or discarding the expression's reference category.
+  if (sourceSupportsDeducedTemporaryType(expression)) {
+    SgType *sourceType = SageBuilder::buildAutoType();
+    if (isSgReferenceType(variableType) != nullptr) {
+      sourceType = SageBuilder::buildReferenceType(sourceType);
+    } else if (isSgRvalueReferenceType(variableType) != nullptr) {
+      sourceType = SageBuilder::buildRvalueReferenceType(sourceType);
+    }
+    temporary->set_auto_decltype(sourceType);
+    if (temporary->get_auto_decltype() != sourceType ||
+        temporary->get_type() != variableType) {
+      fprintf(stderr,
+              "REX_NORMALIZATION_INVARIANT[temporary-type]: declaration=%p "
+              "name=%s failed to preserve distinct semantic and source type "
+              "surfaces\n",
+              static_cast<void *>(tempVarDeclaration), name.c_str());
+      ROSE_ABORT();
+    }
+  }
+
+  return tempVarDeclaration;
 }
 
 } // namespace
@@ -289,10 +337,51 @@ void ExtractFunctionArguments::RewriteFunctionCallArguments(
     if (!FunctionArgumentNeedsNormalization(arg))
       continue;
 
-    // Build a declaration for the temporary variable
-    SgScopeStatement *scope =
-        functionCallInfo.tempVarDeclarationLocation->get_scope();
-    ROSE_ASSERT(scope != NULL);
+    // Normalize the insertion boundary before building a scope-sensitive
+    // declaration.  A condition statement, for example, has no sibling
+    // declaration position: its enclosing control statement is the insertion
+    // anchor and the anchor's enclosing block is the declaration scope.
+    SgStatement *insertionLocation =
+        functionCallInfo.tempVarDeclarationLocation;
+    SgScopeStatement *scope = nullptr;
+    switch (functionCallInfo.tempVarDeclarationInsertionMode) {
+    case FunctionCallInfo::INSERT_BEFORE:
+      insertionLocation =
+          SageInterface::prepareStatementInsertionAnchor(insertionLocation);
+      scope = insertionLocation->get_scope();
+      break;
+
+    case FunctionCallInfo::APPEND_SCOPE:
+      if (SgScopeStatement *locationScope =
+              isSgScopeStatement(insertionLocation)) {
+        scope = locationScope;
+      } else if (SageInterface::isBodyStatement(insertionLocation)) {
+        scope =
+            SageInterface::makeSingleStatementBodyToBlock(insertionLocation);
+        insertionLocation = scope;
+      } else {
+        scope = isSgScopeStatement(insertionLocation->get_parent());
+      }
+      break;
+
+    case FunctionCallInfo::INVALID:
+    default:
+      fprintf(stderr,
+              "REX_NORMALIZATION_INVARIANT[temporary-insertion-mode]: "
+              "function call=%p has no exact temporary insertion mode\n",
+              static_cast<void *>(functionCall));
+      ROSE_ABORT();
+    }
+    if (scope == nullptr) {
+      fprintf(stderr,
+              "REX_NORMALIZATION_INVARIANT[temporary-insertion-scope]: "
+              "location=%p/%s has no exact declaration publication scope\n",
+              static_cast<void *>(insertionLocation),
+              insertionLocation != nullptr
+                  ? insertionLocation->class_name().c_str()
+                  : "null");
+      ROSE_ABORT();
+    }
 
     // DQ (3/1/2015): Added initialization to these local variables.
     // SgVariableDeclaration* tempVarDeclaration;
@@ -305,13 +394,7 @@ void ExtractFunctionArguments::RewriteFunctionCallArguments(
     // defined for compiler-generated functions, this is less clear.
     SgFunctionType *functionType = isSgFunctionType(arg->get_type());
     if (functionType == NULL) {
-      tie(tempVarDeclaration, tempVarReference) =
-          createTempVariableAndReferenceByMovingExpression(arg, scope);
-
-      // createTempVariableOrReferenceForExpression does not set the parent if
-      // the scope stack is empty. Hence set it manually to the currect scope.
-      tempVarDeclaration->set_parent(scope);
-      ROSE_ASSERT(tempVarDeclaration != NULL);
+      tempVarDeclaration = createTempVariableDeclaration(arg, scope);
 
       // DQ (3/1/2015): This is not always true (see inputBug317.C).
       ROSE_ASSERT(tempVarDeclaration->get_definition(0) != NULL);
@@ -319,9 +402,37 @@ void ExtractFunctionArguments::RewriteFunctionCallArguments(
           isSgVariableDefinition(tempVarDeclaration->get_definition()) != NULL);
 
       // Insert the temporary variable declaration
-      InsertStatement(tempVarDeclaration,
-                      functionCallInfo.tempVarDeclarationLocation,
-                      functionCallInfo);
+      InsertStatement(tempVarDeclaration, insertionLocation, functionCallInfo);
+      SgInitializedName *publishedName =
+          SageInterface::getFirstInitializedName(tempVarDeclaration);
+      SgVariableSymbol *publishedSymbol =
+          publishedName != nullptr
+              ? isSgVariableSymbol(
+                    scope->find_symbol_from_declaration(publishedName))
+              : nullptr;
+      if (tempVarDeclaration->get_parent() != scope ||
+          publishedName == nullptr || publishedName->get_scope() != scope ||
+          publishedSymbol == nullptr ||
+          publishedSymbol->get_declaration() != publishedName) {
+        fprintf(stderr,
+                "REX_NORMALIZATION_INVARIANT[temporary-publication]: "
+                "declaration=%p scope=%p lacks one exact lexical and symbol "
+                "owner after insertion\n",
+                static_cast<void *>(tempVarDeclaration),
+                static_cast<void *>(scope));
+        ROSE_ABORT();
+      }
+      tempVarReference = SageBuilder::buildVarRefExp(tempVarDeclaration);
+      if (tempVarReference == nullptr ||
+          isSgVarRefExp(tempVarReference) == nullptr ||
+          isSgVarRefExp(tempVarReference)->get_symbol() != publishedSymbol) {
+        fprintf(stderr,
+                "REX_NORMALIZATION_INVARIANT[temporary-reference]: "
+                "declaration=%p did not produce a reference to its exact "
+                "published symbol\n",
+                static_cast<void *>(tempVarDeclaration));
+        ROSE_ABORT();
+      }
 
       // remember the introduced temp so that it can be queried
       temporariesIntroduced.push_back(tempVarDeclaration);
@@ -331,10 +442,13 @@ void ExtractFunctionArguments::RewriteFunctionCallArguments(
       SgInitializedNamePtrList &declared_vars =
           tempVarDeclaration->get_variables();
       ROSE_ASSERT(declared_vars.size() == 1);
+      SgInitializedName *temp_name = declared_vars.front();
+      ROSE_ASSERT(temp_name != nullptr);
+      ROSE_ASSERT(temp_name->get_initializer() == nullptr);
       SgAssignInitializer *initializer =
-          isSgAssignInitializer(declared_vars.front()->get_initializer());
-      ROSE_ASSERT(initializer != NULL);
-      SageInterface::setOperand(initializer, arg);
+          SageBuilder::buildAssignInitializer(arg, temp_name->get_type());
+      temp_name->set_initializer(initializer);
+      initializer->set_parent(temp_name);
 
       tempVarReference->markAsModified();
       if (SgStatement *enclosing_statement =
@@ -362,8 +476,16 @@ bool ExtractFunctionArguments::FunctionArgumentCanBeNormalized(
   }
   // Don't include SgConstructorInitializer since it will be called even on the
   // temporary, so avoid double copy.
-  if (isSgFunctionRefExp(argument) || isSgMemberFunctionRefExp(argument) ||
-      isSgConstructorInitializer(argument))
+  // A direct callable name is already one side-effect-free argument.  This
+  // includes dependent overload sets in template bodies: they deliberately
+  // have no standalone object type, so manufacturing a variable declaration
+  // from the reference would turn `endl` into the invalid type spelling
+  // `endl temporary`.  Preserve the typed callable edge and let overload
+  // resolution remain at the original call site.
+  if (isSgFunctionRefExp(argument) || isSgTemplateFunctionRefExp(argument) ||
+      isSgMemberFunctionRefExp(argument) ||
+      isSgTemplateMemberFunctionRefExp(argument) ||
+      isSgNonrealRefExp(argument) || isSgConstructorInitializer(argument))
     return false;
 
   // Unknow Template type expressions can't be normalized.

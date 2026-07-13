@@ -1,14 +1,16 @@
 /*
- * Test if the hidden first non-defining declaration can be found by AST query.
-It should not. by Liao, 12/14/2012
-*/
+ * Verify that AST queries expose both the source declaration and its exact
+ * typed semantic-auxiliary declaration without conflating their ownership
+ * roles.
+ */
 #include "rose.h"
 
 #include <iostream>
 using namespace std;
 
 int main(int argc, char *argv[]) {
-  int counter = 0;
+  int lexicalCounter = 0;
+  int auxiliaryCounter = 0;
   SgProject *project = frontend(argc, argv);
   Rose_STL_Container<SgNode *> nodeList =
       NodeQuery::querySubTree(project, V_SgDeclarationStatement);
@@ -16,16 +18,20 @@ int main(int argc, char *argv[]) {
        i != nodeList.end(); i++) {
     SgFunctionDeclaration *decl = isSgFunctionDeclaration((*i));
     // cout<<"decl: "<<decl<< " "<< decl->unparseToString()<<endl;
-    if (decl)
-      if (decl->get_name() == string("foo"))
-        counter++;
+    if (decl && decl->get_name() == string("foo")) {
+      if (SageInterface::hasExactSemanticAuxiliaryOwnership(decl)) {
+        auxiliaryCounter++;
+      } else {
+        ROSE_ASSERT(decl->get_definition() != nullptr);
+        lexicalCounter++;
+      }
+    }
   }
 
-  // We expect two references
-  if (counter != 1) {
-    cerr << "Error. We should find exactly one function declaration. But we "
-            "found: "
-         << counter << endl;
+  if (lexicalCounter != 1 || auxiliaryCounter != 1) {
+    cerr << "Error. Expected one source function and one exact semantic "
+            "auxiliary declaration, but found source="
+         << lexicalCounter << " auxiliary=" << auxiliaryCounter << endl;
     ROSE_ASSERT(false);
   }
 

@@ -127,8 +127,38 @@ void checkFortranOpenMP(SgProject *project) {
   rebuildScopeSymbolTables(project);
 
   SgGlobal *global = firstGlobalScope(project);
-  ROSE_ASSERT(global->lookup_function_symbol("rex_test2026_rebuild_driver") !=
-              nullptr);
+  SgProgramHeaderStatement *driver = nullptr;
+  for (SgNode *node :
+       NodeQuery::querySubTree(project, V_SgProgramHeaderStatement)) {
+    SgProgramHeaderStatement *candidate = isSgProgramHeaderStatement(node);
+    ROSE_ASSERT(candidate != nullptr);
+    if (candidate->get_definition() != nullptr &&
+        candidate->get_name() == "rex_test2026_rebuild_driver") {
+      ROSE_ASSERT(driver == nullptr);
+      driver = candidate;
+    }
+  }
+  ROSE_ASSERT(driver != nullptr);
+  ROSE_ASSERT(driver->get_definingDeclaration() == driver);
+  SgProgramHeaderStatement *canonical =
+      isSgProgramHeaderStatement(driver->get_firstNondefiningDeclaration());
+  ROSE_ASSERT(canonical != nullptr);
+  ROSE_ASSERT(canonical != driver);
+  ROSE_ASSERT(canonical->get_firstNondefiningDeclaration() == canonical);
+  ROSE_ASSERT(canonical->get_definingDeclaration() == driver);
+  ROSE_ASSERT(canonical->get_scope() == global);
+  SgAuxiliaryDeclarationList *auxiliary =
+      isSgAuxiliaryDeclarationList(canonical->get_parent());
+  ROSE_ASSERT(auxiliary != nullptr);
+  ROSE_ASSERT(auxiliary->get_parent() == global);
+  ROSE_ASSERT(global->get_auxiliary_declarations() == auxiliary);
+
+  SgFunctionSymbol *driverSymbol =
+      global->lookup_function_symbol("rex_test2026_rebuild_driver");
+  ROSE_ASSERT(driverSymbol != nullptr);
+  ROSE_ASSERT(driverSymbol->get_declaration() == canonical);
+  ROSE_ASSERT(driverSymbol->get_symbol_basis() == canonical);
+  ROSE_ASSERT(canonical->get_symbol_from_symbol_table() == driverSymbol);
 
   bool saw_module_symbol = false;
   for (SgNode *node : NodeQuery::querySubTree(project, V_SgModuleStatement)) {
@@ -147,17 +177,56 @@ void checkFortranOpenMP(SgProject *project) {
   }
   ROSE_ASSERT(saw_module_symbol);
 
-  bool saw_worker = false;
+  SgProcedureHeaderStatement *workerDefinition = nullptr;
   for (SgNode *node :
        NodeQuery::querySubTree(project, V_SgProcedureHeaderStatement)) {
     SgProcedureHeaderStatement *procedure = isSgProcedureHeaderStatement(node);
     ROSE_ASSERT(procedure != nullptr);
-    if (procedure->get_name() == "rex_test2026_rebuild_worker") {
-      saw_worker = true;
-      break;
+    if (procedure->get_name() == "rex_test2026_rebuild_worker" &&
+        procedure->get_definition() != nullptr) {
+      ROSE_ASSERT(workerDefinition == nullptr);
+      workerDefinition = procedure;
     }
   }
-  ROSE_ASSERT(saw_worker);
+  ROSE_ASSERT(workerDefinition != nullptr);
+  SgProcedureHeaderStatement *workerCanonical = isSgProcedureHeaderStatement(
+      workerDefinition->get_firstNondefiningDeclaration());
+  ROSE_ASSERT(workerCanonical != nullptr);
+  ROSE_ASSERT(workerCanonical != workerDefinition);
+  ROSE_ASSERT(workerCanonical->get_firstNondefiningDeclaration() ==
+              workerCanonical);
+  ROSE_ASSERT(workerCanonical->get_definingDeclaration() == workerDefinition);
+  SgFunctionParameterList *workerCanonicalParameters =
+      workerCanonical->get_parameterList();
+  SgFunctionParameterList *workerDefinitionParameters =
+      workerDefinition->get_parameterList();
+  ROSE_ASSERT(workerCanonicalParameters != nullptr);
+  ROSE_ASSERT(workerDefinitionParameters != nullptr);
+  ROSE_ASSERT(workerCanonicalParameters != workerDefinitionParameters);
+  ROSE_ASSERT(workerCanonicalParameters->get_parent() == workerCanonical);
+  ROSE_ASSERT(workerDefinitionParameters->get_parent() == workerDefinition);
+  ROSE_ASSERT(workerCanonicalParameters->get_args().size() == 1);
+  ROSE_ASSERT(workerDefinitionParameters->get_args().size() == 1);
+  ROSE_ASSERT(workerCanonicalParameters->get_args().front() !=
+              workerDefinitionParameters->get_args().front());
+  ROSE_ASSERT(workerCanonicalParameters->get_args().front()->get_parent() ==
+              workerCanonicalParameters);
+  ROSE_ASSERT(workerDefinitionParameters->get_args().front()->get_parent() ==
+              workerDefinitionParameters);
+  ROSE_ASSERT(workerCanonicalParameters->get_args().front()->get_type() ==
+              workerDefinitionParameters->get_args().front()->get_type());
+  SgAuxiliaryDeclarationList *workerAuxiliary =
+      isSgAuxiliaryDeclarationList(workerCanonical->get_parent());
+  ROSE_ASSERT(workerAuxiliary != nullptr);
+  ROSE_ASSERT(workerAuxiliary->get_parent() == workerDefinition->get_scope());
+  ROSE_ASSERT(workerDefinition->get_scope()->get_auxiliary_declarations() ==
+              workerAuxiliary);
+  SgFunctionSymbol *workerSymbol =
+      workerDefinition->get_scope()->lookup_function_symbol(
+          "rex_test2026_rebuild_worker");
+  ROSE_ASSERT(workerSymbol != nullptr);
+  ROSE_ASSERT(workerSymbol->get_declaration() == workerCanonical);
+  ROSE_ASSERT(workerCanonical->get_symbol_from_symbol_table() == workerSymbol);
 }
 
 } // namespace

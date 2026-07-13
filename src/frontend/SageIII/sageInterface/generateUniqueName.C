@@ -370,19 +370,10 @@ string SageInterface::generateUniqueName(
         // variableNames += "_variable_name_" + (*p)->get_mangled_name() +
         // (*p)->get_type()->get_mangled();
         variableNames += "_variable_name_" + (*p)->get_mangled_name();
-        // This causes problems when the initialize name objects are orphaned.
-        // It seems we either over share or we oprhan IR nodes. DQ (2/17/2007):
-        // Initializers can make that initializedName different and difficult to
-        // share since we can't generate unique names fro expressions.
         if ((*p)->get_initptr() != NULL) {
-          // printf ("This is a SgInitializedName in a SgVariableDeclaration
-          // with an initializer so we can't share it! \n"); variableNames =
-          // variableNames + StringUtility::numberToString(node);
-          variableNames =
-              variableNames +
-              generateUniqueName(
-                  *p,
-                  ignoreDifferenceBetweenDefiningAndNondefiningDeclarations);
+          // Initializer presence is semantic declaration state.  Never unparse
+          // the initializer or use an address to manufacture identity here.
+          variableNames += "__has_initializer";
         }
         p++;
       }
@@ -459,12 +450,13 @@ string SageInterface::generateUniqueName(
       // un-named enum declarations this should be possible to assert now!
       // ROSE_ASSERT (key.empty() == false);
 
-      // DQ (7/10/2010): Found a case where this fails, need more information
-      // about it. DQ (7/23/2010): We need to generate some sort of name to
-      // support generation of mangled names for types to be put into the new
-      // type table.
       if (key.empty() == true) {
-        key = "__generated_name_";
+        fprintf(stderr,
+                "REX_NAME_INVARIANT[enum-mangled-name]: declaration=%p "
+                "name='%s' has no semantic mangled name\n",
+                static_cast<const void *>(enumDeclaration),
+                enumDeclaration->get_name().str());
+        ROSE_ABORT();
       }
       // DQ (7/23/2010): I think that we can assert this here!
       ROSE_ASSERT(key.empty() == false);
@@ -484,71 +476,15 @@ string SageInterface::generateUniqueName(
       // DQ (3/28/2012): Added assertion test.
       ROSE_ASSERT(declaration != NULL);
 
-      // DQ (2/18/2007): Note that for template declarations built
-      // for member functions of a templated class (legacy
-      // frontend kind: templk_member_function) the declaration
-      // only has the template name (or the member function and
-      // not its mangled name so we can't distinguish multiple
-      // overloaded functions of a templated class.  This causes a
-      // bug for the AST merge (since the symbols are different,
-      // and all but the first is orphaned).  The only way through
-      // this, that I can think of, is to number the functions in
-      // the template delcarations and permit the mangled names to
-      // reflect this! for now we will only add this feature to
-      // the "generateUniqueName()" function.
       key = declaration->get_mangled_name();
-      if (declaration->get_template_kind() ==
-          SgTemplateDeclaration::e_template_m_function) {
-        // printf ("Found a SgTemplateDeclaration which is a
-        // SgTemplateDeclaration::e_template_m_function \n");
-        SgTemplateInstantiationDefn *templateInstantiationDefnition =
-            isSgTemplateInstantiationDefn(declaration->get_scope());
-        // printf ("Parent scope is templateInstantiationDefnition = %p
-        // \n",templateInstantiationDefnition);
-        if (templateInstantiationDefnition != NULL) {
-          SgDeclarationStatementPtrList &declarationList =
-              templateInstantiationDefnition->get_members();
-          // printf ("declarationList.size() = %ld \n",declarationList.size());
-
-          SgDeclarationStatementPtrList::iterator i = declarationList.begin();
-          int counter = 0;
-          bool found = false;
-          if (declarationList.begin() == declarationList.end())
-            found = true;
-          while (found == false && i != declarationList.end()) {
-            counter++;
-            SgTemplateInstantiationMemberFunctionDecl
-                *memberFunctionDeclaration =
-                    isSgTemplateInstantiationMemberFunctionDecl(*i);
-            if (memberFunctionDeclaration != NULL) {
-              // See if the current SgTemplateDeclaration is the
-              // SgTemplateDeclaration associated with this
-              // SgTemplateInstantiationMemberFunctionDecl. if
-              // (memberFunctionDeclaration->get_templateDeclaration() ==
-              // declaration)
-              ROSE_ASSERT(declaration->get_definingDeclaration() != NULL);
-              ROSE_ASSERT(memberFunctionDeclaration->get_templateDeclaration()
-                              ->get_definingDeclaration() != NULL);
-              if (memberFunctionDeclaration->get_templateDeclaration()
-                      ->get_definingDeclaration() ==
-                  declaration->get_definingDeclaration()) {
-                found = true;
-              }
-            }
-            i++;
-          }
-
-          // Make sure that we really found the current declaration!
-          if (found == false) {
-            printf("Error: case SgTemplateDeclaration: declaration = %p name = "
-                   "%s \n",
-                   declaration, declaration->get_name().str());
-            declaration->get_file_info()->display(
-                "Error: case SgTemplateDeclaration: debug");
-          }
-          ROSE_ASSERT(found == true);
-          key += "__position_" + StringUtility::numberToString(counter) + "_";
-        }
+      if (key.empty()) {
+        fprintf(stderr,
+                "REX_NAME_INVARIANT[template-mangled-name]: declaration=%p "
+                "name='%s' kind=%d has no overload-complete mangled name\n",
+                static_cast<const void *>(declaration),
+                declaration->get_name().str(),
+                declaration->get_template_kind());
+        ROSE_ABORT();
       } else {
         // Not clear if there might be other nested declarations in a
         // SgTemplateDeclaration that require similar handling! printf ("Must we
@@ -603,61 +539,24 @@ string SageInterface::generateUniqueName(
       }
       }
 
-      // DQ (2/4/2007): To distinguish between template forward
-      // declaration and a template definition I think we need
-      // the string to be appended.  Else we have to find
-      // something in legacy frontend that will help us
-      // identify this more explicitly.
+      if (declaration->get_scope() == NULL ||
+          declaration->get_name().is_null()) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[template-unique-name]: declaration=%p "
+                "type=%s has no exact semantic scope or name\n",
+                static_cast<const void *>(declaration),
+                declaration->class_name().c_str());
+        ROSE_ABORT();
+      }
 
-      // DQ (2/24/2007): To force overloaded non-defining
-      // declarations of templates to be distinct we add the
-      // template string and have modified the IR so that even
-      // non-defining declaration carry the template string of
-      // the defining declaration. printf ("declaration = %p
-      // declaration->get_string() = %s
-      // \n",declaration,declaration->get_string().str());
-      if (declaration->get_template_kind() ==
-          SgTemplateDeclaration::e_template_m_function) {
-        // DQ (2/24/2007): If this is a member function of a
-        // templated class then we don't have the template
-        // string and we have a counter based approach
-        // implemented above (best I could do under the
-        // circumstances).  However, if the template
-        // declaration is outside of the class then the string
-        // is available (precisely the case that might not be
-        // handled well by the mechanism that counts the
-        // location in the template scope, but likely
-        // redundant. In this case we can (and to be uniform
-        // should) include the template string.
-        additionalSuffix +=
-            string("_member_function_template_string_not always_available_") +
-            declaration->get_string();
-      } else {
-        // All other case we hold the template string in both
-        // the defining and non-defining declarations so that
-        // we can have the function parameters required to
-        // distinguish overloaded functions.
-        if (declaration->get_string().is_null() == true) {
-          printf("Error: declaration->get_string().is_null() == true "
-                 "declaration = %p = %s \n",
-                 declaration, declaration->class_name().c_str());
-          declaration->get_file_info()->display(
-              "Error: declaration->get_string().is_null() == true");
-
-          // DQ (8/10/2010): Place a const cast here to avoid changing the
-          // StringUtility::numberToString() function just yet. DQ (7/11/2010):
-          // This will make sure the IR node is unshared additionalSuffix +=
-          // string("_empty_template_string_") +
-          // StringUtility::numberToString(node);
-          additionalSuffix += string("_empty_template_string_") +
-                              StringUtility::numberToString(declaration);
-        }
-        // DQ (7/11/2010): Commenting out this assertion (triggered by AST file
-        // I/O test on large input).
-        // ROSE_ASSERT(declaration->get_string().is_null() == false);
-
-        additionalSuffix +=
-            string("_template_string_") + declaration->get_string();
+      additionalSuffix +=
+          "_typed_template_identity_" +
+          mangleTemplateToString(declaration->get_name().getString(),
+                                 declaration->get_templateParameters(),
+                                 declaration->get_scope());
+      if (const SgExpression *requiresClause =
+              declaration->get_requiresClause()) {
+        additionalSuffix += "_requires_" + mangleExpression(requiresClause);
       }
       break;
     }
@@ -910,6 +809,24 @@ string SageInterface::generateUniqueName(
       case SgAccessModifier::e_default: {
         accessString = "__default_access_";
         break;
+      }
+
+      case SgAccessModifier::e_not_applicable: {
+        accessString = "__not_applicable_access_";
+        break;
+      }
+
+      case SgAccessModifier::e_undefined: {
+        accessString = "__undefined_access_";
+        break;
+      }
+
+      case SgAccessModifier::e_last_modifier: {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[unique-name-access]: declaration=%p has "
+                "the invalid last-modifier sentinel\n",
+                static_cast<const void *>(declarationStatement));
+        ROSE_ABORT();
       }
 
       default: {
@@ -1166,15 +1083,13 @@ string SageInterface::generateUniqueName(
     if (storage.isExtern()) {
       additionalSuffix += "__extern_initialized_name";
     }
-    // DQ (2/17/2007): This causes problems and does not avoid orphaned
-    // initializers, however without it SgInitializedName objects would be over
-    // shared! DQ (2/17/2007): Initializers can make that initializedName
-    // different and difficult to share since we can't generate unique names fro
-    // expressions.
-    if (initializedName->get_initptr() != NULL) {
-      // printf ("This is a SgInitializedName with an initializer so we can't
-      // share it! \n"); key = key + StringUtility::numberToString(node);
-      key = key + initializedName->get_initptr()->unparseToString();
+    if (initializedName->get_parent() == NULL) {
+      fprintf(stderr,
+              "REX_NAME_INVARIANT[initialized-name-owner]: name=%p '%s' is "
+              "detached\n",
+              static_cast<const void *>(initializedName),
+              initializedName->get_name().str());
+      ROSE_ABORT();
     }
 
     // DQ (3/3/2007): If this is part of a function parameter list then we want
@@ -1251,15 +1166,15 @@ string SageInterface::generateUniqueName(
 
     case V_SgSymbolTable: {
       const SgSymbolTable *symbolTable = isSgSymbolTable(node);
-      if (symbolTable->get_parent() != NULL) {
-        key = generateUniqueName(symbolTable->get_parent(), false);
-        additionalSuffix = "__symbol_table";
-      } else {
-        // Detached tables are used to park orphaned symbols that must stay
-        // alive after repair. Give them a standalone stable-in-process name
-        // instead of asserting on missing AST parentage.
-        key = "__detached_symbol_table_" + StringUtility::numberToString(node);
+      if (symbolTable->get_parent() == NULL) {
+        fprintf(stderr,
+                "REX_NAME_INVARIANT[symbol-table-owner]: table=%p is "
+                "detached\n",
+                static_cast<const void *>(symbolTable));
+        ROSE_ABORT();
       }
+      key = generateUniqueName(symbolTable->get_parent(), false);
+      additionalSuffix = "__symbol_table";
       break;
     }
 
@@ -1281,6 +1196,12 @@ string SageInterface::generateUniqueName(
     case V_SgFunctionParameterTypeList: {
       key = "__function_parameter_type_list_";
       // Make the key unique for each file info object!
+      key = key + StringUtility::numberToString(node);
+      break;
+    }
+
+    case V_SgFunctionTypeArgument: {
+      key = "__function_type_argument_";
       key = key + StringUtility::numberToString(node);
       break;
     }
@@ -1327,15 +1248,16 @@ string SageInterface::generateUniqueName(
           SgValueExp *valueExpression = isSgValueExp(subExpression);
           if (valueExpression != NULL) {
             key += "__" + valueExpression->class_name() + "__" +
-                   valueExpression->unparseToString();
+                   valueExpression->get_constant_folded_value_as_string();
           } else {
-            // We can maybe do this as well, but also append the pointer value
-            // just to make sure this will not be shared
-            key += "__" + subExpression->class_name() + "__" +
-                   subExpression->unparseToString();
-
-            // This will make sure the IR node is unshared
-            key += StringUtility::numberToString(node);
+            fprintf(stderr,
+                    "REX_NAME_INVARIANT[nontype-template-argument]: "
+                    "argument=%p expression=%p type=%s lacks typed structural "
+                    "identity\n",
+                    static_cast<const void *>(templateArgument),
+                    static_cast<void *>(subExpression),
+                    subExpression->class_name().c_str());
+            ROSE_ABORT();
           }
         } else {
           // DQ (8/22/2013): Added branch to support non-expression kinds.
@@ -1354,13 +1276,12 @@ string SageInterface::generateUniqueName(
         // this case.
       case SgTemplateArgument::template_template_argument:
       case SgTemplateArgument::start_of_pack_expansion_argument: {
-        // This will make sure the IR node is unshared
-        key += StringUtility::numberToString(node);
-        printf("[SageInterface::generateUniqueName] Warning: "
-               "SgTemplateArgument::template_template_argument or "
-               "SgTemplateArgument::start_of_pack_expansion_argument reached "
-               "(not implemented yet)\n");
-        break;
+        fprintf(stderr,
+                "REX_NAME_INVARIANT[template-argument-kind]: argument=%p "
+                "kind=%d has no typed structural identity\n",
+                static_cast<const void *>(templateArgument),
+                templateArgument->get_argumentType());
+        ROSE_ABORT();
       }
 
       default: {

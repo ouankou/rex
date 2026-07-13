@@ -1,5 +1,4 @@
 set(ROSE_FLAGS  -w)
-set(C_ONLY -rose:C_only)
 set(_cxxcode_translator testTranslator)
 set(_cxxcode_translator_cmd_parts "$<TARGET_FILE:testTranslator>")
 if(valgrind)
@@ -11,14 +10,14 @@ string(JOIN " " _cxxcode_translator_cmd ${_cxxcode_translator_cmd_parts})
 # Test for Old-Style C function definitions
 add_test(
   NAME test2004_19
-  COMMAND ${_cxxcode_translator} ${ROSE_FLAGS} -rose:C_only
+  COMMAND ${_cxxcode_translator} ${ROSE_FLAGS} -x c
           -c ${CMAKE_CURRENT_SOURCE_DIR}/test2004_19.C
 )
 
 # Test for Old-Style C function definitions
 add_test(
   NAME test2004_21
-  COMMAND ${_cxxcode_translator} ${ROSE_FLAGS} ${C_ONLY}
+  COMMAND ${_cxxcode_translator} ${ROSE_FLAGS}
           -c ${CMAKE_CURRENT_SOURCE_DIR}/test2004_21.c
 )
 
@@ -31,7 +30,7 @@ add_test(
 
 add_test(
   NAME test2005_168
-  COMMAND ${_cxxcode_translator} ${ROSE_FLAGS} -rose:C_only
+  COMMAND ${_cxxcode_translator} ${ROSE_FLAGS}
           -rose:verbose 0 -c
           -I${CMAKE_SOURCE_DIR}/src/util/commandlineProcessing
           ${CMAKE_CURRENT_SOURCE_DIR}/test2005_168.c
@@ -48,11 +47,11 @@ add_test(
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${BASH_EXECUTABLE} -c
     "rm -f test2005_172 test2005_172.o && \
-     ${_cxxcode_translator_cmd} ${ROSE_FLAGS} -rose:verbose 0 ${C_ONLY} ${CMAKE_CURRENT_SOURCE_DIR}/test2005_172.c -o test2005_172 && \
+     ${_cxxcode_translator_cmd} ${ROSE_FLAGS} -rose:verbose 0 ${CMAKE_CURRENT_SOURCE_DIR}/test2005_172.c -o test2005_172 && \
      rm -f test2005_172.o && \
-     ${_cxxcode_translator_cmd} ${ROSE_FLAGS} -rose:verbose 0 ${C_ONLY} -c ${CMAKE_CURRENT_SOURCE_DIR}/test2005_172.c && \
+     ${_cxxcode_translator_cmd} ${ROSE_FLAGS} -rose:verbose 0 -c ${CMAKE_CURRENT_SOURCE_DIR}/test2005_172.c && \
      rm -f test2005_172 && \
-     ${_cxxcode_translator_cmd} ${ROSE_FLAGS} -rose:verbose 0 ${C_ONLY} test2005_172.o -o test2005_172"
+     ${_cxxcode_translator_cmd} ${ROSE_FLAGS} -rose:verbose 0 test2005_172.o -o test2005_172"
 )
 
 add_test(
@@ -70,7 +69,7 @@ set_tests_properties(nonsmoke_functional_CompileTests_C++Code_test2005_64.C PROP
 
 add_test(
   NAME gconv_info_Cpp
-  COMMAND	testTranslator ${ROSE_FLAGS} -rose:verbose 0 -c
+  COMMAND testTranslator ${ROSE_FLAGS} -rose:verbose 0 -x c++ -c
           -I${CMAKE_CURRENT_SOURCE_DIR}
           ${CMAKE_CURRENT_SOURCE_DIR}/gconv_info.c
 )
@@ -78,7 +77,7 @@ rex_lock_test_for_input(gconv_info_Cpp gconv_info.c)
 
 add_test(
   NAME gconv_info_C
-  COMMAND testTranslator ${ROSE_FLAGS} -rose:verbose 0 -rose:C_only -c
+  COMMAND testTranslator ${ROSE_FLAGS} -rose:verbose 0 -c
           -I${CMAKE_CURRENT_SOURCE_DIR}
           ${CMAKE_CURRENT_SOURCE_DIR}/gconv_info.c
 )
@@ -86,7 +85,7 @@ rex_lock_test_for_input(gconv_info_C gconv_info.c)
 
 add_test(
   NAME gconv_info_C99
-  COMMAND testTranslator ${ROSE_FLAGS} -rose:verbose 0 -rose:C99_only -c
+  COMMAND testTranslator ${ROSE_FLAGS} -rose:verbose 0 -std=gnu99 -c
           -I${CMAKE_CURRENT_SOURCE_DIR}
           ${CMAKE_CURRENT_SOURCE_DIR}/gconv_info.c
 )
@@ -94,21 +93,21 @@ rex_lock_test_for_input(gconv_info_C99 gconv_info.c)
 
 add_test(
   NAME stdio_Cpp
-  COMMAND testTranslator ${ROSE_FLAGS} -rose:verbose 0
+  COMMAND testTranslator ${ROSE_FLAGS} -rose:verbose 0 -x c++
           -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/stdio.c
 )
 rex_lock_test_for_input(stdio_Cpp stdio.c)
 
 add_test(
   NAME stdio_C
-  COMMAND testTranslator ${ROSE_FLAGS} -rose:verbose 0 -rose:C
+  COMMAND testTranslator ${ROSE_FLAGS} -rose:verbose 0
           -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/stdio.c
 )
 rex_lock_test_for_input(stdio_C stdio.c)
 
 add_test(
   NAME stdio_C99
-  COMMAND testTranslator ${ROSE_FLAGS} -rose:verbose 0 -rose:C99_only
+  COMMAND testTranslator ${ROSE_FLAGS} -rose:verbose 0 -std=gnu99
           -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/stdio.c
 )
 rex_lock_test_for_input(stdio_C99 stdio.c)
@@ -121,7 +120,7 @@ add_test(
 
 add_test(
   NAME test_CplusplusMacro_C
-  COMMAND testTranslator ${ROSE_FLAGS} -rose:C_only
+  COMMAND testTranslator ${ROSE_FLAGS} -x c
           -c ${CMAKE_CURRENT_SOURCE_DIR}/test_CplusplusMacro_C.C
 )
 
@@ -129,7 +128,7 @@ add_test(
 add_test(
   NAME test2004_30
   COMMAND testTranslator ${ROSE_FLAGS}
-          -c ${CMAKE_CURRENT_SOURCE_DIR}/test2004_30.C
+          -std=gnu++14 -c ${CMAKE_CURRENT_SOURCE_DIR}/test2004_30.C
 )
 
 set(files_to_test
@@ -236,8 +235,7 @@ set(_cxxcode_negative_tests
   test2005_173.C
 )
 
-set(_cxxcode_frontend_recovery_tests
-  test2004_158.C
+list(APPEND _cxxcode_negative_tests
   test2005_27.C
   test2005_32.C
   test2005_33.C
@@ -251,12 +249,37 @@ set(_cxxcode_frontend_recovery_tests
   test2006_69.C
 )
 
-function(cxxcode_compile_specimen file_to_test)
-  if(file_to_test IN_LIST _cxxcode_frontend_recovery_tests)
-    list(APPEND ROSE_FLAGS -rex:clang:continue-on-error)
+function(cxxcode_exact_negative_diagnostic input_file output_variable)
+  if(input_file STREQUAL "test2005_27.C")
+    set(_diagnostic "error: main cannot be declared as a variable in the global scope")
+  elseif(input_file STREQUAL "test2005_32.C" OR
+         input_file STREQUAL "test2005_33.C")
+    set(_diagnostic "error: invalid use of non-static data member 'pi'")
+  elseif(input_file STREQUAL "test2005_73.C" OR
+         input_file STREQUAL "test2005_77.C")
+    set(_diagnostic "error: declaration does not declare anything")
+  elseif(input_file STREQUAL "test2005_83.C")
+    set(_diagnostic "error: out-of-line constructor for 'Y' cannot have template arguments")
+  elseif(input_file STREQUAL "test2005_93.C")
+    set(_diagnostic "error: too many template arguments for class template '_List_iterator'")
+  elseif(input_file STREQUAL "test2006_04.C" OR
+         input_file STREQUAL "test2006_05.C" OR
+         input_file STREQUAL "test2006_06.C")
+    set(_diagnostic "error: 'operator new' takes type size_t ('unsigned long') as 1st parameter")
+  elseif(input_file STREQUAL "test2006_69.C")
+    set(_diagnostic "error: declaration of anonymous struct must be a definition")
+  else()
+    set(_diagnostic "")
   endif()
+  set(${output_variable} "${_diagnostic}" PARENT_SCOPE)
+endfunction()
 
-  if(file_to_test IN_LIST _cxxcode_negative_tests)
+function(cxxcode_compile_specimen file_to_test)
+  cxxcode_exact_negative_diagnostic(${file_to_test} _exact_diagnostic)
+  if(NOT _exact_diagnostic STREQUAL "")
+    compile_exact_negative_test(${file_to_test} CXXCODE
+      "${_exact_diagnostic}")
+  elseif(file_to_test IN_LIST _cxxcode_negative_tests)
     compile_negative_test(${file_to_test} CXXCODE)
   else()
     compile_test(${file_to_test} CXXCODE)

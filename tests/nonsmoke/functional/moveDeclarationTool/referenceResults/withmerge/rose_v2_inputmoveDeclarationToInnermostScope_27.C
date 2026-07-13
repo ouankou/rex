@@ -1,5 +1,4 @@
 
-
 void foo(int length, double *dd, double *x, double *y, double *xx, double *yy) {
   for (int i = 0; i < length; ++i) {
     int i1 = i + 1;
@@ -17,4 +16,3 @@ void foo(int length, double *dd, double *x, double *y, double *xx, double *yy) {
     dd[i1] = 0.5 * (a1 + a2);
   }
 }
-

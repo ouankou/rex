@@ -125,12 +125,7 @@ void SystemDependenceGraph::parseProject(SgProject *project) {
 #ifdef NEWDU
   // Create the global def-use analysis
   std::unique_ptr<EDefUse> defUseAnalysis(new EDefUse(project));
-  if (defUseAnalysis->run(false) == 1) {
-    std::cerr << "SystemDependenceGraph :: DFAnalysis failed!  -- "
-                 "defUseAnalysis->run(false)==0"
-              << endl;
-    exit(0);
-  }
+  defUseAnalysis->run(false);
 #endif
   // restrict to only aclually called functions an the main function,
   // find all function calls ->get the function defintion and add it to the set
@@ -477,38 +472,75 @@ void SystemDependenceGraph::performInterproceduralAnalysis() {
   computeSummaryEdges();
 }
 
-std::vector<InterproceduralInfo *>
-SystemDependenceGraph::getPossibleFuncs(SgFunctionCallExp *funcCall) {
-  std::vector<InterproceduralInfo *> retVal;
+namespace {
+
+SgFunctionDeclaration *
+requireExactDirectCallTarget(SgFunctionCallExp *funcCall) {
+  if (funcCall == NULL || funcCall->get_function() == NULL) {
+    cerr << "REX_SLICING_INVARIANT[call-target]: function call has no exact "
+            "callee expression"
+         << endl;
+    ROSE_ABORT();
+  }
+  SgExpression *function = CallTargetSet::unwrapExactImplicitCalleeConversions(
+      funcCall->get_function());
   SgFunctionSymbol *fsym = NULL;
   // check if there is the function declaration available and return the ipi for
   // that decl
-  SgFunctionRefExp *fref = isSgFunctionRefExp(funcCall->get_function());
+  SgFunctionRefExp *fref = isSgFunctionRefExp(function);
   // Liao 11/15/2011
   // It could be a call to a class member function
-  SgArrowExp *arrow_exp = isSgArrowExp(funcCall->get_function());
-  SgDotExp *dot_exp = isSgDotExp(funcCall->get_function());
+  SgArrowExp *arrow_exp = isSgArrowExp(function);
+  SgDotExp *dot_exp = isSgDotExp(function);
   if (arrow_exp || dot_exp) {
-    SgBinaryOp *bop = isSgBinaryOp(funcCall->get_function());
-    ROSE_ASSERT(bop != NULL);
+    SgBinaryOp *bop = isSgBinaryOp(function);
+    if (bop == NULL) {
+      cerr << "REX_SLICING_INVARIANT[call-target]: member call has no exact "
+              "binary access expression"
+           << endl;
+      ROSE_ABORT();
+    }
     SgMemberFunctionRefExp *mfref =
         isSgMemberFunctionRefExp(bop->get_rhs_operand_i());
-    ROSE_ASSERT(mfref != NULL);
+    if (mfref == NULL || mfref->get_symbol() == NULL) {
+      cerr << "REX_SLICING_INVARIANT[call-target]: member access does not "
+              "identify one exact member-function symbol"
+           << endl;
+      ROSE_ABORT();
+    }
     fsym = mfref->get_symbol();
   } else if (fref) {
+    if (fref->get_symbol() == NULL) {
+      cerr << "REX_SLICING_INVARIANT[call-target]: direct function reference "
+              "has no exact function symbol"
+           << endl;
+      ROSE_ABORT();
+    }
     fsym = fref->get_symbol();
   } else {
-    cerr << "Error: SystemDependenceGraph::getPossibleFuncs() found a "
-            "unhandled function call type:"
-         << funcCall->get_function()->class_name() << endl;
+    cerr << "REX_SLICING_INVARIANT[call-target]: unsupported exact callee "
+            "surface="
+         << function->class_name() << endl;
     ROSE_ABORT();
   }
-  ROSE_ASSERT(fsym != NULL);
-  SgFunctionDeclaration *fD = fsym->get_declaration();
+  if (fsym == NULL || fsym->get_declaration() == NULL) {
+    cerr << "REX_SLICING_INVARIANT[call-target]: resolved callee has no exact "
+            "function declaration"
+         << endl;
+    ROSE_ABORT();
+  }
+  return fsym->get_declaration();
+}
+
+} // namespace
+
+std::vector<InterproceduralInfo *>
+SystemDependenceGraph::getPossibleFuncs(SgFunctionCallExp *funcCall) {
+  std::vector<InterproceduralInfo *> retVal;
+  SgFunctionDeclaration *fD = requireExactDirectCallTarget(funcCall);
 #ifdef VERBOSE_DEBUG
   cout << "Adding function call " << funcCall->unparseToString()
-       << " with funref " << fref->unparseToString() << " and function "
-       << fD->get_name().getString() << endl;
+       << " with function " << fD->get_name().getString() << endl;
 #endif
   // check if that function exists, if not use either known function stubs or
   // create a safe function stub
@@ -706,21 +738,9 @@ void SystemDependenceGraph::_processFunction(
 
 Rose_STL_Container<SgFunctionDeclaration *>
 SystemDependenceGraph::_getPossibleFuncs(SgFunctionCallExp *funcCall) {
-
-  // This function currently assumes that the function call is resolved
-  // statically, and returns a single function declaration (which we
-  // can obtain directly from the AST). When a better callgraph
-  // analysis is used, we can instead return all possible function
-  // declarations, and the SDG will still be produced correctly: Each
-  // call site will link up to multiple potential functions.
-
   Rose_STL_Container<SgFunctionDeclaration *> retval;
 
-  SgFunctionRefExp *fref = isSgFunctionRefExp(funcCall->get_function());
-  SgFunctionSymbol *fsym = fref->get_symbol();
-  SgFunctionDeclaration *fD = fsym->get_declaration();
-
-  retval.push_back(fD);
+  retval.push_back(requireExactDirectCallTarget(funcCall));
   return retval;
 }
 

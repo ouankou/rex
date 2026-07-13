@@ -9,14 +9,13 @@
  *---------------------------------------------------------------------------*/
 #include <cstring>
 #include <filesystem>
+#include <iterator>
 
 #include "Rose/StringUtility/FileUtility.h"
 
 #include "Rose/StringUtility/Replace.h"
 
 #include "cmdline.h"
-
-#include "keep_going.h"
 
 #include "omp_simd.h"
 
@@ -37,70 +36,9 @@ const char *licenseText =
 #include <license_string.h>
     ;
 
-static bool startsWith(const std::string &value, const char *prefix) {
-  return value.rfind(prefix, 0) == 0;
-}
-
 static bool isSplitClangTargetOption(const std::string &arg) {
-  return arg == "-target" || arg == "--target" || arg == "-march" ||
-         arg == "-mcpu" || arg == "-mtune" || arg == "-mabi" ||
-         arg == "-mfpu" || arg == "-isysroot" || arg == "--sysroot" ||
+  return arg == "-target" || arg == "-isysroot" || arg == "--sysroot" ||
          arg == "-resource-dir";
-}
-
-static bool isJoinedClangTargetOption(const std::string &arg) {
-  static const char *prefixes[] = {"-target=",   "--target=",     "-march=",
-                                   "-mcpu=",     "-mtune=",       "-mabi=",
-                                   "-mfpu=",     "-mfloat-abi=",  "-isysroot",
-                                   "--sysroot=", "-resource-dir="};
-  for (const char *prefix : prefixes) {
-    if (startsWith(arg, prefix)) {
-      return true;
-    }
-  }
-
-  return arg == "-m32" || arg == "-m64" || arg == "-mx32" ||
-         arg == "-msoft-float" || arg == "-mhard-float" ||
-         arg == "-mlittle-endian" || arg == "-mbig-endian";
-}
-
-static bool isX86OnlyDriverOption(const std::string &arg) {
-  static const char *prefixes[] = {
-      "-mregparm", "-masm=",   "-msse",      "-mno-sse", "-mavx",
-      "-mno-avx",  "-mavx512", "-mmmx",      "-mno-mmx", "-m3dnow",
-      "-mfma",     "-maes",    "-mpclmul",   "-mpopcnt", "-mbmi",
-      "-mbmi2",    "-mf16c",   "-mfsgsbase", "-mxsave"};
-  if (arg == "-mrtd" || arg == "-mno-rtd" || arg == "-msseregparm" ||
-      arg == "-mstackrealign" || arg == "-mno-red-zone" ||
-      arg == "-mred-zone") {
-    return true;
-  }
-  if (startsWith(arg, "-fdefault-calling-conv=")) {
-    const std::string value =
-        arg.substr(std::strlen("-fdefault-calling-conv="));
-    return value == "cdecl" || value == "stdcall" || value == "fastcall" ||
-           value == "thiscall" || value == "vectorcall" || value == "regcall";
-  }
-  for (const char *prefix : prefixes) {
-    if (startsWith(arg, prefix)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-static bool isClangFrontendDriverOption(const std::string &arg) {
-  return arg == "-ffreestanding" || arg == "-fhosted" || arg == "-fno-builtin";
-}
-
-static bool isClangDiagnosticOption(const std::string &arg) {
-  if (arg == "-w" || arg == "-Werror" || arg == "-Wno-error") {
-    return true;
-  }
-  if (arg.rfind("-Wl,", 0) == 0 || arg.rfind("-Wa,", 0) == 0) {
-    return false;
-  }
-  return arg.rfind("-W", 0) == 0;
 }
 
 /*-----------------------------------------------------------------------------
@@ -317,6 +255,21 @@ bool CommandlineProcessing::isOptionTakingSecondParameter(string argument) {
   // filename
   if (argument == "-o" ||   // Used to specify output file to compiler
       argument == "-opt" || // Used in loopProcessor
+      // Compiler options whose separate value can have a source-code suffix.
+      // Keep this classification centralized so frontend input discovery and
+      // final backend command validation agree about operand ownership.
+      argument == "-I" || argument == "-F" || argument == "-L" ||
+      argument == "-B" || argument == "-D" || argument == "-U" ||
+      argument == "-J" || argument == "-MJ" ||
+      argument == "-fintrinsic-modules-path" || argument == "-imacros" ||
+      argument == "-idirafter" || argument == "-iquote" ||
+      argument == "-iframework" || argument == "-iframeworkwithsysroot" ||
+      argument == "-include-pch" || argument == "-isystem-after" ||
+      argument == "-stdlib++-isystem" || argument == "-serialize-diagnostics" ||
+      argument == "-working-directory" || argument == "-Xclang" ||
+      argument == "-Xpreprocessor" || argument == "-Xassembler" ||
+      argument == "-Xlinker" || argument == "-Xcuda-ptxas" ||
+      argument == "-mllvm" ||
       // DQ (1/13/2009): This option should only have a single leading "-",
       // not two. argument == "--include" ||                        // Used
       // for preinclude list (to include some header files before all others,
@@ -455,79 +408,393 @@ bool CommandlineProcessing::isOptionTakingThirdParameter(string argument) {
   return (argument == "-unroll");
 }
 
+namespace {
+
+[[noreturn]] void rejectClangLanguageName(const std::string &name) {
+  fprintf(stderr,
+          "REX_FRONTEND_INVARIANT[clang-language]: explicit -x language '%s' "
+          "is unsupported; expected a supported C, C++, CUDA, or OpenCL "
+          "Clang 22 input type, or none\n",
+          name.c_str());
+  ROSE_ABORT();
+}
+
+CommandlineProcessing::ClangLanguageSelection
+parseClangLanguageName(const std::string &name) {
+  using CommandlineProcessing::ClangLanguageFamily;
+  using CommandlineProcessing::ClangLanguageSelection;
+
+  if (name == "none") {
+    return {ClangLanguageFamily::Suffix, ""};
+  }
+  if (name == "c" || name == "c-header" || name == "cpp-output") {
+    return {ClangLanguageFamily::C, name};
+  }
+  if (name == "c++" || name == "c++-header" || name == "c++-cpp-output" ||
+      name == "c++-header-unit-cpp-output" || name == "c++-module") {
+    return {ClangLanguageFamily::Cxx, name};
+  }
+  if (name == "cuda" || name == "cuda-cpp-output") {
+    return {ClangLanguageFamily::Cuda, name};
+  }
+  if (name == "cl" || name == "opencl" || name == "cl-cpp-output") {
+    return {ClangLanguageFamily::OpenCL, name == "opencl" ? "cl" : name};
+  }
+  rejectClangLanguageName(name);
+}
+
+[[noreturn]] void rejectMissingCommandLineOperand(const std::string &option) {
+  fprintf(stderr,
+          "REX_FRONTEND_INVARIANT[clang-option-operand]: option '%s' requires "
+          "an argument\n",
+          option.c_str());
+  ROSE_ABORT();
+}
+
+[[noreturn]] void rejectClangStdinInput() {
+  fprintf(stderr,
+          "REX_FRONTEND_INVARIANT[clang-source-path]: stdin input '-' has no "
+          "stable source identity and is unsupported\n");
+  ROSE_ABORT();
+}
+
+size_t commandLineOperandCount(const std::string &option) {
+  return CommandlineProcessing::isOptionTakingThirdParameter(option) ? 2 : 1;
+}
+
+bool sameCommandLineSource(const std::string &left, const std::string &right) {
+  if (left == right) {
+    return true;
+  }
+  return StringUtility::getAbsolutePathFromRelativePath(left, true) ==
+         StringUtility::getAbsolutePathFromRelativePath(right, true);
+}
+
+bool isPositionalCommandLineArgument(const std::string &argument,
+                                     bool afterDoubleDash) {
+  return afterDoubleDash || argument.empty() || argument == "-" ||
+         argument.front() != '-';
+}
+
+bool isUnsupportedObjectiveCSource(const std::string &argument) {
+  const std::string suffix = StringUtility::fileNameSuffix(argument);
+  return suffix == "m" || suffix == "M" || suffix == "mi" || suffix == "mm" ||
+         suffix == "mii";
+}
+
+bool isUnsupportedOpenCLCxxSource(const std::string &argument) {
+  const std::string suffix = StringUtility::fileNameSuffix(argument);
+  return suffix == "clcpp" || suffix == "clii";
+}
+
+[[noreturn]] void
+rejectUnsupportedObjectiveCSource(const std::string &argument) {
+  fprintf(stderr,
+          "REX_FRONTEND_INVARIANT[clang-language]: Objective-C source '%s' "
+          "is not supported by REX\n",
+          argument.c_str());
+  ROSE_ABORT();
+}
+
+[[noreturn]] void
+rejectUnsupportedOpenCLCxxSource(const std::string &argument) {
+  fprintf(stderr,
+          "REX_FRONTEND_INVARIANT[clang-language]: OpenCL C++ source '%s' "
+          "is not supported by REX\n",
+          argument.c_str());
+  ROSE_ABORT();
+}
+
+} // namespace
+
+void CommandlineProcessing::validateClangLanguageOptions(
+    const std::vector<std::string> &argv) {
+  bool afterDoubleDash = false;
+  for (size_t i = argv.empty() ? 0 : 1; i < argv.size(); ++i) {
+    const std::string &argument = argv[i];
+    if (afterDoubleDash) {
+      continue;
+    }
+    if (argument == "--") {
+      afterDoubleDash = true;
+      continue;
+    }
+    if (argument == "-x") {
+      if (++i >= argv.size()) {
+        rejectMissingCommandLineOperand(argument);
+      }
+      parseClangLanguageName(argv[i]);
+      continue;
+    }
+    if (argument.rfind("-x", 0) == 0 && argument.size() > 2) {
+      parseClangLanguageName(argument.substr(2));
+      continue;
+    }
+    if (isOptionTakingSecondParameter(argument)) {
+      const size_t operandCount = commandLineOperandCount(argument);
+      if (operandCount >= argv.size() - i) {
+        rejectMissingCommandLineOperand(argument);
+      }
+      i += operandCount;
+    }
+  }
+}
+
+CommandlineProcessing::ClangLanguageSelection
+CommandlineProcessing::clangLanguageSelectionForSource(
+    const std::vector<std::string> &argv, const std::string &source) {
+  if (argv.empty()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[clang-command]: command has no driver "
+            "executable\n");
+    ROSE_ABORT();
+  }
+  if (source.empty()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[clang-source-identity]: requested source "
+            "path is empty\n");
+    ROSE_ABORT();
+  }
+  if (source == "-") {
+    rejectClangStdinInput();
+  }
+
+  ClangLanguageSelection active;
+  ClangLanguageSelection selected;
+  size_t sourceCount = 0;
+  bool afterDoubleDash = false;
+  for (size_t i = 1; i < argv.size(); ++i) {
+    const std::string &argument = argv[i];
+    if (!afterDoubleDash && argument == "--") {
+      afterDoubleDash = true;
+      continue;
+    }
+    if (!afterDoubleDash && argument == "-x") {
+      if (++i >= argv.size()) {
+        rejectMissingCommandLineOperand(argument);
+      }
+      active = parseClangLanguageName(argv[i]);
+      continue;
+    }
+    if (!afterDoubleDash && argument.rfind("-x", 0) == 0 &&
+        argument.size() > 2) {
+      active = parseClangLanguageName(argument.substr(2));
+      continue;
+    }
+    if (!afterDoubleDash && isOptionTakingSecondParameter(argument)) {
+      const size_t operandCount = commandLineOperandCount(argument);
+      if (operandCount >= argv.size() - i) {
+        rejectMissingCommandLineOperand(argument);
+      }
+      i += operandCount;
+      continue;
+    }
+    if (isPositionalCommandLineArgument(argument, afterDoubleDash) &&
+        sameCommandLineSource(argument, source)) {
+      selected = active;
+      ++sourceCount;
+    }
+  }
+
+  if (sourceCount != 1) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[clang-source-identity]: source '%s' must "
+            "occur exactly once as a positional driver input (count=%zu)\n",
+            source.c_str(), sourceCount);
+    ROSE_ABORT();
+  }
+  return selected;
+}
+
+CommandlineProcessing::ClangLanguageSelection
+CommandlineProcessing::clangLanguageSelectionForSuffix(
+    const std::string &source) {
+  const std::string suffix = StringUtility::fileNameSuffix(source);
+
+  if (suffix == "c") {
+    return {ClangLanguageFamily::C, "c"};
+  }
+  if (suffix == "i") {
+    return {ClangLanguageFamily::C, "cpp-output"};
+  }
+  if (suffix == "h") {
+    return {ClangLanguageFamily::C, "c-header"};
+  }
+
+  static const char *cxxSourceSuffixes[] = {"C",   "cc",  "CC",  "cp",  "c++",
+                                            "C++", "cpp", "CPP", "cxx", "CXX"};
+  if (std::find(std::begin(cxxSourceSuffixes), std::end(cxxSourceSuffixes),
+                suffix) != std::end(cxxSourceSuffixes)) {
+    return {ClangLanguageFamily::Cxx, "c++"};
+  }
+  static const char *cxxHeaderSuffixes[] = {"H", "hh", "hpp", "hxx"};
+  if (std::find(std::begin(cxxHeaderSuffixes), std::end(cxxHeaderSuffixes),
+                suffix) != std::end(cxxHeaderSuffixes)) {
+    return {ClangLanguageFamily::Cxx, "c++-header"};
+  }
+  if (suffix == "ii") {
+    return {ClangLanguageFamily::Cxx, "c++-cpp-output"};
+  }
+  static const char *cxxModuleSuffixes[] = {"ccm", "c++m", "cppm", "cxxm"};
+  if (std::find(std::begin(cxxModuleSuffixes), std::end(cxxModuleSuffixes),
+                suffix) != std::end(cxxModuleSuffixes)) {
+    return {ClangLanguageFamily::Cxx, "c++"};
+  }
+  if (suffix == "iim") {
+    return {ClangLanguageFamily::Cxx, "c++-cpp-output"};
+  }
+  if (suffix == "iih") {
+    return {ClangLanguageFamily::Cxx, "c++-header-unit-cpp-output"};
+  }
+
+  if (suffix == "cu") {
+    return {ClangLanguageFamily::Cuda, "cuda"};
+  }
+  if (suffix == "cui") {
+    return {ClangLanguageFamily::Cuda, "cuda-cpp-output"};
+  }
+  if (suffix == "ocl" || suffix == "cl") {
+    return {ClangLanguageFamily::OpenCL, "cl"};
+  }
+  if (suffix == "cli") {
+    return {ClangLanguageFamily::OpenCL, "cl-cpp-output"};
+  }
+
+  fprintf(stderr,
+          "REX_FRONTEND_INVARIANT[clang-suffix-language]: source '%s' has no "
+          "supported exact Clang suffix language\n",
+          source.c_str());
+  ROSE_ABORT();
+}
+
+std::vector<std::string> CommandlineProcessing::sliceCommandLineForSource(
+    const std::vector<std::string> &argv,
+    const Rose_STL_Container<std::string> &sourceFiles,
+    const std::string &source) {
+  (void)clangLanguageSelectionForSource(argv, source);
+
+  std::vector<std::string> result;
+  result.reserve(argv.size());
+  if (argv.empty()) {
+    return result;
+  }
+  result.push_back(argv.front());
+
+  bool afterDoubleDash = false;
+  for (size_t i = 1; i < argv.size(); ++i) {
+    const std::string &argument = argv[i];
+    if (!afterDoubleDash && argument == "--") {
+      afterDoubleDash = true;
+      result.push_back(argument);
+      continue;
+    }
+    if (!afterDoubleDash && argument == "-x") {
+      result.push_back(argument);
+      if (++i >= argv.size()) {
+        rejectMissingCommandLineOperand(argument);
+      }
+      parseClangLanguageName(argv[i]);
+      result.push_back(argv[i]);
+      continue;
+    }
+    if (!afterDoubleDash && argument.rfind("-x", 0) == 0 &&
+        argument.size() > 2) {
+      parseClangLanguageName(argument.substr(2));
+      result.push_back(argument);
+      continue;
+    }
+    if (!afterDoubleDash && isOptionTakingSecondParameter(argument)) {
+      result.push_back(argument);
+      const size_t operandCount = commandLineOperandCount(argument);
+      if (operandCount >= argv.size() - i) {
+        rejectMissingCommandLineOperand(argument);
+      }
+      for (size_t operand = 0; operand < operandCount; ++operand) {
+        result.push_back(argv[++i]);
+      }
+      continue;
+    }
+
+    bool isSource = false;
+    if (isPositionalCommandLineArgument(argument, afterDoubleDash)) {
+      isSource =
+          std::any_of(sourceFiles.begin(), sourceFiles.end(),
+                      [&](const std::string &candidate) {
+                        return sameCommandLineSource(argument, candidate);
+                      });
+    }
+    if (!isSource || sameCommandLineSource(argument, source)) {
+      result.push_back(argument);
+    }
+  }
+  return result;
+}
+
 // DQ (1/16/2008): This function was moved from the commandling_processing.C
 // file for centralized handling.
 Rose_STL_Container<string> CommandlineProcessing::generateSourceFilenames(
     Rose_STL_Container<string> argList, bool binaryMode) {
   Rose_STL_Container<string> sourceFileList;
-
-  // Find out if the command line is a source code compile line
-  bool isSourceCodeCompiler = false;
-
-  // skip the 0th entry since this is just the name of the program
-  Rose_STL_Container<string>::iterator j = argList.begin();
   ASSERT_require(argList.size() > 0);
-  j++;
 
-  while (j != argList.end()) {
-    string &arg = *j;
-    if (arg.size() == 2 && arg[0] == '-' && arg[1] == 'o') {
-      isSourceCodeCompiler = true;
-      break;
+  ClangLanguageSelection activeLanguage;
+  bool afterDoubleDash = false;
+  for (size_t i = 1; i < argList.size(); ++i) {
+    const std::string &argument = argList[i];
+    if (!afterDoubleDash && argument == "--") {
+      afterDoubleDash = true;
+      continue;
     }
-    j++;
-  }
-
-  // skip the 0th entry since this is just the name of the program
-  Rose_STL_Container<string>::iterator i = argList.begin();
-  ASSERT_require(argList.size() > 0);
-  i++;
-
-  while (i != argList.end()) {
-    // Count up the number of filenames (if it is ZERO then this is likely a
-    // link line called using the compiler (required for template processing
-    // in C++ with most compilers)) if there is at least ONE then this is the
-    // source file.  Currently their can be up to maxFileNames = 256 files
-    // specified.
-
-    // most options appear as -<option>
-    // have to process +w2 (warnings option) on some compilers so include
-    // +<option>
-
-    const string &arg = *i;
-
-    // Ignore things that would be obvious options using a "-" or "+" prefix.
-    if (arg.empty() || ((arg[0] != '-') && (arg[0] != '+'))) {
-      if (!isSourceFilename(arg) && (binaryMode || !isObjectFilename(arg)) &&
-          (binaryMode || isExecutableFilename(arg) ||
-           isValidFileWithExecutableFileSuffix(arg))) {
-        if (isSourceCodeCompiler == false || binaryMode == true) {
-          sourceFileList.push_back(arg);
-        }
-        goto incrementPosition;
+    if (!afterDoubleDash && argument == "-x") {
+      if (++i >= argList.size()) {
+        rejectMissingCommandLineOperand(argument);
       }
-
-      // Add source files based on file suffix
-      if (!isObjectFilename(arg) && isSourceFilename(arg)) {
-        sourceFileList.push_back(arg);
-        goto incrementPosition;
-      }
+      activeLanguage = parseClangLanguageName(argList[i]);
+      continue;
     }
-    // DQ (12/8/2007): Looking for rose options that take filenames that would
-    // accidentally be considered as source files. if
-    // (isOptionTakingFileName(*i) == true)
-    if (isOptionTakingSecondParameter(arg)) {
-      if (isOptionTakingThirdParameter(arg)) {
-        // Jump over the next argument when such options are identified.
-        i++;
+    if (!afterDoubleDash && argument.rfind("-x", 0) == 0 &&
+        argument.size() > 2) {
+      activeLanguage = parseClangLanguageName(argument.substr(2));
+      continue;
+    }
+    if (!afterDoubleDash && isOptionTakingSecondParameter(argument)) {
+      const size_t operandCount = commandLineOperandCount(argument);
+      if (operandCount >= argList.size() - i) {
+        rejectMissingCommandLineOperand(argument);
       }
-      // Jump over the next argument when such options are identified.
-      i++;
+      i += operandCount;
+      continue;
+    }
+    if (!isPositionalCommandLineArgument(argument, afterDoubleDash)) {
+      continue;
+    }
+    if (argument == "-") {
+      rejectClangStdinInput();
     }
 
-  incrementPosition:
+    // An explicit -x mode makes every following driver input a source until
+    // `-x none` resets suffix-based classification, exactly as Clang does.
+    if (activeLanguage.isExplicit()) {
+      sourceFileList.push_back(argument);
+      continue;
+    }
 
-    i++;
+    if (isUnsupportedObjectiveCSource(argument)) {
+      rejectUnsupportedObjectiveCSource(argument);
+    }
+    if (isUnsupportedOpenCLCxxSource(argument)) {
+      rejectUnsupportedOpenCLCxxSource(argument);
+    }
+
+    if (binaryMode && !isSourceFilename(argument) &&
+        (isExecutableFilename(argument) ||
+         isValidFileWithExecutableFileSuffix(argument))) {
+      sourceFileList.push_back(argument);
+      continue;
+    }
+    if (!isObjectFilename(argument) && isSourceFilename(argument)) {
+      sourceFileList.push_back(argument);
+    }
   }
 
   if (SgProject::get_verbose() > 1) {
@@ -539,6 +806,106 @@ Rose_STL_Container<string> CommandlineProcessing::generateSourceFilenames(
   }
 
   return sourceFileList;
+}
+
+void CommandlineProcessing::validateBackendCompileOnlyCommandLine(
+    const Rose_STL_Container<string> &argList, const string &expectedSource) {
+  auto fail = [&](const char *reason) {
+    fprintf(
+        stderr,
+        "REX_BACKEND_INVARIANT[per-tu-command]: reason=%s "
+        "expected-source=%s command=%s\n",
+        reason, expectedSource.c_str(),
+        CommandlineProcessing::generateStringFromArgList(argList, false, false)
+            .c_str());
+    ROSE_ABORT();
+  };
+
+  if (argList.empty()) {
+    fail("empty-command");
+  }
+  if (expectedSource.empty()) {
+    fail("empty-expected-source");
+  }
+
+  size_t compileOnlyOptionCount = 0;
+  size_t outputOptionCount = 0;
+  string outputFilename;
+  Rose_STL_Container<string> sourceOperands;
+  ClangLanguageSelection activeLanguage;
+  bool afterDoubleDash = false;
+
+  for (size_t index = 1; index < argList.size(); ++index) {
+    const string &argument = argList[index];
+    if (!afterDoubleDash && argument == "--") {
+      afterDoubleDash = true;
+      continue;
+    }
+    if (!afterDoubleDash && argument == "-x") {
+      if (++index >= argList.size()) {
+        fail("option-missing-value");
+      }
+      activeLanguage = parseClangLanguageName(argList[index]);
+      continue;
+    }
+    if (!afterDoubleDash && argument.rfind("-x", 0) == 0 &&
+        argument.size() > 2) {
+      activeLanguage = parseClangLanguageName(argument.substr(2));
+      continue;
+    }
+    if (!afterDoubleDash && argument == "-c") {
+      ++compileOnlyOptionCount;
+      continue;
+    }
+
+    if (!afterDoubleDash &&
+        CommandlineProcessing::isOptionTakingSecondParameter(argument)) {
+      const size_t parameterCount =
+          CommandlineProcessing::isOptionTakingThirdParameter(argument) ? 2 : 1;
+      if (parameterCount >= argList.size() - index) {
+        fail("option-missing-value");
+      }
+      if (argument == "-o") {
+        ++outputOptionCount;
+        outputFilename = argList[index + 1];
+        if (outputFilename.empty() || outputFilename.front() == '-') {
+          fail("invalid-output-value");
+        }
+      }
+      index += parameterCount;
+      continue;
+    }
+
+    if (!isPositionalCommandLineArgument(argument, afterDoubleDash)) {
+      continue;
+    }
+    if (argument == "-") {
+      rejectClangStdinInput();
+    }
+    const bool suffixSource =
+        CommandlineProcessing::isSourceFilename(argument) ||
+        CommandlineProcessing::isAssemblerFileNameSuffix(
+            StringUtility::fileNameSuffix(argument));
+    if (activeLanguage.isExplicit() || suffixSource) {
+      sourceOperands.push_back(argument);
+    }
+  }
+
+  if (compileOnlyOptionCount == 0) {
+    fail("missing-compile-only-option");
+  }
+  if (sourceOperands.size() != 1) {
+    fail("source-operand-count");
+  }
+  if (!sameCommandLineSource(sourceOperands.front(), expectedSource)) {
+    fail("unexpected-source-operand");
+  }
+  if (outputOptionCount != 1) {
+    fail("output-option-count");
+  }
+  if (sameCommandLineSource(outputFilename, expectedSource)) {
+    fail("output-clobbers-source");
+  }
 }
 
 static std::string const &__str_id(std::string const &str) { return str; }
@@ -560,18 +927,12 @@ static void split_string(std::string const &str, T &res, char sep = ',',
   res.push_back(f(str.substr(prev, pos - prev)));
 }
 
-static const char *const rexClangFrontendOptions[] = {
-    "-rex:clang:continue-on-error", "-rex:clang:disable-access-control",
-    "-rex:clang:delayed-template-parsing", "-rex:clang:respect-rtti-flags"};
+static const char *const removedRexClangFrontendOptions[] = {
+    "-rex:clang:disable-access-control", "-rex:clang:delayed-template-parsing",
+    "-rex:clang:respect-rtti-flags"};
 
-static void removeRexClangFrontendOptions(std::vector<std::string> &argv) {
-  for (const char *option : rexClangFrontendOptions) {
-    CommandlineProcessing::removeArgs(argv, option);
-  }
-}
-
-static bool isRexClangFrontendOption(const std::string &arg) {
-  for (const char *option : rexClangFrontendOptions) {
+static bool isRemovedRexClangFrontendOption(const std::string &arg) {
+  for (const char *option : removedRexClangFrontendOptions) {
     if (arg == option) {
       return true;
     }
@@ -580,10 +941,121 @@ static bool isRexClangFrontendOption(const std::string &arg) {
   return false;
 }
 
+[[noreturn]] static void
+rejectRemovedRexClangFrontendOption(const std::string &option) {
+  fprintf(stderr,
+          "REX_FRONTEND_INVARIANT[removed-clang-option]: option '%s' was an "
+          "inexact compatibility API and is not supported\n",
+          option.c_str());
+  ROSE_ABORT();
+}
+
+static void
+rejectRemovedRexClangFrontendOptions(const std::vector<std::string> &argv) {
+  for (const std::string &argument : argv) {
+    if (isRemovedRexClangFrontendOption(argument)) {
+      rejectRemovedRexClangFrontendOption(argument);
+    }
+  }
+}
+
+static const char *const removedRoseLanguageSelectionOptions[] = {
+    "c",          "C",          "C_only",     "C89",        "C89_only",
+    "C99",        "C99_only",   "C11",        "C11_only",   "C17",
+    "C17_only",   "C23",        "C23_only",   "C2y",        "C2y_only",
+    "cxx",        "Cxx",        "Cxx_only",   "Cxx11",      "Cxx0x",
+    "Cxx0x_only", "Cxx11_only", "Cxx14",      "Cxx14_only", "Cxx17",
+    "Cxx17_only", "Cxx20",      "Cxx20_only", "Cxx23",      "Cxx23_only",
+    "Cxx26",      "Cxx26_only"};
+
+static bool isRemovedRoseLanguageSelectionOption(const std::string &argument) {
+  if (argument == "-std=c" || argument == "-std=gnu" ||
+      argument == "-std=c++" || argument == "-std=gnu++") {
+    return true;
+  }
+
+  const std::string rosePrefix = "-rose:";
+  const std::string longRosePrefix = "--rose:";
+  std::string option;
+  if (argument.rfind(rosePrefix, 0) == 0) {
+    option = argument.substr(rosePrefix.size());
+  } else if (argument.rfind(longRosePrefix, 0) == 0) {
+    option = argument.substr(longRosePrefix.size());
+  } else {
+    return false;
+  }
+
+  for (const char *removedOption : removedRoseLanguageSelectionOptions) {
+    if (option == removedOption) {
+      return true;
+    }
+  }
+  return false;
+}
+
+[[noreturn]] static void
+rejectRemovedRoseLanguageSelectionOption(const std::string &option) {
+  fprintf(stderr,
+          "REX_FRONTEND_INVARIANT[removed-language-option]: option '%s' was "
+          "a deprecated language-selection API; use the source extension, "
+          "-x, and -std= explicitly\n",
+          option.c_str());
+  ROSE_ABORT();
+}
+
+static void rejectRemovedRoseLanguageSelectionOptions(
+    const std::vector<std::string> &argv) {
+  for (const std::string &argument : argv) {
+    if (isRemovedRoseLanguageSelectionOption(argument)) {
+      rejectRemovedRoseLanguageSelectionOption(argument);
+    }
+  }
+}
+
+struct RemovedRexLegacyOption {
+  const char *option;
+  const char *reason;
+};
+
+static const RemovedRexLegacyOption removedRexLegacyOptions[] = {
+    {"-rose:astMerge",
+     "selected the removed AST-merge subsystem and was silently ignored"},
+    {"-rose:ast:merge",
+     "selected the removed AST-merge subsystem and was silently ignored"},
+    {"-rose:astMergeCommandFile",
+     "configured the removed AST-merge subsystem and was silently ignored"},
+    {"-rose:skip_unparse_asm_commands",
+     "silently dropped source-written inline assembly"},
+    {"-rose:skip_unparse_cc_commands", "was a no-op compatibility option"},
+    {"-rose:mangled:noshortname", "was an unsupported no-op mangling option"},
+    {"-rose:suppress_variable_declaration_normalization",
+     "was an unparser-formatting compatibility switch; exact source "
+     "declarator groups are represented by typed AST"}};
+
+static void
+rejectRemovedRexLegacyOptions(const std::vector<std::string> &argv) {
+  for (const std::string &argument : argv) {
+    for (const RemovedRexLegacyOption &removed : removedRexLegacyOptions) {
+      if (argument == removed.option) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[removed-legacy-option]: option '%s' "
+                "%s and is not supported\n",
+                removed.option, removed.reason);
+        ROSE_ABORT();
+      }
+    }
+  }
+}
+
 /*-----------------------------------------------------------------------------
  *  namespace SgProject {
  *---------------------------------------------------------------------------*/
 void SgProject::processCommandLine(const vector<string> &input_argv) {
+  rejectRemovedRexClangFrontendOptions(input_argv);
+  rejectRemovedRoseLanguageSelectionOptions(input_argv);
+  rejectRemovedRexLegacyOptions(input_argv);
+  CommandlineProcessing::validateClangLanguageOptions(input_argv);
+
   // This functions only copies the command line and extracts information from
   // the command line which is useful at the SgProject level (other information
   // useful at the SgFile level is not extracted). Specifically:
@@ -703,7 +1175,14 @@ void SgProject::processCommandLine(const vector<string> &input_argv) {
              mlogLevelToString_C[integerOptionForVerbose]);
   }
 
-  Rose::Cmdline::ProcessKeepGoing(this, local_commandLineArgumentList);
+  if (CommandlineProcessing::isOption(local_commandLineArgumentList,
+                                      "-rose:keep_going", "", true)) {
+    fprintf(stderr,
+            "REX_COMMANDLINE_INVARIANT[keep-going]: -rose:keep_going is not "
+            "supported because compiler pipeline failures terminate at "
+            "their source\n");
+    ROSE_ABORT();
+  }
 
   //
   // Standard compiler options (allows specification of language -x option to
@@ -712,42 +1191,13 @@ void SgProject::processCommandLine(const vector<string> &input_argv) {
   // DQ (1/8/2014): This configuration is used by the git application to specify
   // the C language with the input file is /dev/null. This is a slightly bizare
   // corner case of our command line processing.
-  string tempLanguageSpecificationName;
-  optionCount = sla(local_commandLineArgumentList, "-", "($)^", "x",
-                    &tempLanguageSpecificationName, 1);
-  if (optionCount > 0) {
-    // Make our own copy of the language specification name string
-    // p_language_specification = tempLanguageSpecificationName;
-    // printf ("option -x <option> found language_specification = %s
-    // \n",p_language_specification.c_str());
-    printf("option -x <option> found language_specification = %s \n",
-           tempLanguageSpecificationName.c_str());
-
-    //    -x <language>  Specify the language of the following input files
-    //                   Permissible languages include: c c++ assembler none
-    //                   'none' means revert to the default behavior of
-    //                   guessing the language based on the file's extension
-
-    if (tempLanguageSpecificationName == "c") {
-      set_C_only(true);
-      Rose::is_Cxx_language = false;
-      Rose::is_C_language = true;
-    } else {
-      if (tempLanguageSpecificationName == "c++") {
-        set_Cxx_only(true);
-      } else {
-        if (tempLanguageSpecificationName == "none") {
-          // Language specification is set using filename specification (nothing
-          // to do here).
-        } else {
-          printf("Error: -x <option> implementation in ROSE only permits "
-                 "specification of \"c\" or \"c++\" or \"none\" as supported "
-                 "languages \n");
-          ROSE_ABORT();
-        }
-      }
-    }
-  }
+  // Clang's -x state is ordered and belongs to each input operand.  A project
+  // can legitimately contain `-x c a -x c++ b`; publishing the last switch as
+  // project-global language corrupts the first translation unit.  Validate the
+  // complete option stream before publishing any project state, then let each
+  // SgFile snapshot the state active at its own exact source operand.
+  set_C_only(false);
+  set_Cxx_only(false);
 
   //
   // Standard compiler options (allows alternative -E option to just run CPP)
@@ -880,32 +1330,6 @@ void SgProject::processCommandLine(const vector<string> &input_argv) {
   if (CommandlineProcessing::isOption(local_commandLineArgumentList, "-", "c",
                                       false) == true) {
     set_compileOnly(true);
-  }
-
-  // DQ (4/7/2010): This is useful when using ROSE translators as a linker, this
-  // permits the SgProject to know what backend compiler to call to do the
-  // linking.  This is required when there are no SgFile objects to get this
-  // information from.
-  set_C_only(false);
-  ROSE_ASSERT(get_C_only() == false);
-  if (CommandlineProcessing::isOption(local_commandLineArgumentList,
-                                      "-rose:", "(c|C)", true) == true) {
-    if (SgProject::get_verbose() >= 1)
-      printf("In SgProject: C mode ON \n");
-    set_C_only(true);
-  }
-
-  // DQ (4/7/2010): This is useful when using ROSE translators as a linker, this
-  // permits the SgProject to know what backend compiler to call to do the
-  // linking.  This is required when there are no SgFile objects to get this
-  // information from.
-  set_Cxx_only(false);
-  ROSE_ASSERT(get_Cxx_only() == false);
-  if (CommandlineProcessing::isOption(local_commandLineArgumentList,
-                                      "-rose:", "(cxx|Cxx)", true) == true) {
-    if (SgProject::get_verbose() >= 1)
-      printf("In SgProject: C++ mode ON \n");
-    set_Cxx_only(true);
   }
 
   // Liao 6/29/2012: support linking flags for OpenMP lowering when no SgFile is
@@ -1392,20 +1816,6 @@ void Rose::Cmdline::StripRoseOptions(std::vector<std::string> &argv) {
   Cmdline::Fortran::StripRoseOptions(argv);
 } // Cmdline::StripRoseOptions
 
-void Rose::Cmdline::ProcessKeepGoing(SgProject *project,
-                                     std::vector<std::string> &argv) {
-  bool keep_going =
-      CommandlineProcessing::isOption(argv, "-rose:keep_going", "", true);
-
-  if (keep_going) {
-    if (SgProject::get_verbose() >= 1) {
-      std::cout << "[INFO] [Cmdline] [-rose:keep_going]" << std::endl;
-    }
-    project->set_keep_going(true);
-    Rose::KeepGoing::g_keep_going = true;
-  }
-}
-
 //------------------------------------------------------------------------------
 //                                  Unparser
 //------------------------------------------------------------------------------
@@ -1582,56 +1992,8 @@ void SgFile::usage() {
         "code\n"
         "                             (relative or absolute paths are "
         "supported)\n"
-        "     -rose:keep_going\n"
-        "                             Similar to GNU Make's --keep-going "
-        "option.\n"
-        "\n"
-        "                             If ROSE encounters an error while "
-        "processing your\n"
-        "                             input code, ROSE will simply run your "
-        "backend compiler on\n"
-        "                             your original source code file, as "
-        "is, without modification.\n"
-        "\n"
-        "                             This is useful for compiler tests. "
-        "For example,\n"
-        "                             when compiling a 100K LOC "
-        "application, you can\n"
-        "                             try to compile as much as possible, "
-        "ignoring failures,\n"
-        "                             in order to gauage the overall status "
-        "of your translator,\n"
-        "                             with respect to that application.\n"
-        "\n"
         "Operation modifiers:\n"
         "     -rose:output_warnings   compile with warnings mode on\n"
-        "     -rose:C_only, -rose:C   follow C89 standard, disable C++\n"
-        "     -rose:C89_only, -rose:C89\n"
-        "                             follow C89 standard, disable C++\n"
-        "     -rose:C99_only, -rose:C99\n"
-        "                             follow C99 standard, disable C++\n"
-        "     -rose:C11_only, -rose:C11\n"
-        "                             follow C11 standard, disable C++\n"
-        "     -rose:C17_only, -rose:C17\n"
-        "                             follow C17 standard, disable C++\n"
-        "     -rose:C23_only, -rose:C23\n"
-        "                             follow C23 standard, disable C++\n"
-        "     -rose:C2y_only, -rose:C2y\n"
-        "                             follow C2y standard, disable C++\n"
-        "     -rose:Cxx_only, -rose:Cxx\n"
-        "                             follow C++89 standard\n"
-        "     -rose:Cxx11_only, -rose:Cxx11\n"
-        "                             follow C++11 standard\n"
-        "     -rose:Cxx14_only, -rose:Cxx14\n"
-        "                             follow C++14 standard\n"
-        "     -rose:Cxx17_only, -rose:Cxx17\n"
-        "                             follow C++17 standard\n"
-        "     -rose:Cxx20_only, -rose:Cxx20\n"
-        "                             follow C++20 standard\n"
-        "     -rose:Cxx23_only, -rose:Cxx23\n"
-        "                             follow C++23 standard\n"
-        "     -rose:Cxx26_only, -rose:Cxx26\n"
-        "                             follow C++26 standard\n"
         "     -rose:OpenMP, -rose:openmp\n"
         "                             follow OpenMP 3.0 specification for "
         "C/C++ and Fortran, perform one of the following actions:\n"
@@ -1690,18 +2052,12 @@ void SgFile::usage() {
         "script/graphPerformance)\n"
         "     -rose:exit_after_parser just call the parser (C, C++, and "
         "fortran only)\n"
-        "     -rose:skip_syntax_check skip Fortran syntax checking\n"
-        "     -rose:relax_syntax_check relax Fortran syntax checking\n"
-
         "     -rose:skip_transformation\n"
         "                             read input file and skip all "
         "transformations\n"
         "     -rose:skip_unparse      read and process input file but skip "
         "generation of\n"
         "                             final C++ output file\n"
-        "     -rose:mangled:noshortname\n"
-        "                             Turn off short name mangling "
-        "optimization read and process input file but skip generation of\n"
         "     -rose:skipfinalCompileStep\n"
         "                             read and process input file, \n"
         "                             but skip invoking the backend "
@@ -1983,21 +2339,6 @@ void SgFile::usage() {
         "stream where possible.\n"
         "                             Only C/C++ are supported now. Fortran "
         "support is under development \n"
-        "     -rose:unparse_using_leading_and_trailing_token_mappings \n"
-        "                             unparses code using original token "
-        "stream and forces the output \n"
-        "                             of two files representing the "
-        "unparsing of each statement using \n"
-        "                             the token stream mapping to the AST.  "
-        "The token_leading_* file \n"
-        "                             uses the mapping and the leading "
-        "whitespace mapping between \n"
-        "                             statements, where as the "
-        "token_trailing_* file uses the mapping \n"
-        "                             and the trailing whitespace mapping "
-        "between statements.  Both \n"
-        "                             files should be identical, and the "
-        "same as the input file. \n"
         "     -rose:unparse_template_ast\n"
         "                             unparse C++ templates from their AST. "
         "\n"
@@ -2043,6 +2384,117 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
 
   // DQ (1/17/2006): test this
   // ROSE_ASSERT(get_fileInfo() != NULL);
+
+  // Reject removed APIs before any command-line mutation can hide them.
+  rejectRemovedRoseLanguageSelectionOptions(argv);
+
+  // This report is owned by the project, but a parsed translation unit may
+  // retain the exact project option in its derived command.  Consume that
+  // option only after verifying its arity, uniqueness, and project-owned
+  // value.  Unknown -rose options remain in argv and are rejected when the
+  // Clang command is constructed.
+  const std::string compilationPerformanceOption =
+      "-rose:compilationPerformanceFile";
+  const auto compilationPerformanceArgument =
+      std::find(argv.begin(), argv.end(), compilationPerformanceOption);
+  if (compilationPerformanceArgument != argv.end()) {
+    if (std::find(std::next(compilationPerformanceArgument), argv.end(),
+                  compilationPerformanceOption) != argv.end()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[compilation-performance-option]: "
+              "option '%s' appears more than once in one translation-unit "
+              "command\n",
+              compilationPerformanceOption.c_str());
+      ROSE_ABORT();
+    }
+    const auto compilationPerformanceValue =
+        std::next(compilationPerformanceArgument);
+    if (compilationPerformanceValue == argv.end()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[compilation-performance-option]: "
+              "option '%s' requires an exact output filename\n",
+              compilationPerformanceOption.c_str());
+      ROSE_ABORT();
+    }
+    SgProject *project = get_project();
+    if (project == nullptr || project->get_compilationPerformanceFile() !=
+                                  *compilationPerformanceValue) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[compilation-performance-owner]: "
+              "file=%p option=%s project=%p project-option=%s\n",
+              static_cast<void *>(this), compilationPerformanceValue->c_str(),
+              static_cast<void *>(project),
+              project == nullptr
+                  ? "<missing>"
+                  : project->get_compilationPerformanceFile().c_str());
+      ROSE_ABORT();
+    }
+    argv.erase(compilationPerformanceArgument,
+               std::next(compilationPerformanceValue));
+  }
+
+  const std::string sameDirectoryOption =
+      "-rose:unparse_in_same_directory_as_input_file";
+  const auto sameDirectoryArgument =
+      std::find(argv.begin(), argv.end(), sameDirectoryOption);
+  if (sameDirectoryArgument != argv.end()) {
+    if (std::find(std::next(sameDirectoryArgument), argv.end(),
+                  sameDirectoryOption) != argv.end()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[same-directory-option]: option '%s' "
+              "appears more than once in one translation-unit command\n",
+              sameDirectoryOption.c_str());
+      ROSE_ABORT();
+    }
+    SgProject *project = get_project();
+    if (project == nullptr ||
+        !project->get_unparse_in_same_directory_as_input_file()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[same-directory-option]: option '%s' "
+              "does not match the typed project setting\n",
+              sameDirectoryOption.c_str());
+      ROSE_ABORT();
+    }
+    argv.erase(sameDirectoryArgument);
+  }
+
+  // Output overwrite policy is project state, not a Clang driver option.
+  // Consume each exact zero-arity spelling at the SgFile boundary only after
+  // proving that it agrees with the already parsed project state.  Keeping
+  // these options in the derived translation-unit command would make Clang
+  // diagnose a valid REX option, while removing an unvalidated spelling would
+  // hide a malformed command.
+  auto consumeProjectBooleanOption = [this, &argv](const std::string &option,
+                                                   bool projectValue,
+                                                   const char *invariant) {
+    const auto argument = std::find(argv.begin(), argv.end(), option);
+    if (argument == argv.end())
+      return;
+    if (std::find(std::next(argument), argv.end(), option) != argv.end()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[%s]: option '%s' appears more than "
+              "once in one translation-unit command\n",
+              invariant, option.c_str());
+      ROSE_ABORT();
+    }
+    if (get_project() == nullptr || !projectValue) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[%s]: option '%s' does not match the "
+              "typed project setting\n",
+              invariant, option.c_str());
+      ROSE_ABORT();
+    }
+    argv.erase(argument);
+  };
+  SgProject *project = get_project();
+  consumeProjectBooleanOption("-rose:noclobber_output_file",
+                              project != nullptr &&
+                                  project->get_noclobber_output_file(),
+                              "noclobber-output-option");
+  consumeProjectBooleanOption(
+      "-rose:noclobber_if_different_output_file",
+      project != nullptr && project->get_noclobber_if_different_output_file(),
+      "noclobber-different-output-option");
 
   // Split out the ROSE options first
 
@@ -2156,11 +2608,17 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
       printf("cray pointer mode ON \n");
     set_cray_pointer_support(true);
   }
-  if (CommandlineProcessing::isOption(argv, "-f", "cray-pointer", true) ==
-      true) {
-    if (SgProject::get_verbose() >= 1)
-      printf("cray pointer mode ON (via -fcray-pointer)\n");
-    set_cray_pointer_support(true);
+  if (std::find(argv.begin(), argv.end(), "-fcray-pointer") != argv.end()) {
+    fprintf(stderr, "REX_FRONTEND_INVARIANT[removed-cray-pointer-option]: "
+                    "-fcray-pointer is not a supported Flang option; use "
+                    "-rose:cray_pointer_support explicitly\n");
+    ROSE_ABORT();
+  }
+  if (std::find(argv.begin(), argv.end(), "-fno-cray-pointer") != argv.end()) {
+    fprintf(stderr, "REX_FRONTEND_INVARIANT[unsupported-cray-pointer-option]: "
+                    "-fno-cray-pointer is not supported by the pinned Flang "
+                    "frontend\n");
+    ROSE_ABORT();
   }
 
   //
@@ -2226,36 +2684,6 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
   }
 
   //
-  // DQ (12/14/2015): Added more token handling support to improve the source
-  // position infor stored in the AST Sg_File_Info objects. Turn on the output
-  // of the tokens from the parser (only applies to C and Fortran support).
-  //
-  set_use_token_stream_to_improve_source_position_info(false);
-  ROSE_ASSERT(get_use_token_stream_to_improve_source_position_info() == false);
-  if (CommandlineProcessing::isOption(
-          argv, "-rose:", "(use_token_stream_to_improve_source_position_info)",
-          true) == true) {
-    if (SgProject::get_verbose() >= 1)
-      printf("use_token_stream_to_improve_source_position_info mode ON \n");
-    set_use_token_stream_to_improve_source_position_info(true);
-  }
-
-  //
-  // DQ (12/23/2015): Suppress long-standing normalization of variable
-  // declarations with multiple variables to be converted to individual variable
-  // declarations.
-  //
-  set_suppress_variable_declaration_normalization(false);
-  ROSE_ASSERT(get_suppress_variable_declaration_normalization() == false);
-  if (CommandlineProcessing::isOption(
-          argv, "-rose:", "(suppress_variable_declaration_normalization)",
-          true) == true) {
-    if (SgProject::get_verbose() >= 1)
-      printf("suppress_variable_declaration_normalization mode ON \n");
-    set_suppress_variable_declaration_normalization(true);
-  }
-
-  //
   // DQ (1/30/2014): Added more token handling support (internal testing).
   //
   set_unparse_tokens_testing(0);
@@ -2271,20 +2699,6 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     set_unparse_tokens_testing(integerOptionForUnparseTokensTesting);
   }
 
-  //
-  // DQ (11/20/2010): Added testing for mappings of tokens to the AST (using
-  // both leading and trailing whitespace mappings). Turn on the output of the
-  // testing files for the token unparsing (intenal use only).
-  //
-  set_unparse_using_leading_and_trailing_token_mappings(false);
-  ROSE_ASSERT(get_unparse_using_leading_and_trailing_token_mappings() == false);
-  if (CommandlineProcessing::isOption(
-          argv, "-rose:", "(unparse_using_leading_and_trailing_token_mappings)",
-          true) == true) {
-    if (SgProject::get_verbose() >= 1)
-      printf("unparse_using_leading_and_trailing_token_mappings mode ON \n");
-    set_unparse_using_leading_and_trailing_token_mappings(true);
-  }
   // Liao 12/15/2016,  support unparsing template AST
   set_unparse_template_ast(false);
   ROSE_ASSERT(get_unparse_template_ast() == false);
@@ -2295,29 +2709,22 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     set_unparse_template_ast(true);
   }
 
-  //
-  // Turn on the output of the parser actions for the parser (only applies to
-  // Fortran support).
-  //
-  set_skip_syntax_check(false);
-  ROSE_ASSERT(get_skip_syntax_check() == false);
   if (CommandlineProcessing::isOption(argv, "-rose:", "(skip_syntax_check)",
                                       true) == true) {
-    if (SgProject::get_verbose() >= 1)
-      printf("skip syntax check mode ON \n");
-    set_skip_syntax_check(true);
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[removed-skip-syntax-check]: "
+            "-rose:skip_syntax_check was removed because Flang semantic "
+            "validation is mandatory\n");
+    ROSE_ABORT();
   }
 
-  //
-  // Turn on relaxed syntax checking mode (only applies to Fortran support).
-  //
-  set_relax_syntax_check(false);
-  ROSE_ASSERT(get_relax_syntax_check() == false);
   if (CommandlineProcessing::isOption(argv, "-rose:", "(relax_syntax_check)",
                                       true) == true) {
-    if (SgProject::get_verbose() >= 1)
-      printf("relax syntax check mode ON \n");
-    set_relax_syntax_check(true);
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[removed-relax-syntax-check]: "
+            "-rose:relax_syntax_check was removed because Flang semantic "
+            "validation is mandatory\n");
+    ROSE_ABORT();
   }
 
   // DQ (11/27/2020): Turn on generation of GraphViz representation of Clang's
@@ -2358,114 +2765,6 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
 
   ////////////////////////////////////////////////////////////////////////
   // START parsing standard specifications for C/C++/Fortran (ROSE-1529)
-
-  // Parsing ROSE's C dialect specification
-
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(c|C|C_only)", true) ==
-      true) {
-    printf("WARNING: Command line option -rose:C is deprecated!\n");
-
-    set_C_only(true);
-    set_Cxx_only(false);
-    Rose::is_Cxx_language = false;
-  }
-
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(C89|C89_only)", true) ==
-      true) {
-    printf("WARNING: Command line option -rose:C89 is deprecated!\n");
-
-    // Keep legacy ROSE C89 compatibility semantics for deprecated -rose:C89:
-    // historical test inputs rely on GNU89 extensions (e.g., inline) and
-    // implicit-declaration warnings rather than hard errors.
-    set_C89_gnu_only();
-  }
-
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(C99|C99_only)", true) ==
-      true) {
-    printf("WARNING: Command line option -rose:C99 is deprecated!\n");
-
-    set_C99_gnu_only();
-  }
-
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(C11|C11_only)", true) ==
-      true) {
-    printf("WARNING: Command line option -rose:C11 is deprecated!\n");
-
-    set_C11_gnu_only();
-  }
-
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(C17|C17_only)", true) ==
-      true) {
-    printf("WARNING: Command line option -rose:C17 is deprecated!\n");
-
-    set_C17_gnu_only();
-  }
-
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(C23|C23_only)", true) ==
-      true) {
-    printf("WARNING: Command line option -rose:C23 is deprecated!\n");
-
-    set_C23_gnu_only();
-  }
-
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(C2y|C2y_only)", true) ==
-      true) {
-    printf("WARNING: Command line option -rose:C2y is deprecated!\n");
-
-    set_C2y_gnu_only();
-  }
-
-  // Parsing ROSE's C++ dialect specification
-
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(Cxx|Cxx_only)", true) ==
-      true) {
-    printf("WARNING: Command line option -rose:Cxx is deprecated!\n");
-
-    set_C_only(false);
-    set_Cxx_only(true);
-  }
-
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(Cxx11|Cxx11_only)",
-                                      true) == true) {
-    printf("WARNING: Command line option -rose:Cxx11 is deprecated!\n");
-
-    set_Cxx11_gnu_only();
-  }
-
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(Cxx14|Cxx14_only)",
-                                      true) == true) {
-    printf("WARNING: Command line option -rose:Cxx14 is deprecated!\n");
-
-    set_Cxx14_gnu_only();
-  }
-
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(Cxx17|Cxx17_only)",
-                                      true) == true) {
-    printf("WARNING: Command line option -rose:Cxx17 is deprecated!\n");
-
-    set_Cxx17_gnu_only();
-  }
-
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(Cxx20|Cxx20_only)",
-                                      true) == true) {
-    printf("WARNING: Command line option -rose:Cxx20 is deprecated!\n");
-
-    set_Cxx20_gnu_only();
-  }
-
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(Cxx23|Cxx23_only)",
-                                      true) == true) {
-    printf("WARNING: Command line option -rose:Cxx23 is deprecated!\n");
-
-    set_Cxx23_gnu_only();
-  }
-
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(Cxx26|Cxx26_only)",
-                                      true) == true) {
-    printf("WARNING: Command line option -rose:Cxx26 is deprecated!\n");
-
-    set_Cxx26_gnu_only();
-  }
 
   // Parsing ROSE's Fortran dialect specification
 
@@ -2521,44 +2820,12 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     // Set this as also being F2003 code since Co-Array Fortran is an extension
     // of Fortran 2003
     set_F2003_only();
-
-    // CoArray Fortran defaults to skipping syntax checking.
-    set_skip_syntax_check(true);
   }
 
-  // Parsing GNU-style dialect specification
+  // Parsing compiler-standard dialect specifications
 
   for (unsigned int i = 1; i < argv.size(); i++) {
-    if (argv[i] == "-std=c") {
-      set_C_only(true);
-      Rose::is_Cxx_language = false;
-      Rose::is_C_language = true;
-
-    } else if (argv[i] == "-std=gnu") {
-      set_C_only(true);
-      set_gnu_standard();
-
-    } else if (argv[i] == "-std=c++") {
-      set_Cxx_only(true);
-      // DQ (12/23/2021): This is where it might be an issue for the C++
-      // initializers in the unit-test application code. DQ (12/23/2021):
-      // Isolating the fixes to try again. DQ (12/22/2021): If we are
-      // suggesting this is using the C++ modes, then we have to treat it
-      // as a C++ file. And so it can't also be a C files (else --c and
-      // --c99 options to legacy frontend could be added, which will cause
-      // the legacy frontend error: "Command-line error: language modes
-      // specified are incompatible"  So turn C_only mode off.
-      set_C_only(false);
-
-      // DQ (12/22/2021): Set the language standard to avoid it being c99, c++11
-      // is a reasonable default for now. set_standard(e_cxx11_standard);
-      set_standard(e_default_standard);
-
-    } else if (argv[i] == "-std=gnu++") {
-      set_Cxx_only(true);
-      set_gnu_standard();
-
-    } else if (argv[i] == "-std=fortran") {
+    if (argv[i] == "-std=fortran") {
       std::cerr << "[FATAL] [ROSE] [frontend] [Fortran] "
                    "error: -std=fortran is no longer supported. Use "
                    "-rose:fortran for language selection or "
@@ -2689,7 +2956,48 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     }
   }
 
-  // Matching selected dialect with file extension
+  using ExplicitClangLanguage = CommandlineProcessing::ClangLanguageFamily;
+  const ExplicitClangLanguage explicitClangLanguage =
+      CommandlineProcessing::clangLanguageSelectionForSource(
+          argv, get_sourceFileNameWithPath())
+          .family;
+  if (explicitClangLanguage == ExplicitClangLanguage::C) {
+    set_C_only(true);
+    set_Cxx_only(false);
+    set_Cuda_only(false);
+    set_OpenCL_only(false);
+    Rose::is_C_language = true;
+    Rose::is_Cxx_language = false;
+  } else if (explicitClangLanguage == ExplicitClangLanguage::Cxx) {
+    set_C_only(false);
+    set_Cxx_only(true);
+    set_Cuda_only(false);
+    set_OpenCL_only(false);
+    Rose::is_C_language = false;
+    Rose::is_Cxx_language = true;
+  } else if (explicitClangLanguage == ExplicitClangLanguage::Cuda) {
+    set_C_only(false);
+    set_Cxx_only(false);
+    set_Cuda_only(true);
+    set_OpenCL_only(false);
+  } else if (explicitClangLanguage == ExplicitClangLanguage::OpenCL) {
+    set_C_only(false);
+    set_Cxx_only(false);
+    set_Cuda_only(false);
+    set_OpenCL_only(true);
+  }
+
+  auto rejectDialectLanguageMismatch = [&](const char *dialectFamily,
+                                           const char *requiredLanguage) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[dialect-language]: %s dialect is "
+            "incompatible with this input language; pass '-x %s' explicitly "
+            "when overriding the source suffix\n",
+            dialectFamily, requiredLanguage);
+    ROSE_ABORT();
+  };
+
+  // Validate selected dialect against the exact suffix/-x language.
 
   switch (get_standard()) {
   case e_default_standard: {
@@ -2699,14 +3007,9 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
              "-rose:fortran Fortran language option! \n");
     }
     if (get_C_only() && get_sourceFileUsesCppFileExtension() == true) {
-      // It isn't impossible for a file to contain C code but have a C++ suffix.
-      // If the user specifies a C standard for a C++ suffix file, warn them but
-      // try it anyways.
-      printf("WARNING: C++ source file name specified with explicit selection "
-             "of a C dialect (-rose:C or -std=c)\n");
-      set_Cxx_only(false);
-      Rose::is_Cxx_language = false;
-      Rose::is_C_language = true;
+      if (explicitClangLanguage != ExplicitClangLanguage::C) {
+        rejectDialectLanguageMismatch("C", "c");
+      }
     }
     break;
   }
@@ -2717,12 +3020,12 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
   case e_c17_standard:
   case e_c23_standard:
   case e_c2y_standard: {
-    if (get_sourceFileUsesCppFileExtension() == true) {
-      printf("WARNING: C++ source file name specified with explicit selection "
-             "of a C dialect (-rose:C or -std=c)\n");
-      set_Cxx_only(false);
-      Rose::is_Cxx_language = false;
-      Rose::is_C_language = true;
+    if (explicitClangLanguage == ExplicitClangLanguage::Cxx ||
+        explicitClangLanguage == ExplicitClangLanguage::Cuda ||
+        (explicitClangLanguage != ExplicitClangLanguage::C &&
+         explicitClangLanguage != ExplicitClangLanguage::OpenCL &&
+         get_sourceFileUsesCppFileExtension())) {
+      rejectDialectLanguageMismatch("C", "c");
     }
     break;
   }
@@ -2734,12 +3037,12 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
   case e_cxx20_standard:
   case e_cxx23_standard:
   case e_cxx26_standard: {
-    if (get_sourceFileUsesCppFileExtension() == false) {
-      printf("WARNING: C source file name specified with explicit selection of "
-             "a C++ dialect (-rose:Cxx or -std=c++)\n");
-      set_Cxx_only(true);
-      Rose::is_Cxx_language = true;
-      Rose::is_C_language = false;
+    if (explicitClangLanguage == ExplicitClangLanguage::C ||
+        explicitClangLanguage == ExplicitClangLanguage::OpenCL ||
+        (explicitClangLanguage != ExplicitClangLanguage::Cxx &&
+         explicitClangLanguage != ExplicitClangLanguage::Cuda &&
+         get_sourceFileUsesCppFileExtension() == false)) {
+      rejectDialectLanguageMismatch("C++", "c++");
     }
     break; // NOP
   }
@@ -2792,30 +3095,11 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
   }
 
   if (get_standard() == e_default_standard) {
-    // TV (11/16/2018): ROSE-1530: Figure out the default standard for each
-    // backend compiler (including version)
-
-    //       GNU  : TODO ???
-    //       INTEL:
-    //       https://software.intel.com/en-us/cpp-compiler-developer-guide-and-reference-conformance-to-the-c-c-standards
-    //       CLANG: https://clang.llvm.org/compatibility.html
-
-    if (get_C_only()) {
-#if defined(BACKEND_CXX_IS_GNU_COMPILER)
-      set_C99_gnu_only();
-#endif
-    } else if (get_Cxx_only()) {
-#if defined(BACKEND_CXX_IS_GNU_COMPILER)
-      // PL (10/06/2025): Enable GNU extensions without forcing a C++ standard.
-      set_gnu_standard();
-#endif
-#if defined(ROSE_USE_CLANG_FRONTEND)
-      // REX: Default to C++17 for the Clang frontend so modern tests parse by
-      // default, while retaining GNU extensions for legacy inputs.
-      set_standard(e_cxx17_standard);
-      set_gnu_standard();
-#endif
-    } else if (get_Fortran_only()) {
+    // Preserve the selected compiler driver's exact default for C and C++.
+    // Synthesizing a dialect here can make frontend and backend semantics
+    // diverge from the command line.  Fortran keeps the explicit REX default
+    // because its source form/dialect state is part of the Sage file model.
+    if (get_Fortran_only()) {
       set_F2003_only();
     }
   }
@@ -3091,40 +3375,56 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
   set_openmp(false);
   string ompmacro = "-D_OPENMP=" + StringUtility::numberToString(OMPVERSION);
   ROSE_ASSERT(get_openmp() == false);
-  // We parse OpenMP and then stop now since Building OpenMP AST nodes is
-  // a work in progress. so the default behavior is to turn on them all
-  // TODO turn them to false when parsing-> AST creation -> translation
-  // are finished
+  // OpenMP is disabled until an exact REX/driver option enables the pragma
+  // parser and Sage OpenMP AST constructor below.  These assertions protect
+  // the command-line object's pre-option state; parse-only is inert while
+  // OpenMP itself is disabled.
   ROSE_ASSERT(get_openmp_parse_only() == true);
   ROSE_ASSERT(get_openmp_ast_only() == false);
   ROSE_ASSERT(get_openmp_lowering() == false);
 
-  // Check if OpenMP is explicitly disabled via -fopenmp=0/false/disabled
-  bool openmp_explicitly_disabled = false;
-  for (size_t i = 0; i < argv.size(); i++) {
-    string current_arg = argv[i];
-    if (current_arg.find("-fopenmp=") == 0) {
-      string value = current_arg.substr(9);
-      std::transform(
-          value.begin(), value.end(), value.begin(),
-          [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-      if (value == "0" || value == "false" || value == "disabled") {
-        openmp_explicitly_disabled = true;
-        break;
-      }
+  // The command-line layer is the common C, C++, and Fortran ownership
+  // boundary for OpenMP runtime selection.  Validate joined driver options
+  // before any language adapter can consume or normalize them.
+  for (const string &argument : argv) {
+    if (argument.rfind("-fopenmp=", 0) != 0) {
+      continue;
+    }
+    const string runtime = argument.substr(9);
+    if (runtime != "libomp") {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[rex-openmp-option]: option '%s' "
+              "selects a runtime other than REX's required LLVM libomp\n",
+              argument.c_str());
+      ROSE_ABORT();
     }
   }
 
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(OpenMP|openmp)",
-                                      true) == true ||
-      CommandlineProcessing::isOption(
-          argv, "-", "(openmp|fopenmp|fopenmp-simd)", true) == true) {
+  // Joined runtime options select REX's pragma parser and OpenMP AST
+  // constructor here; language adapters may preserve only the frontend syntax
+  // switch needed to retain directive provenance.
+  const bool joined_openmp_driver_option_present =
+      std::any_of(argv.begin(), argv.end(), [](const string &argument) {
+        return argument.rfind("-fopenmp=", 0) == 0;
+      });
+  const bool rose_openmp_option_present =
+      CommandlineProcessing::isOption(argv, "-rose:", "(OpenMP|openmp)", true);
+  const bool standalone_openmp_driver_option_present =
+      CommandlineProcessing::isOption(argv, "-",
+                                      "(openmp|fopenmp|fopenmp-simd)", true);
+  const bool openmp_driver_option_present =
+      standalone_openmp_driver_option_present ||
+      joined_openmp_driver_option_present;
+
+  if (rose_openmp_option_present || openmp_driver_option_present) {
     if (SgProject::get_verbose() >= 1)
       printf("OpenMP option specified \n");
 
-    if (!openmp_explicitly_disabled) {
-      set_openmp(true);
-      argv.push_back(ompmacro);
+    set_openmp(true);
+    argv.push_back(ompmacro);
+    if (openmp_driver_option_present) {
+      set_openmp_parse_only(false);
+      set_openmp_ast_only(true);
     }
   }
 
@@ -3142,8 +3442,9 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     if (SgProject::get_verbose() >= 1)
       printf("OpenMP sub option for parsing specified \n");
     set_openmp_parse_only(true);
+    set_openmp_ast_only(false);
     // turn on OpenMP if not set explicitly by standalone -rose:OpenMP
-    if (!get_openmp() && !openmp_explicitly_disabled) {
+    if (!get_openmp()) {
       set_openmp(true);
       if (!Outliner::select_omp_loop)
         argv.push_back(ompmacro);
@@ -3165,7 +3466,7 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     // creation before stopping
     set_openmp_parse_only(false);
     // turn on OpenMP if not set explicitly by standalone -rose:OpenMP
-    if (!get_openmp() && !openmp_explicitly_disabled) {
+    if (!get_openmp()) {
       set_openmp(true);
       if (!Outliner::select_omp_loop)
         argv.push_back(ompmacro);
@@ -3187,7 +3488,7 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     set_openmp_parse_only(false);
     set_openmp_ast_only(false);
     // turn on OpenMP if not set explicitly by standalone -rose:OpenMP
-    if (!get_openmp() && !openmp_explicitly_disabled) {
+    if (!get_openmp()) {
       set_openmp(true);
       if (!Outliner::select_omp_loop)
         argv.push_back(ompmacro);
@@ -3210,7 +3511,7 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     set_openmp_ast_only(false);
     set_openmp_analyzing(false);
     // turn on OpenMP if not set explicitly by standalone -rose:OpenMP
-    if (!get_openmp() && !openmp_explicitly_disabled) {
+    if (!get_openmp()) {
       set_openmp(true);
       if (!Outliner::select_omp_loop)
         argv.push_back(ompmacro);
@@ -3227,7 +3528,7 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     set_openmp_ast_only(true);
     set_openmp_parse_only(false);
     // turn on OpenMP if not set explicitly
-    if (!get_openmp() && !openmp_explicitly_disabled) {
+    if (!get_openmp()) {
       set_openmp(true);
       if (!Outliner::select_omp_loop)
         argv.push_back(ompmacro);
@@ -3247,7 +3548,7 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     set_openmp_analyzing(false);
     set_skipfinalCompileStep(true);
     // turn on OpenMP if not set explicitly
-    if (!get_openmp() && !openmp_explicitly_disabled) {
+    if (!get_openmp()) {
       set_openmp(true);
       if (!Outliner::select_omp_loop)
         argv.push_back(ompmacro);
@@ -3258,6 +3559,13 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
   if (CommandlineProcessing::isOption(argv, "-rose:simd:", "(intel-avx)",
                                       true) == true) {
     simd_arch = Intel_AVX512;
+    // Intel SIMD lowering emits the public intrinsic ABI, so its frontend
+    // transaction must parse that ABI before building any transformed nodes.
+    // This gives every generated vector, mask, and intrinsic reference an
+    // exact declaration and also preserves the same forced include for final
+    // compilation of the transformed output.
+    argv.push_back("-include");
+    argv.push_back("immintrin.h");
   } else if (CommandlineProcessing::isOption(argv, "-rose:simd:", "(arm-sve)",
                                              true) == true) {
     simd_arch = Arm_SVE2;
@@ -3342,21 +3650,6 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     if (SgProject::get_verbose() >= 1)
       printf("option -rose:showBackendCommandLine found \n");
     SgProject::set_showBackendCommandLine(true);
-  }
-
-  // mangled:noshortname option: Turns off the optimization that
-  // shortens mangled names.
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(mangled:noshortname)",
-                                      true) == true) {
-    if (SgProject::get_verbose() >= 1)
-      printf("option -rose:mangled:noshortname found \n");
-    // REX: mangled_noshortname is not supported; consume option only.
-  }
-  if (CommandlineProcessing::isOption(
-          argv, "-rose:", "(skip_unparse_cc_commands)", true) == true) {
-    if (SgProject::get_verbose() >= 1)
-      printf("option -rose:skip_unparse_cc_commands found \n");
-    // Legacy option: consume without forwarding to backend.
   }
 
   // unparser language option
@@ -3507,18 +3800,6 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
       true) {
     printf("option -rose:translateCommentsAndDirectivesIntoAST found \n");
     set_translateCommentsAndDirectivesIntoAST(true);
-  }
-
-  // DQ (1/10/2009): The C language ASM statements are providing significant
-  // trouble, they are frequently machine specific and we are compiling then on
-  // architectures for which they were not designed.  This option allows then to
-  // be read, constructed in the AST to support analysis but not unparsed in the
-  // code given to the backend compiler, since this can fail. (See test2007_20.C
-  // from Linux Kernel for an example).
-  if (CommandlineProcessing::isOption(
-          argv, "-rose:", "(skip_unparse_asm_commands)", true) == true) {
-    // printf ("option -rose:skip_unparse_asm_commands found \n");
-    set_skip_unparse_asm_commands(true);
   }
 
   // Default to the Flang frontend when available.
@@ -3744,9 +4025,19 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   //
   //----------------------------------------------------------------------------
 
+  rejectRemovedRexClangFrontendOptions(argv);
+  rejectRemovedRoseLanguageSelectionOptions(argv);
   Rose::Cmdline::StripRoseOptions(argv);
-  removeRexClangFrontendOptions(argv);
   CommandlineProcessing::removeArgsWithParameters(argv, "-outputdir");
+  for (size_t i = 0; i < argv.size();) {
+    const std::string &arg = argv[i];
+    if (arg.rfind("-rex:ast-json-checkpoint=", 0) == 0 ||
+        arg.rfind("-rex:ast-json-dir=", 0) == 0) {
+      argv.erase(argv.begin() + i);
+      continue;
+    }
+    ++i;
+  }
 
   //----------------------------------------------------------------------------
 
@@ -3758,10 +4049,8 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   // optionCount = sla(argv, "-rose:", "($)", "(v|verbose)",1);
   char *loggingSpec = NULL;
   optionCount = sla(argv, "-rose:", "($)^", "(log)", loggingSpec, 1);
-  optionCount = sla(argv, "-rose:", "($)", "(keep_going)", 1);
   int integerOption = 0;
   optionCount = sla(argv, "-rose:", "($)^", "(v|verbose)", &integerOption, 1);
-  optionCount = sla(argv, "-rose:", "($)", "(c|C|C_only)", 1);
   optionCount = sla(argv, "-rose:", "($)", "(OpenACC|openacc)", 1);
   optionCount =
       sla(argv, "-rose:", "($)", "(openacc:parse_only|OpenACC:parse_only)", 1);
@@ -3791,21 +4080,6 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   optionCount =
       sla(argv, "--rose:", "($)", "(openmp:analyzing|OpenMP:analyzing)", 1);
 
-  optionCount = sla(argv, "-rose:", "($)", "(C89|C89_only)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(C99|C99_only)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(Cxx|Cxx_only)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(C11|C11_only)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(C17|C17_only)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(C23|C23_only)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(C2y|C2y_only)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(Cxx0x|Cxx0x_only)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(Cxx11|Cxx11_only)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(Cxx14|Cxx14_only)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(Cxx17|Cxx17_only)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(Cxx20|Cxx20_only)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(Cxx23|Cxx23_only)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(Cxx26|Cxx26_only)", 1);
-
   optionCount = sla(argv, "-rose:", "($)", "(output_warnings)", 1);
   optionCount = sla(argv, "-rose:", "($)", "(cray_pointer_support)", 1);
 
@@ -3820,28 +4094,11 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   // more support for it's use). optionCount = sla(argv, "-rose:", "($)",
   // "(unparse_headers)",1);
 
-  // DQ (12/14/2015): Strip out the new option (so it will not be used on the
-  // backend compiler).
-  optionCount = sla(argv, "-rose:", "($)",
-                    "(use_token_stream_to_improve_source_position_info)", 1);
-
   optionCount = sla(argv, "-rose:", "($)", "(unparse_template_ast)", 1);
-  // DQ (12/23/2015): Suppress variable declaration normalizations
-  optionCount = sla(argv, "-rose:", "($)",
-                    "(suppress_variable_declaration_normalization)", 1);
-
   int integerOption_token_tests = 0;
   optionCount = sla(argv, "-rose:", "($)^", "(unparse_tokens_testing)",
                     &integerOption_token_tests, 1);
-  optionCount = sla(argv, "-rose:", "($)",
-                    "(unparse_using_leading_and_trailing_token_mappings)", 1);
-
   optionCount = sla(argv, "-rose:", "($)", "(exit_after_parser)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(skip_syntax_check)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(relax_syntax_check)", 1);
-
-  optionCount = sla(argv, "-rose:", "($)", "(relax_syntax_check)", 1);
-
   // DQ (8/11/2007): Support for Fortran and its different flavors
   optionCount = sla(argv, "-rose:", "($)", "(fortran)", 1);
   optionCount = sla(argv, "-rose:", "($)", "(CoArrayFortran)", 1);
@@ -3886,7 +4143,6 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   optionCount = sla(argv, "-", "($)", "(ansi)", 1);
   optionCount = sla(argv, "-rose:", "($)", "(markGeneratedFiles)", 1);
   optionCount = sla(argv, "-rose:", "($)", "(negative_test)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(mangled:noshortname)", 1);
   optionCount = sla(argv, "-rose:", "($)", "(showBackendCommandLine)", 1);
   integerOption = 0;
   optionCount = sla(argv, "-rose:", "($)^", "(embedColorCodesInGeneratedCode)",
@@ -3920,13 +4176,7 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   optionCount = sla(argv, "-rose:", "($)^", "(instantiation)",
                     templateInstationationOption, 1);
 
-  // DQ (6/17/2005): Added support for AST merging (sharing common parts of the
-  // AST most often represented in common header files of a project)
-  optionCount = sla(argv, "-rose:", "($)", "(astMerge)", 1);
-  optionCount = sla(argv, "-rose:ast:", "($)", "(merge)", 1);
   char *filename = NULL;
-  optionCount =
-      sla(argv, "-rose:", "($)^", "(astMergeCommandFile)", filename, 1);
 
   // DQ (10/28/2020): Added to support output of compile-time performance data.
   optionCount = sla(argv, "-rose:", "($)^", "(compilationPerformance)", 1);
@@ -3955,9 +4205,6 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   optionCount = sla(argv, "-rose:", "($)^", "(excludePath)", pathname, 1);
   optionCount = sla(argv, "-rose:", "($)^", "(excludeFile)", filename, 1);
   optionCount = sla(argv, "-rose:", "($)^", "(includeFile)", filename, 1);
-
-  optionCount = sla(argv, "-rose:", "($)", "(skip_unparse_asm_commands)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(skip_unparse_cc_commands)", 1);
 
   // DQ (8/26/2007): Disassembly support from segments (true) instead of
   // sections (false, default).
@@ -4033,9 +4280,24 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
     ++i;
   }
 
-  // DQ (9/15/2013): Remove this from being output to the backend compiler.
-  optionCount = sla(argv, "-rose:", "($)",
-                    "(unparse_in_same_directory_as_input_file)", 1);
+  // Generic backend command stripping can also receive the exact supported
+  // project option outside an SgFile transaction. Its arity is zero and a
+  // duplicate remains malformed.
+  const std::string sameDirectoryOption =
+      "-rose:unparse_in_same_directory_as_input_file";
+  const auto sameDirectoryArgument =
+      std::find(argv.begin(), argv.end(), sameDirectoryOption);
+  if (sameDirectoryArgument != argv.end()) {
+    if (std::find(std::next(sameDirectoryArgument), argv.end(),
+                  sameDirectoryOption) != argv.end()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[same-directory-option]: option '%s' "
+              "appears more than once in one translation-unit command\n",
+              sameDirectoryOption.c_str());
+      ROSE_ABORT();
+    }
+    argv.erase(sameDirectoryArgument);
+  }
 
   // DQ (1/26/2014): Remove this from being output to the backend compiler.
   // This also likely means that we are not passing it on to the backend
@@ -4088,8 +4350,8 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   // characters [+][+] for regex handling.
   optionCount =
       sla(argv, "-std=", "($)",
-          "(c|c[+][+]|gnu|gnu[+][+]|fortran|c89|c90|c99|c9x|c11|c1x|c17|c23|"
-          "c2y|gnu89|gnu90|gnu9x|gnu11|gnu1x|gnu17|gnu23|gnu2y|c[+][+]98|c[+][+"
+          "(c89|c90|c99|c9x|c11|c1x|c17|c23|c2y|gnu89|gnu90|gnu9x|gnu11|"
+          "gnu1x|gnu17|gnu23|gnu2y|c[+][+]98|c[+][+"
           "]03|c[+][+]11|c[+][+]0x|gnu[+][+]11|gnu[+][+]0x|c[+][+]14|c[+][+]1y|"
           "gnu[+][+]14|gnu[+][+]1y|c[+][+]17|c[+][+]1z|gnu[+][+]17|gnu[+][+]1z|"
           "c[+][+]20|c[+][+]2a|gnu[+][+]20|gnu[+][+]2a|c[+][+]23|c[+][+]2b|gnu["
@@ -4125,8 +4387,10 @@ void SgFile::stripFortranCommandLineOptions(vector<string> &argv) {
   filtered.reserve(argv.size());
   for (const auto &arg : argv) {
     if (arg == "-fcray-pointer") {
-      // Accepted as a ROSE compatibility alias; do not pass to Flang.
-      continue;
+      std::cerr << "REX_BACKEND_INVARIANT[removed-cray-pointer-option]: "
+                   "-fcray-pointer must not reach the Flang backend; use "
+                   "-rose:cray_pointer_support explicitly\n";
+      ROSE_ABORT();
     }
     if (arg == "-fno-cray-pointer") {
       std::cerr << "[FATAL] [ROSE] [backend] [Fortran] "
@@ -4190,6 +4454,26 @@ CommandlineProcessing::generateOptionListWithDeclaredParameters(
     }
   }
   return optionList;
+}
+
+static void stripRexFrontendCommandLineOptions(vector<string> &argv) {
+  // The backend stripper also removes compiler-owned language controls such
+  // as -std= and -ansi so they can be reconstructed from SgFile state.  A
+  // Clang frontend command must instead retain the user's exact ordered driver
+  // stream.  Remove only options owned by REX at this boundary.
+  rejectRemovedRexClangFrontendOptions(argv);
+  rejectRemovedRoseLanguageSelectionOptions(argv);
+  Rose::Cmdline::StripRoseOptions(argv);
+  CommandlineProcessing::removeArgsWithParameters(argv, "-outputdir");
+  for (size_t i = 0; i < argv.size();) {
+    const std::string &arg = argv[i];
+    if (arg.rfind("-rex:ast-json-checkpoint=", 0) == 0 ||
+        arg.rfind("-rex:ast-json-dir=", 0) == 0) {
+      argv.erase(argv.begin() + i);
+      continue;
+    }
+    ++i;
+  }
 }
 
 void SgFile::stripTranslationCommandLineOptions(vector<string> &argv) {
@@ -4265,216 +4549,127 @@ void SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine,
                                      int /*fileNameIndex*/) {
   // It filters ROSE-specific parameters and fixes the paths.
 
-  std::vector<std::string> inc_dirs_list;
-  std::vector<std::string> define_list;
-  std::vector<std::string> clang_frontend_args;
-  std::vector<std::string> sys_dirs_list;
-  std::string input_file;
-  const bool respect_rtti_flags =
-      std::find(argv.begin(), argv.end(), "-rex:clang:respect-rtti-flags") !=
-      argv.end();
-  auto is_split_module_option = [](const std::string &arg) {
-    return arg == "-fmodule-file" || arg == "-fprebuilt-module-path" ||
-           arg == "-fmodule-map-file";
+  if (argv.empty() || argv.front().empty()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[clang-command]: command has no driver "
+            "executable\n");
+    ROSE_ABORT();
+  }
+
+  // This is the single ownership boundary between REX's driver options and
+  // Clang's driver options.  In particular, REX's historical `-outputdir`
+  // spelling is parsed by Clang as the joined `-o` option followed by a second
+  // positional input.  Preserve the original command on the SgFile, while
+  // removing only REX-owned options from the per-translation-unit frontend
+  // command.  Compiler-owned options remain in their exact original order.
+  vector<string> frontendArgv = argv;
+  stripRexFrontendCommandLineOptions(frontendArgv);
+  if (frontendArgv.empty() || frontendArgv.front() != argv.front()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[clang-command]: REX option stripping "
+            "changed or removed the driver executable\n");
+    ROSE_ABORT();
+  }
+
+  auto fail_missing_operand = [](const std::string &option) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[clang-option-operand]: option '%s' "
+            "requires an argument\n",
+            option.c_str());
+    ROSE_ABORT();
   };
-  auto is_module_option = [&](const std::string &arg) {
-    return arg.rfind("-fmodule", 0) == 0 || arg.rfind("-fmodules", 0) == 0 ||
-           arg.rfind("-fcxx-modules", 0) == 0 ||
-           arg.rfind("-fimplicit-module", 0) == 0 ||
-           arg.rfind("-fprebuilt-module-path", 0) == 0;
-  };
+  const std::string expectedSource = get_sourceFileNameWithPath();
+  if (expectedSource.empty()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[clang-source-identity]: Sage file has no "
+            "owned source path\n");
+    ROSE_ABORT();
+  }
+  const std::string resolvedExpectedSource =
+      StringUtility::getAbsolutePathFromRelativePath(expectedSource, true);
+  std::string sourceOperand;
+  bool afterDoubleDash = false;
+  inputCommandLine.clear();
 
-  for (size_t i = 0; i < argv.size(); i++) {
-    std::string current_arg(argv[i]);
-    Rose::Cmdline::IncludeOptionParseResult include_parse_result =
-        Rose::Cmdline::IncludeOptionParseResult::NotIncludeOption;
-    if (current_arg.find("-I") == 0) {
-      if (current_arg.length() > 2) {
-        inc_dirs_list.push_back(current_arg.substr(2));
-      } else {
-        i++;
-        if (i < argv.size())
-          inc_dirs_list.push_back(current_arg);
-        else
-          break;
-      }
-    } else if (current_arg == "-isystem") {
-      ++i;
-      if (i < argv.size())
-        sys_dirs_list.push_back(argv[i]);
-      else
-        break;
-    } else if (current_arg.rfind("-isystem", 0) == 0) {
-      if (current_arg.size() > 8 && current_arg[8] != '-') {
-        sys_dirs_list.push_back(current_arg.substr(8));
-      }
-    } else if (current_arg.find("-D") == 0) {
-      if (current_arg.length() > 2) {
-        define_list.push_back(current_arg.substr(2));
-      } else {
-        i++;
-        if (i < argv.size())
-          define_list.push_back(argv[i]);
-        else
-          break;
-      }
-    } else if (current_arg == "-std") {
-      ++i;
-      if (i >= argv.size())
-        break;
-    } else if ((include_parse_result =
-                    Rose::Cmdline::normalizeAndAppendIncludeOption(
-                        current_arg, i, argv.size(),
-                        [&argv](size_t arg_index) { return argv[arg_index]; },
-                        clang_frontend_args)) !=
-               Rose::Cmdline::IncludeOptionParseResult::NotIncludeOption) {
-      if (include_parse_result ==
-          Rose::Cmdline::IncludeOptionParseResult::MissingArgument) {
-        break;
-      }
-    } else if (current_arg.rfind("-std=", 0) == 0) {
-      // Standard selection is handled earlier during command-line processing.
-    } else if (current_arg.find("-c") == 0) {
-    } else if (current_arg.find("-o") == 0) {
-      if (current_arg.length() == 2) {
-        i++;
-        if (i >= argv.size())
-          break;
-      }
-    } else if (isSplitClangTargetOption(current_arg)) {
-      clang_frontend_args.push_back(current_arg);
-      ++i;
-      if (i < argv.size()) {
-        clang_frontend_args.push_back(argv[i]);
-      } else {
-        break;
-      }
-    } else if (isJoinedClangTargetOption(current_arg) ||
-               isX86OnlyDriverOption(current_arg)) {
-      clang_frontend_args.push_back(current_arg);
-    } else if (current_arg.find("-rose") == 0) {
+  for (size_t i = 1; i < frontendArgv.size(); i++) {
+    const std::string &currentArg = frontendArgv[i];
+    if (!afterDoubleDash && currentArg == "--") {
+      afterDoubleDash = true;
+      inputCommandLine.push_back(currentArg);
+      continue;
     }
-    // Filter out OpenMP flags - REX captures pragmas as plain text, not via
-    // Clang
-    else if (current_arg == "-fopenmp" ||
-             current_arg.rfind("-fopenmp=", 0) == 0 ||
-             current_arg == "-fopenmp-simd") {
-    } else if (current_arg.find("--rex-omp-") == 0) {
-    } else if (current_arg == "-fexceptions" ||
-               current_arg == "-fcxx-exceptions" || current_arg == "-frtti") {
-      clang_frontend_args.push_back(current_arg);
-    } else if (isClangFrontendDriverOption(current_arg) ||
-               isClangDiagnosticOption(current_arg)) {
-      clang_frontend_args.push_back(current_arg);
-    } else if (current_arg == "-fno-rtti") {
-      // Keep -fno-rtti backend-only unless frontend enforcement is explicitly
-      // requested.
-      if (respect_rtti_flags) {
-        clang_frontend_args.push_back(current_arg);
-      }
-    } else if (current_arg == "-fno-exceptions" ||
-               current_arg == "-fno-cxx-exceptions") {
-      // Keep exceptions enabled in frontend parsing to build a complete C++
-      // AST; disabling remains a backend concern.
-    } else if (isRexClangFrontendOption(current_arg)) {
-      clang_frontend_args.push_back(current_arg);
-    } else if (is_split_module_option(current_arg)) {
-      clang_frontend_args.push_back(current_arg);
-      ++i;
-      if (i < argv.size()) {
-        clang_frontend_args.push_back(argv[i]);
-      } else {
-        break;
-      }
-    } else if (is_module_option(current_arg)) {
-      clang_frontend_args.push_back(current_arg);
-    } else if (!current_arg.empty() && current_arg[0] == '-') {
-      // Ignore other frontend/driver flags that Clang cc1 doesn't accept.
-    } else {
-      input_file = current_arg;
+
+    if (!afterDoubleDash && currentArg == "-std") {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[clang-standard-option]: Clang "
+              "standards must use the exact joined -std=<dialect> form\n");
+      ROSE_ABORT();
     }
+    if (!afterDoubleDash && isRemovedRexClangFrontendOption(currentArg)) {
+      rejectRemovedRexClangFrontendOption(currentArg);
+    }
+    if (!afterDoubleDash && (currentArg.rfind("-rose:", 0) == 0 ||
+                             currentArg.rfind("--rose:", 0) == 0)) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[unknown-rose-option]: unconsumed option "
+              "'%s' reached Clang command construction\n",
+              currentArg.c_str());
+      ROSE_ABORT();
+    }
+
+    if (!afterDoubleDash &&
+        CommandlineProcessing::isOptionTakingSecondParameter(currentArg)) {
+      inputCommandLine.push_back(currentArg);
+      const size_t operandCount =
+          CommandlineProcessing::isOptionTakingThirdParameter(currentArg) ? 2
+                                                                          : 1;
+      if (operandCount >= frontendArgv.size() - i) {
+        fail_missing_operand(currentArg);
+      }
+      for (size_t operandIndex = 0; operandIndex < operandCount;
+           ++operandIndex) {
+        inputCommandLine.push_back(frontendArgv[++i]);
+      }
+      continue;
+    }
+
+    if (afterDoubleDash || currentArg.empty() || currentArg == "-" ||
+        currentArg.front() != '-') {
+      if (currentArg == "-") {
+        rejectClangStdinInput();
+      }
+      const std::string resolvedOperand =
+          StringUtility::getAbsolutePathFromRelativePath(currentArg, true);
+      if (resolvedOperand == resolvedExpectedSource) {
+        if (!sourceOperand.empty()) {
+          fprintf(stderr,
+                  "REX_FRONTEND_INVARIANT[clang-source-count]: owned source "
+                  "operand appears more than once ('%s', '%s')\n",
+                  sourceOperand.c_str(), currentArg.c_str());
+          ROSE_ABORT();
+        }
+        sourceOperand = currentArg;
+      } else if (CommandlineProcessing::isSourceFilename(currentArg) ||
+                 CommandlineProcessing::isAssemblerFileNameSuffix(
+                     StringUtility::fileNameSuffix(currentArg))) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[clang-source-identity]: per-TU "
+                "command contains foreign compilable source '%s' resolving "
+                "to '%s', expected '%s'\n",
+                currentArg.c_str(), resolvedOperand.c_str(),
+                resolvedExpectedSource.c_str());
+        ROSE_ABORT();
+      }
+    }
+    inputCommandLine.push_back(currentArg);
   }
 
-  std::string standard_flag;
-  switch (get_standard()) {
-  case e_default_standard:
-    break;
-  case e_c89_standard:
-    standard_flag = is_gnu_standard() ? "-std=gnu89" : "-std=c89";
-    break;
-  case e_c90_standard:
-    standard_flag = is_gnu_standard() ? "-std=gnu90" : "-std=c90";
-    break;
-  case e_c99_standard:
-    standard_flag = is_gnu_standard() ? "-std=gnu99" : "-std=c99";
-    break;
-  case e_c11_standard:
-    standard_flag = is_gnu_standard() ? "-std=gnu11" : "-std=c11";
-    break;
-  case e_c17_standard:
-    standard_flag = is_gnu_standard() ? "-std=gnu17" : "-std=c17";
-    break;
-  case e_c23_standard:
-    standard_flag = is_gnu_standard() ? "-std=gnu2x" : "-std=c2x";
-    break;
-  case e_c2y_standard:
-    standard_flag = is_gnu_standard() ? "-std=gnu2y" : "-std=c2y";
-    break;
-  case e_cxx98_standard:
-    standard_flag = is_gnu_standard() ? "-std=gnu++98" : "-std=c++98";
-    break;
-  case e_cxx03_standard:
-    standard_flag = is_gnu_standard() ? "-std=gnu++03" : "-std=c++03";
-    break;
-  case e_cxx11_standard:
-    standard_flag = is_gnu_standard() ? "-std=gnu++11" : "-std=c++11";
-    break;
-  case e_cxx14_standard:
-    standard_flag = is_gnu_standard() ? "-std=gnu++14" : "-std=c++14";
-    break;
-  case e_cxx17_standard:
-    standard_flag = is_gnu_standard() ? "-std=gnu++17" : "-std=c++17";
-    break;
-  case e_cxx20_standard:
-    standard_flag = is_gnu_standard() ? "-std=gnu++20" : "-std=c++20";
-    break;
-  case e_cxx23_standard:
-    standard_flag = is_gnu_standard() ? "-std=gnu++23" : "-std=c++23";
-    break;
-  case e_cxx26_standard:
-    standard_flag = is_gnu_standard() ? "-std=gnu++2c" : "-std=c++2c";
-    break;
-  default:
-    break;
+  if (sourceOperand.empty()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[clang-source-count]: command has no "
+            "source operand\n");
+    ROSE_ABORT();
   }
-  if (!standard_flag.empty()) {
-    clang_frontend_args.push_back(standard_flag);
-  }
-  if (get_strict_language_handling()) {
-    clang_frontend_args.push_back("-ansi");
-  }
-
-  std::vector<std::string>::iterator it_str;
-  for (it_str = define_list.begin(); it_str != define_list.end(); it_str++)
-    inputCommandLine.push_back("-D" + *it_str);
-  for (it_str = inc_dirs_list.begin(); it_str != inc_dirs_list.end(); it_str++)
-    inputCommandLine.push_back(
-        "-I" + StringUtility::getAbsolutePathFromRelativePath(*it_str));
-  for (it_str = sys_dirs_list.begin(); it_str != sys_dirs_list.end(); it_str++)
-    inputCommandLine.push_back(
-        "-isystem" + StringUtility::getAbsolutePathFromRelativePath(*it_str));
-  for (it_str = clang_frontend_args.begin();
-       it_str != clang_frontend_args.end(); it_str++)
-    inputCommandLine.push_back(*it_str);
-
-  std::string input_file_path = StringUtility::getPathFromFileName(input_file);
-  input_file = StringUtility::stripPathFromFileName(input_file);
-  if (input_file_path == "")
-    input_file_path = "./";
-  input_file_path =
-      StringUtility::getAbsolutePathFromRelativePath(input_file_path);
-  input_file = input_file_path + "/" + input_file;
-  inputCommandLine.push_back(input_file);
 }
 
 int findIndexForFirstIncludeDirectiveInArgumentList(vector<string> &argv,
@@ -4571,21 +4766,62 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
 
   const std::vector<std::string> originalCommandLineArgs =
       get_originalCommandLineArgumentList();
-  const bool userSpecifiedDialect = std::any_of(
-      originalCommandLineArgs.begin(), originalCommandLineArgs.end(),
-      [](const std::string &arg) {
-        return arg == "-std" || arg.rfind("-std=", 0) == 0 || arg == "-ansi";
-      });
-  const bool useBackendDelayedTemplateParsing =
-      get_Cxx_only() &&
-      std::find(originalCommandLineArgs.begin(), originalCommandLineArgs.end(),
-                "-rex:clang:delayed-template-parsing") !=
-          originalCommandLineArgs.end();
+  SgProject *owningProject = SageInterface::getProject(this);
+  ROSE_ASSERT(owningProject != NULL);
+  auto requireExactOwnedSource = [&](const std::vector<std::string> &command,
+                                     const char *commandKind) -> std::string {
+    if (command.empty()) {
+      fprintf(stderr,
+              "REX_BACKEND_INVARIANT[empty-owned-command]: file=%s "
+              "command-kind=%s\n",
+              getFileName().c_str(), commandKind);
+      ROSE_ABORT();
+    }
 
+    const Rose_STL_Container<string> sourceInputs =
+        CommandlineProcessing::generateSourceFilenames(
+            command, owningProject->get_binary_only());
+    if (sourceInputs.size() != 1) {
+      fprintf(stderr,
+              "REX_BACKEND_INVARIANT[owned-command-source-count]: file=%s "
+              "command-kind=%s count=%zu inputs=%s command=%s\n",
+              getFileName().c_str(), commandKind, sourceInputs.size(),
+              StringUtility::listToString(sourceInputs).c_str(),
+              CommandlineProcessing::generateStringFromArgList(command, false,
+                                                               false)
+                  .c_str());
+      ROSE_ABORT();
+    }
+
+    const std::string sourceInput = sourceInputs.front();
+    const std::string absoluteSourceInput =
+        StringUtility::getAbsolutePathFromRelativePath(sourceInput, true);
+    if (absoluteSourceInput != get_sourceFileNameWithPath()) {
+      fprintf(stderr,
+              "REX_BACKEND_INVARIANT[owned-command-source-mismatch]: "
+              "file=%s command-kind=%s input=%s resolved-input=%s\n",
+              getFileName().c_str(), commandKind, sourceInput.c_str(),
+              absoluteSourceInput.c_str());
+      ROSE_ABORT();
+    }
+    return sourceInput;
+  };
+  const std::string ownedSourceInput =
+      requireExactOwnedSource(originalCommandLineArgs, "original");
   std::vector<std::string> backendArgv = argv;
   SgFile::stripRoseCommandLineOptions(backendArgv);
   if (get_Fortran_only() == true) {
     SgFile::stripFortranCommandLineOptions(backendArgv);
+  }
+  const std::string backendSourceInput =
+      requireExactOwnedSource(backendArgv, "backend");
+  if (backendSourceInput != ownedSourceInput) {
+    fprintf(stderr,
+            "REX_BACKEND_INVARIANT[owned-command-source-spelling]: file=%s "
+            "original-input=%s backend-input=%s\n",
+            getFileName().c_str(), ownedSourceInput.c_str(),
+            backendSourceInput.c_str());
+    ROSE_ABORT();
   }
 
   // To use rose in place of a C or C++ compiler specify the compiler name using
@@ -4593,14 +4829,6 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
   // the default value of "originalCompilerName" is "CC"
   vector<string> compilerNameString;
   compilerNameString.push_back(compilerName);
-#if defined(BACKEND_CXX_IS_CLANG_COMPILER)
-  if (useBackendDelayedTemplateParsing &&
-      std::find(backendArgv.begin(), backendArgv.end(),
-                "-fdelayed-template-parsing") == backendArgv.end()) {
-    compilerNameString.push_back("-fdelayed-template-parsing");
-  }
-#endif
-
   // DQ (1/17/2006): test this
   // ROSE_ASSERT(get_fileInfo() != NULL);
 
@@ -4625,6 +4853,9 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
   }
 
   case SgFile::e_default_language: {
+    fprintf(stderr, "REX_BACKEND_INVARIANT[output-language]: backend command "
+                    "construction requires an exact output language\n");
+    ROSE_ABORT();
   }
 
   case SgFile::e_C_language: {
@@ -4689,9 +4920,12 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
     compilerNameString[0] = BACKEND_FORTRAN_COMPILER_NAME_WITH_PATH;
 
     if (get_backendCompileFormat() == e_fixed_form_output_format) {
-      // Explicit fixed-form compilation; disable line-length limits.
+      // The fixed-form unparser emits source against the standard 72-column
+      // lexical boundary.  The backend must parse the same boundary: Flang's
+      // unlimited mode changes the meaning of a continued character literal
+      // when the first physical record ends at column 72.
       compilerNameString.push_back("-ffixed-form");
-      compilerNameString.push_back("-ffixed-line-length=0");
+      compilerNameString.push_back("-ffixed-line-length=72");
     } else if (get_backendCompileFormat() == e_free_form_output_format) {
       // Explicit free-form compilation.
       compilerNameString.push_back("-ffree-form");
@@ -4894,42 +5128,6 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
   }
   }
 
-#if defined(BACKEND_CXX_IS_CLANG_COMPILER) ||                                  \
-    defined(BACKEND_CXX_IS_GNU_COMPILER)
-  const bool backendOutputsCxx =
-      get_outputLanguage() == SgFile::e_Cxx_language ||
-      get_standard() == e_cxx98_standard ||
-      get_standard() == e_cxx03_standard ||
-      get_standard() == e_cxx11_standard ||
-      get_standard() == e_cxx14_standard ||
-      get_standard() == e_cxx17_standard ||
-      get_standard() == e_cxx20_standard ||
-      get_standard() == e_cxx23_standard || get_standard() == e_cxx26_standard;
-  if (backendOutputsCxx && !userSpecifiedDialect &&
-      std::find(backendArgv.begin(), backendArgv.end(), "-fms-extensions") ==
-          backendArgv.end()) {
-    compilerNameString.push_back("-fms-extensions");
-  }
-#endif
-
-#if defined(BACKEND_CXX_IS_CLANG_COMPILER)
-  if (get_C_only() || get_C89_only() || get_C90_only() || get_C99_only() ||
-      get_C11_only() || get_C17_only() || get_C23_only() || get_C2y_only()) {
-    compilerNameString.push_back("-Wno-error=implicit-function-declaration");
-    compilerNameString.push_back("-Wno-error=implicit-int");
-  }
-
-  if (get_standard() == e_cxx17_standard ||
-      get_standard() == e_cxx20_standard ||
-      get_standard() == e_cxx23_standard ||
-      get_standard() == e_cxx26_standard) {
-    compilerNameString.push_back("-Wno-error=register");
-    compilerNameString.push_back("-Wno-error=dynamic-exception-spec");
-    compilerNameString.push_back("-Wno-register");
-    compilerNameString.push_back("-Wno-dynamic-exception-spec");
-  }
-#endif
-
   // printf ("compilerName       = %s \n",compilerName);
   // printf ("compilerNameString = %s \n",compilerNameString.c_str());
 
@@ -5021,17 +5219,6 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
     // translators to compile them Part of solution to bug 316 :
     // https://outreach.scidac.gov/tracker/
     compilerNameString.push_back("-DUSE_ROSE");
-
-    // DQ (1/29/2014): I think this still makes since when we want to make sure
-    // that the this is code that might be special to the backend (e.g. #undef
-    // <some macros>).  So make this active once again. DQ (9/14/2013): We need
-    // to at times distinguish between the use of USE_ROSE and that this is the
-    // backend compilation. This allows for code to be placed into input source
-    // code to ROSE and preserved (oops, this would not work since any code in
-    // the macro that was not active in the frontend would not survive to be put
-    // into the generated code for the backend).  I don't think there is a way
-    // to not see code in the front-end, yet see it in the backend.
-    compilerNameString.push_back("-DUSE_ROSE_BACKEND");
 
     // Add -D_OPENMP to backend compiler when OpenMP is enabled
     // This allows backend to process #ifdef _OPENMP guards in generated code
@@ -5609,70 +5796,31 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
   // these will be inserted later) if (get_skip_unparse() == true &&
   // get_skipfinalCompileStep() == false)
   if (get_skip_unparse() == false) {
-    // DQ (1/24/2010): Now that we have directory support, the parent of a
-    // SgFile does not have to be a SgProject. SgProject* project =
-    // isSgProject(this->get_parent())
-    SgProject *project = SageInterface::getProject(this);
-    ROSE_ASSERT(project != NULL);
-    Rose_STL_Container<string> sourceFilenames =
-        project->get_sourceFileNameList();
-#if DEBUG_COMPILER_COMMAND_LINE
-    printf("sourceFilenames.size() = %" PRIuPTR " sourceFilenames = %s \n",
-           sourceFilenames.size(),
-           StringUtility::listToString(sourceFilenames).c_str());
-#endif
-    for (Rose_STL_Container<string>::iterator i = sourceFilenames.begin();
-         i != sourceFilenames.end(); i++) {
-#if DEBUG_COMPILER_COMMAND_LINE
-      printf("Removing sourceFilenames list element i = %s \n", (*i).c_str());
-#endif
-
-#if USE_ABSOLUTE_PATHS_IN_SOURCE_FILE_LIST
-#error "USE_ABSOLUTE_PATHS_IN_SOURCE_FILE_LIST is not supported yet"
-
-      // DQ (9/1/2006): Check for use of absolute path and convert filename to
-      // absolute path if required
-      bool usesAbsolutePath = ((*i)[0] == '/');
-      if (usesAbsolutePath == false) {
-        string targetSourceFileToRemove =
-            StringUtility::getAbsolutePathFromRelativePath(*i);
-        printf("Converting source file to absolute path to search for it and "
-               "remove it! targetSourceFileToRemove = %s \n",
-               targetSourceFileToRemove.c_str());
-        argcArgvList.remove(targetSourceFileToRemove);
-      } else {
-        // printf ("This source file used the absolute path so no conversion to
-        // absolute path is required! \n");
-        argcArgvList.remove(*i);
-      }
-#if DEBUG_COMPILER_COMMAND_LINE || 0
-      printf("In buildCompilerCommandLineOptions: test 1.04: "
-             "compilerNameString = \n%s\n",
-             CommandlineProcessing::generateStringFromArgList(
-                 compilerNameString, false, false)
-                 .c_str());
-      printf("argcArgvList.size()                                            = "
-             "%" PRIuPTR " \n",
-             argcArgvList.size());
-      printf("In buildCompilerCommandLineOptions: test 1.04: argcArgvList      "
-             " = \n%s\n",
-             CommandlineProcessing::generateStringFromArgList(argcArgvList,
-                                                              false, false)
-                 .c_str());
-#endif
-#endif
-
-      // DQ (9/25/2007): Moved to std::vector from std::list uniformally
-      // within ROSE. printf ("Skipping test for absolute path removing the
-      // source filename as it appears in the source file name list file = %
-      // \n",i->c_str()); argcArgvList.remove(*i); The if here is to skip
-      // files that don't appear on the command line for those cases when a
-      // single project has multiple inputs.
-      if (find(argcArgvList.begin(), argcArgvList.end(), *i) !=
-          argcArgvList.end()) {
-        argcArgvList.erase(find(argcArgvList.begin(), argcArgvList.end(), *i));
-      }
+    // Rebuild each backend invocation from the command line owned by this
+    // translation unit.  The project's parsed-input list is deliberately not
+    // authoritative here: transformations can add output-only source files
+    // after the frontend has run.  Leaving such a file in argcArgvList and
+    // then appending its unparse output below presents the same translation
+    // unit to Clang twice and makes a per-file -o invalid.
+    const size_t sourceInputCount = std::count(
+        argcArgvList.begin(), argcArgvList.end(), backendSourceInput);
+    if (sourceInputCount != 1) {
+      fprintf(stderr,
+              "REX_BACKEND_INVARIANT[backend-source-occurrence-count]: "
+              "file=%s source=%s count=%zu command=%s\n",
+              getFileName().c_str(), backendSourceInput.c_str(),
+              sourceInputCount,
+              CommandlineProcessing::generateStringFromArgList(argcArgvList,
+                                                               false, false)
+                  .c_str());
+      ROSE_ABORT();
     }
+#if DEBUG_COMPILER_COMMAND_LINE
+    printf("Removing exact owned source input: %s\n",
+           backendSourceInput.c_str());
+#endif
+    argcArgvList.erase(std::find(argcArgvList.begin(), argcArgvList.end(),
+                                 backendSourceInput));
   }
 
 #if DEBUG_COMPILER_COMMAND_LINE || 0

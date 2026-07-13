@@ -100,9 +100,11 @@ for header in ${STL_HEADERS}; do
     printf "
 
 #include <$header>\nint main(){ return 0; }\n" > ${TEST_HEADER_C}
-    # option -P: inhibit generation of linemarkers
-    #cpp -P -std=$LANG_STANDARD -x c++ ${TEST_HEADER_C} ${TEST_HEADER_PP_C}
-    $TOOL1 -P -std=$LANG_STANDARD -E ${TEST_HEADER_C} > ${TEST_HEADER_PP_C}
+    # Preserve preprocessor linemarkers.  They are the frontend's exact
+    # provenance boundary between the user translation unit and system-header
+    # declarations; stripping them turns system-header diagnostics and AST
+    # ownership into main-file diagnostics and ownership.
+    $TOOL1 -std=$LANG_STANDARD -E ${TEST_HEADER_C} > ${TEST_HEADER_PP_C}
     LOC=`wc -l ${TEST_HEADER_PP_C} | cut -f1 -d' '`
     printf "%6s LOC : " "$LOC"
 

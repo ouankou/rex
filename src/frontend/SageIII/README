@@ -78,11 +78,6 @@ Generated files include (complete list as of 5/27/2007):
       (this is a subset of all references to IR nodes defined by function generated in
       Cxx_GrammarReturnDataMemberPointers.C and Cxx_GrammarReturnDataMemberReferenceToPointers.C).
 
-   Cxx_GrammarGetChildIndex.C
-      More generated functions supporting the AST file I/O.  These generate the functions
-      to support computation of unique index values in to the global memory pool of all IR
-      nodes.  These are called in a way that makes there semantics unclear.
-
 **********************************************************************
 *                    Summaries of directories                        *
 **********************************************************************
@@ -110,10 +105,6 @@ Here we summarize the separate sub-directoies of this directory:
       that are not possible or difficult to compute during construction of the AST.
       Some template details are of this sort and handled here, and compete list is
       in the postProcessingSupport() function in the astPostProcessing.C file.
-
-   astMerge
-      This implements the merging of separate ASTs (typically from different files of the
-      same program, but could be different programs).
 
    astTokenStream
       This is the support for weaving of the preprocessed token stream (the post processed

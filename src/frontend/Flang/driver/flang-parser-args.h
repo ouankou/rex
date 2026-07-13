@@ -20,11 +20,11 @@
 
 #include <flang/Parser/unparse.h>
 
-#include <llvm/Config/llvm-config.h>
-
 #include <flang/Support/Fortran-features.h>
 #include <flang/Support/LangOptions.h>
+#include <flang/Support/OpenMP-features.h>
 #include <flang/Support/default-kinds.h>
+#include <llvm/Config/llvm-config.h>
 
 #include <llvm/Support/Errno.h>
 
@@ -60,6 +60,8 @@ struct DriverOptions {
   bool compileOnly{false};                          // -c
   std::string outputPath;                           // -o path
   std::vector<std::string> searchDirectories{"."s}; // -I dir
+  std::vector<std::string> intrinsicModuleDirectories;
+  Fortran::common::IntrinsicTypeDefaultKinds defaultKinds;
   Fortran::common::LangOptions langOpts;
   bool forcedForm{false};             // -Mfixed or -Mfree appeared
   bool warnOnNonstandardUsage{false}; // -Mstandard
@@ -74,6 +76,7 @@ struct DriverOptions {
   bool dumpParseTree{false};
   bool timeParse{false};
   bool externalBuilder{false}; // ROSE
+  bool openMPEnabled{false};
   std::vector<std::string> fcArgs;
   const char *prefix{nullptr};
 };
@@ -123,6 +126,7 @@ inline void AddFlangIntrinsicSearchDirectory(DriverOptions &driver) {
   const std::string normalized_dir =
       flang_intrinsic_dir.lexically_normal().string();
   AddExistingSearchDirectory(driver.searchDirectories, normalized_dir);
+  AddExistingSearchDirectory(driver.intrinsicModuleDirectories, normalized_dir);
   std::error_code ec;
   if (std::filesystem::exists(flang_intrinsic_dir, ec) && !ec &&
       !HasIncludeArg(driver.fcArgs, normalized_dir)) {
@@ -148,8 +152,6 @@ inline int ParseFlangArgs(int argc, char *const argv[], DriverContext &ctx) {
 
   const char *fc{getenv("F18_FC")};
   ctx.driver.fcArgs.push_back(fc ? fc : "flang");
-
-  Fortran::common::IntrinsicTypeDefaultKinds defaultKinds;
 
   while (!args.empty()) {
     std::string arg{std::move(args.front())};
@@ -230,6 +232,22 @@ inline int ParseFlangArgs(int argc, char *const argv[], DriverContext &ctx) {
       ctx.driver.syntaxOnly = true;
     } else if (arg == "-fexternal-builder") {
       ctx.driver.externalBuilder = true;
+    } else if (arg == "-fopenmp") {
+      ctx.options.features.Enable(Fortran::common::LanguageFeature::OpenMP);
+      ctx.driver.openMPEnabled = true;
+      ctx.driver.fcArgs.push_back(arg);
+    } else if (arg == "-fopenmp-version" ||
+               arg.rfind("-fopenmp-version=", 0) == 0) {
+      llvm::errs()
+          << "REX_FLANG_INVARIANT[removed-openmp-version-option]: option '"
+          << arg
+          << "' was part of the removed frontend-owned OpenMP design and is "
+             "not supported\n";
+      std::abort();
+    } else if (arg == "-fopenacc") {
+      ctx.options.features.Enable(Fortran::common::LanguageFeature::OpenACC);
+      ctx.options.predefinitions.emplace_back("_OPENACC", "202211");
+      ctx.driver.fcArgs.push_back(arg);
     } else if (arg == "-c") {
       ctx.driver.compileOnly = true;
     } else if (arg == "-o") {
@@ -247,10 +265,10 @@ inline int ParseFlangArgs(int argc, char *const argv[], DriverContext &ctx) {
       ctx.options.predefinitions.emplace_back(arg.substr(2),
                                               std::optional<std::string>{});
     } else if (arg == "-r8" || arg == "-fdefault-real-8") {
-      defaultKinds.set_defaultRealKind(8);
+      ctx.driver.defaultKinds.set_defaultRealKind(8);
     } else if (arg == "-i8" || arg == "-fdefault-integer-8") {
-      defaultKinds.set_defaultIntegerKind(8);
-      defaultKinds.set_defaultLogicalKind(8);
+      ctx.driver.defaultKinds.set_defaultIntegerKind(8);
+      ctx.driver.defaultKinds.set_defaultLogicalKind(8);
     } else if (arg == "-help" || arg == "--help" || arg == "-?") {
       llvm::errs()
           << "f18-parse-demo options:\n"
@@ -300,6 +318,12 @@ inline int ParseFlangArgs(int argc, char *const argv[], DriverContext &ctx) {
   if (!ctx.options.features.IsEnabled(
           Fortran::common::LanguageFeature::BackslashEscapes)) {
     ctx.driver.fcArgs.push_back("-fno-backslash"); // PGI "-Mbackslash"
+  }
+  if (ctx.driver.openMPEnabled) {
+    constexpr unsigned defaultOpenMPVersion = 60;
+    ctx.driver.langOpts.OpenMPVersion = defaultOpenMPVersion;
+    Fortran::common::setOpenMPMacro(ctx.driver.langOpts.OpenMPVersion,
+                                    ctx.options.predefinitions);
   }
   AddFlangIntrinsicSearchDirectory(ctx.driver);
 

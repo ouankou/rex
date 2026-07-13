@@ -5,33 +5,70 @@ SgExpression *SgAssignInitializer::get_operand() const {
 }
 
 void SgAssignInitializer::post_construction_initialization() {
-  if (get_operand() != NULL)
-    get_operand()->set_parent(this);
+  if (get_operand() == nullptr || p_expression_type == nullptr ||
+      isSgTypeUnknown(p_expression_type) != nullptr ||
+      isSgTypeDefault(p_expression_type) != nullptr) {
+    fprintf(stderr, "REX_AST_INVARIANT[assign-initializer-construction]: exact "
+                    "operand and destination type are required\n");
+    ROSE_ABORT();
+  }
+  get_operand()->set_parent(this);
 }
 
 SgType *SgAssignInitializer::get_type() const {
-  ROSE_ASSERT(get_operand() != NULL);
-
-  SgType *returnType =
-      p_expression_type ? p_expression_type : get_operand()->get_type();
-
-  ROSE_ASSERT(returnType != NULL);
-
-  if (!p_expression_type && get_operand()->variantT() != V_SgStringVal) {
-    SgType *retElemType = SageInterface::getElementType(returnType);
-    if (retElemType != NULL) {
-      returnType = SgPointerType::createType(retElemType);
-    }
+  if (get_operand() == nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[assign-initializer-operand]: initializer=%p "
+            "has no exact operand\n",
+            static_cast<const void *>(this));
+    ROSE_ABORT();
   }
-
-  ROSE_ASSERT(returnType != NULL);
-  return returnType;
+  if (p_expression_type == nullptr ||
+      isSgTypeUnknown(p_expression_type) != nullptr ||
+      isSgTypeDefault(p_expression_type) != nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[assign-initializer-type]: initializer=%p has "
+            "no exact stored destination type\n",
+            static_cast<const void *>(this));
+    ROSE_ABORT();
+  }
+  return p_expression_type;
 }
 
 void SgAssignInitializer::set_operand(SgExpression *exp) {
+  if (exp == nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[assign-initializer-operand]: initializer=%p "
+            "cannot publish a null operand\n",
+            static_cast<void *>(this));
+    ROSE_ABORT();
+  }
   set_operand_i(exp);
-  if (exp)
-    exp->set_parent(this);
+  exp->set_parent(this);
+}
+
+SgExpression *SgAssignInitializer::release_operand() {
+  SgExpression *operand = get_operand_i();
+  if (operand == nullptr || operand->get_parent() != this) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[assign-initializer-release]: initializer=%p "
+            "requires one exactly owned operand, got operand=%p parent=%p\n",
+            static_cast<void *>(this), static_cast<void *>(operand),
+            static_cast<void *>(operand != nullptr ? operand->get_parent()
+                                                   : nullptr));
+    ROSE_ABORT();
+  }
+
+  set_operand_i(nullptr);
+  operand->set_parent(nullptr);
+  if (get_operand_i() != nullptr || operand->get_parent() != nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[assign-initializer-release]: initializer=%p "
+            "did not detach operand=%p exactly once\n",
+            static_cast<void *>(this), static_cast<void *>(operand));
+    ROSE_ABORT();
+  }
+  return operand;
 }
 
 SgExpression *SgAssignInitializer::get_next(int &n) const {

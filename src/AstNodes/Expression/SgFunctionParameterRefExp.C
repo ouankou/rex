@@ -1,22 +1,13 @@
 #include "sage3basic.h"
 
 SgType *SgFunctionParameterRefExp::get_type() const {
-  // DQ (8/11/2014): Added support for C++11 decltype used in new function
-  // return syntax.
-
-  ROSE_ASSERT(this != NULL);
-
-  SgType *returnType = NULL;
-
-  if (p_parameter_expression != NULL) {
-    ROSE_ASSERT(p_parameter_type == NULL);
-    returnType = p_parameter_expression->get_type();
-    ROSE_ASSERT(returnType != NULL);
-  } else {
-    returnType = p_parameter_type;
-    ROSE_ASSERT(returnType != NULL);
+  SgType *result_type = p_parameter_type;
+  if (result_type == nullptr || isSgTypeUnknown(result_type) != nullptr ||
+      isSgTypeDefault(result_type) != nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[function-parameter-reference-type]: "
+            "SgFunctionParameterRefExp has no exact semantic result type\n");
+    ROSE_ABORT();
   }
-
-  ROSE_ASSERT(returnType != NULL);
-  return returnType;
+  return result_type;
 }

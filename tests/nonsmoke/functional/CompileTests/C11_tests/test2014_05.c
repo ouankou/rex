@@ -9,4 +9,6 @@ struct sse_t
 {
   char c;
   float sse_data[4];
-} _Alignas(16);
+};
+
+_Alignas(16) struct sse_t aligned_sse;

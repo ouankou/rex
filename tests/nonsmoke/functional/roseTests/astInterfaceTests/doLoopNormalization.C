@@ -21,9 +21,7 @@ int main(int argc, char *argv[])
   for (size_t i = 0; i < loops.size(); i++) {
     SgFortranDo *cloop = isSgFortranDo(loops[i]);
     ROSE_ASSERT(cloop != NULL);
-    bool result = false;
-    result = SageInterface::doLoopNormalization(cloop);
-    ROSE_ASSERT(result != false);
+    SageInterface::doLoopNormalization(cloop);
   }
   // run all tests
   AstTests::runAllTests(project);

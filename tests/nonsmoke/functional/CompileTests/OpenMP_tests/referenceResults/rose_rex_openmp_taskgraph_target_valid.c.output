@@ -1,0 +1,4 @@
+#pragma omp taskgraph
+#pragma omp target nowait map(tofrom : y) depend(out : y)
+#pragma omp task depend(inout : y) shared(y)
+#pragma omp target nowait map(tofrom : y) depend(in : y)

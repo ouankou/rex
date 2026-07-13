@@ -5,6 +5,7 @@ set(TESTCODES
   13.1f.cc 13.3.1.1.2.cc 7.1.3b.cc 7.3.2.cc 7.3.3c.cc 7.3.3f.cc
   7.3.4d.cc 8.2.7a.cc 7.3.3a.cc)
 set(ROSE_FLAGS  -w -std=gnu++03)
+list(APPEND ROSE_FLAGS ${REX_ELSA_SEMANTIC_PROBE_FLAGS})
 set(_elsa_std_output_dir "${ROSE_TEST_OUTPUT_DIR}")
 if(_elsa_std_output_dir STREQUAL "")
   set(_elsa_std_output_dir "${CMAKE_CURRENT_BINARY_DIR}/rose_output")

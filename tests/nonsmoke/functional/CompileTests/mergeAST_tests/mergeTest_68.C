@@ -6,6 +6,7 @@ extern int abc;
 namespace X
    {
      struct { int x; } a;
-     struct { int x; };
-   }
-
+     struct IndependentType {
+       int x;
+     };
+     } // namespace X

@@ -1,9 +1,5 @@
 
-/* unparser.h
- * This header file contains the class declaration for the newest unparser. Six
- * C files include this header file: unparser.C, modified_sage.C,
- * unparse_stmt.C, unparse_expr.C, unparse_type.C, and unparse_sym.C.
- */
+/* C and C++ type unparser declarations. */
 
 #ifndef UNPARSER_TYPE
 #define UNPARSER_TYPE
@@ -54,7 +50,10 @@ public:
   virtual void unparseTemplateType(SgType *type, SgUnparse_Info &info);
 
   virtual void unparseNonrealType(SgType *type, SgUnparse_Info &info,
-                                  bool is_first_in_nonreal_chain = true);
+                                  bool is_first_in_nonreal_chain = true,
+                                  bool is_declarator_qualifier = false);
+  virtual void unparseCtorPreinitializerDesignatorType(SgType *type,
+                                                       SgUnparse_Info &info);
   virtual void unparseAutoType(SgType *type, SgUnparse_Info &info);
 
   // DQ (7/31/2014): Adding support for nullptr constant expression and its
@@ -79,9 +78,12 @@ public:
   static std::string unparseRestrictKeyword(bool prepend_space = true);
 
   // DQ (5/5/2013): Refactored code to support unparsing name qualified types.
+  // outputNameOverride affects only emitted declarator text; it never changes
+  // the initialized-name node stored in the AST.
   template <class T>
   void outputType(T *referenceNode, SgType *referenceNodeType,
-                  SgUnparse_Info &info);
+                  SgUnparse_Info &info,
+                  const SgName *outputNameOverride = nullptr);
 
   // DQ (4/15/2018): Adding support for output of template instantiations from
   // template typedefs with template arguments with name qualification.

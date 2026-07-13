@@ -139,16 +139,17 @@ public:
       SgFunctionCallExp *fc = isSgFunctionCallExp(n);
       SgExprListExp *args1 = fc->get_args();
       SgFunctionType *ft = isSgFunctionType(fc->get_function()->get_type());
+      if (ft == nullptr) {
+        if (SgPointerType *pointer =
+                isSgPointerType(fc->get_function()->get_type())) {
+          ft = isSgFunctionType(pointer->get_base_type());
+        }
+      }
 
-      // DQ (8/13/2004): Working with Jeremiah, we can now assert this
-      // and we don't have to handle the cases where this is false!
-      // ROSE_ASSERT (ft != NULL);
-      if (ft) // sometimes we enter template function declarations. The function
-              // type is SgTemplateType
-      {
-        SgTypePtrList &params = ft->get_arguments();
+      if (ft) {
+        const SgTypePtrList &params = ft->get_arguments();
         SgExpressionPtrList &args = args1->get_expressions();
-        SgTypePtrList::iterator pi = params.begin();
+        SgTypePtrList::const_iterator pi = params.begin();
         SgExpressionPtrList::iterator ai = args.begin();
         // Some call expressions carry more actual arguments than are recorded
         // on the lowered function type (e.g., hidden/implicit call operands).

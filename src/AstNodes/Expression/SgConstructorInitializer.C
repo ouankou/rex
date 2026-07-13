@@ -77,6 +77,15 @@ SgClassDeclaration *SgConstructorInitializer::get_class_decl() const {
 }
 
 void SgConstructorInitializer::post_construction_initialization() {
+  if (p_expression_type == nullptr ||
+      isSgTypeUnknown(p_expression_type) != nullptr ||
+      isSgTypeDefault(p_expression_type) != nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[exact-expression-type]: "
+            "node=SgConstructorInitializer has no exact semantic result "
+            "type\n");
+    ROSE_ABORT();
+  }
   if (p_declaration == NULL) {
     // This can be NULL for the case of an undeclared constructor.
 
@@ -103,27 +112,17 @@ void SgConstructorInitializer::post_construction_initialization() {
     ROSE_ASSERT(p_expression_type != NULL);
   }
 
-  // DQ (11/15/2006): avoid setting newArgs this late in the process.
-  // ROSE_ASSERT(p_args != NULL);
   if (p_args == NULL) {
-    // Build an empty argument list
-
-    // DQ (11/16/2006): Need to handle use in new constructors that don't have
-    // fileInfo parameters. p_args = new SgExprListExp(New_File_Info(this));
-    if (get_startOfConstruct() != NULL) {
-      p_args = new SgExprListExp(New_File_Info(this));
-      p_args->set_endOfConstruct(New_File_Info(this));
-    } else {
-      p_args = new SgExprListExp();
-    }
-    ROSE_ASSERT(p_args != NULL);
+    fprintf(stderr, "REX_AST_INVARIANT[constructor-initializer-arguments]: "
+                    "constructor initializer has no exact argument list\n");
+    ROSE_ABORT();
   }
-
-  // if (get_args() != NULL)
-  //      get_args()->set_parent(this);
-  get_args()->set_parent(this);
-
-  ROSE_ASSERT(p_args != NULL);
+  if (p_args->get_parent() != nullptr && p_args->get_parent() != this) {
+    fprintf(stderr, "REX_AST_INVARIANT[constructor-initializer-arguments]: "
+                    "constructor initializer argument list is already owned\n");
+    ROSE_ABORT();
+  }
+  p_args->set_parent(this);
 }
 
 SgExpression *SgConstructorInitializer::get_next(int &n) const {

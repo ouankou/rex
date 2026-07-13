@@ -15,4 +15,12 @@ inline int rex_issue148_system_header_function(int input) {
   return input + rex_issue148_system_header_value;
 }
 
+namespace RexIssue148SystemHeaderNamespace {
+} // namespace RexIssue148SystemHeaderNamespace
+
+namespace RexIssue148SystemHeaderNamespace {
+inline int first(int input) { return input + 1; }
+inline int second(int input) { return input + 2; }
+} // namespace RexIssue148SystemHeaderNamespace
+
 #endif

@@ -8,9 +8,4 @@ class X
           virtual void do_toupper(const T & t) const = 0;
    };
 
-inline
-void
-X<char>::do_toupper(const char & c) const
-   {
-   }
-
+   template <> inline void X<char>::do_toupper(const char &c) const {}

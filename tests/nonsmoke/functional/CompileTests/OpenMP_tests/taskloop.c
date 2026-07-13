@@ -2,7 +2,7 @@
 
 static void compute_update(int value) { (void)value; }
 
-void main(omp_lock_t *lock, int n) {
+void taskloop_example(omp_lock_t *lock, int n) {
   int data1 = 10;
   int N = 100;
   int M = 50;

@@ -24,7 +24,11 @@ public:
     if (var_first.is_unknown() || var_first.is_unknown_reference() ||
         var_first.is_unknown_function_call())
       return true;
-    refs = refs + " " + AstNodePtrImpl(var_first)->unparseToString();
+    // Side-effect collection intentionally represents declaration sites with
+    // SgInitializedName semantic identities.  Render through AstInterface's
+    // typed diagnostic API; SgNode::unparseToString() correctly rejects an
+    // initialized name because it has no standalone source emitter.
+    refs = refs + " " + AstInterface::unparseToString(var_first);
     return true;
   }
   void DumpOut(ostream &out) { out << refs; }

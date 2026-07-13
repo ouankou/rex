@@ -152,6 +152,25 @@ void IntraAnalysisResultsToDotFiles::runAnalysis() {
 
 namespace Dbg {
 
+std::string diagnosticNodeText(const SgNode *node) {
+  ASSERT_not_null(node);
+
+  if (const SgInitializedName *initialized_name = isSgInitializedName(node)) {
+    const SgName &name = initialized_name->get_name();
+    return name.is_null() ? std::string("<unnamed initialized-name>")
+                          : name.getString();
+  }
+
+  if (isSgFunctionParameterList(node) != nullptr ||
+      isSgCtorInitializerList(node) != nullptr ||
+      isSgCatchStatementSeq(node) != nullptr) {
+    return std::string("<") + node->sage_class_name() +
+           ": owned syntax container>";
+  }
+
+  return node->unparseToString();
+}
+
 dbgBuf::dbgBuf() { init(NULL); }
 
 dbgBuf::dbgBuf(std::streambuf *baseBuf) { init(baseBuf); }

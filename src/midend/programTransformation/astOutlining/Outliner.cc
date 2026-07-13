@@ -154,6 +154,35 @@ Outliner::Result Outliner::outline(SgStatement *s) {
 Outliner::Result Outliner::outline(SgStatement *s,
                                    const std::string &func_name) {
   // cout<<"Debug Outliner::outline() input statement is:"<<s<<endl;
+  ROSE_ASSERT(s != NULL);
+  std::vector<PreprocessingInfo> original_directives;
+  if (useNewFile) {
+    SgSourceFile *source_file = SageInterface::getEnclosingSourceFile(s);
+    if (source_file == NULL) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[directive-dependencies]: outlining "
+              "target has no enclosing source file\n");
+      ROSE_ABORT();
+    }
+    original_directives =
+        SageInterface::collectCppDirectiveSnapshot(source_file);
+  }
+
+  if (use_dlopen) {
+    SgScopeStatement *call_site_scope = s->get_scope();
+    if (call_site_scope == NULL) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[dlopen-dependency]: outlining target "
+              "has no call-site scope\n");
+      ROSE_ABORT();
+    }
+    // The runtime dependency belongs to the call-site translation unit, not
+    // the separately compiled outlined-function library.  Capture the source
+    // directive contract first so this generated include cannot leak into the
+    // library's directive snapshot.
+    ensureDlopenSupportHeaderInCallSite(call_site_scope);
+  }
+
   SgBasicBlock *s_post = preprocess(s);
   // cout<<"Debug Outliner::outline() preprocessed statement is:"<<s_post<<endl;
   ROSE_ASSERT(s_post);
@@ -163,7 +192,8 @@ Outliner::Result Outliner::outline(SgStatement *s,
   } else {
     // return Transform::outlineBlock (s_post, func_name);
 
-    Outliner::Result returnResult = outlineBlock(s_post, func_name);
+    Outliner::Result returnResult =
+        outlineBlock(s_post, func_name, original_directives);
 
     if (enable_debug)
       printf(

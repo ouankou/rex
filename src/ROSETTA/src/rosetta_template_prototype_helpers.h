@@ -41,7 +41,7 @@ inline void addTemplateInstantiationPrototypes(AstNodeClass &target) {
   target.setDataPrototype(
       "SgTemplateArgumentPtrList", "deducedTemplateArguments",
       "= SgTemplateArgumentPtrList()", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
   // REX: Track the specialized template (primary or partial) chosen by Clang.
   target.setDataPrototype("SgDeclarationStatement*",
                           "specializedTemplateDeclaration", "= NULL",

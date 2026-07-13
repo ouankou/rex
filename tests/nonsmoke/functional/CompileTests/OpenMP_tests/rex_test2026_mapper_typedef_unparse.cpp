@@ -37,5 +37,15 @@ int main(int argc, char *argv[]) {
   mapper->set_mapper_type(class_type_expr);
   class_type_expr->set_parent(mapper);
 
+  SgVarRefExp *mapper_variable = isSgVarRefExp(mapper->get_mapper_variable());
+  ROSE_ASSERT(mapper_variable != nullptr);
+  SgVariableSymbol *mapper_symbol =
+      isSgVariableSymbol(mapper_variable->get_symbol());
+  ROSE_ASSERT(mapper_symbol != nullptr);
+  SgInitializedName *mapper_declaration = mapper_symbol->get_declaration();
+  ROSE_ASSERT(mapper_declaration != nullptr);
+  mapper_declaration->set_type(class_type);
+  ROSE_ASSERT(mapper_variable->get_type() == class_type);
+
   return backend(project);
 }

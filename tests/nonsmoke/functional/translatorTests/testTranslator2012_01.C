@@ -1,229 +1,214 @@
-// This program demonstrates reading two files, and putting
-// the contents of the first file into the 2nd file (above the "main" 
-// function of the second file, if it is present).  Numerous
-// variations of this form of approach would be equivalent.
-// Also, numerous variations of this program could allow
-// for different kinds of behavior.  This is just a simple 
-// test program to demonstrate the technique.
-// The prograsm also show how to output a graph of the AST
-// that is useful for debugging.
-
-// Importantly, this simple version of the program does not
-// move the symbols from the 1st file to the 2nd file.  This
-// would be adviable as an additional modification to make
-// the process more elegant, but the output would be the same.
+// This program demonstrates an exact two-translation-unit transformation: it
+// rebuilds a free-function definition in the second file immediately before
+// main, then removes the source definition through the statement-mutation API.
+// Reusing the source declaration nodes would require an atomic cross-TU
+// declaration-family relocation transaction; changing parent, scope, symbol,
+// and source-position fields independently is malformed.
 
 #include "rose.h"
 
+#include <algorithm>
+#include <set>
+#include <string>
+#include <vector>
+
 using namespace std;
 
-void markAsTransformation (SgStatement* statement )
-   {
-  // Mark a subtree at "statement" as being a transformation (and to be 
-  // output, so it will be output in the generated code).
+void verifyPerTranslationUnitCommandOwnership(SgProject *project) {
+  ROSE_ASSERT(project != NULL);
+  ROSE_ASSERT(project->numberOfFiles() > 1);
 
-  // AST treversal to make the subtree.
-     class MarkAsTransformationTraversal : public AstSimpleProcessing
-        {
-          public:
-               void visit ( SgNode* astNode )
-                  {
-                    SgLocatedNode* locatedNode = isSgLocatedNode(astNode);
-                    if (locatedNode != NULL)
-                       {
-                         locatedNode->get_file_info()->setTransformation();
-                         locatedNode->get_file_info()->setOutputInCodeGeneration();
+  std::set<std::string> ownedSources;
+  for (SgFile *file : project->get_fileList()) {
+    ROSE_ASSERT(file != NULL);
+    const std::vector<std::string> &command =
+        file->get_originalCommandLineArgumentList();
+    ROSE_ASSERT(!command.empty());
+    const Rose_STL_Container<std::string> sourceInputs =
+        CommandlineProcessing::generateSourceFilenames(
+            command, project->get_binary_only());
+    ROSE_ASSERT(sourceInputs.size() == 1);
 
-                      // Uncomment to see the source position information for each SgLocatedNode IR node.
-                      // locatedNode->get_file_info()->display("markAsTransformation(): debug");
-                       }
-                  }
-        };
+    const std::string absoluteSource =
+        Rose::StringUtility::getAbsolutePathFromRelativePath(
+            sourceInputs.front(), true);
+    ROSE_ASSERT(absoluteSource == file->get_sourceFileNameWithPath());
+    ROSE_ASSERT(ownedSources.insert(absoluteSource).second);
+  }
+  ROSE_ASSERT(ownedSources.size() == project->get_fileList().size());
+}
 
-     MarkAsTransformationTraversal traversal;
-     traversal.traverse(statement,preorder);
-   }
+SgFunctionDeclaration *findExactDefiningFunction(SgGlobal *global,
+                                                 const std::string &name) {
+  ROSE_ASSERT(global != NULL);
+  SgFunctionDeclaration *result = NULL;
+  for (SgDeclarationStatement *declaration : global->get_declarations()) {
+    SgFunctionDeclaration *function = isSgFunctionDeclaration(declaration);
+    if (function == NULL || function->get_name().getString() != name) {
+      continue;
+    }
+    ROSE_ASSERT(function->get_definition() != NULL);
+    ROSE_ASSERT(function->get_definingDeclaration() == function);
+    ROSE_ASSERT(result == NULL);
+    result = function;
+  }
+  ROSE_ASSERT(result != NULL);
+  return result;
+}
 
+SgFunctionDeclaration *rebuildExactFreeFunctionDefinition(
+    SgFunctionDeclaration *sourceDefinition, SgGlobal *sourceGlobal,
+    SgGlobal *targetGlobal, SgFunctionDeclaration *targetAnchor) {
+  ROSE_ASSERT(sourceDefinition != NULL);
+  ROSE_ASSERT(sourceGlobal != NULL);
+  ROSE_ASSERT(targetGlobal != NULL);
+  ROSE_ASSERT(sourceGlobal != targetGlobal);
+  ROSE_ASSERT(targetAnchor != NULL);
+  ROSE_ASSERT(isSgMemberFunctionDeclaration(sourceDefinition) == NULL);
+  ROSE_ASSERT(sourceDefinition->get_definition() != NULL);
+  ROSE_ASSERT(sourceDefinition->get_definingDeclaration() == sourceDefinition);
+  ROSE_ASSERT(sourceDefinition->get_parent() == sourceGlobal);
+  ROSE_ASSERT(sourceDefinition->get_scope() == sourceGlobal);
+  ROSE_ASSERT(targetAnchor->get_parent() == targetGlobal);
+  ROSE_ASSERT(targetAnchor->get_scope() == targetGlobal);
 
+  SgFunctionDeclaration *first = isSgFunctionDeclaration(
+      sourceDefinition->get_firstNondefiningDeclaration());
+  ROSE_ASSERT(first != NULL);
+  ROSE_ASSERT(first != sourceDefinition);
+  ROSE_ASSERT(first->get_firstNondefiningDeclaration() == first);
+  ROSE_ASSERT(first->get_definingDeclaration() == sourceDefinition);
+  ROSE_ASSERT(first->get_scope() == sourceGlobal);
+  SgAuxiliaryDeclarationList *sourceAuxiliary =
+      isSgAuxiliaryDeclarationList(first->get_parent());
+  ROSE_ASSERT(sourceAuxiliary != NULL);
+  ROSE_ASSERT(sourceAuxiliary == sourceGlobal->get_auxiliary_declarations());
+  ROSE_ASSERT(sourceAuxiliary->get_parent() == sourceGlobal);
+  ROSE_ASSERT(std::count(sourceAuxiliary->get_declarations().begin(),
+                         sourceAuxiliary->get_declarations().end(),
+                         first) == 1);
 
-// Inherited attribute (see ROSE Tutorial (Chapter 9)).
-class InheritedAttribute
-   {
-     public:
-          static bool isFirstFile;
-          static std::vector<SgDeclarationStatement*> statements_from_first_file;
+  SgFunctionSymbol *sourceSymbol =
+      isSgFunctionSymbol(sourceGlobal->find_symbol_from_declaration(first));
+  ROSE_ASSERT(sourceSymbol != NULL);
+  ROSE_ASSERT(sourceSymbol->get_declaration() == first);
+  ROSE_ASSERT(sourceSymbol->get_symbol_basis() == first);
+  ROSE_ASSERT(sourceSymbol->get_parent() == sourceGlobal->get_symbol_table());
+  ROSE_ASSERT(sourceGlobal->get_symbol_table()->find_function(
+                  sourceDefinition->get_name(), sourceDefinition->get_type(),
+                  NULL) == sourceSymbol);
+  ROSE_ASSERT(targetGlobal->get_symbol_table()->find_function(
+                  sourceDefinition->get_name(), sourceDefinition->get_type(),
+                  NULL) == NULL);
 
-          InheritedAttribute();
-          InheritedAttribute( const InheritedAttribute & X );
-   };
+  SgFunctionDeclaration *targetFirst =
+      SageBuilder::buildNondefiningFunctionDeclaration(
+          SageBuilder::function_declaration_ownership::semanticAuxiliary(),
+          sourceDefinition, targetGlobal);
+  SgFunctionParameterList *targetParameters =
+      SageInterface::deepCopy(sourceDefinition->get_parameterList());
+  ROSE_ASSERT(targetParameters != NULL);
+  ROSE_ASSERT(targetParameters->get_parent() == NULL);
+  SgFunctionDeclaration *targetDefinition =
+      SageBuilder::buildDefiningFunctionDeclaration(
+          SageBuilder::function_declaration_ownership::sourceLexicalBefore(
+              targetGlobal, targetAnchor),
+          sourceDefinition->get_name(),
+          sourceDefinition->get_type()->get_return_type(), targetParameters,
+          targetGlobal, false, targetFirst, NULL, false);
+  ROSE_ASSERT(targetDefinition != NULL);
+  ROSE_ASSERT(targetDefinition->get_parent() == targetGlobal);
+  ROSE_ASSERT(targetDefinition->get_scope() == targetGlobal);
+  ROSE_ASSERT(targetDefinition->get_firstNondefiningDeclaration() ==
+              targetFirst);
+  ROSE_ASSERT(targetFirst->get_definingDeclaration() == targetDefinition);
 
-// Declarations of static data members.
-bool InheritedAttribute::isFirstFile = false;
-std::vector<SgDeclarationStatement*> InheritedAttribute::statements_from_first_file;
+  SgBasicBlock *sourceBody = sourceDefinition->get_definition()->get_body();
+  SgBasicBlock *targetBody = targetDefinition->get_definition()->get_body();
+  ROSE_ASSERT(sourceBody != NULL);
+  ROSE_ASSERT(targetBody != NULL);
+  ROSE_ASSERT(targetBody->get_statements().empty());
+  for (SgStatement *sourceStatement : sourceBody->get_statements()) {
+    SgStatement *targetStatement = SageInterface::deepCopy(sourceStatement);
+    ROSE_ASSERT(targetStatement != NULL);
+    ROSE_ASSERT(targetStatement->get_parent() == NULL);
+    SageInterface::setSourcePositionForTransformation(targetStatement);
+    SageInterface::appendStatement(targetStatement, targetBody);
+  }
+  ROSE_ASSERT(targetBody->get_statements().size() ==
+              sourceBody->get_statements().size());
 
-// Constructor (not really needed)
-InheritedAttribute::InheritedAttribute()
-   {
-   }
+  const SgDeclarationStatementPtrList &targetDeclarations =
+      targetGlobal->get_declarations();
+  const auto definitionPosition = std::find(
+      targetDeclarations.begin(), targetDeclarations.end(), targetDefinition);
+  const auto anchorPosition = std::find(targetDeclarations.begin(),
+                                        targetDeclarations.end(), targetAnchor);
+  ROSE_ASSERT(definitionPosition != targetDeclarations.end());
+  ROSE_ASSERT(anchorPosition != targetDeclarations.end());
+  ROSE_ASSERT(definitionPosition < anchorPosition);
+  SgFunctionSymbol *targetSymbol = isSgFunctionSymbol(
+      targetGlobal->find_symbol_from_declaration(targetFirst));
+  ROSE_ASSERT(targetSymbol != NULL);
+  ROSE_ASSERT(targetSymbol->get_declaration() == targetFirst);
+  ROSE_ASSERT(targetSymbol->get_parent() == targetGlobal->get_symbol_table());
 
-// Copy constructor (not really needed)
-InheritedAttribute::InheritedAttribute( const InheritedAttribute & X )
-   {
-   }
+  // Removal severs the source definition from its canonical semantic
+  // declaration before detaching it.  The source symbol remains valid through
+  // that canonical auxiliary declaration; no raw symbol or scope move occurs.
+  SageInterface::removeStatement(sourceDefinition, false);
+  ROSE_ASSERT(sourceDefinition->get_parent() == NULL);
+  ROSE_ASSERT(sourceDefinition->get_firstNondefiningDeclaration() ==
+              sourceDefinition);
+  ROSE_ASSERT(sourceDefinition->get_definingDeclaration() == sourceDefinition);
+  ROSE_ASSERT(first->get_definingDeclaration() == NULL);
+  ROSE_ASSERT(first->get_parent() == sourceAuxiliary);
+  ROSE_ASSERT(sourceGlobal->find_symbol_from_declaration(first) ==
+              sourceSymbol);
+  ROSE_ASSERT(sourceGlobal->get_declarations().empty());
+  SageInterface::deleteAST(sourceDefinition,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
 
-// Synthesized attribute (see ROSE Tutorial (Chapter 9)).
-class SynthesizedAttribute
-   {
-     public:
-          SgFunctionDeclaration* main_function;
+  return targetDefinition;
+}
 
-          SynthesizedAttribute();
-          SynthesizedAttribute( const SynthesizedAttribute & X );
-   };
-
-// Constructor
-SynthesizedAttribute::SynthesizedAttribute()
-   {
-     main_function = NULL;
-   }
-
-// Copy constructor
-SynthesizedAttribute::SynthesizedAttribute( const SynthesizedAttribute & X )
-   {
-     main_function = X.main_function;
-   }
-
-
-class Traversal : public SgTopDownBottomUpProcessing<InheritedAttribute,SynthesizedAttribute>
-   {
-     public:
-       // Functions required
-          InheritedAttribute   evaluateInheritedAttribute   ( SgNode* astNode, InheritedAttribute inheritedAttribute );
-          SynthesizedAttribute evaluateSynthesizedAttribute ( SgNode* astNode, InheritedAttribute inheritedAttribute, SubTreeSynthesizedAttributes synthesizedAttributeList );
-   };
-
-
-InheritedAttribute
-Traversal::evaluateInheritedAttribute ( SgNode* astNode, InheritedAttribute inheritedAttribute )
-   {
-  // printf ("evaluateInheritedAttribute(): astNode = %p = %s inheritedAttribute.isFirstFile = %s \n",astNode,astNode->class_name().c_str(),inheritedAttribute.isFirstFile ? "true" : "false");
-
-  // This assumes that we only visit 2 files.
-     SgSourceFile* file = isSgSourceFile(astNode);
-     if (file != NULL)
-        {
-       // Only modify the static boolean value from the SgSourceFile position in the tree.
-
-          printf ("Found an SgSourceFile: file = %p \n",file);
-          if (inheritedAttribute.isFirstFile == false)
-               inheritedAttribute.isFirstFile = true;
-            else
-               inheritedAttribute.isFirstFile = false;
-
-          printf ("evaluateInheritedAttribute(): inheritedAttribute.isFirstFile = %s \n",inheritedAttribute.isFirstFile ? "true" : "false");
-        }
-
-     return inheritedAttribute;
-   }
-
-
-SynthesizedAttribute
-Traversal::evaluateSynthesizedAttribute ( SgNode* astNode, InheritedAttribute inheritedAttribute, SynthesizedAttributesList childAttributes )
-   {
-     SynthesizedAttribute localResult;
-
-  // printf ("evaluateSynthesizedAttribute(): astNode = %p = %s inheritedAttribute.isFirstFile = %s \n",astNode,astNode->class_name().c_str(),inheritedAttribute.isFirstFile ? "true" : "false");
-
-  // Accumulate any valid pointer to main on a child node and pass it to the local synthesized attribute.
-     for (size_t i = 0; i < childAttributes.size(); i++)
-        {
-          if (childAttributes[i].main_function != NULL)
-             {
-               localResult.main_function = childAttributes[i].main_function;
-             }
-        }
-
-     if (inheritedAttribute.isFirstFile == true)
-        {
-          SgGlobal* globalScope = isSgGlobal(astNode);
-          if (globalScope != NULL)
-             {
-            // Gather all of the functions in global scope of the first file.
-
-               vector<SgDeclarationStatement*> globalScopeDeclarationsToMove = globalScope->get_declarations();
-               inheritedAttribute.statements_from_first_file = globalScopeDeclarationsToMove;
-
-            // printf ("evaluateSynthesizedAttribute(): Gather all of the functions in global scope of the first file inheritedAttribute.statements_from_first_file.size() = %zu \n",inheritedAttribute.statements_from_first_file.size());
-
-            // Erase the declarations in the global scope of the first file.
-               globalScope->get_declarations().clear();
-             }
-
-          SgDeclarationStatement* declarationStatement = isSgDeclarationStatement(astNode);
-          if (declarationStatement != NULL && isSgGlobal(declarationStatement->get_parent()) != NULL)
-             {
-            // Mark as a transformation (recursively mark the whole subtree).
-            // printf ("*** Mark as a transformation: declarationStatement = %p \n",declarationStatement);
-               markAsTransformation(declarationStatement);
-               if (declarationStatement->get_firstNondefiningDeclaration() != NULL)
-                    markAsTransformation(declarationStatement->get_firstNondefiningDeclaration());
-             }
-        }
-       else
-        {
-          SgFunctionDeclaration* functionDeclaration = isSgFunctionDeclaration(astNode);
-          if (functionDeclaration != NULL && functionDeclaration->get_name() == "main")
-             {
-            // Save the pointer to the main function (in the second file).
-               localResult.main_function = functionDeclaration;
-            // printf ("Found the main function ...(saved pointer) inheritedAttribute.main_function = %p \n",localResult.main_function);
-             }
-
-       // printf ("evaluateSynthesizedAttribute(): localResult.main_function = %p \n",localResult.main_function);
-
-       // Test for the selected insertion point in the 2nd file for the declarations gathered from the first file.
-          SgGlobal* globalScope = isSgGlobal(astNode);
-          if (globalScope != NULL && localResult.main_function != NULL)
-             {
-               printf ("evaluateSynthesizedAttribute(): Found the main function ...\n");
-               vector<SgDeclarationStatement*>::iterator i = find(globalScope->get_declarations().begin(),globalScope->get_declarations().end(),localResult.main_function);
-               globalScope->get_declarations().insert(
-                   i, inheritedAttribute.statements_from_first_file.begin(),
-                   inheritedAttribute.statements_from_first_file.end());
-             }
-        }
-
-     return localResult;
-   }
-
-
-int
-main ( int argc, char* argv[] )
-   {
+int main(int argc, char *argv[]) {
   // Build the abstract syntax tree
-     SgProject* project = frontend(argc,argv);
-     ROSE_ASSERT (project != NULL);
+  SgProject *project = frontend(argc, argv);
+  ROSE_ASSERT(project != NULL);
+  verifyPerTranslationUnitCommandOwnership(project);
+  ROSE_ASSERT(project->numberOfFiles() == 2);
 
-  // Build the inherited attribute
-     InheritedAttribute inheritedAttribute;
+  SgSourceFile *sourceFile = isSgSourceFile(&project->get_file(0));
+  SgSourceFile *targetFile = isSgSourceFile(&project->get_file(1));
+  ROSE_ASSERT(sourceFile != NULL);
+  ROSE_ASSERT(targetFile != NULL);
+  SgGlobal *sourceGlobal = sourceFile->get_globalScope();
+  SgGlobal *targetGlobal = targetFile->get_globalScope();
+  ROSE_ASSERT(sourceGlobal != NULL);
+  ROSE_ASSERT(targetGlobal != NULL);
 
-  // Define the traversal
-     Traversal myTraversal;
+  SgFunctionDeclaration *foobar =
+      findExactDefiningFunction(sourceGlobal, "foobar");
+  SgFunctionDeclaration *mainFunction =
+      findExactDefiningFunction(targetGlobal, "main");
+  ROSE_ASSERT(sourceGlobal->get_declarations().size() == 1);
+  ROSE_ASSERT(targetGlobal->get_declarations().size() == 1);
+  SgFunctionDeclaration *rebuiltFoobar = rebuildExactFreeFunctionDefinition(
+      foobar, sourceGlobal, targetGlobal, mainFunction);
+  ROSE_ASSERT(rebuiltFoobar != NULL);
 
-  // Call the traversal starting at the project (root) node of the AST
-     myTraversal.traverseInputFiles(project,inheritedAttribute);
-
-  // Demonstrate the the transformation will pass the AST tests.
-     AstTests::runAllTests (project);
+  // The ownership-complete transformation must pass every AST invariant.
+  AstTests::runAllTests(project);
 
   // Output an optional graph of the AST (just the tree, when active)
-     generateDOT ( *project );
+  generateDOT(*project);
 
-  // Output an optional graph of the AST (the whole graph, of bounded complexity, when active)
-     const int MAX_NUMBER_OF_IR_NODES_TO_GRAPH_FOR_WHOLE_GRAPH = 10000;
-     generateAstGraph(project,MAX_NUMBER_OF_IR_NODES_TO_GRAPH_FOR_WHOLE_GRAPH,"");
+  // Output an optional graph of the AST (the whole graph, of bounded
+  // complexity, when active).
+  const int MAX_NUMBER_OF_IR_NODES_TO_GRAPH_FOR_WHOLE_GRAPH = 10000;
+  generateAstGraph(project, MAX_NUMBER_OF_IR_NODES_TO_GRAPH_FOR_WHOLE_GRAPH,
+                   "");
 
-     return backend (project);	// only backend error code is reported
-   }
-
-
+  return backend(project); // only backend error code is reported
+}

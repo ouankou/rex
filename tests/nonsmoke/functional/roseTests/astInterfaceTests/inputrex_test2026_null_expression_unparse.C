@@ -1,1 +1,6 @@
-int main() { return 0; }
+int main() {
+  for (;;) {
+    break;
+  }
+  return 0;
+}

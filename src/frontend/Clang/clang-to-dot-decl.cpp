@@ -187,10 +187,6 @@ std::string ClangToDotTranslator::Traverse(clang::Decl *decl) {
     ret_status =
         VisitImplicitParamDecl((clang::ImplicitParamDecl *)decl, node_desc);
     break;
-  case clang::Decl::OMPCapturedExpr:
-    ret_status =
-        VisitOMPCaptureExprDecl((clang::OMPCapturedExprDecl *)decl, node_desc);
-    break;
   case clang::Decl::ParmVar:
     ret_status = VisitParmVarDecl((clang::ParmVarDecl *)decl, node_desc);
     break;
@@ -206,29 +202,9 @@ std::string ClangToDotTranslator::Traverse(clang::Decl *decl) {
     ret_status =
         VisitIndirectFieldDecl((clang::IndirectFieldDecl *)decl, node_desc);
     break;
-  case clang::Decl::OMPDeclareMapper:
-    ret_status = VisitOMPDeclareMapperDecl((clang::OMPDeclareMapperDecl *)decl,
-                                           node_desc);
-    break;
-  case clang::Decl::OMPDeclareReduction:
-    ret_status = VisitOMPDeclareReductionDecl(
-        (clang::OMPDeclareReductionDecl *)decl, node_desc);
-    break;
   case clang::Decl::UnresolvedUsingValue:
     ret_status = VisitUnresolvedUsingValueDecl(
         (clang::UnresolvedUsingValueDecl *)decl, node_desc);
-    break;
-  case clang::Decl::OMPAllocate:
-    ret_status =
-        VisitOMPAllocateDecl((clang::OMPAllocateDecl *)decl, node_desc);
-    break;
-  case clang::Decl::OMPRequires:
-    ret_status =
-        VisitOMPRequiresDecl((clang::OMPRequiresDecl *)decl, node_desc);
-    break;
-  case clang::Decl::OMPThreadPrivate:
-    ret_status = VisitOMPThreadPrivateDecl((clang::OMPThreadPrivateDecl *)decl,
-                                           node_desc);
     break;
   case clang::Decl::PragmaComment:
     ret_status =
@@ -1490,21 +1466,6 @@ bool ClangToDotTranslator::VisitImplicitParamDecl(
   return VisitVarDecl(implicit_param_decl, node_desc) && res;
 }
 
-bool ClangToDotTranslator::VisitOMPCaptureExprDecl(
-    clang::OMPCapturedExprDecl *omp_capture_expr_decl,
-    NodeDescriptor &node_desc) {
-#if DEBUG_VISIT_DECL
-  std::cerr << "ClangToDotTranslator::VisitOMPCaptureExprDecl" << std::endl;
-#endif
-  bool res = true;
-
-  node_desc.kind_hierarchy.push_back("OMPCaptureExprDecl");
-
-  ROSE_ASSERT(FAIL_TODO == 0); // TODO
-
-  return VisitVarDecl(omp_capture_expr_decl, node_desc) && res;
-}
-
 bool ClangToDotTranslator::VisitParmVarDecl(clang::ParmVarDecl *param_var_decl,
                                             NodeDescriptor &node_desc) {
 #if DEBUG_VISIT_DECL
@@ -1591,37 +1552,6 @@ bool ClangToDotTranslator::VisitIndirectFieldDecl(
   return VisitValueDecl(indirect_field_decl, node_desc) && res;
 }
 
-bool ClangToDotTranslator::VisitOMPDeclareMapperDecl(
-    clang::OMPDeclareMapperDecl *omp_declare_mapper_decl,
-    NodeDescriptor &node_desc) {
-#if DEBUG_VISIT_DECL
-  std::cerr << "ClangToDotTranslator::VisitOMPDeclareMapperDecl" << std::endl;
-#endif
-  bool res = true;
-
-  node_desc.kind_hierarchy.push_back("OMPDeclareMapperDecl");
-
-  ROSE_ASSERT(FAIL_TODO == 0); // TODO
-
-  return VisitValueDecl(omp_declare_mapper_decl, node_desc) && res;
-}
-
-bool ClangToDotTranslator::VisitOMPDeclareReductionDecl(
-    clang::OMPDeclareReductionDecl *omp_declare_reduction_decl,
-    NodeDescriptor &node_desc) {
-#if DEBUG_VISIT_DECL
-  std::cerr << "ClangToDotTranslator::VisitOMPDeclareReductionDecl"
-            << std::endl;
-#endif
-  bool res = true;
-
-  node_desc.kind_hierarchy.push_back("OMPDeclareReductionDecl");
-
-  ROSE_ASSERT(FAIL_TODO == 0); // TODO
-
-  return VisitValueDecl(omp_declare_reduction_decl, node_desc) && res;
-}
-
 bool ClangToDotTranslator::VisitUnresolvedUsingValueDecl(
     clang::UnresolvedUsingValueDecl *unresolved_using_value_decl,
     NodeDescriptor &node_desc) {
@@ -1636,49 +1566,6 @@ bool ClangToDotTranslator::VisitUnresolvedUsingValueDecl(
   ROSE_ASSERT(FAIL_TODO == 0); // TODO
 
   return VisitValueDecl(unresolved_using_value_decl, node_desc) && res;
-}
-
-bool ClangToDotTranslator::VisitOMPAllocateDecl(
-    clang::OMPAllocateDecl *omp_allocate_decl, NodeDescriptor &node_desc) {
-#if DEBUG_VISIT_DECL
-  std::cerr << "ClangToDotTranslator::VisitOMPAllocateDecl" << std::endl;
-#endif
-  bool res = true;
-
-  node_desc.kind_hierarchy.push_back("OMPAllocateDecl");
-
-  ROSE_ASSERT(FAIL_TODO == 0); // TODO
-
-  return VisitDecl(omp_allocate_decl, node_desc) && res;
-}
-
-bool ClangToDotTranslator::VisitOMPRequiresDecl(
-    clang::OMPRequiresDecl *omp_requires_decl, NodeDescriptor &node_desc) {
-#if DEBUG_VISIT_DECL
-  std::cerr << "ClangToDotTranslator::VisitOMPRequiresDecl" << std::endl;
-#endif
-  bool res = true;
-
-  node_desc.kind_hierarchy.push_back("OMPRequiresDecl");
-
-  ROSE_ASSERT(FAIL_TODO == 0); // TODO
-
-  return VisitDecl(omp_requires_decl, node_desc) && res;
-}
-
-bool ClangToDotTranslator::VisitOMPThreadPrivateDecl(
-    clang::OMPThreadPrivateDecl *omp_thread_private_decl,
-    NodeDescriptor &node_desc) {
-#if DEBUG_VISIT_DECL
-  std::cerr << "ClangToDotTranslator::VisitOMPThreadPrivateDecl" << std::endl;
-#endif
-  bool res = true;
-
-  node_desc.kind_hierarchy.push_back("OMPThreadPrivateDecl");
-
-  ROSE_ASSERT(FAIL_TODO == 0); // TODO
-
-  return VisitDecl(omp_thread_private_decl, node_desc) && res;
 }
 
 bool ClangToDotTranslator::VisitPragmaCommentDecl(

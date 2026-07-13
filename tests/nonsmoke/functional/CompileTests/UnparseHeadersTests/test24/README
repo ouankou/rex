@@ -1,0 +1,4 @@
+This REX-owned positive fixture verifies that header unparsing preserves an
+explicit function-template specialization structurally. The imported test19
+fixture intentionally omits `template<>` and is kept as a frontend-negative
+diagnostic contract.

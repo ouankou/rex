@@ -37,6 +37,14 @@ class FunctionData;
 // CallGraphFunctionSolver class
 namespace CallTargetSet {
 /**
+ * Return the source expression that denotes a callee after validating and
+ * traversing only compiler-synthesized implicit callee conversions.  Explicit
+ * casts and all non-conversion call surfaces remain in the returned syntax.
+ */
+ROSE_DLL_API SgExpression *
+unwrapExactImplicitCalleeConversions(SgExpression *functionExpression);
+
+/**
  * CallTargetSet::solveFunctionPointerCall
  *
  * \brief Finds all functions that match the function type of pointerDerefExp
@@ -325,31 +333,130 @@ callGraphDeclHasUsableFilename(SgFunctionDeclaration *fdecl) {
     return false;
   }
 
-  const std::string filename = fdecl->get_file_info()->get_filename();
-  return !filename.empty() && filename != "NULL_FILE" &&
-         filename != "compilerGenerated";
+  Sg_File_Info *file_info = fdecl->get_file_info();
+  return file_info->get_physical_file_id() >= 0 &&
+         !file_info->get_physical_filename().empty();
 }
 
-static inline SgFunctionDeclaration *
-predicateFunctionDeclForCallGraph(SgFunctionDeclaration *fdecl) {
-  ROSE_ASSERT(fdecl != NULL);
+using CallGraphExplicitInstantiationSourceIndex =
+    std::unordered_map<SgFunctionDeclaration *, SgFunctionDeclaration *>;
 
-  SgFunctionDeclaration *canonical = canonicalFunctionDeclForCallGraph(fdecl);
-  if (callGraphDeclHasUsableFilename(canonical)) {
-    return canonical;
-  }
+static inline bool callGraphNodeBelongsToProject(const SgNode *node,
+                                                 const SgProject *project) {
+  ROSE_ASSERT(node != NULL);
+  ROSE_ASSERT(project != NULL);
 
-  if (SgFunctionDeclaration *firstNondef = isSgFunctionDeclaration(
-          canonical->get_firstNondefiningDeclaration())) {
-    if (callGraphDeclHasUsableFilename(firstNondef)) {
-      return firstNondef;
+  for (const SgNode *owner = node; owner != NULL; owner = owner->get_parent()) {
+    if (owner == project) {
+      return true;
     }
   }
 
-  if (SgFunctionDeclaration *def =
-          isSgFunctionDeclaration(canonical->get_definingDeclaration())) {
-    if (callGraphDeclHasUsableFilename(def)) {
-      return def;
+  return false;
+}
+
+static inline CallGraphExplicitInstantiationSourceIndex
+buildCallGraphExplicitInstantiationSourceIndex(SgProject *project) {
+  ROSE_ASSERT(project != NULL);
+
+  CallGraphExplicitInstantiationSourceIndex result;
+  VariantVector functionVariants(V_SgFunctionDeclaration);
+  for (SgNode *node : NodeQuery::queryMemoryPool(functionVariants)) {
+    SgFunctionDeclaration *declaration = isSgFunctionDeclaration(node);
+    SgTemplateInstantiationDirectiveStatement *directive =
+        declaration != NULL ? isSgTemplateInstantiationDirectiveStatement(
+                                  declaration->get_parent())
+                            : NULL;
+    if (directive == NULL ||
+        !callGraphNodeBelongsToProject(directive, project)) {
+      continue;
+    }
+
+    Sg_File_Info *directiveInfo = directive->get_file_info();
+    const bool sourceDirective =
+        directiveInfo != NULL && directiveInfo->get_line() > 0 &&
+        directiveInfo->get_col() > 0 && !directiveInfo->isCompilerGenerated() &&
+        !directiveInfo->isFrontendSpecific() &&
+        !directiveInfo->isTransformation();
+    if (!sourceDirective) {
+      continue;
+    }
+    if (!callGraphDeclHasUsableFilename(declaration)) {
+      std::cerr
+          << "REX_CALLGRAPH_INVARIANT[explicit-instantiation-source]: source "
+             "template-instantiation directive owns a declaration without "
+             "exact source identity"
+          << std::endl;
+      ROSE_ABORT();
+    }
+
+    SgFunctionDeclaration *canonical =
+        canonicalFunctionDeclForCallGraph(declaration);
+    result.emplace(canonical, declaration);
+  }
+
+  return result;
+}
+
+static inline SgFunctionDeclaration *predicateFunctionDeclForCallGraph(
+    SgFunctionDeclaration *fdecl,
+    const CallGraphExplicitInstantiationSourceIndex
+        &explicitInstantiationSources) {
+  ROSE_ASSERT(fdecl != NULL);
+
+  auto exactSourceDeclarationInFamily =
+      [](SgFunctionDeclaration *declaration) -> SgFunctionDeclaration * {
+    if (declaration == NULL) {
+      return NULL;
+    }
+    SgFunctionDeclaration *canonical =
+        canonicalFunctionDeclForCallGraph(declaration);
+    if (callGraphDeclHasUsableFilename(canonical)) {
+      return canonical;
+    }
+    if (SgFunctionDeclaration *firstNondef = isSgFunctionDeclaration(
+            canonical->get_firstNondefiningDeclaration())) {
+      if (callGraphDeclHasUsableFilename(firstNondef)) {
+        return firstNondef;
+      }
+    }
+    if (SgFunctionDeclaration *def =
+            isSgFunctionDeclaration(canonical->get_definingDeclaration())) {
+      if (callGraphDeclHasUsableFilename(def)) {
+        return def;
+      }
+    }
+    return NULL;
+  };
+
+  SgFunctionDeclaration *canonical = canonicalFunctionDeclForCallGraph(fdecl);
+  if (SgFunctionDeclaration *source =
+          exactSourceDeclarationInFamily(canonical)) {
+    return source;
+  }
+
+  CallGraphExplicitInstantiationSourceIndex::const_iterator explicitSource =
+      explicitInstantiationSources.find(canonical);
+  if (explicitSource != explicitInstantiationSources.end()) {
+    return explicitSource->second;
+  }
+
+  if (SgFunctionDeclaration *source = exactSourceDeclarationInFamily(
+          canonical->get_templateInstantiationPattern())) {
+    return source;
+  }
+
+  if (SgTemplateInstantiationFunctionDecl *instantiation =
+          isSgTemplateInstantiationFunctionDecl(canonical)) {
+    if (SgFunctionDeclaration *source = exactSourceDeclarationInFamily(
+            instantiation->get_templateDeclaration())) {
+      return source;
+    }
+  } else if (SgTemplateInstantiationMemberFunctionDecl *instantiation =
+                 isSgTemplateInstantiationMemberFunctionDecl(canonical)) {
+    if (SgFunctionDeclaration *source = exactSourceDeclarationInFamily(
+            instantiation->get_templateDeclaration())) {
+      return source;
     }
   }
 
@@ -371,6 +478,29 @@ callGraphDeclHasDefinitionOrDefiningDeclaration(SgFunctionDeclaration *fdecl) {
   return def_decl != NULL && def_decl->get_definition() != NULL;
 }
 
+static inline bool
+callGraphDeclOwnsExactSourceDefinition(SgFunctionDeclaration *fdecl) {
+  if (fdecl == NULL) {
+    return false;
+  }
+
+  SgFunctionDeclaration *defining =
+      fdecl->get_definition() != NULL
+          ? fdecl
+          : isSgFunctionDeclaration(fdecl->get_definingDeclaration());
+  if (defining == NULL || defining->get_definition() == NULL ||
+      isSgAuxiliaryDeclarationList(defining->get_parent()) != NULL ||
+      isSgTemplateInstantiationDirectiveStatement(defining->get_parent()) !=
+          NULL) {
+    return false;
+  }
+
+  Sg_File_Info *file_info = defining->get_file_info();
+  return file_info != NULL && file_info->get_line() > 0 &&
+         file_info->get_col() > 0 && !file_info->isCompilerGenerated() &&
+         !file_info->isFrontendSpecific() && !file_info->isTransformation();
+}
+
 static inline bool callGraphInstantiatedMemberHasClassTemplateArguments(
     SgTemplateInstantiationMemberFunctionDecl *inst_member) {
   if (inst_member == NULL) {
@@ -386,13 +516,24 @@ static inline bool callGraphInstantiatedMemberHasClassTemplateArguments(
   return !associated_class->get_templateArguments().empty();
 }
 
+ROSE_DLL_API bool
+callGraphDeclHasIndependentCallableIdentity(SgFunctionDeclaration *fdecl);
+
 template <typename Predicate>
 void CallGraphBuilder::buildCallGraph(Predicate pred) {
+  const CallGraphExplicitInstantiationSourceIndex explicitInstantiationSources =
+      buildCallGraphExplicitInstantiationSourceIndex(project);
+
   // Adds additional constraints to the predicate. It makes no sense to analyze
   // non-instantiated templates.
   struct isSelected {
     Predicate &pred;
-    isSelected(Predicate &pred) : pred(pred) {}
+    const CallGraphExplicitInstantiationSourceIndex
+        &explicitInstantiationSources;
+    isSelected(Predicate &pred, const CallGraphExplicitInstantiationSourceIndex
+                                    &explicitInstantiationSources)
+        : pred(pred),
+          explicitInstantiationSources(explicitInstantiationSources) {}
     bool operator()(SgNode *node) {
       SgFunctionDeclaration *f = isSgFunctionDeclaration(node);
       // TV (10/26/2018): FIXME ROSE-1487
@@ -403,8 +544,50 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
           isSgTemplateFunctionDeclaration(f)) {
         return false;
       }
+      if (callGraphDeclHasIndependentCallableIdentity(
+              f->get_templateInstantiationPattern())) {
+        // A callable source pattern already has the graph identity for this
+        // semantic product (notably a hidden friend instantiated with its
+        // enclosing class). Instantiated members whose dependent source
+        // pattern is not independently callable continue below and retain
+        // their concrete specialization identity.
+        return false;
+      }
+      Sg_File_Info *functionFileInfo = f->get_file_info();
+      const bool semanticConstructor =
+          f->get_specialFunctionModifier().isConstructor() &&
+          functionFileInfo != nullptr &&
+          functionFileInfo->isCompilerGenerated() &&
+          functionFileInfo->isFrontendSpecific() &&
+          !callGraphDeclOwnsExactSourceDefinition(f);
+      if (semanticConstructor) {
+        const auto origin = f->get_frontend_declaration_origin();
+        if (origin ==
+            SgFunctionDeclaration::e_frontend_declaration_unclassified) {
+          fprintf(stderr,
+                  "REX_CALLGRAPH_INVARIANT[function-declaration-origin]: "
+                  "semantic constructor=%p/%s name=%s has no exact "
+                  "producer-published explicit/implicit origin\n",
+                  static_cast<void *>(f), f->class_name().c_str(),
+                  f->get_qualified_name().getString().c_str());
+          ROSE_ABORT();
+        }
+        if (origin == SgFunctionDeclaration::e_frontend_declaration_implicit) {
+          // An implicit special member has no independent source declaration.
+          // It can enter the graph only when a construction expression
+          // resolves to it.
+          return false;
+        }
+        if (origin != SgFunctionDeclaration::e_frontend_declaration_explicit) {
+          ROSE_ABORT();
+        }
+        // An explicitly source-declared constructor instantiated into
+        // semantic storage still owns an independent callable identity.  The
+        // predicate below selects it through its exact source pattern.
+      }
 
-      SgFunctionDeclaration *pred_decl = predicateFunctionDeclForCallGraph(f);
+      SgFunctionDeclaration *pred_decl =
+          predicateFunctionDeclForCallGraph(f, explicitInstantiationSources);
 
       SgFunctionDeclaration *def_decl =
           isSgFunctionDeclaration(pred_decl->get_definingDeclaration());
@@ -447,21 +630,79 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
   VariantVector vv(V_SgFunctionDeclaration);
   GetOneFuncDeclarationPerFunction defFunc;
   std::vector<SgNode *> fdecl_nodes = NodeQuery::queryMemoryPool(defFunc, &vv);
+  std::set<SgFunctionDeclaration *> selectedDeclarations;
+  isSelected select(pred, explicitInstantiationSources);
   for (SgNode *node : fdecl_nodes) {
     SgFunctionDeclaration *fdecl = isSgFunctionDeclaration(node);
     SgFunctionDeclaration *unique = canonicalFunctionDeclForCallGraph(fdecl);
-    if (isSelected(pred)(unique) &&
-        getGraphNodeForConstruction(unique) == NULL) {
+    const bool selected = select(unique);
+    if (selected && selectedDeclarations.insert(unique).second) {
       FunctionData fdata(
           unique, project,
           &classHierarchy); // computes functions called by unique
       callGraphData.push_back(fdata);
+    }
+  }
+
+  // A template specialization whose body is instantiated into semantic-only
+  // storage is not itself a source definition.  It becomes a graph vertex only
+  // when a source call resolves to it.  Compute that reachability from the
+  // complete candidate set before adding vertices so called specializations
+  // retain their own outgoing edges while unused explicit/implicit
+  // instantiations do not appear as invented source functions.
+  std::set<SgFunctionDeclaration *> resolvedCallees;
+  for (const FunctionData &function : callGraphData) {
+    for (SgFunctionDeclaration *callee : function.functionList) {
+      if (callee != NULL) {
+        resolvedCallees.insert(canonicalFunctionDeclForCallGraph(callee));
+      }
+    }
+  }
+  VariantVector referenceVariants(V_SgTemplateFunctionRefExp);
+  referenceVariants.push_back(V_SgTemplateMemberFunctionRefExp);
+  referenceVariants.push_back(V_SgNonrealRefExp);
+  for (SgNode *node : NodeQuery::queryMemoryPool(referenceVariants)) {
+    SgFunctionDeclaration *resolved = NULL;
+    if (SgTemplateFunctionRefExp *reference =
+            isSgTemplateFunctionRefExp(node)) {
+      resolved = reference->get_semantic_function_declaration();
+    } else if (SgTemplateMemberFunctionRefExp *reference =
+                   isSgTemplateMemberFunctionRefExp(node)) {
+      resolved = reference->get_semantic_member_function_declaration();
+    } else if (SgNonrealRefExp *reference = isSgNonrealRefExp(node)) {
+      resolved = reference->get_resolved_function_declaration();
+    }
+    if (resolved != NULL) {
+      resolvedCallees.insert(canonicalFunctionDeclForCallGraph(resolved));
+    }
+  }
+
+  for (const FunctionData &function : callGraphData) {
+    SgFunctionDeclaration *unique =
+        canonicalFunctionDeclForCallGraph(function.functionDeclaration);
+    bool semanticFunctionInstantiation = false;
+    if (SgTemplateInstantiationFunctionDecl *instantiation =
+            isSgTemplateInstantiationFunctionDecl(unique)) {
+      semanticFunctionInstantiation =
+          !instantiation->get_templateArguments().empty() ||
+          !instantiation->get_deducedTemplateArguments().empty();
+    } else if (SgTemplateInstantiationMemberFunctionDecl *instantiation =
+                   isSgTemplateInstantiationMemberFunctionDecl(unique)) {
+      semanticFunctionInstantiation =
+          !instantiation->get_templateArguments().empty() ||
+          !instantiation->get_deducedTemplateArguments().empty();
+    }
+    if (semanticFunctionInstantiation &&
+        !callGraphDeclOwnsExactSourceDefinition(unique) &&
+        resolvedCallees.count(unique) == 0) {
+      continue;
+    }
+    if (getGraphNodeForConstruction(unique) == NULL) {
       std::string functionName = unique->get_qualified_name().getString();
       SgGraphNode *graphNode = new SgGraphNode(functionName);
       graphNode->set_SgNode(unique);
       registerGraphNode(unique, graphNode);
       graph->addNode(graphNode);
-    } else {
     }
   }
 
@@ -472,7 +713,9 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
     SgFunctionDeclaration *curFuncDecl = currentFunction.functionDeclaration;
     std::string curFuncName = curFuncDecl->get_qualified_name().getString();
     SgGraphNode *srcNode = hasGraphNodeFor(currentFunction.functionDeclaration);
-    ROSE_ASSERT(srcNode != NULL);
+    if (srcNode == NULL) {
+      continue;
+    }
     std::vector<SgFunctionDeclaration *> &callees =
         currentFunction.functionList;
     for (SgFunctionDeclaration *callee : callees) {

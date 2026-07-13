@@ -48,10 +48,15 @@ int main(int argc, char *argv[])
 
     decls = SageInterface::getDependentDeclarations(stmt);
     for (vector<SgDeclarationStatement *>::iterator iter = decls.begin();
-         iter != decls.end(); iter++)
+         iter != decls.end(); iter++) {
       cout << "Dependent Declaration:" << *iter << " " << (*iter)->class_name()
-           << " " << (*iter)->unparseToString()
-           << SageInterface::get_name(*iter) << endl;
+           << " ";
+      if (SageInterface::hasExactSemanticAuxiliaryOwnership(*iter))
+        cout << "<semantic-auxiliary> ";
+      else
+        cout << (*iter)->unparseToString();
+      cout << SageInterface::get_name(*iter) << endl;
+    }
   } else
     ROSE_ASSERT(false);
 

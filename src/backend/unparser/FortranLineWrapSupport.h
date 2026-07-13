@@ -3,15 +3,21 @@
 
 #include <cstddef>
 #include <string>
+#include <vector>
 
 namespace Rose {
 namespace FortranLineWrapSupport {
 
-bool startsWithCaseInsensitive(const std::string &text, size_t pos,
-                               const char *token);
 bool isCommentLine(const std::string &text);
-bool isDirectiveChunk(const std::string &text, int used_cols);
-int clampUsableColumnsToConfiguredWrap(int usable_cols, int configured_wrap);
+bool isFixedFormatCommentLine(const std::string &text);
+std::vector<size_t> stringLiteralLexicalBoundaries(const std::string &literal,
+                                                   char delimiter);
+std::vector<std::string> wrapFreeFormatComment(const std::string &text,
+                                               int first_line_used_columns,
+                                               int usable_columns);
+std::vector<std::string> wrapFixedFormatComment(const std::string &text,
+                                                int first_line_used_columns,
+                                                int usable_columns);
 
 } // namespace FortranLineWrapSupport
 } // namespace Rose

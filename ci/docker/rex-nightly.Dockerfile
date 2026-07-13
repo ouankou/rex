@@ -7,13 +7,14 @@ LABEL org.opencontainers.image.source="https://github.com/ouankou/rex"
 
 ARG LLVM_VERSION
 ENV LLVM_VERSION=${LLVM_VERSION}
+RUN test "${LLVM_VERSION}" = "22"
 ENV REX_ROOT=/opt/rex
 ENV REX_SOURCE_DIR=${REX_ROOT}/src
 ENV REX_BUILD_DIR=${REX_SOURCE_DIR}/build
 ENV REX_INSTALL_DIR=${REX_ROOT}/install
 ENV PATH=${REX_INSTALL_DIR}/bin:/usr/lib/llvm-${LLVM_VERSION}/bin:${PATH}
 ENV CMAKE_PREFIX_PATH=/usr/lib/llvm-${LLVM_VERSION}
-ENV LLVM_DIR=/usr/lib/llvm-${LLVM_VERSION}
+ENV LLVM_DIR=/usr/lib/llvm-${LLVM_VERSION}/lib/cmake/llvm
 ENV CC=clang-${LLVM_VERSION}
 ENV CXX=clang++-${LLVM_VERSION}
 ENV FC=flang-${LLVM_VERSION}
@@ -44,6 +45,18 @@ RUN set -eux; \
 WORKDIR /
 
 FROM runtime AS test
+
+ARG REX_ENABLE_VALGRIND=0
+RUN set -eux; \
+    case "${REX_ENABLE_VALGRIND}" in \
+      0) ;; \
+      1) \
+        apt-get update; \
+        apt-get install -y --no-install-recommends valgrind; \
+        rm -rf /var/lib/apt/lists/*; \
+        ;; \
+      *) echo "REX_ENABLE_VALGRIND must be 0 or 1" >&2; exit 2 ;; \
+    esac
 
 COPY --from=builder ${REX_SOURCE_DIR} ${REX_SOURCE_DIR}
 

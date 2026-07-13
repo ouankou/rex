@@ -1,22 +1,32 @@
 #include "sage3basic.h"
 
 void SgDesignatedInitializer::post_construction_initialization() {
-  // This should be a list of designators to handle the case of
-  // multi-deminsional array references.
-  ROSE_ASSERT(p_designatorList != NULL);
-  p_designatorList->set_parent(this);
-
-  if (p_memberInit !=
-      NULL) // We want to support NULL p_memberInit when building this node
-  {
-    p_memberInit->set_parent(this);
+  if (p_designatorList == nullptr ||
+      p_designatorList->get_expressions().empty() || p_memberInit == nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[designated-initializer-children]: exact "
+            "nonempty designator list and member initializer are required\n");
+    ROSE_ABORT();
   }
+  p_designatorList->set_parent(this);
+  p_memberInit->set_parent(this);
 }
 
 SgType *SgDesignatedInitializer::get_type() const {
-  ROSE_ASSERT(p_memberInit != NULL);
-
-  return p_memberInit->get_type();
+  if (p_memberInit == nullptr || p_memberInit->get_parent() != this) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[designated-initializer-member]: initializer "
+            "has no exactly owned member initializer\n");
+    ROSE_ABORT();
+  }
+  SgType *type = p_memberInit->get_type();
+  if (type == nullptr || isSgTypeUnknown(type) != nullptr ||
+      isSgTypeDefault(type) != nullptr) {
+    fprintf(stderr, "REX_AST_INVARIANT[designated-initializer-type]: member "
+                    "initializer has no exact semantic type\n");
+    ROSE_ABORT();
+  }
+  return type;
 }
 
 int SgDesignatedInitializer::replace_expression(SgExpression *o,

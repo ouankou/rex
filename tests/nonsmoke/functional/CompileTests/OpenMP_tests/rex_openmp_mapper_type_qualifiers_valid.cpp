@@ -1,0 +1,7 @@
+struct MapperRecord {
+  int value;
+};
+
+#pragma omp declare mapper(base_const : const MapperRecord v) map(to : v)
+
+int main() { return 0; }

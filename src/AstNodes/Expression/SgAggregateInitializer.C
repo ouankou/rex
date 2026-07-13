@@ -1,26 +1,28 @@
 #include "sage3basic.h"
 
 void SgAggregateInitializer::post_construction_initialization() {
-  if (get_initializers())
+  if (get_source_form() == e_aggregate_initializer_source_unclassified) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[aggregate-initializer-source-form]: source "
+            "form is unclassified\n");
+    ROSE_ABORT();
+  }
+  if (get_initializers()) {
     get_initializers()->set_parent(this);
+  }
 }
 
 // DQ: trying to remove the nested iterator class
 void SgAggregateInitializer::append_initializer(SgExpression *what) {
-  assert(this != NULL);
-
-  // DQ (11/15/2006): avoid setting newArgs this late in the process.
-  ROSE_ASSERT(p_initializers != NULL);
-  if (!p_initializers) {
-    // set_initializers(new SgExprListExp(this->get_file_info()));
-    SgExprListExp *newArgs = new SgExprListExp(this->get_file_info());
-    assert(newArgs != NULL);
-    newArgs->set_endOfConstruct(this->get_file_info());
-    set_initializers(newArgs);
+  if (p_initializers == nullptr || what == nullptr ||
+      what->get_parent() != nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[aggregate-initializer-append]: exact list and "
+            "detached nonnull element are required\n");
+    ROSE_ABORT();
   }
-
-  // insert_initializer(p_initializers->end(),what);
   p_initializers->append_expression(what);
+  what->set_parent(p_initializers);
 }
 
 SgExpression *SgAggregateInitializer::get_next(int &n) const {
@@ -50,11 +52,15 @@ int SgAggregateInitializer::replace_expression(SgExpression *o,
 }
 
 SgType *SgAggregateInitializer::get_type() const {
-  if (p_expression_type != NULL) {
-    return p_expression_type;
-  } else {
-    return SgTypeDefault::createType();
+  if (p_expression_type == nullptr ||
+      isSgTypeUnknown(p_expression_type) != nullptr ||
+      isSgTypeDefault(p_expression_type) != nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[aggregate-initializer-type]: initializer has "
+            "no exact semantic type\n");
+    ROSE_ABORT();
   }
+  return p_expression_type;
 }
 
 // DQ (6/11/2015): Moved these eight access functions, they should not be

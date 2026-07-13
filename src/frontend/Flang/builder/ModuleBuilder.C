@@ -168,6 +168,7 @@ void ModuleBuilder::insertSymbol(SgSymbol *symbol, SgGlobal *file_scope) {
     // The symbol doesn't exist in the file's scope so insert an alias for it
     SgAliasSymbol *alias_symbol = new SgAliasSymbol(symbol);
     ASSERT_not_null(alias_symbol);
+    alias_symbol->get_causal_nodes().push_back(file_scope);
     file_scope->insert_symbol(alias_symbol->get_name(), alias_symbol);
     MLOG_TRACE_CXX(MLOG_FRONTEND) << "inserted symbol " << symbol->get_name();
   }
@@ -346,7 +347,6 @@ ModuleBuilder::createSgSourceFile(const std::string &module_name) {
     ROSE_ABORT();
   }
 
-  argv.push_back(SKIP_SYNTAX_CHECK);
   argv.push_back(module_filename);
 
   nestedSgFile++;

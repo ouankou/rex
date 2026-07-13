@@ -1,5 +1,3 @@
-#include "previousAndNextNode.h"
-
 #include "sage3basic.h"
 
 #include "tokenStreamMapping.h"
@@ -29,6 +27,122 @@ bool contributesVisibleTransformation(SgLocatedNode *node) {
   }
 
   return !suppressedCompilerGeneratedNode(node);
+}
+
+bool isExactSemanticAuxiliaryStatement(SgNode *node) {
+  std::unordered_set<SgNode *> visited;
+  SgNode *child = node;
+  for (SgNode *parent = node != nullptr ? node->get_parent() : nullptr;
+       parent != nullptr; child = parent, parent = parent->get_parent()) {
+    if (!visited.insert(parent).second) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[token-frontier-auxiliary-owner]: "
+              "node=%p/%s has a parent cycle\n",
+              static_cast<void *>(node),
+              node != nullptr ? node->class_name().c_str() : "<null>");
+      ROSE_ABORT();
+    }
+    const SgNodePtrList successors = parent->get_traversalSuccessorContainer();
+    if (child == nullptr || child->get_parent() != parent ||
+        std::count(successors.begin(), successors.end(), child) != 1) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[token-frontier-auxiliary-owner]: "
+              "node=%p/%s has malformed structural ancestry at child=%p/%s "
+              "parent=%p/%s\n",
+              static_cast<void *>(node),
+              node != nullptr ? node->class_name().c_str() : "<null>",
+              static_cast<void *>(child),
+              child != nullptr ? child->class_name().c_str() : "<null>",
+              static_cast<void *>(parent), parent->class_name().c_str());
+      ROSE_ABORT();
+    }
+
+    SgAuxiliaryDeclarationList *auxiliary =
+        isSgAuxiliaryDeclarationList(parent);
+    if (auxiliary == nullptr) {
+      continue;
+    }
+    SgDeclarationStatement *declaration = isSgDeclarationStatement(child);
+    SgScopeStatement *scope = isSgScopeStatement(auxiliary->get_parent());
+    if (declaration == nullptr || scope == nullptr ||
+        scope->get_auxiliary_declarations() != auxiliary ||
+        std::count(auxiliary->get_declarations().begin(),
+                   auxiliary->get_declarations().end(), declaration) != 1) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[token-frontier-auxiliary-owner]: "
+              "node=%p/%s has malformed auxiliary ownership\n",
+              static_cast<void *>(node),
+              node != nullptr ? node->class_name().c_str() : "<null>");
+      ROSE_ABORT();
+    }
+
+    auto exactSemanticPosition = [declaration](Sg_File_Info *position) {
+      return SageInterface::hasExactSemanticFrontendSourcePosition(declaration,
+                                                                   position);
+    };
+    Sg_File_Info *start = declaration->get_startOfConstruct();
+    Sg_File_Info *end = declaration->get_endOfConstruct();
+    if (!exactSemanticPosition(start) || !exactSemanticPosition(end) ||
+        start->get_file_id() != end->get_file_id() ||
+        start->get_physical_file_id() != end->get_physical_file_id()) {
+      fprintf(
+          stderr,
+          "REX_UNPARSE_INVARIANT[token-frontier-auxiliary-provenance]: "
+          "declaration=%p/%s name=%s parent=%p/%s scope=%p/%s "
+          "start=%p parent=%p file=%d physical=%d line=%d col=%d "
+          "raw-line=%d raw-col=%d "
+          "compiler=%d frontend=%d transformation=%d unavailable=%d "
+          "output=%d; end=%p parent=%p file=%d physical=%d line=%d "
+          "col=%d raw-line=%d raw-col=%d compiler=%d frontend=%d "
+          "transformation=%d "
+          "unavailable=%d output=%d does not have exact semantic "
+          "structural provenance\n",
+          static_cast<void *>(declaration), declaration->class_name().c_str(),
+          SageInterface::get_name(declaration).c_str(),
+          static_cast<void *>(declaration->get_parent()),
+          declaration->get_parent() != nullptr
+              ? declaration->get_parent()->class_name().c_str()
+              : "<null>",
+          static_cast<void *>(declaration->get_scope()),
+          declaration->get_scope() != nullptr
+              ? declaration->get_scope()->class_name().c_str()
+              : "<null>",
+          static_cast<void *>(start),
+          static_cast<void *>(start != nullptr ? start->get_parent() : nullptr),
+          start != nullptr ? start->get_file_id() : Sg_File_Info::BAD_FILE_ID,
+          start != nullptr ? start->get_physical_file_id()
+                           : Sg_File_Info::BAD_FILE_ID,
+          start != nullptr ? start->get_line() : 0,
+          start != nullptr ? start->get_col() : 0,
+          start != nullptr ? start->get_raw_line() : 0,
+          start != nullptr ? start->get_raw_col() : 0,
+          start != nullptr && start->isCompilerGenerated() ? 1 : 0,
+          start != nullptr && start->isFrontendSpecific() ? 1 : 0,
+          start != nullptr && start->isTransformation() ? 1 : 0,
+          start != nullptr && start->isSourcePositionUnavailableInFrontend()
+              ? 1
+              : 0,
+          start != nullptr && start->isOutputInCodeGeneration() ? 1 : 0,
+          static_cast<void *>(end),
+          static_cast<void *>(end != nullptr ? end->get_parent() : nullptr),
+          end != nullptr ? end->get_file_id() : Sg_File_Info::BAD_FILE_ID,
+          end != nullptr ? end->get_physical_file_id()
+                         : Sg_File_Info::BAD_FILE_ID,
+          end != nullptr ? end->get_line() : 0,
+          end != nullptr ? end->get_col() : 0,
+          end != nullptr ? end->get_raw_line() : 0,
+          end != nullptr ? end->get_raw_col() : 0,
+          end != nullptr && end->isCompilerGenerated() ? 1 : 0,
+          end != nullptr && end->isFrontendSpecific() ? 1 : 0,
+          end != nullptr && end->isTransformation() ? 1 : 0,
+          end != nullptr && end->isSourcePositionUnavailableInFrontend() ? 1
+                                                                         : 0,
+          end != nullptr && end->isOutputInCodeGeneration() ? 1 : 0);
+      ROSE_ABORT();
+    }
+    return true;
+  }
+  return false;
 }
 } // namespace
 
@@ -131,12 +245,9 @@ SimpleFrontierDetectionForTokenStreamMapping_SynthesizedAttribute::
 }
 
 SimpleFrontierDetectionForTokenStreamMapping::
-    SimpleFrontierDetectionForTokenStreamMapping(SgSourceFile *sourceFile) {
-  // This is the number of IR nodes in the current file and helpful in randomly
-  // marking IR nodes for testing to be either from the AST or from the token
-  // stream.
-  numberOfNodes = numberOfNodesInSubtree(sourceFile);
-}
+    SimpleFrontierDetectionForTokenStreamMapping(
+        TokenUnparseFrontierFileContext &frontierContext)
+    : frontierContext(frontierContext) {}
 
 SimpleFrontierDetectionForTokenStreamMapping_InheritedAttribute
 SimpleFrontierDetectionForTokenStreamMapping::evaluateInheritedAttribute(
@@ -179,91 +290,114 @@ SimpleFrontierDetectionForTokenStreamMapping::evaluateInheritedAttribute(
     ASSERT_not_null(globalScope->get_parent());
   }
 
-  SgLocatedNode *locatedNode = isSgLocatedNode(n);
-  if (locatedNode != nullptr) {
-    if (locatedNode->isTransformation() == true) {
+  const bool isStructuralFileContainer = isSgProject(n) != nullptr ||
+                                         isSgFileList(n) != nullptr ||
+                                         isSgFile(n) != nullptr;
+  // SgCatchStatementSeq is the typed non-lexical owner of a try statement's
+  // handler vector. Appending handlers changes that container during frontend
+  // construction, but the sequence never owns an independent source or output
+  // boundary. The strict frontier pass validates its exact try/handler edges
+  // and propagates any real handler transformation to the SgTryStmt.
+  if (isSgCatchStatementSeq(n) != nullptr) {
+    return returnAttribute;
+  }
+  // Auxiliary declarations are semantic lookup/type infrastructure.  They are
+  // traversable typed children of a scope, but they are never token-stream or
+  // AST output frontiers.  Suppress only the complete reciprocal ownership and
+  // semantic-provenance contract; a malformed auxiliary declaration continues
+  // into the hard frontier diagnostics below.
+  if (isExactSemanticAuxiliaryStatement(n)) {
+    return returnAttribute;
+  }
+  if (n->get_isModified() && !isStructuralFileContainer) {
 #if DEBUG_INHERIT
-      printf("Found locatedNode = %p = %s as transformation \n", locatedNode,
-             locatedNode->class_name().c_str());
-      // ROSE_ABORT();
+    printf("Found locatedNode = %p = %s as get_isModified = true \n", n,
+           n->class_name().c_str());
 #endif
+    SgStatement *statement = SageInterface::getEnclosingStatement(n);
+    if (statement == nullptr) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[token-frontier]: modified node=%p type=%s "
+              "has no enclosing statement\n",
+              static_cast<void *>(n), n->class_name().c_str());
+      ROSE_ABORT();
+    }
+    if (isSgStatement(n) != nullptr && statement != n) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[token-frontier]: modified statement=%p "
+              "resolved to a different enclosing statement=%p\n",
+              static_cast<void *>(n), static_cast<void *>(statement));
+      ROSE_ABORT();
     }
 
-    // DQ (6/2/2021): An IR node that is a container should not be marked as is
-    // modified, but this should likely be fied elsewhere.
-    SgClassDefinition *classDefinition = isSgClassDefinition(n);
-    if (classDefinition != nullptr) {
-      if (classDefinition->get_isModified() == true) {
-        classDefinition->set_isModified(false);
-      }
+    Sg_File_Info *statementInfo = statement->get_file_info();
+    if (statementInfo == nullptr) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[token-frontier]: modified node=%p type=%s "
+              "maps to statement=%p without file information\n",
+              static_cast<void *>(n), n->class_name().c_str(),
+              static_cast<void *>(statement));
+      ROSE_ABORT();
     }
 
-    // DQ (4/14/2015): We need to detect modified IR nodes and then set there
-    // coresponding parent statement as being transformed.
-    if (locatedNode->get_isModified() == true) {
-#if DEBUG_INHERIT
-      printf("Found locatedNode = %p = %s as get_isModified = %s \n",
-             locatedNode, locatedNode->class_name().c_str(),
-             locatedNode->get_isModified() ? "true" : "false");
-      // ROSE_ABORT();
-#endif
-
-      // DQ (4/14/2015): We need to detect modified IR nodes and then set there
-      // coresponding parent statement as being transformed.
-      SgStatement *statement =
-          SageInterface::getEnclosingStatement(locatedNode);
-
-      // DQ (4/16/2015): I want to verify that we have not returned a statement
-      // at a higher position in the AST than the locatedNode if it was a
-      // SgStatement.
-      if (isSgStatement(locatedNode) != nullptr) {
-        ROSE_ASSERT(statement == locatedNode);
-      }
-      ROSE_ASSERT(isSgStatement(locatedNode) == nullptr ||
-                  statement == locatedNode);
-
-      // DQ (5/3/2021): In order to be marked as a transformation, the node must
-      // be a statement. The evaluateSynthesizedAttribute() function will set
-      // the parent scopes as containing a transformation.
-
-      if (statement != nullptr) {
-        bool allow_transform = true;
-        if (inheritedAttribute.sourceFile != nullptr &&
-            inheritedAttribute.sourceFile->get_file_info() != nullptr &&
-            statement->get_file_info() != nullptr) {
-          int source_file_id = inheritedAttribute.sourceFile->get_file_info()
-                                   ->get_physical_file_id();
-          int stmt_file_id = statement->get_file_info()->get_physical_file_id();
-          if (stmt_file_id != source_file_id &&
-              stmt_file_id != Sg_File_Info::TRANSFORMATION_FILE_ID &&
-              !statement->get_file_info()->isTransformation()) {
-            allow_transform = false;
-          }
-          if (statement->get_file_info()->isOutputInCodeGeneration() == false) {
-            allow_transform = false;
-          }
-        }
-
-#if DEBUG_INHERIT
-        printf("Marking statement = %p = %s to be a transformation and output "
-               "in code generation \n",
-               statement, statement->class_name().c_str());
-#endif
-#if DEBUG_INHERIT
-        printf("BEFORE: In "
-               "SimpleFrontierDetectionForTokenStreamMapping::"
-               "evaluateInheritedAttribute(): "
-               "statement->get_file_info()->getFileName() = %s \n",
-               statement->get_file_info()->get_filenameString().c_str());
-#endif
-        if (allow_transform == true) {
-          // Note that both of these must be set.
-          SageInterface::ensureLocatedNodeFileInfoForTransformation(statement);
-          statement->setTransformation();
-          statement->setOutputInCodeGeneration();
-        }
-      }
+    if (!statement->isOutputInCodeGeneration() &&
+        (statementInfo->isCompilerGenerated() ||
+         statementInfo->isFrontendSpecific())) {
+      return returnAttribute;
     }
+
+    if (!statement->isOutputInCodeGeneration()) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[token-frontier]: modified statement=%p "
+              "type=%s is suppressed from code generation\n",
+              static_cast<void *>(statement), statement->class_name().c_str());
+      ROSE_ABORT();
+    }
+
+    if (contributesVisibleTransformation(statement)) {
+      // Transformation nodes are deliberately detached from the immutable
+      // token stream and carry transformation file information rather than a
+      // physical source-file ID.  The synthesized pass classifies the exact
+      // containing frontier from this transformation marker; forcing the
+      // declaration itself into an atomic AST region would discard surrounding
+      // token-owned preprocessing boundaries.
+      return returnAttribute;
+    }
+
+    Sg_File_Info *sourceInfo = inheritedAttribute.sourceFile->get_file_info();
+    if (sourceInfo == nullptr || sourceInfo->get_physical_file_id() < 0 ||
+        statementInfo->get_physical_file_id() < 0) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[token-frontier]: source=%s or modified "
+              "statement=%p type=%s name=%s parent=%p parent-type=%s has no "
+              "physical file ownership "
+              "(source-file-id=%d source-physical-file-id=%d "
+              "statement-file-id=%d statement-physical-file-id=%d "
+              "output=%s compiler-generated=%s frontend-specific=%s)\n",
+              inheritedAttribute.sourceFile->getFileName().c_str(),
+              static_cast<void *>(statement), statement->class_name().c_str(),
+              SageInterface::get_name(statement).c_str(),
+              static_cast<void *>(statement->get_parent()),
+              statement->get_parent() == nullptr
+                  ? "<null>"
+                  : statement->get_parent()->class_name().c_str(),
+              sourceInfo == nullptr ? Sg_File_Info::NULL_FILE_ID
+                                    : sourceInfo->get_file_id(),
+              sourceInfo == nullptr ? Sg_File_Info::NULL_FILE_ID
+                                    : sourceInfo->get_physical_file_id(),
+              statementInfo->get_file_id(),
+              statementInfo->get_physical_file_id(),
+              statementInfo->isOutputInCodeGeneration() ? "true" : "false",
+              statementInfo->isCompilerGenerated() ? "true" : "false",
+              statementInfo->isFrontendSpecific() ? "true" : "false");
+      ROSE_ABORT();
+    }
+    if (sourceInfo->get_physical_file_id() !=
+        statementInfo->get_physical_file_id()) {
+      return returnAttribute;
+    }
+
+    frontierContext.markStatementForAstUnparse(statement);
   }
 
 #if DEBUG_INHERIT
@@ -326,105 +460,31 @@ SimpleFrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
   SimpleFrontierDetectionForTokenStreamMapping_SynthesizedAttribute
       returnAttribute(n);
 
-  for (size_t i = 0; i < synthesizedAttributeList.size(); i++) {
-    // DQ (4/14/2015): I think this is always true, implying that this function
-    // does nothing.
+  SgStatement *currentStatement = isSgStatement(n);
+  bool containsAstUnparse =
+      currentStatement != nullptr &&
+      (frontierContext.isStatementMarkedForAstUnparse(currentStatement) ||
+       contributesVisibleTransformation(currentStatement));
 
-#if DEBUG_SYNTH
-    printf(
-        "   --- synthesizedAttributeList[i=%zu].node = %p = %s isFrontier = %s "
-        "unparseUsingTokenStream = %s unparseFromTheAST = %s "
-        "containsNodesToBeUnparsedFromTheAST = %s "
-        "containsNodesToBeUnparsedFromTheTokenStream = %s \n",
-        i, synthesizedAttributeList[i].node,
-        synthesizedAttributeList[i].node != nullptr
-            ? synthesizedAttributeList[i].node->class_name().c_str()
-            : "null",
-        synthesizedAttributeList[i].isFrontier ? "true" : "false",
-        synthesizedAttributeList[i].unparseUsingTokenStream ? "true" : "false",
-        synthesizedAttributeList[i].unparseFromTheAST ? "true" : "false",
-        synthesizedAttributeList[i].containsNodesToBeUnparsedFromTheAST
-            ? "true"
-            : "false",
-        synthesizedAttributeList[i].containsNodesToBeUnparsedFromTheTokenStream
-            ? "true"
-            : "false");
-#endif
-    SgStatement *statement = isSgStatement(synthesizedAttributeList[i].node);
-    if (statement != nullptr) {
-      SgStatement *currentStatement = isSgStatement(n);
-#if DEBUG_SYNTH
-      if (currentStatement != nullptr) {
-        printf("   --- currentStatement->isTransformation()    = %s \n",
-               currentStatement->isTransformation() ? "true" : "false");
-      }
-      printf("   --- statement->isTransformation()           = %s \n",
-             statement->isTransformation() ? "true" : "false");
-      printf("   --- statement->get_containsTransformation() = %s \n",
-             statement->get_containsTransformation() ? "true" : "false");
-#endif
-      // if (statement->isTransformation() == true ||
-      // statement->get_containsTransformation() == true)
-      if (currentStatement != nullptr &&
-          currentStatement->isTransformation() == false &&
-          contributesVisibleTransformation(statement)) {
-
-        // DQ (11/13/2018): When header file unparsing is used, then we need to
-        // check if this currentStatement that might be a transformation (or the
-        // child attribute that is a statement might be or contain a
-        // transformation) is from the same file as the current scope. In this
-        // case the #include statement would be unparsed and we would not set
-        // the current statement as containing a transformation.
-        // n->set_containsTransformation(true);
-
-        ASSERT_not_null(inheritedAttribute.sourceFile);
-        ASSERT_not_null(inheritedAttribute.sourceFile->get_file_info());
-#if DEBUG_SYNTH
-        printf("   --- inheritedAttribute.sourceFile->get_unparseHeaderFiles() "
-               "= %s \n",
-               inheritedAttribute.sourceFile->get_unparseHeaderFiles()
-                   ? "true"
-                   : "false");
-#endif
-        if (inheritedAttribute.sourceFile->get_unparseHeaderFiles() == true) {
-          int currentStatement_file_id =
-              currentStatement->get_file_info()->get_physical_file_id();
-          int child_file_id =
-              statement->get_file_info()->get_physical_file_id();
-#if DEBUG_SYNTH
-          printf("   --- currentStatement_file_id = %d child_file_id = %d \n",
-                 currentStatement_file_id, child_file_id);
-#endif
-          // DQ (5/3/2021): Since this is source file and header file dependent
-          // we need to do more than just set the value in the IR nodes that are
-          // shared across multiple files.  We require a file-based (indexed)
-          // map of lists of scopes that are to be marked as containing
-          // transformations. Something like: std::map< SgSourceFile* ,
-          // std::set<SgScopeStatement*> > to make it simple for ROSETTA, we
-          // need to store this outside of the map.
-
-          // if (sourceFile_file_id == child_file_id)
-          if (currentStatement_file_id == child_file_id) {
-            n->set_containsTransformation(true);
-          }
-        } else {
-          n->set_containsTransformation(true);
-        }
-      }
+  for (const auto &childAttribute : synthesizedAttributeList) {
+    if (!childAttribute.containsNodesToBeUnparsedFromTheAST) {
+      continue;
     }
+    // A lexical container can begin in an included file while still owning
+    // later statements from the materialized header whose frontier is being
+    // built. Preserve the file-context-specific transformation bit through
+    // those mixed-physical-file containers; the inherited pass only seeds
+    // statements owned by this exact SgSourceFile.
+    containsAstUnparse = true;
+  }
 
-    // DQ (4/14/2015): Adding support for modified SgInitializedName in a
-    // statement to trigger containsTransformation flag.
-    SgInitializedName *initializedName =
-        isSgInitializedName(synthesizedAttributeList[i].node);
-    if (initializedName != nullptr) {
-      SgStatement *currentStatement = isSgStatement(n);
-      if (currentStatement != nullptr &&
-          currentStatement->isTransformation() == false &&
-          contributesVisibleTransformation(initializedName)) {
-        n->set_containsTransformation(true);
-      }
-    }
+  returnAttribute.containsNodesToBeUnparsedFromTheAST = containsAstUnparse;
+  returnAttribute.containsNodesToBeUnparsedFromTheTokenStream =
+      !containsAstUnparse;
+  returnAttribute.unparseFromTheAST = containsAstUnparse;
+  returnAttribute.unparseUsingTokenStream = !containsAstUnparse;
+  if (currentStatement != nullptr && containsAstUnparse) {
+    frontierContext.markStatementAsContainingAstUnparse(currentStatement);
   }
 
 #if DEBUG_SYNTH
@@ -458,51 +518,58 @@ SimpleFrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
   return returnAttribute;
 }
 
-int SimpleFrontierDetectionForTokenStreamMapping::numberOfNodesInSubtree(
-    SgSourceFile *sourceFile) {
-  int value = 0;
-
-  TimingPerformance timer("AST "
-                          "SimpleFrontierDetectionForTokenStreamMapping::"
-                          "numberOfNodesInSubtree():");
-
-  class CountTraversal : public SgSimpleProcessing {
-  public:
-    int count;
-    CountTraversal() : count(0) {}
-
-    // We only want to count statements since we only test the token/AST
-    // unparsing at the statement level.
-    void visit(SgNode *n) {
-      if (isSgStatement(n) != nullptr)
-        count++;
-    }
-  };
-
-  CountTraversal counter;
-  counter.traverseWithinFile(sourceFile, preorder);
-  value = counter.count;
-
-  return value;
-}
-
-void simpleFrontierDetectionForTokenStreamMapping(SgSourceFile *sourceFile,
-                                                  bool traverseHeaderFiles) {
+void simpleFrontierDetectionForTokenStreamMapping(
+    SgSourceFile *sourceFile, bool traverseHeaderFiles,
+    TokenUnparseFrontierFileContext &frontierContext, SgNode *traversalRoot) {
   TimingPerformance timer(
       "AST Simple Frontier Detection For Token Stream Mapping:");
 
   ASSERT_not_null(sourceFile);
   SimpleFrontierDetectionForTokenStreamMapping_InheritedAttribute
       inheritedAttribute(sourceFile);
-  SimpleFrontierDetectionForTokenStreamMapping fdTraversal(sourceFile);
+  SimpleFrontierDetectionForTokenStreamMapping fdTraversal(frontierContext);
 
   // DQ (12/2/2018): This can be empty for an empty file (see test in:
   // roseTests/astTokenStreamTests).
   // ROSE_ASSERT(sourceFile->get_tokenSubsequenceMap().find(sourceFile->get_globalScope())
   // != sourceFile->get_tokenSubsequenceMap().end());
-  if (traverseHeaderFiles == true) {
+  if (traversalRoot != nullptr) {
+    fdTraversal.traverse(traversalRoot, inheritedAttribute);
+  } else if (traverseHeaderFiles == true) {
     fdTraversal.traverse(sourceFile, inheritedAttribute);
   } else {
     fdTraversal.traverseWithinFile(sourceFile, inheritedAttribute);
   }
+
+  // Function and range-for headers interleave several semantic children inside
+  // one source-level construct.  A transformed header must therefore own its
+  // source boundary atomically.  A transformation in a function body does not
+  // make the function header an AST region: retaining the header token owner is
+  // required for source spellings that the semantic AST cannot represent, such
+  // as conditional directives splitting a return type from a function name.
+  std::set<SgStatement *> atomicStatements;
+  for (SgStatement *seed : frontierContext.statementsToUnparseFromAst) {
+    bool crossedFunctionBody = false;
+    for (SgNode *cursor = seed; cursor != nullptr;
+         cursor = cursor->get_parent()) {
+      if (SgRangeBasedForStatement *rangeFor =
+              isSgRangeBasedForStatement(cursor)) {
+        atomicStatements.insert(rangeFor);
+      }
+      if (isSgFunctionDefinition(cursor) != nullptr) {
+        crossedFunctionBody = true;
+      }
+      if (SgFunctionDeclaration *function = isSgFunctionDeclaration(cursor)) {
+        if (!crossedFunctionBody) {
+          atomicStatements.insert(function);
+        }
+        break;
+      }
+    }
+  }
+  for (SgStatement *statement : atomicStatements) {
+    frontierContext.markStatementForAstUnparse(statement);
+  }
+
+  frontierContext.finishTransformationAnalysis();
 }

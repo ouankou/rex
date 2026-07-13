@@ -14,15 +14,6 @@ std::ostream &operator<<(std::ostream &os, const SgName &n) {
   return os << "\"" << n.str() << "\"";
 }
 std::ostream &operator<<(std::ostream &os,
-                         const SgAsmStmt::AsmRegisterNameList &bv) {
-  for (unsigned int i = 0; i < bv.size(); i++) {
-    if (i != 0)
-      os << ", ";
-    os << ((long)(bv[i]));
-  }
-  return os;
-}
-std::ostream &operator<<(std::ostream &os,
                          const SgDataStatementObjectPtrList &) {
   return os;
 }

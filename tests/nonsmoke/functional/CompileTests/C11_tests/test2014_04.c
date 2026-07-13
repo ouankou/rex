@@ -11,4 +11,6 @@ struct  sse_tag
 {
   char c;
   float sse_data[4];
-} _Alignas(16) sse_t;
+};
+
+_Alignas(16) struct sse_tag sse_t;

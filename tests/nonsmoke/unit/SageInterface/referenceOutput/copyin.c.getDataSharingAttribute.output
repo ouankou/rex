@@ -3,4 +3,4 @@ OpenMP region SgOmpParallelStatement @ 24
 "x"@26:38	copyin
 "y"@26:41	copyin
 "z"@26:44	copyin
-"name"@0:0	shared
+"name"@26:46	shared

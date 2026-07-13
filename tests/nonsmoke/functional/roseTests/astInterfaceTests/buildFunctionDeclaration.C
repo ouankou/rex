@@ -36,22 +36,20 @@ int main (int argc, char *argv[])
   // ("foo",buildVoidType(),paraList,NULL,NULL,false,NULL,NULL);
   // SgFunctionDeclaration * func1 = buildDefiningFunctionDeclaration
   // (SgName("foo"),buildVoidType(),paraList);
-  SgFunctionDeclaration *func1 =
-      buildDefiningFunctionDeclaration("foo", buildVoidType(), paraList, NULL);
+  SgFunctionDeclaration *func1 = buildDefiningFunctionDeclaration(
+      function_declaration_ownership::sourceLexical(), "foo", buildVoidType(),
+      paraList, globalScope);
 
   // build a statement inside the function body
   SgBasicBlock *func_body = func1->get_definition ()->get_body ();
   ROSE_ASSERT (func_body);
   pushScopeStack (isSgScopeStatement (func_body));
 
-  SgVariableDeclaration *varDecl = buildVariableDeclaration
-    (SgName ("i"), buildIntType());
-	  // Insert the statement
-  appendStatement (varDecl);
-  popScopeStack ();
-	  // insert the defining function
-  appendStatement (func1);
-
+  SgVariableDeclaration *varDecl =
+      buildVariableDeclaration(SgName("i"), buildIntType(), nullptr, func_body);
+  // Insert the statement
+  appendStatement(varDecl, func_body);
+  popScopeStack();
   // pop the final scope after all AST insertion
   popScopeStack ();
 

@@ -7,7 +7,7 @@ int main(int argc, char **argv) {
   ROSE_ASSERT(project != NULL);
   AstTests::runAllTests(project);
   SingleStatementToBlockNormalizer singleStatementToBlockNormalizer;
-  singleStatementToBlockNormalizer.Normalize(project);
+  singleStatementToBlockNormalizer.NormalizeInputFiles(project);
   AstTests::runAllTests(project);
   return backend(project);
 }

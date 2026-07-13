@@ -7,41 +7,6 @@ endforeach()
 
 set(REX_COMPILE_TESTS_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/CompileTests)
 
-set(REX_FRONTEND_ERROR_TESTS
-  rex_test2025_cfe_error_exit_code.cpp
-  # Issue 99: Friend function template lookup requires error-tolerant mode.
-  rex_test2025_issue99.cpp
-  # These specimens intentionally feed Clang diagnostics through the
-  # continue-on-error path and should still be part of the default CTest run.
-  test2006_131.C
-  test2014_22.C
-  # ELSA overload-resolution specimens contain intentional semantic
-  # diagnostics under Clang but still build a recoverable AST for backend
-  # coverage.
-  t0127.cc
-  t0132.cc
-  # Name-qualification regression tests include one intentionally-invalid C++
-  # specimen that still needs backend coverage from Clang's recovered AST.
-  testNameQalTypeElab_21.C
-  # C++20 concepts diagnostics should still round-trip through the backend when
-  # Clang recovers a valid AST from an intentionally-invalid input.
-  test2020_47.C
-  # Pointer-to-member comparison diagnostics still leave a usable recovered AST
-  # that must continue through the backend in the mirrored compile suites.
-  test2020_40.C
-  # Issue 441: Builtin redeclarations produce diagnostics; keep frontend alive.
-  test2017_02.c
-  test2018_26.c
-  test2016_35.C
-  # Header-unparse recovery: frontend normalizes the missing template<> on an
-  # out-of-class specialization and the backend must preserve that fixup.
-  Simple19.C
-  # C11 recovery tests: Clang diagnoses these inputs but still builds a valid
-  # AST that REX should carry through the backend.
-  test2014_17.c
-  test2014_19.c
-)
-
 set(REX_FUNCTIONAL_SYSTEM_HEADER_LIKE_DIR
   ${CMAKE_CURRENT_SOURCE_DIR}/input_codes/system_header_like)
 set(REX_TEST2018_34_SUPPORT_DIR
@@ -55,6 +20,7 @@ set(CXX_TESTCODES_GNUXX03
 set(CXX_TESTCODES_GNUXX17
   # These use C++17 library/features (variant/filesystem/*_v traits/CTAD),
   # or include ROSE headers that now require at least C++17.
+  rex_unparser_structured_binding_parent.cpp
   rex_test2026_template_features.cpp
   rex_test2026_stl_map.cpp
   rex_test2026_stl_meta.cpp
@@ -67,12 +33,15 @@ set(CXX_TESTCODES_GNUXX17
   test2017_99.C
 )
 
+set(CXX_TESTCODES_GNUXX20
+  # These exercise C++20-only grammar such as the three-way comparison
+  # operator and must use the same dialect in every shared test consumer.
+  rex_frontend_operator_surface_contract.cpp
+)
+
 function(rex_get_cxx_specimen_extra_flags out_var specimen)
   set(_flags)
   get_filename_component(_specimen_name "${specimen}" NAME)
-  if(DEFINED REX_FRONTEND_ERROR_TESTS AND specimen IN_LIST REX_FRONTEND_ERROR_TESTS)
-    list(APPEND _flags -rex:clang:continue-on-error)
-  endif()
   if(_specimen_name STREQUAL "needs_reentrant.c")
     list(APPEND _flags -pthread)
   endif()
@@ -86,6 +55,14 @@ function(rex_get_cxx_specimen_extra_flags out_var specimen)
     list(APPEND _flags
       -I${REX_TEST2018_34_SUPPORT_DIR})
   endif()
+  if(_specimen_name STREQUAL "rex_frontend_driver_argument_order.c")
+    list(APPEND _flags
+      -DREX_DRIVER_ARGUMENT_ORDER=1
+      -UREX_DRIVER_ARGUMENT_ORDER
+      -DREX_DRIVER_ARGUMENT_ORDER=2
+      -DREX_DRIVER_ARGUMENT_UNDEFINED
+      -UREX_DRIVER_ARGUMENT_UNDEFINED)
+  endif()
   if(specimen STREQUAL "rex_test2025_issue148_system_header_mutation.cpp")
     list(APPEND _flags -isystem ${REX_FUNCTIONAL_SYSTEM_HEADER_LIKE_DIR})
   endif()
@@ -96,11 +73,18 @@ function(rex_get_cxx_specimen_standard_flag out_var specimen)
   get_filename_component(_specimen_name "${specimen}" NAME)
   if(_specimen_name STREQUAL "rex_test2026_concepts.cpp")
     set(_flag -std=c++20)
+  elseif(_specimen_name IN_LIST CXX_TESTCODES_GNUXX20)
+    set(_flag -std=gnu++20)
   elseif(_specimen_name IN_LIST CXX_TESTCODES_GNUXX03)
     set(_flag -std=gnu++03)
   elseif(_specimen_name IN_LIST CXX_TESTCODES_GNUXX17)
     set(_flag -std=gnu++17)
   else()
+    # The compiler itself is built as C++17, but the generic historical C++
+    # specimen set has an explicit C++14 language contract.  Consumers must
+    # not infer an input dialect from the build dialect: doing so makes valid
+    # dynamic exception specifications and register declarations ill-formed
+    # before the frontend can translate their source syntax.
     set(_flag -std=gnu++14)
   endif()
   set(${out_var} "${_flag}" PARENT_SCOPE)
@@ -114,9 +98,10 @@ function(rex_get_fortran_specimen_extra_flags out_var specimen)
     test2007_82.f90
     test2007_83.f90
     test2007_84.f90
+    rex_fortran_cray_pointer_declaration.f90
     test2011_imperial_crayPointers.f90)
   if(_specimen_name IN_LIST _cray_pointer_specimens)
-    list(APPEND _flags -fcray-pointer)
+    list(APPEND _flags -rose:cray_pointer_support)
   endif()
   set(${out_var} "${_flags}" PARENT_SCOPE)
 endfunction()
@@ -238,13 +223,6 @@ if(ROSE_BUILD_C_LANGUAGE_SUPPORT)
   set_tests_properties(rex_install_tree_astInterface PROPERTIES RESOURCE_LOCK ${_functional_lock})
 endif()
 
-set(_keep_going_cmd $<TARGET_FILE:KeepGoingTranslator>)
-set(_keep_going_missing FALSE)
-if(NOT TARGET KeepGoingTranslator)
-  set(_keep_going_cmd KeepGoingTranslator)
-  set(_keep_going_missing TRUE)
-endif()
-
 set(_identity_translator_cmd $<TARGET_FILE:identityTranslator>)
 set(_identity_translator_missing FALSE)
 if(NOT TARGET identityTranslator)
@@ -263,7 +241,9 @@ set_tests_properties(functional_testObjectFileAnalysis PROPERTIES RESOURCE_LOCK 
 add_test(
   NAME functional_testLinkFileAnalysis
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND $<TARGET_FILE:testAnalysis> alt_Analysis_inputFile.o -o testLinkFileAnalysisExecutable
+  COMMAND $<TARGET_FILE:testAnalysis>
+    -x c++ /dev/null -x none
+    alt_Analysis_inputFile.o -o testLinkFileAnalysisExecutable
 )
 set_tests_properties(functional_testLinkFileAnalysis PROPERTIES DEPENDS functional_testObjectFileAnalysis RESOURCE_LOCK ${_functional_lock})
 
@@ -293,7 +273,9 @@ set_tests_properties(functional_testObjectFileCodeGeneration PROPERTIES RESOURCE
 add_test(
   NAME functional_testLinkFileCodeGeneration
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND $<TARGET_FILE:testCodeGeneration> -rose:Cxx alt_CodeGeneration_inputFile.o -o testLinkFileCodeGenerationExecutable
+  COMMAND $<TARGET_FILE:testCodeGeneration>
+    -x c++ /dev/null -x none
+    alt_CodeGeneration_inputFile.o -o testLinkFileCodeGenerationExecutable
 )
 set_tests_properties(functional_testLinkFileCodeGeneration PROPERTIES DEPENDS functional_testObjectFileCodeGeneration RESOURCE_LOCK ${_functional_lock})
 
@@ -394,16 +376,6 @@ add_test(
 set_tests_properties(functional_testTranslatorUnfoldedConstants PROPERTIES RESOURCE_LOCK ${_functional_lock})
 
 add_test(
-  NAME functional_testKeepGoingTranslator
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND ${_keep_going_cmd} -rex:clang:continue-on-error -c ${_functional_minimal_input}
-    ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests/restrict_template_parameter.C
-    ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2017_13_Liao.C
-    ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2017_12_Liao.C
-)
-set_tests_properties(functional_testKeepGoingTranslator PROPERTIES RESOURCE_LOCK ${_functional_lock})
-
-add_test(
   NAME functional_testExampleIdentityTranslator
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${BASH_EXECUTABLE} -c
@@ -425,8 +397,6 @@ set_tests_properties(
     RESOURCE_LOCK ${_functional_lock}
     ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_functional_read_file_twice_output_dir}")
 
-if(_keep_going_missing)
-endif()
 if(_identity_translator_missing)
 endif()
 

@@ -2,6 +2,11 @@ add_executable(statements statements.C )
 target_link_libraries(statements ROSE_DLL ${link_with_libraries} )
 install(TARGETS statements DESTINATION bin)
 
+find_program(BASH_EXECUTABLE bash)
+if(NOT BASH_EXECUTABLE)
+  message(FATAL_ERROR "bash not found; source-position tests require bash")
+endif()
+
 set(TESTCODES
   test_CplusplusMacro_Cpp.C test2001_01.C test2001_02.C test2001_03.C
   test2001_04.C test2001_05.C test2001_06.C test2001_07.C test2001_08.C
@@ -162,17 +167,32 @@ set(_additional_source_position_tests
 
 function(add_source_position_test test_file)
   rex_get_cxx_specimen_extra_flags(_source_position_extra_flags ${test_file})
+  rex_get_cxx_specimen_standard_flag(_source_position_standard_flag
+    ${test_file})
 
   configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${test_file}
     ${CMAKE_CURRENT_BINARY_DIR}/${test_file}
     COPYONLY)
 
-  add_test(
-    NAME SOURCEPOSITIONTEST_${test_file}
-    COMMAND statements ${ROSE_FLAGS} ${_source_position_extra_flags} ${TESTCODE_INCLUDES}
-      -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests
-      -c ${CMAKE_CURRENT_BINARY_DIR}/${test_file})
+  if(test_file STREQUAL "test2006_131.C")
+    add_test(
+      NAME SOURCEPOSITIONTEST_${test_file}
+      COMMAND ${BASH_EXECUTABLE} -c
+        "ulimit -c 0; set +e; \"$@\" > test2006_131.reject.log 2>&1; status=$?; set -e; test \"$status\" -eq 134; test \"$(grep -Fxc \"${CMAKE_CURRENT_BINARY_DIR}/${test_file}:6:2: error: \\\"AST has a SgBasicBlock which has the SgIfStmt as a parent, but is not a child of the SgIfStmt IR node.\\\"\" test2006_131.reject.log)\" -eq 1; test \"$(grep -Fxc \"REX_FRONTEND_INVARIANT[clang-diagnostics]: Clang reported 1 diagnostic error(s); frontend AST translation is forbidden\" test2006_131.reject.log)\" -eq 1"
+        dummy $<TARGET_FILE:statements> ${ROSE_FLAGS}
+        ${_source_position_standard_flag} ${_source_position_extra_flags}
+        ${TESTCODE_INCLUDES}
+        -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests
+        -c ${CMAKE_CURRENT_BINARY_DIR}/${test_file})
+  else()
+    add_test(
+      NAME SOURCEPOSITIONTEST_${test_file}
+      COMMAND statements ${ROSE_FLAGS} ${_source_position_standard_flag}
+        ${_source_position_extra_flags} ${TESTCODE_INCLUDES}
+        -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests
+        -c ${CMAKE_CURRENT_BINARY_DIR}/${test_file})
+  endif()
 
   set_tests_properties(SOURCEPOSITIONTEST_${test_file} PROPERTIES LABELS SOURCEPOSITIONTEST ${ARGN})
 endfunction()

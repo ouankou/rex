@@ -1,10 +1,608 @@
+#include "openMPConstantInteger.h"
 #include "sageAstJsonPrivate.h"
+
+#include <atomic>
 
 namespace Rose {
 namespace AstJson {
 
 uint64_t idFor(const std::unordered_map<const SgNode *, uint64_t> &ids,
                const SgNode *node);
+
+bool expressionCarriesSemanticType(const SgExpression *expression) {
+  return expression != nullptr && expression->has_semantic_value_type();
+}
+
+void validateExactSemanticExpressionType(const SgExpression *expression,
+                                         const SgType *type,
+                                         const std::string &phase) {
+  if (expression == nullptr) {
+    throw std::runtime_error(
+        "AST JSON semantic expression type validation received a null "
+        "expression");
+  }
+  if (!expressionCarriesSemanticType(expression)) {
+    return;
+  }
+  if (type == nullptr || isSgTypeUnknown(type) != nullptr ||
+      isSgTypeDefault(type) != nullptr) {
+    throw std::runtime_error("AST JSON " + expression->class_name() +
+                             " has no exact semantic value type during " +
+                             phase);
+  }
+}
+
+const JsonValue *validatedExpressionTypeProperty(const SgExpression *expression,
+                                                 const JsonValue &properties) {
+  if (expression == nullptr) {
+    throw std::runtime_error(
+        "AST JSON expression type validation received a null expression");
+  }
+
+  const JsonValue *type = properties.find("type");
+  if (expressionCarriesSemanticType(expression)) {
+    if (type == nullptr) {
+      throw std::runtime_error(
+          "AST JSON semantic expression is missing its semantic type");
+    }
+  } else if (type != nullptr) {
+    throw std::runtime_error(
+        "AST JSON syntax expression has a serialized semantic type");
+  }
+  return type;
+}
+
+namespace {
+
+void validateOmpContextScore(SgExpression *score) {
+  if (!expressionCarriesSemanticType(score)) {
+    throw std::runtime_error(
+        "AST JSON OpenMP context selector score is not a semantic "
+        "expression");
+  }
+  SgType *type = score->get_type();
+  if (type == nullptr ||
+      (!SageInterface::isStrictIntegerType(type) &&
+       isSgEnumType(type->stripType(SgType::STRIP_MODIFIER_TYPE |
+                                    SgType::STRIP_TYPEDEF_TYPE)) == nullptr)) {
+    throw std::runtime_error(
+        "AST JSON OpenMP context selector score is not an integer or enum "
+        "expression");
+  }
+  if (!Rose::OpenMP::isNonnegativeConstantInteger(score)) {
+    throw std::runtime_error(
+        "AST JSON OpenMP context selector score is not a nonnegative "
+        "constant integer expression");
+  }
+}
+
+std::string ompContextPropertyName(const SgExpression *expression) {
+  if (const SgOmpNameExpression *name = isSgOmpNameExpression(expression)) {
+    const std::string spelling = trim(name->get_spelling());
+    if (spelling.empty()) {
+      throw std::runtime_error(
+          "AST JSON OpenMP context selector has an empty name property");
+    }
+    return spelling;
+  }
+  if (const SgOmpSourceExpression *source =
+          isSgOmpSourceExpression(expression)) {
+    const std::string spelling = trim(source->get_spelling());
+    const bool double_quoted = spelling.size() >= 2 &&
+                               spelling.front() == '"' &&
+                               spelling.back() == '"';
+    const bool single_quoted = spelling.size() >= 2 &&
+                               spelling.front() == '\'' &&
+                               spelling.back() == '\'';
+    if (!double_quoted && !single_quoted) {
+      throw std::runtime_error(
+          "AST JSON OpenMP context selector string property is not exactly "
+          "quoted");
+    }
+    const std::string value = spelling.substr(1, spelling.size() - 2);
+    if (value.empty()) {
+      throw std::runtime_error(
+          "AST JSON OpenMP context selector has an empty string property");
+    }
+    return value;
+  }
+  throw std::runtime_error(
+      "AST JSON OpenMP name-list selector property is not an exact name or "
+      "quoted syntax node");
+}
+
+std::string ompContextSyntaxProperty(const SgExpression *expression) {
+  if (const SgOmpSourceExpression *source =
+          isSgOmpSourceExpression(expression)) {
+    const std::string spelling = trim(source->get_spelling());
+    if (spelling.empty()) {
+      throw std::runtime_error(
+          "AST JSON OpenMP context selector has an empty syntax property");
+    }
+    return spelling;
+  }
+  return ompContextPropertyName(expression);
+}
+
+std::string
+ompContextPropertyIdentity(const SgOmpContextSelector *selector,
+                           const SgOmpContextSelectorProperty *property) {
+  switch (selector->get_selector_kind()) {
+  case SgOmpClause::e_omp_context_trait_kind:
+    return "kind:" + std::to_string(property->get_context_kind());
+  case SgOmpClause::e_omp_context_trait_vendor:
+    return "vendor:" + std::to_string(property->get_context_vendor());
+  case SgOmpClause::e_omp_context_trait_atomic_default_mem_order:
+    return "atomic-default-mem-order:" +
+           std::to_string(property->get_atomic_default_mem_order());
+  case SgOmpClause::e_omp_context_trait_arch:
+  case SgOmpClause::e_omp_context_trait_isa:
+  case SgOmpClause::e_omp_context_trait_uid:
+  case SgOmpClause::e_omp_context_trait_extension:
+    // OpenMP treats an identifier and the corresponding string literal as
+    // the same name-list property value.
+    return "name:" + ompContextPropertyName(property->get_expression());
+  case SgOmpClause::e_omp_context_trait_requires: {
+    const auto kind = property->get_requires_kind();
+    switch (kind) {
+    case SgOmpClause::e_omp_requires_property_reverse_offload:
+    case SgOmpClause::e_omp_requires_property_unified_address:
+    case SgOmpClause::e_omp_requires_property_unified_shared_memory:
+    case SgOmpClause::e_omp_requires_property_dynamic_allocators:
+    case SgOmpClause::e_omp_requires_property_self_maps:
+    case SgOmpClause::e_omp_requires_property_device_safesync:
+    case SgOmpClause::e_omp_requires_property_atomic_default_mem_order:
+      return "requires:" + std::to_string(kind);
+    case SgOmpClause::e_omp_requires_property_implementation_defined:
+      return "requires:" + std::to_string(kind) + ":" +
+             property->get_requires_extension().getString();
+    case SgOmpClause::e_omp_requires_property_unspecified:
+    default:
+      throw std::runtime_error(
+          "AST JSON OpenMP requires property has an invalid typed kind");
+    }
+  }
+  case SgOmpClause::e_omp_context_trait_implementation_user:
+    return "syntax:" + ompContextSyntaxProperty(property->get_expression());
+  case SgOmpClause::e_omp_context_trait_condition:
+  case SgOmpClause::e_omp_context_trait_device_num:
+    // These selectors require exactly one property, so cardinality is their
+    // stronger and language-independent uniqueness check.
+    return "single";
+  case SgOmpClause::e_omp_context_trait_construct:
+  default:
+    throw std::runtime_error(
+        "AST JSON OpenMP context property has no valid selector identity");
+  }
+}
+
+} // namespace
+
+void validateOmpContextSelectorProperty(
+    const SgOmpContextSelectorProperty *property,
+    const SgOmpContextSelector *selector) {
+  if (property == nullptr || selector == nullptr) {
+    throw std::runtime_error(
+        "AST JSON has a null OpenMP context selector property or owner");
+  }
+  if (property->get_parent() != selector) {
+    throw std::runtime_error(
+        "AST JSON OpenMP context selector property has a different owner");
+  }
+
+  const bool has_expression = property->get_expression() != nullptr;
+  const bool has_context_kind = property->get_context_kind() !=
+                                SgOmpClause::e_omp_when_context_kind_unknown;
+  const bool has_context_vendor =
+      property->get_context_vendor() !=
+      SgOmpClause::e_omp_when_context_vendor_unspecified;
+  const bool has_atomic_default_mem_order =
+      property->get_atomic_default_mem_order() !=
+      SgOmpClause::e_omp_atomic_default_mem_order_kind_unspecified;
+  const bool has_requires = property->get_requires_kind() !=
+                            SgOmpClause::e_omp_requires_property_unspecified;
+  const unsigned payload_count =
+      static_cast<unsigned>(has_expression) +
+      static_cast<unsigned>(has_context_kind) +
+      static_cast<unsigned>(has_context_vendor) +
+      static_cast<unsigned>(has_atomic_default_mem_order) +
+      static_cast<unsigned>(has_requires);
+  if (payload_count != 1) {
+    throw std::runtime_error(
+        "AST JSON OpenMP context selector property does not own exactly one "
+        "typed payload");
+  }
+  if (has_expression && property->get_expression()->get_parent() != property) {
+    throw std::runtime_error(
+        "AST JSON OpenMP context selector property expression has a "
+        "different owner");
+  }
+  if (property->get_requires_expression() != nullptr &&
+      property->get_requires_expression()->get_parent() != property) {
+    throw std::runtime_error(
+        "AST JSON OpenMP requires logical expression has a different owner");
+  }
+
+  bool expression_required = false;
+  bool context_kind_required = false;
+  bool context_vendor_required = false;
+  bool atomic_default_mem_order_required = false;
+  bool requires_required = false;
+  switch (selector->get_selector_kind()) {
+  case SgOmpClause::e_omp_context_trait_condition:
+  case SgOmpClause::e_omp_context_trait_arch:
+  case SgOmpClause::e_omp_context_trait_isa:
+  case SgOmpClause::e_omp_context_trait_device_num:
+  case SgOmpClause::e_omp_context_trait_uid:
+  case SgOmpClause::e_omp_context_trait_extension:
+  case SgOmpClause::e_omp_context_trait_implementation_user:
+    expression_required = true;
+    break;
+  case SgOmpClause::e_omp_context_trait_requires:
+    requires_required = true;
+    break;
+  case SgOmpClause::e_omp_context_trait_kind:
+    context_kind_required = true;
+    break;
+  case SgOmpClause::e_omp_context_trait_vendor:
+    context_vendor_required = true;
+    break;
+  case SgOmpClause::e_omp_context_trait_atomic_default_mem_order:
+    atomic_default_mem_order_required = true;
+    break;
+  case SgOmpClause::e_omp_context_trait_construct:
+  default:
+    throw std::runtime_error(
+        "AST JSON OpenMP context selector property is illegal for its "
+        "selector kind");
+  }
+  if (has_expression != expression_required ||
+      has_context_kind != context_kind_required ||
+      has_context_vendor != context_vendor_required ||
+      has_atomic_default_mem_order != atomic_default_mem_order_required ||
+      has_requires != requires_required) {
+    throw std::runtime_error(
+        "AST JSON OpenMP context selector property has the wrong typed "
+        "payload for its selector");
+  }
+
+  if (!has_requires) {
+    if (property->get_requires_expression() != nullptr ||
+        property->get_requires_atomic_default_mem_order() !=
+            SgOmpClause::e_omp_atomic_default_mem_order_kind_unspecified ||
+        !property->get_requires_extension().getString().empty()) {
+      throw std::runtime_error(
+          "AST JSON OpenMP non-requires property owns a requires payload");
+    }
+  } else {
+    SgExpression *requires_expression = property->get_requires_expression();
+    const auto requires_atomic =
+        property->get_requires_atomic_default_mem_order();
+    const bool has_requires_extension =
+        !property->get_requires_extension().getString().empty();
+    switch (property->get_requires_kind()) {
+    case SgOmpClause::e_omp_requires_property_reverse_offload:
+    case SgOmpClause::e_omp_requires_property_unified_address:
+    case SgOmpClause::e_omp_requires_property_unified_shared_memory:
+    case SgOmpClause::e_omp_requires_property_dynamic_allocators:
+    case SgOmpClause::e_omp_requires_property_self_maps:
+    case SgOmpClause::e_omp_requires_property_device_safesync:
+      if (requires_atomic !=
+              SgOmpClause::e_omp_atomic_default_mem_order_kind_unspecified ||
+          has_requires_extension) {
+        throw std::runtime_error(
+            "AST JSON OpenMP ordinary requires property owns a mismatched "
+            "payload");
+      }
+      if (requires_expression != nullptr &&
+          !expressionCarriesSemanticType(requires_expression)) {
+        throw std::runtime_error(
+            "AST JSON OpenMP requires logical expression is not a semantic "
+            "expression");
+      }
+      break;
+    case SgOmpClause::e_omp_requires_property_atomic_default_mem_order:
+      if (requires_expression != nullptr || has_requires_extension) {
+        throw std::runtime_error(
+            "AST JSON OpenMP atomic_default_mem_order requires property "
+            "owns a mismatched payload");
+      }
+      switch (requires_atomic) {
+      case SgOmpClause::e_omp_atomic_default_mem_order_kind_seq_cst:
+      case SgOmpClause::e_omp_atomic_default_mem_order_kind_acq_rel:
+      case SgOmpClause::e_omp_atomic_default_mem_order_kind_acquire:
+      case SgOmpClause::e_omp_atomic_default_mem_order_kind_release:
+      case SgOmpClause::e_omp_atomic_default_mem_order_kind_relaxed:
+        break;
+      case SgOmpClause::e_omp_atomic_default_mem_order_kind_unspecified:
+      default:
+        throw std::runtime_error(
+            "AST JSON OpenMP atomic_default_mem_order requires property has "
+            "an invalid order");
+      }
+      break;
+    case SgOmpClause::e_omp_requires_property_implementation_defined:
+      if (requires_expression != nullptr ||
+          requires_atomic !=
+              SgOmpClause::e_omp_atomic_default_mem_order_kind_unspecified ||
+          !has_requires_extension) {
+        throw std::runtime_error(
+            "AST JSON OpenMP implementation-defined requires property is "
+            "malformed");
+      }
+      break;
+    case SgOmpClause::e_omp_requires_property_unspecified:
+    default:
+      throw std::runtime_error(
+          "AST JSON OpenMP requires property has an invalid typed kind");
+    }
+  }
+
+  // This also validates the exact syntax-node kind for name-list and syntax
+  // properties without ever asking those nodes for a fabricated value type.
+  if ((selector->get_selector_kind() ==
+           SgOmpClause::e_omp_context_trait_condition ||
+       selector->get_selector_kind() ==
+           SgOmpClause::e_omp_context_trait_device_num) &&
+      !expressionCarriesSemanticType(property->get_expression())) {
+    throw std::runtime_error(
+        "AST JSON OpenMP semantic context property is not a semantic "
+        "expression");
+  }
+  (void)ompContextPropertyIdentity(selector, property);
+}
+
+void validateOmpContextSelector(const SgOmpContextSelector *selector) {
+  if (selector == nullptr) {
+    throw std::runtime_error("AST JSON has a null OpenMP context selector");
+  }
+
+  if (selector->get_score() != nullptr &&
+      selector->get_score()->get_parent() != selector) {
+    throw std::runtime_error(
+        "AST JSON OpenMP context selector score has a different owner");
+  }
+  if (selector->get_construct_directive() != nullptr &&
+      selector->get_construct_directive()->get_parent() != selector) {
+    throw std::runtime_error(
+        "AST JSON OpenMP construct selector directive has a different owner");
+  }
+
+  const bool custom = selector->get_selector_kind() ==
+                      SgOmpClause::e_omp_context_trait_implementation_user;
+  const bool has_custom_name =
+      !selector->get_implementation_defined_name().is_null() &&
+      !selector->get_implementation_defined_name().getString().empty();
+  if (has_custom_name != custom) {
+    throw std::runtime_error(
+        custom ? "AST JSON OpenMP implementation-defined selector has no "
+                 "exact name"
+               : "AST JSON OpenMP built-in selector has an unexpected "
+                 "implementation-defined name");
+  }
+
+  bool score_allowed = false;
+  bool construct_required = false;
+  size_t minimum_properties = 1;
+  size_t maximum_properties = std::numeric_limits<size_t>::max();
+  switch (selector->get_selector_kind()) {
+  case SgOmpClause::e_omp_context_trait_condition:
+    score_allowed = true;
+    maximum_properties = 1;
+    break;
+  case SgOmpClause::e_omp_context_trait_construct:
+    construct_required = true;
+    minimum_properties = 0;
+    maximum_properties = 0;
+    break;
+  case SgOmpClause::e_omp_context_trait_kind:
+  case SgOmpClause::e_omp_context_trait_arch:
+  case SgOmpClause::e_omp_context_trait_isa:
+    break;
+  case SgOmpClause::e_omp_context_trait_device_num:
+  case SgOmpClause::e_omp_context_trait_uid:
+    maximum_properties = 1;
+    break;
+  case SgOmpClause::e_omp_context_trait_vendor:
+  case SgOmpClause::e_omp_context_trait_extension:
+  case SgOmpClause::e_omp_context_trait_requires:
+    score_allowed = true;
+    break;
+  case SgOmpClause::e_omp_context_trait_atomic_default_mem_order:
+    score_allowed = true;
+    maximum_properties = 1;
+    break;
+  case SgOmpClause::e_omp_context_trait_implementation_user:
+    score_allowed = true;
+    minimum_properties = 0;
+    break;
+  default:
+    throw std::runtime_error(
+        "AST JSON OpenMP context selector has an invalid selector kind");
+  }
+
+  if (selector->get_score() != nullptr && !score_allowed) {
+    throw std::runtime_error(
+        "AST JSON OpenMP context selector has a prohibited score");
+  }
+  if (selector->get_score() != nullptr) {
+    validateOmpContextScore(selector->get_score());
+  }
+  const bool has_construct = selector->get_construct_directive() != nullptr;
+  if (has_construct != construct_required) {
+    throw std::runtime_error(
+        construct_required
+            ? "AST JSON OpenMP construct selector is missing its directive"
+            : "AST JSON OpenMP context selector has an unexpected directive");
+  }
+  const size_t property_count = selector->get_properties().size();
+  if (property_count < minimum_properties ||
+      property_count > maximum_properties ||
+      (selector->get_score() != nullptr && property_count == 0)) {
+    throw std::runtime_error(
+        "AST JSON OpenMP context selector has invalid property cardinality");
+  }
+
+  std::unordered_set<std::string> property_identities;
+  for (const SgOmpContextSelectorProperty *property :
+       selector->get_properties()) {
+    validateOmpContextSelectorProperty(property, selector);
+    if (!property_identities
+             .insert(ompContextPropertyIdentity(selector, property))
+             .second) {
+      throw std::runtime_error(
+          "AST JSON OpenMP context selector has a duplicate property");
+    }
+  }
+}
+
+void validateOmpContextSelectorSet(const SgOmpContextSelectorSet *set) {
+  if (set == nullptr) {
+    throw std::runtime_error("AST JSON has a null OpenMP context selector set");
+  }
+  if (set->get_selectors().empty()) {
+    throw std::runtime_error(
+        "AST JSON OpenMP context selector set has no selectors");
+  }
+
+  std::unordered_set<int> singleton_selector_kinds;
+  std::unordered_set<int> construct_selector_kinds;
+  std::unordered_set<std::string> implementation_selector_names;
+  bool has_kind_any = false;
+  for (const SgOmpContextSelector *selector : set->get_selectors()) {
+    if (selector == nullptr || selector->get_parent() != set) {
+      throw std::runtime_error(
+          "AST JSON OpenMP context selector has a different set owner");
+    }
+
+    bool selector_allowed = false;
+    switch (set->get_set_kind()) {
+    case SgOmpClause::e_omp_context_selector_set_user:
+      selector_allowed = selector->get_selector_kind() ==
+                         SgOmpClause::e_omp_context_trait_condition;
+      break;
+    case SgOmpClause::e_omp_context_selector_set_construct:
+      selector_allowed = selector->get_selector_kind() ==
+                         SgOmpClause::e_omp_context_trait_construct;
+      break;
+    case SgOmpClause::e_omp_context_selector_set_device:
+      selector_allowed =
+          selector->get_selector_kind() ==
+              SgOmpClause::e_omp_context_trait_kind ||
+          selector->get_selector_kind() ==
+              SgOmpClause::e_omp_context_trait_arch ||
+          selector->get_selector_kind() == SgOmpClause::e_omp_context_trait_isa;
+      break;
+    case SgOmpClause::e_omp_context_selector_set_target_device:
+      selector_allowed =
+          selector->get_selector_kind() ==
+              SgOmpClause::e_omp_context_trait_kind ||
+          selector->get_selector_kind() ==
+              SgOmpClause::e_omp_context_trait_arch ||
+          selector->get_selector_kind() ==
+              SgOmpClause::e_omp_context_trait_isa ||
+          selector->get_selector_kind() ==
+              SgOmpClause::e_omp_context_trait_device_num ||
+          selector->get_selector_kind() == SgOmpClause::e_omp_context_trait_uid;
+      break;
+    case SgOmpClause::e_omp_context_selector_set_implementation:
+      selector_allowed =
+          selector->get_selector_kind() ==
+              SgOmpClause::e_omp_context_trait_vendor ||
+          selector->get_selector_kind() ==
+              SgOmpClause::e_omp_context_trait_extension ||
+          selector->get_selector_kind() ==
+              SgOmpClause::e_omp_context_trait_requires ||
+          selector->get_selector_kind() ==
+              SgOmpClause::e_omp_context_trait_atomic_default_mem_order ||
+          selector->get_selector_kind() ==
+              SgOmpClause::e_omp_context_trait_implementation_user;
+      break;
+    default:
+      throw std::runtime_error(
+          "AST JSON OpenMP context selector set has an invalid set kind");
+    }
+    if (!selector_allowed) {
+      throw std::runtime_error(
+          "AST JSON OpenMP trait selector is illegal in its selector set");
+    }
+    validateOmpContextSelector(selector);
+
+    bool unique = false;
+    if (selector->get_selector_kind() ==
+        SgOmpClause::e_omp_context_trait_construct) {
+      unique = construct_selector_kinds
+                   .insert(selector->get_construct_directive()->variantT())
+                   .second;
+    } else if (selector->get_selector_kind() ==
+               SgOmpClause::e_omp_context_trait_implementation_user) {
+      if (selector->get_implementation_defined_name().is_null()) {
+        throw std::runtime_error(
+            "AST JSON OpenMP implementation-defined selector has no exact "
+            "name");
+      }
+      unique =
+          implementation_selector_names
+              .insert(selector->get_implementation_defined_name().getString())
+              .second;
+    } else {
+      unique =
+          singleton_selector_kinds.insert(selector->get_selector_kind()).second;
+    }
+    if (!unique) {
+      throw std::runtime_error(
+          "AST JSON OpenMP context selector set has a duplicate selector");
+    }
+
+    if (selector->get_selector_kind() ==
+        SgOmpClause::e_omp_context_trait_kind) {
+      bool selector_has_any = false;
+      for (const SgOmpContextSelectorProperty *property :
+           selector->get_properties()) {
+        selector_has_any =
+            selector_has_any || property->get_context_kind() ==
+                                    SgOmpClause::e_omp_when_context_kind_any;
+      }
+      if (selector_has_any && selector->get_properties().size() != 1) {
+        throw std::runtime_error(
+            "AST JSON OpenMP kind(any) is not the only property in its "
+            "selector");
+      }
+      has_kind_any = has_kind_any || selector_has_any;
+    }
+  }
+  if (has_kind_any && set->get_selectors().size() != 1) {
+    throw std::runtime_error(
+        "AST JSON OpenMP kind(any) selector is not the only selector in its "
+        "set");
+  }
+}
+
+void validateOmpContextSelectorSets(const SgOmpContextSelectorSetPtrList &sets,
+                                    const SgNode *owner) {
+  if (isSgOmpWhenClause(owner) == nullptr &&
+      isSgOmpMatchClause(owner) == nullptr) {
+    throw std::runtime_error(
+        "AST JSON OpenMP context selector sets have an invalid owner");
+  }
+  if (sets.empty()) {
+    throw std::runtime_error(
+        "AST JSON OpenMP variant clause has no context selector sets");
+  }
+
+  std::unordered_set<int> set_kinds;
+  for (const SgOmpContextSelectorSet *set : sets) {
+    if (set == nullptr || set->get_parent() != owner) {
+      throw std::runtime_error(
+          "AST JSON OpenMP context selector set has a different clause owner");
+    }
+    if (!set_kinds.insert(set->get_set_kind()).second) {
+      throw std::runtime_error(
+          "AST JSON OpenMP variant clause has a duplicate selector set");
+    }
+    validateOmpContextSelectorSet(set);
+  }
+}
 
 bool edgeTargetIsInParentChain(const SgNode *node, const SgNode *target) {
   if (node == nullptr || target == nullptr) {
@@ -17,17 +615,6 @@ bool edgeTargetIsInParentChain(const SgNode *node, const SgNode *target) {
     }
   }
   return false;
-}
-
-bool isAnonymousQualificationPrefix(const std::string &prefix) {
-  return prefix.rfind("__anonymous_0x", 0) == 0;
-}
-
-bool hasExplicitReferenceQualification(const SgVarRefExp *ref) {
-  return ref != nullptr &&
-         (ref->get_explicit_name_qualification_length() >= 0 ||
-          ref->get_explicit_global_qualification() ||
-          !ref->get_explicit_name_qualification_tokens().empty());
 }
 
 bool isRightHandSideOfMemberAccess(const SgNode *node) {
@@ -44,20 +631,6 @@ bool isRightHandSideOfMemberAccess(const SgNode *node) {
   return false;
 }
 
-bool shouldSerializeNamePrefix(SgNode *node, const std::string &prefix) {
-  if (SgVarRefExp *ref = isSgVarRefExp(node)) {
-    if (isRightHandSideOfMemberAccess(ref) &&
-        !hasExplicitReferenceQualification(ref)) {
-      return false;
-    }
-  }
-  if (isAnonymousQualificationPrefix(prefix) &&
-      isSgVarRefExp(node) != nullptr && isRightHandSideOfMemberAccess(node)) {
-    return false;
-  }
-  return true;
-}
-
 bool isAnonymousDataMemberReference(SgVarRefExp *ref) {
   if (ref == nullptr || !isRightHandSideOfMemberAccess(ref)) {
     return false;
@@ -72,98 +645,20 @@ bool isAnonymousDataMemberReference(SgVarRefExp *ref) {
   if (declaration == nullptr) {
     return false;
   }
-  return declaration->get_isUnNamed() ||
-         isAnonymousQualificationPrefix(declaration->get_name().getString());
+  return declaration->get_isUnNamed();
 }
 
-void clearReferenceNameQualification(SgVarRefExp *ref) {
-  ref->set_name_qualification_length(0);
-  ref->set_type_elaboration_required(false);
-  ref->set_global_qualification_required(false);
-  ref->set_explicit_name_qualification_length(-1);
-  ref->set_explicit_global_qualification(false);
-  ref->set_explicit_name_qualification_tokens(SgStringList());
-  SgNode::get_globalQualifiedNameMapForNames().erase(ref);
-}
-
-void normalizeAnonymousDataMemberReference(SgVarRefExp *ref) {
-  if (isAnonymousDataMemberReference(ref)) {
-    clearReferenceNameQualification(ref);
+void validateAnonymousDataMemberReferenceQualification(SgVarRefExp *ref) {
+  if (isAnonymousDataMemberReference(ref) &&
+      (ref->get_name_qualification_length() != 0 ||
+       ref->get_type_elaboration_required() ||
+       ref->get_global_qualification_required() ||
+       ref->get_explicit_name_qualification_length() != -1 ||
+       ref->get_explicit_global_qualification() ||
+       !ref->get_explicit_name_qualification_tokens().empty())) {
+    throw std::runtime_error(
+        "AST JSON anonymous data-member reference has qualification state");
   }
-}
-
-std::string rawQualifiedNameStateJson(
-    SgNode *node, const std::unordered_map<const SgNode *, uint64_t> &ids) {
-  std::vector<std::string> fields;
-
-  auto append_simple_map_entry = [&](const std::string &field,
-                                     SgUnorderedMapNodeToString &map) {
-    auto found = map.find(node);
-    if (found != map.end()) {
-      if (field == "name_prefix" &&
-          !shouldSerializeNamePrefix(node, found->second)) {
-        return;
-      }
-      fields.push_back(rawStringField(field, found->second));
-    }
-  };
-
-  append_simple_map_entry("name_prefix",
-                          SgNode::get_globalQualifiedNameMapForNames());
-  append_simple_map_entry("type_prefix",
-                          SgNode::get_globalQualifiedNameMapForTypes());
-  append_simple_map_entry(
-      "template_header",
-      SgNode::get_globalQualifiedNameMapForTemplateHeaders());
-  append_simple_map_entry("type_name", SgNode::get_globalTypeNameMap());
-
-  auto maps_found =
-      SgNode::get_globalQualifiedNameMapForMapsOfTypes().find(node);
-  if (maps_found != SgNode::get_globalQualifiedNameMapForMapsOfTypes().end()) {
-    std::vector<std::pair<uint64_t, std::string>> entries;
-    for (const auto &entry : maps_found->second) {
-      const uint64_t target_id = idFor(ids, entry.first);
-      if (target_id == 0) {
-        std::ostringstream message;
-        message << "AST JSON qualified type-map entry target was not collected"
-                << " while serializing " << node->sage_class_name();
-        if (SgNode *target = entry.first) {
-          message << " target=" << target->sage_class_name();
-        }
-        throw std::runtime_error(message.str());
-      }
-      entries.emplace_back(target_id, entry.second);
-    }
-    std::sort(entries.begin(), entries.end());
-
-    std::ostringstream map_out;
-    map_out << "[";
-    for (size_t i = 0; i < entries.size(); ++i) {
-      if (i != 0) {
-        map_out << ", ";
-      }
-      std::vector<std::string> entry_fields;
-      entry_fields.push_back(rawIntegerField("node", entries[i].first));
-      entry_fields.push_back(rawStringField("prefix", entries[i].second));
-      std::ostringstream entry_out;
-      writeRawObject(entry_out, 0, entry_fields, false);
-      std::string entry_text = entry_out.str();
-      if (!entry_text.empty() && entry_text.back() == '\n') {
-        entry_text.pop_back();
-      }
-      map_out << entry_text;
-    }
-    map_out << "]";
-    fields.push_back(jsonString("type_map_prefixes") + ": " + map_out.str());
-  }
-
-  std::ostringstream out;
-  writeRawObject(out, 0, fields, false);
-  std::string result = out.str();
-  if (!result.empty() && result.back() == '\n') {
-    result.pop_back();
-  }
-  return result;
 }
 
 void writeRawObject(std::ostream &out, int level,
@@ -266,7 +761,6 @@ uint64_t canonicalTypedefDeclarationId(
   return 0;
 }
 
-const char *const kAstJsonTypeTextAttribute = "rex_ast_json_type_text";
 const char *const kAstJsonExternalFunctionAttribute =
     "rex_ast_json_external_function";
 const char *const kAstJsonExternalModuleAttribute =
@@ -275,31 +769,14 @@ const char *const kAstJsonExternalClassDeclarationAttribute =
     "rex_ast_json_external_class_declaration";
 const char *const kAstJsonExternalSourceFileAttribute =
     "rex_ast_json_external_source_file";
+const char *const kAstJsonSemanticArrayIdentityAttribute =
+    "rex_ast_json_semantic_array_identity";
+const char *const kAstJsonPointerMemberIdentityAttribute =
+    "rex_ast_json_pointer_member_identity";
 
 std::unordered_map<const SgNode *, uint64_t> preservedJsonNodeIds;
-
-class AstJsonTypeTextAttribute : public AstAttribute {
-public:
-  explicit AstJsonTypeTextAttribute(std::string text)
-      : text_(std::move(text)) {}
-
-  AstAttribute *copy() const override {
-    return new AstJsonTypeTextAttribute(text_);
-  }
-
-  OwnershipPolicy getOwnershipPolicy() const override {
-    return CONTAINER_OWNERSHIP;
-  }
-
-  std::string attribute_class_name() const override {
-    return "AstJsonTypeTextAttribute";
-  }
-
-  const std::string &text() const { return text_; }
-
-private:
-  std::string text_;
-};
+std::atomic<uint64_t> nextSemanticArrayJsonIdentity{1};
+std::atomic<uint64_t> nextPointerMemberJsonIdentity{1};
 
 class AstJsonStringAttribute : public AstAttribute {
 public:
@@ -323,6 +800,92 @@ public:
 private:
   std::string value_;
 };
+
+class AstJsonIdentityAttribute : public AstAttribute {
+public:
+  explicit AstJsonIdentityAttribute(uint64_t value) : value_(value) {}
+
+  AstAttribute *copy() const override {
+    return new AstJsonIdentityAttribute(value_);
+  }
+
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
+  std::string attribute_class_name() const override {
+    return "AstJsonIdentityAttribute";
+  }
+
+  uint64_t value() const { return value_; }
+
+private:
+  uint64_t value_;
+};
+
+uint64_t typeJsonIdentity(const SgType *type, const char *name) {
+  SgType *mutable_type = const_cast<SgType *>(type);
+  if (mutable_type == nullptr || !mutable_type->attributeExists(name)) {
+    return 0;
+  }
+  const AstJsonIdentityAttribute *attribute =
+      dynamic_cast<const AstJsonIdentityAttribute *>(
+          mutable_type->getAttribute(name));
+  if (attribute == nullptr || attribute->value() == 0 ||
+      attribute->value() >
+          static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+    throw std::runtime_error(std::string("AST JSON type has malformed ") +
+                             name + " metadata");
+  }
+  return attribute->value();
+}
+
+void advanceTypeJsonIdentity(std::atomic<uint64_t> &next, uint64_t identity) {
+  const uint64_t successor = identity + 1;
+  uint64_t candidate = next.load(std::memory_order_relaxed);
+  while (candidate < successor &&
+         !next.compare_exchange_weak(candidate, successor,
+                                     std::memory_order_relaxed,
+                                     std::memory_order_relaxed)) {
+  }
+}
+
+void attachTypeJsonIdentity(SgType *type, const char *name, uint64_t identity,
+                            std::atomic<uint64_t> &next) {
+  if (type == nullptr || identity == 0 ||
+      identity > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+    throw std::runtime_error(std::string("AST JSON cannot attach invalid ") +
+                             name + " metadata");
+  }
+  const uint64_t existing = typeJsonIdentity(type, name);
+  if (existing != 0 && existing != identity) {
+    throw std::runtime_error(std::string("AST JSON type has conflicting ") +
+                             name + " metadata");
+  }
+  if (existing == 0) {
+    type->setAttribute(name, new AstJsonIdentityAttribute(identity));
+  }
+  advanceTypeJsonIdentity(next, identity);
+}
+
+uint64_t assignTypeJsonIdentity(SgType *type, const char *name,
+                                std::atomic<uint64_t> &next) {
+  if (type == nullptr) {
+    throw std::runtime_error(std::string("AST JSON cannot assign ") + name +
+                             " metadata to a null type");
+  }
+  if (const uint64_t existing = typeJsonIdentity(type, name)) {
+    return existing;
+  }
+  const uint64_t identity = next.fetch_add(1, std::memory_order_relaxed);
+  if (identity == 0 ||
+      identity > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+    throw std::runtime_error(std::string("AST JSON exhausted ") + name +
+                             " metadata");
+  }
+  attachTypeJsonIdentity(type, name, identity, next);
+  return identity;
+}
 
 void setAstJsonStringAttribute(SgNode *node, const char *name,
                                std::string value) {
@@ -388,18 +951,6 @@ void markAstJsonExternalClassDeclaration(SgClassDeclaration *decl,
                             source_file);
 }
 
-SgType *attachJsonTypeText(SgType *type, const JsonValue &json) {
-  if (type == nullptr) {
-    return type;
-  }
-  const std::string text = json.stringOr("text");
-  if (!text.empty()) {
-    type->setAttribute(kAstJsonTypeTextAttribute,
-                       new AstJsonTypeTextAttribute(text));
-  }
-  return type;
-}
-
 void attachJsonNodeId(SgNode *node, uint64_t id) {
   if (node == nullptr || id == 0) {
     return;
@@ -415,81 +966,49 @@ uint64_t preservedJsonNodeId(SgNode *node) {
   return found == preservedJsonNodeIds.end() ? 0 : found->second;
 }
 
-std::string jsonTypeText(SgType *type) {
+uint64_t semanticArrayJsonIdentity(SgArrayType *type) {
+  if (type == nullptr || type->get_fortran_source_syntax()) {
+    throw std::runtime_error(
+        "AST JSON cannot assign semantic identity to a source array type");
+  }
+  return assignTypeJsonIdentity(type, kAstJsonSemanticArrayIdentityAttribute,
+                                nextSemanticArrayJsonIdentity);
+}
+
+uint64_t preservedSemanticArrayJsonIdentity(const SgArrayType *type) {
+  return typeJsonIdentity(type, kAstJsonSemanticArrayIdentityAttribute);
+}
+
+void attachSemanticArrayJsonIdentity(SgArrayType *type, uint64_t identity) {
+  if (type == nullptr || type->get_fortran_source_syntax()) {
+    throw std::runtime_error(
+        "AST JSON cannot restore semantic identity on a source array type");
+  }
+  attachTypeJsonIdentity(type, kAstJsonSemanticArrayIdentityAttribute, identity,
+                         nextSemanticArrayJsonIdentity);
+}
+
+uint64_t pointerMemberJsonIdentity(SgPointerMemberType *type) {
   if (type == nullptr) {
-    return "";
+    throw std::runtime_error(
+        "AST JSON cannot assign identity to a null pointer-member type");
   }
-  if (type->attributeExists(kAstJsonTypeTextAttribute)) {
-    if (AstJsonTypeTextAttribute *attribute =
-            dynamic_cast<AstJsonTypeTextAttribute *>(
-                type->getAttribute(kAstJsonTypeTextAttribute))) {
-      return attribute->text();
-    }
+  return assignTypeJsonIdentity(type, kAstJsonPointerMemberIdentityAttribute,
+                                nextPointerMemberJsonIdentity);
+}
+
+uint64_t preservedPointerMemberJsonIdentity(const SgPointerMemberType *type) {
+  return typeJsonIdentity(type, kAstJsonPointerMemberIdentityAttribute);
+}
+
+void attachPointerMemberJsonIdentity(SgPointerMemberType *type,
+                                     uint64_t identity) {
+  if (type == nullptr) {
+    throw std::runtime_error(
+        "AST JSON cannot restore identity on a null pointer-member type");
   }
-  if (SgPointerMemberType *member_pointer = isSgPointerMemberType(type)) {
-    const std::string base = jsonTypeText(member_pointer->get_base_type());
-    const std::string class_type =
-        jsonTypeText(member_pointer->get_class_type());
-    if (!base.empty() && !class_type.empty()) {
-      return base + " " + class_type + "::*";
-    }
-  }
-  if (SgPointerType *pointer = isSgPointerType(type)) {
-    const std::string base = jsonTypeText(pointer->get_base_type());
-    if (!base.empty()) {
-      return base + (base.find("::") != std::string::npos ? "*" : " *");
-    }
-  }
-  if (SgReferenceType *reference = isSgReferenceType(type)) {
-    const std::string base = jsonTypeText(reference->get_base_type());
-    if (!base.empty()) {
-      return base + " &";
-    }
-  }
-  if (SgRvalueReferenceType *reference = isSgRvalueReferenceType(type)) {
-    const std::string base = jsonTypeText(reference->get_base_type());
-    if (!base.empty()) {
-      return base + " &&";
-    }
-  }
-  if (SgTypedefType *typedef_type = isSgTypedefType(type)) {
-    if (SgTypedefDeclaration *decl =
-            isSgTypedefDeclaration(typedef_type->get_declaration())) {
-      return decl->get_name().getString();
-    }
-    return "";
-  }
-  if (SgClassType *class_type = isSgClassType(type)) {
-    if (SgClassDeclaration *decl =
-            isSgClassDeclaration(class_type->get_declaration())) {
-      if (isSgTemplateInstantiationDecl(decl)) {
-        const std::string unparsed = class_type->unparseToString();
-        if (!unparsed.empty()) {
-          return unparsed;
-        }
-      }
-      return decl->get_name().getString();
-    }
-    return "";
-  }
-  if (SgEnumType *enum_type = isSgEnumType(type)) {
-    if (SgEnumDeclaration *decl =
-            isSgEnumDeclaration(enum_type->get_declaration())) {
-      return decl->get_name().getString();
-    }
-    return "";
-  }
-  if (SgNonrealType *nonreal_type = isSgNonrealType(type)) {
-    if (SgNonrealDecl *decl =
-            isSgNonrealDecl(nonreal_type->get_declaration())) {
-      return decl->get_name().getString();
-    }
-    return "";
-  }
-  if (SgTemplateType *template_type = isSgTemplateType(type)) {
-    return template_type->get_name().getString();
-  }
-  return type->unparseToString();
+  attachTypeJsonIdentity(type, kAstJsonPointerMemberIdentityAttribute, identity,
+                         nextPointerMemberJsonIdentity);
 }
 
 void installPointerCache(SgType *base, SgPointerType *pointer) {
@@ -532,13 +1051,28 @@ void installRvalueReferenceCache(SgType *base,
   }
 }
 
-SgPointerType *buildCachedJsonPointerType(SgType *base, const JsonValue *json) {
+SgPointerType *buildCachedJsonPointerType(SgType *base) {
   ROSE_ASSERT(base != nullptr);
-  SgPointerType *pointer = new SgPointerType(base);
-  if (json != nullptr) {
-    attachJsonTypeText(pointer, *json);
+  if (isSgFunctionType(base) != nullptr) {
+    SgPointerType *pointer = base->get_ptr_to();
+    if (pointer == nullptr) {
+      pointer = new SgPointerType(base);
+      installPointerCache(base, pointer);
+    }
+    if (pointer->get_base_type() != base || base->get_ptr_to() != pointer) {
+      throw std::runtime_error(
+          "AST JSON pointer-to-function cache does not preserve the exact "
+          "non-interned function type identity");
+    }
+    return pointer;
   }
-  installPointerCache(base, pointer);
+  SgPointerType *pointer = SgPointerType::createType(base);
+  if (pointer == nullptr || pointer->get_base_type() != base ||
+      base->get_ptr_to() != pointer) {
+    throw std::runtime_error(
+        "AST JSON pointer factory did not preserve the exact canonical base "
+        "type identity");
+  }
   return pointer;
 }
 
@@ -546,7 +1080,7 @@ void installNewExpressionResultType(SgNewExp *expr, SgType *restored_type,
                                     const JsonValue &json) {
   ROSE_ASSERT(expr != nullptr);
   if (json.kind != JsonValue::Kind::Object ||
-      json.stringOr("kind") != "SgPointerType") {
+      json.requiredString("kind") != "SgPointerType") {
     throw std::runtime_error("AST JSON SgNewExp type must be SgPointerType");
   }
   SgPointerType *pointer = isSgPointerType(restored_type);
@@ -559,7 +1093,11 @@ void installNewExpressionResultType(SgNewExp *expr, SgType *restored_type,
     throw std::runtime_error(
         "AST JSON SgNewExp requires specified_type before result type");
   }
-  attachJsonTypeText(pointer, json);
+  if (pointer->get_base_type() != specified_type) {
+    throw std::runtime_error(
+        "AST JSON SgNewExp result type does not point to its exact "
+        "specified_type");
+  }
   specified_type->set_ptr_to(pointer);
 }
 
@@ -581,6 +1119,7 @@ std::string rawFileInfoJson(const Sg_File_Info *info) {
 }
 
 std::string rawLocationJson(SgNode *node) {
+  SgExpression *expression = isSgExpression(node);
   std::ostringstream out;
   out << "{\n";
   indent(out, 2);
@@ -590,8 +1129,15 @@ std::string rawLocationJson(SgNode *node) {
       << ",\n";
   indent(out, 2);
   out << jsonString("end") << ": "
-      << rawFileInfoJson(node != nullptr ? node->get_endOfConstruct() : nullptr)
-      << '\n';
+      << rawFileInfoJson(node != nullptr ? node->get_endOfConstruct()
+                                         : nullptr);
+  if (expression != nullptr) {
+    out << ",\n";
+    indent(out, 2);
+    out << jsonString("operator") << ": "
+        << rawFileInfoJson(expression->get_operatorPosition());
+  }
+  out << '\n';
   out << "}";
   return out.str();
 }
@@ -650,7 +1196,6 @@ rawExpressionRef(SgExpression *expression,
               << safeNodeText(
                      const_cast<SgNode *>(currentTypeSerializationNode));
     }
-    message << " text=" << expression->unparseToString();
     throw std::runtime_error(message.str());
   }
   std::vector<std::string> fields;
@@ -668,6 +1213,14 @@ std::string rawTypeOwnedExpressionRef(
     SgExpression *expression,
     const std::unordered_map<const SgNode *, uint64_t> &ids) {
   if (expression == nullptr) {
+    return rawExpressionRef(expression, ids);
+  }
+  if (expressionIdFor(expression, ids) != 0) {
+    // A collected expression can also be referenced by a type-owned semantic
+    // edge (for example, one placement-new expression shared by a template
+    // argument and decltype). Preserve that exact identity and its complete
+    // collected subtree instead of manufacturing a disconnected anonymous
+    // copy with no edge records.
     return rawExpressionRef(expression, ids);
   }
 
@@ -897,6 +1450,53 @@ rawSymbolRef(SgSymbol *symbol,
   return result;
 }
 
+std::string rawExactBoundSymbolRef(
+    SgSymbol *symbol, const std::unordered_map<const SgNode *, uint64_t> &ids) {
+  if (symbol == nullptr) {
+    return "null";
+  }
+
+  SgSymbolTable *table = isSgSymbolTable(symbol->get_parent());
+  SgScopeStatement *scope =
+      table != nullptr ? isSgScopeStatement(table->get_parent()) : nullptr;
+  const SgName *binding_name = nullptr;
+  size_t occurrences = 0;
+  if (table != nullptr && table->get_table() != nullptr) {
+    for (const auto &entry : *table->get_table()) {
+      if (entry.second == symbol) {
+        binding_name = &entry.first;
+        ++occurrences;
+      }
+    }
+  }
+  const uint64_t scope_id = idFor(ids, scope);
+  if (scope == nullptr || scope_id == 0 || binding_name == nullptr ||
+      occurrences != 1) {
+    std::ostringstream message;
+    message << "AST JSON exact symbol has no unique collected visibility "
+               "owner";
+    message << " symbol=" << symbol->class_name();
+    message << " name=" << symbol->get_name().getString();
+    message << " table=" << table;
+    message << " scope=" << scope;
+    message << " scope_id=" << scope_id;
+    message << " occurrences=" << occurrences;
+    throw std::runtime_error(message.str());
+  }
+
+  std::vector<std::string> fields;
+  fields.push_back(jsonString("symbol") + ": " + rawSymbolRef(symbol, ids));
+  fields.push_back(rawIntegerField("binding_scope", scope_id));
+  fields.push_back(rawStringField("binding_name", binding_name->getString()));
+  std::ostringstream out;
+  writeRawObject(out, 0, fields, false);
+  std::string result = out.str();
+  if (!result.empty() && result.back() == '\n') {
+    result.pop_back();
+  }
+  return result;
+}
+
 bool symbolIsLookupPreferred(SgSymbolTable *table, const SgName &name,
                              SgSymbol *symbol) {
   if (table == nullptr || symbol == nullptr) {
@@ -906,7 +1506,8 @@ bool symbolIsLookupPreferred(SgSymbolTable *table, const SgName &name,
       table->find_variable(name) == symbol) {
     return true;
   }
-  if (isSgClassSymbol(symbol) != nullptr && table->find_class(name) == symbol) {
+  if (isSgClassSymbol(symbol) != nullptr &&
+      table->find_class(name, nullptr) == symbol) {
     return true;
   }
   if (isSgEnumSymbol(symbol) != nullptr && table->find_enum(name) == symbol) {
@@ -950,6 +1551,22 @@ rawSymbolTableJson(SgScopeStatement *scope,
           "AST JSON encountered a null symbol table entry");
     }
     const SgNode *basis = symbolBasis(symbol);
+    if (const SgFunctionDeclaration *function =
+            isSgFunctionDeclaration(basis)) {
+      if (SageInterface::isFortranProgramUnitWithoutSourceName(function)) {
+        const SgName internalKey =
+            SageInterface::getFortranProgramUnitSymbolTableKey(function);
+        if (isSgFunctionSymbol(symbol) == nullptr ||
+            entry.first != internalKey) {
+          throw std::runtime_error(
+              "AST JSON anonymous Fortran program-unit symbol has an "
+              "invalid internal key or symbol kind");
+        }
+        // This key is implementation identity, not source AST state. Rebuild
+        // it from the declaration's exact source anchor after deserialization.
+        continue;
+      }
+    }
     const uint64_t basis_id = idFor(ids, basis);
     const bool external_basis =
         basis_id == 0 &&
@@ -999,14 +1616,20 @@ rawSymbolTableJson(SgScopeStatement *scope,
           rawBoolField("alias_is_renamed", alias->get_isRenamed()));
       fields.push_back(
           rawStringField("alias_new_name", alias->get_new_name().getString()));
+      if (alias->get_causal_nodes().empty()) {
+        throw std::runtime_error(
+            "AST JSON encountered an SgAliasSymbol without causal "
+            "provenance");
+      }
       std::ostringstream causal_nodes;
       causal_nodes << "[";
       for (size_t i = 0; i < alias->get_causal_nodes().size(); ++i) {
         SgNode *causal_node = alias->get_causal_nodes()[i];
         const uint64_t causal_id = idFor(ids, causal_node);
-        if (causal_node != nullptr && causal_id == 0) {
+        if (causal_node == nullptr || causal_id == 0) {
           throw std::runtime_error(
-              "AST JSON SgAliasSymbol causal node was not collected");
+              "AST JSON SgAliasSymbol causal node is null or was not "
+              "collected");
         }
         if (i != 0) {
           causal_nodes << ", ";

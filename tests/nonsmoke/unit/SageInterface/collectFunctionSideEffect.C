@@ -126,11 +126,11 @@ int main(int argc, char *argv[]) {
 
     vector<SgNode *> readRefs, writeRefs;
     // focus on definition only
-    if (!SageInterface::collectReadWriteRefs(func->get_definition(), readRefs,
-                                             writeRefs)) {
+    const bool refsComplete = SageInterface::collectReadWriteRefs(
+        func->get_definition(), readRefs, writeRefs);
+    if (!refsComplete) {
       ofile << "Warning: SageInterface::collectReadWriteRefs() returns false."
             << endl;
-      continue;
     }
 
     dumpVectorNodes(readRefs, "Read references:", ofile);
@@ -138,12 +138,12 @@ int main(int argc, char *argv[]) {
 
     //-------------------------------------------------------------------
     set<SgInitializedName *> readNames, writeNames;
-    if (!SageInterface::collectReadWriteVariables(
-            func->get_definition(), readNames, writeNames, false)) {
+    const bool variablesComplete = SageInterface::collectReadWriteVariables(
+        func->get_definition(), readNames, writeNames, false);
+    if (!variablesComplete) {
       ofile << "Warning: SageInterface::collectReadWriteVariables() returns "
                "false."
             << endl;
-      continue;
     }
 
     dumpSetNames(readNames, "Read var names:", ofile);
@@ -160,10 +160,11 @@ int main(int argc, char *argv[]) {
 
     vector<SgNode *> readRefs, writeRefs;
     // focus on definition only
-    if (!SageInterface::collectReadWriteRefs(target, readRefs, writeRefs)) {
+    const bool refsComplete =
+        SageInterface::collectReadWriteRefs(target, readRefs, writeRefs);
+    if (!refsComplete) {
       ofile << "Warning: SageInterface::collectReadWriteRefs() returns false."
             << endl;
-      continue;
     }
 
     dumpVectorNodes(readRefs, "Read references:", ofile);
@@ -171,12 +172,12 @@ int main(int argc, char *argv[]) {
 
     //-------------------------------------------------------------------
     set<SgInitializedName *> readNames, writeNames;
-    if (!SageInterface::collectReadWriteVariables(target, readNames, writeNames,
-                                                  false)) {
+    const bool variablesComplete = SageInterface::collectReadWriteVariables(
+        target, readNames, writeNames, false);
+    if (!variablesComplete) {
       ofile << "Warning: SageInterface::collectReadWriteVariables() returns "
                "false."
             << endl;
-      continue;
     }
 
     dumpSetNames(readNames, "Read var names:", ofile);

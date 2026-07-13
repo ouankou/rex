@@ -30,12 +30,13 @@ int main(int argc, char *argv[])
   for (size_t i = 0; i < loops.size(); i++) {
     SgForStatement *cloop = isSgForStatement(loops[i]);
     ROSE_ASSERT(cloop != NULL);
-    bool result = false;
-    result = SageInterface::forLoopNormalization(cloop, false);
+    SageInterface::forLoopNormalization(cloop, false);
     if (i == loops.size() -
                  1) // test File info retrieval: erase file info here first
+    {
       SageInterface::setSourcePositionForTransformation(cloop);
-    ROSE_ASSERT(result != false);
+      SageInterface::publishGeneratedSubtreeOutputOwner(cloop, body);
+    }
   }
   // run all tests
   AstTests::runAllTests(project);

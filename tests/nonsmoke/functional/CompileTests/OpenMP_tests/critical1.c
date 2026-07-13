@@ -1,4 +1,7 @@
 #include <omp.h>
+
+enum { test = 1 };
+
 int main(void) {
   int a = 0, b = 0, c = 0;
 #pragma omp parallel

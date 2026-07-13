@@ -81,7 +81,35 @@ int main(int argc, char *argv[]) {
       found_map = true;
       ROSE_ASSERT(map_clause->get_variables() != nullptr);
       ROSE_ASSERT(!map_clause->get_variables()->get_expressions().empty());
-      ROSE_ASSERT(!map_clause->get_array_dimensions().empty());
+      ROSE_ASSERT(map_clause->get_variables()->get_parent() == map_clause);
+      bool found_owned_array_section = false;
+      for (SgExpression *expression :
+           map_clause->get_variables()->get_expressions()) {
+        SgOmpMapItem *item = isSgOmpMapItem(expression);
+        ROSE_ASSERT(item != nullptr);
+        ROSE_ASSERT(item->get_parent() == map_clause->get_variables());
+        ROSE_ASSERT(item->get_expression() != nullptr);
+        ROSE_ASSERT(item->get_expression()->get_parent() == item);
+        SgPntrArrRefExp *array = isSgPntrArrRefExp(item->get_expression());
+        if (array == nullptr) {
+          continue;
+        }
+        SgSubscriptExpression *section =
+            isSgSubscriptExpression(array->get_rhs_operand());
+        if (section == nullptr) {
+          continue;
+        }
+        ROSE_ASSERT(array->get_parent() == item);
+        ROSE_ASSERT(section->get_parent() == array);
+        ROSE_ASSERT(section->get_lowerBound() != nullptr);
+        ROSE_ASSERT(section->get_upperBound() != nullptr);
+        ROSE_ASSERT(section->get_stride() != nullptr);
+        ROSE_ASSERT(section->get_lowerBound()->get_parent() == section);
+        ROSE_ASSERT(section->get_upperBound()->get_parent() == section);
+        ROSE_ASSERT(section->get_stride()->get_parent() == section);
+        found_owned_array_section = true;
+      }
+      ROSE_ASSERT(found_owned_array_section);
     }
   }
   ROSE_ASSERT(found_map);

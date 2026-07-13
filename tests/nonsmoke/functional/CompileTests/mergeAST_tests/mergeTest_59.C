@@ -1,12 +1,11 @@
 // Different types of SgVariableSymbol generating constructs
 const int size = 2;
 int abc;
-class 
-   {
-     public:
-          int a,b;
-          int z;
-   };
+class AnonymousClassType {
+public:
+  int a, b;
+  int z;
+} anonymous_class_instance;
 
 void foo()
    {
@@ -23,8 +22,8 @@ struct X
      int array[size];
    };
 
-const int X<int>::z   = 42;
-const int X<float>::z = 7;
+   template <> const int X<int>::z = 42;
+   template <> const int X<float>::z = 7;
 
-X<int> a;
-X<float> b;
+   X<int> a;
+   X<float> b;

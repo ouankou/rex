@@ -2,15 +2,11 @@
 // Note that these fail for the case of variable declarations.
 namespace X
    {
-     struct
-        {
-          int x;
-        };
+struct FirstBlockType {
+  int x;
+};
 
-     struct
-        {
-          int x;
-        };
+struct SecondBlockType {
+  int x;
+};
    }
-
-

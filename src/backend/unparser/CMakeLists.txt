@@ -7,7 +7,6 @@ add_subdirectory(FortranCodeGeneration)
 
 add_library (unparser OBJECT
   FortranLineWrapSupport.C
-  FortranCodeGeneration/UnparserFortran.C
   FortranCodeGeneration/unparseFortran_expressions.C
   FortranCodeGeneration/unparseFortran_modfile.C
   FortranCodeGeneration/unparseFortran_statements.C
@@ -19,17 +18,13 @@ add_library (unparser OBJECT
   CxxCodeGeneration/unparseAggrInit.C
   CxxCodeGeneration/unparseAssnInit.C
   CxxCodeGeneration/unparseBracedInit.C
-  CxxCodeGeneration/unparseCompInit.C
   CxxCodeGeneration/unparseCtorInit.C
   CxxCodeGeneration/unparseDesignatedInitializer.C
   CxxCodeGeneration/unparseVarDeclStmt.C
   CxxCodeGeneration/helpers.C
-  astUnparseAttribute.C
   unparser.C
   nameQualificationSupport.C
-  unparse_sym.C
   IncludedFilesUnparser.C
-  includeFileSupport.C
   formatSupport/unparseFormatHelp.C
   formatSupport/unparse_format.C
   languageIndependenceSupport/modified_sage_isUnaryOp.C
@@ -39,18 +34,15 @@ add_library (unparser OBJECT
   languageIndependenceSupport/unparse_debug.C
   languageIndependenceSupport/unparseLanguageIndependentConstructs.C)
 add_dependencies(unparser rosetta_generated)
+target_include_directories(unparser PRIVATE ${LLVM_INCLUDE_DIRS})
 
 ########### install files ###############
 
 set(unparser_headers
-  astUnparseAttribute.h
-  copy_unparser.h
   IncludedFilesUnparser.h
-  includeFileSupport.h
   nameQualificationSupport.h
   UnparserDelegate.h
   unparser.h
-  unparse_sym.h
 )
 
 install(FILES ${unparser_headers} DESTINATION ${INCLUDE_INSTALL_DIR})

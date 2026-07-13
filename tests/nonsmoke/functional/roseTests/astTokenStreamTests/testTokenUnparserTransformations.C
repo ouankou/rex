@@ -78,8 +78,8 @@ void TransformVisitor::visit(SgNode *node) {
   SgFunctionDeclaration *functionDeclaration = isSgFunctionDeclaration(node);
   if (functionDeclaration != NULL) {
     // SgFunctionDeclaration*
-    // SageInterface::replaceDefiningFunctionDeclarationWithFunctionPrototype (
-    // SgFunctionDeclaration* functionDeclaration )
+    // SageInterface::replaceFunctionDefinitionWithDeclaration(
+    // SgFunctionDeclaration *functionDefinition)
 
     string originalName = functionDeclaration->get_name();
 
@@ -91,19 +91,19 @@ void TransformVisitor::visit(SgNode *node) {
                              matchEndingSize, matchEnding) == 0) {
       printf("Calling "
              "SageInterface::"
-             "replaceDefiningFunctionDeclarationWithFunctionPrototype(): "
+             "replaceFunctionDefinitionWithDeclaration(): "
              "functionDeclaration = %p \n",
              functionDeclaration);
 
-      SgFunctionDeclaration *functionPrototype = SageInterface::
-          replaceDefiningFunctionDeclarationWithFunctionPrototype(
+      SgDeclarationStatement *sourceReplacement =
+          SageInterface::replaceFunctionDefinitionWithDeclaration(
               functionDeclaration);
 
       printf("Done: calling "
              "SageInterface::"
-             "replaceDefiningFunctionDeclarationWithFunctionPrototype(): "
-             "functionDeclaration = %p functionPrototype = %p \n",
-             functionDeclaration, functionPrototype);
+             "replaceFunctionDefinitionWithDeclaration(): "
+             "functionDeclaration = %p sourceReplacement = %p \n",
+             functionDeclaration, sourceReplacement);
     }
   }
 

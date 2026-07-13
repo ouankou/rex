@@ -5,7 +5,13 @@
 
 #include <stdint.h>
 
+#include <functional>
+
+#include <optional>
+
 #include <utility>
+
+#include <variant>
 
 #include "nodeQuery.h" //for querySubTree
 #include <iostream>
@@ -16,11 +22,10 @@
 
 #include <string>
 
+#include <vector>
+
 SgFile *determineFileType(std::vector<std::string> argv, int &nextErrorCode,
                           SgProject *project);
-
-// DQ (7/20/2008): Added support for unparsing abitrary strings in the unparser.
-#include "astUnparseAttribute.h"
 
 #include <set>
 
@@ -70,13 +75,20 @@ namespace SageInterface {
 // Liao 6/22/2016: keep records of loop init-stmt normalization, later help undo
 // it to support autoPar.
 struct Transformation_Record {
+  struct ForLoopInitNormalizationRecord {
+    SgVariableDeclaration *originalDeclaration = nullptr;
+    SgVariableDeclaration *normalizedDeclaration = nullptr;
+    SgVariableSymbol *originalSymbol = nullptr;
+    SgVariableSymbol *normalizedSymbol = nullptr;
+    SgScopeStatement *normalizedScope = nullptr;
+  };
+
   // a lookup table to check if a for loop has been normalized for its c99-style
   // init-stmt
   std::map<SgForStatement *, bool> forLoopInitNormalizationTable;
-  // Detailed record about the original declaration (1st in the pair) and the
-  // normalization generated new declaration (2nd in the pair)
-  std::map<SgForStatement *,
-           std::pair<SgVariableDeclaration *, SgVariableDeclaration *>>
+  // Exact declaration, symbol, and publication identities needed to reverse
+  // the normalization transaction.
+  std::map<SgForStatement *, ForLoopInitNormalizationRecord>
       forLoopInitNormalizationRecord;
 };
 
@@ -145,9 +157,6 @@ setAbbreviatedFunctionTemplateParameter(SgTemplateParameter *param,
                                         bool is_abbreviated_placeholder = true);
 ROSE_DLL_API bool
 isAbbreviatedFunctionTemplateParameter(SgTemplateParameter *param);
-ROSE_DLL_API void setAutoTypeConstraint(SgAutoType *type,
-                                        std::string constraint);
-ROSE_DLL_API std::string getAutoTypeConstraint(SgAutoType *type);
 
 //------------------------------------------------------------------------
 //@{
@@ -177,6 +186,23 @@ ROSE_DLL_API SgSymbol *lookupSymbolInParentScopesIgnoringAliasSymbols(
 // templateParameterList, SgTemplateArgumentPtrList* templateArgumentList);
 ROSE_DLL_API SgSymbol *lookupSymbolInParentScopes(
     const SgName &name, SgScopeStatement *currentScope = NULL,
+    SgTemplateParameterPtrList *templateParameterList = NULL,
+    SgTemplateArgumentPtrList *templateArgumentList = NULL);
+
+//! Parent-scope lookup for one name-qualification invocation. The caller must
+//! supply the exact symbol kind and its invocation-owned alias visibility set.
+ROSE_DLL_API SgSymbol *lookupSymbolInParentScopesForNameQualification(
+    const SgName &name, SgScopeStatement *currentScope,
+    VariantT requestedSymbolKind, const SgType *type,
+    SgTemplateParameterPtrList *templateParameterList,
+    SgTemplateArgumentPtrList *templateArgumentList,
+    const SgUnorderedNodeSet &visibleAliasCausalNodes);
+
+//! Parent-scope lookup used only by AST snippet-copy fixup. Recursive
+//! base-class search is explicit to this call and never changes global state.
+ROSE_DLL_API SgSymbol *lookupSymbolInParentScopesForAstCopyFixup(
+    const SgName &name, SgScopeStatement *currentScope,
+    VariantT requestedSymbolKind, const SgType *type = NULL,
     SgTemplateParameterPtrList *templateParameterList = NULL,
     SgTemplateArgumentPtrList *templateArgumentList = NULL);
 
@@ -289,15 +315,16 @@ public:
  */
 // DQ (9/28/2005):
 void rebuildSymbolTable(SgScopeStatement *scope);
-void ensureSymbolParentPointers(SgNode *root);
+//! Detach every symbol through the symbol table's exact ownership API.
+void detachAllSymbolsFromScope(SgScopeStatement *scope);
+//! Validate that every symbol has one exact owning symbol-table entry.
+void validateSymbolOwnership(SgNode *root);
 
 /*! \brief Clear those variable symbols with unknown type (together with
  * initialized names) which are also not referenced by any variable references
  * or declarations under root. If root is NULL, all symbols with unknown type
  * will be deleted.
  */
-void clearUnusedVariableSymbols(SgNode *root = NULL);
-
 // DQ (3/1/2009):
 //! All the symbol table references in the copied AST need to be reset after
 //! rebuilding the copied scope's symbol table.
@@ -653,11 +680,29 @@ astIntersection(SgNode *original, SgNode *copy, SgCopyHelp *help = NULL);
 //! Deep copy an arbitrary subtree
 ROSE_DLL_API SgNode *deepCopyNode(const SgNode *subtree);
 
+//! Deep copy a frontend-owned semantic subtree while preserving its exact
+//! source-provenance classification.  This is distinct from deepCopyNode(),
+//! which creates a new transformation output surface.
+ROSE_DLL_API SgNode *deepCopySemanticSubtree(const SgNode *subtree);
+
+//! Deep copy an arbitrary subtree and return the copy transaction's exact
+//! original-to-copy identity map.  Consumers must use this map instead of
+//! reconstructing correspondence from traversal order or spelling.
+ROSE_DLL_API SgNode *
+deepCopyNodeWithIdentityMap(const SgNode *subtree,
+                            SgCopyHelp::copiedNodeMapType &identityMap);
+
 //! A template function for deep copying a subtree. It is also  used to create
 //! deepcopy functions with specialized parameter and return types. e.g
 //! SgExpression* copyExpression(SgExpression* e);
 template <typename NodeType> NodeType *deepCopy(const NodeType *subtree) {
   return dynamic_cast<NodeType *>(deepCopyNode(subtree));
+}
+
+//! Typed frontend-semantic counterpart to deepCopy().
+template <typename NodeType>
+NodeType *deepCopySemantic(const NodeType *subtree) {
+  return dynamic_cast<NodeType *>(deepCopySemanticSubtree(subtree));
 }
 
 //! Deep copy an expression
@@ -720,6 +765,7 @@ class StatementGenerator {
 public:
   virtual ~StatementGenerator() {};
   virtual SgStatement *generate(SgExpression *where_to_write_answer) = 0;
+  virtual void finalizeGeneratedStatement(SgStatement *) {}
 };
 
 //! Check if a SgNode _s is an assignment statement (any of =,+=,-=,&=,/=, ^=,
@@ -736,6 +782,28 @@ bool isAssignmentStatement(SgNode *_s, SgExpression **lhs = NULL,
 //! Otherwise, fine-grain rhs is used.
 ROSE_DLL_API SgInitializedName *
 convertRefToInitializedName(SgNode *current, bool coarseGrain = true);
+
+//! Validate and return the exact initialized name denoted by a resolved
+//! variable-template nonreal reference.  This is a hard AST contract: the
+//! synthetic source-spelling node, the real specialization, its source
+//! template, its symbol, and both copies of the written arguments must agree.
+ROSE_DLL_API SgInitializedName *
+requireResolvedVariableTemplateReference(const SgNonrealRefExp *reference,
+                                         const char *context);
+
+//! Validate and return the exact callable denoted by a resolved function-
+//! template nonreal reference.  This is a hard AST contract: the synthetic
+//! source-spelling node, the real callable declaration, its canonical symbol,
+//! its function type, and both copies of the written arguments must agree.
+ROSE_DLL_API SgFunctionDeclaration *
+requireResolvedFunctionTemplateReference(const SgNonrealRefExp *reference,
+                                         const char *context);
+
+//! Return the canonical source variable template reached from a specialization
+//! after validating the complete, acyclic specialized-template chain.
+ROSE_DLL_API SgTemplateVariableDeclaration *
+requireCanonicalVariableTemplatePrimary(
+    SgTemplateVariableDeclaration *specialization, const char *context);
 
 //! Obtain the first queryed statement at line of a source file
 ROSE_DLL_API SgStatement *getFirstStatementAtLine(SgSourceFile *sourceFile,
@@ -789,16 +857,11 @@ void checkAccessPermissions(SgNode *);
 // support).
 void checkSymbolTables(SgNode *);
 
-// DQ (11/9/2020): Added support for makring IR nodes and subtrees of the AST to
-// be unparsed (physical_file_id is required when unparsing header files is true
-// or support multiple files and shared IR nodes).
+// Mark one node or a subtree as a transformation output surface.  A typed,
+// compiler-synthesized implicit conversion remains a semantic wrapper while
+// its operand is marked normally.  Mixed typed/provenance roles are rejected.
 void markSubtreeToBeUnparsed(SgNode *root, int physical_file_id);
 void markNodeToBeUnparsed(SgNode *node, int physical_file_id);
-
-// DQ (7/8/2021): This is a tree traversal based version of this marking of a
-// subtree which allows special handling of cast expressions. Basically, cast
-// expression should not be marked as transformations.
-void markSubtreeToBeUnparsedTreeTraversal(SgNode *root, int physical_file_id);
 
 // DQ (7/12/2021): Debugging code to locate specific node marked as a
 // transforamtion in the AST. Debugging the outliner.
@@ -848,6 +911,12 @@ ROSE_DLL_API bool is_CAF_language();
 ROSE_DLL_API bool is_Cuda_language();
 ROSE_DLL_API bool is_OpenCL_language();
 #endif
+
+// CUDA translation units use the C++ object and expression semantics while
+// retaining a distinct language identity for CUDA-specific frontend paths.
+ROSE_DLL_API inline bool is_Cxx_family_language() {
+  return is_Cxx_language() || is_Cuda_language();
+}
 
 ROSE_DLL_API bool is_mixed_C_and_Cxx_language();
 ROSE_DLL_API bool is_mixed_Fortran_and_C_language();
@@ -914,24 +983,12 @@ bool ROSE_DLL_API isAncestor(SgNode *node1, SgNode *node2);
 //! Dumps a located node's preprocessing information.
 void dumpPreprocInfo(SgLocatedNode *locatedNode);
 
-//! Find the preprocessingInfo node representing #include <header.h> or #include
-//! "header.h" within a source file. Return NULL if not found.
-ROSE_DLL_API PreprocessingInfo *findHeader(SgSourceFile *source_file,
-                                           const std::string &header_file_name,
-                                           bool isSystemHeader);
-
 //! Insert  #include "filename" or #include <filename> (system header) onto the
 //! global scope of a source file, add to be the last #include .. by default
 //! among existing headers, Or as the first header. Recommended for use.
 ROSE_DLL_API PreprocessingInfo *
 insertHeader(SgSourceFile *source_file, const std::string &header_file_name,
              bool isSystemHeader, bool asLastHeader);
-
-//! Insert a new header right before stmt,  if there are existing headers
-//! attached to stmt, insert it as the last or first header as specified by
-//! asLastHeader
-ROSE_DLL_API void insertHeader(SgStatement *stmt, PreprocessingInfo *newheader,
-                               bool asLastHeader);
 
 //! Insert  #include "filename" or #include <filename> (system header) onto the
 //! global scope of a source file
@@ -943,20 +1000,10 @@ insertHeader(SgSourceFile *source_file, const std::string &header_file_name,
 
 //! Insert  #include "filename" or #include <filename> (system header) into the
 //! global scope containing the current scope, right after other #include XXX.
-ROSE_DLL_API PreprocessingInfo *insertHeader(
-    const std::string &filename,
-    PreprocessingInfo::RelativePositionType position = PreprocessingInfo::after,
-    bool isSystemHeader = false, SgScopeStatement *scope = NULL);
-
-//! Identical to movePreprocessingInfo(), except for the stale name and
-//! confusing order of parameters. It will be deprecated soon.
-ROSE_DLL_API void
-moveUpPreprocessingInfo(SgStatement *stmt_dst, SgStatement *stmt_src,
-                        PreprocessingInfo::RelativePositionType src_position =
-                            PreprocessingInfo::undef,
-                        PreprocessingInfo::RelativePositionType dst_position =
-                            PreprocessingInfo::undef,
-                        bool usePrepend = false);
+ROSE_DLL_API PreprocessingInfo *
+insertHeader(const std::string &filename,
+             PreprocessingInfo::RelativePositionType position,
+             bool isSystemHeader, SgScopeStatement *scope);
 
 //! Move preprocessing information of stmt_src to stmt_dst, Only move
 //! preprocessing information from the specified source-relative position to a
@@ -975,8 +1022,8 @@ movePreprocessingInfo(SgStatement *stmt_src, SgStatement *stmt_dst,
 
 //! Cut preprocessing information from a source node and save it into a buffer.
 //! Used in combination of pastePreprocessingInfo(). The cut-paste operation is
-//! similar to moveUpPreprocessingInfo() but it is more flexible in that the
-//! destination node can be unknown during the cut operation.
+//! equivalent to a split movePreprocessingInfo() operation and permits the
+//! destination node to be unknown during the cut operation.
 ROSE_DLL_API void
 cutPreprocessingInfo(SgLocatedNode *src_node,
                      PreprocessingInfo::RelativePositionType pos,
@@ -989,45 +1036,42 @@ pastePreprocessingInfo(SgLocatedNode *dst_node,
                        PreprocessingInfo::RelativePositionType pos,
                        AttachedPreprocessingInfoType &saved_buf);
 
-//! Attach an arbitrary string to a located node. A workaround to insert
-//! irregular statements or vendor-specific attributes.
-ROSE_DLL_API PreprocessingInfo *
-attachArbitraryText(SgLocatedNode *target, const std::string &text,
-                    PreprocessingInfo::RelativePositionType position =
-                        PreprocessingInfo::before);
-
 //@}
 
-//! Build and attach comment onto the global scope of a source file
-PreprocessingInfo *
-attachComment(SgSourceFile *source_file, const std::string &content,
-              PreprocessingInfo::DirectiveType directive_type =
-                  PreprocessingInfo::C_StyleComment,
-              PreprocessingInfo::RelativePositionType position =
-                  PreprocessingInfo::before);
+//! Publish a generated preprocessing record with one exact physical output
+//! owner. The record remains typed as a transformation; its Sg_File_Info keeps
+//! logical spelling provenance and stores physical output identity separately.
+ROSE_DLL_API void publishGeneratedPreprocessingInfo(PreprocessingInfo *record,
+                                                    SgLocatedNode *exactOwner);
 
-//! Build and attach comment, comment style is inferred from the language type
-//! of the target node if not provided
+//! Publish a generated trailing comment whose explicit attachment is after the
+//! owner's syntax on the owner's current output line.
+ROSE_DLL_API void publishGeneratedTrailingComment(PreprocessingInfo *record,
+                                                  SgLocatedNode *exactOwner);
+
+//! Relocate an already-published preprocessing record whose typed output
+//! placement is the attached AST boundary. The record must identify priorOwner
+//! exactly; detached, shared, source-position-owned, or differently owned
+//! records are hard errors. Source/generated spelling provenance is immutable.
+ROSE_DLL_API void
+relocateAttachedPreprocessingInfoPhysicalOutputOwner(PreprocessingInfo *record,
+                                                     SgLocatedNode *priorOwner,
+                                                     SgLocatedNode *exactOwner);
+
+//! Publish an existing preprocessing record at a new exact physical output
+//! owner. Source-spelled records retain their logical spelling and semantic
+//! classification while their physical output identity changes; generated
+//! records are validated by publishGeneratedPreprocessingInfo().
+ROSE_DLL_API void
+publishPreprocessingInfoPhysicalOutputOwner(PreprocessingInfo *record,
+                                            SgLocatedNode *exactOwner);
+
+//! Build and attach a comment with an explicit lexical comment style.
 ROSE_DLL_API PreprocessingInfo *
 attachComment(SgLocatedNode *target, const std::string &content,
+              PreprocessingInfo::DirectiveType commentStyle,
               PreprocessingInfo::RelativePositionType position =
-                  PreprocessingInfo::before,
-              PreprocessingInfo::DirectiveType dtype =
-                  PreprocessingInfo::CpreprocessorUnknownDeclaration);
-
-// DQ (7/20/2008): I am not clear were I should put this function, candidates
-// include: SgLocatedNode or SgInterface
-//! Add a string to be unparsed to support code generation for back-end specific
-//! tools or compilers.
-ROSE_DLL_API void
-addTextForUnparser(SgNode *astNode, std::string s,
-                   AstUnparseAttribute::RelativePositionType inputlocation);
-
-/**
- * Add preproccessor guard around a given node.
- * It surrounds the node with "#if guard" and "#endif"
- */
-void guardNode(SgLocatedNode *target, std::string guard);
+                  PreprocessingInfo::before);
 
 /* \brief move inner danglling #endif .. #if | #ifdef| #ifndef to be after lnode
     This is needed when we remove a target statement with internal statements.
@@ -1098,10 +1142,6 @@ void setSourcePositionAsTransformation(SgNode *node);
 ROSE_DLL_API void
 ensureLocatedNodeFileInfoForTransformation(SgLocatedNode *locatedNode);
 
-// DQ (5/1/2012): Newly renamed function (previous name preserved for backward
-// compatability).
-void setSourcePositionPointersToNull(SgNode *node);
-
 // ************************************************************************
 
 // ************************************************************************
@@ -1160,6 +1200,11 @@ ROSE_DLL_API SgType *getBoolType(SgNode *n);
 ////! There is another similar function named SgType::isIntegerType(), which
 /// allows additional types char, wchar, and bool to be treated as integer types
 ROSE_DLL_API bool isStrictIntegerType(SgType *t);
+
+//! Apply the C/C++ usual arithmetic conversions using the target ABI owned by
+//! context. Invalid, non-arithmetic, or detached inputs are hard errors.
+ROSE_DLL_API SgType *usualArithmeticConversionType(SgType *lhs, SgType *rhs,
+                                                   const SgNode *context);
 //! Get the data type of the first initialized name of a declaration statement
 ROSE_DLL_API SgType *getFirstVarType(SgVariableDeclaration *decl);
 
@@ -1338,6 +1383,21 @@ ROSE_DLL_API SgType *
 lookupNamedTypeInParentScopes(const std::string &type_name,
                               SgScopeStatement *scope = NULL);
 
+//! Return an existing named type or terminate if the current AST has no such
+//! declaration. This never synthesizes a placeholder declaration.
+ROSE_DLL_API SgType *
+requireNamedTypeInParentScopes(const std::string &type_name,
+                               SgScopeStatement *scope);
+
+//! Returns true when a declarator type names the supplied exact source-owned
+//! class or enum declaration. Externally named tag types are shared across a
+//! project, so the type's canonical declaration family may belong to another
+//! translation unit while the supplied declaration remains the sole owner of
+//! its local source surface.
+ROSE_DLL_API bool
+isExactTagTypeIdentity(SgType *declaratorType,
+                       SgDeclarationStatement *sourceOwnedTag);
+
 // DQ (7/22/2014): Added support for comparing expression types in actual
 // arguments with those expected from the formal function parameter types.
 //! Get the type of the associated argument expression from the function type.
@@ -1354,9 +1414,60 @@ ROSE_DLL_API bool
 templateArgumentListEquivalence(const SgTemplateArgumentPtrList &list1,
                                 const SgTemplateArgumentPtrList &list2);
 
+//! Verify that two template parameters describe the same parameter identity.
+ROSE_DLL_API bool templateParameterEquivalence(SgTemplateParameter *parameter1,
+                                               SgTemplateParameter *parameter2);
+
+//! Verify that two template parameter lists describe the same signature.
+ROSE_DLL_API bool
+templateParameterListEquivalence(const SgTemplateParameterPtrList &list1,
+                                 const SgTemplateParameterPtrList &list2);
+
 //! Test for equivalence of types independent of access permissions (private or
 //! protected modes for members of classes).
 ROSE_DLL_API bool isEquivalentType(const SgType *lhs, const SgType *rhs);
+
+//! Verify that a distinct C++ TypeLoc-owned source type resolves to its exact
+//! canonical semantic type. This includes written template-id graphs whose
+//! SgNonrealType identity is intentionally distinct from the resolved class or
+//! alias-template instantiation.
+ROSE_DLL_API bool cxxSourceTypeMatchesSemanticType(const SgType *source,
+                                                   const SgType *semantic);
+
+//! Verify that the exact type of a written C++ non-type template argument can
+//! undergo the standard conversion represented by its canonical parameter
+//! type.  This is deliberately narrower than general implicit conversion:
+//! it covers top-level cv removal, qualification adjustment, array/function
+//! decay, reference binding, and null pointer conversion without treating
+//! unrelated but similarly spelled types as equivalent.
+ROSE_DLL_API bool
+cxxNonTypeTemplateArgumentTypeConversionIsExact(const SgType *source,
+                                                const SgType *parameter);
+
+//! Verify that a list of written C++ template arguments is the exact explicit
+//! prefix of a resolved semantic argument list. The semantic list may contain
+//! a defaulted suffix and may canonicalize source type spelling.
+ROSE_DLL_API bool cxxSourceTemplateArgumentPrefixMatchesSemantic(
+    const SgTemplateArgumentPtrList &source,
+    const SgTemplateArgumentPtrList &semantic);
+
+//! Verify that an exact Fortran source scalar type resolves to the canonical
+//! semantic scalar type without discarding explicit KIND/LEN selectors.
+ROSE_DLL_API bool fortranSourceTypeMatchesSemanticType(const SgType *source,
+                                                       const SgType *semantic);
+
+//! Verify that an exact Fortran source type resolves to a semantic expression
+//! result type.  A nonconstant source CHARACTER LEN selector may match only
+//! the explicit dynamic-result marker used by semantic expression types.
+ROSE_DLL_API bool
+fortranSourceTypeMatchesSemanticExpressionType(const SgType *source,
+                                               const SgType *semantic);
+
+//! Verify that a Fortran source-syntax function result has the same resolved
+//! meaning as its canonical semantic result. Explicit KIND/LEN selectors use
+//! typed folded metadata; only omitted selectors may match by intrinsic family.
+ROSE_DLL_API bool fortranSourceFunctionResultMatchesSemanticResult(
+    const SgFunctionType *source, const SgFunctionType *semantic);
 
 //! Find the function type matching a function signature plus a given return
 //! type
@@ -1443,12 +1554,226 @@ isCanonicalForLoop(SgNode *loop, SgInitializedName **ivar = NULL,
                    bool *hasIncrementalIterationSpace = NULL,
                    bool *isInclusiveUpperBound = NULL);
 
-//! Check if a Fortran Do loop has a complete canonical form: Do I=1, 10, 1
+class CheckedCanonicalLoopPlan;
+
+//! Exact positive stride captured by a checked canonical-loop plan.
+//!
+//! The implicit ++/-- forms are a distinct value, never a null expression.
+//! An explicit stride retains the exact validated expression edge and value.
+class CheckedCanonicalLoopStride {
+public:
+  enum class Kind { implicit_unit, explicit_positive };
+
+  CheckedCanonicalLoopStride() = delete;
+  CheckedCanonicalLoopStride(const CheckedCanonicalLoopStride &) = default;
+  CheckedCanonicalLoopStride(CheckedCanonicalLoopStride &&) = delete;
+  CheckedCanonicalLoopStride &
+  operator=(const CheckedCanonicalLoopStride &) = delete;
+  CheckedCanonicalLoopStride &operator=(CheckedCanonicalLoopStride &&) = delete;
+
+  Kind kind() const noexcept {
+    return std::holds_alternative<ImplicitUnitTag>(storage_)
+               ? Kind::implicit_unit
+               : Kind::explicit_positive;
+  }
+  unsigned long long positiveValue() const noexcept { return positive_value_; }
+  std::optional<std::reference_wrapper<SgExpression>>
+  explicitExpression() const noexcept {
+    if (const auto *expression =
+            std::get_if<std::reference_wrapper<SgExpression>>(&storage_))
+      return *expression;
+    return std::nullopt;
+  }
+
+private:
+  struct ImplicitUnitTag {};
+  using Storage =
+      std::variant<ImplicitUnitTag, std::reference_wrapper<SgExpression>>;
+
+  explicit CheckedCanonicalLoopStride(ImplicitUnitTag) noexcept;
+  CheckedCanonicalLoopStride(SgExpression &expression,
+                             unsigned long long positive_value) noexcept;
+
+  Storage storage_;
+  unsigned long long positive_value_;
+
+  friend class CheckedCanonicalLoopPlan;
+};
+
+//! Immutable, fully checked description of one transformable C/C++ loop.
+//!
+//! Construction validates exact reciprocal ownership for every header/body
+//! edge, an acyclic structural owner chain, a side-effect-free and loop-
+//! invariant bound/stride surface, a positive nonzero constant stride
+//! magnitude, and the absence of induction-variable mutation or escape from
+//! the body.  Every reference is a borrowed snapshot; transformation commits
+//! revalidate the snapshot before changing the AST.  Only the checked factory
+//! can construct a plan.
+class CheckedCanonicalLoopPlan {
+public:
+  CheckedCanonicalLoopPlan() = delete;
+  CheckedCanonicalLoopPlan(const CheckedCanonicalLoopPlan &) = default;
+  CheckedCanonicalLoopPlan(CheckedCanonicalLoopPlan &&) = delete;
+  CheckedCanonicalLoopPlan &
+  operator=(const CheckedCanonicalLoopPlan &) = delete;
+  CheckedCanonicalLoopPlan &operator=(CheckedCanonicalLoopPlan &&) = delete;
+
+  SgForStatement &loop() const noexcept { return loop_.get(); }
+  SgNode &structuralOwner() const noexcept { return structural_owner_.get(); }
+  SgForInitStatement &forInit() const noexcept { return for_init_.get(); }
+  SgStatement &initializer() const noexcept { return initializer_.get(); }
+  SgStatement &testStatement() const noexcept { return test_statement_.get(); }
+  SgExpression &testExpression() const noexcept {
+    return test_expression_.get();
+  }
+  SgExpression &incrementExpression() const noexcept {
+    return increment_expression_.get();
+  }
+  SgStatement &body() const noexcept { return body_.get(); }
+  SgInitializedName &induction() const noexcept { return induction_.get(); }
+  SgVariableSymbol &inductionSymbol() const noexcept {
+    return induction_symbol_.get();
+  }
+  SgType &inductionType() const noexcept { return induction_type_.get(); }
+  SgExpression &lowerBound() const noexcept { return lower_bound_.get(); }
+  SgExpression &upperBound() const noexcept { return upper_bound_.get(); }
+  const CheckedCanonicalLoopStride &stride() const noexcept { return stride_; }
+  unsigned inductionWidth() const noexcept { return induction_width_; }
+  bool inductionIsUnsigned() const noexcept { return induction_is_unsigned_; }
+  bool isIncreasing() const noexcept { return increasing_; }
+  bool hasInclusiveBound() const noexcept { return inclusive_; }
+  bool initializerIsDeclaration() const noexcept {
+    return initializer_is_declaration_;
+  }
+
+private:
+  CheckedCanonicalLoopPlan(
+      SgForStatement &loop, SgNode &structural_owner,
+      SgForInitStatement &for_init, SgStatement &initializer,
+      SgStatement &test_statement, SgExpression &test_expression,
+      SgExpression &increment_expression, SgStatement &body,
+      SgInitializedName &induction, SgVariableSymbol &induction_symbol,
+      SgType &induction_type, SgExpression &lower_bound,
+      SgExpression &upper_bound,
+      std::optional<std::reference_wrapper<SgExpression>> explicit_stride,
+      unsigned long long positive_stride_value, unsigned induction_width,
+      bool induction_is_unsigned, bool increasing, bool inclusive,
+      bool initializer_is_declaration) noexcept;
+
+  std::reference_wrapper<SgForStatement> loop_;
+  std::reference_wrapper<SgNode> structural_owner_;
+  std::reference_wrapper<SgForInitStatement> for_init_;
+  std::reference_wrapper<SgStatement> initializer_;
+  std::reference_wrapper<SgStatement> test_statement_;
+  std::reference_wrapper<SgExpression> test_expression_;
+  std::reference_wrapper<SgExpression> increment_expression_;
+  std::reference_wrapper<SgStatement> body_;
+  std::reference_wrapper<SgInitializedName> induction_;
+  std::reference_wrapper<SgVariableSymbol> induction_symbol_;
+  std::reference_wrapper<SgType> induction_type_;
+  std::reference_wrapper<SgExpression> lower_bound_;
+  std::reference_wrapper<SgExpression> upper_bound_;
+  CheckedCanonicalLoopStride stride_;
+  unsigned induction_width_;
+  bool induction_is_unsigned_;
+  bool increasing_;
+  bool inclusive_;
+  bool initializer_is_declaration_;
+
+  friend CheckedCanonicalLoopPlan
+  requireCheckedCanonicalLoopPlan(SgForStatement *loop, const char *operation);
+};
+
+//! Build a checked loop plan without modifying or allocating into the AST.
+ROSE_DLL_API CheckedCanonicalLoopPlan
+requireCheckedCanonicalLoopPlan(SgForStatement *loop, const char *operation);
+
+//! Return an exact constant trip count when both bounds are exact integer
+//! constants in the induction type's domain and the terminal increment cannot
+//! overflow or wrap.  Dynamic bounds, an unsafe terminal increment, and an
+//! unrepresentable count return nullopt; a consumer requiring a constant count
+//! must reject nullopt.
+ROSE_DLL_API std::optional<unsigned long long>
+exactCanonicalLoopTripCount(const CheckedCanonicalLoopPlan &plan);
+
+class CheckedLoopUnrollPlan {
+public:
+  CheckedLoopUnrollPlan() = delete;
+  CheckedLoopUnrollPlan(const CheckedLoopUnrollPlan &) = default;
+  CheckedLoopUnrollPlan(CheckedLoopUnrollPlan &&) = delete;
+  CheckedLoopUnrollPlan &operator=(const CheckedLoopUnrollPlan &) = delete;
+  CheckedLoopUnrollPlan &operator=(CheckedLoopUnrollPlan &&) = delete;
+
+  const CheckedCanonicalLoopPlan &loop() const noexcept { return loop_; }
+  size_t factor() const noexcept { return factor_; }
+
+private:
+  CheckedLoopUnrollPlan(const CheckedCanonicalLoopPlan &loop,
+                        size_t factor) noexcept
+      : loop_(loop), factor_(factor) {}
+
+  CheckedCanonicalLoopPlan loop_;
+  size_t factor_;
+
+  friend CheckedLoopUnrollPlan
+  requireCheckedLoopUnrollPlan(SgForStatement *loop, size_t factor,
+                               const char *operation);
+};
+
+//! Read-only unroll planning and one atomic commit.
+ROSE_DLL_API CheckedLoopUnrollPlan
+requireCheckedLoopUnrollPlan(SgForStatement *loop, size_t factor,
+                             const char *operation = "loop-unrolling");
+ROSE_DLL_API void commitLoopUnrolling(const CheckedLoopUnrollPlan &plan);
+
+class CheckedLoopTilingPlan {
+public:
+  CheckedLoopTilingPlan() = delete;
+  CheckedLoopTilingPlan(const CheckedLoopTilingPlan &) = default;
+  CheckedLoopTilingPlan(CheckedLoopTilingPlan &&) = delete;
+  CheckedLoopTilingPlan &operator=(const CheckedLoopTilingPlan &) = delete;
+  CheckedLoopTilingPlan &operator=(CheckedLoopTilingPlan &&) = delete;
+
+  SgForStatement &outerLoop() const noexcept { return outer_.get(); }
+  const std::vector<CheckedCanonicalLoopPlan> &loops() const noexcept {
+    return loops_;
+  }
+  const std::vector<size_t> &tileSizes() const noexcept { return tile_sizes_; }
+
+private:
+  CheckedLoopTilingPlan(SgForStatement &outer,
+                        std::vector<CheckedCanonicalLoopPlan> loops,
+                        std::vector<size_t> tile_sizes) noexcept
+      : outer_(outer), loops_(std::move(loops)),
+        tile_sizes_(std::move(tile_sizes)) {}
+
+  std::reference_wrapper<SgForStatement> outer_;
+  std::vector<CheckedCanonicalLoopPlan> loops_;
+  std::vector<size_t> tile_sizes_;
+
+  friend CheckedLoopTilingPlan
+  requireCheckedLoopTilingPlan(SgForStatement *outer,
+                               const std::vector<size_t> &tile_sizes,
+                               const char *operation);
+};
+
+//! Validate a complete perfect nest and all tile sizes without mutation, then
+//! commit the planned strip-mining transformations in place.
+ROSE_DLL_API CheckedLoopTilingPlan requireCheckedLoopTilingPlan(
+    SgForStatement *outer, const std::vector<size_t> &tile_sizes,
+    const char *operation = "loop-tiling");
+ROSE_DLL_API void commitLoopTiling(const CheckedLoopTilingPlan &plan);
+
+enum class CanonicalFortranLoopDirection { increasing, decreasing, runtime };
+
+//! Check if a Fortran Do loop has a complete canonical form: Do I=1, 10, 1.
+//! A nonconstant step has runtime direction; it must never be guessed to be
+//! increasing by consumers.
 ROSE_DLL_API bool
 isCanonicalDoLoop(SgFortranDo *loop, SgInitializedName **ivar /*=NULL*/,
                   SgExpression **lb /*=NULL*/, SgExpression **ub /*=NULL*/,
                   SgExpression **step /*=NULL*/, SgStatement **body /*=NULL*/,
-                  bool *hasIncrementalIterationSpace /*= NULL*/,
+                  CanonicalFortranLoopDirection *direction /*= NULL*/,
                   bool *isInclusiveUpperBound /*=NULL*/);
 
 //! Set the lower bound of a loop header for (i=lb; ...)
@@ -1457,6 +1782,8 @@ ROSE_DLL_API void setLoopLowerBound(SgNode *loop, SgExpression *lb);
 //! Set the upper bound of a loop header,regardless the condition expression
 //! type.  for (i=lb; i op up, ...)
 ROSE_DLL_API void setLoopUpperBound(SgNode *loop, SgExpression *ub);
+ROSE_DLL_API void setCanonicalForLoopInclusiveComparison(SgForStatement *loop,
+                                                         bool increasing);
 
 //! Set the stride(step) of a loop 's incremental expression, regardless the
 //! expression types (i+=s; i= i+s, etc)
@@ -1466,7 +1793,8 @@ ROSE_DLL_API void setLoopStride(SgNode *loop, SgExpression *stride);
 //! statement outside of the for loop header's init statement, e.g. for (int
 //! i=0;) becomes int i_x; for (i_x=0;..) and rewrite the loop with the new
 //! index variable, if necessary
-ROSE_DLL_API bool normalizeForLoopInitDeclaration(SgForStatement *loop);
+ROSE_DLL_API void normalizeForLoopInitDeclaration(SgForStatement *loop);
+ROSE_DLL_API void retireForLoopInitNormalization(SgForStatement *loop);
 
 //! Undo the normalization of for loop's C99 init declaration. Previous record
 //! of normalization is used to ease the reverse transformation.
@@ -1499,35 +1827,32 @@ ROSE_DLL_API bool unnormalizeForLoopInitDeclaration(SgForStatement *loop);
  */
 ROSE_DLL_API bool normalizeCaseAndDefaultBlocks(SgSwitchStatement *switchStmt);
 
-//! Normalize a for loop, return true if successful. Generated constants will be
-//! fold by default.
+//! Normalize a for loop. Malformed or non-canonicalizable loop headers are hard
+//! errors detected by a read-only preflight before the AST is mutated.
 //!
 //! Translations are :
-//!    For the init statement: for (int i=0;... ) becomes int i; for (i=0;..)
-//!    For test expression:
-//!           i<x is normalized to i<= (x-1) and
-//!           i>x is normalized to i>= (x+1)
+//!    For the init statement: for (int i=0;... ) becomes a declaration in the
+//!           immediately enclosing lexical scope followed by for (i=0;..)
+//!    The test's typed inclusive or exclusive comparison is preserved.
 //!    For increment expression:
 //!           i++ is normalized to i+=1 and
-//!           i-- is normalized to i+=-1
-//!           i-=s is normalized to i+= -s
-ROSE_DLL_API bool forLoopNormalization(SgForStatement *loop,
+//!           i-- is normalized to i-=1.
+//!           Canonical assignment increments are normalized to += or -= while
+//!           preserving a positive stride magnitude.
+ROSE_DLL_API void forLoopNormalization(SgForStatement *loop,
                                        bool foldConstant = true);
 
-//! Normalize a for loop's test expression
-//!           i<x is normalized to i<= (x-1) and
-//!           i>x is normalized to i>= (x+1)
-ROSE_DLL_API bool normalizeForLoopTest(SgForStatement *loop);
-ROSE_DLL_API bool normalizeForLoopIncrement(SgForStatement *loop);
+//! Validate a for loop's typed comparison without changing its inclusivity.
+ROSE_DLL_API void normalizeForLoopTest(SgForStatement *loop);
+ROSE_DLL_API void normalizeForLoopIncrement(SgForStatement *loop);
 
 //! Normalize a Fortran Do loop. Make the default increment expression (1)
 //! explicit
-ROSE_DLL_API bool doLoopNormalization(SgFortranDo *loop);
+ROSE_DLL_API void doLoopNormalization(SgFortranDo *loop);
 
-//!  Unroll a target loop with a specified unrolling factor. It handles steps
-//!  larger than 1 and adds a fringe loop if the iteration count is not evenly
-//!  divisible by the unrolling factor.
-ROSE_DLL_API bool loopUnrolling(SgForStatement *loop, size_t unrolling_factor);
+//! Unroll a target loop by grouping exact source iterations.  The checked
+//! implementation never synthesizes range, endpoint, or stride products.
+ROSE_DLL_API void loopUnrolling(SgForStatement *loop, size_t unrolling_factor);
 
 //! Interchange/permutate a n-level perfectly-nested loop rooted at 'loop' using
 //! a lexicographical order number within (0,depth!).
@@ -1536,17 +1861,25 @@ ROSE_DLL_API bool loopInterchange(SgForStatement *loop, size_t depth,
 
 //! Tile the n-level (starting from 1) loop of a perfectly nested loop nest
 //! using tiling size s
-ROSE_DLL_API bool loopTiling(SgForStatement *loopNest, size_t targetLevel,
+ROSE_DLL_API void loopTiling(SgForStatement *loopNest, size_t targetLevel,
                              size_t tileSize);
+
+//! Tile each leading level of one perfect loop nest in a single checked
+//! transaction.  tileSizes[0] belongs to loopNest itself.
+ROSE_DLL_API void loopTiling(SgForStatement *loopNest,
+                             const std::vector<size_t> &tileSizes);
 
 // Winnie Loop Collapsing
 SgExprListExp *loopCollapsing(SgForStatement *target_loop,
-                              size_t collapsing_factor);
+                              size_t collapsing_factor,
+                              SgStatement *setup_insertion_anchor = nullptr);
 
 bool getForLoopInformations(SgForStatement *for_loop,
                             SgVariableSymbol *&iterator,
                             SgExpression *&lower_bound,
-                            SgExpression *&upper_bound, SgExpression *&stride);
+                            SgExpression *&upper_bound, SgExpression *&stride,
+                            bool &has_incremental_iteration_space,
+                            bool &has_inclusive_bound);
 
 //@}
 
@@ -1697,6 +2030,30 @@ std::vector<SgStatement *> getSwitchCases(SgSwitchStatement *sw);
 
 //! Collect all variable references in a subtree
 void collectVarRefs(SgLocatedNode *root, std::vector<SgVarRefExp *> &result);
+
+//! One variable-reference spelling and the exact statement that emits it.
+class VariableReferenceUse {
+public:
+  VariableReferenceUse(SgVarRefExp *reference, SgStatement *statement)
+      : reference_(reference), statement_(statement) {
+    ASSERT_not_null(reference_);
+    ASSERT_not_null(statement_);
+  }
+
+  SgVarRefExp *reference() const { return reference_; }
+  SgStatement *statement() const { return statement_; }
+
+private:
+  SgVarRefExp *reference_;
+  SgStatement *statement_;
+};
+
+//! Collect variable references together with their exact source use sites.
+//!
+//! Unlike parent-chain queries, this also preserves use sites for references
+//! embedded in non-traversal type edges such as a new-expression array bound.
+void collectVariableReferenceUses(SgLocatedNode *root,
+                                  std::vector<VariableReferenceUse> &result);
 
 //! Topdown traverse a subtree from root to find the first declaration given its
 //! name, scope (optional, can be NULL), and defining or nondefining flag.
@@ -1931,8 +2288,37 @@ NodeType *getEnclosingNode(const SgNode *astNode,
 ROSE_DLL_API SgSourceFile *
 getEnclosingSourceFile(const SgNode *n, const bool includingSelf = false);
 
+//! Return the exact target ABI type used by sizeof/alignof for the context's
+//! one owning translation unit. Detached or untyped contexts are malformed.
+ROSE_DLL_API SgType *requireTargetSizeType(const SgNode *context);
+
 //! Get the closest scope from astNode. Return astNode if it is already a scope.
 ROSE_DLL_API SgScopeStatement *getScope(const SgNode *astNode);
+
+/** Return true only for a Fortran main program or BLOCK DATA program unit
+ * whose source syntax has no name.  The function hard-fails when the public
+ * declaration name and the explicit source-name metadata disagree. */
+ROSE_DLL_API bool
+isFortranProgramUnitWithoutSourceName(const SgFunctionDeclaration *decl);
+
+/** Return whether a spelling is a valid Fortran source identifier. */
+ROSE_DLL_API bool isValidFortranSourceIdentifier(const std::string &name);
+
+/** Return the symbol-table key for a Fortran program unit.  Anonymous program
+ * units receive a stable, source-position-derived internal key while their
+ * public SgFunctionDeclaration::get_name() remains empty. */
+ROSE_DLL_API SgName
+getFortranProgramUnitSymbolTableKey(const SgFunctionDeclaration *decl);
+
+/** Resolve a Fortran common-block designator in its lexical program-unit
+ * scope.  Missing and ambiguous declarations are hard errors. */
+ROSE_DLL_API SgCommonBlockObject *
+lookupFortranCommonBlockObject(const SgName &useName, const SgNode *context);
+
+/** Enforce the semantic and exact-source identity contract of a typed Fortran
+ * common-block directive designator. */
+ROSE_DLL_API void
+validateFortranCommonBlockRef(const SgFortranCommonBlockRefExp *reference);
 
 //! Get the enclosing scope from a node n
 ROSE_DLL_API SgScopeStatement *
@@ -2175,7 +2561,6 @@ struct DeferredTransformation {
     e_outliner,
     e_replaceStatement,
     e_removeStatement,
-    e_replaceDefiningFunctionDeclarationWithFunctionPrototype,
     e_last
   };
 
@@ -2229,11 +2614,6 @@ struct DeferredTransformation {
   ROSE_DLL_API DeferredTransformation &
   operator=(const DeferredTransformation &X); //! operator=()
 
-  // DQ (11/20/20): static function to generate specialized version of deferred
-  // transformation object.
-  static ROSE_DLL_API DeferredTransformation
-  replaceDefiningFunctionDeclarationWithFunctionPrototype(
-      SgFunctionDeclaration *functionDeclaration);
   static ROSE_DLL_API DeferredTransformation
   replaceStatement(SgStatement *oldStmt, SgStatement *newStmt,
                    bool movePreprocessinInfo = false);
@@ -2248,6 +2628,7 @@ struct DeferredTransformation {
 //! dangling pointers, symbols or types that result.
 enum class DeleteAstMode {
   kConservative,          // Preserve nodes referenced from outside the subtree.
+  kRequireIsolated,       // Abort if any candidate has an external reference.
   kSkipExternalReferences // Assume subtree is isolated; skip global
                           // reference scan.
 };
@@ -2272,12 +2653,6 @@ ROSE_DLL_API void registerAstTeardownProject(SgProject *project);
 // DQ (3/5/2022): Adding support to check AST for invalid poionters.
 ROSE_DLL_API void checkSgNodePointers();
 
-//! Special purpose function for deleting AST expression tress containing
-//! valid original expression trees in constant folded expressions (for
-//! internal use only).
-ROSE_DLL_API void
-deleteExpressionTreeWithOriginalExpressionSubtrees(SgNode *root);
-
 // DQ (2/25/2009): Added new function to support outliner.
 //! Move statements in first block to the second block (preserves order and
 //! rebuilds the symbol table).
@@ -2299,21 +2674,129 @@ ROSE_DLL_API bool isLambdaCapturedVariable(SgVarRefExp *varRef);
 //! like For loop, etc.
 ROSE_DLL_API void moveVariableDeclaration(SgVariableDeclaration *decl,
                                           SgScopeStatement *target_scope);
-//! Append a statement to the end of the current scope, handle side effect of
-//! appending statements, e.g. preprocessing info, defining/nondefining
-//! pointers etc.
-ROSE_DLL_API void appendStatement(SgStatement *stmt,
-                                  SgScopeStatement *scope = NULL);
+
+//! Clone one template parameter for a generated declaration. Template-template
+//! declaration identities are copied independently, and every generated
+//! located descendant is left detached until the destination declaration
+//! publishes its exact physical output owner.
+ROSE_DLL_API SgTemplateParameter *
+cloneDetachedGeneratedTemplateParameter(const SgTemplateParameter *source,
+                                        const char *context);
+
+//! Publish or validate the exact output owner for generated located nodes
+//! before a subtree crosses an attached AST mutation boundary. A physical
+//! owner publishes its exact file and occurrence. A semantic owner instead
+//! publishes detached transformation descendants as semantic-only frontend
+//! structure and validates existing semantic descendants.
+ROSE_DLL_API void publishGeneratedSubtreeOutputOwner(SgNode *generatedSubtree,
+                                                     SgLocatedNode *exactOwner);
+
+//! Return whether a declaration has exact semantic-auxiliary ownership.
+//! A declaration whose parent is an auxiliary container must satisfy the
+//! complete reciprocal scope/container/list contract; malformed partial
+//! ownership is a hard error.
+ROSE_DLL_API bool
+hasExactSemanticAuxiliaryOwnership(const SgDeclarationStatement *declaration);
+
+//! Relocate generated descendants of an already-published subtree through one
+//! explicit physical-output file-and-occurrence transfer. Source-spelled
+//! descendants retain their original physical provenance. Every generated
+//! position must identify priorOwner exactly; this API never infers or repairs
+//! an owner.
+ROSE_DLL_API void
+relocateGeneratedSubtreePhysicalOutputOwner(SgNode *generatedSubtree,
+                                            SgLocatedNode *priorOwner,
+                                            SgLocatedNode *exactOwner);
+
+//! Classify one freshly constructed, non-expression frontend node as semantic
+//! name/structure infrastructure. Any existing or partial source position is
+//! a producer error.
+ROSE_DLL_API void
+setSemanticOnlyFrontendSourcePosition(SgLocatedNode *semanticNode);
+
+//! Return whether one file-info record is exact semantic-only frontend
+//! provenance owned by `semanticNode`. A function declaration can additionally
+//! retain its typed physical source-file association, and an exactly
+//! auxiliary-owned declaration or definition can retain its complete frontend
+//! source coordinates, without either becoming a source-emitted declaration.
+ROSE_DLL_API bool
+hasExactSemanticFrontendSourcePosition(const SgNode *semanticNode,
+                                       const Sg_File_Info *position);
+
+//! Return whether every owned source position on a located node identifies
+//! one exact compiler-generated, frontend-specific semantic-only surface.
+ROSE_DLL_API bool
+hasSemanticOnlyFrontendSourcePosition(const SgLocatedNode *semanticNode);
+
+//! Return whether every owned source position on a located node identifies
+//! one exact detached transformation surface awaiting an output owner.
+ROSE_DLL_API bool
+hasDetachedTransformationSourcePosition(const SgLocatedNode *generatedNode);
+
+//! Promote one exact semantic-only frontend node that a transformation has
+//! rewritten into an independently emitted lexical node. The caller supplies
+//! the attached physical output owner explicitly; semantic descendants are
+//! not reclassified implicitly.
+ROSE_DLL_API void
+promoteSemanticOnlyNodeToGeneratedOutput(SgLocatedNode *semanticNode,
+                                         SgLocatedNode *exactOwner);
+
+//! Begin the one exact bottom-up construction transaction for a detached
+//! function-parameter scope. The scope is semantic name infrastructure and
+//! must already carry exact semantic-only provenance. The physical output
+//! owner and semantic lookup scope are independent, explicit roles; this is
+//! required for a parameter scope nested in another detached declarative
+//! region. No parent-chain inference is performed.
+ROSE_DLL_API void beginDetachedFunctionParameterScopeConstruction(
+    SgFunctionParameterScope *parameterScope,
+    SgScopeStatement *exactPhysicalOutputOwner,
+    SgScopeStatement *exactSemanticScope);
+
+//! Attach a parameter scope to its final declaration and consume its exact
+//! detached construction transaction. The scope remains semantic-only while
+//! physically emitted descendants retain the transaction's explicit output
+//! owner. Missing, stale, or mismatched transactions are hard errors.
+ROSE_DLL_API void completeDetachedFunctionParameterScopeConstruction(
+    SgFunctionDeclaration *declaration,
+    SgFunctionParameterScope *parameterScope);
+
+//! Attach a detached local-parameter scope to the requires-expression that
+//! owns its declarative region and consume the same exact construction
+//! transaction used while translating the local parameters.
+ROSE_DLL_API void completeDetachedRequiresParameterScopeConstruction(
+    SgRequiresExpr *requiresExpression,
+    SgFunctionParameterScope *parameterScope);
+
+ROSE_DLL_API void
+beginDetachedForStatementConstruction(SgForStatement *statement,
+                                      SgScopeStatement *exactOutputOwner);
+ROSE_DLL_API void
+completeDetachedForStatementConstruction(SgForStatement *statement);
+
+//! Append a statement to the end of an explicit lexical scope, handling symbol
+//! and defining/nondefining links.
+ROSE_DLL_API void appendStatement(SgStatement *stmt, SgScopeStatement *scope);
+
+//! Publish and validate the effective access of a declaration at its exact
+//! structural position in a C++ class definition.  Fresh builder declarations
+//! may arrive with an unclassified access modifier; source-backed declarations
+//! must already agree with the surrounding access-label stream.
+ROSE_DLL_API void
+publishClassMemberAccessAtLexicalBoundary(SgDeclarationStatement *declaration,
+                                          SgClassDefinition *definition);
 
 //! Append a statement to the end of SgForInitStatement
 ROSE_DLL_API void appendStatement(SgStatement *stmt,
                                   SgForInitStatement *for_init_stmt);
 
-//! Append a list of statements to the end of the current scope, handle side
-//! effect of appending statements, e.g. preprocessing info,
-//! defining/nondefining pointers etc.
+//! Append a list of statements to the end of an explicit lexical scope.
 ROSE_DLL_API void appendStatementList(const std::vector<SgStatement *> &stmt,
-                                      SgScopeStatement *scope = NULL);
+                                      SgScopeStatement *scope);
+
+//! Capture the primary source file's preprocessing directives in physical
+//! source order.  The returned values are independent of later AST mutations.
+ROSE_DLL_API std::vector<PreprocessingInfo>
+collectCppDirectiveSnapshot(SgSourceFile *file);
 
 // DQ (2/6/2009): Added function to support outlining into separate file.
 //! Append a copy ('decl') of a function ('original_statement') into a
@@ -2323,29 +2806,43 @@ ROSE_DLL_API void appendStatementList(const std::vector<SgStatement *> &stmt,
 //! (the new file will not have any headers).
 ROSE_DLL_API void appendStatementWithDependentDeclaration(
     SgDeclarationStatement *decl, SgGlobal *scope,
-    SgStatement *original_statement, bool excludeHeaderFiles,
+    SgStatement *original_statement,
+    SgFunctionDeclaration *source_call_declaration, bool excludeHeaderFiles,
+    const std::vector<PreprocessingInfo> &original_directives,
     SgSourceFile *original_source_file = NULL,
     int original_physical_file_id = -1);
 
-//! Prepend a statement to the beginning of the current scope, handling side
-//! effects as appropriate
-ROSE_DLL_API void prependStatement(SgStatement *stmt,
-                                   SgScopeStatement *scope = NULL);
+//! Prepend a statement to the beginning of an explicit lexical scope, handling
+//! side effects as appropriate.
+ROSE_DLL_API void prependStatement(SgStatement *stmt, SgScopeStatement *scope);
 
 //! Prepend a statement to the beginning of SgForInitStatement
 ROSE_DLL_API void prependStatement(SgStatement *stmt,
                                    SgForInitStatement *for_init_stmt);
 
-//! prepend a list of statements to the beginning of the current scope,
-//! handling side effects as appropriate
+//! Prepend a list of statements to the beginning of an explicit lexical scope.
 ROSE_DLL_API void prependStatementList(const std::vector<SgStatement *> &stmt,
-                                       SgScopeStatement *scope = NULL);
+                                       SgScopeStatement *scope);
 
 //! Check if a scope statement has a simple children statement list
 //! so insert additional statements under the scope is straightforward and
 //! unambiguous . for example, SgBasicBlock has a simple statement list while
 //! IfStmt does not.
 ROSE_DLL_API bool hasSimpleChildrenList(SgScopeStatement *scope);
+
+/**
+ * Normalize an attached statement into the exact lexical anchor used by a
+ * subsequent sibling insertion.
+ *
+ * Control-flow and OpenMP bodies that directly own @p targetStmt are
+ * structurally normalized to an explicit basic block before this function
+ * returns.  Conditions are represented by their enclosing control statement
+ * because a condition has no sibling statement list.  Scope-sensitive
+ * declarations must be built against the returned anchor's scope, not the
+ * target's pre-normalization scope.
+ */
+ROSE_DLL_API SgStatement *
+prepareStatementInsertionAnchor(SgStatement *targetStmt);
 
 //! Insert a statement before or after the target statement within the
 //! target's scope. Move around preprocessing info automatically
@@ -2445,30 +2942,25 @@ ROSE_DLL_API void replaceVariableReferences(SgVariableSymbol *old_sym,
                                             SgVariableSymbol *new_sym,
                                             SgScopeStatement *scope);
 
-// DQ (11/12/2018): Adding test to avoid issues that we can't test for in the
-// unparsing of header files using the token based unparsing.
-//! If header file unparsing and token-based unparsing are used, then some
-//! statements in header files used with the same name and different include
-//! syntax can't be transformed. This is currently because there is no way to
-//! generally test the resulting transformed code generated by ROSE.
-ROSE_DLL_API bool statementCanBeTransformed(SgStatement *stmt);
+//! Require exact physical/include ownership before mutating a statement in a
+//! token-unparsed header. Ambiguous or unsupported ownership is a hard error.
+ROSE_DLL_API void requireStatementCanBeTransformed(SgStatement *stmt);
 
-/** Given an expression, generates a temporary variable whose initializer
- * optionally evaluates that expression. Then, the var reference expression
- * returned can be used instead of the original expression. The temporary
- * variable created can be reassigned to the expression by the returned
- * SgAssignOp; this can be used when the expression the variable represents
- * needs to be evaluated. NOTE: This handles reference types correctly by
- * using pointer types for the temporary.
+/** Given an expression and an exact attached insertion anchor, atomically
+ * inserts a temporary variable immediately before the anchor and publishes its
+ * symbol. The returned variable-reference expression can be used instead of
+ * the original expression. The optional SgAssignOp reevaluates the expression.
+ * Reference types are represented by pointer temporaries.
  * @param expression Expression which will be replaced by a variable
- * @param scope scope in which the temporary variable will be generated
+ * @param insertionAnchor Attached direct child of the exact lexical scope that
+ * will own the temporary declaration
  * @param reEvaluate an assignment op to reevaluate the expression. Leave
  * NULL if not needed
- * @return declaration of the temporary variable, and a a variable reference
- * expression to use instead of the original expression. */
+ * @return attached declaration of the temporary variable and a variable
+ * reference expression to use instead of the original expression. */
 std::pair<SgVariableDeclaration *, SgExpression *>
 createTempVariableForExpression(SgExpression *expression,
-                                SgScopeStatement *scope,
+                                SgStatement *insertionAnchor,
                                 bool initializeInDeclaration,
                                 SgAssignOp **reEvaluate = NULL);
 
@@ -2550,8 +3042,7 @@ void setParameterList(actualFunction *func, SgFunctionParameterList *paralist) {
   }
 }
 
-//! Set ctor-initializer list for a member function declaration and repair the
-//! ownership links used by AST copy and scope initialization.
+//! Publish an exactly constructed ctor-initializer list for a member function.
 template <class actualMemberFunction>
 void setCtorInitializerList(actualMemberFunction *func,
                             SgCtorInitializerList *ctorlist) {
@@ -2567,29 +3058,31 @@ void setCtorInitializerList(actualMemberFunction *func,
   }
   ctorlist->set_parent(func);
 
-  SgScopeStatement *scope = NULL;
-  if (func->get_definingDeclaration() == func &&
-      func->get_definition() != NULL) {
-    scope = func->get_definition();
-  } else {
-    scope = func->get_scope();
+  SgScopeStatement *classScope = func->get_scope();
+  if (classScope == NULL || isSgClassDefinition(classScope) == NULL) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[constructor-initializer-publication]: "
+            "member function=%p has no exact semantic class scope\n",
+            static_cast<void *>(func));
+    ROSE_ABORT();
   }
 
   SgInitializedNamePtrList &ctors = ctorlist->get_ctors();
   for (SgInitializedNamePtrList::iterator i = ctors.begin(); i != ctors.end();
        ++i) {
     SgInitializedName *ctor = *i;
-    if (ctor == NULL) {
-      continue;
-    }
-
-    if (ctor->get_parent() != ctorlist) {
-      ctor->set_parent(ctorlist);
+    if (ctor == NULL || ctor->get_parent() != ctorlist ||
+        ctor->get_scope() != classScope ||
+        (ctor->get_declptr() != NULL && ctor->get_declptr() != func)) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[constructor-initializer-publication]: "
+              "member function=%p list=%p entry=%p has no exact list parent, "
+              "class scope, or declaration identity\n",
+              static_cast<void *>(func), static_cast<void *>(ctorlist),
+              static_cast<void *>(ctor));
+      ROSE_ABORT();
     }
     ctor->set_declptr(func);
-    if (scope != NULL) {
-      ctor->set_scope(scope);
-    }
   }
 }
 
@@ -2624,8 +3117,8 @@ ROSE_DLL_API void setLhsOperand(SgExpression *target, SgExpression *lhs);
 //! set left hand operand for binary expression
 ROSE_DLL_API void setRhsOperand(SgExpression *target, SgExpression *rhs);
 
-//! Set original expression trees to NULL for SgValueExp or SgCastExp
-//! expressions, so you can change the value and have it unparsed correctly.
+//! Delete exactly owned source-provenance trees before transforming their
+//! semantic expression owners.
 ROSE_DLL_API void removeAllOriginalExpressionTrees(SgNode *top);
 
 // DQ (1/25/2010): Added support for directories
@@ -2645,36 +3138,16 @@ moveCommentsToNewStatement(SgStatement *sourceStatement,
                            SgStatement *destinationStatement,
                            bool destinationStatementPreceedsSourceStatement);
 
-// DQ (7/19/2015): This is required to support general unparsing of template
-// instantations for the GNU g++ compiler which does not permit name
-// qualification to be used to support the expression of the namespace where a
-// template instantiatoon would be places.  Such name qualification would also
-// sometimes require global qualification which is also not allowed by the GNU
-// g++ compiler.  These issues appear to be specific to the GNU compiler
-// versions, at least versions 4.4 through 4.8.
-//! Relocate the declaration to be explicitly represented in its associated
-//! namespace (required for some backend compilers to process template
-//! instantiations).
-ROSE_DLL_API void moveDeclarationToAssociatedNamespace(
-    SgDeclarationStatement *declarationStatement);
-
 ROSE_DLL_API bool isTemplateInstantiationNode(SgNode *node);
-
-// DQ (5/23/2021): Added function to support test for template declaration
-// (commented out, not required). ROSE_DLL_API bool
-// isTemplateDeclarationNode(SgNode* node);
-
-ROSE_DLL_API void
-wrapAllTemplateInstantiationsInAssociatedNamespaces(SgProject *root);
 
 // DQ (12/1/2015): Adding support for fixup internal data struuctures that have
 // references to statements (e.g. macro expansions).
 ROSE_DLL_API void
-resetInternalMapsForTargetStatement(SgStatement *sourceStatement);
+resetInternalMapsForTargetStatement(SgStatement *sourceStatement,
+                                    bool statementWillBeDetached = false);
 
-// DQ (6/7/2019): Add support for transforming function definitions to function
-// prototypes in a subtree. We might have to make this specific to a file (only
-// traversing the functions in that file).
+// Replace function-definition source surfaces throughout a subtree with the
+// only declaration form that is legal at each lexical owner.
 /*!\brief XXX
  * This function operates on the new file used to support outlined function
  * definitions. We use a copy of the file where the code will be outlined FROM,
@@ -2683,29 +3156,28 @@ resetInternalMapsForTargetStatement(SgStatement *sourceStatement);
  * advantage of also supporting the same include file tree as the original file
  * where the outlined code is being taken from.
  */
-ROSE_DLL_API void convertFunctionDefinitionsToFunctionPrototypes(SgNode *node);
+ROSE_DLL_API void replaceFunctionDefinitionsWithDeclarations(SgNode *node);
 
-// DQ (11/10/2019): Lower level support for
-// convertFunctionDefinitionsToFunctionPrototypes(). DQ (10/27/2020): Need to
-// return the generated function prototype (incase we want to mark it for output
-// or template unparsing from the AST). ROSE_DLL_API void
-// replaceDefiningFunctionDeclarationWithFunctionPrototype (
-// SgFunctionDeclaration* functionDeclaration ); ROSE_DLL_API
-// SgDeclarationStatement*
-// replaceDefiningFunctionDeclarationWithFunctionPrototype (
-// SgFunctionDeclaration* functionDeclaration );
-ROSE_DLL_API SgFunctionDeclaration *
-replaceDefiningFunctionDeclarationWithFunctionPrototype(
-    SgFunctionDeclaration *functionDeclaration,
+/** Replace an exact defining function declaration with a legal declaration
+ * source surface.  Free functions and member definitions written in their
+ * class are replaced by a newly built prototype.  A member definition written
+ * outside its semantic class scope is replaced by SgEmptyDeclaration because
+ * a namespace-scope qualified member prototype is ill-formed C++.  The
+ * removed definition remains semantically owned by its scope's
+ * SgAuxiliaryDeclarationList and its complete declaration family and symbol
+ * are preserved.  Malformed or unsupported inputs are hard errors; this
+ * function never returns null. */
+ROSE_DLL_API SgDeclarationStatement *replaceFunctionDefinitionWithDeclaration(
+    SgFunctionDeclaration *functionDefinition,
     bool movePreprocessingInfo = true);
 ROSE_DLL_API std::vector<SgFunctionDeclaration *>
 generateFunctionDefinitionsList(SgNode *node);
 
-// DQ (10/29/2020): build a function prototype for all but member functions
-// outside of the class (except for template instantiations). The reason why
-// member functions outside of the class are an exception is because they can
-// not be used except in a class and there would already be one present for the
-// code to compile.
+/** Build a nondefining declaration from an exact function definition whose
+ * structural and semantic scopes permit a prototype at the same source
+ * location.  In particular, out-of-class member definitions are rejected:
+ * their existing in-class declaration is the only legal prototype.  Malformed
+ * or unsupported inputs are hard errors; this function never returns null. */
 ROSE_DLL_API SgFunctionDeclaration *
 buildFunctionPrototype(SgFunctionDeclaration *functionDeclaration);
 
@@ -2719,16 +3191,15 @@ buildFunctionPrototype(SgFunctionDeclaration *functionDeclaration);
   construction then. A set of utility functions are provided to patch up scope,
   parent, symbol for them when the target scope/parent become know.
 */
-//! Connect variable reference to the right variable symbols when feasible,
-//! return the number of references being fixed.
-/*! In AST translation, it is possible to build a variable reference before the
- variable is being declared. buildVarRefExp() will use fake initialized name and
- symbol as placeholders to get the work done. Users should call
- fixVariableReference() when AST is complete and all variable declarations are
- in place.
-*/
-ROSE_DLL_API int fixVariableReferences(SgNode *root,
-                                       bool cleanUnusedSymbol = true);
+//! Rebind local variable references after an AST subtree has been moved to a
+//! different lexical scope.
+/*!
+ * This is an explicit transformation operation, not a frontend or
+ * post-processing repair. Every reference must already have a real, typed
+ * declaration. If a moved local reference cannot be resolved in its new
+ * lexical context, the operation terminates with a hard error.
+ */
+ROSE_DLL_API void rebindVariableReferencesAfterMove(SgNode *root);
 
 //! Patch up symbol, scope, and parent information when a
 //! SgVariableDeclaration's scope is known.
@@ -2765,14 +3236,12 @@ fixNamespaceDeclaration(SgNamespaceDeclarationStatement *structDecl,
 ROSE_DLL_API void fixLabelStatement(SgLabelStatement *label_stmt,
                                     SgScopeStatement *scope);
 
-//! Set a numerical label for a Fortran statement. The statement should have a
-//! enclosing function definition already. SgLabelSymbol and SgLabelRefExp are
-//! created transparently as needed.
+//! Set a numerical label for a Fortran statement in its exact program-unit
+//! label scope. SgLabelSymbol and SgLabelRefExp are created as needed.
 ROSE_DLL_API void
 setFortranNumericLabel(SgStatement *stmt, int label_value,
-                       SgLabelSymbol::label_type_enum label_type =
-                           SgLabelSymbol::e_start_label_type,
-                       SgScopeStatement *label_scope = NULL);
+                       SgLabelSymbol::label_type_enum label_type,
+                       SgScopeStatement *label_scope);
 
 //! Suggest next usable (non-conflicting) numeric label value for a Fortran
 //! function definition scope
@@ -2964,14 +3433,12 @@ ROSE_DLL_API void removeConsecutiveLabels(SgNode *top);
  * ambiguous about the merge direction, to be phased out.
  */
 ROSE_DLL_API bool mergeDeclarationAndAssignment(SgVariableDeclaration *decl,
-                                                SgExprStatement *assign_stmt,
-                                                bool removeAssignStmt = true);
+                                                SgExprStatement *assign_stmt);
 
 //! Merge an assignment into its upstream declaration statement. Callers should
 //! make sure the merge is semantically correct.
 ROSE_DLL_API bool mergeAssignmentWithDeclaration(SgExprStatement *assign_stmt,
-                                                 SgVariableDeclaration *decl,
-                                                 bool removeAssignStmt = true);
+                                                 SgVariableDeclaration *decl);
 
 //! Merge a declaration statement into a matching followed variable assignment.
 //! Callers should make sure the merge is semantically correct (by not
@@ -3237,101 +3704,6 @@ struct const_int_expr_t evaluateConstIntegerExpression(SgExpression *expr);
 // JP (9/17/14): Added function to test whether two SgType* are equivalent or
 // not
 bool checkTypesAreEqual(SgType *typeA, SgType *typeB);
-
-// DQ (8/31/2016): Making this a template function so that we can have it work
-// with user defined filters.
-//! This function detects template instantiations that are relevant when filters
-//! are used.
-/*!
-    legacy frontend normalizes some in-class template functions and member
-   functions to be redefined outside of a class. this causes the associated
-   template instantiations to be declared outside of the class, and to be
-   marked as compiler generated (since the compiler generated form outside of
-   the class declaration). ROSE captures the function definitions, but in the
-   new location (defined outside of the class declaration).  This can confuse
-   some simple tests for template instantiations that are a part of
-   definitions in a file, thus we have this function to detect this specific
-   normalization.
- */
-template <class T>
-bool isTemplateInstantiationFromTemplateDeclarationSatisfyingFilter(
-    SgFunctionDeclaration *function, T *filter) {
-  // DQ (9/1/2016): This function is called in the Call graph generation to
-  // avoid filtering out legacy frontend normalized function template
-  // instnatiations (which come from normalized template functions and member
-  // functions). Note that because of the legacy frontend normailzation the
-  // membr function is moved outside of the class, and thus marked as
-  // compiler generated.  However the template instantiations are always
-  // marked as compiler generated (if not specializations) and so we want to
-  // include a template instantiation that is marked as compiler generated,
-  // but is from a template declaration that satisfyied a specific user
-  // defined filter. The complexity of this detection is isolated here, but
-  // knowing that it must be called is more complex. This function is call in
-  // the CG.C file of
-  // tests/nonsmoke/functional/roseTests/programAnalysisTests/testCallGraphAnalysis.
-
-  bool retval = false;
-
-#define DEBUG_TEMPLATE_NORMALIZATION_DETECTION 0
-
-#if DEBUG_TEMPLATE_NORMALIZATION_DETECTION
-  printf("In isNormalizedTemplateInstantiation(): function = %p = %s = %s \n",
-         function, function->class_name().c_str(), function->get_name().str());
-#endif
-
-  // Test for this to be a template instantation (in which case it was marked as
-  // compiler generated but we may want to allow it to be used in the call
-  // graph, if it's template was a part was defined in the current directory).
-  SgTemplateInstantiationFunctionDecl *templateInstantiationFunction =
-      isSgTemplateInstantiationFunctionDecl(function);
-  SgTemplateInstantiationMemberFunctionDecl
-      *templateInstantiationMemberFunction =
-          isSgTemplateInstantiationMemberFunctionDecl(function);
-
-  if (templateInstantiationFunction != NULL) {
-    // When the defining function has been normalized by legacy frontend,
-    // only the non-defining declaration will have a source position.
-    templateInstantiationFunction = isSgTemplateInstantiationFunctionDecl(
-        templateInstantiationFunction->get_firstNondefiningDeclaration());
-    SgTemplateFunctionDeclaration *templateFunctionDeclaration =
-        templateInstantiationFunction->get_templateDeclaration();
-    if (templateFunctionDeclaration != NULL) {
-      retval = filter->operator()(templateFunctionDeclaration);
-    } else {
-      // Assume false.
-    }
-
-#if DEBUG_TEMPLATE_NORMALIZATION_DETECTION
-    printf("   --- case of templateInstantiationFunction: retval = %s \n",
-           retval ? "true" : "false");
-#endif
-  } else {
-    if (templateInstantiationMemberFunction != NULL) {
-      // When the defining function has been normalized by legacy
-      // frontend, only the non-defining declaration will have a source
-      // position.
-      templateInstantiationMemberFunction =
-          isSgTemplateInstantiationMemberFunctionDecl(
-              templateInstantiationMemberFunction
-                  ->get_firstNondefiningDeclaration());
-      SgTemplateMemberFunctionDeclaration *templateMemberFunctionDeclaration =
-          templateInstantiationMemberFunction->get_templateDeclaration();
-      if (templateMemberFunctionDeclaration != NULL) {
-        retval = filter->operator()(templateMemberFunctionDeclaration);
-      } else {
-        // Assume false.
-      }
-
-#if DEBUG_TEMPLATE_NORMALIZATION_DETECTION
-      printf(
-          "   --- case of templateInstantiationMemberFunction: retval = %s \n",
-          retval ? "true" : "false");
-#endif
-    }
-  }
-
-  return retval;
-}
 
 void detectCycleInType(SgType *type, const std::string &from);
 

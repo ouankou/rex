@@ -77,8 +77,6 @@ ROSE_DLL_API void cleanupInlinedCode(SgNode *n);
 //! Change all members in a program to be public.  There should really be a
 //! smarter procedure for this that only changes members used by inlined
 //! code.
-ROSE_DLL_API void changeAllMembersToPublic(SgNode *n);
-
 //! Get all variable names declared within a scope, in the correct order for
 //! destruction
 ROSE_DLL_API SgInitializedNamePtrList

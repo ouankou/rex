@@ -10,11 +10,11 @@
 
 // include "array_class_interface.h"
 
-#include "keep_going.h"
-
 #include "nameQualificationSupport.h"
 
+#include "FortranLineWrapSupport.h"
 #include "unparser.h"
+#include "utility_functions.h"
 
 // DQ (10/21/2010):  This should only be included by source files that require
 // it. This fixed a reported bug which caused conflicts with configure-time
@@ -26,8 +26,22 @@
 #include "rose_config.h"
 #include "rose_test_output_path.h"
 
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <cerrno>
+#include <cstring>
+#include <fcntl.h>
 #include <fstream>
+#include <functional>
+#include <limits>
+#include <memory>
+#include <optional>
+#include <streambuf>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <unordered_set>
 #include <vector>
 // DQ (8/1/2018): This is the suppport for unparsing of header files.
 #include "FileHelper.h"
@@ -41,306 +55,610 @@
 namespace si = SageInterface;
 
 namespace {
-struct ConditionalDirectiveRecord {
-  enum Kind { IfBegin, ElseBranch, ElifBranch, EndIf, Other } kind;
-  std::string text;
-  size_t line_index;
+bool hasExactSemanticStructuralProvenance(SgLocatedNode *node);
+int requireStructuralPhysicalFileId(SgLocatedNode *node, const char *contract);
 
-  ConditionalDirectiveRecord(Kind kind, const std::string &text,
-                             size_t line_index)
-      : kind(kind), text(text), line_index(line_index) {}
-};
+bool isExactlyAuxiliaryOwned(SgNode *node, const char *contract) {
+  ASSERT_not_null(node);
+  ASSERT_not_null(contract);
 
-std::string trimLeadingWhitespace(const std::string &text) {
-  const std::string::size_type first = text.find_first_not_of(" \t\r");
-  if (first == std::string::npos) {
-    return std::string();
-  }
-
-  const std::string::size_type last = text.find_last_not_of(" \t\r");
-  return text.substr(first, last - first + 1);
-}
-
-bool isOpenMPOrOpenACCStatement(SgStatement *stmt) {
-  if (stmt == NULL) {
-    return false;
-  }
-
-  return SageInterface::isOmpStatement(stmt) ||
-         isSgAccParallelStatement(stmt) != NULL ||
-         isSgAccParallelLoopStatement(stmt) != NULL ||
-         isSgAccDataStatement(stmt) != NULL ||
-         isSgAccKernelsStatement(stmt) != NULL ||
-         isSgAccAtomicStatement(stmt) != NULL ||
-         isSgAccEnterDataStatement(stmt) != NULL ||
-         isSgAccExitDataStatement(stmt) != NULL ||
-         isSgAccRoutineStatement(stmt) != NULL ||
-         isSgAccWaitStatement(stmt) != NULL ||
-         isSgAccCacheStatement(stmt) != NULL ||
-         isSgAccBodyStatement(stmt) != NULL ||
-         isSgAccClauseBodyStatement(stmt) != NULL ||
-         isSgAccClauseStatement(stmt) != NULL;
-}
-
-bool fileContainsOpenMPOrOpenACCStatements(SgSourceFile *file) {
-  if (file == NULL) {
-    return false;
-  }
-
-  class DirectiveTraversal : public AstSimpleProcessing {
-  public:
-    bool found = false;
-
-    void visit(SgNode *node) override {
-      if (found == true) {
-        return;
-      }
-
-      SgStatement *stmt = isSgStatement(node);
-      if (isOpenMPOrOpenACCStatement(stmt)) {
-        found = true;
-      }
+  if (SgAuxiliaryDeclarationList *container =
+          isSgAuxiliaryDeclarationList(node)) {
+    SgScopeStatement *owner = isSgScopeStatement(container->get_parent());
+    if (owner == nullptr || owner->get_auxiliary_declarations() != container) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: node=%p type=%s has malformed "
+              "auxiliary declaration-list ownership\n",
+              contract, static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
     }
-  };
-
-  DirectiveTraversal traversal;
-  traversal.traverse(file, preorder);
-  return traversal.found;
-}
-
-ConditionalDirectiveRecord::Kind
-classifyConditionalDirective(const std::string &line) {
-  const std::string trimmed = trimLeadingWhitespace(line);
-  if (trimmed.rfind("#ifdef", 0) == 0 || trimmed.rfind("#ifndef", 0) == 0 ||
-      trimmed.rfind("#if", 0) == 0) {
-    return ConditionalDirectiveRecord::IfBegin;
-  }
-  if (trimmed.rfind("#elif", 0) == 0) {
-    return ConditionalDirectiveRecord::ElifBranch;
-  }
-  if (trimmed.rfind("#else", 0) == 0) {
-    return ConditionalDirectiveRecord::ElseBranch;
-  }
-  if (trimmed.rfind("#endif", 0) == 0) {
-    return ConditionalDirectiveRecord::EndIf;
+    return true;
   }
 
-  return ConditionalDirectiveRecord::Other;
-}
-
-void copyLanguageSettings(SgSourceFile *target, const SgSourceFile *reference) {
-  ASSERT_not_null(target);
-  ASSERT_not_null(reference);
-
-  target->set_C_only(reference->get_C_only());
-  if (reference->get_C99_only()) {
-    target->set_C99_only();
-  }
-  if (reference->get_C11_only()) {
-    target->set_C11_only();
-  }
-  target->set_Cxx_only(reference->get_Cxx_only());
-  target->set_Cuda_only(reference->get_Cuda_only());
-  target->set_OpenCL_only(reference->get_OpenCL_only());
-  target->set_Fortran_only(reference->get_Fortran_only());
-}
-
-SgSourceFile *buildDetachedHeaderSourceFile(SgProject *project,
-                                            const std::string &headerPath,
-                                            const SgSourceFile *referenceFile) {
-  ASSERT_not_null(project);
-  ASSERT_not_null(referenceFile);
-
-  std::vector<std::string> argv =
-      project->get_originalCommandLineArgumentList();
-  Rose_STL_Container<std::string> fileList =
-      CommandlineProcessing::generateSourceFilenames(
-          argv, project->get_binary_only());
-  CommandlineProcessing::removeAllFileNamesExcept(argv, fileList, headerPath);
-  if (std::find(argv.begin(), argv.end(), headerPath) == argv.end()) {
-    argv.push_back(headerPath);
-  }
-
-  SgSourceFile *headerFile = new SgSourceFile(argv, project);
-  ASSERT_not_null(headerFile);
-
-  headerFile->set_isHeaderFile(true);
-  headerFile->set_unparseHeaderFiles(referenceFile->get_unparseHeaderFiles());
-  headerFile->set_unparse_tokens(referenceFile->get_unparse_tokens());
-  headerFile->set_use_token_stream_to_improve_source_position_info(
-      referenceFile->get_use_token_stream_to_improve_source_position_info());
-  headerFile->set_unparse_using_leading_and_trailing_token_mappings(
-      referenceFile->get_unparse_using_leading_and_trailing_token_mappings());
-
-  copyLanguageSettings(headerFile, referenceFile);
-
-  headerFile->set_requires_C_preprocessor(false);
-  headerFile->initializeGlobalScope();
-
-  if (headerFile->get_preprocessorDirectivesAndCommentsList() == NULL) {
-    headerFile->set_preprocessorDirectivesAndCommentsList(
-        new ROSEAttributesListContainer());
-  }
-
-  return headerFile;
-}
-
-bool readTextFileLines(const std::string &filename,
-                       std::vector<std::string> *lines) {
-  ASSERT_not_null(lines);
-
-  std::ifstream input(filename.c_str());
-  if (!input.is_open()) {
-    return false;
-  }
-
-  std::string line;
-  while (std::getline(input, line)) {
-    if (!line.empty() && line[line.size() - 1] == '\r') {
-      line.erase(line.size() - 1);
+  if (SgDeclarationScopeList *container = isSgDeclarationScopeList(node)) {
+    SgScopeStatement *owner = isSgScopeStatement(container->get_parent());
+    if (owner == nullptr ||
+        owner->get_auxiliary_declaration_scopes() != container) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: node=%p type=%s has malformed "
+              "auxiliary declaration-scope-list ownership\n",
+              contract, static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
     }
-    lines->push_back(line);
+    return true;
   }
 
-  return true;
-}
-
-void appendLineRange(std::vector<std::string> *dest,
-                     const std::vector<std::string> &src, size_t begin,
-                     size_t end) {
-  ASSERT_not_null(dest);
-  for (size_t idx = begin; idx < end; ++idx) {
-    dest->push_back(src[idx]);
-  }
-}
-
-bool rangeHasVisibleText(const std::vector<std::string> &lines, size_t begin,
-                         size_t end) {
-  for (size_t idx = begin; idx < end; ++idx) {
-    if (lines[idx].find_first_not_of(" \t\r") != std::string::npos) {
+  if (SgDeclarationScope *declarationScope = isSgDeclarationScope(node)) {
+    SgNode *owner = declarationScope->get_parent();
+    if (SgDeclarationScopeList *container = isSgDeclarationScopeList(owner)) {
+      SgScopeStatement *scopeOwner =
+          isSgScopeStatement(container->get_parent());
+      const SgDeclarationScopePtrList &scopes = container->get_scopes();
+      if (scopeOwner == nullptr ||
+          scopeOwner->get_auxiliary_declaration_scopes() != container ||
+          std::count(scopes.begin(), scopes.end(), declarationScope) != 1) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[%s]: node=%p type=%s has malformed "
+                "auxiliary declaration-scope ownership\n",
+                contract, static_cast<void *>(node),
+                node->class_name().c_str());
+        ROSE_ABORT();
+      }
       return true;
     }
+
+    SgDeclarationStatement *declarationOwner = isSgDeclarationStatement(owner);
+    SgFunctionDeclaration *functionOwner =
+        isSgFunctionDeclaration(declarationOwner);
+    if (declarationOwner == nullptr ||
+        (declarationOwner->get_nonreal_decl_scope() != declarationScope &&
+         declarationOwner->get_declarationScope() != declarationScope &&
+         declarationOwner->get_source_declarator_scope() != declarationScope &&
+         (functionOwner == nullptr ||
+          functionOwner->get_function_declarator_scope() !=
+              declarationScope))) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: node=%p type=%s has no exact typed "
+              "declaration owner\n",
+              contract, static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
+    }
+    return true;
   }
 
+  std::unordered_set<SgNode *> visited;
+  SgNode *child = node;
+  for (SgNode *parent = node->get_parent(); parent != nullptr;
+       child = parent, parent = parent->get_parent()) {
+    if (!visited.insert(parent).second) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: node=%p type=%s has a parent "
+              "cycle\n",
+              contract, static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
+    }
+
+    if (SgDeclarationScope *declarationScope = isSgDeclarationScope(parent)) {
+      SgNode *scopeParent = declarationScope->get_parent();
+      const SgNodePtrList scopeSuccessors =
+          declarationScope->get_traversalSuccessorContainer();
+      if (child == nullptr || child->get_parent() != declarationScope ||
+          std::count(scopeSuccessors.begin(), scopeSuccessors.end(), child) !=
+              1) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[%s]: node=%p type=%s has malformed "
+                "declaration-scope child ownership\n",
+                contract, static_cast<void *>(node),
+                node->class_name().c_str());
+        ROSE_ABORT();
+      }
+
+      if (SgDeclarationScopeList *container =
+              isSgDeclarationScopeList(scopeParent)) {
+        SgScopeStatement *owner = isSgScopeStatement(container->get_parent());
+        const SgDeclarationScopePtrList &scopes = container->get_scopes();
+        if (owner == nullptr ||
+            owner->get_auxiliary_declaration_scopes() != container ||
+            std::count(scopes.begin(), scopes.end(), declarationScope) != 1) {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[%s]: node=%p type=%s has malformed "
+                  "auxiliary declaration-scope ownership\n",
+                  contract, static_cast<void *>(node),
+                  node->class_name().c_str());
+          ROSE_ABORT();
+        }
+        return true;
+      }
+
+      if (SgDeclarationStatement *declarationOwner =
+              isSgDeclarationStatement(scopeParent)) {
+        if (declarationOwner->get_nonreal_decl_scope() == declarationScope) {
+          return true;
+        }
+        SgFunctionDeclaration *functionOwner =
+            isSgFunctionDeclaration(declarationOwner);
+        if (declarationOwner->get_declarationScope() != declarationScope &&
+            declarationOwner->get_source_declarator_scope() !=
+                declarationScope &&
+            (functionOwner == nullptr ||
+             functionOwner->get_function_declarator_scope() !=
+                 declarationScope)) {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[%s]: node=%p type=%s has a direct "
+                  "declaration scope without one exact typed owner\n",
+                  contract, static_cast<void *>(node),
+                  node->class_name().c_str());
+          ROSE_ABORT();
+        }
+        // A declarator scope may mix source-written class/enum declarations
+        // with semantic lookup declarations. Preserve that distinction from
+        // exact provenance: semantic children are non-lexical, while source
+        // children continue through physical-file selection below.
+        if (hasExactSemanticStructuralProvenance(isSgLocatedNode(node))) {
+          return true;
+        }
+      }
+    }
+
+    if (SgDeclarationScopeList *container = isSgDeclarationScopeList(parent)) {
+      SgDeclarationScope *scope = isSgDeclarationScope(child);
+      SgScopeStatement *owner = isSgScopeStatement(container->get_parent());
+      const SgDeclarationScopePtrList &scopes = container->get_scopes();
+      if (scope == nullptr || owner == nullptr ||
+          owner->get_auxiliary_declaration_scopes() != container ||
+          scope->get_parent() != container ||
+          std::count(scopes.begin(), scopes.end(), scope) != 1) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[%s]: node=%p type=%s has malformed "
+                "auxiliary declaration-scope container ownership\n",
+                contract, static_cast<void *>(node),
+                node->class_name().c_str());
+        ROSE_ABORT();
+      }
+      return true;
+    }
+
+    SgAuxiliaryDeclarationList *container =
+        isSgAuxiliaryDeclarationList(parent);
+    if (container == nullptr) {
+      continue;
+    }
+    SgDeclarationStatement *declaration = isSgDeclarationStatement(child);
+    SgScopeStatement *owner = isSgScopeStatement(container->get_parent());
+    const SgDeclarationStatementPtrList &declarations =
+        container->get_declarations();
+    if (declaration == nullptr || owner == nullptr ||
+        owner->get_auxiliary_declarations() != container ||
+        std::count(declarations.begin(), declarations.end(), declaration) !=
+            1) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: node=%p type=%s has malformed "
+              "auxiliary declaration ownership\n",
+              contract, static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
+    }
+    return true;
+  }
   return false;
 }
 
-std::vector<ConditionalDirectiveRecord>
-collectConditionalDirectives(const std::vector<std::string> &lines) {
-  std::vector<ConditionalDirectiveRecord> directives;
-  for (size_t idx = 0; idx < lines.size(); ++idx) {
-    const std::string trimmed = trimLeadingWhitespace(lines[idx]);
-    const ConditionalDirectiveRecord::Kind kind =
-        classifyConditionalDirective(trimmed);
-    if (kind == ConditionalDirectiveRecord::Other) {
+bool isExactlyTemplateInstantiationDirectivePayload(SgNode *node,
+                                                    const char *contract) {
+  ASSERT_not_null(node);
+  ASSERT_not_null(contract);
+
+  std::unordered_set<SgNode *> visited;
+  SgNode *child = node;
+  for (SgNode *parent = node->get_parent(); parent != nullptr;
+       child = parent, parent = parent->get_parent()) {
+    if (!visited.insert(parent).second) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: template-instantiation payload=%p/"
+              "%s has a parent cycle\n",
+              contract, static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
+    }
+
+    SgTemplateInstantiationDirectiveStatement *directive =
+        isSgTemplateInstantiationDirectiveStatement(parent);
+    if (directive == nullptr) {
       continue;
     }
-    directives.push_back(ConditionalDirectiveRecord(kind, trimmed, idx));
-  }
 
-  return directives;
+    SgDeclarationStatement *declaration = isSgDeclarationStatement(child);
+    const SgNodePtrList successors =
+        directive->get_traversalSuccessorContainer();
+    if (declaration == nullptr || directive->get_declaration() != declaration ||
+        declaration->get_parent() != directive || successors.size() != 1 ||
+        successors.front() != declaration) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: template-instantiation payload=%p/"
+              "%s has no exact directive owner edge\n",
+              contract, static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
+    }
+    if (!hasExactSemanticStructuralProvenance(declaration)) {
+      return false;
+    }
+    (void)requireStructuralPhysicalFileId(directive, contract);
+    return true;
+  }
+  return false;
 }
 
-bool sameConditionalDirectiveSequence(
-    const std::vector<ConditionalDirectiveRecord> &lhs,
-    const std::vector<ConditionalDirectiveRecord> &rhs) {
-  if (lhs.size() != rhs.size()) {
-    return false;
-  }
-
-  for (size_t idx = 0; idx < lhs.size(); ++idx) {
-    if (lhs[idx].kind != rhs[idx].kind || lhs[idx].text != rhs[idx].text) {
+bool hasExactSemanticStructuralProvenance(SgLocatedNode *node) {
+  Sg_File_Info *positions[] = {
+      node != nullptr ? node->get_file_info() : nullptr,
+      node != nullptr ? node->get_startOfConstruct() : nullptr,
+      node != nullptr ? node->get_endOfConstruct() : nullptr};
+  for (Sg_File_Info *position : positions) {
+    if (node == nullptr || position == nullptr ||
+        position->get_parent() != node || position->isShared() ||
+        !position->isCompilerGenerated() || !position->isFrontendSpecific() ||
+        position->isTransformation() ||
+        position->isSourcePositionUnavailableInFrontend() ||
+        !position->isOutputInCodeGeneration() ||
+        position->get_file_id() != Sg_File_Info::COMPILER_GENERATED_FILE_ID ||
+        position->get_physical_file_id() !=
+            Sg_File_Info::COMPILER_GENERATED_FILE_ID) {
       return false;
     }
   }
-
   return true;
 }
 
-bool writeTextFileLines(const std::string &filename,
-                        const std::vector<std::string> &lines) {
-  std::ofstream output(filename.c_str(), std::ios::out | std::ios::trunc);
-  if (!output.is_open()) {
+void requireExactSemanticStructuralProvenance(SgLocatedNode *node,
+                                              const char *contract) {
+  Sg_File_Info *positions[] = {
+      node != nullptr ? node->get_file_info() : nullptr,
+      node != nullptr ? node->get_startOfConstruct() : nullptr,
+      node != nullptr ? node->get_endOfConstruct() : nullptr};
+  for (Sg_File_Info *position : positions) {
+    if (node == nullptr || position == nullptr ||
+        position->get_parent() != node || position->isShared() ||
+        !position->isCompilerGenerated() || !position->isFrontendSpecific() ||
+        position->isTransformation() ||
+        position->isSourcePositionUnavailableInFrontend() ||
+        !position->isOutputInCodeGeneration() ||
+        position->get_file_id() != Sg_File_Info::COMPILER_GENERATED_FILE_ID ||
+        position->get_physical_file_id() !=
+            Sg_File_Info::COMPILER_GENERATED_FILE_ID) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: semantic structural node=%p/%s "
+              "has contradictory source provenance\n",
+              contract, static_cast<void *>(node),
+              node != nullptr ? node->class_name().c_str() : "<null>");
+      ROSE_ABORT();
+    }
+  }
+}
+
+void requireExactTransparentStructuralProvenance(SgLocatedNode *node,
+                                                 SgLocatedNode *lexicalOwner,
+                                                 const char *contract) {
+  Sg_File_Info *ownerPosition =
+      lexicalOwner != nullptr ? lexicalOwner->get_file_info() : nullptr;
+  if (node == nullptr || lexicalOwner == nullptr || contract == nullptr ||
+      ownerPosition == nullptr || ownerPosition->get_parent() != lexicalOwner ||
+      ownerPosition->get_physical_file_id() < 0) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[%s]: transparent structural node=%p/%s "
+            "has no exact lexical source owner\n",
+            contract != nullptr ? contract : "transparent-structure",
+            static_cast<void *>(node),
+            node != nullptr ? node->class_name().c_str() : "<null>");
+    ROSE_ABORT();
+  }
+
+  const int ownerPhysicalFileId = ownerPosition->get_physical_file_id();
+  const std::array<Sg_File_Info *, 3> positions = {node->get_file_info(),
+                                                   node->get_startOfConstruct(),
+                                                   node->get_endOfConstruct()};
+  for (Sg_File_Info *position : positions) {
+    const bool hasPreassignmentPhysicalIdentity =
+        position != nullptr && position->get_physical_file_id() ==
+                                   Sg_File_Info::COMPILER_GENERATED_FILE_ID;
+    const bool hasAssignedPhysicalIdentity =
+        position != nullptr &&
+        position->get_physical_file_id() == ownerPhysicalFileId;
+    if (position == nullptr || position->get_parent() != node ||
+        position->isShared() || !position->isCompilerGenerated() ||
+        !position->isFrontendSpecific() || position->isTransformation() ||
+        position->isSourcePositionUnavailableInFrontend() ||
+        !position->isOutputInCodeGeneration() ||
+        position->get_file_id() != Sg_File_Info::COMPILER_GENERATED_FILE_ID ||
+        hasPreassignmentPhysicalIdentity == hasAssignedPhysicalIdentity) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: transparent structural node=%p/%s "
+              "has contradictory source provenance\n",
+              contract, static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
+    }
+  }
+}
+
+bool isExactlyRangeForSemanticDeclarationPayload(SgStatement *statement,
+                                                 const char *contract) {
+  ASSERT_not_null(statement);
+  ASSERT_not_null(contract);
+
+  std::unordered_set<SgNode *> visited;
+  for (SgNode *cursor = statement; cursor != nullptr;) {
+    if (!visited.insert(cursor).second) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: range-for semantic payload=%p/%s "
+              "has a parent cycle\n",
+              contract, static_cast<void *>(statement),
+              statement->class_name().c_str());
+      ROSE_ABORT();
+    }
+
+    if (SgVariableDeclaration *declaration = isSgVariableDeclaration(cursor)) {
+      SgRangeBasedForStatement *owner =
+          isSgRangeBasedForStatement(declaration->get_parent());
+      if (owner != nullptr) {
+        const unsigned semanticEdgeCount =
+            (owner->get_range_declaration() == declaration ? 1U : 0U) +
+            (owner->get_begin_declaration() == declaration ? 1U : 0U) +
+            (owner->get_end_declaration() == declaration ? 1U : 0U);
+        if (semanticEdgeCount == 0U &&
+            owner->get_iterator_declaration() == declaration) {
+          return false;
+        }
+        const SgNodePtrList ownerSuccessors =
+            owner->get_traversalSuccessorContainer();
+        if (semanticEdgeCount != 1U || declaration->get_scope() != owner ||
+            std::count(ownerSuccessors.begin(), ownerSuccessors.end(),
+                       declaration) != 1) {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[%s]: range-for semantic payload=%p/"
+                  "%s has no single exact range/begin/end declaration "
+                  "owner\n",
+                  contract, static_cast<void *>(statement),
+                  statement->class_name().c_str());
+          ROSE_ABORT();
+        }
+        requireExactSemanticStructuralProvenance(declaration, contract);
+        requireExactSemanticStructuralProvenance(statement, contract);
+        const AttachedPreprocessingInfoType *preprocessing =
+            declaration->get_attachedPreprocessingInfoPtr();
+        if (preprocessing != nullptr && !preprocessing->empty()) {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[%s]: range-for semantic "
+                  "declaration=%p owns preprocessing syntax\n",
+                  contract, static_cast<void *>(declaration));
+          ROSE_ABORT();
+        }
+        return true;
+      }
+    }
+
+    SgNode *parent = cursor->get_parent();
+    if (parent == nullptr) {
+      break;
+    }
+    const SgNodePtrList parentSuccessors =
+        parent->get_traversalSuccessorContainer();
+    if (cursor->get_parent() != parent ||
+        std::count(parentSuccessors.begin(), parentSuccessors.end(), cursor) !=
+            1) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: range-for semantic payload=%p/%s "
+              "has no exact structural parent edge\n",
+              contract, static_cast<void *>(statement),
+              statement->class_name().c_str());
+      ROSE_ABORT();
+    }
+    if (isSgRangeBasedForStatement(parent) != nullptr) {
+      return false;
+    }
+    cursor = parent;
+  }
+  return false;
+}
+
+bool isExactlySourceLessForStructuralNode(SgStatement *statement,
+                                          const char *contract) {
+  if (SgForInitStatement *wrapper = isSgForInitStatement(statement)) {
+    Sg_File_Info *fileInfo = wrapper->get_file_info();
+    if (fileInfo == nullptr || fileInfo->get_physical_file_id() >= 0) {
+      return false;
+    }
+    SgForStatement *owner = isSgForStatement(wrapper->get_parent());
+    const SgStatementPtrList &initializers = wrapper->get_init_stmt();
+    SgNullStatement *payload = initializers.size() == 1
+                                   ? isSgNullStatement(initializers.front())
+                                   : nullptr;
+    const SgNodePtrList ownerSuccessors =
+        owner != nullptr ? owner->get_traversalSuccessorContainer()
+                         : SgNodePtrList();
+    const SgNodePtrList wrapperSuccessors =
+        wrapper->get_traversalSuccessorContainer();
+    if (owner == nullptr || owner->get_for_init_stmt() != wrapper ||
+        std::count(ownerSuccessors.begin(), ownerSuccessors.end(), wrapper) !=
+            1 ||
+        payload == nullptr || payload->get_parent() != wrapper ||
+        wrapperSuccessors.size() != 1 || wrapperSuccessors.front() != payload) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: source-less for-init=%p has no "
+              "exact owner and null payload edges\n",
+              contract, static_cast<void *>(wrapper));
+      ROSE_ABORT();
+    }
+    requireExactSemanticStructuralProvenance(wrapper, contract);
+    requireExactSemanticStructuralProvenance(payload, contract);
+    return true;
+  }
+
+  SgNullStatement *payload = isSgNullStatement(statement);
+  Sg_File_Info *fileInfo =
+      payload != nullptr ? payload->get_file_info() : nullptr;
+  if (payload == nullptr || fileInfo == nullptr ||
+      fileInfo->get_physical_file_id() >= 0) {
     return false;
   }
 
-  for (size_t idx = 0; idx < lines.size(); ++idx) {
-    output << lines[idx] << '\n';
+  bool exactInitializerEdge = false;
+  if (SgForInitStatement *wrapper =
+          isSgForInitStatement(payload->get_parent())) {
+    const SgStatementPtrList &initializers = wrapper->get_init_stmt();
+    exactInitializerEdge = initializers.size() == 1 &&
+                           initializers.front() == payload &&
+                           wrapper->get_file_info() != nullptr &&
+                           wrapper->get_file_info()->get_physical_file_id() < 0;
   }
-
-  return output.good();
+  bool exactConditionEdge = false;
+  if (SgForStatement *owner = isSgForStatement(payload->get_parent())) {
+    const SgNodePtrList successors = owner->get_traversalSuccessorContainer();
+    exactConditionEdge =
+        owner->get_test() == payload &&
+        std::count(successors.begin(), successors.end(), payload) == 1;
+  }
+  if (exactInitializerEdge == exactConditionEdge) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[%s]: source-less null statement=%p has "
+            "no unique typed for-field owner\n",
+            contract, static_cast<void *>(payload));
+    ROSE_ABORT();
+  }
+  requireExactSemanticStructuralProvenance(payload, contract);
+  return true;
 }
 
-void restoreEmptyConditionalBodiesInOutput(SgFile *file,
-                                           const std::string &output_filename) {
-  SgSourceFile *source_file = isSgSourceFile(file);
-  if (source_file == NULL) {
-    return;
+bool isExactlyImplicitControlFlowStructuralNode(SgStatement *statement,
+                                                const char *contract) {
+  SgBasicBlock *block = isSgBasicBlock(statement);
+  if (block == nullptr || !block->get_is_implicit_control_flow_scope()) {
+    return false;
   }
 
-  std::vector<std::string> source_lines;
-  std::vector<std::string> output_lines;
-  if (!readTextFileLines(source_file->get_sourceFileNameWithPath(),
-                         &source_lines) ||
-      !readTextFileLines(output_filename, &output_lines)) {
-    return;
+  SgStatement *owner = isSgStatement(block->get_parent());
+  const bool exactTypedEdge =
+      owner != nullptr &&
+      ((isSgIfStmt(owner) != nullptr &&
+        (isSgIfStmt(owner)->get_true_body() == block ||
+         isSgIfStmt(owner)->get_false_body() == block)) ||
+       (isSgForStatement(owner) != nullptr &&
+        isSgForStatement(owner)->get_loop_body() == block) ||
+       (isSgRangeBasedForStatement(owner) != nullptr &&
+        isSgRangeBasedForStatement(owner)->get_loop_body() == block) ||
+       (isSgWhileStmt(owner) != nullptr &&
+        isSgWhileStmt(owner)->get_body() == block) ||
+       (isSgDoWhileStmt(owner) != nullptr &&
+        isSgDoWhileStmt(owner)->get_body() == block) ||
+       (isSgSwitchStatement(owner) != nullptr &&
+        isSgSwitchStatement(owner)->get_body() == block));
+  const SgNodePtrList ownerSuccessors =
+      owner != nullptr ? owner->get_traversalSuccessorContainer()
+                       : SgNodePtrList();
+  const SgNodePtrList blockSuccessors =
+      block->get_traversalSuccessorContainer();
+  const SgStatementPtrList &statements = block->get_statements();
+  SgStatement *payload = statements.size() == 1 ? statements.front() : nullptr;
+  SgDeclarationScopeList *declarationScopes =
+      block->get_auxiliary_declaration_scopes();
+  SgAuxiliaryDeclarationList *declarations =
+      block->get_auxiliary_declarations();
+  const size_t expectedSuccessorCount = 1 +
+                                        (declarationScopes != nullptr ? 1 : 0) +
+                                        (declarations != nullptr ? 1 : 0);
+  const bool exactBlockSuccessors =
+      payload != nullptr && blockSuccessors.size() == expectedSuccessorCount &&
+      std::count(blockSuccessors.begin(), blockSuccessors.end(), payload) ==
+          1 &&
+      (declarationScopes == nullptr ||
+       std::count(blockSuccessors.begin(), blockSuccessors.end(),
+                  declarationScopes) == 1) &&
+      (declarations == nullptr ||
+       std::count(blockSuccessors.begin(), blockSuccessors.end(),
+                  declarations) == 1);
+  if (!exactTypedEdge ||
+      std::count(ownerSuccessors.begin(), ownerSuccessors.end(), block) != 1 ||
+      payload == nullptr || payload->get_parent() != block ||
+      !exactBlockSuccessors || block->get_is_fortran_block_construct()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[%s]: implicit control-flow scope=%p has no "
+            "exact typed owner and sole statement edge\n",
+            contract, static_cast<void *>(block));
+    ROSE_ABORT();
   }
+  requireExactSemanticStructuralProvenance(block, contract);
+  return true;
+}
 
-  const std::vector<ConditionalDirectiveRecord> source_directives =
-      collectConditionalDirectives(source_lines);
-  const std::vector<ConditionalDirectiveRecord> output_directives =
-      collectConditionalDirectives(output_lines);
-  if (source_directives.empty() || output_directives.empty() ||
-      !sameConditionalDirectiveSequence(source_directives, output_directives)) {
-    return;
+bool isExactlyCatchSequenceStructuralNode(SgStatement *statement,
+                                          const char *contract) {
+  SgCatchStatementSeq *sequence = isSgCatchStatementSeq(statement);
+  if (sequence == nullptr) {
+    return false;
   }
-
-  std::vector<std::string> rebuilt_output;
-  rebuilt_output.reserve(output_lines.size());
-  appendLineRange(&rebuilt_output, output_lines, 0,
-                  output_directives.front().line_index + 1);
-
-  int conditional_depth = 0;
-  bool changed = false;
-  for (size_t idx = 0; idx + 1 < output_directives.size(); ++idx) {
-    const ConditionalDirectiveRecord::Kind kind = output_directives[idx].kind;
-    if (kind == ConditionalDirectiveRecord::IfBegin) {
-      ++conditional_depth;
-    } else if (kind == ConditionalDirectiveRecord::EndIf) {
-      conditional_depth = std::max(0, conditional_depth - 1);
+  SgTryStmt *owner = isSgTryStmt(sequence->get_parent());
+  const SgNodePtrList ownerSuccessors =
+      owner != nullptr ? owner->get_traversalSuccessorContainer()
+                       : SgNodePtrList{};
+  const SgNodePtrList sequenceSuccessors =
+      sequence->get_traversalSuccessorContainer();
+  const SgStatementPtrList &handlers = sequence->get_catch_statement_seq();
+  if (owner == nullptr || owner->get_catch_statement_seq_root() != sequence ||
+      std::count(ownerSuccessors.begin(), ownerSuccessors.end(), sequence) !=
+          1 ||
+      handlers.empty() || sequenceSuccessors.size() != handlers.size()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[%s]: catch sequence=%p has no exact "
+            "nonempty structural owner and handler edges\n",
+            contract, static_cast<void *>(sequence));
+    ROSE_ABORT();
+  }
+  for (std::size_t index = 0; index < handlers.size(); ++index) {
+    if (isSgCatchOptionStmt(handlers[index]) == nullptr ||
+        handlers[index]->get_parent() != sequence ||
+        sequenceSuccessors[index] != handlers[index]) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: catch sequence=%p has malformed "
+              "handler index=%zu\n",
+              contract, static_cast<void *>(sequence), index);
+      ROSE_ABORT();
     }
+  }
+  requireExactTransparentStructuralProvenance(sequence, owner, contract);
+  return true;
+}
 
-    const size_t output_gap_begin = output_directives[idx].line_index + 1;
-    const size_t output_gap_end = output_directives[idx + 1].line_index;
-    const size_t source_gap_begin = source_directives[idx].line_index + 1;
-    const size_t source_gap_end = source_directives[idx + 1].line_index;
-
-    const bool restore_gap =
-        conditional_depth > 0 && source_gap_begin < source_gap_end &&
-        output_gap_begin <= output_gap_end &&
-        rangeHasVisibleText(source_lines, source_gap_begin, source_gap_end) &&
-        !rangeHasVisibleText(output_lines, output_gap_begin, output_gap_end);
-
-    if (restore_gap) {
-      appendLineRange(&rebuilt_output, source_lines, source_gap_begin,
-                      source_gap_end);
-      changed = true;
-    } else {
-      appendLineRange(&rebuilt_output, output_lines, output_gap_begin,
-                      output_gap_end);
-    }
-
-    appendLineRange(&rebuilt_output, output_lines,
-                    output_directives[idx + 1].line_index,
-                    output_directives[idx + 1].line_index + 1);
+int requireStructuralPhysicalFileId(SgLocatedNode *node, const char *contract) {
+  if (node == nullptr) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[%s]: cannot resolve physical ownership "
+            "for a null node\n",
+            contract);
+    ROSE_ABORT();
   }
 
-  appendLineRange(&rebuilt_output, output_lines,
-                  output_directives.back().line_index + 1, output_lines.size());
-
-  if (changed && !writeTextFileLines(output_filename, rebuilt_output)) {
-    return;
+  Sg_File_Info *nodeInfo = node->get_file_info();
+  if (nodeInfo == nullptr) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[%s]: node=%p type=%s has no file "
+            "information\n",
+            contract, static_cast<void *>(node), node->class_name().c_str());
+    ROSE_ABORT();
   }
+  if (nodeInfo->get_physical_file_id() >= 0) {
+    return nodeInfo->get_physical_file_id();
+  }
+  fprintf(stderr,
+          "REX_UNPARSE_INVARIANT[%s]: lexical node=%p type=%s has invalid "
+          "physical file id=%d output=%d compiler-generated=%d "
+          "transformation=%d frontend-specific=%d parent=%p/%s\n",
+          contract, static_cast<void *>(node), node->class_name().c_str(),
+          nodeInfo->get_physical_file_id(),
+          nodeInfo->isOutputInCodeGeneration() ? 1 : 0,
+          nodeInfo->isCompilerGenerated() ? 1 : 0,
+          (nodeInfo->isTransformation() || node->isTransformation()) ? 1 : 0,
+          nodeInfo->isFrontendSpecific() ? 1 : 0,
+          static_cast<void *>(node->get_parent()),
+          node->get_parent() != nullptr
+              ? node->get_parent()->class_name().c_str()
+              : "<null>");
+  ROSE_ABORT();
 }
 
 std::string resolveUnparseOutputToTestDir(const std::string &filename) {
@@ -367,128 +685,581 @@ std::string resolveUnparseOutputToTestDir(SgFile *file,
   return Rose::TestOutput::resolvePath(filename, output_dir);
 }
 
-bool copyOriginalHeaderToOutputLocation(const std::string &originalFileName,
+class FileDescriptorOutputBuffer final : public std::streambuf {
+public:
+  explicit FileDescriptorOutputBuffer(int descriptor)
+      : descriptor_(descriptor) {
+    setp(buffer_.data(), buffer_.data() + buffer_.size());
+  }
+
+  int writeError() const { return writeError_; }
+
+protected:
+  int sync() override { return flushBuffer() ? 0 : -1; }
+
+  int_type overflow(int_type character) override {
+    if (!flushBuffer()) {
+      return traits_type::eof();
+    }
+    if (!traits_type::eq_int_type(character, traits_type::eof())) {
+      *pptr() = traits_type::to_char_type(character);
+      pbump(1);
+    }
+    return traits_type::not_eof(character);
+  }
+
+  std::streamsize xsputn(const char *data, std::streamsize count) override {
+    if (count < 0 || writeError_ != 0) {
+      return 0;
+    }
+
+    std::streamsize written = 0;
+    while (written < count) {
+      if (pptr() == epptr() && !flushBuffer()) {
+        break;
+      }
+      const std::streamsize available = epptr() - pptr();
+      const std::streamsize chunk = std::min(available, count - written);
+      std::memcpy(pptr(), data + written, static_cast<std::size_t>(chunk));
+      pbump(static_cast<int>(chunk));
+      written += chunk;
+    }
+    return written;
+  }
+
+private:
+  bool flushBuffer() {
+    if (writeError_ != 0) {
+      return false;
+    }
+
+    const std::ptrdiff_t buffered = pptr() - pbase();
+    std::ptrdiff_t written = 0;
+    while (written < buffered) {
+      const ssize_t result =
+          write(descriptor_, pbase() + written,
+                static_cast<std::size_t>(buffered - written));
+      if (result > 0) {
+        written += result;
+        continue;
+      }
+      if (result < 0 && errno == EINTR) {
+        continue;
+      }
+      writeError_ = result < 0 ? errno : EIO;
+      return false;
+    }
+    setp(buffer_.data(), buffer_.data() + buffer_.size());
+    return true;
+  }
+
+  int descriptor_;
+  int writeError_ = 0;
+  std::array<char, 64 * 1024> buffer_{};
+};
+
+class AtomicOutputStagingFile final {
+public:
+  AtomicOutputStagingFile(std::string filename, int descriptor, dev_t device,
+                          ino_t inode)
+      : filename_(std::move(filename)), descriptor_(descriptor),
+        device_(device), inode_(inode), buffer_(descriptor_),
+        output_(&buffer_) {}
+
+  AtomicOutputStagingFile(const AtomicOutputStagingFile &) = delete;
+  AtomicOutputStagingFile &operator=(const AtomicOutputStagingFile &) = delete;
+
+  ~AtomicOutputStagingFile() {
+    ROSE_ASSERT(descriptor_ == -1);
+    ROSE_ASSERT(pathFinalized_);
+  }
+
+  const std::string &filename() const { return filename_; }
+  int descriptor() const { return descriptor_; }
+  std::ostream &output() { return output_; }
+  bool writesFinalized() const { return writesFinalized_; }
+
+  void finishWrites(const std::string &outputFilename, const char *contract) {
+    if (contract == nullptr || writesFinalized_ || descriptor_ < 0 ||
+        pathFinalized_) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[output-staging-state]: output=%s "
+              "staging=%s has invalid write-finalization state\n",
+              outputFilename.c_str(), filename_.c_str());
+      ROSE_ABORT();
+    }
+
+    output_.flush();
+    if (!output_) {
+      const int writeError = buffer_.writeError();
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: output=%s staging=%s write "
+              "through exclusive descriptor failed: %s\n",
+              contract, outputFilename.c_str(), filename_.c_str(),
+              writeError != 0 ? strerror(writeError) : "stream failure");
+      ROSE_ABORT();
+    }
+    writesFinalized_ = true;
+    verifyPathIdentity(filename_, outputFilename, "output-staging-identity");
+  }
+
+  void verifyStagingPathIdentity(const std::string &outputFilename) const {
+    verifyPathIdentity(filename_, outputFilename, "output-staging-identity");
+  }
+
+  void verifyCommittedPathIdentity(const std::string &outputFilename) const {
+    verifyPathIdentity(outputFilename, outputFilename,
+                       "output-commit-identity");
+  }
+
+  void markRenamed() {
+    if (pathFinalized_) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[output-staging-state]: staging=%s was "
+              "finalized more than once\n",
+              filename_.c_str());
+      ROSE_ABORT();
+    }
+    pathFinalized_ = true;
+  }
+
+  void closeDescriptor(const std::string &outputFilename,
+                       const char *contract) {
+    if (contract == nullptr || descriptor_ < 0) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[output-staging-state]: output=%s "
+              "staging=%s has no exclusive descriptor to close\n",
+              outputFilename.c_str(), filename_.c_str());
+      ROSE_ABORT();
+    }
+    const int descriptor = descriptor_;
+    if (close(descriptor) != 0) {
+      const int closeError = errno;
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: output=%s staging=%s cannot close "
+              "the exclusive descriptor: %s\n",
+              contract, outputFilename.c_str(), filename_.c_str(),
+              strerror(closeError));
+      ROSE_ABORT();
+    }
+    descriptor_ = -1;
+  }
+
+  void discard(const std::string &outputFilename, const char *contract) {
+    if (contract == nullptr || !writesFinalized_ || pathFinalized_) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[output-staging-state]: output=%s "
+              "staging=%s has invalid discard state\n",
+              outputFilename.c_str(), filename_.c_str());
+      ROSE_ABORT();
+    }
+    verifyStagingPathIdentity(outputFilename);
+    if (unlink(filename_.c_str()) != 0) {
+      const int unlinkError = errno;
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: output=%s staging=%s cannot "
+              "remove the staging entry: %s\n",
+              contract, outputFilename.c_str(), filename_.c_str(),
+              strerror(unlinkError));
+      ROSE_ABORT();
+    }
+    pathFinalized_ = true;
+    closeDescriptor(outputFilename, contract);
+  }
+
+private:
+  void verifyPathIdentity(const std::string &path,
+                          const std::string &outputFilename,
+                          const char *contract) const {
+    if (descriptor_ < 0 || contract == nullptr) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[output-staging-state]: output=%s "
+              "staging=%s has no descriptor identity\n",
+              outputFilename.c_str(), filename_.c_str());
+      ROSE_ABORT();
+    }
+
+    struct stat descriptorStatus{};
+    struct stat pathStatus{};
+    if (fstat(descriptor_, &descriptorStatus) != 0) {
+      const int statusError = errno;
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: output=%s staging=%s cannot "
+              "inspect the exclusive descriptor: %s\n",
+              contract, outputFilename.c_str(), filename_.c_str(),
+              strerror(statusError));
+      ROSE_ABORT();
+    }
+    if (lstat(path.c_str(), &pathStatus) != 0) {
+      const int statusError = errno;
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: output=%s staging=%s path=%s "
+              "cannot inspect the directory entry: %s\n",
+              contract, outputFilename.c_str(), filename_.c_str(), path.c_str(),
+              strerror(statusError));
+      ROSE_ABORT();
+    }
+    if (!S_ISREG(descriptorStatus.st_mode) || !S_ISREG(pathStatus.st_mode) ||
+        descriptorStatus.st_dev != device_ ||
+        descriptorStatus.st_ino != inode_ || pathStatus.st_dev != device_ ||
+        pathStatus.st_ino != inode_ || descriptorStatus.st_nlink != 1 ||
+        pathStatus.st_nlink != 1) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: output=%s staging=%s path=%s no "
+              "longer names the exclusively created regular file\n",
+              contract, outputFilename.c_str(), filename_.c_str(),
+              path.c_str());
+      ROSE_ABORT();
+    }
+  }
+
+  std::string filename_;
+  int descriptor_;
+  dev_t device_;
+  ino_t inode_;
+  FileDescriptorOutputBuffer buffer_;
+  std::ostream output_;
+  bool writesFinalized_ = false;
+  bool pathFinalized_ = false;
+};
+
+std::unique_ptr<AtomicOutputStagingFile>
+createAtomicOutputStagingFile(const std::string &outputFilename) {
+  static std::atomic<unsigned long long> stagingSequence{0};
+  const std::filesystem::path outputPath(outputFilename);
+  const std::filesystem::path parent =
+      outputPath.has_parent_path() ? outputPath.parent_path() : ".";
+  std::error_code error;
+  std::filesystem::create_directories(parent, error);
+  if (error) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[output-directory]: output=%s error=%s\n",
+            outputFilename.c_str(), error.message().c_str());
+    ROSE_ABORT();
+  }
+
+  int openFlags = O_RDWR | O_CREAT | O_EXCL;
+#ifdef O_CLOEXEC
+  openFlags |= O_CLOEXEC;
+#endif
+  std::string stagingFilename;
+  int descriptor = -1;
+  for (;;) {
+    const unsigned long long sequence =
+        stagingSequence.fetch_add(1, std::memory_order_relaxed);
+    if (sequence == std::numeric_limits<unsigned long long>::max()) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[output-staging]: output=%s exhausted the "
+              "atomic staging sequence\n",
+              outputFilename.c_str());
+      ROSE_ABORT();
+    }
+    stagingFilename =
+        (parent / ("." + outputPath.filename().string() + ".rex-unparse-" +
+                   std::to_string(static_cast<unsigned long long>(getpid())) +
+                   "-" + std::to_string(sequence)))
+            .string();
+    descriptor =
+        open(stagingFilename.c_str(), openFlags,
+             S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+    if (descriptor != -1) {
+      break;
+    }
+    const int openError = errno;
+    if (openError == EEXIST) {
+      continue;
+    }
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[output-staging]: output=%s staging=%s "
+            "unable to create an exclusive sibling file: %s\n",
+            outputFilename.c_str(), stagingFilename.c_str(),
+            strerror(openError));
+    ROSE_ABORT();
+  }
+  struct stat descriptorStatus{};
+  const int descriptorStatusResult = fstat(descriptor, &descriptorStatus);
+  if (descriptorStatusResult != 0 || !S_ISREG(descriptorStatus.st_mode) ||
+      descriptorStatus.st_nlink != 1) {
+    const int statusError = descriptorStatusResult != 0 ? errno : EINVAL;
+    unlink(stagingFilename.c_str());
+    close(descriptor);
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[output-staging]: output=%s staging=%s "
+            "cannot establish the exclusive regular-file identity: %s\n",
+            outputFilename.c_str(), stagingFilename.c_str(),
+            strerror(statusError));
+    ROSE_ABORT();
+  }
+  return std::make_unique<AtomicOutputStagingFile>(stagingFilename, descriptor,
+                                                   descriptorStatus.st_dev,
+                                                   descriptorStatus.st_ino);
+}
+
+void commitAtomicOutput(AtomicOutputStagingFile &staging,
+                        const std::string &outputFilename) {
+  if (!staging.writesFinalized()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[output-staging-state]: output=%s "
+            "staging=%s was not write-finalized before commit\n",
+            outputFilename.c_str(), staging.filename().c_str());
+    ROSE_ABORT();
+  }
+
+  struct stat destinationStatus{};
+  if (lstat(outputFilename.c_str(), &destinationStatus) == 0) {
+    if (!S_ISREG(destinationStatus.st_mode)) {
+      staging.discard(outputFilename, "output-permissions");
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[output-permissions]: output=%s is not a "
+              "regular file; symlinks and other special files are not "
+              "valid output destinations\n",
+              outputFilename.c_str());
+      ROSE_ABORT();
+    }
+    if (destinationStatus.st_nlink != 1) {
+      staging.discard(outputFilename, "output-destination");
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[output-destination]: output=%s is a "
+              "regular file with %llu links; atomic replacement requires "
+              "exactly one destination link\n",
+              outputFilename.c_str(),
+              static_cast<unsigned long long>(destinationStatus.st_nlink));
+      ROSE_ABORT();
+    }
+    const mode_t destinationMode =
+        destinationStatus.st_mode &
+        (S_IRWXU | S_IRWXG | S_IRWXO | S_ISUID | S_ISGID | S_ISVTX);
+    if (fchmod(staging.descriptor(), destinationMode) != 0) {
+      const int chmodError = errno;
+      staging.discard(outputFilename, "output-permissions");
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[output-permissions]: output=%s "
+              "staging=%s cannot preserve mode=%04o: %s\n",
+              outputFilename.c_str(), staging.filename().c_str(),
+              static_cast<unsigned int>(destinationMode), strerror(chmodError));
+      ROSE_ABORT();
+    }
+  } else if (errno != ENOENT) {
+    const int statusError = errno;
+    staging.discard(outputFilename, "output-permissions");
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[output-permissions]: output=%s cannot "
+            "inspect destination permissions: %s\n",
+            outputFilename.c_str(), strerror(statusError));
+    ROSE_ABORT();
+  }
+
+  staging.verifyStagingPathIdentity(outputFilename);
+  std::error_code error;
+  std::filesystem::rename(staging.filename(), outputFilename, error);
+  if (error) {
+    staging.discard(outputFilename, "output-commit");
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[output-commit]: output=%s error=%s\n",
+            outputFilename.c_str(), error.message().c_str());
+    ROSE_ABORT();
+  }
+  staging.markRenamed();
+  staging.verifyCommittedPathIdentity(outputFilename);
+  staging.closeDescriptor(outputFilename, "output-close");
+}
+
+bool filesHaveIdenticalContents(const std::filesystem::path &leftPath,
+                                const AtomicOutputStagingFile &right) {
+  right.verifyStagingPathIdentity(leftPath.string());
+  std::error_code leftSizeError;
+  const std::uintmax_t leftSize =
+      std::filesystem::file_size(leftPath, leftSizeError);
+  struct stat rightStatus{};
+  if (fstat(right.descriptor(), &rightStatus) != 0) {
+    const int statusError = errno;
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[output-compare]: left=%s right=%s cannot "
+            "inspect the exclusive descriptor: %s\n",
+            leftPath.string().c_str(), right.filename().c_str(),
+            strerror(statusError));
+    ROSE_ABORT();
+  }
+  const std::uintmax_t rightSize =
+      static_cast<std::uintmax_t>(rightStatus.st_size);
+  if (leftSizeError) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[output-compare]: left=%s right=%s "
+            "unable to read the existing file size: %s\n",
+            leftPath.string().c_str(), right.filename().c_str(),
+            leftSizeError.message().c_str());
+    ROSE_ABORT();
+  }
+  if (leftSize != rightSize) {
+    return false;
+  }
+
+  std::ifstream left(leftPath, std::ios::in | std::ios::binary);
+  if (!left) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[output-compare]: left=%s right=%s "
+            "unable to open the existing comparison input\n",
+            leftPath.string().c_str(), right.filename().c_str());
+    ROSE_ABORT();
+  }
+
+  std::vector<char> leftBuffer(64 * 1024);
+  std::vector<char> rightBuffer(64 * 1024);
+  std::uintmax_t compared = 0;
+  while (compared < leftSize) {
+    const std::size_t requested = static_cast<std::size_t>(
+        std::min<std::uintmax_t>(leftBuffer.size(), leftSize - compared));
+    left.read(leftBuffer.data(), static_cast<std::streamsize>(requested));
+    std::size_t rightRead = 0;
+    while (rightRead < requested) {
+      const ssize_t result = pread(
+          right.descriptor(), rightBuffer.data() + rightRead,
+          requested - rightRead, static_cast<off_t>(compared + rightRead));
+      if (result > 0) {
+        rightRead += static_cast<std::size_t>(result);
+        continue;
+      }
+      if (result < 0 && errno == EINTR) {
+        continue;
+      }
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[output-compare]: left=%s right=%s "
+              "descriptor read failed at byte=%" PRIuMAX ": %s\n",
+              leftPath.string().c_str(), right.filename().c_str(), compared,
+              result < 0 ? strerror(errno) : "short read");
+      ROSE_ABORT();
+    }
+    if (left.gcount() != static_cast<std::streamsize>(requested)) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[output-compare]: left=%s right=%s short "
+              "read at byte=%" PRIuMAX "\n",
+              leftPath.string().c_str(), right.filename().c_str(), compared);
+      ROSE_ABORT();
+    }
+    if (std::memcmp(leftBuffer.data(), rightBuffer.data(), requested) != 0) {
+      return false;
+    }
+    compared += static_cast<std::uintmax_t>(requested);
+  }
+  if (left.bad()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[output-compare]: left=%s right=%s read "
+            "failed\n",
+            leftPath.string().c_str(), right.filename().c_str());
+    ROSE_ABORT();
+  }
+  right.verifyStagingPathIdentity(leftPath.string());
+  return true;
+}
+
+void copyOriginalHeaderToOutputLocation(SgProject *project,
+                                        const std::string &originalFileName,
                                         const std::string &outputFileName) {
-  std::filesystem::path originalFileNamePath(originalFileName);
-  std::filesystem::path outputFileNamePath(outputFileName);
-  std::error_code ec;
-  std::filesystem::create_directories(outputFileNamePath.parent_path(), ec);
-  if (ec) {
-    return false;
+  using OriginalHeaderSnapshots = std::map<std::string, std::string>;
+  ASSERT_not_null(project);
+  const std::string normalizedOriginalFileName =
+      FileHelper::normalizePathIfPossible(originalFileName);
+  if (normalizedOriginalFileName.empty()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[header-snapshot]: header=%s has no "
+            "canonical source path\n",
+            originalFileName.c_str());
+    ROSE_ABORT();
+  }
+  const OriginalHeaderSnapshots &snapshots =
+      project->get_original_header_snapshots();
+  const auto snapshot = snapshots.find(normalizedOriginalFileName);
+  if (snapshot == snapshots.end()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[header-snapshot]: header=%s was not "
+            "snapshotted by the frontend\n",
+            originalFileName.c_str());
+    ROSE_ABORT();
   }
 
-  if (!std::filesystem::exists(originalFileNamePath)) {
-    return false;
-  }
-
-  std::filesystem::copy_file(originalFileNamePath, outputFileNamePath,
-                             std::filesystem::copy_options::skip_existing, ec);
-  return !ec;
-}
-
-bool isSyntheticCatchAllPlaceholderDeclaration(
-    const SgVariableDeclaration *decl) {
-  if (decl == NULL) {
-    return false;
-  }
-
-  SgCatchOptionStmt *catch_stmt = isSgCatchOptionStmt(decl->get_parent());
-  if (catch_stmt == NULL || catch_stmt->get_condition() != decl) {
-    return false;
-  }
-
-  Sg_File_Info *decl_info = decl->get_file_info();
-  if (decl_info == NULL) {
-    return false;
-  }
-
-  const bool synthetic_location = decl_info->isTransformation() == true ||
-                                  decl_info->get_physical_file_id() ==
-                                      Sg_File_Info::TRANSFORMATION_FILE_ID ||
-                                  decl_info->get_line() <= 0;
-  if (synthetic_location == false) {
-    return false;
-  }
-
-  SgInitializedName *init_name = SageInterface::getFirstInitializedName(
-      const_cast<SgVariableDeclaration *>(decl));
-  if (init_name == NULL ||
-      init_name->get_name().is_null() == false &&
-          init_name->get_name().getString().empty() == false) {
-    return false;
-  }
-
-  return isSgTypeEllipse(init_name->get_type()) != NULL;
-}
-
-bool isSemanticOnlySyntheticOutputNode(const SgLocatedNode *node) {
-  if (node == NULL) {
-    return false;
-  }
-
-  if (const SgVariableDeclaration *decl =
-          isSgVariableDeclaration(const_cast<SgLocatedNode *>(node))) {
-    return isSyntheticCatchAllPlaceholderDeclaration(decl);
-  }
-
-  const SgInitializedName *init_name =
-      isSgInitializedName(const_cast<SgLocatedNode *>(node));
-  if (init_name == NULL) {
-    return false;
-  }
-
-  const SgVariableDeclaration *decl =
-      isSgVariableDeclaration(init_name->get_parent());
-  return isSyntheticCatchAllPlaceholderDeclaration(decl);
+  std::unique_ptr<AtomicOutputStagingFile> staging =
+      createAtomicOutputStagingFile(outputFileName);
+  std::ostream &output = staging->output();
+  output.write(snapshot->second.data(), snapshot->second.size());
+  staging->finishWrites(outputFileName, "header-copy");
+  commitAtomicOutput(*staging, outputFileName);
 }
 
 bool fileHasRelevantModifications(SgSourceFile *file) {
   if (file == NULL) {
-    return true;
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[modification-ownership]: null source "
+            "file\n");
+    ROSE_ABORT();
   }
 
   std::set<SgStatement *> transformedStatements =
       SageInterface::collectTransformedStatements(file);
   auto affects_current_file = [&](SgLocatedNode *node) -> bool {
     if (node == NULL) {
-      return true;
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[modification-ownership]: null modified "
+              "node\n");
+      ROSE_ABORT();
     }
 
     Sg_File_Info *node_info = node->get_file_info();
     if (node_info == NULL) {
-      return true;
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[modification-ownership]: node=%p "
+              "type=%s has no file information\n",
+              static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
     }
 
-    if (node_info->isSameFile(file) == true) {
-      return true;
+    const int physicalFileId = node_info->get_physical_file_id();
+    if (physicalFileId < 0 ||
+        physicalFileId == Sg_File_Info::TRANSFORMATION_FILE_ID) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[modification-ownership]: node=%p "
+              "type=%s still has transformation-only file ownership\n",
+              static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
     }
-
-    if (node_info->isTransformation() == true ||
-        node_info->get_physical_file_id() ==
-            Sg_File_Info::TRANSFORMATION_FILE_ID) {
-      SgSourceFile *enclosing_file =
-          SageInterface::getEnclosingSourceFile(node);
-      if (enclosing_file == NULL || enclosing_file == file) {
-        return true;
-      }
+    const std::string nodeFileName = FileHelper::normalizePathIfPossible(
+        node_info->getFilenameFromID(physicalFileId));
+    const std::string sourceFileName =
+        FileHelper::normalizePathIfPossible(file->getFileName());
+    if (nodeFileName.empty() || sourceFileName.empty()) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[modification-ownership]: node=%p "
+              "type=%s or source=%p has no normalized physical filename\n",
+              static_cast<void *>(node), node->class_name().c_str(),
+              static_cast<void *>(file));
+      ROSE_ABORT();
     }
-
-    return false;
+    return nodeFileName == sourceFileName;
   };
 
   for (SgStatement *stmt : transformedStatements) {
     if (stmt == NULL) {
-      continue;
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[modification-ownership]: transformed "
+              "statement set contains null\n");
+      ROSE_ABORT();
     }
-    if (isSemanticOnlySyntheticOutputNode(stmt)) {
+    if (isExactlyAuxiliaryOwned(stmt, "modification-ownership")) {
       continue;
     }
     Sg_File_Info *stmt_info = stmt->get_file_info();
     if (stmt_info == NULL) {
-      return true;
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[modification-ownership]: statement=%p "
+              "type=%s has no file information\n",
+              static_cast<void *>(stmt), stmt->class_name().c_str());
+      ROSE_ABORT();
     }
     if (stmt_info->isOutputInCodeGeneration() == false) {
-      continue;
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[modification-ownership]: transformed "
+              "statement=%p/%s uses the legacy non-output suppression bit\n",
+              static_cast<void *>(stmt), stmt->class_name().c_str());
+      ROSE_ABORT();
     }
     if (affects_current_file(stmt) == false) {
       continue;
@@ -500,17 +1271,28 @@ bool fileHasRelevantModifications(SgSourceFile *file) {
       SageInterface::collectModifiedLocatedNodes(file);
   for (SgLocatedNode *node : modifiedNodes) {
     if (node == NULL) {
-      continue;
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[modification-ownership]: modified node "
+              "set contains null\n");
+      ROSE_ABORT();
     }
-    if (isSemanticOnlySyntheticOutputNode(node)) {
+    if (isExactlyAuxiliaryOwned(node, "modification-ownership")) {
       continue;
     }
     Sg_File_Info *node_info = node->get_file_info();
     if (node_info == NULL) {
-      return true;
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[modification-ownership]: node=%p "
+              "type=%s has no file information\n",
+              static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
     }
     if (node_info->isOutputInCodeGeneration() == false) {
-      continue;
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[modification-ownership]: modified "
+              "node=%p/%s uses the legacy non-output suppression bit\n",
+              static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
     }
     if (affects_current_file(node) == false) {
       continue;
@@ -523,60 +1305,74 @@ bool fileHasRelevantModifications(SgSourceFile *file) {
 
 std::string getAssociatedFileNameForOutput(SgLocatedNode *node) {
   if (node == NULL) {
-    return std::string();
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[modification-ownership]: null located "
+            "node\n");
+    ROSE_ABORT();
   }
 
   Sg_File_Info *fileInfo = node->get_file_info();
   if (fileInfo == NULL) {
-    return std::string();
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[modification-ownership]: node=%p type=%s "
+            "has no file information\n",
+            static_cast<void *>(node), node->class_name().c_str());
+    ROSE_ABORT();
   }
 
-  std::string filename;
-  const int physicalFileId = fileInfo->get_physical_file_id();
-  if (physicalFileId >= 0) {
-    filename = fileInfo->getFilenameFromID(physicalFileId);
+  const int physicalFileId =
+      requireStructuralPhysicalFileId(node, "modification-ownership");
+  const std::string filename = fileInfo->getFilenameFromID(physicalFileId);
+  const std::string normalizedFilename =
+      FileHelper::normalizePathIfPossible(filename);
+  if (normalizedFilename.empty() || filename == "NULL_FILE" ||
+      filename == "transformation") {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[modification-ownership]: node=%p type=%s "
+            "physical file id=%d has no filename\n",
+            static_cast<void *>(node), node->class_name().c_str(),
+            physicalFileId);
+    ROSE_ABORT();
   }
-
-  if (filename.empty() || filename == "NULL_FILE") {
-    filename = fileInfo->get_physical_filename();
-  }
-
-  if (filename.empty() || filename == "NULL_FILE") {
-    filename = fileInfo->get_filename();
-  }
-
-  if (filename == "transformation") {
-    if (SgSourceFile *sourceFile =
-            SageInterface::getEnclosingSourceFile(node)) {
-      filename = sourceFile->getFileName();
-    } else {
-      filename.clear();
-    }
-  }
-
-  return FileHelper::normalizePathIfPossible(filename);
+  return normalizedFilename;
 }
 
 std::set<std::string>
 collectFilesWithRelevantModifications(SgProject *project) {
   std::set<std::string> files;
   if (project == NULL) {
-    return files;
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[modification-ownership]: null project\n");
+    ROSE_ABORT();
   }
 
   std::set<SgStatement *> transformedStatements =
       SageInterface::collectTransformedStatements(project);
   for (SgStatement *statement : transformedStatements) {
     if (statement == NULL) {
-      continue;
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[modification-ownership]: transformed "
+              "statement set contains null\n");
+      ROSE_ABORT();
     }
-    if (isSemanticOnlySyntheticOutputNode(statement)) {
+    if (isExactlyAuxiliaryOwned(statement, "modification-ownership")) {
       continue;
     }
 
     Sg_File_Info *fileInfo = statement->get_file_info();
-    if (fileInfo == NULL || fileInfo->isOutputInCodeGeneration() == false) {
-      continue;
+    if (fileInfo == NULL) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[modification-ownership]: statement=%p "
+              "type=%s has no file information\n",
+              static_cast<void *>(statement), statement->class_name().c_str());
+      ROSE_ABORT();
+    }
+    if (fileInfo->isOutputInCodeGeneration() == false) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[modification-ownership]: transformed "
+              "statement=%p/%s uses the legacy non-output suppression bit\n",
+              static_cast<void *>(statement), statement->class_name().c_str());
+      ROSE_ABORT();
     }
 
     const std::string filename = getAssociatedFileNameForOutput(statement);
@@ -589,15 +1385,29 @@ collectFilesWithRelevantModifications(SgProject *project) {
       SageInterface::collectModifiedLocatedNodes(project);
   for (SgLocatedNode *node : modifiedNodes) {
     if (node == NULL) {
-      continue;
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[modification-ownership]: modified node "
+              "set contains null\n");
+      ROSE_ABORT();
     }
-    if (isSemanticOnlySyntheticOutputNode(node)) {
+    if (isExactlyAuxiliaryOwned(node, "modification-ownership")) {
       continue;
     }
 
     Sg_File_Info *fileInfo = node->get_file_info();
-    if (fileInfo == NULL || fileInfo->isOutputInCodeGeneration() == false) {
-      continue;
+    if (fileInfo == NULL) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[modification-ownership]: node=%p "
+              "type=%s has no file information\n",
+              static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
+    }
+    if (fileInfo->isOutputInCodeGeneration() == false) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[modification-ownership]: modified "
+              "node=%p/%s uses the legacy non-output suppression bit\n",
+              static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
     }
 
     const std::string filename = getAssociatedFileNameForOutput(node);
@@ -611,11 +1421,16 @@ collectFilesWithRelevantModifications(SgProject *project) {
 
 bool headerRequiresAstUnparsing(
     const std::set<std::string> &filesWithRelevantModifications,
+    const std::set<std::string> &filesWithMarkedTransformations,
+    const std::set<std::string> &filesWithUpdatedIncludePaths,
     const std::string &headerFilename) {
   const std::string normalizedHeaderFilename =
       FileHelper::normalizePathIfPossible(headerFilename);
   if (normalizedHeaderFilename.empty()) {
-    return true;
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[header-plan]: header has no physical "
+            "filename\n");
+    ROSE_ABORT();
   }
 
   if (filesWithRelevantModifications.find(normalizedHeaderFilename) !=
@@ -623,29 +1438,34 @@ bool headerRequiresAstUnparsing(
     return true;
   }
 
-  if (IncludedFilesUnparser::filesWithMarkedTransformations.find(
-          normalizedHeaderFilename) !=
-      IncludedFilesUnparser::filesWithMarkedTransformations.end()) {
+  if (filesWithMarkedTransformations.find(normalizedHeaderFilename) !=
+      filesWithMarkedTransformations.end()) {
     return true;
   }
 
-  return IncludedFilesUnparser::filesWithUpdatedIncludePaths.find(
-             normalizedHeaderFilename) !=
-         IncludedFilesUnparser::filesWithUpdatedIncludePaths.end();
+  return filesWithUpdatedIncludePaths.find(normalizedHeaderFilename) !=
+         filesWithUpdatedIncludePaths.end();
 }
 
 bool scopeHasRelevantModifications(SgScopeStatement *scope,
-                                   const std::string &headerFilename) {
+                                   const std::string &headerFilename,
+                                   SgSourceFile *materializedHeader) {
   const std::string normalizedHeaderFilename =
       FileHelper::normalizePathIfPossible(headerFilename);
   if (scope == NULL || normalizedHeaderFilename.empty()) {
-    return false;
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[header-scope]: scope=%p header=%s is "
+            "incomplete\n",
+            static_cast<void *>(scope), headerFilename.c_str());
+    ROSE_ABORT();
   }
 
   class Traversal : public AstSimpleProcessing {
   public:
-    explicit Traversal(const std::string &normalizedHeaderFilename)
-        : normalizedHeaderFilename(normalizedHeaderFilename), found(false) {}
+    Traversal(const std::string &normalizedHeaderFilename,
+              SgSourceFile *materializedHeader)
+        : normalizedHeaderFilename(normalizedHeaderFilename),
+          materializedHeader(materializedHeader), found(false) {}
 
     void visit(SgNode *node) {
       if (found == true) {
@@ -656,17 +1476,64 @@ bool scopeHasRelevantModifications(SgScopeStatement *scope,
       if (locatedNode == NULL) {
         return;
       }
-      if (isSemanticOnlySyntheticOutputNode(locatedNode)) {
+      if (isExactlyAuxiliaryOwned(locatedNode, "header-scope")) {
         return;
       }
-
       Sg_File_Info *fileInfo = locatedNode->get_file_info();
-      if (fileInfo == NULL || fileInfo->isOutputInCodeGeneration() == false) {
+      if (fileInfo == NULL) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[header-scope]: node=%p type=%s has no "
+                "file information\n",
+                static_cast<void *>(locatedNode),
+                locatedNode->class_name().c_str());
+        ROSE_ABORT();
+      }
+      const std::string physicalFileName =
+          getAssociatedFileNameForOutput(locatedNode);
+      if (physicalFileName != normalizedHeaderFilename) {
         return;
       }
-
-      if (getAssociatedFileNameForOutput(locatedNode) !=
-          normalizedHeaderFilename) {
+      if (fileInfo->isOutputInCodeGeneration() == false) {
+        SgStatement *statement = isSgStatement(locatedNode);
+        for (SgNode *owner = locatedNode->get_parent();
+             statement == nullptr && owner != nullptr;
+             owner = owner->get_parent()) {
+          statement = isSgStatement(owner);
+        }
+        if (materializedHeader == nullptr ||
+            FileHelper::normalizePathIfPossible(
+                materializedHeader->getFileName()) !=
+                normalizedHeaderFilename ||
+            statement == nullptr) {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[header-scope]: lexical non-output "
+                  "node=%p/%s has no exact materialized header statement "
+                  "owner\n",
+                  static_cast<void *>(locatedNode),
+                  locatedNode->class_name().c_str());
+          ROSE_ABORT();
+        }
+        const auto &tokenMap = materializedHeader->get_tokenSubsequenceMap();
+        const auto mapping = tokenMap.find(statement);
+        if (mapping == tokenMap.end() || mapping->second == nullptr) {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[header-scope]: lexical non-output "
+                  "statement=%p/%s has no exact token-only ownership\n",
+                  static_cast<void *>(statement),
+                  statement->class_name().c_str());
+          ROSE_ABORT();
+        }
+        if (locatedNode->get_isModified() ||
+            (isSgStatement(locatedNode) != nullptr &&
+             isSgStatement(locatedNode)->isTransformation())) {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[header-scope]: "
+                  "modified/transformed node=%p/%s cannot retain token-only "
+                  "ownership\n",
+                  static_cast<void *>(locatedNode),
+                  locatedNode->class_name().c_str());
+          ROSE_ABORT();
+        }
         return;
       }
 
@@ -682,43 +1549,88 @@ bool scopeHasRelevantModifications(SgScopeStatement *scope,
     }
 
     const std::string normalizedHeaderFilename;
+    SgSourceFile *const materializedHeader;
     bool found;
   };
 
-  Traversal traversal(normalizedHeaderFilename);
+  Traversal traversal(normalizedHeaderFilename, materializedHeader);
   traversal.traverse(scope, preorder);
   return traversal.found;
 }
 
-void insertIncludeFileMapEntry(const std::string &filename,
+void insertIncludeFileMapEntry(TokenUnparseFrontierContext &context,
+                               const std::string &filename,
                                SgIncludeFile *includeFile) {
   if (includeFile == nullptr || filename.empty()) {
-    return;
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[include-tree]: filename=%s include=%p "
+            "cannot index an incomplete include node\n",
+            filename.c_str(), static_cast<void *>(includeFile));
+    ROSE_ABORT();
   }
 
-  std::pair<std::map<std::string, SgIncludeFile *>::iterator, bool>
-      insertResult = Rose::includeFileMapForUnparsing.insert(
-          std::make_pair(filename, includeFile));
-  if (!insertResult.second) {
-    SgIncludeFile *existing = insertResult.first->second;
-    if (existing == nullptr) {
-      insertResult.first->second = includeFile;
-      return;
-    }
+  const std::string normalizedFilename =
+      FileHelper::normalizePathIfPossible(filename);
+  if (normalizedFilename.empty() || normalizedFilename == "NULL_FILE" ||
+      normalizedFilename == "transformation") {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[include-tree]: filename=%s has no "
+            "physical include identity\n",
+            filename.c_str());
+    ROSE_ABORT();
+  }
+  std::vector<SgIncludeFile *> &occurrences =
+      context.includeFileOccurrencesByPath[normalizedFilename];
+  if (std::find(occurrences.begin(), occurrences.end(), includeFile) ==
+      occurrences.end()) {
+    occurrences.push_back(includeFile);
+  }
 
-    if (existing != includeFile &&
-        existing->get_can_be_supported_using_token_based_unparsing() == true &&
-        includeFile->get_can_be_supported_using_token_based_unparsing() ==
-            false) {
-      insertResult.first->second = includeFile;
-    }
+  SgSourceFile *source = includeFile->get_source_file();
+  if (source == nullptr) {
+    return;
+  }
+  const std::string sourcePath =
+      FileHelper::normalizePathIfPossible(source->getFileName());
+  SgIncludeFile *canonical = source->get_associated_include_file();
+  const std::string canonicalPath =
+      canonical != nullptr
+          ? FileHelper::normalizePathIfPossible(canonical->get_filename())
+          : std::string();
+  if (sourcePath != normalizedFilename || canonical == nullptr ||
+      canonical->get_source_file() != source ||
+      canonicalPath != normalizedFilename) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[header-context]: occurrence=%p file=%s "
+            "source=%p path=%s has no exact bidirectional canonical include "
+            "ownership\n",
+            static_cast<void *>(includeFile), normalizedFilename.c_str(),
+            static_cast<void *>(source), sourcePath.c_str());
+    ROSE_ABORT();
+  }
+
+  auto insertResult = context.includeFilesByPath.insert(
+      std::make_pair(normalizedFilename, canonical));
+  if (!insertResult.second && insertResult.first->second != canonical) {
+    SgIncludeFile *existing = insertResult.first->second;
+    SgSourceFile *existingSource =
+        existing != nullptr ? existing->get_source_file() : nullptr;
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[header-context]: file=%s has distinct "
+            "canonical include owners %p(source=%p) and %p(source=%p)\n",
+            normalizedFilename.c_str(), static_cast<void *>(existing),
+            static_cast<void *>(existingSource), static_cast<void *>(canonical),
+            static_cast<void *>(source));
+    ROSE_ABORT();
   }
 }
 
 void populateIncludeFileMapForUnparsingFromIncludeTree(
-    SgIncludeFile *includeTreeRoot) {
+    TokenUnparseFrontierContext &context, SgIncludeFile *includeTreeRoot) {
   if (includeTreeRoot == nullptr) {
-    return;
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[include-tree]: missing include-tree root\n");
+    ROSE_ABORT();
   }
 
   std::vector<SgIncludeFile *> worklist;
@@ -729,18 +1641,21 @@ void populateIncludeFileMapForUnparsingFromIncludeTree(
     SgIncludeFile *includeFile = worklist.back();
     worklist.pop_back();
     if (includeFile == nullptr) {
-      continue;
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[include-tree]: null include-file node\n");
+      ROSE_ABORT();
     }
     if (!visited.insert(includeFile).second) {
       continue;
     }
 
     const std::string filename = includeFile->get_filename();
-    insertIncludeFileMapEntry(filename, includeFile);
+    insertIncludeFileMapEntry(context, filename, includeFile);
 
     SgSourceFile *includedSourceFile = includeFile->get_source_file();
     if (includedSourceFile != nullptr) {
-      insertIncludeFileMapEntry(includedSourceFile->getFileName(), includeFile);
+      insertIncludeFileMapEntry(context, includedSourceFile->getFileName(),
+                                includeFile);
     }
 
     const SgIncludeFilePtrList &includeFileList =
@@ -751,14 +1666,21 @@ void populateIncludeFileMapForUnparsingFromIncludeTree(
   }
 }
 
-SgIncludeFile *lookupIncludeFileForUnparsing(const std::string &filename) {
+SgIncludeFile *
+lookupIncludeFileForUnparsing(const TokenUnparseFrontierContext &context,
+                              const std::string &filename) {
   if (filename.empty()) {
-    return nullptr;
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[include-tree]: cannot look up an empty "
+            "physical filename\n");
+    ROSE_ABORT();
   }
 
+  const std::string normalizedFilename =
+      FileHelper::normalizePathIfPossible(filename);
   std::map<std::string, SgIncludeFile *>::const_iterator it =
-      Rose::includeFileMapForUnparsing.find(filename);
-  if (it == Rose::includeFileMapForUnparsing.end()) {
+      context.includeFilesByPath.find(normalizedFilename);
+  if (it == context.includeFilesByPath.end()) {
     return nullptr;
   }
   return it->second;
@@ -786,7 +1708,107 @@ using namespace Rose;
 
 // DQ (5/9/2021): Activate this code.
 void buildTokenStreamFrontier(SgSourceFile *sourceFile,
-                              bool traverseHeaderFiles);
+                              bool traverseHeaderFiles,
+                              TokenUnparseFrontierContext &context,
+                              SgNode *traversalRoot = nullptr);
+void buildFirstAndLastStatementsForIncludeFiles(
+    SgProject *project, TokenUnparseFrontierContext &context);
+void buildFirstAndLastStatementsForScopes(SgProject *project,
+                                          TokenUnparseFrontierContext &context);
+
+namespace {
+bool sourceNeedsTokenFrontier(SgSourceFile *sourceFile) {
+  ASSERT_not_null(sourceFile);
+  return sourceFile->get_unparse_tokens();
+}
+
+bool prepareMaterializedHeaderTokenFrontiers(
+    SgProject *project, TokenUnparseFrontierContext &context,
+    const map<string, SgScopeStatement *> &unparseScopesMap) {
+  ASSERT_not_null(project);
+  std::vector<SgIncludeFile *> worklist;
+  std::set<SgIncludeFile *> visitedIncludes;
+  std::set<SgSourceFile *> materializedHeaders;
+  bool preparedAny = false;
+
+  for (SgFile *projectFile : project->get_fileList()) {
+    SgSourceFile *translationUnit = isSgSourceFile(projectFile);
+    if (translationUnit == nullptr ||
+        !translationUnit->get_unparseHeaderFiles()) {
+      continue;
+    }
+    SgIncludeFile *root = translationUnit->get_associated_include_file();
+    if (root == nullptr) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[include-tree]: translation-unit=%s "
+              "has no include-tree root\n",
+              translationUnit->getFileName().c_str());
+      ROSE_ABORT();
+    }
+    worklist.push_back(root);
+  }
+
+  while (!worklist.empty()) {
+    SgIncludeFile *includeFile = worklist.back();
+    worklist.pop_back();
+    if (includeFile == nullptr) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[include-tree]: null include-file node\n");
+      ROSE_ABORT();
+    }
+    if (!visitedIncludes.insert(includeFile).second) {
+      continue;
+    }
+
+    SgSourceFile *header = includeFile->get_source_file();
+    if (header != nullptr && header->get_isHeaderFile() &&
+        sourceNeedsTokenFrontier(header)) {
+      materializedHeaders.insert(header);
+    }
+    if (header != nullptr && header->get_isHeaderFile() &&
+        sourceNeedsTokenFrontier(header) && !context.hasFile(header) &&
+        header->get_associated_include_file() == includeFile) {
+      const string normalizedHeaderPath =
+          FileHelper::normalizePathIfPossible(header->getFileName());
+      const auto scope = unparseScopesMap.find(normalizedHeaderPath);
+      if (scope == unparseScopesMap.end() || scope->second == nullptr) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[header-context]: header=%s source=%p "
+                "has no structural emission scope for frontier analysis\n",
+                header->getFileName().c_str(), static_cast<void *>(header));
+        ROSE_ABORT();
+      }
+      buildTokenStreamFrontier(header, false, context, scope->second);
+      preparedAny = true;
+    }
+
+    for (SgIncludeFile *child : includeFile->get_include_file_list()) {
+      if (child == nullptr) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[include-tree]: include=%s contains a "
+                "null child\n",
+                includeFile->get_filename().str());
+        ROSE_ABORT();
+      }
+      worklist.push_back(child);
+    }
+  }
+
+  for (SgSourceFile *header : materializedHeaders) {
+    ASSERT_not_null(header);
+    if (header->get_associated_include_file() == nullptr ||
+        !context.hasFile(header)) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[header-context]: header=%s source=%p has "
+              "no canonical include edge with a prepared token frontier\n",
+              header->getFileName().c_str(), static_cast<void *>(header));
+      ROSE_ABORT();
+    }
+  }
+
+  return preparedAny;
+}
+} // namespace
 
 //-----------------------------------------------------------------------------------
 //  Unparser::Unparser
@@ -812,12 +1834,25 @@ void buildTokenStreamFrontier(SgSourceFile *sourceFile,
 // ostream* nos, string fname, Unparser_Opt nopt, int nline, UnparseFormatHelp
 // *h, UnparseDelegate* r)
 Unparser::Unparser(ostream *nos, string fname, Unparser_Opt nopt,
-                   UnparseFormatHelp *h, UnparseDelegate *r)
-    : cur(nos, h), delegate(r) {
+                   UnparseFormatHelp *h, UnparseDelegate *r,
+                   const UnparsePreprocessingInfoRewriteMap *rewrites,
+                   NameQualificationContext *nameQualifications,
+                   const TokenUnparseFrontierContext *tokenFrontiers)
+    : u_type(nullptr), u_name(nullptr), u_debug(nullptr), u_sage(nullptr),
+      u_exprStmt(nullptr), u_fortran_type(nullptr),
+      u_fortran_locatedNode(nullptr), opt(nopt), cur_index(0),
+      prevdir_was_cppDeclaration(false), currentFile(nullptr), cur(nos, h),
+      delegate(r), embedColorCodesInGeneratedCode(0),
+      generateSourcePositionCodes(0),
+      nameQualifications(nameQualifications != nullptr
+                             ? nameQualifications
+                             : &ownedNameQualifications),
+      preprocessingInfoRewrites(rewrites),
+      tokenUnparseFrontiers(tokenFrontiers),
+      fortranDirectiveKind(FortranDirectiveKind::none) {
   u_type = new Unparse_Type(this);
-  u_name = new Unparser_Nameq(this);
+  u_name = new Unparser_Nameq(this, *this->nameQualifications);
   // u_support  = new Unparse_Support(this);
-  u_sym = new Unparse_Sym(this);
   u_debug = new Unparse_Debug(this);
   u_sage = new Unparse_MOD_SAGE(this);
   u_exprStmt = new Unparse_ExprStmt(this, fname);
@@ -830,6 +1865,10 @@ Unparser::Unparser(ostream *nos, string fname, Unparser_Opt nopt,
 
   // ASSERT_not_null(nfile);
   ASSERT_not_null(nos);
+
+  if (h != nullptr) {
+    cur.set_linewrap(cur.get_indentstop());
+  }
 
   // ASSERT_not_null(nlist);
   // file       = nfile;
@@ -844,24 +1883,450 @@ Unparser::Unparser(ostream *nos, string fname, Unparser_Opt nopt,
 
   // dir_list         = nlist;
   // dir_listList     = nlistList;
-  opt = nopt;
-
   // MK: If overload option is set true, the keyword "operator" occurs in the
   // output. Usually, that's not what you want, but it can be used to avoid a
   // current bug, see file TODO_MK. The default is to set this flag to false,
   // see file preprocessorSupport.C in the src directory
   // opt.set_overload_opt(true);
 
-  cur_index = 0;
-
-  currentFile = NULL;
-
-  // DQ (5/8/2010): The default setting for this if "false".
-  set_resetSourcePosition(false);
-
   // DQ (8/19/2007): Removed this old unpasing mechanism.
   // line_to_unparse  = nline;
   // ltu  = nline;
+}
+
+Unparser::FortranDirectiveKind Unparser::getFortranDirectiveKind() const {
+  return fortranDirectiveKind;
+}
+
+Unparser::FortranDirectiveContextGuard::FortranDirectiveContextGuard(
+    Unparser *unparser, FortranDirectiveKind kind)
+    : unparser_(unparser), kind_(kind) {
+  ASSERT_not_null(unparser_);
+  if (kind_ == FortranDirectiveKind::none) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-directive-context]: cannot enter "
+            "an empty directive context\n");
+    ROSE_ABORT();
+  }
+  if (unparser_->currentFile == nullptr ||
+      !unparser_->currentFile->get_Fortran_only()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-directive-context]: directive "
+            "context requires an exact Fortran source file\n");
+    ROSE_ABORT();
+  }
+
+  previous_ = unparser_->getFortranDirectiveKind();
+  if (previous_ != FortranDirectiveKind::none && previous_ != kind_) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-directive-context]: conflicting "
+            "nested directive kinds\n");
+    ROSE_ABORT();
+  }
+  unparser_->setFortranDirectiveKind(kind_);
+  active_ = true;
+}
+
+Unparser::FortranDirectiveContextGuard::~FortranDirectiveContextGuard() {
+  if (!active_) {
+    return;
+  }
+  if (unparser_->getFortranDirectiveKind() != kind_) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-directive-context]: directive "
+            "context changed before its emission completed\n");
+    ROSE_ABORT();
+  }
+  unparser_->setFortranDirectiveKind(previous_);
+}
+
+void Unparser::setFortranDirectiveKind(FortranDirectiveKind kind) {
+  switch (kind) {
+  case FortranDirectiveKind::none:
+  case FortranDirectiveKind::openmp:
+  case FortranDirectiveKind::openacc:
+    fortranDirectiveKind = kind;
+    return;
+  }
+
+  fprintf(stderr, "REX_UNPARSE_INVARIANT[fortran-directive-context]: invalid "
+                  "directive kind\n");
+  ROSE_ABORT();
+}
+
+void Unparser::requireFortranDirectiveKind(FortranDirectiveKind kind) const {
+  if (currentFile == nullptr || !currentFile->get_Fortran_only() ||
+      kind == FortranDirectiveKind::none || fortranDirectiveKind != kind) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-directive-context]: directive "
+            "emission has no matching semantic context\n");
+    ROSE_ABORT();
+  }
+}
+
+const char *
+Unparser::fortranDirectiveContinuationPrefix(bool fixedFormat) const {
+  switch (fortranDirectiveKind) {
+  case FortranDirectiveKind::none:
+    return nullptr;
+  case FortranDirectiveKind::openmp:
+    return fixedFormat ? "!$omp&" : "!$omp& ";
+  case FortranDirectiveKind::openacc:
+    return fixedFormat ? "!$acc&" : "!$acc& ";
+  }
+
+  fprintf(stderr, "REX_UNPARSE_INVARIANT[fortran-directive-context]: invalid "
+                  "directive kind\n");
+  ROSE_ABORT();
+}
+
+Unparser::FortranLineWrapLayout Unparser::fortranLineWrapLayout() const {
+  if (currentFile == nullptr || !currentFile->get_Fortran_only()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-line-wrap]: requested layout "
+            "outside Fortran file emission\n");
+    ROSE_ABORT();
+  }
+  const std::optional<int> configuredColumns = cur.get_linewrap();
+  if (!configuredColumns.has_value()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-line-wrap]: requested layout "
+            "while wrapping is disabled\n");
+    ROSE_ABORT();
+  }
+
+  FortranLineWrapLayout layout;
+  switch (currentFile->get_outputFormat()) {
+  case SgFile::e_fixed_form_output_format:
+    layout.fixedFormat = true;
+    layout.physicalColumns =
+        std::min(*configuredColumns, MAX_F90_LINE_LEN_FIXED);
+    layout.textColumns = layout.physicalColumns;
+    break;
+  case SgFile::e_free_form_output_format:
+    layout.fixedFormat = false;
+    layout.physicalColumns =
+        std::min(*configuredColumns, MAX_F90_LINE_LEN_FREE);
+    layout.textColumns = layout.physicalColumns - 1;
+    break;
+  default:
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-line-wrap]: output format is "
+            "neither fixed nor free form\n");
+    ROSE_ABORT();
+  }
+
+  if (layout.physicalColumns <= 0 || layout.textColumns <= 0) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-line-wrap]: configured width "
+            "cannot hold Fortran source text\n");
+    ROSE_ABORT();
+  }
+  return layout;
+}
+
+void Unparser::emitFortranRawText(const std::string &text) {
+  cur.emit_raw_text(text);
+}
+
+void Unparser::emitFortranText(const std::string &text) {
+  if (currentFile == nullptr || !currentFile->get_Fortran_only()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-text-context]: emission requires "
+            "an active Fortran source file\n");
+    ROSE_ABORT();
+  }
+  if (text.empty()) {
+    return;
+  }
+  if (cur.get_compact_output()) {
+    cur << text;
+    return;
+  }
+  if (!cur.get_linewrap().has_value()) {
+    emitFortranRawText(text);
+    return;
+  }
+
+  const size_t newline = text.find('\n');
+  if (newline != std::string::npos) {
+    std::string line = text.substr(0, newline);
+    if (!line.empty() && line.back() == '\r') {
+      line.pop_back();
+    }
+    emitFortranText(line);
+    cur.insert_newline(1);
+    emitFortranText(text.substr(newline + 1));
+    return;
+  }
+  if (text.find('\r') != std::string::npos) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-line-wrap]: carriage return is "
+            "not followed by a newline\n");
+    ROSE_ABORT();
+  }
+
+  const FortranLineWrapLayout layout = fortranLineWrapLayout();
+  const int usedColumns = cur.current_col();
+  if (usedColumns < 0 || usedColumns > layout.textColumns) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-line-wrap]: current output column "
+            "is outside the configured text width\n");
+    ROSE_ABORT();
+  }
+  const int availableColumns = layout.textColumns - usedColumns;
+  if (text.size() <= static_cast<size_t>(availableColumns)) {
+    emitFortranRawText(text);
+    return;
+  }
+
+  const char *directivePrefix =
+      fortranDirectiveContinuationPrefix(layout.fixedFormat);
+  const size_t prefixSize =
+      directivePrefix != nullptr
+          ? std::char_traits<char>::length(directivePrefix)
+      : layout.fixedFormat ? 6
+                           : 1;
+  if (prefixSize + text.size() > static_cast<size_t>(layout.textColumns)) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-line-wrap]: indivisible %zu-byte "
+            "token cannot fit after a %zu-byte continuation prefix in %d "
+            "text columns\n",
+            text.size(), prefixSize, layout.textColumns);
+    ROSE_ABORT();
+  }
+
+  if (layout.fixedFormat) {
+    if (usedColumns == 0 && text.front() != ' ') {
+      fprintf(stderr, "REX_UNPARSE_INVARIANT[fortran-line-wrap]: fixed-format "
+                      "column-one text exceeds the configured width\n");
+      ROSE_ABORT();
+    }
+    cur.insert_newline(1);
+    emitFortranRawText(directivePrefix != nullptr ? directivePrefix : "     &");
+  } else {
+    emitFortranRawText("&");
+    cur.insert_newline(1);
+    emitFortranRawText(directivePrefix != nullptr ? directivePrefix : "&");
+  }
+  emitFortranRawText(text);
+}
+
+void Unparser::emitFortranComment(const std::string &text) {
+  if (currentFile == nullptr || !currentFile->get_Fortran_only() ||
+      text.empty()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-comment-wrap]: comment emission "
+            "requires nonempty text and an active Fortran file\n");
+    ROSE_ABORT();
+  }
+  if (fortranDirectiveKind != FortranDirectiveKind::none) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-comment-wrap]: ordinary comment "
+            "emission occurred inside a directive context\n");
+    ROSE_ABORT();
+  }
+
+  bool fixedFormat = false;
+  switch (currentFile->get_outputFormat()) {
+  case SgFile::e_fixed_form_output_format:
+    fixedFormat = true;
+    break;
+  case SgFile::e_free_form_output_format:
+    break;
+  default:
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-comment-wrap]: output format is "
+            "neither fixed nor free form\n");
+    ROSE_ABORT();
+  }
+
+  size_t lineStart = 0;
+  while (lineStart < text.size()) {
+    const size_t newline = text.find('\n', lineStart);
+    const bool hasNewline = newline != std::string::npos;
+    size_t lineEnd = hasNewline ? newline : text.size();
+    if (hasNewline && lineEnd > lineStart && text[lineEnd - 1] == '\r') {
+      --lineEnd;
+    }
+    const std::string line = text.substr(lineStart, lineEnd - lineStart);
+    if (line.find('\r') != std::string::npos) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[fortran-comment-wrap]: carriage return "
+              "is not followed by a newline\n");
+      ROSE_ABORT();
+    }
+
+    if (!line.empty()) {
+      const bool isComment =
+          fixedFormat
+              ? Rose::FortranLineWrapSupport::isFixedFormatCommentLine(line)
+              : Rose::FortranLineWrapSupport::isCommentLine(line);
+      if (!isComment) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[fortran-comment-wrap]: preprocessing "
+                "record is not a Fortran comment\n");
+        ROSE_ABORT();
+      }
+
+      const size_t marker = line.find_first_not_of(' ');
+      if (marker != std::string::npos && marker + 1 < line.size() &&
+          line[marker] == '!' && line[marker + 1] == '$') {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[fortran-comment-wrap]: directive text "
+                "was presented as an ordinary comment\n");
+        ROSE_ABORT();
+      }
+
+      if (fixedFormat && cur.current_col() != 0) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[fortran-comment-wrap]: fixed-format "
+                "comment does not begin in column one\n");
+        ROSE_ABORT();
+      }
+
+      if (!cur.get_linewrap().has_value()) {
+        emitFortranRawText(line);
+      } else {
+        const FortranLineWrapLayout layout = fortranLineWrapLayout();
+        const int usedColumns = cur.current_col();
+        const std::vector<std::string> wrappedLines =
+            fixedFormat ? Rose::FortranLineWrapSupport::wrapFixedFormatComment(
+                              line, usedColumns, layout.textColumns)
+                        : Rose::FortranLineWrapSupport::wrapFreeFormatComment(
+                              line, usedColumns, layout.textColumns);
+        for (size_t i = 0; i < wrappedLines.size(); ++i) {
+          if (i != 0) {
+            cur.insert_newline(1);
+          }
+          emitFortranRawText(wrappedLines[i]);
+        }
+      }
+    }
+
+    if (!hasNewline) {
+      break;
+    }
+    cur.insert_newline(1);
+    lineStart = newline + 1;
+  }
+}
+
+void Unparser::emitFortranCharacterLiteral(const std::string &value,
+                                           char delimiter) {
+  if (currentFile == nullptr || !currentFile->get_Fortran_only()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-string-context]: emission requires "
+            "an active Fortran source file\n");
+    ROSE_ABORT();
+  }
+  if (delimiter != '\'' && delimiter != '"') {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-string-delimiter]: character "
+            "literal has no exact apostrophe or quotation-mark delimiter\n");
+    ROSE_ABORT();
+  }
+
+  // SgStringVal stores the decoded character payload.  Fortran represents the
+  // active delimiter inside that payload by doubling it; emitting the decoded
+  // value directly produces malformed source such as 'isn't'.
+  std::string literal;
+  literal.reserve(value.size() + 2);
+  literal.push_back(delimiter);
+  for (char character : value) {
+    literal.push_back(character);
+    if (character == delimiter) {
+      literal.push_back(character);
+    }
+  }
+  literal.push_back(delimiter);
+
+  const std::vector<size_t> lexicalBoundaries =
+      Rose::FortranLineWrapSupport::stringLiteralLexicalBoundaries(literal,
+                                                                   delimiter);
+  auto isSafeBoundary = [&](size_t boundary) {
+    return std::binary_search(lexicalBoundaries.begin(),
+                              lexicalBoundaries.end(), boundary);
+  };
+
+  if (cur.get_compact_output()) {
+    cur.emit_literal(literal);
+    return;
+  }
+
+  if (!cur.get_linewrap().has_value()) {
+    emitFortranRawText(literal);
+    return;
+  }
+
+  const FortranLineWrapLayout layout = fortranLineWrapLayout();
+  int usedColumns = cur.current_col();
+  if (usedColumns < 0 || usedColumns > layout.textColumns) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-string-wrap]: current output "
+            "column is outside the configured text width\n");
+    ROSE_ABORT();
+  }
+
+  size_t offset = 0;
+  while (offset < literal.size()) {
+    const size_t capacity =
+        static_cast<size_t>(layout.textColumns - usedColumns);
+    const size_t furthest = std::min(literal.size(), offset + capacity);
+    size_t boundary = furthest;
+    while (boundary > offset && !isSafeBoundary(boundary)) {
+      --boundary;
+    }
+
+    if (boundary == literal.size()) {
+      emitFortranRawText(literal.substr(offset));
+      return;
+    }
+    if (boundary > offset) {
+      emitFortranRawText(literal.substr(offset, boundary - offset));
+      offset = boundary;
+    } else if (usedColumns == 0) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[fortran-string-wrap]: configured width "
+              "cannot hold the next string-literal lexical unit\n");
+      ROSE_ABORT();
+    }
+
+    const char *directivePrefix =
+        fortranDirectiveContinuationPrefix(layout.fixedFormat);
+    if (layout.fixedFormat) {
+      cur.insert_newline(1);
+      emitFortranRawText(directivePrefix != nullptr ? directivePrefix
+                                                    : "     &");
+    } else {
+      emitFortranRawText("&");
+      cur.insert_newline(1);
+      if (directivePrefix != nullptr) {
+        emitFortranRawText(directivePrefix);
+      }
+      emitFortranRawText("&");
+    }
+
+    usedColumns = cur.current_col();
+    if (usedColumns < 0 || usedColumns >= layout.textColumns) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[fortran-string-wrap]: continuation "
+              "prefix leaves no room for string text\n");
+      ROSE_ABORT();
+    }
+    size_t nextBoundary = offset + 1;
+    while (nextBoundary <= literal.size() && !isSafeBoundary(nextBoundary)) {
+      ++nextBoundary;
+    }
+    if (nextBoundary > literal.size() ||
+        nextBoundary - offset >
+            static_cast<size_t>(layout.textColumns - usedColumns)) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[fortran-string-wrap]: continuation "
+              "line cannot hold the next string-literal lexical unit\n");
+      ROSE_ABORT();
+    }
+  }
 }
 
 //-----------------------------------------------------------------------------------
@@ -870,9 +2335,14 @@ Unparser::Unparser(ostream *nos, string fname, Unparser_Opt nopt,
 //  Destructor
 //-----------------------------------------------------------------------------------
 Unparser::~Unparser() {
+  if (fortranDirectiveKind != FortranDirectiveKind::none) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-directive-context]: unparser was "
+            "destroyed inside a directive context\n");
+    ROSE_ABORT();
+  }
   delete u_type;
   delete u_name;
-  delete u_sym;
   delete u_debug;
   delete u_sage;
   delete u_exprStmt;
@@ -881,6 +2351,91 @@ Unparser::~Unparser() {
 }
 
 UnparseFormat &Unparser::get_output_stream() { return cur; }
+
+NameQualificationContext &Unparser::get_name_qualification_context() {
+  ASSERT_not_null(nameQualifications);
+  return *nameQualifications;
+}
+
+std::string
+Unparser::preprocessingInfoText(const PreprocessingInfo *info) const {
+  if (info == nullptr) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[preprocessing-info]: null preprocessing "
+            "record\n");
+    ROSE_ABORT();
+  }
+  if (preprocessingInfoRewrites != nullptr) {
+    const auto rewrite = preprocessingInfoRewrites->find(info);
+    if (rewrite != preprocessingInfoRewrites->end()) {
+      return rewrite->second;
+    }
+  }
+  return info->getString();
+}
+
+void Unparser::claimPreprocessingInfoReceipt(const PreprocessingInfo *record,
+                                             const SgLocatedNode *owner,
+                                             int relativePosition) {
+  if (record == nullptr || owner == nullptr ||
+      record->getAttachedOwner() != owner ||
+      static_cast<int>(record->getRelativePosition()) != relativePosition) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[preprocessing-receipt-owner]: record=%p "
+            "requested-owner=%p recorded-owner=%p requested-position=%d "
+            "recorded-position=%d has no exact emission owner\n",
+            static_cast<const void *>(record), static_cast<const void *>(owner),
+            record != nullptr
+                ? static_cast<const void *>(record->getAttachedOwner())
+                : nullptr,
+            relativePosition,
+            record != nullptr ? static_cast<int>(record->getRelativePosition())
+                              : -1);
+    ROSE_ABORT();
+  }
+
+  const auto inserted = preprocessingInfoReceipts.emplace(
+      record, PreprocessingInfoReceipt{owner, relativePosition});
+  if (!inserted.second) {
+    const PreprocessingInfoReceipt &first = inserted.first->second;
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[preprocessing-receipt-duplicate]: "
+            "one record was claimed twice in this unparser invocation\n");
+    fprintf(stderr,
+            "REX_UNPARSE_DETAIL[preprocessing-receipt-duplicate]: "
+            "record=%p text=%s first-owner=%p/%s first-position=%d "
+            "duplicate-owner=%p/%s duplicate-position=%d\n",
+            static_cast<const void *>(record), record->getString().c_str(),
+            static_cast<const void *>(first.owner),
+            first.owner != nullptr ? first.owner->class_name().c_str()
+                                   : "<null>",
+            first.relativePosition, static_cast<const void *>(owner),
+            owner->class_name().c_str(), relativePosition);
+    ROSE_ABORT();
+  }
+}
+
+const TokenUnparseFrontierFileContext &
+Unparser::tokenUnparseFrontier(SgSourceFile *sourceFile) const {
+  ASSERT_not_null(sourceFile);
+  if (tokenUnparseFrontiers == nullptr) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[token-frontier]: file=%s unparser has no "
+            "invocation frontier context\n",
+            sourceFile->getFileName().c_str());
+    ROSE_ABORT();
+  }
+  return tokenUnparseFrontiers->file(sourceFile);
+}
+
+const TokenUnparseFrontierContext &Unparser::tokenUnparseContext() const {
+  if (tokenUnparseFrontiers == nullptr) {
+    fprintf(stderr, "REX_UNPARSE_INVARIANT[token-frontier]: unparser has no "
+                    "invocation frontier context\n");
+    ROSE_ABORT();
+  }
+  return *tokenUnparseFrontiers;
+}
 
 bool Unparser::isPartOfTransformation(SgLocatedNode *n) {
   // return (n->get_file_info()==0 ||
@@ -904,66 +2459,21 @@ bool Unparser::isCompilerGenerated(SgLocatedNode *n) {
   return n->get_file_info()->isCompilerGenerated();
 }
 
-bool Unparser::containsLanguageStatements(char *fileName) {
-  // We need to implement this later
-  ASSERT_not_null(fileName);
-  // printf ("Warning: Unparser::containsLanguageStatements(%s) not implemented!
-  // \n",fileName);
-
-  // Note that: false will imply that the file contains only preprocessor
-  // declarations
-  //                  and thus the file need not be unparsed with a different
-  //                  name (a local header file).
-  //            true  will imply that it needs to be unparsed as a special
-  //            renamed
-  //                  header file so that transformations in the header files
-  //                  can be supported.
-
-  return false;
-}
-
-bool Unparser::includeFileIsSurroundedByExternCBraces(char *tempFilename) {
-  // For the first attempt at writing this function we will check to see if all
-  // the declarations in the target file have "C" linkage.  This is neccessary
-  // but not a sufficent condition to knowing if the user really specific a
-  // surrounding extern "C" around an include file.
-
-  // A more robust test is to search all the declaration until the next
-  // declaration coming from the current file (if they ALL have "C" linkage then
-  // it is at least equivalent to unparsing with a surrounding extern "C" (with
-  // braces) specification.
-
-  // For the moment just assume that all files require or don't require extern
-  // "C" linkage. Why is this not good enough for compiling (if we don't link
-  // anything)?
-
-  return false;
-}
-
-//-----------------------------------------------------------------------------------
-//  int Unparser::line_count
-//
-//  counts the number of lines in one directive
-//-----------------------------------------------------------------------------------
-int Unparser::line_count(char *directive) {
-  int lines = 1;
-
-  for (int i = 0; directive[i] != '\0'; i++) {
-    if (directive[i] == '\n')
-      lines++;
-  }
-  return lines;
-}
-
-bool Unparser::isASecondaryFile(SgStatement *stmt) {
-  // for now just assume there are no secondary files
-  return false;
-}
-
-void Unparser::computeNameQualification(SgSourceFile *file) {
+void Unparser::computeNameQualification(
+    SgSourceFile *file, NameQualificationContext &nameQualifications) {
   // DQ (8/7/2018): Refactored code for name qualification (so that we can call
   // it once before all files are unparsed (where we unparse multiple files
   // because fo the use of header file unparsing)).
+
+  ASSERT_not_null(file);
+  if (file->get_skip_unparse()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[skipped-file-qualification]: file=%s was "
+            "submitted for output qualification despite its explicit "
+            "skip_unparse role\n",
+            file->getFileName().c_str());
+    ROSE_ABORT();
+  }
 
   // DQ (8/7/2018): Copied this logic from where computeNameQualification() was
   // originally called to limit the number of parameters in the function API.
@@ -982,7 +2492,12 @@ void Unparser::computeNameQualification(SgSourceFile *file) {
   // hidel list computation is expensive (in this implementation). DQ
   // (8/6/2007): Only compute the hidden lists if working with C++ code! if
   // (isCxxFile == true)
-  if (isCxxFile == true) {
+  // Contextual type identities are consumed by both the C and C++ unparsers.
+  // In particular, a C function-pointer declarator has typed parameter
+  // positions whose (possibly empty) qualification result is keyed to the
+  // declaration that emits it.  Skipping this traversal for C left those
+  // exact use-site records absent after transformations such as outlining.
+  {
     // DQ (5/15/2011): Test clearing the mangled name map.
     // printf ("Calling SgNode::clearGlobalMangledNameMap() \n");
 
@@ -1004,14 +2519,8 @@ void Unparser::computeNameQualification(SgSourceFile *file) {
       printf("Calling name qualification support \n");
     }
 
-    SgNodePtrList &nodes_for_namequal_init =
-        file->get_extra_nodes_for_namequal_init();
-    for (SgNodePtrList::iterator it = nodes_for_namequal_init.begin();
-         it != nodes_for_namequal_init.end(); ++it) {
-      generateNameQualificationSupport(*it, referencedNameSet);
-    }
-
-    generateNameQualificationSupport(file, referencedNameSet);
+    generateNameQualificationSupport(file, referencedNameSet,
+                                     nameQualifications);
 
     if (SgProject::get_verbose() > 0) {
       printf("DONE: Calling name qualification support \n");
@@ -1021,7 +2530,9 @@ void Unparser::computeNameQualification(SgSourceFile *file) {
     // pushed to lower scopes where they are required. DQ (5/22/2007): Added
     // support for passing hidden list information about types, declarations and
     // elaborated types to child scopes.
-    propagateHiddenListData(file);
+    if (isCxxFile) {
+      propagateHiddenListData(file);
+    }
 
     // DQ (6/11/2015): Added to support debugging the difference between C and
     // C++ support for token-based unparsing.
@@ -1057,13 +2568,9 @@ void Unparser::unparseFile(SgSourceFile *file, SgUnparse_Info &info,
 #define DEBUG_UNPARSE_FILE 0
 
   ASSERT_not_null(file);
-  ASSERT_not_null(u_exprStmt);
-  u_exprStmt->resetTemplateParameterEmissionState();
-
   // DQ (6/5/2021): Save the previous statement that was just unparsed (at this
   // point we just want to clear the value from any other file).
-  SgUnparse_Info::set_previouslyUnparsedStatement(NULL);
-  SgUnparse_Info::set_previousStatementUnparsedFromTokenStream(false);
+  info.set_previousStatementUnparsedFromTokenStream(false);
 
   // DQ (10/29/2018): I now think we need to support this mechanism of
   // specifying the scope to be unparsed separately. This is essential to the
@@ -1087,9 +2594,6 @@ void Unparser::unparseFile(SgSourceFile *file, SgUnparse_Info &info,
   printf("In unparseFile(): file = %p filename = %s unparseScope = %p \n", file,
          file->getFileName().c_str(), unparseScope);
   printf(
-      " --- file->get_header_file_unparsing_optimization()             = %s \n",
-      file->get_header_file_unparsing_optimization() ? "true" : "false");
-  printf(
       " --- file->get_header_file_unparsing_optimization_source_file() = %s \n",
       file->get_header_file_unparsing_optimization_source_file() ? "true"
                                                                  : "false");
@@ -1105,9 +2609,21 @@ void Unparser::unparseFile(SgSourceFile *file, SgUnparse_Info &info,
   printf("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ \n");
 #endif
 
-  // DQ (5/22/2021): Set the current_source_file in the SgUnparse_Info object.
   SgSourceFile *sourceFile = info.get_current_source_file();
-  ROSE_ASSERT(sourceFile != NULL);
+  if (sourceFile == nullptr || sourceFile != file) {
+    const std::string requested_name =
+        std::filesystem::path(file->getFileName()).filename().string();
+    const std::string inherited_name =
+        sourceFile != nullptr ? std::filesystem::path(sourceFile->getFileName())
+                                    .filename()
+                                    .string()
+                              : "<null>";
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[current-source-file]: unparse-file=%s "
+            "inherited=%s must identify the same source file\n",
+            requested_name.c_str(), inherited_name.c_str());
+    ROSE_ABORT();
+  }
 
   // DQ (4/24/2021): Sorting out the header file optimization, so that we can
   // correctly handle when both ON or OFF. This data member appears to always be
@@ -1168,16 +2684,6 @@ void Unparser::unparseFile(SgSourceFile *file, SgUnparse_Info &info,
   // qualification will be nested in this time).
   TimingPerformance timer("Unparse File:");
 
-  // DQ (8/16/2018): This should have already been set.
-  ASSERT_not_null(info.get_current_source_file());
-
-  // DQ (8/16/2018): And if it should have already been set, then se should not
-  // reset it here! DQ (1/10/2015): Set the current source file.
-  info.set_current_source_file(file);
-
-  // DQ (5/15/2011): Moved this to be called in the postProcessingSupport()
-  // (before resetTemplateNames() else template names will not be set properly).
-
   // DQ (8/7/2018): use of new data member to explicitly mark SgSourceFile as a
   // header file. bool isHeaderFile = file->get_isHeaderFile();
   // ROSE_ASSERT(file->get_isHeaderFile() == true);
@@ -1195,14 +2701,9 @@ void Unparser::unparseFile(SgSourceFile *file, SgUnparse_Info &info,
   printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ \n");
 #endif
 
-  // DQ (12/6/2014): This is the part of the token stream support that is
-  // required after transformations have been done in the AST.
-  if ((isCfile || isCxxFile) && file->get_unparse_tokens() == true) {
-    const bool has_relevant_modifications = fileHasRelevantModifications(file);
-    if (has_relevant_modifications) {
-      file->set_unparse_tokens(false);
-    }
-  }
+  // Token mode is a per-file contract established by the frontend.  A
+  // transformation narrows the replay frontier; it must not silently change
+  // the requested unparse mode for the entire file.
   if ((isCfile || isCxxFile) && file->get_unparse_tokens() == true) {
 #define DEBUG_UNPARSE_TOKENS 0
 
@@ -1275,7 +2776,7 @@ void Unparser::unparseFile(SgSourceFile *file, SgUnparse_Info &info,
 
 #if DEBUG_UNPARSE_TOKENS
     printf("file->get_unparseHeaderFiles() = %s \n",
-           file->get_unparseHeaderFiles() ? "true" : "false");
+           headerSourceFile->get_unparseHeaderFiles() ? "true" : "false");
 #endif
 
 #if DEBUG_UNPARSE_FILE
@@ -1284,40 +2785,20 @@ void Unparser::unparseFile(SgSourceFile *file, SgUnparse_Info &info,
            this->currentFile, this->currentFile->getFileName().c_str());
 #endif
   } else {
-    // DQ (29/8/2017): Add a warning clarifying the limitations of this feature
-    // to a few specific languages.
     if (file->get_unparse_tokens() == true) {
-      printf("Warning: unparse_tokens support is only available for C and C++ "
-             "languages at present \n");
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[token-language]: file=%s token replay "
+              "was requested for a non-C/C++ output language\n",
+              file->getFileName().c_str());
+      ROSE_ABORT();
     }
   }
-
-  // Turn ON the error checking which triggers an if the default SgUnparse_Info
-  // constructor is called
-  SgUnparse_Info::set_forceDefaultConstructorToTriggerError(true);
 
   if (file->get_markGeneratedFiles() == true) {
     // Output marker to identify code generated by ROSE (causes "#define
     // ROSE_GENERATED_CODE" to be placed at the top of the file). printf
     // ("Output marker to identify code generated by ROSE \n");
     u_exprStmt->markGeneratedFile();
-  }
-
-  if (SgProject::get_verbose() > 0) {
-    if (file->get_unparse_tokens() == true) {
-      // This now unparses the raw token stream as a separate file with the
-      // prefix "rose_tokens_"
-
-      // This is just unparsing the token stream WITHOUT using the mapping
-      // information that relates it to the AST. MH-20140701 removed comment-out
-      // Note that this is not yet using the SgTokenPtrList of SgToken IR nodes
-      // (this is using a lower level data structure).
-      unparseFileUsingTokenStream(file);
-
-      // Now we want to just continue to unparse the file that will be generated
-      // from the AST (and modify that code to selectively use the token
-      // stream).
-    }
   }
 
   // SgScopeStatement* globalScope = (SgScopeStatement*) (&(file->root()));
@@ -1351,8 +2832,11 @@ void Unparser::unparseFile(SgSourceFile *file, SgUnparse_Info &info,
   }
 
   case SgFile::e_default_language: {
-    // printf ("Error: SgFile::e_default_language detected in unparser \n");
-    // ROSE_ABORT();
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[output-language]: file=%s has default "
+            "output language\n",
+            file->getFileName().c_str());
+    ROSE_ABORT();
   }
 
   case SgFile::e_C_language:
@@ -1392,17 +2876,23 @@ void Unparser::unparseFile(SgSourceFile *file, SgUnparse_Info &info,
       // DQ (8/6/2018): Check the currentFile data member.
       ASSERT_not_null(this->currentFile);
 
-      // const SgStatementPtrList& statements = unparseScope ->
-      // getStatementList();
-      SgStatementPtrList statements = unparseScope->generateStatementList();
-      for (SgStatementPtrList::iterator statement = statements.begin();
-           statement != statements.end(); statement++) {
+      if (unparseScope == globalScope) {
+        // A materialized header shares the translation unit's lexical global
+        // scope, but owns a distinct token stream. Enter through the normal
+        // global-scope unparser so its file prefix and trailing tokens are
+        // emitted from the header's SgSourceFile context.
+        u_exprStmt->unparseStatement(globalScope, info);
+      } else {
+        SgStatementPtrList statements = unparseScope->generateStatementList();
+        for (SgStatement *statement : statements) {
 #if DEBUG_UNPARSE_FILE
-        printf("Unparsing the statements on the unparseScope statement by "
-               "statement (what about comments) statement = %p = %s \n",
-               *statement, (*statement)->class_name().c_str());
+          printf("Unparsing the statements on the unparseScope statement by "
+                 "statement (what about comments) statement = %p = %s \n",
+                 statement, statement->class_name().c_str());
 #endif
-        u_exprStmt->unparseStatement(*statement, info);
+          ASSERT_not_null(statement);
+          u_exprStmt->unparseStatement(statement, info);
+        }
       }
 
     } else {
@@ -1529,8 +3019,10 @@ void Unparser::unparseFile(SgSourceFile *file, SgUnparse_Info &info,
   // DQ: This does not compile
   // cur << std::endl;
 
-  // DQ: This does not force a new line either!
-  // cur << "\n\n\n";
+  // Finalize the source file through the formatter before flushing.  This
+  // commits the required final newline while discarding a pending syntactic
+  // separator, so the stream cannot end in formatter-generated whitespace.
+  cur.insert_newline();
   cur.flush();
 
   // MH-20140701 removed comment-out
@@ -1542,475 +3034,6 @@ void Unparser::unparseFile(SgSourceFile *file, SgUnparse_Info &info,
          " = %s \n",
          SageInterface::is_Cxx_language() ? "true" : "false");
 #endif
-
-  // Turn OFF the error checking which triggers an if the default SgUnparse_Info
-  // constructor is called
-  SgUnparse_Info::set_forceDefaultConstructorToTriggerError(false);
-}
-
-// DQ (9/30/2013): Supporting function for evaluating token source position
-// information.
-int Unparser::getNumberOfLines(std::string internalString) {
-  // This code is copied from the similar support in rose_attributes_list.C.
-
-  // ASSERT_this();
-
-  int line = 0;
-  int i = 0;
-  while (internalString[i] != '\0') {
-    if (internalString[i] == '\n') {
-      line++;
-    }
-    i++;
-  }
-
-  return line;
-}
-
-int Unparser::getColumnNumberOfEndOfString(std::string internalString) {
-  // This code is copied from the similar support in rose_attributes_list.C.
-
-  // ASSERT_not_null(this);
-
-  int col = 1;
-  int i = 0;
-
-  // DQ (10/1/2013): I think we want to have the column number after a '\n' be
-  // zero. DQ (10/27/2006): the last line has a '\n' so we need the length of
-  // the last line before the '\n" triggers the counter to be reset! This fix is
-  // required because the strings we have include the final '\n"
-  int previousLineLength = col;
-  while (internalString[i] != '\0') {
-    if (internalString[i] == '\n') {
-      // previousLineLength = col;
-      col = 1;
-      previousLineLength = col;
-    } else {
-      col++;
-      previousLineLength = col;
-    }
-    i++;
-  }
-
-  int endingColumnNumber = previousLineLength;
-
-  return endingColumnNumber;
-}
-
-void Unparser::unparseFileUsingTokenStream(
-    SgSourceFile *file, const std::string *outputFilenameOverride) {
-  // DQ (9/30/2013): Unparse the file using the token stream (stored in the
-  // SgFile).
-
-  // DQ (10/27/2013): Now that we have setup the token_list in the
-  // SgSourceFile, this should be a valid list (unless this is completly
-  // blank file). The assignment to the token_list in the SgSourceFile is
-  // handled in "void buildTokenStreamMapping(SgSourceFile* sourceFile);".
-
-  // Note that these are the SgToken IR nodes and we have generated a token
-  // stream via the type: LexTokenStreamType.
-  // ROSE_ASSERT(file->get_token_list().empty() == true);
-
-  ROSE_ASSERT(file != NULL);
-  string fileNameForTokenStream = file->getFileName();
-
-  ASSERT_not_null(file->get_preprocessorDirectivesAndCommentsList());
-  ROSEAttributesListContainerPtr filePreprocInfo =
-      file->get_preprocessorDirectivesAndCommentsList();
-
-  // We should at least have the current files CPP/Comment/Token information
-  // (even if it is an empty file).
-  ROSE_ASSERT(filePreprocInfo->getList().size() > 0);
-
-  // This is an empty list not useful outside of the Flex file to gather the CPP
-  // directives, comments, and tokens.
-  ROSE_ASSERT(mapFilenameToAttributes.empty() == true);
-
-  // std::map<std::string,ROSEAttributesList* >::iterator currentFileItr =
-  // mapFilenameToAttributes.find(fileNameForTokenStream);
-  std::map<std::string, ROSEAttributesList *>::iterator currentFileItr =
-      filePreprocInfo->getList().find(fileNameForTokenStream);
-  // ROSE_ASSERT(currentFileItr != mapFilenameToAttributes.end());
-  ROSE_ASSERT(currentFileItr != filePreprocInfo->getList().end());
-
-  // If there already exists a list for the current file then get that list.
-  ASSERT_not_null(currentFileItr->second);
-
-  ROSEAttributesList *existingListOfAttributes = currentFileItr->second;
-  // Clang-based workflows can legitimately skip building legacy SgToken IR
-  // nodes while still recording the raw preprocessing token stream used here
-  // for unchanged-file output.
-  LexTokenStreamTypePointer rawTokenStream =
-      existingListOfAttributes->get_rawTokenStream();
-  ASSERT_not_null(rawTokenStream);
-  LexTokenStreamType &tokenList = *rawTokenStream;
-
-  // Write out the tokens into the output file.
-  int current_line_number = 1;
-  int current_column_number = 1;
-
-  int output_token_counter = 0;
-  for (LexTokenStreamType::iterator i = tokenList.begin(); i != tokenList.end();
-       i++) {
-    output_token_counter++;
-
-    std::string s = (*i)->p_tok_elem->token_lexeme;
-    int lines = getNumberOfLines(s);
-    int line_length = getColumnNumberOfEndOfString(s);
-    // Check starting position
-    if ((*i)->beginning_fpi.line_num != current_line_number) {
-      // printf ("error: (*i)->beginning_fpi.line_num = %d current_line_number =
-      // %d \n",(*i)->beginning_fpi.line_num,current_line_number);
-      printf("error: (*i)->beginning_fpi.line_num = %d \n",
-             (*i)->beginning_fpi.line_num);
-      printf("error: current_line_number          = %d \n",
-             current_line_number);
-      ROSE_ABORT();
-    }
-
-    if ((*i)->beginning_fpi.column_num != current_column_number) {
-      // DQ (1/4/2014): This problem is demonstrated by
-      // tests/nonsmoke/functional/roseTests/astInterfaceTests/inputmoveDeclarationToInnermostScope_test2015_18.C
-      // when using the "-rose:verbose 2" option.
-      printf("error: In Unparser::unparseFileUsingTokenStream(): "
-             "(*i)->beginning_fpi.column_num = %d \n",
-             (*i)->beginning_fpi.column_num);
-      printf("error: In Unparser::unparseFileUsingTokenStream(): "
-             "current_line_number = %d current_column_number = %d \n",
-             current_line_number, current_column_number);
-
-      // DQ (1/4/2014): Commented this assertion out as part of debugging
-      // tests/nonsmoke/functional/roseTests/astInterfaceTests/inputmoveDeclarationToInnermostScope_test2015_18.C
-      // when using the "-rose:verbose 2" option. Note that "}" that is a part
-      // of an "extern \"C\" {" fails this test (is classified as
-      // CPP_PREPROCESSING_INFO). ROSE_ABORT();
-    }
-
-    current_line_number += lines;
-
-    if (lines == 0) {
-      // Increment the column number.
-      current_column_number += (line_length - 1);
-    } else {
-      // reset the column number.
-      current_column_number = line_length;
-    }
-
-    // Check starting position
-    if ((*i)->ending_fpi.line_num != current_line_number) {
-      printf("error: (*i)->ending_fpi.line_num = %d \n",
-             (*i)->ending_fpi.line_num);
-      printf("error: current_line_number = %d \n", current_line_number);
-      ROSE_ABORT();
-    }
-
-    // The position of the end of the last token is one less than the current
-    // position for the next token.
-    if ((*i)->ending_fpi.column_num != (current_column_number - 1)) {
-      printf("error: (*i)->ending_fpi.column_num = %d \n",
-             (*i)->ending_fpi.column_num);
-      printf("error: current_line_number = %d current_column_number = %d \n",
-             current_line_number, current_column_number);
-      ROSE_ABORT();
-    }
-  }
-
-  // We could output a banner, but this would make the input and output files
-  // different. cur << "/* ROSE Generated file from token stream */ \n";
-
-  // DQ (10/27/2013): Use a different filename for the output of the raw token
-  // stream (not associated with individual statements).
-  string outputFilename;
-  if (outputFilenameOverride != NULL &&
-      outputFilenameOverride->empty() == false) {
-    outputFilename = *outputFilenameOverride;
-  } else {
-    outputFilename = "rose_raw_tokens_" + file->get_sourceFileNameWithoutPath();
-  }
-  outputFilename = resolveUnparseOutputToTestDir(file, outputFilename);
-
-  fstream ROSE_RawTokenStream_OutputFile(outputFilename.c_str(), ios::out);
-  // ROSE_OutputFile.open(s_file.c_str());
-
-  // DQ (12/8/2007): Added error checking for opening out output file.
-  if (!ROSE_RawTokenStream_OutputFile) {
-    // throw std::exception("(fstream) error while opening file.");
-    printf("Error detected in opening file %s for output \n",
-           outputFilename.c_str());
-    ROSE_ABORT();
-  }
-  // Use a different filename for the output of the raw token stream (which is a
-  // file generated for debugging support).
-
-  // Write out the tokens into the output file.
-  for (LexTokenStreamType::iterator i = tokenList.begin(); i != tokenList.end();
-       i++) {
-    ROSE_RawTokenStream_OutputFile << (*i)->p_tok_elem->token_lexeme;
-  }
-
-  ROSE_RawTokenStream_OutputFile.flush();
-}
-
-string unparseStatementWithoutBasicBlockToString(SgStatement *statement) {
-  string statementString;
-
-  ASSERT_not_null(statement);
-  // printf ("unparseStatementWithoutBasicBlockToString():
-  // statement->sage_class_name() = %s \n",statement->sage_class_name());
-
-  // Build a SgUnparse_Info object to represent formatting options for
-  // this statement (use the default values).
-  SgUnparse_Info info;
-
-  // exclude comments
-  info.set_SkipComments();
-
-  // exclude body and the trailing semicolon
-  info.set_SkipBasicBlock();
-  info.set_SkipSemiColon();
-
-  // exclude all CPP directives (since they have already been evaluated by the
-  // front-end)
-  info.set_SkipCPPDirectives();
-
-  switch (statement->variantT()) {
-  case V_SgCaseOptionStmt:
-  case V_SgDefaultOptionStmt:
-    statementString = globalUnparseToString(statement, &info);
-    break;
-
-  default:
-    printf("Error, default case in switch within "
-           "unparseStatementWithoutBasicBlockToString() \n");
-  }
-
-  printf(
-      "In unparseStatementWithoutBasicBlockToString(): statementString = %s \n",
-      statementString.c_str());
-
-  return statementString;
-}
-
-string unparseScopeStatementWithoutBasicBlockToString(SgScopeStatement *scope) {
-  string scopeString;
-
-  ASSERT_not_null(scope);
-  // printf ("unparseScopeStatementWithoutBasicBlockToString():
-  // scope->sage_class_name() = %s \n",scope->sage_class_name());
-
-  // Build a SgUnparse_Info object to represent formatting options for
-  // this statement (use the default values).
-  SgUnparse_Info info;
-
-  // exclude comments
-  info.set_SkipComments();
-
-  // exclude body and the trailing semicolon
-  info.set_SkipBasicBlock();
-  info.set_SkipSemiColon();
-
-  // exclude all CPP directives (since they have already been evaluated by the
-  // front-end)
-  info.set_SkipCPPDirectives();
-
-  switch (scope->variantT()) {
-  case V_SgSwitchStatement:
-  case V_SgForStatement:
-  case V_SgWhileStmt:
-  case V_SgDoWhileStmt:
-  case V_SgIfStmt:
-  case V_SgCatchOptionStmt:
-  case V_SgCaseOptionStmt:
-    scopeString = globalUnparseToString(scope, &info);
-    break;
-  default:
-    printf("Error, default case in switch within "
-           "unparseScopeStatementWithoutBasicBlockToString() \n");
-    ROSE_ABORT();
-  }
-
-  // printf ("In unparseScopeStatementWithoutBasicBlockToString(): scopeString =
-  // %s \n",scopeString.c_str());
-
-  return scopeString;
-}
-
-string unparseDeclarationToString(SgDeclarationStatement *declaration,
-                                  bool unparseAsDeclaration) {
-  // This function generates a string for a declaration. The string is required
-  // for the intermediate file to make sure that all transformation code will
-  // compile (since it could depend on declarations defined within the code).
-
-  // Details:
-  //   1) Only record declarations found within the source file (exclude all
-  //   header files
-  //      since they will be seen when the same header files are included).
-  //   2) Resort the variable declarations to remove redundent entries.
-  //        WRONG: variable declarations could have dependences upon class
-  //        declarations!
-  //   3) Don't sort all declarations since some could have dependences.
-  //        a) class declarations
-  //        b) typedefs
-  //        c) function declarations
-  //        d) template declarations
-  //        e) variable definition???
-
-  // ASSERT_not_null(this);
-  ASSERT_not_null(declaration);
-
-  string declarationString;
-
-  // Build a SgUnparse_Info object to represent formatting options for
-  // this statement (use the default values).
-  SgUnparse_Info info;
-
-  // exclude comments
-  info.set_SkipComments();
-
-  // exclude all CPP directives (since they have already been evaluated by the
-  // front-end)
-  info.set_SkipCPPDirectives();
-
-  switch (declaration->variantT()) {
-    // Enum declarations should not skip their definition since
-    // this is where the constants are declared.
-  case V_SgEnumDeclaration:
-
-  case V_SgVariableDeclaration:
-  case V_SgTemplateDeclaration:
-  case V_SgTypedefDeclaration:
-    // Need to figure out if a forward declaration would work or be
-    // more conservative and always output the complete class definition.
-
-    // turn off output of initializer values
-    info.set_SkipInitializer();
-    // output the declaration as a string
-    declarationString = globalUnparseToString(declaration, &info);
-    break;
-
-  case V_SgClassDeclaration:
-    // Need to figure out if a forward declaration would work or be
-    // more conservative and always output the complete class definition.
-
-    // turn off the generation of the function definitions only
-    // (we still want the restof the class definition since these
-    // define all member data and member functions).
-    info.set_SkipFunctionDefinition();
-    info.set_AddSemiColonAfterDeclaration();
-
-    if (unparseAsDeclaration == false) {
-      info.set_SkipClassDefinition();
-    } else {
-      //                  info.set_AddSemiColonAfterDeclaration();
-    }
-
-    // output the declaration as a string
-    declarationString = globalUnparseToString(declaration, &info);
-    break;
-
-    // For functions just output the declaration and skip the definition
-    // (This also avoids the generation of redundent definitions since the
-    // function we are in when we generate all declarations would be included).
-  case V_SgMemberFunctionDeclaration:
-  case V_SgFunctionDeclaration: {
-    // turn off the generation of the definition
-    info.set_SkipFunctionDefinition();
-
-    // unparse with the ";" (as a declaration) or unparse without the ";"
-    // as a function for which we will attach a local scope (basic block).
-    // printf ("In generateDeclarationString(): unparseAsDeclaration = %s
-    // \n",(unparseAsDeclaration) ? "true" : "false");
-    if (unparseAsDeclaration == true)
-      info.set_AddSemiColonAfterDeclaration();
-
-    // output the declaration as a string
-    declarationString = globalUnparseToString(declaration, &info);
-    break;
-  }
-
-  case V_SgFunctionParameterList: {
-    // Handle generation of declaration strings this case differently from
-    // unparser since want to generate declaration strings and not function
-    // parameter lists (function parameter lists would be delimited by "," while
-    // declarations would be delimited by ";").
-    SgFunctionParameterList *parameterListDeclaration =
-        dynamic_cast<SgFunctionParameterList *>(declaration);
-    ASSERT_not_null(parameterListDeclaration);
-    SgInitializedNamePtrList &argList = parameterListDeclaration->get_args();
-    SgInitializedNamePtrList::iterator i;
-    for (i = argList.begin(); i != argList.end(); i++) {
-      //                  printf ("START: Calling unparseToString on type! \n");
-      ASSERT_not_null((*i));
-      string typeNameString = (*i)->get_type()->unparseToString();
-      //                  printf ("DONE: Calling unparseToString on type! \n");
-
-      string variableName;
-      if ((*i)->get_name().getString() != "") {
-        variableName = (*i)->get_name().str();
-        declarationString += typeNameString + " " + variableName + "; ";
-      } else {
-        // Don't need the tailing ";" if there is no variable name (I think)
-        declarationString += typeNameString + " ";
-      }
-    }
-    break;
-  }
-
-    // ignore this case ... not really a declaration
-  case V_SgCtorInitializerList:
-    // printf ("Ignore the SgCtorInitializerList (constructor initializer list)
-    // \n");
-    break;
-
-  case V_SgVariableDefinition:
-    printf("ERROR: SgVariableDefinition nodes not used in AST \n");
-    ROSE_ABORT();
-    break;
-
-    // DQ (7/31/2006): Suggested additions by Markus Schordan.
-  case V_SgPragma:
-    break;
-  case V_SgPragmaDeclaration:
-    break;
-
-    // default case should always be an error
-  default:
-    printf("Default reached in "
-           "AST_Rewrite::AccumulatedDeclarationsAttribute::"
-           "generateDeclarationString() \n");
-    printf("     declaration->sage_class_name() = %s \n",
-           declaration->sage_class_name());
-    ROSE_ABORT();
-    break;
-  }
-
-  // Add a space to make it easier to read (not required)
-  declarationString += " ";
-
-  // printf ("For this scope: declarationString = %s
-  // \n",declarationString.c_str());
-
-  return declarationString;
-}
-
-string Unparser::removeUnwantedWhiteSpace(const string &X) {
-  string returnString;
-  int stringLength = X.length();
-
-  for (int i = 0; i < stringLength; i++) {
-    if ((X[i] != ' ') && (X[i] != '\n')) {
-      returnString += X[i];
-    } else {
-      if ((i > 0) && (X[i] == ' ') &&
-          ((X[i - 1] != ' ') && (X[i - 1] != '\n') && (X[i - 1] != '{') &&
-           (X[i - 1] != ';') && (X[i - 1] != '}'))) {
-        if ((i < stringLength - 1) && (X[i] == ' ') && (X[i + 1] != '('))
-          returnString += X[i];
-      }
-    }
-  }
-
-  return returnString;
 }
 
 // DQ (12/5/2006): Output separate file containing source position information
@@ -2031,154 +3054,693 @@ void Unparser::set_generateSourcePositionCodes(int x) {
   generateSourcePositionCodes = x;
 }
 
-void Unparser::set_resetSourcePosition(bool x) { p_resetSourcePosition = x; }
+namespace {
+enum class StringUnparseCategory {
+  project,
+  sourceFile,
+  statement,
+  expression,
+  type,
+  templateArgument,
+  templateParameter,
+  pragma,
+  openmpClause,
+  templateArgumentList,
+  templateParameterList
+};
 
-bool Unparser::get_resetSourcePosition() { return p_resetSourcePosition; }
-
-// DQ (5/8/2010): Added support to force unparser to reset the source positon in
-// the AST (this is the only side-effect in unparsing).
-//! Reset the Sg_File_Info to reference the unparsed (generated) source code.
-void Unparser::resetSourcePosition(SgStatement *stmt) {
-  static int previous_line_number = 0;
-  static int previous_column_number = 0;
-
-  Sg_File_Info *originalFileInfo = stmt->get_file_info();
-  ASSERT_not_null(originalFileInfo);
-
-  if (SgProject::get_verbose() > 0)
-    printf("Reset the source code position from %s:%d:%d to ",
-           originalFileInfo->get_filename(), originalFileInfo->get_line(),
-           originalFileInfo->get_col());
-
-  // This is the current output file.
-  // string newFilename = "output";
-  // Detect reuse of an Unparser object with a different file
-  ASSERT_not_null(currentFile);
-  string newFilename = get_output_filename(*currentFile);
-
-  // This is the position of the start of the stmt.
-  int line = cur.current_line();
-
-  // This is the position of the end of the stmt (likely we can refine this
-  // later). int column = cur.current_col(); int column =
-  // previous_column_number;
-  int column = (line == previous_line_number) ? previous_column_number : 0;
-
-  // Save the current position
-  previous_line_number = line;
-  previous_column_number = cur.current_col();
-
-  originalFileInfo->set_filenameString(newFilename);
-  originalFileInfo->set_line(line);
-  originalFileInfo->set_col(column);
-
-  if (SgProject::get_verbose() > 0)
-    printf("%s:%d:%d \n", originalFileInfo->get_filename(),
-           originalFileInfo->get_line(), originalFileInfo->get_col());
+[[noreturn]] void rejectStringUnparseCategory(const SgNode *node,
+                                              const char *category) {
+  ASSERT_not_null(node);
+  ASSERT_not_null(category);
+  fprintf(stderr,
+          "REX_UNPARSE_INVARIANT[unparse-to-string-dispatch]: node=%s "
+          "category=%s has no typed standalone emitter\n",
+          node->class_name().c_str(), category);
+  ROSE_ABORT();
 }
 
-void resetSourcePositionToGeneratedCode(SgFile *file,
-                                        UnparseFormatHelp *unparseHelp) {
-  // DQ (5/8/2010): This function uses the unparsing operation to record the
-  // locations of the unparsed language constructs and reset the source code
-  // position to that of the generated code.
+StringUnparseCategory classifyStringUnparseNode(const SgNode *node) {
+  ASSERT_not_null(node);
 
-  // DQ (4/22/2006): This can be true when the "-E" option is used, but then we
-  // should not have called this function!
-  ROSE_ASSERT(file->get_skip_unparse() == false);
-
-  // If we did unparse an intermediate file then we want to compile that file
-  // instead of the original source file.
-  string outputFilename;
-  if (file->get_unparse_output_filename().empty() == true) {
-    outputFilename = "rose_" + file->get_sourceFileNameWithoutPath();
-  } else {
-    outputFilename = file->get_unparse_output_filename();
+  // Symbols and initialized names are semantic identities, not standalone
+  // source constructs.  Their spelling requires a typed reference or
+  // declaration emission site and must never be fabricated here.
+  if (isSgSymbol(node) != nullptr) {
+    rejectStringUnparseCategory(node, "symbol");
   }
-  outputFilename = resolveUnparseOutputToTestDir(file, outputFilename);
+  if (isSgInitializedName(node) != nullptr) {
+    rejectStringUnparseCategory(node, "initialized-name");
+  }
 
-  // Set the output file name, since this may be called before unparse().
-  file->set_unparse_output_filename(outputFilename);
-  ROSE_ASSERT(file->get_unparse_output_filename().empty() == false);
+  if (isSgProject(node) != nullptr) {
+    return StringUnparseCategory::project;
+  }
+  if (isSgSourceFile(node) != nullptr) {
+    return StringUnparseCategory::sourceFile;
+  }
+  if (isSgStatement(node) != nullptr) {
+    return StringUnparseCategory::statement;
+  }
+  if (isSgExpression(node) != nullptr) {
+    return StringUnparseCategory::expression;
+  }
+  if (isSgType(node) != nullptr) {
+    return StringUnparseCategory::type;
+  }
+  if (isSgTemplateArgument(node) != nullptr) {
+    return StringUnparseCategory::templateArgument;
+  }
+  if (isSgTemplateParameter(node) != nullptr) {
+    return StringUnparseCategory::templateParameter;
+  }
+  if (isSgPragma(node) != nullptr) {
+    return StringUnparseCategory::pragma;
+  }
+  if (isSgOmpClause(node) != nullptr) {
+    return StringUnparseCategory::openmpClause;
+  }
+  if (isSgLocatedNodeSupport(node) != nullptr) {
+    rejectStringUnparseCategory(node, "unsupported-located-support");
+  }
+  if (isSgSupport(node) != nullptr) {
+    rejectStringUnparseCategory(node, "unsupported-support");
+  }
+  rejectStringUnparseCategory(node, "unsupported-node");
+}
 
-  // Name the file with a separate extension.
-  outputFilename += ".resetSourcePosition";
+StringUnparseCategory selectStringUnparseCategory(
+    const SgNode *node, const SgTemplateArgumentPtrList *templateArgumentList,
+    const SgTemplateParameterPtrList *templateParameterList) {
+  const unsigned inputCount = (node != nullptr ? 1U : 0U) +
+                              (templateArgumentList != nullptr ? 1U : 0U) +
+                              (templateParameterList != nullptr ? 1U : 0U);
+  if (inputCount != 1) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[unparse-to-string-dispatch]: exactly one "
+            "node or template-list input is required, received count=%u\n",
+            inputCount);
+    ROSE_ABORT();
+  }
+  if (node != nullptr) {
+    return classifyStringUnparseNode(node);
+  }
+  return templateArgumentList != nullptr
+             ? StringUnparseCategory::templateArgumentList
+             : StringUnparseCategory::templateParameterList;
+}
 
-  // printf ("Inside of resetSourcePositionToGeneratedCode(UnparseFormatHelp*)
-  // outputFilename = %s \n",outputFilename.c_str());
+bool isContextFreeCFamilyBuiltinType(const SgType *type) {
+  if (type == nullptr) {
+    return false;
+  }
 
-  if (SgProject::get_verbose() > -1)
-    printf("Calling the resetSourcePositionToGeneratedCode: outputFilename = "
-           "%s \n",
-           outputFilename.c_str());
+  switch (type->variant()) {
+  case T_CHAR:
+  case T_SIGNED_CHAR:
+  case T_UNSIGNED_CHAR:
+  case T_SHORT:
+  case T_SIGNED_SHORT:
+  case T_UNSIGNED_SHORT:
+  case T_INT:
+  case T_SIGNED_INT:
+  case T_UNSIGNED_INT:
+  case T_LONG:
+  case T_SIGNED_LONG:
+  case T_UNSIGNED_LONG:
+  case T_VOID:
+  case T_GLOBAL_VOID:
+  case T_WCHAR:
+  case T_CHAR8:
+  case T_CHAR16:
+  case T_CHAR32:
+  case T_FLOAT:
+  case T_DOUBLE:
+  case T_FLOAT80:
+  case T_FLOAT128:
+  case T_FLOAT16:
+  case T_FP16:
+  case T_BFLOAT16:
+  case T_FLOAT32X:
+  case T_FLOAT64X:
+  case T_FLOAT32:
+  case T_FLOAT64:
+  case T_LONG_LONG:
+  case T_SIGNED_LONG_LONG:
+  case T_UNSIGNED_LONG_LONG:
+  case T_SIGNED_128BIT_INTEGER:
+  case T_UNSIGNED_128BIT_INTEGER:
+  case T_LONG_DOUBLE:
+  case T_BOOL:
+  case T_NULLPTR:
+  case T_ELLIPSE:
+    return true;
+  case T_COMPLEX: {
+    const SgTypeComplex *complex_type = isSgTypeComplex(type);
+    ASSERT_not_null(complex_type);
+    return isContextFreeCFamilyBuiltinType(complex_type->get_base_type());
+  }
+  default:
+    return false;
+  }
+}
 
-  fstream ROSE_OutputFile(outputFilename.c_str(), ios::out);
+bool requiresExactCFamilyBuiltinLanguage(const SgType *type) {
+  if (type == nullptr) {
+    return false;
+  }
+  return type->variant() == T_BOOL || type->variant() == T_NULLPTR;
+}
 
-  if (!ROSE_OutputFile) {
-    // throw std::exception("(fstream) error while opening file.");
-    printf("Error detected in opening file %s for output \n",
-           outputFilename.c_str());
+std::vector<SgDeclarationStatement *>
+namedTypeDeclarationCandidates(const SgNamedType *namedType) {
+  std::vector<SgDeclarationStatement *> candidates;
+  if (namedType == nullptr || namedType->get_declaration() == nullptr) {
+    return candidates;
+  }
+
+  auto appendUnique = [&](SgDeclarationStatement *declaration) {
+    if (declaration != nullptr &&
+        std::find(candidates.begin(), candidates.end(), declaration) ==
+            candidates.end()) {
+      candidates.push_back(declaration);
+    }
+  };
+  SgDeclarationStatement *declaration = namedType->get_declaration();
+  appendUnique(declaration);
+  appendUnique(declaration->get_firstNondefiningDeclaration());
+  appendUnique(declaration->get_definingDeclaration());
+  return candidates;
+}
+
+enum class StringUnparseContextKind { source, canonicalCFamily, project };
+
+struct StringUnparseInvocationContext {
+  StringUnparseCategory category;
+  StringUnparseContextKind kind;
+  SgSourceFile *sourceFile = nullptr;
+  SgStatement *emissionStatement = nullptr;
+  SgNode *referenceNode = nullptr;
+  SgScopeStatement *scope = nullptr;
+  SgFile::languageOption_enum language = SgFile::e_error_language;
+  std::string fileName;
+  bool fullSourceTraversal = false;
+};
+
+const char *stringUnparseCategoryName(StringUnparseCategory category) {
+  switch (category) {
+  case StringUnparseCategory::project:
+    return "SgProject";
+  case StringUnparseCategory::sourceFile:
+    return "SgSourceFile";
+  case StringUnparseCategory::statement:
+    return "statement";
+  case StringUnparseCategory::expression:
+    return "expression";
+  case StringUnparseCategory::type:
+    return "type";
+  case StringUnparseCategory::templateArgument:
+    return "template-argument";
+  case StringUnparseCategory::templateParameter:
+    return "template-parameter";
+  case StringUnparseCategory::pragma:
+    return "pragma";
+  case StringUnparseCategory::openmpClause:
+    return "OpenMP-clause";
+  case StringUnparseCategory::templateArgumentList:
+    return "template-argument-list";
+  case StringUnparseCategory::templateParameterList:
+    return "template-parameter-list";
+  }
+
+  fprintf(stderr,
+          "REX_UNPARSE_INVARIANT[unparse-to-string-context]: invalid input "
+          "category\n");
+  ROSE_ABORT();
+}
+
+SgSourceFile *sourceFileForContextNode(SgNode *node) {
+  if (node == nullptr) {
+    return nullptr;
+  }
+  if (SgSourceFile *sourceFile = isSgSourceFile(node)) {
+    return sourceFile;
+  }
+  return SageInterface::getEnclosingSourceFile(node);
+}
+
+SgStatement *structuralEmissionStatement(SgNode *node) {
+  for (SgNode *cursor = node; cursor != nullptr;
+       cursor = cursor->get_parent()) {
+    if (SgStatement *statement = isSgStatement(cursor)) {
+      return statement;
+    }
+  }
+  return nullptr;
+}
+
+SgScopeStatement *structuralScope(SgNode *node) {
+  for (SgNode *cursor = node; cursor != nullptr;
+       cursor = cursor->get_parent()) {
+    if (SgScopeStatement *scope = isSgScopeStatement(cursor)) {
+      return scope;
+    }
+  }
+  return nullptr;
+}
+
+bool isSemanticOnlyNamedTypeDeclaration(
+    const SgDeclarationStatement *declaration) {
+  if (declaration == nullptr) {
+    return false;
+  }
+  if (isSgAuxiliaryDeclarationList(declaration->get_parent()) != nullptr) {
+    return true;
+  }
+  return isSgNonrealDecl(const_cast<SgDeclarationStatement *>(declaration)) !=
+             nullptr &&
+         isSgDeclarationScope(declaration->get_parent()) != nullptr;
+}
+
+bool isContextFreeCFamilyLiteral(const SgExpression *expression) {
+  const SgValueExp *value = isSgValueExp(expression);
+  if (value != nullptr) {
+    // Enum values, template-parameter values, and complex values carry or
+    // contain semantic identities.  All other value leaves have a complete
+    // canonical/source-spelling representation independent of a lexical use
+    // site, provided no contextual original-expression tree is attached.
+    if (isSgEnumVal(value) != nullptr ||
+        isSgTemplateParameterVal(value) != nullptr ||
+        isSgComplexVal(value) != nullptr) {
+      return false;
+    }
+    SgExpression *source = value->get_originalExpressionTree();
+    return source == nullptr || isSgOmpSourceExpression(source) != nullptr;
+  }
+
+  return isSgMacroExpansionExp(expression) != nullptr ||
+         isSgOmpSourceExpression(expression) != nullptr;
+}
+
+bool isContextFreeTemplateArgument(const SgTemplateArgument *argument) {
+  if (argument == nullptr) {
+    return false;
+  }
+  switch (argument->get_argumentType()) {
+  case SgTemplateArgument::type_argument: {
+    SgType *type = argument->get_sourceSpelledType();
+    if (type == nullptr) {
+      type = argument->get_type();
+    }
+    return isContextFreeCFamilyBuiltinType(type);
+  }
+  case SgTemplateArgument::nontype_argument:
+    return argument->get_initializedName() == nullptr &&
+           isContextFreeCFamilyLiteral(argument->get_expression());
+  case SgTemplateArgument::template_template_argument:
+  case SgTemplateArgument::start_of_pack_expansion_argument:
+  case SgTemplateArgument::argument_undefined:
+  default:
+    return false;
+  }
+}
+
+bool isContextFreeTemplateParameter(const SgTemplateParameter *parameter) {
+  if (parameter == nullptr || parameter->get_typeConstraint() != nullptr) {
+    return false;
+  }
+  switch (parameter->get_parameterType()) {
+  case SgTemplateParameter::type_parameter: {
+    SgType *type = parameter->get_type();
+    const bool hasCanonicalName =
+        (isSgTemplateType(type) != nullptr &&
+         !isSgTemplateType(type)->get_name().is_null()) ||
+        (isSgNonrealType(type) != nullptr &&
+         !isSgNonrealType(type)->get_name().is_null());
+    return hasCanonicalName && parameter->get_defaultTypeParameter() == nullptr;
+  }
+  case SgTemplateParameter::nontype_parameter: {
+    if (SgExpression *expression = parameter->get_expression()) {
+      return isContextFreeCFamilyLiteral(expression);
+    }
+    SgInitializedName *name = parameter->get_initializedName();
+    return name != nullptr &&
+           isContextFreeCFamilyBuiltinType(name->get_type()) &&
+           parameter->get_defaultExpressionParameter() == nullptr;
+  }
+  case SgTemplateParameter::template_parameter:
+  default:
+    return false;
+  }
+}
+
+bool isContextFreeCanonicalCFamilyInput(StringUnparseCategory category,
+                                        const SgNode *node) {
+  if (category == StringUnparseCategory::type) {
+    return isContextFreeCFamilyBuiltinType(isSgType(node));
+  }
+  if (category == StringUnparseCategory::expression) {
+    return isContextFreeCFamilyLiteral(isSgExpression(node));
+  }
+  return false;
+}
+
+std::string sourceFileNameForDiagnostic(const SgSourceFile *sourceFile) {
+  ASSERT_not_null(sourceFile);
+  const Sg_File_Info *fileInfo = sourceFile->get_file_info();
+  return fileInfo != nullptr && !fileInfo->get_raw_filename().empty()
+             ? fileInfo->get_raw_filename()
+             : std::string("<missing-file-info>");
+}
+
+StringUnparseInvocationContext resolveStringUnparseInvocationContext(
+    StringUnparseCategory category, const SgNode *astNode,
+    const SgUnparse_Info *inputInfo,
+    const SgTemplateArgumentPtrList *templateArgumentList = nullptr,
+    const SgTemplateParameterPtrList *templateParameterList = nullptr) {
+  StringUnparseInvocationContext context{category,
+                                         StringUnparseContextKind::source};
+  if (const SgNullExpression *nullExpression = isSgNullExpression(astNode)) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[unparse-to-string-null-expression]: "
+            "typed null role=%d has no standalone expression spelling\n",
+            static_cast<int>(nullExpression->get_role()));
+    ROSE_ABORT();
+  }
+  SgSourceFile *resolvedSourceFile = nullptr;
+  const char *resolvedCandidate = nullptr;
+
+  auto addSourceFileCandidate = [&](const char *candidate,
+                                    SgSourceFile *sourceFile) {
+    ASSERT_not_null(candidate);
+    ASSERT_not_null(sourceFile);
+    if (resolvedSourceFile != nullptr && resolvedSourceFile != sourceFile) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[unparse-to-string-context]: "
+              "candidate=%s file=%s conflicts with candidate=%s file=%s\n",
+              candidate, sourceFileNameForDiagnostic(sourceFile).c_str(),
+              resolvedCandidate,
+              sourceFileNameForDiagnostic(resolvedSourceFile).c_str());
+      ROSE_ABORT();
+    }
+    resolvedSourceFile = sourceFile;
+    resolvedCandidate = candidate;
+  };
+
+  auto addNodeCandidate = [&](const char *candidate, SgNode *node,
+                              bool requireSourceFile) {
+    if (node == nullptr) {
+      return;
+    }
+    SgSourceFile *sourceFile = sourceFileForContextNode(node);
+    if (sourceFile == nullptr) {
+      if (!requireSourceFile) {
+        return;
+      }
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[unparse-to-string-context]: "
+              "candidate=%s node=%s has no enclosing source file\n",
+              candidate, node->class_name().c_str());
+      ROSE_ABORT();
+    }
+    addSourceFileCandidate(candidate, sourceFile);
+  };
+
+  // Builtin type nodes are globally shared semantic singletons.  Any parent
+  // they happen to carry belongs to an unrelated AST use and is not an
+  // intrinsic source candidate for a standalone spelling request.  An
+  // explicit SgUnparse_Info context below can still select a source language.
+  const bool typeInput = category == StringUnparseCategory::type;
+  const bool sharedContextFreeBuiltin =
+      typeInput && isContextFreeCFamilyBuiltinType(isSgType(astNode));
+  const bool callerHasExactTypeUseSite =
+      typeInput && inputInfo != nullptr &&
+      (inputInfo->get_current_source_file() != nullptr ||
+       inputInfo->get_template_argument_qualification_context() != nullptr ||
+       inputInfo->get_reference_node_for_qualification() != nullptr ||
+       inputInfo->get_current_scope() != nullptr);
+  if (typeInput && isSgNamedType(astNode) != nullptr && inputInfo != nullptr &&
+      !inputInfo->forceQualifiedNames() &&
+      (inputInfo->get_template_argument_qualification_context() == nullptr ||
+       inputInfo->get_reference_node_for_qualification() == nullptr)) {
+    fprintf(stderr,
+            "REX_NAME_QUALIFICATION_INVARIANT[standalone-type-use]: "
+            "type=%p/%s lacks an exact emission statement or reference "
+            "identity\n",
+            static_cast<const void *>(astNode), astNode->class_name().c_str());
+    ROSE_ABORT();
+  }
+  // SgType nodes are shared semantic identities rather than structurally
+  // owned AST children.  Their parent pointer can therefore identify an
+  // unrelated use in another project or source file.  A caller-provided use
+  // site is the only source context for a contextual type spelling; a
+  // standalone named type may instead use its canonical declaration family.
+  if (category != StringUnparseCategory::project && !typeInput) {
+    addNodeCandidate("node", const_cast<SgNode *>(astNode), false);
+  } else if (typeInput && !sharedContextFreeBuiltin &&
+             !callerHasExactTypeUseSite) {
+    // Named types are shared semantic nodes and normally have no structural
+    // parent. Their canonical/first/defining declaration chain is the exact
+    // intrinsic source identity for a standalone type spelling; every
+    // source-backed member of that chain must agree.
+    if (const SgNamedType *namedType = isSgNamedType(astNode)) {
+      for (SgDeclarationStatement *declaration :
+           namedTypeDeclarationCandidates(namedType)) {
+        addNodeCandidate("node-declaration", declaration, false);
+      }
+    }
+  }
+
+  bool listElementsAreCanonical = true;
+  if (templateArgumentList != nullptr) {
+    for (SgTemplateArgument *argument : *templateArgumentList) {
+      if (argument == nullptr) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[unparse-to-string-list-context]: "
+                "template argument list contains a null element\n");
+        ROSE_ABORT();
+      }
+      addNodeCandidate("template-argument", argument, false);
+      listElementsAreCanonical =
+          listElementsAreCanonical && isContextFreeTemplateArgument(argument);
+      if (sourceFileForContextNode(argument) == nullptr &&
+          !isContextFreeTemplateArgument(argument)) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[unparse-to-string-list-context]: "
+                "detached template argument is not context-free\n");
+        ROSE_ABORT();
+      }
+    }
+  }
+  if (templateParameterList != nullptr) {
+    for (SgTemplateParameter *parameter : *templateParameterList) {
+      if (parameter == nullptr) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[unparse-to-string-list-context]: "
+                "template parameter list contains a null element\n");
+        ROSE_ABORT();
+      }
+      addNodeCandidate("template-parameter", parameter, false);
+      listElementsAreCanonical =
+          listElementsAreCanonical && isContextFreeTemplateParameter(parameter);
+      if (sourceFileForContextNode(parameter) == nullptr &&
+          !isContextFreeTemplateParameter(parameter)) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[unparse-to-string-list-context]: "
+                "detached template parameter is not context-free\n");
+        ROSE_ABORT();
+      }
+    }
+  }
+
+  if (inputInfo != nullptr) {
+    if (SgSourceFile *sourceFile = inputInfo->get_current_source_file()) {
+      addSourceFileCandidate("current-source-file", sourceFile);
+    }
+    addNodeCandidate("qualification-context",
+                     inputInfo->get_template_argument_qualification_context(),
+                     true);
+    addNodeCandidate("reference-node",
+                     inputInfo->get_reference_node_for_qualification(), false);
+    addNodeCandidate("current-scope", inputInfo->get_current_scope(), true);
+  }
+
+  if (category == StringUnparseCategory::project) {
+    if (resolvedSourceFile != nullptr) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[unparse-to-string-context]: SgProject "
+              "spans source files and cannot use candidate=%s file=%s\n",
+              resolvedCandidate,
+              sourceFileNameForDiagnostic(resolvedSourceFile).c_str());
+      ROSE_ABORT();
+    }
+    context.kind = StringUnparseContextKind::project;
+    context.language = SgFile::e_default_language;
+    context.fileName = "<rex-project-unparse>";
+    context.fullSourceTraversal = true;
+    return context;
+  }
+
+  if (resolvedSourceFile == nullptr) {
+    const bool canonicalList =
+        (category == StringUnparseCategory::templateArgumentList ||
+         category == StringUnparseCategory::templateParameterList) &&
+        listElementsAreCanonical;
+    if (!canonicalList &&
+        !isContextFreeCanonicalCFamilyInput(category, astNode)) {
+      if (category == StringUnparseCategory::type) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[unparse-to-string-type-context]: "
+                "detached type=%s requires an exact source use-site\n",
+                astNode->class_name().c_str());
+        ROSE_ABORT();
+      }
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[unparse-to-string-context]: input=%s "
+              "is context-sensitive and has no exact source-file context\n",
+              astNode != nullptr ? astNode->class_name().c_str()
+                                 : stringUnparseCategoryName(category));
+      ROSE_ABORT();
+    }
+    const SgFile::languageOption_enum explicitLanguage =
+        inputInfo != nullptr ? inputInfo->get_language()
+                             : SgFile::e_default_language;
+    if (explicitLanguage != SgFile::e_default_language &&
+        explicitLanguage != SgFile::e_C_language &&
+        explicitLanguage != SgFile::e_Cxx_language) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[unparse-to-string-context]: canonical "
+              "C/C++ input=%s has conflicting explicit language=%s\n",
+              astNode != nullptr ? astNode->class_name().c_str()
+                                 : stringUnparseCategoryName(category),
+              SgFile::get_outputLanguageOptionName(explicitLanguage).c_str());
+      ROSE_ABORT();
+    }
+    context.kind = StringUnparseContextKind::canonicalCFamily;
+    if (explicitLanguage != SgFile::e_default_language) {
+      context.language = explicitLanguage;
+    } else if (astNode != nullptr &&
+               requiresExactCFamilyBuiltinLanguage(isSgType(astNode))) {
+      // Bool and nullptr have different valid spellings across the C-family
+      // languages, so their language must remain unresolved and fail at the
+      // typed emitter instead of silently selecting C++.
+      context.language = SgFile::e_default_language;
+    } else {
+      context.language = SgFile::e_Cxx_language;
+    }
+    context.fileName = "<rex-canonical-cxx>";
+    return context;
+  }
+
+  const Sg_File_Info *fileInfo = resolvedSourceFile->get_file_info();
+  if (fileInfo == nullptr || fileInfo->get_raw_filename().empty()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[unparse-to-string-context]: source file "
+            "from candidate=%s has no exact filename\n",
+            resolvedCandidate);
+    ROSE_ABORT();
+  }
+  const SgFile::languageOption_enum sourceLanguage =
+      resolvedSourceFile->get_outputLanguage();
+  if (sourceLanguage != SgFile::e_C_language &&
+      sourceLanguage != SgFile::e_Cxx_language &&
+      sourceLanguage != SgFile::e_Fortran_language) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[unparse-to-string-context]: source "
+            "file=%s has non-explicit output language=%s\n",
+            fileInfo->get_raw_filename().c_str(),
+            SgFile::get_outputLanguageOptionName(sourceLanguage).c_str());
+    ROSE_ABORT();
+  }
+  if (inputInfo != nullptr &&
+      inputInfo->get_language() != SgFile::e_default_language &&
+      inputInfo->get_language() != sourceLanguage) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[unparse-to-string-context]: source "
+            "file=%s language=%s conflicts with explicit language=%s\n",
+            fileInfo->get_raw_filename().c_str(),
+            SgFile::get_outputLanguageOptionName(sourceLanguage).c_str(),
+            SgFile::get_outputLanguageOptionName(inputInfo->get_language())
+                .c_str());
     ROSE_ABORT();
   }
 
-  ROSE_ASSERT(ROSE_OutputFile);
+  if (category == StringUnparseCategory::type &&
+      isSgNonrealType(astNode) != nullptr &&
+      (inputInfo == nullptr ||
+       inputInfo->get_template_argument_qualification_context() == nullptr ||
+       inputInfo->get_reference_node_for_qualification() == nullptr)) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[unparse-to-string-type-use-site]: "
+            "contextual type=%p/%s requires an exact emitted qualification "
+            "context and reference identity\n",
+            static_cast<const void *>(astNode), astNode->class_name().c_str());
+    ROSE_ABORT();
+  }
 
-  // all options are now defined to be false. When these options can be passed
-  // in from the prompt, these options will be set accordingly.
-  bool UseAutoKeyword = false;
-  bool generateLineDirectives = file->get_unparse_line_directives();
-
-  // DQ (6/19/2007): note that test2004_24.C will fail if this is false.
-  // If false, this will cause A.operator+(B) to be unparsed as "A+B". This is a
-  // confusing point!
-  bool useOverloadedOperators = false;
-
-  bool num = false;
-
-  // It is an error to have this always turned off (e.g. pointer = this; will
-  // not unparse correctly)
-  bool _this = true;
-
-  bool caststring = false;
-  bool _debug = false;
-  bool _class = false;
-  bool _forced_transformation_format = false;
-
-  // control unparsing of include files into the source file (default is false)
-  bool _unparse_includes = file->get_unparse_includes();
-
-  Unparser_Opt roseOptions(UseAutoKeyword, generateLineDirectives,
-                           useOverloadedOperators, num, _this, caststring,
-                           _debug, _class, _forced_transformation_format,
-                           _unparse_includes);
-
-  Unparser roseUnparser(&ROSE_OutputFile,
-                        file->get_file_info()->get_filenameString(),
-                        roseOptions, unparseHelp, NULL);
-
-  // DQ (12/5/2006): Output information that can be used to colorize properties
-  // of generated code (useful for debugging).
-  roseUnparser.set_embedColorCodesInGeneratedCode(
-      file->get_embedColorCodesInGeneratedCode());
-  roseUnparser.set_generateSourcePositionCodes(
-      file->get_generateSourcePositionCodes());
-
-  // This turnes on the mechanism to force resetting the AST's source position
-  // information.
-  roseUnparser.set_generateSourcePositionCodes(true);
-
-  // information that is passed down through the tree (inherited attribute)
-  // SgUnparse_Info inheritedAttributeInfo (NO_UNPARSE_INFO);
-  SgUnparse_Info inheritedAttributeInfo;
-
-  SgSourceFile *sourceFile = isSgSourceFile(file);
-  ASSERT_not_null(sourceFile);
-
-  roseUnparser.unparseFile(sourceFile, inheritedAttributeInfo);
-
-  // And finally we need to close the file (to flush everything out!)
-  ROSE_OutputFile.close();
+  context.kind = StringUnparseContextKind::source;
+  context.sourceFile = resolvedSourceFile;
+  context.language = sourceLanguage;
+  context.fileName = fileInfo->get_raw_filename();
+  context.fullSourceTraversal = category == StringUnparseCategory::sourceFile;
+  SgNode *structuralContextNode = const_cast<SgNode *>(astNode);
+  const bool hasExactCallerTypeUseSite =
+      category == StringUnparseCategory::type && inputInfo != nullptr &&
+      inputInfo->get_template_argument_qualification_context() != nullptr &&
+      inputInfo->get_reference_node_for_qualification() != nullptr;
+  if (hasExactCallerTypeUseSite) {
+    structuralContextNode =
+        inputInfo->get_template_argument_qualification_context();
+  }
+  if (const SgNamedType *namedType = isSgNamedType(astNode)) {
+    if (!hasExactCallerTypeUseSite) {
+      for (SgDeclarationStatement *declaration :
+           namedTypeDeclarationCandidates(namedType)) {
+        if (sourceFileForContextNode(declaration) == resolvedSourceFile &&
+            !isSemanticOnlyNamedTypeDeclaration(declaration)) {
+          structuralContextNode = declaration;
+          break;
+        }
+      }
+      if (structuralContextNode == astNode) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[standalone-named-type-context]: "
+                "type=%p/%s has a source file but no exact emitted "
+                "declaration identity in that file\n",
+                static_cast<const void *>(astNode),
+                astNode->class_name().c_str());
+        ROSE_ABORT();
+      }
+    } else if (sourceFileForContextNode(structuralContextNode) !=
+               resolvedSourceFile) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[standalone-named-type-use-site]: "
+              "type=%p/%s has a qualification context outside its exact "
+              "source file\n",
+              static_cast<const void *>(astNode),
+              astNode->class_name().c_str());
+      ROSE_ABORT();
+    }
+  }
+  context.emissionStatement =
+      inputInfo != nullptr &&
+              inputInfo->get_template_argument_qualification_context() !=
+                  nullptr
+          ? inputInfo->get_template_argument_qualification_context()
+          : structuralEmissionStatement(structuralContextNode);
+  context.referenceNode =
+      inputInfo != nullptr &&
+              inputInfo->get_reference_node_for_qualification() != nullptr
+          ? inputInfo->get_reference_node_for_qualification()
+          : (isSgNamedType(astNode) != nullptr ? structuralContextNode
+                                               : nullptr);
+  context.scope =
+      inputInfo != nullptr && inputInfo->get_current_scope() != nullptr
+          ? inputInfo->get_current_scope()
+          : structuralScope(structuralContextNode);
+  return context;
 }
+} // namespace
 
 /*! \brief This function is the connection from the SgNode::unparseToString()
    function to the unparser.
@@ -2204,16 +3766,132 @@ string globalUnparseToString_OpenMPSafe(
     const SgNode *astNode,
     const SgTemplateArgumentPtrList *templateArgumentList,
     const SgTemplateParameterPtrList *templateParameterList,
-    SgUnparse_Info *inputUnparseInfoPointer);
+    SgUnparse_Info *inputUnparseInfoPointer,
+    NameQualificationContext *nameQualifications,
+    TokenUnparseFrontierContext *tokenFrontiers = nullptr,
+    const StringUnparseInvocationContext *validatedContext = nullptr);
 
 string globalUnparseToString(const SgNode *astNode,
                              SgUnparse_Info *inputUnparseInfoPointer) {
-  string returnString;
+  // Validate the public node category before name-qualification analysis or
+  // any other late unparser setup can hide an unsupported semantic object.
+  const StringUnparseCategory category =
+      selectStringUnparseCategory(astNode, nullptr, nullptr);
+  const StringUnparseInvocationContext invocationContext =
+      resolveStringUnparseInvocationContext(category, astNode,
+                                            inputUnparseInfoPointer);
 
-// tps (Jun 24 2008) added because OpenMP crashes all the time at the unparser
-#if ROSE_GCC_OMP
-#pragma omp critical(unparser)
-#endif
+  string returnString;
+  NameQualificationContext localNameQualifications;
+  NameQualificationContext *nameQualifications = nullptr;
+  // Name qualification must consume the emission statement selected and
+  // cross-validated by the invocation boundary.  Re-reading only the optional
+  // caller field here loses the declaration-derived use site of detached named
+  // types and makes a valid source context appear projectless.
+  SgStatement *exact_emission_statement =
+      invocationContext.kind == StringUnparseContextKind::source
+          ? invocationContext.emissionStatement
+          : nullptr;
+  const bool caller_fixed_qualification_use_site =
+      inputUnparseInfoPointer != nullptr &&
+      inputUnparseInfoPointer->get_template_argument_qualification_context() !=
+          nullptr;
+  // A structurally parented statement subtree changes emission statements as
+  // the traversal descends (for example, a for-statement owns a distinct
+  // SgExprStatement in its initializer).  Pin only a caller-specified use site
+  // or a non-statement semantic root.  Treating the structurally derived root
+  // statement as an explicit fixed context records every descendant under the
+  // outer statement while the unparser correctly requests its inner owner.
+  SgStatement *qualification_emission_statement =
+      caller_fixed_qualification_use_site ||
+              isSgStatement(const_cast<SgNode *>(astNode)) == nullptr
+          ? exact_emission_statement
+          : nullptr;
+  SgNode *explicit_reference_node =
+      invocationContext.kind == StringUnparseContextKind::source
+          ? invocationContext.referenceNode
+          : nullptr;
+
+  if (SgSourceFile *sourceFile =
+          isSgSourceFile(const_cast<SgNode *>(astNode))) {
+    localNameQualifications.clear();
+    Unparser::computeNameQualification(sourceFile, localNameQualifications);
+    nameQualifications = &localNameQualifications;
+  } else if (SgProject *project = isSgProject(const_cast<SgNode *>(astNode))) {
+    localNameQualifications.clear();
+    ASSERT_not_null(project->get_fileList_ptr());
+    for (SgFile *file : project->get_fileList_ptr()->get_listOfFiles()) {
+      if (SgSourceFile *sourceFile = isSgSourceFile(file);
+          sourceFile != nullptr && !sourceFile->get_skip_unparse()) {
+        Unparser::computeNameQualification(sourceFile, localNameQualifications);
+      }
+    }
+    nameQualifications = &localNameQualifications;
+  } else if (invocationContext.kind == StringUnparseContextKind::source) {
+    ASSERT_not_null(invocationContext.sourceFile);
+    if (explicit_reference_node != nullptr ||
+        SageInterface::getEnclosingStatement(const_cast<SgNode *>(astNode)) !=
+            nullptr ||
+        !isContextFreeCFamilyBuiltinType(
+            isSgType(const_cast<SgNode *>(astNode)))) {
+      if (exact_emission_statement == nullptr) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[unparse-to-string-name-"
+                "qualification-context]: input=%s has no exact emission "
+                "statement\n",
+                astNode->class_name().c_str());
+        ROSE_ABORT();
+      }
+      localNameQualifications.clear();
+      NameQualificationTraversal::NameQualificationSetType referencedNameSet;
+      SgNode *qualificationRoot = const_cast<SgNode *>(astNode);
+      if (isSgType(qualificationRoot) != nullptr ||
+          (qualificationRoot->get_parent() != nullptr &&
+           SageInterface::getEnclosingSourceFile(qualificationRoot) ==
+               invocationContext.sourceFile)) {
+        // Every structurally source-owned subtree can reference declarations
+        // and using directives from the lexical prefix between the file root
+        // and its exact use site.  This includes expression roots requested by
+        // diagnostic clients, not only statements.  SgType identities are
+        // shared and therefore always use the already validated source use
+        // site rather than a non-owning parent pointer.  Analyze the exact
+        // source tree in order; beginning at the requested subtree would
+        // falsely treat valid preceding declarations as unpublished.
+        qualificationRoot = invocationContext.sourceFile;
+      }
+      // Function-definition unparsing emits the declaration header before the
+      // body, but the definition's generated successor set does not contain
+      // its owning declaration.  Start qualification at the exact declaration
+      // edge so the analyzed graph matches every node the emitter will visit.
+      // The declaration then reaches this same definition and its body through
+      // its normal typed successors.
+      if (SgFunctionDefinition *definition =
+              isSgFunctionDefinition(qualificationRoot)) {
+        SgFunctionDeclaration *declaration = definition->get_declaration();
+        if (declaration == nullptr ||
+            declaration->get_definition() != definition ||
+            definition->get_parent() != declaration) {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[function-definition-qualification-"
+                  "root]: definition=%p has no exact owning declaration\n",
+                  static_cast<void *>(definition));
+          ROSE_ABORT();
+        }
+        qualificationRoot = declaration;
+      }
+      // unparseToString() may request a header or transformed declaration that
+      // the input-file traversal would omit. Analyze the requested subtree
+      // with its real enclosing scope and statement as the exact emission
+      // context. Primitive builtin types are the only context-free exception.
+      generateNameQualificationSupport(
+          qualificationRoot, referencedNameSet, localNameQualifications,
+          /*useInputFileTraversalOptimization=*/
+          false, qualification_emission_statement, explicit_reference_node,
+          isSgType(const_cast<SgNode *>(astNode)));
+      nameQualifications = &localNameQualifications;
+    }
+  }
+
   {
     if (inputUnparseInfoPointer != NULL) {
       // DQ (1/13/2014): These should have been setup to be the same.
@@ -2224,11 +3902,25 @@ string globalUnparseToString(const SgNode *astNode,
     // DQ (9/13/2014): Call internal funtion modified to be more general.
     // returnString =
     // globalUnparseToString_OpenMPSafe(astNode,inputUnparseInfoPointer);
-    returnString = globalUnparseToString_OpenMPSafe(astNode, NULL, NULL,
-                                                    inputUnparseInfoPointer);
+    returnString = globalUnparseToString_OpenMPSafe(
+        astNode, NULL, NULL, inputUnparseInfoPointer, nameQualifications,
+        nullptr, &invocationContext);
   }
 
   return returnString;
+}
+
+string globalUnparseToString(const SgNode *astNode,
+                             SgUnparse_Info *inputUnparseInfoPointer,
+                             NameQualificationContext *nameQualifications) {
+  const StringUnparseCategory category =
+      selectStringUnparseCategory(astNode, nullptr, nullptr);
+  const StringUnparseInvocationContext invocationContext =
+      resolveStringUnparseInvocationContext(category, astNode,
+                                            inputUnparseInfoPointer);
+  return globalUnparseToString_OpenMPSafe(
+      astNode, nullptr, nullptr, inputUnparseInfoPointer, nameQualifications,
+      nullptr, &invocationContext);
 }
 
 string
@@ -2250,11 +3942,29 @@ globalUnparseToString(const SgTemplateArgumentPtrList *templateArgumentList,
     // DQ (9/13/2014): Call internal funtion modified to be more general.
     // returnString =
     // globalUnparseToString_OpenMPSafe(astNode,inputUnparseInfoPointer);
+    const StringUnparseInvocationContext invocationContext =
+        resolveStringUnparseInvocationContext(
+            StringUnparseCategory::templateArgumentList, nullptr,
+            inputUnparseInfoPointer, templateArgumentList, nullptr);
     returnString = globalUnparseToString_OpenMPSafe(
-        NULL, templateArgumentList, NULL, inputUnparseInfoPointer);
+        NULL, templateArgumentList, NULL, inputUnparseInfoPointer, nullptr,
+        nullptr, &invocationContext);
   }
 
   return returnString;
+}
+
+string
+globalUnparseToString(const SgTemplateArgumentPtrList *templateArgumentList,
+                      SgUnparse_Info *inputUnparseInfoPointer,
+                      NameQualificationContext *nameQualifications) {
+  const StringUnparseInvocationContext invocationContext =
+      resolveStringUnparseInvocationContext(
+          StringUnparseCategory::templateArgumentList, nullptr,
+          inputUnparseInfoPointer, templateArgumentList, nullptr);
+  return globalUnparseToString_OpenMPSafe(
+      nullptr, templateArgumentList, nullptr, inputUnparseInfoPointer,
+      nameQualifications, nullptr, &invocationContext);
 }
 
 string
@@ -2276,11 +3986,29 @@ globalUnparseToString(const SgTemplateParameterPtrList *templateParameterList,
     // DQ (9/13/2014): Call internal funtion modified to be more general.
     // returnString =
     // globalUnparseToString_OpenMPSafe(astNode,inputUnparseInfoPointer);
+    const StringUnparseInvocationContext invocationContext =
+        resolveStringUnparseInvocationContext(
+            StringUnparseCategory::templateParameterList, nullptr,
+            inputUnparseInfoPointer, nullptr, templateParameterList);
     returnString = globalUnparseToString_OpenMPSafe(
-        NULL, NULL, templateParameterList, inputUnparseInfoPointer);
+        NULL, NULL, templateParameterList, inputUnparseInfoPointer, nullptr,
+        nullptr, &invocationContext);
   }
 
   return returnString;
+}
+
+string
+globalUnparseToString(const SgTemplateParameterPtrList *templateParameterList,
+                      SgUnparse_Info *inputUnparseInfoPointer,
+                      NameQualificationContext *nameQualifications) {
+  const StringUnparseInvocationContext invocationContext =
+      resolveStringUnparseInvocationContext(
+          StringUnparseCategory::templateParameterList, nullptr,
+          inputUnparseInfoPointer, nullptr, templateParameterList);
+  return globalUnparseToString_OpenMPSafe(
+      nullptr, nullptr, templateParameterList, inputUnparseInfoPointer,
+      nameQualifications, nullptr, &invocationContext);
 }
 
 // DQ (9/13/2014): Modified to extend the API of this internal function.
@@ -2290,17 +4018,69 @@ string globalUnparseToString_OpenMPSafe(
     const SgNode *astNode,
     const SgTemplateArgumentPtrList *templateArgumentList,
     const SgTemplateParameterPtrList *templateParameterList,
-    SgUnparse_Info *inputUnparseInfoPointer) {
-  // This global function permits any SgNode (including it's subtree) to be
-  // turned into a string
-
-  // DQ (9/13/2014): Modified the API to be more general (as part of refactoring
-  // support for name qualification). DQ (3/2/2006): Let's make sure we have a
-  // valid IR node! ASSERT_not_null(astNode);
-  ROSE_ASSERT(astNode != NULL || templateArgumentList != NULL ||
-              templateParameterList != NULL);
+    SgUnparse_Info *inputUnparseInfoPointer,
+    NameQualificationContext *nameQualifications,
+    TokenUnparseFrontierContext *tokenFrontiers,
+    const StringUnparseInvocationContext *validatedContext) {
+  const StringUnparseCategory category = selectStringUnparseCategory(
+      astNode, templateArgumentList, templateParameterList);
+  const StringUnparseInvocationContext invocationContext =
+      validatedContext != nullptr
+          ? *validatedContext
+          : resolveStringUnparseInvocationContext(
+                category, astNode, inputUnparseInfoPointer,
+                templateArgumentList, templateParameterList);
+  if (invocationContext.category != category) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[unparse-to-string-context]: validated "
+            "category does not match invocation input\n");
+    ROSE_ABORT();
+  }
 
   string returnString;
+
+  TokenUnparseFrontierContext localTokenFrontiers;
+  if (tokenFrontiers == nullptr && astNode != nullptr &&
+      (isSgProject(astNode) != nullptr || isSgSourceFile(astNode) != nullptr)) {
+    SgProject *project = isSgProject(const_cast<SgNode *>(astNode));
+    std::vector<SgSourceFile *> sourceFiles;
+    if (SgSourceFile *sourceFile =
+            isSgSourceFile(const_cast<SgNode *>(astNode))) {
+      project = SageInterface::getProject(sourceFile);
+      sourceFiles.push_back(sourceFile);
+    } else {
+      ASSERT_not_null(project);
+      for (SgFile *file : project->get_fileList()) {
+        if (SgSourceFile *sourceFile = isSgSourceFile(file)) {
+          sourceFiles.push_back(sourceFile);
+        }
+      }
+    }
+
+    bool needsTokenContext = false;
+    for (SgSourceFile *sourceFile : sourceFiles) {
+      const bool needsTokenFrontier = sourceFile->get_unparse_tokens();
+      if (!needsTokenFrontier) {
+        continue;
+      }
+      if (project == nullptr) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[token-frontier]: file=%s string "
+                "unparse has no project\n",
+                sourceFile->getFileName().c_str());
+        ROSE_ABORT();
+      }
+      needsTokenContext = true;
+      buildTokenStreamFrontier(sourceFile, sourceFile->get_unparseHeaderFiles(),
+                               localTokenFrontiers);
+    }
+    if (needsTokenContext) {
+      enforceTokenUnparseContract(project);
+      buildFirstAndLastStatementsForIncludeFiles(project, localTokenFrontiers);
+      buildFirstAndLastStatementsForScopes(project, localTokenFrontiers);
+      tokenFrontiers = &localTokenFrontiers;
+    }
+  }
 
   // all options are now defined to be false. When these options can be passed
   // in from the prompt, these options will be set accordingly.
@@ -2330,74 +4110,11 @@ string globalUnparseToString_OpenMPSafe(
   // file stream
   ostringstream outputString;
 
-  const SgLocatedNode *locatedNode = isSgLocatedNode(astNode);
-  string fileNameOfStatementsToUnparse;
-  if (locatedNode == NULL) {
-    fileNameOfStatementsToUnparse = "defaultFileNameInGlobalUnparseToString";
-  } else {
-    ASSERT_not_null(locatedNode);
-
-    // DQ (5/31/2005): Get the filename from a traversal back through the
-    // parents to the SgFile fileNameOfStatementsToUnparse =
-    // locatedNode->getFileName(); fileNameOfStatementsToUnparse =
-    // Rose::getFileNameByTraversalBackToFileNode(locatedNode);
-    if (locatedNode->get_parent() == NULL) {
-      // DQ (7/29/2005):
-      // Allow this function to be called with disconnected AST fragments not
-      // connected to a previously generated AST.  This happens in Qing's
-      // interface where AST fragements are built and meant to be unparsed. Only
-      // the parent of the root of the AST fragement is expected to be NULL.
-      // fileNameOfStatementsToUnparse = locatedNode->getFileName();
-      fileNameOfStatementsToUnparse = locatedNode->getFilenameString();
-    } else {
-      // DQ (2/20/2007): The expression being unparsed could be one contained in
-      // a SgArrayType
-      SgArrayType *arrayType = isSgArrayType(locatedNode->get_parent());
-      if (arrayType != NULL) {
-        // If this is an index of a SgArrayType node then handle as a special
-        // case
-        fileNameOfStatementsToUnparse =
-            "defaultFileNameInGlobalUnparseToString";
-      } else {
-        fileNameOfStatementsToUnparse =
-            Rose::getFileNameByTraversalBackToFileNode(locatedNode);
-      }
-    }
-  } // end if locatedNode
-
-  if (fileNameOfStatementsToUnparse ==
-          "defaultFileNameInGlobalUnparseToString" &&
-      inputUnparseInfoPointer != NULL) {
-    SgSourceFile *source_file =
-        inputUnparseInfoPointer->get_current_source_file();
-    if (source_file == NULL) {
-      SgNode *reference_node =
-          inputUnparseInfoPointer->get_reference_node_for_qualification();
-      source_file = SageInterface::getEnclosingSourceFile(reference_node);
-    }
-    if (source_file == NULL) {
-      source_file = SageInterface::getEnclosingSourceFile(
-          inputUnparseInfoPointer->get_current_scope());
-    }
-
-    if (source_file != NULL) {
-      if (source_file->get_file_info() != NULL &&
-          source_file->get_file_info()->get_filenameString().empty() == false) {
-        fileNameOfStatementsToUnparse =
-            source_file->get_file_info()->get_filenameString();
-      } else if (!source_file->get_sourceFileNameWithPath().empty()) {
-        fileNameOfStatementsToUnparse =
-            source_file->get_sourceFileNameWithPath();
-      }
-    }
-  }
-
-  ROSE_ASSERT(fileNameOfStatementsToUnparse.size() > 0);
-
   // Unparser roseUnparser ( &outputString, fileNameOfStatementsToUnparse,
   // roseOptions, lineNumber );
-  Unparser roseUnparser(&outputString, fileNameOfStatementsToUnparse,
-                        roseOptions);
+  Unparser roseUnparser(&outputString, invocationContext.fileName, roseOptions,
+                        nullptr, nullptr, nullptr, nameQualifications,
+                        tokenFrontiers);
 
   // Information that is passed down through the tree (inherited attribute)
   // Use the input SgUnparse_Info object if it is available.
@@ -2417,165 +4134,104 @@ string globalUnparseToString_OpenMPSafe(
     // NULL) IS PASSED AS ARGUMENT TO THE FUNCTION If no input parameter has
     // been specified then allocate one inheritedAttributeInfoPointer = new
     // SgUnparse_Info (NO_UNPARSE_INFO);
-    bool prev_state =
-        SgUnparse_Info::get_forceDefaultConstructorToTriggerError();
-    SgUnparse_Info::set_forceDefaultConstructorToTriggerError(false);
     inheritedAttributeInfoPointer = new SgUnparse_Info();
     ASSERT_not_null(inheritedAttributeInfoPointer);
-    SgUnparse_Info::set_forceDefaultConstructorToTriggerError(prev_state);
 
     // DQ (2/18/2013): Keep track of local allocation of the SgUnparse_Info
     // object in this function
     allocatedSgUnparseInfoObjectLocally = true;
 
-    // MS: 09/30/2003: comments de-activated in unparsing
-    ROSE_ASSERT(inheritedAttributeInfoPointer->SkipComments() == false);
-
-    // Skip all comments in unparsing
-    inheritedAttributeInfoPointer->set_SkipComments();
-    ROSE_ASSERT(inheritedAttributeInfoPointer->SkipComments() == true);
-    // Skip all whitespace in unparsing (removed in generated string)
-    inheritedAttributeInfoPointer->set_SkipWhitespaces();
-    ROSE_ASSERT(inheritedAttributeInfoPointer->SkipWhitespaces() == true);
-
-    // Skip all directives (macros are already substituted by the front-end, so
-    // this has no effect on those)
-    inheritedAttributeInfoPointer->set_SkipCPPDirectives();
-    ROSE_ASSERT(inheritedAttributeInfoPointer->SkipCPPDirectives() == true);
-
-    // DQ (8/1/2007): Test if we can force the default to be to unparse fully
-    // qualified names. printf ("Setting the default to generate fully qualified
-    // names, astNode = %p = %s \n",astNode,astNode->class_name().c_str());
-    inheritedAttributeInfoPointer->set_forceQualifiedNames();
-
-    // DQ (8/6/2007): Avoid output of "public", "private", and "protected" in
-    // front of class members. This does not appear to have any effect, because
-    // it it explicitly set in the unparse function for
-    // SgMemberFunctionDeclaration.
-    inheritedAttributeInfoPointer->unset_CheckAccess();
-
-    // DQ (8/1/2007): Only try to set the current scope to the SgGlobal scope if
-    // this is NOT a SgProject or SgFile
-    if ((isSgProject(astNode) != NULL || isSgFile(astNode) != NULL) == false) {
-      // This will be set to NULL where astNode is a SgType!
-      inheritedAttributeInfoPointer->set_current_scope(
-          SageInterface::getGlobalScope(astNode));
+    if (!invocationContext.fullSourceTraversal) {
+      // Every standalone spelling uses the dense diagnostic formatter.
+      // Typed statement directives have an explicit dense representation;
+      // source comments and preprocessing records remain excluded.
+      inheritedAttributeInfoPointer->set_SkipComments();
+      inheritedAttributeInfoPointer->set_SkipWhitespaces();
+      inheritedAttributeInfoPointer->set_SkipCPPDirectives();
+      inheritedAttributeInfoPointer->set_forceQualifiedNames();
+      inheritedAttributeInfoPointer->unset_CheckAccess();
     }
-
-    // DQ (5/19/2011): Allow compiler generated statements to be unparsed by
-    // default.
-    inheritedAttributeInfoPointer->set_outputCompilerGeneratedStatements();
 
     // unparseToString() should avoid full class/enum definitions by
     // default; statement-level unparsers can opt back in when needed
     // (e.g., typedefs that include a defining declaration).
-    if (isSgProject(astNode) == NULL && isSgFile(astNode) == NULL) {
+    if (!invocationContext.fullSourceTraversal) {
       inheritedAttributeInfoPointer->set_SkipClassDefinition();
       inheritedAttributeInfoPointer->set_SkipEnumDefinition();
     }
-
-    // DQ (1/10/2015): Add initialization of the current_source_file.
-    // This is required where this function is called from the name
-    // qualification support.
-    SgSourceFile *sourceFile = SageInterface::getEnclosingSourceFile(astNode);
-    // ASSERT_not_null(sourceFile);
-    if (sourceFile == NULL) {
-    }
-
-    inheritedAttributeInfoPointer->set_current_source_file(sourceFile);
   }
 
   ASSERT_not_null(inheritedAttributeInfoPointer);
   SgUnparse_Info &inheritedAttributeInfo = *inheritedAttributeInfoPointer;
 
-  SgSourceFile *currentSourceFile =
-      inheritedAttributeInfo.get_current_source_file();
-  if (currentSourceFile == NULL) {
-    currentSourceFile = SageInterface::getEnclosingSourceFile(astNode);
-    if (currentSourceFile == NULL) {
-      SgNode *referenceNode =
-          inheritedAttributeInfo.get_reference_node_for_qualification();
-      currentSourceFile = SageInterface::getEnclosingSourceFile(referenceNode);
+  // Apply the single context resolved and cross-validated at the invocation
+  // boundary.  No downstream filename, scope, language, or source-file probe
+  // is permitted to repair this state later.
+  if (invocationContext.kind == StringUnparseContextKind::source) {
+    ASSERT_not_null(invocationContext.sourceFile);
+    if (inheritedAttributeInfo.get_current_source_file() == nullptr) {
+      inheritedAttributeInfo.set_current_source_file(
+          invocationContext.sourceFile);
     }
-    if (currentSourceFile == NULL) {
-      currentSourceFile = SageInterface::getEnclosingSourceFile(
-          inheritedAttributeInfo.get_current_scope());
-    }
-    if (currentSourceFile != NULL) {
-      inheritedAttributeInfo.set_current_source_file(currentSourceFile);
-    }
-  }
-  if (currentSourceFile != NULL) {
     if (inheritedAttributeInfo.get_language() == SgFile::e_default_language) {
-      inheritedAttributeInfo.set_language(
-          currentSourceFile->get_outputLanguage());
+      inheritedAttributeInfo.set_language(invocationContext.language);
     }
-    roseUnparser.currentFile = currentSourceFile;
-  }
-
-  // DQ (1/6/2021): Adding support to detect use of unparseToString()
-  // functionality.  This is required to avoid premature saving of state
-  // regarding the static previouslyUnparsedTokenSubsequences which is required
-  // to support multiple statements (e.g. a variable declarations with
-  // containing multiple variables which translates (typically) to multiple
-  // variable declarations (each with one variable) within the AST).
-  inheritedAttributeInfoPointer->set_usedInUparseToStringFunction();
-
-  // DQ (5/27/2007): Commented out, uncomment when we are ready for Robert's new
-  // hidden list mechanism. if (inheritedAttributeInfo.get_current_scope() ==
-  // NULL)
-  if (astNode != NULL && inheritedAttributeInfo.get_current_scope() == NULL) {
-    // DQ (6/2/2007): Find the nearest containing scope so that we can fill in
-    // the current_scope, so that the name qualification can work.
-    SgStatement *stmt = SageInterface::getEnclosingStatement((SgNode *)astNode);
-
-    // DQ (6/27/2007): If we unparse a type then we can't find the
-    // enclosing statement, so assume it is SgGlobal. But how do we find a
-    // SgGlobal IR node to use?  So we have to leave it NULL and hand this
-    // case downstream! TV (05/24/2018): in the case of template arguments
-    // the statement's parent might not have been set (template argument
-    // are unparsed to qualify names for lookup when translating from the
-    // legacy frontend to SAGE)
-    SgScopeStatement *scope = isSgScopeStatement(stmt);
-    if (scope == NULL && stmt != NULL) {
-      scope = stmt->get_scope();
+    if (inheritedAttributeInfo.get_template_argument_qualification_context() ==
+            nullptr &&
+        invocationContext.emissionStatement != nullptr) {
+      inheritedAttributeInfo.set_template_argument_qualification_context(
+          invocationContext.emissionStatement);
     }
-
-    inheritedAttributeInfo.set_current_scope(scope);
-
-    const SgTemplateArgument *templateArgument = isSgTemplateArgument(astNode);
-    if (templateArgument != NULL) {
-      // debugging code!
-      // printf ("Exiting to debug case of SgTemplateArgument \n");
-      // ROSE_ABORT();
-
-      // DQ (5/25/2013): Commented out this message (too much output spew for
-      // test codes, debugging test2013_191.C).
+    if (inheritedAttributeInfo.get_current_scope() == nullptr &&
+        invocationContext.scope != nullptr) {
+      inheritedAttributeInfo.set_current_scope(invocationContext.scope);
     }
-    // stmt->get_startOfConstruct()->display("In unparseStatement():
-    // info.get_current_scope() == NULL: debug"); ROSE_ABORT();
-  }
-
-  if (roseUnparser.currentFile == NULL) {
-    SgSourceFile *currentSourceFile =
-        inheritedAttributeInfo.get_current_source_file();
-    if (currentSourceFile == NULL) {
-      currentSourceFile = SageInterface::getEnclosingSourceFile(
-          inheritedAttributeInfo.get_current_scope());
+    if (inheritedAttributeInfo.get_reference_node_for_qualification() ==
+            nullptr &&
+        invocationContext.referenceNode != nullptr) {
+      inheritedAttributeInfo.set_reference_node_for_qualification(
+          invocationContext.referenceNode);
     }
-    if (currentSourceFile == NULL) {
-      currentSourceFile = SageInterface::getEnclosingSourceFile(astNode);
+    roseUnparser.currentFile = invocationContext.sourceFile;
+  } else if (invocationContext.kind ==
+             StringUnparseContextKind::canonicalCFamily) {
+    if (inheritedAttributeInfo.get_language() == SgFile::e_default_language &&
+        invocationContext.language != SgFile::e_default_language) {
+      inheritedAttributeInfo.set_language(invocationContext.language);
     }
-    if (currentSourceFile != NULL) {
-      inheritedAttributeInfo.set_current_source_file(currentSourceFile);
-      roseUnparser.currentFile = currentSourceFile;
+    if (category == StringUnparseCategory::templateArgumentList ||
+        category == StringUnparseCategory::templateParameterList) {
+      inheritedAttributeInfo.set_SkipQualifiedNames();
     }
   }
-  // ASSERT_not_null(info.get_current_scope());
+
+  if (inheritedAttributeInfo.SkipWhitespaces() &&
+      (!inheritedAttributeInfo.SkipComments() ||
+       !inheritedAttributeInfo.SkipCPPDirectives())) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[compact-output]: compact diagnostics "
+            "require comments and preprocessing directives to be skipped\n");
+    ROSE_ABORT();
+  }
+  if (inheritedAttributeInfo.SkipWhitespaces() && tokenFrontiers != nullptr) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[compact-output]: compact diagnostics "
+            "cannot use token-stream unparsing\n");
+    ROSE_ABORT();
+  }
+  const bool compactOutput = inheritedAttributeInfo.SkipWhitespaces();
+  roseUnparser.get_output_stream().set_compact_output(compactOutput);
+
+  // Detached AST rendering is not part of the file-level token replay or
+  // preprocessing-boundary state.
+  if (invocationContext.fullSourceTraversal) {
+    inheritedAttributeInfoPointer->unset_usedInUparseToStringFunction();
+  } else {
+    inheritedAttributeInfoPointer->set_usedInUparseToStringFunction();
+  }
 
   // Turn ON the error checking which triggers an error if the default
   // SgUnparse_Info constructor is called
-  // SgUnparse_Info::forceDefaultConstructorToTriggerError = true;
 
   // DQ (10/19/2004): Cleaned up this code, remove this dead code after we are
   // sure that this worked properly Actually, this code is required to be this
@@ -2587,279 +4243,212 @@ string globalUnparseToString_OpenMPSafe(
   ROSE_ASSERT(inheritedAttributeInfo.SkipClassDefinition() ==
               inheritedAttributeInfo.SkipEnumDefinition());
 
-  // Both SgProject and SgFile are handled via recursive calls
-  if ((isSgProject(astNode) != NULL) || (isSgSourceFile(astNode) != NULL)) {
-    // printf ("Implementation Note: Put these cases (unparsing the SgProject
-    // and SgFile into the cases for nodes derived from SgSupport below! \n");
-
-    // Handle recursive call for SgProject
+  switch (category) {
+  case StringUnparseCategory::project: {
     const SgProject *project = isSgProject(astNode);
-    if (project != NULL) {
-      for (int i = 0; i < project->numberOfFiles(); i++) {
-        // SgFile* file = &(project->get_file(i));
-        SgFile *file = project->get_fileList()[i];
-        ASSERT_not_null(file);
-        string unparsedFileString = globalUnparseToString_OpenMPSafe(
-            file, NULL, NULL, inputUnparseInfoPointer);
-        // string prefixString       = string("/* TOP:")      +
-        // string(Rose::getFileName(file)) + string(" */ \n"); string
-        // suffixString       = string("\n/* BOTTOM:") +
-        // string(Rose::getFileName(file)) + string(" */ \n\n");
-        string prefixString =
-            string("/* TOP:") + file->getFileName() + string(" */ \n");
-        string suffixString =
-            string("\n/* BOTTOM:") + file->getFileName() + string(" */ \n\n");
-        returnString += prefixString + unparsedFileString + suffixString;
-      }
+    ASSERT_not_null(project);
+    for (int i = 0; i < project->numberOfFiles(); ++i) {
+      SgFile *file = project->get_fileList()[i];
+      ASSERT_not_null(file);
+      const string unparsedFileString = globalUnparseToString_OpenMPSafe(
+          file, nullptr, nullptr, inputUnparseInfoPointer, nameQualifications,
+          tokenFrontiers);
+      const string prefixString =
+          string("/* TOP:") + file->getFileName() + string(" */ \n");
+      const string suffixString =
+          string("\n/* BOTTOM:") + file->getFileName() + string(" */ \n\n");
+      returnString += prefixString + unparsedFileString + suffixString;
     }
+    break;
+  }
 
-    // Handle recursive call for SgFile
+  case StringUnparseCategory::sourceFile: {
     const SgSourceFile *file = isSgSourceFile(astNode);
-    if (file != NULL) {
-      SgGlobal *globalScope = file->get_globalScope();
-      ASSERT_not_null(globalScope);
-      returnString = globalUnparseToString_OpenMPSafe(globalScope, NULL, NULL,
-                                                      inputUnparseInfoPointer);
-    }
-  } else {
-    // DQ (1/12/2003): Only now try to trap use of SgUnparse_Info default
-    // constructor Turn ON the error checking which triggers an error if the
-    // default SgUnparse_Info constructor is called GB (09/27/2007): Took this
-    // out because it breaks parallel traversals that call unparseToString. It
-    // doesn't seem to have any other effect (whatever was debugged with this
-    // seems to be fixed now).
-    // SgUnparse_Info::set_forceDefaultConstructorToTriggerError(true);
+    ASSERT_not_null(file);
+    SgGlobal *globalScope = file->get_globalScope();
+    ASSERT_not_null(globalScope);
+    StringUnparseInvocationContext globalContext = invocationContext;
+    globalContext.category = StringUnparseCategory::statement;
+    globalContext.emissionStatement = globalScope;
+    globalContext.scope = globalScope;
+    globalContext.fullSourceTraversal = true;
+    returnString = globalUnparseToString_OpenMPSafe(
+        globalScope, nullptr, nullptr, inputUnparseInfoPointer,
+        nameQualifications, tokenFrontiers, &globalContext);
+    break;
+  }
 
-    if (isSgStatement(astNode) != NULL) {
-      const SgStatement *stmt = isSgStatement(astNode);
-
-      // DQ (9/6/2010): Added support to detect use of C (default) or Fortran
-      // code. DQ (2/2/2007): Note that we should modify the unparser to take
-      // the IR nodes as const pointers, but this is a bigger job than I want to
-      // do now! roseUnparser.u_exprStmt->unparseStatement (
-      // const_cast<SgStatement*>(stmt), inheritedAttributeInfo );
-      if (SageInterface::is_Fortran_language() == true) {
-        // Unparse as a Fortran code.
-        ASSERT_not_null(roseUnparser.u_fortran_locatedNode);
-        roseUnparser.u_fortran_locatedNode->unparseStatement(
-            const_cast<SgStatement *>(stmt), inheritedAttributeInfo);
-      } else {
-        // Unparse as a C/C++ code.
-        // DQ (12/13/2018): Adding logic to skip cases where the SgGlobal can
-        // not be associate with SgSourceFile.
-        SgGlobal *globalScope = isSgGlobal(const_cast<SgStatement *>(stmt));
-        bool skipCallToUnparseStatement = false;
-        if (globalScope != NULL) {
-          ASSERT_not_null(globalScope->get_parent());
-          SgProject *project = isSgProject(globalScope->get_parent());
-          if (project != NULL) {
-            printf("Note: Parent of SgGlobal is a SgProject: skipping call to "
-                   "unparseStatement(): can not be associate with SgSourceFile "
-                   "\n");
-            skipCallToUnparseStatement = true;
-          }
-        }
-
-        ASSERT_not_null(roseUnparser.u_exprStmt);
-
-        // printf ("Calling roseUnparser.u_exprStmt->unparseStatement() stmt =
-        // %s \n",stmt->class_name().c_str()); roseUnparser.u_exprStmt->curprint
-        // ("Output from curprint"); roseUnparser.u_exprStmt->unparseStatement (
-        // const_cast<SgStatement*>(stmt), inheritedAttributeInfo );
-        if (skipCallToUnparseStatement == false) {
-          roseUnparser.u_exprStmt->unparseStatement(
-              const_cast<SgStatement *>(stmt), inheritedAttributeInfo);
+  case StringUnparseCategory::statement: {
+    const SgStatement *statement = isSgStatement(astNode);
+    ASSERT_not_null(statement);
+    if (inheritedAttributeInfo.get_language() == SgFile::e_Fortran_language) {
+      ASSERT_not_null(roseUnparser.u_fortran_locatedNode);
+      roseUnparser.u_fortran_locatedNode->unparseStatement(
+          const_cast<SgStatement *>(statement), inheritedAttributeInfo);
+    } else if (inheritedAttributeInfo.get_language() == SgFile::e_C_language ||
+               inheritedAttributeInfo.get_language() ==
+                   SgFile::e_Cxx_language) {
+      if (SgGlobal *globalScope =
+              isSgGlobal(const_cast<SgStatement *>(statement))) {
+        ASSERT_not_null(globalScope->get_parent());
+        if (isSgProject(globalScope->get_parent()) != nullptr) {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[unparse-to-string]: global=%p is "
+                  "parented directly by a project and has no source-file "
+                  "emission context\n",
+                  static_cast<void *>(globalScope));
+          ROSE_ABORT();
         }
       }
+      ASSERT_not_null(roseUnparser.u_exprStmt);
+      roseUnparser.u_exprStmt->unparseStatement(
+          const_cast<SgStatement *>(statement), inheritedAttributeInfo);
+    } else {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[unparse-to-string-context]: statement "
+              "dispatch has invalid language=%s\n",
+              SgFile::get_outputLanguageOptionName(
+                  inheritedAttributeInfo.get_language())
+                  .c_str());
+      ROSE_ABORT();
     }
+    break;
+  }
 
-    if (isSgExpression(astNode) != NULL) {
-      const SgExpression *expr = isSgExpression(astNode);
-
-      // DQ (9/6/2010): Added support to detect use of C (default) or Fortran
-      // code. DQ (2/2/2007): Note that we should modify the unparser to take
-      // the IR nodes as const pointers, but this is a bigger job than I want to
-      // do now! roseUnparser.u_exprStmt->unparseExpression (
-      // const_cast<SgExpression*>(expr), inheritedAttributeInfo );
-      if (SageInterface::is_Fortran_language() == true) {
-        // Unparse as a Fortran code.
-        ASSERT_not_null(roseUnparser.u_fortran_locatedNode);
-        roseUnparser.u_fortran_locatedNode->unparseExpression(
-            const_cast<SgExpression *>(expr), inheritedAttributeInfo);
-      } else {
-        // Unparse as a C/C++ code.
-        ASSERT_not_null(roseUnparser.u_exprStmt);
-        roseUnparser.u_exprStmt->unparseExpression(
-            const_cast<SgExpression *>(expr), inheritedAttributeInfo);
-      }
+  case StringUnparseCategory::expression: {
+    const SgExpression *expression = isSgExpression(astNode);
+    ASSERT_not_null(expression);
+    if (inheritedAttributeInfo.get_language() == SgFile::e_Fortran_language) {
+      ASSERT_not_null(roseUnparser.u_fortran_locatedNode);
+      roseUnparser.u_fortran_locatedNode->unparseExpression(
+          const_cast<SgExpression *>(expression), inheritedAttributeInfo);
+    } else if (inheritedAttributeInfo.get_language() == SgFile::e_C_language ||
+               inheritedAttributeInfo.get_language() ==
+                   SgFile::e_Cxx_language) {
+      ASSERT_not_null(roseUnparser.u_exprStmt);
+      roseUnparser.u_exprStmt->unparseExpression(
+          const_cast<SgExpression *>(expression), inheritedAttributeInfo);
+    } else {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[unparse-to-string-context]: expression "
+              "dispatch has invalid language=%s\n",
+              SgFile::get_outputLanguageOptionName(
+                  inheritedAttributeInfo.get_language())
+                  .c_str());
+      ROSE_ABORT();
     }
+    break;
+  }
 
-    if (isSgType(astNode) != NULL) {
-      const SgType *type = isSgType(astNode);
-      // DQ (1/13/2014): These should have been setup to be the same.
-      ROSE_ASSERT(inheritedAttributeInfo.SkipClassDefinition() ==
-                  inheritedAttributeInfo.SkipEnumDefinition());
-
-      // DQ (9/6/2010): Added support to detect use of C (default) or Fortran
-      // code. DQ (2/2/2007): Note that we should modify the unparser to take
-      // the IR nodes as const pointers, but this is a bigger job than I want to
-      // do now!
-      ASSERT_not_null(roseUnparser.u_type);
-      roseUnparser.u_type->unparseType(const_cast<SgType *>(type),
-                                       inheritedAttributeInfo);
-    }
-
-    if (isSgSymbol(astNode) != NULL) {
-      const SgSymbol *symbol = isSgSymbol(astNode);
-
-      // DQ (2/2/2007): Note that we should modify the unparser to take the IR
-      // nodes as const pointers, but this is a bigger job than I want to do
-      // now!
-      ASSERT_not_null(roseUnparser.u_sym);
-      roseUnparser.u_sym->unparseSymbol(const_cast<SgSymbol *>(symbol),
-                                        inheritedAttributeInfo);
-    }
-
-    if (isSgSupport(astNode) != NULL) {
-      // Handle different specific cases derived from SgSupport
-      // (e.g. template parameters and template arguments).
-      ASSERT_not_null(astNode);
-      switch (astNode->variantT()) {
-      case V_SgTemplateParameter: {
-        const SgTemplateParameter *templateParameter =
-            isSgTemplateParameter(astNode);
-
-        // DQ (2/2/2007): Note that we should modify the unparser to take the IR
-        // nodes as const pointers, but this is a bigger job than I want to do
-        // now!
-        ASSERT_not_null(roseUnparser.u_exprStmt);
-        roseUnparser.u_exprStmt->unparseTemplateParameter(
-            const_cast<SgTemplateParameter *>(templateParameter),
-            inheritedAttributeInfo);
-        break;
-      }
-
-      case V_SgTemplateArgument: {
-        const SgTemplateArgument *templateArgument =
-            isSgTemplateArgument(astNode);
-        // DQ (2/2/2007): Note that we should modify the unparser to take the IR
-        // nodes as const pointers, but this is a bigger job than I want to do
-        // now!
-        ASSERT_not_null(roseUnparser.u_exprStmt);
-        roseUnparser.u_exprStmt->unparseTemplateArgument(
-            const_cast<SgTemplateArgument *>(templateArgument),
-            inheritedAttributeInfo);
-
-        // printf ("In globalUnparseToString_OpenMPSafe(): case
-        // V_SgTemplateArgument (after): returnString = %s outputString = %s
-        // \n",returnString.c_str(),outputString.str()); printf ("In
-        // globalUnparseToString_OpenMPSafe(): case V_SgTemplateArgument
-        // (after): returnString = %s outputString = %s
-        // \n",returnString.c_str(),outputString.str()); printf ("In
-        // globalUnparseToString_OpenMPSafe(): case V_SgTemplateArgument
-        // (after): returnString = %s \n",returnString.c_str());
-
-        break;
-      }
-
-      case V_Sg_File_Info: {
-        // DQ (8/5/2007): This is implemented above as a special case!
-        // DQ (5/11/2006): Not sure how or if we should implement this
-        break;
-      }
-
-      case V_SgPragma: {
-        const SgPragma *pr = isSgPragma(astNode);
-        SgPragmaDeclaration *decl = isSgPragmaDeclaration(pr->get_parent());
-        ROSE_ASSERT(decl);
-        ASSERT_not_null(roseUnparser.u_exprStmt);
-        roseUnparser.u_exprStmt->unparseStatement(decl, inheritedAttributeInfo);
-        break;
-      }
-
-      case V_SgFileList: {
-        // DQ (1/23/2010): Not sure how or if we should implement this
-        const SgFileList *fileList = isSgFileList(astNode);
-        ASSERT_not_null(fileList);
-        printf("WARNING: SgFileList support not implemented for unparser...\n");
-        break;
-      }
-
-        // Perhaps the support for SgFile and SgProject shoud be moved to this
-        // location?
-      default: {
-        printf("Error: default reached in node derived from SgSupport astNode "
-               "= %s \n",
-               astNode->class_name().c_str());
-
-        // DQ (4/12/2019): Calling ROSE_ASSERT() is more useful in debugging
-        // than calling ROSE_ABORT(). ROSE_ABORT();
-        ROSE_ABORT();
-      }
+  case StringUnparseCategory::type: {
+    const SgType *type = isSgType(astNode);
+    ASSERT_not_null(type);
+    ROSE_ASSERT(inheritedAttributeInfo.SkipClassDefinition() ==
+                inheritedAttributeInfo.SkipEnumDefinition());
+    if (inheritedAttributeInfo.get_language() == SgFile::e_C_language ||
+        inheritedAttributeInfo.get_language() == SgFile::e_Cxx_language) {
+      SgNode *reference =
+          inheritedAttributeInfo.get_reference_node_for_qualification();
+      if (reference != nullptr) {
+        SgStatement *useSite =
+            inheritedAttributeInfo
+                .get_template_argument_qualification_context();
+        if (!inheritedAttributeInfo.SkipQualifiedNames() &&
+            useSite == nullptr) {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[type-unparse-context]: type=%p/%s "
+                  "reference=%p/%s has no exact qualification use site\n",
+                  static_cast<const void *>(type), type->class_name().c_str(),
+                  static_cast<void *>(reference),
+                  reference->class_name().c_str());
+          ROSE_ABORT();
+        }
+        const NameQualificationResult qualification =
+            roseUnparser.u_name->lookup_type_qualification_for_output(
+                reference, useSite,
+                inheritedAttributeInfo.SkipQualifiedNames());
+        inheritedAttributeInfo.set_name_qualification_length(
+            qualification.length);
+        inheritedAttributeInfo.set_global_qualification_required(
+            qualification.global);
+        inheritedAttributeInfo.set_type_elaboration_required(
+            qualification.typeElaboration);
       }
     }
+    ASSERT_not_null(roseUnparser.u_type);
+    roseUnparser.u_type->unparseType(const_cast<SgType *>(type),
+                                     inheritedAttributeInfo);
+    break;
+  }
 
-    if (astNode == NULL) {
-      // DQ (9/13/2014): This is where we could put support for when astNode ==
-      // NULL, and the input was an STL list of IR node pointers.
-      if (templateArgumentList != NULL) {
-        roseUnparser.u_exprStmt->unparseTemplateArgumentList(
-            *templateArgumentList, inheritedAttributeInfo);
-      }
+  case StringUnparseCategory::templateParameter: {
+    const SgTemplateParameter *parameter = isSgTemplateParameter(astNode);
+    ASSERT_not_null(parameter);
+    ASSERT_not_null(roseUnparser.u_exprStmt);
+    roseUnparser.u_exprStmt->unparseTemplateParameter(
+        const_cast<SgTemplateParameter *>(parameter), inheritedAttributeInfo);
+    break;
+  }
 
-      if (templateParameterList != NULL) {
-        roseUnparser.u_exprStmt->unparseTemplateParameterList(
-            *templateParameterList, inheritedAttributeInfo);
-      }
+  case StringUnparseCategory::templateArgument: {
+    const SgTemplateArgument *argument = isSgTemplateArgument(astNode);
+    ASSERT_not_null(argument);
+    ASSERT_not_null(roseUnparser.u_exprStmt);
+    roseUnparser.u_exprStmt->unparseTemplateArgument(
+        const_cast<SgTemplateArgument *>(argument), inheritedAttributeInfo);
+    break;
+  }
+
+  case StringUnparseCategory::pragma: {
+    const SgPragma *pragma = isSgPragma(astNode);
+    ASSERT_not_null(pragma);
+    SgPragmaDeclaration *declaration =
+        isSgPragmaDeclaration(pragma->get_parent());
+    if (declaration == nullptr || declaration->get_pragma() != pragma) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[unparse-to-string-dispatch]: SgPragma "
+              "has no exact owning declaration\n");
+      ROSE_ABORT();
     }
+    ASSERT_not_null(roseUnparser.u_exprStmt);
+    roseUnparser.u_exprStmt->unparseStatement(declaration,
+                                              inheritedAttributeInfo);
+    break;
+  }
 
-    // Liao 11/5/2010 move out of SgSupport
-    if (isSgInitializedName(astNode)) //       case V_SgInitializedName:
-    {
-      // DQ (8/6/2007): This should just unparse the name (fully qualified if
-      // required). QY: not sure how to implement this DQ (7/23/2004): This
-      // should unparse as a declaration (type and name with initializer).
-      const SgInitializedName *initializedName = isSgInitializedName(astNode);
-      // roseUnparser.get_output_stream() <<
-      // initializedName->get_qualified_name().str();
-      SgScopeStatement *scope = initializedName->get_scope();
-      if (isSgGlobal(scope) == NULL &&
-          scope->containsOnlyDeclarations() == true) {
-        roseUnparser.get_output_stream()
-            << roseUnparser.u_exprStmt->trimGlobalScopeQualifier(
-                   scope->get_qualified_name().getString())
-            << "::";
-      }
-      roseUnparser.get_output_stream() << initializedName->get_name().str();
-      // break;
-    }
+  case StringUnparseCategory::openmpClause: {
+    SgOmpClause *clause = const_cast<SgOmpClause *>(isSgOmpClause(astNode));
+    ASSERT_not_null(clause);
+    ASSERT_not_null(roseUnparser.u_exprStmt);
+    roseUnparser.u_exprStmt->unparseOmpClause(clause, inheritedAttributeInfo);
+    break;
+  }
 
-    // Liao, 8/28/2009, support for SgLocatedNodeSupport
-    if (isSgLocatedNodeSupport(astNode) != NULL) {
-      if (isSgOmpClause(astNode)) {
-        SgOmpClause *omp_clause =
-            const_cast<SgOmpClause *>(isSgOmpClause(astNode));
-        ROSE_ASSERT(omp_clause);
+  case StringUnparseCategory::templateArgumentList:
+    ASSERT_not_null(templateArgumentList);
+    roseUnparser.u_exprStmt->unparseTemplateArgumentList(
+        *templateArgumentList, inheritedAttributeInfo,
+        TemplateArgumentEmission::complete_typed_identity);
+    break;
 
-        ASSERT_not_null(roseUnparser.u_exprStmt);
-        roseUnparser.u_exprStmt->unparseOmpClause(omp_clause,
-                                                  inheritedAttributeInfo);
-      }
-    }
+  case StringUnparseCategory::templateParameterList:
+    ASSERT_not_null(templateParameterList);
+    roseUnparser.u_exprStmt->unparseTemplateParameterList(
+        *templateParameterList, inheritedAttributeInfo);
+    break;
+  }
 
-    // Turn OFF the error checking which triggers an if the default
-    // SgUnparse_Info constructor is called GB (09/27/2007): Removed this error
-    // check, see above.
-    // SgUnparse_Info::set_forceDefaultConstructorToTriggerError(false);
+  // Turn OFF the error checking which triggers an if the default
+  // SgUnparse_Info constructor is called GB (09/27/2007): Removed this error
+  // check, see above.
 
-    // MS: following is the rewritten code of the above outcommented
-    //     code to support ostringstream instead of ostrstream.
+  ROSE_ASSERT(roseUnparser.get_output_stream().get_compact_output() ==
+              compactOutput);
+  if (compactOutput) {
+    roseUnparser.get_output_stream().finalize_compact_output();
+  }
+  if (isSgProject(astNode) == nullptr && isSgSourceFile(astNode) == nullptr) {
     returnString = outputString.str();
-
-    // Call function to tighten up the code to make it more dense
-    if (inheritedAttributeInfo.SkipWhitespaces() == true) {
-      returnString = roseUnparser.removeUnwantedWhiteSpace(returnString);
-    }
   }
 
   // delete the allocated SgUnparse_Info object
@@ -2897,9 +4486,14 @@ string get_output_filename(SgFile &file) {
 
 // Later we might want to move this to the SgProject or SgFile support class
 // (generated by ROSETTA)
-void unparseFile(SgFile *file, UnparseFormatHelp *unparseHelp,
-                 UnparseDelegate *unparseDelegate,
-                 SgScopeStatement *unparseScope) {
+void unparseFile(
+    SgFile *file, UnparseFormatHelp *unparseHelp,
+    UnparseDelegate *unparseDelegate, SgScopeStatement *unparseScope,
+    const UnparsePreprocessingInfoRewriteMap *preprocessingInfoRewrites,
+    const std::string *outputFilenameOverride,
+    NameQualificationContext *nameQualifications,
+    TokenUnparseFrontierContext *tokenFrontiers,
+    unsigned int physicalFileOccurrence) {
   // DQ (1/24/2010): Refactored code to cal this more directly (part of support
   // for SgDirectory). DQ (7/12/2005): Introduce tracking of performance of
   // ROSE.
@@ -2913,34 +4507,72 @@ void unparseFile(SgFile *file, UnparseFormatHelp *unparseHelp,
   // file.set_verbose(true);
 
   ASSERT_not_null(file);
-
-  // FMZ (12/21/2009) the imported files by "use" statements should not be
-  // unparsed
-  if (file->get_skip_unparse() == true) {
-    // We need to be careful about this premature return.
-    return;
+  if (file->get_skip_unparse()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[skipped-file-dispatch]: file=%s was "
+            "dispatched directly despite its explicit skip_unparse role\n",
+            file->getFileName().c_str());
+    ROSE_ABORT();
   }
 
-  // Not that this fails in the AST File I/O tests and since the file in
-  // unparsed a second time ROSE_ASSERT
-  // (file->get_unparse_output_filename().empty() == true);
+  NameQualificationContext localNameQualifications;
+  if (nameQualifications == nullptr) {
+    if (SgSourceFile *sourceFile = isSgSourceFile(file)) {
+      localNameQualifications.clear();
+      Unparser::computeNameQualification(sourceFile, localNameQualifications);
+      nameQualifications = &localNameQualifications;
+    }
+  }
 
-  // DQ (4/22/2006): This can be true when the "-E" option is used, but then we
-  // should not have called unparse()!
-  ROSE_ASSERT(file->get_skip_unparse() == false);
+  TokenUnparseFrontierContext localTokenFrontiers;
+  if (SgSourceFile *sourceFile = isSgSourceFile(file)) {
+    const bool needsTokenFrontier = sourceFile->get_unparse_tokens();
+    if (needsTokenFrontier) {
+      if (tokenFrontiers == nullptr) {
+        buildTokenStreamFrontier(sourceFile,
+                                 sourceFile->get_unparseHeaderFiles(),
+                                 localTokenFrontiers);
+        SgProject *project = SageInterface::getProject(sourceFile);
+        if (project == nullptr) {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[token-boundary]: file=%s has no "
+                  "project for token boundary construction\n",
+                  sourceFile->getFileName().c_str());
+          ROSE_ABORT();
+        }
+        buildFirstAndLastStatementsForIncludeFiles(project,
+                                                   localTokenFrontiers);
+        buildFirstAndLastStatementsForScopes(project, localTokenFrontiers);
+        tokenFrontiers = &localTokenFrontiers;
+      } else if (!tokenFrontiers->hasFile(sourceFile)) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[token-frontier]: file=%s was not "
+                "prepared by its unparse invocation\n",
+                sourceFile->getFileName().c_str());
+        ROSE_ABORT();
+      }
+    }
+  }
 
   // DQ (9/7/2017): This is new code to introduce more general language handling
   // to ROSE.
 
-  // Output prefix (typically "rose_").
-  string output_filename_prefix;
-
   // Name of output filename (with prefix).
-  string outputFilename;
+  const bool hasOutputFilenameOverride = outputFilenameOverride != nullptr;
+  string outputFilename =
+      hasOutputFilenameOverride ? *outputFilenameOverride : std::string();
+  if (hasOutputFilenameOverride && outputFilename.empty()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[output-name]: file=%s received an empty "
+            "output filename override\n",
+            file->getFileName().c_str());
+    ROSE_ABORT();
+  }
 
   // If we did unparse an intermediate file then we want to compile that file
   // instead of the original source file.
-  if (file->get_unparse_output_filename().empty() == true) {
+  if (!hasOutputFilenameOverride &&
+      file->get_unparse_output_filename().empty() == true) {
 
     switch (file->get_outputLanguage()) {
     case SgFile::e_error_language: {
@@ -2949,8 +4581,11 @@ void unparseFile(SgFile *file, UnparseFormatHelp *unparseHelp,
     }
 
     case SgFile::e_default_language: {
-      // printf ("Error: SgFile::e_default_language detected in unparser \n");
-      // ROSE_ABORT();
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[output-language]: file=%s has default "
+              "output language\n",
+              file->getFileName().c_str());
+      ROSE_ABORT();
     }
 
     case SgFile::e_C_language:
@@ -3002,18 +4637,18 @@ void unparseFile(SgFile *file, UnparseFormatHelp *unparseHelp,
 
     if (project != NULL) {
       if (project->get_unparse_in_same_directory_as_input_file() == true) {
-        // outputFilename =
-        // Rose::getPathFromFileName(file->get_sourceFileNameWithPath()) +
-        // "/rose_" + file->get_sourceFileNameWithoutPath();
-        outputFilename =
-            Rose::getPathFromFileName(file->get_sourceFileNameWithPath()) +
-            "/" + output_filename_prefix +
-            file->get_sourceFileNameWithoutPath();
+        const std::filesystem::path inputPath(
+            file->get_sourceFileNameWithPath());
+        outputFilename = (inputPath.parent_path() /
+                          ("rose_" + file->get_sourceFileNameWithoutPath()))
+                             .string();
       }
-    } else {
-      printf(
-          "WARNING: In unparseFile(): file = %p has no associated project \n",
-          file);
+    } else if (isSgSourceFile(file) != nullptr) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[missing-project]: file=%s source file "
+              "has no associated project\n",
+              file->getFileName().c_str());
+      ROSE_ABORT();
     }
 
     // DQ (9/15/2013): Added assertion.
@@ -3044,588 +4679,394 @@ void unparseFile(SgFile *file, UnparseFormatHelp *unparseHelp,
     ROSE_ASSERT(file->get_unparse_output_filename().empty() == false);
     // assert(file->get_unparse_output_filename().empty() == false);
   }
-  const string resolvedOutputFilename =
-      resolveUnparseOutputToTestDir(file, file->get_unparse_output_filename());
-  if (resolvedOutputFilename != file->get_unparse_output_filename()) {
-    file->set_unparse_output_filename(resolvedOutputFilename);
+  if (hasOutputFilenameOverride) {
+    outputFilename = resolveUnparseOutputToTestDir(file, outputFilename);
+  } else {
+    const string resolvedOutputFilename = resolveUnparseOutputToTestDir(
+        file, file->get_unparse_output_filename());
+    if (resolvedOutputFilename != file->get_unparse_output_filename()) {
+      file->set_unparse_output_filename(resolvedOutputFilename);
+    }
+    outputFilename = file->get_unparse_output_filename();
   }
 
-  // DQ (2/23/2021): Added assertion.
-  ROSE_ASSERT(file->get_unparse_output_filename().empty() == false);
-
-  if (file->get_skip_unparse() == true) {
-    // MS: commented out the following output
-    // if ( file.get_verbose() == true )
-    // printf ("### Rose::skip_unparse == true: Skipping all source code
-    // generation by ROSE generated preprocessor! \n");
-  } else {
-    // Open the file where we will put the generated code
-    string outputFilename = get_output_filename(*file);
-
-    if (SgProject::get_verbose() > 0) {
-      printf("Calling the unparser: outputFilename = %s \n",
-             outputFilename.c_str());
+  SgProject *project = SageInterface::getProject(file);
+  const bool explicitClobber =
+      project != nullptr && project->get_unparser__clobber_input_file();
+  SgSourceFile *sourceFile = isSgSourceFile(file);
+  const bool generatedSource =
+      sourceFile != nullptr && sourceFile->get_isGeneratedSource();
+  if (generatedSource || !explicitClobber) {
+    std::error_code inputPathError;
+    std::error_code outputPathError;
+    const std::filesystem::path inputPath = std::filesystem::weakly_canonical(
+        file->get_sourceFileNameWithPath(), inputPathError);
+    const std::filesystem::path outputPath =
+        std::filesystem::weakly_canonical(outputFilename, outputPathError);
+    if (inputPathError || outputPathError) {
+      std::cerr << "Error: unable to canonicalize unparser input/output paths: "
+                << file->get_sourceFileNameWithPath() << " and "
+                << outputFilename << std::endl;
+      ROSE_ABORT();
     }
-
-    // DQ (3/19/2014): Added support for noclobber option.
-    std::filesystem::path output_file = outputFilename;
-
-    bool trigger_file_comparision = false;
-
-    string saved_filename = outputFilename;
-    string alternative_filename = outputFilename + ".noclobber_compare";
-
-    if (std::filesystem::exists(output_file)) {
-      if (SgProject::get_verbose() > 0) {
-        printf("In unparseFile(SgFile*): (outputFilename) output file exists = "
-               "%s \n",
-               output_file.string().c_str());
-      }
-
-      SgProject *project = SageInterface::getProject(file);
-      ASSERT_not_null(project);
-
-      if (project->get_noclobber_output_file() == true) {
-        // If the file exists then it is an error if -rose:noclobber_output_file
-        // option was specified.
-        printf("\n\n***********************************************************"
-               "******************************************* \n");
-        printf("Error: the output file already exists, cannot overwrite "
-               "(-rose:noclobber_output_file option specified) \n");
-        printf("   --- outputFilename = %s \n", outputFilename.c_str());
-        printf("***************************************************************"
-               "*************************************** \n\n\n");
-        // ROSE_ABORT();
+    if (generatedSource) {
+      if (inputPath != outputPath) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[generated-output-path]: identity=%s "
+                "output=%s do not name the same path\n",
+                file->get_sourceFileNameWithPath().c_str(),
+                outputFilename.c_str());
         ROSE_ABORT();
-      } else {
-        // If the file exists then generate an alternative file so that we can
-        // compare the new file to the existing file (error if not identical).
-        if (project->get_noclobber_if_different_output_file() == true) {
-          // If the file exists and the generated file is not identical, then it
-          // is an error if -rose:noclobber_if_different_output_file option was
-          // specified.
-          trigger_file_comparision = true;
-
-          if (SgProject::get_verbose() > 0)
-            printf("Generate test output in alternative_filename = %s \n",
-                   alternative_filename.c_str());
-
-          outputFilename = alternative_filename;
-        }
-        // Pei-Hung (8/6/2014) appending PID as alternative name to avoid
-        // collision
-        else {
-          if (project->get_appendPID() == true) {
-            ostringstream os;
-            os << getpid();
-            unsigned dot = outputFilename.find_last_of(".");
-            outputFilename = outputFilename.substr(0, dot) + "_" + os.str() +
-                             outputFilename.substr(dot);
-            if (SgProject::get_verbose() > 0)
-              printf("Generate test output name with PID = %s \n",
-                     outputFilename.c_str());
-          }
-        }
       }
-
-      file->set_unparse_output_filename(outputFilename);
-    }
-
-    SgSourceFile *sourceFile = isSgSourceFile(file);
-    bool useRawTokenOutput = false;
-    // The default C/C++ unparse path must continue through the AST-based
-    // unparser, even for unchanged files. Bypassing it with raw token replay
-    // changes long-standing normalization behavior and breaks transformation
-    // tools whose reference output depends on canonical AST formatting.
-
-    if (useRawTokenOutput == true) {
-      Unparser_Opt dummyOptions;
-      ostringstream dummyStream;
-      Unparser rawTokenUnparser(
-          &dummyStream, sourceFile->get_file_info()->get_filenameString(),
-          dummyOptions, unparseHelp, unparseDelegate);
-      rawTokenUnparser.unparseFileUsingTokenStream(sourceFile, &outputFilename);
-      restoreEmptyConditionalBodiesInOutput(file, outputFilename);
     } else {
-      fstream ROSE_OutputFile(outputFilename.c_str(), ios::out);
-      // ROSE_OutputFile.open(s_file.c_str());
-
-      // DQ (12/8/2007): Added error checking for opening out output
-      // file.
-      if (!ROSE_OutputFile) {
-        // throw std::exception("(fstream) error while opening file.");
-        printf("Error detected in opening file %s for output \n",
-               outputFilename.c_str());
+      bool aliasesInput = inputPath == outputPath;
+      std::error_code existsError;
+      const bool outputExists =
+          std::filesystem::exists(outputPath, existsError);
+      if (existsError) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[output-path]: output=%s unable to "
+                "inspect destination: %s\n",
+                outputFilename.c_str(), existsError.message().c_str());
         ROSE_ABORT();
       }
-
-      // file.set_unparse_includes(false);
-      // ROSE_ASSERT (file.get_unparse_includes() == false);
-
-      // This is the new unparser that Gary Lee is developing
-      // The goal of this unparser is to provide formatting
-      // similar to that of the original application code
-
-      // all options are now defined to be false. When these options can be
-      // passed in from the prompt, these options will be set accordingly.
-      bool UseAutoKeyword = false;
-      // bool linefile                      = false;
-      bool generateLineDirectives = file->get_unparse_line_directives();
-
-      // DQ (6/19/2007): note that test2004_24.C will fail if this is false.
-      // If false, this will cause A.operator+(B) to be unparsed as "A+B". This
-      // is a confusing point!
-      bool useOverloadedOperators = false;
-      // bool useOverloadedOperators        = true;
-
-      bool num = false;
-
-      // It is an error to have this always turned off (e.g. pointer = this;
-      // will not unparse correctly)
-      bool _this = true;
-
-      bool caststring = false;
-      bool _debug = false;
-      bool _class = false;
-      bool _forced_transformation_format = false;
-
-      // control unparsing of include files into the source file (default is
-      // false)
-      bool _unparse_includes = file->get_unparse_includes();
-
-      Unparser_Opt roseOptions(UseAutoKeyword, generateLineDirectives,
-                               useOverloadedOperators, num, _this, caststring,
-                               _debug, _class, _forced_transformation_format,
-                               _unparse_includes);
-
-      // printf ("Rose::getFileName(file) = %s \n",Rose::getFileName(file));
-      // printf ("file->get_file_info()->get_filenameString = %s
-      // \n",file->get_file_info()->get_filenameString().c_str());
-
-      // DQ (7/19/2007): Remove lineNumber from constructor parameter list.
-      // int lineNumber = 0;  // Zero indicates that ALL lines should be
-      // unparsed Unparser roseUnparser ( &file, &ROSE_OutputFile,
-      // Rose::getFileName(&file), roseOptions, lineNumber ); Unparser
-      // roseUnparser ( &ROSE_OutputFile, Rose::getFileName(&file), roseOptions,
-      // lineNumber, NULL, repl ); Unparser roseUnparser ( &ROSE_OutputFile,
-      // Rose::getFileName(file), roseOptions, lineNumber, unparseHelp,
-      // unparseDelegate ); Unparser roseUnparser ( &ROSE_OutputFile,
-      // file->get_file_info()->get_filenameString(), roseOptions, lineNumber,
-      // unparseHelp, unparseDelegate );
-
-      Unparser roseUnparser(&ROSE_OutputFile,
-                            file->get_file_info()->get_filenameString(),
-                            roseOptions, unparseHelp, unparseDelegate);
-
-      // Location to turn on unparser specific debugging data that shows up in
-      // the output file This prevents the unparsed output file from compiling
-      // properly! ROSE_DEBUG = 0;
-
-      // DQ (12/5/2006): Output information that can be used to colorize
-      // properties of generated code (useful for debugging).
-      roseUnparser.set_embedColorCodesInGeneratedCode(
-          file->get_embedColorCodesInGeneratedCode());
-      roseUnparser.set_generateSourcePositionCodes(
-          file->get_generateSourcePositionCodes());
-
-      // information that is passed down through the tree (inherited attribute)
-      // SgUnparse_Info inheritedAttributeInfo (NO_UNPARSE_INFO);
-      SgUnparse_Info inheritedAttributeInfo;
-
-      // DQ (9/24/2013): Set the output language to the inpuse language.
-      inheritedAttributeInfo.set_language(file->get_outputLanguage());
-
-      // inheritedAttributeInfo.display("Inside of unparseFile(SgFile* file)");
-      // Call member function to start the unparsing process
-      // roseUnparser.run_unparser();
-      // roseUnparser.unparseFile(file,inheritedAttributeInfo);
-
-      // DQ (9/2/2008): This one way to handle the variations in type
-      switch (file->variantT()) {
-      case V_SgSourceFile: {
-        SgSourceFile *sourceFile = isSgSourceFile(file);
-
-        ROSE_ASSERT(inheritedAttributeInfo.get_current_source_file() == NULL);
-
-        // DQ (8/16/2018): Set this here before it is passed into unparseFile().
-        inheritedAttributeInfo.set_current_source_file(sourceFile);
-
-        ASSERT_not_null(inheritedAttributeInfo.get_current_source_file());
-
-        // DQ (10/29/2018): I now think we need to support this mechanism of
-        // specifying the scope to be unparsed separately. This is essential to
-        // the support for header files representing nested scopes inside of the
-        // global scope. Traversing the global scope does not permit these inner
-        // nested scopes to be traversed using the unparser.
-
-        // DQ (8/16/2018): the more conventional usage is to us a single
-        // SgSourceFile and SgGlobal for each header file.
-        // roseUnparser.unparseFile(sourceFile,inheritedAttributeInfo,
-        // unparseScope);
-        // roseUnparser.unparseFile(sourceFile,inheritedAttributeInfo, NULL);
-        roseUnparser.unparseFile(sourceFile, inheritedAttributeInfo,
-                                 unparseScope);
-        break;
-      }
-
-      case V_SgUnknownFile: {
-        SgUnknownFile *unknownFile = isSgUnknownFile(file);
-
-        unknownFile->set_skipfinalCompileStep(true);
-
-        printf("Warning: Unclear what to unparse from a SgUnknownFile (set "
-               "skipfinalCompileStep) \n");
-        break;
-      }
-
-      default: {
-        printf("Error: default reached in unparser: file = %s \n",
-               file->class_name().c_str());
-        ROSE_ABORT();
-      }
-      }
-
-      // And finally we need to close the file (to flush everything out!)
-      ROSE_OutputFile.close();
-      restoreEmptyConditionalBodiesInOutput(file, outputFilename);
-
-      // Invoke post-output user-defined callbacks if any.  We must pass the
-      // absolute output name because the build system may have changed
-      // directories by now and the callback might need to know how this name
-      // compares to the top of the build tree.
-      if (unparseHelp != NULL) {
-        Rose::FileSystem::Path fullOutputName =
-            Rose::FileSystem::makeAbsolute(outputFilename);
-        UnparseFormatHelp::PostOutputCallback::Args args(file, fullOutputName);
-        // unparseHelp->postOutputCallbacks.apply(true, args);
-        MLOG_FATAL_CXX(MLOG_UNPARSER)
-            << "Need callback mechanisms for post-output hooks\n";
-      }
-
-      // DQ (3/19/2014): If -rose:noclobber_if_different_output, then test the
-      // generated file against the original file.
-      if (trigger_file_comparision == true) {
-        // Test the generated file against the previously generated file of the
-        // same original name. if different, it is an error, if the same it is
-        // OK.
-
-        if (SgProject::get_verbose() > 0) {
-          printf("Testing saved_filename against alternative_filename (using "
-                 "std::filesystem::equivalent()): \n");
-          printf("   --- saved_filename       = %s \n", saved_filename.c_str());
-          printf("   --- alternative_filename = %s \n",
-                 alternative_filename.c_str());
-        }
-
-        std::filesystem::path saved_output_file = saved_filename;
-        std::filesystem::path alternative_output_file = alternative_filename;
-
-        std::ifstream ifs1(saved_filename.c_str());
-        std::ifstream ifs2(alternative_filename.c_str());
-
-        std::istream_iterator<char> b1(ifs1);
-        std::istream_iterator<char> b2(ifs2);
-
-        bool files_are_identical = true;
-
-        // Check the sizes, if the same then we have to check the contents.
-        if (file_size(saved_output_file) ==
-            file_size(alternative_output_file)) {
-          size_t filesize = file_size(saved_output_file);
-
-          if (SgProject::get_verbose() > 0) {
-            printf("   --- files are the same size = %" PRIuPTR
-                   " (checking contents) \n",
-                   filesize);
-          }
-
-          size_t counter = 0;
-          files_are_identical = true;
-          while (files_are_identical == true && counter < filesize) {
-            // check for inequality of file data (at least this is portable).
-            if (*b1 != *b2) {
-              if (SgProject::get_verbose() > 0)
-                printf("...detected file content inequality... \n");
-
-              files_are_identical = false;
-            }
-
-            b1++;
-            b2++;
-            counter++;
-          }
-        } else {
-          // If not the same size then they are not the same files.
-          if (SgProject::get_verbose() > 0) {
-            size_t saved_filesize = file_size(saved_output_file);
-            size_t alternative_filesize = file_size(alternative_output_file);
-            printf(
-                "   --- files are not the same size saved_filesize = %" PRIuPTR
-                " alternative_filesize = %" PRIuPTR " \n",
-                saved_filesize, alternative_filesize);
-          }
-
-          files_are_identical = false;
-        }
-
-        if (SgProject::get_verbose() > 0) {
-          printf("   --- files_are_identical = %s \n",
-                 files_are_identical ? "true" : "false");
-        }
-
-        if (files_are_identical == false) {
-          printf("\n\n*********************************************************"
-                 "********************************************* \n");
-          printf("Error: files are not equivalent: \n");
-          printf("   --- saved_filename       = %s \n", saved_filename.c_str());
-          printf("   --- alternative_filename = %s \n",
-                 alternative_filename.c_str());
-          printf("*************************************************************"
-                 "***************************************** \n\n\n");
-
-          // remove the generated file or leave in place to allow users to
-          // examine file differences. std::filesystem::remove(unparsed_file);
-
+      if (!aliasesInput && outputExists) {
+        std::error_code equivalentError;
+        aliasesInput =
+            std::filesystem::equivalent(inputPath, outputPath, equivalentError);
+        if (equivalentError) {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[output-path]: input=%s output=%s "
+                  "unable to compare paths: %s\n",
+                  file->get_sourceFileNameWithPath().c_str(),
+                  outputFilename.c_str(), equivalentError.message().c_str());
           ROSE_ABORT();
         }
       }
+      if (aliasesInput) {
+        std::cerr << "Error: refusing to overwrite unparser input without "
+                     "-rose:unparser:clobber_input_file: "
+                  << inputPath << std::endl;
+        ROSE_ABORT();
+      }
+    }
+  }
+
+  // DQ (2/23/2021): Added assertion.
+  ROSE_ASSERT(outputFilename.empty() == false);
+
+  if (SgProject::get_verbose() > 0) {
+    printf("Calling the unparser: outputFilename = %s \n",
+           outputFilename.c_str());
+  }
+
+  // DQ (3/19/2014): Added support for noclobber option.
+  std::filesystem::path output_file = outputFilename;
+
+  bool trigger_file_comparision = false;
+
+  string saved_filename = outputFilename;
+
+  std::error_code outputExistsError;
+  const bool outputExists =
+      std::filesystem::exists(output_file, outputExistsError);
+  if (outputExistsError) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[output-path]: output=%s unable to "
+            "inspect destination: %s\n",
+            outputFilename.c_str(), outputExistsError.message().c_str());
+    ROSE_ABORT();
+  }
+  if (outputExists) {
+    if (SgProject::get_verbose() > 0) {
+      printf("In unparseFile(SgFile*): (outputFilename) output file exists = "
+             "%s \n",
+             output_file.string().c_str());
+    }
+
+    SgProject *project = SageInterface::getProject(file);
+    ASSERT_not_null(project);
+
+    if (project->get_noclobber_output_file() == true) {
+      // If the file exists then it is an error if -rose:noclobber_output_file
+      // option was specified.
+      printf("\n\n***********************************************************"
+             "******************************************* \n");
+      printf("Error: the output file already exists, cannot overwrite "
+             "(-rose:noclobber_output_file option specified) \n");
+      printf("   --- outputFilename = %s \n", outputFilename.c_str());
+      printf("***************************************************************"
+             "*************************************** \n\n\n");
+      // ROSE_ABORT();
+      ROSE_ABORT();
+    } else {
+      // If the file exists then generate an alternative file so that we can
+      // compare the new file to the existing file (error if not identical).
+      if (project->get_noclobber_if_different_output_file() == true) {
+        // If the file exists and the generated file is not identical, then it
+        // is an error if -rose:noclobber_if_different_output_file option was
+        // specified.
+        trigger_file_comparision = true;
+      }
+      // Pei-Hung (8/6/2014) appending PID as alternative name to avoid
+      // collision
+      else {
+        if (project->get_appendPID() == true) {
+          ostringstream os;
+          os << getpid();
+          unsigned dot = outputFilename.find_last_of(".");
+          outputFilename = outputFilename.substr(0, dot) + "_" + os.str() +
+                           outputFilename.substr(dot);
+          if (SgProject::get_verbose() > 0)
+            printf("Generate test output name with PID = %s \n",
+                   outputFilename.c_str());
+        }
+      }
+    }
+
+    if (!hasOutputFilenameOverride) {
+      file->set_unparse_output_filename(outputFilename);
+    }
+  }
+
+  {
+    std::unique_ptr<AtomicOutputStagingFile> staging =
+        createAtomicOutputStagingFile(outputFilename);
+    const string &stagingFilename = staging->filename();
+    std::ostream &ROSE_OutputFile = staging->output();
+
+    // file.set_unparse_includes(false);
+    // ROSE_ASSERT (file.get_unparse_includes() == false);
+
+    // This is the new unparser that Gary Lee is developing
+    // The goal of this unparser is to provide formatting
+    // similar to that of the original application code
+
+    // all options are now defined to be false. When these options can be
+    // passed in from the prompt, these options will be set accordingly.
+    bool UseAutoKeyword = false;
+    // bool linefile                      = false;
+    bool generateLineDirectives = file->get_unparse_line_directives();
+
+    // DQ (6/19/2007): note that test2004_24.C will fail if this is false.
+    // If false, this will cause A.operator+(B) to be unparsed as "A+B". This
+    // is a confusing point!
+    bool useOverloadedOperators = false;
+    // bool useOverloadedOperators        = true;
+
+    bool num = false;
+
+    // It is an error to have this always turned off (e.g. pointer = this;
+    // will not unparse correctly)
+    bool _this = true;
+
+    bool caststring = false;
+    bool _debug = false;
+    bool _class = false;
+    bool _forced_transformation_format = false;
+
+    // control unparsing of include files into the source file (default is
+    // false)
+    bool _unparse_includes = file->get_unparse_includes();
+
+    Unparser_Opt roseOptions(UseAutoKeyword, generateLineDirectives,
+                             useOverloadedOperators, num, _this, caststring,
+                             _debug, _class, _forced_transformation_format,
+                             _unparse_includes);
+
+    // printf ("Rose::getFileName(file) = %s \n",Rose::getFileName(file));
+    // printf ("file->get_file_info()->get_filenameString = %s
+    // \n",file->get_file_info()->get_filenameString().c_str());
+
+    // DQ (7/19/2007): Remove lineNumber from constructor parameter list.
+    // int lineNumber = 0;  // Zero indicates that ALL lines should be
+    // unparsed Unparser roseUnparser ( &file, &ROSE_OutputFile,
+    // Rose::getFileName(&file), roseOptions, lineNumber ); Unparser
+    // roseUnparser ( &ROSE_OutputFile, Rose::getFileName(&file), roseOptions,
+    // lineNumber, NULL, repl ); Unparser roseUnparser ( &ROSE_OutputFile,
+    // Rose::getFileName(file), roseOptions, lineNumber, unparseHelp,
+    // unparseDelegate ); Unparser roseUnparser ( &ROSE_OutputFile,
+    // file->get_file_info()->get_filenameString(), roseOptions, lineNumber,
+    // unparseHelp, unparseDelegate );
+
+    Unparser roseUnparser(
+        &ROSE_OutputFile, file->get_file_info()->get_filenameString(),
+        roseOptions, unparseHelp, unparseDelegate, preprocessingInfoRewrites,
+        nameQualifications, tokenFrontiers);
+
+    // Location to turn on unparser specific debugging data that shows up in
+    // the output file This prevents the unparsed output file from compiling
+    // properly! ROSE_DEBUG = 0;
+
+    // DQ (12/5/2006): Output information that can be used to colorize
+    // properties of generated code (useful for debugging).
+    roseUnparser.set_embedColorCodesInGeneratedCode(
+        file->get_embedColorCodesInGeneratedCode());
+    roseUnparser.set_generateSourcePositionCodes(
+        file->get_generateSourcePositionCodes());
+
+    // information that is passed down through the tree (inherited attribute)
+    // SgUnparse_Info inheritedAttributeInfo (NO_UNPARSE_INFO);
+    SgUnparse_Info inheritedAttributeInfo;
+
+    // DQ (9/24/2013): Set the output language to the inpuse language.
+    inheritedAttributeInfo.set_language(file->get_outputLanguage());
+
+    // inheritedAttributeInfo.display("Inside of unparseFile(SgFile* file)");
+    // Call member function to start the unparsing process
+    // roseUnparser.run_unparser();
+    // roseUnparser.unparseFile(file,inheritedAttributeInfo);
+
+    // DQ (9/2/2008): This one way to handle the variations in type
+    switch (file->variantT()) {
+    case V_SgSourceFile: {
+      SgSourceFile *sourceFile = isSgSourceFile(file);
+
+      ROSE_ASSERT(inheritedAttributeInfo.get_current_source_file() == NULL);
+
+      // DQ (8/16/2018): Set this here before it is passed into unparseFile().
+      inheritedAttributeInfo.set_current_source_file(sourceFile);
+      inheritedAttributeInfo.set_current_physical_file_occurrence_id(
+          physicalFileOccurrence);
+
+      ASSERT_not_null(inheritedAttributeInfo.get_current_source_file());
+
+      // DQ (10/29/2018): I now think we need to support this mechanism of
+      // specifying the scope to be unparsed separately. This is essential to
+      // the support for header files representing nested scopes inside of the
+      // global scope. Traversing the global scope does not permit these inner
+      // nested scopes to be traversed using the unparser.
+
+      // DQ (8/16/2018): the more conventional usage is to us a single
+      // SgSourceFile and SgGlobal for each header file.
+      // roseUnparser.unparseFile(sourceFile,inheritedAttributeInfo,
+      // unparseScope);
+      // roseUnparser.unparseFile(sourceFile,inheritedAttributeInfo, NULL);
+      roseUnparser.unparseFile(sourceFile, inheritedAttributeInfo,
+                               unparseScope);
+      break;
+    }
+
+    case V_SgUnknownFile: {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[unknown-file]: file=%s cannot unparse "
+              "SgUnknownFile\n",
+              file->getFileName().c_str());
+      ROSE_ABORT();
+    }
+
+    default: {
+      printf("Error: default reached in unparser: file = %s \n",
+             file->class_name().c_str());
+      ROSE_ABORT();
+    }
+    }
+
+    staging->finishWrites(outputFilename, "output-write");
+    if (!trigger_file_comparision) {
+      commitAtomicOutput(*staging, outputFilename);
+    }
+
+    // DQ (3/19/2014): If -rose:noclobber_if_different_output, then test the
+    // generated file against the original file.
+    if (trigger_file_comparision == true) {
+      // Test the generated file against the previously generated file of the
+      // same original name. if different, it is an error, if the same it is
+      // OK.
+
+      if (SgProject::get_verbose() > 0) {
+        printf("Testing saved_filename against stagingFilename (using "
+               "std::filesystem::equivalent()): \n");
+        printf("   --- saved_filename       = %s \n", saved_filename.c_str());
+        printf("   --- stagingFilename      = %s \n", stagingFilename.c_str());
+      }
+
+      std::filesystem::path saved_output_file = saved_filename;
+      const bool files_are_identical =
+          filesHaveIdenticalContents(saved_output_file, *staging);
+
+      if (SgProject::get_verbose() > 0) {
+        printf("   --- files_are_identical = %s \n",
+               files_are_identical ? "true" : "false");
+      }
+
+      if (files_are_identical == false) {
+        fprintf(stderr,
+                "\n\n*********************************************************"
+                "********************************************* \n");
+        fprintf(stderr, "Error: files are not equivalent: \n");
+        fprintf(stderr, "   --- saved_filename       = %s \n",
+                saved_filename.c_str());
+        fprintf(stderr, "   --- stagingFilename      = %s \n",
+                stagingFilename.c_str());
+        fprintf(stderr,
+                "*************************************************************"
+                "***************************************** \n\n\n");
+
+        // remove the generated file or leave in place to allow users to
+        // examine file differences. std::filesystem::remove(unparsed_file);
+
+        staging->discard(outputFilename, "output-compare");
+        ROSE_ABORT();
+      }
+      staging->discard(outputFilename, "output-compare");
     }
   }
 }
 
 namespace {
-bool isSeparateIncludeSearchPathOption(const string &argument) {
-  return argument == "-I" || argument == "-iquote" || argument == "-isystem" ||
-         argument == "-idirafter" || argument == "-F" ||
-         argument == "-iframework" || argument == "--include-directory";
-}
-
-bool isJoinedIncludeSearchPathOption(const string &argument) {
-  return (argument.rfind("-I", 0) == 0 && argument.size() > 2) ||
-         (argument.rfind("-iquote", 0) == 0 && argument.size() > 7) ||
-         (argument.rfind("-isystem", 0) == 0 && argument.size() > 8) ||
-         (argument.rfind("-idirafter", 0) == 0 && argument.size() > 10) ||
-         (argument.rfind("-F", 0) == 0 && argument.size() > 2) ||
-         (argument.rfind("-iframework", 0) == 0 && argument.size() > 11) ||
-         (argument.rfind("--include-directory=", 0) == 0);
-}
-
-bool isSeparateQuoteSearchPathOption(const string &argument) {
-  return argument == "-iquote";
-}
-
-bool isJoinedQuoteSearchPathOption(const string &argument) {
-  return argument.rfind("-iquote", 0) == 0 && argument.size() > 7;
-}
-
-list<string>
-buildQuoteIncludeOptions(const list<string> &includeCompilerOptions) {
-  list<string> quoteIncludeOptions;
-  for (list<string>::const_iterator option = includeCompilerOptions.begin();
-       option != includeCompilerOptions.end(); ++option) {
-    if (option->rfind("-I", 0) == 0 && option->size() > 2) {
-      quoteIncludeOptions.push_back("-iquote" + option->substr(2));
+void addHeaderUnparseIncludeOptions(
+    SgProject *project, const list<string> &includeCompilerOptions) {
+  ASSERT_not_null(project);
+  SgStringList &extraIncludeOptions =
+      project->get_extraIncludeDirectorySpecifierBeforeList();
+  for (const std::string &option : includeCompilerOptions) {
+    if (option.rfind("-I", 0) != 0 || option.size() <= 2) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[header-include-path]: project=%p "
+              "invalid generated-header include option '%s'\n",
+              static_cast<void *>(project), option.c_str());
+      ROSE_ABORT();
     }
-  }
-  return quoteIncludeOptions;
-}
-
-void insertAfterQuoteSearchPathOptions(
-    SgStringList &argumentList, const list<string> &quoteIncludeOptions) {
-  if (quoteIncludeOptions.empty())
-    return;
-
-  size_t insertionIndex = argumentList.empty() ? 0 : 1;
-  for (size_t i = 1; i < argumentList.size(); ++i) {
-    if (isSeparateQuoteSearchPathOption(argumentList[i])) {
-      insertionIndex = i + 1;
-      if (insertionIndex < argumentList.size()) {
-        ++insertionIndex;
-        ++i;
-      }
-    } else if (isJoinedQuoteSearchPathOption(argumentList[i])) {
-      insertionIndex = i + 1;
+    if (std::find(extraIncludeOptions.begin(), extraIncludeOptions.end(),
+                  option) == extraIncludeOptions.end()) {
+      extraIncludeOptions.push_back(option);
     }
   }
 
-  argumentList.insert(argumentList.begin() + insertionIndex,
-                      quoteIncludeOptions.begin(), quoteIncludeOptions.end());
-}
-
-void insertHeaderUnparseIncludeOptions(
-    SgStringList &argumentList, const list<string> &includeCompilerOptions) {
-  if (includeCompilerOptions.empty())
-    return;
-
-  insertAfterQuoteSearchPathOptions(
-      argumentList, buildQuoteIncludeOptions(includeCompilerOptions));
-
-  size_t insertionIndex = argumentList.empty() ? 0 : 1;
-  for (size_t i = 1; i < argumentList.size(); ++i) {
-    if (isSeparateIncludeSearchPathOption(argumentList[i])) {
-      insertionIndex = i + 1;
-      if (insertionIndex < argumentList.size()) {
-        ++insertionIndex;
-        ++i;
-      }
-    } else if (isJoinedIncludeSearchPathOption(argumentList[i])) {
-      insertionIndex = i + 1;
+  SgStringList &originalSourceIncludeOptions =
+      project->get_extraIncludeDirectorySpecifierAfterList();
+  for (SgFile *projectFile : project->get_fileList()) {
+    SgSourceFile *sourceFile = isSgSourceFile(projectFile);
+    if (sourceFile == nullptr || sourceFile->get_isHeaderFile()) {
+      continue;
+    }
+    const std::string sourcePath =
+        FileHelper::normalizePathIfPossible(sourceFile->getFileName());
+    const std::string sourceDirectory = FileHelper::normalizePathIfPossible(
+        Rose::getPathFromFileName(sourcePath));
+    if (sourcePath.empty() || sourceDirectory.empty()) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[header-include-path]: source=%p path=%s "
+              "has no normalized containing directory\n",
+              static_cast<void *>(sourceFile),
+              sourceFile->getFileName().c_str());
+      ROSE_ABORT();
+    }
+    const std::string option = "-I" + sourceDirectory;
+    if (std::find(originalSourceIncludeOptions.begin(),
+                  originalSourceIncludeOptions.end(),
+                  option) == originalSourceIncludeOptions.end()) {
+      originalSourceIncludeOptions.push_back(option);
     }
   }
-
-  argumentList.insert(argumentList.begin() + insertionIndex,
-                      includeCompilerOptions.begin(),
-                      includeCompilerOptions.end());
 }
 } // namespace
 
-void insertHeaderUnparseIncludeOptionsIntoCommandLine(
-    SgProject *project, const list<string> &includeCompilerOptions) {
-  SgStringList argumentList = project->get_originalCommandLineArgumentList();
-
-  insertHeaderUnparseIncludeOptions(argumentList, includeCompilerOptions);
-
-  project->get_originalCommandLineArgumentList() = argumentList;
-  const SgFilePtrList &fileList = project->get_fileList();
-  for (SgFilePtrList::const_iterator sgFilePtr = fileList.begin();
-       sgFilePtr != fileList.end(); sgFilePtr++) {
-    argumentList = (*sgFilePtr)->get_originalCommandLineArgumentList();
-    insertHeaderUnparseIncludeOptions(argumentList, includeCompilerOptions);
-    (*sgFilePtr)->get_originalCommandLineArgumentList() = argumentList;
-  }
-}
-
 // DQ (3/14/2021): Output include saved in the SgIncludeFile about first and
 // last computed statements in each header file.
-void outputFirstAndLastIncludeFileInfo(SgSourceFile *sourceFile) {
-  int counter = 0;
-
-#define DEBUG_OUTPUT_FIRST_LAST_DATA 1
-
-  ROSE_ASSERT(sourceFile != NULL);
-
-#if DEBUG_OUTPUT_FIRST_LAST_DATA
-  printf("In outputFirstAndLastIncludeFileInfo(): "
-         "Rose::includeFileMapForUnparsing.size() = %zu \n",
-         Rose::includeFileMapForUnparsing.size());
-#endif
-
-#if DEBUG_OUTPUT_FIRST_LAST_DATA
-  printf("\nOutput collected information about first and last statements for "
-         "each include file \n");
-  printf("\nOutput information on sourceFile = %s \n",
-         sourceFile->getFileName().c_str());
-  printf(" --- sourceFile->get_isDynamicLibrary() = %s \n",
-         sourceFile->get_isDynamicLibrary() ? "true" : "false");
-#endif
-
-#if DEBUG_OUTPUT_FIRST_LAST_DATA || 0
-  // DQ (5/20/2021): Adding support to the input source file to compute first
-  // and last statements for the unparser.
-  if (sourceFile->get_firstStatement() != NULL) {
-    printf(" --- sourceFile->get_firstStatement() = %p = %s name = %s \n",
-           sourceFile->get_firstStatement(),
-           sourceFile->get_firstStatement()->class_name().c_str(),
-           SageInterface::get_name(sourceFile->get_firstStatement()).c_str());
-  } else {
-    printf(" --- sourceFile->get_firstStatement() = %p \n",
-           sourceFile->get_firstStatement());
-  }
-
-  if (sourceFile->get_lastStatement() != NULL) {
-    printf(" --- sourceFile->get_lastStatement()  = %p = %s name = %s \n",
-           sourceFile->get_lastStatement(),
-           sourceFile->get_lastStatement()->class_name().c_str(),
-           SageInterface::get_name(sourceFile->get_lastStatement()).c_str());
-  } else {
-    printf(" --- sourceFile->get_lastStatement()  = %p \n",
-           sourceFile->get_lastStatement());
-  }
-#endif
-
-  // DQ (5/22/2021): Only output the information about headers if we have set
-  // sourceFile->get_unparseHeaderFiles() to TRUE on the command line.
-  if (sourceFile->get_unparseHeaderFiles() == true) {
-#if DEBUG_OUTPUT_FIRST_LAST_DATA
-    printf("\nOutput information on header files: \n");
-#endif
-
-    for (std::map<std::string, SgIncludeFile *>::iterator i =
-             Rose::includeFileMapForUnparsing.begin();
-         i != Rose::includeFileMapForUnparsing.end(); ++i) {
-      string filename = i->first;
-      SgIncludeFile *includeFile = i->second;
-#if DEBUG_OUTPUT_FIRST_LAST_DATA
-      printf(" --- filename = %s includeFile = %p \n", filename.c_str(),
-             includeFile);
-#endif
-      ROSE_ASSERT(includeFile != NULL);
-#if DEBUG_OUTPUT_FIRST_LAST_DATA
-      printf("\ncounter = %d \n", counter);
-      printf(" --- includeFile = %p filename = %s \n", includeFile,
-             includeFile->get_filename().str());
-      printf(" --- --- includeFile->get_first_source_sequence_number() = %u \n",
-             includeFile->get_first_source_sequence_number());
-      printf(" --- --- includeFile->get_last_source_sequence_number()  = %u \n",
-             includeFile->get_last_source_sequence_number());
-#endif
-
-#if DEBUG_OUTPUT_FIRST_LAST_DATA
-      printf(" --- --- includeFile->get_firstStatement() = %p \n",
-             includeFile->get_firstStatement());
-      printf(" --- --- includeFile->get_lastStatement()  = %p \n",
-             includeFile->get_lastStatement());
-#endif
-      // New design puts the first and last directly into the SgIncludeFile.
-      SgStatement *firstStatement = includeFile->get_firstStatement();
-      SgStatement *lastStatement = includeFile->get_lastStatement();
-
-      if (firstStatement != NULL) {
-        Sg_File_Info *first_file_info = firstStatement->get_file_info();
-#if DEBUG_OUTPUT_FIRST_LAST_DATA
-        printf(" --- firstStatement = %p = %s \n", firstStatement,
-               firstStatement->class_name().c_str());
-        printf(" --- firstStatement = %s \n",
-               SageInterface::get_name(firstStatement).c_str());
-        printf(" --- firstStatement: line = %d column = %d filename = %s \n",
-               first_file_info->get_line(), first_file_info->get_col(),
-               first_file_info->get_filenameString().c_str());
-#endif
-      } else {
-        // Not all include files have a valid statement (some just include other
-        // include files, or define macros).
-#if DEBUG_OUTPUT_FIRST_LAST_DATA
-        printf(" --- firstStatement == NULL: filename = %s \n",
-               includeFile->get_filename().str());
-#endif
-      }
-
-      if (lastStatement != NULL) {
-        Sg_File_Info *last_file_info = lastStatement->get_file_info();
-#if DEBUG_OUTPUT_FIRST_LAST_DATA
-        printf(" --- lastStatement  = %p = %s \n", lastStatement,
-               lastStatement->class_name().c_str());
-        printf(" --- lastStatement = %s \n",
-               SageInterface::get_name(lastStatement).c_str());
-        printf(" --- lastStatement: line = %d column = %d filename = %s \n",
-               last_file_info->get_line(), last_file_info->get_col(),
-               last_file_info->get_filenameString().c_str());
-#endif
-      } else {
-        // Not all include files have a valid statement (some just include other
-        // include files, or define macros).
-#if DEBUG_OUTPUT_FIRST_LAST_DATA
-        printf(" --- lastStatement == NULL: filename = %s \n",
-               includeFile->get_filename().str());
-#endif
-      }
-
-      counter++;
-    }
-  }
-}
-
-void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
+void buildFirstAndLastStatementsForIncludeFiles(
+    SgProject *project, TokenUnparseFrontierContext &context)
 // void buildFirstAndLastStatementsForIncludeFiles ( SgSourceFile* sourceFile )
 {
   // This function build the mapping of the first and last statements associated
@@ -3659,6 +5100,11 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
 
   class IncludeFileStatementTraversal : public AstSimpleProcessing {
   public:
+    explicit IncludeFileStatementTraversal(TokenUnparseFrontierContext &context)
+        : context(context) {}
+
+    TokenUnparseFrontierContext &context;
+
     // DQ (3/13/2021): This needs to be the header file and not the original
     // input file. IncludeFileStatementTraversal(SgSourceFile* sourceFile);
 
@@ -3684,13 +5130,25 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
       SgSourceFile *tmp_sourceFile = isSgSourceFile(node);
       if (tmp_sourceFile != NULL) {
         sourceFile = tmp_sourceFile;
+        target_scope = nullptr;
+        context.includeFilesByPath.clear();
+        context.includeFileOccurrencesByPath.clear();
 
 #if DEBUG_FIRST_LAST_STMTS
         printf("Found the input source file: sourceFile->getFileName() \n",
                sourceFile->getFileName().c_str());
 #endif
-        populateIncludeFileMapForUnparsingFromIncludeTree(
-            sourceFile->get_associated_include_file());
+        SgIncludeFile *includeRoot = sourceFile->get_associated_include_file();
+        if (includeRoot != NULL) {
+          populateIncludeFileMapForUnparsingFromIncludeTree(context,
+                                                            includeRoot);
+        } else if (sourceFile->get_unparseHeaderFiles()) {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[include-tree]: file=%s requested "
+                  "header unparsing without an include-tree root\n",
+                  sourceFile->getFileName().c_str());
+          ROSE_ABORT();
+        }
       }
       ROSE_ASSERT(sourceFile != NULL);
 
@@ -3704,29 +5162,67 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
       SgGlobal *globalScope = isSgGlobal(statement);
       SgFunctionParameterList *functionParameterList =
           isSgFunctionParameterList(node);
+      SgFunctionParameterScope *functionParameterScope =
+          isSgFunctionParameterScope(node);
       SgCtorInitializerList *ctorInitializerList =
           isSgCtorInitializerList(node);
-
-      SgTemplateInstantiationDecl *templateInstantiationDecl =
-          isSgTemplateInstantiationDecl(node);
-      SgTemplateInstantiationMemberFunctionDecl
-          *templateInstantiationMemberFunctionDecl =
-              isSgTemplateInstantiationMemberFunctionDecl(node);
+      SgDeclarationScope *declarationScope = isSgDeclarationScope(node);
 
       // IR nodes for which we don't want to identify as the first or last
       // statement of a file (header file).
       bool processStatement =
           globalScope == NULL && functionParameterList == NULL &&
-          ctorInitializerList == NULL && templateInstantiationDecl == NULL &&
-          templateInstantiationMemberFunctionDecl == NULL;
+          functionParameterScope == NULL && ctorInitializerList == NULL &&
+          declarationScope == NULL;
 
 #if DEBUG_FIRST_LAST_STMTS
       printf("statement        = %p \n", statement);
       printf("processStatement = %s \n", processStatement ? "true" : "false");
 #endif
       if (statement != NULL && processStatement == true) {
+        if (isExactlyAuxiliaryOwned(statement, "token-frontier") ||
+            isExactlyTemplateInstantiationDirectivePayload(statement,
+                                                           "token-frontier") ||
+            isExactlyRangeForSemanticDeclarationPayload(statement,
+                                                        "token-frontier") ||
+            isExactlySourceLessForStructuralNode(statement, "token-frontier") ||
+            isExactlyImplicitControlFlowStructuralNode(statement,
+                                                       "token-frontier") ||
+            isExactlyCatchSequenceStructuralNode(statement, "token-frontier")) {
+          return;
+        }
         Sg_File_Info *file_info = statement->get_file_info();
         ROSE_ASSERT(file_info != NULL);
+        const bool has_current_file_token_mapping =
+            sourceFile->get_tokenSubsequenceMap().find(statement) !=
+            sourceFile->get_tokenSubsequenceMap().end();
+        if (!file_info->isOutputInCodeGeneration() &&
+            !has_current_file_token_mapping) {
+          const int physical_file_id =
+              requireStructuralPhysicalFileId(statement, "token-frontier");
+          const std::string physical_path =
+              file_info->getFilenameFromID(physical_file_id);
+          if (physical_path.empty() || physical_path == "NULL_FILE" ||
+              physical_path == "transformation" ||
+              FileHelper::normalizePathIfPossible(physical_path) ==
+                  FileHelper::normalizePathIfPossible(
+                      sourceFile->getFileName())) {
+            fprintf(stderr,
+                    "REX_UNPARSE_INVARIANT[token-frontier]: non-output "
+                    "lexical statement=%p/%s name=%s source=%s:%d:%d has no "
+                    "exact external physical owner and no token mapping\n",
+                    static_cast<void *>(statement),
+                    statement->class_name().c_str(),
+                    SageInterface::get_name(statement).c_str(),
+                    physical_path.c_str(), file_info->get_line(),
+                    file_info->get_col());
+            ROSE_ABORT();
+          }
+          // A source declaration from a non-emitted header remains a semantic
+          // dependency in the project AST, but it is outside this source
+          // file's emission frontier by construction.
+          return;
+        }
 #if DEBUG_FIRST_LAST_STMTS
         printf("\nIn IncludeFileStatementTraversal::visit(): statement = %p = "
                "%s \n",
@@ -3745,25 +5241,51 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
         // derived directly from the physical file id, instead of computed by
         // the get_physical_filename() function. This could be using the file_id
         // instead of the filename as a string.
-        string filename = file_info->get_physical_filename();
-        int physical_file_id = file_info->get_physical_file_id();
+        int physical_file_id =
+            requireStructuralPhysicalFileId(statement, "token-ownership");
+        string filename = file_info->getFilenameFromID(physical_file_id);
+        if (filename.empty() || filename == "NULL_FILE" ||
+            filename == "transformation") {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[token-ownership]: statement=%p "
+                  "type=%s physical file id=%d has no registered source path\n",
+                  static_cast<void *>(statement),
+                  statement->class_name().c_str(), physical_file_id);
+          ROSE_ABORT();
+        }
 #if DEBUG_FIRST_LAST_STMTS
         printf("before reset filename: physical_file_id = %d filename = %s \n",
                physical_file_id, filename.c_str());
 #endif
-        filename = Sg_File_Info::getFilenameFromID(physical_file_id);
+        const bool isTranslationUnitStatement =
+            has_current_file_token_mapping ||
+            FileHelper::normalizePathIfPossible(filename) ==
+                FileHelper::normalizePathIfPossible(sourceFile->getFileName());
+        if (!isTranslationUnitStatement &&
+            !sourceFile->get_unparseHeaderFiles()) {
+          return;
+        }
 #if DEBUG_FIRST_LAST_STMTS
         printf("after reset filename: physical_file_id  = %d filename = %s \n",
                physical_file_id, filename.c_str());
 #endif
-        SgIncludeFile *includeFile = lookupIncludeFileForUnparsing(filename);
-        if (includeFile == NULL) {
+        SgIncludeFile *includeFile =
+            has_current_file_token_mapping
+                ? nullptr
+                : lookupIncludeFileForUnparsing(context, filename);
+        if (includeFile == NULL && !has_current_file_token_mapping &&
+            sourceFile->get_associated_include_file() != NULL) {
           populateIncludeFileMapForUnparsingFromIncludeTree(
-              sourceFile->get_associated_include_file());
-          includeFile = lookupIncludeFileForUnparsing(filename);
+              context, sourceFile->get_associated_include_file());
+          includeFile = lookupIncludeFileForUnparsing(context, filename);
         }
 
         if (includeFile != NULL) {
+          auto &includeBounds = context.includeFileStatementBounds[includeFile];
+          target_scope =
+              includeBounds.first != nullptr
+                  ? isSgScopeStatement(includeBounds.first->get_parent())
+                  : nullptr;
           SgSourceFile *header_file_asssociated_source_file =
               includeFile->get_source_file();
 
@@ -3804,7 +5326,7 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
               // ROSE_ASSERT(statementBoundsMap.find(includeFile) !=
               // statementBoundsMap.end());
 
-              if (includeFile->get_firstStatement() == NULL) {
+              if (includeBounds.first == NULL) {
 #if DEBUG_FIRST_LAST_STMTS
                 printf("Previously NULL: first time seeing a statement for "
                        "includeFile->get_filename() = %s \n",
@@ -3822,7 +5344,7 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
                     tokenStreamSequenceMap.end()) {
                   ROSE_ASSERT(statement != NULL);
 
-                  includeFile->set_firstStatement(statement);
+                  includeBounds.first = statement;
 
                   ROSE_ASSERT(statement->get_parent() != NULL);
 
@@ -3871,7 +5393,7 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
                   printf("This can be a last statement (it has an associated "
                          "token subsequence) \n");
 #endif
-                  includeFile->set_lastStatement(statement);
+                  includeBounds.second = statement;
                 } else {
 #if DEBUG_FIRST_LAST_STMTS
                   // printf ("We can't record this as a last statement because
@@ -3884,7 +5406,7 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
                   // transformation is a last statement of a header file and in
                   // which case it is still the last statement independent of if
                   // it is unparsed via the token stream or from the AST.
-                  includeFile->set_lastStatement(statement);
+                  includeBounds.second = statement;
                 }
 
                 SgStatement *computedLastStatement =
@@ -3900,7 +5422,7 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
                   printf("Since this is the last statement of the scope, then "
                          "make the scope the last statement \n");
 #endif
-                  includeFile->set_lastStatement(target_scope);
+                  includeBounds.second = target_scope;
                 }
               } else {
 #if DEBUG_FIRST_LAST_STMTS
@@ -3918,6 +5440,60 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
           // Not all statements will be in the header files, however this could
           // be the input source file, so we need to support computing the first
           // and last statements in that file as well.
+          if (!isTranslationUnitStatement) {
+            fprintf(
+                stderr,
+                "REX_UNPARSE_INVARIANT[token-ownership]: statement=%p "
+                "type=%s file=%s compiler-generated=%d frontend-specific=%d "
+                "output=%d transformed=%d parent=%s scope=%s is neither the "
+                "translation unit nor present in its include tree\n",
+                static_cast<void *>(statement), statement->class_name().c_str(),
+                filename.c_str(), file_info->isCompilerGenerated() ? 1 : 0,
+                file_info->isFrontendSpecific() ? 1 : 0,
+                file_info->isOutputInCodeGeneration() ? 1 : 0,
+                file_info->isTransformation() ? 1 : 0,
+                statement->get_parent() != nullptr
+                    ? statement->get_parent()->class_name().c_str()
+                    : "<null>",
+                statement->get_scope() != nullptr
+                    ? statement->get_scope()->class_name().c_str()
+                    : "<null>");
+            if (SgVariableDeclaration *variable_decl =
+                    isSgVariableDeclaration(statement)) {
+              fprintf(stderr,
+                      "REX_UNPARSE_INVARIANT[token-ownership]: variable "
+                      "names=");
+              for (SgInitializedName *variable :
+                   variable_decl->get_variables()) {
+                fprintf(stderr, "%s%s",
+                        variable == variable_decl->get_variables().front()
+                            ? ""
+                            : ",",
+                        variable != nullptr
+                            ? variable->get_name().getString().c_str()
+                            : "<null>");
+              }
+              fprintf(stderr, "\n");
+            }
+            fprintf(stderr,
+                    "REX_UNPARSE_INVARIANT[token-ownership]: ancestry=");
+            for (SgNode *ancestor = statement; ancestor != nullptr;
+                 ancestor = ancestor->get_parent()) {
+              fprintf(stderr, "%s%s", ancestor == statement ? "" : " <- ",
+                      ancestor->class_name().c_str());
+              if (SgClassDefinition *class_definition =
+                      isSgClassDefinition(ancestor)) {
+                SgClassDeclaration *class_declaration =
+                    class_definition->get_declaration();
+                fprintf(stderr, "(%s)",
+                        class_declaration != nullptr
+                            ? class_declaration->get_name().getString().c_str()
+                            : "<null-declaration>");
+              }
+            }
+            fprintf(stderr, "\n");
+            ROSE_ABORT();
+          }
 #if DEBUG_FIRST_LAST_STMTS
           printf("filename not found in includeFileMapForUnparsing: filename = "
                  "%s \n",
@@ -3929,6 +5505,11 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
           // to statements that don't have a corresponding token subsequence.
           std::map<SgNode *, TokenStreamSequenceToNodeMapping *>
               &tokenStreamSequenceMap = sourceFile->get_tokenSubsequenceMap();
+          auto &sourceBounds = context.sourceFileStatementBounds[sourceFile];
+          target_scope =
+              sourceBounds.first != nullptr
+                  ? isSgScopeStatement(sourceBounds.first->get_parent())
+                  : nullptr;
 #if DEBUG_FIRST_LAST_STMTS
           printf(" --- tokenStreamSequenceMap.size() = %zu \n",
                  tokenStreamSequenceMap.size());
@@ -3937,7 +5518,7 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
           // DQ (5/20/2021): The firstStatment and lastStatement in the source
           // file are only used for the input source file (the include files
           // used their own data member).
-          if (sourceFile->get_firstStatement() == NULL) {
+          if (sourceBounds.first == NULL) {
 #if DEBUG_FIRST_LAST_STMTS
             printf("Previously NULL: first time seeing a statement for "
                    "sourceFile->get_filename() = %s \n",
@@ -3953,7 +5534,7 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
             // tokenStreamSequenceMap[stmt];
             if (tokenStreamSequenceMap.find(statement) !=
                 tokenStreamSequenceMap.end()) {
-              sourceFile->set_firstStatement(statement);
+              sourceBounds.first = statement;
               target_scope = isSgScopeStatement(statement->get_parent());
 
 #if DEBUG_FIRST_LAST_STMTS
@@ -3995,7 +5576,7 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
                 printf("This can be a last statement (it has an associated "
                        "token subsequence) \n");
 #endif
-                sourceFile->set_lastStatement(statement);
+                sourceBounds.second = statement;
               } else {
 #if DEBUG_FIRST_LAST_STMTS
                 // printf ("We can't record this as a last statement because it
@@ -4011,7 +5592,7 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
                 // sourceFile->set_lastStatement(statement);
                 if (tokenStreamSequenceMap.find(statement) !=
                     tokenStreamSequenceMap.end()) {
-                  sourceFile->set_lastStatement(statement);
+                  sourceBounds.second = statement;
                 } else {
 #if DEBUG_FIRST_LAST_STMTS
                   printf("We can't record this as a last statement becuase it "
@@ -4043,7 +5624,7 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
               printf("Since this is the last statement of the scope, then make "
                      "the scope the last statement (except for SgGlobal) \n");
 #endif
-              sourceFile->set_lastStatement(target_scope);
+              sourceBounds.second = target_scope;
             }
           } else {
 #if DEBUG_FIRST_LAST_STMTS
@@ -4061,7 +5642,7 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
   };
 
   // IncludeFileStatementTraversal traversal(statementBoundsMap);
-  IncludeFileStatementTraversal traversal;
+  IncludeFileStatementTraversal traversal(context);
 
 #if DEBUG_FIRST_LAST_STMTS
   printf("Before call to traversal \n");
@@ -4082,7 +5663,7 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
     // tests in
     // tests/nonsmoke/functional/CompilerOptionsTests/testGenerateSourceFileNames)
     // ROSE_ASSERT(sourceFile != NULL);
-    if (sourceFile != NULL) {
+    if (sourceFile != NULL && !sourceFile->get_skip_unparse()) {
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
       printf("\nFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
              "FFFFFFFFFFF \n");
@@ -4106,7 +5687,7 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
 
       // Copy the information of first and last statement per scope for each
       // file to store it in the source file.
-      // Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[sourceFile]
+      // context.scopeStatementBoundsBySourceFile[sourceFile]
       // = traversal.firstAndLastStatementsToUnparseInScopeMap;
 
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
@@ -4144,26 +5725,25 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
   // outputFirstAndLastIncludeFileInfo(sourceFile);
   // outputFirstAndLastStatementsInScope(sourceFile);
 
-  // ROSE_ASSERT(Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.find(sourceFile)
-  // != Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.end());
+  // ROSE_ASSERT(context.scopeStatementBoundsBySourceFile.find(sourceFile)
+  // != context.scopeStatementBoundsBySourceFile.end());
 
   std::map<SgSourceFile *,
            std::map<SgScopeStatement *,
                     std::pair<SgStatement *, SgStatement *>>>::iterator j =
-      Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.begin();
+      context.scopeStatementBoundsBySourceFile.begin();
 
-  printf("Output Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile "
+  printf("Output context.scopeStatementBoundsBySourceFile "
          "(size = %zu): \n",
-         Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.size());
-  while (j !=
-         Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.end()) {
+         context.scopeStatementBoundsBySourceFile.size());
+  while (j != context.scopeStatementBoundsBySourceFile.end()) {
     SgSourceFile *tmp_sourceFile = j->first;
     printf("tmp_sourceFile = %p name = %s \n", tmp_sourceFile,
            tmp_sourceFile->getFileName().c_str());
 
     // std::map<SgScopeStatement*,std::pair<SgStatement*,SgStatement*> >
     // firstAndLastStatements =
-    // Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile[sourceFile];
+    // context.scopeStatementBoundsBySourceFile[sourceFile];
     std::map<SgScopeStatement *, std::pair<SgStatement *, SgStatement *>>
         firstAndLastStatements = j->second;
 
@@ -4214,7 +5794,8 @@ void buildFirstAndLastStatementsForIncludeFiles(SgProject *project)
 #endif
 }
 
-void buildFirstAndLastStatementsForScopes(SgProject *project) {
+void buildFirstAndLastStatementsForScopes(
+    SgProject *project, TokenUnparseFrontierContext &context) {
   // DQ (5/27/2021): We need a more comprehensive handling of identifing first
   // and last statements specific to each scope and for each file.  It is
   // similar to the function above that computed the first and last statement
@@ -4248,6 +5829,11 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
 
   class StatementTraversal : public AstSimpleProcessing {
   public:
+    explicit StatementTraversal(TokenUnparseFrontierContext &context)
+        : context(context) {}
+
+    TokenUnparseFrontierContext &context;
+
     // We need to recorde the first and last statement that are in the same
     // scope.
 
@@ -4269,6 +5855,8 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
       SgSourceFile *tmp_sourceFile = isSgSourceFile(node);
       if (tmp_sourceFile != NULL) {
         sourceFile = tmp_sourceFile;
+        context.includeFilesByPath.clear();
+        context.includeFileOccurrencesByPath.clear();
 
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
         printf("Found the input source file: sourceFile->getFileName() = %s \n",
@@ -4283,8 +5871,17 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
         printf("setting physical_file_id_from_source_file = %d \n",
                physical_file_id_from_source_file);
 #endif
-        populateIncludeFileMapForUnparsingFromIncludeTree(
-            sourceFile->get_associated_include_file());
+        SgIncludeFile *includeRoot = sourceFile->get_associated_include_file();
+        if (includeRoot != NULL) {
+          populateIncludeFileMapForUnparsingFromIncludeTree(context,
+                                                            includeRoot);
+        } else if (sourceFile->get_unparseHeaderFiles()) {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[include-tree]: file=%s requested "
+                  "header unparsing without an include-tree root\n",
+                  sourceFile->getFileName().c_str());
+          ROSE_ABORT();
+        }
       }
       ROSE_ASSERT(sourceFile != NULL);
 
@@ -4298,21 +5895,18 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
       SgGlobal *globalScope = isSgGlobal(statement);
       SgFunctionParameterList *functionParameterList =
           isSgFunctionParameterList(node);
+      SgFunctionParameterScope *functionParameterScope =
+          isSgFunctionParameterScope(node);
       SgCtorInitializerList *ctorInitializerList =
           isSgCtorInitializerList(node);
-
-      SgTemplateInstantiationDecl *templateInstantiationDecl =
-          isSgTemplateInstantiationDecl(node);
-      SgTemplateInstantiationMemberFunctionDecl
-          *templateInstantiationMemberFunctionDecl =
-              isSgTemplateInstantiationMemberFunctionDecl(node);
+      SgDeclarationScope *declarationScope = isSgDeclarationScope(node);
 
       // IR nodes for which we don't want to identify as the first or last
       // statement of a file (header file).
       bool processStatement =
           globalScope == NULL && functionParameterList == NULL &&
-          ctorInitializerList == NULL && templateInstantiationDecl == NULL &&
-          templateInstantiationMemberFunctionDecl == NULL;
+          functionParameterScope == NULL && ctorInitializerList == NULL &&
+          declarationScope == NULL;
 
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
       printf("statement        = %p \n", statement);
@@ -4329,16 +5923,14 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
         // std::pair<SgStatement*,SgStatement*>(NULL,NULL);
         // firstAndLastStatementsToUnparseInScopeMap->[sourceFile][globalScope]
         // = std::pair<SgStatement*,SgStatement*>(NULL,NULL);
-        if (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.find(
-                sourceFile) ==
-            Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.end()) {
+        if (context.scopeStatementBoundsBySourceFile.find(sourceFile) ==
+            context.scopeStatementBoundsBySourceFile.end()) {
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
           printf("A map for this file already exists \n");
 #endif
-          Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-              [sourceFile] =
-                  std::map<SgScopeStatement *,
-                           std::pair<SgStatement *, SgStatement *>>();
+          context.scopeStatementBoundsBySourceFile[sourceFile] =
+              std::map<SgScopeStatement *,
+                       std::pair<SgStatement *, SgStatement *>>();
         } else {
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
           printf("A map for this file already exists \n");
@@ -4347,8 +5939,49 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
       }
 
       if (statement != NULL && processStatement == true) {
+        if (isExactlyAuxiliaryOwned(statement, "token-frontier") ||
+            isExactlyTemplateInstantiationDirectivePayload(statement,
+                                                           "token-frontier") ||
+            isExactlyRangeForSemanticDeclarationPayload(statement,
+                                                        "token-frontier") ||
+            isExactlySourceLessForStructuralNode(statement, "token-frontier") ||
+            isExactlyImplicitControlFlowStructuralNode(statement,
+                                                       "token-frontier") ||
+            isExactlyCatchSequenceStructuralNode(statement, "token-frontier")) {
+          return;
+        }
         Sg_File_Info *file_info = statement->get_file_info();
         ROSE_ASSERT(file_info != NULL);
+        const bool has_current_file_token_mapping =
+            sourceFile->get_tokenSubsequenceMap().find(statement) !=
+            sourceFile->get_tokenSubsequenceMap().end();
+        if (!file_info->isOutputInCodeGeneration() &&
+            !has_current_file_token_mapping) {
+          const int physical_file_id =
+              requireStructuralPhysicalFileId(statement, "token-frontier");
+          const std::string physical_path =
+              file_info->getFilenameFromID(physical_file_id);
+          if (physical_path.empty() || physical_path == "NULL_FILE" ||
+              physical_path == "transformation" ||
+              FileHelper::normalizePathIfPossible(physical_path) ==
+                  FileHelper::normalizePathIfPossible(
+                      sourceFile->getFileName())) {
+            fprintf(stderr,
+                    "REX_UNPARSE_INVARIANT[token-frontier]: non-output "
+                    "lexical statement=%p/%s name=%s source=%s:%d:%d has no "
+                    "exact external physical owner and no token mapping\n",
+                    static_cast<void *>(statement),
+                    statement->class_name().c_str(),
+                    SageInterface::get_name(statement).c_str(),
+                    physical_path.c_str(), file_info->get_line(),
+                    file_info->get_col());
+            ROSE_ABORT();
+          }
+          // A source declaration from a non-emitted header remains a semantic
+          // dependency in the project AST, but it is outside this source
+          // file's emission frontier by construction.
+          return;
+        }
 
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
         printf("\nIn StatementTraversal::visit(): statement = %p = %s \n", node,
@@ -4392,24 +6025,45 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
         // derived directly from the physical file id, instead of computed by
         // the get_physical_filename() function. This could be using the file_id
         // instead of the filename as a string.
-        string filename = file_info->get_physical_filename();
-        int physical_file_id = file_info->get_physical_file_id();
+        int physical_file_id =
+            requireStructuralPhysicalFileId(statement, "token-ownership");
+        string filename = file_info->getFilenameFromID(physical_file_id);
+        if (filename.empty() || filename == "NULL_FILE" ||
+            filename == "transformation") {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[token-ownership]: statement=%p "
+                  "type=%s physical file id=%d has no registered source path\n",
+                  static_cast<void *>(statement),
+                  statement->class_name().c_str(), physical_file_id);
+          ROSE_ABORT();
+        }
 
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
         printf("before reset filename: physical_file_id = %d filename = %s \n",
                physical_file_id, filename.c_str());
 #endif
-        filename = Sg_File_Info::getFilenameFromID(physical_file_id);
+        const bool isTranslationUnitStatement =
+            has_current_file_token_mapping ||
+            FileHelper::normalizePathIfPossible(filename) ==
+                FileHelper::normalizePathIfPossible(sourceFile->getFileName());
+        if (!isTranslationUnitStatement &&
+            !sourceFile->get_unparseHeaderFiles()) {
+          return;
+        }
 
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
         printf("after reset filename: physical_file_id  = %d filename = %s \n",
                physical_file_id, filename.c_str());
 #endif
-        SgIncludeFile *includeFile = lookupIncludeFileForUnparsing(filename);
-        if (includeFile == NULL) {
+        SgIncludeFile *includeFile =
+            has_current_file_token_mapping
+                ? nullptr
+                : lookupIncludeFileForUnparsing(context, filename);
+        if (includeFile == NULL && !has_current_file_token_mapping &&
+            sourceFile->get_associated_include_file() != NULL) {
           populateIncludeFileMapForUnparsingFromIncludeTree(
-              sourceFile->get_associated_include_file());
-          includeFile = lookupIncludeFileForUnparsing(filename);
+              context, sourceFile->get_associated_include_file());
+          includeFile = lookupIncludeFileForUnparsing(context, filename);
         }
 
         if (includeFile != NULL) {
@@ -4456,18 +6110,17 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
               // of the statements that we process and so we store information
               // in the entry for the global scope).
               {
-                if (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                        .find(header_file_asssociated_source_file) ==
-                    Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                        .end()) {
+                if (context.scopeStatementBoundsBySourceFile.find(
+                        header_file_asssociated_source_file) ==
+                    context.scopeStatementBoundsBySourceFile.end()) {
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
                   printf(
                       "Add map for this file is it does NOT already exists \n");
 #endif
-                  Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
+                  context.scopeStatementBoundsBySourceFile
                       [header_file_asssociated_source_file] =
-                          std::map<SgScopeStatement *,
-                                   std::pair<SgStatement *, SgStatement *>>();
+                      std::map<SgScopeStatement *,
+                               std::pair<SgStatement *, SgStatement *>>();
                 } else {
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
                   printf("A map for this file ALREADY exists \n");
@@ -4475,23 +6128,20 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
                 }
               }
 
-              ROSE_ASSERT(
-                  Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                      .find(header_file_asssociated_source_file) !=
-                  Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                      .end());
+              ROSE_ASSERT(context.scopeStatementBoundsBySourceFile.find(
+                              header_file_asssociated_source_file) !=
+                          context.scopeStatementBoundsBySourceFile.end());
 
-              if (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                      .find(header_file_asssociated_source_file) ==
-                  Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                      .end()) {
+              if (context.scopeStatementBoundsBySourceFile.find(
+                      header_file_asssociated_source_file) ==
+                  context.scopeStatementBoundsBySourceFile.end()) {
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
                 printf("A map for this file already exists \n");
 #endif
-                Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
+                context.scopeStatementBoundsBySourceFile
                     [header_file_asssociated_source_file] =
-                        std::map<SgScopeStatement *,
-                                 std::pair<SgStatement *, SgStatement *>>();
+                    std::map<SgScopeStatement *,
+                             std::pair<SgStatement *, SgStatement *>>();
               } else {
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
                 printf("A map for this file already exists \n");
@@ -4505,19 +6155,21 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
                 printf("parentScope != NULL \n");
 #endif
-                if (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                        [header_file_asssociated_source_file]
-                            .find(parentScope) ==
-                    Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                        [header_file_asssociated_source_file]
-                            .end()) {
+                if (context
+                        .scopeStatementBoundsBySourceFile
+                            [header_file_asssociated_source_file]
+                        .find(parentScope) ==
+                    context
+                        .scopeStatementBoundsBySourceFile
+                            [header_file_asssociated_source_file]
+                        .end()) {
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
                   printf("Adding parentScope = %p = %s \n", parentScope,
                          parentScope->class_name().c_str());
 #endif
-                  Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
+                  context.scopeStatementBoundsBySourceFile
                       [header_file_asssociated_source_file][parentScope] =
-                          std::pair<SgStatement *, SgStatement *>(NULL, NULL);
+                      std::pair<SgStatement *, SgStatement *>(NULL, NULL);
                 } else {
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
                   printf("Rose::"
@@ -4529,17 +6181,17 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
               }
 
               if (parentScope != NULL) {
-                ROSE_ASSERT(
-                    Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                        .find(header_file_asssociated_source_file) !=
-                    Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                        .end());
-                if (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                        [header_file_asssociated_source_file]
-                            .find(parentScope) ==
-                    Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                        [header_file_asssociated_source_file]
-                            .end()) {
+                ROSE_ASSERT(context.scopeStatementBoundsBySourceFile.find(
+                                header_file_asssociated_source_file) !=
+                            context.scopeStatementBoundsBySourceFile.end());
+                if (context
+                        .scopeStatementBoundsBySourceFile
+                            [header_file_asssociated_source_file]
+                        .find(parentScope) ==
+                    context
+                        .scopeStatementBoundsBySourceFile
+                            [header_file_asssociated_source_file]
+                        .end()) {
                   printf(
                       "Error: "
                       "(Rose::"
@@ -4556,17 +6208,19 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
                          parentScope->class_name().c_str(),
                          SageInterface::get_name(parentScope).c_str());
                 }
-                ROSE_ASSERT(
-                    Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                        [header_file_asssociated_source_file]
-                            .find(parentScope) !=
-                    Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                        [header_file_asssociated_source_file]
-                            .end());
+                ROSE_ASSERT(context
+                                .scopeStatementBoundsBySourceFile
+                                    [header_file_asssociated_source_file]
+                                .find(parentScope) !=
+                            context
+                                .scopeStatementBoundsBySourceFile
+                                    [header_file_asssociated_source_file]
+                                .end());
 
-                if (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                        [header_file_asssociated_source_file][parentScope]
-                            .first == NULL) {
+                if (context
+                        .scopeStatementBoundsBySourceFile
+                            [header_file_asssociated_source_file][parentScope]
+                        .first == NULL) {
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
                   printf("Previously NULL: first time seeing a statement for "
                          "includeFile->get_filename() = %s \n",
@@ -4576,9 +6230,10 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
                       tokenStreamSequenceMap.end()) {
                     ROSE_ASSERT(statement != NULL);
 
-                    Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                        [header_file_asssociated_source_file][parentScope]
-                            .first = statement;
+                    context
+                        .scopeStatementBoundsBySourceFile
+                            [header_file_asssociated_source_file][parentScope]
+                        .first = statement;
 
                     ROSE_ASSERT(statement->get_parent() != NULL);
                   } else {
@@ -4593,10 +6248,10 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
                            physical_file_id);
 #endif
                     if (physical_file_id == physical_file_id_from_source_file) {
-                      Rose::
-                          firstAndLastStatementsToUnparseInScopeMapBySourceFile
+                      context
+                          .scopeStatementBoundsBySourceFile
                               [header_file_asssociated_source_file][parentScope]
-                                  .first = statement;
+                          .first = statement;
                     }
                   }
                 }
@@ -4618,9 +6273,10 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
                   printf("This can be a last statement (it has an associated "
                          "token subsequence) \n");
 #endif
-                  Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                      [header_file_asssociated_source_file][parentScope]
-                          .second = statement;
+                  context
+                      .scopeStatementBoundsBySourceFile
+                          [header_file_asssociated_source_file][parentScope]
+                      .second = statement;
                 } else {
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
                   printf("We can't record this as a last statement because it "
@@ -4633,15 +6289,30 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
                          physical_file_id);
 #endif
                   if (physical_file_id == physical_file_id_from_source_file) {
-                    Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                        [header_file_asssociated_source_file][parentScope]
-                            .second = statement;
+                    context
+                        .scopeStatementBoundsBySourceFile
+                            [header_file_asssociated_source_file][parentScope]
+                        .second = statement;
                   }
                 }
               }
             }
           }
         } else {
+          if (!isTranslationUnitStatement) {
+            fprintf(
+                stderr,
+                "REX_UNPARSE_INVARIANT[token-ownership]: statement=%p "
+                "type=%s file=%s compiler-generated=%d frontend-specific=%d "
+                "output=%d transformed=%d is neither the translation unit "
+                "nor present in its include tree\n",
+                static_cast<void *>(statement), statement->class_name().c_str(),
+                filename.c_str(), file_info->isCompilerGenerated() ? 1 : 0,
+                file_info->isFrontendSpecific() ? 1 : 0,
+                file_info->isOutputInCodeGeneration() ? 1 : 0,
+                file_info->isTransformation() ? 1 : 0);
+            ROSE_ABORT();
+          }
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
           printf("filename not found in includeFileMapForUnparsing: filename = "
                  "%s \n",
@@ -4658,39 +6329,30 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
                  tokenStreamSequenceMap.size());
 #endif
 
-          if (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.find(
-                  sourceFile) ==
-              Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                  .end()) {
-            Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                [sourceFile] =
-                    std::map<SgScopeStatement *,
-                             std::pair<SgStatement *, SgStatement *>>();
+          if (context.scopeStatementBoundsBySourceFile.find(sourceFile) ==
+              context.scopeStatementBoundsBySourceFile.end()) {
+            context.scopeStatementBoundsBySourceFile[sourceFile] =
+                std::map<SgScopeStatement *,
+                         std::pair<SgStatement *, SgStatement *>>();
           }
 
           if (parentScope != NULL) {
-            if (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                    [sourceFile]
-                        .find(parentScope) ==
-                Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                    [sourceFile]
-                        .end()) {
-              Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                  [sourceFile][parentScope] =
-                      std::pair<SgStatement *, SgStatement *>(NULL, NULL);
+            if (context.scopeStatementBoundsBySourceFile[sourceFile].find(
+                    parentScope) ==
+                context.scopeStatementBoundsBySourceFile[sourceFile].end()) {
+              context
+                  .scopeStatementBoundsBySourceFile[sourceFile][parentScope] =
+                  std::pair<SgStatement *, SgStatement *>(NULL, NULL);
             }
 
             ROSE_ASSERT(
-                Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                    [sourceFile]
-                        .find(parentScope) !=
-                Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                    [sourceFile]
-                        .end());
+                context.scopeStatementBoundsBySourceFile[sourceFile].find(
+                    parentScope) !=
+                context.scopeStatementBoundsBySourceFile[sourceFile].end());
 
-            if (Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                    [sourceFile][parentScope]
-                        .first == NULL) {
+            if (context
+                    .scopeStatementBoundsBySourceFile[sourceFile][parentScope]
+                    .first == NULL) {
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
               printf("Previously NULL: first time seeing a statement for "
                      "sourceFile->get_filename() = %s \n",
@@ -4698,36 +6360,35 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
 #endif
               if (tokenStreamSequenceMap.find(statement) !=
                   tokenStreamSequenceMap.end()) {
-                Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                    [sourceFile][parentScope]
-                        .first = statement;
+                context
+                    .scopeStatementBoundsBySourceFile[sourceFile][parentScope]
+                    .first = statement;
               } else {
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
                 printf("We can't record this as a first statement becuae it "
                        "does not correspond to a token subsequence \n");
 #endif
                 if (physical_file_id == physical_file_id_from_source_file) {
-                  Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                      [sourceFile][parentScope]
-                          .first = statement;
+                  context
+                      .scopeStatementBoundsBySourceFile[sourceFile][parentScope]
+                      .first = statement;
                 }
               }
             }
 
             if (tokenStreamSequenceMap.find(statement) !=
                 tokenStreamSequenceMap.end()) {
-              Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                  [sourceFile][parentScope]
-                      .second = statement;
+              context.scopeStatementBoundsBySourceFile[sourceFile][parentScope]
+                  .second = statement;
             } else {
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
               printf("We can't record this as a last statement because it does "
                      "not correspond to a token subsequence \n");
 #endif
               if (physical_file_id == physical_file_id_from_source_file) {
-                Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile
-                    [sourceFile][parentScope]
-                        .second = statement;
+                context
+                    .scopeStatementBoundsBySourceFile[sourceFile][parentScope]
+                    .second = statement;
               }
             }
           }
@@ -4736,7 +6397,7 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
     }
   };
 
-  StatementTraversal traversal;
+  StatementTraversal traversal(context);
 
 #if DEBUG_FIRST_LAST_STMTS_SCOPES
   printf("Before call to traversal \n");
@@ -4787,10 +6448,29 @@ void buildFirstAndLastStatementsForScopes(SgProject *project) {
 // DQ (11/10/2018): Move this ot a more common location.
 void generateGraphOfIncludeFiles(SgProject *project, std::string filename);
 
-void unparseIncludedFiles(SgProject *project,
-                          UnparseFormatHelp *unparseFormatHelp,
-                          UnparseDelegate *unparseDelegate) {
+void unparseIncludedFiles(
+    SgProject *project, UnparseFormatHelp *unparseFormatHelp,
+    UnparseDelegate *unparseDelegate,
+    UnparsePreprocessingInfoRewriteMap *preprocessingInfoRewrites,
+    NameQualificationContext *nameQualifications,
+    TokenUnparseFrontierContext *tokenFrontiers) {
   ASSERT_not_null(project);
+
+  UnparsePreprocessingInfoRewriteMap localPreprocessingInfoRewrites;
+  UnparsePreprocessingInfoRewriteMap *effectivePreprocessingInfoRewrites =
+      preprocessingInfoRewrites != nullptr ? preprocessingInfoRewrites
+                                           : &localPreprocessingInfoRewrites;
+  if (!effectivePreprocessingInfoRewrites->empty()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[rewrite-plan]: project=%p include rewrite "
+            "plan was not empty at session start\n",
+            static_cast<void *>(project));
+    ROSE_ABORT();
+  }
+
+  TokenUnparseFrontierContext localTokenFrontiers;
+  TokenUnparseFrontierContext *effectiveTokenFrontiers =
+      tokenFrontiers != nullptr ? tokenFrontiers : &localTokenFrontiers;
 
 #define DEBUG_UNPARSE_INCLUDE_FILES 0
 
@@ -4843,17 +6523,37 @@ void unparseIncludedFiles(SgProject *project,
   // DQ (5/2/2021): Get the file so that we can get the data member for
   // unparseHeaderFiles. NOTE: An improvement would be to make the data member
   // for unparseHeaderFiles a static data member.
-  SgFile *file = NULL;
-  if (!project->get_fileList().empty() &&
-      (*(project->get_fileList()).begin())->get_unparseHeaderFiles()) {
-    file = *((project->get_fileList()).begin());
+  SgSourceFile *headerSourceFile = nullptr;
+  bool needsAnyTokenFrontier = false;
+  for (SgFile *projectFile : project->get_fileList()) {
+    SgSourceFile *candidate = isSgSourceFile(projectFile);
+    if (candidate == nullptr || candidate->get_skip_unparse()) {
+      continue;
+    }
+    needsAnyTokenFrontier =
+        needsAnyTokenFrontier || candidate->get_unparse_tokens();
+    if (candidate->get_unparseHeaderFiles() && headerSourceFile == nullptr) {
+      headerSourceFile = candidate;
+    }
   }
-  // ROSE_ASSERT(file != NULL);
+  if (tokenFrontiers == nullptr) {
+    for (SgFile *projectFile : project->get_fileList()) {
+      SgSourceFile *candidate = isSgSourceFile(projectFile);
+      if (candidate == nullptr || candidate->get_skip_unparse()) {
+        continue;
+      }
+      const bool needsTokenFrontier = candidate->get_unparse_tokens();
+      if (needsTokenFrontier) {
+        buildTokenStreamFrontier(candidate, candidate->get_unparseHeaderFiles(),
+                                 *effectiveTokenFrontiers);
+      }
+    }
+  }
 
   // Proceed only if there are input files and they require header files
   // unparsing. if (!project -> get_fileList().empty() && (*(project ->
   // get_fileList()).begin()) -> get_unparseHeaderFiles())
-  if (file != NULL && file->get_unparseHeaderFiles() == true) {
+  if (headerSourceFile != nullptr) {
     if (SgProject::get_verbose() >= 1) {
       cout << endl << "***HEADER FILES UNPARSING***" << endl << endl;
     }
@@ -4876,30 +6576,90 @@ void unparseIncludedFiles(SgProject *project,
     // DQ (3/14/2021): Moved to be after includedFilesUnparser(). Build a map of
     // the first and last statement in each include file.
     // buildFirstAndLastStatementsForIncludeFiles(project);
-    SgSourceFile *sourceFile = isSgSourceFile(file);
-    ROSE_ASSERT(sourceFile != NULL);
-    if (sourceFile->get_unparse_tokens() == true) {
-      buildFirstAndLastStatementsForIncludeFiles(project);
-
-      // DQ (5/27/2021): We need to debug the collection of first and last
-      // statements associated with each scope (actually we just need the last
-      // statement for each scope). This only important for the token-based
-      // unarpsing.
-      buildFirstAndLastStatementsForScopes(project);
-    }
-
+    SgSourceFile *sourceFile = headerSourceFile;
     // DQ (9/20/2018): Choosing a better name for this function.
     // includedFilesUnparser.unparse();
     includedFilesUnparser.figureOutWhichFilesToUnparse();
+    *effectivePreprocessingInfoRewrites =
+        includedFilesUnparser.getIncludeRewrites();
 
     const string &unparseRootPath = includedFilesUnparser.getUnparseRootPath();
     const map<string, string> &unparseMap =
         includedFilesUnparser.getUnparseMap();
     const map<string, SgScopeStatement *> &unparseScopesMap =
         includedFilesUnparser.getUnparseScopesMap();
+    const map<string, unsigned int> &unparseOccurrenceMap =
+        includedFilesUnparser.getUnparseOccurrenceMap();
     const std::set<std::string> filesWithRelevantModifications =
         collectFilesWithRelevantModifications(project);
-    insertHeaderUnparseIncludeOptionsIntoCommandLine(
+    const std::set<std::string> &filesWithMarkedTransformations =
+        includedFilesUnparser.getFilesWithMarkedTransformations();
+    const std::set<std::string> &filesWithUpdatedIncludePaths =
+        includedFilesUnparser.getFilesWithUpdatedIncludePaths();
+    const map<string, SgSourceFile *> unparseSourceFileMap =
+        includedFilesUnparser.getUnparseSourceFileMap();
+
+    if (needsAnyTokenFrontier) {
+      prepareMaterializedHeaderTokenFrontiers(project, *effectiveTokenFrontiers,
+                                              unparseScopesMap);
+      buildFirstAndLastStatementsForIncludeFiles(project,
+                                                 *effectiveTokenFrontiers);
+      buildFirstAndLastStatementsForScopes(project, *effectiveTokenFrontiers);
+    }
+
+    // Validate the complete header plan before creating any output file. A
+    // dirty header without a frontend AST is never eligible for snapshot copy.
+    for (const auto &entry : unparseMap) {
+      const std::string originalFileName =
+          FileHelper::normalizePathIfPossible(entry.first);
+      if (originalFileName.empty() || entry.second.empty()) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[header-plan]: input=%s output=%s has "
+                "an incomplete planned path\n",
+                entry.first.c_str(), entry.second.c_str());
+        ROSE_ABORT();
+      }
+
+      bool requiresAstUnparsing = headerRequiresAstUnparsing(
+          filesWithRelevantModifications, filesWithMarkedTransformations,
+          filesWithUpdatedIncludePaths, originalFileName);
+      const auto materializedSource =
+          unparseSourceFileMap.find(originalFileName);
+      SgSourceFile *materializedHeader =
+          materializedSource != unparseSourceFileMap.end()
+              ? materializedSource->second
+              : nullptr;
+      const auto scope = unparseScopesMap.find(originalFileName);
+      if (scope != unparseScopesMap.end() &&
+          scopeHasRelevantModifications(scope->second, originalFileName,
+                                        materializedHeader)) {
+        requiresAstUnparsing = true;
+      }
+      if (!requiresAstUnparsing) {
+        continue;
+      }
+
+      auto source = unparseSourceFileMap.find(originalFileName);
+      if (source == unparseSourceFileMap.end() || source->second == NULL) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[dirty-header-without-ast]: %s was "
+                "modified but the frontend did not materialize its "
+                "SgSourceFile\n",
+                originalFileName.c_str());
+        ROSE_ABORT();
+      }
+      if (FileHelper::normalizePathIfPossible(source->second->getFileName()) !=
+          originalFileName) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[header-filename]: expected=%s "
+                "frontend-source=%s\n",
+                originalFileName.c_str(),
+                source->second->getFileName().c_str());
+        ROSE_ABORT();
+      }
+    }
+
+    addHeaderUnparseIncludeOptions(
         project, includedFilesUnparser.getIncludeCompilerOptions());
 
     // #if DEBUG_UNPARSE_INCLUDE_FILES
@@ -4920,162 +6680,28 @@ void unparseIncludedFiles(SgProject *project,
 
     // DQ (11/19/2018): Copy the files that are specified in the filesToCopy
     // list.
-    set<string> copySet = includedFilesUnparser.getFilesToCopy();
-    set<string>::iterator copySetInterator = copySet.begin();
-    while (copySetInterator != copySet.end()) {
-#if DEBUG_UNPARSE_INCLUDE_FILES
-      printf("copySetInterator = %s \n", (*copySetInterator).c_str());
-#endif
-      string originalFileName = *copySetInterator;
-      ASSERT_not_null(project);
-      const string applicationRootDirectory =
-          project->get_applicationRootDirectory();
-
-      // #if DEBUG_UNPARSE_INCLUDE_FILES
-      // DQ (4/4/2020): Added header file unparsing feature specific debug
-      // level.
-      if (SgProject::get_unparseHeaderFilesDebug() > 4) {
-        printf("Loop over files to copy: originalFileName = %s not found in "
-               "unparseSourceFileMap \n",
-               originalFileName.c_str());
-      }
-      // #endif
-
+    const set<string> copySet = includedFilesUnparser.getFilesToCopy();
+    for (const string &originalFileName : copySet) {
       const string copiedOutputFileName =
           includedFilesUnparser.getCopiedFileOutputPath(originalFileName);
-      if (!copiedOutputFileName.empty()) {
-        ROSE_ASSERT(copyOriginalHeaderToOutputLocation(originalFileName,
-                                                       copiedOutputFileName));
-        copySetInterator++;
-        continue;
+      if (copiedOutputFileName.empty()) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[header-plan]: copied header=%s has no "
+                "planned output path\n",
+                originalFileName.c_str());
+        ROSE_ABORT();
       }
-
-      // DQ (11/19/2018): Retrieve the original SgSourceFile constructed within
-      // the frontend processing.
-      map<string, SgSourceFile *> unparseSourceFileMap =
-          includedFilesUnparser.getUnparseSourceFileMap();
-      // DQ (11/19/2018): This appears to be an error, force this as a test and
-      // exit until we fix this.
-      // ROSE_ASSERT(unparseSourceFileMap.find(originalFileName) !=
-      // unparseSourceFileMap.end());
-      if (unparseSourceFileMap.find(originalFileName) ==
-          unparseSourceFileMap.end()) {
-        // printf ("NOTE: originalFileName = %s not found in
-        // unparseSourceFileMap \n",originalFileName.c_str()); #if
-        // DEBUG_UNPARSE_INCLUDE_FILES DQ (4/4/2020): Added header file
-        // unparsing feature specific debug level.
-        if (SgProject::get_unparseHeaderFilesDebug() > 4) {
-          printf("NOTE: originalFileName = %s not found in "
-                 "unparseSourceFileMap \n",
-                 originalFileName.c_str());
-        }
-        // #endif
-
-        string filenameWithOutPath = FileHelper::getFileName(originalFileName);
-
-        string adjusted_header_file_directory = unparseRootPath;
-
-        // string name_used_in_include_directive =
-        // associated_include_file->get_name_used_in_include_directive();
-        string name_used_in_include_directive = originalFileName;
-        string directoryPathPrefix =
-            Rose::getPathFromFileName(name_used_in_include_directive);
-
-        // Subtract off the applicationRootDirectory as a prefix.
-        // directoryPathPrefix.substr(0,applicationRootDirectory);
-        // directoryPathPrefix = directoryPathPrefix.substr()
-        // ROSE_ASSERT(applicationRootDirectory.is_null() == false);
-        // ROSE_ASSERT(applicationRootDirectory.length() > 0);
-        size_t pos = directoryPathPrefix.find(applicationRootDirectory);
-        if (pos != string::npos) {
-          directoryPathPrefix.erase(pos, applicationRootDirectory.length());
-        }
-        if (directoryPathPrefix == ".") {
-          directoryPathPrefix = "";
-        } else {
-          // Nothing to do.
-        }
-
-        // DQ (11/30/2019): Avoid output of string with double "/" as in "//".
-        if (directoryPathPrefix != "") {
-          directoryPathPrefix += "/";
-        }
-
-        // string newFileName = adjusted_header_file_directory +
-        // directoryPathPrefix + filenameWithOutPath;
-        // adjusted_header_file_directory += directoryPathPrefix;
-        adjusted_header_file_directory += "/" + directoryPathPrefix;
-        string newFileName =
-            adjusted_header_file_directory + filenameWithOutPath;
-
-        ROSE_ASSERT(
-            copyOriginalHeaderToOutputLocation(originalFileName, newFileName));
-      } else {
-        ROSE_ASSERT(unparseSourceFileMap.find(originalFileName) !=
-                    unparseSourceFileMap.end());
-
-        SgSourceFile *unparsedFile = unparseSourceFileMap[originalFileName];
-        ASSERT_not_null(unparsedFile);
-
-        string filenameWithOutPath = FileHelper::getFileName(originalFileName);
-
-        string adjusted_header_file_directory = unparseRootPath;
-
-        // DQ (1/1/2019): Append the filename as a suffix to the
-        // userSpecifiedUnparseRootFolder so that we can avoid header file
-        // location collissions when compileing either multiple files or
-        // multiple files in parallel. adjusted_header_file_directory += "/" +
-        // filenameWithOutPath;
-
-        SgIncludeFile *associated_include_file =
-            unparsedFile->get_associated_include_file();
-        string name_used_in_include_directive =
-            associated_include_file != NULL
-                ? associated_include_file->get_name_used_in_include_directive()
-                      .getString()
-                : filenameWithOutPath;
-        string directoryPathPrefix =
-            Rose::getPathFromFileName(name_used_in_include_directive);
-        if (directoryPathPrefix == ".") {
-          directoryPathPrefix = "";
-        } else {
-          // Nothing to do.
-        }
-
-        directoryPathPrefix += "/";
-
-        // string newFileName = adjusted_header_file_directory +
-        // directoryPathPrefix + filenameWithOutPath;
-        // adjusted_header_file_directory += directoryPathPrefix;
-        adjusted_header_file_directory += "/" + directoryPathPrefix;
-
-        string newFileName =
-            adjusted_header_file_directory + filenameWithOutPath;
-
-        bool isApplicationFile =
-            associated_include_file != NULL
-                ? associated_include_file->get_isApplicationFile()
-                : (!applicationRootDirectory.empty() &&
-                   originalFileName.find(applicationRootDirectory) == 0);
-
-        if (isApplicationFile == true) {
-          std::filesystem::path newFileNamePath(newFileName);
-          std::error_code existsError;
-          if (std::filesystem::exists(newFileNamePath, existsError) == true) {
-            // Handle error.
-            // We might want to report this but not stop processing, since
-            // multiple files will trigger the same header files the be copied.
-            printf("Note: this file already exists: no need to re-copy it: "
-                   "newFileName = %s \n",
-                   newFileName.c_str());
-          }
-          ROSE_ASSERT(copyOriginalHeaderToOutputLocation(originalFileName,
-                                                         newFileName));
-        } else {
-        }
+      if (headerRequiresAstUnparsing(
+              filesWithRelevantModifications, filesWithMarkedTransformations,
+              filesWithUpdatedIncludePaths, originalFileName)) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[header-plan]: modified header=%s was "
+                "incorrectly classified for snapshot copy\n",
+                originalFileName.c_str());
+        ROSE_ABORT();
       }
-
-      copySetInterator++;
+      copyOriginalHeaderToOutputLocation(project, originalFileName,
+                                         copiedOutputFileName);
     }
 
 #if DEBUG_UNPARSE_INCLUDE_FILES
@@ -5085,12 +6711,12 @@ void unparseIncludedFiles(SgProject *project,
 
     // DQ (5/2/2021): We can assert this because of the predicate for this true
     // case (above).
-    ROSE_ASSERT(file->get_unparseHeaderFiles() == true);
+    ROSE_ASSERT(headerSourceFile->get_unparseHeaderFiles() == true);
 
 #if DEBUG_UNPARSE_INCLUDE_FILES
     printf("In Unparser::unparseFile(): calling buildTokenStreamFrontier(): "
            "filename = %s \n",
-           file->getFileName().c_str());
+           headerSourceFile->getFileName().c_str());
 #endif
     // DQ (5/2/2021): This is the version from 5/1/2021.
     // buildTokenStreamFrontier(file);
@@ -5100,37 +6726,16 @@ void unparseIncludedFiles(SgProject *project,
            "frontier! \n");
 #endif
 
-    const std::string applicationRootDirectory =
-        project->get_applicationRootDirectory();
-    const SgSourceFile *referenceSourceFile = NULL;
-    for (SgFile *projectFile : project->get_fileList()) {
-      SgSourceFile *projectSourceFile = isSgSourceFile(projectFile);
-      if (projectSourceFile == NULL) {
-        continue;
-      }
-      if (referenceSourceFile == NULL &&
-          projectSourceFile->get_isHeaderFile() == false) {
-        referenceSourceFile = projectSourceFile;
-      }
-      populateIncludeFileMapForUnparsingFromIncludeTree(
-          projectSourceFile->get_associated_include_file());
-    }
-    if (referenceSourceFile == NULL) {
-      for (SgFile *projectFile : project->get_fileList()) {
-        referenceSourceFile = isSgSourceFile(projectFile);
-        if (referenceSourceFile != NULL) {
-          break;
-        }
-      }
-    }
-
     for (map<string, string>::const_iterator unparseMapEntry =
              unparseMap.begin();
          unparseMapEntry != unparseMap.end(); unparseMapEntry++) {
       // const string & originalFileName = unparseMapEntry -> first;
       string originalFileName = unparseMapEntry->first;
       bool requiresAstUnparsing = headerRequiresAstUnparsing(
-          filesWithRelevantModifications, originalFileName);
+          filesWithRelevantModifications,
+          includedFilesUnparser.getFilesWithMarkedTransformations(),
+          includedFilesUnparser.getFilesWithUpdatedIncludePaths(),
+          originalFileName);
 
       string originalFileNameWithoutPath =
           Rose::utility_stripPathFromFileName(originalFileName);
@@ -5170,84 +6775,38 @@ void unparseIncludedFiles(SgProject *project,
                originalFileNameWithoutPath.c_str());
       }
       // #endif
-
-      // #if 1
-      // DQ (9/7/2018): Retrieve the original SgSourceFile constructed within
-      // the frontend processing. map<string, SgSourceFile*>
-      // unparseSourceFileMap = includedFilesUnparser.getUnparseSourceFileMap();
-      map<string, SgSourceFile *> unparseSourceFileMap =
-          includedFilesUnparser.getUnparseSourceFileMap();
-      map<string, SgScopeStatement *>::const_iterator unparseScopeIter =
-          unparseScopesMap.find(originalFileName);
+      const auto unparseScopeIter = unparseScopesMap.find(originalFileName);
+      SgSourceFile *unparsedFile = NULL;
+      const auto sourceFileIter = unparseSourceFileMap.find(
+          FileHelper::normalizePathIfPossible(originalFileName));
+      if (sourceFileIter != unparseSourceFileMap.end()) {
+        unparsedFile = sourceFileIter->second;
+      }
       if (unparseScopeIter != unparseScopesMap.end() &&
           scopeHasRelevantModifications(unparseScopeIter->second,
-                                        originalFileName) == true) {
+                                        originalFileName, unparsedFile)) {
         requiresAstUnparsing = true;
       }
 
-      // If no SgSourceFile was materialized for a header, we can't
-      // token-unparse it; fall back to copying the original header
-      // into the computed output location so downstream compilation
-      // still succeeds.
-      map<string, SgSourceFile *>::const_iterator sourceFileIter =
-          unparseSourceFileMap.find(originalFileName);
-      if (sourceFileIter == unparseSourceFileMap.end()) {
-        SgIncludeFile *includeFile =
-            lookupIncludeFileForUnparsing(originalFileName);
-        if (includeFile != NULL && includeFile->get_source_file() != NULL) {
-          unparseSourceFileMap.insert(
-              std::make_pair(originalFileName, includeFile->get_source_file()));
-          sourceFileIter = unparseSourceFileMap.find(originalFileName);
-        }
-        if (referenceSourceFile != NULL && requiresAstUnparsing == true &&
-            ((includeFile != NULL &&
-              includeFile->get_isApplicationFile() == true) ||
-             (!applicationRootDirectory.empty() &&
-              originalFileName.find(applicationRootDirectory) == 0)) &&
-            sourceFileIter == unparseSourceFileMap.end()) {
-          SgSourceFile *headerSourceFile = buildDetachedHeaderSourceFile(
-              project, originalFileName, referenceSourceFile);
-          ASSERT_not_null(headerSourceFile);
-          if (includeFile != NULL) {
-            headerSourceFile->set_associated_include_file(includeFile);
-            if (includeFile->get_source_file() == NULL) {
-              includeFile->set_source_file(headerSourceFile);
-            }
-          }
-          unparseSourceFileMap.insert(
-              std::make_pair(originalFileName, headerSourceFile));
-          sourceFileIter = unparseSourceFileMap.find(originalFileName);
-        }
+      if (unparsedFile != NULL && fileHasRelevantModifications(unparsedFile)) {
+        requiresAstUnparsing = true;
       }
 
-      if (sourceFileIter != unparseSourceFileMap.end()) {
-        SgSourceFile *candidateHeaderFile = sourceFileIter->second;
-        if (candidateHeaderFile != NULL &&
-            FileHelper::normalizePathIfPossible(
-                candidateHeaderFile->getFileName()) ==
-                FileHelper::normalizePathIfPossible(originalFileName) &&
-            fileHasRelevantModifications(candidateHeaderFile) == true) {
-          requiresAstUnparsing = true;
+      if (unparsedFile == NULL) {
+        if (requiresAstUnparsing) {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[dirty-header-without-ast]: %s was "
+                  "modified but the frontend did not materialize its "
+                  "SgSourceFile\n",
+                  originalFileName.c_str());
+          ROSE_ABORT();
         }
-      }
-
-      if (sourceFileIter == unparseSourceFileMap.end()) {
         const string outputFileName = FileHelper::concatenatePaths(
             unparseRootPath, unparseMapEntry->second);
-
-        if (SgProject::get_unparseHeaderFilesDebug() >= 2) {
-          printf("NOTE: Header file missing SgSourceFile; copying "
-                 "instead of unparsing: %s -> %s\n",
-                 originalFileName.c_str(), outputFileName.c_str());
-        }
-
-        copyOriginalHeaderToOutputLocation(originalFileName, outputFileName);
-
+        copyOriginalHeaderToOutputLocation(project, originalFileName,
+                                           outputFileName);
         continue;
       }
-
-      SgSourceFile *unparsedFile = sourceFileIter->second;
-      ASSERT_not_null(unparsedFile);
 
       // #if DEBUG_UNPARSE_INCLUDE_FILES
       // DQ (4/4/2020): Added header file unparsing feature specific debug
@@ -5265,11 +6824,14 @@ void unparseIncludedFiles(SgProject *project,
       // SgIncludeFile information.
       SgIncludeFile *associated_include_file =
           unparsedFile->get_associated_include_file();
+      if (associated_include_file == nullptr) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[header-include-node]: header=%s has "
+                "no associated SgIncludeFile\n",
+                originalFileName.c_str());
+        ROSE_ABORT();
+      }
       if (associated_include_file != NULL) {
-
-        // DQ (11/15/2018): Mark this as a header file that will be unparsed.
-        associated_include_file->set_will_be_unparsed(true);
-
         if (requiresAstUnparsing == true &&
             unparsedFile->get_unparse_tokens() == true &&
             associated_include_file
@@ -5277,23 +6839,12 @@ void unparseIncludedFiles(SgProject *project,
                 false) {
           const string outputFileName = FileHelper::concatenatePaths(
               unparseRootPath, unparseMapEntry->second);
-
-          // Only token-based header unparsing needs to reject headers that the
-          // include analysis marks as unsafe for token output. The AST-based
-          // header unparser must still emit those headers so declaration
-          // rewrites and include-path updates are preserved.
-          // #if DEBUG_UNPARSE_INCLUDE_FILES
-          // DQ (4/4/2020): Added header file unparsing feature specific debug
-          // level.
-          if (SgProject::get_unparseHeaderFilesDebug() > 0) {
-            printf("Skip over this entry in the unparseMap \n");
-          }
-          // #endif
-          // The original header still has to exist in the output tree so the
-          // generated source compiles and the include graph remains complete.
-          copyOriginalHeaderToOutputLocation(originalFileName, outputFileName);
-
-          continue;
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[header-token-support]: header=%s "
+                  "output=%s was modified but its token mapping is marked "
+                  "unsafe\n",
+                  originalFileName.c_str(), outputFileName.c_str());
+          ROSE_ABORT();
         }
       }
 
@@ -5301,11 +6852,32 @@ void unparseIncludedFiles(SgProject *project,
       // not reasonable for a header file when using the header file unparsing
       // optimization. DQ (11/7/2018): Make sure that this is available.
       // ASSERT_not_null(unparsedFile->get_project());
-      // DQ (9/14/2018): Added code to set the source file and output file
-      // names.
-      unparsedFile->set_sourceFileNameWithoutPath(
-          FileHelper::getFileName(originalFileName));
-      unparsedFile->set_sourceFileNameWithPath(originalFileName);
+      const string expectedHeaderPath =
+          FileHelper::normalizePathIfPossible(originalFileName);
+      const string actualEmissionPath =
+          FileHelper::normalizePathIfPossible(unparsedFile->getFileName());
+      const string actualParsePath = FileHelper::normalizePathIfPossible(
+          unparsedFile->get_sourceFileNameWithPath());
+      const bool parseIdentityIsInternallyConsistent =
+          !actualParsePath.empty() &&
+          unparsedFile->get_sourceFileNameWithoutPath() ==
+              FileHelper::getFileName(
+                  unparsedFile->get_sourceFileNameWithPath());
+      const bool headerParseIdentityMatches =
+          unparsedFile->get_isHeaderFile() == false ||
+          actualParsePath == expectedHeaderPath;
+      if (expectedHeaderPath.empty() ||
+          actualEmissionPath != expectedHeaderPath ||
+          !parseIdentityIsInternallyConsistent || !headerParseIdentityMatches) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[header-filename]: expected=%s "
+                "emission=%s parse-input=%s parse-basename=%s header=%d\n",
+                originalFileName.c_str(), unparsedFile->getFileName().c_str(),
+                unparsedFile->get_sourceFileNameWithPath().c_str(),
+                unparsedFile->get_sourceFileNameWithoutPath().c_str(),
+                unparsedFile->get_isHeaderFile() ? 1 : 0);
+        ROSE_ABORT();
+      }
 
       ASSERT_not_null(unparsedFile->get_parent());
       // #if DEBUG_UNPARSE_INCLUDE_FILES
@@ -5320,291 +6892,13 @@ void unparseIncludedFiles(SgProject *project,
                unparsedFile->get_parent()->class_name().c_str());
       }
       // #endif
-
-      // #if DEBUG_UNPARSE_INCLUDE_FILES
-      // DQ (11/7/2018): Mark this location since we will have to both add more
-      // logic to support more complex use of header files in applications and
-      // define locations for the source files so that they can access the
-      // header files once they are unparsed. DQ (4/4/2020): Added header file
-      // unparsing feature specific debug level.
-      if (SgProject::get_unparseHeaderFilesDebug() >= 7) {
-        printf("\n\n");
-        printf("********************************************************** \n");
-        printf("Computing the adjusted header file directory for unparsing \n");
-        printf("********************************************************** \n");
-      }
-      // #endif
-
-      // DQ (11/6/2018): The header file directory can be a subdir of the
-      // unparseRootPath if it is specified in the include directive with a path
-      // prefix.  If this is the case then it is recomputed below.
-      string adjusted_header_file_directory = unparseRootPath;
-
-      // DQ (1/1/2019): Append the filename as a suffix to the
-      // userSpecifiedUnparseRootFolder so that we can avoid header file
-      // location collissions when compileing either multiple files or multiple
-      // files in parallel. string filenameWithOutPath =
-      // FileHelper::getFileName(originalFileName);
-      // adjusted_header_file_directory += "/" + filenameWithOutPath;
-      SgHeaderFileBody *associated_header_file_body =
-          isSgHeaderFileBody(unparsedFile->get_parent());
-
-      // DQ (4/4/2020): Added header file unparsing feature specific debug
-      // level.
-      if (SgProject::get_unparseHeaderFilesDebug() >= 7) {
-        printf("(associated_header_file_body != NULL) = %s \n",
-               (associated_header_file_body != NULL) ? "true" : "false");
-      }
-
-      if (associated_header_file_body != NULL) {
-        // SgIncludeFile* associated_include_file =
-        // isSgIncludeFile(associated_header_file_body->get_parent());
-        SgIncludeDirectiveStatement *associated_include_directive =
-            isSgIncludeDirectiveStatement(
-                associated_header_file_body->get_parent());
-        ASSERT_not_null(associated_include_directive);
-        if (associated_include_directive != NULL) {
-          string name_used_in_include_directive =
-              associated_include_directive
-                  ->get_name_used_in_include_directive();
-
-          // #if DEBUG_UNPARSE_INCLUDE_FILES
-          // DQ (4/4/2020): Added header file unparsing feature specific debug
-          // level.
-          if (SgProject::get_unparseHeaderFilesDebug() >= 7) {
-            printf("Processing unparseMapEntries: "
-                   "name_used_in_include_directive = %s \n",
-                   name_used_in_include_directive.c_str());
-          }
-          // #endif
-
-          // DQ (11/11/2018): Need to connect the
-          // extraIncludeDirectorySpecifierList to the translation unit, and not
-          // the source file associated with any header.
-          SgIncludeFile *include_file_support =
-              associated_include_directive->get_include_file_heirarchy();
-          ASSERT_not_null(include_file_support);
-          SgSourceFile *translation_unit_source_file =
-              include_file_support->get_source_file_of_translation_unit();
-
-          ASSERT_not_null(translation_unit_source_file);
-          // #if DEBUG_UNPARSE_INCLUDE_FILES
-          // DQ (4/4/2020): Added header file unparsing feature specific debug
-          // level.
-          if (SgProject::get_unparseHeaderFilesDebug() >= 7) {
-            printf("(check directory prefix) translation_unit_source_file: "
-                   "filename = %s \n",
-                   translation_unit_source_file->getFileName().c_str());
-          }
-          // #endif
-
-          // DQ (11/6/2018): Adding support for when the header file has a path
-          // prefix.
-          string directoryPathPrefix =
-              Rose::getPathFromFileName(name_used_in_include_directive);
-
-          // #if DEBUG_UNPARSE_INCLUDE_FILES
-          // DQ (4/4/2020): Added header file unparsing feature specific debug
-          // level.
-          if (SgProject::get_unparseHeaderFilesDebug() >= 7) {
-            printf("directoryPathPrefix = %s \n", directoryPathPrefix.c_str());
-          }
-          // #endif
-
-          string include_filename = Rose::utility_stripPathFromFileName(
-              name_used_in_include_directive);
-          if (directoryPathPrefix != ".") {
-
-            adjusted_header_file_directory =
-                unparseRootPath + "/" + directoryPathPrefix;
-            // DQ (1/1/2019): Append the filename as a suffix to the
-            // userSpecifiedUnparseRootFolder so that we can avoid header file
-            // location collissions when compileing either multiple files or
-            // multiple files in parallel. adjusted_header_file_directory += "/"
-            // + filenameWithOutPath; DQ (11/6/2018): Build the path.
-            std::filesystem::path pathPrefix(adjusted_header_file_directory);
-            create_directories(pathPrefix);
-
-            // DQ (11/8/2018): Adding the "-I" prefix required for use on the
-            // command line.
-            string include_line = string("-I") + adjusted_header_file_directory;
-            // unparsedFile->get_extraIncludeDirectorySpecifierList().push_back(include_line);
-            // translation_unit_source_file->get_extraIncludeDirectorySpecifierList().push_back(include_line);
-            translation_unit_source_file
-                ->get_extraIncludeDirectorySpecifierBeforeList()
-                .push_back(include_line);
-          }
-
-        } else {
-          printf(
-              "Note: associated_include_file == NULL: "
-              "associated_header_file_body->get_parent() = %p = %s \n",
-              associated_header_file_body->get_parent(),
-              associated_header_file_body->get_parent()->class_name().c_str());
-        }
-      } else {
-        // DQ (11/7/2018): This case is used when the original source file (not
-        // a header file) is processed. #if DEBUG_UNPARSE_INCLUDE_FILES DQ
-        // (4/4/2020): Added header file unparsing feature specific debug level.
-        if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
-          printf("Note: associated_include_file == NULL: filename = %s "
-                 "unparsedFile->get_parent() = %p = %s \n",
-                 unparsedFile->getFileName().c_str(),
-                 unparsedFile->get_parent(),
-                 unparsedFile->get_parent()->class_name().c_str());
-          printf("Before modification for source file: "
-                 "adjusted_header_file_directory = %s \n",
-                 adjusted_header_file_directory.c_str());
-        }
-        // #endif
-
-        // DQ (10/2/2019): The project is an input parameter to this function,
-        // plus the get_project() function can requrn NULL for a header file
-        // (within header file optimzation). string applicationRootDirectory =
-        // unparsedFile->get_project()->get_applicationRootDirectory();
-        ASSERT_not_null(project);
-        string applicationRootDirectory =
-            project->get_applicationRootDirectory();
-        // DQ (4/4/2020): Added header file unparsing feature specific debug
-        // level.
-        if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
-          printf("applicationRootDirectory = %s \n",
-                 applicationRootDirectory.c_str());
-        }
-        std::filesystem::path applicationRootDirectoryPath(
-            applicationRootDirectory);
-        std::filesystem::path currentDirectoryPath(
-            adjusted_header_file_directory);
-
-        string source_filename = unparsedFile->getFileName();
-        string source_file_directory =
-            Rose::getPathFromFileName(source_filename);
-        // DQ (4/4/2020): Added header file unparsing feature specific debug
-        // level.
-        if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
-          printf("source_filename                = %s \n",
-                 source_filename.c_str());
-          printf("source_file_directory          = %s \n",
-                 source_file_directory.c_str());
-          printf("adjusted_header_file_directory = %s \n",
-                 adjusted_header_file_directory.c_str());
-        }
-        std::filesystem::path source_file_directory_path(source_file_directory);
-        // DQ (4/4/2020): Added header file unparsing feature specific debug
-        // level.
-        if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
-          printf("currentDirectoryPath.generic_string()       = %s \n",
-                 currentDirectoryPath.generic_string().c_str());
-          printf("source_file_directory_path.generic_string() = %s \n",
-                 source_file_directory_path.generic_string().c_str());
-        }
-
-        // bool paths_are_equivalent =
-        // currentDirectoryPath.equivalent(applicationRootDirectoryPath);
-        bool paths_are_equivalent =
-            equivalent(currentDirectoryPath, source_file_directory_path);
-        if (paths_are_equivalent == true) {
-          // Nothing to do here.
-        } else {
-          // Need to modify the path associated with the output filename.
-
-          // remove substring (represented by applicationRootDirectory) from
-          // source_file_directory, and append this to the
-          // adjusted_header_file_directory.
-          string source_file_directory_copy = source_file_directory;
-          string::size_type i =
-              source_file_directory_copy.find(applicationRootDirectory);
-          if (i != string::npos) {
-            source_file_directory_copy.erase(i,
-                                             applicationRootDirectory.length());
-          }
-          string added_directory = source_file_directory_copy;
-          // DQ (2/1/2020): Handle the case of a name specified in the current
-          // directory.
-          if (added_directory == ".") {
-            added_directory = "";
-          } else {
-            // Nothing to do.
-          }
-
-          adjusted_header_file_directory += added_directory;
-          // We might need to build the added directory.
-
-          std::filesystem::path adjusted_header_file_directory_path(
-              adjusted_header_file_directory);
-          create_directories(adjusted_header_file_directory_path);
-
-          // DQ (11/8/2018): Debugging code to spot the added include path in
-          // the command line for the backend compiler. source_file_directory +=
-          // "ADDED_INCLUDE_PATH";
-
-          // DQ (10/2/2019): The project is an input parameter to this function,
-          // plus the get_project() function can requrn NULL for a header file
-          // (within header file optimzation).
-          // ASSERT_not_null(unparsedFile->get_project());
-
-          // DQ (11/7/2018): We need a way to add include directories to the
-          // generated command line for the backend compiler. Then we need to
-          // add the adjusted_header_file_directory as an include directory to
-          // the backend compiler's command line. We should maybe add a list of
-          // include directories to add the the generated command line for the
-          // backend compiler. This would be separated from the list of includes
-          // that is collected from the user specified command line (since that
-          // is used directly so that we capture anything that we don't
-          // explicitly collect).
-
-          // unparsedFile->get_project()->get_quotedIncludesSearchPaths().push_back(source_file_directory);
-          // unparsedFile->get_project()->get_includeDirectorySpecifierList().push_back(source_file_directory);
-
-          // DQ (11/28/2018): This is adding the include path for the directory
-          // location of the source file. I don't think this adds any other
-          // directories to the include path list.
-
-          // DQ (3/11/2020): The source directory is the original home of the
-          // source file and maybe some include files, and we don't want to use
-          // this directory if we have modified a header file and it is being
-          // unparsed into the directory specified by the
-          // adjusted_header_file_directory.  This should also force us to move
-          // any header files in the source directory to the new directory. DQ
-          // (11/8/2018): Adding the "-I" prefix required for use on the command
-          // line. string include_line = string("-I") + source_file_directory;
-          // unparsedFile->get_extraIncludeDirectorySpecifierList().push_back(include_line);
-
-          // DQ (3/11/2020): Add the path to the modified (transformed) include
-          // file.
-          string adjusted_header_file_directory_include_line =
-              string("-I") + adjusted_header_file_directory;
-          // unparsedFile->get_extraIncludeDirectorySpecifierList().push_back(adjusted_header_file_directory_include_line);
-          unparsedFile->get_extraIncludeDirectorySpecifierBeforeList()
-              .push_back(adjusted_header_file_directory_include_line);
-          // DQ (3/14/2020): Check that the project is valid.
-          ROSE_ASSERT(project != NULL);
-
-          // DQ (3/14/2020): Add the header file path to the project (not just
-          // the SgSourceFile, since the project is where we accumulate all of
-          // the header file paths so that source files that are not the
-          // unparsedFile (which represents a header file) can be unparsed and
-          // compiled using to file the header files that have been modified.
-          // project->get_extraIncludeDirectorySpecifierList().push_back(adjusted_header_file_directory_include_line);
-          project->get_extraIncludeDirectorySpecifierBeforeList().push_back(
-              adjusted_header_file_directory_include_line);
-        }
-      }
-
-      // We need to add in any possible extra directories in the path between
-      // unparseMapEntry->second.c_str() (the filename without path), and the
-      // base directory.
-
-      // DQ (3/11/2020): The output file name "outputFileName" includes the path
-      // the we much include in the extraIncludeDirectorySpecifierList.
-      // Specifically we need to add the adjusted_header_file_directory to the
-      // extraIncludeDirectorySpecifierList. const string& outputFileName =
-      // FileHelper::concatenatePaths(unparseRootPath, unparseMapEntry ->
-      // second);
-      const string &outputFileName = FileHelper::concatenatePaths(
-          adjusted_header_file_directory, unparseMapEntry->second);
+      // The planning phase owns the complete relative output path. Recomputing
+      // it here from AST parent shape or the application root can place the
+      // header outside the include-search path and silently select the original
+      // unmodified header.
+      const string outputFileName = FileHelper::concatenatePaths(
+          unparseRootPath, unparseMapEntry->second);
       FileHelper::ensureParentFolderExists(outputFileName);
-      unparsedFile->set_unparse_output_filename(outputFileName);
 
       // DQ (10/2/2019): The project is an input parameter to this function,
       // plus the get_project() function can requrn NULL for a header file
@@ -5614,11 +6908,8 @@ void unparseIncludedFiles(SgProject *project,
       // source file).
       if (unparsedFile->get_isHeaderFile() == true) {
         if (requiresAstUnparsing == false) {
-          std::filesystem::copy_file(
-              std::filesystem::path(originalFileName),
-              std::filesystem::path(
-                  unparsedFile->get_unparse_output_filename()),
-              std::filesystem::copy_options::overwrite_existing);
+          copyOriginalHeaderToOutputLocation(project, originalFileName,
+                                             outputFileName);
           continue;
         }
 
@@ -5653,6 +6944,16 @@ void unparseIncludedFiles(SgProject *project,
         SgScopeStatement *header_file_associated_scope =
             unparseScopesMapEntry->second;
         ASSERT_not_null(header_file_associated_scope);
+        const auto occurrenceEntry =
+            unparseOccurrenceMap.find(originalFileName);
+        if (occurrenceEntry == unparseOccurrenceMap.end() ||
+            occurrenceEntry->second == 0) {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[header-context]: header=%s has no "
+                  "exact selected lexical occurrence\n",
+                  originalFileName.c_str());
+          ROSE_ABORT();
+        }
         // unparseFile(unparsedFile, unparseFormatHelp, unparseDelegate, NULL);
         // unparseStatement(header_file_associated_scope);
         // u_exprStmt->unparseStatement(header_file_associated_scope, ninfo);
@@ -5690,7 +6991,10 @@ void unparseIncludedFiles(SgProject *project,
           }
 
           unparseFile(unparsedFile, unparseFormatHelp, unparseDelegate,
-                      header_file_associated_scope);
+                      header_file_associated_scope,
+                      effectivePreprocessingInfoRewrites, &outputFileName,
+                      nameQualifications, effectiveTokenFrontiers,
+                      occurrenceEntry->second);
 
 #if DEBUG_UNPARSE_INCLUDE_FILES
           printf(
@@ -5726,99 +7030,6 @@ void unparseIncludedFiles(SgProject *project,
       // #endif
     }
 
-    // DQ (11/18/2018): For any include file that is unparsed, it can cause a
-    // nested include file to be missed if it used a relative path (common).
-    // This step detects child include files that are not unparsed and
-    // explicitly provides a path for the original child include file to be
-    // found in the backend compile step.  This is less about the unparsing of
-    // include files than the testing of the include files that are being
-    // generated (but the testing is essential).
-
-    // DQ (5/22/2021): This is computed above.
-    // DQ (5/2/2021): Reverting back to the version from May 1st.
-    // DQ (5/2/2021): This is already built above.
-    // SgSourceFile* sourceFile = isSgSourceFile(project->operator[](0));
-    ASSERT_not_null(sourceFile);
-
-    SgIncludeFile *includeFile = sourceFile->get_associated_include_file();
-    if (includeFile != NULL) {
-      // IncludeFileSupport::headerFilePrefix (includeFile);
-      std::set<std::string> added_include_path_set =
-          IncludeFileSupport::headerFilePrefix(includeFile);
-
-      // #if DEBUG_UNPARSE_INCLUDE_FILES
-      // DQ (4/4/2020): Added header file unparsing feature specific debug
-      // level.
-      if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
-        printf(
-            "In unparseIncludedFiles(): added_include_path_set.size() = %zu \n",
-            added_include_path_set.size());
-      }
-      // #endif
-
-      SgSourceFile *translation_unit_source_file =
-          includeFile->get_source_file_of_translation_unit();
-      ASSERT_not_null(translation_unit_source_file);
-
-      // #if DEBUG_UNPARSE_INCLUDE_FILES
-      // DQ (4/4/2020): Added header file unparsing feature specific debug
-      // level.
-      if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
-        printf("(add extra include paths) translation_unit_source_file: "
-               "filename = %s \n",
-               translation_unit_source_file->getFileName().c_str());
-        printf("added_include_path_set.size() = %zu \n",
-               added_include_path_set.size());
-      }
-      // #endif
-
-      std::set<std::string>::iterator i = added_include_path_set.begin();
-      while (i != added_include_path_set.end()) {
-        string header_file_directory = *i;
-        string include_line = string("-I") + header_file_directory;
-
-        // #if DEBUG_UNPARSE_INCLUDE_FILES
-        // DQ (4/4/2020): Added header file unparsing feature specific debug
-        // level.
-        if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
-          printf("   --- include_line = %s \n", include_line.c_str());
-        }
-        // #endif
-
-        // DQ (11/28/2018): Avoid putting system directories into the
-        // extraIncludeDirectorySpecifierList.
-        // translation_unit_source_file->get_extraIncludeDirectorySpecifierList().push_back(include_line);
-        string applicationRootDirectory =
-            sourceFile->get_project()->get_applicationRootDirectory();
-        string includeFileName = includeFile->get_filename();
-        // bool isSubstring =
-        // (includeFileName.substr(applicationRootDirectory,0) != string::npos);
-        // size_t location = includeFileName.find(applicationRootDirectory);
-        size_t location = header_file_directory.find(applicationRootDirectory);
-        bool isSubstring = (location == 0);
-
-        // #if DEBUG_UNPARSE_INCLUDE_FILES
-        // DQ (4/4/2020): Added header file unparsing feature specific debug
-        // level.
-        if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
-          printf("location = %zu isSubstring = %s \n", location,
-                 isSubstring ? "true" : "false");
-        }
-        // #endif
-
-        // Check is this is a path in the application directory (avoid system or
-        // compiler include paths).
-        if (isSubstring == true) {
-          translation_unit_source_file
-              ->get_extraIncludeDirectorySpecifierBeforeList()
-              .push_back(include_line);
-        } else {
-        }
-
-        i++;
-      }
-    }
-
   } else {
     printf("This may be where we need to compute the first and last statements "
            "for each scope \n");
@@ -5827,19 +7038,19 @@ void unparseIncludedFiles(SgProject *project,
     // based unparsing. DQ (5/20/2021): Need to support this here where we have
     // only a source file with no header files.
     // buildFirstAndLastStatementsForIncludeFiles(project);
-    ROSE_ASSERT(file != NULL);
-    SgSourceFile *sourceFile = isSgSourceFile(file);
-    // ROSE_ASSERT(sourceFile != NULL);
+    SgSourceFile *sourceFile = headerSourceFile;
 
     // if (sourceFile->get_unparse_tokens() == true)
-    if (sourceFile != NULL && sourceFile->get_unparse_tokens() == true) {
-      buildFirstAndLastStatementsForIncludeFiles(project);
+    if (sourceFile != NULL && needsAnyTokenFrontier &&
+        tokenFrontiers == nullptr) {
+      buildFirstAndLastStatementsForIncludeFiles(project,
+                                                 *effectiveTokenFrontiers);
 
       // DQ (5/27/2021): We need to debug the collection of first and last
       // statements associated with each scope (actually we just need the last
       // statement for each scope). This only important for the token-based
       // unarpsing.
-      buildFirstAndLastStatementsForScopes(project);
+      buildFirstAndLastStatementsForScopes(project, *effectiveTokenFrontiers);
     }
   }
 
@@ -5863,6 +7074,11 @@ void unparseIncludedFiles(SgProject *project,
 void unparseProject(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
                     UnparseDelegate *unparseDelegate) {
   ASSERT_not_null(project);
+  enforceTokenUnparseContract(project);
+  UnparsePreprocessingInfoRewriteMap preprocessingInfoRewrites;
+  NameQualificationContext nameQualifications;
+  nameQualifications.clear();
+  TokenUnparseFrontierContext tokenFrontiers;
 
 #define DEBUG_UNPARSE_PROJECT 0
 
@@ -5892,10 +7108,6 @@ void unparseProject(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
          "Testing for robustness ... \n");
 #endif
 
-  if (project->get_unparse_tokens() == true) {
-    buildFirstAndLastStatementsForScopes(project);
-  }
-
 #if DEBUG_UNPARSE_PROJECT
   printf(
       "DONE: In unparseProject(): Calling "
@@ -5906,6 +7118,8 @@ void unparseProject(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
   ASSERT_not_null(project->get_fileList_ptr());
 
   SgSourceFile *sourceFile = NULL;
+  bool hasHeaderUnparseSource = false;
+  bool needsTokenBoundaries = false;
   // DQ (8/7/2018): Call the name qualification support on each file in the
   // project.
   for (size_t i = 0; i < project->get_fileList_ptr()->get_listOfFiles().size();
@@ -5919,7 +7133,9 @@ void unparseProject(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
     // DQ (8/7/2018): We might want to allow mixed collections of binaries and
     // source files.
 
-    if (sourceFile != NULL) {
+    if (sourceFile != NULL && !sourceFile->get_skip_unparse()) {
+      hasHeaderUnparseSource =
+          hasHeaderUnparseSource || sourceFile->get_unparseHeaderFiles();
       // #if 1
       // DQ (4/4/2020): Added header file unparsing feature specific debug
       // level.
@@ -5930,7 +7146,7 @@ void unparseProject(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
       }
       // #endif
 
-      Unparser::computeNameQualification(sourceFile);
+      Unparser::computeNameQualification(sourceFile, nameQualifications);
 
       // DQ (4/4/2020): Added header file unparsing feature specific debug
       // level.
@@ -5951,27 +7167,31 @@ void unparseProject(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
       // transformation tracking uses the same frontier even when full-file
       // `-rose:unparse_tokens` mode is disabled.
       const bool needs_token_unparse_frontier =
-          sourceFile->get_unparse_tokens() == true ||
-          (sourceFile->get_use_token_stream_to_improve_source_position_info() ==
-               true &&
-           sourceFile
-                   ->get_unparse_using_leading_and_trailing_token_mappings() ==
-               true);
+          sourceFile->get_unparse_tokens();
       // buildTokenStreamFrontier(sourceFile,traverseHeaderFiles);
       if (needs_token_unparse_frontier) {
-        buildTokenStreamFrontier(sourceFile, traverseHeaderFiles);
+        needsTokenBoundaries = true;
+        buildTokenStreamFrontier(sourceFile, traverseHeaderFiles,
+                                 tokenFrontiers);
       }
     } else {
     }
+  }
+
+  if (needsTokenBoundaries && !hasHeaderUnparseSource) {
+    buildFirstAndLastStatementsForIncludeFiles(project, tokenFrontiers);
+    buildFirstAndLastStatementsForScopes(project, tokenFrontiers);
   }
 
   // DQ (5/10/2021): We only need to support the case of
   // file->get_unparseHeaderFiles() == true. unparseIncludedFiles(project,
   // unparseFormatHelp, unparseDelegate); if
   // (sourceFile->get_unparseHeaderFiles() == true)
-  if (sourceFile != NULL && sourceFile->get_unparseHeaderFiles() == true) {
+  if (hasHeaderUnparseSource) {
     // negara1 (06/27/2011)
-    unparseIncludedFiles(project, unparseFormatHelp, unparseDelegate);
+    unparseIncludedFiles(project, unparseFormatHelp, unparseDelegate,
+                         &preprocessingInfoRewrites, &nameQualifications,
+                         &tokenFrontiers);
   }
 
 #if ROSE_USING_OLD_PROJECT_FILE_LIST_SUPPORT
@@ -5995,7 +7215,8 @@ void unparseProject(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
 
   // DQ (1/23/2010): refactored the SgFileList
   unparseFileList(project->get_fileList_ptr(), unparseFormatHelp,
-                  unparseDelegate);
+                  unparseDelegate, &preprocessingInfoRewrites,
+                  &nameQualifications, nullptr, &tokenFrontiers);
 
   if (SgProject::get_verbose() >= 1) {
     printf("In unparseProject(): Unparse the directory list... \n");
@@ -6013,7 +7234,9 @@ void unparseProject(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
     ASSERT_not_null(project->get_directoryList());
     SgDirectory *directory =
         project->get_directoryList()->get_listOfDirectories()[i];
-    unparseDirectory(directory, unparseFormatHelp, unparseDelegate);
+    unparseDirectory(directory, unparseFormatHelp, unparseDelegate,
+                     &preprocessingInfoRewrites, &nameQualifications,
+                     &tokenFrontiers);
   }
 #endif
 
@@ -6023,67 +7246,111 @@ void unparseProject(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
   }
 }
 
-// DQ (1/19/2010): Added support for handling directories of files.
-void unparseDirectory(SgDirectory *directory,
-                      UnparseFormatHelp *unparseFormatHelp,
-                      UnparseDelegate *unparseDelegate) {
-  int status = 0;
+namespace {
+bool containsParentDirectoryComponent(const std::filesystem::path &path) {
+  return std::find(path.begin(), path.end(), std::filesystem::path("..")) !=
+         path.end();
+}
 
+void unparseDirectoryAt(
+    SgDirectory *directory, const std::filesystem::path &outputDirectory,
+    UnparseFormatHelp *unparseFormatHelp, UnparseDelegate *unparseDelegate,
+    const UnparsePreprocessingInfoRewriteMap *preprocessingInfoRewrites,
+    NameQualificationContext *nameQualifications,
+    TokenUnparseFrontierContext *tokenFrontiers) {
   ASSERT_not_null(directory);
-
-  // Part of the unparcing support for directories is to change the current
-  // system directory.
-  string directoryName = directory->get_name();
-  ROSE_ASSERT(directoryName != "");
-
-  string mkdirCommand = string("mkdir -p ") + directoryName;
-
-  // DQ (1/24/2010): This is a potential security problem!
-  if (SgProject::get_verbose() > 0)
-    printf("WARNING: calling system using mkdirCommand = %s \n",
-           mkdirCommand.c_str());
-
-  status = system(mkdirCommand.c_str());
-  ROSE_ASSERT(status == 0);
-
-  // Now change the current working directory to the new directory
-  status = chdir(directoryName.c_str());
-  ROSE_ASSERT(status == 0);
-
-  // DQ (1/23/2010): refactored the SgFileList
-  unparseFileList(directory->get_fileList(), unparseFormatHelp,
-                  unparseDelegate);
-
-  // printf ("Unparse the directory list... \n");
-  for (int i = 0; i < directory->numberOfDirectories(); ++i) {
-    // printf ("Unparse each directory (i = %d) \n",i);
-    ASSERT_not_null(directory->get_directoryList());
-    SgDirectory *subdirectory =
-        directory->get_directoryList()->get_listOfDirectories()[i];
-    unparseDirectory(subdirectory, unparseFormatHelp, unparseDelegate);
+  if (outputDirectory.empty() ||
+      containsParentDirectoryComponent(outputDirectory)) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[directory-output]: directory=%s resolved "
+            "to unsafe output path %s\n",
+            directory->get_name().c_str(), outputDirectory.string().c_str());
+    ROSE_ABORT();
   }
 
-  // DQ (1/24/2010): This is a potential security problem!
-  string chdirCommand = "..";
+  std::error_code error;
+  std::filesystem::create_directories(outputDirectory, error);
+  if (error) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[directory-output]: output=%s error=%s\n",
+            outputDirectory.string().c_str(), error.message().c_str());
+    ROSE_ABORT();
+  }
 
-  if (SgProject::get_verbose() > 0)
-    printf("WARNING: calling system using chdirCommand = %s \n",
-           chdirCommand.c_str());
+  const std::string outputDirectoryString = outputDirectory.string();
+  unparseFileList(directory->get_fileList(), unparseFormatHelp, unparseDelegate,
+                  preprocessingInfoRewrites, nameQualifications,
+                  &outputDirectoryString, tokenFrontiers);
 
-  // Now change the current working directory to the new directory
-  status = chdir(chdirCommand.c_str());
-  ROSE_ASSERT(status == 0);
+  if (directory->get_directoryList() == NULL) {
+    if (directory->numberOfDirectories() != 0) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[directory-output]: directory=%s reports "
+              "children without a directory list\n",
+              directory->get_name().c_str());
+      ROSE_ABORT();
+    }
+    return;
+  }
+  for (SgDirectory *subdirectory :
+       directory->get_directoryList()->get_listOfDirectories()) {
+    ASSERT_not_null(subdirectory);
+    const std::filesystem::path childName(subdirectory->get_name());
+    if (childName.empty() || childName.is_absolute() ||
+        containsParentDirectoryComponent(childName)) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[directory-output]: parent=%s has unsafe "
+              "child name %s\n",
+              outputDirectory.string().c_str(),
+              subdirectory->get_name().c_str());
+      ROSE_ABORT();
+    }
+    unparseDirectoryAt(
+        subdirectory, (outputDirectory / childName).lexically_normal(),
+        unparseFormatHelp, unparseDelegate, preprocessingInfoRewrites,
+        nameQualifications, tokenFrontiers);
+  }
+}
+} // namespace
+
+void unparseDirectory(
+    SgDirectory *directory, UnparseFormatHelp *unparseFormatHelp,
+    UnparseDelegate *unparseDelegate,
+    const UnparsePreprocessingInfoRewriteMap *preprocessingInfoRewrites,
+    NameQualificationContext *nameQualifications,
+    TokenUnparseFrontierContext *tokenFrontiers) {
+  ASSERT_not_null(directory);
+  const std::filesystem::path directoryName(directory->get_name());
+  if (directoryName.empty() ||
+      containsParentDirectoryComponent(directoryName)) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[directory-output]: unsafe root directory "
+            "name %s\n",
+            directory->get_name().c_str());
+    ROSE_ABORT();
+  }
+  const std::filesystem::path outputDirectory =
+      directoryName.is_absolute()
+          ? directoryName.lexically_normal()
+          : (std::filesystem::current_path() / directoryName)
+                .lexically_normal();
+  unparseDirectoryAt(directory, outputDirectory, unparseFormatHelp,
+                     unparseDelegate, preprocessingInfoRewrites,
+                     nameQualifications, tokenFrontiers);
 }
 
 // DQ (1/19/2010): Added support for refactored handling directories of files.
 
 /* Disable address sanitizer for this function */
 // __attribute__((no_sanitize("address")))
-void unparseFileList(SgFileList *fileList, UnparseFormatHelp *unparseFormatHelp,
-                     UnparseDelegate *unparseDelegate) {
+void unparseFileList(
+    SgFileList *fileList, UnparseFormatHelp *unparseFormatHelp,
+    UnparseDelegate *unparseDelegate,
+    const UnparsePreprocessingInfoRewriteMap *preprocessingInfoRewrites,
+    NameQualificationContext *nameQualifications,
+    const std::string *outputDirectoryOverride,
+    TokenUnparseFrontierContext *tokenFrontiers) {
   ASSERT_not_null(fileList);
-
-  int status_of_function = 0;
 
   // #if 0
   // DQ (4/9/2020): Added header file unparsing feature specific debug level.
@@ -6117,45 +7384,77 @@ void unparseFileList(SgFileList *fileList, UnparseFormatHelp *unparseFormatHelp,
     // {
     ASSERT_not_null(file);
 
+    // skip_unparse is a file-dispatch role, used both by an explicit command
+    // line request and by semantic module files loaded for symbol resolution.
+    // It is consumed only here; reaching the direct file emitter with the bit
+    // set is a caller-contract violation.
+    if (file->get_skip_unparse()) {
+      continue;
+    }
+
     if (SgProject::get_verbose() > 1) {
       printf("Unparsing file = %p = %s \n", file, file->class_name().c_str());
     }
 
-    if (KEEP_GOING_CAUGHT_BACKEND_UNPARSER_SIGNAL) {
-      std::cout << "[WARN] "
-                << "Configured to keep going after catching a "
-                << "signal in Unparser::unparseFile()" << std::endl;
+    if (SgSourceFile *sourceFile = isSgSourceFile(file)) {
+      if (sourceFile->get_frontendErrorCode() != 0) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[frontend-error]: file=%s code=%d "
+                "refusing to unparse an invalid frontend result\n",
+                file->getFileName().c_str(),
+                sourceFile->get_frontendErrorCode());
+        ROSE_ABORT();
+      }
+    }
 
-      if (file != NULL) {
-        file->set_unparserErrorCode(100);
-        status_of_function = max(100, status_of_function);
-      } else {
-        std::cout
-            << "[FATAL] "
-            << "Unable to keep going due to an unrecoverable internal error"
-            << std::endl;
-        exit(1);
+    if (SgProject::get_unparseHeaderFilesDebug() >= 3) {
+      printf("In unparseFileList(): calling unparseFile(): filename = %s \n",
+             file->getFileName().c_str());
+    }
+    std::string outputFilename;
+    const std::string *outputFilenameOverride = nullptr;
+    if (outputDirectoryOverride != nullptr) {
+      if (outputDirectoryOverride->empty()) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[directory-output]: file=%s received "
+                "an empty output directory\n",
+                file->getFileName().c_str());
+        ROSE_ABORT();
       }
-    } else {
-      if (!isSgSourceFile(file) ||
-          isSgSourceFile(file)->get_frontendErrorCode() == 0) {
-        // #if 0
-        // DQ (4/9/2020): Added header file unparsing feature specific debug
-        // level.
-        if (SgProject::get_unparseHeaderFilesDebug() >= 3) {
-          printf(
-              "In unparseFileList(): calling unparseFile(): filename = %s \n",
-              file->getFileName().c_str());
-        }
-        // #endif
-        unparseFile(file, unparseFormatHelp, unparseDelegate);
-      } else {
-        if (SgProject::get_verbose() > 1) {
-          std::cout << "[WARN] "
-                    << "Skipping unparsing of file " << file->getFileName()
-                    << std::endl;
-        }
+      SgProject *project = SageInterface::getProject(file);
+      if (project != nullptr &&
+          project->get_unparse_in_same_directory_as_input_file()) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[directory-output]: file=%s cannot use "
+                "both SgDirectory output and same-directory output\n",
+                file->getFileName().c_str());
+        ROSE_ABORT();
       }
+      std::string basename =
+          file->get_unparse_output_filename().empty()
+              ? "rose_" + file->get_sourceFileNameWithoutPath()
+              : std::filesystem::path(file->get_unparse_output_filename())
+                    .filename()
+                    .string();
+      if (file->get_Cuda_only()) {
+        basename = StringUtility::stripFileSuffixFromFileName(basename) + ".cu";
+      }
+      if (basename.empty()) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[directory-output]: file=%s has no "
+                "output basename\n",
+                file->getFileName().c_str());
+        ROSE_ABORT();
+      }
+      outputFilename =
+          (std::filesystem::path(*outputDirectoryOverride) / basename).string();
+      outputFilenameOverride = &outputFilename;
+    }
+    unparseFile(file, unparseFormatHelp, unparseDelegate, nullptr,
+                preprocessingInfoRewrites, outputFilenameOverride,
+                nameQualifications, tokenFrontiers);
+    if (outputFilenameOverride != nullptr) {
+      file->set_unparse_output_filename(outputFilename);
     }
     // }//file
 

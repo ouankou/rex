@@ -7,193 +7,60 @@
 
 #include "unparser.h"
 
-#include <limits>
-
 using namespace std;
 using namespace Rose;
-
-namespace {
-bool EvaluateConstIntExpr(SgExpression *expr, long long &value) {
-  if (expr == nullptr) {
-    return false;
-  }
-  if (auto *intVal = isSgIntVal(expr)) {
-    value = intVal->get_value();
-    return true;
-  }
-  if (auto *longVal = isSgLongIntVal(expr)) {
-    value = longVal->get_value();
-    return true;
-  }
-  if (auto *longLongVal = isSgLongLongIntVal(expr)) {
-    value = longLongVal->get_value();
-    return true;
-  }
-  if (auto *shortVal = isSgShortVal(expr)) {
-    value = shortVal->get_value();
-    return true;
-  }
-  if (auto *uintVal = isSgUnsignedIntVal(expr)) {
-    value = static_cast<long long>(uintVal->get_value());
-    return true;
-  }
-  if (auto *ulongVal = isSgUnsignedLongVal(expr)) {
-    unsigned long raw = ulongVal->get_value();
-    if (raw >
-        static_cast<unsigned long>(std::numeric_limits<long long>::max())) {
-      return false;
-    }
-    value = static_cast<long long>(raw);
-    return true;
-  }
-  if (auto *ulongLongVal = isSgUnsignedLongLongIntVal(expr)) {
-    unsigned long long raw = ulongLongVal->get_value();
-    if (raw > static_cast<unsigned long long>(
-                  std::numeric_limits<long long>::max())) {
-      return false;
-    }
-    value = static_cast<long long>(raw);
-    return true;
-  }
-  if (auto *ushortVal = isSgUnsignedShortVal(expr)) {
-    value = static_cast<long long>(ushortVal->get_value());
-    return true;
-  }
-  if (auto *varRef = isSgVarRefExp(expr)) {
-    SgVariableSymbol *symbol = varRef->get_symbol();
-    if (symbol == nullptr) {
-      return false;
-    }
-    SgInitializedName *initName = symbol->get_declaration();
-    if (initName == nullptr) {
-      return false;
-    }
-    bool isConst = SageInterface::isConstType(initName->get_type());
-    if (!isConst) {
-      if (auto *varDecl = isSgVariableDeclaration(initName->get_parent())) {
-        isConst = varDecl->get_declarationModifier()
-                      .get_typeModifier()
-                      .get_constVolatileModifier()
-                      .isConst();
-      }
-    }
-    if (!isConst) {
-      return false;
-    }
-    auto *initializer = isSgAssignInitializer(initName->get_initializer());
-    if (initializer == nullptr) {
-      return false;
-    }
-    return EvaluateConstIntExpr(initializer->get_operand(), value);
-  }
-  if (auto *addOp = isSgAddOp(expr)) {
-    long long lhs = 0;
-    long long rhs = 0;
-    if (!EvaluateConstIntExpr(addOp->get_lhs_operand(), lhs) ||
-        !EvaluateConstIntExpr(addOp->get_rhs_operand(), rhs)) {
-      return false;
-    }
-    value = lhs + rhs;
-    return true;
-  }
-  if (auto *subOp = isSgSubtractOp(expr)) {
-    long long lhs = 0;
-    long long rhs = 0;
-    if (!EvaluateConstIntExpr(subOp->get_lhs_operand(), lhs) ||
-        !EvaluateConstIntExpr(subOp->get_rhs_operand(), rhs)) {
-      return false;
-    }
-    value = lhs - rhs;
-    return true;
-  }
-  if (auto *mulOp = isSgMultiplyOp(expr)) {
-    long long lhs = 0;
-    long long rhs = 0;
-    if (!EvaluateConstIntExpr(mulOp->get_lhs_operand(), lhs) ||
-        !EvaluateConstIntExpr(mulOp->get_rhs_operand(), rhs)) {
-      return false;
-    }
-    value = lhs * rhs;
-    return true;
-  }
-  if (auto *divOp = isSgDivideOp(expr)) {
-    long long lhs = 0;
-    long long rhs = 0;
-    if (!EvaluateConstIntExpr(divOp->get_lhs_operand(), lhs) ||
-        !EvaluateConstIntExpr(divOp->get_rhs_operand(), rhs) || rhs == 0) {
-      return false;
-    }
-    value = lhs / rhs;
-    return true;
-  }
-  if (auto *modOp = isSgModOp(expr)) {
-    long long lhs = 0;
-    long long rhs = 0;
-    if (!EvaluateConstIntExpr(modOp->get_lhs_operand(), lhs) ||
-        !EvaluateConstIntExpr(modOp->get_rhs_operand(), rhs) || rhs == 0) {
-      return false;
-    }
-    value = lhs % rhs;
-    return true;
-  }
-  if (auto *minusOp = isSgMinusOp(expr)) {
-    long long operand = 0;
-    if (!EvaluateConstIntExpr(minusOp->get_operand(), operand)) {
-      return false;
-    }
-    value = -operand;
-    return true;
-  }
-  if (auto *unaryAddOp = isSgUnaryAddOp(expr)) {
-    long long operand = 0;
-    if (!EvaluateConstIntExpr(unaryAddOp->get_operand(), operand)) {
-      return false;
-    }
-    value = operand;
-    return true;
-  }
-  return false;
-}
-
-bool ImpliedDoHasZeroIterations(const SgExpression *expr) {
-  const auto *impliedDo = isSgImpliedDo(expr);
-  if (impliedDo == nullptr) {
-    return false;
-  }
-
-  SgExpression *init = impliedDo->get_do_var_initialization();
-  SgExpression *upper = impliedDo->get_last_val();
-  SgExpression *step = impliedDo->get_increment();
-  if (init == nullptr || upper == nullptr || step == nullptr) {
-    return false;
-  }
-
-  auto *assignOp = isSgAssignOp(init);
-  if (assignOp == nullptr) {
-    return false;
-  }
-
-  long long lowerVal = 0;
-  long long upperVal = 0;
-  long long stepVal = 0;
-  if (!EvaluateConstIntExpr(assignOp->get_rhs_operand(), lowerVal) ||
-      !EvaluateConstIntExpr(upper, upperVal) ||
-      !EvaluateConstIntExpr(step, stepVal) || stepVal == 0) {
-    return false;
-  }
-
-  if (stepVal > 0) {
-    return lowerVal > upperVal;
-  }
-  return lowerVal < upperVal;
-}
-} // namespace
 
 void FortranCodeGeneration_locatedNode::unparseLanguageSpecificExpression(
     SgExpression *expr, SgUnparse_Info &info) {
   // This is the Fortran specific expression code generation
 
   switch (expr->variantT()) {
+  case V_SgOmpNameExpression: {
+    SgOmpNameExpression *name = isSgOmpNameExpression(expr);
+    ASSERT_not_null(name);
+    if (name->get_spelling().empty()) {
+      fprintf(stderr, "REX_UNPARSE_INVARIANT[openmp-name]: empty OpenMP syntax "
+                      "identifier\n");
+      ROSE_ABORT();
+    }
+    curprint(name->get_spelling());
+    break;
+  }
+  case V_SgOmpSourceExpression: {
+    SgOmpSourceExpression *source = isSgOmpSourceExpression(expr);
+    ASSERT_not_null(source);
+    if (source->get_spelling().empty()) {
+      fprintf(stderr, "REX_UNPARSE_INVARIANT[openmp-source-expression]: empty "
+                      "source spelling\n");
+      ROSE_ABORT();
+    }
+    // This node owns a complete Fortran token sequence, not a character
+    // literal.  Route it through the normal token formatter so dotted
+    // operators retain the required token boundaries.
+    curprint(source->get_spelling());
+    break;
+  }
+  case V_SgFortranCommonBlockRefExp: {
+    SgFortranCommonBlockRefExp *reference = isSgFortranCommonBlockRefExp(expr);
+    ASSERT_not_null(reference);
+    SageInterface::validateFortranCommonBlockRef(reference);
+    SgExprListExp *list = isSgExprListExp(reference->get_parent());
+    SgNode *clause = list != nullptr ? list->get_parent() : nullptr;
+    if (isSgOmpVariablesClause(clause) == nullptr &&
+        isSgAccVariablesClause(clause) == nullptr &&
+        isSgOmpThreadprivateStatement(reference->get_parent()) == nullptr) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[fortran-common-block-context]: /%s/ "
+              "is not owned by an OpenMP/OpenACC variable-list construct\n",
+              reference->get_use_name().str());
+      ROSE_ABORT();
+    }
+    curprint("/");
+    curprint(reference->get_use_name().str());
+    curprint("/");
+    break;
+  }
+
     // function, intrinsic calls
   case V_SgFunctionCallExp:
     unparseFuncCall(expr, info);
@@ -368,9 +235,6 @@ void FortranCodeGeneration_locatedNode::unparseLanguageSpecificExpression(
     break;
 
     // IO
-  case V_SgIOItemExpression:
-    unparseIOItemExpr(expr, info);
-    break;
   case V_SgImpliedDo:
     unparseImpliedDo(expr, info);
     break;
@@ -473,10 +337,8 @@ void FortranCodeGeneration_locatedNode::unparseLabelRefExp(SgExpression *expr,
   // in all other case the SgLabelRefExp shuld have a IOStatement as a parent,
   // we will look for where the parent is part of an expression list.  This
   // could be improved later. the best way to handle this would be to do the
-  // type checking, and I'm OK with that approach.  The backup plan is to embed
-  // names into (what) that would trigger these to be treated as alternative
-  // return arguments. We could also check if the enclosing statement is an IO
-  // statement.  So there are a number of options here.
+  // type checking. We distinguish alternative returns structurally from label
+  // references owned by I/O and RETURN statements below.
   SgStatement *tmp_statement =
       SageInterface::getEnclosingStatement(labelRefExp);
   ASSERT_not_null(tmp_statement);
@@ -555,7 +417,9 @@ void FortranCodeGeneration_locatedNode::unparseLabelRefExp(SgExpression *expr,
 
 void FortranCodeGeneration_locatedNode::unparseExprRoot(SgExpression *,
                                                         SgUnparse_Info &) {
-  // This IR nodes should not exist in a ROSE generated AST.
+  std::cerr << "Error: SgExpressionRoot must not reach the Fortran unparser"
+            << std::endl;
+  ROSE_ABORT();
 }
 
 //----------------------------------------------------------------------------
@@ -719,38 +583,49 @@ void FortranCodeGeneration_locatedNode::unparseOrOp(SgExpression *expr,
 // (SgBoolType) the type of the expression is not enough to test, we have to
 // test the lhs and rhs type.
 bool outputLogicalOperator(SgExpression *expr) {
-  bool outputLogicalOperator = false;
-
   SgBinaryOp *binaryOp = isSgBinaryOp(expr);
-  if (binaryOp != NULL) {
-    SgExpression *lhs = binaryOp->get_lhs_operand();
-    SgExpression *rhs = binaryOp->get_rhs_operand();
-    SgType *lhs_type = lhs->get_type();
-    SgType *rhs_type = rhs->get_type();
-    const bool lhs_is_bool = isSgTypeBool(lhs_type) != NULL;
-    const bool rhs_is_bool = isSgTypeBool(rhs_type) != NULL;
-    const bool lhs_is_unknown = isSgTypeUnknown(lhs_type) != NULL;
-    const bool rhs_is_unknown = isSgTypeUnknown(rhs_type) != NULL;
-    if (lhs_is_bool || rhs_is_bool) {
-      if (lhs_type == nullptr || rhs_type == nullptr || lhs_is_unknown ||
-          rhs_is_unknown) {
-        outputLogicalOperator = true;
-      } else if (!lhs_is_bool || !rhs_is_bool) {
-        printf("Error: outputLogicalOperator(). Found a boolean operand "
-               "paired with a non-boolean operand for SgExpression:%s\n",
-               expr->class_name().c_str());
-        ASSERT_not_null(isSgTypeBool(lhs_type));
-        ASSERT_not_null(isSgTypeBool(rhs_type));
-      } else {
-        outputLogicalOperator = true;
-      }
-    }
-  } else {
-    printf("Error: this function only needs to handle binary operators. ");
+  if (binaryOp == nullptr) {
+    std::cerr << "Error: logical-operator selection requires SgBinaryOp"
+              << std::endl;
     ROSE_ABORT();
   }
 
-  return outputLogicalOperator;
+  SgExpression *lhs = binaryOp->get_lhs_operand();
+  SgExpression *rhs = binaryOp->get_rhs_operand();
+  ASSERT_not_null(lhs);
+  ASSERT_not_null(rhs);
+  SgType *lhsType = lhs->get_type();
+  SgType *rhsType = rhs->get_type();
+  if (lhsType == nullptr || rhsType == nullptr ||
+      isSgTypeUnknown(lhsType) != nullptr ||
+      isSgTypeUnknown(rhsType) != nullptr) {
+    std::cerr << "Error: equality operands must have resolved types before "
+                 "Fortran unparsing"
+              << std::endl;
+    ROSE_ABORT();
+  }
+
+  auto isLogicalType = [](SgType *type) {
+    while (type != nullptr) {
+      if (SgModifierType *modifier = isSgModifierType(type)) {
+        type = modifier->get_base_type();
+      } else if (SgArrayType *array = isSgArrayType(type)) {
+        type = array->get_base_type();
+      } else {
+        break;
+      }
+    }
+    return isSgTypeBool(type) != nullptr;
+  };
+  const bool lhsIsBool = isLogicalType(lhsType);
+  const bool rhsIsBool = isLogicalType(rhsType);
+  if (lhsIsBool != rhsIsBool) {
+    std::cerr << "Error: Fortran equality has one LOGICAL and one non-LOGICAL "
+                 "operand"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  return lhsIsBool;
 }
 
 void FortranCodeGeneration_locatedNode::unparseEqOp(SgExpression *expr,
@@ -855,45 +730,83 @@ void FortranCodeGeneration_locatedNode::unparseExpOp(SgExpression *expr,
 void FortranCodeGeneration_locatedNode::unparseModOp(SgExpression *expr,
                                                      SgUnparse_Info &info) {
   // Sage node corresponds to Fortran mod intrinsic (remainder function)
-  unparseBinaryOperator(expr, "MOD", info);
+  SgModOp *operation = isSgModOp(expr);
+  ROSE_ASSERT(operation != nullptr);
+  curprint("MOD(");
+  unparseExpression(operation->get_lhs_operand(), info);
+  curprint(", ");
+  unparseExpression(operation->get_rhs_operand(), info);
+  curprint(")");
 }
 
 void FortranCodeGeneration_locatedNode::unparseBitXOrOp(SgExpression *expr,
                                                         SgUnparse_Info &info) {
   // Sage node corresponds to Fortran ieor intrinsic
-  unparseBinaryOperator(expr, "IEOR", info);
+  SgBitXorOp *operation = isSgBitXorOp(expr);
+  ROSE_ASSERT(operation != nullptr);
+  curprint("IEOR(");
+  unparseExpression(operation->get_lhs_operand(), info);
+  curprint(", ");
+  unparseExpression(operation->get_rhs_operand(), info);
+  curprint(")");
 }
 
 void FortranCodeGeneration_locatedNode::unparseBitAndOp(SgExpression *expr,
                                                         SgUnparse_Info &info) {
   // Sage node corresponds to Fortran iand intrinsic
-  unparseBinaryOperator(expr, "IAND", info);
+  SgBitAndOp *operation = isSgBitAndOp(expr);
+  ROSE_ASSERT(operation != nullptr);
+  curprint("IAND(");
+  unparseExpression(operation->get_lhs_operand(), info);
+  curprint(", ");
+  unparseExpression(operation->get_rhs_operand(), info);
+  curprint(")");
 }
 
 void FortranCodeGeneration_locatedNode::unparseBitOrOp(SgExpression *expr,
                                                        SgUnparse_Info &info) {
   // Sage node corresponds to Fortran ior intrinsic
-  unparseBinaryOperator(expr, "IOR", info);
+  SgBitOrOp *operation = isSgBitOrOp(expr);
+  ROSE_ASSERT(operation != nullptr);
+  curprint("IOR(");
+  unparseExpression(operation->get_lhs_operand(), info);
+  curprint(", ");
+  unparseExpression(operation->get_rhs_operand(), info);
+  curprint(")");
 }
 
 void FortranCodeGeneration_locatedNode::unparseLShiftOp(SgExpression *expr,
                                                         SgUnparse_Info &info) {
-  // Sage node corresponds to Fortran ishft(x,+) intrinsic
-  // FIXME:eraxxon: need special case in unparseBinaryExpr
-  unparseBinaryOperator(expr, "ISHFT(x,+)", info);
+  // Sage node corresponds to the Fortran left-shift intrinsic.
+  SgLshiftOp *operation = isSgLshiftOp(expr);
+  ROSE_ASSERT(operation != nullptr);
+  curprint("ISHFT(");
+  unparseExpression(operation->get_lhs_operand(), info);
+  curprint(", ");
+  unparseExpression(operation->get_rhs_operand(), info);
+  curprint(")");
 }
 
 void FortranCodeGeneration_locatedNode::unparseRShiftOp(SgExpression *expr,
                                                         SgUnparse_Info &info) {
-  // Sage node corresponds to Fortran ishft(x,-) intrinsic
-  // FIXME:eraxxon: need special case in unparseBinaryExpr
-  unparseBinaryOperator(expr, "ISHFT(x,-)", info);
+  // Sage node corresponds to the Fortran right-shift intrinsic.
+  SgRshiftOp *operation = isSgRshiftOp(expr);
+  ROSE_ASSERT(operation != nullptr);
+  curprint("ISHFT(");
+  unparseExpression(operation->get_lhs_operand(), info);
+  curprint(", -(");
+  unparseExpression(operation->get_rhs_operand(), info);
+  curprint("))");
 }
 
 void FortranCodeGeneration_locatedNode::unparseBitCompOp(SgExpression *expr,
                                                          SgUnparse_Info &info) {
   // Sage node corresponds to Fortran not intrinsic
-  unparseUnaryOperator(expr, "NOT", info);
+  SgBitComplementOp *operation = isSgBitComplementOp(expr);
+  ROSE_ASSERT(operation != nullptr);
+  curprint("NOT(");
+  unparseExpression(operation->get_operand(), info);
+  curprint(")");
 }
 
 void FortranCodeGeneration_locatedNode::unparseConcatenationOp(
@@ -954,86 +867,7 @@ void FortranCodeGeneration_locatedNode::unparseCastOp(SgExpression *expr,
       << "Case operators not defined for Fortran code generation! node = "
       << expr->class_name() << "\n";
   ROSE_ABORT();
-
-  SgCastExp *cast_op = isSgCastExp(expr);
-  ASSERT_not_null(cast_op);
-
-  SgUnparse_Info ninfo(info);
-  ninfo.unset_PrintName();
-
-  // Never unparse the declaration from within a cast expression
-  ninfo.set_SkipDefinition();
-  ninfo.unset_SkipBaseType();
-
-  switch (cast_op->cast_type()) {
-  case SgCastExp::e_unknown: {
-    printf("SgCastExp::e_unknown found \n");
-    ROSE_ABORT();
-  }
-
-  case SgCastExp::e_default: {
-    printf("SgCastExp::e_default found \n");
-    ROSE_ABORT();
-  }
-
-  case SgCastExp::e_dynamic_cast: {
-    // dynamic_cast <P *> (expr)
-    printf("SgCastExp::e_dynamic_cast found (Now defined in Fortran) \n");
-    ROSE_ABORT();
-  }
-  case SgCastExp::e_static_cast: {
-    // static_cast <P *> (expr)
-    printf("SgCastExp::e_static_cast found (Now defined in Fortran) \n");
-    ROSE_ABORT();
-  }
-  case SgCastExp::e_reinterpret_cast: {
-    // reinterpret_cast <P *> (expr)
-    printf("SgCastExp::e_reinterpret_cast found (Now defined in Fortran) \n");
-    ROSE_ABORT();
-  }
-
-  case SgCastExp::e_C_style_cast:
-  case SgCastExp::e_const_cast: {
-    // (P *) expr
-    // check if the expression that we are casting is not a string
-    // if (cast_op->get_operand()->variant() != STRING_VAL)
-    if (cast_op->get_operand()->variantT() != V_SgStringVal) {
-      // it is not a string, so we always cast
-      curprint("(");
-      // unp->u_type->unparseType(cast_op->get_type(), ninfo);
-      unp->u_fortran_type->unparseType(cast_op->get_type(), ninfo);
-      curprint(")");
-    }
-    break;
-  }
-
-    // DQ (3/28/2017): Adding this here to eliminate warning from Clang.
-  case SgCastExp::e_safe_cast: {
-    printf("SgCastExp::e_safe_cast found (Not defined in Fortran) \n");
-    ROSE_ABORT();
-  }
-
-    // DQ (3/28/2017): Adding this here to eliminate warning from Clang.
-  case SgCastExp::e_last_cast: {
-    printf("SgCastExp::e_last_cast is an error (end of enum list) \n");
-    ROSE_ABORT();
-  }
-
-    // DQ (3/28/2017): Adding this here to eliminate warning from Clang.
-  default: {
-    // DQ (3/28/2017): There should be no other cases, but make the default an
-    // error (just in case).
-    printf("SgCastExp::e_last_cast is an error (end of enum list) \n");
-    ROSE_ABORT();
-  }
-  }
-
-  unparseExpression(cast_op->get_operand(), info);
 }
-
-//----------------------------------------------------------------------------
-//  FortranCodeGeneration_locatedNode::<FIXME>
-//----------------------------------------------------------------------------
 
 void FortranCodeGeneration_locatedNode::unparseNewOp(SgExpression *expr,
                                                      SgUnparse_Info &) {
@@ -1053,21 +887,24 @@ void FortranCodeGeneration_locatedNode::unparseDeleteOp(SgExpression *expr,
 //  FortranCodeGeneration_locatedNode::<FIXME>
 //----------------------------------------------------------------------------
 
-void FortranCodeGeneration_locatedNode::unparsePointStOp(SgExpression *expr,
-                                                         SgUnparse_Info &info) {
-  // Sage node has no Fortran correspondence (unless semantics are twisted)
-  ROSE_ASSERT(false && "FortranCodeGeneration_locatedNode::unparsePointStOp");
-  unparseBinaryOperator(expr, "->", info);
+void FortranCodeGeneration_locatedNode::unparsePointStOp(SgExpression *,
+                                                         SgUnparse_Info &) {
+  std::cerr << "Error: SgArrowExp has no Fortran source spelling" << std::endl;
+  ROSE_ABORT();
 }
 
 void FortranCodeGeneration_locatedNode::unparseDerefOp(SgExpression *,
                                                        SgUnparse_Info &) {
-  // Sage node has no explicit Fortran correspondence
+  std::cerr << "Error: SgPointerDerefExp has no Fortran source spelling"
+            << std::endl;
+  ROSE_ABORT();
 }
 
 void FortranCodeGeneration_locatedNode::unparseAddrOp(SgExpression *,
                                                       SgUnparse_Info &) {
-  // Sage node has no explicit Fortran correspondence
+  std::cerr << "Error: SgAddressOfOp has no Fortran source spelling"
+            << std::endl;
+  ROSE_ABORT();
 }
 
 void FortranCodeGeneration_locatedNode::unparseTypeRef(SgExpression *expr,
@@ -1088,7 +925,7 @@ void FortranCodeGeneration_locatedNode::unparseTypeExpression(
 
   SgUnparse_Info ninfo(info);
   ninfo.unset_PrintName();
-  unp->u_fortran_type->unparseType(type_expr->get_type(), ninfo);
+  unp->u_fortran_type->unparseType(type_expr->get_represented_type(), ninfo);
 }
 
 void FortranCodeGeneration_locatedNode::unparseRangeExp(SgExpression *expr,
@@ -1102,16 +939,18 @@ void FortranCodeGeneration_locatedNode::unparseRangeExp(SgExpression *expr,
   ASSERT_not_null(start);
   ASSERT_not_null(end);
 
+  if (stride != nullptr && isSgNullExpression(stride) == nullptr) {
+    std::cerr << "Error: SgRangeExp with a stride is not a Fortran case range"
+              << std::endl;
+    ROSE_ABORT();
+  }
+
   if (isSgNullExpression(start) == nullptr) {
     unparseExpression(start, info);
   }
   curprint(":");
   if (isSgNullExpression(end) == nullptr) {
     unparseExpression(end, info);
-  }
-
-  if (stride != nullptr && isSgNullExpression(stride) == nullptr) {
-    ROSE_ASSERT(!"Fortran range expressions do not support stride");
   }
 }
 
@@ -1187,9 +1026,6 @@ void FortranCodeGeneration_locatedNode::unparseInitializerList(
 
   bool needComma = false;
   for (SgExpression *item : expr_list->get_expressions()) {
-    if (ImpliedDoHasZeroIterations(item)) {
-      continue;
-    }
     if (needComma) {
       curprint(",");
     }
@@ -1209,28 +1045,85 @@ void FortranCodeGeneration_locatedNode::unparseAggrInit(SgExpression *expr,
   SgAggregateInitializer *aggr_init = isSgAggregateInitializer(expr);
   ASSERT_not_null(aggr_init);
 
-  SgType *explicitType = aggr_init->get_type();
-  const bool hasExplicitType = explicitType != nullptr &&
-                               isSgTypeDefault(explicitType) == nullptr &&
-                               isSgTypeUnknown(explicitType) == nullptr;
-  if (!hasExplicitType) {
-    unparseInitializerList(aggr_init->get_initializers(), info);
+  if (aggr_init->get_source_form() ==
+      SgAggregateInitializer::
+          e_aggregate_initializer_source_fortran_structure) {
+    SgExprListExp *arguments = aggr_init->get_initializers();
+    SgType *semanticType = aggr_init->get_expression_type();
+    SgType *sourceType = aggr_init->get_fortran_source_explicit_type();
+    if (arguments == nullptr || arguments->get_parent() != aggr_init ||
+        semanticType == nullptr || isSgClassType(semanticType) == nullptr ||
+        !aggr_init->get_fortran_has_source_explicit_type() ||
+        sourceType != semanticType ||
+        aggr_init->get_fortran_source_derived_type_symbol() == nullptr) {
+      std::cerr
+          << "REX_UNPARSE_INVARIANT[fortran-structure-constructor]: "
+             "structure constructor has no exact argument, type, and source "
+             "binding contract"
+          << std::endl;
+      ROSE_ABORT();
+    }
+    SgUnparse_Info typeInfo(info);
+    typeInfo.set_reference_node_for_qualification(aggr_init);
+    unp->u_fortran_type->unparseType(sourceType, typeInfo, false);
+    curprint("(");
+    unparseExpression(arguments, info);
+    curprint(")");
     return;
   }
 
+  if (aggr_init->get_source_form() !=
+      SgAggregateInitializer::e_aggregate_initializer_source_fortran) {
+    std::cerr
+        << "REX_UNPARSE_INVARIANT[fortran-array-constructor-source-form]: "
+           "aggregate initializer has source form="
+        << static_cast<int>(aggr_init->get_source_form()) << std::endl;
+    ROSE_ABORT();
+  }
   SgExprListExp *expr_list = aggr_init->get_initializers();
-  ASSERT_not_null(expr_list);
+  if (expr_list == nullptr || expr_list->get_parent() != aggr_init) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-array-constructor-list]: "
+                 "aggregate initializer has no exact expression list"
+              << std::endl;
+    ROSE_ABORT();
+  }
+
+  SgType *semanticType = aggr_init->get_expression_type();
+  if (semanticType == nullptr || isSgTypeDefault(semanticType) != nullptr ||
+      isSgTypeUnknown(semanticType) != nullptr) {
+    std::cerr << "REX_UNPARSER_INVARIANT[fortran-array-constructor-type]: "
+                 "aggregate initializer has no exact semantic expression "
+                 "type"
+              << std::endl;
+    ROSE_ABORT();
+  }
+
+  const bool hasExplicitType =
+      aggr_init->get_fortran_has_source_explicit_type();
+  SgType *explicitType = aggr_init->get_fortran_source_explicit_type();
+  if (hasExplicitType != (explicitType != nullptr) ||
+      (explicitType != nullptr && (isSgTypeDefault(explicitType) != nullptr ||
+                                   isSgTypeUnknown(explicitType) != nullptr))) {
+    std::cerr
+        << "REX_UNPARSER_INVARIANT[fortran-array-constructor-source-type]: "
+           "explicit source-type flag and typed payload are inconsistent"
+        << std::endl;
+    ROSE_ABORT();
+  }
+  if (!hasExplicitType) {
+    unparseInitializerList(expr_list, info);
+    return;
+  }
 
   info.set_nested_expression();
   curprint("(/");
-  unp->u_fortran_type->unparseType(explicitType, info, false);
+  SgUnparse_Info typeInfo(info);
+  typeInfo.set_reference_node_for_qualification(aggr_init);
+  unp->u_fortran_type->unparseType(explicitType, typeInfo, false);
   curprint(" ::");
 
   bool needComma = false;
   for (SgExpression *item : expr_list->get_expressions()) {
-    if (ImpliedDoHasZeroIterations(item)) {
-      continue;
-    }
     if (needComma) {
       curprint(",");
     }
@@ -1274,25 +1167,6 @@ void FortranCodeGeneration_locatedNode::unparseAssnInit(SgExpression *expr,
   unparseExpression(assn_init->get_operand(), info);
 }
 
-//----------------------------------------------------------------------------
-//  FortranCodeGeneration_locatedNode::<IO>
-//----------------------------------------------------------------------------
-
-void FortranCodeGeneration_locatedNode::unparseIOItemExpr(
-    SgExpression *expr, SgUnparse_Info &info) {
-  // Sage node represents Fortran IO
-  SgIOItemExpression *ioitem_expr = isSgIOItemExpression(expr);
-  ASSERT_not_null(ioitem_expr);
-
-  SgExpression *ioitem = ioitem_expr->get_io_item();
-
-  if (isSgExprListExp(ioitem)) {
-    unparseExprList(isSgExprListExp(ioitem), info);
-  } else {
-    unparseExpression(ioitem, info);
-  }
-}
-
 void FortranCodeGeneration_locatedNode::unparseImpliedDo(SgExpression *expr,
                                                          SgUnparse_Info &info) {
   // Sage node corresponds to a Fortran implied do
@@ -1304,38 +1178,52 @@ void FortranCodeGeneration_locatedNode::unparseImpliedDo(SgExpression *expr,
   SgExpression *ub = ioitem_expr->get_last_val();
   SgExpression *step = ioitem_expr->get_increment();
 
-  ASSERT_not_null(lb);
-  ASSERT_not_null(ub);
-  ASSERT_not_null(step);
+  if (object_list == nullptr || object_list->empty() ||
+      object_list->get_parent() != ioitem_expr) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-implied-do-object-list]: "
+                 "implied-do requires one owned nonempty object list"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  for (SgExpression *object : object_list->get_expressions()) {
+    if (object == nullptr || object->get_parent() != object_list) {
+      std::cerr << "REX_UNPARSE_INVARIANT[fortran-implied-do-object-list]: "
+                   "implied-do object list contains a null or foreign-owned "
+                   "object"
+                << std::endl;
+      ROSE_ABORT();
+    }
+  }
+
+  if (lb == nullptr || ub == nullptr || step == nullptr ||
+      lb->get_parent() != ioitem_expr || ub->get_parent() != ioitem_expr ||
+      step->get_parent() != ioitem_expr) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-implied-do-control]: "
+                 "implied-do requires three exactly owned control "
+                 "expressions"
+              << std::endl;
+    ROSE_ABORT();
+  }
 
   curprint("(");
-  if (object_list != nullptr) {
-    unparseExprList(object_list, info);
+  unparseExprList(object_list, info);
+  curprint(",");
 
-    if (object_list->empty() == false)
-      curprint(",");
+  SgAssignOp *initialization = isSgAssignOp(lb);
+  if (initialization == nullptr ||
+      initialization->get_lhs_operand() == nullptr ||
+      initialization->get_rhs_operand() == nullptr ||
+      initialization->get_lhs_operand()->get_parent() != initialization ||
+      initialization->get_rhs_operand()->get_parent() != initialization) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-implied-do-control]: "
+                 "implied-do initialization must be one complete owned "
+                 "assignment"
+              << std::endl;
+    ROSE_ABORT();
   }
-
-  // DQ (10/9/2010): This is an iterative step in the correct handling of
-  // implied do expressions. Unparse the lhs and rhs separately to about extra
-  // "()".  A little later this will be a variable declaration, but we will not
-  // be able to unparse it as such since the type (integer) is not explicitly
-  // represented.
-  ASSERT_not_null(lb);
-  SgBinaryOp *binaryExpression = isSgBinaryOp(lb);
-  if (binaryExpression == NULL) {
-    // This is a temporary fix to support some initial testing.
-    printf("lb = %p = %s \n", lb, lb->class_name().c_str());
-    unparseExpression(lb, info);
-    curprint(" = 1");
-  } else {
-    ASSERT_not_null(binaryExpression);
-    ASSERT_not_null(binaryExpression->get_lhs_operand());
-    unparseExpression(binaryExpression->get_lhs_operand(), info);
-    curprint(" = ");
-    ASSERT_not_null(binaryExpression->get_rhs_operand());
-    unparseExpression(binaryExpression->get_rhs_operand(), info);
-  }
+  unparseExpression(initialization->get_lhs_operand(), info);
+  curprint(" = ");
+  unparseExpression(initialization->get_rhs_operand(), info);
 
   curprint(", ");
   unparseExpression(ub, info);
@@ -1362,20 +1250,6 @@ void FortranCodeGeneration_locatedNode::unparseVarRef(SgExpression *expr,
 
   SgInitializedName *decl = var_ref->get_symbol()->get_declaration();
   ASSERT_not_null(decl);
-  SgVariableDeclaration *vd = isSgVariableDeclaration(decl->get_declaration());
-
-  if (false /*vd != NULL*/) {
-    // FIXME:eraxxon: how to handle renamed module vars?
-    SgClassDefinition *cdef = isSgClassDefinition(vd->get_parent());
-    if (cdef != NULL) {
-      SgClassDeclaration *xdecl = isSgClassDeclaration(cdef->get_declaration());
-      if (xdecl != NULL &&
-          vd->get_declarationModifier().get_storageModifier().isStatic()) {
-        curprint(xdecl->get_qualified_name().str());
-        curprint("::");
-      }
-    }
-  }
 
   curprint(var_ref->get_symbol()->get_name().str());
 }
@@ -1385,7 +1259,39 @@ void FortranCodeGeneration_locatedNode::unparseFuncRef(SgExpression *expr,
   // Sage node corresponds to a Fortran function reference
   SgFunctionRefExp *func_ref = isSgFunctionRefExp(expr);
   ASSERT_not_null(func_ref);
-  string func_name = func_ref->get_symbol()->get_name().str();
+  SgFunctionSymbol *semantic = func_ref->get_symbol();
+  SgFunctionSymbol *sourceVisible =
+      func_ref->get_fortran_source_visible_symbol();
+  SgScopeStatement *sourceScope =
+      sourceVisible != nullptr ? sourceVisible->get_scope() : nullptr;
+  SgSymbolTable *sourceTable =
+      sourceScope != nullptr ? sourceScope->get_symbol_table() : nullptr;
+  const auto bindingKind = func_ref->get_fortran_source_visible_binding_kind();
+  const bool renamedBinding =
+      bindingKind ==
+          SgFunctionRefExp::e_fortran_source_visible_binding_use_rename ||
+      bindingKind ==
+          SgFunctionRefExp::e_fortran_source_visible_binding_generic_overload;
+  SgRenameSymbol *sourceRename =
+      renamedBinding ? isSgRenameSymbol(sourceVisible) : nullptr;
+  if (semantic == nullptr || semantic->get_declaration() == nullptr ||
+      sourceVisible == nullptr || sourceVisible->get_declaration() == nullptr ||
+      sourceScope == nullptr || sourceTable == nullptr ||
+      sourceVisible->get_parent() != sourceTable ||
+      !sourceTable->exists(sourceVisible) ||
+      bindingKind ==
+          SgFunctionRefExp::e_fortran_source_visible_binding_not_applicable ||
+      (sourceRename != nullptr &&
+       sourceRename->get_original_symbol() != semantic) ||
+      (renamedBinding && sourceRename == nullptr)) {
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-function-source-binding]: "
+                 "function reference="
+              << func_ref
+              << " has no exact semantic and source-visible procedure "
+                 "identities\n";
+    ROSE_ABORT();
+  }
+  string func_name = sourceVisible->get_name().str();
   curprint(func_name);
 }
 
@@ -1412,25 +1318,77 @@ void FortranCodeGeneration_locatedNode::unparseStringVal(SgExpression *expr,
   SgStringVal *str_val = isSgStringVal(expr);
   ASSERT_not_null(str_val);
 
-  // String values in fortran can use either double or single quotes ("..." or
-  // '...') to be used.
-  string str;
-
-  // We add the quotes back in since they are not saved with the string value
-  // (so that C/C++ and Fortran can be handled similarly).
-  if (str_val->get_usesSingleQuotes() == true) {
-    // str = string("/* single quotes */ \'") + str_val->get_value() +
-    // string("\'");
-    str = string("\'") + str_val->get_value() + string("\'");
-  } else {
-    str = string("\"") + str_val->get_value() + string("\"");
+  Unparser::FortranDirectiveKind expectedDirective =
+      Unparser::FortranDirectiveKind::none;
+  for (SgNode *ancestor = str_val->get_parent(); ancestor != nullptr;
+       ancestor = ancestor->get_parent()) {
+    if (isSgOmpClause(ancestor) != nullptr) {
+      if (expectedDirective == Unparser::FortranDirectiveKind::openacc) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[fortran-string]: literal has both "
+                "OpenMP and OpenACC clause ancestors\n");
+        ROSE_ABORT();
+      }
+      expectedDirective = Unparser::FortranDirectiveKind::openmp;
+    } else if (isSgAccClause(ancestor) != nullptr) {
+      if (expectedDirective == Unparser::FortranDirectiveKind::openmp) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[fortran-string]: literal has both "
+                "OpenMP and OpenACC clause ancestors\n");
+        ROSE_ABORT();
+      }
+      expectedDirective = Unparser::FortranDirectiveKind::openacc;
+    }
   }
-  curprint(str);
+  if (expectedDirective == Unparser::FortranDirectiveKind::none) {
+    if (unp->getFortranDirectiveKind() !=
+        Unparser::FortranDirectiveKind::none) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[fortran-directive-context]: ordinary "
+              "string emitted inside a directive header\n");
+      ROSE_ABORT();
+    }
+  } else {
+    unp->requireFortranDirectiveKind(expectedDirective);
+  }
+
+  const char delimiter = str_val->get_stringDelimiter();
+  if (delimiter == 'H') {
+    const string &value = str_val->get_value();
+    if (value.find_first_of("\r\n") != string::npos) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[fortran-string]: Hollerith payload "
+              "contains a physical newline\n");
+      ROSE_ABORT();
+    }
+    const std::string literal = std::to_string(value.size()) + "H" + value;
+    if (unp->cur.get_compact_output()) {
+      unp->cur.emit_literal(literal);
+    } else {
+      unp->emitFortranText(literal);
+    }
+    return;
+  }
+  if (delimiter != '\'' && delimiter != '"') {
+    fprintf(stderr, "REX_UNPARSE_INVARIANT[fortran-string]: SgStringVal has no "
+                    "Fortran source delimiter\n");
+    ROSE_ABORT();
+  }
+  unp->emitFortranCharacterLiteral(str_val->get_value(), delimiter);
 }
 
 //----------------------------------------------------------------------------
 //  void FortranCodeGeneration_locatedNode::<constants>
 //----------------------------------------------------------------------------
+
+void FortranCodeGeneration_locatedNode::unparseLongLongIntVal(
+    SgExpression *expr, SgUnparse_Info &info) {
+  SgLongLongIntVal *value = isSgLongLongIntVal(expr);
+  ROSE_ASSERT(value != nullptr);
+  UnparseLanguageIndependentConstructs::unparseLongLongIntVal(expr, info);
+  if (value->get_valueString().empty())
+    curprint("_8");
+}
 
 void FortranCodeGeneration_locatedNode::unparseBoolVal(SgExpression *expr,
                                                        SgUnparse_Info &) {
@@ -1443,6 +1401,12 @@ void FortranCodeGeneration_locatedNode::unparseBoolVal(SgExpression *expr,
   } else {
     curprint(".FALSE.");
   }
+}
+
+void FortranCodeGeneration_locatedNode::unparseNullptrVal(SgExpression *expr,
+                                                          SgUnparse_Info &) {
+  ASSERT_not_null(isSgNullptrValExp(expr));
+  curprint("NULL()");
 }
 
 //----------------------------------------------------------------------------
@@ -1466,9 +1430,6 @@ void FortranCodeGeneration_locatedNode::unparseExprList(SgExpression *expr,
   }
   bool needComma = false;
   for (SgExpression *item : expr_list->get_expressions()) {
-    if (ImpliedDoHasZeroIterations(item)) {
-      continue;
-    }
     if (needComma) {
       curprint(",");
     }
@@ -1534,26 +1495,18 @@ bool FortranCodeGeneration_locatedNode::isSubroutineCall(
     return false;
   }
 
-  // Note that the function declaration is explicitly marked and I think this is
-  // better than getting the return type.
-
   SgExpression *functionExpr = fcall->get_function();
   ASSERT_not_null(functionExpr);
 
-  if (SgFunctionRefExp *functionRefExp = isSgFunctionRefExp(functionExpr)) {
-    SgFunctionSymbol *functionSymbol = functionRefExp->get_symbol();
-    ASSERT_not_null(functionSymbol);
-
-    SgFunctionDeclaration *functionDeclaration =
-        functionSymbol->get_declaration();
-    ASSERT_not_null(functionDeclaration);
-
-    SgProcedureHeaderStatement *procedureHeaderStatement =
-        isSgProcedureHeaderStatement(functionDeclaration);
-    ASSERT_not_null(procedureHeaderStatement);
-
-    return (procedureHeaderStatement->get_subprogram_kind() ==
-            SgProcedureHeaderStatement::e_subroutine_subprogram_kind);
+  // The abstract expression node deliberately has no semantic type accessor.
+  // Diagnose that malformed call target here instead of invoking its virtual
+  // base implementation, whose generic abort would hide the Fortran contract.
+  if (functionExpr->variantT() == V_SgExpression) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-call-target-type]: standalone "
+            "call target type=%s has no exact semantic procedure type\n",
+            functionExpr->class_name().c_str());
+    ROSE_ABORT();
   }
 
   auto stripModifierType = [](SgType *type) {
@@ -1571,49 +1524,46 @@ bool FortranCodeGeneration_locatedNode::isSubroutineCall(
     return stripModifierType(type);
   };
 
-  auto getExprType = [&](auto &&self, SgExpression *expr) -> SgType * {
-    if (expr == nullptr) {
-      return nullptr;
-    }
-    if (expr->get_type() != nullptr) {
-      return expr->get_type();
-    }
-    if (auto *varRef = isSgVarRefExp(expr)) {
-      if (SgVariableSymbol *sym = varRef->get_symbol()) {
-        return sym->get_type();
-      }
-    }
-    if (auto *dot = isSgDotExp(expr)) {
-      return self(self, dot->get_rhs_operand_i());
-    }
-    return nullptr;
-  };
+  SgType *targetType = functionExpr->get_type();
+  if (targetType == nullptr) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-call-target-type]: standalone "
+            "call target type=%s has no exact semantic procedure type\n",
+            functionExpr->class_name().c_str());
+    ROSE_ABORT();
+  }
 
-  SgType *type = stripPointerType(getExprType(getExprType, functionExpr));
+  SgType *type = stripPointerType(targetType);
   if (SgFunctionType *funcType = isSgFunctionType(type)) {
+    if (funcType->get_return_type() == nullptr) {
+      std::cerr << "Error: indirect Fortran call has no return type"
+                << std::endl;
+      ROSE_ABORT();
+    }
     return isSgTypeVoid(funcType->get_return_type()) != nullptr;
   }
   if (SgMemberFunctionType *funcType = isSgMemberFunctionType(type)) {
+    if (funcType->get_return_type() == nullptr) {
+      std::cerr << "Error: indirect Fortran member call has no return type"
+                << std::endl;
+      ROSE_ABORT();
+    }
     return isSgTypeVoid(funcType->get_return_type()) != nullptr;
   }
 
-  return false;
+  std::cerr << "Error: standalone Fortran call target has no resolved "
+               "procedure type"
+            << std::endl;
+  ROSE_ABORT();
 }
 
 void FortranCodeGeneration_locatedNode::unparseUnknownArrayOrFunctionReference(
-    SgExpression *expr, SgUnparse_Info &info) {
-  SgUnknownArrayOrFunctionReference *assumeArrayReference =
-      isSgUnknownArrayOrFunctionReference(expr);
-
-  curprint("\n    ! SgUnknownArrayOrFunctionReference (post-processing "
-           "required to resolve reference): reference name = ");
-  // For debugging support output a simple variable reference.
-  SgExpression *variableReference = assumeArrayReference->get_named_reference();
-  unparseVarRef(variableReference, info);
-
-  // Output 1 new line so that new statements will appear on their own line
-  // after the SgProgramHeaderStatement declaration.
-  unp->cur.insert_newline(1);
+    SgExpression *expr, SgUnparse_Info &) {
+  ASSERT_not_null(isSgUnknownArrayOrFunctionReference(expr));
+  std::cerr << "Error: unresolved SgUnknownArrayOrFunctionReference reached "
+               "the Fortran unparser"
+            << std::endl;
+  ROSE_ABORT();
 }
 
 void FortranCodeGeneration_locatedNode::unparseUserDefinedUnaryOp(
@@ -1806,12 +1756,7 @@ PrecedenceSpecifier
 FortranCodeGeneration_locatedNode::getPrecedence(SgExpression *exp) {
   // same as in base class except unary plus/minus have equal precedence with
   // binary plus.
-
-  SgAddOp *addOp = new SgAddOp(NULL, NULL, NULL, NULL);
-  PrecedenceSpecifier addOpPrec =
-      UnparseLanguageIndependentConstructs::getPrecedence(addOp);
-  delete addOp;
   return (isSgMinusOp(exp) || isSgUnaryAddOp(exp)
-              ? addOpPrec
+              ? additiveOperatorPrecedence()
               : UnparseLanguageIndependentConstructs::getPrecedence(exp));
 }

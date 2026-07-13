@@ -25,10 +25,19 @@ SageInterface::DeclarationSets *decl_set = NULL;
 
 class RoseVisitor : public ROSE_VisitTraversal {
 public:
+  explicit RoseVisitor(SgProject *project) : project_(project) {
+    ROSE_ASSERT(project_ != nullptr);
+  }
+
   void visit(SgNode *node);
+
+private:
+  SgProject *project_;
 };
 
 void RoseVisitor::visit(SgNode *node) {
+  const bool projectOwned = SageInterface::getProject(node) == project_;
+
   if (SgDeclarationStatement *decl = isSgDeclarationStatement(node)) {
     cout << "calling enclosingNamespaceScope() " << endl;
     enclosingNamespaceScope(decl);
@@ -70,9 +79,12 @@ void RoseVisitor::visit(SgNode *node) {
          << endl;
     outputLocalSymbolTables(sw);
 
-    // calling some functions within a smaller narrow scope
-    setOneSourcePositionForTransformation(sw);
-    removeAllOriginalExpressionTrees(sw);
+    // Destructive coverage is restricted to the active project AST. Source
+    // statements retain their frontend provenance; transformation provenance
+    // is established only while constructing generated nodes.
+    if (projectOwned) {
+      removeAllOriginalExpressionTrees(sw);
+    }
     // TODO: bugging function to fix
     //    changeBreakStatementsToGotos(sw);
   }
@@ -147,7 +159,8 @@ void RoseVisitor::visit(SgNode *node) {
     cout << get_name(pdecl) << endl;
   }
 
-  if (SgExpression *exp = isSgExpression(node)) {
+  if (SgExpression *exp = isSgExpression(node);
+      exp != nullptr && exp->has_semantic_value_type()) {
     cout << "calling SageInterface::get_name ( const SgType* type ) " << endl;
     cout << get_name(
         exp->get_type()); // we don't want touch this func for all nodes
@@ -164,8 +177,10 @@ void RoseVisitor::visit(SgNode *node) {
         cout << "calling  SageInterface::isEqualToIntConst(SgExpression* e, "
                 "int value) return true, IntVal == 12345 "
              << endl;
-        setOperand(isSgExpression(iv->get_parent()),
-                   SageBuilder::buildIntVal(9));
+        if (projectOwned) {
+          setOperand(isSgExpression(iv->get_parent()),
+                     SageBuilder::buildIntVal(9));
+        }
       }
     }
 
@@ -199,30 +214,29 @@ void RoseVisitor::visit(SgNode *node) {
 
   // Extracted from
   // projects/SMTPathFeasibility/utils/replaceExpressionsAndSimplifyExpressions.cpp
-  if (SgIfStmt *fixIf = isSgIfStmt(node)) {
+  if (SgIfStmt *fixIf = projectOwned ? isSgIfStmt(node) : nullptr) {
     SgStatement *conditional = fixIf->get_conditional();
     if (isSgExprStatement(conditional)) {
       SgExpression *expr = isSgExprStatement(conditional)->get_expression();
       std::pair<SgVariableDeclaration *, SgExpression *> pr =
-          SageInterface::createTempVariableForExpression(
-              expr, isSgScopeStatement(fixIf), true);
+          SageInterface::createTempVariableForExpression(expr, fixIf, true);
       SgInitializedNamePtrList lptr = pr.first->get_variables();
       // std::cout << "lprt size: " << lptr.size() << std::endl;
       ROSE_ASSERT(lptr.size() <= 1);
       SgVarRefExp *varRef = SageBuilder::buildVarRefExp(pr.first);
       SgIntVal *iv = SageBuilder::buildIntVal(0);
-      SgNotEqualOp *nop = SageBuilder::buildNotEqualOp(isSgExpression(varRef),
-                                                       isSgExpression(iv));
+      SgNotEqualOp *nop = SageBuilder::buildNotEqualOp(
+          isSgExpression(varRef), isSgExpression(iv),
+          SageBuilder::buildBoolType());
       SgExprStatement *ses =
           SageBuilder::buildExprStatement(isSgExpression(nop));
       SageInterface::replaceStatement(conditional, ses);
-
-      SageInterface::insertStatementBefore(fixIf, pr.first);
     }
   }
 
   // scan various input functions to trigger testing
-  if (SgFunctionDefinition *node2 = isSgFunctionDefinition(node)) {
+  if (SgFunctionDefinition *node2 =
+          projectOwned ? isSgFunctionDefinition(node) : nullptr) {
     clearScopeNumbers(node2);
 
     removeConsecutiveLabels(node2);
@@ -276,7 +290,7 @@ int main(int argc, char *argv[]) {
   // 2. Call some functions during a memory traversal
   //  ROSE memory traversal to catch all sorts of nodes, not just those on
   //  visible AST
-  RoseVisitor visitor;
+  RoseVisitor visitor(project);
   visitor.traverseMemoryPool();
 
   // 3. Call some functions in the end
@@ -286,10 +300,8 @@ int main(int argc, char *argv[]) {
   // special calls
   SgFunctionDeclaration *mdecl = findMain(project);
   ROSE_ASSERT(mdecl != NULL);
-  PreprocessingInfo *comment = new PreprocessingInfo(
-      PreprocessingInfo::CplusplusStyleComment, "//test comments here ",
-      "user-generated", 0, 0, 0, PreprocessingInfo::before);
-  insertHeader(mdecl, comment, true);
+  attachComment(mdecl, "test comments here",
+                PreprocessingInfo::CplusplusStyleComment);
 
   SgFunctionDeclaration *foo_decl =
       findFunctionDeclaration(project, "foo", NULL, false);
@@ -301,7 +313,7 @@ int main(int argc, char *argv[]) {
   collectModifiedStatements(project);
 
   SgFunctionDeclaration *mv_decl = findFunctionDeclaration(
-      project, "test_moveVariableDeclaration", NULL, false);
+      project, "test_moveVariableDeclaration", NULL, true);
   ROSE_ASSERT(mv_decl != NULL);
   SgBasicBlock *body = isSgBasicBlock(mv_decl->get_definition()->get_body());
   ROSE_ASSERT(body != NULL);

@@ -23,6 +23,11 @@ target_link_libraries(DataFlowTest ROSE_DLL ${link_with_libraries})
 add_executable(StmtRefTest StmtRefTest.C)
 target_link_libraries(StmtRefTest ROSE_DLL ${link_with_libraries})
 
+add_executable(rex_side_effect_callable_channels
+  rex_side_effect_callable_channels.C)
+target_link_libraries(rex_side_effect_callable_channels
+  ROSE_DLL ${link_with_libraries})
+
 add_executable(PtrAnalTest PtrAnalTest.C)
 target_link_libraries(PtrAnalTest ROSE_DLL ${link_with_libraries})
 
@@ -56,14 +61,17 @@ set(_sr_exec "$<TARGET_FILE:StmtRefTest>")
 set(_vfa_exec "$<TARGET_FILE:VirtualFunctionAnalysisTest>")
 set(_ptr_cmd "${_ptr_exec} ${CMAKE_CURRENT_SOURCE_DIR}/testPtr2.C")
 set(_cfg_cmd_01 "${_cfg_exec} -I${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/testfile1.c")
-set(_cfg_cmd_02 "${_cfg_exec} -I${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/testfile2.c")
+# testfile2.c and testfile4.c intentionally exercise pre-C99 implicit-int
+# programs.  Select their exact GNU C89 source dialect instead of asking the
+# LLVM frontend to reinterpret them as malformed C99-or-later input.
+set(_cfg_cmd_02 "${_cfg_exec} -std=gnu89 -I${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/testfile2.c")
 set(_cfg_cmd_03 "${_cfg_exec} -I${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/testfile3.c")
 set(_df_cmd_01 "${_df_exec} -I${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/testfile1.c")
-set(_df_cmd_02 "${_df_exec} -I${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/testfile2.c")
+set(_df_cmd_02 "${_df_exec} -std=gnu89 -I${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/testfile2.c")
 set(_df_cmd_03 "${_df_exec} -I${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/testfile3.c")
-set(_df_cmd_04 "${_df_exec} -I${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/testfile4.c")
+set(_df_cmd_04 "${_df_exec} -std=gnu89 -I${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/testfile4.c")
 set(_sr_cmd_01 "${_sr_exec} -I${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/testfile1.c")
-set(_sr_cmd_02 "${_sr_exec} -I${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/testfile2.c")
+set(_sr_cmd_02 "${_sr_exec} -std=gnu89 -I${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/testfile2.c")
 set(_sr_cmd_03 "${_sr_exec} -I${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/testfile3.c")
 set(_vf_cmd_01 "${_vfa_exec} -I${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/test_vfa1.C")
 set(_vf_cmd_02 "${_vfa_exec} -I${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/test_vfa2.C")
@@ -204,6 +212,13 @@ add_test(
     ANS=${CMAKE_CURRENT_SOURCE_DIR}/testfile3.c.ref
     ${_check_answer}
     sr_03.passed
+)
+
+add_test(
+  NAME rex_side_effect_callable_channels
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND $<TARGET_FILE:rex_side_effect_callable_channels>
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_side_effect_callable_channels_input.C
 )
 
 # Virtual function analysis tests (exit status only)

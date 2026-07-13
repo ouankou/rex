@@ -48,6 +48,7 @@ extern std::map<std::string, ROSEAttributesList *> mapFilenameToAttributes;
 // DQ (4/19/2006): Forward declaration so that PreprocessingInfo can
 // contain a pointer to a Sg_File_Info object.
 class Sg_File_Info;
+class SgLocatedNode;
 
 // DQ (1/21/2008): Need forward declaration
 class SgFile;
@@ -73,11 +74,20 @@ public:
     inside = 4, // Directive goes inside the corresponding code segment (as in
                 // between "{" and "}" of an empty basic block)
 
-    // DQ (7/19/2008): Added additional fields so that we could use this enum
-    // type in the AstUnparseAttribute replace       = 5, // Support for
-    // replacing the IR node in the unparsing of any associated subtree
+    // Source-owned preprocessing information can be attached before, after,
+    // or inside the corresponding AST surface.
     before_syntax = 6, // We still have to specify the syntax
     after_syntax = 7   // We still have to specify the syntax
+  };
+
+  // Source-coordinate placement is meaningful only while the record remains
+  // on its frontend source owner.  Transformations that publish the record on
+  // another AST boundary retain the source spelling but make the explicit
+  // attachment position authoritative.
+  enum OutputPlacementType {
+    source_position = 0,
+    attached_output_boundary = 1,
+    attached_output_trailing_line = 2
   };
 
   // Enum type to help classify the type for string that has been saved.
@@ -116,6 +126,7 @@ public:
     CpreprocessorElifDeclaration,
     CpreprocessorEndifDeclaration,
     CpreprocessorLineDeclaration,
+    CpreprocessorPragmaDeclaration,
     CpreprocessorErrorDeclaration,
 
     // DQ (10/19/2005): Added CPP warning directive
@@ -131,19 +142,6 @@ public:
     // AS & LIAO (8/12/2008): A PreprocessingInfo that is a
     // hand made MacroCall that will expand into a valid statement.
     CMacroCallStatement,
-
-    // DQ (11/28/2008): What does this mean!
-    // A line replacement will replace a sub-tree in the AST
-    // after a node with position (filename,line)
-    LineReplacement,
-
-    // The is the 'extern "C" {' construct.  Note that this is not
-    // captured in
-    // the legacy frontend AST and it is required to be captured as part
-    // of the CPP and
-    // comment preprocessing.
-    ClinkageSpecificationStart,
-    ClinkageSpecificationEnd,
 
     // DQ (11/17/2008): Added support for #ident
     CpreprocessorIdentDeclaration,
@@ -164,20 +162,6 @@ public:
     //   '4' indicates that the following text should be treated as
     //   being wrapped in an implicit 'extern "C"' block
     CpreprocessorCompilerGeneratedLinemarker,
-
-    // DQ (2/2/2014): permit raw text to be specified as a extremely
-    // simple way to add text to the unparsing of the AST.
-    // Note that it is the user's responcability to have the text be
-    // legal code.  Additionall any language constructs
-    // added using this mechanism will ot show up in the AST.  So it is
-    // not possible to reference functions (for example)
-    // added using this mechanism to build function calls as
-    // transformation elsewhere in the code.  But one could add
-    // the function via AST transformations and the function body using
-    // a mechanism provided here and that would define
-    // a simple appoach to adding large complex functions for which it
-    // is impractical to build up an AST.
-    RawText,
 
     CpreprocessorEnd_ifDeclaration,
 
@@ -219,6 +203,20 @@ private:
   // removed and having a flag here is not going to work for that.  so we have
   // to also record that the ROSEAttributesList has changed.
   bool p_isTransformation;
+
+  OutputPlacementType outputPlacement;
+
+  // An attached preprocessing record is an owned source-surface object, not a
+  // shareable attribute.  The owning SgLocatedNode is recorded explicitly so
+  // malformed ASTs cannot publish one record through multiple attachment
+  // lists and leave the unparser to guess which list is authoritative.
+  SgLocatedNode *attachedOwner;
+
+  friend class SgLocatedNode;
+  void claimAttachedOwner(SgLocatedNode *owner);
+  void releaseAttachedOwner(SgLocatedNode *owner);
+  void changeAttachedPosition(SgLocatedNode *owner,
+                              RelativePositionType position);
 
   // member functions
 public:
@@ -266,6 +264,9 @@ public:
   void setTypeOfDirective(DirectiveType);
   RelativePositionType getRelativePosition(void) const;
   void setRelativePosition(RelativePositionType relPos);
+  OutputPlacementType getOutputPlacement() const;
+  void setOutputPlacement(OutputPlacementType placement);
+  SgLocatedNode *getAttachedOwner() const;
 
   // DQ (2/27/2019): Adding support for CPP directives and comments to have
   // filename information (already present, but we need to access it).
@@ -295,6 +296,7 @@ public:
   void unpacked(char *storePointer);
 
   // DQ (4/19/2006): Added Sg_File_Info objects to each PreprocessingInfo object
+  bool has_file_info() const;
   Sg_File_Info *get_file_info() const;
   void set_file_info(Sg_File_Info *info);
 
@@ -313,13 +315,6 @@ public:
   void set_filenameForCompilerGeneratedLinemarker(std::string x);
   void set_optionalflagsForCompilerGeneratedLinemarker(std::string x);
 
-  // DQ (12/30/2013): Adding support to supress output of macros that are
-  // self-referential. e.g. "#define foo X->foo", which would be expanded a
-  // second time in the backend processing. Note that if we don't output the
-  // #define, then we still might have a problem if there was code that depended
-  // upon a "#ifdef foo".  So this handling is not without some risk, but it
-  // always better to use the token stream unparsing for these cases.
-  bool isSelfReferential();
   std::string getMacroName();
 
   // DQ (1/15/2015): Adding support for token-based unparsing. Access function

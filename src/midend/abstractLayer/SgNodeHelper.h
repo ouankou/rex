@@ -537,13 +537,6 @@ getInitializerListOfAggregateDeclaration(SgVariableDeclaration *decl);
 */
 void replaceExpression(SgExpression *e1, SgExpression *e2, bool mode = false);
 
-/*! replaces the ast with root 'node' with the string 's'. The
-   string is attached to the AST and the unparser uses string s
-   instead of unparsing this substree. This function can be used to
-   generate C++ extensions.
-*/
-void replaceAstWithString(SgNode *node, std::string s);
-
 /*! collects all pragmas with name 'pragmaName' and creates a list
    of all pragma strings (with stripped off prefix) and the
    associated SgNode. */

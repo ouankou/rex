@@ -8,12 +8,6 @@
 // directly, and then use the mechanisms to interprete the frontier from the AST
 // directly.
 
-// DQ (12/1/2013): Added switch to control testing mode for token unparsing.
-// Test codes in the tests/nonsmoke/functional/roseTests/astTokenStreamTests
-// directory turn on this variable so that all regression tests can be processed
-// to mix the unparsing of the token stream with unparsing from the AST.
-extern ROSE_DLL_API bool tokenUnparsingTestingMode;
-
 class ArtificialFrontier_InheritedAttribute {
 public:
   // Save a reference to the associated source file so that we can get the
@@ -59,9 +53,8 @@ class ArtificialFrontierTraversal
           ArtificialFrontier_InheritedAttribute,
           ArtificialFrontier_SynthesizedAttribute> {
 public:
-  int numberOfNodes;
-
-  ArtificialFrontierTraversal(SgSourceFile *sourceFile);
+  explicit ArtificialFrontierTraversal(
+      TokenUnparseFrontierFileContext &frontierContext);
 
   // virtual function must be defined
   ArtificialFrontier_InheritedAttribute evaluateInheritedAttribute(
@@ -72,12 +65,11 @@ public:
       SgNode *n, ArtificialFrontier_InheritedAttribute inheritedAttribute,
       SubTreeSynthesizedAttributes synthesizedAttributeList);
 
-  // This is used to test the random association of AST node to either token
-  // unparsing or AST unparsing.
-  int numberOfNodesInSubtree(SgSourceFile *sourceFile);
+private:
+  TokenUnparseFrontierFileContext &frontierContext;
 };
 
-void buildArtificialFrontier(SgSourceFile *sourceFile,
-                             bool traverseHeaderFiles);
+void buildArtificialFrontier(SgSourceFile *sourceFile, bool traverseHeaderFiles,
+                             TokenUnparseFrontierFileContext &frontierContext);
 
 #endif

@@ -123,6 +123,10 @@ void Grammar::setUpSupport() {
   // MS: reorganized lists in IR not containing non-list objects to simplify IR
   // and traversal design
   NEW_TERMINAL_MACRO(TypedefSeq, "TypedefSeq", "T_TYPEDEF_SEQ");
+  NEW_TERMINAL_MACRO(FunctionTypeArgument, "FunctionTypeArgument",
+                     "T_FUNCTION_TYPE_ARGUMENT");
+  NEW_TERMINAL_MACRO(OmpIteratorDefinition, "OmpIteratorDefinition",
+                     "OMP_ITERATOR_DEFINITION");
   NEW_TERMINAL_MACRO(FunctionParameterTypeList, "FunctionParameterTypeList",
                      "T_FUNCTION_PARAMETER_TYPE_LIST");
 
@@ -278,6 +282,7 @@ void Grammar::setUpSupport() {
       Modifier | Name | SymbolTable | Attribute | File_Info | File | Project |
           Options | Unparse_Info | BaseClass | TypedefSeq | TemplateParameter |
           TemplateArgument | Directory | FileList | DirectoryList |
+          FunctionTypeArgument | OmpIteratorDefinition |
           FunctionParameterTypeList | QualifiedName | TemplateArgumentList |
           TemplateParameterList | /* RenamePair                | InterfaceBody
                                      |*/
@@ -344,23 +349,6 @@ void Grammar::setUpSupport() {
                                NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 
-  // DQ (7/12/2014): This supports name qualification (see test2014_90.C) and
-  // the use of SgAliasSymbols before of after their use in the AST relative to
-  // the causal nodes (SgUsingDirectiveStatement, SgUsingDeclarationStatement,
-  // SgBaseClass, etc.).  This is a requirement imposed because we must support
-  // the generation of source code from the AST (and correct name qualification
-  // as a result).
-  SymbolTable.setDataPrototype(
-      "static SgUnorderedNodeSet", "aliasSymbolCausalNodeSet", "",
-      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (7/19/2025): Added support for a name qualification mode to avoid
-  // expensive checks outside of name qualification.
-  SymbolTable.setDataPrototype("static bool", "name_qualification_mode",
-                               "= false", NO_CONSTRUCTOR_PARAMETER,
-                               NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
-                               COPY_DATA);
-
   // DQ (7/22/2010): Added type table to support stricter uniqueness of types
   // and proper sharing.
   TypeTable.setFunctionPrototype("HEADER_TYPE_TABLE",
@@ -369,11 +357,6 @@ void Grammar::setUpSupport() {
   TypeTable.setDataPrototype("SgSymbolTable*", "type_table", "= nullptr",
                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, DEF_DELETE);
-
-  SymbolTable.setDataPrototype("static bool", "force_search_of_base_classes",
-                               "= false", NO_CONSTRUCTOR_PARAMETER,
-                               NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
-                               COPY_DATA);
 
   Name.setFunctionPrototype("HEADER_NAME", "../Grammar/Support.code");
 
@@ -496,15 +479,11 @@ void Grammar::setUpSupport() {
                                 "= nullptr", NO_CONSTRUCTOR_PARAMETER,
                                 BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
                                 NO_DELETE);
-
-  // DQ (11/21/2021): I think this may be useful to support using the correct
-  // declaration (class declaration or enum declaration) when unparsing embedded
-  // types in typedef declarations that are properly represented in multiple
-  // files, but for which we can't use the declaration referenced through the
-  // shared type since it will be from the incorrect file (and will not
-  // unparse).
+  // Preserve the exact statement where a shared template argument is emitted.
+  // Contextual qualification is keyed by this use site, not by the shared
+  // SgTemplateArgument alone.
   Unparse_Info.setDataPrototype(
-      "SgDeclarationStatement*", "declaration_of_context", "= nullptr",
+      "SgStatement*", "template_argument_qualification_context", "= nullptr",
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
@@ -519,23 +498,17 @@ void Grammar::setUpSupport() {
       "SgName", "array_index_list", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (1/12/2004): Put static back, but cleared static list in
-  //                 post_construction_initialization() member function.
-  // DQ (1/11/2004): Bugfix for autonomous typedefs (can't make this a static
-  //                 member since it then has side effects).
-  // Support for unparsing references to structure tags within the same
-  // structure Example is: struct Xtag { Xtag *xref; } X; such code is common in
-  // tree data structures. Unparse_Info.setDataPrototype("list<SgNamedType*>",
-  // "structureTagList", "", Unparse_Info.setDataPrototype("SgTypePtrList",
-  // "structureTagProcessingList", "",
+  // All copies made during one unparser traversal share this state, while
+  // separately constructed roots have independent state. This preserves the
+  // inherited-attribute behavior without process-global leakage between files
+  // or threads.
   Unparse_Info.setDataPrototype(
-      "static SgTypePtrList", "structureTagProcessingList", "",
+      "std::shared_ptr<UnparseSessionState>", "unparse_session_state", "",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // Build our own constructor so that it can contain debugging into to make
-  // sure it is not called within the unparser (unparser should only call the
-  // copy constructor to preserve the semantics of the inherited attribute
-  // mechanism)
+  // Build our own constructor to initialize the bit vector and create a fresh
+  // session state. Copy construction preserves inherited-attribute context and
+  // shares only that session state.
   Unparse_Info.setAutomaticGenerationOfConstructor(false);
 
   // DQ (9/6/2004): Added support for output of name qualification (list of
@@ -551,13 +524,6 @@ void Grammar::setUpSupport() {
       "SgNamespaceDeclarationStatement*", "current_namespace", "= nullptr",
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
-
-  // DQ (1/31/2006): Support for static bool
-  // forceDefaultConstructorToTriggerError;
-  Unparse_Info.setDataPrototype("static bool",
-                                "forceDefaultConstructorToTriggerError", "",
-                                NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                                NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
 
   // DQ (3/18/2006): Support for output of information about formatting within
   // code generation (unparsing). This information is helpful in visualizing
@@ -653,6 +619,13 @@ void Grammar::setUpSupport() {
                                 "= nullptr", NO_CONSTRUCTOR_PARAMETER,
                                 BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
                                 NO_DELETE);
+  // A materialized header can have multiple semantic AST expansions in one
+  // translation unit. Header emission selects one exact frontend-published
+  // lexical occurrence and carries it through copied unparse contexts.
+  Unparse_Info.setDataPrototype(
+      "unsigned int", "current_physical_file_occurrence_id", "= 0",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_DATA);
 
   // DQ (4/28/2017): Added information required for use of generated names in
   // the output of types for template arguments as used in symbol table lookup.
@@ -665,37 +638,12 @@ void Grammar::setUpSupport() {
       "bool", "user_defined_literal", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (12/26/2019): When supporting multiple files, the defining declaration
-  // in a named type must refer to the defining declaration associated with the
-  // appropriate file (to be unparsed correctly).
-  Unparse_Info.setDataPrototype(
-      "SgDeclarationStatement*", "declstatement_associated_with_type",
-      "= nullptr", NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-      NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (8/15/2020): Record when we are in an extern "C" so that we can avoid
-  // nesting (see Cxx_tests/test2020_28.C).
-  Unparse_Info.setDataPrototype("static bool", "extern_C_with_braces",
-                                "= false", NO_CONSTRUCTOR_PARAMETER,
-                                NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
   // DQ (8/24/2020): debugging Cxx_tests/test2020_44.C need to communicate when
   // to suppress extra parenthesis use around SgFunctionType arguments.
   Unparse_Info.setDataPrototype("bool", "context_for_added_parentheses",
                                 "= false", NO_CONSTRUCTOR_PARAMETER,
                                 BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
                                 NO_DELETE);
-
-  // DQ (6/5/2021): Support for debuging, we wnat to debug the transitions
-  // between token-based unparsing and unparsing from the AST.
-  Unparse_Info.setDataPrototype("static SgStatement*",
-                                "previouslyUnparsedStatement", "= NULL",
-                                NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                                NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
-  Unparse_Info.setDataPrototype(
-      "static bool", "previousStatementUnparsedFromTokenStream", "= false",
-      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
-      NO_COPY_DATA);
 
   BaseClass.setFunctionPrototype("HEADER_BASECLASS", "../Grammar/Support.code");
   ExpBaseClass.setFunctionPrototype("HEADER_EXP_BASE_CLASS",
@@ -706,7 +654,43 @@ void Grammar::setUpSupport() {
   // DQ (4/29/2004): Removed in place of new modifier interface
   BaseClass.setDataPrototype("SgClassDeclaration*", "base_class", "= nullptr",
                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                             DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
+                             NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+
+  // Preserve the exact type written at this inheritance use site. The
+  // semantic base declaration is insufficient for typedef/alias spelling and
+  // dependent template bases, and fabricating a declaration to carry that
+  // spelling corrupts the class hierarchy.
+  BaseClass.setDataPrototype("SgType*", "source_type", "= nullptr",
+                             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                             NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+
+  // Preserve the exact nested-name-specifier written on this inheritance use
+  // site.  SgType nodes are shared semantic identities, so source spelling
+  // belongs to the SgBaseClass edge rather than to source_type.
+  BaseClass.setDataPrototype("bool", "source_type_qualification_present",
+                             "= false", NO_CONSTRUCTOR_PARAMETER,
+                             BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+                             COPY_DATA);
+  BaseClass.setDataPrototype("bool", "source_type_global_qualification",
+                             "= false", NO_CONSTRUCTOR_PARAMETER,
+                             BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+                             COPY_DATA);
+  BaseClass.setDataPrototype("SgStringList", "source_type_qualification_tokens",
+                             "", NO_CONSTRUCTOR_PARAMETER,
+                             BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                             NO_DELETE, COPY_DATA);
+  // A macro invocation can provide both the semantic qualifier and the
+  // terminal type name (and, for a function-like macro, its template
+  // arguments). Record those source roles explicitly so the backend does not
+  // append semantic components that were already spelled by the macro.
+  BaseClass.setDataPrototype(
+      "bool", "source_type_qualification_owns_terminal_name", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_DATA);
+  BaseClass.setDataPrototype(
+      "bool", "source_type_qualification_owns_template_arguments", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_DATA);
 
   BaseClass.setDataPrototype("bool", "isDirectBaseClass", "= false",
                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
@@ -765,11 +749,13 @@ void Grammar::setUpSupport() {
 
   ExpBaseClass.setDataPrototype("SgExpression*", "base_class_exp", "= nullptr",
                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                                DEF_TRAVERSAL, NO_DELETE);
+                                DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
+                                OPTIONAL_TRAVERSAL_MEMBER);
 
-  NonrealBaseClass.setDataPrototype(
-      "SgNonrealDecl*", "base_class_nonreal", "= nullptr",
-      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+  NonrealBaseClass.setDataPrototype("SgNonrealDecl*", "base_class_nonreal",
+                                    "= nullptr", CONSTRUCTOR_PARAMETER,
+                                    BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                    NO_DELETE, COPY_DATA);
 
   FuncDecl_attr.setFunctionPrototype("HEADER_FUNCTION_DECLARATION_ATTRIBUTE",
                                      "../Grammar/Support.code");
@@ -825,13 +811,15 @@ void Grammar::setUpSupport() {
                              NO_TRAVERSAL, NO_DELETE);
   Directory.setDataPrototype("SgFileList*", "fileList", "= nullptr",
                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                             DEF_TRAVERSAL, NO_DELETE);
+                             DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
+                             OPTIONAL_TRAVERSAL_MEMBER);
 
   // Note that this must be of type: "SgDirectoryList*" since it a pointer to an
   // IR node and not a STL list.
   Directory.setDataPrototype("SgDirectoryList*", "directoryList", "= nullptr",
                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                             DEF_TRAVERSAL, NO_DELETE);
+                             DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
+                             OPTIONAL_TRAVERSAL_MEMBER);
 
   // DQ (11/1/2015): Build the access functions, but don't let the set_* access
   // function set the "p_isModified" flag. DQ (1/3/2006): Added attribute via
@@ -923,7 +911,15 @@ void Grammar::setUpSupport() {
   // DQ (9/2/2008): We want to move this to be in the SgSourceFile
   SourceFile.setDataPrototype("SgGlobal*", "globalScope", "= nullptr",
                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                              DEF_TRAVERSAL, NO_DELETE);
+                              DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
+                              OPTIONAL_TRAVERSAL_MEMBER);
+
+  // Exact target ABI type returned by sizeof/alignof.  Clang publishes this
+  // from ASTContext::getSizeType(); transformations must obtain it from their
+  // one owning translation unit instead of guessing from the host or width.
+  SourceFile.setDataPrototype("SgType*", "target_size_type", "= nullptr",
+                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                              NO_TRAVERSAL, NO_DELETE);
 
   // DQ (10/1/2008): Added support for lists of SgModuleStatement where they are
   // not a part of the current translation unit.  A place for the information in
@@ -954,6 +950,22 @@ void Grammar::setUpSupport() {
   // DQ (8/7/2018): Mark files explicitly as header files (support for unparse
   // headers and unparse tokens).
   SourceFile.setDataPrototype("bool", "isHeaderFile", "= false",
+                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                              NO_TRAVERSAL, NO_DELETE);
+
+  // A generated source file is an output-only translation unit constructed
+  // directly through SageBuilder.  It has no frontend input whose contents
+  // the unparser could overwrite.  Keep this identity in the IR instead of
+  // encoding it through a fabricated input filename.
+  SourceFile.setDataPrototype("bool", "isGeneratedSource", "= false",
+                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                              NO_TRAVERSAL, NO_DELETE);
+
+  // A project can also contain parsed copies and transformation-created
+  // output files.  Record the exact CLI-input role when SgProject constructs
+  // the original translation units; file-list membership is not sufficient
+  // to distinguish those identities.
+  SourceFile.setDataPrototype("bool", "isCommandLineInputSource", "= false",
                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                               NO_TRAVERSAL, NO_DELETE);
 
@@ -1012,6 +1024,32 @@ void Grammar::setUpSupport() {
                               "= nullptr", NO_CONSTRUCTOR_PARAMETER,
                               BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE);
 
+  // Exact physical paths observed by the active frontend's include callbacks.
+  // This ownership metadata is independent of the optional SgIncludeFile tree,
+  // which is materialized only for header-file unparsing.
+  SourceFile.setDataPrototype(
+      "SgStringList", "frontendIncludeOwnershipPathList", "",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  SourceFile.setDataPrototype(
+      "SgStringList", "frontendSystemIncludeOwnershipPathList", "",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  // Physical dependencies whose declarations must not be mutated in place.
+  // This includes system headers and imported Fortran module files.  Keeping
+  // it separate from the include lists avoids pretending that every frontend
+  // dependency is a C/C++ include.
+  SourceFile.setDataPrototype(
+      "SgStringList", "frontendExternalOwnershipPathList", "",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  // Imported module ASTs have exact structural ownership under the source
+  // file that requested them, but are not lexical project inputs and must not
+  // participate in project traversal, unparsing, or analysis.
+  SourceFile.setDataPrototype("SgFileList*", "frontendExternalFileList",
+                              "= nullptr", NO_CONSTRUCTOR_PARAMETER,
+                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
   // DQ (11/6/2018): Added to support unparsing of headers and source files for
   // whole applications having multiple levels of directory structure.
   // SourceFile.setDataPrototype("std::string", "applicationRootDirectory", "=
@@ -1036,13 +1074,6 @@ void Grammar::setUpSupport() {
                               "= false", NO_CONSTRUCTOR_PARAMETER,
                               BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // TV: List of node that must be traversed by generateNameQualificationSupport
-  // before it is applied to this file
-  SourceFile.setDataPrototype("SgNodePtrList", "extra_nodes_for_namequal_init",
-                              "", NO_CONSTRUCTOR_PARAMETER,
-                              BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-                              NO_DELETE);
-
   // DQ (3/11/2021): We need to to support the dynamic library feature (used by
   // the code segregation tool, and likely future tools). This feature is also
   // part of outliner which supports outlining to a separate file. Also, this is
@@ -1052,19 +1083,10 @@ void Grammar::setUpSupport() {
                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                               NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (5/20/2021): Save the first and last statement associated with the
-  // source file (required to support the token-based unparsing (e.g. detecting
-  // the last statement so that we can output the trailing whitespace).
-  SourceFile.setDataPrototype("SgStatement*", "firstStatement", " = nullptr",
-                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                              NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
-  SourceFile.setDataPrototype("SgStatement*", "lastStatement", " = nullptr",
-                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                              NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
-
   UnknownFile.setDataPrototype("SgGlobal*", "globalScope", "= nullptr",
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                               DEF_TRAVERSAL, NO_DELETE);
+                               DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
+                               OPTIONAL_TRAVERSAL_MEMBER);
 
   // DQ (9/18/2018): Adding support for building the include file tree for each
   // source file.
@@ -1222,16 +1244,6 @@ void Grammar::setUpSupport() {
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (3/9/2021): Save the first and last statement associated with the file
-  // (required to support the token-based unparsing (e.g. detecting the last
-  // statement so that we can output the trailing whitespace).
-  IncludeFile.setDataPrototype("SgStatement*", "firstStatement", " = nullptr",
-                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                               NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
-  IncludeFile.setDataPrototype("SgStatement*", "lastStatement", " = nullptr",
-                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                               NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
-
   // DQ (5/9/2021): Support for token-based unparsing when used with header file
   // unparsing. IncludeFile.setDataPrototype   ( "bool",
   // "headerFileRepresentsAllStatementsInParentScope", "= false",
@@ -1372,20 +1384,9 @@ void Grammar::setUpSupport() {
   File.setDataPrototype("bool", "exit_after_parser", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
-  File.setDataPrototype("bool", "skip_syntax_check", "= false",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
   // TV (09/24/2018): Adding the ability to skip the parser when testing the
   // backend with ROSE command line processing
   File.setDataPrototype("bool", "skip_parser", "= false",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (4/7/2010): This permits less aggressive syntax checking, but still some
-  // syntax checking. With Flang as the backend, non-2018 dialect selection is
-  // handled by -rose:fortran_std, so relax_syntax_check skips the backend
-  // syntax pass rather than relying on GCC-specific -std flags.
-  File.setDataPrototype("bool", "relax_syntax_check", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
@@ -1698,28 +1699,6 @@ void Grammar::setUpSupport() {
                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (5/23/2015): This must be static because ASM statments can exist in GNU
-  // statement expressions within typeof operators which then causes the ASM
-  // statement to not be traversed as part of the AST (beccause it is hidden in
-  // a type (and types are not traversed).  The unparsing of the ASM statement
-  // checks this flag (skip_unparse_asm_commands) since unparsing of ASM is
-  // architecture dependent and a special problem for the portability of the
-  // ROSE regression tests (e.g. on older non-x86 platforms). The solution is to
-  // make this a static boolean flag so that we need not find the SgFile object
-  // via a traversal upwards in the AST through the parent pointers. DQ
-  // (1/10/2009): The C language ASM statements are providing significant
-  // trouble, they are frequently machine specific and we are compiling then on
-  // architectures for which they were not designed.  This option allows then to
-  // be read, constructed in the AST to support analysis but not unparsed in the
-  // code given to the backend compiler, since this can fail. (See test2007_20.C
-  // from Linux Kernel for an example). File.setDataPrototype         ( "bool",
-  // "skip_unparse_asm_commands", "= false",
-  //             NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-  //             NO_TRAVERSAL, NO_DELETE);
-  File.setDataPrototype("static bool", "skip_unparse_asm_commands", "= false",
-                        NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-
   // DQ (2/3/2009): For a library archive, these are the name of the object
   // files it contains. This information is obtained via "ar -vox <archive>",
   // and saving and reading the list.
@@ -1755,20 +1734,6 @@ void Grammar::setUpSupport() {
                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (11/12/2014): Added to support testing of the unparsing using token
-  // streams. This option forces the output of two files representing the
-  // unparsing of each statement using the tken stream mapping to the AST.  The
-  // token_leading_* file uses the mapping and the leading whitespace mapping
-  // between statements, where as the token_trailing_* file uses the mapping and
-  // the trailing whitespace mapping between statements.  Both files should be
-  // identical, and the same as the input file.  This option was previously
-  // internally activated when the verbose level was non-zero, but this was not
-  // a good long-term approach.
-  File.setDataPrototype("bool",
-                        "unparse_using_leading_and_trailing_token_mappings",
-                        "= false", NO_CONSTRUCTOR_PARAMETER,
-                        BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
   // Liao (12/15/2016): Unparse template from its AST.
   File.setDataPrototype("bool", "unparse_template_ast", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
@@ -1796,30 +1761,6 @@ void Grammar::setUpSupport() {
                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (12/11/2015): Use the token stream to improve source position
-  // information. secondary declarations, for loop initialization statements,
-  // etc.  This is part of a currently experimental mechanism to improve the
-  // source positon information in the AST using local searches of the token
-  // stream as a part of the token stream mapping to the AST (as used in the
-  // token-based unparsing).
-  File.setDataPrototype("bool",
-                        "use_token_stream_to_improve_source_position_info",
-                        "= false", NO_CONSTRUCTOR_PARAMETER,
-                        BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (12/23/2015): Adding optional support for variables to be in the same
-  // variable declaration (optionally eding a long standing ROSE specific
-  // normalization that we would like to move away from longer term). Note that
-  // this is already addressed in Fortran (not an option to have variable
-  // declarations normalized), but not it has not be even an option in C/C++
-  // until now. File.setDataPrototype ("bool",
-  // "allow_multiple_names_in_variable_declarations", "= false",
-  //             NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-  //             NO_TRAVERSAL, NO_DELETE);
-  File.setDataPrototype("bool", "suppress_variable_declaration_normalization",
-                        "= false", NO_CONSTRUCTOR_PARAMETER,
-                        BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
   // TV (11/27/2020): Whether or not to generate a graphviz representation of
   // the Clang internal representation
   File.setDataPrototype("bool", "clang_il_to_graphviz", "= false",
@@ -1831,18 +1772,11 @@ void Grammar::setUpSupport() {
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (4/24/2021): Change this to be a static data member.
   // DQ (8/19/2019): Adding support to optimize the performance of the header
   // file unarsing. Specifically we want to limit the collection of comments and
   // CPP dirctives to a set determined as part of the unparsing, after we know
-  // what parts of the AST have been modified, but immediiately before the
-  // unparsing of each file. File.setDataPrototype("bool",
-  // "header_file_unparsing_optimization", "= false",
-  //             NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-  //             NO_TRAVERSAL, NO_DELETE);
-  File.setDataPrototype("static bool", "header_file_unparsing_optimization",
-                        "= false", NO_CONSTRUCTOR_PARAMETER,
-                        NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // what parts of the AST have been modified, but immediately before the
+  // unparsing of each file.
   File.setDataPrototype("bool",
                         "header_file_unparsing_optimization_source_file",
                         "= false", NO_CONSTRUCTOR_PARAMETER,
@@ -2126,7 +2060,8 @@ void Grammar::setUpSupport() {
   // [Rasmussen 10.05.06]
   Project.setDataPrototype("SgFileList*", "fileList_ptr", "= nullptr",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                           DEF_TRAVERSAL, NO_DELETE);
+                           DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
+                           OPTIONAL_TRAVERSAL_MEMBER);
 
   // Project.setDataPrototype("std::list<std::string>","originalCommandLineArgumentList",
   // "", DQ (9/28/2022): Use BUILD_LIST_ACCESS_FUNCTIONS for list access.
@@ -2134,6 +2069,10 @@ void Grammar::setUpSupport() {
                            "", NO_CONSTRUCTOR_PARAMETER,
                            BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
                            NO_DELETE);
+  Project.setDataPrototype(
+      "std::map<std::string, std::string>", "original_header_snapshots", "",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
 
   Project.setDataPrototype("int", "frontendErrorCode", "= 0",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
@@ -2160,16 +2099,6 @@ void Grammar::setUpSupport() {
   File.setDataPrototype("int", "backendCompilerErrorCode", "= 0",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
-
-  File.setDataPrototype("bool", "unparsedFileFailedCompilation", "= false",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-
-  // TOO1 (03/05/2013): Ignore errors (similar to GNU Make's --keep-going), and
-  //                    simply compile the original input code as a failover.
-  Project.setDataPrototype(
-      "bool", "keep_going", "= false", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   // TOO1 (03/20/2014): Dangerous rope for Pontetec,
   // -rose:unparser:clobber_input_file
@@ -2522,13 +2451,6 @@ void Grammar::setUpSupport() {
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (11/16/2019): When using deferred evaluation, the collection of comments
-  // and CPP directives is handled by the transformation.  This is so far only
-  // used in a single tool, so support more broadly in ROSE may come soon.
-  Project.setDataPrototype("bool", "usingDeferredTransformations", "= false",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                           NO_TRAVERSAL, NO_DELETE);
-
   Project.setDataPrototype("std::string", "astfile_out", "",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
@@ -2691,14 +2613,17 @@ void Grammar::setUpSupport() {
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   DeclarationModifier.setDataPrototype(
-      "std::string", "gnu_attribute_section_name", "=\"\"",
+      "SgDeclarationModifier::gnu_declaration_visibility_enum",
+      "gnu_attribute_visibility",
+      "= SgDeclarationModifier::e_unspecified_visibility",
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
   DeclarationModifier.setDataPrototype(
-      "SgDeclarationModifier::gnu_declaration_visability_enum",
-      "gnu_attribute_visability",
-      "= SgDeclarationModifier::e_unknown_visibility", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      "SgDeclarationModifier::gnu_declaration_visibility_enum",
+      "gnu_type_visibility",
+      "= SgDeclarationModifier::e_unspecified_visibility",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
 
   TypeModifier.setDataPrototype(
       "SgBitVector", "modifierVector", "", NO_CONSTRUCTOR_PARAMETER,
@@ -2802,6 +2727,11 @@ void Grammar::setUpSupport() {
   File_Info.setDataPrototype("unsigned int", "source_sequence_number", "= 0",
                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
+  // The physical file identifies one output artifact. Clang's FileID
+  // additionally distinguishes each textual inclusion of that artifact.
+  File_Info.setDataPrototype("unsigned int", "physical_file_occurrence_id",
+                             "= 0", NO_CONSTRUCTOR_PARAMETER,
+                             NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   // DQ (2/27/2019): I want to add line number support, and use this to test if
   // we can support CPP directives and comments added to alll shared IR nodes
@@ -2935,26 +2865,47 @@ void Grammar::setUpSupport() {
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   TemplateParameter.setDataPrototype(
       "SgExpression*", "expression", "= nullptr", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
+      OPTIONAL_TRAVERSAL_MEMBER);
   TemplateParameter.setDataPrototype(
       "SgExpression*", "typeConstraint", "= nullptr", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
+      OPTIONAL_TRAVERSAL_MEMBER);
+  // The semantic immediately-declared constraint prepends the constrained
+  // parameter itself to the concept arguments.  That expression is not the
+  // source grammar surface.  Preserve the independently typed concept-id that
+  // was written before the parameter so unparsing never has to reverse Clang's
+  // semantic normalization.
+  TemplateParameter.setDataPrototype(
+      "SgExpression*", "sourceTypeConstraint", "= nullptr",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+      NO_DELETE, COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
   TemplateParameter.setDataPrototype(
       "SgExpression*", "defaultExpressionParameter", "= nullptr",
-      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE,
+      COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
   TemplateParameter.setDataPrototype(
       "SgDeclarationStatement*", "templateDeclaration", "= nullptr",
-      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // A template-template parameter always refers to its attached semantic
+  // identity through templateDeclaration.  Redeclaration-only syntax surfaces
+  // can spell a different nested template header; preserve that independently
+  // instead of manufacturing a second detached semantic identity.
+  TemplateParameter.setDataPrototype(
+      "SgTemplateDeclaration*", "sourceSpelledTemplateDeclaration", "= nullptr",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+      NO_DELETE, COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
   TemplateParameter.setDataPrototype(
       "SgDeclarationStatement*", "defaultTemplateDeclarationParameter",
       "= nullptr", CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
-      NO_DELETE);
+      NO_DELETE, COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
 
   // DQ (11/21/2011): template parameters can be "int U = 42" in which case "U"
   // needs to be an initialized name (see test2011_157.C).
   TemplateParameter.setDataPrototype(
       "SgInitializedName*", "initializedName", "= nullptr",
-      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE,
+      COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
   TemplateParameter.setDataPrototype(
       "SgTemplateParameter::template_parameter_keyword_enum",
       "templateParameterKeyword", "= keyword_unspecified",
@@ -2967,7 +2918,6 @@ void Grammar::setUpSupport() {
   TemplateParameter.setDataPrototype(
       "bool", "is_parameter_pack", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
-
   TemplateArgument.setFunctionPrototype("HEADER_TEMPLATE_ARGUMENT",
                                         "../Grammar/Support.code");
   TemplateArgument.setDataPrototype(
@@ -2981,39 +2931,56 @@ void Grammar::setUpSupport() {
       "SgType*", "type", "= nullptr", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (11/27/2016): Adding an optional (and more suitable reference to a type
-  // alias that can be unparsed). This type was evaluated to no reference
-  // internal private types that are marked as private access.  Due in an error
-  // with newer compilers (e.g. GNU 6.1) if they were unparsed in the generated
-  // code.  This pointer is available as an alternative type that can be
-  // unparsed (used by the unparser, and the name qualification). This type does
-  // not have any priviate access typedefs contained within it.
+  // The canonical semantic type remains in p_type.  When Clang provides a
+  // TemplateArgumentLoc, this separate edge records the exact source-spelled
+  // type surface (including typedef/using aliases and written qualification)
+  // that the unparser is required to emit.
   TemplateArgument.setDataPrototype(
-      "SgType*", "unparsable_type_alias", "= nullptr", NO_CONSTRUCTOR_PARAMETER,
+      "SgType*", "sourceSpelledType", "= nullptr", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // Preserve the qualifier written on the exact type argument use.  Presence
+  // distinguishes an explicitly unqualified source spelling from missing
+  // producer data; sourceSpelledType continues to own dependent qualifier
+  // chains that are represented structurally as SgNonrealType.
+  TemplateArgument.setDataPrototype("bool", "source_type_qualification_present",
+                                    "= false", NO_CONSTRUCTOR_PARAMETER,
+                                    BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                    NO_DELETE);
+  TemplateArgument.setDataPrototype("bool", "source_type_global_qualification",
+                                    "= false", NO_CONSTRUCTOR_PARAMETER,
+                                    BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                    NO_DELETE);
+  TemplateArgument.setDataPrototype(
+      "SgStringList", "source_type_qualification_tokens", "",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
 
   // Could be an array bound (integer) or some unknown type
   TemplateArgument.setDataPrototype(
       "SgExpression*", "expression", "= nullptr", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
+      OPTIONAL_TRAVERSAL_MEMBER);
 
   // DQ (12/22/2011): The new design has a SgTemplateClassDeclaration derived
   // from a SgClassDeclaration (and the same for SgTemplateFunctionDeclaration,
   // etc.) So we have to change this to support the new design. Now we have to
   // use a common base class which would be the SgDeclarationStatement. DQ: Case
   // of a template specialization (and partial specialization) not handled here
-  // (not clear on how to do this)
+  // (not clear on how to do this).  This is a semantic identity edge to a
+  // declaration owned by its lexical scope, not syntax owned by the argument.
+  // A copy transaction remaps the edge only when that declaration is copied
+  // independently through its real structural owner.
   TemplateArgument.setDataPrototype(
       "SgDeclarationStatement*", "templateDeclaration", "= nullptr",
-      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   // DQ (8/10/2013): template arguments can be a SgInitializedName or an
   // expression when it is a non-type (see test2013_303.C). I think we want to
   // eventually make this a constructor argument, but not at first.
-  TemplateArgument.setDataPrototype("SgInitializedName*", "initializedName",
-                                    "= nullptr", NO_CONSTRUCTOR_PARAMETER,
-                                    BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
-                                    NO_DELETE);
+  TemplateArgument.setDataPrototype(
+      "SgInitializedName*", "initializedName", "= nullptr",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+      NO_DELETE, COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
 
   // DQ (2/27/2005): Support for recognition of default template arguments
   // (required to fix bug demonstrated in test2005_12.C)
@@ -3147,6 +3114,12 @@ void Grammar::setUpSupport() {
   TemplateParameterList.setDataPrototype(
       "SgTemplateParameterPtrList", "args", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+  TemplateParameterList.setDataPrototype(
+      "SgTemplateParameterList::source_header_separator_enum",
+      "source_header_separator",
+      "= SgTemplateParameterList::e_source_header_separator_unset",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
 
   // This function exists everywhere (at each node of the grammar)!
 
@@ -3376,6 +3349,58 @@ void Grammar::setUpSupport() {
   FunctionParameterTypeList.setDataPrototype(
       "SgTypePtrList", "arguments", "", NO_CONSTRUCTOR_PARAMETER,
       NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  FunctionTypeArgument.setFunctionPrototype("HEADER_FUNCTION_TYPE_ARGUMENT",
+                                            "../Grammar/Support.code");
+  FunctionTypeArgument.setFunctionSource("SOURCE_FUNCTION_TYPE_ARGUMENT",
+                                         "../Grammar/Support.code");
+  FunctionTypeArgument.setDataPrototype(
+      "SgType*", "type", "= NULL", CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+      NO_TRAVERSAL, NO_DELETE);
+  FunctionTypeArgument.setDataPrototype(
+      "bool", "is_pack_expansion", "= false", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  FunctionTypeArgument.setDataPrototype(
+      "bool", "source_type_qualification_present", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  FunctionTypeArgument.setDataPrototype(
+      "bool", "source_type_global_qualification", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  FunctionTypeArgument.setDataPrototype(
+      "SgStringList", "source_type_qualification_tokens", "",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  FunctionTypeArgument.setDataPrototype(
+      "bool", "source_type_elaboration_required", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  // One OpenMP iterator-specifier.  The named fields encode the five grammar
+  // roles directly; clauses own lists of these nodes structurally instead of
+  // hiding expressions in nested raw containers.
+  OmpIteratorDefinition.setDataPrototype(
+      "SgTypeExpression*", "iterator_type", "= NULL", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
+      OPTIONAL_TRAVERSAL_MEMBER);
+  OmpIteratorDefinition.setDataPrototype(
+      "SgOmpNameExpression*", "iterator_name", "= NULL", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
+      OPTIONAL_TRAVERSAL_MEMBER);
+  OmpIteratorDefinition.setDataPrototype(
+      "SgExpression*", "begin", "= NULL", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
+      OPTIONAL_TRAVERSAL_MEMBER);
+  OmpIteratorDefinition.setDataPrototype(
+      "SgExpression*", "end", "= NULL", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
+      OPTIONAL_TRAVERSAL_MEMBER);
+  OmpIteratorDefinition.setDataPrototype(
+      "SgExpression*", "step", "= NULL", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
+      OPTIONAL_TRAVERSAL_MEMBER);
+  FunctionParameterTypeList.setDataPrototype(
+      "SgFunctionTypeArgumentPtrList", "argument_qualification_use_sites", "",
+      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
   // DQ (3/12/2004): Added for template support
   TemplateParameter.setFunctionSource("SOURCE_TEMPLATE_PARAMETER",

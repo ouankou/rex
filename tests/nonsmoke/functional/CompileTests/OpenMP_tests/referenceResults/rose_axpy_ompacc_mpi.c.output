@@ -1,8 +1,0 @@
-#pragma omp parallel for shared(x,y,n,a) private(i)
-#pragma omp target device(mpi:all)
-#pragma omp target device(mpi : all) end
-#pragma omp target device(mpi:master)
-#pragma omp target device(mpi : master) end
-#pragma omp target device(mpi) map(tofrom : y_ompacc[0:n] dist_data(BLOCK,DUPLICATE,BLOCK)) map(to : x[0:n] dist_data(BLOCK),a,n)
-#pragma omp parallel for shared(x,y_ompacc,n,a) private(i)
-#pragma omp parallel shared(num_threads)

@@ -167,9 +167,16 @@ void Grammar::setUpSymbols() {
   // TypeSymbol.setDataPrototype   ( "SgInitializedName*", "declaration", "=
   // NULL");
 
+  // A symbol table owns symbol nodes; symbols only reference the declarations
+  // and other semantic nodes that define their meaning.  Treating those basis
+  // pointers as traversal ownership made a symbol copy recursively manufacture
+  // declarations outside the requested copy root.  Copied symbol tables now
+  // clone their exact source symbols and remap these non-owning edges through
+  // the active SgCopyHelp transaction.
+
   FunctionSymbol.setDataPrototype(
       "SgFunctionDeclaration*", "declaration", "= NULL", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 
   FunctionTypeSymbol.excludeFunctionPrototype("HEADER_GET_NAME",
                                               "../Grammar/Symbol.code");
@@ -194,29 +201,30 @@ void Grammar::setUpSymbols() {
   // It would always return the correct non-defining declaration!
   ClassSymbol.setDataPrototype("SgClassDeclaration*", "declaration", "= NULL",
                                CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                               DEF_TRAVERSAL, NO_DELETE);
+                               NO_TRAVERSAL, NO_DELETE, COPY_DATA);
   // ClassSymbol.setDataPrototype    ( "SgClassDeclaration*",   "declaration",
   // "= NULL",
   //               CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL);
   TemplateSymbol.setDataPrototype(
       "SgTemplateDeclaration*", "declaration", "= NULL", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE); // [DT] 5/10/2000
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_DATA); // [DT] 5/10/2000
 
   // TV (04/11/2018): Introducing representation for non-real "stuff" (template
   // parameters)
   NonrealSymbol.setDataPrototype("SgNonrealDecl*", "declaration", "= NULL",
                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                                 DEF_TRAVERSAL, NO_DELETE);
+                                 NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 
   EnumSymbol.setDataPrototype("SgEnumDeclaration*", "declaration", "= NULL",
                               CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                              DEF_TRAVERSAL, NO_DELETE);
+                              NO_TRAVERSAL, NO_DELETE, COPY_DATA);
   EnumFieldSymbol.setDataPrototype(
       "SgInitializedName*", "declaration", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   TypedefSymbol.setDataPrototype(
       "SgTypedefDeclaration*", "declaration", "= NULL", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 
   MemberFunctionSymbol.setFunctionPrototype("HEADER_DECLARATION",
                                             "../Grammar/Symbol.code");
@@ -226,7 +234,7 @@ void Grammar::setUpSymbols() {
                                    "../Grammar/Symbol.code");
   LabelSymbol.setDataPrototype("SgLabelStatement*", "declaration", "= NULL",
                                CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                               DEF_TRAVERSAL, NO_DELETE);
+                               NO_TRAVERSAL, NO_DELETE, COPY_DATA);
   LabelSymbol.setDataPrototype("SgStatement*", "fortran_statement", "= NULL",
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
@@ -259,10 +267,12 @@ void Grammar::setUpSymbols() {
                                    NO_TRAVERSAL, NO_DELETE);
   NamespaceSymbol.setDataPrototype(
       "SgNamespaceDeclarationStatement*", "declaration", "= NULL",
-      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_DATA);
   NamespaceSymbol.setDataPrototype(
       "SgNamespaceAliasDeclarationStatement*", "aliasDeclaration", "= NULL",
-      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_DATA);
   NamespaceSymbol.setDataPrototype(
       "bool", "isAlias", "= false", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -296,7 +306,7 @@ void Grammar::setUpSymbols() {
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   ModuleSymbol.setDataPrototype("SgModuleStatement*", "declaration", "= NULL",
                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                                DEF_TRAVERSAL, NO_DELETE);
+                                NO_TRAVERSAL, NO_DELETE, COPY_DATA);
   CommonSymbol.setDataPrototype("SgInitializedName*", "declaration", "= NULL",
                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                 NO_TRAVERSAL, NO_DELETE);
@@ -338,6 +348,9 @@ void Grammar::setUpSymbols() {
   RenameSymbol.setDataPrototype("SgName", "new_name", "= \"\"",
                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                 NO_TRAVERSAL, NO_DELETE);
+  RenameSymbol.setDataPrototype(
+      "SgNodePtrList", "causal_nodes", "", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   // ***********************************************************************
   // ***********************************************************************

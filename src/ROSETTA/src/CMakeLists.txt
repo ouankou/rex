@@ -56,7 +56,6 @@ set(GRAMMAR_SOURCE_FILES
   ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarCheckingIfDataMembersAreInMemoryPool.macro
   ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarReturnDataMemberPointers.macro
   ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarProcessDataMemberReferenceToPointers.macro
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarGetChildIndex.macro
   ../astNodeList)
 
 add_executable(CxxGrammarMetaProgram ${CxxGrammarMetaProgram_SRCS})

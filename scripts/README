@@ -86,7 +86,7 @@ executables that are created during test execution, so a nonzero count can
 be expected.
 
 Common ways to reduce missing_executable (optional)
-- Example translators (KeepGoingTranslator, identityTranslator):
+- Example translators (such as identityTranslator):
   configure with `-DENABLE-EXAMPLE-TRANSLATORS-DIRECTORY=ON` and rebuild.
 - Valgrind-based uninitializedField_tests:
   install Valgrind headers and configure with `-DWITH-VALGRIND=<prefix>` or

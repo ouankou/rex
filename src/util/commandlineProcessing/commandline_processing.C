@@ -14,6 +14,8 @@
 
 #include <iostream>
 
+#include <iterator>
+
 #include <string.h>
 
 #include <vector>
@@ -430,7 +432,7 @@ bool CommandlineProcessing::isCFileNameSuffix(const std::string &suffix) {
   // For now define CASE_SENSITIVE_SYSTEM to be true, as we are currently a
   // UNIXish project.
 
-  if (suffix == "c")
+  if (suffix == "c" || suffix == "i" || suffix == "h")
     returnValue = true;
 
   return returnValue;
@@ -459,18 +461,12 @@ bool CommandlineProcessing::isCppFileNameSuffix(const std::string &suffix) {
   // UNIXish project.
 
 #if (CASE_SENSITIVE_SYSTEM == 1)
-  if (suffix == "C" || suffix == "cc" || suffix == "cp" || suffix == "c++" ||
-      suffix == "cpp" || suffix == "cxx" || suffix == "CPP"
-      // It seems that the upper-case versions of the above should also be
-      // accepted. However, it does not look like GNU-g++ accepts them. So, I am
-      // commenting them out
-      /*
-      || suffix == "CC"
-      || suffix == "C++"
-      || suffix == "CP"
-      || suffix == "CXX"
-      */
-  )
+  if (suffix == "C" || suffix == "cc" || suffix == "CC" || suffix == "cp" ||
+      suffix == "c++" || suffix == "C++" || suffix == "cpp" ||
+      suffix == "CPP" || suffix == "cxx" || suffix == "CXX" || suffix == "H" ||
+      suffix == "hh" || suffix == "hpp" || suffix == "hxx" || suffix == "ii" ||
+      suffix == "ccm" || suffix == "c++m" || suffix == "cppm" ||
+      suffix == "cxxm" || suffix == "iim" || suffix == "iih")
 #else // It is a case insensitive system
   if (suffix == "cc" || suffix == "cp" || suffix == "c++" || suffix == "cpp" ||
       suffix == "cxx" || suffix == "CC" || suffix == "CP" || suffix == "C++" ||
@@ -709,7 +705,7 @@ bool CommandlineProcessing::isCudaFileNameSuffix(const std::string &suffix) {
   // UNIXish project.
 
 #if (CASE_SENSITIVE_SYSTEM == 1)
-  if (suffix == "cu")
+  if (suffix == "cu" || suffix == "cui")
 #else // It is a case insensitive system
   if (suffix == "cu")
 #endif
@@ -728,7 +724,7 @@ bool CommandlineProcessing::isOpenCLFileNameSuffix(const std::string &suffix) {
   // UNIXish project.
 
 #if (CASE_SENSITIVE_SYSTEM == 1)
-  if (suffix == "ocl" || suffix == "cl")
+  if (suffix == "ocl" || suffix == "cl" || suffix == "cli")
 #else // It is a case insensitive system
   if (suffix == "ocl" || suffix == "cl")
 #endif
@@ -749,52 +745,18 @@ void CommandlineProcessing::initSourceFileSuffixList() {
     // DQ (1/5/2008): For a binary (executable) file, no suffix is a valid
     // suffix, so allow this case validSourceFileSuffixes.push_back("");
 
-#if (CASE_SENSITIVE_SYSTEM == 1)
-    validSourceFileSuffixes.push_back(".c");
-    validSourceFileSuffixes.push_back(".cc");
-    validSourceFileSuffixes.push_back(".cp");
-    validSourceFileSuffixes.push_back(".c++");
-    validSourceFileSuffixes.push_back(".cpp");
-    validSourceFileSuffixes.push_back(".cxx");
-    validSourceFileSuffixes.push_back(".C");
-    validSourceFileSuffixes.push_back(".CPP");
-    /*
-         validSourceFileSuffixes.push_back(".CC");
-         validSourceFileSuffixes.push_back(".CP");
-         validSourceFileSuffixes.push_back(".C++");
-         validSourceFileSuffixes.push_back(".CXX");
-    */
-
-    // TV (05/17/2010) Support for CUDA
-    validSourceFileSuffixes.push_back(".cu");
-
-    // TV (05/17/2010) Support for OpenCL
-    validSourceFileSuffixes.push_back(".ocl");
-    validSourceFileSuffixes.push_back(".cl");
-
-#else
-    // it is a case insensitive system
-    validSourceFileSuffixes.push_back(".c");
-    validSourceFileSuffixes.push_back(".cc");
-    validSourceFileSuffixes.push_back(".cp");
-    validSourceFileSuffixes.push_back(".c++");
-    validSourceFileSuffixes.push_back(".cpp");
-    validSourceFileSuffixes.push_back(".cxx");
-    validSourceFileSuffixes.push_back(".C");
-    validSourceFileSuffixes.push_back(".CC");
-    validSourceFileSuffixes.push_back(".CP");
-    validSourceFileSuffixes.push_back(".C++");
-    validSourceFileSuffixes.push_back(".CPP");
-    validSourceFileSuffixes.push_back(".CXX");
-
-    // TV (05/17/2010) Support for CUDA
-    validSourceFileSuffixes.push_back(".cu");
-
-    // TV (05/17/2010) Support for OpenCL
-    validSourceFileSuffixes.push_back(".ocl");
-    validSourceFileSuffixes.push_back(".cl");
-
-#endif
+    // Keep suffix-driven discovery identical to the Clang 22 types accepted by
+    // REX's C, C++, CUDA, and OpenCL frontends. Objective-C and OpenCL C++
+    // suffixes are intentionally excluded and rejected by the command-line
+    // layer.
+    static const char *clangSourceSuffixes[] = {
+        ".c",   ".i",   ".h",   ".C",    ".cc",   ".CC",   ".cp",  ".c++",
+        ".C++", ".cpp", ".CPP", ".cxx",  ".CXX",  ".H",    ".hh",  ".hpp",
+        ".hxx", ".ii",  ".ccm", ".c++m", ".cppm", ".cxxm", ".iim", ".iih",
+        ".cu",  ".cui", ".ocl", ".cl",   ".cli"};
+    validSourceFileSuffixes.insert(validSourceFileSuffixes.end(),
+                                   std::begin(clangSourceSuffixes),
+                                   std::end(clangSourceSuffixes));
     first_call = false;
   }
 }

@@ -212,16 +212,41 @@ public:
     }
   }
 
-  void visit(SgConditionalExp *sgn) {
-    LatticeType *condLat = getLattice(sgn->get_conditional_exp()),
-                *trueLat = getLattice(sgn->get_true_exp()),
-                *falseLat = getLattice(sgn->get_false_exp()),
-                *resLat = getLattice(sgn);
+  void visit(SgMacroExpansionExp *sgn) {
+    LatticeType *expanded = getLattice(sgn->get_expanded_expression_checked());
+    LatticeType *result = getLattice(sgn);
+    if (result) {
+      if (expanded == nullptr) {
+        fprintf(stderr,
+                "REX_DATAFLOW_INVARIANT[macro-expansion-lattice]: a live "
+                "macro result has no expanded-expression lattice\n");
+        ROSE_ABORT();
+      }
+      result->copy(expanded);
+      modified = true;
+    }
+  }
 
-    // Liveness of the result implies liveness of the input expressions
+  void visit(SgConditionalExp *sgn) {
+    sgn->validate();
+    LatticeType *trueLat =
+        sgn->get_operator_kind() ==
+                SgConditionalExp::e_conditional_operator_standard
+            ? getLattice(sgn->get_true_exp())
+            : getLattice(sgn->get_conditional_exp());
+    LatticeType *falseLat = getLattice(sgn->get_false_exp());
+    LatticeType *resLat = getLattice(sgn);
+
+    // The condition chooses the value but does not contribute to it. A GNU
+    // binary conditional uses the condition itself as its true value.
     if (resLat) {
-      resLat->copy(condLat);
-      resLat->meetUpdate(trueLat);
+      if (trueLat == nullptr || falseLat == nullptr) {
+        fprintf(stderr,
+                "REX_DATAFLOW_INVARIANT[conditional-lattice]: a live "
+                "conditional result has an absent value-branch lattice\n");
+        ROSE_ABORT();
+      }
+      resLat->copy(trueLat);
       resLat->meetUpdate(falseLat);
       modified = true;
     }

@@ -1,0 +1,8 @@
+cmd = cd ${TARGET} && ${TEST_UNPARSE_HEADERS} ${ROSE_SWITCHES} ${HDR_ROOT_SWITCHES} ${srcdir}/${TARGET}/rex_unparse_namespace_split_open.cpp
+cmd = test -f ${TARGET}/unparsedHeaders/rex_unparse_namespace_split_open.hpp
+cmd = grep -F "namespace rex_split_namespace" ${TARGET}/unparsedHeaders/rex_unparse_namespace_split_open.hpp
+cmd = grep -F "namespace rex_split_nested_namespace" ${TARGET}/unparsedHeaders/rex_unparse_namespace_split_open.hpp
+cmd = grep -F "split_namespace_anchor_rename_me_renamed" ${TARGET}/unparsedHeaders/rex_unparse_namespace_split_open.hpp
+cmd = grep -F "} // namespace rex_split_nested_namespace" ${TARGET}/rose_rex_unparse_namespace_split_open.cpp
+cmd = grep -F "} // namespace rex_split_namespace" ${TARGET}/rose_rex_unparse_namespace_split_open.cpp
+cmd = ${CXX} -std=c++17 -fsyntax-only -I${TARGET}/unparsedHeaders ${TARGET}/rose_rex_unparse_namespace_split_open.cpp

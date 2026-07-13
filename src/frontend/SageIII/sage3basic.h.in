@@ -147,18 +147,7 @@
 // DEBUG_SAGE_ACCESS_FUNCTIONS == 1, else just report error.
 #define DEBUG_SAGE_ACCESS_FUNCTIONS_ASSERTION 0
 
-// DQ (10/12/2004): Remove the resetTemplateName() from use within the legacy
-// frontend/Sage connection because it will (where required) force calls to
-// generate the qualified name which requires the parent pointer to have already
-// been set.  Since we defer the setting of the parent pointers until post
-// processing of the Sage III AST. It is now called within the AstFixup.C.
-#define USE_RESET_TEMPLATE_NAME false
-
 #include "ROSE_DEPRECATED.h"
-
-// DQ (12/22/2007): Name of implicit Fortran "main" when building the program
-// function.
-#define ROSE_IMPLICIT_FORTRAN_PROGRAM_NAME "rose_fortran_main"
 
 // DQ (10/6/2004): We have tracked down and noted all locations where a Sage III
 // member function modifies its input parameters. The locations where this
@@ -354,21 +343,5 @@
 // OpenMP version macro value (YYYYMM format from OpenMP spec).
 // Value is injected from CMake's ROSE_OPENMP_VERSION.
 #define OMPVERSION @ROSE_OPENMP_VERSION@
-
-// Optional filter for memory-pool traversals. AstPostProcessing uses this to
-// skip nodes originating from system headers when running with the Clang
-// frontend so that post-processing doesn't attach unrelated libstdc++
-// instantiations to the user AST.
-namespace Rose {
-typedef bool (*MemoryPoolTraversalFilter)(SgNode *);
-ROSE_DLL_API void
-setMemoryPoolTraversalFilter(MemoryPoolTraversalFilter filter);
-ROSE_DLL_API MemoryPoolTraversalFilter getMemoryPoolTraversalFilter();
-
-inline bool shouldSkipMemoryPoolTraversal(SgNode *node) {
-  MemoryPoolTraversalFilter filter = getMemoryPoolTraversalFilter();
-  return filter != NULL && filter(node);
-}
-} // namespace Rose
 
 #endif

@@ -12,6 +12,187 @@ target_link_libraries(outlineRandom ROSE_DLL ${link_with_libraries})
 add_executable(outlineSelection outlineSelection.cc)
 target_link_libraries(outlineSelection ROSE_DLL ${link_with_libraries})
 
+add_executable(rex_outliner_preprocessing_owner_contract
+  rex_outliner_preprocessing_owner_contract.cpp)
+target_link_libraries(rex_outliner_preprocessing_owner_contract
+  ROSE_DLL ${link_with_libraries})
+
+add_executable(rex_outliner_signature_contract_driver
+  rex_outliner_signature_contract_driver.cpp)
+target_link_libraries(rex_outliner_signature_contract_driver
+  ROSE_DLL ${link_with_libraries})
+
+add_executable(rex_outliner_class_conversion_contract_driver
+  rex_outliner_class_conversion_contract_driver.cpp)
+target_link_libraries(rex_outliner_class_conversion_contract_driver
+  ROSE_DLL ${link_with_libraries})
+
+add_executable(rex_outliner_friend_linkage_contract_driver
+  rex_outliner_friend_linkage_contract_driver.cpp)
+target_link_libraries(rex_outliner_friend_linkage_contract_driver
+  ROSE_DLL ${link_with_libraries})
+
+add_executable(rex_outliner_local_type_template_contract_driver
+  rex_outliner_local_type_template_contract_driver.cpp)
+target_link_libraries(rex_outliner_local_type_template_contract_driver
+  ROSE_DLL ${link_with_libraries})
+
+add_executable(rex_outliner_dependent_namespace_target_table_driver
+  rex_outliner_dependent_namespace_target_table_driver.cpp)
+target_link_libraries(rex_outliner_dependent_namespace_target_table_driver
+  ROSE_DLL ${link_with_libraries})
+
+foreach(_rex_outliner_signature_mode IN ITEMS direct wrapper)
+  set(_rex_outliner_signature_flags)
+  if(_rex_outliner_signature_mode STREQUAL "direct")
+    list(APPEND _rex_outliner_signature_flags -rose:outline:enable_classic)
+  else()
+    list(APPEND _rex_outliner_signature_flags -rose:outline:parameter_wrapper)
+  endif()
+  add_test(
+    NAME rex_outliner_signature_${_rex_outliner_signature_mode}_contract
+    COMMAND $<TARGET_FILE:rex_outliner_signature_contract_driver>
+      --rex-signature-mode=${_rex_outliner_signature_mode}
+      ${_rex_outliner_signature_flags}
+      -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_outliner_signature_contract.c)
+  set_tests_properties(
+    rex_outliner_signature_${_rex_outliner_signature_mode}_contract
+    PROPERTIES LABELS "rex;OUTLINER;AST")
+endforeach()
+unset(_rex_outliner_signature_mode)
+unset(_rex_outliner_signature_flags)
+
+foreach(_rex_outliner_class_conversion_mode
+        IN ITEMS direct wrapper new_file copied)
+  set(_rex_outliner_class_conversion_flags)
+  if(_rex_outliner_class_conversion_mode STREQUAL "direct")
+    list(APPEND _rex_outliner_class_conversion_flags
+      -rose:outline:enable_classic)
+  elseif(_rex_outliner_class_conversion_mode STREQUAL "wrapper")
+    list(APPEND _rex_outliner_class_conversion_flags
+      -rose:outline:parameter_wrapper)
+  elseif(_rex_outliner_class_conversion_mode STREQUAL "new_file")
+    list(APPEND _rex_outliner_class_conversion_flags
+      -rose:outline:new_file
+      -rose:outline:temp_variable)
+  else()
+    list(APPEND _rex_outliner_class_conversion_flags
+      -rose:outline:use_dlopen
+      -rose:outline:copy_orig_file
+      -rose:outline:output_path
+      ${CMAKE_CURRENT_BINARY_DIR}/rex_outliner_class_conversion_copied_output)
+  endif()
+  add_test(
+    NAME
+      rex_outliner_class_conversion_${_rex_outliner_class_conversion_mode}_contract
+    COMMAND $<TARGET_FILE:rex_outliner_class_conversion_contract_driver>
+      --rex-class-conversion-mode=${_rex_outliner_class_conversion_mode}
+      ${_rex_outliner_class_conversion_flags}
+      -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_outliner_class_conversion_contract.cpp)
+  set_tests_properties(
+    rex_outliner_class_conversion_${_rex_outliner_class_conversion_mode}_contract
+    PROPERTIES LABELS "rex;OUTLINER;AST;CAST")
+endforeach()
+unset(_rex_outliner_class_conversion_mode)
+unset(_rex_outliner_class_conversion_flags)
+
+add_test(
+  NAME rex_outliner_friend_linkage_contract
+  COMMAND $<TARGET_FILE:rex_outliner_friend_linkage_contract_driver>
+    -rose:outline:parameter_wrapper
+    -rose:detect_dangling_pointers
+    1
+    -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_outliner_friend_linkage_contract.cpp)
+set_tests_properties(
+  rex_outliner_friend_linkage_contract
+  PROPERTIES LABELS "rex;OUTLINER;AST;LINKAGE")
+
+add_test(
+  NAME rex_outliner_local_type_template_contract
+  COMMAND $<TARGET_FILE:rex_outliner_local_type_template_contract_driver>
+    -rose:outline:parameter_wrapper
+    -rose:detect_dangling_pointers
+    1
+    -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_outliner_local_type_template_contract.cpp)
+set_tests_properties(
+  rex_outliner_local_type_template_contract
+  PROPERTIES LABELS "rex;OUTLINER;AST;TEMPLATE")
+
+add_test(
+  NAME rex_outliner_dependent_namespace_target_table_contract
+  COMMAND $<TARGET_FILE:rex_outliner_dependent_namespace_target_table_driver>
+    -rose:outline:use_dlopen
+    -rose:outline:copy_orig_file
+    -rose:outline:output_path
+    ${CMAKE_CURRENT_BINARY_DIR}/rex_outliner_dependent_namespace_target_table_output
+    -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_outliner_dependent_namespace_target_table_contract.cpp)
+set_tests_properties(
+  rex_outliner_dependent_namespace_target_table_contract
+  PROPERTIES LABELS "rex;OUTLINER;AST;SYMBOL")
+
+add_test(
+  NAME rex_outliner_preprocessing_owner_contract
+  COMMAND $<TARGET_FILE:rex_outliner_preprocessing_owner_contract>)
+set_tests_properties(rex_outliner_preprocessing_owner_contract
+  PROPERTIES LABELS "rex;OUTLINER;AST")
+
+set(_outliner_preprocessing_invalid_modes
+  null-comment-owner
+  null-comment-spelling
+  null-header-project
+  empty-header-filename)
+set(_outliner_preprocessing_invalid_diagnostics
+  "REX_OUTLINER_INVARIANT[preprocessing-comment]: exact owner is null"
+  "REX_OUTLINER_INVARIANT[preprocessing-comment]: comment spelling is null"
+  "REX_OUTLINER_INVARIANT[preprocessing-header]: project is null"
+  "REX_OUTLINER_INVARIANT[preprocessing-header]: header filename is empty")
+list(LENGTH _outliner_preprocessing_invalid_modes
+  _outliner_preprocessing_invalid_mode_count)
+list(LENGTH _outliner_preprocessing_invalid_diagnostics
+  _outliner_preprocessing_invalid_diagnostic_count)
+if(NOT _outliner_preprocessing_invalid_mode_count EQUAL
+   _outliner_preprocessing_invalid_diagnostic_count)
+  message(FATAL_ERROR
+    "Outliner preprocessing hard-contract tables have different lengths")
+endif()
+math(EXPR _outliner_preprocessing_invalid_last
+  "${_outliner_preprocessing_invalid_mode_count} - 1")
+foreach(_outliner_preprocessing_invalid_index
+        RANGE ${_outliner_preprocessing_invalid_last})
+  list(GET _outliner_preprocessing_invalid_modes
+    ${_outliner_preprocessing_invalid_index} _mode)
+  list(GET _outliner_preprocessing_invalid_diagnostics
+    ${_outliner_preprocessing_invalid_index} _diagnostic)
+  string(REPLACE "-" "_" _suffix "${_mode}")
+  add_test(
+    NAME rex_outliner_preprocessing_${_suffix}_is_rejected
+    COMMAND
+      sh -c
+      "ulimit -c 0; set +e; \"$1\" \"$2\" >rex_outliner_preprocessing_$3.log 2>&1; status=$?; set -e; test $status -eq 134; test \"\$(grep -Fxc -- \"$4\" rex_outliner_preprocessing_$3.log)\" -eq 1"
+      dummy
+      $<TARGET_FILE:rex_outliner_preprocessing_owner_contract>
+      ${_mode}
+      ${_suffix}
+      ${_diagnostic})
+  set_tests_properties(
+    rex_outliner_preprocessing_${_suffix}_is_rejected
+    PROPERTIES LABELS "rex;OUTLINER;AST;death")
+endforeach()
+unset(_outliner_preprocessing_invalid_modes)
+unset(_outliner_preprocessing_invalid_diagnostics)
+unset(_outliner_preprocessing_invalid_mode_count)
+unset(_outliner_preprocessing_invalid_diagnostic_count)
+unset(_outliner_preprocessing_invalid_last)
+unset(_outliner_preprocessing_invalid_index)
+unset(_mode)
+unset(_diagnostic)
+unset(_suffix)
+
 set(OUTLINE_C_TESTS
   array1.c
   arrayParameter.c
@@ -43,6 +224,10 @@ set(OUTLINE_CXX_TESTS
   const-global.cpp
   polygon.cpp
   reference.cpp
+  rex_outliner_access_chain_contract.cpp
+  rex_outliner_copied_preprocessing_ownership.cpp
+  rex_outliner_functional_scalar_cast_contract.cpp
+  rex_outliner_implicit_receiver_contract.cpp
   template_function1.cpp
   test_26_v2_2020.cpp
   test_66_2020.cpp
@@ -51,6 +236,7 @@ set(OUTLINE_CXX_TESTS
 
 set(OUTLINE_CXX2_TESTS
   print.cpp
+  rex_outliner_generated_output_ownership.cpp
   test_42_2020.cpp
   test_20_2019.cpp
   test_26_v1_2020.cpp
@@ -792,12 +978,38 @@ endforeach()
 
 # Fortran tests without outline-specific switches
 if(enable-fortran)
+  set(_outline_use_module1_fixture outline_use_module1_fortran_module)
+  set(_outline_use_module1_fixture_dir
+    "${CMAKE_CURRENT_BINARY_DIR}/fortran_module_fixtures/use_module1")
+  set(_outline_use_module1_mod
+    "${_outline_use_module1_fixture_dir}/test.mod")
+  set(_outline_use_module1_obj
+    "${_outline_use_module1_fixture_dir}/module1.o")
+  file(MAKE_DIRECTORY "${_outline_use_module1_fixture_dir}")
+
+  add_test(
+    NAME outline_prepare_useModule1_module
+    COMMAND /bin/sh -c
+      "rm -f \"${_outline_use_module1_mod}\" \"${_outline_use_module1_obj}\" && \
+       \"${CMAKE_Fortran_COMPILER}\" -ffree-form -c \
+       \"${CMAKE_CURRENT_SOURCE_DIR}/module1.f90\" \
+       -module-dir \"${_outline_use_module1_fixture_dir}\" \
+       -o \"${_outline_use_module1_obj}\" && \
+       test -s \"${_outline_use_module1_mod}\""
+  )
+  set_tests_properties(outline_prepare_useModule1_module
+    PROPERTIES FIXTURES_SETUP "${_outline_use_module1_fixture}")
+
   foreach(specimen IN LISTS OUTLINE_FORTRAN_TESTS)
     string(REPLACE "." "_" _name ${specimen})
     if(specimen MATCHES "\\.f$")
       set(_format_flags "${_outline_fortran_fixed_form}")
     else()
       set(_format_flags "${_outline_fortran_free_form}")
+    endif()
+    set(_module_include "")
+    if(specimen STREQUAL "useModule1.f90")
+      set(_module_include "-I${_outline_use_module1_fixture_dir}")
     endif()
     set(_target noswitch_${specimen}.passed)
     add_test(
@@ -806,16 +1018,22 @@ if(enable-fortran)
       COMMAND ${_rth}
         TITLE="outline ${specimen} [${_target}]"
         USE_SUBDIR=yes
-        CMD="$<TARGET_FILE:outline> ${_outline_includes_str} ${_outline_noswitch_str} ${_format_flags} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
+        CMD="$<TARGET_FILE:outline> ${_outline_includes_str} ${_module_include} ${_outline_noswitch_str} ${_format_flags} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
         ${_exit_status}
         ${_target}
     )
+    if(specimen STREQUAL "useModule1.f90")
+      set_tests_properties(outline_noswitch_${_name}
+        PROPERTIES
+          FIXTURES_REQUIRED "${_outline_use_module1_fixture}")
+    endif()
   endforeach()
 endif()
 
 # outlineSelection: seq7 tests on external C++ specimens
 foreach(specimen IN LISTS OUTLINE_EXTERNAL_CXX_TESTS)
   string(REPLACE "." "_" _name ${specimen})
+  rex_get_cxx_specimen_standard_flag(_outline_cxx_standard_flag ${specimen})
   set(_target seq7a_${specimen}.passed)
   add_test(
     NAME outline_seq7a_${_name}
@@ -823,7 +1041,7 @@ foreach(specimen IN LISTS OUTLINE_EXTERNAL_CXX_TESTS)
     COMMAND ${_rth}
       TITLE="outlineSelection seq7 ${specimen} [${_target}]"
       USE_SUBDIR=yes
-      CMD="$<TARGET_FILE:outlineSelection> ${_outline_includes_str} -DTEST_STRING_MACRO=\\\"test\\\" -rose:outline:seq 7 ${_outline_flags_str} -c ${_outline_external_dir}/${specimen}"
+      CMD="$<TARGET_FILE:outlineSelection> ${_outline_cxx_standard_flag} ${_outline_includes_str} -DTEST_STRING_MACRO=\\\"test\\\" -rose:outline:seq 7 ${_outline_flags_str} -c ${_outline_external_dir}/${specimen}"
       ${_exit_status}
       ${_target}
   )
@@ -838,6 +1056,10 @@ if(enable-fortran)
     else()
       set(_format_flags "${_outline_fortran_free_form}")
     endif()
+    set(_module_include "")
+    if(specimen STREQUAL "useModule1.f90")
+      set(_module_include "-I${_outline_use_module1_fixture_dir}")
+    endif()
     set(_target seq7b_${specimen}.passed)
     add_test(
       NAME outline_seq7b_${_name}
@@ -845,10 +1067,15 @@ if(enable-fortran)
       COMMAND ${_rth}
         TITLE="outlineSelection seq7 ${specimen} [${_target}]"
         USE_SUBDIR=yes
-        CMD="$<TARGET_FILE:outlineSelection> ${_outline_includes_str} -rose:verbose 0 -rose:outline:seq 7 ${_format_flags} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
+        CMD="$<TARGET_FILE:outlineSelection> ${_outline_includes_str} ${_module_include} -rose:verbose 0 -rose:outline:seq 7 ${_format_flags} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
         ${_exit_status}
         ${_target}
     )
+    if(specimen STREQUAL "useModule1.f90")
+      set_tests_properties(outline_seq7b_${_name}
+        PROPERTIES
+          FIXTURES_REQUIRED "${_outline_use_module1_fixture}")
+    endif()
   endforeach()
 endif()
 

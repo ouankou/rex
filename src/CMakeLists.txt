@@ -45,7 +45,6 @@ set(ROSETTA_SRC
   ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_Grammar.C
   ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_GrammarCheckingIfDataMembersAreInMemoryPool.C
   ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_GrammarCopyMemberFunctions.C
-  ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_GrammarGetChildIndex.C
   ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_GrammarNewAndDeleteOperators.C
   ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_GrammarNewConstructors.C
   ${CMAKE_BINARY_DIR}/src/frontend/SageIII/Cxx_GrammarProcessDataMemberReferenceToPointers.C
@@ -122,7 +121,6 @@ set(_rose_sage_pch_targets
   abstractLayer
   astDiagnostics
   astDump
-  astFixup
   astHiddenTypeAndDeclarationLists
   astPostProcessing
   astProcessing
@@ -164,7 +162,6 @@ set(rose_LIB_SRCS
   $<TARGET_OBJECTS:sage3>
   $<TARGET_OBJECTS:roseAstNodesExpression>
   $<TARGET_OBJECTS:virtualCFG>
-  $<TARGET_OBJECTS:astFixup>
   $<TARGET_OBJECTS:midend>
   $<TARGET_OBJECTS:abstractLayer>
   $<TARGET_OBJECTS:astDiagnostics>

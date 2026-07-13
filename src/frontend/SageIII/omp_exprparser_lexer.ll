@@ -6,6 +6,8 @@
 %option noyy_pop_state
 %option noyy_push_state
 
+%s FORTRAN
+
 
 %{
 
@@ -23,6 +25,7 @@ extern int omp_exprparser_lex();
 
 #include <stdio.h>
 #include <cstdlib>
+#include <iostream>
 #include <string>
 #include <string.h>
 #include "sage3basic.h"
@@ -30,7 +33,6 @@ extern int omp_exprparser_lex();
 
 static const char* ompparserinput = NULL;
 static size_t ompparserinput_remaining = 0;
-static std::string gExpressionString;
 
 /* pass user specified string to buf, indicate the size using 'result', 
    and shift the current position pointer of user input afterwards 
@@ -54,16 +56,19 @@ static std::string gExpressionString;
 
 %}
 
-blank           [ ]
+blank           [ \t]
 newline         [\n]
 digit           [0-9]
+integer_suffix  ([uU]([lL]{1,2})?|[lL]{1,2}[uU]?)
 
 id              [a-zA-Z_][a-zA-Z0-9_]*
+global_id       "::"{blank}*{id}
+qualified_id    {global_id}|(("::"{blank}*)?{id}({blank}*"::"{blank}*{id})+)
 fortran_block_end [ ]*[^a-zA-Z0-9_]
 
 %%
-0[xX][0-9a-fA-F]+ { omp_exprparser_lval.stype = strdup(yytext); return (HEXCONSTANT); }
-{digit}{digit}* { omp_exprparser_lval.stype = strdup(yytext); return (ICONSTANT); }
+0[xX][0-9a-fA-F]+{integer_suffix}? { omp_exprparser_lval.stype = strdup(yytext); return (HEXCONSTANT); }
+{digit}+{integer_suffix}? { omp_exprparser_lval.stype = strdup(yytext); return (ICONSTANT); }
 
 [.][Tt][Rr][Uu][Ee][.] { omp_exprparser_lval.stype = strdup("1"); return (ICONSTANT); }
 [.][Ff][Aa][Ll][Ss][Ee][.] { omp_exprparser_lval.stype = strdup("0"); return (ICONSTANT); }
@@ -101,6 +106,8 @@ fortran_block_end [ ]*[^a-zA-Z0-9_]
 "%"             { return ('%'); }
 "-"             { return ('-'); }
 "&"             { return ('&'); }
+"!"             { return ('!'); }
+"~"             { return ('~'); }
 "^"             { return ('^'); }
 "|"             { return ('|'); }
 "&&"            { return (LOGAND); }
@@ -138,18 +145,35 @@ expr            { return (EXPRESSION); }
 varlist         { return (VARLIST); }
 identifier      { return (IDENTIFIER); /*not in use for now*/ }
 array_section   { return (ARRAY_SECTION); }
-\"([^\\\"]|\\.)*\" {
-                  std::string text(yytext);
-                  if (text.size() >= 2) {
-                    text = text.substr(1, text.size() - 2);
-                  }
-                  omp_exprparser_lval.stype = strdup(text.c_str());
+static_cast     { return (STATIC_CAST); }
+sizeof          { return (SIZEOF); }
+int             { return (TYPE_INT); }
+<INITIAL>\"([^\\\"\n]|\\.)*\" {
+                  omp_exprparser_lval.stype = strdup(yytext);
                   return (STRING_LITERAL);
                 }
+<FORTRAN>\"([^\"\n]|\"\")*\" {
+                  omp_exprparser_lval.stype = strdup(yytext);
+                  return (STRING_LITERAL);
+                }
+<FORTRAN>\'([^\'\n]|\'\')*\' {
+                  omp_exprparser_lval.stype = strdup(yytext);
+                  return (STRING_LITERAL);
+                }
+{qualified_id}  { std::string spelling;
+                  for (const char *character = yytext; *character != '\0';
+                       ++character) {
+                    if (*character != ' ' && *character != '\t' &&
+                        *character != '\r' && *character != '\n') {
+                      spelling.push_back(*character);
+                    }
+                  }
+                  omp_exprparser_lval.stype = strdup(spelling.c_str());
+                  return (ID_EXPRESSION); }
 {id}            { omp_exprparser_lval.stype = strdup(yytext);
                   return (ID_EXPRESSION); }
 
-"/"{id}"/"/{fortran_block_end}  { omp_exprparser_lval.stype = strdup(yytext); return (ID_EXPRESSION); }
+"/"{id}"/"/{fortran_block_end}  { omp_exprparser_lval.stype = strdup(yytext); return (FORTRAN_COMMON_BLOCK); }
 {blank}*        ;
 .               { return (LEXICALERROR);}
 
@@ -157,10 +181,39 @@ array_section   { return (ARRAY_SECTION); }
 
 /* entry point invoked by callers to start scanning for a string */
 extern void omp_exprparser_lexer_init(const char* str) {
+  if (str == NULL || str[0] == '\0' || ompparserinput != NULL ||
+      ompparserinput_remaining != 0) {
+    std::cerr << "REX_OMP_AST_INVARIANT[expression-lexer-lifecycle]: "
+                 "OpenMP expression lexer requires clean state and nonempty "
+                 "input\n";
+    ROSE_ABORT();
+  }
   ompparserinput = str;
-  ompparserinput_remaining = str != NULL ? strlen(str) : 0;
+  ompparserinput_remaining = strlen(str);
+  if (SageInterface::is_Fortran_language()) {
+    BEGIN(FORTRAN);
+  } else {
+    BEGIN(INITIAL);
+  }
   /* We have omp_ suffix for all flex functions */
   omp_exprparser_restart(omp_exprparser_in);
+}
+
+extern void omp_exprparser_lexer_finish() {
+  if (ompparserinput == NULL || ompparserinput_remaining != 0) {
+    std::cerr << "REX_OMP_AST_INVARIANT[expression-lexer-lifecycle]: "
+                 "OpenMP expression lexer finished without consuming its "
+                 "complete active input\n";
+    ROSE_ABORT();
+  }
+  ompparserinput = NULL;
+  ompparserinput_remaining = 0;
+  BEGIN(INITIAL);
+}
+
+extern bool omp_exprparser_lexer_is_clean() {
+  return ompparserinput == NULL && ompparserinput_remaining == 0 &&
+         YY_START == INITIAL;
 }
 /**
  * @file

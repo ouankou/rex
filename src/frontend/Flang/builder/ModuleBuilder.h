@@ -40,8 +40,6 @@ namespace Rose {
  *  Create an entry for the module in the moduleNameMap
  */
 
-#define SKIP_SYNTAX_CHECK "-rose:skip_syntax_check"
-
 class ModuleBuilder {
   typedef std::map<std::string, SgSourceFile *> ModuleMapType;
 

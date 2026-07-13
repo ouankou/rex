@@ -6,10 +6,11 @@
 
 #include <stdio.h>
 
-sum(to, from, count) register short *to, *from;
-register count;
+int sum(to, from, count)
+register short *to, *from;
+register int count;
 {
-  register n = (count + 7) / 8;
+  register int n = (count + 7) / 8;
   switch (count % 8) {
   case 0:
     do {

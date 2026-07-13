@@ -3,6 +3,6 @@
 template <typename T> class Y;
 
 // forward declaration of template specialization
-class Y<int>;
+template <> class Y<int>;
 // class Y<int>{};
-class Y<int>;
+template <> class Y<int>;

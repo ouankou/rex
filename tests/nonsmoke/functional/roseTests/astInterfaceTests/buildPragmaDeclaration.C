@@ -12,14 +12,14 @@ int main (int argc, char *argv[])
   // grab the scope in which AST will be added
   SgProject *project = frontend (argc, argv);
   SgFunctionDeclaration* mainFunc= findMain(project);
-  pushScopeStack (isSgScopeStatement (mainFunc->get_definition()->get_body()));
+  SgBasicBlock *body = mainFunc->get_definition()->get_body();
+  pushScopeStack(isSgScopeStatement(body));
 
   // #pragma omp parallel
   SgPragmaDeclaration * decl = buildPragmaDeclaration("omp parallel");
-  prependStatement (decl);
+  prependStatement(decl, body);
   popScopeStack ();
 
   AstTests::runAllTests(project);
   return backend (project);
 }
-

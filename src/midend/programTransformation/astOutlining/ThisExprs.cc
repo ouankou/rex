@@ -8,6 +8,7 @@
 
 #include "sageBuilder.h"
 
+#include <algorithm>
 #include <iostream>
 
 #include <list>
@@ -35,12 +36,12 @@ using namespace SageInterface;
 // =====================================================================
 
 /*!
- *  Checks that a set of 'this' expressions has the same class symbol,
- *  and returns that symbol.
+ *  Checks that a set of 'this' expressions has the same exact class or
+ *  current-instantiation symbol, and returns that symbol.
  */
-static SgClassSymbol *getClassSymAndVerify(const ASTtools::ThisExprSet_t &E,
-                                           SgType **this_pointer_type) {
-  SgClassSymbol *sym = 0;
+static SgSymbol *getThisSymbolAndVerify(const ASTtools::ThisExprSet_t &E,
+                                        SgType **this_pointer_type) {
+  SgSymbol *sym = NULL;
   if (this_pointer_type != NULL) {
     *this_pointer_type = NULL;
   }
@@ -49,14 +50,45 @@ static SgClassSymbol *getClassSymAndVerify(const ASTtools::ThisExprSet_t &E,
          ++i) {
       const SgThisExp *t = *i;
       ROSE_ASSERT(t);
-      if (!sym)
-        sym = t->get_class_symbol();
-      else if (sym != t->get_class_symbol()) {
-        cerr << "*** 'this' expressions use different symbols! ***" << endl;
-        return 0; // Signal error
+      SgClassSymbol *class_symbol = t->get_class_symbol();
+      SgNonrealSymbol *nonreal_symbol = t->get_nonreal_symbol();
+      if ((class_symbol == NULL) == (nonreal_symbol == NULL)) {
+        cerr << "REX_AST_INVARIANT[outliner-this-symbol]: outlined 'this' "
+                "expression must have exactly one class or current-"
+                "instantiation symbol"
+             << endl;
+        ROSE_ABORT();
       }
-      if (this_pointer_type != NULL && *this_pointer_type == NULL) {
-        *this_pointer_type = t->get_type();
+      SgSymbol *this_symbol = class_symbol != NULL
+                                  ? static_cast<SgSymbol *>(class_symbol)
+                                  : static_cast<SgSymbol *>(nonreal_symbol);
+      if (sym == NULL)
+        sym = this_symbol;
+      else if (sym != this_symbol) {
+        cerr << "REX_AST_INVARIANT[outliner-this-symbol]: outlined 'this' "
+                "expressions use different exact receiver symbols"
+             << endl;
+        ROSE_ABORT();
+      }
+      if (this_pointer_type != NULL) {
+        SgType *current_pointer_type = t->get_type();
+        if (current_pointer_type == NULL ||
+            isSgPointerType(current_pointer_type) == NULL) {
+          cerr << "REX_AST_INVARIANT[outliner-this-result-type]: outlined "
+                  "'this' expression has no exact pointer result type"
+               << endl;
+          ROSE_ABORT();
+        }
+        if (*this_pointer_type == NULL) {
+          *this_pointer_type = current_pointer_type;
+        } else if (*this_pointer_type != current_pointer_type &&
+                   !SageInterface::isEquivalentType(*this_pointer_type,
+                                                    current_pointer_type)) {
+          cerr << "REX_AST_INVARIANT[outliner-this-result-type]: outlined "
+                  "'this' expressions have different semantic pointer types"
+               << endl;
+          ROSE_ABORT();
+        }
       }
     }
   }
@@ -68,7 +100,7 @@ static SgClassSymbol *getClassSymAndVerify(const ASTtools::ThisExprSet_t &E,
 // declaration
 static SgVariableDeclaration *createThisShadowDecl(
     const string &name,
-    SgClassSymbol *sym,             /* the class symbol for this pointer*/
+    SgSymbol *sym, /* exact class/current-instantiation symbol */
     SgFunctionDefinition *func_def, /*The enclosing class member function*/
     SgType *this_pointer_type)
 //                      SgScopeStatement* scope)
@@ -81,9 +113,6 @@ static SgVariableDeclaration *createThisShadowDecl(
   ROSE_ASSERT(sym && func_def);
 
   // Analyze function definition.
-  const SgMemberFunctionDeclaration *func_decl =
-      isSgMemberFunctionDeclaration(func_def->get_declaration());
-  ROSE_ASSERT(func_decl);
   SgBasicBlock *func_body = func_def->get_body();
   ROSE_ASSERT(func_body);
 
@@ -99,58 +128,30 @@ static SgVariableDeclaration *createThisShadowDecl(
     ROSE_ASSERT(decl);
     ROSE_ASSERT(decl->get_scope() == isSgScopeStatement(func_body));
   } else {
-    SgType *var_type = 0;
-    if (this_pointer_type != NULL) {
-      var_type = this_pointer_type;
-    } else {
-      // Build variable's type. class A*  or const class A *
-      SgType *class_type = sym->get_type();
-      ROSE_ASSERT(class_type);
-      if (ASTtools::isConstMemFunc(func_decl)) {
-        SgModifierType *mod_type = SageBuilder::buildConstType(class_type);
-        var_type = SgPointerType::createType(mod_type);
-      } else {
-        var_type = SgPointerType::createType(class_type);
-      }
+    if (this_pointer_type == NULL ||
+        isSgPointerType(this_pointer_type) == nullptr) {
+      cerr << "REX_AST_INVARIANT[outliner-this-result-type]: this shadow "
+              "requires the original exact pointer type"
+           << endl;
+      ROSE_ABORT();
     }
+    SgType *var_type = this_pointer_type;
     ROSE_ASSERT(var_type);
 
     // Build initial value: this pointer
-    SgThisExp *this_expr = SageBuilder::buildThisExp(sym);
+    SgThisExp *this_expr = SageBuilder::buildThisExp(sym, this_pointer_type);
     ROSE_ASSERT(this_expr);
-    if (this_pointer_type != NULL) {
-      SgType *this_base_type = nullptr;
-      if (SgPointerType *pointer_type = isSgPointerType(this_pointer_type)) {
-        this_base_type = pointer_type->get_base_type();
-      }
-      if (this_base_type != nullptr) {
-        this_base_type = this_base_type->stripType(SgType::STRIP_MODIFIER_TYPE |
-                                                   SgType::STRIP_TYPEDEF_TYPE);
-      }
-      if (SgNonrealType *nonreal_type = isSgNonrealType(this_base_type)) {
-        if (SgNonrealDecl *nonreal_decl =
-                isSgNonrealDecl(nonreal_type->get_declaration())) {
-          if (SgNonrealSymbol *nonreal_symbol = isSgNonrealSymbol(
-                  nonreal_decl->get_symbol_from_symbol_table())) {
-            this_expr->set_nonreal_symbol(nonreal_symbol);
-          }
-        }
-      }
-    }
-    SgAssignInitializer *init = SageBuilder::buildAssignInitializer(this_expr);
+    SgAssignInitializer *init =
+        SageBuilder::buildAssignInitializer(this_expr, var_type);
 
     // Build final declaration.
     decl = SageBuilder::buildVariableDeclaration(var_name, var_type, init,
                                                  func_body);
     // SageBuilder::buildVariableDeclaration (var_name, var_type, init, scope);
-    ROSE_ASSERT(
-        decl->get_variableDeclarationContainsBaseTypeDefiningDeclaration() ==
-        false);
+    ROSE_ASSERT(decl->get_baseTypeDefiningDeclaration() == nullptr);
     SageInterface::prependStatement(decl, func_body);
   }
   ROSE_ASSERT(decl);
-  // Add some comments to mark it
-  SageBuilder::buildComment(decl, "//A declaration for this pointer");
 
   // We insert it to the enclosing member function definition
   if (enable_debug) {
@@ -161,23 +162,6 @@ static SgVariableDeclaration *createThisShadowDecl(
     func_body->unparseToString();
   }
 
-  // Liao (1/i28/2020): When used in conjunction with header file unparsing we
-  // need to set the physical file id on entirety of the subtree being inserted.
-  SgSourceFile *sfile = getEnclosingSourceFile(func_body);
-  if (sfile->get_unparseHeaderFiles()) {
-    int physical_file_id =
-        func_body->get_startOfConstruct()->get_physical_file_id();
-    string physical_filename_from_id =
-        Sg_File_Info::getFilenameFromID(physical_file_id);
-    if (enable_debug) {
-      printf("scope for function call transformation: "
-             "physical_filename_from_id = %s \n",
-             physical_filename_from_id.c_str());
-    }
-
-    SageBuilder::fixupSourcePositionFileSpecification(
-        decl, physical_filename_from_id);
-  }
   // decl->set_isModified(true);
   return decl;
 }
@@ -195,6 +179,7 @@ static void replaceThisExprs(ASTtools::ThisExprSet_t &this_exprs,
 
     SgVarRefExp *e_repl = SageBuilder::buildVarRefExp(sym);
     ROSE_ASSERT(e_repl);
+    SageInterface::publishGeneratedSubtreeOutputOwner(e_repl, e_this);
 
     SgNode *e_par = e_this->get_parent();
     ROSE_ASSERT(e_par);
@@ -268,6 +253,43 @@ getClassSymbolFromMemberFunctionDecl(const SgMemberFunctionDeclaration *decl) {
   return isSgClassSymbol(sym);
 }
 
+static SgSymbol *getPublishedSymbolForThisPointerType(SgType *pointer_type) {
+  SgPointerType *pointer = isSgPointerType(pointer_type);
+  SgType *pointee = pointer != NULL ? pointer->get_base_type() : NULL;
+  if (pointee != NULL) {
+    pointee = pointee->stripType(SgType::STRIP_MODIFIER_TYPE |
+                                 SgType::STRIP_TYPEDEF_TYPE);
+  }
+
+  if (SgClassType *class_type = isSgClassType(pointee)) {
+    SgClassDeclaration *declaration =
+        isSgClassDeclaration(class_type->get_declaration());
+    SgClassDeclaration *first =
+        declaration != NULL
+            ? isSgClassDeclaration(
+                  declaration->get_firstNondefiningDeclaration())
+            : NULL;
+    for (SgClassDeclaration *candidate : {declaration, first}) {
+      SgSymbol *symbol =
+          candidate != NULL ? candidate->get_symbol_from_symbol_table() : NULL;
+      if (isSgClassSymbol(symbol) != NULL) {
+        return symbol;
+      }
+    }
+    return NULL;
+  }
+
+  if (SgNonrealType *nonreal_type = isSgNonrealType(pointee)) {
+    SgNonrealDecl *declaration =
+        isSgNonrealDecl(nonreal_type->get_declaration());
+    return declaration != NULL
+               ? isSgNonrealSymbol(declaration->get_symbol_from_symbol_table())
+               : NULL;
+  }
+
+  return NULL;
+}
+
 static SgTemplateClassDeclaration *
 getTemplateClassDeclarationFromSymbol(SgClassSymbol *sym) {
   if (sym == NULL)
@@ -281,9 +303,11 @@ getTemplateClassDeclarationFromSymbol(SgClassSymbol *sym) {
           isSgTemplateClassDeclaration(class_decl))
     return template_decl;
 
-  if (SgTemplateInstantiationDecl *inst_decl =
-          isSgTemplateInstantiationDecl(class_decl))
-    return inst_decl->get_templateDeclaration();
+  // An instantiated class already has an exact concrete class type.  Reusing
+  // the primary template parameters here would incorrectly turn Class<int>
+  // back into the dependent current instantiation Class<T>.
+  if (isSgTemplateInstantiationDecl(class_decl) != NULL)
+    return NULL;
 
   if (SgTemplateClassDeclaration *template_decl = isSgTemplateClassDeclaration(
           class_decl->get_firstNondefiningDeclaration()))
@@ -299,42 +323,52 @@ getTemplateClassDeclarationFromSymbol(SgClassSymbol *sym) {
 static SgTemplateArgument *
 buildTemplateArgumentFromParameter(SgTemplateParameter *param,
                                    size_t position) {
-  if (param == NULL)
-    return NULL;
+  if (param == NULL) {
+    cerr << "REX_TRANSFORM_INVARIANT[current-instantiation-parameter]: "
+            "template parameter is null"
+         << endl;
+    ROSE_ABORT();
+  }
 
+  SgTemplateArgument *argument = NULL;
   switch (param->get_parameterType()) {
-  case SgTemplateParameter::type_parameter:
-    if (SgType *param_type = param->get_type())
-      return new SgTemplateArgument(param_type, false);
+  case SgTemplateParameter::type_parameter: {
+    if (SgType *param_type = param->get_type()) {
+      // This argument belongs to the generated declaration of the outlined
+      // function's explicit this pointer.  It is therefore a written use-site
+      // argument, not an implicit/defaulted semantic argument.
+      argument = new SgTemplateArgument(param_type, true);
+    }
     break;
+  }
 
   case SgTemplateParameter::nontype_parameter: {
-    SgType *param_type = NULL;
-    std::string param_name;
-    if (SgInitializedName *init_name = param->get_initializedName()) {
-      param_type = init_name->get_type();
-      param_name = init_name->get_name().getString();
+    SgInitializedName *init_name = param->get_initializedName();
+    SgType *param_type = init_name != NULL ? init_name->get_type() : NULL;
+    const std::string param_name =
+        init_name != NULL ? init_name->get_name().getString() : std::string();
+    if (init_name == NULL || param_type == NULL || param_name.empty()) {
+      break;
     }
     SgTemplateParameterVal *param_value =
         SageBuilder::buildTemplateParameterVal_nfi(position, param_name);
     ROSE_ASSERT(param_value != NULL);
-    if (param_type != NULL)
-      param_value->set_valueType(param_type);
+    param_value->set_valueType(param_type);
 
-    SgTemplateArgument *arg = new SgTemplateArgument(
+    argument = new SgTemplateArgument(
         SgTemplateArgument::nontype_argument, false /*isArrayBoundUnknownType*/,
-        param_type, param_value, NULL, false /*explicitlySpecified*/);
-    param_value->set_parent(arg);
-    return arg;
+        param_type, param_value, NULL, true /*explicitlySpecified*/);
+    param_value->set_parent(argument);
+    break;
   }
 
   case SgTemplateParameter::template_parameter:
     if (SgDeclarationStatement *template_decl =
             param->get_templateDeclaration()) {
-      return new SgTemplateArgument(
+      argument = new SgTemplateArgument(
           SgTemplateArgument::template_template_argument,
           false /*isArrayBoundUnknownType*/, NULL /*type*/, NULL /*expression*/,
-          template_decl, false /*explicitlySpecified*/);
+          template_decl, true /*explicitlySpecified*/);
     }
     break;
 
@@ -342,11 +376,50 @@ buildTemplateArgumentFromParameter(SgTemplateParameter *param,
     break;
   }
 
-  return NULL;
+  if (argument == NULL) {
+    cerr << "REX_TRANSFORM_INVARIANT[current-instantiation-parameter]: "
+            "template parameter at position "
+         << position << " has no exact semantic argument" << endl;
+    ROSE_ABORT();
+  }
+
+  ASTtools::publishTemplateParameterPackExpansion(param, argument);
+  return argument;
 }
 
-static SgType *buildCurrentInstantiationThisPointerType(
-    SgClassSymbol *sym, const SgMemberFunctionDeclaration *member_decl) {
+static std::string
+templateParameterSemanticName(SgTemplateParameter *parameter) {
+  ASSERT_not_null(parameter);
+  std::string name;
+  switch (parameter->get_parameterType()) {
+  case SgTemplateParameter::type_parameter:
+    if (SgTemplateType *type = isSgTemplateType(parameter->get_type()))
+      name = type->get_name().getString();
+    break;
+  case SgTemplateParameter::nontype_parameter:
+    if (SgInitializedName *initialized_name = parameter->get_initializedName())
+      name = initialized_name->get_name().getString();
+    break;
+  case SgTemplateParameter::template_parameter:
+    if (SgTemplateDeclaration *declaration =
+            isSgTemplateDeclaration(parameter->get_templateDeclaration())) {
+      name = SageInterface::get_name(declaration);
+    }
+    break;
+  case SgTemplateParameter::parameter_undefined:
+    break;
+  }
+  if (name.empty()) {
+    std::cerr << "REX_TRANSFORM_INVARIANT[unnamed-template-parameter]: "
+                 "outlining cannot construct a current-instantiation type\n";
+    ROSE_ABORT();
+  }
+  if (parameter->get_is_parameter_pack())
+    name += "...";
+  return name;
+}
+
+static SgType *buildCurrentInstantiationThisBaseType(SgClassSymbol *sym) {
   SgTemplateClassDeclaration *template_decl =
       getTemplateClassDeclarationFromSymbol(sym);
   if (template_decl == NULL || template_decl->get_templateParameters().empty())
@@ -358,27 +431,103 @@ static SgType *buildCurrentInstantiationThisPointerType(
   for (size_t i = 0; i < template_params.size(); ++i) {
     SgTemplateArgument *arg =
         buildTemplateArgumentFromParameter(template_params[i], i);
-    if (arg == NULL)
-      return NULL;
+    ROSE_ASSERT(arg != NULL);
     template_args.push_back(arg);
   }
 
   SgName template_name = template_decl->get_templateName();
   if (template_name.is_null() || template_name.getString().empty())
     template_name = template_decl->get_name();
+  ROSE_ASSERT(!template_name.is_null());
+
+  std::string semantic_name = template_name.getString() + "<";
+  for (size_t i = 0; i < template_params.size(); ++i) {
+    if (i != 0)
+      semantic_name += ", ";
+    semantic_name += templateParameterSemanticName(template_params[i]);
+  }
+  semantic_name += ">";
+  const SgName semantic_instantiation_name(semantic_name);
 
   SgScopeStatement *scope = template_decl->get_scope();
-  if (scope == NULL)
-    scope = SageBuilder::topScopeStack();
-  ROSE_ASSERT(scope != NULL);
+  if (scope == NULL) {
+    cerr << "REX_TRANSFORM_INVARIANT[current-instantiation-scope]: template "
+            "class declaration has no exact semantic scope"
+         << endl;
+    ROSE_ABORT();
+  }
 
   SgNonrealType *current_instantiation_type =
-      SageBuilder::buildNonrealType(template_name, scope, &template_args);
-  ROSE_ASSERT(current_instantiation_type != NULL);
+      SageBuilder::buildSemanticNonrealType(
+          template_name, scope, &template_args, &semantic_instantiation_name);
+  SgNonrealDecl *current_instantiation_declaration =
+      current_instantiation_type != NULL
+          ? isSgNonrealDecl(current_instantiation_type->get_declaration())
+          : NULL;
+  if (current_instantiation_declaration == NULL ||
+      current_instantiation_declaration->get_nonreal_template_role() !=
+          SgNonrealDecl::e_nonreal_template_id ||
+      current_instantiation_declaration->get_templateDeclaration() != NULL) {
+    cerr << "REX_TRANSFORM_INVARIANT[current-instantiation-declaration]: "
+            "generated dependent type does not have one unbound typed "
+            "declaration"
+         << endl;
+    ROSE_ABORT();
+  }
+  current_instantiation_declaration->set_templateDeclaration(template_decl);
+  if (current_instantiation_declaration->get_templateDeclaration() !=
+      template_decl) {
+    cerr << "REX_TRANSFORM_INVARIANT[current-instantiation-declaration]: "
+            "generated dependent type did not publish its primary class "
+            "template"
+         << endl;
+    ROSE_ABORT();
+  }
 
-  SgType *base_type = current_instantiation_type;
-  if (member_decl != NULL && ASTtools::isConstMemFunc(member_decl))
-    base_type = SageBuilder::buildConstType(base_type);
+  return current_instantiation_type;
+}
+
+static SgType *
+buildImplicitThisPointerType(SgClassSymbol *sym,
+                             const SgMemberFunctionDeclaration *member_decl) {
+  SgMemberFunctionType *member_type =
+      member_decl != NULL ? isSgMemberFunctionType(member_decl->get_type())
+                          : NULL;
+  if (sym == NULL || member_decl == NULL || member_type == NULL) {
+    cerr << "REX_AST_INVARIANT[outliner-this-result-type]: implicit this use "
+            "requires exact class and member-function "
+            "semantic types"
+         << endl;
+    ROSE_ABORT();
+  }
+
+  SgType *base_type = buildCurrentInstantiationThisBaseType(sym);
+  if (base_type == NULL)
+    base_type = sym->get_type();
+  if (base_type == NULL) {
+    cerr << "REX_AST_INVARIANT[outliner-this-result-type]: class symbol has "
+            "no exact semantic type"
+         << endl;
+    ROSE_ABORT();
+  }
+
+  if (member_type->isConstFunc() || member_type->isVolatileFunc() ||
+      member_type->isRestrictFunc()) {
+    SgModifierType *qualified_type = new SgModifierType(base_type);
+    SgTypeModifier &modifier = qualified_type->get_typeModifier();
+    if (member_type->isConstFunc())
+      modifier.get_constVolatileModifier().setConst();
+    if (member_type->isVolatileFunc())
+      modifier.get_constVolatileModifier().setVolatile();
+    if (member_type->isRestrictFunc())
+      modifier.setRestrict();
+
+    SgModifierType *canonical =
+        SgModifierType::insertModifierTypeIntoTypeTable(qualified_type);
+    if (canonical != qualified_type)
+      delete qualified_type;
+    base_type = canonical;
+  }
 
   return SgPointerType::createType(base_type);
 }
@@ -437,7 +586,19 @@ static bool isNonStaticMemberVariableDecl(const SgInitializedName *init_name) {
   if (decl == NULL)
     return false;
 
-  if (isSgClassDefinition(decl->get_parent()) == NULL)
+  SgClassDefinition *class_scope = isSgClassDefinition(decl->get_scope());
+  SgDeclarationGroupStatement *group =
+      isSgDeclarationGroupStatement(decl->get_parent());
+  const bool direct_member = class_scope != NULL &&
+                             decl->get_parent() == class_scope &&
+                             class_scope->statementExistsInScope(decl);
+  const bool grouped_member =
+      class_scope != NULL && group != NULL &&
+      group->get_parent() == class_scope && group->get_scope() == class_scope &&
+      class_scope->statementExistsInScope(group) &&
+      std::count(group->get_declarations().begin(),
+                 group->get_declarations().end(), decl) == 1;
+  if (!direct_member && !grouped_member)
     return false;
 
   return decl->get_declarationModifier().get_storageModifier().isStatic() ==
@@ -454,6 +615,17 @@ static bool isImplicitMemberVarRef(const SgVarRefExp *var_ref) {
 
   if (!isNonStaticMemberVariableDecl(sym->get_declaration()))
     return false;
+
+  // A qualified member name denotes the member entity itself, most notably in
+  // a pointer-to-member expression such as `&C::field`.  It does not consume
+  // an implicit object.  The frontend records that written distinction
+  // directly on the reference; using only the surrounding dot/arrow shape
+  // mistakes qualified entity references for hidden `this` uses.
+  if (var_ref->get_explicit_name_qualification_length() > 0 ||
+      var_ref->get_explicit_global_qualification() ||
+      !var_ref->get_explicit_name_qualification_tokens().empty()) {
+    return false;
+  }
 
   SgNode *parent = var_ref->get_parent();
   SgBinaryOp *binary_parent = isSgBinaryOp(parent);
@@ -482,19 +654,51 @@ static void replaceImplicitMemberFunctionCalls(SgBasicBlock *b,
       continue;
 
     SgExpression *func_expr = call->get_function();
-    if (func_expr == NULL)
-      continue;
+    if (func_expr == NULL || func_expr->get_parent() != call) {
+      cerr << "REX_OUTLINER_INVARIANT[implicit-member-call-owner]: source "
+              "callee must be owned directly by its call"
+           << endl;
+      ROSE_ABORT();
+    }
+    SgType *function_type = func_expr->get_type();
+    if (function_type == NULL) {
+      cerr << "REX_OUTLINER_INVARIANT[implicit-member-call-type]: source "
+              "callee has no exact semantic type"
+           << endl;
+      ROSE_ABORT();
+    }
 
     SgVarRefExp *this_ref = SageBuilder::buildVarRefExp(sym);
     ROSE_ASSERT(this_ref != NULL);
 
-    SgArrowExp *arrow = SageBuilder::buildArrowExp(this_ref, func_expr);
+    // The strict binary-expression builder adopts detached operands.  The
+    // callee is initially owned by the call, so detach that exact edge before
+    // publishing it under the new arrow expression.
+    call->set_function(NULL);
+    func_expr->set_parent(NULL);
+    if (call->get_function() != NULL || func_expr->get_parent() != NULL) {
+      cerr << "REX_OUTLINER_INVARIANT[implicit-member-call-detach]: callee "
+              "ownership was not detached exactly once"
+           << endl;
+      ROSE_ABORT();
+    }
+
+    SgArrowExp *arrow =
+        SageBuilder::buildArrowExp(this_ref, func_expr, function_type);
     ROSE_ASSERT(arrow != NULL);
+    SageInterface::publishGeneratedSubtreeOutputOwner(arrow, call);
 
     call->set_function(arrow);
     arrow->set_parent(call);
-    func_expr->set_parent(arrow);
-    this_ref->set_parent(arrow);
+    if (call->get_function() != arrow || arrow->get_parent() != call ||
+        arrow->get_lhs_operand() != this_ref ||
+        arrow->get_rhs_operand() != func_expr ||
+        this_ref->get_parent() != arrow || func_expr->get_parent() != arrow) {
+      cerr << "REX_OUTLINER_INVARIANT[implicit-member-call-publish]: arrow "
+              "receiver/callee ownership was not published exactly"
+           << endl;
+      ROSE_ABORT();
+    }
   }
 }
 
@@ -521,8 +725,10 @@ static void replaceImplicitMemberVarRefs(SgBasicBlock *b,
         SageBuilder::buildVarRefExp(var_ref->get_symbol());
     ROSE_ASSERT(member_ref != NULL);
 
-    SgArrowExp *arrow = SageBuilder::buildArrowExp(this_ref, member_ref);
+    SgArrowExp *arrow = SageBuilder::buildArrowExp(this_ref, member_ref,
+                                                   member_ref->get_type());
     ROSE_ASSERT(arrow != NULL);
+    SageInterface::publishGeneratedSubtreeOutputOwner(arrow, var_ref);
 
     SageInterface::replaceExpression(var_ref, arrow, true);
   }
@@ -584,8 +790,8 @@ SgBasicBlock *Outliner::Preprocess::transformThisExprs(SgBasicBlock *b) {
     cout << "The input BB is:" << b << endl;
     b->get_file_info()->display();
   }
-  // Get the class symbol for the set of 'this' expressions.
-  SgClassSymbol *sym = NULL;
+  // Get the exact class/current-instantiation identity for the receiver.
+  SgSymbol *sym = NULL;
   SgType *this_pointer_type = NULL;
   const SgFunctionDefinition *func_def = ASTtools::findFirstFuncDef(b);
   const SgMemberFunctionDeclaration *member_decl =
@@ -593,16 +799,21 @@ SgBasicBlock *Outliner::Preprocess::transformThisExprs(SgBasicBlock *b) {
           ? isSgMemberFunctionDeclaration(func_def->get_declaration())
           : NULL;
   if (!this_exprs.empty()) {
-    sym = getClassSymAndVerify(this_exprs, &this_pointer_type);
+    sym = getThisSymbolAndVerify(this_exprs, &this_pointer_type);
   } else {
-    if (member_decl != NULL)
-      sym = getClassSymbolFromMemberFunctionDecl(member_decl);
+    SgClassSymbol *class_symbol =
+        getClassSymbolFromMemberFunctionDecl(member_decl);
+    this_pointer_type = buildImplicitThisPointerType(class_symbol, member_decl);
+    sym = getPublishedSymbolForThisPointerType(this_pointer_type);
   }
-  ROSE_ASSERT(sym != NULL);
-
-  if (SgType *current_instantiation_this_type =
-          buildCurrentInstantiationThisPointerType(sym, member_decl)) {
-    this_pointer_type = current_instantiation_this_type;
+  if (sym == NULL || this_pointer_type == NULL ||
+      isSgPointerType(this_pointer_type) == NULL ||
+      (isSgClassSymbol(sym) == NULL && isSgNonrealSymbol(sym) == NULL)) {
+    cerr << "REX_AST_INVARIANT[outliner-this-identity]: receiver requires an "
+            "exact class/current-instantiation symbol and matching pointer "
+            "type"
+         << endl;
+    ROSE_ABORT();
   }
   // Liao 10/27/2009
   // we have to consider the AST changes for both #pragma rose_outline and

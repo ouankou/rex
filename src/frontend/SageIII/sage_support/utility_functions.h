@@ -64,12 +64,14 @@ ROSE_DLL_API SgProject *frontendShell(const std::vector<std::string> &argv);
 // use of alternative code generation techniques (e.g. copy-based code
 // generation). int backend ( SgProject* project );
 //
-// WARNING: If a non-null unparseFormatHelp is specified then backend will
-// unconditionally delete it.  Therefore, the caller must have allocated it on
-// the heap or else strange errors will result.
+// The caller retains ownership of unparseFormatHelp and unparseDelegate.
 ROSE_DLL_API int backend(SgProject *project,
                          UnparseFormatHelp *unparseFormatHelp = NULL,
                          UnparseDelegate *unparseDelegate = NULL);
+
+// Validate every token-backed source file before the unparser can create or
+// replace an output file. Contract violations terminate immediately.
+ROSE_DLL_API void enforceTokenUnparseContract(SgProject *project);
 
 // DQ (8/24/2009): This backend calls the backend compiler using the original
 // input source file list. This is useful as a test code for testing ROSE for
@@ -88,12 +90,6 @@ backendCompilesUsingOriginalInputFile(SgProject *project,
 // required for a specific backend (vendor) compiler).
 ROSE_DLL_API int
 backendGeneratesSourceCodeButCompilesUsingOriginalInputFile(SgProject *project);
-
-// QY: new back end that performs only source-to-source translations
-//  of the original file. Furthermore, statements are copied from
-//  the original file if they are not changed
-ROSE_DLL_API int copy_backend(SgProject *project,
-                              UnparseFormatHelp *unparseFormatHelp = NULL);
 
 // int globalBackendErrorCode  = 0;
 // int backend ( const SgProject & project, int & errorCode =
@@ -311,26 +307,6 @@ extern std::map<SgSourceFile *,
                 std::map<SgNode *, TokenStreamSequenceToNodeMapping *> *>
     tokenSubsequenceMapOfMapsBySourceFile;
 
-// DQ (11/27/2013): Adding vector of nodes in the AST that defines the token
-// unparsing AST frontier. extern std::vector<FrontierNode*> frontierNodes;
-// extern std::map<SgStatement*,FrontierNode*> frontierNodes;
-extern std::map<int, std::map<SgStatement *, FrontierNode *> *>
-    frontierNodesMapOfMaps;
-
-// DQ (11/27/2013): Adding adjacency information for the nodes in the token
-// unparsing AST frontier. extern std::map<SgNode*,PreviousAndNextNodeData*>
-// previousAndNextNodeMap;
-extern std::map<int, std::map<SgNode *, PreviousAndNextNodeData *> *>
-    previousAndNextNodeMapOfMaps;
-
-// DQ (11/29/2013): Added to support access to multi-map of redundant mapping of
-// frontier IR nodes to token subsequences. extern
-// std::multimap<int,SgStatement*> redundantlyMappedTokensToStatementMultimap;
-// extern std::set<int> redundantTokenEndingsSet;
-extern std::map<int, std::multimap<int, SgStatement *> *>
-    redundantlyMappedTokensToStatementMapOfMultimaps;
-extern std::map<int, std::set<int> *> redundantTokenEndingsMapOfSets;
-
 // DQ (11/20/2015): Provide a statement to use as a key in the token sequence
 // map to get representative whitespace. extern
 // std::map<SgScopeStatement*,SgStatement*>
@@ -346,13 +322,7 @@ extern std::map<int, std::map<SgStatement *, MacroExpansion *> *>
 
 // DQ (10/29/2018): Build a map for the unparser to use to locate SgIncludeFile
 // IR nodes.
-extern std::map<std::string, SgIncludeFile *> includeFileMapForUnparsing;
 // DQ (5/27/2021): Track first/last statements per scope per source file.
-extern std::map<
-    SgSourceFile *,
-    std::map<SgScopeStatement *, std::pair<SgStatement *, SgStatement *>>>
-    firstAndLastStatementsToUnparseInScopeMapBySourceFile;
-
 // DQ (11/25/2020): These are the boolean variables that are computed in
 // the function compute_language_kind() and inlined via the
 // SageInterface::is_<language kind>_language() functions.  This fixes a

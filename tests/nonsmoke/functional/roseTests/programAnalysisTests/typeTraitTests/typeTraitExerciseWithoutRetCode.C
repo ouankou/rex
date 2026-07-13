@@ -19,6 +19,13 @@ class TypeTraitChecker : public AstSimpleProcessing {
 private:
     typedef bool (*TypeTraitFunctionP)(const SgType * const) ;
     map<string, TypeTraitFunctionP> nameToFpMap;
+    static SgType *typeOperand(SgTypeTraitBuiltinOperator *func, size_t index) {
+      ROSE_ASSERT(func != nullptr && index < func->get_args().size());
+      SgTypeExpression *operand = isSgTypeExpression(func->get_args()[index]);
+      ROSE_ASSERT(operand != nullptr && operand->get_parent() == func);
+      ROSE_ASSERT(operand->get_represented_type() != nullptr);
+      return operand->get_represented_type();
+    }
     void CallTypeTraitFunction(SgTypeTraitBuiltinOperator * func) {
         
 #if DEBUG_QUADRATIC_BEHAVIOR
@@ -38,7 +45,7 @@ private:
         
         // skip if it is a SgTemplateType
         // This allows us to process files with templates
-        SgType *t1 = isSgType(func->get_args()[0]);
+        SgType *t1 = typeOperand(func, 0);
         SgType *t = t1->stripType(SgType::STRIP_TYPEDEF_TYPE);
         
         if (isSgTemplateType(t)){
@@ -52,8 +59,7 @@ private:
         map<string, TypeTraitFunctionP> :: iterator it = nameToFpMap.find(str);
         if(it != nameToFpMap.end()){
             // Found a type trait that we understand, let us run analysis on it.
-            ROSE_ASSERT(isSgType(func->get_args()[0]));
-            bool val = it->second(isSgType(func->get_args()[0]));
+            bool val = it->second(typeOperand(func, 0));
             cout<<val;
 #if DEBUG_QUADRATIC_BEHAVIOR
             printf ("In CallTypeTraitFunction: output boolean value \n");
@@ -63,9 +69,8 @@ private:
         
         if (str == "__is_base_of"){
             // __is_base_of is special since it has a different signature.
-            ROSE_ASSERT(isSgType(func->get_args()[0]));
-            ROSE_ASSERT(isSgType(func->get_args()[1]));
-            bool val = SageInterface::IsBaseOf(isSgType(func->get_args()[0]),isSgType(func->get_args()[1]));
+            bool val = SageInterface::IsBaseOf(typeOperand(func, 0),
+                                               typeOperand(func, 1));
             cout<<val;
         }
 

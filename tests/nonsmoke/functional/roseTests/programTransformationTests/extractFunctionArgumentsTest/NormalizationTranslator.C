@@ -4,15 +4,28 @@
 
 #include <iostream>
 
+namespace {
+class InputFunctionCollector : public AstSimpleProcessing {
+public:
+  std::vector<SgFunctionDefinition *> functions;
+
+private:
+  void visit(SgNode *node) override {
+    if (SgFunctionDefinition *function = isSgFunctionDefinition(node)) {
+      functions.push_back(function);
+    }
+  }
+};
+} // namespace
+
 int main(int argc, char **argv) {
   SgProject *project = frontend(argc, argv);
   ROSE_ASSERT(project != NULL);
   AstTests::runAllTests(project);
 
-  std::vector<SgFunctionDefinition *> functions =
-      SageInterface::querySubTree<SgFunctionDefinition>(project,
-                                                        V_SgFunctionDefinition);
-  for (SgFunctionDefinition *function : functions) {
+  InputFunctionCollector collector;
+  collector.traverseInputFiles(project, preorder);
+  for (SgFunctionDefinition *function : collector.functions) {
     ExtractFunctionArguments e;
 
     // Normalize now...
@@ -22,7 +35,7 @@ int main(int argc, char **argv) {
     e.GetTemporariesIntroduced();
   }
 
-  SageInterface::fixVariableReferences(project);
+  SageInterface::rebindVariableReferencesAfterMove(project);
 
   AstTests::runAllTests(project);
   return backend(project);

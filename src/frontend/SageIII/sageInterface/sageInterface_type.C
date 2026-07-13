@@ -1,5 +1,6 @@
 #include "sage3basic.h"
 
+#include "integerWidth.h"
 #include "sageInterface.h"
 
 #include <iostream>
@@ -8,9 +9,14 @@
 
 #include <memory>
 
+#include <cstdint>
+#include <limits>
+#include <optional>
+
 #include <sstream>
 
 #include <unordered_map>
+#include <vector>
 
 using namespace std;
 
@@ -143,6 +149,778 @@ SgType *resolveConcreteTemplateType(SgTemplateType *template_type) {
   return NULL;
 }
 } // namespace
+
+namespace {
+enum class FortranIntrinsicCategory {
+  none,
+  integer,
+  unsigned_integer,
+  real,
+  complex,
+  logical,
+  character,
+};
+
+const SgType *stripFortranSelectorModifiers(const SgType *type) {
+  while (const SgModifierType *modifier = isSgModifierType(type)) {
+    type = modifier->get_base_type();
+  }
+  return type;
+}
+
+FortranIntrinsicCategory fortranIntrinsicCategory(const SgType *type) {
+  type = stripFortranSelectorModifiers(type);
+  if (isSgTypeInt(type) != nullptr || isSgTypeSignedInt(type) != nullptr) {
+    return FortranIntrinsicCategory::integer;
+  }
+  if (isSgTypeUnsignedInt(type) != nullptr) {
+    return FortranIntrinsicCategory::unsigned_integer;
+  }
+  if (isSgTypeFloat(type) != nullptr || isSgTypeDouble(type) != nullptr) {
+    return FortranIntrinsicCategory::real;
+  }
+  if (isSgTypeComplex(type) != nullptr) {
+    return FortranIntrinsicCategory::complex;
+  }
+  if (isSgTypeBool(type) != nullptr) {
+    return FortranIntrinsicCategory::logical;
+  }
+  if (isSgTypeChar(type) != nullptr || isSgTypeString(type) != nullptr) {
+    return FortranIntrinsicCategory::character;
+  }
+  return FortranIntrinsicCategory::none;
+}
+
+template <typename Unsigned>
+std::optional<std::int64_t> signedIntegerValue(Unsigned value) {
+  if (!Detail::unsignedValueFitsIn<std::int64_t>(value)) {
+    return std::nullopt;
+  }
+  return static_cast<std::int64_t>(value);
+}
+
+std::optional<std::int64_t>
+exactFortranIntegerLiteral(const SgExpression *expression) {
+  if (const SgIntVal *value = isSgIntVal(expression)) {
+    return static_cast<std::int64_t>(value->get_value());
+  }
+  if (const SgLongIntVal *value = isSgLongIntVal(expression)) {
+    return static_cast<std::int64_t>(value->get_value());
+  }
+  if (const SgLongLongIntVal *value = isSgLongLongIntVal(expression)) {
+    return static_cast<std::int64_t>(value->get_value());
+  }
+  if (const SgShortVal *value = isSgShortVal(expression)) {
+    return static_cast<std::int64_t>(value->get_value());
+  }
+  if (const SgUnsignedIntVal *value = isSgUnsignedIntVal(expression)) {
+    return signedIntegerValue(value->get_value());
+  }
+  if (const SgUnsignedLongVal *value = isSgUnsignedLongVal(expression)) {
+    return signedIntegerValue(value->get_value());
+  }
+  if (const SgUnsignedLongLongIntVal *value =
+          isSgUnsignedLongLongIntVal(expression)) {
+    return signedIntegerValue(value->get_value());
+  }
+  if (const SgUnsignedShortVal *value = isSgUnsignedShortVal(expression)) {
+    return signedIntegerValue(value->get_value());
+  }
+  return std::nullopt;
+}
+
+struct FortranProcedureLocalVariableIdentity {
+  const SgFunctionDeclaration *canonical = nullptr;
+  SgName name;
+  SgType *type = nullptr;
+};
+
+const SgFunctionDeclaration *
+exactEnclosingFortranProcedure(const SgScopeStatement *scope) {
+  const SgFunctionDeclaration *procedure = nullptr;
+  if (const SgFunctionParameterScope *parameters =
+          isSgFunctionParameterScope(scope)) {
+    procedure = isSgFunctionDeclaration(parameters->get_parent());
+  } else if (const SgBasicBlock *body = isSgBasicBlock(scope)) {
+    const SgFunctionDefinition *definition =
+        isSgFunctionDefinition(body->get_parent());
+    procedure = definition != nullptr ? definition->get_declaration() : nullptr;
+    if (procedure == nullptr && definition != nullptr) {
+      SgScopeStatement *owner =
+          definition->get_construction_physical_output_owner();
+      const SgName &name = definition->get_fortran_construction_name();
+      SgFunctionSymbol *symbol = owner != nullptr && !name.is_null()
+                                     ? owner->lookup_function_symbol(name)
+                                     : nullptr;
+      const SgProcedureHeaderStatement *canonical =
+          symbol != nullptr
+              ? isSgProcedureHeaderStatement(symbol->get_declaration())
+              : nullptr;
+      if (canonical == nullptr || canonical->get_scope() != owner ||
+          canonical->get_firstNondefiningDeclaration() != canonical ||
+          canonical->get_definition() != nullptr ||
+          canonical->get_fortran_procedure_source_form() !=
+              SgProcedureHeaderStatement::
+                  e_fortran_procedure_source_form_semantic_only) {
+        return nullptr;
+      }
+      procedure = canonical;
+    }
+  }
+  if (isSgProcedureHeaderStatement(procedure) == nullptr) {
+    return nullptr;
+  }
+  const SgFunctionDeclaration *canonical =
+      isSgFunctionDeclaration(procedure->get_firstNondefiningDeclaration());
+  return canonical != nullptr &&
+                 canonical->get_firstNondefiningDeclaration() == canonical
+             ? canonical
+             : nullptr;
+}
+
+bool sameFortranIdentifier(const SgName &left, const SgName &right) {
+  std::string leftName = left.getString();
+  std::string rightName = right.getString();
+  std::transform(leftName.begin(), leftName.end(), leftName.begin(),
+                 [](unsigned char character) {
+                   return static_cast<char>(std::tolower(character));
+                 });
+  std::transform(rightName.begin(), rightName.end(), rightName.begin(),
+                 [](unsigned char character) {
+                   return static_cast<char>(std::tolower(character));
+                 });
+  return leftName == rightName;
+}
+
+std::optional<FortranProcedureLocalVariableIdentity>
+exactFortranProcedureLocalVariableIdentity(const SgVariableSymbol *symbol) {
+  const SgInitializedName *declaration =
+      symbol != nullptr ? symbol->get_declaration() : nullptr;
+  const SgScopeStatement *scope =
+      declaration != nullptr ? declaration->get_scope() : nullptr;
+  const SgFunctionDeclaration *canonical =
+      exactEnclosingFortranProcedure(scope);
+  const SgVariableDeclaration *owner =
+      declaration != nullptr
+          ? isSgVariableDeclaration(declaration->get_parent())
+          : nullptr;
+  if (declaration == nullptr || scope == nullptr || canonical == nullptr ||
+      symbol->get_scope() != scope || declaration->get_type() == nullptr ||
+      owner == nullptr ||
+      std::find(owner->get_variables().begin(), owner->get_variables().end(),
+                declaration) == owner->get_variables().end()) {
+    return std::nullopt;
+  }
+  return FortranProcedureLocalVariableIdentity{
+      canonical, declaration->get_name(), declaration->get_type()};
+}
+
+bool exactFortranProcedureLocalVariableIdentity(const SgVariableSymbol *left,
+                                                const SgVariableSymbol *right) {
+  const std::optional<FortranProcedureLocalVariableIdentity> leftIdentity =
+      exactFortranProcedureLocalVariableIdentity(left);
+  const std::optional<FortranProcedureLocalVariableIdentity> rightIdentity =
+      exactFortranProcedureLocalVariableIdentity(right);
+  return leftIdentity && rightIdentity &&
+         leftIdentity->canonical == rightIdentity->canonical &&
+         leftIdentity->type == rightIdentity->type &&
+         sameFortranIdentifier(leftIdentity->name, rightIdentity->name);
+}
+
+bool exactFortranSemanticExpressionTypeIdentity(const SgType *left,
+                                                const SgType *right);
+
+bool exactFortranProcedureLocalFunctionIdentity(const SgFunctionSymbol *left,
+                                                const SgFunctionSymbol *right) {
+  auto identity = [](const SgFunctionSymbol *symbol) {
+    const SgFunctionDeclaration *declaration =
+        symbol != nullptr ? symbol->get_declaration() : nullptr;
+    const SgScopeStatement *scope =
+        symbol != nullptr ? symbol->get_scope() : nullptr;
+    const SgProcedureHeaderStatement *fortranDeclaration =
+        isSgProcedureHeaderStatement(declaration);
+    const SgFunctionDeclaration *context =
+        exactEnclosingFortranProcedure(scope);
+    const SgFunctionDeclaration *canonical =
+        declaration != nullptr
+            ? isSgFunctionDeclaration(
+                  declaration->get_firstNondefiningDeclaration())
+            : nullptr;
+    const auto sourceForm =
+        fortranDeclaration != nullptr
+            ? fortranDeclaration->get_fortran_procedure_source_form()
+            : SgProcedureHeaderStatement::
+                  e_fortran_procedure_source_form_unknown;
+    const SgAuxiliaryDeclarationList *auxiliary =
+        declaration != nullptr
+            ? isSgAuxiliaryDeclarationList(declaration->get_parent())
+            : nullptr;
+    const SgInterfaceBody *interfaceBody =
+        declaration != nullptr ? isSgInterfaceBody(declaration->get_parent())
+                               : nullptr;
+    const SgInterfaceStatement *interfaceStatement =
+        interfaceBody != nullptr
+            ? isSgInterfaceStatement(interfaceBody->get_parent())
+            : nullptr;
+    const bool exactSemanticOnlyOwner =
+        sourceForm == SgProcedureHeaderStatement::
+                          e_fortran_procedure_source_form_semantic_only &&
+        auxiliary != nullptr && auxiliary->get_parent() == scope &&
+        scope != nullptr && scope->get_auxiliary_declarations() == auxiliary;
+    const bool exactInterfaceOwner =
+        sourceForm == SgProcedureHeaderStatement::
+                          e_fortran_procedure_source_form_header &&
+        interfaceBody != nullptr && interfaceStatement != nullptr &&
+        interfaceBody->get_functionDeclaration() == declaration &&
+        interfaceStatement->get_parent() == scope;
+    if (declaration == nullptr || scope == nullptr ||
+        fortranDeclaration == nullptr || context == nullptr ||
+        declaration->get_scope() != scope ||
+        declaration->get_type() == nullptr || canonical != declaration ||
+        symbol->get_scope() != scope ||
+        (!exactSemanticOnlyOwner && !exactInterfaceOwner)) {
+      return std::tuple<
+          const SgFunctionDeclaration *, SgName, SgFunctionType *,
+          SgProcedureHeaderStatement::fortran_procedure_source_form_enum>{
+          nullptr, SgName(), nullptr,
+          SgProcedureHeaderStatement::e_fortran_procedure_source_form_unknown};
+    }
+    return std::tuple<
+        const SgFunctionDeclaration *, SgName, SgFunctionType *,
+        SgProcedureHeaderStatement::fortran_procedure_source_form_enum>{
+        context, declaration->get_name(), declaration->get_type(), sourceForm};
+  };
+
+  const auto [leftContext, leftName, leftType, leftForm] = identity(left);
+  const auto [rightContext, rightName, rightType, rightForm] = identity(right);
+  return leftContext != nullptr && leftContext == rightContext &&
+         leftType != nullptr &&
+         exactFortranSemanticExpressionTypeIdentity(leftType, rightType) &&
+         (leftForm == SgProcedureHeaderStatement::
+                          e_fortran_procedure_source_form_semantic_only ||
+          rightForm == SgProcedureHeaderStatement::
+                           e_fortran_procedure_source_form_semantic_only) &&
+         sameFortranIdentifier(leftName, rightName);
+}
+
+bool exactFortranSemanticExpressionTypeIdentity(const SgType *left,
+                                                const SgType *right) {
+  if (left == nullptr || right == nullptr) {
+    return false;
+  }
+  if (left == right) {
+    return true;
+  }
+
+  const SgFunctionType *leftFunction = isSgFunctionType(left);
+  const SgFunctionType *rightFunction = isSgFunctionType(right);
+  if (leftFunction != nullptr || rightFunction != nullptr) {
+    if (leftFunction == nullptr || rightFunction == nullptr ||
+        leftFunction->get_fortran_source_syntax() ||
+        rightFunction->get_fortran_source_syntax() ||
+        leftFunction->get_has_ellipses() != rightFunction->get_has_ellipses() ||
+        leftFunction->get_argument_list() == nullptr ||
+        rightFunction->get_argument_list() == nullptr ||
+        leftFunction->get_argument_list()->get_parent() != leftFunction ||
+        rightFunction->get_argument_list()->get_parent() != rightFunction ||
+        leftFunction->get_arguments().size() !=
+            rightFunction->get_arguments().size() ||
+        !exactFortranSemanticExpressionTypeIdentity(
+            leftFunction->get_return_type(),
+            rightFunction->get_return_type())) {
+      return false;
+    }
+    for (std::size_t index = 0; index < leftFunction->get_arguments().size();
+         ++index) {
+      if (!exactFortranSemanticExpressionTypeIdentity(
+              leftFunction->get_arguments()[index],
+              rightFunction->get_arguments()[index])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // Ranked expression results deliberately own fresh shape-only array types:
+  // their dimension lists are AST children and therefore cannot be shared by
+  // a global canonical type.  Compare only that exact semantic schema here;
+  // declaration arrays, source-syntax arrays, explicit bounds, and coarrays
+  // remain pointer-distinct and do not match through this path.
+  const SgArrayType *leftArray = isSgArrayType(left);
+  const SgArrayType *rightArray = isSgArrayType(right);
+  if (leftArray == nullptr || rightArray == nullptr ||
+      leftArray->get_fortran_source_syntax() ||
+      rightArray->get_fortran_source_syntax() || leftArray->get_isCoArray() ||
+      rightArray->get_isCoArray() || leftArray->get_rank() <= 0 ||
+      leftArray->get_rank() != rightArray->get_rank() ||
+      leftArray->get_is_variable_length_array() !=
+          rightArray->get_is_variable_length_array() ||
+      leftArray->get_index() != nullptr || rightArray->get_index() != nullptr) {
+    return false;
+  }
+
+  const SgExprListExp *leftDimensions = leftArray->get_dim_info();
+  const SgExprListExp *rightDimensions = rightArray->get_dim_info();
+  if (leftDimensions == nullptr || rightDimensions == nullptr ||
+      leftDimensions->get_parent() != leftArray ||
+      rightDimensions->get_parent() != rightArray ||
+      leftDimensions->get_expressions().size() !=
+          static_cast<std::size_t>(leftArray->get_rank()) ||
+      rightDimensions->get_expressions().size() !=
+          static_cast<std::size_t>(rightArray->get_rank())) {
+    return false;
+  }
+  for (const SgExprListExp *dimensions : {leftDimensions, rightDimensions}) {
+    for (const SgExpression *dimension : dimensions->get_expressions()) {
+      if (isSgColonShapeExp(dimension) == nullptr ||
+          dimension->get_parent() != dimensions ||
+          dimension->get_fortran_integer_constant_value_is_available() ||
+          dimension->get_fortran_integer_constant_value() != 0) {
+        return false;
+      }
+    }
+  }
+  return exactFortranSemanticExpressionTypeIdentity(
+      leftArray->get_base_type(), rightArray->get_base_type());
+}
+
+bool exactFortranDynamicLengthExpression(const SgExpression *source,
+                                         const SgExpression *semantic) {
+  if (source == nullptr || semantic == nullptr ||
+      source->variantT() != semantic->variantT() ||
+      source->get_fortran_integer_constant_value_is_available() !=
+          semantic->get_fortran_integer_constant_value_is_available() ||
+      source->get_fortran_integer_constant_value() !=
+          semantic->get_fortran_integer_constant_value()) {
+    return false;
+  }
+  const bool sourceHasSemanticType = source->has_semantic_value_type();
+  const bool semanticHasSemanticType = semantic->has_semantic_value_type();
+  if (sourceHasSemanticType != semanticHasSemanticType) {
+    return false;
+  }
+  if (sourceHasSemanticType) {
+    SgType *sourceType = source->get_type();
+    SgType *semanticType = semantic->get_type();
+    if (sourceType == nullptr || semanticType == nullptr ||
+        !exactFortranSemanticExpressionTypeIdentity(sourceType, semanticType)) {
+      return false;
+    }
+  }
+
+  const std::optional<std::int64_t> sourceLiteral =
+      exactFortranIntegerLiteral(source);
+  const std::optional<std::int64_t> semanticLiteral =
+      exactFortranIntegerLiteral(semantic);
+  if (sourceLiteral || semanticLiteral) {
+    return sourceLiteral && semanticLiteral &&
+           *sourceLiteral == *semanticLiteral;
+  }
+  if (const SgStringVal *sourceString = isSgStringVal(source)) {
+    const SgStringVal *semanticString = isSgStringVal(semantic);
+    return semanticString != nullptr &&
+           sourceString->get_value() == semanticString->get_value() &&
+           sourceString->get_literal_encoding() ==
+               semanticString->get_literal_encoding() &&
+           sourceString->get_cxx_unevaluated() ==
+               semanticString->get_cxx_unevaluated() &&
+           sourceString->get_stringDelimiter() ==
+               semanticString->get_stringDelimiter() &&
+           sourceString->get_isRawString() ==
+               semanticString->get_isRawString() &&
+           sourceString->get_raw_string_delimiter() ==
+               semanticString->get_raw_string_delimiter() &&
+           sourceString->get_raw_string_payload() ==
+               semanticString->get_raw_string_payload();
+  }
+  if (const SgVarRefExp *sourceReference = isSgVarRefExp(source)) {
+    const SgVarRefExp *semanticReference = isSgVarRefExp(semantic);
+    return semanticReference != nullptr &&
+           sourceReference->get_symbol() != nullptr &&
+           (sourceReference->get_symbol() == semanticReference->get_symbol() ||
+            exactFortranProcedureLocalVariableIdentity(
+                sourceReference->get_symbol(),
+                semanticReference->get_symbol()));
+  }
+  if (const SgFunctionRefExp *sourceReference = isSgFunctionRefExp(source)) {
+    const SgFunctionRefExp *semanticReference = isSgFunctionRefExp(semantic);
+    return semanticReference != nullptr &&
+           sourceReference->get_symbol() != nullptr &&
+           (sourceReference->get_symbol() == semanticReference->get_symbol() ||
+            exactFortranProcedureLocalFunctionIdentity(
+                sourceReference->get_symbol(),
+                semanticReference->get_symbol()));
+  }
+  if (const SgMemberFunctionRefExp *sourceReference =
+          isSgMemberFunctionRefExp(source)) {
+    const SgMemberFunctionRefExp *semanticReference =
+        isSgMemberFunctionRefExp(semantic);
+    return semanticReference != nullptr &&
+           sourceReference->get_symbol() != nullptr &&
+           sourceReference->get_symbol() == semanticReference->get_symbol();
+  }
+  if (const SgActualArgumentExpression *sourceArgument =
+          isSgActualArgumentExpression(source)) {
+    const SgActualArgumentExpression *semanticArgument =
+        isSgActualArgumentExpression(semantic);
+    if (semanticArgument == nullptr ||
+        sourceArgument->get_argument_name() !=
+            semanticArgument->get_argument_name()) {
+      return false;
+    }
+  }
+
+  const std::vector<SgNode *> sourceChildren =
+      const_cast<SgExpression *>(source)->get_traversalSuccessorContainer();
+  const std::vector<SgNode *> semanticChildren =
+      const_cast<SgExpression *>(semantic)->get_traversalSuccessorContainer();
+  if (sourceChildren.empty() || semanticChildren.empty()) {
+    const SgExprListExp *sourceList = isSgExprListExp(source);
+    const SgExprListExp *semanticList = isSgExprListExp(semantic);
+    return sourceChildren.empty() && semanticChildren.empty() &&
+           sourceList != nullptr && semanticList != nullptr &&
+           sourceList->get_expressions().empty() &&
+           semanticList->get_expressions().empty() &&
+           sourceList->get_parent() != nullptr &&
+           semanticList->get_parent() != nullptr;
+  }
+  if (sourceChildren.size() != semanticChildren.size()) {
+    return false;
+  }
+  for (std::size_t index = 0; index < sourceChildren.size(); ++index) {
+    const SgExpression *sourceChild = isSgExpression(sourceChildren[index]);
+    const SgExpression *semanticChild = isSgExpression(semanticChildren[index]);
+    if ((sourceChild == nullptr) != (semanticChild == nullptr) ||
+        (sourceChild != nullptr &&
+         !exactFortranDynamicLengthExpression(sourceChild, semanticChild))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool sourceSelectorMetadataIsExact(const SgExpression *expression) {
+  if (expression == nullptr ||
+      !expression->get_fortran_integer_constant_value_is_available()) {
+    return false;
+  }
+  const std::int64_t folded = expression->get_fortran_integer_constant_value();
+  if (isSgValueExp(expression) != nullptr) {
+    const std::optional<std::int64_t> literal =
+        exactFortranIntegerLiteral(expression);
+    return literal && *literal == folded;
+  }
+  return true;
+}
+
+bool selectorHasNoFoldedMetadata(const SgExpression *expression) {
+  return expression != nullptr &&
+         !expression->get_fortran_integer_constant_value_is_available() &&
+         expression->get_fortran_integer_constant_value() == 0;
+}
+
+bool typeHasNoFixedFortranKindMetadata(const SgType *type) {
+  return type != nullptr &&
+         !type->get_fortran_fixed_kind_value_is_available() &&
+         type->get_fortran_fixed_kind_value() == 0;
+}
+
+bool isFixedDoubleSourceType(const SgType *type) {
+  type = stripFortranSelectorModifiers(type);
+  if (isSgTypeDouble(type) != nullptr) {
+    return true;
+  }
+  const SgTypeComplex *complex = isSgTypeComplex(type);
+  return complex != nullptr && isSgTypeDouble(stripFortranSelectorModifiers(
+                                   complex->get_base_type())) != nullptr;
+}
+
+bool fortranKindMatches(const SgType *source, const SgType *semantic,
+                        FortranIntrinsicCategory category) {
+  source = stripFortranSelectorModifiers(source);
+  semantic = stripFortranSelectorModifiers(semantic);
+  if (source == nullptr || semantic == nullptr ||
+      semantic->get_hasTypeKindStar() ||
+      !typeHasNoFixedFortranKindMetadata(semantic)) {
+    return false;
+  }
+
+  SgExpression *semanticKind = semantic->get_type_kind();
+  if (semanticKind == nullptr) {
+    if (const SgTypeComplex *complex = isSgTypeComplex(semantic)) {
+      const SgType *component =
+          stripFortranSelectorModifiers(complex->get_base_type());
+      semanticKind =
+          component != nullptr ? component->get_type_kind() : nullptr;
+    }
+  }
+  SgExpression *sourceKind = source->get_type_kind();
+  if (semanticKind == nullptr) {
+    return sourceKind == nullptr && !source->get_hasTypeKindStar() &&
+           typeHasNoFixedFortranKindMetadata(source);
+  }
+  const std::optional<std::int64_t> semanticValue =
+      exactFortranIntegerLiteral(semanticKind);
+  if (!semanticValue || *semanticValue <= 0 ||
+      !selectorHasNoFoldedMetadata(semanticKind)) {
+    return false;
+  }
+
+  const bool fixedDouble = isFixedDoubleSourceType(source);
+  if (fixedDouble) {
+    return sourceKind == nullptr && !source->get_hasTypeKindStar() &&
+           source->get_fortran_fixed_kind_value_is_available() &&
+           source->get_fortran_fixed_kind_value() > 0 &&
+           source->get_fortran_fixed_kind_value() == *semanticValue;
+  }
+  if (!typeHasNoFixedFortranKindMetadata(source)) {
+    return false;
+  }
+  if (sourceKind == nullptr) {
+    return !source->get_hasTypeKindStar();
+  }
+  if (!sourceSelectorMetadataIsExact(sourceKind)) {
+    return false;
+  }
+
+  std::int64_t resolvedSourceValue =
+      sourceKind->get_fortran_integer_constant_value();
+  if (source->get_hasTypeKindStar()) {
+    if (resolvedSourceValue <= 0) {
+      return false;
+    }
+    // Legacy COMPLEX*n spells the total complex storage size, while Flang's
+    // semantic KIND is the size of one real component.
+    if (category == FortranIntrinsicCategory::complex) {
+      if ((resolvedSourceValue % 2) != 0) {
+        return false;
+      }
+      resolvedSourceValue /= 2;
+    }
+  } else if (resolvedSourceValue <= 0) {
+    return false;
+  }
+  return resolvedSourceValue == *semanticValue;
+}
+
+bool fortranCharacterLengthMatches(const SgType *source, const SgType *semantic,
+                                   bool allowDynamicExpressionResult) {
+  source = stripFortranSelectorModifiers(source);
+  semantic = stripFortranSelectorModifiers(semantic);
+  const SgTypeString *semanticString = isSgTypeString(semantic);
+  if (semanticString == nullptr ||
+      semanticString->get_fortran_dynamic_length_pending()) {
+    return false;
+  }
+  if (semanticString->get_fortran_dynamic_result_length()) {
+    const SgTypeString *sourceString = isSgTypeString(source);
+    SgExpression *sourceLength = sourceString != nullptr
+                                     ? sourceString->get_lengthExpression()
+                                     : nullptr;
+    return allowDynamicExpressionResult &&
+           !semanticString->get_fortran_source_syntax() &&
+           semanticString->get_lengthExpression() == nullptr &&
+           sourceString != nullptr &&
+           sourceString->get_fortran_source_syntax() &&
+           !sourceString->get_fortran_dynamic_length_pending() &&
+           !sourceString->get_fortran_dynamic_result_length() &&
+           sourceLength != nullptr &&
+           sourceLength->get_parent() == sourceString &&
+           isSgValueExp(sourceLength) == nullptr &&
+           isSgAsteriskShapeExp(sourceLength) == nullptr &&
+           isSgColonShapeExp(sourceLength) == nullptr &&
+           !sourceLength->get_fortran_integer_constant_value_is_available() &&
+           sourceLength->get_fortran_integer_constant_value() == 0;
+  }
+  SgExpression *semanticLength = semanticString->get_lengthExpression();
+  if (semanticLength == nullptr) {
+    return false;
+  }
+
+  SgExpression *sourceLength = nullptr;
+  if (const SgTypeString *sourceString = isSgTypeString(source)) {
+    sourceLength = sourceString->get_lengthExpression();
+  } else if (isSgTypeChar(source) == nullptr) {
+    return false;
+  }
+
+  if (sourceLength == nullptr) {
+    const std::optional<std::int64_t> semanticValue =
+        exactFortranIntegerLiteral(semanticLength);
+    return semanticValue && *semanticValue == 1 &&
+           selectorHasNoFoldedMetadata(semanticLength);
+  }
+  if (isSgAsteriskShapeExp(sourceLength) != nullptr ||
+      isSgColonShapeExp(sourceLength) != nullptr) {
+    return selectorHasNoFoldedMetadata(sourceLength) &&
+           selectorHasNoFoldedMetadata(semanticLength) &&
+           sourceLength->variantT() == semanticLength->variantT();
+  }
+  const std::optional<std::int64_t> semanticValue =
+      exactFortranIntegerLiteral(semanticLength);
+  if (sourceLength->get_fortran_integer_constant_value_is_available()) {
+    return sourceSelectorMetadataIsExact(sourceLength) && semanticValue &&
+           *semanticValue >= 0 && selectorHasNoFoldedMetadata(semanticLength) &&
+           sourceLength->get_fortran_integer_constant_value() == *semanticValue;
+  }
+  return sourceLength->get_fortran_integer_constant_value() == 0 &&
+         !semanticValue && selectorHasNoFoldedMetadata(semanticLength) &&
+         exactFortranDynamicLengthExpression(sourceLength, semanticLength);
+}
+
+bool fortranSourceTypeMatchesSemanticTypeImpl(
+    const SgType *source, const SgType *semantic,
+    bool allowDynamicExpressionResult) {
+  if (source == nullptr || semantic == nullptr) {
+    return false;
+  }
+
+  const SgModifierType *sourceModifier = isSgModifierType(source);
+  const SgModifierType *semanticModifier = isSgModifierType(semantic);
+  if (sourceModifier != nullptr || semanticModifier != nullptr) {
+    // PARAMETER is a declaration attribute in Fortran, not part of the
+    // declaration-type-spec source surface.  Its semantic object type carries
+    // one exact const wrapper while the independently owned source type starts
+    // at the written type-spec.  No other unmatched modifier is admissible.
+    if (sourceModifier == nullptr && semanticModifier != nullptr &&
+        !semanticModifier->get_fortran_source_syntax()) {
+      SgTypeModifier exactParameterModifier;
+      exactParameterModifier.get_constVolatileModifier().setConst();
+      if (semanticModifier->get_typeModifier() == exactParameterModifier) {
+        return fortranSourceTypeMatchesSemanticTypeImpl(
+            source, semanticModifier->get_base_type(),
+            allowDynamicExpressionResult);
+      }
+    }
+    return sourceModifier != nullptr && semanticModifier != nullptr &&
+           sourceModifier->get_fortran_source_syntax() &&
+           !semanticModifier->get_fortran_source_syntax() &&
+           sourceModifier->get_typeModifier() ==
+               semanticModifier->get_typeModifier() &&
+           fortranSourceTypeMatchesSemanticTypeImpl(
+               sourceModifier->get_base_type(),
+               semanticModifier->get_base_type(), allowDynamicExpressionResult);
+  }
+
+  const SgPointerType *sourcePointer = isSgPointerType(source);
+  const SgPointerType *semanticPointer = isSgPointerType(semantic);
+  if (sourcePointer != nullptr || semanticPointer != nullptr) {
+    return sourcePointer != nullptr && semanticPointer != nullptr &&
+           sourcePointer->get_fortran_source_syntax() &&
+           !semanticPointer->get_fortran_source_syntax() &&
+           fortranSourceTypeMatchesSemanticTypeImpl(
+               sourcePointer->get_base_type(), semanticPointer->get_base_type(),
+               allowDynamicExpressionResult);
+  }
+
+  const SgArrayType *sourceArray = isSgArrayType(source);
+  const SgArrayType *semanticArray = isSgArrayType(semantic);
+  if (sourceArray != nullptr || semanticArray != nullptr) {
+    if (sourceArray == nullptr || semanticArray == nullptr ||
+        !sourceArray->get_fortran_source_syntax() ||
+        semanticArray->get_fortran_source_syntax() ||
+        sourceArray->get_isCoArray() != semanticArray->get_isCoArray() ||
+        sourceArray->get_rank() != semanticArray->get_rank() ||
+        sourceArray->get_is_variable_length_array() !=
+            semanticArray->get_is_variable_length_array()) {
+      return false;
+    }
+    const SgExprListExp *sourceDimensions = sourceArray->get_dim_info();
+    const SgExprListExp *semanticDimensions = semanticArray->get_dim_info();
+    if (sourceDimensions == nullptr || semanticDimensions == nullptr ||
+        sourceDimensions->get_parent() != sourceArray ||
+        semanticDimensions->get_parent() != semanticArray ||
+        sourceDimensions->get_expressions().size() != sourceArray->get_rank() ||
+        semanticDimensions->get_expressions().size() !=
+            semanticArray->get_rank()) {
+      return false;
+    }
+    return fortranSourceTypeMatchesSemanticTypeImpl(
+        sourceArray->get_base_type(), semanticArray->get_base_type(),
+        allowDynamicExpressionResult);
+  }
+
+  const bool sourceAssumed = isSgTypeFortranAssumed(source) != nullptr;
+  const bool semanticAssumed = isSgTypeFortranAssumed(semantic) != nullptr;
+  const bool sourceUnlimited =
+      isSgTypeFortranUnlimitedPolymorphic(source) != nullptr;
+  const bool semanticUnlimited =
+      isSgTypeFortranUnlimitedPolymorphic(semantic) != nullptr;
+  if (sourceAssumed || semanticAssumed || sourceUnlimited ||
+      semanticUnlimited) {
+    return source->get_fortran_source_syntax() &&
+           !semantic->get_fortran_source_syntax() &&
+           sourceAssumed == semanticAssumed &&
+           sourceUnlimited == semanticUnlimited;
+  }
+
+  const FortranIntrinsicCategory sourceCategory =
+      fortranIntrinsicCategory(source);
+  const FortranIntrinsicCategory semanticCategory =
+      fortranIntrinsicCategory(semantic);
+  if (sourceCategory != FortranIntrinsicCategory::none ||
+      semanticCategory != FortranIntrinsicCategory::none) {
+    if (sourceCategory == FortranIntrinsicCategory::none ||
+        sourceCategory != semanticCategory ||
+        !source->get_fortran_source_syntax() ||
+        semantic->get_fortran_source_syntax() ||
+        !fortranKindMatches(source, semantic, sourceCategory)) {
+      return false;
+    }
+    return sourceCategory != FortranIntrinsicCategory::character ||
+           fortranCharacterLengthMatches(source, semantic,
+                                         allowDynamicExpressionResult);
+  }
+
+  // A Fortran PROCEDURE declaration stores its exact source interface on the
+  // initialized name.  Its function type is therefore the canonical semantic
+  // signature on both sides of the source/semantic type surface; only wrappers
+  // such as POINTER are distinct source-syntax nodes.
+  if (isSgFunctionType(source) != nullptr ||
+      isSgFunctionType(semantic) != nullptr) {
+    return source == semantic && isSgFunctionType(source) != nullptr &&
+           isSgFunctionType(semantic) != nullptr;
+  }
+
+  // Derived-type syntax and semantic types deliberately share one canonical
+  // declaration/type identity.  This is the only source/semantic category in
+  // which pointer identity is the typed contract; no structural-equivalence
+  // fallback is permitted for an unclassified type.
+  return isSgClassType(source) != nullptr &&
+         isSgClassType(semantic) != nullptr && source == semantic;
+}
+} // namespace
+
+bool fortranSourceTypeMatchesSemanticType(const SgType *source,
+                                          const SgType *semantic) {
+  return fortranSourceTypeMatchesSemanticTypeImpl(source, semantic, false);
+}
+
+bool fortranSourceTypeMatchesSemanticExpressionType(const SgType *source,
+                                                    const SgType *semantic) {
+  return fortranSourceTypeMatchesSemanticTypeImpl(source, semantic, true);
+}
+
+bool fortranSourceFunctionResultMatchesSemanticResult(
+    const SgFunctionType *source, const SgFunctionType *semantic) {
+  if (source == nullptr || semantic == nullptr ||
+      !source->get_fortran_source_syntax() ||
+      semantic->get_fortran_source_syntax() ||
+      !fortranSourceTypeMatchesSemanticType(source->get_return_type(),
+                                            semantic->get_return_type()) ||
+      source->get_arguments().size() != semantic->get_arguments().size()) {
+    return false;
+  }
+  for (std::size_t index = 0; index < source->get_arguments().size(); ++index) {
+    const SgType *sourceArgument = source->get_arguments()[index];
+    const SgType *semanticArgument = semantic->get_arguments()[index];
+    if (sourceArgument == nullptr || semanticArgument == nullptr ||
+        sourceArgument != semanticArgument) {
+      return false;
+    }
+  }
+  return true;
+}
 
 // copied from TransformationSupport::getTypeName
 std::string getTypeName(SgType *type) {
@@ -301,8 +1079,23 @@ std::string getTypeName(SgType *type) {
   case V_SgTypeWchar:
     typeName = "wchar";
     break;
+  case V_SgTypeChar8:
+    typeName = "char8_t";
+    break;
+  case V_SgTypeChar16:
+    typeName = "char16_t";
+    break;
+  case V_SgTypeChar32:
+    typeName = "char32_t";
+    break;
   case V_SgTypeDefault:
     typeName = "default";
+    break;
+  case V_SgTypeFortranAssumed:
+    typeName = "type(*)";
+    break;
+  case V_SgTypeFortranUnlimitedPolymorphic:
+    typeName = "class(*)";
     break;
   default: {
     printf("default reached in switch within SageInterface::getTypeName "
@@ -853,8 +1646,7 @@ bool isDefaultConstructible(SgType *type) {
   case V_SgTypeVoid:
   case V_SgTypeWchar:
 
-    // DQ (2/16/2018): Adding support for char16_t and char32_t (C99 and C++11
-    // specific types).
+  case V_SgTypeChar8:
   case V_SgTypeChar16:
   case V_SgTypeChar32:
 
@@ -1022,8 +1814,7 @@ bool isCopyConstructible(SgType *type) {
   case V_SgTypeVoid:
   case V_SgTypeWchar:
 
-    // DQ (2/16/2018): Adding support for char16_t and char32_t (C99 and C++11
-    // specific types).
+  case V_SgTypeChar8:
   case V_SgTypeChar16:
   case V_SgTypeChar32:
 
@@ -1167,8 +1958,7 @@ bool isAssignable(SgType *type) {
   case V_SgTypeVoid:
   case V_SgTypeWchar:
 
-    // DQ (2/16/2018): Adding support for char16_t and char32_t (C99 and C++11
-    // specific types).
+  case V_SgTypeChar8:
   case V_SgTypeChar16:
   case V_SgTypeChar32:
 
@@ -1222,8 +2012,7 @@ bool hasTrivialDestructor(SgType *t) {
   case V_SgTypeVoid:
   case V_SgTypeWchar:
 
-    // DQ (2/16/2018): Adding support for char16_t and char32_t (C99 and C++11
-    // specific types).
+  case V_SgTypeChar8:
   case V_SgTypeChar16:
   case V_SgTypeChar32:
 
@@ -1343,8 +2132,10 @@ string mangleScalarType(SgType *type) {
     result += "w";
     break;
 
-    // DQ (2/16/2018): Adding support for char16_t and char32_t (C99 and C++11
-    // specific types).
+  case V_SgTypeChar8:
+    result += "c8";
+    break;
+
   case V_SgTypeChar16:
     result += "c16";
     break;
@@ -1515,7 +2306,7 @@ SgType *getAssociatedTypeFromFunctionTypeList(
   SgFunctionType *functionType = isSgFunctionType(tmp_functionType);
   ROSE_ASSERT(functionType != NULL);
 
-  SgTypePtrList &typeList = functionType->get_arguments();
+  const SgTypePtrList &typeList = functionType->get_arguments();
 
   SgType *indexed_function_parameter_type = typeList[index];
   ROSE_ASSERT(indexed_function_parameter_type != NULL);

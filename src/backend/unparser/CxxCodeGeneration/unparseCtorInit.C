@@ -1,173 +1,33 @@
 
-#include <algorithm>
-#include <cctype>
-
 #include "unparser.h"
 
 #include "sage3basic.h"
 
 #include "rose_config.h"
 
-#define DEBUG__isAssociatedWithCxx11_initializationList 0
 #define DEBUG__trimCtorNameQual 0
 #define DEBUG__unparseCtorInit 0
 
-namespace {
-bool isCtorIdentifierWhitespace(char ch) {
-  return std::isspace(static_cast<unsigned char>(ch)) != 0;
-}
-
-bool shouldOmitCtorIdentifierWhitespace(char prev, char next) {
-  if (prev == '\0' || next == '\0') {
-    return true;
-  }
-
-  // Preserve `< ::name>` so compaction does not form the `<::` token.
-  if (prev == '<' && next == ':') {
-    return false;
-  }
-
-  return prev == '<' || next == '>' || next == ',' ||
-         (prev == '>' && next == '>');
-}
-
-std::string compactCtorTemplateIdentifierSpacing(const std::string &text) {
-  std::string compacted;
-  compacted.reserve(text.size());
-
-  for (auto segment_begin = text.begin(); segment_begin != text.end();) {
-    const auto whitespace_begin =
-        std::find_if(segment_begin, text.end(),
-                     [](char ch) { return isCtorIdentifierWhitespace(ch); });
-    compacted.append(segment_begin, whitespace_begin);
-    if (whitespace_begin == text.end()) {
-      break;
-    }
-
-    const auto next_segment =
-        std::find_if_not(whitespace_begin, text.end(), [](char ch) {
-          return isCtorIdentifierWhitespace(ch);
-        });
-    const char prev = compacted.empty() ? '\0' : compacted.back();
-    const char next = next_segment == text.end() ? '\0' : *next_segment;
-
-    if (!shouldOmitCtorIdentifierWhitespace(prev, next) && !compacted.empty() &&
-        !isCtorIdentifierWhitespace(compacted.back())) {
-      compacted += ' ';
-    }
-
-    segment_begin = next_segment;
-  }
-
-  return Rose::StringUtility::trim(compacted);
-}
-
-std::string ctorTypedefName(SgTypedefType *typedef_type) {
-  if (typedef_type == nullptr) {
-    return std::string();
-  }
-
-  return compactCtorTemplateIdentifierSpacing(
-      typedef_type->get_name().getString());
-}
-
-std::string qualifiedCtorTypedefName(SgTypedefType *typedef_type) {
-  if (typedef_type == nullptr) {
-    return std::string();
-  }
-
-  return compactCtorTemplateIdentifierSpacing(
-      typedef_type->get_qualified_name().getString());
-}
-
-bool ctorTypeNeedsCompactTemplateSpacing(SgType *type) {
-  if (type == nullptr) {
-    return false;
-  }
-
-  if (SgModifierType *modifier_type = isSgModifierType(type)) {
-    return ctorTypeNeedsCompactTemplateSpacing(modifier_type->get_base_type());
-  }
-  if (SgReferenceType *reference_type = isSgReferenceType(type)) {
-    return ctorTypeNeedsCompactTemplateSpacing(reference_type->get_base_type());
-  }
-  if (SgRvalueReferenceType *reference_type = isSgRvalueReferenceType(type)) {
-    return ctorTypeNeedsCompactTemplateSpacing(reference_type->get_base_type());
-  }
-  if (SgPointerType *pointer_type = isSgPointerType(type)) {
-    return ctorTypeNeedsCompactTemplateSpacing(pointer_type->get_base_type());
-  }
-  if (SgArrayType *array_type = isSgArrayType(type)) {
-    return ctorTypeNeedsCompactTemplateSpacing(array_type->get_base_type());
-  }
-  if (SgTypedefType *typedef_type = isSgTypedefType(type)) {
-    return typedef_type->get_name().getString().find('<') !=
-               std::string::npos ||
-           ctorTypeNeedsCompactTemplateSpacing(typedef_type->get_base_type());
-  }
-  if (isSgTemplateType(type) != nullptr) {
-    return true;
-  }
-  if (SgNonrealType *nonreal_type = isSgNonrealType(type)) {
-    const SgNonrealDecl *decl =
-        isSgNonrealDecl(nonreal_type->get_declaration());
-    return decl != nullptr &&
-           (!decl->get_tpl_args().empty() || decl->get_is_nonreal_template());
-  }
-  if (SgClassType *class_type = isSgClassType(type)) {
-    return isSgTemplateInstantiationDecl(class_type->get_declaration()) !=
-           nullptr;
-  }
-
-  return false;
-}
-} // namespace
-
-static bool
-isAssociatedWithCxx11_initializationList(SgConstructorInitializer *con_init) {
-  bool is_cxx11_initialization_list = false;
-#if DEBUG__isAssociatedWithCxx11_initializationList
-  printf("Enter isAssociatedWithCxx11_initializationList()\n");
-#endif
-  if (con_init != NULL) {
-    SgMemberFunctionDeclaration *mfdecl = con_init->get_declaration();
-#if DEBUG__isAssociatedWithCxx11_initializationList
-    printf("  mfdecl = %p = %s\n", mfdecl,
-           mfdecl ? mfdecl->class_name().c_str() : "");
-#endif
-    if (mfdecl != NULL) {
-      std::string name = mfdecl->get_name();
-#if DEBUG__isAssociatedWithCxx11_initializationList
-      printf("    ->name = %s\n", name.c_str());
-#endif
-      if (name == "initializer_list") {
-        is_cxx11_initialization_list = true;
-      }
-    }
-  }
-
-#if DEBUG__isAssociatedWithCxx11_initializationList
-  printf("  is_cxx11_initialization_list = %s\n",
-         is_cxx11_initialization_list ? "true" : "false");
-  printf("Leave isAssociatedWithCxx11_initializationList()\n");
-#endif
-  return is_cxx11_initialization_list;
-}
-
 void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
                                        SgUnparse_Info &info) {
+  SgConstructorInitializer *con_init = isSgConstructorInitializer(expr);
+  ASSERT_not_null(con_init);
 #if DEBUG__unparseCtorInit
+  SgType *debug_type = con_init->get_expression_type();
   printf("Enter Unparse_ExprStmt::unparseCtorInit():\n");
   printf("  info.inAggregateInitializer() = %s \n",
          info.inAggregateInitializer() ? "true" : "false");
   printf("  expr = %p = %s\n", expr, expr->class_name().c_str());
-  printf("    ->get_type() = %p = %s\n", expr->get_type(),
-         expr->get_type()->class_name().c_str());
+  printf("    ->get_expression_type() = %p = %s\n", debug_type,
+         debug_type != nullptr ? debug_type->class_name().c_str() : "<null>");
 #endif
-
-  SgConstructorInitializer *con_init = isSgConstructorInitializer(expr);
-  ASSERT_not_null(con_init);
-  bool ctor_without_args = con_init->get_args()->get_expressions().empty();
+  SgExprListExp *ctor_args = con_init->get_args();
+  if (ctor_args == nullptr) {
+    fprintf(stderr, "REX_UNPARSE_INVARIANT[constructor-initializer-arguments]: "
+                    "initializer has no exact argument list\n");
+    ROSE_ABORT();
+  }
+  bool ctor_without_args = ctor_args->get_expressions().empty();
 #if DEBUG__unparseCtorInit
   printf("    ->get_need_name() = %s \n",
          con_init->get_need_name() ? "true" : "false");
@@ -175,22 +35,16 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
          con_init->get_is_braced_initialized() ? "true" : "false");
   printf("    ->get_need_parenthesis_after_name() = %s \n",
          con_init->get_need_parenthesis_after_name() ? "true" : "false");
-  printf("    ->get_is_explicit_cast() = %s \n",
-         con_init->get_is_explicit_cast() ? "true" : "false");
   printf("    ->get_is_used_in_conditional() = %s \n",
          con_init->get_is_used_in_conditional() ? "true" : "false");
   printf("  ctor_without_args = %s \n", ctor_without_args ? "true" : "false");
 #endif
   SgMemberFunctionDeclaration *ctor_decl = con_init->get_declaration();
-  SgClassDeclaration *ctor_class = con_init->get_class_decl();
-  SgType *ctor_type = con_init->get_type();
+  SgType *ctor_type = con_init->get_expression_type();
 #if DEBUG__unparseCtorInit
   printf("  ctor_decl  = %p = %s = %s\n", ctor_decl,
          ctor_decl ? ctor_decl->class_name().c_str() : "",
          ctor_decl ? ctor_decl->get_name().str() : "");
-  printf("  ctor_class = %p = %s = %s\n", ctor_class,
-         ctor_class ? ctor_class->class_name().c_str() : "",
-         ctor_class ? ctor_class->get_name().str() : "");
   printf("  ctor_type  = %p = %s = %s\n", ctor_type,
          ctor_type ? ctor_type->class_name().c_str() : "",
          isSgNamedType(ctor_type) ? ((SgNamedType *)ctor_type)->get_name().str()
@@ -211,306 +65,116 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
   printf("  use_braces = %s\n", use_braces ? "true" : "false");
 #endif
 
-  bool iname_use_cpy_syntax =
-      isSgInitializedName(pnode)
-          ? ((SgInitializedName *)pnode)
-                ->get_using_assignment_copy_constructor_syntax()
-          : false;
-  bool force_paren_because_risk_most_vexing_parse =
-      isSgVariableDeclaration(ppnode) &&
-      con_init->get_need_parenthesis_after_name() && !iname_use_cpy_syntax;
-#if DEBUG__unparseCtorInit
-  printf("  iname_use_cpy_syntax = %s\n",
-         iname_use_cpy_syntax ? "true" : "false");
-  printf("  force_paren_because_risk_most_vexing_parse = %s\n",
-         force_paren_because_risk_most_vexing_parse ? "true" : "false");
-#endif
-
-  bool arg_of_ctor_or_aggr =
-      isSgConstructorInitializer(ppnode) || isSgAggregateInitializer(ppnode);
-  bool is_explicit_ctor =
-      ctor_decl ? ctor_decl->get_functionModifier().isExplicit() : false;
-  bool explicit_ctor_with_cpy_syntax = is_explicit_ctor &&
-                                       iname_use_cpy_syntax &&
-                                       !ctor_without_args && !use_braces;
-  bool nested_ctor_init_without_arg = ctor_without_args && arg_of_ctor_or_aggr;
-  bool is_top_of_init_within_ctor = isSgCtorInitializerList(ppnode);
-#if DEBUG__unparseCtorInit
-  printf("  arg_of_ctor_or_aggr = %s\n",
-         arg_of_ctor_or_aggr ? "true" : "false");
-  printf("  is_explicit_ctor = %s\n", is_explicit_ctor ? "true" : "false");
-  printf("  explicit_ctor_with_cpy_syntax = %s\n",
-         explicit_ctor_with_cpy_syntax ? "true" : "false");
-  printf("  nested_ctor_init_without_arg = %s\n",
-         nested_ctor_init_without_arg ? "true" : "false");
-  printf("  is_top_of_init_within_ctor = %s\n",
-         is_top_of_init_within_ctor ? "true" : "false");
-#endif
-
-  bool is_ctor_within_new = isSgNewExp(pnode) != nullptr;
-  if (isSgConstructorInitializer(ppnode)) {
-    SgConstructorInitializer *pp_con_init = (SgConstructorInitializer *)ppnode;
-    if (pp_con_init->get_declaration() != nullptr) {
-      ppnode = nullptr;
-    }
-  } else if (isSgInitializedName(pnode) || isSgExprStatement(ppnode) ||
-             isSgStatement(ppnode)) {
-    ppnode = nullptr;
+  const bool use_parentheses = con_init->get_need_parenthesis_after_name();
+  if (use_braces && use_parentheses) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[constructor-initializer-source-form]: "
+            "initializer selects both braced and parenthesized syntax\n");
+    ROSE_ABORT();
   }
-  while (ppnode != nullptr) {
-#if DEBUG__unparseCtorInit
-    printf("  ppnode = %p = %s\n", ppnode,
-           ppnode ? ppnode->class_name().c_str() : "");
-#endif
-    bool is_new = isSgNewExp(ppnode);
-    bool stop_now = !isSgExprListExp(ppnode);
-    if (isSgAggregateInitializer(ppnode))
-      stop_now = false;
-    if (isSgConstructorInitializer(ppnode)) {
-      SgConstructorInitializer *pp_con_init =
-          (SgConstructorInitializer *)ppnode;
-      stop_now = pp_con_init->get_declaration() != nullptr;
+
+  const bool need_name = con_init->get_need_name();
+  if (isSgNewExp(pnode) != nullptr && need_name) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[constructor-initializer-source-form]: "
+            "new-expression initializer redundantly owns a type name\n");
+    ROSE_ABORT();
+  }
+  if (need_name && !use_braces && !use_parentheses) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[constructor-initializer-source-form]: "
+            "named initializer has no exact delimiter form\n");
+    ROSE_ABORT();
+  }
+  if (!ctor_without_args && !use_braces && !use_parentheses) {
+    size_t exact_owner_edges = 0;
+    if (pnode != nullptr) {
+      for (const std::pair<SgNode *, std::string> &edge :
+           pnode->returnDataMemberPointers()) {
+        if (edge.first == con_init) {
+          ++exact_owner_edges;
+        }
+      }
     }
-    if (is_new) {
-      is_ctor_within_new = true;
-      break;
-    } else if (stop_now) {
-      break;
+    if (need_name || ctor_args->get_expressions().size() != 1 ||
+        exact_owner_edges != 1) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[constructor-initializer-source-form]: "
+              "delimiter-free conversion requires one exact argument and "
+              "one exact structural owner edge\n");
+      ROSE_ABORT();
     }
-    ppnode = ppnode->get_parent();
   }
 #if DEBUG__unparseCtorInit
-  printf("  is_ctor_within_new = %s\n", is_ctor_within_new ? "true" : "false");
-#endif
-
-  bool print_ctor_name = unp->u_sage->printConstructorName(con_init);
-  bool need_name =
-      con_init->get_need_name() && !is_ctor_within_new &&
-      (nested_ctor_init_without_arg || con_init->get_is_explicit_cast() ||
-       explicit_ctor_with_cpy_syntax);
-#if DEBUG__unparseCtorInit
-  printf("  print_ctor_name = %s\n", print_ctor_name ? "true" : "false");
   printf("  need_name       = %s\n", need_name ? "true" : "false");
 #endif
   if (need_name) {
-    SgUnparse_Info info_for_typename(info);
-    if (ctor_class || ctor_decl) {
-      SgType *type_for_ctor_name =
-          ctor_type != nullptr
-              ? ctor_type
-              : (ctor_class != nullptr ? ctor_class->get_type() : nullptr);
-      std::string qualifier = con_init->get_qualified_name_prefix().str();
-      SgTypedefType *typedef_ctor_type = isSgTypedefType(type_for_ctor_name);
-      const bool ctor_spelled_via_typedef = typedef_ctor_type != nullptr;
-      std::string typedef_ctor_display_name;
-#if DEBUG__unparseCtorInit
-      printf("  qualifier = %s\n", qualifier.c_str());
-#endif
-      bool need_ctor_name = true;
-      size_t length = qualifier.size();
-      if (ctor_spelled_via_typedef) {
-        qualifier.clear();
-        typedef_ctor_display_name = qualifiedCtorTypedefName(typedef_ctor_type);
-      } else if (length > 0 && ctor_decl != nullptr) {
-        ROSE_ASSERT(length > 2);
-        ROSE_ASSERT(qualifier[length - 1] == ':');
-        ROSE_ASSERT(qualifier[length - 2] == ':');
-        qualifier = qualifier.substr(0, length - 2);
-        need_ctor_name = false;
-#if DEBUG__unparseCtorInit
-        printf("  qualifier = %s\n", qualifier.c_str());
-#endif
-      }
-      qualifier = compactCtorTemplateIdentifierSpacing(qualifier);
-      curprint(qualifier.c_str());
-
-      if (need_ctor_name) {
-        SgTemplateInstantiationMemberFunctionDecl *tpl_ctor_decl =
-            isSgTemplateInstantiationMemberFunctionDecl(ctor_decl);
-        if (ctor_class) {
-          bool handled_typedef_ctor_name = false;
-          if (typedef_ctor_type != nullptr) {
-            const std::string typedef_name =
-                !typedef_ctor_display_name.empty()
-                    ? typedef_ctor_display_name
-                    : ctorTypedefName(typedef_ctor_type);
-            if (!typedef_name.empty()) {
-              curprint(typedef_name);
-              handled_typedef_ctor_name = true;
-            }
-          }
-          if (!handled_typedef_ctor_name &&
-              isSgTypedefType(type_for_ctor_name) != nullptr) {
-            curprint(isSgTypedefType(type_for_ctor_name)
-                         ->get_qualified_name()
-                         .str());
-            handled_typedef_ctor_name = true;
-          }
-          // Constructor names are emitted as standalone type names here, so
-          // they must not inherit declarator-level base-type suppression from
-          // the surrounding expression context.
-          if (!handled_typedef_ctor_name) {
-            info_for_typename.unset_SkipBaseType();
-            SgNode *type_qualification_reference = con_init;
-            if (!qualifier.empty() && ctor_decl == nullptr) {
-              info_for_typename.set_global_qualification_required(false);
-              // We already emitted the outer qualifier text above. Point type
-              // qualification at the type node itself so nested template
-              // arguments still keep their own AST-based qualification.
-              type_qualification_reference = type_for_ctor_name;
-            }
-            SgUnparse_Info type_info(info_for_typename);
-            type_info.set_reference_node_for_qualification(
-                type_qualification_reference);
-            type_info.set_SkipClassSpecifier();
-            type_info.set_SkipClassDefinition();
-            type_info.set_SkipEnumDefinition();
-            if (ctorTypeNeedsCompactTemplateSpacing(type_for_ctor_name)) {
-              type_info.set_declstatement_ptr(nullptr);
-              type_info.set_current_context(nullptr);
-
-              const std::string type_name =
-                  compactCtorTemplateIdentifierSpacing(
-                      globalUnparseToString(type_for_ctor_name, &type_info));
-              if (!type_name.empty()) {
-                curprint(type_name);
-              } else {
-                SgUnparse_Info type_first(type_info);
-                type_first.unset_isTypeSecondPart();
-                type_first.set_isTypeFirstPart();
-                unp->u_type->unparseType(type_for_ctor_name, type_first);
-
-                SgUnparse_Info type_second(type_info);
-                type_second.unset_isTypeFirstPart();
-                type_second.set_isTypeSecondPart();
-                unp->u_type->unparseType(type_for_ctor_name, type_second);
-              }
-            } else {
-              SgUnparse_Info type_first(type_info);
-              type_first.unset_isTypeSecondPart();
-              type_first.set_isTypeFirstPart();
-              unp->u_type->unparseType(type_for_ctor_name, type_first);
-
-              SgUnparse_Info type_second(type_info);
-              type_second.unset_isTypeFirstPart();
-              type_second.set_isTypeSecondPart();
-              unp->u_type->unparseType(type_for_ctor_name, type_second);
-            }
-          }
-        } else if (tpl_ctor_decl != nullptr &&
-                   isNonFriendMemberFunctionDeclaration(ctor_decl)) {
-          unparseTemplateMemberFunctionName(tpl_ctor_decl, info);
-        } else {
-          curprint(ctor_decl->get_name());
-        }
-      }
-    } else {
-      info_for_typename.unset_isWithType();
-      info_for_typename.unset_SkipBaseType();
-      SgUnparse_Info type_info(info_for_typename);
-      type_info.set_reference_node_for_qualification(con_init);
-      type_info.set_SkipClassDefinition();
-      type_info.set_SkipEnumDefinition();
-      if (ctorTypeNeedsCompactTemplateSpacing(ctor_type)) {
-        type_info.set_declstatement_ptr(nullptr);
-        type_info.set_current_context(nullptr);
-
-        const std::string type_name = compactCtorTemplateIdentifierSpacing(
-            globalUnparseToString(ctor_type, &type_info));
-        if (!type_name.empty()) {
-          curprint(type_name);
-        } else {
-          SgUnparse_Info type_first(type_info);
-          type_first.unset_isTypeSecondPart();
-          type_first.set_isTypeFirstPart();
-          unp->u_type->unparseType(ctor_type, type_first);
-
-          SgUnparse_Info type_second(type_info);
-          type_second.unset_isTypeFirstPart();
-          type_second.set_isTypeSecondPart();
-          unp->u_type->unparseType(ctor_type, type_second);
-        }
-      } else {
-        SgUnparse_Info type_first(type_info);
-        type_first.unset_isTypeSecondPart();
-        type_first.set_isTypeFirstPart();
-        unp->u_type->unparseType(ctor_type, type_first);
-
-        SgUnparse_Info type_second(type_info);
-        type_second.unset_isTypeFirstPart();
-        type_second.set_isTypeSecondPart();
-        unp->u_type->unparseType(ctor_type, type_second);
-      }
+    if (ctor_type == nullptr) {
+      fprintf(stderr, "REX_UNPARSE_INVARIANT[constructor-initializer-type]: "
+                      "name-emitting initializer has no exact type\n");
+      ROSE_ABORT();
     }
+    SgStatement *qualification_use_site =
+        info.get_template_argument_qualification_context();
+    if (qualification_use_site == nullptr) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[constructor-initializer-use-site]: "
+              "initializer has no explicit qualification context\n");
+      ROSE_ABORT();
+    }
+    const NameQualificationResult constructor_qualification =
+        unp->u_name->lookup_qualification(con_init, qualification_use_site);
+    SgUnparse_Info info_for_typename(info);
+    info_for_typename.set_template_argument_qualification_context(
+        qualification_use_site);
+    // Constructor names are type spellings. The frontend must publish the
+    // exact written type on the initializer; reconstructing it from the class
+    // or constructor declaration loses typedef and dependent-type identity.
+    info_for_typename.unset_isWithType();
+    info_for_typename.unset_SkipBaseType();
+    SgUnparse_Info type_info(info_for_typename);
+    type_info.set_reference_node_for_qualification(con_init);
+    type_info.set_name_qualification_length(constructor_qualification.length);
+    type_info.set_global_qualification_required(
+        constructor_qualification.global);
+    type_info.set_type_elaboration_required(
+        con_init->get_type_elaboration_required());
+    type_info.set_SkipClassSpecifier();
+    type_info.set_SkipClassDefinition();
+    type_info.set_SkipEnumDefinition();
+    SgUnparse_Info type_first(type_info);
+    type_first.unset_isTypeSecondPart();
+    type_first.set_isTypeFirstPart();
+    unp->u_type->unparseType(ctor_type, type_first);
+
+    SgUnparse_Info type_second(type_info);
+    type_second.unset_isTypeFirstPart();
+    type_second.set_isTypeSecondPart();
+    unp->u_type->unparseType(ctor_type, type_second);
   }
 
   if (con_init->get_is_used_in_conditional())
     curprint(" = ");
 
-  SgExprListExp *ctor_args = con_init->get_args();
-  ASSERT_not_null(ctor_args);
-
   SgUnparse_Info info_for_args(info);
-  if (isAssociatedWithCxx11_initializationList(con_init)) {
-    info_for_args.set_context_for_added_parentheses(true);
-    ROSE_ASSERT(ctor_args->get_expressions().size() == 2);
-    SgExpression *init_arg = ctor_args->get_expressions()[0];
-    ASSERT_not_null(init_arg);
-    unparseExpression(init_arg, info_for_args);
+  // Preserve brace-init even for empty argument lists to avoid dropping
+  // `T t{}` to `T t;` (value-initialization vs default-initialization).
 
-  } else {
-    // Preserve brace-init even for empty argument lists to avoid dropping
-    // `T t{}` to `T t;` (value-initialization vs default-initialization).
-
-    bool need_paren =
-        need_name || use_braces || is_ctor_within_new ||
-        (need_name && con_init->get_need_parenthesis_after_name()) ||
-        is_top_of_init_within_ctor ||
-        force_paren_because_risk_most_vexing_parse;
+  const bool need_paren = use_braces || use_parentheses;
 #if DEBUG__unparseCtorInit
-    printf("  need_paren   = %s \n", need_paren ? "true" : "false");
+  printf("  need_paren   = %s \n", need_paren ? "true" : "false");
+#endif
+#if DEBUG__unparseCtorInit
+  printf("  use_braces   = %s \n", use_braces ? "true" : "false");
+  printf("  need_paren   = %s \n", need_paren ? "true" : "false");
 #endif
 
-    if (print_ctor_name) {
-      // FIXME looks like this tries to deal with initializer list but we have
-      // use_initlist (see next)
-      SgExprListExp *expressionList = isSgExprListExp(ctor_args);
-      ASSERT_not_null(expressionList);
-      if (!ctor_args->get_expressions().empty()) {
-        SgInitializer *initializer =
-            isSgInitializer(ctor_args->get_expressions()[0]);
-        if (initializer == nullptr) {
-          need_paren = true;
-        } else if (ctor_args->get_expressions().size() >= 2) {
-          need_paren = true;
-        }
-      }
-    }
-#if DEBUG__unparseCtorInit
-    printf("  use_braces   = %s \n", use_braces ? "true" : "false");
-    printf("  need_paren   = %s \n", need_paren ? "true" : "false");
-#endif
-
-    // FIXME should it simply be
-    // `info_for_args.set_context_for_added_parentheses(need_paren);`?
-    //       and what about `use_braces` vs
-    //       `con_init->get_is_braced_initialized()`
-    info_for_args.set_context_for_added_parentheses(need_paren && !use_braces);
-    const bool wrap_nested_ctor_arg_for_most_vexing_parse =
-        force_paren_because_risk_most_vexing_parse && !use_braces &&
-        ctor_args->get_expressions().size() == 1 &&
-        isSgConstructorInitializer(ctor_args->get_expressions().front()) !=
-            nullptr;
-    if (need_paren)
-      curprint(use_braces ? "{" : "(");
-    if (wrap_nested_ctor_arg_for_most_vexing_parse)
-      curprint("(");
-    unparseExpression(ctor_args, info_for_args);
-    if (wrap_nested_ctor_arg_for_most_vexing_parse)
-      curprint(")");
-    if (need_paren)
-      curprint(use_braces ? "}" : ")");
-  }
+  info_for_args.set_context_for_added_parentheses(need_paren && !use_braces);
+  if (need_paren)
+    curprint(use_braces ? "{" : "(");
+  unparseExpression(ctor_args, info_for_args);
+  if (need_paren)
+    curprint(use_braces ? "}" : ")");
 
 #if DEBUG__unparseCtorInit
   printf("Leaving Unparse_ExprStmt::unparseCtorInit \n");

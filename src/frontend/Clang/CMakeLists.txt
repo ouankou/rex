@@ -20,6 +20,8 @@ set(CLANG_FRONTEND_SOURCES
 
 # Clang frontend headers
 set(CLANG_FRONTEND_HEADERS
+  clang-decl-attachment-session.hpp
+  clang-expanded-token-order.hpp
   clang-frontend.hpp
   clang-frontend-private.hpp
   clang-to-dot.hpp
@@ -63,6 +65,26 @@ message(STATUS "Clang frontend using LLVM includes: ${LLVM_INCLUDE_DIRS}")
 rose_force_system_include_dirs(libroseClangFrontend
   ${LLVM_INCLUDE_DIRS}
   ${CLANG_INCLUDE_DIRS})
+
+if(REX_ENABLE_WASM)
+  foreach(_rex_wasm_clang_contract_var
+      REX_WASM_VIRTUAL_CLANG_C_DRIVER
+      REX_WASM_VIRTUAL_CLANG_CXX_DRIVER
+      REX_WASM_VIRTUAL_CLANG_RESOURCE_DIR)
+    if(NOT DEFINED ${_rex_wasm_clang_contract_var}
+       OR "${${_rex_wasm_clang_contract_var}}" STREQUAL "")
+      message(FATAL_ERROR
+        "REX WASM Clang frontend contract is missing ${_rex_wasm_clang_contract_var}")
+    endif()
+  endforeach()
+  unset(_rex_wasm_clang_contract_var)
+
+  target_compile_definitions(libroseClangFrontend PRIVATE
+    REX_WASM_IN_PROCESS_CLANG=1
+    "REX_WASM_CLANG_C_DRIVER=\"${REX_WASM_VIRTUAL_CLANG_C_DRIVER}\""
+    "REX_WASM_CLANG_CXX_DRIVER=\"${REX_WASM_VIRTUAL_CLANG_CXX_DRIVER}\""
+    "REX_WASM_CLANG_RESOURCE_DIR=\"${REX_WASM_VIRTUAL_CLANG_RESOURCE_DIR}\"")
+endif()
 
 # Add LLVM definitions
 set(_rose_clang_llvm_definitions "")

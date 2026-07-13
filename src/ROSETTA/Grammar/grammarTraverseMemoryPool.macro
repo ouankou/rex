@@ -49,8 +49,6 @@ $CLASSNAME::traverseMemoryPoolNodes(ROSE_VisitTraversal & traversal)
                if ($CLASSNAME::pool_live_flags[nodeList[i].pool_index][nodeList[i].slot_index])
                   {
                     $CLASSNAME* current = nodeList[i].node;
-                    if (Rose::shouldSkipMemoryPoolTraversal(current))
-                       continue;
                     traversal.visit(current);
                   }
              }
@@ -85,8 +83,6 @@ $CLASSNAME::traverseMemoryPoolVisitorPattern ( ROSE_VisitorPattern & visitor )
                        {
                          $CLASSNAME* current =
                            reinterpret_cast<$CLASSNAME*>(base + j * sizeof($CLASSNAME));
-                         if (Rose::shouldSkipMemoryPoolTraversal(current))
-                            continue;
                       // printf ("Found a valid $CLASSNAME object in the memory pool %d at position %d \n",i,j);
                       // printf ("Calling executeVisitorMemberFunction(visitor) \n");
                          current->executeVisitorMemberFunction(visitor);
@@ -136,8 +132,7 @@ $CLASSNAME::visitRepresentativeNode(ROSE_VisitTraversal & traversal)
                          unsigned char* base = pool_bases[i];
                          $CLASSNAME* current =
                            reinterpret_cast<$CLASSNAME*>(base + j * sizeof($CLASSNAME));
-                         if (Rose::shouldSkipMemoryPoolTraversal(current) == false)
-                            traversal.visit(current);
+                         traversal.visit(current);
                          done = true;
                        }
                     j++;

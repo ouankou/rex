@@ -4,6 +4,7 @@
 #include <string>
 
 class SgProject;
+class SgNode;
 class SgSourceFile;
 
 namespace Rose {
@@ -33,6 +34,12 @@ void writeProjectJson(SgProject *project, const std::string &path,
                       const Options &options);
 void writeSourceFileJson(SgSourceFile *file, Checkpoint checkpoint,
                          const std::string &path, const Options &options);
+
+// Return the deterministic typed serializer signature for one AST subtree.
+// Unlike unparseToString(), this compares the node/property/edge/type/symbol
+// contract directly and therefore cannot repair malformed state while
+// determining equivalence.
+std::string canonicalSubtreeSignature(SgNode *root);
 
 } // namespace AstJson
 } // namespace Rose

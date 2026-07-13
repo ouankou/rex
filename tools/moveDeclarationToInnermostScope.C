@@ -105,7 +105,6 @@
 
 #include "rose.h"
 #include "rose_test_output_path.h"
-#include "tokenStreamMapping.h"
 
 #include "wholeAST_API.h"
 
@@ -142,68 +141,6 @@ void appendRoseOptionIfMissing(std::vector<std::string> &argvList,
   if (std::find(argvList.begin(), argvList.end(), option) == argvList.end()) {
     argvList.push_back(option);
   }
-}
-
-void removeRoseOption(std::vector<std::string> &argvList,
-                      const std::string &option) {
-  if (option.empty()) {
-    return;
-  }
-
-  argvList.erase(std::remove(argvList.begin(), argvList.end(), option),
-                 argvList.end());
-}
-
-bool sourceFileSupportsDeferredTokenSetup(const std::string &filename) {
-  std::ifstream input(filename.c_str());
-  if (!input) {
-    return false;
-  }
-
-  std::string line;
-  size_t line_count = 0;
-  bool saw_include = false;
-  while (std::getline(input, line)) {
-    ++line_count;
-    if (line.find("#include") != std::string::npos) {
-      saw_include = true;
-    }
-    if (line_count > 256) {
-      return false;
-    }
-  }
-
-  return saw_include;
-}
-
-bool shouldDeferTokenSetup(const std::vector<std::string> &source_filenames,
-                           bool requested_token_preserving_mode) {
-  if (!requested_token_preserving_mode || source_filenames.empty()) {
-    return false;
-  }
-
-  for (const std::string &filename : source_filenames) {
-    if (!sourceFileSupportsDeferredTokenSetup(filename)) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-bool copyFileContents(const std::string &from, const std::string &to) {
-  if (from.empty() || to.empty() || from == to) {
-    return false;
-  }
-
-  std::ifstream input(from.c_str(), std::ios::binary);
-  std::ofstream output(to.c_str(), std::ios::binary | std::ios::trunc);
-  if (!input || !output) {
-    return false;
-  }
-
-  output << input.rdbuf();
-  return input.good() || input.eof();
 }
 
 bool fileInfoBelongsToSourceFile(const Sg_File_Info *file_info,
@@ -321,32 +258,7 @@ void markSubtreeAsTransformation(SgNode *root) {
   if (root == nullptr) {
     return;
   }
-
-  for (SgNode *node : NodeQuery::querySubTree(root, V_SgNode)) {
-    if (SgLocatedNode *located = isSgLocatedNode(node)) {
-      located->setTransformation();
-      if (Sg_File_Info *file_info = located->get_file_info()) {
-        file_info->setTransformation();
-        file_info->setOutputInCodeGeneration();
-      }
-      if (Sg_File_Info *start = located->get_startOfConstruct()) {
-        start->setTransformation();
-        start->setOutputInCodeGeneration();
-      }
-      if (Sg_File_Info *end = located->get_endOfConstruct()) {
-        end->setTransformation();
-        end->setOutputInCodeGeneration();
-      }
-      if (SgExpression *expr = isSgExpression(located)) {
-        if (Sg_File_Info *op = expr->get_operatorPosition()) {
-          op->setTransformation();
-          op->setOutputInCodeGeneration();
-        }
-      }
-    } else {
-      SageInterface::setSourcePositionAsTransformation(node);
-    }
-  }
+  SageInterface::setSourcePositionForTransformation(root);
 }
 
 void discardCopiedPreprocessingInfo(SgLocatedNode *node) {
@@ -367,22 +279,191 @@ void discardCopiedPreprocessingInfo(SgLocatedNode *node) {
   node->set_attachedPreprocessingInfoPtr(nullptr);
 }
 
-void moveLeadingPreprocessingInfoPreservingDestinationTokens(
-    SgStatement *source, SgStatement *destination) {
+bool canonicalizeRegeneratedCxxLineComment(PreprocessingInfo *info) {
+  ROSE_ASSERT(info != nullptr);
+  if (info->getTypeOfDirective() != PreprocessingInfo::CplusplusStyleComment) {
+    return false;
+  }
+
+  std::string text = info->getString();
+  const size_t comment_begin = text.find_first_not_of(" \t");
+  if (comment_begin == std::string::npos ||
+      text.compare(comment_begin, 2, "//") != 0) {
+    std::cerr << "REX_MOVE_DECL_INVARIANT[cxx-comment-spelling]: moved "
+                 "C++ line comment does not begin with //\n";
+    ROSE_ABORT();
+  }
+
+  const size_t line_end = text.find_first_of("\r\n", comment_begin + 2);
+  const size_t content_end =
+      line_end == std::string::npos ? text.size() : line_end;
+  size_t trimmed_end = content_end;
+  while (trimmed_end > comment_begin + 2 &&
+         (text[trimmed_end - 1] == ' ' || text[trimmed_end - 1] == '\t')) {
+    --trimmed_end;
+  }
+  if (trimmed_end != content_end) {
+    text.erase(trimmed_end, content_end - trimmed_end);
+  }
+
+  const size_t content_begin = comment_begin + 2;
+  if (content_begin < text.size() && text[content_begin] != '/' &&
+      text[content_begin] != '\r' && text[content_begin] != '\n' &&
+      text[content_begin] != ' ' && text[content_begin] != '\t') {
+    text.insert(content_begin, 1, ' ');
+  }
+
+  if (text == info->getString()) {
+    return false;
+  }
+  info->setString(text);
+  return true;
+}
+
+bool sourceCommentIsTrailingItsOwner(PreprocessingInfo *info,
+                                     SgLocatedNode *owner) {
+  ROSE_ASSERT(info != nullptr);
+  ROSE_ASSERT(owner != nullptr);
+  if (info->getTypeOfDirective() < PreprocessingInfo::C_StyleComment ||
+      info->getTypeOfDirective() > PreprocessingInfo::F90StyleComment ||
+      (info->getRelativePosition() != PreprocessingInfo::after &&
+       info->getRelativePosition() != PreprocessingInfo::after_syntax)) {
+    return false;
+  }
+  if (info->getOutputPlacement() != PreprocessingInfo::source_position ||
+      info->isTransformation()) {
+    return info->getOutputPlacement() ==
+           PreprocessingInfo::attached_output_trailing_line;
+  }
+  if (!info->has_file_info() || owner->get_endOfConstruct() == nullptr) {
+    std::cerr << "REX_MOVE_DECL_INVARIANT[preprocessing-source-anchor]: "
+                 "trailing comment has no exact source owner boundary\n";
+    ROSE_ABORT();
+  }
+  Sg_File_Info *comment_info = info->get_file_info();
+  Sg_File_Info *owner_end = owner->get_endOfConstruct();
+  if (comment_info->get_line() <= 0 || owner_end->get_line() <= 0 ||
+      comment_info->get_physical_file_id() < 0 ||
+      owner_end->get_physical_file_id() < 0) {
+    std::cerr << "REX_MOVE_DECL_INVARIANT[preprocessing-source-anchor]: "
+                 "trailing comment has an invalid source owner boundary\n";
+    ROSE_ABORT();
+  }
+  return comment_info->isSameFile(*owner_end) &&
+         comment_info->get_line() == owner_end->get_line();
+}
+
+void publishRegeneratedPreprocessingInfo(PreprocessingInfo *info,
+                                         SgLocatedNode *owner) {
+  if (sourceCommentIsTrailingItsOwner(info, owner)) {
+    SageInterface::publishGeneratedTrailingComment(info, owner);
+  } else {
+    SageInterface::publishGeneratedPreprocessingInfo(info, owner);
+  }
+}
+
+void canonicalizeRegeneratedCxxLineComments(SgNode *root) {
+  ROSE_ASSERT(root != nullptr);
+  for (SgNode *node : NodeQuery::querySubTree(root, V_SgNode)) {
+    SgLocatedNode *owner = isSgLocatedNode(node);
+    if (owner == nullptr) {
+      continue;
+    }
+    AttachedPreprocessingInfoType *records =
+        owner->get_attachedPreprocessingInfoPtr();
+    if (records == nullptr) {
+      continue;
+    }
+    for (PreprocessingInfo *info : *records) {
+      if (info == nullptr) {
+        std::cerr << "REX_MOVE_DECL_INVARIANT[preprocessing-record]: owner="
+                  << owner->class_name()
+                  << " has a null attached preprocessing record\n";
+        ROSE_ABORT();
+      }
+      if (canonicalizeRegeneratedCxxLineComment(info)) {
+        publishRegeneratedPreprocessingInfo(info, owner);
+      }
+    }
+  }
+}
+
+void publishRegeneratedPreprocessingInfoForReferenceOwners(
+    SgVariableSymbol *symbol, SgScopeStatement *scope) {
+  ROSE_ASSERT(symbol != nullptr);
+  ROSE_ASSERT(scope != nullptr);
+
+  std::set<SgStatement *> regenerated_statements;
+  for (SgNode *node : NodeQuery::querySubTree(scope, V_SgVarRefExp)) {
+    SgVarRefExp *reference = isSgVarRefExp(node);
+    if (reference == nullptr || reference->get_symbol() != symbol) {
+      continue;
+    }
+    SgStatement *statement = SageInterface::getEnclosingStatement(reference);
+    if (statement == nullptr ||
+        !SageInterface::isAncestor(statement, reference)) {
+      std::cerr << "REX_MOVE_DECL_INVARIANT[reference-output-owner]: "
+                   "variable reference has no exact enclosing statement\n";
+      ROSE_ABORT();
+    }
+    regenerated_statements.insert(statement);
+  }
+
+  for (SgStatement *statement : regenerated_statements) {
+    AttachedPreprocessingInfoType *records =
+        statement->get_attachedPreprocessingInfoPtr();
+    if (records == nullptr) {
+      continue;
+    }
+    statement->validateAttachedPreprocessingInfoOwnership();
+    for (PreprocessingInfo *info : *records) {
+      if (info == nullptr || info->getAttachedOwner() != statement) {
+        std::cerr << "REX_MOVE_DECL_INVARIANT[reference-output-owner]: "
+                     "regenerated statement has malformed preprocessing "
+                     "ownership\n";
+        ROSE_ABORT();
+      }
+      const bool trailing = sourceCommentIsTrailingItsOwner(info, statement);
+      canonicalizeRegeneratedCxxLineComment(info);
+      if (trailing) {
+        SageInterface::publishGeneratedTrailingComment(info, statement);
+      } else {
+        SageInterface::publishGeneratedPreprocessingInfo(info, statement);
+      }
+    }
+  }
+}
+
+void movePreprocessingInfoPreservingDestinationTokens(
+    SgStatement *source, SgStatement *destination,
+    PreprocessingInfo::RelativePositionType position) {
   ROSE_ASSERT(source != nullptr);
   ROSE_ASSERT(destination != nullptr);
+  if (position != PreprocessingInfo::before &&
+      position != PreprocessingInfo::after) {
+    std::cerr << "REX_MOVE_DECL_INVARIANT[preprocessing-position]: source="
+              << describeTrackingNode(source)
+              << " has an unsupported preprocessing transfer position\n";
+    ROSE_ABORT();
+  }
 
   AttachedPreprocessingInfoType moved_info;
-  SageInterface::cutPreprocessingInfo(source, PreprocessingInfo::before,
-                                      moved_info);
+  SageInterface::cutPreprocessingInfo(source, position, moved_info);
   if (moved_info.empty()) {
     return;
   }
 
   for (PreprocessingInfo *info : moved_info) {
     ROSE_ASSERT(info != nullptr);
-    info->setRelativePosition(PreprocessingInfo::before);
-    info->setAsTransformation();
+    const bool preserve_trailing_line =
+        sourceCommentIsTrailingItsOwner(info, source);
+    canonicalizeRegeneratedCxxLineComment(info);
+    info->setRelativePosition(position);
+    if (preserve_trailing_line) {
+      SageInterface::publishGeneratedTrailingComment(info, destination);
+    } else {
+      SageInterface::publishGeneratedPreprocessingInfo(info, destination);
+    }
   }
 
   // Mirror SageInterface::movePreprocessingInfo(): once comments/directives are
@@ -394,8 +475,13 @@ void moveLeadingPreprocessingInfoPreservingDestinationTokens(
     destination->set_isModified(false);
   }
 
-  SageInterface::pastePreprocessingInfo(destination, PreprocessingInfo::before,
-                                        moved_info);
+  SageInterface::pastePreprocessingInfo(destination, position, moved_info);
+}
+
+void moveLeadingPreprocessingInfoPreservingDestinationTokens(
+    SgStatement *source, SgStatement *destination) {
+  movePreprocessingInfoPreservingDestinationTokens(source, destination,
+                                                   PreprocessingInfo::before);
 }
 
 void markStatementSurroundingWhitespaceTransformation(SgStatement *statement) {
@@ -437,6 +523,9 @@ void markStatementStructuralTransformation(SgStatement *statement) {
     return;
   }
 
+  if (isSgBasicBlock(statement) != nullptr) {
+    canonicalizeRegeneratedCxxLineComments(statement);
+  }
   statement->set_containsTransformation(true);
   if (statement->get_isModified()) {
     statement->set_isModified(false);
@@ -574,13 +663,6 @@ bool useAlgorithmV2 = true;
 //! nodes
 bool transTracking = false;
 
-//! Users want to see the tool working by default
-//! By default ASSERT should block the execution to find issues.
-//! But some users want to keep the tool going even when some assertion fails.
-//! This is only supported by moveDeclarationToInnermostScope() and associated
-//! functions for now
-bool tool_keep_going = false;
-
 //! Users want to see conservative and aggressive moving
 // Like any other compiler-based tools. We do things conservatively by default.
 // Declarations with initializers will not be moved
@@ -623,6 +705,149 @@ getDeclaredVariableSymbolIfAny(SgVariableDeclaration *decl) {
 static bool isSupportedSingleVariableDeclaration(SgVariableDeclaration *decl) {
   return decl != NULL && decl->get_variables().size() == 1 &&
          getDeclaredVariableSymbolIfAny(decl) != NULL;
+}
+
+static bool isExactForInitializerDeclaration(SgVariableDeclaration *decl) {
+  if (decl == NULL) {
+    return false;
+  }
+
+  SgNode *surface = decl;
+  SgDeclarationGroupStatement *group =
+      isSgDeclarationGroupStatement(decl->get_parent());
+  if (group != NULL) {
+    group->validate();
+    const SgDeclarationStatementPtrList &members = group->get_declarations();
+    if (std::count(members.begin(), members.end(), decl) != 1) {
+      std::cerr << "REX_MOVE_DECL_INVARIANT[for-init-declaration-owner]: "
+                << describeTrackingNode(decl)
+                << " is not an exact member of its source group\n";
+      ROSE_ABORT();
+    }
+    surface = group;
+  }
+
+  SgForInitStatement *for_init = isSgForInitStatement(surface->get_parent());
+  if (for_init == NULL) {
+    return false;
+  }
+  SgForStatement *owner = isSgForStatement(for_init->get_parent());
+  const SgStatementPtrList &initializers = for_init->get_init_stmt();
+  const SgNodePtrList owner_successors =
+      owner != NULL ? owner->get_traversalSuccessorContainer()
+                    : SgNodePtrList();
+  if (owner == NULL || owner->get_for_init_stmt() != for_init ||
+      std::count(owner_successors.begin(), owner_successors.end(), for_init) !=
+          1 ||
+      std::count(initializers.begin(), initializers.end(),
+                 isSgStatement(surface)) != 1 ||
+      decl->get_scope() != owner ||
+      (group != NULL && group->get_scope() != owner)) {
+    std::cerr << "REX_MOVE_DECL_INVARIANT[for-init-declaration-owner]: "
+              << describeTrackingNode(decl)
+              << " has no exact for-initializer surface and semantic scope\n";
+    ROSE_ABORT();
+  }
+  return true;
+}
+
+static void
+materializeExactSourceDeclarationGroupMembers(SgVariableDeclaration *decl) {
+  if (decl == NULL) {
+    return;
+  }
+  SgDeclarationGroupStatement *group =
+      isSgDeclarationGroupStatement(decl->get_parent());
+  if (group == NULL) {
+    return;
+  }
+
+  group->validate();
+  SgBasicBlock *owner = isSgBasicBlock(group->get_parent());
+  const SgDeclarationStatementPtrList source_members =
+      group->get_declarations();
+  if (owner == NULL || group->get_scope() != owner ||
+      decl->get_scope() != owner ||
+      std::count(source_members.begin(), source_members.end(), decl) != 1) {
+    std::cerr
+        << "REX_MOVE_DECL_INVARIANT[declaration-group-owner]: declaration="
+        << describeTrackingNode(decl)
+        << " is not an exact member of a basic-block source group\n";
+    ROSE_ABORT();
+  }
+
+  SgDeclarationStatement *first_member = source_members.front();
+  SgDeclarationStatement *last_member = source_members.back();
+  ROSE_ASSERT(first_member != NULL);
+  ROSE_ASSERT(last_member != NULL);
+  if (AttachedPreprocessingInfoType *records =
+          group->get_attachedPreprocessingInfoPtr()) {
+    for (PreprocessingInfo *record : *records) {
+      if (record == NULL ||
+          (record->getRelativePosition() != PreprocessingInfo::before &&
+           record->getRelativePosition() != PreprocessingInfo::after)) {
+        std::cerr << "REX_MOVE_DECL_INVARIANT[declaration-group-"
+                     "preprocessing]: group="
+                  << describeTrackingNode(group)
+                  << " has a null or non-boundary preprocessing record\n";
+        ROSE_ABORT();
+      }
+    }
+  }
+  movePreprocessingInfoPreservingDestinationTokens(group, first_member,
+                                                   PreprocessingInfo::before);
+  movePreprocessingInfoPreservingDestinationTokens(group, last_member,
+                                                   PreprocessingInfo::after);
+
+  SgStatement *next_statement = SageInterface::getNextStatement(group);
+  SageInterface::removeStatement(group, false);
+  if (group->get_parent() != NULL) {
+    std::cerr
+        << "REX_MOVE_DECL_INVARIANT[declaration-group-removal]: group="
+        << describeTrackingNode(group)
+        << " remained structurally attached after whole-surface removal\n";
+    ROSE_ABORT();
+  }
+
+  const SgDeclarationStatementPtrList released_members =
+      group->release_declarations_after_surface_removal();
+  if (released_members != source_members) {
+    std::cerr << "REX_MOVE_DECL_INVARIANT[declaration-group-order]: group "
+                 "release changed exact source member identity or order\n";
+    ROSE_ABORT();
+  }
+
+  for (SgDeclarationStatement *member : released_members) {
+    markSubtreeAsTransformation(member);
+    member->set_containsTransformationToSurroundingWhitespace(true);
+    if (next_statement != NULL) {
+      SageInterface::insertStatementBefore(next_statement, member, false);
+    } else {
+      SageInterface::appendStatement(member, owner);
+    }
+    if (member->get_parent() != owner) {
+      std::cerr
+          << "REX_MOVE_DECL_INVARIANT[declaration-group-publication]: member="
+          << describeTrackingNode(member)
+          << " has no exact standalone basic-block owner\n";
+      ROSE_ABORT();
+    }
+    if (SgVariableDeclaration *variable = isSgVariableDeclaration(member)) {
+      if (variable->get_scope() != owner ||
+          getDeclaredVariableSymbolIfAny(variable) == NULL) {
+        std::cerr << "REX_MOVE_DECL_INVARIANT[declaration-group-symbol]: "
+                  << describeTrackingNode(variable)
+                  << " lost its exact semantic scope or symbol\n";
+        ROSE_ABORT();
+      }
+    }
+  }
+
+  if (next_statement != NULL) {
+    markStatementSurroundingWhitespaceTransformation(next_statement);
+  }
+  markStatementStructuralTransformation(owner);
+  SageInterface::deleteAST(group);
 }
 
 static void
@@ -719,6 +944,109 @@ normalizeDeclarationListItemsToStandalone(SgVariableDeclaration *decl) {
     list_item->set_isAssociatedWithDeclarationList(false);
     list_item_init->set_prev_decl_item(NULL);
   }
+}
+
+static std::vector<SgVariableDeclaration *>
+splitMergedVariableDeclarationSurface(SgVariableDeclaration *decl) {
+  ROSE_ASSERT(decl != NULL);
+  if (decl->get_variables().size() <= 1) {
+    return {decl};
+  }
+
+  SgBasicBlock *owner = isSgBasicBlock(decl->get_parent());
+  if (owner == NULL || decl->get_scope() != owner) {
+    std::cerr << "REX_MOVE_DECL_INVARIANT[declarator-group-owner]: merged "
+                 "variable declaration is not directly owned by its exact "
+                 "basic-block scope: "
+              << describeTrackingNode(decl) << "\n";
+    ROSE_ABORT();
+  }
+
+  const SgInitializedNamePtrList declarators = decl->get_variables();
+  for (SgInitializedName *declarator : declarators) {
+    if (declarator == NULL || declarator->get_scope() != owner ||
+        declarator->get_name().getString().empty()) {
+      std::cerr << "REX_MOVE_DECL_INVARIANT[declarator-group-identity]: "
+                   "merged variable declaration contains an invalid "
+                   "declarator identity\n";
+      ROSE_ABORT();
+    }
+  }
+
+  decl->get_variables().erase(decl->get_variables().begin() + 1,
+                              decl->get_variables().end());
+  decl->set_isAssociatedWithDeclarationList(false);
+  decl->set_isFirstDeclarationOfDeclarationList(true);
+  declarators.front()->set_prev_decl_item(NULL);
+
+  std::vector<SgVariableDeclaration *> standalone;
+  standalone.reserve(declarators.size());
+  standalone.push_back(decl);
+  SgStatement *insert_after = decl;
+
+  for (size_t index = 1; index < declarators.size(); ++index) {
+    SgVariableDeclaration *split_decl = SageInterface::deepCopy(decl);
+    ROSE_ASSERT(split_decl != NULL);
+
+    Sg_File_Info *source_start = decl->get_startOfConstruct();
+    Sg_File_Info *source_end = decl->get_endOfConstruct();
+    if (source_start == NULL || source_end == NULL ||
+        source_start->get_line() <= 0 || source_end->get_line() <= 0) {
+      std::cerr << "REX_MOVE_DECL_INVARIANT[declarator-group-position]: "
+                   "source declaration has no exact source interval\n";
+      ROSE_ABORT();
+    }
+    Sg_File_Info *old_start = split_decl->get_startOfConstruct();
+    Sg_File_Info *old_end = split_decl->get_endOfConstruct();
+    if (old_end != old_start) {
+      delete old_end;
+    }
+    delete old_start;
+    Sg_File_Info *new_start = new Sg_File_Info(*source_start);
+    Sg_File_Info *new_end = new Sg_File_Info(*source_end);
+    split_decl->set_startOfConstruct(new_start);
+    split_decl->set_endOfConstruct(new_end);
+    new_start->set_parent(split_decl);
+    new_end->set_parent(split_decl);
+
+    SgInitializedNamePtrList copied_declarators = split_decl->get_variables();
+    split_decl->get_variables().clear();
+    for (SgInitializedName *copied : copied_declarators) {
+      SageInterface::deepDelete(copied);
+    }
+    discardCopiedPreprocessingInfo(split_decl);
+
+    SgInitializedName *declarator = declarators[index];
+    split_decl->get_variables().push_back(declarator);
+    declarator->set_parent(split_decl);
+    declarator->set_prev_decl_item(NULL);
+    split_decl->set_parent(owner);
+    split_decl->set_scope(owner);
+    split_decl->set_isAssociatedWithDeclarationList(false);
+    split_decl->set_isFirstDeclarationOfDeclarationList(true);
+
+    SageInterface::insertStatementAfter(insert_after, split_decl, false);
+    if (split_decl->get_parent() != owner || split_decl->get_scope() != owner ||
+        getDeclaredVariableSymbolIfAny(split_decl) == NULL) {
+      std::cerr << "REX_MOVE_DECL_INVARIANT[declarator-group-publication]: "
+                   "standalone declarator has no exact statement or symbol "
+                   "ownership\n";
+      ROSE_ABORT();
+    }
+    insert_after = split_decl;
+    standalone.push_back(split_decl);
+
+    if (transTracking) {
+      TransformationTracking::registerAstSubtreeIds(split_decl);
+      TransformationTracking::addInputNode(split_decl, decl);
+    }
+  }
+
+  for (SgVariableDeclaration *standalone_decl : standalone) {
+    markSubtreeAsTransformation(standalone_decl);
+    standalone_decl->set_containsTransformationToSurroundingWhitespace(true);
+  }
+  return standalone;
 }
 
 //! Move a declaration to a scope which is the closest to the declaration's use
@@ -947,6 +1275,8 @@ protected:
       //	std::queue<SgVariableDeclaration* > worklist;
       std::stack<SgVariableDeclaration *> worklist;
 
+      std::vector<SgVariableDeclaration *> normalized_var_decls;
+      std::vector<SgVariableDeclaration *> primary_file_var_decls;
       for (size_t i = 0; i < var_decls.size(); i++)
       // Liao 2015/11/2
       // reverse the order for better result:  int i; int j;  order will be
@@ -958,21 +1288,57 @@ protected:
         // skip compiler generated (frontend) declarations
         if (decl->get_file_info()->isCompilerGenerated())
           continue;
-        if (!main_source_filename.empty() &&
-            !locatedNodeBelongsToSourceFile(decl, main_source_filename)) {
+        bool belongs_to_primary_file =
+            main_source_filename.empty() ||
+            locatedNodeBelongsToSourceFile(decl, main_source_filename);
+        if (!belongs_to_primary_file) {
+          SgDeclarationGroupStatement *source_group =
+              isSgDeclarationGroupStatement(decl->get_parent());
+          if (source_group != NULL) {
+            source_group->validate();
+            belongs_to_primary_file = locatedNodeBelongsToSourceFile(
+                source_group, main_source_filename);
+          }
+        }
+        if (!belongs_to_primary_file) {
           if (debug) {
             cout << "Skipping declaration outside primary file: "
                  << describeTrackingNode(decl) << endl;
           }
           continue;
         }
-        normalizeDeclarationListItemsToStandalone(decl);
-        if (!isSupportedSingleVariableDeclaration(decl)) {
-          if (debug)
-            cout << "Skipping unsupported declaration (normalized "
-                    "declaration-list item or missing symbol): "
-                 << describeTrackingNode(decl) << endl;
+        // A declaration in the initializer owns one-time loop-entry semantics
+        // and participates in the condition/increment scope.  Moving it into a
+        // nested body would change both lifetime and initialization frequency;
+        // it is therefore outside this block-declaration transformation.
+        if (isExactForInitializerDeclaration(decl)) {
           continue;
+        }
+        primary_file_var_decls.push_back(decl);
+      }
+
+      // Establish the complete source-owned worklist before materializing any
+      // declaration group. Materialization intentionally turns every released
+      // member into a transformation; using those mutated positions to decide
+      // whether later members came from the primary file would silently drop
+      // all but the first declarator in `int i, j, k`.
+      for (SgVariableDeclaration *decl : primary_file_var_decls) {
+        materializeExactSourceDeclarationGroupMembers(decl);
+        normalizeDeclarationListItemsToStandalone(decl);
+        std::vector<SgVariableDeclaration *> standalone_decls =
+            splitMergedVariableDeclarationSurface(decl);
+        normalized_var_decls.insert(normalized_var_decls.end(),
+                                    standalone_decls.begin(),
+                                    standalone_decls.end());
+      }
+
+      for (SgVariableDeclaration *decl : normalized_var_decls) {
+        if (!isSupportedSingleVariableDeclaration(decl)) {
+          std::cerr << "REX_MOVE_DECL_INVARIANT[declaration-identity]: "
+                       "normalized declaration has no exact single-variable "
+                       "symbol: "
+                    << describeTrackingNode(decl) << "\n";
+          ROSE_ABORT();
         }
         worklist.push(decl);
       }
@@ -992,10 +1358,10 @@ protected:
           if (debug)
             cout << "skipping a static variable declaration .." << endl;
         } else if (!isSupportedSingleVariableDeclaration(decl)) {
-          if (debug) {
-            cout << "Skipping unsupported declaration from worklist: "
-                 << describeTrackingNode(decl) << endl;
-          }
+          std::cerr << "REX_MOVE_DECL_INVARIANT[worklist-identity]: "
+                       "declaration lost its exact single-variable symbol: "
+                    << describeTrackingNode(decl) << "\n";
+          ROSE_ABORT();
         } else {
           bool null_initializer = false;
           SgInitializedName *init_name =
@@ -1068,34 +1434,8 @@ int main(int argc, char *argv[]) {
 
   const bool explicit_token_unparse = CommandlineProcessing::isOption(
       argvList, "-rose:", "(unparse_tokens)", false);
-  const bool explicit_token_source_positions = CommandlineProcessing::isOption(
-      argvList, "-rose:", "(use_token_stream_to_improve_source_position_info)",
-      false);
-  const bool explicit_token_whitespace = CommandlineProcessing::isOption(
-      argvList, "-rose:", "(unparse_using_leading_and_trailing_token_mappings)",
-      false);
-  const bool requested_token_preserving_mode =
-      transTracking || explicit_token_unparse ||
-      explicit_token_source_positions || explicit_token_whitespace;
-  const std::vector<std::string> source_filenames =
-      GetSourceFilenamesFromCommandline(argvList);
-  const bool defer_token_setup =
-      shouldDeferTokenSetup(source_filenames, requested_token_preserving_mode);
-
-  if (defer_token_setup) {
-    // Small wrapper-style inputs that mostly include headers do not need the
-    // source-preserving Clang path during frontend translation. Build the
-    // token mapping explicitly after frontend() instead.
-    removeRoseOption(argvList, "-rose:unparse_tokens");
-    removeRoseOption(argvList,
-                     "-rose:use_token_stream_to_improve_source_position_info");
-    removeRoseOption(argvList,
-                     "-rose:unparse_using_leading_and_trailing_token_mappings");
-  } else if (transTracking) {
-    appendRoseOptionIfMissing(
-        argvList, "-rose:use_token_stream_to_improve_source_position_info");
-    appendRoseOptionIfMissing(
-        argvList, "-rose:unparse_using_leading_and_trailing_token_mappings");
+  if (transTracking) {
+    appendRoseOptionIfMissing(argvList, "-rose:unparse_tokens");
   }
 
   // TOO1 (2014/12/05): Temporarily added this to support keep-going in rose-sh.
@@ -1108,13 +1448,10 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
-  // We don't remove this option since it is used later by other logic
-  if (CommandlineProcessing::isOption(argvList, "-rose:keep_going", "",
-                                      false)) {
-    tool_keep_going = true;
-    cout << "Turing on the keep going model, ignore assertions as much as "
-            "possible..."
-         << endl;
+  if (CommandlineProcessing::isOption(argvList, "-rose:keep_going", "", true)) {
+    std::cerr << "REX_MOVE_DECL_INVARIANT[keep-going]: this tool requires "
+                 "hard failures and does not support -rose:keep_going\n";
+    ROSE_ABORT();
   }
 
   if (CommandlineProcessing::isOption(argvList, "-rose:merge_decl_assign", "",
@@ -1138,38 +1475,17 @@ int main(int argc, char *argv[]) {
 
   SgProject *project = frontend(argvList);
 
-  if (transTracking || explicit_token_unparse ||
-      explicit_token_source_positions || explicit_token_whitespace) {
+  if (transTracking || explicit_token_unparse) {
     for (SgFile *file : project->get_fileList()) {
       SgSourceFile *source_file = isSgSourceFile(file);
       if (source_file == NULL) {
         continue;
       }
 
-      source_file->set_suppress_variable_declaration_normalization(
-          transTracking);
-
-      const bool enable_token_source_positions =
-          transTracking || explicit_token_source_positions ||
-          explicit_token_unparse;
-      const bool enable_token_whitespace =
-          transTracking || explicit_token_whitespace || explicit_token_unparse;
-
-      source_file->set_use_token_stream_to_improve_source_position_info(
-          enable_token_source_positions);
-      source_file->set_unparse_using_leading_and_trailing_token_mappings(
-          enable_token_whitespace);
-
-      if (explicit_token_unparse) {
-        source_file->set_unparse_tokens(true);
-      }
-
-      if (defer_token_setup &&
-          (source_file->get_unparse_tokens() ||
-           source_file
-               ->get_use_token_stream_to_improve_source_position_info())) {
-        buildTokenStreamMappingForSourceFile(source_file);
-      }
+      // Transformation tracking requires token mappings, but it does not
+      // select token replay for generated output.  Only the explicit unparse
+      // option owns that mode decision.
+      source_file->set_unparse_tokens(explicit_token_unparse);
     }
   }
 
@@ -1188,7 +1504,6 @@ int main(int argc, char *argv[]) {
   }
 
   // DQ (10/6/2015): Remove transformation for debugging token-unparsing.
-  std::vector<std::pair<std::string, std::string>> passthrough_outputs;
   if (!isIdentity) {
     SgFilePtrList file_ptr_list = project->get_fileList();
     visitorTraversal exampleTraversal;
@@ -1205,12 +1520,6 @@ int main(int argc, char *argv[]) {
             cout << "Begin merging declarations # " << inserted_decls.size()
                  << endl;
           collectiveMergeDeclarationAndAssignment(inserted_decls);
-        }
-
-        if (inserted_decls.empty()) {
-          s_file->set_skipfinalCompileStep(true);
-          passthrough_outputs.push_back(std::make_pair(
-              s_file->getFileName(), s_file->get_unparse_output_filename()));
         }
       }
     }
@@ -1276,13 +1585,7 @@ int main(int argc, char *argv[]) {
 
   // run all tests
   AstTests::runAllTests(project);
-  int status = backend(project);
-  if (status == 0) {
-    for (const auto &paths : passthrough_outputs) {
-      copyFileContents(paths.first, paths.second);
-    }
-  }
-  return status;
+  return backend(project);
 }
 
 //==================================================================================
@@ -1912,6 +2215,27 @@ void copyMoveVariableDeclaration(
         NULL; // we may not want to actually make copies here until the copy
               // will really be inserted into AST
     decl_copy = SageInterface::deepCopy(decl);
+    SgInitializedName *init_name_copy =
+        SageInterface::getFirstInitializedName(decl_copy);
+    ROSE_ASSERT(init_name_copy != nullptr);
+    SgVariableSymbol *new_sym = nullptr;
+    auto publish_copy_symbol = [&]() {
+      init_name_copy->set_scope(adjusted_scope);
+      SgSymbol *published =
+          adjusted_scope->find_symbol_from_declaration(init_name_copy);
+      if (published == nullptr) {
+        adjusted_scope->insert_symbol(sym->get_name(),
+                                      new SgVariableSymbol(init_name_copy));
+        published =
+            adjusted_scope->find_symbol_from_declaration(init_name_copy);
+      }
+      new_sym = isSgVariableSymbol(published);
+      if (new_sym == nullptr || new_sym->get_declaration() != init_name_copy) {
+        std::cerr << "REX_MOVE_DECL_INVARIANT[copy-symbol]: copied "
+                     "declaration has no exact symbol in its target scope\n";
+        ROSE_ABORT();
+      }
+    };
     SageInterface::setSourcePositionForTransformation(decl_copy);
     markSubtreeAsTransformation(decl_copy);
 
@@ -1929,6 +2253,7 @@ void copyMoveVariableDeclaration(
     switch (target_scope->variantT()) {
     case V_SgBasicBlock: {
       const bool adjusted_scope_was_modified = adjusted_scope->get_isModified();
+      publish_copy_symbol();
       SageInterface::prependStatement(decl_copy, adjusted_scope);
       markStatementSurroundingWhitespaceTransformation(
           isSgStatement(adjusted_scope));
@@ -1955,6 +2280,12 @@ void copyMoveVariableDeclaration(
         }
         // we move int i; to be for (int i=0; ...);
         SgStatementPtrList &stmt_list = stmt->get_init_stmt();
+        SgForInitStatement *for_init_stmt = stmt->get_for_init_stmt();
+        if (for_init_stmt == nullptr) {
+          std::cerr << "REX_MOVE_DECL_INVARIANT[for-init-owner]: loop has no "
+                       "typed initializer owner\n";
+          ROSE_ABORT();
+        }
         // Try to match a pattern like for (i=0; ...) here
         // assuming there is only one assignment like i=0
         // We don't yet handle more complex cases
@@ -1971,25 +2302,50 @@ void copyMoveVariableDeclaration(
         ROSE_ASSERT(exp_stmt != NULL);
         SgAssignOp *assign_op = isSgAssignOp(exp_stmt->get_expression());
         if (assign_op != NULL) {
-          ROSE_ASSERT(assign_op != NULL);
-          stmt_list.clear();
-          // SageInterface::removeStatement() cannot handle this case, we remove
-          // it on our own
-          SageInterface::mergeDeclarationAndAssignment(decl_copy, exp_stmt,
-                                                       false);
+          publish_copy_symbol();
+          SgVarRefExp *index_ref = isSgVarRefExp(assign_op->get_lhs_operand());
+          if (index_ref == nullptr || index_ref->get_symbol() != sym) {
+            std::cerr << "REX_MOVE_DECL_INVARIANT[for-index-symbol]: loop "
+                         "initializer does not reference the declaration "
+                         "being moved\n";
+            ROSE_ABORT();
+          }
+          index_ref->set_symbol(new_sym);
+          if (!SageInterface::mergeDeclarationAndAssignment(decl_copy,
+                                                            exp_stmt)) {
+            std::cerr << "REX_MOVE_DECL_INVARIANT[for-index-merge]: exact "
+                         "declaration/initializer merge failed\n";
+            ROSE_ABORT();
+          }
+          SgNullStatement *empty_initializer =
+              stmt_list.size() == 1 ? isSgNullStatement(stmt_list.front())
+                                    : nullptr;
+          if (empty_initializer == nullptr ||
+              empty_initializer->get_parent() != for_init_stmt ||
+              exp_stmt->get_parent() != nullptr) {
+            std::cerr << "REX_MOVE_DECL_INVARIANT[for-init-absence]: merging "
+                         "the sole initializer did not publish one exact "
+                         "typed absence sentinel\n";
+            ROSE_ABORT();
+          }
           SageInterface::deepDelete(exp_stmt);
-          ROSE_ASSERT(stmt_list.size() == 0);
           // insert the merged decl into the list, TODO preserve the order in
           // the list else other cases: we simply prepend decl_copy to the front
           // of init_stmt
           // A variant version should be able to handle it
-          SgForInitStatement *for_init_stmt = stmt->get_for_init_stmt();
           const bool for_init_was_modified = for_init_stmt->get_isModified();
           SageInterface::prependStatement(decl_copy, for_init_stmt);
+          if (stmt_list.size() != 1 || stmt_list.front() != decl_copy ||
+              decl_copy->get_parent() != for_init_stmt ||
+              empty_initializer->get_parent() != nullptr) {
+            std::cerr << "REX_MOVE_DECL_INVARIANT[for-init-publication]: "
+                         "merged declaration did not atomically replace the "
+                         "typed absence sentinel\n";
+            ROSE_ABORT();
+          }
           markStatementStructuralTransformation(stmt);
           restoreNodeModifiedFlagAfterMovedDeclInsertion(for_init_stmt,
                                                          for_init_was_modified);
-          ROSE_ASSERT(decl_copy->get_parent() != NULL);
           // we already merged with assignment, we skip it so it won't be
           // considered again?
           inserted_copied_decls.push_back(decl_copy);
@@ -1998,24 +2354,17 @@ void copyMoveVariableDeclaration(
         }
         // TODO: it can be SgCommanOpExp
         else if (isSgCommaOpExp(exp_stmt->get_expression())) {
-          cerr << "Error in moveVariableDeclaration(), multiple expressions in "
-                  "for-condition is not supported now. "
+          cerr << "REX_MOVE_DECL_INVARIANT[for-initializer]: multiple "
+                  "expressions in a for initializer are unsupported"
                << endl;
-          if (tool_keep_going)
-            break;
-          else
-            ROSE_ASSERT(assign_op != NULL);
+          ROSE_ABORT();
         }
       } //
       else if (isReferencedByLoopHeader(sym, stmt)) {
-        cerr << "Error in moveVariableDeclaration(), A variable declaration is "
-                "referenced in the loop header. But it is not loop index. It "
-                "is a bad loop form and should be skipped long time ago. "
+        cerr << "REX_MOVE_DECL_INVARIANT[loop-header-reference]: variable is "
+                "referenced by the loop header but is not the loop index"
              << endl;
-        if (tool_keep_going)
-          break;
-        else
-          ROSE_ASSERT(false);
+        ROSE_ABORT();
       } else // now, the declared variable is not loop index and not referenced
              // in the header. We can safely move it into the loop body
       {
@@ -2023,6 +2372,7 @@ void copyMoveVariableDeclaration(
             SageInterface::ensureBasicBlockAsBodyOfFor(stmt);
         adjusted_scope = loop_body;
         adjusted_scope_was_modified = adjusted_scope->get_isModified();
+        publish_copy_symbol();
         SageInterface::prependStatement(decl_copy, adjusted_scope);
         markStatementSurroundingWhitespaceTransformation(
             isSgStatement(adjusted_scope));
@@ -2074,37 +2424,11 @@ void copyMoveVariableDeclaration(
       ROSE_ASSERT(false);
     }
     }
-    // check what is exactly copied:
-    // Symbol is not copies. It is shared instead
-    SgVariableSymbol *new_sym = SageInterface::getFirstVarSym(decl_copy);
-
-    // init name is copied, but its scope is not changed!
-    // but the symbol cannot be find by calling
-    // init_name->get_symbol_from_symbol_table ()
-    SgInitializedName *init_name_copy =
-        SageInterface::getFirstInitializedName(decl_copy);
-
-    // Note that this will set the isModified flag be it can be ignored.
-    init_name_copy->set_scope(adjusted_scope);
-
-    // ROSE_ASSERT (false);
-    if (orig_scope != adjusted_scope) {
-      // SageInterface::fixVariableDeclaration() cannot switch the scope for
-      // init name. it somehow always reuses previously associated scope.
-      ROSE_ASSERT(i_name != init_name_copy);
-      // we have to manually copy the symbol and insert it
-      SgName sname = sym->get_name();
-
-      // DQ (11/2/2015): Added assertion.
-      // ROSE_ASSERT(adjusted_scope->get_isModified() == false);
-
-      adjusted_scope->insert_symbol(sname,
-                                    new SgVariableSymbol(init_name_copy));
-
-      // DQ (11/2/2015): Added assertion.
-      // ROSE_ASSERT(adjusted_scope->get_isModified() == false);
-    }
-    new_sym = SageInterface::getFirstVarSym(decl_copy);
+    // Publish the copied declaration before redirecting any references.  The
+    // copied InitializedName, rather than a name lookup or the original
+    // symbol, is the identity of the new symbol.
+    ROSE_ASSERT(i_name != init_name_copy);
+    publish_copy_symbol();
     ROSE_ASSERT(sym != new_sym);
     // This is difficult since C++ variables have namespaces
     // Details are in SageInterface::fixVariableDeclaration()
@@ -2112,6 +2436,12 @@ void copyMoveVariableDeclaration(
 
     // DQ (11/2/2015): Added assertion.
     // ROSE_ASSERT(adjusted_scope->get_isModified() == false);
+
+    // Replacing a symbol makes each owning statement a regenerated output
+    // surface. Publish its preprocessing records while their original source
+    // line relationship is still available; the later transformation marking
+    // deliberately invalidates those lexical statement coordinates.
+    publishRegeneratedPreprocessingInfoForReferenceOwners(sym, adjusted_scope);
 
     // replace variable references
     SageInterface::replaceVariableReferences(sym, new_sym, adjusted_scope);
@@ -2148,12 +2478,10 @@ void copyMoveVariableDeclaration(
 
       } while (top_scope != bottom_scope);
     } else {
-      if (!tool_keep_going) {
-        cerr << "Error. declaration scope is not an ancestor scope of the "
-                "target scope"
-             << endl;
-        ROSE_ASSERT(false);
-      }
+      cerr << "REX_MOVE_DECL_INVARIANT[target-scope]: declaration scope is "
+              "not an ancestor of the target scope"
+           << endl;
+      ROSE_ABORT();
     }
 
   } // end for all scopes
@@ -2175,11 +2503,11 @@ void copyMoveVariableDeclaration(
     // is that the preprocessing info must be attached to the "before" position
     // of the declaration.
     if (next_stmt == NULL) {
-      cerr << "Error. Cannot find the next statement of the declaration to be "
-              "moved!"
+      cerr << "REX_MOVE_DECL_INVARIANT[preprocessing-owner]: declaration "
+              "with attached preprocessing information has no following "
+              "statement to own it after the move"
            << endl;
-      if (!tool_keep_going)
-        ROSE_ASSERT(next_stmt != NULL);
+      ROSE_ABORT();
     } else {
       // consider things attached before, move to the same location, using
       // preprepend  to insert it.

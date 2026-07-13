@@ -20,7 +20,9 @@ main (int argc, char *argv[])
 
     if (functionName == "bar2")
     {
-      SgFunctionCallExp * func_call = isSgFunctionCallExp(func_ref->get_parent());
+      SgFunctionCallExp *func_call =
+          getEnclosingNode<SgFunctionCallExp>(func_ref);
+      ROSE_ASSERT(func_call != NULL);
       insertAfterUsingCommaOp(buildVarRefExp("a", getScope(func_ref)), func_call);
     }
     i++;

@@ -6,6 +6,23 @@ const path = require("path");
 
 const cases = [
   {
+    name : "wasm-driver-resource-contract",
+    mode : "plain",
+    filename : "driver_resource_contract.c",
+    source : `#include <stddef.h>
+
+#if !defined(__clang_major__) || __clang_major__ != 22
+#error "REX WASM must use the configured LLVM 22 in-process frontend"
+#endif
+
+int main(void) {
+  size_t value = sizeof(int);
+  return value == 0;
+}
+`,
+    expectedFiles : [ "rose_driver_resource_contract.c" ],
+  },
+  {
     name : "plain-c-round-trip",
     mode : "plain",
     filename : "plain_round_trip.c",

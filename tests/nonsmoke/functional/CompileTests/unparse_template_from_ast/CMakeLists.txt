@@ -15,7 +15,6 @@ set(_unparse_template_specimens
 )
 
 set(_unparse_template_flags
-  -std=c++
   -rose:unparse_template_ast
   -DSKIP_ROSE_BUILTIN_DECLARATIONS
 )
@@ -33,4 +32,3 @@ foreach(specimen IN LISTS _unparse_template_specimens)
       ${_target}
   )
 endforeach()
-

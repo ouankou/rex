@@ -59,26 +59,13 @@ void SimpleTransformation::visit(SgNode* astNode)
 
                printf ("   --- functionDeclaration->isCompilerGenerated() = %s \n",functionDeclaration->isCompilerGenerated() ? "true" : "false");
                printf ("   --- functionDeclaration->isTransformation()    = %s \n",functionDeclaration->isTransformation()    ? "true" : "false");
-            // printf ("   --- function: %s \n",functionDeclaration->unparseToString().c_str());
-               if (functionDeclaration->isCompilerGenerated() == true)
-                  {
-                    ROSE_ASSERT(functionDeclaration->isTransformation() == false);
-
-                    functionDeclaration->setTransformation();
-                    functionDeclaration->setOutputInCodeGeneration();
-
-                    printf ("   --- (before unparse) functionDeclaration->isTransformation()    = %s \n",functionDeclaration->isTransformation()    ? "true" : "false");
-
-                    printf ("   --- function: %s \n",functionDeclaration->unparseToString().c_str());
-
-                    functionDeclaration->unsetOutputInCodeGeneration();
-                    functionDeclaration->unsetTransformation();
-                  }
-                 else
-                  {
-                 // printf ("   --- (non-compiler-generated) function: %s \n",functionDeclaration->unparseToString().c_str());
-                    printf ("   --- function: %s \n",functionDeclaration->unparseToString().c_str());
-                  }
+               if (SageInterface::hasExactSemanticAuxiliaryOwnership(
+                       functionDeclaration)) {
+                 printf("   --- function: <semantic-auxiliary> \n");
+               } else {
+                 printf("   --- function: %s \n",
+                        functionDeclaration->unparseToString().c_str());
+               }
              }
         }
    }
@@ -97,7 +84,3 @@ int main(int argc, char *argv[])
 
      return backend(project);
    }
-
-
-
-

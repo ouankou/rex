@@ -10,7 +10,8 @@ int main(int argc, char **argv) {
   for (SgNode *node : templates) {
     SgTemplateFunctionDeclaration *decl = isSgTemplateFunctionDeclaration(node);
     if (decl != nullptr && decl->get_name() == "choose") {
-      choose_template = decl;
+      choose_template = isSgTemplateFunctionDeclaration(
+          decl->get_firstNondefiningDeclaration());
       break;
     }
   }
@@ -50,7 +51,14 @@ int main(int argc, char **argv) {
     if (decl == nullptr) {
       continue;
     }
-    if (decl->get_templateDeclaration() != choose_template) {
+    SgTemplateFunctionDeclaration *instantiation_template =
+        decl->get_templateDeclaration();
+    SgTemplateFunctionDeclaration *canonical_instantiation_template =
+        instantiation_template != nullptr
+            ? isSgTemplateFunctionDeclaration(
+                  instantiation_template->get_firstNondefiningDeclaration())
+            : nullptr;
+    if (canonical_instantiation_template != choose_template) {
       continue;
     }
     if (!decl->get_constraintSatisfactionEvaluated()) {

@@ -14,6 +14,8 @@
 
 #include "StmtInfoCollect.h"
 
+#include <algorithm>
+
 #include <map>
 
 #include <ostream>
@@ -71,6 +73,46 @@ using namespace VirtualCFG;
 using namespace ::DominatorTreesAndDominanceFrontiers;
 ROSE_DLL_API bool IsImportantForSliceSgFilter(SgNode *n);
 struct IsImportantForSliceCFGFilter;
+
+inline std::string dependenceDiagnosticNodeText(const SgNode *node) {
+  ASSERT_not_null(node);
+  if (const SgNullExpression *absence = isSgNullExpression(node)) {
+    SgNode *owner = absence->get_parent();
+    if (absence->get_role() !=
+            SgNullExpression::e_null_expression_syntactic_absence ||
+        owner == nullptr) {
+      fprintf(stderr,
+              "REX_SLICING_INVARIANT[diagnostic-null-expression]: null=%p "
+              "role=%d parent=%p/%s has no exact syntactic-absence owner\n",
+              static_cast<const void *>(absence),
+              static_cast<int>(absence->get_role()), static_cast<void *>(owner),
+              owner != nullptr ? owner->class_name().c_str() : "<null>");
+      ROSE_ABORT();
+    }
+    const SgNodePtrList children = owner->get_traversalSuccessorContainer();
+    if (std::count(children.begin(), children.end(), absence) != 1) {
+      fprintf(stderr,
+              "REX_SLICING_INVARIANT[diagnostic-null-expression]: null=%p "
+              "has no unique owning traversal edge in parent=%p/%s\n",
+              static_cast<const void *>(absence), static_cast<void *>(owner),
+              owner->class_name().c_str());
+      ROSE_ABORT();
+    }
+    if (const SgForStatement *for_statement = isSgForStatement(owner);
+        for_statement != nullptr && for_statement->get_increment() == absence) {
+      return "<SgNullExpression: absent for increment>";
+    }
+    return std::string("<SgNullExpression: syntactic absence owned by ") +
+           owner->sage_class_name() + ">";
+  }
+  if (isSgFunctionParameterList(node) != nullptr ||
+      isSgCtorInitializerList(node) != nullptr ||
+      isSgCatchStatementSeq(node) != nullptr) {
+    return std::string("<") + node->sage_class_name() +
+           ": owned syntax container>";
+  }
+  return node->unparseToString();
+}
 
 NodeQuerySynthesizedAttributeType queryIsImportantForSliceType(SgNode *astNode);
 NodeQuerySynthesizedAttributeType
@@ -220,7 +262,8 @@ public:
 
   DependenceNode(SgNode *node)
       : depType(SGNODE), sgNode(node),
-        name(escapeString(node->unparseToString())), highlight(false) {}
+        name(escapeString(dependenceDiagnosticNodeText(node))),
+        highlight(false) {}
 
   DependenceNode(NodeType type, SgNode *node = NULL, std::string depName = "")
       : depType(type), sgNode(node), name(depName), highlight(false) {}
@@ -341,9 +384,8 @@ public:
         os << sgNode->class_name() << "\\n";
         if (isSgExpressionRoot(sgNode)) {
           os << "["
-             << escapeString(isSgExpressionRoot(sgNode)
-                                 ->get_operand()
-                                 ->unparseToString())
+             << escapeString(dependenceDiagnosticNodeText(
+                    isSgExpressionRoot(sgNode)->get_operand()))
              << "]";
         } else if (isSgFunctionDeclaration(sgNode)) {
           os << "[" << isSgFunctionDeclaration(sgNode)->get_name().str() << "]";
@@ -363,7 +405,8 @@ public:
              << "]";
         } else {
           //            std::cout <<"node"<<sgNode->class_name()<<std::endl;
-          os << "[" << escapeString(sgNode->unparseToString()) << "]";
+          os << "[" << escapeString(dependenceDiagnosticNodeText(sgNode))
+             << "]";
         }
         break;
       case FORMALOUT: {
@@ -379,8 +422,8 @@ public:
       }
 #else
       if (isSgExpressionRoot(sgNode)) {
-        os << escapeString(
-            isSgExpressionRoot(sgNode)->get_operand()->unparseToString());
+        os << escapeString(dependenceDiagnosticNodeText(
+            isSgExpressionRoot(sgNode)->get_operand()));
       } else if (isSgFunctionDeclaration(sgNode)) {
         os << isSgFunctionDeclaration(sgNode)->get_name().str();
       } else if (isSgFunctionDefinition(sgNode)) {
@@ -395,7 +438,7 @@ public:
         os << isSgInitializedName(sgNode)->get_qualified_name().getString();
       } else {
         //            std::cout <<"node"<<sgNode->class_name()<<std::endl;
-        os << escapeString(sgNode->unparseToString());
+        os << escapeString(dependenceDiagnosticNodeText(sgNode));
       }
 
 #endif

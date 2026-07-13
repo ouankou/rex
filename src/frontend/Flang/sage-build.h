@@ -14,12 +14,15 @@
 
 #include <flang/Semantics/symbol.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <list>
 #include <optional>
 #include <string>
 #include <tuple>
+#include <vector>
 
+#include "builder/Tokens.h"
 #include "general_language_translation.h"
 
 class SgBasicBlock;
@@ -27,21 +30,103 @@ class SgExpression;
 class SgIfStmt;
 class SgSourceFile;
 class SgStatement;
+class SgSymbol;
+class SgScopeStatement;
 class SgType;
+class SgVariableSymbol;
+class SgWaitStatement;
 using OptLabel = std::optional<unsigned long long>;
-using EntityDeclTuple = std::tuple<std::string, SgType *, SgExpression *>;
+// Keep the semantic type that owns an entity distinct from the exact type
+// surface written in the source.  Initializers must be constructed with the
+// semantic type; the source type is published independently on the
+// SgInitializedName for source emission.
+using EntityDeclTuple =
+    std::tuple<std::string, SgType *, SgType *, SgExpression *>;
 
 // Needed until Rose compiles with C++17 (see setSgSourceFile below)
 class SgSourceFile;
 
 namespace Rose::builder {
 
+class BuildVisitor;
+enum class FortranImplicitTypeSpecKind;
+
+SgType *BuildFortranSemanticObjectType(const Fortran::semantics::Symbol &symbol,
+                                       BuildVisitor &visitor);
+
+struct FlangSourceRange {
+  std::size_t provenance_start{0};
+  std::size_t provenance_size{0};
+  std::string path;
+  int start_line{0};
+  int start_column{0};
+  int end_line{0};
+  int end_column{0};
+};
+
+struct FlangSourceToken {
+  enum class Kind { comment, preprocessing };
+
+  Kind kind{Kind::comment};
+  PreprocessingDirectiveKind preprocessing_kind{
+      PreprocessingDirectiveKind::none};
+  FlangSourceRange range;
+  std::string spelling;
+};
+
+struct FlangDirectivePhysicalLine {
+  FlangSourceRange range;
+  std::string spelling;
+};
+
+struct FlangDirectiveGroup {
+  enum class Family { openmp, openmp_extension, openacc, cuda_fortran };
+  enum class SourceForm { physical_directive, macro_expansion };
+  enum class Producer { flang_parse_tree, rex_openmp_parser };
+
+  Family family{Family::openmp};
+  SourceForm source_form{SourceForm::physical_directive};
+  Producer producer{Producer::flang_parse_tree};
+  Fortran::parser::CharBlock cooked_source;
+  std::size_t source_order_start{0};
+  std::size_t source_order_size{0};
+  FlangSourceRange range;
+  std::vector<FlangDirectivePhysicalLine> physical_lines;
+  std::string logical_spelling;
+  std::string semantic_spelling;
+};
+
+struct FlangSourceStream {
+  std::vector<FlangSourceToken> tokens;
+  std::vector<FlangDirectiveGroup> directives;
+  Fortran::parser::CharBlock directive_cooked_source;
+  Fortran::parser::CharBlock base_cooked_source;
+  std::vector<std::size_t> base_to_directive_offsets;
+};
+
+struct FlangBaseFortranCookedSource {
+  const Fortran::parser::CookedSource *source{nullptr};
+  std::vector<std::size_t> original_offsets;
+};
+
+FlangBaseFortranCookedSource
+BuildFlangBaseFortranCookedSource(Fortran::parser::AllCookedSources &,
+                                  const Fortran::parser::CookedSource &,
+                                  bool enable_openmp);
+
+FlangSourceStream CollectFlangSourceStream(
+    Fortran::parser::Program &, Fortran::parser::AllCookedSources &,
+    const Fortran::parser::CookedSource &, const FlangBaseFortranCookedSource &,
+    bool enable_openmp, bool enable_openacc, bool fixed_form);
+
 // SgSourceFile* temporary needed until ROSE supports C++17
 void setSgSourceFile(SgSourceFile *sg_file);
 SgSourceFile *getSgSourceFile();
 
 // Converts parsed program to ROSE Sage nodes
-void Build(Fortran::parser::Program &, Fortran::parser::AllCookedSources &);
+void Build(Fortran::parser::Program &, Fortran::parser::AllCookedSources &,
+           const FlangSourceStream &, int double_precision_kind,
+           Fortran::semantics::SemanticsContext &);
 
 void Build(Fortran::parser::CompilerDirective &);
 void Build(Fortran::parser::OpenACCRoutineConstruct &);
@@ -54,9 +139,6 @@ void Build(Fortran::parser::AccEndCombinedDirective &);
 void Build(Fortran::parser::OmpEndLoopDirective &);
 void Build(Fortran::parser::CUFKernelDoConstruct &);
 
-void BuildFunctionReturnType(const Fortran::parser::SpecificationPart &,
-                             std::string &, SgType *&);
-
 void Build(Fortran::parser::FunctionStmt &, std::list<std::string> &,
            std::string &, std::string &,
            LanguageTranslation::FunctionModifierList &, SgType *&);
@@ -64,14 +146,8 @@ void Build(Fortran::parser::SubroutineStmt &, std::list<std::string> &,
            std::string &, LanguageTranslation::FunctionModifierList &);
 
 void Build(const Fortran::parser::Substring &, SgExpression *&);
-void Build(const Fortran::parser::FunctionReference &, SgExpression *&);
 void Build(const Fortran::parser::Call &, std::list<SgExpression *> &arg_list,
-           std::string &name, SgExpression *&designator);
-inline void Build(const Fortran::parser::Call &x,
-                  std::list<SgExpression *> &arg_list, std::string &name) {
-  SgExpression *designator = nullptr;
-  Build(x, arg_list, name, designator);
-}
+           const Fortran::parser::Name *&name, SgExpression *&designator);
 void Build(const Fortran::parser::ProcComponentRef &, SgExpression *&);
 
 void Build(const Fortran::parser::ActualArgSpec &, SgExpression *&);
@@ -124,16 +200,18 @@ void Build(Fortran::parser::InternalSubprogramPart &);
 void BuildImpl(Fortran::parser::ParameterStmt &);
 void BuildImpl(Fortran::parser::OldParameterStmt &);
 void BuildImpl(Fortran::parser::FormatStmt &);
-void BuildImpl(Fortran::parser::EntryStmt &);
+SgEntryStatement *BuildImpl(Fortran::parser::EntryStmt &);
 
 void BuildImpl(Fortran::parser::UseStmt &);
 
 void Build(
     std::list<Fortran::parser::ImplicitSpec> &,
-    std::list<
-        std::tuple<SgType *, std::list<std::tuple<char, std::optional<char>>>>>
+    std::list<std::tuple<SgType *, SgSymbol *, FortranImplicitTypeSpecKind,
+                         std::list<std::tuple<char, std::optional<char>>>>>
         &implicit_spec_list);
 void Build(Fortran::parser::ImplicitSpec &, SgType *&type,
+           SgSymbol *&source_derived_type_symbol,
+           FortranImplicitTypeSpecKind &fortran_type_spec,
            std::list<std::tuple<char, std::optional<char>>> &letter_spec_list);
 void Build(std::list<Fortran::parser::LetterSpec> &,
            std::list<std::tuple<char, std::optional<char>>> &letter_spec_list);
@@ -157,7 +235,8 @@ void Build(Fortran::parser::DerivedTypeSpec &, SgType *&);
 
 void EntityDecls(std::list<Fortran::parser::EntityDecl> &,
                  std::list<EntityDeclTuple> &, SgType *,
-                 Fortran::parser::ArraySpec *dimensionSpec);
+                 Fortran::parser::ArraySpec *dimensionSpec,
+                 const Fortran::parser::CharBlock &statement_source);
 
 void Build(Fortran::parser::AttrSpec &,
            LanguageTranslation::ExpressionKind &modifier_enum);
@@ -167,7 +246,7 @@ void Build(Fortran::parser::IntegerTypeSpec &, SgType *&);
 #if USE_DEPRECATED
 void Build(const Fortran::parser::CharLength &, SgExpression *&);
 #endif
-void Build(Fortran::parser::Initialization &, SgExpression *&);
+void Build(Fortran::parser::Initialization &, SgExpression *&, SgType *);
 
 void Build(Fortran::parser::SpecificationExpr &, SgExpression *&);
 void Build(Fortran::parser::Scalar<Fortran::parser::IntExpr> &,
@@ -225,7 +304,6 @@ void Build(Fortran::parser::PointerAssignmentStmt &);
 void Build(Fortran::parser::PrintStmt &);
 
 void Build(Fortran::parser::DefaultCharExpr &, SgExpression *&);
-void Build(const Fortran::parser::Label &, SgExpression *&);
 void Build(const Fortran::parser::Star &, SgExpression *&);
 void Build(Fortran::parser::InputItem &, SgExpression *&);
 void Build(Fortran::parser::OutputItem &, SgExpression *&);
@@ -243,42 +321,33 @@ void Build(Fortran::parser::UnlockStmt &);
 void Build(Fortran::parser::WaitStmt &);
 void Build(Fortran::parser::WhereStmt &);
 void Build(Fortran::parser::WriteStmt &);
-void Build(Fortran::parser::ComputedGotoStmt &);
 void Build(Fortran::parser::ForallStmt &);
-void Build(Fortran::parser::ArithmeticIfStmt &);
-void Build(Fortran::parser::AssignStmt &);
-void Build(Fortran::parser::AssignedGotoStmt &);
 void Build(Fortran::parser::PauseStmt &);
 void Build(Fortran::parser::NamelistStmt &);
 
 // Expr
 //
 void Build(const Fortran::parser::CharLiteralConstantSubstring &,
-           SgExpression *&);
+           SgType *substring_type, SgExpression *&);
 void Build(const Fortran::parser::SubstringInquiry &, SgExpression *&);
 void Build(const Fortran::parser::Substring &, SgExpression *&);
 void Build(const Fortran::parser::Designator &, SgExpression *&);
 void Build(const Fortran::parser::DataRef &, SgExpression *&);
 
-void Build(const Fortran::parser::ArrayConstructor &, SgExpression *&);
-void Build(const Fortran::parser::AcSpec &, SgExpression *&);
 void Build(const Fortran::parser::AcValue &, SgExpression *&);
 void Build(const Fortran::parser::AcImpliedDo &, SgExpression *&);
 void Build(const Fortran::parser::StructureConstructor &, SgExpression *&);
 void Build(const Fortran::parser::Expr::DefinedUnary &, SgExpression *&);
 void Build(const Fortran::parser::Expr::DefinedBinary &, SgExpression *&);
-void Build(const Fortran::parser::Expr::ComplexConstructor &, SgExpression *&);
 void Build(const Fortran::parser::Expr::Parentheses &, SgExpression *&);
 void Build(const Fortran::parser::Expr::UnaryPlus &, SgExpression *&);
 void Build(const Fortran::parser::Expr::Negate &, SgExpression *&);
 void Build(const Fortran::parser::Expr::NOT &, SgExpression *&);
-void Build(const Fortran::parser::Expr::PercentLoc &, SgExpression *&);
 
 void Build(const Fortran::parser::StructureComponent &, SgExpression *&);
 void Build(const Fortran::parser::ArrayElement &, SgExpression *&);
 void Build(const Fortran::parser::CoindexedNamedObject &, SgExpression *&);
 void Build(const Fortran::parser::ImageSelector &, SgExpression *&);
-void Build(const Fortran::parser::ImageSelectorSpec &, SgExpression *&);
 void Build(const Fortran::parser::SectionSubscript &, SgExpression *&);
 void Build(const Fortran::parser::SubscriptTriplet &, SgExpression *&);
 
@@ -312,7 +381,6 @@ void Build(std::list<Fortran::parser::IfConstruct::ElseIfBlock> &,
            SgBasicBlock *&else_if_block, SgIfStmt *&else_if_stmt);
 
 // SpecificationConstruct
-void Build(Fortran::parser::EnumDef &);
 void Build(Fortran::parser::InterfaceBlock &);
 void Build(Fortran::parser::StructureDef &);
 void Build(Fortran::parser::OtherSpecificationStmt &);
@@ -335,6 +403,44 @@ void getModifiers(const Fortran::parser::LanguageBindingSpec &,
                   LanguageTranslation::ExpressionKind &);
 void getModifiers(Fortran::parser::TypeAttrSpec &,
                   LanguageTranslation::ExpressionKind &);
+
+namespace detail {
+
+enum class FlangWaitSpecKind { unit, end, eor, err, id, iomsg, iostat };
+enum class FlangSourceTypeContract {
+  explicit_object,
+  component,
+  procedure_result
+};
+
+void AttachFlangWaitSpecExpression(SgWaitStatement *, FlangWaitSpecKind,
+                                   SgExpression *);
+void ValidateFlangWaitStatement(SgWaitStatement *);
+void RequireFlangSourceTypeContract(SgType *, SgType *, FlangSourceTypeContract,
+                                    const std::string &);
+Fortran::parser::CharBlock RequireExactFortranSignedRealSignSource(
+    const Fortran::parser::CharBlock &real_source,
+    const Fortran::parser::CharBlock &statement_source,
+    Fortran::parser::Sign sign);
+void PublishExactFortranEntityCharacterLength(
+    SgExpression *, const Fortran::parser::CharLength &,
+    const Fortran::parser::Name &,
+    const Fortran::parser::CharBlock &statement_source);
+
+SgSymbol *RequireFlangPublishedSemanticSymbol(const Fortran::parser::Name &,
+                                              BuildVisitor &);
+SgExpression *BuildFlangSemanticNameReference(const Fortran::parser::Name &,
+                                              BuildVisitor &,
+                                              SgScopeStatement *);
+SgVariableSymbol *
+RequireFlangSemanticComponentSymbol(const Fortran::parser::Name &,
+                                    BuildVisitor &);
+SgVariableSymbol *
+PublishFlangSemanticFunctionResult(const Fortran::parser::Name &,
+                                   const std::string &, BuildVisitor &,
+                                   SgScopeStatement *);
+
+} // namespace detail
 
 } // namespace Rose::builder
 

@@ -62,14 +62,37 @@ void VisitEveryNode::visit(SgNode *node) {
 
   std::vector<SgNode *> linearizedSubtree = linearize_subtree(node);
 
-  outStream << "Unparsed: " << node->class_name() << " "
-            << node->unparseToString() << std::endl;
+  const bool ownerOnlySyntaxContainer =
+      isSgCatchStatementSeq(node) != nullptr ||
+      isSgFunctionParameterList(node) != nullptr ||
+      isSgCtorInitializerList(node) != nullptr;
+  outStream << "Unparsed: " << node->class_name();
+  if (ownerOnlySyntaxContainer) {
+    outStream << " <owned-syntax-container>";
+  } else if (SgInitializedName *initializedName = isSgInitializedName(node)) {
+    outStream << " " << initializedName->get_name().getString();
+  } else {
+    const std::string source = node->unparseToString();
+    if (!source.empty()) {
+      outStream << " " << source;
+    }
+  }
+  outStream << std::endl;
   outStream << "          ";
+  bool first = true;
   for (std::vector<SgNode *>::iterator it_sub = linearizedSubtree.begin();
        it_sub != linearizedSubtree.end(); ++it_sub) {
-    outStream << (*it_sub)->class_name() << " ";
-    if (isSgValueExp(*it_sub) != NULL)
-      outStream << (*it_sub)->unparseToString() + " ";
+    if (!first) {
+      outStream << " ";
+    }
+    first = false;
+    outStream << (*it_sub)->class_name();
+    if (isSgValueExp(*it_sub) != NULL) {
+      const std::string value = (*it_sub)->unparseToString();
+      if (!value.empty()) {
+        outStream << " " << value;
+      }
+    }
   }
 
   outStream << std::endl;

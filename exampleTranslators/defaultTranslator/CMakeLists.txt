@@ -1,6 +1,5 @@
 set(DEFAULT_TRANSLATOR_SOURCES
   defaultTranslator.C
-  KeepGoingTranslator.cpp
   preprocessingInfoDumper.C
   mangledNameDumper.C
   qualifiedNameDumper.C

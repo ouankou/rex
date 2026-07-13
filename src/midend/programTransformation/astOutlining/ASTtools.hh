@@ -41,6 +41,17 @@ findFirstFuncDefScope(const SgStatement *s);
 //! Search for the first surrounding function definition.
 ROSE_DLL_API const SgFunctionDefinition *findFirstFuncDef(const SgStatement *s);
 
+//! Return the canonical declaration that identifies a function family.
+ROSE_DLL_API SgFunctionDeclaration *
+canonicalFunctionFamilyDeclaration(SgFunctionDeclaration *declaration);
+
+//! Return true when two declarations belong to the same function family.
+ROSE_DLL_API bool sameFunctionFamily(SgFunctionDeclaration *lhs,
+                                     SgFunctionDeclaration *rhs);
+
+//! Return the function that lexically owns a function-local named type.
+ROSE_DLL_API SgFunctionDeclaration *functionOwningHiddenNamedType(SgType *type);
+
 //! Returns 'true' if the specific function is a 'const' member function.
 bool isConstMemFunc(const SgFunctionDeclaration *decl);
 
@@ -49,6 +60,20 @@ bool isConstMemFunc(const SgFunctionDefinition *def);
 
 //! Returns 'true' if the specified type is a 'const' object.
 bool isConstObj(const SgType *type);
+
+//! Build the exact semantic result type of applying unary '&' to an
+//! expression of operand_type.  C++ reference declarations denote their
+//! referred-to object in an expression, so this never constructs the illegal
+//! pointer-to-reference type.
+ROSE_DLL_API SgPointerType *buildAddressOfResultType(SgType *operand_type);
+
+//! Publish the exact use-site pack-expansion surface for an argument that
+//! references a template parameter.  A type parameter's SgTemplateType owns
+//! the ellipsis in its declaration; the SgTemplateArgument owns the ellipsis
+//! in a generated template-id use.
+ROSE_DLL_API void
+publishTemplateParameterPackExpansion(const SgTemplateParameter *parameter,
+                                      SgTemplateArgument *argument);
 
 //! Collect variables suitable for using pointer dereferencing
 ROSE_DLL_API void collectPointerDereferencingVarSyms(const SgStatement *s,
@@ -149,11 +174,6 @@ ROSE_DLL_API void setSourcePositionAsTransformation(SgNode *node);
 //! Reset source position as transformation recursively
 ROSE_DLL_API void
 setSourcePositionAtRootAndAllChildrenAsTransformation(SgNode *node);
-
-//! Assign a generated subtree to the physical source file that should receive
-//! it.
-ROSE_DLL_API void assignGeneratedSubtreeToPhysicalFile(SgNode *node,
-                                                       int physical_file_id);
 
 } // namespace ASTtools
 

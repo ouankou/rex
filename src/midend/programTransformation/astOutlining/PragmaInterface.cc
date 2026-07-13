@@ -36,6 +36,11 @@ using namespace std;
 
 // =====================================================================
 
+bool Outliner::isOutlineDirective(const SgPragmaDeclaration *decl) {
+  return decl != nullptr && decl->get_pragma() != nullptr &&
+         decl->get_pragma()->get_pragma() == PRAGMA_OUTLINE;
+}
+
 /*!
  *  \brief Check whether the specified pragma is an outlining
  *  directive.
@@ -46,11 +51,7 @@ using namespace std;
  *  or no such statement exists.
  */
 static SgStatement *processPragma(SgPragmaDeclaration *decl) {
-  if (!decl || !decl->get_pragma())
-    return 0;
-
-  string pragmaString = decl->get_pragma()->get_pragma();
-  if (pragmaString != PRAGMA_OUTLINE) // Not an outlining pragma.
+  if (!Outliner::isOutlineDirective(decl))
     return 0;
 
   // Get statement to outline

@@ -1,16 +1,14 @@
 
-/* unparser.h
- * This header file contains the class declaration for the newest unparser. Six
- * C files include this header file: unparser.C, modified_sage.C,
- * unparse_stmt.C, unparse_expr.C, unparse_type.C, and unparse_sym.C.
- */
+/* C and C++ statement and expression unparser declarations. */
 
 #ifndef UNPARSER_EXPRSTMT
 #define UNPARSER_EXPRSTMT
 
 #include "unparser.h"
 
+#include <cstddef>
 #include <set>
+#include <utility>
 
 // Unparser::token_sequence_position_enum_type xxx;
 
@@ -43,6 +41,11 @@ class SgAsmOp;
 // using namespace std;
 class Unparser;
 
+enum class TemplateArgumentEmission {
+  explicit_source_prefix,
+  complete_typed_identity
+};
+
 class Unparse_ExprStmt : public UnparseLanguageIndependentConstructs {
 public:
   Unparse_ExprStmt(Unparser *unp, std::string fname);
@@ -57,9 +60,6 @@ public:
   virtual void unparseTemplateArgument(SgTemplateArgument *templateArgument,
                                        SgUnparse_Info &info);
 
-  // Reset per-unparse state that must not leak across translation units.
-  void resetTemplateParameterEmissionState();
-
   // DQ (11/27/2004): Added to support unparsing of pointers to nested template
   // arguments
   virtual void unparseTemplateName(
@@ -72,8 +72,8 @@ public:
                                        templateInstantiationFunctionDeclaration,
                                    SgUnparse_Info &info);
   void unparseTemplateArgumentList(
-      const SgTemplateArgumentPtrList &templateArgListPtr,
-      SgUnparse_Info &info);
+      const SgTemplateArgumentPtrList &templateArgListPtr, SgUnparse_Info &info,
+      TemplateArgumentEmission emission);
 
   // DQ (9/13/2014): Added as part of refactoring support for name
   // qualification.
@@ -81,6 +81,10 @@ public:
       const SgTemplateParameterPtrList &templateParameterList,
       SgUnparse_Info &info, bool is_template_header = false,
       SgDeclarationStatement *template_declaration = nullptr);
+  void unparseSourceSpelledTemplateHeaders(
+      const SgTemplateParameterListPtrList &headers,
+      SgDeclarationStatement *declaration, SgUnparse_Info &info,
+      const char *declaration_kind);
 
   // DQ (5/25/2013): Added support for unparsing the name of the template member
   // function.
@@ -96,20 +100,11 @@ public:
                                            SgInitializedName *initializedName,
                                            bool outputParameterDeclaration,
                                            SgUnparse_Info &info);
+  void unparseOldStyleFunctionParameterDeclarations(
+      SgFunctionDeclaration *funcdecl_stmt, SgUnparse_Info &info);
 
   void unparse_helper(SgFunctionDeclaration *funcdecl_stmt,
                       SgUnparse_Info &info);
-
-  // DQ (5/27/2005): Added to support unparsing of compiler generated statements
-  // after comments attached to the following statement. We would like to not
-  // have any comments be attached to compiler generated statements so that they
-  // can be easily inserted anywhere.
-  //! Unparser support for compiler-generated statments
-  // void saveCompilerGeneratedStatements ( SgStatement* stmt, SgUnparse_Info &
-  // info );
-
-  //! Unparser support for compiler-generated statments
-  void outputCompilerGeneratedStatements(SgUnparse_Info &info);
 
   //! Support for Fortran numeric labels (can appear on any statement), this is
   //! an empty function for C/C++.
@@ -185,6 +180,8 @@ public:
   virtual void unparseFloat16Val(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseFloat32Val(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseFloat64Val(SgExpression *expr, SgUnparse_Info &info);
+  virtual void unparseFloat80Val(SgExpression *expr, SgUnparse_Info &info);
+  virtual void unparseFloat128Val(SgExpression *expr, SgUnparse_Info &info);
   // virtual void unparseDoubleVal               (SgExpression* expr,
   // SgUnparse_Info& info);
   virtual void unparseLongDoubleVal(SgExpression *expr, SgUnparse_Info &info);
@@ -274,7 +271,6 @@ public:
   virtual void unparseVConst(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseExprInit(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseAggrInit(SgExpression *expr, SgUnparse_Info &info);
-  virtual void unparseCompInit(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseCtorInit(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseAssnInit(SgExpression *expr, SgUnparse_Info &info);
 
@@ -341,14 +337,22 @@ public:
                                         SgUnparse_Info &info);
 
   virtual void unparseFuncDeclStmt(SgStatement *stmt, SgUnparse_Info &info);
+  virtual void unparseCudaLaunchBounds(SgFunctionDeclaration *declaration,
+                                       SgUnparse_Info &info);
   virtual void unparseFuncDefnStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseMFuncDeclStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseVarDeclStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseVarDefnStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseClassDeclStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseClassDefnStmt(SgStatement *stmt, SgUnparse_Info &info);
+  SgStatement *
+  unparseClassMembersWithSourceRoles(SgClassDefinition *classDefinition,
+                                     SgUnparse_Info &info,
+                                     bool forceAstStatementEmission);
   virtual void unparseEnumDeclStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseExprStmt(SgStatement *stmt, SgUnparse_Info &info);
+  virtual void unparseAttributedStatement(SgStatement *stmt,
+                                          SgUnparse_Info &info);
   virtual void unparseLabelStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseWhileStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseDoWhileStmt(SgStatement *stmt, SgUnparse_Info &info);
@@ -374,6 +378,9 @@ public:
   // DQ (7/25/2014): Adding support for C11 static assertions.
   virtual void unparseStaticAssertionDeclaration(SgStatement *stmt,
                                                  SgUnparse_Info &info);
+
+  virtual void unparseFriendTypeDeclaration(SgStatement *stmt,
+                                            SgUnparse_Info &info);
 
   // DQ (12/26/2011): New unparse functions for new template declaration IR
   // nodes (new design for template declarations).
@@ -465,6 +472,8 @@ public:
   // precision to the global scope and permit the unparsing via the token stream
   // to be used as well.
   virtual void unparseEmptyDeclaration(SgStatement *stmt, SgUnparse_Info &info);
+  virtual void unparseAccessLabelStatement(SgStatement *stmt,
+                                           SgUnparse_Info &info);
 
   // DQ (5/1/2004): Added support for unparsing namespace constructs
   virtual void unparseNamespaceDeclarationStatement(SgStatement *stmt,
@@ -483,10 +492,6 @@ public:
   void initializeDeclarationsFromParent(
       SgDeclarationStatement *declarationStatement, SgClassDefinition *&cdefn,
       SgNamespaceDefinitionStatement *&namespaceDefn, int debugSupport = 0);
-
-  //! DQ (10/12/2006): Support for qualified names (function names can't have
-  //! global scope specifier in GNU, or so it seems).
-  std::string trimGlobalScopeQualifier(std::string qualifiedName);
 
   //! Support for exception specification for functions and member functions
   virtual void
@@ -569,18 +574,15 @@ public:
   void unparsePragmaAttribute(SgScopeStatement *scope_stmt);
 
 private:
-  // Template default-argument emission tracking is scoped to a single unparse
-  // task.
-  std::set<const SgTemplateParameter *> emitted_default_template_args_;
-  std::set<std::string> emitted_default_template_arg_keys_;
-
+  std::string requireCompleteClassTemplateId(
+      SgTemplateInstantiationDecl *declaration) const;
   void unparseFunctionTryBlock(SgTryStmt *try_stmt, SgUnparse_Info &ninfo);
 };
 
 // Helpers
 
-std::string
-unparse_register_name(SgInitializedName::asm_register_name_enum register_name);
+std::string unparse_asm_clobber_name(const std::string &register_name);
+std::string unparse_asm_label_name(const std::string &label_name);
 
 bool isNonFriendMemberFunctionDeclaration(const SgFunctionDeclaration *decl);
 

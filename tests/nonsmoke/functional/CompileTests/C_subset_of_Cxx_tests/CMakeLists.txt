@@ -76,7 +76,7 @@ foreach(file_to_test ${files_to_test})
   list(APPEND _c_subset_of_cxx_sources ../Cxx_tests/${file_to_test})
 endforeach()
 
-set(ROSE_FLAGS -rose:C  -w)
+set(ROSE_FLAGS -w)
 
 function(compile_test_in_binary_dir input_file label)
   get_filename_component(test_name ${input_file} NAME_WE)

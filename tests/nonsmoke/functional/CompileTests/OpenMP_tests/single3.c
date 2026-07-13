@@ -17,7 +17,7 @@ int main(void) {
     {
       int num_threads = 2;
     }
-#pragma omp single nowait copyprivate(a, b)
+#pragma omp single copyprivate(a, b)
     {
       int num_threads = 3;
     }

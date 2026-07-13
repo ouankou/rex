@@ -125,6 +125,9 @@ void __kmpc_end_serialized_parallel(ident_t *, int);
 void *__kmpc_omp_task_alloc(ident_t *, int, int, size_t, size_t, void *);
 int __kmpc_omp_task(ident_t *, int, void *);
 int __kmpc_omp_taskwait(ident_t *, int);
+void __kmpc_taskgroup(ident_t *, int);
+void __kmpc_end_taskgroup(ident_t *, int);
+void *__kmpc_threadprivate_cached(ident_t *, int, void *, size_t, void ***);
 void __kmpc_for_static_init_4(ident_t *, int, int, int *, int *, int *, int *,
                               int, int);
 void __kmpc_for_static_init_8(ident_t *, int, int, int *, int64_t *, int64_t *,

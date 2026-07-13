@@ -18,11 +18,6 @@
 #include "RoseAst.h" // using AST Iterator
 #include "rose_config.h"
 
-// DQ (8/1/2005): test use of new static function to create
-// Sg_File_Info object that are marked as transformations
-#undef SgNULL_FILE
-#define SgNULL_FILE Sg_File_Info::generateDefaultFileInfoForTransformationNode()
-
 #include "inliner.h"
 
 #include "inlinerSupport.h"
@@ -416,8 +411,8 @@ SgExpression *generateAssignmentMaybe(SgExpression *lhs, SgExpression *rhs) {
 
   SgExpression *returnAssignmentOperator = NULL;
   if (lhs != NULL) {
-    returnAssignmentOperator = new SgAssignOp(SgNULL_FILE, lhs, rhs);
-    returnAssignmentOperator->set_endOfConstruct(SgNULL_FILE);
+    returnAssignmentOperator =
+        SageBuilder::buildAssignOp(lhs, rhs, lhs->get_type());
   } else
     returnAssignmentOperator = rhs;
 
@@ -429,51 +424,83 @@ SgExpression *generateAssignmentMaybe(SgExpression *lhs, SgExpression *rhs) {
 class ChangeReturnsToGotosVisitor : public AstSimpleProcessing {
 private:
   SgLabelStatement *label;
+  SgStatement *generated_body;
   SgExpression *where_to_write_answer;
   bool returns_by_reference;
 
 public:
   ChangeReturnsToGotosVisitor(SgLabelStatement *label,
+                              SgStatement *generated_body,
                               SgExpression *where_to_write_answer,
                               bool returns_by_reference)
-      : label(label), where_to_write_answer(where_to_write_answer),
+      : label(label), generated_body(generated_body),
+        where_to_write_answer(where_to_write_answer),
         returns_by_reference(returns_by_reference) {}
 
   virtual void visit(SgNode *n) {
     SgReturnStmt *rs = isSgReturnStmt(n);
     if (rs) {
+      SgNode *owner = rs;
+      while (owner != generated_body &&
+             isSgFunctionDefinition(owner) == nullptr) {
+        owner = owner->get_parent();
+        if (owner == nullptr) {
+          fprintf(stderr,
+                  "REX_INLINE_INVARIANT[return-generated-body]: return=%p "
+                  "does not descend from generated body=%p\n",
+                  static_cast<void *>(rs), static_cast<void *>(generated_body));
+          ROSE_ABORT();
+        }
+      }
+      if (owner != generated_body) {
+        // A lambda or local callable is a distinct return domain even though
+        // its definition is structurally nested in the copied function body.
+        return;
+      }
+
       // std::cout << "Converting return statement " << rs->unparseToString();
       // std::cout << " into possible assignment to " <<
       // where_to_write_answer->unparseToString(); std::cout << " and jump to "
       // << label->get_name().getString() << std::endl;
       SgExpression *return_expr = rs->get_expression();
+      if (return_expr != NULL) {
+        if (return_expr->get_parent() != rs) {
+          fprintf(stderr,
+                  "REX_INLINE_INVARIANT[return-expression-owner]: return=%p "
+                  "expression=%p parent=%p is not the exact typed child\n",
+                  static_cast<void *>(rs), static_cast<void *>(return_expr),
+                  static_cast<void *>(return_expr->get_parent()));
+          ROSE_ABORT();
+        }
+        rs->set_expression(NULL);
+        return_expr->set_parent(NULL);
+      }
       SgBasicBlock *block = SageBuilder::buildBasicBlock();
+      // The replacement scope must acquire its physical output identity before
+      // generated statements are published into it.  This also detaches the
+      // old return in one checked ownership transaction.
+      SageInterface::replaceStatement(rs, block);
       // printf ("Building IR node #1: new SgBasicBlock = %p \n",block);
       if (return_expr) {
         SgExpression *result_expr = return_expr;
+        SgExpression *answer_expr =
+            where_to_write_answer != NULL
+                ? SageInterface::copyExpression(where_to_write_answer)
+                : NULL;
         if (returns_by_reference && where_to_write_answer != NULL &&
             SageInterface::isPointerType(where_to_write_answer->get_type())) {
-          result_expr = SageBuilder::buildAddressOfOp(return_expr);
+          result_expr = SageBuilder::buildAddressOfOp(
+              return_expr, where_to_write_answer->get_type());
         }
 
         SgExpression *assignment =
-            generateAssignmentMaybe(where_to_write_answer, result_expr);
-        if (where_to_write_answer)
-          where_to_write_answer->set_parent(assignment);
-        if (result_expr != assignment)
-          result_expr->set_parent(assignment);
+            generateAssignmentMaybe(answer_expr, result_expr);
         SgStatement *assign_stmt = SageBuilder::buildExprStatement(assignment);
         SageInterface::appendStatement(assign_stmt, block);
       }
 
-      // block->get_statements().push_back(new SgGotoStatement(SgNULL_FILE,
-      // label));
-      SgGotoStatement *gotoStatement = new SgGotoStatement(SgNULL_FILE, label);
-      gotoStatement->set_endOfConstruct(SgNULL_FILE);
-      ROSE_ASSERT(n->get_parent() != NULL);
+      SgGotoStatement *gotoStatement = SageBuilder::buildGotoStatement(label);
       SageInterface::appendStatement(gotoStatement, block);
-      isSgStatement(n->get_parent())->replace_statement(rs, block);
-      block->set_parent(n->get_parent());
       ROSE_ASSERT(gotoStatement->get_parent() != NULL);
     }
   }
@@ -485,19 +512,62 @@ class ChangeReturnsToGotosPrevisitor
     : public SageInterface::StatementGenerator {
   SgLabelStatement *end_of_inline_label;
   SgStatement *funbody_copy;
+  std::vector<SgVariableDeclaration *> pending_declarations;
   bool returns_by_reference;
+  SgExpression *where_to_write_answer = NULL;
+  bool finalized = false;
 
 public:
-  ChangeReturnsToGotosPrevisitor(SgLabelStatement *end, SgStatement *body,
-                                 bool returns_by_reference)
+  ChangeReturnsToGotosPrevisitor(
+      SgLabelStatement *end, SgStatement *body,
+      const std::vector<SgVariableDeclaration *> &declarations,
+      bool returns_by_reference)
       : end_of_inline_label(end), funbody_copy(body),
+        pending_declarations(declarations),
         returns_by_reference(returns_by_reference) {}
 
-  virtual SgStatement *generate(SgExpression *where_to_write_answer) {
-    ChangeReturnsToGotosVisitor(end_of_inline_label, where_to_write_answer,
-                                returns_by_reference)
-        .traverse(funbody_copy, postorder);
+  SgStatement *generate(SgExpression *where_to_write_answer) override {
+    if (finalized || funbody_copy == NULL ||
+        funbody_copy->get_parent() != NULL) {
+      fprintf(stderr,
+              "REX_INLINE_INVARIANT[generated-body]: body=%p parent=%p "
+              "finalized=%d is not one detached unconsumed inline body\n",
+              static_cast<void *>(funbody_copy),
+              funbody_copy != NULL
+                  ? static_cast<void *>(funbody_copy->get_parent())
+                  : NULL,
+              finalized ? 1 : 0);
+      ROSE_ABORT();
+    }
+    this->where_to_write_answer = where_to_write_answer;
     return funbody_copy;
+  }
+
+  void finalizeGeneratedStatement(SgStatement *generatedStatement) override {
+    if (finalized || generatedStatement != funbody_copy ||
+        funbody_copy->get_parent() == NULL) {
+      fprintf(stderr,
+              "REX_INLINE_INVARIANT[published-body]: expected=%p actual=%p "
+              "parent=%p finalized=%d is not one attached inline body\n",
+              static_cast<void *>(funbody_copy),
+              static_cast<void *>(generatedStatement),
+              funbody_copy != NULL
+                  ? static_cast<void *>(funbody_copy->get_parent())
+                  : NULL,
+              finalized ? 1 : 0);
+      ROSE_ABORT();
+    }
+    finalized = true;
+    for (auto declaration = pending_declarations.rbegin();
+         declaration != pending_declarations.rend(); ++declaration) {
+      SageInterface::prependStatement(*declaration,
+                                      isSgScopeStatement(funbody_copy));
+    }
+    SageInterface::appendStatement(end_of_inline_label,
+                                   isSgScopeStatement(funbody_copy));
+    ChangeReturnsToGotosVisitor(end_of_inline_label, funbody_copy,
+                                where_to_write_answer, returns_by_reference)
+        .traverse(funbody_copy, postorder);
   }
 };
 
@@ -542,10 +612,10 @@ public:
 
   virtual void visit(SgNode *n) {
     if (isSgThisExp(n)) {
-      SgVarRefExp *vr = new SgVarRefExp(SgNULL_FILE, sym);
-      vr->set_endOfConstruct(SgNULL_FILE);
-      isSgExpression(n->get_parent())
-          ->replace_expression(isSgExpression(n), vr);
+      SgExpression *thisExpression = isSgExpression(n);
+      ROSE_ASSERT(thisExpression->get_parent() != NULL);
+      SgVarRefExp *vr = SageBuilder::buildVarRefExp(sym);
+      SageInterface::replaceExpression(thisExpression, vr);
     }
   }
 };
@@ -615,26 +685,94 @@ static void markAsTransformation(SgNode *ast) {
       }
 
       if (SgLocatedNode *loc = isSgLocatedNode(node)) {
+        if (SgAuxiliaryDeclarationList *auxiliary =
+                isSgAuxiliaryDeclarationList(loc)) {
+          auxiliary->validate_semantic_non_output_role();
+          // Auxiliary declarations are semantic dependencies of the copied
+          // scope, not descendants of its lexical output surface. Keep the
+          // complete container subtree outside the transformation
+          // publication transaction.
+          return true;
+        }
         if (isSuppressedFrontendNode(loc)) {
           return true;
         }
 
-        // DQ (3/1/2015): This is now being caught in the DOT file generation,
-        // so I think we need to use this better version. DQ (4/14/2014): This
-        // should be a more complete version to set all of the Sg_File_Info
-        // objects on a SgLocatedNode.
-        if (loc->get_startOfConstruct()) {
-          loc->get_startOfConstruct()->setTransformation();
-          loc->get_startOfConstruct()->setOutputInCodeGeneration();
+        if (SgCastExp *cast = isSgCastExp(loc);
+            cast != NULL &&
+            cast->get_cast_type() == SgCastExp::e_implicit_cast) {
+          cast->validate_semantic_conversion();
+          size_t position_index = 0;
+          for (Sg_File_Info *position :
+               {cast->get_file_info(), cast->get_startOfConstruct(),
+                cast->get_endOfConstruct(), cast->get_operatorPosition()}) {
+            if (position == NULL || position->get_parent() != cast ||
+                position->isShared() || !position->isCompilerGenerated() ||
+                position->isTransformation() ||
+                !position->isOutputInCodeGeneration() ||
+                !position->isImplicitCast()) {
+              fprintf(
+                  stderr,
+                  "REX_INLINE_INVARIANT[implicit-conversion-provenance]: "
+                  "cast=%p position[%zu]=%p parent=%p shared=%d "
+                  "generated=%d transformation=%d output=%d implicit=%d "
+                  "is not one exact copied semantic wrapper\n",
+                  static_cast<void *>(cast), position_index,
+                  static_cast<void *>(position),
+                  static_cast<void *>(position != NULL ? position->get_parent()
+                                                       : NULL),
+                  position != NULL && position->isShared() ? 1 : 0,
+                  position != NULL && position->isCompilerGenerated() ? 1 : 0,
+                  position != NULL && position->isTransformation() ? 1 : 0,
+                  position != NULL && position->isOutputInCodeGeneration() ? 1
+                                                                           : 0,
+                  position != NULL && position->isImplicitCast() ? 1 : 0);
+              ROSE_ABORT();
+            }
+            ++position_index;
+          }
+          // The implicit conversion is a transparent frontend semantic edge,
+          // not a new written surface.  Its operand remains traversable and
+          // independently enters the inlined transformation subtree.
+          return false;
         }
 
-        if (loc->get_endOfConstruct()) {
-          loc->get_endOfConstruct()->setTransformation();
-          loc->get_endOfConstruct()->setOutputInCodeGeneration();
+        // The copied subtree is a new lexical surface.  All three owned source
+        // positions must enter the transformation state together; leaving the
+        // primary position source-backed makes token mapping treat a copied
+        // declaration as an original declaration without a source token
+        // interval.
+        for (Sg_File_Info *position :
+             {loc->get_file_info(), loc->get_startOfConstruct(),
+              loc->get_endOfConstruct()}) {
+          if (position == NULL) {
+            continue;
+          }
+          if (position->get_parent() != loc) {
+            fprintf(stderr,
+                    "REX_INLINE_INVARIANT[transformation-provenance]: "
+                    "node=%p/%s position=%p has owner=%p\n",
+                    static_cast<void *>(loc), loc->class_name().c_str(),
+                    static_cast<void *>(position),
+                    static_cast<void *>(position->get_parent()));
+            ROSE_ABORT();
+          }
+          position->setTransformation();
+          position->setOutputInCodeGeneration();
         }
 
         if (SgExpression *exp = isSgExpression(loc)) {
           if (exp->get_operatorPosition()) {
+            if (exp->get_operatorPosition()->get_parent() != exp) {
+              fprintf(stderr,
+                      "REX_INLINE_INVARIANT[transformation-provenance]: "
+                      "expression=%p/%s operator-position=%p has owner=%p\n",
+                      static_cast<void *>(exp), exp->class_name().c_str(),
+                      static_cast<void *>(exp->get_operatorPosition()),
+                      static_cast<void *>(
+                          exp->get_operatorPosition()->get_parent()));
+              ROSE_ABORT();
+            }
             exp->get_operatorPosition()->setTransformation();
             exp->get_operatorPosition()->setOutputInCodeGeneration();
           }
@@ -687,6 +825,25 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
   // Walk to its right-hand side to get the member function reference
   // expression.
   SgExpression *funname = funcall->get_function();
+  if (SgCastExp *decay = isSgCastExp(funname)) {
+    decay->validate_semantic_conversion();
+    if (decay->get_cast_type() == SgCastExp::e_implicit_cast &&
+        decay->get_semantic_conversion_kind() ==
+            SgCastExp::e_semantic_conversion_FunctionToPointerDecay) {
+      SgPointerType *resultType = isSgPointerType(decay->get_type());
+      SgExpression *sourceFunction = decay->get_operand_i();
+      if (resultType == NULL || sourceFunction == NULL ||
+          isSgFunctionType(resultType->get_base_type()) == NULL ||
+          isSgFunctionType(sourceFunction->get_type()) == NULL) {
+        fprintf(stderr,
+                "REX_INLINE_INVARIANT[function-pointer-decay]: call=%p "
+                "cast=%p does not preserve one exact function identity\n",
+                static_cast<void *>(funcall), static_cast<void *>(decay));
+        ROSE_ABORT();
+      }
+      funname = sourceFunction;
+    }
+  }
   SgExpression *func_ref_exp = isSgFunctionRefExp(funname);
   SgDotExp *dotexp = isSgDotExp(funname);
   SgArrowExp *arrowexp = isSgArrowExp(funname);
@@ -735,9 +892,27 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
           removeRedundantCopyInConstruction(in);
         lhs = dotexp->get_lhs_operand(); // Should be a var ref now
       }
-      thisptr = new SgAddressOfOp(SgNULL_FILE, deepCopy(lhs));
+      SgType *lhsType = lhs->get_type();
+      if (lhsType == NULL) {
+        fprintf(stderr,
+                "REX_INLINE_INVARIANT[member-object-type]: expression=%p/%s "
+                "has no exact semantic type\n",
+                static_cast<void *>(lhs), lhs->class_name().c_str());
+        ROSE_ABORT();
+      }
+      SgType *thisPointerType = SageBuilder::buildPointerType(lhsType);
+      if (thisPointerType == NULL) {
+        fprintf(stderr,
+                "REX_INLINE_INVARIANT[member-object-type]: expression=%p/%s "
+                "type=%p/%s has no exact pointer type\n",
+                static_cast<void *>(lhs), lhs->class_name().c_str(),
+                static_cast<void *>(lhsType), lhsType->class_name().c_str());
+        ROSE_ABORT();
+      }
+      thisptr = SageBuilder::buildAddressOfOp(
+          SageInterface::copyExpression(lhs), thisPointerType);
     } else if (arrowexp) {
-      thisptr = arrowexp->get_lhs_operand();
+      thisptr = SageInterface::copyExpression(arrowexp->get_lhs_operand());
     } else {
       ROSE_ABORT();
     }
@@ -839,6 +1014,7 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
   SgName thisname("this__");
   thisname << ++gensym_counter;
   SgInitializedName *thisinitname = 0;
+  SgType *thisptrtype = NULL;
   // Pei-Hung (06/12/20) Need to check if this is a lambda function call
   bool isLambdaMemberFuncCall = false;
   ReplaceCaptureVariableVisitor::captureVarMap varMap;
@@ -849,7 +1025,7 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
   if (isSgMemberFunctionSymbol(funsym) &&
       !fundecl->get_declarationModifier().get_storageModifier().isStatic()) {
     assert(thisptr != NULL);
-    SgType *thisptrtype = thisptr->get_type();
+    thisptrtype = thisptr->get_type();
     const SgSpecialFunctionModifier &specialMod =
         funsym->get_declaration()->get_specialFunctionModifier();
     SgFunctionType *ft = funsym->get_declaration()->get_type();
@@ -858,7 +1034,7 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
     ROSE_ASSERT(mft);
     SgType *ct = mft->get_class_type();
     if (specialMod.isConstructor()) {
-      thisptrtype = new SgPointerType(ct);
+      thisptrtype = SageBuilder::buildPointerType(ct);
     }
     // Pei-Hung (06/12/20) check if the parent of SgClassDeclaration is a
     // SgLambdaExp
@@ -898,32 +1074,9 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
                                             .get_typeModifier()
                                             .get_constVolatileModifier();
       // if (thiscv.isConst() || thiscv.isVolatile()) { FIXME
-      thisptrtype = new SgModifierType(thisptrtype);
-      isSgModifierType(thisptrtype)
-          ->get_typeModifier()
-          .get_constVolatileModifier() = thiscv;
-      // }
-      // cout << thisptrtype->unparseToString() << " --- " << thiscv.isConst()
-      // << " " << thiscv.isVolatile() << endl;
-      SgAssignInitializer *assignInitializer =
-          new SgAssignInitializer(SgNULL_FILE, thisptr);
-      assignInitializer->set_endOfConstruct(SgNULL_FILE);
-      thisdecl = new SgVariableDeclaration(SgNULL_FILE, thisname, thisptrtype,
-                                           assignInitializer);
-      thisdecl->set_endOfConstruct(SgNULL_FILE);
-      thisdecl->get_definition()->set_endOfConstruct(SgNULL_FILE);
-      thisdecl->set_definingDeclaration(thisdecl);
-
-      thisinitname = (thisdecl->get_variables()).back();
-      // thisinitname = lastElementOfContainer(thisdecl->get_variables());
-      //  thisinitname->set_endOfConstruct(SgNULL_FILE);
-      assignInitializer->set_parent(thisinitname);
-      markAsTransformation(assignInitializer);
-
-      // printf ("Built new SgVariableDeclaration #1 = %p \n",thisdecl);
-
-      // DQ (6/23/2006): New test
-      ROSE_ASSERT(assignInitializer->get_parent() != NULL);
+      SgTypeModifier exact_modifier;
+      exact_modifier.get_constVolatileModifier() = thiscv;
+      thisptrtype = SageBuilder::buildModifierType(thisptrtype, exact_modifier);
     }
   }
 
@@ -945,266 +1098,238 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
   // (re)inserting the original.
   SgBasicBlock *funbody_raw = fundef->get_body();
   SgInitializedNamePtrList &params = fundecl->get_args();
-  std::vector<SgInitializedName *> inits;
+  std::vector<SgVariableDeclaration *> pendingDeclarations;
   SgTreeCopy tc;
   SgFunctionDefinition *function_copy =
       isSgFunctionDefinition(fundef->copy(tc));
 
-  // Pei-Hung (07/15/2020) the SgClassSymbol for the copied SgthisExp is
-  // associated with original symbol table.  This should better be fixed in the
-  // deep copy function.  This should serve as a tentative fix only.
-  for (SgCopyHelp::copiedNodeMapTypeIterator iter =
-           tc.get_copiedNodeMap().begin();
-       iter != tc.get_copiedNodeMap().end(); iter++) {
-    SgThisExp *thisexp_raw = isSgThisExp(const_cast<SgNode *>(iter->first));
-    if (thisexp_raw != NULL) {
-      SgThisExp *thisexp_copy = isSgThisExp(iter->second);
-      SgClassSymbol *classsym_raw = thisexp_raw->get_class_symbol();
-      SgClassSymbol *classsym_copy = thisexp_copy->get_class_symbol();
-      // both SgClassSymbols point to the same symbol table
-      if (classsym_raw->get_parent() == classsym_copy->get_parent()) {
-        SgSymbolTable *symtable_raw =
-            isSgSymbolTable(classsym_raw->get_parent());
-        ROSE_ASSERT(symtable_raw);
-        SgScopeStatement *parentscope =
-            isSgScopeStatement(symtable_raw->get_parent());
-        // Use the copy stack to look for the scope this symbol should stay
-        if (tc.get_copiedNodeMap().find(parentscope) !=
-            tc.get_copiedNodeMap().end()) {
-          SgSymbolTable *newsymtable =
-              isSgScopeStatement(
-                  tc.get_copiedNodeMap().find(parentscope)->second)
-                  ->get_symbol_table();
-          classsym_copy->set_parent(newsymtable);
-          newsymtable->insert(classsym_copy->get_name(), classsym_copy);
-          // std::cout << symtable_raw << " scope :" <<
-          // tc.get_copiedNodeMap().find(parentscope)->first << ":" <<
-          // tc.get_copiedNodeMap().find(parentscope)->second << std::endl;
-          // std::cout << "copy stack :" << iter->first<< ":" << iter->second <<
-          // std::endl;
-        }
-      }
-    }
-  }
-
-  ROSE_ASSERT(function_copy);
-  SgBasicBlock *funbody_copy = function_copy->get_body();
-
-  class ClearCopiedScopeSymbolTables : public AstSimpleProcessing {
-  public:
-    void visit(SgNode *node) override {
-      if (SgScopeStatement *scope = isSgScopeStatement(node)) {
-        if (SgSymbolTable *symbolTable = scope->get_symbol_table()) {
-          symbolTable->get_table()->clear();
-        }
-      }
-    }
-  };
-
-  ClearCopiedScopeSymbolTables().traverse(funbody_copy, preorder);
-  funbody_raw->fixupCopy_symbols(funbody_copy, tc);
-
-  auto repairScopesLeavingFunctionCopy = [funbody_copy, &tc](SgNode *root) {
-    std::map<const SgDeclarationStatement *, SgDeclarationStatement *>
-        copiedDeclarationByOriginal;
-    std::map<SgDeclarationStatement *, const SgDeclarationStatement *>
-        originalDeclarationByCopy;
-
+  auto validateExactCopiedScopes = [&tc](SgNode *root) {
+    std::map<SgNode *, const SgNode *> originalByCopy;
     for (SgCopyHelp::copiedNodeMapTypeIterator it =
              tc.get_copiedNodeMap().begin();
          it != tc.get_copiedNodeMap().end(); ++it) {
-      const SgDeclarationStatement *originalDecl =
-          isSgDeclarationStatement(const_cast<SgNode *>(it->first));
-      SgDeclarationStatement *copiedDecl = isSgDeclarationStatement(it->second);
-      if (originalDecl == NULL || copiedDecl == NULL) {
-        continue;
+      if (it->first != NULL && it->second != NULL && it->first != it->second) {
+        const bool inserted =
+            originalByCopy.emplace(it->second, it->first).second;
+        if (!inserted) {
+          fprintf(stderr,
+                  "REX_INLINE_INVARIANT[copy-map-identity]: copy=%p/%s has "
+                  "multiple original nodes\n",
+                  static_cast<void *>(it->second),
+                  it->second->class_name().c_str());
+          ROSE_ABORT();
+        }
       }
-
-      copiedDeclarationByOriginal[originalDecl] = copiedDecl;
-      originalDeclarationByCopy[copiedDecl] = originalDecl;
     }
 
-    class RepairCopiedScopes : public AstSimpleProcessing {
-      SgBasicBlock *retainedBody;
-      const std::map<const SgDeclarationStatement *, SgDeclarationStatement *>
-          &copiedDeclarationByOriginal;
-      const std::map<SgDeclarationStatement *, const SgDeclarationStatement *>
-          &originalDeclarationByCopy;
+    class ValidateCopiedScopes : public AstSimpleProcessing {
+      SgCopyHelp &copyHelp;
+      const std::map<SgNode *, const SgNode *> &originalByCopy;
 
-      static bool nodeIsRetained(SgNode *node, SgBasicBlock *retainedBody) {
-        for (SgNode *current = node; current != NULL;
-             current = current->get_parent()) {
-          if (current == retainedBody) {
-            return true;
-          }
-        }
-
-        return false;
-      }
-
-      static bool scopeIsRetained(SgScopeStatement *scope,
-                                  SgBasicBlock *retainedBody) {
-        for (SgNode *node = scope; node != NULL; node = node->get_parent()) {
-          if (node == retainedBody) {
-            return true;
-          }
-        }
-
-        return false;
-      }
-
-      SgDeclarationStatement *
-      findRetainedCopy(const SgDeclarationStatement *originalDecl) const {
-        if (originalDecl == NULL) {
+      SgNode *expectedSemanticTarget(const SgNode *originalTarget,
+                                     const SgNode *originalOwner,
+                                     SgNode *copiedOwner) const {
+        if (originalTarget == NULL) {
           return NULL;
         }
-
-        std::map<const SgDeclarationStatement *,
-                 SgDeclarationStatement *>::const_iterator found =
-            copiedDeclarationByOriginal.find(originalDecl);
-        if (found == copiedDeclarationByOriginal.end() ||
-            nodeIsRetained(found->second, retainedBody) == false) {
-          return NULL;
+        if (originalTarget == originalOwner) {
+          return copiedOwner;
         }
+        SgCopyHelp::copiedNodeMapTypeIterator mapped =
+            copyHelp.get_copiedNodeMap().find(
+                const_cast<SgNode *>(originalTarget));
+        if (mapped != copyHelp.get_copiedNodeMap().end() &&
+            mapped->second != originalTarget) {
+          return mapped->second;
+        }
+        return const_cast<SgNode *>(originalTarget);
+      }
 
+      const SgNode *requireOriginal(SgNode *copy) const {
+        std::map<SgNode *, const SgNode *>::const_iterator found =
+            originalByCopy.find(copy);
+        if (found == originalByCopy.end()) {
+          fprintf(stderr,
+                  "REX_INLINE_INVARIANT[copy-map-completeness]: copied "
+                  "node=%p/%s has no exact original\n",
+                  static_cast<void *>(copy), copy->class_name().c_str());
+          ROSE_ABORT();
+        }
         return found->second;
       }
 
-      static SgScopeStatement *findStructuralScope(SgNode *node) {
-        for (SgNode *parent = node != NULL ? node->get_parent() : NULL;
-             parent != NULL; parent = parent->get_parent()) {
-          if (SgScopeStatement *scope = isSgScopeStatement(parent)) {
-            return scope;
-          }
-        }
-
-        return NULL;
-      }
-
-      void repairDeclarationChain(SgDeclarationStatement *declaration) const {
-        SgDeclarationStatement *currentDefining =
-            declaration->get_definingDeclaration();
-        SgDeclarationStatement *currentFirstNondefining =
-            declaration->get_firstNondefiningDeclaration();
-        const bool definingLeavesRetainedBody =
-            currentDefining != NULL &&
-            nodeIsRetained(currentDefining, retainedBody) == false;
-        const bool firstLeavesRetainedBody =
-            currentFirstNondefining != NULL &&
-            nodeIsRetained(currentFirstNondefining, retainedBody) == false;
-
-        if (!definingLeavesRetainedBody && !firstLeavesRetainedBody) {
-          return;
-        }
-
-        SgDeclarationStatement *replacementDefining = NULL;
-        SgDeclarationStatement *replacementFirstNondefining = NULL;
-
-        std::map<SgDeclarationStatement *,
-                 const SgDeclarationStatement *>::const_iterator original =
-            originalDeclarationByCopy.find(declaration);
-        if (original != originalDeclarationByCopy.end()) {
-          const SgDeclarationStatement *originalDecl = original->second;
-          const SgDeclarationStatement *originalDefining =
-              originalDecl->get_definingDeclaration();
-          const SgDeclarationStatement *originalFirstNondefining =
-              originalDecl->get_firstNondefiningDeclaration();
-
-          replacementDefining = findRetainedCopy(originalDefining);
-          replacementFirstNondefining =
-              findRetainedCopy(originalFirstNondefining);
-
-          if (originalDefining == NULL) {
-            replacementDefining = NULL;
-          } else if (replacementDefining == NULL &&
-                     originalDefining == originalDecl) {
-            replacementDefining = declaration;
-          }
-
-          if (originalFirstNondefining == NULL) {
-            replacementFirstNondefining = NULL;
-          } else if (replacementFirstNondefining == NULL &&
-                     originalFirstNondefining == originalDecl) {
-            replacementFirstNondefining = declaration;
-          }
-        }
-
-        if (definingLeavesRetainedBody && replacementDefining == NULL) {
-          replacementDefining = declaration;
-        }
-
-        if (firstLeavesRetainedBody && replacementFirstNondefining == NULL) {
-          replacementFirstNondefining =
-              replacementDefining != NULL ? replacementDefining : declaration;
-        }
-
-        if (replacementDefining != NULL &&
-            currentDefining != replacementDefining) {
-          declaration->set_definingDeclaration(replacementDefining);
-        }
-
-        if (replacementFirstNondefining != NULL &&
-            currentFirstNondefining != replacementFirstNondefining) {
-          declaration->set_firstNondefiningDeclaration(
-              replacementFirstNondefining);
-        }
-      }
-
     public:
-      RepairCopiedScopes(
-          SgBasicBlock *retainedBody,
-          const std::map<const SgDeclarationStatement *,
-                         SgDeclarationStatement *> &copiedDeclarationByOriginal,
-          const std::map<SgDeclarationStatement *,
-                         const SgDeclarationStatement *>
-              &originalDeclarationByCopy)
-          : retainedBody(retainedBody),
-            copiedDeclarationByOriginal(copiedDeclarationByOriginal),
-            originalDeclarationByCopy(originalDeclarationByCopy) {}
+      ValidateCopiedScopes(
+          SgCopyHelp &copyHelp,
+          const std::map<SgNode *, const SgNode *> &originalByCopy)
+          : copyHelp(copyHelp), originalByCopy(originalByCopy) {}
 
       void visit(SgNode *node) override {
-        if (SgInitializedName *initializedName = isSgInitializedName(node)) {
-          if (initializedName->get_scope() != NULL &&
-              scopeIsRetained(initializedName->get_scope(), retainedBody) ==
-                  false) {
-            SgScopeStatement *replacementScope =
-                findStructuralScope(initializedName);
-            if (replacementScope == NULL) {
-              replacementScope = retainedBody;
-            }
-
-            initializedName->set_scope(replacementScope);
+        if (SgInitializedName *copiedName = isSgInitializedName(node)) {
+          const SgInitializedName *originalName =
+              isSgInitializedName(const_cast<SgNode *>(requireOriginal(node)));
+          ROSE_ASSERT(originalName != NULL);
+          SgScopeStatement *expectedScope =
+              isSgScopeStatement(expectedSemanticTarget(
+                  originalName->get_scope(), originalName, copiedName));
+          if (copiedName->get_scope() != expectedScope) {
+            fprintf(stderr,
+                    "REX_INLINE_INVARIANT[initialized-name-scope]: "
+                    "original=%p/%s scope=%p copy=%p scope=%p expected=%p\n",
+                    static_cast<const void *>(originalName),
+                    originalName->get_name().str(),
+                    static_cast<void *>(originalName->get_scope()),
+                    static_cast<void *>(copiedName),
+                    static_cast<void *>(copiedName->get_scope()),
+                    static_cast<void *>(expectedScope));
+            ROSE_ABORT();
           }
         }
 
-        if (SgDeclarationStatement *declaration =
+        if (SgDeclarationStatement *copiedDeclaration =
                 isSgDeclarationStatement(node)) {
-          repairDeclarationChain(declaration);
+          const SgDeclarationStatement *originalDeclaration =
+              isSgDeclarationStatement(
+                  const_cast<SgNode *>(requireOriginal(node)));
+          ROSE_ASSERT(originalDeclaration != NULL);
 
-          const bool isLambdaClosureClass =
-              lambdaExpressionForClassDeclaration(
-                  isSgClassDeclaration(declaration)) != NULL;
-          if (declaration->hasExplicitScope() == true &&
-              ((declaration->get_scope() != NULL &&
-                scopeIsRetained(declaration->get_scope(), retainedBody) ==
-                    false) ||
-               isLambdaClosureClass)) {
-            SgScopeStatement *replacementScope =
-                findStructuralScope(declaration);
-            if (replacementScope == NULL) {
-              replacementScope = retainedBody;
+          SgDeclarationStatement *expectedDefining =
+              isSgDeclarationStatement(expectedSemanticTarget(
+                  originalDeclaration->get_definingDeclaration(),
+                  originalDeclaration, copiedDeclaration));
+          SgDeclarationStatement *expectedFirst =
+              isSgDeclarationStatement(expectedSemanticTarget(
+                  originalDeclaration->get_firstNondefiningDeclaration(),
+                  originalDeclaration, copiedDeclaration));
+          if (copiedDeclaration->get_definingDeclaration() !=
+                  expectedDefining ||
+              copiedDeclaration->get_firstNondefiningDeclaration() !=
+                  expectedFirst) {
+            fprintf(stderr,
+                    "REX_INLINE_INVARIANT[declaration-chain]: original=%p/%s "
+                    "copy=%p defining=%p expected=%p first=%p expected=%p\n",
+                    static_cast<const void *>(originalDeclaration),
+                    originalDeclaration->class_name().c_str(),
+                    static_cast<void *>(copiedDeclaration),
+                    static_cast<void *>(
+                        copiedDeclaration->get_definingDeclaration()),
+                    static_cast<void *>(expectedDefining),
+                    static_cast<void *>(
+                        copiedDeclaration->get_firstNondefiningDeclaration()),
+                    static_cast<void *>(expectedFirst));
+            ROSE_ABORT();
+          }
+
+          if (originalDeclaration->hasExplicitScope()) {
+            SgScopeStatement *expectedScope = isSgScopeStatement(
+                expectedSemanticTarget(originalDeclaration->get_scope(),
+                                       originalDeclaration, copiedDeclaration));
+            if (originalDeclaration->get_scope() == NULL ||
+                copiedDeclaration->get_scope() != expectedScope) {
+              fprintf(stderr,
+                      "REX_INLINE_INVARIANT[declaration-scope]: "
+                      "original=%p/%s scope=%p copy=%p scope=%p expected=%p\n",
+                      static_cast<const void *>(originalDeclaration),
+                      originalDeclaration->class_name().c_str(),
+                      static_cast<void *>(originalDeclaration->get_scope()),
+                      static_cast<void *>(copiedDeclaration),
+                      static_cast<void *>(copiedDeclaration->get_scope()),
+                      static_cast<void *>(expectedScope));
+              ROSE_ABORT();
             }
-
-            declaration->set_scope(replacementScope);
           }
         }
       }
     };
 
-    RepairCopiedScopes repair(funbody_copy, copiedDeclarationByOriginal,
-                              originalDeclarationByCopy);
-    repair.traverse(root, preorder);
+    ValidateCopiedScopes validator(tc, originalByCopy);
+    validator.traverse(root, preorder);
   };
+  ROSE_ASSERT(function_copy);
+  validateExactCopiedScopes(function_copy);
+
+  SgFunctionDeclaration *function_copy_declaration =
+      function_copy->get_declaration();
+  if (function_copy_declaration == NULL ||
+      function_copy_declaration->get_args().size() != params.size()) {
+    fprintf(stderr,
+            "REX_INLINE_INVARIANT[copied-formals]: copied definition=%p "
+            "declaration=%p has %zu formals; source declaration=%p has %zu\n",
+            static_cast<void *>(function_copy),
+            static_cast<void *>(function_copy_declaration),
+            function_copy_declaration != NULL
+                ? function_copy_declaration->get_args().size()
+                : 0,
+            static_cast<void *>(fundecl), params.size());
+    ROSE_ABORT();
+  }
+  SgInitializedNamePtrList copied_params =
+      function_copy_declaration->get_args();
+  for (size_t i = 0; i < params.size(); ++i) {
+    SgCopyHelp::copiedNodeMapTypeIterator copied =
+        tc.get_copiedNodeMap().find(params[i]);
+    if (copied == tc.get_copiedNodeMap().end() ||
+        copied->second != copied_params[i]) {
+      fprintf(stderr,
+              "REX_INLINE_INVARIANT[copied-formals]: source formal=%p at "
+              "index=%zu maps to %p instead of exact copied formal=%p\n",
+              static_cast<void *>(params[i]), i,
+              static_cast<void *>(copied != tc.get_copiedNodeMap().end()
+                                      ? copied->second
+                                      : NULL),
+              static_cast<void *>(copied_params[i]));
+      ROSE_ABORT();
+    }
+  }
+
+  // SgThisExp's semantic class-symbol edge must be rebound by the central copy
+  // transaction.  Inlining does not repair or rehome copied symbols.
+  for (SgCopyHelp::copiedNodeMapTypeIterator iter =
+           tc.get_copiedNodeMap().begin();
+       iter != tc.get_copiedNodeMap().end(); ++iter) {
+    const SgThisExp *originalThis = isSgThisExp(iter->first);
+    SgThisExp *copiedThis = isSgThisExp(iter->second);
+    if (originalThis == NULL) {
+      continue;
+    }
+    SgClassSymbol *originalSymbol = originalThis->get_class_symbol();
+    SgClassSymbol *copiedSymbol =
+        copiedThis != NULL ? copiedThis->get_class_symbol() : NULL;
+    SgSymbolTable *originalTable =
+        originalSymbol != NULL ? isSgSymbolTable(originalSymbol->get_parent())
+                               : NULL;
+    SgScopeStatement *originalScope =
+        originalTable != NULL ? isSgScopeStatement(originalTable->get_parent())
+                              : NULL;
+    SgScopeStatement *expectedScope = originalScope;
+    SgCopyHelp::copiedNodeMapTypeIterator copiedScope =
+        tc.get_copiedNodeMap().find(originalScope);
+    if (copiedScope != tc.get_copiedNodeMap().end() &&
+        copiedScope->second != originalScope) {
+      expectedScope = isSgScopeStatement(copiedScope->second);
+    }
+    SgSymbolTable *expectedTable =
+        expectedScope != NULL ? expectedScope->get_symbol_table() : NULL;
+    if (copiedThis == NULL || originalSymbol == NULL || copiedSymbol == NULL ||
+        originalScope == NULL || expectedScope == NULL ||
+        expectedTable == NULL || copiedSymbol->get_parent() != expectedTable ||
+        !expectedTable->exists(copiedSymbol)) {
+      fprintf(stderr,
+              "REX_INLINE_INVARIANT[this-symbol]: original=%p symbol=%p "
+              "scope=%p copy=%p symbol=%p parent=%p expected-table=%p\n",
+              static_cast<const void *>(originalThis),
+              static_cast<void *>(originalSymbol),
+              static_cast<void *>(originalScope),
+              static_cast<void *>(copiedThis),
+              static_cast<void *>(copiedSymbol),
+              static_cast<void *>(
+                  copiedSymbol != NULL ? copiedSymbol->get_parent() : NULL),
+              static_cast<void *>(expectedTable));
+      ROSE_ABORT();
+    }
+  }
+
+  SgBasicBlock *funbody_copy = function_copy->get_body();
   // rename labels in an inlined function definition. goto statements to them
   // will be updated.
   renameLabels(funbody_copy, targetFunction);
@@ -1234,25 +1359,62 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
   ASSERT_require(funbody_raw->get_symbol_table()->size() ==
                  funbody_copy->get_symbol_table()->size());
 
-  // We don't need to keep the copied SgFunctionDefinition now that the labels
-  // in it have been moved to the target function (having it in the memory pool
-  // confuses the AST tests), but we must not delete the formal argument list or
-  // the body because we need them below.
-  if (function_copy->get_declaration()) {
-    ASSERT_require(function_copy->get_declaration()->get_parent() ==
-                   function_copy);
-    function_copy->get_declaration()->set_parent(NULL);
-    function_copy->set_declaration(NULL);
+  // Release the copied body for insertion, but retain its complete temporary
+  // function family until every reference to copied formals and captures has
+  // been rebound below.  Retiring the definition here would leave the copied
+  // canonical declaration pointing at a live defining declaration with no
+  // definition.
+  if (function_copy->get_declaration() != function_copy_declaration ||
+      function_copy->get_parent() != function_copy_declaration ||
+      function_copy_declaration->get_definition() != function_copy) {
+    fprintf(stderr,
+            "REX_INLINE_INVARIANT[function-copy-owner]: copied "
+            "definition=%p declaration=%p parent=%p definition-edge=%p "
+            "does not preserve exact declaration ownership\n",
+            static_cast<void *>(function_copy),
+            static_cast<void *>(function_copy_declaration),
+            static_cast<void *>(function_copy->get_parent()),
+            static_cast<void *>(function_copy_declaration->get_definition()));
+    ROSE_ABORT();
   }
   if (function_copy->get_body()) {
     ASSERT_require(function_copy->get_body()->get_parent() == function_copy);
     function_copy->get_body()->set_parent(NULL);
     function_copy->set_body(NULL);
   }
-  repairScopesLeavingFunctionCopy(funbody_copy);
-  delete function_copy;
-  function_copy = NULL;
-  funbody_copy->set_parent(SageInterface::getScope(funcall));
+  if (funbody_copy->get_parent() != NULL) {
+    fprintf(stderr,
+            "REX_INLINE_INVARIANT[copied-body-release]: body=%p parent=%p "
+            "was not detached from its copied function definition\n",
+            static_cast<void *>(funbody_copy),
+            static_cast<void *>(funbody_copy->get_parent()));
+    ROSE_ABORT();
+  }
+  if (!isLambdaMemberFuncCall && thisptr != NULL) {
+    if (thisptrtype == NULL || thisptr->get_parent() != NULL) {
+      fprintf(stderr,
+              "REX_INLINE_INVARIANT[this-shadow-producer]: this-expression=%p "
+              "parent=%p type=%p is not one detached typed operand\n",
+              static_cast<void *>(thisptr),
+              static_cast<void *>(thisptr->get_parent()),
+              static_cast<void *>(thisptrtype));
+      ROSE_ABORT();
+    }
+    SgAssignInitializer *assignInitializer =
+        SageBuilder::buildAssignInitializer(thisptr, thisptrtype);
+    thisdecl = SageBuilder::buildVariableDeclaration(
+        thisname, thisptrtype, assignInitializer, funbody_copy);
+    thisinitname = SageInterface::getFirstInitializedName(thisdecl);
+    if (thisinitname == NULL ||
+        thisinitname->get_initializer() != assignInitializer) {
+      fprintf(stderr,
+              "REX_INLINE_INVARIANT[this-shadow-producer]: declaration=%p "
+              "has no exact initialized-name and initializer ownership\n",
+              static_cast<void *>(thisdecl));
+      ROSE_ABORT();
+    }
+    pendingDeclarations.push_back(thisdecl);
+  }
 
   // In the to-be-inserted function body, create new local variables with
   // distinct non-conflicting names, one per formal argument and having the same
@@ -1261,242 +1423,83 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
   // (SgInitializedName) to its corresponding new local variable
   // (SgVariableSymbol).
   ReplaceParameterUseVisitor::paramMapType paramMap;
-  SgInitializedNamePtrList::iterator formalIter = params.begin();
+  SgInitializedNamePtrList::iterator formalIter = copied_params.begin();
   SgExpressionPtrList::iterator actualIter = funargs.begin();
   for (size_t argNumber = 0;
-       formalIter != params.end() && actualIter != funargs.end();
+       formalIter != copied_params.end() && actualIter != funargs.end();
        ++argNumber, ++formalIter, ++actualIter) {
     SgInitializedName *formalArg = *formalIter;
     SgExpression *actualArg = *actualIter;
 
     // Build the new local variable.
     // FIXME[Robb P. Matzke 2014-12-12]: we need a better way to generate a
-    // non-conflicting local variable name
-    // SgAssignInitializer* initializer = NULL;
-    SgInitializer *initializer = NULL;
-    // Pei-Hung (06/12/20): need to check if the argument is a class defined for
-    // lambda
-    SgClassDeclaration *classdecl = NULL;
+    // non-conflicting local variable name.
     bool hasLambdaFuncArg = isSgLambdaExp(actualArg) != NULL;
-    if (isSgClassType(formalArg->get_typeptr())) {
-      SgClassType *classtype = isSgClassType(formalArg->get_typeptr());
-      classdecl = isSgClassDeclaration(classtype->get_declaration());
-      ROSE_ASSERT(classdecl);
-      hasLambdaFuncArg = hasLambdaFuncArg ||
-                         lambdaExpressionForClassDeclaration(classdecl) != NULL;
+    if (SgClassType *classType = isSgClassType(formalArg->get_typeptr())) {
+      SgClassDeclaration *classDeclaration =
+          isSgClassDeclaration(classType->get_declaration());
+      ROSE_ASSERT(classDeclaration);
+      hasLambdaFuncArg =
+          hasLambdaFuncArg ||
+          lambdaExpressionForClassDeclaration(classDeclaration) != NULL;
     }
     SgVariableDeclaration *vardecl = NULL;
     SgName shadow_name(formalArg->get_name());
     shadow_name << "__" << ++gensym_counter;
-    int newStmtCount = 0;
-    // Pei-Hung (06/12/20) this will create functor for the inlined code.
-    // turn off this by default; turn it on for experimental usage
-    bool retrieveFunctor = false;
-    if (retrieveFunctor && hasLambdaFuncArg) {
-      // cout << "new class name = " << shadow_name << endl;
-      // Get lambda function, class declaration, and others
-      SgLambdaExp *lambdaExp = isSgLambdaExp(classdecl->get_parent());
-      // SgClassDeclaration* defingingclassdecl  =
-      // isSgClassDeclaration(classdecl->get_definingDeclaration());
-      SgMemberFunctionDeclaration *lambdaFunc =
-          isSgMemberFunctionDeclaration(lambdaExp->get_lambda_function());
-      SgLambdaCaptureList *lambdaCaptureList =
-          lambdaExp->get_lambda_capture_list();
-      SgLambdaCapturePtrList captureList =
-          lambdaCaptureList->get_capture_list();
-
-      // Create new copy of class
-      SgMemberFunctionDeclaration *lambdaFuncDefCopy =
-          isSgMemberFunctionDeclaration(SageInterface::deepCopy(lambdaFunc));
-      // These should be replaced by buildClassDeclarationStatement_nfi if it
-      // can be compiled properly.
-      SgClassDeclaration *lambdaFuncClassCopy = new SgClassDeclaration(
-          shadow_name, SgClassDeclaration::e_class, NULL, NULL);
-      lambdaFuncClassCopy->set_firstNondefiningDeclaration(lambdaFuncClassCopy);
-      lambdaFuncClassCopy->set_parent(funbody_copy);
-      lambdaFuncClassCopy->set_scope(funbody_copy);
-      (void)SgClassType::createType(lambdaFuncClassCopy);
-      setOneSourcePositionForTransformation(lambdaFuncClassCopy);
-      SgClassDefinition *lambdaClassDef = SageBuilder::buildClassDefinition();
-
-      SgClassDeclaration *definingLambdaClassDecl = new SgClassDeclaration(
-          shadow_name, SgClassDeclaration::e_class, NULL, lambdaClassDef);
-      lambdaClassDef->set_declaration(definingLambdaClassDecl);
-      definingLambdaClassDecl->set_parent(funbody_copy);
-      definingLambdaClassDecl->set_scope(funbody_copy);
-      lambdaFuncClassCopy->set_definingDeclaration(definingLambdaClassDecl);
-      setOneSourcePositionForTransformation(definingLambdaClassDecl);
-      definingLambdaClassDecl->set_definingDeclaration(definingLambdaClassDecl);
-      definingLambdaClassDecl->set_firstNondefiningDeclaration(
-          lambdaFuncClassCopy);
-      definingLambdaClassDecl->set_type(lambdaFuncClassCopy->get_type());
-      lambdaFuncClassCopy->setForward();
-      // fixStructDeclaration(definingLambdaClassDecl,funbody_copy);
-
-      // namae the class to be the variable name used for template function
-      // argument
-      lambdaFuncClassCopy->set_name(shadow_name);
-      definingLambdaClassDecl->set_name(shadow_name);
-
-      lambdaFuncClassCopy->set_explicit_anonymous(false);
-      definingLambdaClassDecl->set_explicit_anonymous(false);
-
-      lambdaFuncClassCopy->set_isAutonomousDeclaration(false);
-      definingLambdaClassDecl->set_isAutonomousDeclaration(false);
-
-      // cout << lambdaFuncClassCopy->get_name() << ":" << lambdaFuncClassCopy
-      // << ":" << lambdaFuncClassCopy->get_explicit_anonymous() << ":" <<
-      // lambdaFuncClassCopy->get_isAutonomousDeclaration() << endl; cout <<
-      // lambdaFuncClassCopy->get_parent() << ":" << classdecl->get_parent()<<
-      // endl; cout << lambdaFuncClassCopy->get_type() << ":" <<
-      // classdecl->get_type()<< endl;
-
-      // Insert the class definition to expose the class details.
-      lambdaClassDef->append_member(lambdaFuncDefCopy);
-
-      // adding capture list
-      SgFunctionParameterList *captureParamList =
-          SageBuilder::buildFunctionParameterList();
-      SgCtorInitializerList *closureList =
-          SageBuilder::buildCtorInitializerList_nfi();
-      closureList->set_definingDeclaration(closureList);
-      // prepare member functon parameter list for constructor initializer
-      SgExprListExp *memberFuncArgList = SageBuilder::buildExprListExp_nfi();
-      for (SgLambdaCapture *capture : captureList) {
-        // capture list
-        SgVarRefExp *captureVarRef =
-            isSgVarRefExp(capture->get_capture_variable());
-        ROSE_ASSERT(captureVarRef);
-        SgVariableSymbol *captureVarSym = captureVarRef->get_symbol();
-        SgName localVarName(captureVarSym->get_name());
-        localVarName << "__" << ++gensym_counter;
-        // cout << "capture list:"<< localVarName << endl;
-        SgInitializedName *captureInitializedName =
-            SageBuilder::buildInitializedName(localVarName,
-                                              captureVarSym->get_type());
-        captureParamList->append_arg(captureInitializedName);
-        captureInitializedName->set_parent(captureParamList);
-        captureInitializedName->set_scope(lambdaClassDef);
-
-        // closure list
-        SgVarRefExp *closureVarRef =
-            isSgVarRefExp(capture->get_closure_variable());
-        ROSE_ASSERT(closureVarRef);
-        SgVariableSymbol *closureVarSym = closureVarRef->get_symbol();
-        SgName closureNmae = closureVarSym->get_name();
-        // cout << "closure list:"<< closureNmae << endl;
-        //  build local private variable declaration for the closure variable
-        SgVariableDeclaration *closureVarDel =
-            SageBuilder::buildVariableDeclaration(
-                closureNmae, closureVarSym->get_type(), NULL, lambdaClassDef);
-        closureVarDel->get_declarationModifier()
-            .get_accessModifier()
-            .setPrivate();
-
-        SgVarRefExp *closureAssignVarExp =
-            SageBuilder::buildVarRefExp(captureInitializedName, funbody_copy);
-        SgAssignInitializer *assignInitilizer =
-            SageBuilder::buildAssignInitializer(closureAssignVarExp,
-                                                closureVarSym->get_type());
-        SgInitializedName *closuredName = SageBuilder::buildInitializedName(
-            closureNmae, closureVarSym->get_type(), assignInitilizer);
-        closureList->append_ctor_initializer(closuredName);
-        closuredName->set_parent(closureList);
-        closuredName->set_scope(lambdaClassDef);
-        lambdaClassDef->append_member(closureVarDel);
-
-        // Add parameter for onstructor initializer
-        SgVarRefExp *constructInitializerParam =
-            SageBuilder::buildVarRefExp(closureVarSym);
-        memberFuncArgList->append_expression(constructInitializerParam);
-      }
-      // Build constructor with member intialization
-      SgMemberFunctionDeclaration *selfDefiningFunctionDecl =
-          SageBuilder::buildDefiningMemberFunctionDeclaration(
-              shadow_name, SageBuilder::buildVoidType(), captureParamList,
-              lambdaClassDef);
-      SageInterface::setCtorInitializerList(selfDefiningFunctionDecl,
-                                            closureList);
-      selfDefiningFunctionDecl->set_associatedClassDeclaration(
-          definingLambdaClassDecl);
-      // set constructor type to avoid return type being unparsed
-      selfDefiningFunctionDecl->get_specialFunctionModifier().setConstructor();
-      lambdaClassDef->append_member(selfDefiningFunctionDecl);
-      funbody_copy->get_statements().insert(
-          funbody_copy->get_statements().begin() + argNumber,
-          definingLambdaClassDecl);
-      newStmtCount++;
-
-      // Build variable declaration for the new class/
-      SgConstructorInitializer *constructorInitializer =
-          SageBuilder::buildConstructorInitializer(
-              selfDefiningFunctionDecl, memberFuncArgList,
-              SageBuilder::buildVoidType(), false, false, false, false);
-      ASSERT_not_null(constructorInitializer);
-      initializer = isSgInitializer(constructorInitializer);
-      SgName init_construct_name(formalArg->get_name());
-      init_construct_name << "__" << ++gensym_counter;
-      vardecl = SageBuilder::buildVariableDeclaration(
-          init_construct_name, definingLambdaClassDecl->get_type(), initializer,
-          funbody_copy);
-    } else if (hasLambdaFuncArg) {
-      // SgLambdaExp* lambdaExp = isSgLambdaExp(classdecl->get_parent());
-      // SgClassDeclaration* defingingclassdecl  =
-      // isSgClassDeclaration(classdecl->get_definingDeclaration());
-      // SgMemberFunctionDeclaration* lambdaFunc =
-      // isSgMemberFunctionDeclaration(lambdaExp->get_lambda_function());
-      SgAssignInitializer *assignInitializer = new SgAssignInitializer(
-          SgNULL_FILE, actualArg, formalArg->get_type());
-      ASSERT_not_null(assignInitializer);
-      initializer = isSgInitializer(assignInitializer);
+    if (hasLambdaFuncArg) {
       SgType *autoShadowType =
           buildAutoShadowTypeForFormal(formalArg->get_type());
-      vardecl = new SgVariableDeclaration(SgNULL_FILE, shadow_name,
-                                          autoShadowType, initializer);
+      SgAssignInitializer *assignInitializer =
+          SageBuilder::buildAssignInitializer(actualArg, autoShadowType);
+      ASSERT_not_null(assignInitializer);
+      vardecl = SageBuilder::buildVariableDeclaration(
+          shadow_name, autoShadowType, assignInitializer, funbody_copy);
       SgInitializedName *vardeclInitializedName =
           vardecl->get_decl_item(shadow_name);
       vardeclInitializedName->set_auto_decltype(autoShadowType);
     } else {
-      SgAssignInitializer *assignInitializer = new SgAssignInitializer(
-          SgNULL_FILE, actualArg, formalArg->get_type());
+      SgAssignInitializer *assignInitializer =
+          SageBuilder::buildAssignInitializer(actualArg, formalArg->get_type());
       ASSERT_not_null(assignInitializer);
-      initializer = isSgInitializer(assignInitializer);
-      vardecl = new SgVariableDeclaration(SgNULL_FILE, shadow_name,
-                                          formalArg->get_type(), initializer);
+      vardecl = SageBuilder::buildVariableDeclaration(
+          shadow_name, formalArg->get_type(), assignInitializer, funbody_copy);
     }
-    initializer->set_endOfConstruct(SgNULL_FILE);
-    vardecl->set_definingDeclaration(vardecl);
-    vardecl->set_endOfConstruct(SgNULL_FILE);
-    vardecl->get_definition()->set_endOfConstruct(SgNULL_FILE);
-    vardecl->set_parent(funbody_copy);
 
     // Insert the new local variable into the (near) beginning of the
     // to-be-inserted function body.  We insert them in the order their
     // corresponding actuals/formals appear, although the C++ standard does not
     // require this order of evaluation.
     SgInitializedName *init = vardecl->get_variables().back();
-    inits.push_back(init);
-    initializer->set_parent(init);
-    init->set_scope(funbody_copy);
-    funbody_copy->get_statements().insert(
-        funbody_copy->get_statements().begin() + argNumber + newStmtCount,
-        vardecl);
-    SgVariableSymbol *sym = new SgVariableSymbol(init);
+    pendingDeclarations.push_back(vardecl);
+    SgVariableSymbol *sym =
+        isSgVariableSymbol(funbody_copy->find_symbol_from_declaration(init));
+    if (sym == NULL || sym->get_declaration() != init ||
+        sym->get_parent() != funbody_copy->get_symbol_table()) {
+      fprintf(stderr,
+              "REX_INLINE_INVARIANT[parameter-shadow-symbol]: formal=%p "
+              "declaration=%p name=%p symbol=%p has no exact copied-body "
+              "publication\n",
+              static_cast<void *>(formalArg), static_cast<void *>(vardecl),
+              static_cast<void *>(init), static_cast<void *>(sym));
+      ROSE_ABORT();
+    }
     paramMap[formalArg] = sym;
-    funbody_copy->insert_symbol(shadow_name, sym);
-    sym->set_parent(funbody_copy->get_symbol_table());
   }
 
   // Similarly for "this". We create a local variable in the to-be-inserted
   // function body that will be initialized with the caller's "this".
   if (!isLambdaMemberFuncCall && thisdecl) {
-    thisdecl->set_parent(funbody_copy);
-    thisinitname->set_scope(funbody_copy);
-    funbody_copy->get_statements().insert(
-        funbody_copy->get_statements().begin(), thisdecl);
-    SgVariableSymbol *thisSym = new SgVariableSymbol(thisinitname);
-    funbody_copy->insert_symbol(thisname, thisSym);
-    thisSym->set_parent(funbody_copy->get_symbol_table());
+    SgVariableSymbol *thisSym = isSgVariableSymbol(
+        funbody_copy->find_symbol_from_declaration(thisinitname));
+    if (thisSym == NULL || thisSym->get_declaration() != thisinitname ||
+        thisSym->get_parent() != funbody_copy->get_symbol_table()) {
+      fprintf(stderr,
+              "REX_INLINE_INVARIANT[this-shadow-symbol]: declaration=%p "
+              "name=%p symbol=%p has no exact copied-body publication\n",
+              static_cast<void *>(thisdecl), static_cast<void *>(thisinitname),
+              static_cast<void *>(thisSym));
+      ROSE_ABORT();
+    }
     ReplaceThisWithRefVisitor(thisSym).traverse(funbody_copy, postorder);
   }
   if (isLambdaMemberFuncCall) {
@@ -1504,29 +1507,82 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
   }
   ReplaceParameterUseVisitor(paramMap).traverse(funbody_copy, postorder);
 
+  // The copied declaration family is a temporary semantic owner for copied
+  // formals while references are being rebound.  It must now be completely
+  // isolated from the body that will be inserted.  Split its canonical and
+  // defining declarations into independently closed roots and require the
+  // deletion machinery to prove that no live AST edge still targets either
+  // root.
+  SgFunctionDeclaration *copied_canonical = isSgFunctionDeclaration(
+      function_copy_declaration->get_firstNondefiningDeclaration());
+  SgAuxiliaryDeclarationList *copied_canonical_owner =
+      copied_canonical != NULL
+          ? isSgAuxiliaryDeclarationList(copied_canonical->get_parent())
+          : NULL;
+  if (copied_canonical == NULL ||
+      copied_canonical == function_copy_declaration ||
+      copied_canonical_owner == NULL ||
+      copied_canonical_owner->get_parent() != NULL ||
+      copied_canonical_owner->get_declarations().size() != 1 ||
+      copied_canonical_owner->get_declarations().front() != copied_canonical ||
+      copied_canonical->get_firstNondefiningDeclaration() != copied_canonical ||
+      copied_canonical->get_definingDeclaration() !=
+          function_copy_declaration ||
+      function_copy_declaration->get_firstNondefiningDeclaration() !=
+          copied_canonical ||
+      function_copy_declaration->get_definingDeclaration() !=
+          function_copy_declaration ||
+      function_copy_declaration->get_definition() != function_copy ||
+      function_copy->get_declaration() != function_copy_declaration ||
+      function_copy->get_parent() != function_copy_declaration ||
+      function_copy->get_body() != NULL) {
+    fprintf(stderr,
+            "REX_INLINE_INVARIANT[function-copy-retirement]: canonical=%p "
+            "canonical-owner=%p defining=%p definition=%p is not one exact "
+            "detached copied function family\n",
+            static_cast<void *>(copied_canonical),
+            static_cast<void *>(copied_canonical_owner),
+            static_cast<void *>(function_copy_declaration),
+            static_cast<void *>(function_copy));
+    ROSE_ABORT();
+  }
+
+  copied_canonical_owner->get_declarations().clear();
+  copied_canonical->set_parent(NULL);
+  copied_canonical->set_definingDeclaration(NULL);
+  function_copy_declaration->set_firstNondefiningDeclaration(
+      function_copy_declaration);
+  SageInterface::deleteAST(copied_canonical,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
+  SageInterface::deleteAST(copied_canonical_owner,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
+  SageInterface::deleteAST(function_copy_declaration,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
+  function_copy = NULL;
+  function_copy_declaration = NULL;
+
   SgName end_of_inline_name = "rose_inline_end__";
   end_of_inline_name << ++gensym_counter;
-  SgLabelStatement *end_of_inline_label =
-      new SgLabelStatement(SgNULL_FILE, end_of_inline_name);
-  end_of_inline_label->set_endOfConstruct(SgNULL_FILE);
+  SgNullStatement *dummyStatement = SageBuilder::buildNullStatement();
+  SgLabelStatement *end_of_inline_label = SageBuilder::buildLabelStatement(
+      end_of_inline_name, dummyStatement, targetFunction);
 
-  funbody_copy->append_statement(end_of_inline_label);
-  end_of_inline_label->set_scope(targetFunction);
   SgLabelSymbol *end_of_inline_label_sym =
-      new SgLabelSymbol(end_of_inline_label);
-  end_of_inline_label_sym->set_parent(targetFunction->get_symbol_table());
-  targetFunction->get_symbol_table()->insert(end_of_inline_label->get_name(),
-                                             end_of_inline_label_sym);
-
-  // To ensure that there is some statement after the label
-  SgExprStatement *dummyStatement =
-      SageBuilder::buildExprStatement(SageBuilder::buildNullExpression());
-  dummyStatement->set_endOfConstruct(SgNULL_FILE);
-  funbody_copy->append_statement(dummyStatement);
-  dummyStatement->set_parent(funbody_copy);
+      targetFunction->lookup_label_symbol(end_of_inline_name);
+  if (end_of_inline_label_sym == NULL ||
+      end_of_inline_label_sym->get_declaration() != end_of_inline_label ||
+      end_of_inline_label_sym->get_parent() !=
+          targetFunction->get_symbol_table()) {
+    fprintf(stderr,
+            "REX_INLINE_INVARIANT[end-label-symbol]: label=%p symbol=%p "
+            "has no exact target-function publication\n",
+            static_cast<void *>(end_of_inline_label),
+            static_cast<void *>(end_of_inline_label_sym));
+    ROSE_ABORT();
+  }
 
   ChangeReturnsToGotosPrevisitor previsitor = ChangeReturnsToGotosPrevisitor(
-      end_of_inline_label, funbody_copy,
+      end_of_inline_label, funbody_copy, pendingDeclarations,
       SageInterface::isReferenceType(funcall->get_type()));
   replaceExpressionWithStatement(funcall, &previsitor);
 
@@ -1541,9 +1597,10 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
   AstTests::runAllTests(SageInterface::getProject());
 #endif
 
-  // DQ (4/7/2015): This fixes something I was required to fix over the weekend
-  // and which is fixed more directly, I think. Mark the things we insert as
-  // being transformations so they get inserted into the output by backend()
+  // The copied body has become a new lexical surface at the call site. Publish
+  // that producer transition before token mapping sees its declarations;
+  // copied source coordinates are provenance only and cannot claim the
+  // original function's token intervals.
   markAsTransformation(funbody_copy);
 
   return true;

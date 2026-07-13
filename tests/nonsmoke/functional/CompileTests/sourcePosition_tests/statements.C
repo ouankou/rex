@@ -28,9 +28,12 @@ directiveTypeColor ( const PreprocessingInfo::DirectiveType & directive )
         {
           case PreprocessingInfo::C_StyleComment:
           case PreprocessingInfo::CplusplusStyleComment:
+          case PreprocessingInfo::FortranStyleComment:
+          case PreprocessingInfo::F90StyleComment:
              returnString = "lightgreen";
              break;
           case PreprocessingInfo::CpreprocessorIncludeDeclaration:
+          case PreprocessingInfo::CpreprocessorIncludeNextDeclaration:
           case PreprocessingInfo::CpreprocessorDefineDeclaration:
           case PreprocessingInfo::CpreprocessorUndefDeclaration:
           case PreprocessingInfo::CpreprocessorIfdefDeclaration:
@@ -38,18 +41,22 @@ directiveTypeColor ( const PreprocessingInfo::DirectiveType & directive )
           case PreprocessingInfo::CpreprocessorElifDeclaration:
           case PreprocessingInfo::CpreprocessorIfndefDeclaration:
           case PreprocessingInfo::CpreprocessorIfDeclaration:
+          case PreprocessingInfo::CpreprocessorDeadIfDeclaration:
           case PreprocessingInfo::CpreprocessorEndifDeclaration:
           case PreprocessingInfo::CpreprocessorLineDeclaration:
-          case PreprocessingInfo::ClinkageSpecificationStart:
-          case PreprocessingInfo::ClinkageSpecificationEnd:
+          case PreprocessingInfo::CpreprocessorPragmaDeclaration:
           case PreprocessingInfo::CpreprocessorErrorDeclaration:
           case PreprocessingInfo::CpreprocessorWarningDeclaration:
+          case PreprocessingInfo::CpreprocessorIdentDeclaration:
+          case PreprocessingInfo::CpreprocessorCompilerGeneratedLinemarker:
              returnString = "green";
              break;
           case PreprocessingInfo::CpreprocessorEmptyDeclaration:
+          case PreprocessingInfo::CpreprocessorBlankLine:
           case PreprocessingInfo::CSkippedToken:
           case PreprocessingInfo::CMacroCall:
-          case PreprocessingInfo::LineReplacement:
+          case PreprocessingInfo::CMacroCallStatement:
+          case PreprocessingInfo::CpreprocessorEnd_ifDeclaration:
              returnString = "olivegreen";
              break;
 
@@ -118,6 +125,8 @@ nodeColor( SgStatement* statement )
                case V_SgUsingDirectiveStatement:
                case V_SgVariableDeclaration:
                case V_SgVariableDefinition:
+               case V_SgAccessLabelStatement:
+               case V_SgDeclarationGroupStatement:
                case V_SgEmptyDeclaration:
                case V_SgClinkageStartStatement:
                case V_SgClinkageEndStatement:
@@ -347,6 +356,7 @@ nodeColor( SgExpression* expression )
                case V_SgAggregateInitializer:
                case V_SgAssignInitializer:
                case V_SgConstructorInitializer:
+               case V_SgDesignatedInitializer:
                     returnString = "lightblue";
                     break;
 
@@ -417,6 +427,7 @@ nodeColor( SgExpression* expression )
 
                case V_SgAsmOp:
                case V_SgClassNameRefExp:
+               case V_SgCompoundLiteralExp:
                case V_SgConditionalExp:
                case V_SgDeleteExp:
                case V_SgExprListExp:
@@ -442,6 +453,9 @@ nodeColor( SgExpression* expression )
                case V_SgTemplateMemberFunctionRefExp:
                case V_SgTemplateFunctionRefExp:
                case V_SgNonrealRefExp:
+               case V_SgMacroExpansionExp:
+               case V_SgSourceLocationBuiltinExp:
+               case V_SgDesignator:
                     returnString = "brown";
                     break;
 
@@ -546,9 +560,65 @@ visitorTraversal::visit(SgNode* n)
 
      if (outputExpression == true)
         {
-       // Currently we don't attach comments to expressions (as I recall).
           AttachedPreprocessingInfoType* comments = expression->getAttachedPreprocessingInfo();
-          ROSE_ASSERT(comments == NULL);
+          if (comments != NULL)
+             {
+            // An include-expanded scalar initializer has no source expression
+            // in the owner file.  Its assignment initializer is the exact
+            // typed owner of the include boundary.
+               SgAssignInitializer* initializer =
+                   isSgAssignInitializer(expression);
+               ROSE_ASSERT(initializer != NULL);
+               ROSE_ASSERT(
+                   initializer->get_source_form() ==
+                   SgAssignInitializer::
+                       e_assignment_initializer_source_include_operand_expansion ||
+                   initializer->get_source_form() ==
+                       SgAssignInitializer::
+                           e_assignment_initializer_source_include_complete_expansion);
+               ROSE_ASSERT(comments->size() == 1);
+               PreprocessingInfo* info = comments->front();
+               ROSE_ASSERT(info != NULL);
+               ROSE_ASSERT(
+                   info->getTypeOfDirective() ==
+                       PreprocessingInfo::CpreprocessorIncludeDeclaration ||
+                   info->getTypeOfDirective() ==
+                       PreprocessingInfo::
+                           CpreprocessorIncludeNextDeclaration);
+               ROSE_ASSERT(
+                   info->getRelativePosition() == PreprocessingInfo::inside);
+               Sg_File_Info* initializerStart =
+                   initializer->get_startOfConstruct();
+               Sg_File_Info* initializerEnd =
+                   initializer->get_endOfConstruct();
+               Sg_File_Info* includePosition = info->get_file_info();
+               ROSE_ASSERT(initializerStart != NULL);
+               ROSE_ASSERT(initializerEnd != NULL);
+               ROSE_ASSERT(includePosition != NULL);
+               ROSE_ASSERT(initializerStart->isSameFile(*initializerEnd));
+               ROSE_ASSERT(initializerStart->isSameFile(*includePosition));
+               const bool includeAfterStart =
+                   initializerStart->get_line() <
+                       includePosition->get_line() ||
+                   (initializerStart->get_line() ==
+                        includePosition->get_line() &&
+                    initializerStart->get_col() <
+                        includePosition->get_col());
+               const bool completeIncludeAtStart =
+                   initializer->get_source_form() ==
+                       SgAssignInitializer::
+                           e_assignment_initializer_source_include_complete_expansion &&
+                   initializerStart->get_line() ==
+                       includePosition->get_line() &&
+                   initializerStart->get_col() ==
+                       includePosition->get_col();
+               ROSE_ASSERT(includeAfterStart || completeIncludeAtStart);
+               ROSE_ASSERT(
+                   includePosition->get_line() < initializerEnd->get_line() ||
+                   (includePosition->get_line() ==
+                        initializerEnd->get_line() &&
+                    includePosition->get_col() < initializerEnd->get_col()));
+             }
 
           ROSE_ASSERT(expression->get_startOfConstruct() != NULL);
           int startingLineNumber   = expression->get_startOfConstruct()->get_line();

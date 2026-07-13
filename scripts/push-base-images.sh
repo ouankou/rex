@@ -16,6 +16,10 @@ IMAGE_NAME="${2:-rex}"
 TAG="${3:-base}"
 IMAGE="ghcr.io/${OWNER}/${IMAGE_NAME}"
 LLVM_VERSION="${LLVM_VERSION:-22}"
+if [[ "${LLVM_VERSION}" != "22" ]]; then
+  echo "Error: REX base images are pinned to LLVM/Clang major 22; requested '${LLVM_VERSION}'." >&2
+  exit 2
+fi
 
 BUILDER="${BUILDER:-rex-multi}"
 if ! docker buildx inspect "${BUILDER}" >/dev/null 2>&1; then

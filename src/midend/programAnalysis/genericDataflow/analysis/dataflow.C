@@ -230,6 +230,7 @@ bool IntraUniDirectionalDataflow::runAnalysis(const Function &func,
 #if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8)
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
+
   unique_ptr<VirtualCFG::dataflow> workList(getInitialWorklist(
       func, firstVisit, analyzeDueToCallers, calleesUpdated, fState));
 
@@ -245,7 +246,7 @@ bool IntraUniDirectionalDataflow::runAnalysis(const Function &func,
     if (analysisDebugLevel >= 1) {
       ostringstream nodeNameStr;
       nodeNameStr << "Current Node " << sgn << "[" << sgn->class_name() << " | "
-                  << Dbg::escape(sgn->unparseToString()) << " | "
+                  << Dbg::escape(Dbg::diagnosticNodeText(sgn)) << " | "
                   << n.getIndex() << "]";
       nodeName = nodeNameStr.str();
       Dbg::enterFunc(nodeName);
@@ -385,7 +386,8 @@ bool IntraUniDirectionalDataflow::runAnalysis(const Function &func,
         if (analysisDebugLevel >= 1)
           Dbg::dbg << "    Descendant: " << nextSgNode << "["
                    << nextSgNode->class_name() << " | "
-                   << Dbg::escape(nextSgNode->unparseToString()) << "]" << endl;
+                   << Dbg::escape(Dbg::diagnosticNodeText(nextSgNode)) << "]"
+                   << endl;
 
         NodeState *nextState = NodeState::getNodeState(nextNode, 0);
         ROSE_ASSERT(nextSgNode && nextState);

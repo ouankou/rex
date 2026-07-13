@@ -15,12 +15,16 @@ void SgUnaryOp::set_operand(SgExpression *exp) {
 }
 
 SgType *SgUnaryOp::get_type() const {
-  // DQ (1/14/2006): Get the type from the operand
-  ROSE_ASSERT(get_operand() != NULL);
-
-  SgType *returnType = get_operand()->get_type();
-
-  return returnType;
+  if (p_expression_type == nullptr ||
+      isSgTypeUnknown(p_expression_type) != nullptr ||
+      isSgTypeDefault(p_expression_type) != nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[unary-result-type]: expression=%s has no "
+            "exact semantic result type\n",
+            class_name().c_str());
+    ROSE_ABORT();
+  }
+  return p_expression_type;
 }
 
 int SgUnaryOp::length() const { return 1; }
@@ -47,9 +51,11 @@ int SgUnaryOp::replace_expression(SgExpression *o, SgExpression *n) {
   if (get_operand() == o) {
     set_operand(n);
     return 1;
-  } else {
-    printf("Warning: inside of SgUnaryOp::replace_expression original "
-           "SgExpression unidentified \n");
-    return 0;
   }
+
+  fprintf(stderr,
+          "REX_AST_INVARIANT[unary-replacement-edge]: expression=%s does "
+          "not own the requested old operand\n",
+          class_name().c_str());
+  ROSE_ABORT();
 }

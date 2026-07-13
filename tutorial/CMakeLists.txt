@@ -8,7 +8,7 @@ if(ENABLE-TUTORIAL-DIRECTORY)
   set(tutorials
     ASTGraphGenerator
     ASTGraphGeneratorCustomized AST_PDF_Generator wholeASTGraphGenerator
-    identityTranslator lineReplacement queryLibraryExample nestedQueryExample
+    identityTranslator queryLibraryExample nestedQueryExample
     visitorTraversal prePostTraversal combinedTraversals traverseIRnodeTypes
     classicObjectOrientedVisitorPatternTraversal inheritedAttributeTraversal
     synthesizedAttributeTraversal inheritedAndSynthesizedAttributeTraversal
@@ -27,7 +27,7 @@ if(ENABLE-TUTORIAL-DIRECTORY)
     loopNestingInfoProcessing tauInstrumenter typeTransformation
     generatingUniqueNamesFromDeclaration
     symbolTableHandling scopeInformation customGraphGeneration inlineTransformations
-    addComments addArbitraryTextForUnparser collectComments
+    addComments collectComments
     collectDefineDirectives partialRedundancyElimination
     codeGenerationFormatControl dataFlowGraph customGraphGenerationWithFiltering
     graphTraversal wholeGraphAST traversalShortCircuit

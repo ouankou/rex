@@ -110,6 +110,25 @@ void AstNodeClass::setBaseClass(AstNodeClass *bc) { baseClass = bc; }
 
 AstNodeClass *AstNodeClass::getBaseClass() const { return baseClass; }
 
+void AstNodeClass::setTraversalCardinalityOverride(
+    const std::string &memberName,
+    TraversalCardinalityEnum traversalCardinality) {
+  if (memberName.empty() ||
+      !traversalCardinalityOverrides.emplace(memberName, traversalCardinality)
+           .second) {
+    fprintf(stderr,
+            "REX_ROSETTA_INVARIANT[traversal-cardinality-override]: node=%s "
+            "has an empty or duplicate override for member=%s\n",
+            getName().c_str(), memberName.c_str());
+    ROSE_ABORT();
+  }
+}
+
+const std::map<std::string, TraversalCardinalityEnum> &
+AstNodeClass::getTraversalCardinalityOverrides() const {
+  return traversalCardinalityOverrides;
+}
+
 bool AstNodeClass::isDerivedFrom(const string &s) const {
   // DQ (10/11/2014): This function checks if the input name is a base class of
   // this AstNodeClass.
@@ -434,22 +453,50 @@ AstNodeClass::buildCopyMemberFunctionSource() {
               varNameString + string("\n");
           constructArgCopy1 += comment;
 
-          // Code built generated to build constructor parameters can't set the
-          // "result->xxx" data members since the "result" class have not been
-          // built (see generated code for more examples).
-          bool buildConstructorArgument = true;
-          constructArgCopy1 +=
-              data->buildCopyMemberFunctionSource(buildConstructorArgument);
-          // constructArgList1 = constructArgList1 + ", " + varNameString;
+          const string typeName = data->getTypeNameString();
+          const bool deferExclusiveOwnedPointer =
+              data->getToBeTraversed() == DEF_TRAVERSAL &&
+              data->getToBeDeleted() == DEF_DELETE &&
+              data->getToBeCopied() == CLONE_TREE &&
+              typeName.find('*') != string::npos;
+          if (deferExclusiveOwnedPointer) {
+            // An exclusively owned constructor edge can close a cycle back to
+            // the node being copied.  Construct the result with an empty edge,
+            // publish the root identity in the common copy template, and only
+            // then recurse into the child.  Copying the child before
+            // publishing the result manufactures a detached provisional owner
+            // when, for example, a function body reaches one of its
+            // parameters.  This is the same ownership classification used by
+            // GrammarString to select copyOrLookupOwnedAst.
+            constructArgCopy1 +=
+                "  // Defer this owned edge until the result identity is "
+                "published.\n";
+            constructArgList1 += ", static_cast<" + typeName + ">(nullptr)";
 
-          constructArgList1 += ", " + varNameString;
+            bool buildConstructorArgument = false;
+            postConstructCopy1 += comment;
+            postConstructCopy1 +=
+                data->buildCopyMemberFunctionSource(buildConstructorArgument);
+            postConstructCopy1 +=
+                data->buildCopyMemberFunctionSetParentSource();
+          } else {
+            // Code built generated to build constructor parameters can't set
+            // the "result->xxx" data members since the "result" class have not
+            // been built (see generated code for more examples).
+            bool buildConstructorArgument = true;
+            constructArgCopy1 +=
+                data->buildCopyMemberFunctionSource(buildConstructorArgument);
+            // constructArgList1 = constructArgList1 + ", " + varNameString;
 
-          // DQ (9/28/2022): Fixing compiler warning for argument not used.
-          // string setParentString =
-          // data->buildCopyMemberFunctionSetParentSource(varNameString);
-          string setParentString =
-              data->buildCopyMemberFunctionSetParentSource();
-          postConstructCopy += setParentString;
+            constructArgList1 += ", " + varNameString;
+
+            // DQ (9/28/2022): Fixing compiler warning for argument not used.
+            // string setParentString =
+            // data->buildCopyMemberFunctionSetParentSource(varNameString);
+            string setParentString =
+                data->buildCopyMemberFunctionSetParentSource();
+            postConstructCopy += setParentString;
+          }
         } else {
           // Code built generated to build constructor parameters can't set the
           // "result->xxx" data members since the "result" class have not been
@@ -1028,6 +1075,23 @@ void AstNodeClass::setDataPrototype(
                      inputDefaultInitializer, constructorParameter,
                      buildAccessDataFunctions, toBeTraversedDuringTreeTraversal,
                      delete_flag, toBeCopied);
+  setDataPrototype(temp);
+}
+
+void AstNodeClass::setDataPrototype(
+    const string &inputTypeNameString, const string &inputVariableNameString,
+    const string &inputDefaultInitializer,
+    const ConstructParamEnum &constructorParameter,
+    const BuildAccessEnum &buildAccessDataFunctions,
+    const TraversalEnum &toBeTraversedDuringTreeTraversal,
+    const DeleteEnum &delete_flag, const CopyConfigEnum &toBeCopied,
+    const TraversalCardinalityEnum &traversalCardinality,
+    const TraversalAccessorEnum &traversalAccessor) {
+  GrammarString temp(inputTypeNameString, inputVariableNameString,
+                     inputDefaultInitializer, constructorParameter,
+                     buildAccessDataFunctions, toBeTraversedDuringTreeTraversal,
+                     delete_flag, toBeCopied, traversalCardinality,
+                     traversalAccessor);
   setDataPrototype(temp);
 }
 
@@ -1812,11 +1876,10 @@ std::string AstNodeClass::buildListIteratorString(string typeName,
 
       returnString += "     else\n";
     }
-    returnString += "     for ( " + iteratorBaseType + "::const_iterator " +
-                    iteratorName + " = " + originalList + accessOperator +
-                    "begin() \n" + "; " + iteratorName + " != " + originalList +
-                    accessOperator + "end(); ++" + iteratorName +
-                    ") \n        { \n";
+    returnString += "     for ( auto " + iteratorName + " = " + originalList +
+                    accessOperator + "begin() \n" + "; " + iteratorName +
+                    " != " + originalList + accessOperator + "end(); ++" +
+                    iteratorName + ") \n        { \n";
 
     // Declare the a loop variable (reference to current element of list)
     returnString +=
@@ -2051,11 +2114,10 @@ string AstNodeClass::buildListIteratorStringForReferenceToPointers(
       returnString += "     else\n";
     }
 
-    returnString += "     for ( " + iteratorBaseType + "::iterator " +
-                    iteratorName + " = " + originalList + accessOperator +
-                    "begin() \n" + "; " + iteratorName + " != " + originalList +
-                    accessOperator + "end(); ++" + iteratorName +
-                    ") \n        { \n";
+    returnString += "     for ( auto " + iteratorName + " = " + originalList +
+                    accessOperator + "begin() \n" + "; " + iteratorName +
+                    " != " + originalList + accessOperator + "end(); ++" +
+                    iteratorName + ") \n        { \n";
 
     // Declare the a loop variable (reference to current element of list)
     returnString += "          handler->apply(*" + iteratorName + ",SgName(\"" +
@@ -2181,258 +2243,6 @@ string AstNodeClass::buildProcessDataMemberReferenceToPointers() {
       }
     }
   }
-
-  return s;
-}
-
-// DQ (3/7/2007): This is support for buildChildIndex() (see below)
-/*************************************************************************************************
- *  The function
- *       AstNodeClass::buildListIteratorStringForChildIndex()
- *  supports buildChildIndex() by building the string representing the code
- *  necessary to count the index of all data member pointers to IR nodes
- *  contained in STL lists.
- *************************************************************************************************/
-// DQ (9/28/2022): Fixing compiler warning for argument not used.
-// std::string AstNodeClass::buildListIteratorStringForChildIndex(string
-// typeName, string variableName, string classNameString)
-std::string
-AstNodeClass::buildListIteratorStringForChildIndex(string typeName,
-                                                   string variableName) {
-  // AS(2/14/2006) Builds the strings for the list of data member pointers.
-  string returnString;
-
-  // Control variables for code generation
-  bool typeIsPointerToListOfPointers =
-      typeName.find("PtrListPtr") != string::npos;
-  bool typeIsPointerToListOfNonpointers =
-      (typeIsPointerToListOfPointers == false) &&
-      typeName.find("ListPtr") != string::npos;
-  bool typeIsPointerToList =
-      typeIsPointerToListOfPointers || typeIsPointerToListOfNonpointers;
-
-  // By "simple list" we mean NOT a pointer to a list (just a list, e.g. STL
-  // list)
-  bool typeIsSimpleListOfPointers = (typeIsPointerToListOfPointers == false) &&
-                                    typeName.find("PtrList") != string::npos;
-  bool typeIsList = typeIsPointerToList || typeIsSimpleListOfPointers;
-  bool typeIsSgNode = typeName.find('*') != string::npos;
-
-  // One of these should be true!
-  if (typeIsList != true)
-    return "";
-
-  ROSE_ASSERT(typeIsList == true || typeIsSgNode == true);
-  ROSE_ASSERT(typeIsList == false || typeIsSgNode == false);
-
-  string listElementType = "default-error-type";
-
-  if (typeIsList == true) {
-    // name constant for all cases below (in this scope)
-    string listElementName = "source_list_element";
-
-    // names that are set differently for different cases
-    string iteratorBaseType;
-    string needPointer;
-    string originalList;
-    string iteratorName;
-
-    // Access member functions using "->" or "." (set to some string
-    // that will cause an error if used, instead of empty string).
-    string accessOperator = "error string for access operator";
-
-    if (typeIsPointerToList == true) {
-      if (typeIsPointerToListOfPointers == true) {
-        needPointer = "*";
-        accessOperator = "->";
-      } else {
-        ROSE_ASSERT(typeIsPointerToListOfNonpointers == true);
-        accessOperator = ".";
-      }
-
-      // iteratorBaseType = string("NeedBaseType_of_") + typeName;
-      int positionOfListPtrSubstring = typeName.find("ListPtr");
-      int positionOfPtrSubstring =
-          typeName.find("Ptr", positionOfListPtrSubstring);
-      iteratorBaseType = typeName.substr(0, positionOfPtrSubstring);
-
-      // copyOfList = variableName + "_source";
-      // originalList = string("get_") + variableName + "()";
-      originalList = string("p_") + variableName;
-
-      iteratorName = variableName + "_iterator";
-
-    } else {
-      ROSE_ASSERT(typeIsSimpleListOfPointers == true);
-      iteratorBaseType = typeName;
-      needPointer = "*";
-      accessOperator = ".";
-
-      // Need to generate different code, for example:
-      //      SgStatementPtrList::const_iterator cpinit_stmt =
-      //      get_init_stmt().begin();
-      // instead of:
-      //      SgStatementPtrList::const_iterator init_stmt_copy_iterator =
-      //      init_stmt_copy.begin();
-
-      // originalList = string("get_") + variableName + "()";
-      originalList = string("p_") + variableName;
-
-      iteratorName = string("source_") + variableName + "_iterator";
-    }
-
-    // Need to get the prefix substring to strings like "SgFilePtrList" (i.e.
-    // "SgFile")
-    int positionOfPtrListSubstring = iteratorBaseType.find("PtrList");
-    int positionOfListSubstring =
-        iteratorBaseType.find("Ptr", positionOfPtrListSubstring);
-    listElementType = typeName.substr(0, positionOfListSubstring) + needPointer;
-
-    // Open up the loop over the list elements
-    if (accessOperator == "->") {
-      returnString += "     if ( " + originalList + " == NULL )\n";
-
-      // Return a NULL pointer so that th graph shows that this pointer equals
-      // NULL returnString += "
-      // returnVector.push_back(pair<SgNode*,std::string>(
-      // NULL,\""+variableName+"\"));\n";
-      returnString +=
-          "        { /* do nothing because this is not an IR node */ } \n";
-      returnString += "       else\n";
-    }
-
-    returnString += "          for ( " + iteratorBaseType +
-                    "::const_iterator " + iteratorName + " = " + originalList +
-                    accessOperator + "begin(); " + iteratorName +
-                    " != " + originalList + accessOperator + "end(); ++" +
-                    iteratorName + ") \n             { \n";
-
-    // Declare the a loop variable (reference to current element of list)
-    // returnString += " returnVector.push_back(pair<SgNode*,std::string>( *" +
-    // iteratorName + ",\""+variableName+"\"));\n"; returnString += " if ( *" +
-    // iteratorName + " == childNode ) { returnValue = indexCounter; }
-    // indexCounter++;\n";
-    returnString +=
-        "               if ( *" + iteratorName +
-        " == childNode ) { return indexCounter; } indexCounter++;\n";
-
-    // close off the loop
-    returnString += "             } \n";
-  }
-
-  return returnString;
-}
-
-// DQ (3/7/2007): This is support for buildChildIndex() (see below)
-/*************************************************************************************************
- *  The function
- *       AstNodeClass::buildChildIndex()
- *  builds the code for returning all data member pointers to IR nodes in the
- *AST.
- *************************************************************************************************/
-string AstNodeClass::buildChildIndex() {
-  // AS (2/14/2006): This function generates the code for each IR node to return
-  // a signed integer of the index associated with the child in the IR node. A
-  // negative value indicates that the IR node is not a child.  Uses include:
-  //   1) Generating unique names for children (e.g. declarations in
-  //      scopes where overloaded template functions in a class don't
-  //      have the parameter list information availalbe so we need to
-  //      prevent over sharing.
-  //   2) Forms a lower level implementation of "isChild(SgNode*)" function.
-  //   3) Useful in Jeremiah's control flow graph work.
-
-  vector<GrammarString *> copyList;
-  vector<GrammarString *>::iterator stringListIterator;
-
-  string classNameString = this->name;
-  // string s = "int indexCounter = 0, returnValue = -1;\n";
-  string s = "int indexCounter = 0;\n";
-
-  for (AstNodeClass *t = this; t != NULL; t = t->getBaseClass()) {
-    copyList = t->getMemberDataPrototypeList(AstNodeClass::LOCAL_LIST,
-                                             AstNodeClass::INCLUDE_LIST);
-    // printf ("Possible base class AstNodeClass name = %s \n",(*t).name);
-    // AS Iterate over data memeber of (non-) AstNodeClass class we are looking
-    // at
-    for (stringListIterator = copyList.begin();
-         stringListIterator != copyList.end(); stringListIterator++) {
-      GrammarString *data = *stringListIterator;
-      // AS Name of the actual data member. All the data members in rosetta is
-      // called p_<name>, but our name string only contains <name>
-      string varNameString = string(data->getVariableNameString());
-      // AS A type name is always a type name, but if it is 'const' or 'static'
-      // those will we in front of the typename And there are some typedef-types
-      string varTypeString = string(data->getTypeNameString());
-      // AS Freepointer is a specific data member that contains no AST
-      // information, so lets skip that
-
-      if (varNameString != "freepointer") {
-        // AS Analyse the types to see if it contains a '*' because then it is a
-        // pointer
-        bool typeIsStarPointer = (varTypeString.find("*") != std::string::npos);
-        // AS Check to see if it this is an pointer to any IR-node. The
-        // varTypeString == "$CLASSNAME *" checks to see if it is a ir-node
-        // pointer which is *not* yet replaced. $CLASSNAME is inside the string
-        // and will later be replaced with e.g SgTypeInt etc.
-        // 'varTypeString.substr(0,15) == "$GRAMMAR_PREFIX"' checks to see if it
-        // is part of the grammar. 'varTypeString.substr(0,2) == "Sg" ' and to
-        // see if it is a Sg node of some type. DQ (9/28/2022): Fixing compiler
-        // warning for argument not used. s +=
-        // buildListIteratorStringForChildIndex(varTypeString,
-        // varNameString,classNameString);
-        s += buildListIteratorStringForChildIndex(varTypeString, varNameString);
-
-        if ((varTypeString == "$CLASSNAME *") ||
-            (((varTypeString.substr(0, 15) == "$GRAMMAR_PREFIX") ||
-              (varTypeString.substr(0, 2) == "Sg")) &&
-             typeIsStarPointer)) {
-          // AS Checks to see if the pointer is a data member. Because the
-          // mechanism for generating access to variables is the same as the one
-          // accessing access member functions. We do not want the last case to
-          // show up here.
-          //  s += "     if ( p_" + varNameString + " == childNode ) {
-          //  returnValue = indexCounter; } indexCounter++;\n";
-          s += "     if ( p_" + varNameString +
-               " == childNode ) { return indexCounter; } indexCounter++;\n";
-        } else {
-          if (varTypeString.find("rose_hash_multimap") != std::string::npos) {
-            // AS(02/24/06) Generate code for returning data member pointers to
-            // IR
-            std::string accessOperator = ".";
-            if (varTypeString.find("rose_hash_multimap*") !=
-                std::string::npos) {
-              accessOperator = "->";
-              s += "     if ( p_" + varNameString + " == NULL )\n";
-              // Return a NULL pointer so that th graph shows that this pointer
-              // equals NULL
-              s += "          indexCounter++;\n";
-              s += "       else\n";
-            }
-
-            s += "          for ( rose_hash_multimap::const_iterator it_" +
-                 varNameString + "= p_" + varNameString + accessOperator +
-                 "begin(); it_" + varNameString + " != p_" + varNameString +
-                 accessOperator + "end(); ++it_" + varNameString + ") \n";
-            s += "             {\n";
-            // Declare the a loop variable (reference to current element of
-            // list) s += "               if ( it_" + varNameString + "->second
-            // == childNode ) { returnValue = indexCounter; }
-            // indexCounter++;\n";
-            s += "               if ( it_" + varNameString +
-                 "->second == childNode ) { return indexCounter; } "
-                 "indexCounter++;\n";
-            // close off the loop
-            s += "             }\n";
-          }
-        }
-      }
-    }
-  }
-
-  s += "  // Child not found, return -1 (default value for returnValue) as "
-       "index position to signal this.\n";
-  // s += "     return returnValue;";
-  s += "     return -1;";
 
   return s;
 }

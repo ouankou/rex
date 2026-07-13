@@ -1,9 +1,5 @@
 
-/* unparser.h
- * This header file contains the class declaration for the newest unparser. Six
- * C files include this header file: unparser.C, modified_sage.C,
- * unparse_stmt.C, unparse_expr.C, unparse_type.C, and unparse_sym.C.
- */
+/* Shared AST classification helpers used by the unparser. */
 
 #ifndef UNPARSER_MOD_SAGE
 #define UNPARSER_MOD_SAGE
@@ -16,6 +12,7 @@
 
 #include "unparser.h"
 class SgExpression;
+class SgFunctionCallExp;
 class SgType;
 class SgExprListExp;
 class SgConstructorInitializer;
@@ -31,14 +28,12 @@ class Unparser;
 class Unparse_MOD_SAGE {
 private:
   Unparser *unp;
+  std::vector<std::string> activeExternLinkageBraceStack;
+  std::vector<bool> activeColorCodeStates;
 
 public:
   Unparse_MOD_SAGE(Unparser *unp);
   virtual ~Unparse_MOD_SAGE() {};
-
-  int cur_get_linewrap();
-
-  void cur_set_linewrap(int nr);
 
   void curprint(std::string str);
   void curprint_newline();
@@ -89,13 +84,9 @@ public:
   bool isOverloadedArrowOperatorChain(SgExpression *expr);
 
   //! auxiliary functions (some code from original modified_sage.C)
-  bool NoDereference(SgExpression *expr);
   bool isCast_ConstCharStar(SgType *type);
   bool PrintStartParen(SgExpression *expr, SgUnparse_Info &info);
   bool RemovePareninExprList(SgExprListExp *expr_list);
-  bool isOneElementList(SgConstructorInitializer *con_init);
-
-  bool printConstructorName(SgExpression *expr);
   bool noQualifiedName(SgExpression *expr);
 
   void printSpecifier1(SgDeclarationStatement *decl_stmt, SgUnparse_Info &info);
@@ -104,6 +95,8 @@ public:
 
   // DQ (2/26/2013): Added support for missing attributes in unparsed code.
   void printAttributes(SgDeclarationStatement *decl_stmt, SgUnparse_Info &info);
+  void printGnuVisibilityAttributes(SgDeclarationStatement *decl_stmt,
+                                    bool leading_space);
 
   // DQ (2/27/2013): Added support for missing attributes in unparsed code.
   void printAttributes(SgInitializedName *initializedName,
@@ -125,10 +118,10 @@ public:
   // using extern "C". DQ (8/29/2005): Added to support differences in the order
   // of "extern C" and "template<>" with g++ version 3.3.x and 3.4.x void
   // outputExternLinkageSpecifier ( SgDeclarationStatement* decl_stmt );
-  static void resetActiveExternLinkageBraceStack();
-  static void pushActiveExternLinkageBraceLanguage(const std::string &language);
-  static void popActiveExternLinkageBraceLanguage();
-  static std::string getActiveExternLinkageBraceLanguage();
+  void resetActiveExternLinkageBraceStack();
+  void pushActiveExternLinkageBraceLanguage(const std::string &language);
+  void popActiveExternLinkageBraceLanguage();
+  std::string getActiveExternLinkageBraceLanguage() const;
 
   void outputExternLinkageSpecifier(SgDeclarationStatement *decl_stmt,
                                     SgUnparse_Info &info);
@@ -148,18 +141,11 @@ public:
   // DQ (4/3/2004): Added to output modifiers (e.g. register) in formal function
   // arguments void printFunctionFormalArgumentSpecifier ( SgType* type,
   // SgUnparse_Info& info );
-
-  // MS: temporary flag for experiments with uparsing of template instantiations
-  static bool experimentalMode;
-  static int experimentalModeVerbose;
-
-private:
-  void
-  outputTemplateSpecializationSpecifier2(SgDeclarationStatement *decl_stmt);
 };
 
 #endif
 
 int GetOperatorVariant(SgExpression *expr);
+SgExpression *GetImplicitConversionObject(SgFunctionCallExp *call);
 SgExpression *GetFirstOperand(SgExpression *expr);
 bool getOperatorFunctionName(SgExpression *expr, std::string &func_name);

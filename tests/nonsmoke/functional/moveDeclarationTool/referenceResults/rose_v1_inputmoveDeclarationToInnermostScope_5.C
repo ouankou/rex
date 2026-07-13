@@ -1,4 +1,3 @@
-
 #define fmin(a,b) ((a) < (b)) ? (a) : (b)
 #define fvswap(zzp1, zzp2, zzn)       \
 {                                     \
@@ -9,31 +8,28 @@
       yyp1++; yyp2++; yyn--;          \
    }                                  \
 }
-typedef char            Char;
-typedef unsigned char   Bool;
-typedef unsigned char   UChar;
-typedef int             Int32;
-typedef unsigned int    UInt32;
-typedef short           Int16;
-typedef unsigned short  UInt16;
-
+typedef char Char;
+typedef unsigned char Bool;
+typedef unsigned char UChar;
+typedef int Int32;
+typedef unsigned int UInt32;
+typedef short Int16;
+typedef unsigned short UInt16;
 typedef unsigned long long UInt64;
 #define BZ_N_RADIX 2
 #define FALLBACK_QSORT_SMALL_THRESH 10
 #define FALLBACK_QSORT_STACK_SIZE   100
-void mainQSort3(UInt32 *ptr, UChar *block, UInt16 *quadrant, Int32 nblock,
-                Int32 loSt, Int32 hiSt, Int32 dSt, Int32 *budget);
+void mainQSort3(UInt32 *ptr, UChar *block, UInt16 *quadrant, Int32 nblock, Int32 loSt, Int32 hiSt, Int32 dSt, Int32 *budget);
 void fallbackSimpleSort(UInt32 *fmap, UInt32 *eclass, Int32 lo, Int32 hi);
 
-static void fallbackQSort3(UInt32 *fmap, UInt32 *eclass, Int32 loSt,
-                           Int32 hiSt) {
+static void fallbackQSort3(UInt32 *fmap, UInt32 *eclass, Int32 loSt, Int32 hiSt) {
   Int32 sp;
   UInt32 r;
   Int32 stackLo[100];
   Int32 stackHi[100];
   r = 0;
   sp = 0;
-  while (sp > 0) {
+  while (sp > 0){
     Int32 unLo;
     Int32 unHi;
     Int32 ltLo;
@@ -44,14 +40,14 @@ static void fallbackQSort3(UInt32 *fmap, UInt32 *eclass, Int32 loSt,
     Int32 hi;
     UInt32 med;
     UInt32 r3;
-    if (hi - lo < 10) {
+    if (hi - lo < FALLBACK_QSORT_SMALL_THRESH) {
       fallbackSimpleSort(fmap, eclass, lo, hi);
-      continue; 
+      continue;
     }
     /* Random partitioning.  Median of 3 sometimes fails to
-       avoid bad cases.  Median of 9 seems to help but 
+       avoid bad cases.  Median of 9 seems to help but
        looks rather expensive.  This too seems to work but
-       is cheaper.  Guidance for the magic constants 
+       is cheaper.  Guidance for the magic constants
        7621 and 32768 is taken from Sedgewick's algorithms
        book, chapter 35.
        */
@@ -61,32 +57,32 @@ static void fallbackQSort3(UInt32 *fmap, UInt32 *eclass, Int32 loSt,
       med = eclass[fmap[lo]];
      else if (r3 == 1)
       med = eclass[fmap[(lo + hi) >> 1]];
-     else 
+     else
       med = eclass[fmap[hi]];
     unLo = ltLo = lo;
     unHi = gtHi = hi;
-    while (1) {
-      while (1) {
+    while (1){
+      while (1){
         if (unLo > unHi)
           break;
         n = (Int32)eclass[fmap[unLo]] - (Int32)med;
         if (n == 0) {
           ltLo++;
           unLo++;
-          continue; 
+          continue;
         };
         if (n > 0)
           break;
         unLo++;
       }
-      while (1) {
+      while (1){
         if (unLo > unHi)
           break;
         n = (Int32)eclass[fmap[unHi]] - (Int32)med;
         if (n == 0) {
           gtHi--;
           unHi--;
-          continue; 
+          continue;
         };
         if (n < 0)
           break;
@@ -98,24 +94,24 @@ static void fallbackQSort3(UInt32 *fmap, UInt32 *eclass, Int32 loSt,
       unHi--;
     }
     if (gtHi < ltLo)
-      continue; 
-    n = (((ltLo - lo) < (unLo - ltLo))?(ltLo - lo) : (unLo - ltLo));
+      continue;
+    n = fmin(ltLo-lo, unLo-ltLo);
     {
-      Int32 yyp1 = lo;
+      Int32 yyp1 = (lo);
       Int32 yyp2 = (unLo - n);
-      Int32 yyn = n;
-      while (yyn > 0) {
+      Int32 yyn = (n);
+      while (yyn > 0){
         yyp1++;
         yyp2++;
         yyn--;
       }
     };
-    m = (((hi - gtHi) < (gtHi - unHi))?(hi - gtHi) : (gtHi - unHi));
+    m = fmin(hi-gtHi, gtHi-unHi);
     {
-      Int32 yyp1 = unLo;
+      Int32 yyp1 = (unLo);
       Int32 yyp2 = (hi - m + 1);
-      Int32 yyn = m;
-      while (yyn > 0) {
+      Int32 yyn = (m);
+      while (yyn > 0){
         yyp1++;
         yyp2++;
         yyn--;
@@ -137,7 +133,7 @@ static void fallbackQSort3(UInt32 *fmap, UInt32 *eclass, Int32 loSt,
       UInt16 *quadrant;
       Int32 nblock;
       Int32 *budget;
-      mainQSort3(ptr, block, quadrant, nblock, lo, hi, 2, budget);
+      mainQSort3(ptr, block, quadrant, nblock, lo, hi, BZ_N_RADIX, budget);
     }
   }
   // another if-stmt case
@@ -155,36 +151,31 @@ static void fallbackQSort3(UInt32 *fmap, UInt32 *eclass, Int32 loSt,
   // switch
   {
     int blockx;
-    switch (blockx) {
+    switch (blockx){
       int ttt;
-    case 0:
+      case 0:
       ttt++;
       break;
-    case 1:
+      case 1:
       ttt--;
       break;
-      }
     }
   }
-  Int32 uInt64_qrm10(UInt64 *n);
-  Bool uInt64_isZero(UInt64 *n);
-  
+}
+Int32 uInt64_qrm10(UInt64 *n);
+Bool uInt64_isZero(UInt64 *n);
 
-  void uInt64_toAscii(char *outbuf, UInt64 *n) {
-    UChar buf[32];
-    Int32 nBuf = 0;
-    UInt64 n_copy = *n;
-    do  {
-      Int32 q;
-      q = uInt64_qrm10(&n_copy);
-      buf[nBuf] = q + '0';
-      nBuf++;
-    }while (!(uInt64_isZero(&n_copy)));
-    outbuf[nBuf] = 0;
-    for (Int32 i = 0; i < nBuf; i++)
-      outbuf[i] = buf[nBuf - i - 1];
-  }
-
-
-
-
+void uInt64_toAscii(char *outbuf, UInt64 *n) {
+  UChar buf[32];
+  Int32 nBuf = 0;
+  UInt64 n_copy = *n;
+  do  {
+    Int32 q;
+    q = uInt64_qrm10((&n_copy));
+    buf[nBuf] = q + '0';
+    nBuf++;
+  }while (!uInt64_isZero((&n_copy)));
+  outbuf[nBuf] = 0;
+  for (Int32 i = 0; i < nBuf; i++)
+    outbuf[i] = buf[nBuf - i - 1];
+}

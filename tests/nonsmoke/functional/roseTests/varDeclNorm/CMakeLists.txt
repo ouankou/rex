@@ -21,7 +21,6 @@ set(_var_decl_specimens
 )
 
 set(_var_decl_flags
-  -rose:suppress_variable_declaration_normalization
   -rose:skipfinalCompileStep
   -w
   -rose:verbose 0)
@@ -41,4 +40,3 @@ foreach(specimen IN LISTS _var_decl_specimens)
       ${_target}
   )
 endforeach()
-

@@ -1,3 +1,3 @@
 // These are different declarations
-struct {};
-struct {};
+struct FirstDistinctDeclaration {};
+struct SecondDistinctDeclaration {};

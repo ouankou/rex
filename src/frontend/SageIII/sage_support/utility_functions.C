@@ -9,8 +9,6 @@
 
 #include "AstDOTGeneration.h"
 
-#include "keep_going.h"
-
 #include "processSupport.h"
 
 #include "sageInterface/sageInterface.h"
@@ -22,9 +20,6 @@
 #include "plugin.h"
 
 #include <time.h>
-
-// DQ (10/11/2007): This is commented out to avoid use of this mechanism.
-// #include <copy_unparser.h>
 
 // DQ (10/14/2010):  This should only be included by source files that require
 // it. This fixed a reported bug which caused conflicts with configure-time
@@ -41,6 +36,18 @@ using namespace std;
 using namespace Rose;
 
 namespace {
+
+[[noreturn]] void tokenContractFailure(const SgSourceFile *sourceFile,
+                                       const SgNode *node,
+                                       const std::string &detail) {
+  fprintf(stderr,
+          "REX_UNPARSE_INVARIANT[token-map]: token-unparse contract "
+          "violation: file=%s node=%s address=%p %s\n",
+          sourceFile != NULL ? sourceFile->getFileName().c_str() : "<null>",
+          node != NULL ? node->class_name().c_str() : "<null>",
+          static_cast<const void *>(node), detail.c_str());
+  ROSE_ABORT();
+}
 
 void rosePhaseTrace(const char *phase) {
   if (getenv("ROSE_PHASE_TRACE") != nullptr) {
@@ -127,26 +134,6 @@ std::map<SgSourceFile *,
          std::map<SgNode *, TokenStreamSequenceToNodeMapping *> *>
     Rose::tokenSubsequenceMapOfMapsBySourceFile;
 
-// DQ (11/27/2013): Adding vector of nodes in the AST that defines the token
-// unparsing AST frontier. std::vector<FrontierNode*> Rose::frontierNodes;
-// std::map<SgStatement*,FrontierNode*> Rose::frontierNodes;
-std::map<int, std::map<SgStatement *, FrontierNode *> *>
-    Rose::frontierNodesMapOfMaps;
-
-// DQ (11/27/2013): Adding adjacency information for the nodes in the token
-// unparsing AST frontier. std::map<SgNode*,PreviousAndNextNodeData*>
-// Rose::previousAndNextNodeMap;
-std::map<int, std::map<SgNode *, PreviousAndNextNodeData *> *>
-    Rose::previousAndNextNodeMapOfMaps;
-
-// DQ (11/29/2013): Added to support access to multi-map of redundant mapping of
-// frontier IR nodes to token subsequences. std::multimap<int,SgStatement*>
-// Rose::redundantlyMappedTokensToStatementMultimap; std::set<int>
-// Rose::redundantTokenEndingsSet;
-std::map<int, std::multimap<int, SgStatement *> *>
-    Rose::redundantlyMappedTokensToStatementMapOfMultimaps;
-std::map<int, std::set<int> *> Rose::redundantTokenEndingsMapOfSets;
-
 // DQ (11/20/2015): Provide a statement to use as a key in the token sequence
 // map to get representative whitespace.
 // std::map<SgScopeStatement*,SgStatement*>
@@ -162,12 +149,6 @@ std::map<int, std::map<SgStatement *, MacroExpansion *> *>
 
 // DQ (10/29/2018): Build a map for the unparser to use to locate SgIncludeFile
 // IR nodes.
-std::map<std::string, SgIncludeFile *> Rose::includeFileMapForUnparsing;
-
-// DQ (5/27/2021): Track first/last statements per scope per source file.
-std::map<SgSourceFile *,
-         std::map<SgScopeStatement *, std::pair<SgStatement *, SgStatement *>>>
-    Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile;
 
 // DQ (11/25/2020): These are the boolean variables that are computed in the
 // function compute_language_kind() and inlined via the
@@ -432,7 +413,7 @@ SgProject *frontend(const std::vector<std::string> &argv,
     project->parse(argv2);
     rosePhaseTrace("project.parse.end");
     int frontend_status = project->get_frontendErrorCode();
-    if (!Rose::KeepGoing::g_keep_going && frontend_status != 0) {
+    if (frontend_status != 0) {
       skip_postprocessing = true;
     }
 
@@ -440,59 +421,6 @@ SgProject *frontend(const std::vector<std::string> &argv,
       // DQ (1/27/2017): Comment this out so that we can generate the dot graph
       // to debug symbol with null basis.
       unsetNodesMarkedAsModified(project);
-
-      // Clang frontend does not populate a full SgToken stream. If raw-token
-      // output would otherwise be chosen, mark a real AST node as modified so
-      // unparsing uses the AST.
-      for (SgFile *file : project->get_fileList()) {
-        SgSourceFile *sourceFile = isSgSourceFile(file);
-        if (sourceFile == nullptr) {
-          continue;
-        }
-        if (!(sourceFile->get_C_only() || sourceFile->get_Cxx_only() ||
-              sourceFile->get_Cuda_only() || sourceFile->get_OpenCL_only())) {
-          continue;
-        }
-        if (sourceFile->get_unparse_tokens()) {
-          continue;
-        }
-        if (!sourceFile->get_token_list().empty()) {
-          continue;
-        }
-        ROSEAttributesListContainerPtr preproc_list =
-            sourceFile->get_preprocessorDirectivesAndCommentsList();
-        if (preproc_list == nullptr ||
-            preproc_list->getList().find(sourceFile->getFileName()) ==
-                preproc_list->getList().end()) {
-          continue;
-        }
-
-        SgStatement *mark_stmt = nullptr;
-        if (SgGlobal *global_scope = sourceFile->get_globalScope()) {
-          const SgDeclarationStatementPtrList &decls =
-              global_scope->get_declarations();
-          for (auto it = decls.rbegin(); it != decls.rend(); ++it) {
-            SgDeclarationStatement *decl = *it;
-            if (decl == nullptr) {
-              continue;
-            }
-            Sg_File_Info *info = decl->get_file_info();
-            if (info != nullptr && info->isOutputInCodeGeneration()) {
-              mark_stmt = decl;
-              break;
-            }
-          }
-          if (mark_stmt == nullptr) {
-            mark_stmt = global_scope;
-            if (Sg_File_Info *info = global_scope->get_file_info()) {
-              info->setOutputInCodeGeneration();
-            }
-          }
-        }
-        if (mark_stmt != nullptr) {
-          mark_stmt->markAsModified();
-        }
-      }
 
       // Set the mode to be transformation, mostly for Fortran. Liao 8/1/2013
       if (SageBuilder::SourcePositionClassificationMode ==
@@ -510,9 +438,9 @@ SgProject *frontend(const std::vector<std::string> &argv,
       rosePhaseTrace("plugins.end");
 
       if (SageInterface::isAstTeardownEnabled()) {
-        rosePhaseTrace("ensureSymbolParentPointers.begin");
-        SageInterface::ensureSymbolParentPointers(project);
-        rosePhaseTrace("ensureSymbolParentPointers.end");
+        rosePhaseTrace("validateSymbolOwnership.begin");
+        SageInterface::validateSymbolOwnership(project);
+        rosePhaseTrace("validateSymbolOwnership.end");
       }
     }
   }
@@ -645,323 +573,27 @@ void assertTokenSubsequenceWithinBounds(
     const SgSourceFile *sourceFile, const SgNode *node,
     const TokenStreamSequenceToNodeMapping *mapping, size_t tokenCount) {
   if (mapping == NULL) {
-    MLOG_ERROR_CXX("sageSupport")
-        << "token-unparse contract violation: NULL token mapping for node "
-        << node << " ("
-        << (node != NULL ? node->class_name() : std::string("<null>"))
-        << ") in file " << sourceFile->getFileName() << std::endl;
-    ROSE_ASSERT(false);
+    tokenContractFailure(sourceFile, node, "null mapping");
   }
 
+  const TokenStreamHalfOpenInterval &core =
+      mapping->halfOpenInterval(TokenStreamIntervalKind::token_subsequence);
+
   if (tokenCount == 0) {
-    ROSE_ASSERT(mapping->token_subsequence_start == -1);
-    ROSE_ASSERT(mapping->token_subsequence_end == -1);
+    if (core.begin != 0 || core.end != 0) {
+      tokenContractFailure(sourceFile, node,
+                           "non-empty interval for an empty token stream");
+    }
     return;
   }
 
-  if (mapping->token_subsequence_start < 0 ||
-      mapping->token_subsequence_end < 0 ||
-      mapping->token_subsequence_start > mapping->token_subsequence_end ||
-      static_cast<size_t>(mapping->token_subsequence_end) >= tokenCount) {
-    MLOG_ERROR_CXX("sageSupport")
-        << "token-unparse contract violation: invalid token bounds ["
-        << mapping->token_subsequence_start << ","
-        << mapping->token_subsequence_end << "] for node " << node << " ("
-        << (node != NULL ? node->class_name() : std::string("<null>"))
-        << ") in file " << sourceFile->getFileName() << " with " << tokenCount
-        << " tokens" << std::endl;
-    ROSE_ASSERT(false);
+  if (core.begin < 0 || core.end <= core.begin ||
+      static_cast<size_t>(core.end) > tokenCount) {
+    std::ostringstream detail;
+    detail << "invalid core interval [" << core.begin << "," << core.end
+           << ") for " << tokenCount << " tokens";
+    tokenContractFailure(sourceFile, node, detail.str());
   }
-}
-
-bool tokenIsIgnorableForDeclarationMapping(stream_element *token) {
-  return token == NULL || token->p_tok_elem == NULL ||
-         token->p_tok_elem->token_id == ROSE_token_ids::C_CXX_WHITESPACE ||
-         token->p_tok_elem->token_id ==
-             ROSE_token_ids::C_CXX_PREPROCESSING_INFO;
-}
-
-bool tokenEndsBeforeSourcePosition(stream_element *token, int line,
-                                   int column) {
-  if (token == NULL) {
-    return true;
-  }
-  if (token->ending_fpi.line_num < line) {
-    return true;
-  }
-  return token->ending_fpi.line_num == line &&
-         token->ending_fpi.column_num < column;
-}
-
-bool tokenBeginsAfterSourcePosition(stream_element *token, int line,
-                                    int column) {
-  if (token == NULL) {
-    return true;
-  }
-  if (token->beginning_fpi.line_num > line) {
-    return true;
-  }
-  return token->beginning_fpi.line_num == line &&
-         token->beginning_fpi.column_num > column;
-}
-
-int findDeclarationStartTokenIndex(
-    const std::vector<stream_element *> &tokenVector, int lowerBound,
-    int upperBound, const Sg_File_Info *start) {
-  if (start == NULL) {
-    return -1;
-  }
-
-  lowerBound = std::max(0, lowerBound);
-  upperBound = std::min(static_cast<int>(tokenVector.size()) - 1, upperBound);
-  const int line = start->get_physical_line();
-  const int column = start->get_col();
-  for (int i = lowerBound; i <= upperBound; ++i) {
-    if (tokenIsIgnorableForDeclarationMapping(tokenVector[i])) {
-      continue;
-    }
-    if (!tokenEndsBeforeSourcePosition(tokenVector[i], line, column)) {
-      return i;
-    }
-  }
-  return -1;
-}
-
-int findDeclarationEndTokenIndex(
-    const std::vector<stream_element *> &tokenVector, int lowerBound,
-    int upperBound, const Sg_File_Info *end) {
-  if (end == NULL) {
-    return -1;
-  }
-
-  lowerBound = std::max(0, lowerBound);
-  upperBound = std::min(static_cast<int>(tokenVector.size()) - 1, upperBound);
-  const int line = end->get_physical_line();
-  const int column = end->get_col();
-  for (int i = upperBound; i >= lowerBound; --i) {
-    if (tokenIsIgnorableForDeclarationMapping(tokenVector[i])) {
-      continue;
-    }
-    if (!tokenBeginsAfterSourcePosition(tokenVector[i], line, column)) {
-      return i;
-    }
-  }
-  return -1;
-}
-
-int findDeclarationTrailingSemicolonTokenIndex(
-    const std::vector<stream_element *> &tokenVector, int lowerBound,
-    int upperBound) {
-  lowerBound = std::max(0, lowerBound);
-  upperBound = std::min(static_cast<int>(tokenVector.size()) - 1, upperBound);
-  for (int i = lowerBound; i <= upperBound; ++i) {
-    if (tokenVector[i] != NULL && tokenVector[i]->p_tok_elem != NULL &&
-        tokenVector[i]->p_tok_elem->token_lexeme == ";") {
-      return i;
-    }
-  }
-  return -1;
-}
-
-bool repairMissingTopLevelTemplateVariableTokenMapping(
-    SgSourceFile *sourceFile, SgTemplateVariableDeclaration *decl,
-    const SgDeclarationStatementPtrList &declarations,
-    std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap,
-    const std::vector<stream_element *> &tokenVector) {
-  if (sourceFile == NULL || decl == NULL || tokenVector.empty()) {
-    return false;
-  }
-
-  Sg_File_Info *declInfo = decl->get_file_info();
-  Sg_File_Info *start = decl->get_startOfConstruct();
-  Sg_File_Info *end = decl->get_endOfConstruct();
-  if (declInfo == NULL || start == NULL || end == NULL ||
-      declInfo->isCompilerGenerated() || start->isCompilerGenerated() ||
-      end->isCompilerGenerated() || declInfo->isTransformation() ||
-      declInfo->isOutputInCodeGeneration() == false ||
-      !isLocatedNodeInSourceFile(decl, sourceFile)) {
-    return false;
-  }
-
-  size_t declIndex = declarations.size();
-  for (size_t i = 0; i < declarations.size(); ++i) {
-    if (declarations[i] == decl) {
-      declIndex = i;
-      break;
-    }
-  }
-  if (declIndex == declarations.size()) {
-    return false;
-  }
-
-  int lowerBound = 0;
-  for (size_t prev = declIndex; prev-- > 0;) {
-    std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator prevIt =
-        tokenMap.find(declarations[prev]);
-    if (prevIt != tokenMap.end() && prevIt->second != NULL &&
-        prevIt->second->token_subsequence_end >= 0) {
-      lowerBound = prevIt->second->token_subsequence_end + 1;
-      break;
-    }
-  }
-
-  int upperBound = static_cast<int>(tokenVector.size()) - 1;
-  for (size_t next = declIndex + 1; next < declarations.size(); ++next) {
-    std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator nextIt =
-        tokenMap.find(declarations[next]);
-    if (nextIt != tokenMap.end() && nextIt->second != NULL &&
-        nextIt->second->token_subsequence_start >= 0) {
-      upperBound = nextIt->second->token_subsequence_start - 1;
-      break;
-    }
-  }
-
-  lowerBound = std::max(0, lowerBound);
-  upperBound = std::min(static_cast<int>(tokenVector.size()) - 1, upperBound);
-
-  auto mapWithinBounds = [&](int searchLowerBound,
-                             int searchUpperBound) -> bool {
-    if (searchLowerBound > searchUpperBound) {
-      return false;
-    }
-
-    const int startIndex = findDeclarationStartTokenIndex(
-        tokenVector, searchLowerBound, searchUpperBound, start);
-    if (startIndex < 0) {
-      return false;
-    }
-
-    int endIndex = findDeclarationEndTokenIndex(tokenVector, startIndex,
-                                                searchUpperBound, end);
-    if (endIndex < startIndex) {
-      return false;
-    }
-
-    const int semicolonIndex = findDeclarationTrailingSemicolonTokenIndex(
-        tokenVector, endIndex, searchUpperBound);
-    if (semicolonIndex >= 0) {
-      endIndex = semicolonIndex;
-    }
-
-    tokenMap[decl] = TokenStreamSequenceToNodeMapping::createTokenInterval(
-        sourceFile, decl, -1, -1, startIndex, endIndex, -1, -1, -1, -1);
-    return true;
-  };
-
-  if (mapWithinBounds(lowerBound, upperBound)) {
-    return true;
-  }
-
-  return mapWithinBounds(0, static_cast<int>(tokenVector.size()) - 1);
-}
-
-bool repairMissingTopLevelEmptyDeclarationTokenMapping(
-    SgSourceFile *sourceFile, SgEmptyDeclaration *emptyDecl,
-    const SgDeclarationStatementPtrList &declarations,
-    std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap,
-    const std::vector<stream_element *> &tokenVector) {
-  if (sourceFile == NULL || emptyDecl == NULL || tokenVector.empty()) {
-    return false;
-  }
-
-  Sg_File_Info *declInfo = emptyDecl->get_file_info();
-  if (declInfo == NULL || declInfo->isCompilerGenerated() ||
-      declInfo->isTransformation() ||
-      declInfo->isOutputInCodeGeneration() == false ||
-      !isLocatedNodeInSourceFile(emptyDecl, sourceFile)) {
-    return false;
-  }
-
-  size_t declIndex = declarations.size();
-  for (size_t i = 0; i < declarations.size(); ++i) {
-    if (declarations[i] == emptyDecl) {
-      declIndex = i;
-      break;
-    }
-  }
-  if (declIndex == declarations.size()) {
-    return false;
-  }
-
-  int lowerBound = 0;
-  int previousTokenEnd = -1;
-  for (size_t prev = declIndex; prev-- > 0;) {
-    std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator prevIt =
-        tokenMap.find(declarations[prev]);
-    if (prevIt != tokenMap.end() && prevIt->second != NULL &&
-        prevIt->second->token_subsequence_end >= 0) {
-      previousTokenEnd = prevIt->second->token_subsequence_end;
-      lowerBound = prevIt->second->token_subsequence_end + 1;
-      break;
-    }
-  }
-
-  int upperBound = static_cast<int>(tokenVector.size()) - 1;
-  for (size_t next = declIndex + 1; next < declarations.size(); ++next) {
-    std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator nextIt =
-        tokenMap.find(declarations[next]);
-    if (nextIt != tokenMap.end() && nextIt->second != NULL &&
-        nextIt->second->token_subsequence_start >= 0) {
-      upperBound = nextIt->second->token_subsequence_start - 1;
-      break;
-    }
-  }
-
-  lowerBound = std::max(0, lowerBound);
-  upperBound = std::min(static_cast<int>(tokenVector.size()) - 1, upperBound);
-  if (lowerBound > upperBound) {
-    lowerBound = 0;
-    upperBound = static_cast<int>(tokenVector.size()) - 1;
-  }
-
-  const int targetLine = declInfo->get_physical_line();
-  const int targetCol = declInfo->get_col();
-  int bestTokenIndex = -1;
-  long long bestScore = -1;
-  for (int i = lowerBound; i <= upperBound; ++i) {
-    stream_element *token = tokenVector[i];
-    if (token == NULL || token->p_tok_elem == NULL ||
-        token->p_tok_elem->token_lexeme != ";") {
-      continue;
-    }
-
-    const long long lineDelta =
-        static_cast<long long>(token->beginning_fpi.line_num) - targetLine;
-    const long long colDelta =
-        static_cast<long long>(token->beginning_fpi.column_num) - targetCol;
-    const long long score =
-        (lineDelta < 0 ? -lineDelta : lineDelta) * 1000000LL +
-        (colDelta < 0 ? -colDelta : colDelta);
-
-    if (bestTokenIndex < 0 || score < bestScore) {
-      bestTokenIndex = i;
-      bestScore = score;
-      if (score == 0) {
-        break;
-      }
-    }
-  }
-
-  if (bestTokenIndex < 0) {
-    if (previousTokenEnd >= 0 &&
-        static_cast<size_t>(previousTokenEnd) < tokenVector.size()) {
-      stream_element *token = tokenVector[previousTokenEnd];
-      if (token != NULL && token->p_tok_elem != NULL &&
-          token->p_tok_elem->token_lexeme == ";" &&
-          token->beginning_fpi.line_num == targetLine &&
-          token->beginning_fpi.column_num == targetCol) {
-        bestTokenIndex = previousTokenEnd;
-      }
-    }
-    if (bestTokenIndex < 0) {
-      return false;
-    }
-  }
-
-  tokenMap[emptyDecl] = TokenStreamSequenceToNodeMapping::createTokenInterval(
-      sourceFile, emptyDecl, -1, -1, bestTokenIndex, bestTokenIndex, -1, -1, -1,
-      -1);
-  return true;
 }
 
 void enforceTokenUnparseContractForFile(SgSourceFile *sourceFile) {
@@ -982,22 +614,19 @@ void enforceTokenUnparseContractForFile(SgSourceFile *sourceFile) {
       Rose::tokenSubsequenceMapOfMapsBySourceFile.find(sourceFile);
   if (mapIt == Rose::tokenSubsequenceMapOfMapsBySourceFile.end() ||
       mapIt->second == NULL) {
-    MLOG_ERROR_CXX("sageSupport")
-        << "token-unparse contract violation: missing token-map entry for "
-        << "token-based unparsing in file " << sourceFile->getFileName()
-        << std::endl;
-    ROSE_ASSERT(false);
+    tokenContractFailure(sourceFile, sourceFile,
+                         "missing per-file token-map entry");
   }
 
-  std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap =
+  const std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap =
       sourceFile->get_tokenSubsequenceMap();
 
   std::vector<stream_element *> tokenVector = getTokenStream(sourceFile);
   const size_t tokenCount = tokenVector.size();
 
   if (tokenCount == 0) {
-    std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator globalIt =
-        tokenMap.find(globalScope);
+    std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::const_iterator
+        globalIt = tokenMap.find(globalScope);
     if (globalIt != tokenMap.end() && globalIt->second != NULL) {
       assertTokenSubsequenceWithinBounds(sourceFile, globalScope,
                                          globalIt->second, tokenCount);
@@ -1005,13 +634,11 @@ void enforceTokenUnparseContractForFile(SgSourceFile *sourceFile) {
     return;
   }
 
-  std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator globalIt =
-      tokenMap.find(globalScope);
+  std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::const_iterator
+      globalIt = tokenMap.find(globalScope);
   if (globalIt == tokenMap.end() || globalIt->second == NULL) {
-    MLOG_ERROR_CXX("sageSupport")
-        << "token-unparse contract violation: token-map missing global-scope "
-        << "entry for file " << sourceFile->getFileName() << std::endl;
-    ROSE_ASSERT(false);
+    tokenContractFailure(sourceFile, globalScope,
+                         "missing global-scope mapping");
   }
 
   assertTokenSubsequenceWithinBounds(sourceFile, globalScope, globalIt->second,
@@ -1020,6 +647,11 @@ void enforceTokenUnparseContractForFile(SgSourceFile *sourceFile) {
   const SgDeclarationStatementPtrList &declarations =
       globalScope->get_declarations();
   size_t requiredTopLevelMappings = 0;
+  struct RequiredMapping {
+    const SgDeclarationStatement *declaration;
+    const TokenStreamSequenceToNodeMapping *mapping;
+  };
+  std::vector<RequiredMapping> requiredMappings;
 
   for (SgDeclarationStatement *decl : declarations) {
     if (decl == NULL) {
@@ -1037,6 +669,15 @@ void enforceTokenUnparseContractForFile(SgSourceFile *sourceFile) {
       continue;
     }
 
+    // A declaration proven by the frontend to be only one semantic fragment
+    // of a macro replacement has no independent lexical token surface.  The
+    // token-mapping builder therefore rejects an entry for it; the final
+    // unparse contract must enforce the same ownership rule instead of
+    // requiring the mapping that construction correctly prohibited.
+    if (decl->get_source_range_is_macro_expansion_fragment()) {
+      continue;
+    }
+
     if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
       if (!class_decl->get_isAutonomousDeclaration() ||
           class_decl->get_isUnNamed()) {
@@ -1051,12 +692,12 @@ void enforceTokenUnparseContractForFile(SgSourceFile *sourceFile) {
       }
     }
 
-    // Some frontend wrapper statements do not own an independent token
-    // subsequence. Coverage is tracked on the enclosed declaration(s), while
-    // the unparser reconstructs the wrapper syntax structurally.
-    if (isSgTemplateInstantiationDirectiveStatement(decl) != NULL ||
-        isSgClinkageStartStatement(decl) != NULL ||
-        isSgClinkageEndStatement(decl) != NULL) {
+    // Template-instantiation directives are structural wrappers around the
+    // declaration that owns the source interval. Linkage markers, by contrast,
+    // are source-backed declarations with exact token ownership and must
+    // satisfy the same mapping contract as every other emitted top-level
+    // declaration.
+    if (isSgTemplateInstantiationDirectiveStatement(decl) != NULL) {
       continue;
     }
 
@@ -1070,24 +711,8 @@ void enforceTokenUnparseContractForFile(SgSourceFile *sourceFile) {
 
     requiredTopLevelMappings += 1;
 
-    std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator declIt =
-        tokenMap.find(decl);
-    if ((declIt == tokenMap.end() || declIt->second == NULL) &&
-        isSgEmptyDeclaration(decl) != NULL) {
-      if (repairMissingTopLevelEmptyDeclarationTokenMapping(
-              sourceFile, isSgEmptyDeclaration(decl), declarations, tokenMap,
-              tokenVector)) {
+    std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::const_iterator
         declIt = tokenMap.find(decl);
-      }
-    }
-    if ((declIt == tokenMap.end() || declIt->second == NULL) &&
-        isSgTemplateVariableDeclaration(decl) != NULL) {
-      if (repairMissingTopLevelTemplateVariableTokenMapping(
-              sourceFile, isSgTemplateVariableDeclaration(decl), declarations,
-              tokenMap, tokenVector)) {
-        declIt = tokenMap.find(decl);
-      }
-    }
     if (declIt == tokenMap.end() || declIt->second == NULL) {
       std::ostringstream detail;
       detail << " parent="
@@ -1110,24 +735,77 @@ void enforceTokenUnparseContractForFile(SgSourceFile *sourceFile) {
           << "declaration entry " << decl << " (" << decl->class_name()
           << ") in file " << sourceFile->getFileName() << detail.str()
           << std::endl;
-      ROSE_ASSERT(false);
+      tokenContractFailure(sourceFile, decl,
+                           "missing required top-level mapping" + detail.str());
     }
 
     assertTokenSubsequenceWithinBounds(sourceFile, decl, declIt->second,
                                        tokenCount);
+    requiredMappings.push_back({decl, declIt->second});
+  }
+
+  std::sort(requiredMappings.begin(), requiredMappings.end(),
+            [](const RequiredMapping &lhs, const RequiredMapping &rhs) {
+              const TokenStreamHalfOpenInterval &lhs_core =
+                  lhs.mapping->halfOpenInterval(
+                      TokenStreamIntervalKind::token_subsequence);
+              const TokenStreamHalfOpenInterval &rhs_core =
+                  rhs.mapping->halfOpenInterval(
+                      TokenStreamIntervalKind::token_subsequence);
+              if (lhs_core.begin != rhs_core.begin) {
+                return lhs_core.begin < rhs_core.begin;
+              }
+              return lhs_core.end < rhs_core.end;
+            });
+  for (size_t index = 1; index < requiredMappings.size(); ++index) {
+    const RequiredMapping &previous = requiredMappings[index - 1];
+    const RequiredMapping &current = requiredMappings[index];
+    if (current.mapping == previous.mapping) {
+      continue;
+    }
+    const TokenStreamHalfOpenInterval &previous_core =
+        previous.mapping->halfOpenInterval(
+            TokenStreamIntervalKind::token_subsequence);
+    const TokenStreamHalfOpenInterval &current_core =
+        current.mapping->halfOpenInterval(
+            TokenStreamIntervalKind::token_subsequence);
+    if (current_core.begin < previous_core.end) {
+      std::ostringstream detail;
+      detail << "overlapping top-level intervals [" << previous_core.begin
+             << "," << previous_core.end << ") owned by "
+             << previous.declaration->class_name();
+      if (Sg_File_Info *start = previous.declaration->get_startOfConstruct()) {
+        detail << " source=" << start->get_physical_line() << ":"
+               << start->get_col();
+      }
+      if (Sg_File_Info *end = previous.declaration->get_endOfConstruct()) {
+        detail << "-" << end->get_physical_line() << ":" << end->get_col();
+      }
+      detail << " macro-ended="
+             << previous.declaration->get_source_range_ends_in_macro_expansion()
+             << " and [" << current_core.begin << "," << current_core.end
+             << ") owned by " << current.declaration->class_name();
+      if (Sg_File_Info *start = current.declaration->get_startOfConstruct()) {
+        detail << " source=" << start->get_physical_line() << ":"
+               << start->get_col();
+      }
+      if (Sg_File_Info *end = current.declaration->get_endOfConstruct()) {
+        detail << "-" << end->get_physical_line() << ":" << end->get_col();
+      }
+      tokenContractFailure(sourceFile, current.declaration, detail.str());
+    }
   }
 
   if (requiredTopLevelMappings > 0 && tokenMap.size() <= 1) {
-    MLOG_ERROR_CXX("sageSupport")
-        << "token-unparse contract violation: token-map for file "
-        << sourceFile->getFileName() << " contains only global-scope mapping "
-        << "but " << requiredTopLevelMappings
-        << " top-level declaration(s) require token coverage" << std::endl;
-    ROSE_ASSERT(false);
+    std::ostringstream detail;
+    detail << "map contains only the global mapping but "
+           << requiredTopLevelMappings
+           << " top-level declarations require coverage";
+    tokenContractFailure(sourceFile, globalScope, detail.str());
   }
 }
 
-void enforceTokenUnparseContract(SgProject *project) {
+void enforceTokenUnparseContractImpl(SgProject *project) {
   ASSERT_not_null(project);
 
   for (SgFile *file : project->get_fileList()) {
@@ -1141,6 +819,10 @@ void enforceTokenUnparseContract(SgProject *project) {
 }
 
 } // namespace
+
+void enforceTokenUnparseContract(SgProject *project) {
+  enforceTokenUnparseContractImpl(project);
+}
 
 /*! \brief Call to backend, generates either object file or executable.
 
@@ -1208,7 +890,6 @@ int backend(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
     }
 
     rosePhaseTrace("backend.unparse.begin");
-    enforceTokenUnparseContract(project);
     project->unparse(unparseFormatHelp, unparseDelegate);
     rosePhaseTrace("backend.unparse.end");
 
@@ -1341,20 +1022,78 @@ int backendCompilesUsingOriginalInputFile(SgProject *project,
     e_last_language
   };
 
-  language_enum language = e_none;
-  language = project->get_C_only() ? e_c : language;
-  language = project->get_Cxx_only() ? e_cxx : language;
-  language = project->get_Fortran_only() ? e_fortran : language;
+  bool hasCInput = false;
+  bool hasCxxInput = false;
+  bool hasFortranInput = false;
+  auto recordExactFileLanguage = [&](const SgFile *file) {
+    if (file == nullptr) {
+      fprintf(stderr,
+              "REX_BACKEND_INVARIANT[project-language]: project contains a "
+              "null file\n");
+      ROSE_ABORT();
+    }
 
-  // ROSE_ASSERT(language != e_none);
+    if (file->get_Cuda_only()) {
+      hasCxxInput = true;
+      return;
+    }
+    if (file->get_OpenCL_only()) {
+      hasCInput = true;
+      return;
+    }
+
+    switch (file->get_inputLanguage()) {
+    case SgFile::e_C_language:
+      hasCInput = true;
+      return;
+    case SgFile::e_Cxx_language:
+      hasCxxInput = true;
+      return;
+    case SgFile::e_Fortran_language:
+      hasFortranInput = true;
+      return;
+    default:
+      fprintf(stderr,
+              "REX_BACKEND_INVARIANT[project-language]: file '%s' has no "
+              "supported exact input language (value=%d)\n",
+              file->getFileName().c_str(),
+              static_cast<int>(file->get_inputLanguage()));
+      ROSE_ABORT();
+    }
+  };
+
+  if (project->numberOfFiles() > 0) {
+    for (const SgFile *file : project->get_fileList()) {
+      recordExactFileLanguage(file);
+    }
+  } else {
+    hasCInput = project->get_C_only();
+    hasCxxInput = project->get_Cxx_only();
+    hasFortranInput = project->get_Fortran_only();
+  }
+
+  if (hasFortranInput && (hasCInput || hasCxxInput)) {
+    fprintf(stderr,
+            "REX_BACKEND_INVARIANT[project-language]: one original-input "
+            "backend command cannot compile a mixed Fortran and C/C++ "
+            "project\n");
+    ROSE_ABORT();
+  }
+
+  // Clang selects each translation unit's language from its exact -x setting
+  // or suffix.  A mixed C/C++ link must use the C++ driver so that the C++
+  // runtime is present; this does not change any SgProject/SgFile language
+  // metadata.
+  const language_enum language = hasFortranInput ? e_fortran
+                                 : hasCxxInput   ? e_cxx
+                                 : hasCInput     ? e_c
+                                                 : e_none;
+
   if (language == e_none) {
-    // DQ (4/7/2010): Set the default language for ROSE to be C++
-    // This will mean that linking fortran object files will not be possible
-    // with ROSE. but at least configure will work propoerly since it will have
-    // a valid default. If we add state to SgProject, then we could set the
-    // default, but also allow it to be overriden using -rose:C or -rose:Cxx or
-    // -rose:fortran options.
-    language = e_cxx;
+    fprintf(stderr,
+            "REX_BACKEND_INVARIANT[project-language]: object generation "
+            "requires an exact project language\n");
+    ROSE_ABORT();
   }
 
   switch (language) {
@@ -1372,16 +1111,8 @@ int backendCompilesUsingOriginalInputFile(SgProject *project,
     break;
 
   default: {
-    // Note that the default is C++, and that if there are no SgFile objects
-    // then there is no place to hold the default since the SgProject does not
-    // have any such state to hold this information.  A better idea might be to
-    // give the SgProject state so that it can hold if it is used with -rose:C
-    // or -rose:Cxx or -rose:fortran on the command line.
-
     printf("Default reached in switch in "
            "backendCompilesUsingOriginalInputFile() \n");
-    printf("   Note use options: -rose:C or -rose:Cxx or -rose:fortran to "
-           "specify which language backend compiler to link object files. \n");
     ROSE_ABORT();
   }
   }
@@ -1403,28 +1134,156 @@ int backendCompilesUsingOriginalInputFile(SgProject *project,
     // DQ (2/20/2010): Added filtering of options that should not be passed to
     // the vendor compiler.
     SgFile::stripRoseCommandLineOptions(originalCommandLineArgumentList);
-    if (project->get_Fortran_only() == true) {
+    if (language == e_fortran) {
       SgFile::stripFortranCommandLineOptions(originalCommandLineArgumentList);
     }
 
-    SgStringList::iterator it = originalCommandLineArgumentList.begin();
+    struct MixedSourceLanguageState {
+      std::string selectedDriverName;
+      std::string restoredDriverName;
+    };
+    std::map<std::string, MixedSourceLanguageState> mixedSourceLanguages;
+    if (hasCInput && hasCxxInput) {
+      for (const SgFile *file : project->get_fileList()) {
+        ASSERT_not_null(file);
+        const std::string sourcePath =
+            StringUtility::getAbsolutePathFromRelativePath(file->getFileName(),
+                                                           true);
+        using CommandlineProcessing::ClangLanguageFamily;
+        const CommandlineProcessing::ClangLanguageSelection selection =
+            CommandlineProcessing::clangLanguageSelectionForSource(
+                originalCommandLineArgumentList, file->getFileName());
+        ClangLanguageFamily expectedFamily;
+        if (file->get_Cuda_only()) {
+          expectedFamily = ClangLanguageFamily::Cuda;
+        } else if (file->get_OpenCL_only()) {
+          expectedFamily = ClangLanguageFamily::OpenCL;
+        } else if (file->get_inputLanguage() == SgFile::e_C_language) {
+          expectedFamily = ClangLanguageFamily::C;
+        } else if (file->get_inputLanguage() == SgFile::e_Cxx_language) {
+          expectedFamily = ClangLanguageFamily::Cxx;
+        } else {
+          fprintf(stderr,
+                  "REX_BACKEND_INVARIANT[project-language]: mixed C/C++ "
+                  "project contains non-Clang source '%s'\n",
+                  file->getFileName().c_str());
+          ROSE_ABORT();
+        }
+        if (selection.isExplicit() && selection.family != expectedFamily) {
+          fprintf(stderr,
+                  "REX_BACKEND_INVARIANT[project-language]: source '%s' has "
+                  "Clang -x language '%s' inconsistent with its exact AST "
+                  "language\n",
+                  file->getFileName().c_str(), selection.driverName.c_str());
+          ROSE_ABORT();
+        }
 
-    // Iterate past the name of the compiler being called (arg[0]).
-    if (it != originalCommandLineArgumentList.end())
-      it++;
+        CommandlineProcessing::ClangLanguageSelection suffixSelection;
+        if (!selection.isExplicit()) {
+          suffixSelection =
+              CommandlineProcessing::clangLanguageSelectionForSuffix(
+                  file->getFileName());
+          if (suffixSelection.family != expectedFamily ||
+              suffixSelection.driverName.empty()) {
+            fprintf(stderr,
+                    "REX_BACKEND_INVARIANT[project-language]: source '%s' "
+                    "has no exact Clang suffix language consistent with its "
+                    "AST language\n",
+                    file->getFileName().c_str());
+            ROSE_ABORT();
+          }
+        }
 
-    // JL (03/15/2018) Changed system to systemFromVector so that
-    // command line arguments will be handled correctly ROSE-813
-    for (SgStringList::iterator i = it;
-         i != originalCommandLineArgumentList.end(); i++) {
-      commandLineToGenerateObjectFile.push_back(*i);
+        // The temporary selection must preserve exact modes such as
+        // c-header and cpp-output. Restore the state active before this source
+        // immediately afterwards so a following object, archive, or source is
+        // classified exactly as it was on the original driver command line.
+        MixedSourceLanguageState languageState;
+        languageState.selectedDriverName = selection.isExplicit()
+                                               ? selection.driverName
+                                               : suffixSelection.driverName;
+        languageState.restoredDriverName =
+            selection.isExplicit() ? selection.driverName : "none";
+        if (!mixedSourceLanguages.emplace(sourcePath, languageState).second) {
+          fprintf(stderr,
+                  "REX_BACKEND_INVARIANT[project-language]: mixed C/C++ "
+                  "project contains duplicate source identity '%s'\n",
+                  sourcePath.c_str());
+          ROSE_ABORT();
+        }
+      }
+    }
+
+    size_t mixedSourcesPublished = 0;
+    bool afterDoubleDash = false;
+    for (size_t index = 1; index < originalCommandLineArgumentList.size();
+         ++index) {
+      const std::string &argument = originalCommandLineArgumentList[index];
+      if (!afterDoubleDash && argument == "--") {
+        afterDoubleDash = true;
+        commandLineToGenerateObjectFile.push_back(argument);
+        continue;
+      }
+
+      if (!afterDoubleDash &&
+          CommandlineProcessing::isOptionTakingSecondParameter(argument)) {
+        const size_t operandCount =
+            CommandlineProcessing::isOptionTakingThirdParameter(argument) ? 2
+                                                                          : 1;
+        if (operandCount >= originalCommandLineArgumentList.size() - index) {
+          fprintf(stderr,
+                  "REX_BACKEND_INVARIANT[backend-option-operand]: option '%s' "
+                  "requires %zu argument(s)\n",
+                  argument.c_str(), operandCount);
+          ROSE_ABORT();
+        }
+        commandLineToGenerateObjectFile.push_back(argument);
+        for (size_t operand = 0; operand < operandCount; ++operand) {
+          commandLineToGenerateObjectFile.push_back(
+              originalCommandLineArgumentList[++index]);
+        }
+        continue;
+      }
+
+      if (!mixedSourceLanguages.empty() &&
+          (afterDoubleDash || argument.empty() || argument.front() != '-')) {
+        const std::string operandPath =
+            StringUtility::getAbsolutePathFromRelativePath(argument, true);
+        const auto languageIt = mixedSourceLanguages.find(operandPath);
+        if (languageIt != mixedSourceLanguages.end()) {
+          if (afterDoubleDash) {
+            fprintf(stderr,
+                    "REX_BACKEND_INVARIANT[project-language]: cannot publish "
+                    "the exact language of mixed source '%s' after '--'\n",
+                    argument.c_str());
+            ROSE_ABORT();
+          }
+          commandLineToGenerateObjectFile.push_back("-x");
+          commandLineToGenerateObjectFile.push_back(
+              languageIt->second.selectedDriverName);
+          commandLineToGenerateObjectFile.push_back(argument);
+          commandLineToGenerateObjectFile.push_back("-x");
+          commandLineToGenerateObjectFile.push_back(
+              languageIt->second.restoredDriverName);
+          ++mixedSourcesPublished;
+          continue;
+        }
+      }
+
+      commandLineToGenerateObjectFile.push_back(argument);
+    }
+    if (mixedSourcesPublished != mixedSourceLanguages.size()) {
+      fprintf(stderr,
+              "REX_BACKEND_INVARIANT[project-language]: published %zu of %zu "
+              "mixed C/C++ source language identities\n",
+              mixedSourcesPublished, mixedSourceLanguages.size());
+      ROSE_ABORT();
     }
 
     if (SgProject::get_verbose() >= 1) {
       printf("Compile Line: ");
-      for (SgStringList::iterator i = it;
-           i != commandLineToGenerateObjectFile.end(); i++) {
-        printf("%s ", (*i).c_str());
+      for (const std::string &argument : commandLineToGenerateObjectFile) {
+        printf("%s ", argument.c_str());
       }
       printf("\n");
     }
@@ -1489,26 +1348,6 @@ int backendGeneratesSourceCodeButCompilesUsingOriginalInputFile(
   }
 
   return backendCompilesUsingOriginalInputFile(project);
-}
-
-int copy_backend(SgProject *project, UnparseFormatHelp *unparseFormatHelp) {
-  // This is part of the copy-based unparser (from Qing).
-  // This function calls the unparseFile function with a
-  // CopyUnparser object (derived from UnparseDelegate)
-  // to control the unparsing and substitute text based
-  // copying for code generation from the AST.
-
-  // This function does not presently have the same semantics as the
-  // "backend()". The code above could be refactored to permit both backend
-  // function to more readily have the same semantics later.
-
-  printf("Error: Inside of copy_backend(), the copy backend has been disabled "
-         "in favor of a token based mechanism for unparsing. \n");
-  ROSE_ABORT();
-
-  // DQ (5/19/2005): I had to make up a return value since one was not
-  // previously specified
-  return 0;
 }
 
 void generatePDF(const SgProject &project) {
@@ -1840,6 +1679,55 @@ SgStatement *Rose::getNextStatement(SgStatement *currentStatement) {
   //! get next statement will return the next statement in a function or method.
   //! if at the end or outside, it WILL return NULL
 
+  // A source declaration group is the lexical owner of an ordered sequence of
+  // semantic declarations.  Its members are deliberately absent from the
+  // surrounding scope list, so iteration must first advance within that exact
+  // typed owner and then continue from the group wrapper.
+  if (SgDeclarationGroupStatement *group =
+          isSgDeclarationGroupStatement(currentStatement->get_parent())) {
+    group->validate();
+    const SgDeclarationStatementPtrList &members = group->get_declarations();
+    auto position = std::find(members.begin(), members.end(), currentStatement);
+    if (position == members.end() ||
+        std::count(members.begin(), members.end(), currentStatement) != 1) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[statement-iteration]: declaration=%p "
+              "type=%s is not owned exactly once by group=%p\n",
+              static_cast<void *>(currentStatement),
+              currentStatement->class_name().c_str(),
+              static_cast<void *>(group));
+      ROSE_ABORT();
+    }
+    ++position;
+    if (position != members.end()) {
+      return *position;
+    }
+    currentStatement = group;
+  }
+
+  // SgForInitStatement owns a real ordered statement list but is not a scope.
+  // Handle that list directly instead of trying to find its children in their
+  // semantic scope's unrelated statement list.
+  if (SgForInitStatement *for_init =
+          isSgForInitStatement(currentStatement->get_parent())) {
+    const SgStatementPtrList &initializers = for_init->get_init_stmt();
+    auto position =
+        std::find(initializers.begin(), initializers.end(), currentStatement);
+    if (position == initializers.end() ||
+        std::count(initializers.begin(), initializers.end(),
+                   currentStatement) != 1) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[statement-iteration]: initializer=%p "
+              "type=%s is not owned exactly once by for-init=%p\n",
+              static_cast<void *>(currentStatement),
+              currentStatement->class_name().c_str(),
+              static_cast<void *>(for_init));
+      ROSE_ABORT();
+    }
+    ++position;
+    return position == initializers.end() ? nullptr : *position;
+  }
+
   SgStatement *nextStatement = NULL;
   SgScopeStatement *scope = currentStatement->get_scope();
   ROSE_ASSERT(scope != NULL);
@@ -1946,13 +1834,14 @@ SgStatement *Rose::getNextStatement(SgStatement *currentStatement) {
       for (i = declarationList.begin();
            (i != declarationList.end() && (*i) != currentStatement); i++) {
       }
-      // now i == currentStatement
-
-      // DQ (7/19/2015): Needed to add support for template instatiations that
-      // might not be located in there scope (because they would be name
-      // qualified).
       if (i == declarationList.end()) {
-        nextStatement = NULL;
+        fprintf(stderr,
+                "REX_AST_INVARIANT[statement-iteration]: declaration=%p "
+                "type=%s is absent from scope=%p type=%s declaration list\n",
+                static_cast<void *>(currentStatement),
+                currentStatement->class_name().c_str(),
+                static_cast<void *>(scope), scope->class_name().c_str());
+        ROSE_ABORT();
       } else {
         i++;
         if (declarationList.end() == i)
@@ -1966,7 +1855,7 @@ SgStatement *Rose::getNextStatement(SgStatement *currentStatement) {
       // Liao, 11/18/2009, Handle the rare case that current statement is not
       // found in its scope's statement list
       for (i = statementList.begin();
-           (*i) != currentStatement && i != statementList.end(); i++) {
+           i != statementList.end() && (*i) != currentStatement; i++) {
         //  SgStatement* cur_stmt = *i;
         //  cout<<"Skipping current statement: "<<cur_stmt->class_name()<<endl;
         //  cout<<cur_stmt->get_file_info()->displayString()<<endl;
@@ -2051,9 +1940,16 @@ static SgStatement *getPreviousStatement_support_for_declaration_list(
   Rose_STL_Container<SgDeclarationStatement *>::iterator targetIterator =
       find(declarationList.begin(), declarationList.end(), targetStatement);
 
-  ROSE_ASSERT(targetStatement == *targetIterator);
-
-  ROSE_ASSERT(targetIterator != declarationList.end());
+  if (targetIterator == declarationList.end()) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[statement-iteration]: declaration=%p type=%s "
+            "is absent from scope=%p type=%s declaration list\n",
+            static_cast<void *>(targetStatement),
+            targetStatement->class_name().c_str(),
+            static_cast<void *>(parent_scope),
+            parent_scope->class_name().c_str());
+    ROSE_ABORT();
+  }
 
   if (targetIterator == declarationList.begin()) {
     if (climbOutScope) {
@@ -2112,9 +2008,16 @@ getPreviousStatement_support_for_statement_list(SgScopeStatement *parent_scope,
   Rose_STL_Container<SgStatement *>::iterator targetIterator =
       find(statementList.begin(), statementList.end(), targetStatement);
 
-  ROSE_ASSERT(targetStatement == *targetIterator);
-
-  ROSE_ASSERT(targetIterator != statementList.end());
+  if (targetIterator == statementList.end()) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[statement-iteration]: statement=%p type=%s is "
+            "absent from scope=%p type=%s statement list\n",
+            static_cast<void *>(targetStatement),
+            targetStatement->class_name().c_str(),
+            static_cast<void *>(parent_scope),
+            parent_scope->class_name().c_str());
+    ROSE_ABORT();
+  }
 
   if (targetIterator == statementList.begin()) {
     if (climbOutScope) {
@@ -2157,6 +2060,52 @@ SgStatement *Rose::getPreviousStatement(SgStatement *targetStatement,
   ROSE_ASSERT(targetStatement != NULL);
 
   SgStatement *previousStatement = NULL;
+
+  // Mirror getNextStatement's exact lexical ordering for typed source
+  // declaration groups.  The first member continues from the wrapper; later
+  // members return their preceding semantic declaration directly.
+  if (SgDeclarationGroupStatement *group =
+          isSgDeclarationGroupStatement(targetStatement->get_parent())) {
+    group->validate();
+    const SgDeclarationStatementPtrList &members = group->get_declarations();
+    auto position = std::find(members.begin(), members.end(), targetStatement);
+    if (position == members.end() ||
+        std::count(members.begin(), members.end(), targetStatement) != 1) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[statement-iteration]: declaration=%p "
+              "type=%s is not owned exactly once by group=%p\n",
+              static_cast<void *>(targetStatement),
+              targetStatement->class_name().c_str(),
+              static_cast<void *>(group));
+      ROSE_ABORT();
+    }
+    if (position != members.begin()) {
+      return *std::prev(position);
+    }
+    targetStatement = group;
+  }
+
+  if (SgForInitStatement *for_init =
+          isSgForInitStatement(targetStatement->get_parent())) {
+    const SgStatementPtrList &initializers = for_init->get_init_stmt();
+    auto position =
+        std::find(initializers.begin(), initializers.end(), targetStatement);
+    if (position == initializers.end() ||
+        std::count(initializers.begin(), initializers.end(), targetStatement) !=
+            1) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[statement-iteration]: initializer=%p "
+              "type=%s is not owned exactly once by for-init=%p\n",
+              static_cast<void *>(targetStatement),
+              targetStatement->class_name().c_str(),
+              static_cast<void *>(for_init));
+      ROSE_ABORT();
+    }
+    if (position != initializers.begin()) {
+      return *std::prev(position);
+    }
+    return climbOutScope ? for_init : nullptr;
+  }
 
   // DQ (3/15/2024): We don't need this variable now.
   // SgScopeStatement *scope             = targetStatement->get_scope();

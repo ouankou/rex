@@ -15,16 +15,16 @@ public:
 void RoseVisitor::visit(SgNode *node) {
   if (isSgType(node)) {
     if (SageInterface::isCopyConstructible(isSgType(node)))
-      cout << "found a copy constructible type:\t" << node->unparseToString()
+      cout << "found a copy constructible type:\t" << node->class_name()
            << endl;
     else
       cout << "      found a non-copy constructible type:\t"
-           << node->unparseToString() << endl;
+           << node->class_name() << endl;
 
     if (SageInterface::isAssignable(isSgType(node)))
-      cout << "found an assignable type:\t" << node->unparseToString() << endl;
+      cout << "found an assignable type:\t" << node->class_name() << endl;
     else
-      cout << "      found a non-assignable type:\t" << node->unparseToString()
+      cout << "      found a non-assignable type:\t" << node->class_name()
            << endl;
   }
 }

@@ -3,5 +3,6 @@
 // I think this was a syntax error that appeared to previously pass un-noticed.
 
 // New version of test code:
-struct { typedef int X; };
-
+struct TypedefOwner {
+  typedef int X;
+};

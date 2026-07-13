@@ -10,6 +10,7 @@ add_library(roseAstNodesExpression OBJECT
   SgAssignInitializer.C
   SgAssumedRankExp.C
   SgAsteriskShapeExp.C
+  SgAwaitExpression.C
   SgBinaryOp.C
   SgBitComplementOp.C
   SgBracedInitializer.C
@@ -23,33 +24,44 @@ add_library(roseAstNodesExpression OBJECT
   SgColonShapeExp.C
   SgCommaOpExp.C
   SgComplexVal.C
-  SgCompoundInitializer.C
   SgConditionalExp.C
   SgConstructorInitializer.C
   SgCudaKernelCallExp.C
   SgDeleteExp.C
   SgDesignatedInitializer.C
+  SgDesignator.C
   SgDotExp.C
   SgDotStarOp.C
   SgEnumVal.C
   SgExponentiationOp.C
   SgExpression.C
   SgExprListExp.C
+  SgFoldExpression.C
   SgFunctionCallExp.C
   SgFunctionParameterRefExp.C
   SgFunctionRefExp.C
+  SgFortranCommonBlockRefExp.C
   SgImpliedDo.C
-  SgIOItemExpression.C
   SgLabelRefExp.C
   SgLambdaExp.C
-  SgLambdaRefExp.C
-  SgLogicalBinaryOpSupport.C
+  SgMacroExpansionExp.C
   SgMemberFunctionRefExp.C
   SgMinusMinusOp.C
   SgNewExp.C
   SgNoexceptOp.C
   SgNonrealRefExp.C
   SgOrOp.C
+  SgOmpApplyTransformation.C
+  SgOmpInductionItem.C
+  SgOmpInitModifier.C
+  SgOmpInitModifierList.C
+  SgOmpAppendArgsOperation.C
+  SgOmpMapDistDataPolicy.C
+  SgOmpMapItem.C
+  SgOmpNameExpression.C
+  SgOmpDirectiveLocalRefExp.C
+  SgOmpSourceExpression.C
+  SgPackExpansionExpr.C
   SgPlusPlusOp.C
   SgPntrArrRefExp.C
   SgPointerDerefExp.C
@@ -65,6 +77,8 @@ add_library(roseAstNodesExpression OBJECT
   SgTemplateParameterVal.C
   SgThisExp.C
   SgThrowOp.C
+  SgTypeExpression.C
+  SgTypeRequirement.C
   SgTypeIdOp.C
   SgTypeTraitBuiltinOperator.C
   SgUnaryOp.C

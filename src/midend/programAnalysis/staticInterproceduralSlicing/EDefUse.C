@@ -12,9 +12,13 @@ EDefUse::EDefUse(SgProject *proj) { internalDefUse = new DefUseAnalysis(proj); }
 
 EDefUse::~EDefUse() { delete internalDefUse; }
 
-int EDefUse::run(bool debug) {
-  internalDefUse->run(debug);
-  return 0; // JJW 10-17-2007 does not appear to ever be used
+void EDefUse::run(bool debug) {
+  ROSE_ASSERT(internalDefUse != NULL);
+  if (internalDefUse->run(debug) != 0) {
+    fprintf(stderr, "REX_SLICING_INVARIANT[extended-def-use-run]: underlying "
+                    "def-use analysis failed\n");
+    ROSE_ABORT();
+  }
 }
 std::vector<SgNode *> EDefUse::getDefFor(SgNode *node,
                                          SgInitializedName *initName) {

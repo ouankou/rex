@@ -35,11 +35,7 @@ int main(int argc, char *argv[]) {
 
   SgProject *project = frontend(argc, argv);
   EDefUse *edu = new EDefUse(project);
-  if (edu->run(false) == 1) {
-    std::cerr << "createFDG:: DFAnalysis failed!   -- edu->run(false)==0"
-              << endl;
-    exit(0);
-  }
+  edu->run(false);
   std::vector<InterproceduralInfo *> ip;
 
   list<SgNode *> functionDeclarations =

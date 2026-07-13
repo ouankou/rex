@@ -46,14 +46,17 @@ void UnparseHeadersTransformVisitor::visit(SgNode *node) {
       if (assignOp != NULL && assignOp->get_lhs_operand() == varRefExp) {
         SgIntVal *intVal = isSgIntVal(assignOp->get_rhs_operand());
         if (intVal != NULL) {
-          SageInterface::replaceExpression(intVal, SageBuilder::buildIntVal(2),
-                                           false);
+          SgIntVal *replacement = SageBuilder::buildIntVal(2);
+          ROSE_ASSERT(replacement != NULL);
+          SageInterface::publishGeneratedSubtreeOutputOwner(replacement,
+                                                            intVal);
+          SageInterface::replaceExpression(intVal, replacement, false);
         }
 
         SgStatement *enclosingStatement =
             SageInterface::getEnclosingStatement(varRefExp);
         if (enclosingStatement != NULL) {
-          enclosingStatement->setTransformation();
+          enclosingStatement->set_isModified(true);
         }
       }
     }

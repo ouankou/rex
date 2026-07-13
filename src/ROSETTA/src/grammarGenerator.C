@@ -151,11 +151,16 @@ Grammar::CreateMinimalTraversedGrammarSymbolsSet(
 string Grammar::restrictedTypeStringOfGrammarString(
     GrammarString *gs, AstNodeClass *grammarnode, string grammarSymListOpPrefix,
     string grammarSymListOpPostfix) {
-  string type = typeStringOfGrammarString(gs);
+  const string sourceType = typeStringOfGrammarString(gs);
 
-  if (type.find("static ") != string::npos) {
+  if (sourceType.find("static ") != string::npos) {
     return "IGNORE"; // special case: static types are ignored entirely
   }
+
+  const bool isContainer = gs->getSchemaStorage() != SCALAR_SCHEMA_STORAGE;
+  string type = isContainer ? gs->getSchemaElementTypeName() : sourceType;
+  type =
+      GrammarString::copyEdit(type, "$GRAMMAR_PREFIX_", getGrammarPrefixName());
 
   // $CLASSNAME in type
   type = replaceString("$CLASSNAME", grammarnode->name, type);
@@ -188,14 +193,7 @@ string Grammar::restrictedTypeStringOfGrammarString(
     }
   }
 
-  GrammarNodeInfo gInfo = getGrammarNodeInfo(
-      grammarnode); // MS: should be a member function of GrammarNode
-  if (gInfo.numContainerMembers >
-      0) { // there can be only one container member!
-    // cout << "ContainerMembers>0: " << type << endl;
-    type = replaceString("PtrList", "", type);
-    type = replaceString("List", "",
-                         type); // only SgInitializedNameList as of 05/20/03, MS
+  if (isContainer) {
     if (!generateSDFTreeGrammar) {
       type = grammarSymListOpPrefix + type +
              grammarSymListOpPostfix; // EBNF notation for lists
@@ -203,9 +201,6 @@ string Grammar::restrictedTypeStringOfGrammarString(
       type = string("ListStarOf") + type;
       sdfTreeGrammarContainerTypes.insert(type);
     }
-  } else {
-    type = replaceString("PtrListPtr", "", type);
-    // cout << "ContainerMembers<=0: " << type << endl;
   }
   return type;
 }
@@ -235,15 +230,10 @@ bool Grammar::isFilteredMemberVariable(string varName) {
       "operatorPosition",
       "originalExpressionTree",
       "uses_operator_syntax",
-      "globalQualifiedNameMapForNames",
-      "globalQualifiedNameMapForTypes",
-      "globalQualifiedNameMapForTemplateHeaders",
-      "globalTypeNameMap",
       "globalMangledNameMap",
       "globalTypeTable",
       "shortMangledNameCache",
-      "globalFunctionTypeTable",
-      "globalQualifiedNameMapForMapsOfTypes"};
+      "globalFunctionTypeTable"};
   set<string> filteredMemberVariablesSet(
       filteredMemberVariables,
       filteredMemberVariables +

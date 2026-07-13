@@ -1,0 +1,5 @@
+num_threads(MiXeD_Thread_Count)
+private(MiXeD_Private_Value)
+shared(MiXeD_Shared_Value)
+num_tasks(NuM_TaSkS)
+copyprivate(CoPyPrIvAtE)

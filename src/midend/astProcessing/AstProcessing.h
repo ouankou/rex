@@ -800,34 +800,22 @@ void SgTreeTraversal<InheritedAttributeType, SynthesizedAttributeType>::
     // useDefaultIndexBasedTraversal flag tells us whether to use successor
     // containers or direct index-based access to the node's successors.
     AstSuccessorsSelectors::SuccessorsContainer succContainer;
-    size_t numberOfSuccessors;
     if (!useDefaultIndexBasedTraversal) {
       setNodeSuccessors(node, succContainer);
-      numberOfSuccessors = succContainer.size();
     } else {
-      numberOfSuccessors = node->get_numberOfTraversalSuccessors();
+      // The generated index accessor validates and materializes the complete
+      // successor sequence.  Calling it once per index is quadratic for
+      // high-cardinality typed owners such as SgAuxiliaryDeclarationList and
+      // also repeats the same identity validation.  Materialize the exact
+      // sequence once for this traversal step.
+      succContainer = node->get_traversalSuccessorContainer();
     }
+    const size_t numberOfSuccessors = succContainer.size();
 
-    for (size_t idx = 0; idx < numberOfSuccessors; idx++) {
-      SgNode *child = nullptr;
-
-      if (useDefaultIndexBasedTraversal) {
-        // ROSE_ASSERT(node->get_traversalSuccessorByIndex(idx) != NULL ||
-        // node->get_traversalSuccessorByIndex(idx) == NULL);
-        child = node->get_traversalSuccessorByIndex(idx);
-
-        // DQ (4/21/2014): Valgrind test to isolate uninitialised read reported
-        // where child is read below.
-        ASSERT_require(child == nullptr || child != nullptr);
-      } else {
-        // ROSE_ASSERT(succContainer[idx] != NULL || succContainer[idx] ==
-        // NULL);
-        child = succContainer[idx];
-
-        // DQ (4/21/2014): Valgrind test to isolate uninitialised read reported
-        // where child is read below.
-        ASSERT_require(child == nullptr || child != nullptr);
-      }
+    for (SgNode *child : succContainer) {
+      // DQ (4/21/2014): Valgrind test to isolate uninitialised read reported
+      // where child is read below.
+      ASSERT_require(child == nullptr || child != nullptr);
 
       if (child != nullptr) {
         performTraversal(child, inheritedValue, treeTraversalOrder);

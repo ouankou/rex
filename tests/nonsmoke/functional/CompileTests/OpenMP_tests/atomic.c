@@ -1,4 +1,7 @@
 #include <omp.h>
+
+enum { test = 1 };
+
 int main(void) {
 
   int a;

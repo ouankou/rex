@@ -5,6 +5,7 @@
 #define DETECT_MACRO_OR_INCLUDE_FILE_EXPANSIONS_H
 
 #include "AstProcessing.h"
+#include "tokenStreamInterval.h"
 
 #include <map>
 
@@ -26,7 +27,7 @@ using MacroDirectiveMap = std::map<std::string, std::vector<MacroDirective>>;
 class MacroExpansion {
 public:
   // The name of the macro that is expanded.
-  std::string macro_name;
+  const std::string macro_name;
 
   // Mark this as a shared macro expansion if multiple statements are associated
   // with it.
@@ -34,12 +35,11 @@ public:
 
   // Save the position of the macro expansion so that we can distinquish between
   // different macro expansions.
-  int line;
-  int column;
+  const int line;
+  const int column;
 
-  // The starting and ending positions of the macro call in the token sequence.
-  int token_start;
-  int token_end;
+  // Exact half-open token interval of the written macro invocation.
+  const TokenStreamHalfOpenInterval token_interval;
 
   // Use a vector as a container for the associated IR nodes for this macro
   // expansion when it is shared.
@@ -50,7 +50,9 @@ public:
   // SageInterface::resetInternalMapsForTargetStatement().
   bool isTransformed;
 
-  MacroExpansion(const std::string &name);
+  MacroExpansion(const std::string &name,
+                 const TokenStreamHalfOpenInterval &token_interval, int line,
+                 int column);
 };
 
 class DetectMacroOrIncludeFileExpansionsInheritedAttribute {
@@ -112,12 +114,8 @@ public:
       SubTreeSynthesizedAttributes synthesizedAttributeList);
 
   // Support function
-  MacroExpansion *isPartOfMacroExpansion(SgStatement *statement,
-                                         std::string &name, int &startingToken,
-                                         int &endingToken);
-  MacroExpansion *isPartOfMacroExpansion(SgLocatedNode *locatedNode,
-                                         std::string &name, int &startingToken,
-                                         int &endingToken);
+  MacroExpansion *isPartOfMacroExpansion(SgStatement *statement);
+  MacroExpansion *isPartOfMacroExpansion(SgLocatedNode *locatedNode);
 };
 
 // Main API function to call the AST traversals

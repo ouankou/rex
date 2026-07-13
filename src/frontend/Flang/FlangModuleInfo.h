@@ -5,8 +5,6 @@
 #include <string>
 #include <vector>
 
-#define SKIP_SYNTAX_CHECK "-rose:skip_syntax_check"
-
 class SgModuleStatement;
 class SgProject;
 class SgSourceFile;
@@ -17,17 +15,25 @@ private:
 
   static SgProject *currentProject;
   static ModuleMapType moduleNameAstMap;
+  static ModuleMapType intrinsicModuleNameAstMap;
+  static std::vector<bool> activeIntrinsicModuleLoads;
   static unsigned int nestedSgFile;
   static std::vector<std::string> inputDirs;
-  static std::vector<std::string> sourceDirs;
 
 public:
+  enum class ModuleNature { intrinsic, nonintrinsic };
+
   static bool isModuleFile();
   static void setCurrentProject(SgProject *project);
   static SgProject *getCurrentProject();
 
-  static SgModuleStatement *getModule(const std::string &modName);
-  static bool isIntrinsicModuleName(const std::string &modName);
+  static void registerModule(SgModuleStatement *module);
+  static SgModuleStatement *getModule(const std::string &modName,
+                                      const std::string &moduleFile,
+                                      ModuleNature nature);
+  static ModuleNature
+  requireModuleNatureForSourceFile(const std::string &modName,
+                                   const std::string &moduleFile);
 
   static void set_inputDirs(SgProject *project);
 
@@ -35,7 +41,6 @@ public:
   ~FlangModuleInfo() = default;
 
 private:
-  static std::string find_file_from_inputDirs(const std::string &basename);
   static SgSourceFile *createSgSourceFile(const std::string &moduleName);
   static void clearMap();
   static void dumpMap();

@@ -3,5 +3,8 @@
 void SgColonShapeExp::post_construction_initialization() {}
 
 SgType *SgColonShapeExp::get_type() const {
-  return SgTypeDefault::createType();
+  fprintf(stderr,
+          "REX_AST_INVARIANT[fortran-shape-syntax-type]: colon shape has no "
+          "standalone semantic value type\n");
+  ROSE_ABORT();
 }

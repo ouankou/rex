@@ -1,5 +1,10 @@
 include_directories(${ROSE_INCLUDES} ${CMAKE_CURRENT_BINARY_DIR})
 
+find_program(BASH_EXECUTABLE bash)
+if(NOT BASH_EXECUTABLE)
+  message(FATAL_ERROR "bash not found; SageInterface death tests require bash")
+endif()
+
 file(GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test_output_path.h CONTENT [=[
 #pragma once
 
@@ -27,6 +32,53 @@ target_link_libraries(collectFunctionSideEffect ROSE_DLL ${link_with_libraries})
 add_executable(performAliasAnalysis performAliasAnalysis.C)
 target_link_libraries(performAliasAnalysis ROSE_DLL ${link_with_libraries})
 
+add_executable(rex_integer_width_contract rex_integer_width_contract.cpp)
+target_include_directories(rex_integer_width_contract PRIVATE
+  ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/sageInterface)
+add_test(NAME rex_integer_width_contract COMMAND rex_integer_width_contract)
+set_tests_properties(rex_integer_width_contract
+  PROPERTIES LABELS "rex;integer-width;WASM")
+
+set(_openmp_modifier_validation_header_test
+  rex_openmp_modifier_validation_header_self_contained.cpp)
+add_executable(rex_openmp_modifier_validation_header_self_contained
+  ${_openmp_modifier_validation_header_test})
+set_source_files_properties(${_openmp_modifier_validation_header_test}
+  PROPERTIES SKIP_PRECOMPILE_HEADERS TRUE)
+target_link_libraries(rex_openmp_modifier_validation_header_self_contained
+  ROSE_DLL ${link_with_libraries})
+add_test(
+  NAME rex_openmp_modifier_validation_header_self_contained
+  COMMAND rex_openmp_modifier_validation_header_self_contained)
+set_tests_properties(rex_openmp_modifier_validation_header_self_contained
+  PROPERTIES LABELS "rex;headers;OpenMP;WASM")
+
+add_test(
+  NAME rex_omp_support_header_self_contained
+  COMMAND ${CMAKE_CXX_COMPILER}
+    -std=c++17
+    -fsyntax-only
+    -I${ROSE_TOP_SRC_DIR}/src/frontend/SageIII
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_omp_support_header_self_contained.cpp)
+set_tests_properties(rex_omp_support_header_self_contained
+  PROPERTIES LABELS "rex;headers;CFE")
+
+add_test(
+  NAME rex_build_script_preserves_search_paths
+  COMMAND ${BASH_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_build_script_preserves_search_paths.sh
+    ${ROSE_TOP_SRC_DIR}/build-rex.sh)
+set_tests_properties(rex_build_script_preserves_search_paths
+  PROPERTIES LABELS "rex;build-system")
+
+add_test(
+  NAME rex_ci_llvm_env_preserves_search_paths
+  COMMAND ${BASH_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_ci_llvm_env_preserves_search_paths.sh
+    ${ROSE_TOP_SRC_DIR}/scripts/ci-llvm-env)
+set_tests_properties(rex_ci_llvm_env_preserves_search_paths
+  PROPERTIES LABELS "rex;build-system;CI")
+
 set(_openmp_specimens_path
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/OpenMP_tests)
 set(_dataracebench_path ${_openmp_specimens_path}/dataRaceBench)
@@ -51,7 +103,7 @@ set(SAGE_OPENMP_SPECIMENS
   array_init.c
   atomic.c
   atoms-2.c
-  axpy_ompacc2.c
+  rex_openmp_axpy_multi_device.c
   axpy_ompacc3.c
   axpy_ompacc.c
   barrier.c
@@ -191,7 +243,7 @@ set(SAGE_OPENMP_VERIFY
   array_init.c
   atomic.c
   atoms-2.c
-  axpy_ompacc2.c
+  rex_openmp_axpy_multi_device.c
   axpy_ompacc3.c
   axpy_ompacc.c
   barrier.c
@@ -345,11 +397,16 @@ function(_sage_sanitize_name input output_var)
 endfunction()
 
 function(_sage_add_diff_test test_name output_file)
+  if(ARGC GREATER 2)
+    set(_reference_output ${ARGV2})
+  else()
+    set(_reference_output ${output_file})
+  endif()
   add_test(
     NAME ${test_name}_diff
     COMMAND ${CMAKE_COMMAND} -E compare_files
       ${_sage_output_dir}/${output_file}
-      ${_reference_dir}/${output_file}
+      ${_reference_dir}/${_reference_output}
   )
   set_tests_properties(${test_name}_diff PROPERTIES DEPENDS "${test_name}")
 endfunction()
@@ -373,7 +430,12 @@ foreach(specimen IN LISTS SAGE_OPENMP_SPECIMENS)
   )
   _sage_set_output_env(${_test_name})
   if(specimen IN_LIST SAGE_OPENMP_VERIFY)
-    _sage_add_diff_test(${_test_name} ${_output})
+    if(specimen STREQUAL "rex_openmp_axpy_multi_device.c")
+      _sage_add_diff_test(${_test_name} ${_output}
+        axpy_ompacc2.c.getDataSharingAttribute.output)
+    else()
+      _sage_add_diff_test(${_test_name} ${_output})
+    endif()
   endif()
 endforeach()
 

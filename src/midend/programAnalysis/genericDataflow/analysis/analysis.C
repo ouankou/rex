@@ -177,8 +177,8 @@ InterProceduralDataflow::InterProceduralDataflow(
       if (analysisDebugLevel >= 1) {
         DataflowNode begin(func.get_definition()->cfgForBeginning(), filter);
         Dbg::dbg << "begin=" << begin.getNode() << " = ["
-                 << Dbg::escape(begin.getNode()->unparseToString()) << " | "
-                 << begin.getNode()->class_name() << "]" << endl;
+                 << Dbg::escape(Dbg::diagnosticNodeText(begin.getNode()))
+                 << " | " << begin.getNode()->class_name() << "]" << endl;
         Dbg::dbg << "Initialized state of function "
                  << func.get_name().getString()
                  << "(), state=" << (&(funcS->state)) << endl;
@@ -218,7 +218,7 @@ void InitDataflowState::visit(const Function &func, const DataflowNode &n,
   if (analysisDebugLevel >= 2)
     Dbg::dbg << "InitDataflowState::visit() sgn=" << sgn << "["
              << sgn->class_name() << " | "
-             << Dbg::escape(sgn->unparseToString())
+             << Dbg::escape(Dbg::diagnosticNodeText(sgn))
              << "], dfAnalysis=" << dfAnalysis << endl;
 
   // generate a new initial state for this node
@@ -277,7 +277,7 @@ void FindAllFunctionCalls::visit(const Function &, const DataflowNode &n,
   if (analysisDebugLevel >= 2) {
     Dbg::dbg << "FindAllFunctionCalls::visit() sgn=" << sgn << "["
              << sgn->class_name() << " | "
-             << Dbg::escape(sgn->unparseToString()) << "]" << endl;
+             << Dbg::escape(Dbg::diagnosticNodeText(sgn)) << "]" << endl;
   }
 
   // If this is a function call, find the function that is being called and if
@@ -334,7 +334,7 @@ bool IntraUniDirectionalDataflow::propagateStateToNextNode(
   if (analysisDebugLevel >= 1) {
     Dbg::dbg << "\n        Propagating to Next Node: " << nextNode.getNode()
              << "[" << nextNode.getNode()->class_name() << " | "
-             << Dbg::escape(nextNode.getNode()->unparseToString()) << "]"
+             << Dbg::escape(Dbg::diagnosticNodeText(nextNode.getNode())) << "]"
              << endl;
     int j;
     for (j = 0, itC = curNodeState.begin(); itC != curNodeState.end();
@@ -546,8 +546,8 @@ bool printDataflowInfoPass::transfer(const Function &func,
                                      const DataflowNode &n, NodeState &state,
                                      const vector<Lattice *> &dfInfo) {
   Dbg::dbg << "-----#############################--------\n";
-  Dbg::dbg << "Node: [" << Dbg::escape(n.getNode()->unparseToString()) << " | "
-           << n.getNode()->class_name() << "]\n";
+  Dbg::dbg << "Node: [" << Dbg::escape(Dbg::diagnosticNodeText(n.getNode()))
+           << " | " << n.getNode()->class_name() << "]\n";
   // print out all the dataflow facts associated with analysis at this node
 
   const /*map <int, NodeFact*>*/ vector<NodeFact *> facts =
@@ -712,7 +712,7 @@ void MergeAllReturnStates::visit(const Function &func, const DataflowNode &n,
   if (analysisDebugLevel >= 1)
     Dbg::dbg << "MergeAllReturnStates::visit() func="
              << func.get_name().getString() << "() sgn=" << sgn << "["
-             << Dbg::escape(sgn->unparseToString()) << " | "
+             << Dbg::escape(Dbg::diagnosticNodeText(sgn)) << " | "
              << sgn->class_name() << "]\n";
   // Dbg::dbg << "visit {{{: modified="<<modified<<endl;
 
@@ -722,8 +722,8 @@ void MergeAllReturnStates::visit(const Function &func, const DataflowNode &n,
       Dbg::dbg << "MergeAllReturnStates::visit() "
                   "isSgReturnStmt(sgn)->get_expression()="
                << isSgReturnStmt(sgn)->get_expression() << "["
-               << Dbg::escape(
-                      isSgReturnStmt(sgn)->get_expression()->unparseToString())
+               << Dbg::escape(Dbg::diagnosticNodeText(
+                      isSgReturnStmt(sgn)->get_expression()))
                << " | " << isSgReturnStmt(sgn)->get_expression()->class_name()
                << "]\n";
 

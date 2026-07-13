@@ -1,5 +1,4 @@
 
-
 int main() {
   int k;
   k = 0; // k is used in the same scope in which it is declared
@@ -33,4 +32,3 @@ int main() {
   }
   return 0;
 }
-

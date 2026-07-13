@@ -110,7 +110,8 @@ when AST JSON is not enabled. Status is done unless stated otherwise.
   `OMPTEST_rex_test2026_mapper_template_reachable_scope_cpp`, and checkpoint
   variants.
 - Anonymous member name qualification:
-  `nameQualificationSupport.C`, `newHiddenList.C`.
+  `clang-frontend-decl.cpp`, `nameQualificationSupport.C`,
+  `sageAstJsonSerializeSupport.cpp`.
   Coverage: `Cxx_tests_rex_test2026_anonymous_member_no_qualification_unparse`.
 - Template instantiation reachable scope:
   `clang-frontend-decl.cpp`, `clang-frontend-type.cpp`, `clang-frontend.cpp`.

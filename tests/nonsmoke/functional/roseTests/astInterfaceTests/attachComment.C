@@ -14,7 +14,8 @@ int main(int argc, char *argv[]) {
   // go to the function body
   SgFunctionDeclaration *mainFunc = findMain(project);
 
-  attachComment(mainFunc, "Test for source comment.");
+  attachComment(mainFunc, "Test for source comment.",
+                PreprocessingInfo::C_StyleComment);
 
   AstTests::runAllTests(project);
   return backend(project);

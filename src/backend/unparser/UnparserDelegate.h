@@ -10,13 +10,17 @@
 class UnparseFormat;
 class UnparseDelegate {
 public:
-  virtual ~UnparseDelegate() {};
+  enum class StatementCoreEmission { declined, emitted };
 
-  // This class need only support the unparsing of statements since all other IR
-  // nodes are unparsed by the functions that unparse statements.
+  virtual ~UnparseDelegate() = default;
 
-  virtual bool unparse_statement(SgStatement *stmt, SgUnparse_Info &info,
-                                 UnparseFormat &out) = 0;
+  // A delegate emits only the statement's core AST surface.  The owning
+  // unparser retains leading/trailing preprocessing, line directives, numeric
+  // labels, formatting, token-routing, and session-state cleanup.
+
+  virtual StatementCoreEmission unparse_statement(SgStatement *stmt,
+                                                  SgUnparse_Info &info,
+                                                  UnparseFormat &out) = 0;
 };
 
 #endif

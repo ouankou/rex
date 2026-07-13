@@ -2,13 +2,18 @@
 set -euo pipefail
 
 arg0="${0##*/}"
-mode="${1:-}"
-llvm_version="${2:-${LLVM_VERSION:-22}}"
 
 die() {
   echo "$arg0: error:" "$@" >&2
   exit 2
 }
+
+if (( $# < 1 || $# > 2 )); then
+  die "usage: $arg0 {native|docs|wasm} [llvm-version]"
+fi
+
+mode="$1"
+llvm_version="${2:-${LLVM_VERSION:-22}}"
 
 add_llvm_apt_repo() {
   wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
@@ -22,9 +27,13 @@ install_packages() {
   sudo apt-get install -y "$@"
 }
 
-if [ -z "$mode" ]; then
-  die "usage: $arg0 {native|docs|wasm} [llvm-version]"
+if [ "${llvm_version}" != "22" ]; then
+  die "REX is pinned to LLVM/Clang major 22; requested '${llvm_version}'"
 fi
+case "$mode" in
+  native|docs|wasm) ;;
+  *) die "unknown dependency mode: $mode" ;;
+esac
 
 add_llvm_apt_repo
 
@@ -47,6 +56,7 @@ case "$mode" in
       libantlr4-runtime-dev \
       libclang-"${llvm_version}"-dev \
       libclang-cpp"${llvm_version}"-dev \
+      libflang-"${llvm_version}"-dev \
       libhpdf-dev \
       libomp-"${llvm_version}"-dev \
       libtool \
@@ -88,6 +98,7 @@ case "$mode" in
       clang-tools-"${llvm_version}" \
       curl \
       flex \
+      git \
       libomp-"${llvm_version}"-dev \
       llvm-"${llvm_version}" \
       llvm-"${llvm_version}"-dev \
@@ -96,8 +107,5 @@ case "$mode" in
       openjdk-25-jdk \
       perl \
       pkg-config
-    ;;
-  *)
-    die "unknown dependency mode: $mode"
     ;;
 esac

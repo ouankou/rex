@@ -79,7 +79,7 @@ add_test(
     -DREX_INPUT=${_single_stmt_tests_dir}/test2005_155.C
     -DREX_INCLUDE_DIR=${_single_stmt_tests_dir}
     -DREX_WORKDIR=${_single_stmt_issue432_output_dir}
-    "-DREX_EXPECTED_REGEX=template[ ]+void[ ]+X::foo<int>\\(int i,int j,int k\\)"
+    "-DREX_EXPECTED_REGEX=template[ ]+void[ ]+X::foo<int>\\(int i,[ ]*int j,[ ]*int k\\)"
     -P ${CMAKE_CURRENT_SOURCE_DIR}/check_unparsed_contains.cmake
 )
 

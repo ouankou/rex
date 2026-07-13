@@ -1,13 +1,12 @@
-/* unparser.h
- * This header file contains the class declaration for the newest unparser. Six
- * C files include this header file: unparser.C, modified_sage.C,
- * unparse_stmt.C, unparse_expr.C, unparse_type.C, and unparse_sym.C.
- */
+/* Fortran unparser declarations. */
 
 #ifndef UNPARSE_FORTRAN_H
 #define UNPARSE_FORTRAN_H
 
 #include "unparser.h"
+
+bool fortranAttributeStatementOwnsArrayShape(
+    const SgInitializedName *initializedName);
 
 class FortranCodeGeneration_locatedNode
     : public UnparseLanguageIndependentConstructs {
@@ -66,8 +65,10 @@ public:
 
   virtual void unparseStringVal(SgExpression *expr,
                                 SgUnparse_Info &info) override;
+  void unparseLongLongIntVal(SgExpression *expr, SgUnparse_Info &info) override;
   virtual void unparseBoolVal(SgExpression *expr,
                               SgUnparse_Info &info) override;
+  void unparseNullptrVal(SgExpression *expr, SgUnparse_Info &info) override;
   virtual void unparseFuncCall(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparsePointStOp(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseRecRef(SgExpression *expr, SgUnparse_Info &info);
@@ -117,7 +118,6 @@ public:
   virtual void unparseAsteriskShapeExp(SgExpression *expr,
                                        SgUnparse_Info &info);
 
-  virtual void unparseIOItemExpr(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseImpliedDo(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseConcatenationOp(SgExpression *expr, SgUnparse_Info &info);
 
@@ -215,6 +215,7 @@ public:
   virtual void unparseFuncDefnStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseVarDeclStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseVarDefnStmt(SgStatement *stmt, SgUnparse_Info &info);
+  virtual void unparseEnumDeclStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseClassDeclStmt_module(SgStatement *stmt,
                                            SgUnparse_Info &info);
   virtual void unparseClassDeclStmt_derivedType(SgStatement *stmt,
@@ -338,7 +339,7 @@ private:
    * the given type.
    */
   void unparseEntityTypeAttr(SgType *type, SgUnparse_Info &info,
-                             bool oneVarOnly);
+                             bool oneVarOnly, bool emitDimensionShape = true);
 
   /**
    * For unparsing language keywords (allows option for upper or lower case)

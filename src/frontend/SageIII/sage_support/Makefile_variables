@@ -2,7 +2,6 @@
 
 fSageSupport_la_sources=\
 	$(fSageSupportPath)/sage_support.C \
-	$(fSageSupportPath)/keep_going.C \
 	$(fSageSupportPath)/cmdline.C \
 	$(fSageSupportPath)/utility_functions.C
 
@@ -11,7 +10,6 @@ $(fSageSupportPath)/cmdline.lo: ${top_builddir}/rose_config.h
 
 fSageSupport_includeHeaders=\
 	$(fSageSupportPath)/sage_support.h \
-	$(fSageSupportPath)/keep_going.h \
 	$(fSageSupportPath)/cmdline.h \
 	$(fSageSupportPath)/utility_functions.h \
 	$(fSageSupportPath)/utility_functionsImpl.C

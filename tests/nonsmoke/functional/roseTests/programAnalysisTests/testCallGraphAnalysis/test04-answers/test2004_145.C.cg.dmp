@@ -1,2 +1,2 @@
-X < Y* > ::foo ->
-foobar -> X < Y* > ::foo
+X < A<int>::Y* > ::foo ->
+foobar -> X < A<int>::Y* > ::foo

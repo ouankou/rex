@@ -154,6 +154,7 @@ ConstantFoldingTraversal::evaluateInheritedAttribute(
                "ConstantFoldingTraversal::evaluateInheritedAttribute.\n");
 #endif
         originalExpression->set_originalExpressionTree(NULL);
+        original_tree->set_parent(nullptr);
         SageInterface::deepDelete(original_tree);
       }
     }
@@ -451,6 +452,7 @@ static SgValueExp *evaluateUnaryOp(SgUnaryOp *unaryOperator) {
 
 //! Evaluate a conditional expression i.e. a?b:c
 static SgValueExp *evaluateConditionalExp(SgConditionalExp *cond_exp) {
+  cond_exp->validate();
   SgValueExp *result = NULL;
   auto copy_value_exp = [](SgValueExp *value_exp) -> SgValueExp * {
     if (value_exp == NULL) {
@@ -466,7 +468,7 @@ static SgValueExp *evaluateConditionalExp(SgConditionalExp *cond_exp) {
   SgExpression *c_exp_value = cond_exp->get_conditional_exp();
   SgValueExp *value_exp = isSgValueExp(c_exp_value);
 
-  SgExpression *t_exp_value = cond_exp->get_true_exp();
+  SgExpression *t_exp_value = cond_exp->get_true_value_exp();
   SgValueExp *value_exp_t = isSgValueExp(t_exp_value);
 
   SgExpression *f_exp_value = cond_exp->get_false_exp();
@@ -499,7 +501,7 @@ static SgValueExp *evaluateConditionalExp(SgConditionalExp *cond_exp) {
     case V_SgIntVal: {
       int v = cf_get_int_value(value_exp);
       if (v) {
-        if (value_exp_t) // set the value only if the true exp is a constant
+        if (value_exp_t) // set the value only if the true value is a constant
           result = copy_value_exp(value_exp_t);
       } else {
         if (value_exp_f)
@@ -586,9 +588,13 @@ ConstantFoldingTraversal::evaluateSynthesizedAttribute(
         // from and constant operands or values folded from constant
         // expressions.
         SgExpression *lhsSynthesizedValue =
-            synthesizedAttributeList[SgBinaryOp_lhs_operand_i].newValueExp;
+            synthesizedAttributeList
+                [rosettaTraversalIndex(E_SgBinaryOp::SgBinaryOp_lhs_operand_i)]
+                    .newValueExp;
         SgExpression *rhsSynthesizedValue =
-            synthesizedAttributeList[SgBinaryOp_rhs_operand_i].newValueExp;
+            synthesizedAttributeList
+                [rosettaTraversalIndex(E_SgBinaryOp::SgBinaryOp_rhs_operand_i)]
+                    .newValueExp;
 
         // printf ("Propagated values: lhsSynthesizedValue = %p
         // rhsSynthesizedValue = %p
@@ -619,7 +625,9 @@ ConstantFoldingTraversal::evaluateSynthesizedAttribute(
                     (synthesizedAttributeList.size() == 2 &&
                      isSgCastExp(unaryOperator)));
         SgExpression *synthesizedValue =
-            synthesizedAttributeList[SgUnaryOp_operand_i].newValueExp;
+            synthesizedAttributeList[rosettaTraversalIndex(
+                                         E_SgUnaryOp::SgUnaryOp_operand_i)]
+                .newValueExp;
         // Replace the lhs and/or rhs if generated at a child node in the AST
         // traversal
         if (synthesizedValue != NULL) {
@@ -652,7 +660,10 @@ ConstantFoldingTraversal::evaluateSynthesizedAttribute(
         ROSE_ASSERT(assignInit != NULL);
         ROSE_ASSERT(synthesizedAttributeList.size() == 1);
         SgExpression *synthesizedValue =
-            synthesizedAttributeList[SgAssignInitializer_operand_i].newValueExp;
+            synthesizedAttributeList
+                [rosettaTraversalIndex(
+                     E_SgAssignInitializer::SgAssignInitializer_operand_i)]
+                    .newValueExp;
         // Replace the lhs and/or rhs if generated at a child node in the AST
         // traversal
         if (synthesizedValue != NULL) {
@@ -676,23 +687,22 @@ ConstantFoldingTraversal::evaluateSynthesizedAttribute(
       {
         SgConditionalExp *cond_exp = isSgConditionalExp(expr);
         ROSE_ASSERT(cond_exp);
-        ROSE_ASSERT(synthesizedAttributeList.size() == 3);
-        // step 1. replace children with their synthesized values
-        // src/frontend/SageIII/Cxx_GrammarTreeTraversalAccessEnums.h defines
-        // the traversal enum enum E_SgConditionalExp
-        // {SgConditionalExp_conditional_exp, SgConditionalExp_true_exp,
-        // SgConditionalExp_false_exp}
-        SgExpression *c_exp_value =
-            synthesizedAttributeList[SgConditionalExp_conditional_exp]
-                .newValueExp;
+        cond_exp->validate();
+        const bool standard = cond_exp->get_operator_kind() ==
+                              SgConditionalExp::e_conditional_operator_standard;
+        ROSE_ASSERT(synthesizedAttributeList.size() == (standard ? 3 : 2));
+        // Optional traversal edges are omitted, so the false operand is child
+        // two for a standard conditional and child one for a GNU binary
+        // conditional.
+        SgExpression *c_exp_value = synthesizedAttributeList[0].newValueExp;
         SgExpression *t_exp_value =
-            synthesizedAttributeList[SgConditionalExp_true_exp].newValueExp;
+            standard ? synthesizedAttributeList[1].newValueExp : nullptr;
         SgExpression *f_exp_value =
-            synthesizedAttributeList[SgConditionalExp_false_exp].newValueExp;
+            synthesizedAttributeList[standard ? 2 : 1].newValueExp;
         if (c_exp_value != NULL)
           replaceExpressionWithDeferredDelete(cond_exp->get_conditional_exp(),
                                               c_exp_value);
-        if (t_exp_value != NULL)
+        if (standard && t_exp_value != NULL)
           replaceExpressionWithDeferredDelete(cond_exp->get_true_exp(),
                                               t_exp_value);
         if (f_exp_value != NULL)
@@ -708,11 +718,17 @@ ConstantFoldingTraversal::evaluateSynthesizedAttribute(
         // buildtree/src/frontend/SageIII/Cxx_GrammarTreeTraversalAccessEnums.h
         // defines the traversal enum
         SgExpression *start_exp_value =
-            synthesizedAttributeList[SgRangeExp_start].newValueExp;
+            synthesizedAttributeList[rosettaTraversalIndex(
+                                         E_SgRangeExp::SgRangeExp_start)]
+                .newValueExp;
         SgExpression *end_exp_value =
-            synthesizedAttributeList[SgRangeExp_end].newValueExp;
+            synthesizedAttributeList[rosettaTraversalIndex(
+                                         E_SgRangeExp::SgRangeExp_end)]
+                .newValueExp;
         SgExpression *stride_exp_value =
-            synthesizedAttributeList[SgRangeExp_stride].newValueExp;
+            synthesizedAttributeList[rosettaTraversalIndex(
+                                         E_SgRangeExp::SgRangeExp_stride)]
+                .newValueExp;
 
         if (start_exp_value != NULL)
           replaceExpressionWithDeferredDelete(r_exp->get_start(),
@@ -775,8 +791,8 @@ ConstantUnFoldingTraversal::evaluateSynthesizedAttribute(
         int value = intValueExp->get_value();
         SgIntVal *lhsIntValue = SageBuilder::buildIntVal(1);
         SgIntVal *rhsIntValue = SageBuilder::buildIntVal(value - 1);
-        returnAttribute.newExp =
-            SageBuilder::buildAddOp(lhsIntValue, rhsIntValue);
+        returnAttribute.newExp = SageBuilder::buildAddOp(
+            lhsIntValue, rhsIntValue, SageBuilder::buildIntType());
         printf("Found constant = %d and built a constant expression (%d+%d) \n",
                value, lhsIntValue->get_value(), rhsIntValue->get_value());
       } else {
@@ -804,9 +820,13 @@ ConstantUnFoldingTraversal::evaluateSynthesizedAttribute(
     // where we would expect to find the values propagated up from and constant
     // operands or values folded from constant expressions.
     SgExpression *lhsSynthesizedValue =
-        synthesizedAttributeList[SgBinaryOp_lhs_operand_i].newExp;
+        synthesizedAttributeList[rosettaTraversalIndex(
+                                     E_SgBinaryOp::SgBinaryOp_lhs_operand_i)]
+            .newExp;
     SgExpression *rhsSynthesizedValue =
-        synthesizedAttributeList[SgBinaryOp_rhs_operand_i].newExp;
+        synthesizedAttributeList[rosettaTraversalIndex(
+                                     E_SgBinaryOp::SgBinaryOp_rhs_operand_i)]
+            .newExp;
 
     // Replace the lhs and/or rhs if generated at a child node in the AST
     // traversal

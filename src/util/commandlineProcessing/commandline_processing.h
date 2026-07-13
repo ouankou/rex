@@ -208,6 +208,59 @@ removeAllFileNamesExcept(std::vector<std::string> &argv,
                          Rose_STL_Container<std::string> filenameList,
                          std::string exceptFilename);
 
+/** Exact language family selected by Clang's ordered `-x` driver state. */
+enum class ClangLanguageFamily {
+  Suffix,
+  C,
+  Cxx,
+  Cuda,
+  OpenCL,
+};
+
+/** Language state active at one exact driver input operand.
+ *
+ * `driverName` is empty for suffix-driven input and otherwise contains the
+ * exact Clang language name to pass after `-x`.  The REX spelling `opencl` is
+ * canonicalized to Clang's `cl` spelling.
+ */
+struct ClangLanguageSelection {
+  ClangLanguageFamily family = ClangLanguageFamily::Suffix;
+  std::string driverName;
+
+  bool isExplicit() const { return family != ClangLanguageFamily::Suffix; }
+};
+
+/** Validate every split or joined Clang `-x` option in argument order. */
+ROSE_DLL_API void
+validateClangLanguageOptions(const std::vector<std::string> &argv);
+
+/** Return the ordered `-x` state active at one exact source operand.
+ *
+ * The source must occur exactly once as a positional driver input.  Option
+ * operands with the same spelling do not count as source occurrences.
+ */
+ROSE_DLL_API ClangLanguageSelection clangLanguageSelectionForSource(
+    const std::vector<std::string> &argv, const std::string &source);
+
+/** Return the exact Clang driver language selected by a supported suffix.
+ *
+ * The result is explicit for every suffix-driven C, C++, CUDA, or OpenCL
+ * source accepted by REX. Unsupported or suffixless inputs are hard errors.
+ */
+ROSE_DLL_API ClangLanguageSelection
+clangLanguageSelectionForSuffix(const std::string &source);
+
+/** Build a per-translation-unit argv without changing ordered option state.
+ *
+ * Only positional source operands other than `source` are removed.  In
+ * particular, option operands, linker inputs, `--`, and all ordered `-x`
+ * switches are retained exactly.
+ */
+ROSE_DLL_API std::vector<std::string>
+sliceCommandLineForSource(const std::vector<std::string> &argv,
+                          const Rose_STL_Container<std::string> &sourceFiles,
+                          const std::string &source);
+
 /** Build a string from the argList.
  *
  * @param argList Argument list.
@@ -226,6 +279,22 @@ generateStringFromArgList(Rose_STL_Container<std::string> argList,
 ROSE_DLL_API Rose_STL_Container<std::string>
 generateSourceFilenames(Rose_STL_Container<std::string> argList,
                         bool binaryMode);
+
+/** Enforce the final per-translation-unit backend compile contract.
+ *
+ * The command must be compile-only, contain exactly one source operand (the
+ * expected source), and contain exactly one structurally valid `-o OUTPUT`
+ * pair.  Values owned by options such as `-include` are not source operands,
+ * even when their suffix looks like source code.
+ *
+ * Violations are internal compiler errors and abort immediately.
+ *
+ * @param argList Final backend command, including the compiler executable.
+ * @param expectedSource Exact source operand owned by this translation unit.
+ */
+ROSE_DLL_API void validateBackendCompileOnlyCommandLine(
+    const Rose_STL_Container<std::string> &argList,
+    const std::string &expectedSource);
 
 // DQ and PC (6/1/2006): Added Peter's suggested fixes to support
 // auto-documentation.

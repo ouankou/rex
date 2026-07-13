@@ -344,6 +344,269 @@ string mangleLocalScopeToString(const SgScopeStatement *scope) {
   return mangled_name.str();
 }
 
+namespace {
+
+string encodeMangledIdentityComponent(const string &value) {
+  static constexpr char digits[] = "0123456789abcdef";
+  string encoded;
+  encoded.reserve(value.size() * 2);
+  for (unsigned char character : value) {
+    encoded.push_back(digits[character >> 4]);
+    encoded.push_back(digits[character & 0x0f]);
+  }
+  return encoded;
+}
+
+string
+mangleFortranProcedureScopeToString(const SgFunctionDefinition *definition) {
+  ROSE_ASSERT(definition != nullptr);
+
+  const SgFunctionDeclaration *declaration = definition->get_declaration();
+  const SgProcedureHeaderStatement *procedure =
+      isSgProcedureHeaderStatement(declaration);
+  const SgProgramHeaderStatement *program =
+      isSgProgramHeaderStatement(declaration);
+  SgScopeStatement *outerScope = nullptr;
+  SgName procedureIdentity;
+
+  if (declaration == nullptr) {
+    outerScope = definition->get_construction_physical_output_owner();
+    procedureIdentity = definition->get_fortran_construction_name();
+    if (definition->get_parent() != nullptr || outerScope == nullptr ||
+        procedureIdentity.getString().empty() ||
+        definition->get_body() == nullptr ||
+        definition->get_body()->get_parent() != definition) {
+      fprintf(stderr,
+              "REX_MANGLING_INVARIANT[fortran-procedure-construction-scope]: "
+              "detached definition=%p owner=%p name='%s' has no exact "
+              "construction identity\n",
+              static_cast<const void *>(definition),
+              static_cast<void *>(outerScope),
+              procedureIdentity.getString().c_str());
+      ROSE_ABORT();
+    }
+  } else {
+    outerScope = declaration->get_scope();
+    if ((procedure == nullptr) == (program == nullptr) ||
+        definition->get_parent() != declaration ||
+        declaration->get_definition() != definition || outerScope == nullptr ||
+        definition->get_construction_physical_output_owner() != nullptr ||
+        !definition->get_fortran_construction_name().getString().empty()) {
+      fprintf(stderr,
+              "REX_MANGLING_INVARIANT[fortran-program-unit-scope]: "
+              "definition=%p declaration=%p/%s owner=%p retained a malformed "
+              "program-unit or construction identity\n",
+              static_cast<const void *>(definition),
+              static_cast<const void *>(declaration),
+              declaration->class_name().c_str(),
+              static_cast<void *>(
+                  definition->get_construction_physical_output_owner()));
+      ROSE_ABORT();
+    }
+    procedureIdentity =
+        SageInterface::getFortranProgramUnitSymbolTableKey(declaration);
+  }
+
+  Sg_File_Info *start = definition->get_startOfConstruct();
+  Sg_File_Info *end = definition->get_endOfConstruct();
+  const bool commonSourceIdentityValid =
+      !procedureIdentity.getString().empty() && start != nullptr &&
+      end != nullptr && start != end && definition->get_file_info() == start &&
+      start->get_parent() == definition && end->get_parent() == definition &&
+      start->get_physical_file_id() >= 0 &&
+      end->get_physical_file_id() == start->get_physical_file_id() &&
+      !start->get_physical_filename().empty() &&
+      end->get_physical_filename() == start->get_physical_filename() &&
+      !start->isShared() && !end->isShared();
+  const bool generatedDefinition = commonSourceIdentityValid &&
+                                   start->isTransformation() &&
+                                   end->isTransformation();
+  const bool generatedIdentityValid =
+      generatedDefinition && procedure != nullptr &&
+      procedure->get_fortran_procedure_source_form() ==
+          SgProcedureHeaderStatement::e_fortran_procedure_source_form_header &&
+      start->isOutputInCodeGeneration() && end->isOutputInCodeGeneration() &&
+      !start->isCompilerGenerated() && !end->isCompilerGenerated();
+  const bool sourceIdentityValid =
+      commonSourceIdentityValid && !start->isTransformation() &&
+      !end->isTransformation() && !start->isCompilerGenerated() &&
+      !end->isCompilerGenerated() && start->get_line() > 0 &&
+      start->get_col() > 0;
+  if (!generatedIdentityValid && !sourceIdentityValid) {
+    fprintf(stderr,
+            "REX_MANGLING_INVARIANT[fortran-program-unit-scope-source]: "
+            "definition=%p name='%s' start=%p end=%p start-class=%u "
+            "end-class=%u physical=%d/%d line=%d:%d has no exact owned "
+            "source or generated-output identity\n",
+            static_cast<const void *>(definition),
+            procedureIdentity.getString().c_str(), static_cast<void *>(start),
+            static_cast<void *>(end),
+            start != nullptr ? start->get_classificationBitField() : 0,
+            end != nullptr ? end->get_classificationBitField() : 0,
+            start != nullptr ? start->get_physical_file_id()
+                             : Sg_File_Info::BAD_FILE_ID,
+            end != nullptr ? end->get_physical_file_id()
+                           : Sg_File_Info::BAD_FILE_ID,
+            start != nullptr ? start->get_line() : 0,
+            start != nullptr ? start->get_col() : 0);
+    ROSE_ABORT();
+  }
+
+  ostringstream localIdentity;
+  localIdentity << "__fortran_program_unit_scope__"
+                << encodeMangledIdentityComponent(procedureIdentity.getString())
+                << "__file__"
+                << encodeMangledIdentityComponent(
+                       start->get_physical_filename())
+                << (generatedDefinition ? "__generated__" : "__line__");
+  if (!generatedDefinition) {
+    localIdentity << start->get_line() << "__column__" << start->get_col();
+  }
+  return joinMangledQualifiersToString(mangleQualifiersToString(outerScope),
+                                       localIdentity.str());
+}
+
+bool functionNameRequiresReturnTypeIdentity(const string &name) {
+  static const string operatorPrefix = "operator";
+  if (name.size() <= operatorPrefix.size() ||
+      name.compare(0, operatorPrefix.size(), operatorPrefix) != 0 ||
+      !isspace(static_cast<unsigned char>(name[operatorPrefix.size()]))) {
+    return false;
+  }
+
+  const string suffix = trimSpaces(name.substr(operatorPrefix.size()));
+  return suffix != "new" && suffix != "new[]" && suffix != "delete" &&
+         suffix != "delete[]";
+}
+
+string mangleFunctionScopeToString(const SgFunctionDefinition *definition) {
+  ROSE_ASSERT(definition != nullptr);
+
+  const SgFunctionDeclaration *declaration = definition->get_declaration();
+  const SgFunctionType *functionType =
+      declaration != nullptr ? declaration->get_type() : nullptr;
+  const SgFunctionParameterTypeList *parameterTypes =
+      functionType != nullptr ? functionType->get_argument_list() : nullptr;
+  SgScopeStatement *outerScope =
+      declaration != nullptr ? declaration->get_scope() : nullptr;
+  if (declaration == nullptr || declaration->get_definition() != definition ||
+      definition->get_parent() != declaration ||
+      definition->get_body() == nullptr ||
+      definition->get_body()->get_parent() != definition ||
+      functionType == nullptr || parameterTypes == nullptr ||
+      outerScope == nullptr || declaration->get_name().getString().empty()) {
+    fprintf(
+        stderr,
+        "REX_MANGLING_INVARIANT[function-scope]: definition=%p "
+        "declaration=%p/%s definition-link=%p body=%p type=%p "
+        "parameters=%p outer-scope=%p name='%s' has no exact semantic "
+        "scope identity\n",
+        static_cast<const void *>(definition),
+        static_cast<const void *>(declaration),
+        declaration != nullptr ? declaration->class_name().c_str() : "<null>",
+        static_cast<const void *>(
+            declaration != nullptr ? declaration->get_definition() : nullptr),
+        static_cast<void *>(definition->get_body()),
+        static_cast<const void *>(functionType),
+        static_cast<const void *>(parameterTypes),
+        static_cast<void *>(outerScope),
+        declaration != nullptr ? declaration->get_name().getString().c_str()
+                               : "");
+    ROSE_ABORT();
+  }
+
+  string returnTypeIdentity;
+  if (functionNameRequiresReturnTypeIdentity(
+          declaration->get_name().getString())) {
+    SgType *returnType = declaration->get_orig_return_type();
+    if (returnType == nullptr) {
+      fprintf(stderr,
+              "REX_MANGLING_INVARIANT[function-scope-conversion]: "
+              "definition=%p declaration=%p name='%s' has no return type\n",
+              static_cast<const void *>(definition),
+              static_cast<const void *>(declaration),
+              declaration->get_name().getString().c_str());
+      ROSE_ABORT();
+    }
+    returnTypeIdentity = returnType->get_mangled().getString();
+  }
+
+  string functionName = declaration->get_name().getString();
+  string templateIdentity;
+  if (const SgTemplateInstantiationFunctionDecl *instantiation =
+          isSgTemplateInstantiationFunctionDecl(declaration)) {
+    functionName = instantiation->get_templateName().getString();
+    templateIdentity = mangleTemplateArgsToString(
+        instantiation->get_templateArguments().begin(),
+        instantiation->get_templateArguments().end());
+  } else if (const SgTemplateInstantiationMemberFunctionDecl *instantiation =
+                 isSgTemplateInstantiationMemberFunctionDecl(declaration)) {
+    functionName = instantiation->get_templateName().getString();
+    templateIdentity = mangleTemplateArgsToString(
+        instantiation->get_templateArguments().begin(),
+        instantiation->get_templateArguments().end());
+  } else if (const SgTemplateFunctionDeclaration *functionTemplate =
+                 isSgTemplateFunctionDeclaration(declaration)) {
+    templateIdentity = mangleTemplateArgsToString(
+        functionTemplate->get_templateParameters().begin(),
+        functionTemplate->get_templateParameters().end());
+  } else if (const SgTemplateMemberFunctionDeclaration *functionTemplate =
+                 isSgTemplateMemberFunctionDeclaration(declaration)) {
+    templateIdentity = mangleTemplateArgsToString(
+        functionTemplate->get_templateParameters().begin(),
+        functionTemplate->get_templateParameters().end());
+  }
+  if (functionName.empty()) {
+    fprintf(stderr,
+            "REX_MANGLING_INVARIANT[function-scope-template-name]: "
+            "definition=%p declaration=%p/%s has no template identity\n",
+            static_cast<const void *>(definition),
+            static_cast<const void *>(declaration),
+            declaration->class_name().c_str());
+    ROSE_ABORT();
+  }
+
+  const string argumentIdentity =
+      mangleTypesToString(parameterTypes->get_arguments().begin(),
+                          parameterTypes->get_arguments().end());
+  ostringstream modifiers;
+  if (const SgMemberFunctionType *memberType =
+          isSgMemberFunctionType(functionType)) {
+    modifiers << (memberType->isConstFunc() ? "c" : "_")
+              << (memberType->isVolatileFunc() ? "v" : "_")
+              << (memberType->isRestrictFunc() ? "r" : "_")
+              << (memberType->isLvalueReferenceFunc() ? "l" : "_")
+              << (memberType->isRvalueReferenceFunc() ? "r" : "_");
+    if (memberType->isLvalueReferenceFunc() &&
+        memberType->isRvalueReferenceFunc()) {
+      fprintf(stderr,
+              "REX_MANGLING_INVARIANT[function-scope-ref-qualifier]: "
+              "definition=%p declaration=%p has both reference qualifiers\n",
+              static_cast<const void *>(definition),
+              static_cast<const void *>(declaration));
+      ROSE_ABORT();
+    }
+  } else {
+    modifiers << "_____";
+  }
+
+  ostringstream localIdentity;
+  localIdentity << "__function_scope_name__"
+                << encodeMangledIdentityComponent(mangleFunctionNameToString(
+                       functionName, returnTypeIdentity))
+                << "__template__"
+                << encodeMangledIdentityComponent(templateIdentity)
+                << "__arguments__"
+                << encodeMangledIdentityComponent(argumentIdentity)
+                << "__modifiers__" << modifiers.str() << "__translation_unit__"
+                << encodeMangledIdentityComponent(
+                       mangleTranslationUnitQualifiers(declaration));
+  return joinMangledQualifiersToString(mangleQualifiersToString(outerScope),
+                                       localIdentity.str());
+}
+
+} // namespace
+
 string mangleQualifiersToString(const SgScopeStatement *scope) {
 
   // DQ (3/14/2012): I would like to make this assertion (part of required C++
@@ -435,30 +698,25 @@ string mangleQualifiersToString(const SgScopeStatement *scope) {
       // 'scope' is part of scope for locally defined classes
       const SgFunctionDefinition *def = isSgFunctionDefinition(scope);
       ROSE_ASSERT(def != nullptr);
-      SgFunctionDefinition *nonconst_def =
-          const_cast<SgFunctionDefinition *>(def);
-      if (MangledNameSupport::visitedFunctionDefinitions.find(nonconst_def) !=
-          MangledNameSupport::visitedFunctionDefinitions.end()) {
-        const SgFunctionDeclaration *decl = def->get_declaration();
-        if (decl != nullptr) {
-          mangled_name = decl->get_name().getString();
-        } else {
-          mangled_name = "function";
-        }
-        mangled_name += "_" + Rose::StringUtility::numberToString(
-                                  reinterpret_cast<size_t>(def));
+      if (isSgProcedureHeaderStatement(def->get_declaration()) != nullptr ||
+          isSgProgramHeaderStatement(def->get_declaration()) != nullptr ||
+          (def->get_declaration() == nullptr &&
+           !def->get_fortran_construction_name().getString().empty())) {
+        mangled_name = mangleFortranProcedureScopeToString(def);
         break;
       }
-      MangledNameSupport::visitedFunctionDefinitions.insert(nonconst_def);
-      mangled_name = def->get_mangled_name().getString();
-      MangledNameSupport::visitedFunctionDefinitions.erase(nonconst_def);
+      mangled_name = mangleFunctionScopeToString(def);
       break;
     }
 
     case V_SgRangeBasedForStatement:
+    case V_SgAssociateStatement:
+    case V_SgCAFWithTeamStatement:
     case V_SgCatchOptionStmt:
     case V_SgDoWhileStmt:
+    case V_SgForAllStatement:
     case V_SgForStatement:
+    case V_SgFortranDo:
     case V_SgIfStmt:
     case V_SgSwitchStatement:
     case V_SgWhileStmt:
@@ -495,41 +753,13 @@ string mangleQualifiersToString(const SgScopeStatement *scope) {
 
       // DQ (3/14/2012): I think that defaults should be resurced for errors,
       // and not proper handling of unexpected cases.
-    default: // Embed the class name for subsequent debugging.
-    {
-      // DQ (7/24/2017): I think it is a mistake to supress this comment.
-      printf("WARNING: In mangleQualifiersToString(const SgScopeStatement*): "
-             "case of scope = %p = %s not handled (default reached) \n",
-             scope, scope->class_name().c_str());
-
-      // DQ (1/12/13): Assert that this is not a previously deleted IR node
-      // (which will have the name = "SgNode").
-      ROSE_ASSERT(scope->class_name() != "SgNode");
-
-      // DQ (1/12/13): Added assertion.
-      ROSE_ASSERT(scope->get_scope() != NULL);
-
-      // Surrounding scope name
-      string par_scope_name = mangleQualifiersToString(scope->get_scope());
-
-      // Compute a local scope name
-      //! \todo Compute local scope names correctly (consistently).
-      ostringstream scope_name;
-
-      scope_name << scope->class_name();
-
-      // DQ (3/15/2016): Only reformatted this code below.
-      AstRegExAttribute *attribute =
-          (AstRegExAttribute *)scope->getAttribute("name");
-      if (attribute != NULL) {
-        scope_name << "_" << attribute->expression;
-      }
-
-      // Build full name
-      mangled_name =
-          joinMangledQualifiersToString(par_scope_name, scope_name.str());
-      break;
-    }
+    default:
+      fprintf(stderr,
+              "REX_MANGLING_INVARIANT[unsupported-scope]: scope=%p type=%s "
+              "semantic-parent=%p has no typed mangling rule\n",
+              static_cast<const void *>(scope), scope->class_name().c_str(),
+              static_cast<const void *>(scope->get_scope()));
+      ROSE_ABORT();
     }
   }
 
@@ -574,8 +804,30 @@ SgName mangleQualifiers(const SgScopeStatement *scope) {
   // DQ (2/17/2014): Adding debugging code (issue with new options to gnunet).
   // DQ (1/12/13): Added assertion.
   if (scope->get_scope() == NULL) {
-    // DQ (2/17/2014): In this case there is no mangled name.
-    return SgName("");
+    if (isSgGlobal(scope) != NULL) {
+      return SgName("");
+    }
+    fprintf(stderr,
+            "REX_MANGLING_INVARIANT[detached-scope]: scope=%p type=%s has no "
+            "semantic enclosing scope\n",
+            static_cast<const void *>(scope), scope->class_name().c_str());
+    const SgNode *ancestor = scope;
+    for (size_t depth = 0; ancestor != NULL && depth < 16; ++depth) {
+      const SgLocatedNode *located = isSgLocatedNode(ancestor);
+      const Sg_File_Info *info =
+          located != NULL ? located->get_file_info() : NULL;
+      fprintf(stderr,
+              "REX_MANGLING_INVARIANT[detached-scope-owner]: depth=%zu "
+              "node=%p/%s parent=%p source=(%d:%d:%d)\n",
+              depth, static_cast<const void *>(ancestor),
+              ancestor->class_name().c_str(),
+              static_cast<const void *>(ancestor->get_parent()),
+              info != NULL ? info->get_physical_file_id() : -1,
+              info != NULL ? info->get_line() : -1,
+              info != NULL ? info->get_col() : -1);
+      ancestor = ancestor->get_parent();
+    }
+    ROSE_ABORT();
   }
   ROSE_ASSERT(scope->get_scope() != NULL);
 
@@ -789,9 +1041,9 @@ mangleTemplateArgsToString(const SgTemplateArgumentPtrList::const_iterator b,
   return mangled_name.str();
 }
 
-string mangleTemplateParamsToString(
-    const SgTemplateParameterPtrList::const_iterator b,
-    const SgTemplateParameterPtrList::const_iterator e) {
+string
+mangleTemplateArgsToString(const SgTemplateParameterPtrList::const_iterator b,
+                           const SgTemplateParameterPtrList::const_iterator e) {
   ostringstream mangled_name;
   bool is_first = true;
 
@@ -814,10 +1066,13 @@ string mangleTemplateParamsToString(
 string mangleTemplateToString(const string &templ_name,
                               const SgTemplateArgumentPtrList &templ_args,
                               const SgScopeStatement *scope) {
-  // Mangle all the template arguments
-
-  // DQ (10/29/2015): Added assertion.
-  // ROSE_ASSERT(scope != NULL);
+  if (templ_name.empty() || scope == NULL) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[mangle-template-arguments]: template name or "
+            "semantic scope is missing (name=%s scope=%p)\n",
+            templ_name.c_str(), static_cast<const void *>(scope));
+    ROSE_ABORT();
+  }
 
   string args_mangled;
   if (templ_args.empty() == true) {
@@ -828,12 +1083,7 @@ string mangleTemplateToString(const string &templ_name,
   }
 
   // Compute the name qualification, if any.
-  string scope_name;
-  if (scope == NULL) {
-    scope_name = "unknown_scope";
-  } else {
-    scope_name = mangleQualifiersToString(scope);
-  }
+  string scope_name = mangleQualifiersToString(scope);
 
   string mangled_template_name = normalizeNameForMangledNameSupport(templ_name);
 
@@ -841,8 +1091,12 @@ string mangleTemplateToString(const string &templ_name,
   string mangled_name =
       joinMangledQualifiersToString(scope_name, mangled_template_name);
 
-  if (mangled_name.empty() == true) {
-    mangled_name = "unknown_template_name";
+  if (mangled_name.empty()) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[mangle-template-arguments]: nonempty template "
+            "name=%s and scope=%p produced an empty identity\n",
+            templ_name.c_str(), static_cast<const void *>(scope));
+    ROSE_ABORT();
   }
 
   mangled_name += "__tas__" + args_mangled + "__tae__";
@@ -856,26 +1110,24 @@ string mangleTemplateToString(const string &templ_name,
 string mangleTemplateToString(const string &templ_name,
                               const SgTemplateParameterPtrList &templ_params,
                               const SgScopeStatement *scope) {
-  // Mangle all the template parameters
-
-  // DQ (10/29/2015): Added assertion.
-  // ROSE_ASSERT(scope != NULL);
+  if (templ_name.empty() || scope == NULL) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[mangle-template-parameters]: template name or "
+            "semantic scope is missing (name=%s scope=%p)\n",
+            templ_name.c_str(), static_cast<const void *>(scope));
+    ROSE_ABORT();
+  }
 
   string params_mangled;
   if (templ_params.empty() == true) {
-    params_mangled = "unknown_param";
+    params_mangled = "no_templ_params";
   } else {
     params_mangled =
-        mangleTemplateParamsToString(templ_params.begin(), templ_params.end());
+        mangleTemplateArgsToString(templ_params.begin(), templ_params.end());
   }
 
   // Compute the name qualification, if any.
-  string scope_name;
-  if (scope == NULL) {
-    scope_name = "unknown_scope";
-  } else {
-    scope_name = mangleQualifiersToString(scope);
-  }
+  string scope_name = mangleQualifiersToString(scope);
 
   string mangled_template_name = normalizeNameForMangledNameSupport(templ_name);
 
@@ -883,8 +1135,12 @@ string mangleTemplateToString(const string &templ_name,
   string mangled_name =
       joinMangledQualifiersToString(scope_name, mangled_template_name);
 
-  if (mangled_name.empty() == true) {
-    mangled_name = "unknown_template_name";
+  if (mangled_name.empty()) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[mangle-template-parameters]: nonempty template "
+            "name=%s and scope=%p produced an empty identity\n",
+            templ_name.c_str(), static_cast<const void *>(scope));
+    ROSE_ABORT();
   }
 
   mangled_name += "__tps__" + params_mangled + "__tpe__";
@@ -1065,11 +1321,31 @@ string mangleValueExp(const SgValueExp *expr) {
   }
 
     // DQ (7/21/2012): Added support for IR node not seen previously except in
-    // new C++11 work.
+  // new C++11 work.
   case V_SgTemplateParameterVal: {
+    const SgTemplateParameterVal *parameter = isSgTemplateParameterVal(expr);
+    if (parameter == nullptr ||
+        parameter->get_template_parameter_position() < 0 ||
+        parameter->get_valueType() == nullptr) {
+      std::cerr << "REX_AST_INVARIANT[template-parameter-value-mangle]: "
+                   "template parameter value has no exact position or type"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    const SgName type_mangle = parameter->get_valueType()->get_mangled();
+    if (type_mangle.is_null()) {
+      std::cerr << "REX_AST_INVARIANT[template-parameter-value-mangle]: "
+                   "template parameter value type has no exact mangled name"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    // Parameter spelling is not semantic identity: redeclarations may rename
+    // a template parameter.  Its list position and exact type are stable and
+    // distinguish dependent values such as `auto* p` and `auto** pp`.
     mangled_name =
-        "unsupported_SgTemplateParameterVal"; // mangleSgValueExp<SgTemplateParameterVal>
-                                              // (isSgTemplateParameterVal(expr));
+        "__tpv_pos_" +
+        std::to_string(parameter->get_template_parameter_position()) +
+        "__type_" + type_mangle.getString() + "__";
     break;
   }
 
@@ -1106,6 +1382,40 @@ static void mangleBinaryOp(const SgBinaryOp *binop,
                << "_";
 }
 
+static string
+mangleReferencedFunctionDeclaration(const SgFunctionDeclaration *declaration,
+                                    const char *referenceKind) {
+  if (declaration == nullptr || referenceKind == nullptr) {
+    std::cerr << "REX_AST_INVARIANT[function-reference-mangle]: function "
+                 "reference has no exact declaration or reference kind"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  const string qualifiedName = declaration->get_qualified_name().str();
+  const SgFunctionType *type = isSgFunctionType(declaration->get_type());
+  if (qualifiedName.empty() || type == nullptr ||
+      type->get_return_type() == nullptr ||
+      type->get_argument_list() == nullptr) {
+    std::cerr << "REX_AST_INVARIANT[function-reference-mangle]: "
+              << referenceKind << " '" << declaration->get_name()
+              << "' has no exact qualified declaration identity and function "
+                 "type"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  const SgName typeIdentity = type->get_mangled();
+  if (typeIdentity.is_null() || typeIdentity.getString().empty()) {
+    std::cerr << "REX_AST_INVARIANT[function-reference-mangle]: "
+              << referenceKind << " '" << qualifiedName
+              << "' has no exact structural function-type identity"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  return "_b" + string(referenceKind) + "_name_" +
+         replaceNonAlphaNum(qualifiedName) + "__type_" +
+         typeIdentity.getString() + "_e" + referenceKind + "_";
+}
+
 string mangleExpression(const SgExpression *expr) {
   ostringstream mangled_name;
   ROSE_ASSERT(expr != NULL);
@@ -1121,12 +1431,59 @@ string mangleExpression(const SgExpression *expr) {
       ROSE_ASSERT(vsym != NULL);
       SgInitializedName *iname = vsym->get_declaration();
       ROSE_ASSERT(iname != NULL);
+      SgFunctionParameterScope *parameterScope =
+          isSgFunctionParameterScope(iname->get_scope());
+      SgRequiresExpr *requiresExpression =
+          parameterScope != NULL
+              ? isSgRequiresExpr(parameterScope->get_parent())
+              : NULL;
+      if (requiresExpression != NULL) {
+        SgFunctionParameterList *parameters =
+            requiresExpression->get_local_parameter_list();
+        if (requiresExpression->get_local_parameter_scope() != parameterScope ||
+            parameters == NULL ||
+            parameters->get_parent() != requiresExpression ||
+            iname->get_type() == NULL) {
+          std::cerr << "REX_AST_INVARIANT[requires-local-reference-mangle]: "
+                       "requires local variable '"
+                    << iname->get_name()
+                    << "' has no exact parameter scope, list, or type"
+                    << std::endl;
+          ROSE_ABORT();
+        }
+        const SgInitializedNamePtrList &parameterList = parameters->get_args();
+        const SgInitializedNamePtrList::const_iterator position =
+            std::find(parameterList.begin(), parameterList.end(), iname);
+        if (position == parameterList.end() ||
+            std::find(std::next(position), parameterList.end(), iname) !=
+                parameterList.end()) {
+          std::cerr << "REX_AST_INVARIANT[requires-local-reference-mangle]: "
+                       "requires local variable '"
+                    << iname->get_name()
+                    << "' is not owned at one exact parameter-list position"
+                    << std::endl;
+          ROSE_ABORT();
+        }
+        // A requires-expression local parameter is a bound variable.  Its
+        // spelling and enclosing declaration's output qualification are not
+        // semantic identity; independently owned copies are alpha-equivalent
+        // when the parameter position and exact type agree.
+        mangled_name << "__requires_local_pos_"
+                     << std::distance(parameterList.begin(), position)
+                     << "__type_" << iname->get_type()->get_mangled().str()
+                     << "__";
+        break;
+      }
       // Avoid recursive mangling when dependent decltype expressions reference
       // function parameters whose mangled names depend on the enclosing
       // function declaration.
       std::string variable_name = iname->get_qualified_name().str();
       if (variable_name.empty()) {
-        variable_name = iname->get_name().str();
+        std::cerr << "REX_AST_INVARIANT[variable-reference-mangle]: variable '"
+                  << iname->get_name()
+                  << "' has no exact qualified declaration identity"
+                  << std::endl;
+        ROSE_ABORT();
       }
       mangled_name << replaceNonAlphaNum(variable_name);
       break;
@@ -1136,8 +1493,8 @@ string mangleExpression(const SgExpression *expr) {
       SgFunctionSymbol *fsym = e->get_symbol_i();
       ROSE_ASSERT(fsym != NULL);
       SgFunctionDeclaration *fdecl = fsym->get_declaration();
-      ROSE_ASSERT(fdecl != NULL);
-      mangled_name << fdecl->get_mangled_name().str();
+      mangled_name << mangleReferencedFunctionDeclaration(fdecl,
+                                                          "FunctionRefExp");
       break;
     }
     case V_SgTemplateFunctionRefExp: {
@@ -1145,8 +1502,8 @@ string mangleExpression(const SgExpression *expr) {
       SgTemplateFunctionSymbol *fsym = e->get_symbol_i();
       ROSE_ASSERT(fsym != NULL);
       SgFunctionDeclaration *fdecl = fsym->get_declaration();
-      ROSE_ASSERT(fdecl != NULL);
-      mangled_name << fdecl->get_mangled_name().str();
+      mangled_name << mangleReferencedFunctionDeclaration(
+          fdecl, "TemplateFunctionRefExp");
       break;
     }
     case V_SgMemberFunctionRefExp: {
@@ -1154,8 +1511,8 @@ string mangleExpression(const SgExpression *expr) {
       SgMemberFunctionSymbol *fsym = e->get_symbol_i();
       ROSE_ASSERT(fsym != NULL);
       SgMemberFunctionDeclaration *fdecl = fsym->get_declaration();
-      ROSE_ASSERT(fdecl != NULL);
-      mangled_name << fdecl->get_mangled_name().str();
+      mangled_name << mangleReferencedFunctionDeclaration(
+          fdecl, "MemberFunctionRefExp");
       break;
     }
     case V_SgTemplateMemberFunctionRefExp: {
@@ -1164,8 +1521,8 @@ string mangleExpression(const SgExpression *expr) {
       SgTemplateMemberFunctionSymbol *fsym = e->get_symbol_i();
       ROSE_ASSERT(fsym != NULL);
       SgMemberFunctionDeclaration *fdecl = fsym->get_declaration();
-      ROSE_ASSERT(fdecl != NULL);
-      mangled_name << fdecl->get_mangled_name().str();
+      mangled_name << mangleReferencedFunctionDeclaration(
+          fdecl, "TemplateMemberFunctionRefExp");
       break;
     }
     case V_SgNonrealRefExp: {
@@ -1174,20 +1531,37 @@ string mangleExpression(const SgExpression *expr) {
       ROSE_ASSERT(nrsym != NULL);
       SgNonrealDecl *nrdecl = nrsym->get_declaration();
       ROSE_ASSERT(nrdecl != NULL);
-      nrdecl->get_is_nonreal_template(); // FIXME TMP Reference to get as it is
-                                         // not visible in the lib!!!
       mangled_name << nrdecl->get_mangled_name().str();
+      const SgTemplateArgumentPtrList &templateArguments =
+          nrref->get_templateArguments();
+      if (!templateArguments.empty()) {
+        mangled_name << "__bNonrealTemplateArguments_"
+                     << mangleTemplateArgsToString(templateArguments.begin(),
+                                                   templateArguments.end())
+                     << "_eNonrealTemplateArguments__";
+      }
       break;
     }
 
     case V_SgCastExp: {
       const SgCastExp *cast = isSgCastExp(expr);
       ROSE_ASSERT(cast != NULL);
+      cast->validate_semantic_conversion();
       SgExpression *op = cast->get_operand_i();
       ROSE_ASSERT(op != NULL);
       SgType *cast_type = cast->get_type();
       ROSE_ASSERT(cast_type != NULL);
-      mangled_name << "_bCastExp_" << mangleExpression(op) << "_totype_"
+      mangled_name << "_bCastExp_surface_"
+                   << static_cast<int>(cast->get_cast_type()) << "_semantic_"
+                   << static_cast<int>(cast->get_semantic_conversion_kind())
+                   << "_category_"
+                   << static_cast<int>(cast->get_value_category())
+                   << "_base_path_";
+      for (SgType *base : cast->get_conversion_base_path()) {
+        ROSE_ASSERT(base != nullptr);
+        mangled_name << base->get_mangled().str() << "_step_";
+      }
+      mangled_name << "_operand_" << mangleExpression(op) << "_totype_"
                    << cast_type->get_mangled().str() << "_eCastExp_";
       break;
     }
@@ -1327,6 +1701,111 @@ string mangleExpression(const SgExpression *expr) {
                    << "_eNoexceptOp_";
       break;
     }
+    case V_SgSimpleRequirement: {
+      const SgSimpleRequirement *requirement = isSgSimpleRequirement(expr);
+      if (requirement == NULL || requirement->get_expression() == NULL) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[mangle-simple-requirement]: malformed "
+                "simple requirement=%p\n",
+                static_cast<const void *>(requirement));
+        ROSE_ABORT();
+      }
+      mangled_name << "_bSimpleRequirement_"
+                   << mangleExpression(requirement->get_expression())
+                   << "_eSimpleRequirement_";
+      break;
+    }
+    case V_SgTypeRequirement: {
+      const SgTypeRequirement *requirement = isSgTypeRequirement(expr);
+      if (requirement == NULL || requirement->get_required_type() == NULL) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[mangle-type-requirement]: malformed type "
+                "requirement=%p\n",
+                static_cast<const void *>(requirement));
+        ROSE_ABORT();
+      }
+      mangled_name << "_bTypeRequirement_"
+                   << requirement->get_required_type()->get_mangled().str()
+                   << "_eTypeRequirement_";
+      break;
+    }
+    case V_SgCompoundRequirement: {
+      const SgCompoundRequirement *requirement = isSgCompoundRequirement(expr);
+      if (requirement == NULL || requirement->get_expression() == NULL) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[mangle-compound-requirement]: malformed "
+                "compound requirement=%p\n",
+                static_cast<const void *>(requirement));
+        ROSE_ABORT();
+      }
+      mangled_name << "_bCompoundRequirement_"
+                   << mangleExpression(requirement->get_expression())
+                   << (requirement->get_noexcept_required() ? "_noexcept_"
+                                                            : "_maythrow_");
+      if (requirement->get_type_constraint() != NULL) {
+        mangled_name << "_typeConstraint_"
+                     << mangleExpression(requirement->get_type_constraint());
+      } else {
+        mangled_name << "_noTypeConstraint_";
+      }
+      mangled_name << "_eCompoundRequirement_";
+      break;
+    }
+    case V_SgNestedRequirement: {
+      const SgNestedRequirement *requirement = isSgNestedRequirement(expr);
+      if (requirement == NULL || requirement->get_constraint() == NULL) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[mangle-nested-requirement]: malformed "
+                "nested requirement=%p\n",
+                static_cast<const void *>(requirement));
+        ROSE_ABORT();
+      }
+      mangled_name << "_bNestedRequirement_"
+                   << mangleExpression(requirement->get_constraint())
+                   << "_eNestedRequirement_";
+      break;
+    }
+    case V_SgRequiresExpr: {
+      const SgRequiresExpr *requiresExpression = isSgRequiresExpr(expr);
+      if (requiresExpression == NULL ||
+          requiresExpression->get_requirements() == NULL ||
+          requiresExpression->get_requirements()->get_expressions().empty()) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[mangle-requires-expression]: malformed "
+                "requires expression=%p\n",
+                static_cast<const void *>(requiresExpression));
+        ROSE_ABORT();
+      }
+
+      mangled_name << "_bRequiresExpression_";
+      if (const SgFunctionParameterList *parameters =
+              requiresExpression->get_local_parameter_list()) {
+        mangled_name << "_bLocalParameters_";
+        const SgInitializedNamePtrList &parameterList = parameters->get_args();
+        for (SgInitializedNamePtrList::const_iterator i = parameterList.begin();
+             i != parameterList.end(); ++i) {
+          if (i != parameterList.begin()) {
+            mangled_name << "__sep__";
+          }
+          const SgInitializedName *parameter = *i;
+          if (parameter == NULL || parameter->get_type() == NULL) {
+            fprintf(stderr,
+                    "REX_AST_INVARIANT[mangle-requires-parameter]: requires "
+                    "expression=%p has malformed local parameter\n",
+                    static_cast<const void *>(requiresExpression));
+            ROSE_ABORT();
+          }
+          mangled_name << parameter->get_type()->get_mangled().str() << "_"
+                       << replaceNonAlphaNum(parameter->get_name().str());
+        }
+        mangled_name << "_eLocalParameters_";
+      } else {
+        mangled_name << "_noLocalParameters_";
+      }
+      mangled_name << mangleExpression(requiresExpression->get_requirements())
+                   << "_eRequiresExpression_";
+      break;
+    }
     case V_SgSizeOfOp: {
       const SgSizeOfOp *e = isSgSizeOfOp(expr);
       mangled_name << "_bSizeOfOp_";
@@ -1358,10 +1837,15 @@ string mangleExpression(const SgExpression *expr) {
 
     case V_SgConditionalExp: {
       const SgConditionalExp *e = isSgConditionalExp(expr);
+      e->validate();
       mangled_name << "_bConditionalExp_";
+      mangled_name << static_cast<int>(e->get_operator_kind()) << "__";
       mangled_name << mangleExpression(e->get_conditional_exp());
-      mangled_name << "__";
-      mangled_name << mangleExpression(e->get_true_exp());
+      if (e->get_operator_kind() ==
+          SgConditionalExp::e_conditional_operator_standard) {
+        mangled_name << "__";
+        mangled_name << mangleExpression(e->get_true_exp());
+      }
       mangled_name << "__";
       mangled_name << mangleExpression(e->get_false_exp());
       mangled_name << "_eConditionalExp_";
@@ -1378,16 +1862,35 @@ string mangleExpression(const SgExpression *expr) {
     }
     case V_SgConstructorInitializer: {
       const SgConstructorInitializer *e = isSgConstructorInitializer(expr);
-      ROSE_ASSERT(e != NULL);
+      SgType *type = e != nullptr ? e->get_type() : nullptr;
+      SgExprListExp *arguments = e != nullptr ? e->get_args() : nullptr;
+      if (e == nullptr || type == nullptr || isSgTypeUnknown(type) != nullptr ||
+          isSgTypeDefault(type) != nullptr ||
+          (arguments != nullptr && arguments->get_parent() != e)) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[constructor-initializer-mangle]: "
+                "initializer=%p type=%p arguments=%p parent=%p is malformed\n",
+                static_cast<const void *>(e), static_cast<void *>(type),
+                static_cast<void *>(arguments),
+                static_cast<void *>(
+                    arguments != nullptr ? arguments->get_parent() : nullptr));
+        ROSE_ABORT();
+      }
 
       mangled_name << "_bConstructorInitializer_";
-
-      mangled_name << e->get_type()->get_mangled().getString();
-
-      mangleExpression(e->get_args());
-
+      mangled_name << "_type_" << type->get_mangled().getString();
+      mangled_name << "_arguments_"
+                   << (arguments != nullptr ? mangleExpression(arguments)
+                                            : "_noArguments_");
+      if (SgMemberFunctionDeclaration *declaration = e->get_declaration()) {
+        mangled_name << "_constructor_"
+                     << mangleReferencedFunctionDeclaration(
+                            declaration, "ConstructorInitializerDeclaration");
+      } else {
+        mangled_name << "_noConstructorDeclaration_";
+      }
+      mangled_name << "_braced_" << (e->get_is_braced_initialized() ? 1 : 0);
       mangled_name << "_eConstructorInitializer_";
-
       break;
     }
     case V_SgPntrArrRefExp: {
@@ -1402,24 +1905,58 @@ string mangleExpression(const SgExpression *expr) {
       const SgTypeTraitBuiltinOperator *e = isSgTypeTraitBuiltinOperator(expr);
       mangled_name << "_bTypeTraitBuiltinOperator_"
                    << e->get_name().getString();
-      mangled_name << "_bNodePtrList_";
-      SgNodePtrList::const_iterator it;
-      const SgNodePtrList &args = e->get_args();
+      mangled_name << "_bExpressionPtrList_";
+      SgExpressionPtrList::const_iterator it;
+      const SgExpressionPtrList &args = e->get_args();
       for (it = args.begin(); it != args.end(); it++) {
         if (it != args.begin())
           mangled_name << "__sep__";
-        SgType *tit = isSgType(*it);
-        SgExpression *eit = isSgExpression(*it);
-        if (tit != NULL) {
-          mangled_name << tit->get_mangled().getString();
+        SgTypeExpression *type_operand = isSgTypeExpression(*it);
+        SgExpression *eit = *it;
+        if (type_operand != nullptr) {
+          SgType *represented_type = type_operand->get_represented_type();
+          if (represented_type == nullptr ||
+              isSgTypeUnknown(represented_type) != nullptr ||
+              isSgTypeDefault(represented_type) != nullptr ||
+              type_operand->get_parent() != e) {
+            fprintf(stderr,
+                    "REX_AST_INVARIANT[type-trait-mangling]: builtin=%p "
+                    "contains a malformed typed operand occurrence\n",
+                    static_cast<const void *>(e));
+            ROSE_ABORT();
+          }
+          mangled_name << "_bTypeOperand_"
+                       << represented_type->get_mangled().getString()
+                       << "_eTypeOperand_";
         } else if (eit != NULL) {
           mangled_name << mangleExpression(eit);
         } else {
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[type-trait-mangling]: builtin=%p "
+                  "contains a raw type or non-expression argument\n",
+                  static_cast<const void *>(e));
           ROSE_ABORT();
         }
       }
-      mangled_name << "_eNodePtrList_";
+      mangled_name << "_eExpressionPtrList_";
       mangled_name << "_eTypeTraitBuiltinOperator_";
+      break;
+    }
+    case V_SgTypeExpression: {
+      const SgTypeExpression *type_expression = isSgTypeExpression(expr);
+      SgType *represented_type = type_expression->get_represented_type();
+      if (represented_type == nullptr ||
+          isSgTypeUnknown(represented_type) != nullptr ||
+          isSgTypeDefault(represented_type) != nullptr) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[type-expression-mangling]: expression=%p "
+                "has no exact represented type\n",
+                static_cast<const void *>(type_expression));
+        ROSE_ABORT();
+      }
+      mangled_name << "_bTypeExpression_"
+                   << represented_type->get_mangled().getString()
+                   << "_eTypeExpression_";
       break;
     }
     case V_SgExprListExp: {
@@ -1457,14 +1994,88 @@ string mangleExpression(const SgExpression *expr) {
       break;
     }
     case V_SgNewExp: {
-      // FIXME ROSE-1783
       const SgNewExp *e = isSgNewExp(expr);
-      mangled_name << "_bNewExpr_" << std::hex << e << "_eNewExpr_";
+      SgType *specifiedType = e != nullptr ? e->get_specified_type() : nullptr;
+      SgExprListExp *placementArguments =
+          e != nullptr ? e->get_placement_args() : nullptr;
+      SgConstructorInitializer *constructorArguments =
+          e != nullptr ? e->get_constructor_args() : nullptr;
+      SgExpression *builtinArguments =
+          e != nullptr ? e->get_builtin_args() : nullptr;
+      const short globalSpecifier =
+          e != nullptr ? e->get_need_global_specifier() : -1;
+      if (e == nullptr || specifiedType == nullptr ||
+          isSgTypeUnknown(specifiedType) != nullptr ||
+          isSgTypeDefault(specifiedType) != nullptr ||
+          (placementArguments != nullptr &&
+           placementArguments->get_parent() != e) ||
+          (constructorArguments != nullptr &&
+           constructorArguments->get_parent() != e) ||
+          (builtinArguments != nullptr &&
+           builtinArguments->get_parent() != e) ||
+          (globalSpecifier != 0 && globalSpecifier != 1)) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[new-expression-mangle]: expression=%p "
+                "type=%p placement=%p constructor=%p builtin=%p global=%d is "
+                "malformed\n",
+                static_cast<const void *>(e),
+                static_cast<void *>(specifiedType),
+                static_cast<void *>(placementArguments),
+                static_cast<void *>(constructorArguments),
+                static_cast<void *>(builtinArguments),
+                static_cast<int>(globalSpecifier));
+        ROSE_ABORT();
+      }
+      mangled_name << "_bNewExpr_type_"
+                   << specifiedType->get_mangled().getString();
+      mangled_name << "_placement_"
+                   << (placementArguments != nullptr
+                           ? mangleExpression(placementArguments)
+                           : "_noPlacementArguments_");
+      mangled_name << "_constructor_"
+                   << (constructorArguments != nullptr
+                           ? mangleExpression(constructorArguments)
+                           : "_noConstructorArguments_");
+      mangled_name << "_builtin_"
+                   << (builtinArguments != nullptr
+                           ? mangleExpression(builtinArguments)
+                           : "_noBuiltinArguments_");
+      mangled_name << "_global_" << static_cast<int>(globalSpecifier)
+                   << "_parenthesized_type_"
+                   << (e->get_type_id_is_parenthesized() ? 1 : 0)
+                   << "_implicit_array_bound_"
+                   << (e->get_array_bound_is_implicit() ? 1 : 0);
+      if (SgFunctionDeclaration *newOperator =
+              e->get_newOperatorDeclaration()) {
+        mangled_name << "_operator_"
+                     << mangleReferencedFunctionDeclaration(
+                            newOperator, "NewOperatorDeclaration");
+      } else {
+        mangled_name << "_implicitOperator_";
+      }
+      mangled_name << "_eNewExpr_";
       break;
     }
     case V_SgFunctionParameterRefExp: {
       const SgFunctionParameterRefExp *e = isSgFunctionParameterRefExp(expr);
-      mangled_name << "_bFunctionParameterRefExp_" << std::hex << e
+      SgType *parameterType = e != nullptr ? e->get_parameter_type() : nullptr;
+      if (e == nullptr || e->get_parameter_number() < 0 ||
+          e->get_parameter_levels_up() < 0 || parameterType == nullptr ||
+          isSgTypeUnknown(parameterType) != nullptr ||
+          isSgTypeDefault(parameterType) != nullptr) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[function-parameter-reference-mangle]: "
+                "expression=%p number=%d levels=%d type=%p is malformed\n",
+                static_cast<const void *>(e),
+                e != nullptr ? e->get_parameter_number() : -1,
+                e != nullptr ? e->get_parameter_levels_up() : -1,
+                static_cast<void *>(parameterType));
+        ROSE_ABORT();
+      }
+      mangled_name << "_bFunctionParameterRefExp_number_"
+                   << e->get_parameter_number() << "_levels_"
+                   << e->get_parameter_levels_up() << "_type_"
+                   << parameterType->get_mangled().getString()
                    << "_eFunctionParameterRefExp_";
       break;
     }
@@ -1482,6 +2093,33 @@ string mangleExpression(const SgExpression *expr) {
     case V_SgNullExpression: {
       // Handle null expressions (placeholders for unsupported C++ constructs)
       mangled_name << "_bNullExpr_";
+      break;
+    }
+    case V_SgColonShapeExp:
+      mangled_name << "_bFortranColonShape_eFortranColonShape_";
+      break;
+    case V_SgAsteriskShapeExp:
+      mangled_name << "_bFortranAsteriskShape_eFortranAsteriskShape_";
+      break;
+    case V_SgAssumedRankExp:
+      mangled_name << "_bFortranAssumedRank_eFortranAssumedRank_";
+      break;
+    case V_SgSubscriptExpression: {
+      const SgSubscriptExpression *subscript = isSgSubscriptExpression(expr);
+      if (subscript == NULL || subscript->get_lowerBound() == NULL ||
+          subscript->get_upperBound() == NULL ||
+          subscript->get_stride() == NULL) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[mangle-fortran-subscript]: malformed "
+                "subscript expression=%p\n",
+                static_cast<const void *>(subscript));
+        ROSE_ABORT();
+      }
+      mangled_name << "_bFortranSubscript_lower_"
+                   << mangleExpression(subscript->get_lowerBound()) << "_upper_"
+                   << mangleExpression(subscript->get_upperBound())
+                   << "_stride_" << mangleExpression(subscript->get_stride())
+                   << "_eFortranSubscript_";
       break;
     }
     case V_SgFoldExpression: {
@@ -1504,6 +2142,12 @@ string mangleExpression(const SgExpression *expr) {
       mangled_name << "_ePackExpansionExpr_";
       break;
     }
+    case V_SgMacroExpansionExp: {
+      const SgMacroExpansionExp *macro = isSgMacroExpansionExp(expr);
+      mangled_name << mangleExpression(
+          macro->get_expanded_expression_checked());
+      break;
+    }
     default: {
       printf("In mangleExpression: Unsupported expression %p (%s)\n", expr,
              expr ? expr->class_name().c_str() : "");
@@ -1519,22 +2163,125 @@ bool declarationHasTranslationUnitScope(const SgDeclarationStatement *decl) {
   ROSE_ASSERT(decl != NULL);
   SgNode *declParent = decl->get_parent();
 
-  // DQ (9/8/2014): This now fails as a result of new template declaration
-  // handling.
   if (declParent == NULL) {
-    ROSE_ASSERT(decl->get_firstNondefiningDeclaration() != NULL);
-    declParent = decl->get_firstNondefiningDeclaration()->get_parent();
+    const SgFunctionDeclaration *pendingDefining =
+        isSgFunctionDeclaration(decl);
+    const SgFunctionDeclaration *pendingCanonical =
+        pendingDefining != NULL
+            ? isSgFunctionDeclaration(
+                  pendingDefining->get_firstNondefiningDeclaration())
+            : NULL;
+    const SgFunctionDefinition *pendingDefinition =
+        pendingDefining != NULL ? pendingDefining->get_definition() : NULL;
+    const SgAuxiliaryDeclarationList *pendingCanonicalOwner =
+        pendingCanonical != NULL
+            ? isSgAuxiliaryDeclarationList(pendingCanonical->get_parent())
+            : NULL;
+    const bool exactPendingRootCopyFamily =
+        pendingDefining != NULL && pendingCanonical != NULL &&
+        pendingCanonical != pendingDefining && pendingDefinition != NULL &&
+        pendingDefining->get_definingDeclaration() == pendingDefining &&
+        pendingCanonical->get_firstNondefiningDeclaration() ==
+            pendingCanonical &&
+        pendingCanonical->get_definingDeclaration() == pendingDefining &&
+        pendingDefinition->get_parent() == pendingDefining &&
+        pendingDefinition->get_declaration() == pendingDefining &&
+        pendingDefining->get_scope() != NULL &&
+        pendingCanonical->get_scope() == pendingDefining->get_scope() &&
+        pendingCanonicalOwner != NULL &&
+        pendingCanonicalOwner->get_parent() == NULL &&
+        pendingCanonicalOwner->get_declarations().size() == 1 &&
+        pendingCanonicalOwner->get_declarations().front() == pendingCanonical;
+    if (!exactPendingRootCopyFamily) {
+      fprintf(
+          stderr,
+          "REX_AST_INVARIANT[mangling-declaration-parent]: "
+          "declaration=%p type=%s name=%s has no structural owner\n",
+          static_cast<const void *>(decl), decl->class_name().c_str(),
+          SageInterface::get_name(const_cast<SgDeclarationStatement *>(decl))
+              .c_str());
+      ROSE_ABORT();
+    }
+    declParent = pendingDefining->get_scope();
   }
 
-  // Some declarations can remain semantically scoped even when their
-  // structural parent is unavailable, e.g., compiler-generated declarations
-  // visited after copy/delete cleanup. Translation-unit classification is
-  // fundamentally a scope question, so use the explicit scope as the final
-  // fallback instead of asserting on the missing parent.
-  if (declParent == NULL) {
-    declParent = decl->get_scope();
+  if (SgAuxiliaryDeclarationList *auxiliary =
+          isSgAuxiliaryDeclarationList(declParent)) {
+    SgScopeStatement *semanticOwner =
+        isSgScopeStatement(auxiliary->get_parent());
+    const SgDeclarationStatementPtrList &declarations =
+        auxiliary->get_declarations();
+    const SgFunctionDeclaration *pendingCanonical =
+        isSgFunctionDeclaration(decl);
+    const SgFunctionDeclaration *pendingDefining =
+        pendingCanonical != NULL
+            ? isSgFunctionDeclaration(
+                  pendingCanonical->get_definingDeclaration())
+            : NULL;
+    const bool exactPendingCopyFamily =
+        semanticOwner == NULL && declarations.size() == 1 &&
+        declarations.front() == decl && pendingCanonical != NULL &&
+        pendingCanonical->get_firstNondefiningDeclaration() ==
+            pendingCanonical &&
+        pendingDefining != NULL && pendingDefining != pendingCanonical &&
+        pendingDefining->get_firstNondefiningDeclaration() ==
+            pendingCanonical &&
+        pendingDefining->get_definingDeclaration() == pendingDefining &&
+        pendingDefining->get_definition() != NULL &&
+        pendingDefining->get_definition()->get_declaration() ==
+            pendingDefining &&
+        pendingCanonical->get_scope() != NULL &&
+        pendingDefining->get_scope() == pendingCanonical->get_scope();
+    if (exactPendingCopyFamily) {
+      semanticOwner = pendingCanonical->get_scope();
+    }
+    if (semanticOwner == NULL ||
+        (!exactPendingCopyFamily &&
+         semanticOwner->get_auxiliary_declarations() != auxiliary) ||
+        decl->get_scope() != semanticOwner ||
+        std::count(declarations.begin(), declarations.end(), decl) != 1) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[mangling-auxiliary-owner]: declaration=%p "
+              "type=%s auxiliary=%p auxiliary_parent=%p semantic_scope=%p "
+              "declaration_count=%zu pending_canonical=%p "
+              "canonical_first=%p pending_defining=%p defining_first=%p "
+              "defining_self=%p definition=%p definition_declaration=%p "
+              "defining_scope=%p exact_pending_copy_family=%d has malformed "
+              "semantic ownership\n",
+              static_cast<const void *>(decl), decl->class_name().c_str(),
+              static_cast<void *>(auxiliary),
+              static_cast<void *>(auxiliary->get_parent()),
+              static_cast<void *>(decl->get_scope()), declarations.size(),
+              static_cast<const void *>(pendingCanonical),
+              static_cast<const void *>(
+                  pendingCanonical != NULL
+                      ? pendingCanonical->get_firstNondefiningDeclaration()
+                      : NULL),
+              static_cast<const void *>(pendingDefining),
+              static_cast<const void *>(
+                  pendingDefining != NULL
+                      ? pendingDefining->get_firstNondefiningDeclaration()
+                      : NULL),
+              static_cast<const void *>(
+                  pendingDefining != NULL
+                      ? pendingDefining->get_definingDeclaration()
+                      : NULL),
+              static_cast<const void *>(pendingDefining != NULL
+                                            ? pendingDefining->get_definition()
+                                            : NULL),
+              static_cast<const void *>(
+                  pendingDefining != NULL &&
+                          pendingDefining->get_definition() != NULL
+                      ? pendingDefining->get_definition()->get_declaration()
+                      : NULL),
+              static_cast<const void *>(pendingDefining != NULL
+                                            ? pendingDefining->get_scope()
+                                            : NULL),
+              exactPendingCopyFamily ? 1 : 0);
+      ROSE_ABORT();
+    }
+    declParent = semanticOwner;
   }
-  ROSE_ASSERT(declParent != NULL);
 
   VariantT declParentV = declParent->variantT();
 

@@ -49,22 +49,6 @@ void AstRestructure::delayedReplace(SgNode *astNode, string s) {
   scheduledReplacements.insert(make_pair(astNode, s));
 }
 
-void AstRestructure::unparserReplace(SgExpression *astNode, string s) {
-  cout << "AstRestructure::unsafeReplace:" << s << endl;
-
-  // DQ (7/19/2008): Modified interface to AstUnparseAttribute
-  // AstUnparseAttribute* newa = new AstUnparseAttribute(s);
-  AstUnparseAttribute *newa =
-      new AstUnparseAttribute(s, AstUnparseAttribute::e_replace);
-
-  printf("AstRestructure::unparserReplace(): using new attribute interface \n");
-  astNode->addNewAttribute("_UnparserSourceReplacement", newa);
-
-  // DQ (4/8/2004): This variable declaration does not appear to serve any
-  //                purpose and generates an warning. Is it required?
-  // AstAttribute* a=astNode->attribute["_UnparserSourceReplacement"];
-}
-
 void AstRestructure::immediateReplace(SgStatement *astNode, string s) {
   cout << "IMMEDIATE REPLACE: OLD AST-SOURCE: " << astNode->unparseToString()
        << endl;
