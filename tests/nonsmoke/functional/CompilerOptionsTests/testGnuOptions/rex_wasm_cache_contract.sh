@@ -15,9 +15,9 @@ incomplete_cache="${temporary_root}/incomplete-llvm-wasm"
 llvm_source_root="${temporary_root}/llvm-project"
 llvm_source_dir="${llvm_source_root}/llvm"
 emsdk_root="${temporary_root}/emsdk/emsdk-main"
-generated_header_manifest="${repo_root}/cmake/rex_wasm_required_generated_headers.txt"
+fake_bin="${temporary_root}/bin"
+probe_trace="${temporary_root}/probe.trace"
 wasm_workflow="${repo_root}/.github/workflows/rex-wasm-build.yml"
-omitted_generated_header="tools/clang/include/clang/Sema/AttrIsTypeDependent.inc"
 
 # The Emscripten action downloads to RUNNER_TEMP on a first cache miss and
 # copies the completed SDK into actions-cache-folder afterward. The REX LLVM
@@ -36,7 +36,7 @@ if [[ "$(grep -Fxc \
   exit 1
 fi
 if [[ "$(grep -Fc \
-    "hashFiles('.github/workflows/rex-wasm-build.yml', 'scripts/ci-rex-wasm-build-dist', 'cmake/rex_wasm_required_generated_headers.txt')" \
+    "hashFiles('.github/workflows/rex-wasm-build.yml', 'scripts/ci-rex-wasm-build-dist', 'cmake/rex_wasm_llvm_probe/**')" \
     "${wasm_workflow}")" -ne 2 ]]; then
   echo "REX WASM cache key does not include the complete workflow contract" >&2
   exit 1
@@ -59,7 +59,8 @@ mkdir -p \
   "${incomplete_cache}/lib/cmake/llvm" \
   "${incomplete_cache}/lib/cmake/clang" \
   "${incomplete_cache}/lib/clang/22/include" \
-  "${incomplete_cache}/tools/clang/include/clang/Basic"
+  "${incomplete_cache}/tools/clang/include/clang/Basic" \
+  "${fake_bin}"
 printf '# exact LLVM source fixture\n' > "${llvm_source_dir}/CMakeLists.txt"
 printf '# exact Clang source fixture\n' > "${llvm_source_root}/clang/CMakeLists.txt"
 printf '%s\n' \
@@ -93,18 +94,30 @@ printf '%s\n' \
   'export EMSDK="${fixture_emsdk_root}"' \
   'export PATH="${fixture_emsdk_root}/upstream/emscripten:${PATH}"' \
   > "${emsdk_root}/emsdk_env.sh"
-for emsdk_tool in emcmake em++; do
-  printf '%s\n' \
-    '#!/usr/bin/env bash' \
-    'exit 0' \
-    > "${emsdk_root}/upstream/emscripten/${emsdk_tool}"
-done
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  "probe_trace='${probe_trace}'" \
+  'if [[ "$*" == *"/cmake/rex_wasm_llvm_probe"* ]]; then' \
+  '  printf "probe invoked\n" > "${probe_trace}"' \
+  'fi' \
+  'exit 0' \
+  > "${emsdk_root}/upstream/emscripten/emcmake"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'exit 0' \
+  > "${emsdk_root}/upstream/emscripten/em++"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'exit 0' \
+  > "${fake_bin}/cmake"
 printf '# exact stable Emscripten toolchain fixture\n' \
   > "${emsdk_root}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake"
 chmod +x \
   "${emsdk_root}/emsdk" \
   "${emsdk_root}/upstream/emscripten/emcmake" \
-  "${emsdk_root}/upstream/emscripten/em++"
+  "${emsdk_root}/upstream/emscripten/em++" \
+  "${fake_bin}/cmake"
+export PATH="${fake_bin}:${PATH}"
 
 set +e
 missing_emsdk_output="$({
@@ -144,7 +157,7 @@ fi
 # Model the exact immutable configuration contract before exercising the
 # individual missing-artifact checks below.  A cache that was configured with
 # different LLVM/WASM options is already invalid, independently of which
-# archives or generated headers it happens to contain.
+# archives it happens to contain.
 emscripten_toolchain="${emsdk_root}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake"
 printf '%s\n' \
   'CMAKE_BUILD_TYPE:STRING=MinSizeRel' \
@@ -178,27 +191,15 @@ printf '%s\n' \
   'source_version=22.1.8' \
   "source_root=${llvm_source_root}" \
   > "${incomplete_cache}/rex-wasm-llvm-source-contract.txt"
-
-# Populate every generated LLVM/Clang header REX consumes.
-while read -r policy relative_path extra || [[ -n "${policy}" ]]; do
-  if [[ -z "${policy}" || "${policy}" == \#* ]]; then
-    continue
-  fi
-  if [[ -n "${extra}" || -z "${relative_path}" ||
-        ( "${policy}" != "nonempty" && "${policy}" != "exists" ) ]]; then
-    echo "malformed generated-header manifest fixture input" >&2
-    exit 1
-  fi
-  mkdir -p "${incomplete_cache}/$(dirname "${relative_path}")"
-  if [[ "${policy}" == "nonempty" ]]; then
-    printf '/* generated header fixture */\n' \
-      > "${incomplete_cache}/${relative_path}"
-  else
-    : > "${incomplete_cache}/${relative_path}"
-  fi
-done < "${generated_header_manifest}"
 printf '#define CLANG_VERSION_MAJOR 22\n' \
   > "${incomplete_cache}/tools/clang/include/clang/Basic/Version.inc"
+printf '%s\n' \
+  'schema=rex-wasm-llvm-readiness-v1' \
+  "source_commit=${llvm_source_commit}" \
+  'source_version=22.1.8' \
+  "source_root=${llvm_source_root}" \
+  'build_type=MinSizeRel' \
+  > "${incomplete_cache}/rex-wasm-llvm-readiness.txt"
 
 # Populate every REX WASM Clang archive except clangDriver.  The old readiness
 # probe accepted this cache after seeing clangFrontend alone.
@@ -247,15 +248,38 @@ if [[ "$(grep -Fxc "${expected_archive_error}" <<< "${cache_output}")" -ne 1 ]];
   exit 1
 fi
 
-# Complete the archive set, then remove one generated header.  This second
-# rejection proves that an archive-complete cache is still not ready when a
-# generated compile dependency is absent.
+# Complete the archive set. A cache is ready only after the checked-in probe
+# compiles and links against its exported LLVM/Clang package targets.
 printf 'static archive fixture\n' \
   > "${incomplete_cache}/lib/libclangDriver.a"
-rm "${incomplete_cache}/${omitted_generated_header}"
+rm -f "${probe_trace}"
+if ! probe_output="$({
+  LLVM_VERSION=22 \
+  LLVM_SOURCE_DIR="${llvm_source_dir}" \
+  LLVM_WASM_BUILD_DIR="${incomplete_cache}" \
+  REX_WASM_BUILD_ROOT="${temporary_root}/build-root" \
+  REX_WASM_EMSDK_ROOT="${emsdk_root}" \
+    "${repo_root}/scripts/ci-rex-wasm-build-dist" verify-llvm-cache
+} 2>&1)"; then
+  echo "complete WASM LLVM cache failed its compile-link probe" >&2
+  printf '%s\n' "${probe_output}" >&2
+  exit 1
+fi
+if [[ ! -s "${probe_trace}" ]]; then
+  echo "complete WASM LLVM cache did not run the compile-link probe" >&2
+  exit 1
+fi
 
+# The readiness stamp is an exact build contract, not a generic cache marker.
+printf '%s\n' \
+  'schema=rex-wasm-llvm-readiness-v1' \
+  'source_commit=0000000000000000000000000000000000000000' \
+  'source_version=22.1.8' \
+  "source_root=${llvm_source_root}" \
+  'build_type=MinSizeRel' \
+  > "${incomplete_cache}/rex-wasm-llvm-readiness.txt"
 set +e
-header_output="$({
+readiness_output="$({
   LLVM_VERSION=22 \
   LLVM_SOURCE_DIR="${llvm_source_dir}" \
   LLVM_WASM_BUILD_DIR="${incomplete_cache}" \
@@ -263,29 +287,26 @@ header_output="$({
   REX_WASM_EMSDK_ROOT="${emsdk_root}" \
     "${repo_root}/scripts/ci-rex-wasm-build-dist" verify-llvm-cache
 } 2>&1)"
-header_status=$?
+readiness_status=$?
 set -e
-if [[ "${header_status}" -ne 2 ]]; then
-  echo "generated-header-incomplete WASM LLVM cache was not rejected with status 2" >&2
-  printf '%s\n' "${header_output}" >&2
-  exit 1
-fi
-if [[ "$(grep -Fxc "${expected_cache_error}" <<< "${header_output}")" -ne 1 ]]; then
-  echo "generated-header-incomplete cache did not emit the exact hard diagnostic" >&2
-  printf '%s\n' "${header_output}" >&2
-  exit 1
-fi
-expected_header_error="       required nonempty generated header is missing: ${omitted_generated_header}"
-if [[ "$(grep -Fxc "${expected_header_error}" <<< "${header_output}")" -ne 1 ]]; then
-  echo "incomplete WASM LLVM cache did not identify the omitted generated header" >&2
-  printf '%s\n' "${header_output}" >&2
+if [[ "${readiness_status}" -ne 2 ]] ||
+   [[ "$(grep -Fxc \
+    '       LLVM compile/link readiness stamp does not match the exact current build contract' \
+    <<< "${readiness_output}")" -ne 1 ]]; then
+  echo "mismatched WASM LLVM readiness stamp was not rejected exactly" >&2
+  printf '%s\n' "${readiness_output}" >&2
   exit 1
 fi
 
 # A complete artifact inventory is still invalid when it was produced from a
 # different source commit. This catches mutable ref/cache-key reuse directly.
-printf '/* generated header fixture */\n' \
-  > "${incomplete_cache}/${omitted_generated_header}"
+printf '%s\n' \
+  'schema=rex-wasm-llvm-readiness-v1' \
+  "source_commit=${llvm_source_commit}" \
+  'source_version=22.1.8' \
+  "source_root=${llvm_source_root}" \
+  'build_type=MinSizeRel' \
+  > "${incomplete_cache}/rex-wasm-llvm-readiness.txt"
 printf '%s\n' \
   'source_commit=0000000000000000000000000000000000000000' \
   'source_version=22.1.8' \
@@ -306,6 +327,41 @@ set -e
 if [[ "${provenance_status}" -ne 2 ]]; then
   echo "stale-source WASM LLVM cache was not rejected with status 2" >&2
   printf '%s\n' "${provenance_output}" >&2
+  exit 1
+fi
+
+# A matching inventory and stamp are still rejected when the actual package
+# cannot compile and link the probe.
+printf '%s\n' \
+  "source_commit=${llvm_source_commit}" \
+  'source_version=22.1.8' \
+  "source_root=${llvm_source_root}" \
+  > "${incomplete_cache}/rex-wasm-llvm-source-contract.txt"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'if [[ "$*" == *"/cmake/rex_wasm_llvm_probe"* ]]; then' \
+  '  exit 9' \
+  'fi' \
+  'exit 0' \
+  > "${emsdk_root}/upstream/emscripten/emcmake"
+chmod +x "${emsdk_root}/upstream/emscripten/emcmake"
+set +e
+probe_failure_output="$({
+  LLVM_VERSION=22 \
+  LLVM_SOURCE_DIR="${llvm_source_dir}" \
+  LLVM_WASM_BUILD_DIR="${incomplete_cache}" \
+  REX_WASM_BUILD_ROOT="${temporary_root}/build-root" \
+  REX_WASM_EMSDK_ROOT="${emsdk_root}" \
+    "${repo_root}/scripts/ci-rex-wasm-build-dist" verify-llvm-cache
+} 2>&1)"
+probe_failure_status=$?
+set -e
+expected_probe_error="       LLVM/Clang compile-link probe failed in ${temporary_root}/build-root/llvm-probe"
+if [[ "${probe_failure_status}" -ne 2 ]] ||
+   [[ "$(grep -Fxc "${expected_probe_error}" \
+    <<< "${probe_failure_output}")" -ne 1 ]]; then
+  echo "failing WASM LLVM compile-link probe was not rejected exactly" >&2
+  printf '%s\n' "${probe_failure_output}" >&2
   exit 1
 fi
 expected_provenance_error='       LLVM source provenance stamp does not match the exact current source checkout'

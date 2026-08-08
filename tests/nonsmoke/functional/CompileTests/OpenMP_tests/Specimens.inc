@@ -1,9 +1,7 @@
 # we define various list of files to be used for testing OpenMP support
 
-# removed experimental dist_data, mpi examples
-#    axpy_ompacc_parseonly.c
-#    axpy_ompacc_mpi.c
-#    axpy_ompacc4.c 
+# The removed experimental dist_data and MPI device extensions are not part of
+# the REX OpenMP grammar. Standard dist_data coverage remains in axpy_ompacc4.c.
 # this is the all set of OpenMP C input tests
 # all other C test lists can be a subset of this one
 nonsmoke_specimens_openmp_c = \
@@ -319,4 +317,3 @@ nonsmoke_getDataSharingAttribute_c_verify = \
     endif3.c \
     endif.c \
     reduction_min_max.c
-

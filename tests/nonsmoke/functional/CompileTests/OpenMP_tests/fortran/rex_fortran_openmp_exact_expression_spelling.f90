@@ -20,7 +20,9 @@ program rex_fortran_openmp_exact_expression_spelling
   end do
 !$OMP END TASKLOOP
 
+!$OMP PARALLEL PRIVATE(CoPyPrIvAtE)
 !$OMP SINGLE
   CoPyPrIvAtE = MiXeD_Shared_Value
 !$OMP END SINGLE COPYPRIVATE(CoPyPrIvAtE)
+!$OMP END PARALLEL
 end program rex_fortran_openmp_exact_expression_spelling

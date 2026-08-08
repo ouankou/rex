@@ -252,6 +252,41 @@ add_rex_openmp_semantic_negative(
   target_update_from.c
   C
   "REX_OMP_SEMANTIC[directive-list-item-uniqueness]: target update repeats an OpenMP list item across clauses")
+add_rex_openmp_semantic_negative(
+  OMPTEST_rex_openmp_orphaned_copyprivate_static_local_is_rejected
+  rex_openmp_orphaned_copyprivate_static_local_invalid.c
+  C
+  "REX_OMP_SEMANTIC[copyprivate-data-environment]: copyprivate list item 'value' is neither threadprivate nor private in an enclosing context")
+add_rex_openmp_semantic_negative(
+  OMPTEST_rex_openmp_nested_parallel_outer_local_copyprivate_is_rejected
+  rex_openmp_nested_parallel_outer_local_copyprivate_invalid.c
+  C
+  "REX_OMP_SEMANTIC[copyprivate-data-environment]: copyprivate list item 'value' is neither threadprivate nor private in an enclosing context")
+add_rex_openmp_semantic_negative(
+  OMPTEST_rex_openmp_nested_parallel_outer_private_clause_copyprivate_is_rejected
+  rex_openmp_nested_parallel_outer_private_clause_copyprivate_invalid.c
+  C
+  "REX_OMP_SEMANTIC[copyprivate-data-environment]: copyprivate list item 'value' is neither threadprivate nor private in an enclosing context")
+add_rex_openmp_semantic_negative(
+  OMPTEST_rex_openmp_copyprivate_shared_overrides_default_private_is_rejected
+  rex_openmp_copyprivate_shared_overrides_default_private_invalid.c
+  C
+  "REX_OMP_SEMANTIC[copyprivate-data-environment]: copyprivate list item 'value' is neither threadprivate nor private in an enclosing context")
+add_rex_openmp_semantic_negative(
+  OMPTEST_rex_openmp_copyprivate_shared_overrides_default_firstprivate_is_rejected
+  rex_openmp_copyprivate_shared_overrides_default_firstprivate_invalid.c
+  C
+  "REX_OMP_SEMANTIC[copyprivate-data-environment]: copyprivate list item 'value' is neither threadprivate nor private in an enclosing context")
+add_rex_openmp_semantic_negative(
+  OMPTEST_rex_openmp_parallel_body_static_local_copyprivate_is_rejected
+  rex_openmp_parallel_body_static_local_copyprivate_invalid.c
+  C
+  "REX_OMP_SEMANTIC[copyprivate-data-environment]: copyprivate list item 'value' is neither threadprivate nor private in an enclosing context")
+add_rex_openmp_semantic_negative(
+  OMPTEST_rex_openmp_parallel_body_extern_local_copyprivate_is_rejected
+  rex_openmp_parallel_body_extern_local_copyprivate_invalid.c
+  C
+  "REX_OMP_SEMANTIC[copyprivate-data-environment]: copyprivate list item 'value' is neither threadprivate nor private in an enclosing context")
 # REX-owned valid counterparts retain positive AST/unparse coverage for every
 # construct above.  Reparse each generated source so malformed output cannot
 # pass merely because the first translation produced a file.
@@ -260,18 +295,27 @@ set(_rex_openmp_semantic_positive_sources
   rex_openmp_atomic_semantic_positive.c
   rex_openmp_critical_semantic_positive.c
   rex_openmp_nested_variant_cache.c
+  rex_openmp_orphaned_copyprivate_automatic_local.c
+  rex_openmp_orphaned_copyprivate_parameter.cpp
+  rex_openmp_orphaned_copyprivate_reference_parameter.cpp
   rex_openmp_simd_semantic_positive.c
   rex_openmp_target_if_semantic_positive.c
+  rex_openmp_thread_local_copyprivate.cpp
   rex_openmp_user_allocator_semantic_positive.c)
 foreach(_source IN LISTS _rex_openmp_semantic_positive_sources)
   string(MAKE_C_IDENTIFIER "${_source}" _name)
+  if(_source MATCHES "[.](cc|cpp|cxx|C)$")
+    set(_semantic_flags ${ROSE_CXX_FLAGS})
+  else()
+    set(_semantic_flags ${ROSE_C_FLAGS})
+  endif()
   set(_output ${_omp_test_output_dir}/rose_${_source})
   set(_output_fixture rex_openmp_semantic_positive_${_name}_output)
   add_test(
     NAME OMPTEST_${_name}_translation
     WORKING_DIRECTORY ${_omp_test_output_dir}
     COMMAND $<TARGET_FILE:parseOmp>
-      ${ROSE_C_FLAGS}
+      ${_semantic_flags}
       -rose:skipfinalCompileStep
       -rose:output ${_output}
       -c
@@ -280,7 +324,7 @@ foreach(_source IN LISTS _rex_openmp_semantic_positive_sources)
     NAME OMPTEST_${_name}_roundtrip
     WORKING_DIRECTORY ${_omp_test_output_dir}
     COMMAND $<TARGET_FILE:parseOmp>
-      ${ROSE_C_FLAGS}
+      ${_semantic_flags}
       -rose:skip_unparse
       -rose:skipfinalCompileStep
       -c

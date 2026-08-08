@@ -35,7 +35,8 @@ void rex_openmp_typed_clause_items(int step_value, omp_interop_t object) {
 
 #pragma omp interop init(interop, targetsync : object)
 
-#pragma omp parallel allocate(allocator : allocated_value)
+#pragma omp parallel private(allocated_value)                                  \
+    allocate(allocator : allocated_value)
   {
     allocated_value += induction_value;
   }
@@ -45,7 +46,8 @@ void rex_openmp_typed_clause_items(int step_value, omp_interop_t object) {
     allocated_value += 1;
   }
 
-#pragma omp parallel allocate(allocator(allocator), align(64) : allocated_value)
+#pragma omp parallel private(allocated_value)                                  \
+    allocate(allocator(allocator), align(64) : allocated_value)
   {
     allocated_value += step_value;
   }

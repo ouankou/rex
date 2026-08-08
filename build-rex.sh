@@ -129,7 +129,7 @@ validate_llvm_compiler() {
 
 validate_flang_installation() {
     local flang_root="$1"
-    local contract_file="cmake/rex_flang_frontend_contract.txt"
+    local manifest_file="cmake/rex_flang_frontend_manifest.txt"
     local libdir
     local kind
     local name
@@ -145,8 +145,8 @@ validate_flang_installation() {
             return 1
             ;;
     esac
-    if [ ! -f "$contract_file" ]; then
-        echo -e "${RED}Error: REX Flang frontend contract file is missing: $contract_file${NC}" >&2
+    if [ ! -f "$manifest_file" ]; then
+        echo -e "${RED}Error: REX Flang frontend manifest is missing: $manifest_file${NC}" >&2
         return 1
     fi
 
@@ -156,7 +156,7 @@ validate_flang_installation() {
             \#*) continue ;;
         esac
         if [ -z "$name" ] || [ -n "$trailing" ]; then
-            echo -e "${RED}Error: malformed REX Flang frontend contract entry: $kind ${name:-}${trailing:+ $trailing}${NC}" >&2
+            echo -e "${RED}Error: malformed REX Flang frontend manifest entry: $kind ${name:-}${trailing:+ $trailing}${NC}" >&2
             return 1
         fi
         case "$kind" in
@@ -183,14 +183,14 @@ validate_flang_installation() {
                 fi
                 ;;
             *)
-                echo -e "${RED}Error: unknown REX Flang frontend contract kind '$kind'.${NC}" >&2
+                echo -e "${RED}Error: unknown REX Flang frontend manifest kind '$kind'.${NC}" >&2
                 return 1
                 ;;
         esac
-    done < "$contract_file"
+    done < "$manifest_file"
 
     if [ "$library_count" -eq 0 ] || [ "$header_count" -eq 0 ]; then
-        echo -e "${RED}Error: REX Flang frontend contract must declare libraries and headers.${NC}" >&2
+        echo -e "${RED}Error: REX Flang frontend manifest must declare libraries and headers.${NC}" >&2
         return 1
     fi
 }

@@ -101,7 +101,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ${{ env.LLVM_WASM_CACHE_DIR }}
-          key: rex-wasm-llvm-${{ runner.os }}-${{ runner.arch }}-emsdk-${{ env.EMSDK_VERSION }}-${{ steps.llvm-source.outputs.commit }}-${{ inputs.llvm-project-checkout-dir }}-${{ env.REX_WASM_BUILD_TYPE }}-${{ hashFiles('.github/workflows/rex-wasm-build.yml', 'scripts/ci-rex-wasm-build-dist', 'cmake/rex_wasm_required_generated_headers.txt') }}
+          key: rex-wasm-llvm-${{ runner.os }}-${{ runner.arch }}-emsdk-${{ env.EMSDK_VERSION }}-${{ steps.llvm-source.outputs.commit }}-${{ inputs.llvm-project-checkout-dir }}-${{ env.REX_WASM_BUILD_TYPE }}-${{ hashFiles('.github/workflows/rex-wasm-build.yml', 'scripts/ci-rex-wasm-build-dist', 'cmake/rex_wasm_llvm_probe/**') }}
 
       - name: Report wasm LLVM cache hit
         run: |
@@ -117,14 +117,14 @@ jobs:
             echo "- actions/cache cache-hit: ${cache_hit:-false}"
             echo "- requested ref: ${LLVM_PROJECT_REF}"
             echo "- exact commit: ${{ steps.llvm-source.outputs.commit }}"
-            echo "- cache key: rex-wasm-llvm-${{ runner.os }}-${{ runner.arch }}-emsdk-${EMSDK_VERSION}-${{ steps.llvm-source.outputs.commit }}-${LLVM_PROJECT_CHECKOUT_DIR}-${REX_WASM_BUILD_TYPE}-${{ hashFiles('.github/workflows/rex-wasm-build.yml', 'scripts/ci-rex-wasm-build-dist', 'cmake/rex_wasm_required_generated_headers.txt') }}"
+            echo "- cache key: rex-wasm-llvm-${{ runner.os }}-${{ runner.arch }}-emsdk-${EMSDK_VERSION}-${{ steps.llvm-source.outputs.commit }}-${LLVM_PROJECT_CHECKOUT_DIR}-${REX_WASM_BUILD_TYPE}-${{ hashFiles('.github/workflows/rex-wasm-build.yml', 'scripts/ci-rex-wasm-build-dist', 'cmake/rex_wasm_llvm_probe/**') }}"
             echo "- matched key: ${matched_key:-none}"
             echo "- cache path: ${LLVM_WASM_CACHE_DIR}"
             echo "- cache save enabled: $([[ '${{ github.event_name }}' != 'pull_request' ]] && echo yes || echo no)"
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Install system dependencies
-        run: scripts/ci-install-deps wasm 22
+        run: scripts/ci-install-deps wasm "${{ env.LLVM_VERSION }}"
 
       - name: Set up Emscripten
         uses: mymindstorm/setup-emsdk@v16
@@ -135,39 +135,39 @@ jobs:
 
       - name: Inspect wasm LLVM cache contents
         run: |
-          source scripts/ci-llvm-env 22
+          source scripts/ci-llvm-env "${LLVM_VERSION}"
           scripts/ci-rex-wasm-build-dist llvm-status
 
       - name: Validate exact restored wasm LLVM/Clang cache
         if: ${{ steps.restore-llvm-wasm.outputs.cache-hit == 'true' }}
         run: |
-          source scripts/ci-llvm-env 22
+          source scripts/ci-llvm-env "${LLVM_VERSION}"
           scripts/ci-rex-wasm-build-dist verify-llvm-cache
 
       - name: Build wasm LLVM/Clang after an exact cache miss
         if: ${{ steps.restore-llvm-wasm.outputs.cache-hit != 'true' }}
         run: |
-          source scripts/ci-llvm-env 22
+          source scripts/ci-llvm-env "${LLVM_VERSION}"
           scripts/ci-rex-wasm-build-dist llvm
 
       - name: Configure REX WASM
         run: |
-          source scripts/ci-llvm-env 22
+          source scripts/ci-llvm-env "${LLVM_VERSION}"
           scripts/ci-rex-wasm-build-dist configure-rex
 
       - name: Build REX WASM target
         run: |
-          source scripts/ci-llvm-env 22
+          source scripts/ci-llvm-env "${LLVM_VERSION}"
           scripts/ci-rex-wasm-build-dist build-rex
 
       - name: Run REX WASM smoke tests
         run: |
-          source scripts/ci-llvm-env 22
+          source scripts/ci-llvm-env "${LLVM_VERSION}"
           scripts/ci-rex-wasm-build-dist test
 
       - name: Assemble static REX WASM site
         run: |
-          source scripts/ci-llvm-env 22
+          source scripts/ci-llvm-env "${LLVM_VERSION}"
           scripts/ci-rex-wasm-build-dist dist
 
       - name: Save wasm LLVM cache

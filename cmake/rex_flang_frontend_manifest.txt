@@ -1,14 +1,16 @@
-# REX Flang frontend link libraries. Keep this list limited to parsing,
-# semantics, and expression evaluation; lowering pulls in FIR/MLIR and is not
-# part of the REX frontend contract.
+# Shared CMake/build-rex inventory for one complete LLVM 22 Flang frontend
+# installation. Entries describe required installed artifacts; they do not
+# select a toolchain or permit mixing files from multiple prefixes.
+#
+# Keep this surface limited to parsing, semantic analysis, and expression
+# evaluation. FIR/MLIR lowering is intentionally outside REX's frontend.
 library FortranSemantics
 library FortranEvaluate
 library FortranParser
 library FortranDecimal
 library FortranSupport
 
-# REX Flang frontend headers. Every path is relative to one installation's
-# include directory.
+# Header paths are relative to the selected installation's include directory.
 header flang/Evaluate/fold.h
 header flang/Evaluate/tools.h
 header flang/Parser/dump-parse-tree.h

@@ -10,7 +10,7 @@ int a;
 int b;
 int main(void) {
 
-#pragma omp parallel
+#pragma omp parallel private(a, b)
   {
 
 #pragma omp single

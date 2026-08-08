@@ -21,7 +21,9 @@ jobs="${REX_WASM_JOBS:-$(nproc)}"
 build_type="${REX_WASM_BUILD_TYPE:-MinSizeRel}"
 package_sysroot="${REX_WASM_PACKAGE_SYSROOT:-OFF}"
 phase="${1:-all}"
-readonly llvm_wasm_generated_header_manifest="${repo_root}/cmake/rex_wasm_required_generated_headers.txt"
+readonly llvm_wasm_probe_source_dir="${repo_root}/cmake/rex_wasm_llvm_probe"
+readonly llvm_wasm_probe_build_dir="${build_root}/llvm-probe"
+readonly llvm_wasm_readiness_stamp="${llvm_wasm_build_dir}/rex-wasm-llvm-readiness.txt"
 
 if [[ ! "${jobs}" =~ ^[1-9][0-9]*$ ]]; then
   echo "error: REX_WASM_JOBS must be a positive integer, got '${jobs}'" >&2
@@ -205,6 +207,27 @@ github_repo_url() {
   return 1
 }
 
+run_llvm_wasm_probe() {
+  local dir="$1"
+  llvm_wasm_probe_error=""
+  mkdir -p "${llvm_wasm_probe_build_dir}"
+  if ! emcmake cmake \
+      -S "${llvm_wasm_probe_source_dir}" \
+      -B "${llvm_wasm_probe_build_dir}" \
+      -G Ninja \
+      -DCMAKE_BUILD_TYPE="${build_type}" \
+      -DLLVM_DIR="${dir}/lib/cmake/llvm" \
+      -DClang_DIR="${dir}/lib/cmake/clang" \
+      -DREX_EXPECTED_LLVM_VERSION="${llvm_source_version}" \
+      >"${llvm_wasm_probe_build_dir}/configure.log" 2>&1 ||
+     ! cmake --build "${llvm_wasm_probe_build_dir}" --target \
+       rex_wasm_llvm_probe -j"${jobs}" \
+       >"${llvm_wasm_probe_build_dir}/build.log" 2>&1; then
+    llvm_wasm_probe_error="LLVM/Clang compile-link probe failed in ${llvm_wasm_probe_build_dir}"
+    return 1
+  fi
+}
+
 llvm_wasm_ready() {
   local dir="$1"
   local cache_entry
@@ -213,16 +236,15 @@ llvm_wasm_ready() {
   local cached_source_real
   local expected_value
   local library
-  local policy
   local relative_path
   local source_real
-  local extra
   local source_contract="${dir}/rex-wasm-llvm-source-contract.txt"
 
   llvm_wasm_readiness_error=""
 
-  if [[ ! -s "${llvm_wasm_generated_header_manifest}" ]]; then
-    echo "error: required WASM LLVM generated-header manifest is missing or empty: ${llvm_wasm_generated_header_manifest}" >&2
+  if [[ ! -s "${llvm_wasm_probe_source_dir}/CMakeLists.txt" ||
+        ! -s "${llvm_wasm_probe_source_dir}/rex_wasm_llvm_probe.cpp" ]]; then
+    echo "error: required WASM LLVM compile/link probe is missing or empty: ${llvm_wasm_probe_source_dir}" >&2
     exit 2
   fi
 
@@ -231,7 +253,8 @@ llvm_wasm_ready() {
     lib/cmake/llvm/LLVMConfig.cmake \
     lib/cmake/clang/ClangConfig.cmake \
     "lib/clang/${llvm_version}/include/stddef.h" \
-    rex-wasm-llvm-source-contract.txt; do
+    rex-wasm-llvm-source-contract.txt \
+    rex-wasm-llvm-readiness.txt; do
     if [[ ! -s "${dir}/${relative_path}" ]]; then
       llvm_wasm_readiness_error="required nonempty file is missing: ${relative_path}"
       return 1
@@ -254,29 +277,19 @@ llvm_wasm_ready() {
     return 1
   fi
 
-  while read -r policy relative_path extra || [[ -n "${policy}" ]]; do
-    if [[ -z "${policy}" || "${policy}" == \#* ]]; then
-      continue
-    fi
-    if [[ -n "${extra}" || -z "${relative_path}" ||
-          ( "${policy}" != "nonempty" && "${policy}" != "exists" ) ||
-          "${relative_path}" == /* ||
-          "${relative_path}" == *".."* ||
-          "${relative_path}" == *\\* ]]; then
-      echo "error: malformed WASM LLVM generated-header manifest entry: ${policy} ${relative_path} ${extra}" >&2
-      exit 2
-    fi
-    if [[ "${policy}" == "nonempty" &&
-          ! -s "${dir}/${relative_path}" ]]; then
-      llvm_wasm_readiness_error="required nonempty generated header is missing: ${relative_path}"
-      return 1
-    fi
-    if [[ "${policy}" == "exists" &&
-          ! -f "${dir}/${relative_path}" ]]; then
-      llvm_wasm_readiness_error="required generated header is missing: ${relative_path}"
-      return 1
-    fi
-  done < "${llvm_wasm_generated_header_manifest}"
+  if ! grep -Fqx 'schema=rex-wasm-llvm-readiness-v1' \
+       "${llvm_wasm_readiness_stamp}" ||
+     ! grep -Fqx "source_commit=${llvm_source_commit}" \
+       "${llvm_wasm_readiness_stamp}" ||
+     ! grep -Fqx "source_version=${llvm_source_version}" \
+       "${llvm_wasm_readiness_stamp}" ||
+     ! grep -Fqx "source_root=${llvm_source_root}" \
+       "${llvm_wasm_readiness_stamp}" ||
+     ! grep -Fqx "build_type=${build_type}" \
+       "${llvm_wasm_readiness_stamp}"; then
+    llvm_wasm_readiness_error="LLVM compile/link readiness stamp does not match the exact current build contract"
+    return 1
+  fi
 
   grep -Eq '^[[:space:]]*set\(LLVM_VERSION_MAJOR[[:space:]]+22\)' \
     "${dir}/lib/cmake/llvm/LLVMConfig.cmake" || {
@@ -362,6 +375,11 @@ llvm_wasm_ready() {
       return 1
     fi
   done
+
+  if ! run_llvm_wasm_probe "${dir}"; then
+    llvm_wasm_readiness_error="${llvm_wasm_probe_error}"
+    return 1
+  fi
 }
 
 needs_llvm_source_contract=0
@@ -373,7 +391,7 @@ esac
 
 needs_emsdk_contract=0
 case "${phase}" in
-  all|llvm-status|llvm|configure-rex|build-rex)
+  all|llvm-status|verify-llvm-cache|llvm|configure-rex|build-rex)
     needs_emsdk_contract=1
     ;;
 esac
@@ -536,7 +554,7 @@ build_llvm_wasm() {
   fi
 
   source_contract="${llvm_wasm_build_dir}/rex-wasm-llvm-source-contract.txt"
-  rm -f "${source_contract}"
+  rm -f "${source_contract}" "${llvm_wasm_readiness_stamp}"
   echo "==> Configuring wasm LLVM/Clang in ${llvm_wasm_build_dir}"
   emcmake cmake -S "${LLVM_SOURCE_DIR}" -B "${llvm_wasm_build_dir}" -G Ninja \
     -DCMAKE_BUILD_TYPE="${build_type}" \
@@ -573,6 +591,17 @@ build_llvm_wasm() {
     "source_commit=${llvm_source_commit}" \
     "source_version=${llvm_source_version}" \
     "source_root=${llvm_source_root}" > "${source_contract}"
+
+  if ! run_llvm_wasm_probe "${llvm_wasm_build_dir}"; then
+    echo "error: ${llvm_wasm_probe_error}" >&2
+    exit 2
+  fi
+  printf '%s\n' \
+    'schema=rex-wasm-llvm-readiness-v1' \
+    "source_commit=${llvm_source_commit}" \
+    "source_version=${llvm_source_version}" \
+    "source_root=${llvm_source_root}" \
+    "build_type=${build_type}" > "${llvm_wasm_readiness_stamp}"
 
   require_llvm_wasm_ready
 }
