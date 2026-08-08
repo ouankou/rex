@@ -4750,6 +4750,91 @@ OmpDirectiveParseCacheTree parseClauseNodesForDirective(
     }
   }
 
+  if (directive->getKind() != OMPD_allocators) {
+    struct PrivatizedListItem {
+      OmpListItemIdentity identity;
+    };
+    std::vector<PrivatizedListItem> privatized_items;
+    auto may_create_private_copy = [](OpenMPClauseKind kind) {
+      switch (kind) {
+      case OMPC_private:
+      case OMPC_firstprivate:
+      case OMPC_lastprivate:
+      case OMPC_linear:
+      case OMPC_reduction:
+      case OMPC_task_reduction:
+      case OMPC_in_reduction:
+        return true;
+      default:
+        return false;
+      }
+    };
+    for (OpenMPClause *clause : semantic_clauses) {
+      if (!may_create_private_copy(clause->getKind())) {
+        continue;
+      }
+      const auto cached = parsed_cache.clause_expression_nodes.find(clause);
+      if (cached == parsed_cache.clause_expression_nodes.end() ||
+          cached->second.size() < clause->getExpressionItems().size()) {
+        std::cerr << "REX_OMP_AST_INVARIANT[allocate-private-list-item]: "
+                     "privatizing clause has no complete typed list-item "
+                     "cache\n";
+        ROSE_ABORT();
+      }
+      for (size_t item = 0; item < clause->getExpressionItems().size();
+           ++item) {
+        const OmpParsedExpression *parsed = cached->second[item];
+        PrivatizedListItem privatized;
+        if (parsed == nullptr || parsed->node == nullptr ||
+            !buildOmpListItemIdentity(parsed->node, privatized.identity) ||
+            privatized.identity.root == nullptr) {
+          std::cerr << "REX_OMP_AST_INVARIANT[allocate-private-list-item]: "
+                       "privatizing clause item has no exact typed identity\n";
+          ROSE_ABORT();
+        }
+        privatized_items.push_back(std::move(privatized));
+      }
+    }
+    for (OpenMPClause *clause : semantic_clauses) {
+      if (clause->getKind() != OMPC_allocate) {
+        continue;
+      }
+      const auto cached = parsed_cache.clause_expression_nodes.find(clause);
+      if (cached == parsed_cache.clause_expression_nodes.end() ||
+          cached->second.size() < clause->getExpressionItems().size()) {
+        std::cerr << "REX_OMP_AST_INVARIANT[allocate-private-list-item]: "
+                     "allocate clause has no complete typed list-item cache\n";
+        ROSE_ABORT();
+      }
+      for (size_t item = 0; item < clause->getExpressionItems().size();
+           ++item) {
+        const OmpParsedExpression *parsed = cached->second[item];
+        OmpListItemIdentity allocated;
+        if (parsed == nullptr || parsed->node == nullptr ||
+            !buildOmpListItemIdentity(parsed->node, allocated) ||
+            allocated.root == nullptr) {
+          std::cerr << "REX_OMP_AST_INVARIANT[allocate-private-list-item]: "
+                       "allocate clause item has no exact typed identity\n";
+          ROSE_ABORT();
+        }
+        const bool has_private_copy =
+            std::any_of(privatized_items.begin(), privatized_items.end(),
+                        [&](const PrivatizedListItem &privatized) {
+                          return ompListItemIdentitiesConflict(
+                              allocated, privatized.identity);
+                        });
+        if (!has_private_copy) {
+          std::cerr << "REX_OMP_SEMANTIC[allocate-private-list-item]: "
+                       "allocate list item '"
+                    << parsed->text
+                    << "' has no data-sharing clause on the same directive "
+                       "that may create its private copy\n";
+          ROSE_ABORT();
+        }
+      }
+    }
+  }
+
   if (declare_mapper_symbol != nullptr && !declare_mapper_maps_variable) {
     std::cerr << "REX_OMP_SEMANTIC[declare-mapper-map-clause]: declare mapper "
                  "requires a map clause that maps its variable\n";
@@ -6498,6 +6583,355 @@ bool ompListItemIdentitiesConflict(const OmpListItemIdentity &lhs,
   // aggregate item together with one of its parts, which OpenMP also forbids
   // on the same directive.
   return true;
+}
+
+static void appendOpenMPCommonBlockMemberIdentities(
+    SgFortranCommonBlockRefExp *common,
+    std::vector<OmpListItemIdentity> &identities, const char *contract) {
+  if (common == nullptr || contract == nullptr) {
+    std::cerr << "REX_OMP_AST_INVARIANT[copyprivate-data-environment]: "
+                 "null common-block identity input\n";
+    ROSE_ABORT();
+  }
+  SageInterface::validateFortranCommonBlockRef(common);
+  SgExprListExp *members =
+      common->get_common_block()->get_variable_reference_list();
+  if (members == nullptr || members->get_expressions().empty()) {
+    std::cerr << "REX_OMP_AST_INVARIANT[" << contract
+              << "]: common block has no exact nonempty typed member list\n";
+    ROSE_ABORT();
+  }
+
+  for (SgExpression *member : members->get_expressions()) {
+    OmpListItemIdentity identity;
+    if (!buildOmpListItemIdentity(member, identity) ||
+        identity.root == nullptr || !identity.member_path.empty()) {
+      std::cerr << "REX_OMP_AST_INVARIANT[" << contract
+                << "]: common-block member has no exact variable identity\n";
+      ROSE_ABORT();
+    }
+    identities.push_back(std::move(identity));
+  }
+}
+
+static std::vector<OmpListItemIdentity>
+requireOpenMPClauseListItemIdentities(SgOmpVariablesClause *clause,
+                                      const char *contract) {
+  if (clause == nullptr || contract == nullptr ||
+      clause->get_variables() == nullptr) {
+    std::cerr << "REX_OMP_AST_INVARIANT[copyprivate-data-environment]: "
+                 "clause has no typed variable list\n";
+    ROSE_ABORT();
+  }
+  std::vector<OmpListItemIdentity> identities;
+  for (SgExpression *expression : clause->get_variables()->get_expressions()) {
+    if (SgFortranCommonBlockRefExp *common =
+            isSgFortranCommonBlockRefExp(expression)) {
+      appendOpenMPCommonBlockMemberIdentities(common, identities, contract);
+      continue;
+    }
+    OmpListItemIdentity identity;
+    if (!buildOmpListItemIdentity(expression, identity) ||
+        identity.root == nullptr) {
+      std::cerr << "REX_OMP_AST_INVARIANT[" << contract
+                << "]: clause item has no exact typed identity\n";
+      ROSE_ABORT();
+    }
+    identities.push_back(std::move(identity));
+  }
+  if (identities.empty()) {
+    std::cerr << "REX_OMP_AST_INVARIANT[" << contract
+              << "]: clause owns an empty typed variable list\n";
+    ROSE_ABORT();
+  }
+  return identities;
+}
+
+static bool ompClauseMayCreatePrivateCopy(SgOmpClause *clause) {
+  return isSgOmpPrivateClause(clause) != nullptr ||
+         isSgOmpFirstprivateClause(clause) != nullptr ||
+         isSgOmpLastprivateClause(clause) != nullptr ||
+         isSgOmpLinearClause(clause) != nullptr ||
+         isSgOmpReductionClause(clause) != nullptr ||
+         isSgOmpTaskReductionClause(clause) != nullptr ||
+         isSgOmpInReductionClause(clause) != nullptr;
+}
+
+static bool hasOpenMPThreadprivateStorage(const OmpListItemIdentity &item) {
+  ROSE_ASSERT(item.root != nullptr);
+  SgInitializedName *declaration = item.root->get_declaration();
+  SgVariableDeclaration *variable_declaration =
+      declaration != nullptr
+          ? isSgVariableDeclaration(declaration->get_declaration())
+          : nullptr;
+  if (variable_declaration == nullptr) {
+    return false;
+  }
+
+  const SgStorageModifier &storage =
+      variable_declaration->get_declarationModifier().get_storageModifier();
+  return variable_declaration->get_is_thread_local() ||
+         storage.get_thread_local_storage();
+}
+
+static bool hasOpenMPPrivateOrInheritedDataSharingForOrphanedSingle(
+    const OmpListItemIdentity &item, SgOmpSingleStatement *single,
+    SgSourceFile *source_file) {
+  ROSE_ASSERT(item.root != nullptr && single != nullptr &&
+              source_file != nullptr);
+
+  // A lexically enclosed single construct gets its data-sharing attributes
+  // from that parallel region.  The called-routine rule below applies only to
+  // an orphaned single construct whose binding parallel region is dynamic.
+  for (SgNode *ancestor = single->get_parent(); ancestor != nullptr;
+       ancestor = ancestor->get_parent()) {
+    if (isSgOmpParallelStatement(ancestor) != nullptr) {
+      return false;
+    }
+  }
+
+  SgInitializedName *declaration = item.root->get_declaration();
+  if (declaration == nullptr) {
+    std::cerr << "REX_OMP_AST_INVARIANT[copyprivate-data-environment]: "
+                 "copyprivate identity has no exact declaration\n";
+    ROSE_ABORT();
+  }
+
+  const bool is_c_or_cxx = source_file->get_C_only() ||
+                           source_file->get_C99_only() ||
+                           source_file->get_Cxx_only();
+  if (is_c_or_cxx &&
+      isSgFunctionParameterList(declaration->get_parent()) != nullptr) {
+    if (declaration->get_type() == nullptr) {
+      std::cerr << "REX_OMP_AST_INVARIANT[copyprivate-data-environment]: "
+                   "function parameter has no exact type\n";
+      ROSE_ABORT();
+    }
+    // C/C++ value parameters are automatic objects owned by each invocation.
+    // Reference parameters instead inherit the data-sharing attribute of the
+    // associated actual argument. An orphaned construct has a dynamic binding
+    // parallel region, so its static helper definition cannot reject that
+    // valid inherited category: a private actual makes the referenced item
+    // private in the enclosing context.
+    return true;
+  }
+
+  SgVariableDeclaration *variable_declaration =
+      isSgVariableDeclaration(declaration->get_declaration());
+  if (variable_declaration == nullptr ||
+      SageInterface::isStatic(variable_declaration) ||
+      SageInterface::isExtern(variable_declaration)) {
+    return false;
+  }
+
+  SgScopeStatement *declaration_scope = declaration->get_scope();
+  if (declaration_scope == nullptr ||
+      isSgGlobal(declaration_scope) != nullptr ||
+      isSgNamespaceDefinitionStatement(declaration_scope) != nullptr) {
+    return false;
+  }
+
+  SgFunctionDefinition *single_function =
+      SageInterface::getEnclosingFunctionDefinition(single);
+  SgFunctionDefinition *declaration_function =
+      SageInterface::getEnclosingFunctionDefinition(declaration);
+  return single_function != nullptr && single_function == declaration_function;
+}
+
+static void validateOpenMPCopyprivateDataEnvironment(SgSourceFile *sourceFile) {
+  if (sourceFile == nullptr) {
+    std::cerr << "REX_OMP_AST_INVARIANT[copyprivate-data-environment]: null "
+                 "source file\n";
+    ROSE_ABORT();
+  }
+
+  const Rose_STL_Container<SgNode *> copyprivate_clauses =
+      NodeQuery::querySubTree(sourceFile, V_SgOmpCopyprivateClause);
+  if (copyprivate_clauses.empty()) {
+    return;
+  }
+
+  std::vector<OmpListItemIdentity> threadprivate_items;
+  for (SgNode *node :
+       NodeQuery::querySubTree(sourceFile, V_SgOmpThreadprivateStatement)) {
+    SgOmpThreadprivateStatement *statement =
+        isSgOmpThreadprivateStatement(node);
+    ROSE_ASSERT(statement != nullptr);
+    for (SgExpression *expression : statement->get_variables()) {
+      if (SgFortranCommonBlockRefExp *common =
+              isSgFortranCommonBlockRefExp(expression)) {
+        appendOpenMPCommonBlockMemberIdentities(common, threadprivate_items,
+                                                "copyprivate-data-environment");
+        continue;
+      }
+      OmpListItemIdentity identity;
+      if (!buildOmpListItemIdentity(expression, identity) ||
+          identity.root == nullptr) {
+        std::cerr << "REX_OMP_AST_INVARIANT[copyprivate-data-environment]: "
+                     "threadprivate item has no exact typed identity\n";
+        ROSE_ABORT();
+      }
+      threadprivate_items.push_back(std::move(identity));
+    }
+  }
+
+  for (SgNode *node : copyprivate_clauses) {
+    SgOmpCopyprivateClause *copyprivate = isSgOmpCopyprivateClause(node);
+    SgOmpClauseList *clause_list =
+        copyprivate != nullptr ? isSgOmpClauseList(copyprivate->get_parent())
+                               : nullptr;
+    SgOmpSingleStatement *single =
+        clause_list != nullptr
+            ? isSgOmpSingleStatement(clause_list->get_parent())
+            : nullptr;
+    if (single == nullptr) {
+      std::cerr << "REX_OMP_AST_INVARIANT[copyprivate-data-environment]: "
+                   "copyprivate clause is not owned by a single construct\n";
+      ROSE_ABORT();
+    }
+
+    const std::vector<OmpListItemIdentity> copied_items =
+        requireOpenMPClauseListItemIdentities(copyprivate,
+                                              "copyprivate-data-environment");
+    for (const OmpListItemIdentity &copied : copied_items) {
+      bool is_private =
+          std::any_of(threadprivate_items.begin(), threadprivate_items.end(),
+                      [&](const OmpListItemIdentity &threadprivate) {
+                        return ompListItemIdentitiesConflict(copied,
+                                                             threadprivate);
+                      }) ||
+          hasOpenMPThreadprivateStorage(copied);
+      bool is_shared = false;
+
+      for (SgNode *ancestor = single->get_parent();
+           !is_private && !is_shared && ancestor != nullptr;
+           ancestor = ancestor->get_parent()) {
+        SgOmpClauseBodyStatement *context =
+            isSgOmpClauseBodyStatement(ancestor);
+        if (context == nullptr) {
+          continue;
+        }
+        const bool reached_binding_parallel =
+            isSgOmpParallelStatement(context) != nullptr;
+        SgOmpClauseList *context_clauses = getOmpClauseList(context);
+        ROSE_ASSERT(context_clauses != nullptr);
+        bool has_explicit_private = false;
+        bool has_explicit_shared = false;
+        SgOmpDefaultClause *default_clause = nullptr;
+        // Explicit item attributes override the default independently of
+        // source clause order, so classify the complete clause list first.
+        for (SgOmpClause *clause : context_clauses->get_clauses()) {
+          if (SgOmpDefaultClause *candidate = isSgOmpDefaultClause(clause)) {
+            if (default_clause != nullptr) {
+              std::cerr << "REX_OMP_SEMANTIC[copyprivate-data-environment]: "
+                           "enclosing context has multiple default clauses\n";
+              ROSE_ABORT();
+            }
+            default_clause = candidate;
+            continue;
+          }
+          SgOmpVariablesClause *variables = isSgOmpVariablesClause(clause);
+          const bool creates_private = ompClauseMayCreatePrivateCopy(clause);
+          const bool creates_shared = isSgOmpSharedClause(clause) != nullptr;
+          if (variables == nullptr || (!creates_private && !creates_shared)) {
+            continue;
+          }
+          const std::vector<OmpListItemIdentity> attributed =
+              requireOpenMPClauseListItemIdentities(
+                  variables, "copyprivate-data-environment");
+          const bool matches = std::any_of(
+              attributed.begin(), attributed.end(),
+              [&](const OmpListItemIdentity &candidate) {
+                return ompListItemIdentitiesConflict(copied, candidate);
+              });
+          if (matches) {
+            has_explicit_private = has_explicit_private || creates_private;
+            has_explicit_shared = has_explicit_shared || creates_shared;
+          }
+        }
+
+        SgInitializedName *declaration = copied.root->get_declaration();
+        SgStatement *body = context->get_body();
+        SgVariableDeclaration *variable_declaration =
+            declaration != nullptr
+                ? isSgVariableDeclaration(declaration->get_declaration())
+                : nullptr;
+        // Lexical containment is sufficient only for automatic locals.
+        // Static, extern, and thread-storage declarations remain shared or
+        // threadprivate even when their declaration appears inside the
+        // binding parallel region's body.
+        const bool has_automatic_storage =
+            variable_declaration != nullptr &&
+            !SageInterface::isStatic(variable_declaration) &&
+            !SageInterface::isExtern(variable_declaration) &&
+            !hasOpenMPThreadprivateStorage(copied);
+        const bool has_predetermined_private = has_automatic_storage &&
+                                               body != nullptr &&
+                                               isAncestor(body, declaration);
+        if (has_explicit_private && has_explicit_shared) {
+          std::cerr << "REX_OMP_SEMANTIC[copyprivate-data-environment]: "
+                       "copyprivate list item has conflicting explicit "
+                       "data-sharing attributes in an enclosing context\n";
+          ROSE_ABORT();
+        }
+        if (has_predetermined_private && has_explicit_shared) {
+          std::cerr << "REX_OMP_SEMANTIC[copyprivate-data-environment]: "
+                       "predetermined private item is explicitly shared in "
+                       "an enclosing context\n";
+          ROSE_ABORT();
+        }
+
+        if (has_explicit_private || has_predetermined_private) {
+          is_private = true;
+        } else if (has_explicit_shared) {
+          is_shared = true;
+        } else if (default_clause != nullptr) {
+          switch (default_clause->get_data_sharing()) {
+          case SgOmpClause::e_omp_default_private:
+          case SgOmpClause::e_omp_default_firstprivate:
+            is_private = true;
+            break;
+          case SgOmpClause::e_omp_default_shared:
+            is_shared = true;
+            break;
+          case SgOmpClause::e_omp_default_none:
+            break;
+          case SgOmpClause::e_omp_default_unknown:
+          case SgOmpClause::e_omp_default_variant:
+          case SgOmpClause::e_omp_default_last:
+            std::cerr
+                << "REX_OMP_AST_INVARIANT[copyprivate-data-environment]: "
+                   "enclosing context has an invalid default data-sharing "
+                   "kind\n";
+            ROSE_ABORT();
+          }
+        }
+
+        // The nearest enclosing parallel region determines the data-sharing
+        // environment seen by this single construct. An item that is private
+        // in an outer region is shared when referenced from a nested parallel
+        // region unless the inner region gives it another attribute, so an
+        // outer clause or declaration must not override the binding region.
+        if (reached_binding_parallel) {
+          break;
+        }
+      }
+
+      if (!is_private && !is_shared) {
+        is_private = hasOpenMPPrivateOrInheritedDataSharingForOrphanedSingle(
+            copied, single, sourceFile);
+      }
+
+      if (!is_private) {
+        std::cerr << "REX_OMP_SEMANTIC[copyprivate-data-environment]: "
+                     "copyprivate list item '"
+                  << copied.root->get_name().getString()
+                  << "' is neither threadprivate nor private in an enclosing "
+                     "context\n";
+        ROSE_ABORT();
+      }
+    }
+  }
 }
 
 } // namespace
@@ -10099,6 +10533,9 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
     printf("Calling convert_OpenMP_pragma_to_AST() \n");
   }
   OpenMPIRToSageAST(sageFilePtr, openaccSession);
+  if (wantsOpenMP) {
+    validateOpenMPCopyprivateDataEnvironment(sageFilePtr);
+  }
   if (isFortran && parsed_fortran_pragmas) {
     removeFortranOpenMPPragmas(sageFilePtr);
   }

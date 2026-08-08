@@ -1,1 +1,1 @@
-#pragma omp parallel allocate(user_modi : a,b) allocate(user_modi : a,c)
+#pragma omp parallel private(a,b,c) allocate(user_modi : a,b) allocate(user_modi : c)

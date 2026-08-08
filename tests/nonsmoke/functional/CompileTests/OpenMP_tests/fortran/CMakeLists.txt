@@ -3,9 +3,13 @@ file(GLOB OPENMP_FORTRAN_TESTCODES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
   "*.f90")
 list(SORT OPENMP_FORTRAN_TESTCODES)
 list(REMOVE_ITEM OPENMP_FORTRAN_TESTCODES
+  allocate_predefined_modifiers.f90
+  allocate_user_defined_modifiers.f90
+  exampleA134f.f90
   rex_flang_openmp_runtime_include_semantics.f90
   rex_fortran_openmp_directive_string_continuation.f90
-  rex_fortran_openmp_taskgroup_end.f90)
+  rex_fortran_openmp_taskgroup_end.f90
+  single-copyprivate.f90)
 
 set(ROSE_FLAGS -rose:openmp:ast_only -rose:verbose 0)
 set(TESTCODE_INCLUDES)
@@ -16,7 +20,57 @@ set(_rex_openmp_fortran_semantic_positive_sources
   rex_fortran_openmp_allocate_predefined_semantic_positive.f90
   rex_fortran_openmp_allocate_user_semantic_positive.f90
   rex_fortran_openmp_copyprivate_semantic_positive.f90
-  rex_fortran_openmp_recursive_task_semantic_positive.f90)
+  rex_fortran_openmp_recursive_task_semantic_positive.f90
+  rex_fortran_openmp_threadprivate_common_block_copyprivate.f90
+  rex_fortran_openmp_threadprivate_common_member_copyprivate.f90)
+
+function(add_rex_fortran_openmp_semantic_negative
+    test_name source expected_status expected_count expected_diagnostic)
+  set(_test_log "${test_name}.log")
+  add_test(
+    NAME ${test_name}
+    WORKING_DIRECTORY ${_omp_fortran_output_dir}
+    COMMAND ${BASH_EXECUTABLE} -c
+      "ulimit -c 0; log=\"$1\"; expected=\"$2\"; expected_status=\"$3\"; expected_count=\"$4\"; shift 4; set +e; \"$@\" >\"$log\" 2>&1; status=$?; set -e; test \"$status\" -eq \"$expected_status\"; test \"$(grep -Fc -- \"$expected\" \"$log\")\" -eq \"$expected_count\""
+      dummy
+      ${_test_log}
+      "${expected_diagnostic}"
+      ${expected_status}
+      ${expected_count}
+      $<TARGET_FILE:parseOmp>
+      ${ROSE_FLAGS}
+      -rose:skipfinalCompileStep
+      -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/${source})
+  set_tests_properties(${test_name}
+    PROPERTIES LABELS "OMPFORTRAN;rex;death")
+  rex_lock_test_for_input(${test_name} ${source})
+endfunction()
+
+add_rex_fortran_openmp_semantic_negative(
+  OMPFORTRAN_rex_allocate_without_private_copy_is_rejected
+  allocate_predefined_modifiers.f90
+  134
+  1
+  "REX_OMP_SEMANTIC[allocate-private-list-item]: allocate list item 'a' has no data-sharing clause on the same directive that may create its private copy")
+add_rex_fortran_openmp_semantic_negative(
+  OMPFORTRAN_rex_undefined_user_allocator_is_rejected
+  allocate_user_defined_modifiers.f90
+  134
+  1
+  "REX_OMP_AST_INVARIANT[fortran-typed-scope-name]: name 'user_modi' has no unique typed value in the directive scope")
+add_rex_fortran_openmp_semantic_negative(
+  OMPFORTRAN_rex_recursive_function_without_result_is_rejected
+  exampleA134f.f90
+  1
+  2
+  "error: Recursive call to 'fib' requires a distinct RESULT in its declaration")
+add_rex_fortran_openmp_semantic_negative(
+  OMPFORTRAN_rex_copyprivate_without_private_context_is_rejected
+  single-copyprivate.f90
+  134
+  1
+  "REX_OMP_SEMANTIC[copyprivate-data-environment]: copyprivate list item 'jlast' is neither threadprivate nor private in an enclosing context")
 
 add_executable(rex_flang_directive_lexical_ownership
   rex_flang_directive_lexical_ownership.cpp)

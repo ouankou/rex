@@ -16,9 +16,11 @@ subroutine exercise_openmp_directive_context()
   end do
 !$omp end parallel do
 
+!$omp parallel private(payload_alpha, payload_beta, payload_gamma, payload_delta)
 !$omp single
   payload_beta = payload_alpha
 !$omp end single copyprivate(payload_alpha, payload_beta, payload_gamma, payload_delta)
+!$omp end parallel
 
 end subroutine exercise_openmp_directive_context
 end module rex_fortran_openmp_directive_context_coverage

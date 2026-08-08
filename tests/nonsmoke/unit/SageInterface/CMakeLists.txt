@@ -79,6 +79,14 @@ add_test(
 set_tests_properties(rex_ci_llvm_env_preserves_search_paths
   PROPERTIES LABELS "rex;build-system;CI")
 
+add_test(
+  NAME rex_ci_llvm_version_contract
+  COMMAND ${BASH_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_ci_llvm_version_contract.sh
+    ${ROSE_TOP_SRC_DIR}/.github/workflows)
+set_tests_properties(rex_ci_llvm_version_contract
+  PROPERTIES LABELS "rex;build-system;CI")
+
 set(_openmp_specimens_path
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/OpenMP_tests)
 set(_dataracebench_path ${_openmp_specimens_path}/dataRaceBench)

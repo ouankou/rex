@@ -982,34 +982,34 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
       "No Flang include directories were provided by FLANG_ROOT or LLVM_INCLUDE_DIRS")
   endif()
 
-  set(_flang_contract_file
-    "${CMAKE_SOURCE_DIR}/cmake/rex_flang_frontend_contract.txt")
-  if(NOT EXISTS "${_flang_contract_file}")
+  set(_flang_manifest_file
+    "${CMAKE_SOURCE_DIR}/cmake/rex_flang_frontend_manifest.txt")
+  if(NOT EXISTS "${_flang_manifest_file}")
     message(FATAL_ERROR
-      "REX Flang frontend contract file is missing: ${_flang_contract_file}")
+      "REX Flang frontend manifest is missing: ${_flang_manifest_file}")
   endif()
-  file(STRINGS "${_flang_contract_file}" _flang_contract_lines)
+  file(STRINGS "${_flang_manifest_file}" _flang_manifest_lines)
   set(_flang_lib_names "")
   set(_flang_required_headers "")
-  foreach(_flang_contract_line IN LISTS _flang_contract_lines)
-    string(REGEX REPLACE "[ \t]*#.*$" "" _flang_contract_line
-      "${_flang_contract_line}")
-    string(STRIP "${_flang_contract_line}" _flang_contract_line)
-    if(NOT _flang_contract_line)
+  foreach(_flang_manifest_line IN LISTS _flang_manifest_lines)
+    string(REGEX REPLACE "[ \t]*#.*$" "" _flang_manifest_line
+      "${_flang_manifest_line}")
+    string(STRIP "${_flang_manifest_line}" _flang_manifest_line)
+    if(NOT _flang_manifest_line)
       continue()
     endif()
-    if(_flang_contract_line MATCHES "^library[ \t]+([^ \t]+)$")
+    if(_flang_manifest_line MATCHES "^library[ \t]+([^ \t]+)$")
       list(APPEND _flang_lib_names "${CMAKE_MATCH_1}")
-    elseif(_flang_contract_line MATCHES "^header[ \t]+([^ \t]+)$")
+    elseif(_flang_manifest_line MATCHES "^header[ \t]+([^ \t]+)$")
       list(APPEND _flang_required_headers "${CMAKE_MATCH_1}")
     else()
       message(FATAL_ERROR
-        "Malformed REX Flang frontend contract entry: '${_flang_contract_line}'")
+        "Malformed REX Flang frontend manifest entry: '${_flang_manifest_line}'")
     endif()
   endforeach()
   if(NOT _flang_lib_names OR NOT _flang_required_headers)
     message(FATAL_ERROR
-      "REX Flang frontend contract must declare libraries and headers: ${_flang_contract_file}")
+      "REX Flang frontend manifest must declare libraries and headers: ${_flang_manifest_file}")
   endif()
   set(FLANG_INCLUDE_DIRS "")
   foreach(_flang_include_candidate IN LISTS _flang_include_candidates)
@@ -1039,9 +1039,9 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
   unset(_flang_candidate_complete)
   unset(_flang_include_candidate)
   unset(_flang_include_candidates)
-  unset(_flang_contract_file)
-  unset(_flang_contract_line)
-  unset(_flang_contract_lines)
+  unset(_flang_manifest_file)
+  unset(_flang_manifest_line)
+  unset(_flang_manifest_lines)
   unset(_flang_required_header)
   unset(_flang_required_headers)
 
@@ -1350,86 +1350,6 @@ if(REX_ENABLE_WASM)
     endif()
   endforeach()
   unset(_rose_wasm_clang_target)
-
-  set(_rose_wasm_generated_header_manifest
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/rex_wasm_required_generated_headers.txt")
-  if(NOT EXISTS "${_rose_wasm_generated_header_manifest}")
-    message(FATAL_ERROR
-      "The REX WASM LLVM generated-header manifest is missing: "
-      "${_rose_wasm_generated_header_manifest}")
-  endif()
-  file(STRINGS "${_rose_wasm_generated_header_manifest}"
-    _rose_wasm_generated_header_lines)
-  if(NOT _rose_wasm_generated_header_lines)
-    message(FATAL_ERROR
-      "The REX WASM LLVM generated-header manifest is empty: "
-      "${_rose_wasm_generated_header_manifest}")
-  endif()
-  if(NOT LLVM_BINARY_DIR OR NOT IS_ABSOLUTE "${LLVM_BINARY_DIR}")
-    message(FATAL_ERROR
-      "The exact LLVM ${LLVM_REQUIRED_MAJOR} package must provide an absolute "
-      "LLVM_BINARY_DIR for the REX WASM generated-header contract")
-  endif()
-  set(_rose_wasm_generated_header_count 0)
-  foreach(_rose_wasm_generated_header_line
-      IN LISTS _rose_wasm_generated_header_lines)
-    string(STRIP "${_rose_wasm_generated_header_line}"
-      _rose_wasm_generated_header_line)
-    if(_rose_wasm_generated_header_line STREQUAL "" OR
-       _rose_wasm_generated_header_line MATCHES "^#")
-      continue()
-    endif()
-    if(NOT _rose_wasm_generated_header_line MATCHES
-       "^(nonempty|exists) +([^ ]+)$")
-      message(FATAL_ERROR
-        "Malformed REX WASM LLVM generated-header manifest entry: "
-        "${_rose_wasm_generated_header_line}")
-    endif()
-    set(_rose_wasm_generated_header_policy "${CMAKE_MATCH_1}")
-    set(_rose_wasm_generated_header_relative "${CMAKE_MATCH_2}")
-    if(IS_ABSOLUTE "${_rose_wasm_generated_header_relative}")
-      message(FATAL_ERROR
-        "REX WASM LLVM generated-header manifest entries must be relative: "
-        "${_rose_wasm_generated_header_relative}")
-    endif()
-    if(_rose_wasm_generated_header_relative MATCHES "(^|/)\\.\\.(/|$)" OR
-       _rose_wasm_generated_header_relative MATCHES "\\\\")
-      message(FATAL_ERROR
-        "REX WASM LLVM generated-header manifest entries must remain inside LLVM_BINARY_DIR: "
-        "${_rose_wasm_generated_header_relative}")
-    endif()
-    set(_rose_wasm_generated_header
-      "${LLVM_BINARY_DIR}/${_rose_wasm_generated_header_relative}")
-    if(NOT EXISTS "${_rose_wasm_generated_header}" OR
-       IS_DIRECTORY "${_rose_wasm_generated_header}")
-      message(FATAL_ERROR
-        "The exact LLVM ${LLVM_REQUIRED_MAJOR} WASM build is missing a generated header REX consumes: "
-        "${_rose_wasm_generated_header}")
-    endif()
-    if(_rose_wasm_generated_header_policy STREQUAL "nonempty")
-      file(SIZE "${_rose_wasm_generated_header}"
-        _rose_wasm_generated_header_size)
-      if(_rose_wasm_generated_header_size EQUAL 0)
-        message(FATAL_ERROR
-          "The exact LLVM ${LLVM_REQUIRED_MAJOR} WASM build has an empty generated header that must be nonempty: "
-          "${_rose_wasm_generated_header}")
-      endif()
-    endif()
-    math(EXPR _rose_wasm_generated_header_count
-      "${_rose_wasm_generated_header_count} + 1")
-  endforeach()
-  if(_rose_wasm_generated_header_count EQUAL 0)
-    message(FATAL_ERROR
-      "The REX WASM LLVM generated-header manifest contains no entries")
-  endif()
-  unset(_rose_wasm_generated_header)
-  unset(_rose_wasm_generated_header_count)
-  unset(_rose_wasm_generated_header_line)
-  unset(_rose_wasm_generated_header_lines)
-  unset(_rose_wasm_generated_header_manifest)
-  unset(_rose_wasm_generated_header_policy)
-  unset(_rose_wasm_generated_header_relative)
-  unset(_rose_wasm_generated_header_size)
 else()
   set(CLANG_LIBS
     clangFrontendTool

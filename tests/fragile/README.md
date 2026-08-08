@@ -4,15 +4,15 @@ These exact name-based manifests preserve tests that failed at least once while
 hardening the frontend and unparser contracts. Passing later runs never remove
 a test from the retained campaign.
 
-- `unparser_hardening_fast.txt` contains 564 exact tests: the measured-fast
+- `unparser_hardening_fast.txt` contains 584 exact tests: the measured-fast
   portion of the retained campaign, its prerequisites, the
   exclusive-staging-descriptor security regression, and the no-PCH OpenMP
   validation-header, friend-template canonical-chain, and
   implicit-control-flow header-planning regressions. It runs on every push to
   `main` and every pull request targeting `main`.
-- `unparser_hardening_full.txt` contains all 2,524 retained tests present in
-  the parent registry, 24 exact dependencies and fixture owners, the
-  exclusive-staging-descriptor regression, and the no-PCH header regression.
+- `unparser_hardening_full.txt` contains all 2,542 retained tests present in
+  the parent registry, 24 exact dependencies and fixture owners, and four
+  explicit contract regressions, for 2,570 exact tests total.
   It runs in the daily x86_64 workflow, including its
   Valgrind-dependent tests. That workflow unions the manifest with its
   pre-existing core-test regex so this campaign does not reduce prior nightly
