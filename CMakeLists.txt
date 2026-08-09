@@ -1055,6 +1055,7 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
   # Do not import or link the lowering layer, whose public interface requires
   # FIR/MLIR components that the REX frontend does not use.
   set(FLANG_LIBS "")
+  set(_flang_evaluate_library_path "")
   set(_flang_missing "")
   foreach(_flang_lib ${_flang_lib_names})
     unset(_flang_lib_path CACHE)
@@ -1064,6 +1065,9 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
       NO_DEFAULT_PATH)
     if(_flang_lib_path)
       list(APPEND FLANG_LIBS "${_flang_lib_path}")
+      if(_flang_lib STREQUAL "FortranEvaluate")
+        set(_flang_evaluate_library_path "${_flang_lib_path}")
+      endif()
     else()
       list(APPEND _flang_missing ${_flang_lib})
     endif()
@@ -1072,29 +1076,65 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
     message(FATAL_ERROR
       "Required Flang libraries were not found in ${_flang_search_dirs}: ${_flang_missing}")
   endif()
+  if(NOT _flang_evaluate_library_path)
+    message(FATAL_ERROR
+      "The required FortranEvaluate library has no resolved path")
+  endif()
+  if(NOT CMAKE_NM)
+    message(FATAL_ERROR
+      "Cannot inspect the selected FortranEvaluate library's system dependencies because CMake did not identify an nm tool")
+  endif()
+  # Flang defines HAS_QUADMATHLIB only when its build finds libquadmath's
+  # sinq, and the resulting FortranEvaluate archive then has an unresolved
+  # sinq reference. Inspect the selected archive because this dependency is
+  # target/toolchain-specific and is absent from supported non-x86 packages.
+  execute_process(
+    COMMAND "${CMAKE_NM}" --undefined-only
+      "${_flang_evaluate_library_path}"
+    RESULT_VARIABLE _flang_nm_status
+    OUTPUT_VARIABLE _flang_evaluate_undefined_symbols
+    ERROR_VARIABLE _flang_nm_error)
+  if(NOT _flang_nm_status EQUAL 0)
+    message(FATAL_ERROR
+      "Failed to inspect the selected FortranEvaluate library '${_flang_evaluate_library_path}' with '${CMAKE_NM}': ${_flang_nm_error}")
+  endif()
+  set(_flang_requires_quadmath FALSE)
+  if(_flang_evaluate_undefined_symbols MATCHES
+      "(^|\n)[^\n]*[ \t]U[ \t]+_?sinq(\n|$)")
+    set(_flang_requires_quadmath TRUE)
+  endif()
+  if(_flang_requires_quadmath)
+    if(NOT CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES)
+      message(FATAL_ERROR
+        "Cannot locate required Flang dependency libquadmath because the C++ compiler reported no implicit link directories")
+    endif()
+    unset(_flang_quadmath_path CACHE)
+    find_library(_flang_quadmath_path
+      NAMES quadmath
+      PATHS ${CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES}
+      NO_DEFAULT_PATH)
+    if(NOT _flang_quadmath_path)
+      message(FATAL_ERROR
+        "The selected FortranEvaluate library requires libquadmath, but it was not found in the C++ compiler's implicit link directories: "
+        "${CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES}")
+    endif()
+    list(APPEND FLANG_LIBS "${_flang_quadmath_path}")
+    message(STATUS
+      "Using required Flang quadmath dependency: ${_flang_quadmath_path}")
+    unset(_flang_quadmath_path CACHE)
+  else()
+    message(STATUS
+      "The selected FortranEvaluate library does not require libquadmath")
+  endif()
+  unset(_flang_evaluate_library_path)
+  unset(_flang_evaluate_undefined_symbols)
   unset(_flang_lib_names)
   unset(_flang_lib_path CACHE)
   unset(_flang_missing)
+  unset(_flang_nm_error)
+  unset(_flang_nm_status)
+  unset(_flang_requires_quadmath)
   unset(_flang_search_dirs)
-
-  if(NOT CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES)
-    message(FATAL_ERROR
-      "Cannot locate required Flang dependency libquadmath because the C++ compiler reported no implicit link directories")
-  endif()
-  unset(_flang_quadmath_path CACHE)
-  find_library(_flang_quadmath_path
-    NAMES quadmath
-    PATHS ${CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES}
-    NO_DEFAULT_PATH)
-  if(NOT _flang_quadmath_path)
-    message(FATAL_ERROR
-      "Required Flang dependency libquadmath was not found in the C++ compiler's implicit link directories: "
-      "${CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES}")
-  endif()
-  list(APPEND FLANG_LIBS "${_flang_quadmath_path}")
-  message(STATUS
-    "Using required Flang quadmath dependency: ${_flang_quadmath_path}")
-  unset(_flang_quadmath_path CACHE)
 
   include(TestBigEndian)
   test_big_endian(ROSE_FLANG_BIG_ENDIAN)

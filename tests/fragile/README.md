@@ -10,9 +10,9 @@ a test from the retained campaign.
   validation-header, friend-template canonical-chain, and
   implicit-control-flow header-planning regressions. It runs on every push to
   `main` and every pull request targeting `main`.
-- `unparser_hardening_full.txt` contains all 2,542 retained tests present in
+- `unparser_hardening_full.txt` contains all 2,544 retained tests present in
   the parent registry, 24 exact dependencies and fixture owners, and four
-  explicit contract regressions, for 2,570 exact tests total.
+  explicit contract regressions, for 2,572 exact tests total.
   It runs in the daily x86_64 workflow, including its
   Valgrind-dependent tests. That workflow unions the manifest with its
   pre-existing core-test regex so this campaign does not reduce prior nightly

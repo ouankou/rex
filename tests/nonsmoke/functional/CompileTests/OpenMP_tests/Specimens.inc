@@ -1,7 +1,8 @@
 # we define various list of files to be used for testing OpenMP support
 
-# The removed experimental dist_data and MPI device extensions are not part of
-# the REX OpenMP grammar. Standard dist_data coverage remains in axpy_ompacc4.c.
+# The removed experimental MPI device constructs are not part of the REX
+# OpenMP grammar. Registered dist_data extension coverage remains in
+# axpy_ompacc4.c.
 # this is the all set of OpenMP C input tests
 # all other C test lists can be a subset of this one
 nonsmoke_specimens_openmp_c = \
