@@ -1,9 +1,11 @@
 name: Nightly x86_64 CI
 
 on:
-  schedule:
-    # Every day at 14:00 UTC (07:00 PDT)
-    - cron: "0 14 * * *"
+  workflow_run:
+    workflows:
+    - Nightly REX Images
+    types:
+    - completed
   workflow_dispatch:
 
 concurrency:
@@ -25,8 +27,19 @@ jobs:
       TARGET_PLATFORM: linux/amd64
 
     steps:
+    - name: Require successful nightly image publication
+      if: ${{ github.event_name == 'workflow_run' }}
+      env:
+        IMAGE_WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+      run: |
+        set -euo pipefail
+        if [[ "${IMAGE_WORKFLOW_CONCLUSION}" != "success" ]]; then
+          echo "Nightly REX Images concluded '${IMAGE_WORKFLOW_CONCLUSION}'; no current dev image was published." >&2
+          exit 1
+        fi
+
     - name: Run retained fragile tests from prebuilt image (${{ env.TARGET_ARCH }})
-      if: ${{ !env.ACT }}
+      if: ${{ !env.ACT && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') }}
       run: |
         set -euo pipefail
         docker pull --platform="${TARGET_PLATFORM}" "${IMAGE_REPO}:dev"
