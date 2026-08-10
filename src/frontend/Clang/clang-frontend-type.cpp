@@ -9423,7 +9423,7 @@ SgNode *ClangToSageTranslator::Traverse(const clang::Type *type) {
       reinterpret_cast<uintptr_t>(SageBuilder::topScopeStack()),
       reinterpret_cast<uintptr_t>(currentMemberCallSpecializationContext()),
       p_semantic_template_argument_expression_depth != 0,
-      p_exact_template_parameter_name_stack);
+      p_exact_template_parameter_name_stack.contextId());
   SgNode *cached_result = nullptr;
   if (globally_cacheable) {
     auto cached = p_type_translation_map.find(type);

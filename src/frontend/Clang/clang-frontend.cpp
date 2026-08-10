@@ -318,31 +318,32 @@ namespaceDeclarationSyntaxEnd(SgNamespaceDeclarationStatement *namespace_decl) {
   return closing->get_endOfConstruct();
 }
 
-static bool isSameLineNamespaceClosingComment(SgLocatedNode *node,
-                                              Sg_File_Info *comment_location,
-                                              const PreprocessingInfo *info) {
+static bool isSameLineTrailingComment(SgLocatedNode *node,
+                                      Sg_File_Info *comment_location,
+                                      const PreprocessingInfo *info) {
   if (!isCommentPreprocessingInfo(info) || comment_location == nullptr) {
     return false;
   }
 
   SgNamespaceDeclarationStatement *namespace_decl =
       isSgNamespaceDeclarationStatement(node);
-  if (namespace_decl == nullptr) {
-    return false;
-  }
-
-  Sg_File_Info *namespace_end = namespaceDeclarationSyntaxEnd(namespace_decl);
-  if (namespace_end == nullptr || namespace_end->get_line() <= 0 ||
-      namespace_end->get_col() <= 0 || comment_location->get_line() <= 0 ||
+  Sg_File_Info *syntax_end = namespace_decl != nullptr
+                                 ? namespaceDeclarationSyntaxEnd(namespace_decl)
+                             : node != nullptr ? node->get_endOfConstruct()
+                                               : nullptr;
+  if (syntax_end == nullptr || syntax_end->get_line() <= 0 ||
+      syntax_end->get_col() <= 0 || comment_location->get_line() <= 0 ||
       comment_location->get_col() <= 0 ||
-      namespace_end->get_physical_file_id() < 0 ||
+      syntax_end->get_physical_file_id() < 0 ||
       comment_location->get_physical_file_id() < 0 ||
-      !namespace_end->isSameFile(*comment_location)) {
+      !syntax_end->isSameFile(*comment_location) ||
+      syntax_end->get_physical_file_occurrence_id() !=
+          comment_location->get_physical_file_occurrence_id()) {
     return false;
   }
 
-  return namespace_end->get_line() == comment_location->get_line() &&
-         namespace_end->get_col() < comment_location->get_col();
+  return syntax_end->get_line() == comment_location->get_line() &&
+         syntax_end->get_col() < comment_location->get_col();
 }
 
 static bool hasExactPhysicalSourceInterval(SgLocatedNode *node);
@@ -377,7 +378,9 @@ canonicalPreprocessingOwner(SgLocatedNode *candidate,
           definition_end->get_line() <= 0 || record_start->get_line() <= 0 ||
           definition_end->get_physical_file_id() < 0 ||
           record_start->get_physical_file_id() < 0 ||
-          !definition_end->isSameFile(*record_start)) {
+          !definition_end->isSameFile(*record_start) ||
+          definition_end->get_physical_file_occurrence_id() !=
+              record_start->get_physical_file_occurrence_id()) {
         std::cerr
             << "REX_FRONTEND_INVARIANT[preprocessing-owner]: structural class "
                "after surface has no exact physical boundary\n";
@@ -450,12 +453,19 @@ canonicalPreprocessingOwner(SgLocatedNode *candidate,
   return candidate;
 }
 
-static bool isSemanticNonLexicalDeclarationSubtree(SgNode *node) {
+static bool isSemanticNonLexicalDeclarationSubtree(
+    SgNode *node, std::unordered_map<SgNode *, bool> &classification_cache) {
   if (node == nullptr) {
     return false;
   }
 
+  const auto cached_node = classification_cache.find(node);
+  if (cached_node != classification_cache.end()) {
+    return cached_node->second;
+  }
+
   std::unordered_set<SgNode *> visited;
+  std::vector<SgNode *> uncached_path;
   SgDeclarationStatement *direct_declaration = nullptr;
   for (SgNode *cursor = node; cursor != nullptr;
        cursor = cursor->get_parent()) {
@@ -466,6 +476,15 @@ static bool isSemanticNonLexicalDeclarationSubtree(SgNode *node) {
           << node->class_name() << "\n";
       ROSE_ABORT();
     }
+
+    const auto cached = classification_cache.find(cursor);
+    if (cached != classification_cache.end()) {
+      for (SgNode *path_node : uncached_path) {
+        classification_cache.emplace(path_node, cached->second);
+      }
+      return cached->second;
+    }
+    uncached_path.push_back(cursor);
 
     if (SgDeclarationStatement *declaration =
             isSgDeclarationStatement(cursor)) {
@@ -493,6 +512,51 @@ static bool isSemanticNonLexicalDeclarationSubtree(SgNode *node) {
                   << direct_declaration->class_name()
                   << " has malformed typed auxiliary ownership\n";
         ROSE_ABORT();
+      }
+      for (SgNode *path_node : uncached_path) {
+        classification_cache.emplace(path_node, true);
+      }
+      return true;
+    }
+
+    if (SgFunctionParameterList *parameters =
+            isSgFunctionParameterList(cursor)) {
+      if (SgFunctionDeclaration *function =
+              isSgFunctionDeclaration(parameters->get_parent())) {
+        SgFunctionParameterList *semantic = function->get_parameterList();
+        SgFunctionParameterList *syntax = function->get_parameterList_syntax();
+        const bool is_semantic = semantic == parameters;
+        const bool is_syntax = syntax == parameters;
+        if ((!is_semantic && !is_syntax) ||
+            (semantic != nullptr && semantic->get_parent() != function) ||
+            (syntax != nullptr && syntax->get_parent() != function)) {
+          std::cerr
+              << "REX_FRONTEND_INVARIANT[preprocessing-parameter-list-"
+                 "owner]: function parameter list has no exact typed role\n";
+          ROSE_ABORT();
+        }
+        if (is_semantic && syntax != nullptr && syntax != semantic) {
+          for (SgNode *path_node : uncached_path) {
+            classification_cache.emplace(path_node, true);
+          }
+          return true;
+        }
+      }
+    }
+
+    if (SgVariableDefinition *definition = isSgVariableDefinition(cursor)) {
+      SgInitializedName *initialized_name =
+          isSgInitializedName(definition->get_parent());
+      if (initialized_name == nullptr ||
+          initialized_name->get_definition() != definition ||
+          definition->get_vardefn() != initialized_name) {
+        std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-variable-definition-"
+                     "owner]: semantic variable definition has no exact "
+                     "initialized-name owner\n";
+        ROSE_ABORT();
+      }
+      for (SgNode *path_node : uncached_path) {
+        classification_cache.emplace(path_node, true);
       }
       return true;
     }
@@ -550,8 +614,14 @@ static bool isSemanticNonLexicalDeclarationSubtree(SgNode *node) {
                   << "\n";
         ROSE_ABORT();
       }
+      for (SgNode *path_node : uncached_path) {
+        classification_cache.emplace(path_node, true);
+      }
       return true;
     }
+  }
+  for (SgNode *path_node : uncached_path) {
+    classification_cache.emplace(path_node, false);
   }
   return false;
 }
@@ -565,7 +635,9 @@ static bool hasExactPhysicalSourceInterval(SgLocatedNode *node) {
   if (start == nullptr || end == nullptr || start->get_line() <= 0 ||
       start->get_col() <= 0 || end->get_line() <= 0 || end->get_col() <= 0 ||
       start->get_physical_file_id() < 0 || end->get_physical_file_id() < 0 ||
-      !start->isSameFile(*end)) {
+      !start->isSameFile(*end) ||
+      start->get_physical_file_occurrence_id() !=
+          end->get_physical_file_occurrence_id()) {
     return false;
   }
   return start->get_line() < end->get_line() ||
@@ -2050,6 +2122,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
 
 void finishSageAST(ClangToSageTranslator &translator) {
   SgGlobal *global_scope = translator.getGlobalScope();
+  std::unordered_map<SgNode *, bool> semantic_nonlexical_subtrees;
 
   // Insert captured pragmas that were not attached during statement
   // translation (e.g., standalone directives or file-scope pragmas).
@@ -2082,26 +2155,8 @@ void finishSageAST(ClangToSageTranslator &translator) {
   roseClangPhaseTrace("clang_main.finishSageAST.sortPreprocessorList.begin");
   translator.sortPreprocessorList();
   if (translator.preprocessor_list_size() > 0) {
-    roseClangPhaseTrace("clang_main.finishSageAST.preprocessorTraverse.begin");
-    NextPreprocessorToInsert npp(translator);
-    std::pair<Sg_File_Info *, PreprocessingInfo *> top =
-        translator.preprocessor_top();
-    if (top.first == nullptr || top.second == nullptr) {
-      std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-owner]: recorder "
-                   "published an incomplete preprocessing record\n";
-      ROSE_ABORT();
-    }
-    npp.cursor = top.first;
-    npp.next_to_insert = top.second;
-    npp.candidat = NULL;
-
-    PreprocessorInserter preprocessor_inserter;
-    preprocessor_inserter.traverse(global_scope, &npp);
-  }
-
-  if (translator.preprocessor_list_size() > 0) {
     if (global_scope == nullptr) {
-      std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-owner]: residual "
+      std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-owner]: recorded "
                    "preprocessing records have no translation-unit owner\n";
       ROSE_ABORT();
     }
@@ -2120,7 +2175,8 @@ void finishSageAST(ClangToSageTranslator &translator) {
           b->get_physical_file_id() < 0) {
         return false;
       }
-      return a->isSameFile(*b);
+      return a->isSameFile(*b) && a->get_physical_file_occurrence_id() ==
+                                      b->get_physical_file_occurrence_id();
     };
     auto location_leq = [](Sg_File_Info *lhs, Sg_File_Info *rhs) -> bool {
       if (lhs == nullptr || rhs == nullptr) {
@@ -2169,12 +2225,57 @@ void finishSageAST(ClangToSageTranslator &translator) {
       const uint64_t column = static_cast<uint64_t>(info->get_col());
       return (line << 32) | column;
     };
-    auto source_file_key = [](Sg_File_Info *info) -> std::string {
+    using PhysicalSourceOccurrenceKey = std::pair<int, unsigned int>;
+    auto source_file_key =
+        [](Sg_File_Info *info) -> PhysicalSourceOccurrenceKey {
       if (info == nullptr || info->get_physical_file_id() < 0) {
-        return std::string();
+        return {-1, 0};
       }
-      return std::string("#physical-file-id:") +
-             std::to_string(info->get_physical_file_id());
+      return {info->get_physical_file_id(),
+              info->get_physical_file_occurrence_id()};
+    };
+    std::map<PhysicalSourceOccurrenceKey, std::vector<uint64_t>>
+        preprocessing_positions;
+    std::map<PhysicalSourceOccurrenceKey, std::vector<uint64_t>>
+        directive_positions;
+    for (const auto &[location, record] :
+         translator.preprocessor_remaining_records()) {
+      const PhysicalSourceOccurrenceKey key = source_file_key(location);
+      const uint64_t position = source_coordinate(location);
+      if (key.first < 0 || position == 0 || record == nullptr) {
+        std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-anchor-index]: "
+                     "residual preprocessing record has no exact physical "
+                     "position\n";
+        ROSE_ABORT();
+      }
+      preprocessing_positions[key].push_back(position);
+      if (!isCommentPreprocessingInfo(record)) {
+        directive_positions[key].push_back(position);
+      }
+    }
+    auto sort_position_index = [](auto &index) {
+      for (auto &[key, positions] : index) {
+        (void)key;
+        std::sort(positions.begin(), positions.end());
+      }
+    };
+    sort_position_index(preprocessing_positions);
+    sort_position_index(directive_positions);
+    auto interval_contains_position = [&](const auto &position_index,
+                                          Sg_File_Info *start,
+                                          Sg_File_Info *end) -> bool {
+      if (start == nullptr || end == nullptr || !is_same_file(start, end)) {
+        return false;
+      }
+      const auto found = position_index.find(source_file_key(start));
+      if (found == position_index.end()) {
+        return false;
+      }
+      const uint64_t interval_start = source_coordinate(start);
+      const uint64_t interval_end = source_coordinate(end);
+      const auto position = std::lower_bound(
+          found->second.begin(), found->second.end(), interval_start);
+      return position != found->second.end() && *position <= interval_end;
     };
     struct AnchorCandidate {
       SgLocatedNode *node = nullptr;
@@ -2187,16 +2288,17 @@ void finishSageAST(ClangToSageTranslator &translator) {
       std::vector<AnchorCandidate> candidates;
       std::vector<uint64_t> prefix_max_end;
     };
-    std::map<std::string, FileAnchorIndex> anchor_index;
-    std::unordered_set<SgLocatedNode *> indexed_nodes;
-    std::unordered_set<SgLocatedNode *> active_nodes;
+    std::map<PhysicalSourceOccurrenceKey, FileAnchorIndex> anchor_index;
+    std::unordered_set<SgNode *> indexed_nodes;
+    std::unordered_set<SgNode *> active_nodes;
     size_t next_anchor_order = 0;
-    std::function<void(SgLocatedNode *, size_t)> index_anchor_node;
-    index_anchor_node = [&](SgLocatedNode *node, size_t depth) {
+    std::function<void(SgNode *, size_t)> index_anchor_node;
+    index_anchor_node = [&](SgNode *node, size_t depth) {
       if (node == nullptr) {
         return;
       }
-      if (isSemanticNonLexicalDeclarationSubtree(node)) {
+      if (isSemanticNonLexicalDeclarationSubtree(
+              node, semantic_nonlexical_subtrees)) {
         return;
       }
       if (!active_nodes.insert(node).second) {
@@ -2206,174 +2308,176 @@ void finishSageAST(ClangToSageTranslator &translator) {
         ROSE_ABORT();
       }
       if (!indexed_nodes.insert(node).second) {
-        active_nodes.erase(node);
-        return;
-      }
-
-      Sg_File_Info *start_info = node_start(node);
-      Sg_File_Info *end_info = node_end(node);
-      SgNamespaceDeclarationStatement *namespace_declaration =
-          isSgNamespaceDeclarationStatement(node);
-      if (namespace_declaration != nullptr) {
-        if (!namespace_declaration->has_source_fragments()) {
-          std::cerr << "REX_FRONTEND_INVARIANT[namespace-source-fragment]: "
-                       "preprocessing anchor index reached namespace without "
-                       "typed source fragments\n";
-          ROSE_ABORT();
-        }
-        namespace_declaration->validate_source_fragments();
-        SgNamespaceSourceFragment *fragments[] = {
-            namespace_declaration->get_opening_introducer_source_fragment(),
-            namespace_declaration->get_opening_source_fragment(),
-            namespace_declaration->get_closing_source_fragment()};
-        for (SgNamespaceSourceFragment *fragment : fragments) {
-          if (fragment == nullptr) {
-            continue;
-          }
-          Sg_File_Info *fragment_start = fragment->get_startOfConstruct();
-          Sg_File_Info *fragment_end = fragment->get_endOfConstruct();
-          ROSE_ASSERT(fragment_start != nullptr && fragment_end != nullptr);
-          const std::string key = source_file_key(fragment_start);
-          if (key.empty() || fragment_start->get_line() <= 0 ||
-              fragment_start->get_col() <= 0 || fragment_end->get_line() <= 0 ||
-              fragment_end->get_col() <= 0 ||
-              !fragment_start->isSameFile(*fragment_end)) {
-            std::cerr << "REX_FRONTEND_INVARIANT[namespace-source-fragment]: "
-                         "preprocessing anchor fragment has no exact physical "
-                         "range\n";
-            ROSE_ABORT();
-          }
-          uint64_t start = source_coordinate(fragment_start);
-          uint64_t end = source_coordinate(fragment_end);
-          if (start > end) {
-            std::cerr
-                << "REX_FRONTEND_INVARIANT[preprocessing-anchor-index]: "
-                   "namespace source fragment has a retrograde interval\n";
-            ROSE_ABORT();
-          }
-          anchor_index[key].candidates.push_back(
-              {node, start, end, depth, next_anchor_order++});
-        }
-      }
-      const bool has_source_start =
-          start_info != nullptr && start_info->get_line() > 0;
-      const bool has_source_end =
-          end_info != nullptr && end_info->get_line() > 0;
-      if (namespace_declaration == nullptr &&
-          has_source_start != has_source_end) {
         std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-anchor-index]: "
                      "node="
                   << node->class_name()
-                  << " has a partial physical source interval\n";
+                  << " is reachable through more than one exact owned "
+                     "traversal path\n";
         ROSE_ABORT();
       }
-      if (namespace_declaration == nullptr && has_source_start &&
-          has_source_end) {
-        const std::string key = source_file_key(start_info);
-        if (key.empty() || !is_same_file(start_info, end_info) ||
-            source_coordinate(start_info) == 0 ||
-            source_coordinate(end_info) == 0) {
+
+      // Walk every exact owned traversal edge so expression-owned lexical
+      // scopes (for example a lambda inside an initializer) cannot disappear
+      // between their enclosing declaration and their statement surfaces.
+      // Traversing through expressions is required to reach their typed
+      // lexical scopes.  Ordinary comments retain statement ownership, while
+      // directives may use an exact expression boundary because moving a
+      // definition past its use changes the program.  Expression lists are
+      // also typed delimiter surfaces: their direct-element router below can
+      // preserve comments and directives at exact argument/initializer
+      // boundaries.  Restrict both indexes to residual records so this remains
+      // a focused lexical index rather than a complete expression index.
+      // Other non-statement nodes provide topology only.  The statement
+      // grammar also contains semantic containers which are not unparsed as
+      // independent syntax and whose attachment contract therefore rejects
+      // preprocessing records.
+      const bool is_semantic_statement_container =
+          isSgTypedefSeq(node) != nullptr ||
+          isSgCatchStatementSeq(node) != nullptr;
+      SgLocatedNode *located = isSgLocatedNode(node);
+      const bool is_statement_anchor = isSgStatement(node) != nullptr;
+      auto expression_list_has_owner_file_boundary =
+          [&](SgExprListExp *expression_list) {
+            ROSE_ASSERT(expression_list != nullptr);
+            if (expression_list->get_expressions().empty()) {
+              return true;
+            }
+            Sg_File_Info *list_start = node_start(expression_list);
+            if (list_start == nullptr ||
+                list_start->get_physical_file_id() < 0) {
+              return false;
+            }
+            for (SgExpression *expression :
+                 expression_list->get_expressions()) {
+              if (expression == nullptr ||
+                  expression->get_parent() != expression_list) {
+                std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-expression-"
+                             "list-owner]: expression list contains malformed "
+                             "typed element ownership\n";
+                ROSE_ABORT();
+              }
+              if (expression->isCompilerGenerated()) {
+                continue;
+              }
+              Sg_File_Info *expression_start = node_start(expression);
+              Sg_File_Info *expression_end = node_end(expression);
+              if (expression_start != nullptr && expression_end != nullptr &&
+                  expression_start->get_line() > 0 &&
+                  expression_start->get_col() > 0 &&
+                  expression_end->get_line() > 0 &&
+                  expression_end->get_col() > 0 &&
+                  is_same_file(expression_start, expression_end) &&
+                  is_same_file(list_start, expression_start)) {
+                return true;
+              }
+            }
+            return false;
+          };
+      SgExprListExp *expression_list = isSgExprListExp(node);
+      const bool is_expression_list_anchor =
+          expression_list != nullptr && located != nullptr &&
+          expression_list_has_owner_file_boundary(expression_list) &&
+          interval_contains_position(preprocessing_positions,
+                                     node_start(located), node_end(located));
+      const bool is_directive_expression_anchor =
+          isSgExpression(node) != nullptr && located != nullptr &&
+          interval_contains_position(directive_positions, node_start(located),
+                                     node_end(located));
+      SgLocatedNode *anchor_candidate =
+          !is_semantic_statement_container &&
+                  (is_statement_anchor || is_expression_list_anchor ||
+                   is_directive_expression_anchor)
+              ? located
+              : nullptr;
+      if (anchor_candidate != nullptr) {
+        Sg_File_Info *start_info = node_start(anchor_candidate);
+        Sg_File_Info *end_info = node_end(anchor_candidate);
+        SgNamespaceDeclarationStatement *namespace_declaration =
+            isSgNamespaceDeclarationStatement(anchor_candidate);
+        if (namespace_declaration != nullptr) {
+          if (!namespace_declaration->has_source_fragments()) {
+            std::cerr << "REX_FRONTEND_INVARIANT[namespace-source-fragment]: "
+                         "preprocessing anchor index reached namespace without "
+                         "typed source fragments\n";
+            ROSE_ABORT();
+          }
+          namespace_declaration->validate_source_fragments();
+          SgNamespaceSourceFragment *fragments[] = {
+              namespace_declaration->get_opening_introducer_source_fragment(),
+              namespace_declaration->get_opening_source_fragment(),
+              namespace_declaration->get_closing_source_fragment()};
+          for (SgNamespaceSourceFragment *fragment : fragments) {
+            if (fragment == nullptr) {
+              continue;
+            }
+            Sg_File_Info *fragment_start = fragment->get_startOfConstruct();
+            Sg_File_Info *fragment_end = fragment->get_endOfConstruct();
+            ROSE_ASSERT(fragment_start != nullptr && fragment_end != nullptr);
+            const PhysicalSourceOccurrenceKey key =
+                source_file_key(fragment_start);
+            if (key.first < 0 || fragment_start->get_line() <= 0 ||
+                fragment_start->get_col() <= 0 ||
+                fragment_end->get_line() <= 0 || fragment_end->get_col() <= 0 ||
+                !is_same_file(fragment_start, fragment_end)) {
+              std::cerr
+                  << "REX_FRONTEND_INVARIANT[namespace-source-fragment]: "
+                     "preprocessing anchor fragment has no exact physical "
+                     "range\n";
+              ROSE_ABORT();
+            }
+            uint64_t start = source_coordinate(fragment_start);
+            uint64_t end = source_coordinate(fragment_end);
+            if (start > end) {
+              std::cerr
+                  << "REX_FRONTEND_INVARIANT[preprocessing-anchor-index]: "
+                     "namespace source fragment has a retrograde interval\n";
+              ROSE_ABORT();
+            }
+            anchor_index[key].candidates.push_back(
+                {anchor_candidate, start, end, depth, next_anchor_order++});
+          }
+        }
+        const bool has_source_start =
+            start_info != nullptr && start_info->get_line() > 0;
+        const bool has_source_end =
+            end_info != nullptr && end_info->get_line() > 0;
+        if (namespace_declaration == nullptr &&
+            has_source_start != has_source_end) {
           std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-anchor-index]: "
                        "node="
                     << node->class_name()
-                    << " has no exact single-file physical interval\n";
+                    << " has a partial physical source interval\n";
           ROSE_ABORT();
         }
-        uint64_t start = source_coordinate(start_info);
-        uint64_t end = source_coordinate(end_info);
-        if (start > end) {
-          std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-anchor-index]: "
-                       "node="
-                    << node->class_name() << " has a retrograde interval\n";
-          ROSE_ABORT();
+        if (namespace_declaration == nullptr && has_source_start &&
+            has_source_end) {
+          const PhysicalSourceOccurrenceKey key = source_file_key(start_info);
+          if (key.first < 0 || !is_same_file(start_info, end_info) ||
+              source_coordinate(start_info) == 0 ||
+              source_coordinate(end_info) == 0) {
+            std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-anchor-index]: "
+                         "node="
+                      << node->class_name()
+                      << " has no exact single-file physical interval\n";
+            ROSE_ABORT();
+          }
+          uint64_t start = source_coordinate(start_info);
+          uint64_t end = source_coordinate(end_info);
+          if (start > end) {
+            std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-anchor-index]: "
+                         "node="
+                      << node->class_name() << " has a retrograde interval\n";
+            ROSE_ABORT();
+          }
+          anchor_index[key].candidates.push_back(
+              {anchor_candidate, start, end, depth, next_anchor_order++});
         }
-        anchor_index[key].candidates.push_back(
-            {node, start, end, depth, next_anchor_order++});
       }
-
-      auto index_node = [&](SgLocatedNode *child) {
-        index_anchor_node(child, depth + 1);
-      };
-      auto index_stmt_list = [&](const SgStatementPtrList &statements) {
-        for (SgStatement *statement : statements) {
-          index_node(isSgLocatedNode(statement));
+      for (SgNode *child : node->get_traversalSuccessorContainer()) {
+        if (child->get_parent() == node) {
+          index_anchor_node(child, depth + 1);
         }
-      };
-      auto index_decl_list =
-          [&](const SgDeclarationStatementPtrList &declarations) {
-            for (SgDeclarationStatement *declaration : declarations) {
-              index_node(isSgLocatedNode(declaration));
-            }
-          };
-
-      if (SgFunctionDeclaration *declaration = isSgFunctionDeclaration(node)) {
-        index_node(isSgLocatedNode(declaration->get_definition()));
       }
-      if (SgFunctionDefinition *definition = isSgFunctionDefinition(node)) {
-        index_node(isSgLocatedNode(definition->get_body()));
-      }
-      if (SgBasicBlock *block = isSgBasicBlock(node)) {
-        index_stmt_list(block->get_statements());
-      }
-      if (SgForStatement *statement = isSgForStatement(node)) {
-        index_node(isSgLocatedNode(statement->get_loop_body()));
-      }
-      if (SgRangeBasedForStatement *statement =
-              isSgRangeBasedForStatement(node)) {
-        index_node(isSgLocatedNode(statement->get_loop_body()));
-      }
-      if (SgWhileStmt *statement = isSgWhileStmt(node)) {
-        index_node(isSgLocatedNode(statement->get_body()));
-      }
-      if (SgDoWhileStmt *statement = isSgDoWhileStmt(node)) {
-        index_node(isSgLocatedNode(statement->get_body()));
-      }
-      if (SgIfStmt *statement = isSgIfStmt(node)) {
-        index_node(isSgLocatedNode(statement->get_true_body()));
-        index_node(isSgLocatedNode(statement->get_false_body()));
-      }
-      if (SgSwitchStatement *statement = isSgSwitchStatement(node)) {
-        index_node(isSgLocatedNode(statement->get_body()));
-      }
-      if (SgCaseOptionStmt *statement = isSgCaseOptionStmt(node)) {
-        index_node(isSgLocatedNode(statement->get_body()));
-      }
-      if (SgDefaultOptionStmt *statement = isSgDefaultOptionStmt(node)) {
-        index_node(isSgLocatedNode(statement->get_body()));
-      }
-      if (SgTryStmt *statement = isSgTryStmt(node)) {
-        index_node(isSgLocatedNode(statement->get_body()));
-        index_stmt_list(statement->get_catch_statement_seq());
-      }
-      if (SgCatchOptionStmt *statement = isSgCatchOptionStmt(node)) {
-        index_node(isSgLocatedNode(statement->get_body()));
-      }
-      if (SgLabelStatement *statement = isSgLabelStatement(node)) {
-        index_node(isSgLocatedNode(statement->get_statement()));
-      }
-      if (SgNamespaceDeclarationStatement *declaration =
-              isSgNamespaceDeclarationStatement(node)) {
-        index_node(isSgLocatedNode(declaration->get_definition()));
-      }
-      if (SgNamespaceDefinitionStatement *definition =
-              isSgNamespaceDefinitionStatement(node)) {
-        index_decl_list(definition->get_declarations());
-      }
-      if (SgClassDeclaration *declaration = isSgClassDeclaration(node)) {
-        index_node(isSgLocatedNode(declaration->get_definition()));
-      }
-      if (SgTemplateClassDeclaration *declaration =
-              isSgTemplateClassDeclaration(node)) {
-        index_node(isSgLocatedNode(declaration->get_definition()));
-      }
-      if (SgClassDefinition *definition = isSgClassDefinition(node)) {
-        index_decl_list(definition->get_members());
-      }
-      if (SgTemplateClassDefinition *definition =
-              isSgTemplateClassDefinition(node)) {
-        index_decl_list(definition->get_members());
-      }
-
       active_nodes.erase(node);
     };
     if (global_scope != nullptr) {
@@ -2447,7 +2551,7 @@ void finishSageAST(ClangToSageTranslator &translator) {
       std::vector<BoundaryCandidate> by_start;
       std::vector<BoundaryCandidate> by_end;
     };
-    std::map<std::string, FileBoundaryIndex> boundary_index;
+    std::map<PhysicalSourceOccurrenceKey, FileBoundaryIndex> boundary_index;
     // A source-file gap must be owned by one of the same typed lexical
     // surfaces that can own a cursor inside its interval.  Querying every
     // SgStatement here also admits structural declarator children such as
@@ -2463,6 +2567,26 @@ void finishSageAST(ClangToSageTranslator &translator) {
           std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-boundary]: "
                        "lexical anchor index contains an invalid boundary\n";
           ROSE_ABORT();
+        }
+        if (isSgStatement(anchor.node) == nullptr) {
+          // Expression anchors own records inside exact syntax but are not
+          // sibling boundaries for gaps outside their enclosing statement.
+          continue;
+        }
+        SgFunctionParameterList *parameter_list =
+            isSgFunctionParameterList(anchor.node);
+        if (parameter_list == nullptr) {
+          SgInitializedName *parameter = isSgInitializedName(anchor.node);
+          parameter_list =
+              parameter != nullptr
+                  ? isSgFunctionParameterList(parameter->get_parent())
+                  : nullptr;
+        }
+        if (parameter_list != nullptr) {
+          // Declarator children are exact inside-syntax anchors, but they are
+          // never sibling statement boundaries for text outside the complete
+          // function declaration.
+          continue;
         }
         BoundaryCandidate indexed = {anchor.node, anchor.start, anchor.end,
                                      anchor.order};
@@ -2512,11 +2636,18 @@ void finishSageAST(ClangToSageTranslator &translator) {
             return value < candidate.end;
           });
       if (prior_end != index.by_end.begin()) {
-        prior = std::prev(prior_end)->node;
+        const uint64_t prior_coordinate = std::prev(prior_end)->end;
+        auto prior_begin = std::lower_bound(
+            index.by_end.begin(), prior_end, prior_coordinate,
+            [](const BoundaryCandidate &candidate, uint64_t value) {
+              return candidate.end < value;
+            });
+        prior = prior_begin->node;
       }
-      if (prior != nullptr &&
-          isSameLineNamespaceClosingComment(prior, cursor, info)) {
-        relative_position = PreprocessingInfo::after_syntax;
+      if (prior != nullptr && isSameLineTrailingComment(prior, cursor, info)) {
+        relative_position = isSgNamespaceDeclarationStatement(prior) != nullptr
+                                ? PreprocessingInfo::after_syntax
+                                : PreprocessingInfo::after;
         return prior;
       }
 
@@ -2527,12 +2658,12 @@ void finishSageAST(ClangToSageTranslator &translator) {
             return candidate.start < value;
           });
       if (following_begin != index.by_start.end()) {
-        auto following_end = std::upper_bound(
-            following_begin, index.by_start.end(), following_begin->start,
-            [](uint64_t value, const BoundaryCandidate &candidate) {
-              return value < candidate.start;
-            });
-        following = std::prev(following_end)->node;
+        // Equal source boundaries occur for a lexical declaration and its
+        // structural definition payload.  The earliest stable candidate is
+        // the declaration surface; attaching to the later definition emits a
+        // before-directive only after `class X {` and can also strand
+        // conditional directives on suppressed structural children.
+        following = following_begin->node;
       }
 
       if (following != nullptr) {
@@ -2576,6 +2707,22 @@ void finishSageAST(ClangToSageTranslator &translator) {
       return type == PreprocessingInfo::C_StyleComment ||
              type == PreprocessingInfo::CplusplusStyleComment;
     };
+    auto has_direct_lexical_children = [](SgLocatedNode *node) {
+      return isSgScopeStatement(node) != nullptr ||
+             isSgFunctionDeclaration(node) != nullptr ||
+             isSgFunctionDefinition(node) != nullptr ||
+             isSgForStatement(node) != nullptr ||
+             isSgRangeBasedForStatement(node) != nullptr ||
+             isSgWhileStmt(node) != nullptr ||
+             isSgDoWhileStmt(node) != nullptr || isSgIfStmt(node) != nullptr ||
+             isSgSwitchStatement(node) != nullptr ||
+             isSgCaseOptionStmt(node) != nullptr ||
+             isSgDefaultOptionStmt(node) != nullptr ||
+             isSgTryStmt(node) != nullptr ||
+             isSgCatchOptionStmt(node) != nullptr ||
+             isSgLabelStatement(node) != nullptr ||
+             isSgEnumDeclaration(node) != nullptr;
+    };
     auto find_sibling_anchor_after_cursor =
         [&](SgLocatedNode *anchor, Sg_File_Info *cursor) -> SgLocatedNode * {
       if (anchor == nullptr || cursor == nullptr) {
@@ -2592,12 +2739,14 @@ void finishSageAST(ClangToSageTranslator &translator) {
         return location_leq(node_start(lhs), node_start(rhs));
       };
 
-      auto consider = [&](SgLocatedNode *candidate, SgLocatedNode *&best) {
+      auto consider_at = [&](SgLocatedNode *candidate,
+                             Sg_File_Info *candidate_start,
+                             SgLocatedNode *&best) {
         if (candidate == nullptr ||
-            isSemanticNonLexicalDeclarationSubtree(candidate)) {
+            isSemanticNonLexicalDeclarationSubtree(
+                candidate, semantic_nonlexical_subtrees)) {
           return;
         }
-        Sg_File_Info *candidate_start = node_start(candidate);
         if (!hasExactPhysicalSourceInterval(candidate) ||
             candidate_start == nullptr || candidate_start->get_line() <= 0) {
           return;
@@ -2612,8 +2761,79 @@ void finishSageAST(ClangToSageTranslator &translator) {
           best = candidate;
         }
       };
+      auto consider = [&](SgLocatedNode *candidate, SgLocatedNode *&best) {
+        consider_at(candidate, node_start(candidate), best);
+      };
+      auto consider_group_member = [&](SgDeclarationStatement *declaration,
+                                       SgLocatedNode *&best) {
+        Sg_File_Info *boundary_start = node_start(declaration);
+        if (SgVariableDeclaration *variable =
+                isSgVariableDeclaration(declaration)) {
+          if (!variable->get_variables().empty()) {
+            boundary_start = node_start(variable->get_variables().front());
+          }
+        }
+        consider_at(isSgLocatedNode(declaration), boundary_start, best);
+      };
+
+      auto consider_direct_children = [&](SgNode *owner, SgLocatedNode *&best) {
+        if (SgFunctionDeclaration *declaration =
+                isSgFunctionDeclaration(owner)) {
+          consider(isSgLocatedNode(declaration->get_definition()), best);
+        } else if (SgFunctionDefinition *definition =
+                       isSgFunctionDefinition(owner)) {
+          consider(isSgLocatedNode(definition->get_body()), best);
+        } else if (SgForStatement *statement = isSgForStatement(owner)) {
+          consider(isSgLocatedNode(statement->get_loop_body()), best);
+        } else if (SgRangeBasedForStatement *statement =
+                       isSgRangeBasedForStatement(owner)) {
+          consider(isSgLocatedNode(statement->get_loop_body()), best);
+        } else if (SgWhileStmt *statement = isSgWhileStmt(owner)) {
+          consider(isSgLocatedNode(statement->get_body()), best);
+        } else if (SgDoWhileStmt *statement = isSgDoWhileStmt(owner)) {
+          consider(isSgLocatedNode(statement->get_body()), best);
+        } else if (SgIfStmt *statement = isSgIfStmt(owner)) {
+          consider(isSgLocatedNode(statement->get_true_body()), best);
+          consider(isSgLocatedNode(statement->get_false_body()), best);
+        } else if (SgSwitchStatement *statement = isSgSwitchStatement(owner)) {
+          consider(isSgLocatedNode(statement->get_body()), best);
+        } else if (SgCaseOptionStmt *statement = isSgCaseOptionStmt(owner)) {
+          consider(isSgLocatedNode(statement->get_body()), best);
+        } else if (SgDefaultOptionStmt *statement =
+                       isSgDefaultOptionStmt(owner)) {
+          consider(isSgLocatedNode(statement->get_body()), best);
+        } else if (SgTryStmt *statement = isSgTryStmt(owner)) {
+          consider(isSgLocatedNode(statement->get_body()), best);
+          for (SgStatement *handler : statement->get_catch_statement_seq()) {
+            consider(isSgLocatedNode(handler), best);
+          }
+        } else if (SgCatchOptionStmt *statement = isSgCatchOptionStmt(owner)) {
+          consider(isSgLocatedNode(statement->get_body()), best);
+        } else if (SgLabelStatement *statement = isSgLabelStatement(owner)) {
+          consider(isSgLocatedNode(statement->get_statement()), best);
+        } else if (SgEnumDeclaration *declaration =
+                       isSgEnumDeclaration(owner)) {
+          for (SgInitializedName *enumerator : declaration->get_enumerators()) {
+            if (enumerator->get_enum_constant_source_ownership() ==
+                SgInitializedName::e_enum_constant_source_body) {
+              consider(isSgLocatedNode(enumerator), best);
+            }
+          }
+        } else if (SgDeclarationGroupStatement *group =
+                       isSgDeclarationGroupStatement(owner)) {
+          for (SgDeclarationStatement *declaration :
+               group->get_declarations()) {
+            consider_group_member(declaration, best);
+          }
+        }
+      };
 
       SgLocatedNode *best = nullptr;
+      consider_direct_children(anchor, best);
+      if (best != nullptr) {
+        return best;
+      }
+
       SgNode *owner = isSgScopeStatement(anchor) != nullptr
                           ? static_cast<SgNode *>(anchor)
                           : anchor->get_parent();
@@ -2638,6 +2858,11 @@ void finishSageAST(ClangToSageTranslator &translator) {
                      isSgTemplateClassDefinition(owner)) {
         for (SgDeclarationStatement *decl : scope->get_members()) {
           consider(isSgLocatedNode(decl), best);
+        }
+      } else if (SgDeclarationGroupStatement *group =
+                     isSgDeclarationGroupStatement(owner)) {
+        for (SgDeclarationStatement *decl : group->get_declarations()) {
+          consider_group_member(decl, best);
         }
       }
       return best;
@@ -2667,7 +2892,8 @@ void finishSageAST(ClangToSageTranslator &translator) {
                          "incomplete preprocessing attachment\n";
             ROSE_ABORT();
           }
-          if (isSemanticNonLexicalDeclarationSubtree(target)) {
+          if (isSemanticNonLexicalDeclarationSubtree(
+                  target, semantic_nonlexical_subtrees)) {
             std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-owner]: "
                          "directive cannot attach to semantic auxiliary node="
                       << target->class_name() << "\n";
@@ -2696,7 +2922,7 @@ void finishSageAST(ClangToSageTranslator &translator) {
                 closing_start != nullptr &&
                 closing_start->get_physical_file_id() >= 0 &&
                 info->get_file_info()->get_physical_file_id() >= 0 &&
-                closing_start->isSameFile(*info->get_file_info())) {
+                is_same_file(closing_start, info->get_file_info())) {
               target_info = closing_start;
               exact_namespace_closing_boundary = true;
             }
@@ -2726,7 +2952,7 @@ void finishSageAST(ClangToSageTranslator &translator) {
                 if (fragment_start != nullptr &&
                     fragment_start->get_physical_file_id() >= 0 &&
                     info->get_file_info()->get_physical_file_id() >= 0 &&
-                    fragment_start->isSameFile(*info->get_file_info())) {
+                    is_same_file(fragment_start, info->get_file_info())) {
                   target_info = fragment_start;
                   break;
                 }
@@ -2779,7 +3005,8 @@ void finishSageAST(ClangToSageTranslator &translator) {
             ROSE_ABORT();
           }
           target = canonicalPreprocessingOwner(target, info);
-          if (isSemanticNonLexicalDeclarationSubtree(target) ||
+          if (isSemanticNonLexicalDeclarationSubtree(
+                  target, semantic_nonlexical_subtrees) ||
               (isSgGlobal(target) == nullptr &&
                !exact_namespace_closing_boundary &&
                !hasExactPhysicalSourceInterval(target))) {
@@ -2796,18 +3023,297 @@ void finishSageAST(ClangToSageTranslator &translator) {
         if (!has_forced_anchor) {
           anchor = find_anchor_for_cursor(cursor);
         }
+        if (!has_forced_anchor && anchor != nullptr && cursor != nullptr &&
+            !is_comment_directive(entry.second)) {
+          SgFunctionParameterList *parameter_list =
+              isSgFunctionParameterList(anchor);
+          if (parameter_list == nullptr) {
+            SgInitializedName *parameter = isSgInitializedName(anchor);
+            parameter_list =
+                parameter != nullptr
+                    ? isSgFunctionParameterList(parameter->get_parent())
+                    : nullptr;
+          }
+          if (parameter_list == nullptr) {
+            SgFunctionDeclaration *function = isSgFunctionDeclaration(anchor);
+            SgFunctionParameterList *candidate =
+                function != nullptr ? function->get_parameterList_syntax()
+                                    : nullptr;
+            if (candidate == nullptr && function != nullptr) {
+              candidate = function->get_parameterList();
+            }
+            if (candidate != nullptr && cursor_inside_node(candidate, cursor)) {
+              parameter_list = candidate;
+            }
+          }
+          if (parameter_list != nullptr) {
+            SgFunctionDeclaration *function =
+                isSgFunctionDeclaration(parameter_list->get_parent());
+            SgFunctionParameterList *source_parameters =
+                function != nullptr ? function->get_parameterList_syntax()
+                                    : nullptr;
+            if (source_parameters == nullptr && function != nullptr) {
+              source_parameters = function->get_parameterList();
+            }
+            if (function == nullptr || source_parameters != parameter_list ||
+                !cursor_inside_node(parameter_list, cursor)) {
+              std::cerr
+                  << "REX_FRONTEND_INVARIANT[preprocessing-parameter-owner]: "
+                     "parameter directive has no exact source parameter-list "
+                     "owner list="
+                  << parameter_list
+                  << " parent=" << parameter_list->get_parent() << "/"
+                  << (parameter_list->get_parent() != nullptr
+                          ? parameter_list->get_parent()->class_name()
+                          : std::string("<null>"))
+                  << " function=" << function << " semantic="
+                  << (function != nullptr ? function->get_parameterList()
+                                          : nullptr)
+                  << " syntax="
+                  << (function != nullptr ? function->get_parameterList_syntax()
+                                          : nullptr)
+                  << " selected-source=" << source_parameters << " old-style="
+                  << (function != nullptr && function->get_oldStyleDefinition()
+                          ? 1
+                          : 0)
+                  << " cursor-inside="
+                  << (cursor_inside_node(parameter_list, cursor) ? 1 : 0)
+                  << "\n";
+              ROSE_ABORT();
+            }
+
+            SgInitializedName *prior_parameter = nullptr;
+            SgInitializedName *following_parameter = nullptr;
+            for (SgInitializedName *parameter : parameter_list->get_args()) {
+              Sg_File_Info *parameter_start = node_start(parameter);
+              Sg_File_Info *parameter_end = node_end(parameter);
+              if (parameter == nullptr ||
+                  parameter->get_parent() != parameter_list ||
+                  !hasExactPhysicalSourceInterval(parameter) ||
+                  !is_same_file(parameter_start, cursor) ||
+                  !is_same_file(parameter_end, cursor)) {
+                std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-parameter-"
+                             "owner]: source parameter list contains a "
+                             "malformed parameter boundary\n";
+                ROSE_ABORT();
+              }
+              if (location_leq(cursor, parameter_start)) {
+                following_parameter = parameter;
+                break;
+              }
+              if (location_leq(parameter_end, cursor)) {
+                prior_parameter = parameter;
+                continue;
+              }
+              std::cerr
+                  << "REX_FRONTEND_INVARIANT[preprocessing-parameter-"
+                     "interior]: directive lies inside one parameter's typed "
+                     "source interval and has no exact declarator boundary\n";
+              ROSE_ABORT();
+            }
+
+            if (following_parameter != nullptr) {
+              entry.second->setRelativePosition(PreprocessingInfo::before);
+              attach_preprocessor_record(following_parameter, entry.second);
+            } else if (prior_parameter != nullptr) {
+              entry.second->setRelativePosition(PreprocessingInfo::after);
+              attach_preprocessor_record(prior_parameter, entry.second);
+            } else if (parameter_list->get_args().empty()) {
+              entry.second->setRelativePosition(PreprocessingInfo::inside);
+              attach_preprocessor_record(parameter_list, entry.second);
+            } else {
+              std::cerr
+                  << "REX_FRONTEND_INVARIANT[preprocessing-parameter-owner]: "
+                     "directive has no exact parameter boundary\n";
+              ROSE_ABORT();
+            }
+            goto inserted_preproc;
+          }
+        }
+
+        if (!has_forced_anchor && anchor != nullptr && cursor != nullptr) {
+          if (SgExprListExp *expression_list = isSgExprListExp(anchor)) {
+            SgAggregateInitializer *aggregate =
+                isSgAggregateInitializer(expression_list->get_parent());
+            if (aggregate != nullptr &&
+                aggregate->get_initializers() != expression_list) {
+              std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-expression-"
+                           "list-owner]: aggregate initializer does not own "
+                           "its exact expression list\n";
+              ROSE_ABORT();
+            }
+
+            SgExpression *prior_expression = nullptr;
+            SgExpression *following_expression = nullptr;
+            for (SgExpression *expression :
+                 expression_list->get_expressions()) {
+              Sg_File_Info *expression_start = node_start(expression);
+              Sg_File_Info *expression_end = node_end(expression);
+              if (expression == nullptr ||
+                  expression->get_parent() != expression_list) {
+                std::cerr
+                    << "REX_FRONTEND_INVARIANT[preprocessing-expression-"
+                       "list-owner]: expression list contains a malformed "
+                       "typed element ownership\n";
+                ROSE_ABORT();
+              }
+              if (expression->isCompilerGenerated()) {
+                continue;
+              }
+              if (expression_start == nullptr || expression_end == nullptr ||
+                  expression_start->get_line() <= 0 ||
+                  expression_start->get_col() <= 0 ||
+                  expression_end->get_line() <= 0 ||
+                  expression_end->get_col() <= 0 ||
+                  expression_start->get_physical_file_id() < 0 ||
+                  expression_end->get_physical_file_id() < 0 ||
+                  !is_same_file(expression_start, expression_end) ||
+                  !location_leq(expression_start, expression_end)) {
+                std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-expression-"
+                             "list-owner]: source expression-list element="
+                          << expression->class_name()
+                          << " has no exact ordered physical interval\n";
+                ROSE_ABORT();
+              }
+              // Include-expanded elements retain their own physical file
+              // occurrence.  They are not lexical boundaries for a residual
+              // owner-file record; their typed include/source-role contract
+              // remains responsible for emitting them.
+              if (!is_same_file(expression_start, cursor)) {
+                continue;
+              }
+              if (location_leq(cursor, expression_start)) {
+                following_expression = expression;
+                break;
+              }
+              if (location_leq(expression_end, cursor)) {
+                prior_expression = expression;
+                continue;
+              }
+              if (!is_comment_directive(entry.second)) {
+                std::cerr
+                    << "REX_FRONTEND_INVARIANT[preprocessing-expression-"
+                       "interior]: directive lies inside one expression-list "
+                       "element without an exact descendant boundary\n";
+                ROSE_ABORT();
+              }
+              prior_expression = expression;
+              break;
+            }
+
+            if (following_expression != nullptr) {
+              entry.second->setRelativePosition(PreprocessingInfo::before);
+              attach_preprocessor_record(following_expression, entry.second);
+            } else if (prior_expression != nullptr) {
+              entry.second->setRelativePosition(PreprocessingInfo::after);
+              attach_preprocessor_record(prior_expression, entry.second);
+            } else if (expression_list->get_expressions().empty()) {
+              entry.second->setRelativePosition(
+                  aggregate != nullptr ? PreprocessingInfo::inside
+                                       : PreprocessingInfo::before);
+              attach_preprocessor_record(
+                  aggregate != nullptr
+                      ? static_cast<SgLocatedNode *>(aggregate)
+                      : static_cast<SgLocatedNode *>(expression_list),
+                  entry.second);
+            } else {
+              std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-expression-"
+                           "list-owner]: record has no exact expression-list "
+                           "boundary\n";
+              ROSE_ABORT();
+            }
+            goto inserted_preproc;
+          }
+
+          SgCtorInitializerList *ctor_initializer_list =
+              isSgCtorInitializerList(anchor);
+          if (ctor_initializer_list != nullptr) {
+            SgMemberFunctionDeclaration *constructor =
+                isSgMemberFunctionDeclaration(
+                    ctor_initializer_list->get_parent());
+            if (constructor == nullptr ||
+                constructor->get_CtorInitializerList() !=
+                    ctor_initializer_list) {
+              std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-ctor-"
+                           "initializer-owner]: initializer list has no exact "
+                           "constructor owner\n";
+              ROSE_ABORT();
+            }
+
+            SgInitializedName *prior_initializer = nullptr;
+            SgInitializedName *following_initializer = nullptr;
+            const SgInitializedNamePtrList &initializers =
+                ctor_initializer_list->get_ctors();
+            for (SgInitializedName *initializer : initializers) {
+              Sg_File_Info *initializer_start = node_start(initializer);
+              Sg_File_Info *initializer_end = node_end(initializer);
+              if (initializer == nullptr ||
+                  initializer->get_parent() != ctor_initializer_list ||
+                  !hasExactPhysicalSourceInterval(initializer) ||
+                  !is_same_file(initializer_start, cursor) ||
+                  !is_same_file(initializer_end, cursor) ||
+                  std::count(initializers.begin(), initializers.end(),
+                             initializer) != 1) {
+                std::cerr
+                    << "REX_FRONTEND_INVARIANT[preprocessing-ctor-"
+                       "initializer-owner]: constructor contains a malformed "
+                       "typed initializer boundary\n";
+                ROSE_ABORT();
+              }
+              if (location_leq(cursor, initializer_start)) {
+                following_initializer = initializer;
+                break;
+              }
+              if (location_leq(initializer_end, cursor)) {
+                prior_initializer = initializer;
+                continue;
+              }
+              std::cerr
+                  << "REX_FRONTEND_INVARIANT[preprocessing-ctor-initializer-"
+                     "interior]: directive lies inside one constructor "
+                     "initializer's typed source interval and has no exact "
+                     "lexical descendant owner\n";
+              ROSE_ABORT();
+            }
+
+            if (following_initializer != nullptr) {
+              entry.second->setRelativePosition(PreprocessingInfo::before);
+              attach_preprocessor_record(following_initializer, entry.second);
+            } else if (prior_initializer != nullptr || initializers.empty()) {
+              SgFunctionDefinition *definition = constructor->get_definition();
+              Sg_File_Info *definition_start = node_start(definition);
+              if (definition == nullptr || definition_start == nullptr ||
+                  !is_same_file(definition_start, cursor) ||
+                  !location_leq(cursor, definition_start)) {
+                std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-ctor-"
+                             "initializer-owner]: trailing initializer-list "
+                             "directive has no exact function-body boundary\n";
+                ROSE_ABORT();
+              }
+              entry.second->setRelativePosition(PreprocessingInfo::before);
+              attach_preprocessor_record(definition, entry.second);
+            } else {
+              std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-ctor-"
+                           "initializer-owner]: directive has no exact "
+                           "initializer boundary\n";
+              ROSE_ABORT();
+            }
+            goto inserted_preproc;
+          }
+        }
         if (anchor == nullptr) {
           anchor = find_file_boundary_anchor(cursor, forced_relative_position,
                                              entry.second);
           has_forced_anchor = anchor != nullptr;
         }
         if (anchor == nullptr && cursor != nullptr) {
-          const std::string cursor_key = source_file_key(cursor);
+          const PhysicalSourceOccurrenceKey cursor_key =
+              source_file_key(cursor);
           const auto boundaries = boundary_index.find(cursor_key);
           const bool has_lexical_boundary =
               boundaries != boundary_index.end() &&
               !boundaries->second.by_start.empty();
-          if (cursor_key.empty() || cursor->get_line() <= 0 ||
+          if (cursor_key.first < 0 || cursor->get_line() <= 0 ||
               cursor->get_col() <= 0) {
             std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-owner]: "
                          "directive has no exact physical source coordinate\n";
@@ -2848,10 +3354,29 @@ void finishSageAST(ClangToSageTranslator &translator) {
             forced_relative_position = PreprocessingInfo::before;
           }
         }
-        if (is_include && anchor != nullptr && cursor != nullptr &&
-            isSgScopeStatement(anchor) != nullptr) {
-          if (SgLocatedNode *following =
-                  find_sibling_anchor_after_cursor(anchor, cursor)) {
+        // A directive in the gap between two direct children of a lexical
+        // scope belongs before the following child.  Attaching it merely
+        // "inside" the broad scope interval emits it at the end of the scope;
+        // for an in-function #define that moves the definition after every
+        // expansion and produces uncompilable output.  This boundary rule is
+        // directive-kind independent: the source interval, not whether the
+        // record is an #include, determines its exact owner.
+        if (!has_forced_anchor && anchor != nullptr && cursor != nullptr &&
+            cursor_inside_node(anchor, cursor) &&
+            has_direct_lexical_children(anchor)) {
+          PreprocessingInfo::RelativePositionType gap_position =
+              PreprocessingInfo::undef;
+          SgLocatedNode *gap_anchor =
+              find_file_boundary_anchor(cursor, gap_position, entry.second);
+          if (gap_anchor != nullptr &&
+              isSameLineTrailingComment(gap_anchor, cursor, entry.second) &&
+              (gap_position == PreprocessingInfo::after ||
+               gap_position == PreprocessingInfo::after_syntax)) {
+            anchor = gap_anchor;
+            has_forced_anchor = true;
+            forced_relative_position = gap_position;
+          } else if (SgLocatedNode *following =
+                         find_sibling_anchor_after_cursor(anchor, cursor)) {
             anchor = following;
             has_forced_anchor = true;
             forced_relative_position = PreprocessingInfo::before;
@@ -2906,7 +3431,8 @@ void finishSageAST(ClangToSageTranslator &translator) {
             entry.second->setRelativePosition(PreprocessingInfo::inside);
           } else if (isSgNamespaceDeclarationStatement(anchor) != nullptr ||
                      isSgClassDeclaration(anchor) != nullptr ||
-                     isSgTemplateClassDeclaration(anchor) != nullptr) {
+                     isSgTemplateClassDeclaration(anchor) != nullptr ||
+                     isSgEnumDeclaration(anchor) != nullptr) {
             if (start != nullptr && end != nullptr &&
                 cursor_inside_node(anchor, entry.first) &&
                 !location_leq(entry.first, start) &&
@@ -2914,10 +3440,12 @@ void finishSageAST(ClangToSageTranslator &translator) {
               entry.second->setRelativePosition(PreprocessingInfo::inside);
             } else if (start != nullptr && location_leq(entry.first, start)) {
               entry.second->setRelativePosition(PreprocessingInfo::before);
-            } else if (isSameLineNamespaceClosingComment(anchor, entry.first,
-                                                         entry.second)) {
+            } else if (isSameLineTrailingComment(anchor, entry.first,
+                                                 entry.second)) {
               entry.second->setRelativePosition(
-                  PreprocessingInfo::after_syntax);
+                  isSgNamespaceDeclarationStatement(anchor) != nullptr
+                      ? PreprocessingInfo::after_syntax
+                      : PreprocessingInfo::after);
             } else {
               entry.second->setRelativePosition(PreprocessingInfo::after);
             }
@@ -2946,6 +3474,22 @@ void finishSageAST(ClangToSageTranslator &translator) {
       }
     }
   }
+
+  // Construction-time indexes replace repeated whole-list scans.  Audit each
+  // index once at the transaction boundary so a missed mutation is exposed as
+  // a hard frontend error rather than surviving into later AST consumers.
+  translator.validateDeclarationAttachmentSession();
+  std::unordered_set<SgSymbolTable *> audited_symbol_tables;
+  Rose_STL_Container<SgNode *> scopes =
+      NodeQuery::querySubTree(global_scope, V_SgScopeStatement);
+  for (SgNode *node : scopes) {
+    SgScopeStatement *scope = isSgScopeStatement(node);
+    SgSymbolTable *table =
+        scope != nullptr ? scope->get_symbol_table() : nullptr;
+    if (table != nullptr && audited_symbol_tables.insert(table).second) {
+      table->validate_exact_symbol_indexes();
+    }
+  }
 }
 
 SgGlobal *ClangToSageTranslator::getGlobalScope() const {
@@ -2968,6 +3512,10 @@ ClangToSageTranslator::ClangToSageTranslator(
 }
 
 ClangToSageTranslator::~ClangToSageTranslator() {}
+
+void ClangToSageTranslator::validateDeclarationAttachmentSession() {
+  p_decl_attachment_session.validateAll();
+}
 
 void ClangToSageTranslator::recordExpandedToken(const clang::Token &token) {
   if (token.isAnnotation()) {
@@ -4750,6 +5298,12 @@ size_t ClangToSageTranslator::preprocessor_list_size() {
   return p_sage_preprocessor_recorder->size();
 }
 
+std::vector<std::pair<Sg_File_Info *, PreprocessingInfo *>>
+ClangToSageTranslator::preprocessor_remaining_records() {
+  ROSE_ASSERT(p_sage_preprocessor_recorder != nullptr);
+  return p_sage_preprocessor_recorder->remainingRecords();
+}
+
 void ClangToSageTranslator::preprocessor_mark_attached(
     PreprocessingInfo *preprocessing_info) {
   ROSE_ASSERT(p_sage_preprocessor_recorder != nullptr);
@@ -4790,2005 +5344,6 @@ ClangToSageTranslator::getSourceText(clang::SourceRange range) const {
     return std::string();
   }
   return text.str();
-}
-
-// struct NextPreprocessorToInsert
-
-// NextPreprocessorToInsert::NextPreprocessorToInsert(ClangToSageTranslator &
-// translator_) :
-NextPreprocessorToInsert::NextPreprocessorToInsert(
-    ClangToSageTranslator &translator_)
-    : cursor(NULL), candidat(NULL), next_to_insert(NULL),
-      translator(translator_) {}
-
-bool NextPreprocessorToInsert::advance() {
-  if (!translator.preprocessor_pop()) {
-    cursor = NULL;
-    next_to_insert = NULL;
-    candidat = NULL;
-    return false;
-  }
-
-  std::pair<Sg_File_Info *, PreprocessingInfo *> next =
-      translator.preprocessor_top();
-  if (next.first == nullptr || next.second == nullptr) {
-    std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-owner]: recorder "
-                 "published an incomplete successor record\n";
-    ROSE_ABORT();
-  }
-  cursor = next.first;
-  next_to_insert = next.second;
-  candidat = NULL;
-  return true;
-}
-
-namespace {
-
-std::string lexicalBoundaryFileKey(Sg_File_Info *info) {
-  return info != nullptr && info->get_physical_file_id() >= 0
-             ? std::string("#physical-file-id:") +
-                   std::to_string(info->get_physical_file_id())
-             : std::string();
-}
-
-uint64_t lexicalBoundaryCoordinate(Sg_File_Info *info) {
-  if (info == nullptr || info->get_line() <= 0 || info->get_col() <= 0) {
-    return 0;
-  }
-  return (static_cast<uint64_t>(info->get_line()) << 32) |
-         static_cast<uint64_t>(info->get_col());
-}
-
-} // namespace
-
-void PreprocessorInserter::cacheLexicalBoundaries(SgGlobal *global_scope) {
-  if (global_scope == cached_lexical_boundary_scope_) {
-    return;
-  }
-  cached_lexical_boundary_scope_ = global_scope;
-  cached_lexical_boundaries_.clear();
-  if (global_scope == nullptr) {
-    std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-boundary]: lexical "
-                 "boundary cache requires a global scope\n";
-    ROSE_ABORT();
-  }
-
-  Rose_STL_Container<SgNode *> statements =
-      NodeQuery::querySubTree(global_scope, V_SgStatement);
-  for (SgNode *node : statements) {
-    SgLocatedNode *located = isSgLocatedNode(node);
-    if (located == nullptr) {
-      std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-boundary]: "
-                   "statement query returned a non-located node\n";
-      ROSE_ABORT();
-    }
-    if (isSgGlobal(located) != nullptr) {
-      continue;
-    }
-    if (isSemanticNonLexicalDeclarationSubtree(located)) {
-      continue;
-    }
-
-    SgNamespaceDeclarationStatement *namespace_declaration =
-        isSgNamespaceDeclarationStatement(located);
-    if (namespace_declaration != nullptr) {
-      if (!namespace_declaration->has_source_fragments()) {
-        std::cerr << "REX_FRONTEND_INVARIANT[namespace-source-fragment]: "
-                     "lexical namespace preprocessing owner has no typed "
-                     "source fragments\n";
-        ROSE_ABORT();
-      }
-      namespace_declaration->validate_source_fragments();
-      SgNamespaceSourceFragment *closing =
-          namespace_declaration->get_closing_source_fragment();
-      if (closing == nullptr ||
-          closing->get_parent() != namespace_declaration) {
-        std::cerr << "REX_FRONTEND_INVARIANT[namespace-source-fragment]: "
-                     "preprocessing boundary has no exact closing owner\n";
-        ROSE_ABORT();
-      }
-      closing->validate();
-      Sg_File_Info *closing_end = closing->get_endOfConstruct();
-      const std::string key = lexicalBoundaryFileKey(closing_end);
-      const uint64_t coordinate = lexicalBoundaryCoordinate(closing_end);
-      if (key.empty() || coordinate == 0) {
-        std::cerr << "REX_FRONTEND_INVARIANT[namespace-source-fragment]: "
-                     "preprocessing boundary has no exact source identity\n";
-        ROSE_ABORT();
-      }
-      cached_lexical_boundaries_[key].push_back(
-          {namespace_declaration, coordinate});
-      continue;
-    }
-
-    Sg_File_Info *start = located->get_startOfConstruct();
-    Sg_File_Info *end = located->get_endOfConstruct();
-    const bool has_start = start != nullptr && start->get_line() > 0;
-    const bool has_end = end != nullptr && end->get_line() > 0;
-    if (!has_start && !has_end) {
-      continue;
-    }
-    if (!hasExactPhysicalSourceInterval(located)) {
-      std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-boundary]: source "
-                   "node="
-                << located->class_name()
-                << " has no exact ordered physical interval\n";
-      ROSE_ABORT();
-    }
-    const std::string key = lexicalBoundaryFileKey(end);
-    const uint64_t coordinate = lexicalBoundaryCoordinate(end);
-    if (key.empty() || coordinate == 0) {
-      std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-boundary]: source "
-                   "node="
-                << located->class_name()
-                << " has no exact physical file identity\n";
-      ROSE_ABORT();
-    }
-    cached_lexical_boundaries_[key].push_back({nullptr, coordinate});
-  }
-
-  for (auto &[key, boundaries] : cached_lexical_boundaries_) {
-    (void)key;
-    std::stable_sort(
-        boundaries.begin(), boundaries.end(),
-        [](const LexicalBoundaryInfo &lhs, const LexicalBoundaryInfo &rhs) {
-          return lhs.end < rhs.end;
-        });
-  }
-}
-
-SgNamespaceDeclarationStatement *
-PreprocessorInserter::findExactNamespaceClosingCommentOwner(
-    SgGlobal *global_scope, Sg_File_Info *comment_location,
-    const PreprocessingInfo *info) {
-  if (!isCommentPreprocessingInfo(info) || comment_location == nullptr) {
-    return nullptr;
-  }
-  cacheLexicalBoundaries(global_scope);
-
-  const std::string key = lexicalBoundaryFileKey(comment_location);
-  const uint64_t comment_coordinate =
-      lexicalBoundaryCoordinate(comment_location);
-  const auto found = cached_lexical_boundaries_.find(key);
-  if (key.empty() || comment_coordinate == 0 ||
-      found == cached_lexical_boundaries_.end()) {
-    return nullptr;
-  }
-
-  const std::vector<LexicalBoundaryInfo> &boundaries = found->second;
-  auto prior = std::lower_bound(
-      boundaries.begin(), boundaries.end(), comment_coordinate,
-      [](const LexicalBoundaryInfo &candidate, uint64_t coordinate) {
-        return candidate.end < coordinate;
-      });
-  if (prior == boundaries.begin()) {
-    return nullptr;
-  }
-  const uint64_t nearest_end = std::prev(prior)->end;
-  auto nearest_begin = std::lower_bound(
-      boundaries.begin(), prior, nearest_end,
-      [](const LexicalBoundaryInfo &candidate, uint64_t coordinate) {
-        return candidate.end < coordinate;
-      });
-
-  SgNamespaceDeclarationStatement *exact_owner = nullptr;
-  for (auto candidate = nearest_begin; candidate != prior; ++candidate) {
-    if (candidate->namespace_closing_owner == nullptr ||
-        !isSameLineNamespaceClosingComment(candidate->namespace_closing_owner,
-                                           comment_location, info)) {
-      continue;
-    }
-    if (exact_owner != nullptr &&
-        exact_owner != candidate->namespace_closing_owner) {
-      std::cerr << "REX_FRONTEND_INVARIANT[namespace-source-fragment]: "
-                   "one closing comment has multiple namespace fragments at "
-                   "the same source coordinate\n";
-      ROSE_ABORT();
-    }
-    exact_owner = candidate->namespace_closing_owner;
-  }
-  return exact_owner;
-}
-
-// class
-
-NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
-    SgNode *astNode, NextPreprocessorToInsert *inheritedValue) {
-  // Guard against null after final preprocessor insertion
-  if (inheritedValue == NULL)
-    return NULL;
-  if (inheritedValue->cursor == NULL)
-    return NULL;
-
-  SgLocatedNode *position_node = isSgLocatedNode(astNode);
-  if (position_node == NULL)
-    return inheritedValue;
-  if (isSemanticNonLexicalDeclarationSubtree(position_node)) {
-    return inheritedValue;
-  }
-
-  Sg_File_Info *current_pos = position_node->get_startOfConstruct();
-  if (current_pos == NULL) {
-    return inheritedValue;
-  }
-
-  // Source fragments participate in lexical traversal, but preprocessing is
-  // owned by the namespace declaration that emits the fragment.  Preserve the
-  // fragment's exact traversal coordinate while using that declaration as the
-  // attachment target.
-  SgLocatedNode *loc_node = position_node;
-  if (SgNamespaceSourceFragment *fragment =
-          isSgNamespaceSourceFragment(position_node)) {
-    fragment->validate();
-    SgNamespaceDeclarationStatement *owner =
-        isSgNamespaceDeclarationStatement(fragment->get_parent());
-    if (owner == nullptr || !owner->has_source_fragments() ||
-        (fragment->get_kind() ==
-             SgNamespaceSourceFragment::
-                 e_namespace_source_fragment_opening_introducer &&
-         owner->get_opening_introducer_source_fragment() != fragment) ||
-        (fragment->get_kind() ==
-             SgNamespaceSourceFragment::e_namespace_source_fragment_opening &&
-         owner->get_opening_source_fragment() != fragment) ||
-        (fragment->get_kind() ==
-             SgNamespaceSourceFragment::e_namespace_source_fragment_closing &&
-         owner->get_closing_source_fragment() != fragment)) {
-      std::cerr << "REX_FRONTEND_INVARIANT[namespace-source-fragment]: "
-                   "preprocessing traversal reached fragment without its "
-                   "exact namespace owner\n";
-      ROSE_ABORT();
-    }
-    owner->validate_source_fragments();
-    // The closing fragment is a structural child of the declaration, so AST
-    // preorder reaches it before the namespace definition and its lexical
-    // contents.  Treating that early visit as a source cursor boundary steals
-    // comments/directives from declarations inside the namespace.  The next
-    // real lexical node (or the residual exact-boundary index at EOF) consumes
-    // closing-boundary records after the contents have been traversed.
-    if (fragment->get_kind() ==
-        SgNamespaceSourceFragment::e_namespace_source_fragment_closing) {
-      return inheritedValue;
-    }
-    loc_node = owner;
-  }
-
-  auto exact_source_start = [](SgLocatedNode *node) -> Sg_File_Info * {
-    return hasExactPhysicalSourceInterval(node) ? node->get_startOfConstruct()
-                                                : nullptr;
-  };
-  auto is_same_file = [](Sg_File_Info *a, Sg_File_Info *b) -> bool {
-    if (a == nullptr || b == nullptr || a->get_physical_file_id() < 0 ||
-        b->get_physical_file_id() < 0 ||
-        a->get_physical_file_occurrence_id() == 0 ||
-        b->get_physical_file_occurrence_id() == 0) {
-      return false;
-    }
-    return a->isSameFile(*b) && a->get_physical_file_occurrence_id() ==
-                                    b->get_physical_file_occurrence_id();
-  };
-  auto should_attach_preproc = [&](SgLocatedNode *node) -> bool {
-    // Keep in sync with SgLocatedNode::addToAttachedPreprocessingInfo() hard
-    // restrictions: these node kinds are not valid preprocessing anchors.
-    // SgFunctionParameterList must also be excluded: top-level directives that
-    // precede a function declaration belong to the enclosing declaration, not
-    // inside the declarator's parameter-list syntax.
-    if (node == nullptr || isSgGlobal(node) != nullptr ||
-        isSemanticNonLexicalDeclarationSubtree(node) ||
-        isSgTypedefSeq(node) != nullptr ||
-        isSgCatchStatementSeq(node) != nullptr ||
-        isSgCtorInitializerList(node) != nullptr ||
-        isSgFunctionParameterList(node) != nullptr) {
-      return false;
-    }
-    if (SgNamespaceDeclarationStatement *namespace_declaration =
-            isSgNamespaceDeclarationStatement(node)) {
-      if (!namespace_declaration->has_source_fragments()) {
-        return false;
-      }
-      namespace_declaration->validate_source_fragments();
-      return true;
-    }
-    return hasExactPhysicalSourceInterval(node);
-  };
-  // Non-statement nodes may appear earlier in traversal order than later
-  // directives/comments. Limit those attachments to the node's own lexical
-  // range so conditionals do not migrate into preceding expressions.
-  auto should_attach_preproc_target =
-      [&](SgLocatedNode *node, Sg_File_Info *directive_info) -> bool {
-    auto location_leq_local = [](Sg_File_Info *lhs, Sg_File_Info *rhs) -> bool {
-      if (lhs == nullptr || rhs == nullptr) {
-        return false;
-      }
-      if (lhs->get_line() != rhs->get_line()) {
-        return lhs->get_line() < rhs->get_line();
-      }
-      return lhs->get_col() <= rhs->get_col();
-    };
-
-    if (node == nullptr || isSemanticNonLexicalDeclarationSubtree(node) ||
-        !should_attach_preproc(node)) {
-      return false;
-    }
-    if (directive_info == nullptr) {
-      return true;
-    }
-
-    Sg_File_Info *info = nullptr;
-    if (SgNamespaceDeclarationStatement *namespace_declaration =
-            isSgNamespaceDeclarationStatement(node)) {
-      if (!namespace_declaration->has_source_fragments()) {
-        std::cerr << "REX_FRONTEND_INVARIANT[namespace-source-fragment]: "
-                     "namespace preprocessing target has no typed source "
-                     "fragments\n";
-        ROSE_ABORT();
-      }
-      namespace_declaration->validate_source_fragments();
-      SgNamespaceSourceFragment *introducer =
-          namespace_declaration->get_opening_introducer_source_fragment();
-      SgNamespaceSourceFragment *opening =
-          namespace_declaration->get_opening_source_fragment();
-      SgNamespaceSourceFragment *closing =
-          namespace_declaration->get_closing_source_fragment();
-      ROSE_ASSERT(opening != nullptr && closing != nullptr);
-      Sg_File_Info *opening_start = opening->get_startOfConstruct();
-      Sg_File_Info *closing_start = closing->get_startOfConstruct();
-      Sg_File_Info *introducer_start =
-          introducer != nullptr ? introducer->get_startOfConstruct() : nullptr;
-      if (introducer_start != nullptr &&
-          introducer_start->get_physical_file_id() >= 0 &&
-          directive_info->get_physical_file_id() >= 0 &&
-          is_same_file(introducer_start, directive_info)) {
-        info = introducer_start;
-      } else if (opening_start != nullptr &&
-                 opening_start->get_physical_file_id() >= 0 &&
-                 directive_info->get_physical_file_id() >= 0 &&
-                 is_same_file(opening_start, directive_info)) {
-        info = opening_start;
-      } else if (closing_start != nullptr &&
-                 closing_start->get_physical_file_id() >= 0 &&
-                 directive_info->get_physical_file_id() >= 0 &&
-                 is_same_file(closing_start, directive_info)) {
-        info = closing_start;
-      } else {
-        return false;
-      }
-    } else {
-      info = exact_source_start(node);
-    }
-    if (info == nullptr || info->get_line() <= 0 || info->get_col() <= 0) {
-      return false;
-    }
-    if (!is_same_file(info, directive_info)) {
-      return false;
-    }
-
-    if (isSgStatement(node) != nullptr) {
-      return true;
-    }
-    Sg_File_Info *start = node->get_startOfConstruct();
-    Sg_File_Info *end = node->get_endOfConstruct();
-    return start != nullptr && end != nullptr &&
-           is_same_file(start, directive_info) &&
-           is_same_file(end, directive_info) &&
-           location_leq_local(start, directive_info) &&
-           location_leq_local(directive_info, end);
-  };
-  auto is_include_directive = [](const PreprocessingInfo *info) -> bool {
-    if (info == nullptr) {
-      return false;
-    }
-    PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
-    return type == PreprocessingInfo::CpreprocessorIncludeDeclaration ||
-           type == PreprocessingInfo::CpreprocessorIncludeNextDeclaration;
-  };
-  auto is_comment_directive = [](const PreprocessingInfo *info) -> bool {
-    if (info == nullptr) {
-      return false;
-    }
-    PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
-    return type == PreprocessingInfo::C_StyleComment ||
-           type == PreprocessingInfo::CplusplusStyleComment ||
-           type == PreprocessingInfo::FortranStyleComment ||
-           type == PreprocessingInfo::F90StyleComment;
-  };
-  auto promote_include_target =
-      [&](SgLocatedNode *node,
-          PreprocessingInfo *directive) -> SgLocatedNode * {
-    if (node == nullptr || !is_include_directive(directive)) {
-      return node;
-    }
-    Sg_File_Info *directive_info = directive->get_file_info();
-    if (directive_info == nullptr) {
-      return node;
-    }
-
-    SgLocatedNode *best = node;
-    for (SgNode *cursor = node; cursor != nullptr;
-         cursor = cursor->get_parent()) {
-      SgLocatedNode *located = isSgLocatedNode(cursor);
-      if (located == nullptr || isSgStatement(located) == nullptr) {
-        continue;
-      }
-      Sg_File_Info *located_info = exact_source_start(located);
-      if (located_info == nullptr || located_info->get_line() == 0) {
-        continue;
-      }
-      if (!is_same_file(located_info, directive_info)) {
-        continue;
-      }
-      if (!should_attach_preproc(located)) {
-        continue;
-      }
-      best = located;
-      break;
-    }
-
-    return best;
-  };
-  auto should_attach_include_target =
-      [&](SgLocatedNode *node, Sg_File_Info *directive_info) -> bool {
-    if (node == nullptr || isSemanticNonLexicalDeclarationSubtree(node) ||
-        !should_attach_preproc(node)) {
-      return false;
-    }
-    if (directive_info == nullptr) {
-      return true;
-    }
-
-    if (SgNamespaceDeclarationStatement *namespace_declaration =
-            isSgNamespaceDeclarationStatement(node)) {
-      namespace_declaration->validate_source_fragments();
-      SgNamespaceSourceFragment *fragments[] = {
-          namespace_declaration->get_opening_introducer_source_fragment(),
-          namespace_declaration->get_opening_source_fragment(),
-          namespace_declaration->get_closing_source_fragment()};
-      for (SgNamespaceSourceFragment *fragment : fragments) {
-        if (fragment == nullptr) {
-          continue;
-        }
-        Sg_File_Info *start = fragment->get_startOfConstruct();
-        Sg_File_Info *end = fragment->get_endOfConstruct();
-        if (start != nullptr && end != nullptr &&
-            is_same_file(start, directive_info) &&
-            is_same_file(end, directive_info)) {
-          return true;
-        }
-      }
-      return false;
-    }
-    return is_same_file(node->get_startOfConstruct(), directive_info) &&
-           is_same_file(node->get_endOfConstruct(), directive_info);
-  };
-  auto location_leq = [](Sg_File_Info *lhs, Sg_File_Info *rhs) -> bool {
-    if (lhs == nullptr || rhs == nullptr) {
-      return false;
-    }
-    if (lhs->get_line() != rhs->get_line()) {
-      return lhs->get_line() < rhs->get_line();
-    }
-    return lhs->get_col() <= rhs->get_col();
-  };
-  auto find_exact_enum_body_anchor =
-      [&](SgLocatedNode *seed, Sg_File_Info *directive_info,
-          PreprocessingInfo::RelativePositionType &relative_position)
-      -> SgLocatedNode * {
-    if (seed == nullptr || directive_info == nullptr) {
-      return nullptr;
-    }
-
-    SgEnumDeclaration *enum_owner = nullptr;
-    std::unordered_set<SgNode *> visited;
-    for (SgNode *cursor = seed; cursor != nullptr;
-         cursor = cursor->get_parent()) {
-      if (!visited.insert(cursor).second) {
-        std::cerr
-            << "REX_FRONTEND_INVARIANT[enum-source-ownership]: parent cycle "
-               "while locating a preprocessing owner\n";
-        ROSE_ABORT();
-      }
-      if ((enum_owner = isSgEnumDeclaration(cursor)) != nullptr) {
-        break;
-      }
-    }
-    if (enum_owner == nullptr || !hasExactPhysicalSourceInterval(enum_owner)) {
-      return nullptr;
-    }
-
-    Sg_File_Info *enum_start = enum_owner->get_startOfConstruct();
-    Sg_File_Info *enum_end = enum_owner->get_endOfConstruct();
-    if (!is_same_file(enum_start, directive_info) ||
-        !is_same_file(enum_end, directive_info) ||
-        !location_leq(enum_start, directive_info) ||
-        !location_leq(directive_info, enum_end)) {
-      return nullptr;
-    }
-
-    enum_owner->validate_enumerator_source_ownership();
-    for (SgInitializedName *enumerator : enum_owner->get_enumerators()) {
-      ROSE_ASSERT(enumerator != nullptr);
-      if (enumerator->get_enum_constant_source_ownership() !=
-          SgInitializedName::e_enum_constant_source_body) {
-        continue;
-      }
-      Sg_File_Info *enumerator_start = enumerator->get_startOfConstruct();
-      Sg_File_Info *enumerator_end = enumerator->get_endOfConstruct();
-      if (enumerator_start == nullptr || enumerator_end == nullptr ||
-          enumerator_start->isCompilerGenerated()) {
-        continue;
-      }
-      if (!is_same_file(enum_start, enumerator_start) ||
-          !is_same_file(enum_start, enumerator_end)) {
-        std::cerr
-            << "REX_FRONTEND_INVARIANT[enum-source-ownership]: direct enum "
-               "constant does not share its owner's exact physical source\n";
-        ROSE_ABORT();
-      }
-      if (location_leq(enumerator_start, directive_info) &&
-          location_leq(directive_info, enumerator_end)) {
-        // This is not an enum-list boundary.  A nested expression/source
-        // producer must claim preprocessing that lies inside one constant's
-        // own exact syntax range.
-        return nullptr;
-      }
-      const bool follows_directive =
-          location_leq(directive_info, enumerator_start) &&
-          !location_leq(enumerator_start, directive_info);
-      if (follows_directive) {
-        relative_position = PreprocessingInfo::before;
-        return enumerator;
-      }
-    }
-
-    // A directive after the last source-spelled constant still belongs inside
-    // the exact enum body.  The defining declaration is its typed terminal
-    // boundary; canonicalPreprocessingOwner preserves that owner.
-    relative_position = PreprocessingInfo::inside;
-    return enum_owner;
-  };
-  auto declaration_group_comment_anchor =
-      [&](SgLocatedNode *seed, Sg_File_Info *comment_position,
-          PreprocessingInfo *comment,
-          PreprocessingInfo::RelativePositionType &relative_position)
-      -> SgDeclarationStatement * {
-    if (seed == nullptr || comment_position == nullptr ||
-        !is_comment_directive(comment)) {
-      return nullptr;
-    }
-
-    SgDeclarationGroupStatement *group = nullptr;
-    for (SgNode *node = seed; node != nullptr; node = node->get_parent()) {
-      if ((group = isSgDeclarationGroupStatement(node)) != nullptr) {
-        break;
-      }
-    }
-    if (group == nullptr) {
-      return nullptr;
-    }
-    group->validate();
-
-    Sg_File_Info *group_start = group->get_startOfConstruct();
-    Sg_File_Info *group_end = group->get_endOfConstruct();
-    if (group_start == nullptr || group_end == nullptr ||
-        group_start->get_line() <= 0 || group_end->get_line() <= 0 ||
-        !is_same_file(group_start, group_end) ||
-        !is_same_file(group_start, comment_position) ||
-        !location_leq(group_start, group_end)) {
-      std::cerr << "REX_CFE_PREPROCESSING_INVARIANT[declaration-group-owner]: "
-                   "typed declaration group has no exact ordered single-file "
-                   "range\n";
-      ROSE_ABORT();
-    }
-    const bool comment_strictly_inside_group =
-        location_leq(group_start, comment_position) &&
-        !location_leq(comment_position, group_start) &&
-        location_leq(comment_position, group_end) &&
-        !location_leq(group_end, comment_position);
-    if (!comment_strictly_inside_group) {
-      return nullptr;
-    }
-
-    Sg_File_Info *previous_member_end = nullptr;
-    const SgDeclarationStatementPtrList &members = group->get_declarations();
-    for (size_t index = 0; index < members.size(); ++index) {
-      SgDeclarationStatement *member = members[index];
-      Sg_File_Info *member_start =
-          member != nullptr ? member->get_startOfConstruct() : nullptr;
-      Sg_File_Info *member_end =
-          member != nullptr ? member->get_endOfConstruct() : nullptr;
-      if (member == nullptr || member->get_parent() != group ||
-          member_start == nullptr || member_end == nullptr ||
-          member_start->get_line() <= 0 || member_end->get_line() <= 0 ||
-          !is_same_file(group_start, member_start) ||
-          !is_same_file(group_start, member_end) ||
-          !location_leq(group_start, member_start) ||
-          !location_leq(member_start, member_end) ||
-          !location_leq(member_end, group_end) ||
-          (previous_member_end != nullptr &&
-           !location_leq(previous_member_end, member_end))) {
-        std::cerr
-            << "REX_CFE_PREPROCESSING_INVARIANT[declaration-group-owner]: "
-               "typed declaration group member index="
-            << index << " has no exact monotonic source range\n";
-        ROSE_ABORT();
-      }
-
-      if (previous_member_end != nullptr &&
-          location_leq(previous_member_end, comment_position) &&
-          !location_leq(comment_position, previous_member_end) &&
-          location_leq(comment_position, member_end)) {
-        relative_position = PreprocessingInfo::before;
-        return member;
-      }
-      previous_member_end = member_end;
-    }
-
-    ROSE_ASSERT(previous_member_end != nullptr);
-    if (location_leq(previous_member_end, comment_position) &&
-        !location_leq(comment_position, previous_member_end)) {
-      relative_position = PreprocessingInfo::after;
-      return members.back();
-    }
-    return nullptr;
-  };
-  auto directive_inside_node = [&](SgLocatedNode *node,
-                                   Sg_File_Info *directive_info) -> bool {
-    if (node == nullptr || directive_info == nullptr ||
-        !hasExactPhysicalSourceInterval(node)) {
-      return false;
-    }
-    Sg_File_Info *start = node->get_startOfConstruct();
-    Sg_File_Info *end = node->get_endOfConstruct();
-    if (!is_same_file(start, directive_info) ||
-        !is_same_file(end, directive_info)) {
-      return false;
-    }
-
-    return location_leq(start, directive_info) &&
-           location_leq(directive_info, end);
-  };
-  std::function<SgLocatedNode *(SgLocatedNode *, Sg_File_Info *)>
-      include_target_for_inside;
-  include_target_for_inside =
-      [&](SgLocatedNode *node,
-          Sg_File_Info *directive_info) -> SgLocatedNode * {
-    if (node == nullptr || directive_info == nullptr) {
-      return node;
-    }
-
-    auto choose_inside = [&](SgLocatedNode *candidate) -> SgLocatedNode * {
-      if (candidate == nullptr) {
-        return nullptr;
-      }
-      if (!should_attach_include_target(candidate, directive_info)) {
-        return nullptr;
-      }
-      if (!directive_inside_node(candidate, directive_info)) {
-        return nullptr;
-      }
-      return candidate;
-    };
-
-    auto descend_statements =
-        [&](const SgStatementPtrList &stmts) -> SgLocatedNode * {
-      for (SgStatement *stmt : stmts) {
-        SgLocatedNode *candidate = isSgLocatedNode(stmt);
-        if (candidate == nullptr) {
-          continue;
-        }
-        if (!directive_inside_node(candidate, directive_info)) {
-          continue;
-        }
-        if (SgLocatedNode *target =
-                include_target_for_inside(candidate, directive_info)) {
-          return target;
-        }
-        return candidate;
-      }
-      return nullptr;
-    };
-
-    auto descend_declarations =
-        [&](const SgDeclarationStatementPtrList &decls) -> SgLocatedNode * {
-      for (SgDeclarationStatement *decl : decls) {
-        SgLocatedNode *candidate = isSgLocatedNode(decl);
-        if (candidate == nullptr) {
-          continue;
-        }
-        if (!directive_inside_node(candidate, directive_info)) {
-          continue;
-        }
-        if (SgLocatedNode *target =
-                include_target_for_inside(candidate, directive_info)) {
-          return target;
-        }
-        return candidate;
-      }
-      return nullptr;
-    };
-
-    if (SgBasicBlock *block = isSgBasicBlock(node)) {
-      if (SgLocatedNode *target = descend_statements(block->get_statements())) {
-        return target;
-      }
-    }
-    if (SgNamespaceDefinitionStatement *ns_def =
-            isSgNamespaceDefinitionStatement(node)) {
-      if (SgLocatedNode *target =
-              descend_declarations(ns_def->get_declarations())) {
-        return target;
-      }
-    }
-    if (SgClassDefinition *class_def = isSgClassDefinition(node)) {
-      if (SgLocatedNode *target =
-              descend_declarations(class_def->get_members())) {
-        return target;
-      }
-    }
-    if (SgTemplateClassDefinition *class_def =
-            isSgTemplateClassDefinition(node)) {
-      if (SgLocatedNode *target =
-              descend_declarations(class_def->get_members())) {
-        return target;
-      }
-    }
-
-    if (SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(node)) {
-      if (SgFunctionDefinition *defn = func_decl->get_definition()) {
-        if (SgBasicBlock *body = defn->get_body()) {
-          if (SgLocatedNode *target =
-                  include_target_for_inside(body, directive_info)) {
-            return target;
-          }
-          if (SgLocatedNode *target = choose_inside(body)) {
-            return target;
-          }
-        }
-        if (SgLocatedNode *target =
-                include_target_for_inside(defn, directive_info)) {
-          return target;
-        }
-        if (SgLocatedNode *target = choose_inside(defn)) {
-          return target;
-        }
-      }
-    }
-    if (SgIfStmt *if_stmt = isSgIfStmt(node)) {
-      if (SgLocatedNode *target = include_target_for_inside(
-              isSgLocatedNode(if_stmt->get_true_body()), directive_info)) {
-        return target;
-      }
-      if (SgLocatedNode *target =
-              choose_inside(isSgLocatedNode(if_stmt->get_true_body()))) {
-        return target;
-      }
-      if (SgLocatedNode *target = include_target_for_inside(
-              isSgLocatedNode(if_stmt->get_false_body()), directive_info)) {
-        return target;
-      }
-      if (SgLocatedNode *target =
-              choose_inside(isSgLocatedNode(if_stmt->get_false_body()))) {
-        return target;
-      }
-    }
-    if (SgForStatement *for_stmt = isSgForStatement(node)) {
-      if (SgLocatedNode *target = include_target_for_inside(
-              isSgLocatedNode(for_stmt->get_loop_body()), directive_info)) {
-        return target;
-      }
-      if (SgLocatedNode *target =
-              choose_inside(isSgLocatedNode(for_stmt->get_loop_body()))) {
-        return target;
-      }
-    }
-    if (SgRangeBasedForStatement *for_stmt = isSgRangeBasedForStatement(node)) {
-      if (SgLocatedNode *target = include_target_for_inside(
-              isSgLocatedNode(for_stmt->get_loop_body()), directive_info)) {
-        return target;
-      }
-      if (SgLocatedNode *target =
-              choose_inside(isSgLocatedNode(for_stmt->get_loop_body()))) {
-        return target;
-      }
-    }
-    if (SgWhileStmt *while_stmt = isSgWhileStmt(node)) {
-      if (SgLocatedNode *target = include_target_for_inside(
-              isSgLocatedNode(while_stmt->get_body()), directive_info)) {
-        return target;
-      }
-      if (SgLocatedNode *target =
-              choose_inside(isSgLocatedNode(while_stmt->get_body()))) {
-        return target;
-      }
-    }
-    if (SgDoWhileStmt *do_stmt = isSgDoWhileStmt(node)) {
-      if (SgLocatedNode *target = include_target_for_inside(
-              isSgLocatedNode(do_stmt->get_body()), directive_info)) {
-        return target;
-      }
-      if (SgLocatedNode *target =
-              choose_inside(isSgLocatedNode(do_stmt->get_body()))) {
-        return target;
-      }
-    }
-    if (SgSwitchStatement *switch_stmt = isSgSwitchStatement(node)) {
-      if (SgLocatedNode *target = include_target_for_inside(
-              isSgLocatedNode(switch_stmt->get_body()), directive_info)) {
-        return target;
-      }
-      if (SgLocatedNode *target =
-              choose_inside(isSgLocatedNode(switch_stmt->get_body()))) {
-        return target;
-      }
-    }
-    if (SgCaseOptionStmt *case_stmt = isSgCaseOptionStmt(node)) {
-      if (SgLocatedNode *target = include_target_for_inside(
-              isSgLocatedNode(case_stmt->get_body()), directive_info)) {
-        return target;
-      }
-      if (SgLocatedNode *target =
-              choose_inside(isSgLocatedNode(case_stmt->get_body()))) {
-        return target;
-      }
-    }
-    if (SgDefaultOptionStmt *default_stmt = isSgDefaultOptionStmt(node)) {
-      if (SgLocatedNode *target = include_target_for_inside(
-              isSgLocatedNode(default_stmt->get_body()), directive_info)) {
-        return target;
-      }
-      if (SgLocatedNode *target =
-              choose_inside(isSgLocatedNode(default_stmt->get_body()))) {
-        return target;
-      }
-    }
-    if (SgCatchOptionStmt *catch_stmt = isSgCatchOptionStmt(node)) {
-      if (SgLocatedNode *target = include_target_for_inside(
-              isSgLocatedNode(catch_stmt->get_body()), directive_info)) {
-        return target;
-      }
-      if (SgLocatedNode *target =
-              choose_inside(isSgLocatedNode(catch_stmt->get_body()))) {
-        return target;
-      }
-    }
-    if (SgNamespaceDeclarationStatement *ns_decl =
-            isSgNamespaceDeclarationStatement(node)) {
-      if (SgNamespaceDefinitionStatement *ns_def = ns_decl->get_definition()) {
-        if (SgLocatedNode *target =
-                include_target_for_inside(ns_def, directive_info)) {
-          return target;
-        }
-        if (SgLocatedNode *target = choose_inside(ns_def)) {
-          return target;
-        }
-      }
-    }
-    if (SgClassDeclaration *class_decl = isSgClassDeclaration(node)) {
-      if (SgClassDefinition *class_def = class_decl->get_definition()) {
-        if (SgLocatedNode *target =
-                include_target_for_inside(class_def, directive_info)) {
-          return target;
-        }
-        if (SgLocatedNode *target = choose_inside(class_def)) {
-          return target;
-        }
-      }
-    }
-    if (SgTemplateClassDeclaration *class_decl =
-            isSgTemplateClassDeclaration(node)) {
-      if (SgTemplateClassDefinition *class_def =
-              isSgTemplateClassDefinition(class_decl->get_definition())) {
-        if (SgLocatedNode *target =
-                include_target_for_inside(class_def, directive_info)) {
-          return target;
-        }
-        if (SgLocatedNode *target = choose_inside(class_def)) {
-          return target;
-        }
-      }
-    }
-
-    return choose_inside(node);
-  };
-  auto find_prior_include_anchor =
-      [&](SgLocatedNode *node,
-          Sg_File_Info *directive_info) -> SgLocatedNode * {
-    if (node == nullptr || directive_info == nullptr) {
-      return nullptr;
-    }
-
-    auto choose_best = [&](SgLocatedNode *candidate,
-                           SgLocatedNode *best) -> SgLocatedNode * {
-      if (candidate == nullptr) {
-        return best;
-      }
-      if (!should_attach_include_target(candidate, directive_info)) {
-        return best;
-      }
-      if (!directive_inside_node(candidate, directive_info)) {
-        return best;
-      }
-      return candidate;
-    };
-
-    SgLocatedNode *best = nullptr;
-    SgNode *parent = node->get_parent();
-    if (SgBasicBlock *block = isSgBasicBlock(parent)) {
-      for (SgStatement *stmt : block->get_statements()) {
-        if (stmt == node) {
-          break;
-        }
-        best = choose_best(isSgLocatedNode(stmt), best);
-      }
-    } else if (SgNamespaceDefinitionStatement *ns_def =
-                   isSgNamespaceDefinitionStatement(parent)) {
-      for (SgDeclarationStatement *decl : ns_def->get_declarations()) {
-        if (decl == node) {
-          break;
-        }
-        best = choose_best(isSgLocatedNode(decl), best);
-      }
-    } else if (SgGlobal *global = isSgGlobal(parent)) {
-      for (SgDeclarationStatement *decl : global->get_declarations()) {
-        if (decl == node) {
-          break;
-        }
-        best = choose_best(isSgLocatedNode(decl), best);
-      }
-    } else if (SgClassDefinition *class_def = isSgClassDefinition(parent)) {
-      for (SgDeclarationStatement *decl : class_def->get_members()) {
-        if (decl == node) {
-          break;
-        }
-        best = choose_best(isSgLocatedNode(decl), best);
-      }
-    } else if (SgTemplateClassDefinition *class_def =
-                   isSgTemplateClassDefinition(parent)) {
-      for (SgDeclarationStatement *decl : class_def->get_members()) {
-        if (decl == node) {
-          break;
-        }
-        best = choose_best(isSgLocatedNode(decl), best);
-      }
-    }
-
-    if (best == nullptr) {
-      best = choose_best(isSgLocatedNode(parent), best);
-    }
-    return best;
-  };
-
-  auto find_global_preprocessing_gap_anchor =
-      [&](Sg_File_Info *directive_info,
-          PreprocessingInfo::RelativePositionType &relative_position)
-      -> SgLocatedNode * {
-    SgGlobal *global_scope = inheritedValue->translator.getGlobalScope();
-    if (directive_info == nullptr || global_scope == nullptr) {
-      return nullptr;
-    }
-
-    SgLocatedNode *prior = nullptr;
-    Sg_File_Info *prior_end = nullptr;
-    SgLocatedNode *following = nullptr;
-    Sg_File_Info *following_start = nullptr;
-    SgNamespaceDefinitionStatement *following_namespace_closing_owner = nullptr;
-    for (SgDeclarationStatement *decl : global_scope->get_declarations()) {
-      SgLocatedNode *candidate = isSgLocatedNode(decl);
-      if (candidate == nullptr ||
-          !should_attach_include_target(candidate, directive_info)) {
-        continue;
-      }
-      Sg_File_Info *start = candidate->get_startOfConstruct();
-      Sg_File_Info *end = candidate->get_endOfConstruct();
-      bool matched_namespace_closing_fragment = false;
-      if ((start == nullptr || !is_same_file(start, directive_info)) &&
-          isSgNamespaceDeclarationStatement(candidate) != nullptr) {
-        SgNamespaceDeclarationStatement *namespace_declaration =
-            isSgNamespaceDeclarationStatement(candidate);
-        if (!namespace_declaration->has_source_fragments()) {
-          std::cerr << "REX_FRONTEND_INVARIANT[namespace-source-fragment]: "
-                       "global preprocessing anchor has no typed source "
-                       "fragments\n";
-          ROSE_ABORT();
-        }
-        namespace_declaration->validate_source_fragments();
-        SgNamespaceSourceFragment *fragments[] = {
-            namespace_declaration->get_opening_introducer_source_fragment(),
-            namespace_declaration->get_opening_source_fragment(),
-            namespace_declaration->get_closing_source_fragment()};
-        for (SgNamespaceSourceFragment *fragment : fragments) {
-          if (fragment == nullptr) {
-            continue;
-          }
-          Sg_File_Info *fragment_start = fragment->get_startOfConstruct();
-          Sg_File_Info *fragment_end = fragment->get_endOfConstruct();
-          if (fragment_start != nullptr && fragment_end != nullptr &&
-              fragment_start->get_physical_file_id() >= 0 &&
-              directive_info->get_physical_file_id() >= 0 &&
-              fragment_start->isSameFile(*directive_info)) {
-            start = fragment_start;
-            end = fragment_end;
-            matched_namespace_closing_fragment =
-                fragment->get_kind() ==
-                SgNamespaceSourceFragment::e_namespace_source_fragment_closing;
-            break;
-          }
-        }
-      }
-      if (start == nullptr || end == nullptr || start->get_line() <= 0 ||
-          end->get_line() <= 0 || !is_same_file(start, directive_info) ||
-          !is_same_file(end, directive_info)) {
-        continue;
-      }
-      if (!location_leq(start, end)) {
-        std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-gap-owner]: node="
-                  << candidate->class_name()
-                  << " has a retrograde source interval\n";
-        ROSE_ABORT();
-      }
-
-      if (location_leq(start, directive_info) &&
-          location_leq(directive_info, end)) {
-        // The directive is lexically inside this declaration; a nested source
-        // owner must claim it.
-        return nullptr;
-      }
-
-      const bool candidate_precedes = location_leq(end, directive_info) &&
-                                      !location_leq(directive_info, end);
-      if (candidate_precedes &&
-          (prior_end == nullptr || location_leq(prior_end, end))) {
-        prior = candidate;
-        prior_end = end;
-      }
-
-      const bool candidate_follows = location_leq(directive_info, start) &&
-                                     !location_leq(start, directive_info);
-      if (candidate_follows && (following_start == nullptr ||
-                                location_leq(start, following_start))) {
-        following = candidate;
-        following_start = start;
-        following_namespace_closing_owner =
-            matched_namespace_closing_fragment
-                ? isSgNamespaceDeclarationStatement(candidate)->get_definition()
-                : nullptr;
-      }
-    }
-
-    if (prior != nullptr) {
-      relative_position =
-          isSameLineNamespaceClosingComment(prior, directive_info,
-                                            inheritedValue->next_to_insert)
-              ? PreprocessingInfo::after_syntax
-              : PreprocessingInfo::after;
-      return prior;
-    }
-    if (following != nullptr) {
-      if (following_namespace_closing_owner != nullptr) {
-        relative_position = PreprocessingInfo::inside;
-        return following_namespace_closing_owner;
-      }
-      relative_position = PreprocessingInfo::before;
-      return following;
-    }
-    return nullptr;
-  };
-  auto is_conditional_directive = [](PreprocessingInfo::DirectiveType type) {
-    return type == PreprocessingInfo::CpreprocessorIfDeclaration ||
-           type == PreprocessingInfo::CpreprocessorIfdefDeclaration ||
-           type == PreprocessingInfo::CpreprocessorIfndefDeclaration ||
-           type == PreprocessingInfo::CpreprocessorElifDeclaration ||
-           type == PreprocessingInfo::CpreprocessorElseDeclaration ||
-           type == PreprocessingInfo::CpreprocessorEndifDeclaration;
-  };
-  auto is_gap_preserved_directive = [&](PreprocessingInfo::DirectiveType type) {
-    // Preserve only trailing conditional structure across statement gaps.
-    // Opening directives must stay anchored on the following declaration or
-    // scope so later rewrites cannot strand an `#endif` without its `#if`.
-    return type == PreprocessingInfo::CpreprocessorDeadIfDeclaration ||
-           type == PreprocessingInfo::CpreprocessorElifDeclaration ||
-           type == PreprocessingInfo::CpreprocessorElseDeclaration ||
-           type == PreprocessingInfo::CpreprocessorEndifDeclaration;
-  };
-  auto is_opening_conditional_directive =
-      [](PreprocessingInfo::DirectiveType type) {
-        return type == PreprocessingInfo::CpreprocessorIfDeclaration ||
-               type == PreprocessingInfo::CpreprocessorIfdefDeclaration ||
-               type == PreprocessingInfo::CpreprocessorIfndefDeclaration;
-      };
-  auto is_structural_conditional_scope = [](SgLocatedNode *node) {
-    return node != nullptr &&
-           (isSgBasicBlock(node) != nullptr || isSgIfStmt(node) != nullptr ||
-            isSgSwitchStatement(node) != nullptr ||
-            isSgCaseOptionStmt(node) != nullptr ||
-            isSgDefaultOptionStmt(node) != nullptr ||
-            isSgForStatement(node) != nullptr ||
-            isSgRangeBasedForStatement(node) != nullptr ||
-            isSgWhileStmt(node) != nullptr ||
-            isSgDoWhileStmt(node) != nullptr ||
-            isSgCatchOptionStmt(node) != nullptr);
-  };
-  auto find_structural_conditional_anchor =
-      [&](SgLocatedNode *candidate, SgLocatedNode *current_node,
-          Sg_File_Info *directive_info,
-          PreprocessingInfo::DirectiveType directive_type,
-          PreprocessingInfo::RelativePositionType &relative_position)
-      -> SgLocatedNode * {
-    if (candidate == nullptr || current_node == nullptr ||
-        directive_info == nullptr || current_pos == nullptr ||
-        !is_conditional_directive(directive_type)) {
-      return nullptr;
-    }
-
-    const bool is_opening = is_opening_conditional_directive(directive_type);
-    for (SgNode *cursor_node = candidate; cursor_node != nullptr;
-         cursor_node = cursor_node->get_parent()) {
-      SgLocatedNode *anchor = isSgLocatedNode(cursor_node);
-      if (anchor == nullptr || !is_structural_conditional_scope(anchor) ||
-          !should_attach_preproc_target(anchor, directive_info)) {
-        continue;
-      }
-      if (anchor == current_node ||
-          SageInterface::isAncestor(anchor, current_node)) {
-        continue;
-      }
-
-      Sg_File_Info *start = anchor->get_startOfConstruct();
-      Sg_File_Info *end = anchor->get_endOfConstruct();
-      if (start == nullptr || end == nullptr ||
-          !is_same_file(start, directive_info) ||
-          !is_same_file(end, directive_info)) {
-        continue;
-      }
-
-      if (is_opening) {
-        if (location_leq(start, directive_info) &&
-            location_leq(directive_info, end)) {
-          relative_position = PreprocessingInfo::inside;
-          return anchor;
-        }
-      } else {
-        if (location_leq(end, directive_info) &&
-            location_leq(directive_info, current_pos) &&
-            !location_leq(current_pos, directive_info)) {
-          relative_position = PreprocessingInfo::after;
-          return anchor;
-        }
-      }
-    }
-
-    return nullptr;
-  };
-  auto find_exact_gap_anchor_after_candidate =
-      [&](SgLocatedNode *candidate, SgLocatedNode *current_node,
-          Sg_File_Info *directive_info) -> SgLocatedNode * {
-    if (candidate == nullptr || current_node == nullptr ||
-        directive_info == nullptr || current_pos == nullptr) {
-      return nullptr;
-    }
-
-    auto get_effective_end = [&](SgLocatedNode *node) -> Sg_File_Info * {
-      if (node == nullptr) {
-        return nullptr;
-      }
-      if (SgNamespaceDeclarationStatement *namespace_declaration =
-              isSgNamespaceDeclarationStatement(node)) {
-        return namespaceDeclarationSyntaxEnd(namespace_declaration);
-      }
-      return hasExactPhysicalSourceInterval(node) ? node->get_endOfConstruct()
-                                                  : nullptr;
-    };
-
-    SgLocatedNode *exact_anchor = nullptr;
-    for (SgNode *cursor_node = candidate; cursor_node != nullptr;
-         cursor_node = cursor_node->get_parent()) {
-      SgLocatedNode *anchor = isSgLocatedNode(cursor_node);
-      if (anchor == nullptr || anchor == current_node ||
-          SageInterface::isAncestor(anchor, current_node) ||
-          !should_attach_preproc_target(anchor, directive_info)) {
-        continue;
-      }
-
-      Sg_File_Info *anchor_end = get_effective_end(anchor);
-      if (anchor_end == nullptr || anchor_end->get_line() <= 0 ||
-          !is_same_file(anchor_end, directive_info) ||
-          !is_same_file(current_pos, directive_info)) {
-        continue;
-      }
-
-      const bool after_anchor = location_leq(anchor_end, directive_info) &&
-                                !location_leq(directive_info, anchor_end);
-      const bool before_current = location_leq(directive_info, current_pos) &&
-                                  !location_leq(current_pos, directive_info);
-      if (after_anchor && before_current) {
-        if (SgStatement *anchor_stmt = isSgStatement(anchor)) {
-          auto next_sibling_statement = [](SgStatement *stmt) -> SgStatement * {
-            if (stmt == nullptr) {
-              return nullptr;
-            }
-            if (SgBasicBlock *bb = isSgBasicBlock(stmt->get_parent())) {
-              const SgStatementPtrList &stmts = bb->get_statements();
-              for (size_t i = 0; i < stmts.size(); ++i) {
-                if (stmts[i] == stmt) {
-                  return (i + 1 < stmts.size()) ? stmts[i + 1] : nullptr;
-                }
-              }
-              return nullptr;
-            }
-            if (SgGlobal *global = isSgGlobal(stmt->get_parent())) {
-              const SgDeclarationStatementPtrList &decls =
-                  global->get_declarations();
-              for (size_t i = 0; i < decls.size(); ++i) {
-                if (decls[i] == stmt) {
-                  return (i + 1 < decls.size()) ? decls[i + 1] : nullptr;
-                }
-              }
-              return nullptr;
-            }
-            if (SgNamespaceDefinitionStatement *ns_def =
-                    isSgNamespaceDefinitionStatement(stmt->get_parent())) {
-              const SgDeclarationStatementPtrList &decls =
-                  ns_def->get_declarations();
-              for (size_t i = 0; i < decls.size(); ++i) {
-                if (decls[i] == stmt) {
-                  return (i + 1 < decls.size()) ? decls[i + 1] : nullptr;
-                }
-              }
-              return nullptr;
-            }
-            if (SgClassDefinition *class_def =
-                    isSgClassDefinition(stmt->get_parent())) {
-              const SgDeclarationStatementPtrList &members =
-                  class_def->get_members();
-              for (size_t i = 0; i < members.size(); ++i) {
-                if (members[i] == stmt) {
-                  return (i + 1 < members.size()) ? members[i + 1] : nullptr;
-                }
-              }
-              return nullptr;
-            }
-            if (SgTemplateClassDefinition *class_def =
-                    isSgTemplateClassDefinition(stmt->get_parent())) {
-              const SgDeclarationStatementPtrList &members =
-                  class_def->get_members();
-              for (size_t i = 0; i < members.size(); ++i) {
-                if (members[i] == stmt) {
-                  return (i + 1 < members.size()) ? members[i + 1] : nullptr;
-                }
-              }
-              return nullptr;
-            }
-            return nullptr;
-          };
-
-          if (SgStatement *next_stmt = next_sibling_statement(anchor_stmt)) {
-            Sg_File_Info *next_start = next_stmt->get_startOfConstruct();
-            if (hasExactPhysicalSourceInterval(next_stmt) &&
-                next_start != nullptr && next_start->get_line() > 0 &&
-                is_same_file(next_start, directive_info) &&
-                location_leq(directive_info, next_start) &&
-                !location_leq(next_start, directive_info)) {
-              exact_anchor = anchor;
-            }
-          } else if (SgLocatedNode *parent =
-                         isSgLocatedNode(anchor_stmt->get_parent())) {
-            Sg_File_Info *parent_end = get_effective_end(parent);
-            if (parent_end != nullptr && parent_end->get_line() > 0 &&
-                is_same_file(parent_end, directive_info) &&
-                location_leq(directive_info, parent_end)) {
-              exact_anchor = anchor;
-            }
-          }
-        }
-      }
-    }
-
-    return exact_anchor;
-  };
-  auto find_exact_enclosing_gap_anchor =
-      [&](SgLocatedNode *candidate, SgLocatedNode *current_node,
-          Sg_File_Info *directive_info) -> SgLocatedNode * {
-    if (candidate == nullptr || current_node == nullptr ||
-        directive_info == nullptr || current_pos == nullptr) {
-      return nullptr;
-    }
-
-    for (SgNode *cursor_node = candidate; cursor_node != nullptr;
-         cursor_node = cursor_node->get_parent()) {
-      SgLocatedNode *anchor = isSgLocatedNode(cursor_node);
-      if (anchor == nullptr || anchor == current_node ||
-          isSgGlobal(anchor) != nullptr ||
-          !SageInterface::isAncestor(anchor, current_node) ||
-          !should_attach_preproc_target(anchor, directive_info)) {
-        continue;
-      }
-
-      Sg_File_Info *start = anchor->get_startOfConstruct();
-      Sg_File_Info *end = anchor->get_endOfConstruct();
-      if (start == nullptr || end == nullptr || start->get_line() <= 0 ||
-          end->get_line() <= 0 || !is_same_file(start, directive_info) ||
-          !is_same_file(end, directive_info) ||
-          !is_same_file(current_pos, directive_info)) {
-        continue;
-      }
-      if (!location_leq(start, directive_info) ||
-          location_leq(directive_info, start) ||
-          !location_leq(directive_info, end) ||
-          !location_leq(directive_info, current_pos) ||
-          location_leq(current_pos, directive_info)) {
-        continue;
-      }
-
-      return anchor;
-    }
-    return nullptr;
-  };
-  auto find_exact_traversal_boundary_anchor =
-      [&](SgLocatedNode *candidate, SgLocatedNode *current_node,
-          Sg_File_Info *directive_info,
-          PreprocessingInfo::RelativePositionType &relative_position)
-      -> SgLocatedNode * {
-    if (directive_info == nullptr || current_pos == nullptr ||
-        !is_same_file(current_pos, directive_info)) {
-      return nullptr;
-    }
-
-    if (candidate != nullptr &&
-        should_attach_preproc_target(candidate, directive_info)) {
-      Sg_File_Info *candidate_start = candidate->get_startOfConstruct();
-      Sg_File_Info *candidate_end = candidate->get_endOfConstruct();
-      if (candidate_start != nullptr && candidate_end != nullptr &&
-          candidate_start->get_line() > 0 && candidate_end->get_line() > 0 &&
-          is_same_file(candidate_start, directive_info) &&
-          is_same_file(candidate_end, directive_info)) {
-        if (!location_leq(candidate_start, candidate_end)) {
-          std::swap(candidate_start, candidate_end);
-        }
-        const bool strictly_inside =
-            location_leq(candidate_start, directive_info) &&
-            !location_leq(directive_info, candidate_start) &&
-            location_leq(directive_info, candidate_end) &&
-            !location_leq(candidate_end, directive_info);
-        if (strictly_inside) {
-          relative_position = PreprocessingInfo::inside;
-          return candidate;
-        }
-        const bool strictly_after_candidate =
-            location_leq(candidate_end, directive_info) &&
-            !location_leq(directive_info, candidate_end);
-        const bool strictly_before_current =
-            location_leq(directive_info, current_pos) &&
-            !location_leq(current_pos, directive_info);
-        if (strictly_after_candidate && strictly_before_current) {
-          relative_position = PreprocessingInfo::after;
-          return candidate;
-        }
-      }
-    }
-
-    if (current_node != nullptr &&
-        should_attach_preproc_target(current_node, directive_info)) {
-      Sg_File_Info *current_start = current_node->get_startOfConstruct();
-      if (current_start != nullptr && current_start->get_line() > 0 &&
-          is_same_file(current_start, directive_info) &&
-          location_leq(directive_info, current_start) &&
-          !location_leq(current_start, directive_info)) {
-        relative_position = PreprocessingInfo::before;
-        return current_node;
-      }
-    }
-    return nullptr;
-  };
-  auto find_exact_function_body_boundary =
-      [&](SgLocatedNode *seed, Sg_File_Info *directive_info) -> SgBasicBlock * {
-    if (seed == nullptr || directive_info == nullptr) {
-      return nullptr;
-    }
-    for (SgNode *cursor = seed; cursor != nullptr;
-         cursor = cursor->get_parent()) {
-      SgFunctionDeclaration *function = isSgFunctionDeclaration(cursor);
-      if (function == nullptr || function->get_definition() == nullptr ||
-          function->get_definition()->get_body() == nullptr) {
-        continue;
-      }
-      Sg_File_Info *function_start = function->get_startOfConstruct();
-      SgBasicBlock *body = function->get_definition()->get_body();
-      Sg_File_Info *body_start = body->get_startOfConstruct();
-      if (function_start == nullptr || body_start == nullptr ||
-          function_start->get_line() <= 0 || body_start->get_line() <= 0 ||
-          !is_same_file(function_start, directive_info) ||
-          !is_same_file(body_start, directive_info)) {
-        continue;
-      }
-      const bool after_function_start =
-          location_leq(function_start, directive_info) &&
-          !location_leq(directive_info, function_start);
-      const bool before_body = location_leq(directive_info, body_start) &&
-                               !location_leq(body_start, directive_info);
-      if (after_function_start && before_body) {
-        return body;
-      }
-    }
-    return nullptr;
-  };
-  auto find_exact_lexical_scope_boundary =
-      [&](SgLocatedNode *seed, Sg_File_Info *directive_info,
-          PreprocessingInfo::RelativePositionType &relative_position)
-      -> SgLocatedNode * {
-    if (seed == nullptr || directive_info == nullptr) {
-      return nullptr;
-    }
-
-    SgLocatedNode *best_scope = nullptr;
-    const SgStatementPtrList *best_statements = nullptr;
-    const SgDeclarationStatementPtrList *best_declarations = nullptr;
-    std::optional<unsigned int> bestSpan;
-    for (SgNode *cursor = seed; cursor != nullptr;
-         cursor = cursor->get_parent()) {
-      SgLocatedNode *scope = isSgLocatedNode(cursor);
-      const SgStatementPtrList *statements = nullptr;
-      const SgDeclarationStatementPtrList *declarations = nullptr;
-      if (SgBasicBlock *block = isSgBasicBlock(cursor)) {
-        statements = &block->get_statements();
-      } else if (SgNamespaceDefinitionStatement *ns =
-                     isSgNamespaceDefinitionStatement(cursor)) {
-        declarations = &ns->get_declarations();
-      } else if (SgClassDefinition *class_definition =
-                     isSgClassDefinition(cursor)) {
-        declarations = &class_definition->get_members();
-      } else if (SgTemplateClassDefinition *class_definition =
-                     isSgTemplateClassDefinition(cursor)) {
-        declarations = &class_definition->get_members();
-      } else {
-        continue;
-      }
-      Sg_File_Info *start = scope->get_startOfConstruct();
-      Sg_File_Info *end = scope->get_endOfConstruct();
-      if (start == nullptr || end == nullptr || start->get_line() <= 0 ||
-          end->get_line() <= 0 || !is_same_file(start, directive_info) ||
-          !is_same_file(end, directive_info) ||
-          !location_leq(start, directive_info) ||
-          !location_leq(directive_info, end)) {
-        continue;
-      }
-      if (end->get_line() < start->get_line()) {
-        fprintf(stderr,
-                "REX_FRONTEND_INVARIANT[preprocessing-scope-span]: "
-                "scope=%p/%s has retrograde source lines %d..%d\n",
-                static_cast<void *>(scope), scope->class_name().c_str(),
-                start->get_line(), end->get_line());
-        ROSE_ABORT();
-      }
-      const unsigned int span =
-          static_cast<unsigned int>(end->get_line() - start->get_line());
-      if (!bestSpan.has_value() || span < *bestSpan) {
-        best_scope = scope;
-        best_statements = statements;
-        best_declarations = declarations;
-        bestSpan = span;
-      }
-    }
-
-    SgGlobal *global_scope = inheritedValue->translator.getGlobalScope();
-    if (global_scope != nullptr) {
-      if (cached_lexical_conditional_scope_ != global_scope) {
-        cached_lexical_conditional_scope_ = global_scope;
-        cached_lexical_conditional_scopes_.clear();
-        auto add_scope =
-            [&](SgLocatedNode *scope, const SgStatementPtrList *statements,
-                const SgDeclarationStatementPtrList *declarations) {
-              if (scope == nullptr) {
-                return;
-              }
-              Sg_File_Info *start = scope->get_startOfConstruct();
-              Sg_File_Info *end = scope->get_endOfConstruct();
-              if (start == nullptr || end == nullptr ||
-                  start->get_line() <= 0 || end->get_line() <= 0) {
-                return;
-              }
-              cached_lexical_conditional_scopes_.push_back(
-                  {scope, statements, declarations, start, end});
-            };
-        for (SgNode *node :
-             NodeQuery::querySubTree(global_scope, V_SgBasicBlock)) {
-          if (SgBasicBlock *block = isSgBasicBlock(node)) {
-            add_scope(block, &block->get_statements(), nullptr);
-          }
-        }
-        for (SgNode *node : NodeQuery::querySubTree(
-                 global_scope, V_SgNamespaceDefinitionStatement)) {
-          if (SgNamespaceDefinitionStatement *ns =
-                  isSgNamespaceDefinitionStatement(node)) {
-            add_scope(ns, nullptr, &ns->get_declarations());
-          }
-        }
-        for (SgNode *node :
-             NodeQuery::querySubTree(global_scope, V_SgClassDefinition)) {
-          if (SgClassDefinition *class_definition = isSgClassDefinition(node)) {
-            add_scope(class_definition, nullptr,
-                      &class_definition->get_members());
-          }
-        }
-        for (SgNode *node : NodeQuery::querySubTree(
-                 global_scope, V_SgTemplateClassDefinition)) {
-          if (SgTemplateClassDefinition *class_definition =
-                  isSgTemplateClassDefinition(node)) {
-            add_scope(class_definition, nullptr,
-                      &class_definition->get_members());
-          }
-        }
-      }
-
-      for (const LexicalConditionalScopeInfo &candidate :
-           cached_lexical_conditional_scopes_) {
-        if (!is_same_file(candidate.start, directive_info) ||
-            !is_same_file(candidate.end, directive_info) ||
-            !location_leq(candidate.start, directive_info) ||
-            !location_leq(directive_info, candidate.end)) {
-          continue;
-        }
-        if (candidate.end->get_line() < candidate.start->get_line()) {
-          fprintf(stderr,
-                  "REX_FRONTEND_INVARIANT[preprocessing-scope-span]: "
-                  "cached scope=%p/%s has retrograde source lines %d..%d\n",
-                  static_cast<void *>(candidate.scope),
-                  candidate.scope->class_name().c_str(),
-                  candidate.start->get_line(), candidate.end->get_line());
-          ROSE_ABORT();
-        }
-        const unsigned int span = static_cast<unsigned int>(
-            candidate.end->get_line() - candidate.start->get_line());
-        if (!bestSpan.has_value() || span < *bestSpan) {
-          best_scope = candidate.scope;
-          best_statements = candidate.statements;
-          best_declarations = candidate.declarations;
-          bestSpan = span;
-        }
-      }
-    }
-    if (best_scope == nullptr) {
-      return nullptr;
-    }
-
-    SgLocatedNode *following = nullptr;
-    Sg_File_Info *following_start = nullptr;
-    bool directive_inside_child = false;
-    auto consider_child = [&](SgLocatedNode *child) {
-      if (directive_inside_child || child == nullptr ||
-          !should_attach_preproc_target(child, directive_info)) {
-        return;
-      }
-      Sg_File_Info *start = child->get_startOfConstruct();
-      Sg_File_Info *end = child->get_endOfConstruct();
-      if (start == nullptr || end == nullptr || start->get_line() <= 0 ||
-          end->get_line() <= 0 || !is_same_file(start, directive_info) ||
-          !is_same_file(end, directive_info)) {
-        return;
-      }
-      if (!location_leq(start, end)) {
-        std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-gap-owner]: node="
-                  << child->class_name()
-                  << " has a retrograde physical source interval\n";
-        ROSE_ABORT();
-      }
-      const bool strictly_inside = location_leq(start, directive_info) &&
-                                   !location_leq(directive_info, start) &&
-                                   location_leq(directive_info, end) &&
-                                   !location_leq(end, directive_info);
-      if (strictly_inside) {
-        directive_inside_child = true;
-        return;
-      }
-      const bool child_after = location_leq(directive_info, start) &&
-                               !location_leq(start, directive_info);
-      if (child_after && (following_start == nullptr ||
-                          location_leq(start, following_start))) {
-        following = child;
-        following_start = start;
-      }
-    };
-    if (best_statements != nullptr) {
-      for (SgStatement *statement : *best_statements) {
-        consider_child(isSgLocatedNode(statement));
-      }
-    } else {
-      for (SgDeclarationStatement *declaration : *best_declarations) {
-        consider_child(isSgLocatedNode(declaration));
-      }
-    }
-
-    if (directive_inside_child) {
-      return nullptr;
-    }
-    if (following != nullptr) {
-      relative_position = PreprocessingInfo::before;
-      return following;
-    }
-    // A lexical gap is a boundary in the containing child list, not part of
-    // the syntax of the preceding child.  In particular, attaching a trailing
-    // conditional to a switch/loop with `after` can emit it before that
-    // construct's closing brace.  Terminal gaps therefore belong inside the
-    // exact containing scope; non-terminal gaps belong before the following
-    // child.  All preprocessing records in one gap consequently share one
-    // owner and retain recorder order.
-    relative_position = PreprocessingInfo::inside;
-    return best_scope;
-  };
-
-  if (inheritedValue->cursor != nullptr &&
-      *current_pos <= *(inheritedValue->cursor)) {
-    bool is_include = is_include_directive(inheritedValue->next_to_insert);
-    bool record_candidate = false;
-    if (is_include) {
-      record_candidate =
-          should_attach_include_target(loc_node, inheritedValue->cursor);
-    } else {
-      record_candidate =
-          should_attach_preproc_target(loc_node, inheritedValue->cursor);
-    }
-    if (record_candidate) {
-      inheritedValue->candidat = loc_node;
-    }
-  }
-
-  bool passed_cursor = *current_pos >= *(inheritedValue->cursor);
-
-  while (passed_cursor) {
-    if (inheritedValue->next_to_insert != NULL) {
-      SgLocatedNode *attach_node = loc_node;
-      PreprocessingInfo::DirectiveType directive_type =
-          inheritedValue->next_to_insert->getTypeOfDirective();
-      attach_node =
-          promote_include_target(attach_node, inheritedValue->next_to_insert);
-      bool has_exact_namespace_closing_comment_anchor = false;
-      if (SgNamespaceDeclarationStatement *exact_owner =
-              findExactNamespaceClosingCommentOwner(
-                  inheritedValue->translator.getGlobalScope(),
-                  inheritedValue->cursor, inheritedValue->next_to_insert)) {
-        attach_node = exact_owner;
-        inheritedValue->next_to_insert->setRelativePosition(
-            PreprocessingInfo::after_syntax);
-        has_exact_namespace_closing_comment_anchor = true;
-      }
-      bool has_global_lexical_preprocessing_anchor = false;
-      bool has_structural_conditional_anchor = false;
-      bool has_lexical_conditional_scope_anchor = false;
-      bool has_function_body_conditional_anchor = false;
-      bool has_lexical_include_scope_anchor = false;
-      bool has_declaration_group_comment_anchor = false;
-      if (!has_exact_namespace_closing_comment_anchor &&
-          inheritedValue->cursor != nullptr) {
-        PreprocessingInfo::RelativePositionType global_position =
-            PreprocessingInfo::before;
-        if (SgLocatedNode *global_anchor = find_global_preprocessing_gap_anchor(
-                inheritedValue->cursor, global_position)) {
-          // File-level preprocessing is owned by the adjacent declaration in
-          // the global lexical list. Semantic traversal can otherwise consume
-          // it on a non-output instantiated descendant.
-          attach_node = global_anchor;
-          inheritedValue->next_to_insert->setRelativePosition(global_position);
-          has_global_lexical_preprocessing_anchor = true;
-        }
-      }
-      if (!has_global_lexical_preprocessing_anchor &&
-          is_include_directive(inheritedValue->next_to_insert) &&
-          inheritedValue->cursor != nullptr) {
-        PreprocessingInfo::RelativePositionType boundary_position =
-            inheritedValue->next_to_insert->getRelativePosition();
-        SgLocatedNode *boundary_anchor = find_exact_lexical_scope_boundary(
-            inheritedValue->candidat != nullptr ? inheritedValue->candidat
-                                                : loc_node,
-            inheritedValue->cursor, boundary_position);
-        if (boundary_anchor == nullptr &&
-            inheritedValue->candidat != loc_node) {
-          boundary_anchor = find_exact_lexical_scope_boundary(
-              loc_node, inheritedValue->cursor, boundary_position);
-        }
-        if (boundary_anchor != nullptr) {
-          attach_node = boundary_anchor;
-          inheritedValue->next_to_insert->setRelativePosition(
-              boundary_position);
-          has_lexical_include_scope_anchor = true;
-        }
-      }
-      if (!has_global_lexical_preprocessing_anchor &&
-          !has_lexical_include_scope_anchor &&
-          is_include_directive(inheritedValue->next_to_insert) &&
-          inheritedValue->cursor != nullptr &&
-          inheritedValue->candidat != nullptr &&
-          inheritedValue->candidat != loc_node &&
-          should_attach_include_target(inheritedValue->candidat,
-                                       inheritedValue->cursor)) {
-        if (directive_inside_node(inheritedValue->candidat,
-                                  inheritedValue->cursor)) {
-          attach_node = inheritedValue->candidat;
-        }
-      }
-      const bool is_lexical_conditional_directive =
-          is_conditional_directive(directive_type) ||
-          directive_type == PreprocessingInfo::CpreprocessorDeadIfDeclaration ||
-          directive_type == PreprocessingInfo::CSkippedToken;
-      if (!has_global_lexical_preprocessing_anchor &&
-          !has_structural_conditional_anchor &&
-          is_lexical_conditional_directive &&
-          inheritedValue->cursor != nullptr) {
-        SgBasicBlock *body_anchor = find_exact_function_body_boundary(
-            inheritedValue->candidat, inheritedValue->cursor);
-        if (body_anchor == nullptr) {
-          body_anchor = find_exact_function_body_boundary(
-              loc_node, inheritedValue->cursor);
-        }
-        if (body_anchor != nullptr) {
-          attach_node = body_anchor;
-          inheritedValue->next_to_insert->setRelativePosition(
-              PreprocessingInfo::before);
-          has_function_body_conditional_anchor = true;
-        }
-      }
-      if (!has_global_lexical_preprocessing_anchor &&
-          !has_structural_conditional_anchor &&
-          !has_function_body_conditional_anchor &&
-          is_lexical_conditional_directive &&
-          inheritedValue->cursor != nullptr) {
-        PreprocessingInfo::RelativePositionType boundary_position =
-            inheritedValue->next_to_insert->getRelativePosition();
-        SgLocatedNode *boundary_anchor = find_exact_lexical_scope_boundary(
-            inheritedValue->candidat != nullptr ? inheritedValue->candidat
-                                                : loc_node,
-            inheritedValue->cursor, boundary_position);
-        if (boundary_anchor == nullptr &&
-            inheritedValue->candidat != loc_node) {
-          boundary_anchor = find_exact_lexical_scope_boundary(
-              loc_node, inheritedValue->cursor, boundary_position);
-        }
-        if (boundary_anchor != nullptr) {
-          attach_node = boundary_anchor;
-          inheritedValue->next_to_insert->setRelativePosition(
-              boundary_position);
-          has_lexical_conditional_scope_anchor = true;
-        }
-      }
-      if (!has_exact_namespace_closing_comment_anchor &&
-          !has_global_lexical_preprocessing_anchor &&
-          is_comment_directive(inheritedValue->next_to_insert) &&
-          inheritedValue->cursor != nullptr) {
-        PreprocessingInfo::RelativePositionType boundary_position =
-            inheritedValue->next_to_insert->getRelativePosition();
-        SgLocatedNode *boundary_anchor = find_exact_lexical_scope_boundary(
-            inheritedValue->candidat != nullptr ? inheritedValue->candidat
-                                                : loc_node,
-            inheritedValue->cursor, boundary_position);
-        if (boundary_anchor == nullptr &&
-            inheritedValue->candidat != loc_node) {
-          boundary_anchor = find_exact_lexical_scope_boundary(
-              loc_node, inheritedValue->cursor, boundary_position);
-        }
-        if (boundary_anchor != nullptr) {
-          // Top-down traversal sees a scope only at its opening token.  A
-          // terminal comment before the closing token therefore remains
-          // pending until a later source coordinate is visited.  Bind it to
-          // the smallest exact lexical scope now; declaration-group,
-          // same-line trailing, enum-body, and namespace-closing rules below
-          // may still select a more specific typed surface.
-          attach_node = boundary_anchor;
-          inheritedValue->next_to_insert->setRelativePosition(
-              boundary_position);
-        }
-      }
-      if (!has_global_lexical_preprocessing_anchor &&
-          !has_function_body_conditional_anchor &&
-          !has_lexical_conditional_scope_anchor &&
-          !is_include_directive(inheritedValue->next_to_insert) &&
-          inheritedValue->cursor != nullptr &&
-          inheritedValue->candidat != nullptr &&
-          inheritedValue->candidat != loc_node) {
-        PreprocessingInfo::RelativePositionType relative_position =
-            inheritedValue->next_to_insert->getRelativePosition();
-        if (SgLocatedNode *boundary_anchor = find_structural_conditional_anchor(
-                inheritedValue->candidat, loc_node, inheritedValue->cursor,
-                directive_type, relative_position)) {
-          attach_node = boundary_anchor;
-          inheritedValue->next_to_insert->setRelativePosition(
-              relative_position);
-          has_structural_conditional_anchor = true;
-        }
-      }
-      if (!has_global_lexical_preprocessing_anchor &&
-          !has_structural_conditional_anchor &&
-          !has_function_body_conditional_anchor &&
-          !has_lexical_conditional_scope_anchor &&
-          !is_include_directive(inheritedValue->next_to_insert) &&
-          inheritedValue->cursor != nullptr &&
-          inheritedValue->candidat != nullptr &&
-          inheritedValue->candidat != loc_node &&
-          is_gap_preserved_directive(directive_type)) {
-        SgLocatedNode *gap_anchor = find_exact_gap_anchor_after_candidate(
-            inheritedValue->candidat, loc_node, inheritedValue->cursor);
-        PreprocessingInfo::RelativePositionType gap_position =
-            PreprocessingInfo::after;
-        if (gap_anchor == nullptr) {
-          gap_anchor = find_exact_traversal_boundary_anchor(
-              inheritedValue->candidat, loc_node, inheritedValue->cursor,
-              gap_position);
-        }
-        if (gap_anchor == nullptr) {
-          gap_anchor = find_exact_enclosing_gap_anchor(
-              inheritedValue->candidat, loc_node, inheritedValue->cursor);
-          gap_position = PreprocessingInfo::inside;
-        }
-        if (gap_anchor == nullptr) {
-          std::cerr << "REX_CFE_PREPROCESSING_INVARIANT[gap-owner]: trailing "
-                       "conditional directive between AST nodes has no exact "
-                       "adjacent owner; directive="
-                    << inheritedValue->cursor->get_filenameString() << ":"
-                    << inheritedValue->cursor->get_line() << ":"
-                    << inheritedValue->cursor->get_col()
-                    << " candidate=" << inheritedValue->candidat->class_name()
-                    << " current=" << loc_node->class_name() << "\n";
-          ROSE_ABORT();
-        }
-        attach_node = gap_anchor;
-        inheritedValue->next_to_insert->setRelativePosition(gap_position);
-      }
-      if (!has_global_lexical_preprocessing_anchor &&
-          !has_lexical_include_scope_anchor &&
-          is_include_directive(inheritedValue->next_to_insert) &&
-          inheritedValue->cursor != nullptr) {
-        if (!directive_inside_node(attach_node, inheritedValue->cursor)) {
-          if (SgLocatedNode *prior = find_prior_include_anchor(
-                  attach_node, inheritedValue->cursor)) {
-            attach_node = prior;
-          }
-        }
-        if (SgLocatedNode *inside_target = include_target_for_inside(
-                attach_node, inheritedValue->cursor)) {
-          attach_node = inside_target;
-        }
-        if (isSgBasicBlock(attach_node) != nullptr ||
-            isSgClassDefinition(attach_node) != nullptr ||
-            isSgTemplateClassDefinition(attach_node) != nullptr ||
-            isSgNamespaceDefinitionStatement(attach_node) != nullptr) {
-          inheritedValue->next_to_insert->setRelativePosition(
-              PreprocessingInfo::inside);
-        } else if (isSgNamespaceDeclarationStatement(attach_node) != nullptr ||
-                   isSgClassDeclaration(attach_node) != nullptr ||
-                   isSgTemplateClassDeclaration(attach_node) != nullptr) {
-          Sg_File_Info *start = attach_node->get_startOfConstruct();
-          Sg_File_Info *end = attach_node->get_endOfConstruct();
-          if (start != nullptr && end != nullptr &&
-              directive_inside_node(attach_node, inheritedValue->cursor) &&
-              location_leq(start, inheritedValue->cursor) &&
-              location_leq(inheritedValue->cursor, end) &&
-              !location_leq(inheritedValue->cursor, start) &&
-              !location_leq(end, inheritedValue->cursor)) {
-            inheritedValue->next_to_insert->setRelativePosition(
-                PreprocessingInfo::inside);
-          }
-        }
-      }
-      if (!has_exact_namespace_closing_comment_anchor &&
-          !has_global_lexical_preprocessing_anchor &&
-          !is_include_directive(inheritedValue->next_to_insert) &&
-          is_comment_directive(inheritedValue->next_to_insert) &&
-          inheritedValue->cursor != nullptr) {
-        PreprocessingInfo::RelativePositionType group_position =
-            inheritedValue->next_to_insert->getRelativePosition();
-        SgDeclarationStatement *group_anchor = declaration_group_comment_anchor(
-            inheritedValue->candidat != nullptr ? inheritedValue->candidat
-                                                : loc_node,
-            inheritedValue->cursor, inheritedValue->next_to_insert,
-            group_position);
-        if (group_anchor == nullptr && inheritedValue->candidat != loc_node) {
-          group_anchor = declaration_group_comment_anchor(
-              loc_node, inheritedValue->cursor, inheritedValue->next_to_insert,
-              group_position);
-        }
-        if (group_anchor != nullptr) {
-          attach_node = group_anchor;
-          inheritedValue->next_to_insert->setRelativePosition(group_position);
-          has_declaration_group_comment_anchor = true;
-        }
-      }
-      if (!has_exact_namespace_closing_comment_anchor &&
-          !has_global_lexical_preprocessing_anchor &&
-          !has_declaration_group_comment_anchor &&
-          !is_include_directive(inheritedValue->next_to_insert) &&
-          is_comment_directive(inheritedValue->next_to_insert) &&
-          inheritedValue->cursor != nullptr &&
-          inheritedValue->candidat != nullptr &&
-          inheritedValue->candidat != loc_node) {
-        SgLocatedNode *candidate_node = inheritedValue->candidat;
-        Sg_File_Info *candidate_end =
-            isSgNamespaceDeclarationStatement(candidate_node) != nullptr
-                ? namespaceDeclarationSyntaxEnd(
-                      isSgNamespaceDeclarationStatement(candidate_node))
-                : candidate_node->get_endOfConstruct();
-        if (candidate_end != nullptr && candidate_end->get_line() > 0 &&
-            is_same_file(candidate_end, inheritedValue->cursor) &&
-            candidate_end->get_line() == inheritedValue->cursor->get_line() &&
-            candidate_end->get_col() > 0 &&
-            candidate_end->get_col() < inheritedValue->cursor->get_col()) {
-          attach_node = candidate_node;
-          const PreprocessingInfo::RelativePositionType relative_position =
-              isSameLineNamespaceClosingComment(candidate_node,
-                                                inheritedValue->cursor,
-                                                inheritedValue->next_to_insert)
-                  ? PreprocessingInfo::after_syntax
-                  : PreprocessingInfo::after;
-          inheritedValue->next_to_insert->setRelativePosition(
-              relative_position);
-        }
-      }
-      bool has_exact_enum_body_anchor = false;
-      if (inheritedValue->cursor != nullptr) {
-        PreprocessingInfo::RelativePositionType enum_position =
-            inheritedValue->next_to_insert->getRelativePosition();
-        SgLocatedNode *enum_anchor = find_exact_enum_body_anchor(
-            attach_node, inheritedValue->cursor, enum_position);
-        if (enum_anchor == nullptr && inheritedValue->candidat != nullptr &&
-            inheritedValue->candidat != attach_node) {
-          enum_anchor = find_exact_enum_body_anchor(
-              inheritedValue->candidat, inheritedValue->cursor, enum_position);
-        }
-        if (enum_anchor == nullptr && loc_node != attach_node &&
-            inheritedValue->candidat != loc_node) {
-          enum_anchor = find_exact_enum_body_anchor(
-              loc_node, inheritedValue->cursor, enum_position);
-        }
-        if (enum_anchor != nullptr) {
-          attach_node = enum_anchor;
-          inheritedValue->next_to_insert->setRelativePosition(enum_position);
-          has_exact_enum_body_anchor = true;
-        }
-      }
-      bool is_include = is_include_directive(inheritedValue->next_to_insert);
-      bool can_attach = has_exact_enum_body_anchor ||
-                        (is_include ? should_attach_include_target(
-                                          attach_node, inheritedValue->cursor)
-                                    : should_attach_preproc_target(
-                                          attach_node, inheritedValue->cursor));
-      if (!can_attach) {
-        return inheritedValue;
-      }
-      attach_node = canonicalPreprocessingOwner(attach_node,
-                                                inheritedValue->next_to_insert);
-      if (isSemanticNonLexicalDeclarationSubtree(attach_node) ||
-          !hasExactPhysicalSourceInterval(attach_node)) {
-        std::cerr << "REX_FRONTEND_INVARIANT[preprocessing-owner]: canonical "
-                     "traversal owner="
-                  << attach_node->class_name()
-                  << " has no exact lexical source interval\n";
-        ROSE_ABORT();
-      }
-      inheritedValue->translator.preprocessor_mark_attached(
-          inheritedValue->next_to_insert);
-      attach_node->addToAttachedPreprocessingInfo(
-          inheritedValue->next_to_insert);
-    }
-    if (!inheritedValue->advance()) {
-      return NULL;
-    }
-
-    if (inheritedValue->cursor != nullptr &&
-        *current_pos <= *(inheritedValue->cursor)) {
-      bool next_is_include =
-          is_include_directive(inheritedValue->next_to_insert);
-      bool record_candidate = false;
-      if (next_is_include) {
-        record_candidate =
-            should_attach_include_target(loc_node, inheritedValue->cursor);
-      } else {
-        record_candidate =
-            should_attach_preproc_target(loc_node, inheritedValue->cursor);
-      }
-      if (record_candidate) {
-        inheritedValue->candidat = loc_node;
-      }
-    }
-
-    passed_cursor = *current_pos >= *(inheritedValue->cursor);
-  }
-
-  return inheritedValue;
 }
 
 // class SagePreprocessorRecord
@@ -6847,8 +5402,10 @@ SagePreprocessorRecord::SagePreprocessorRecord(
     : p_source_manager(source_manager), p_preprocessor(preprocessor),
       p_preprocessor_record_list(), p_preprocessor_records_by_location(),
       p_preprocessor_records_by_line(), p_preprocessor_record_positions(),
-      p_removed_preprocessor_records(), p_attached_preprocessor_records(),
-      p_preprocessor_record_cursor(0), p_preprocessor_record_list_sorted(true),
+      p_preprocessor_records_by_file_offset(),
+      p_include_records_by_file_offset(), p_removed_preprocessor_records(),
+      p_attached_preprocessor_records(), p_preprocessor_record_cursor(0),
+      p_preprocessor_record_list_sorted(true),
       p_record_directive_stream(record_directive_stream),
       p_record_application_header_directives(
           record_application_header_directives),
@@ -6930,6 +5487,93 @@ void SagePreprocessorRecord::markAttached(
   }
 }
 
+std::vector<SagePreprocessorRecord::RecordedDirectiveRef>
+SagePreprocessorRecord::recordedDirectivesWithin(
+    clang::SourceRange source_range, bool allow_at_interval_start,
+    const char *contract) const {
+  if (p_source_manager == nullptr || p_preprocessor == nullptr ||
+      source_range.getBegin().isInvalid() ||
+      source_range.getEnd().isInvalid() || contract == nullptr ||
+      *contract == '\0') {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[recorded-directive-range]: range query "
+            "requires an exact frontend range and producer contract\n");
+    ROSE_ABORT();
+  }
+  clang::SourceLocation begin =
+      p_source_manager->getFileLoc(source_range.getBegin());
+  clang::SourceLocation end =
+      p_source_manager->getFileLoc(source_range.getEnd());
+  if (begin.isInvalid() || end.isInvalid()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[recorded-directive-range]: %s has no "
+            "exact physical endpoints\n",
+            contract);
+    ROSE_ABORT();
+  }
+  const clang::FileID file_id = p_source_manager->getFileID(begin);
+  if (!file_id.isValid() || p_source_manager->getFileID(end) != file_id) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[recorded-directive-range]: %s crosses "
+            "physical files\n",
+            contract);
+    ROSE_ABORT();
+  }
+  clang::SourceLocation after_end = clang::Lexer::getLocForEndOfToken(
+      end, 0, *p_source_manager, p_preprocessor->getLangOpts());
+  after_end = p_source_manager->getFileLoc(after_end);
+  if (after_end.isInvalid() ||
+      p_source_manager->getFileID(after_end) != file_id) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[recorded-directive-range]: %s has no "
+            "exact half-open token interval\n",
+            contract);
+    ROSE_ABORT();
+  }
+  const unsigned begin_offset = p_source_manager->getFileOffset(begin);
+  const unsigned end_offset = p_source_manager->getFileOffset(after_end);
+  if (begin_offset >= end_offset) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[recorded-directive-range]: %s has empty "
+            "or retrograde offsets=%u/%u\n",
+            contract, begin_offset, end_offset);
+    ROSE_ABORT();
+  }
+
+  std::vector<RecordedDirectiveRef> result;
+  const auto file_records =
+      p_preprocessor_records_by_file_offset.find(file_id.getHashValue());
+  if (file_records == p_preprocessor_records_by_file_offset.end()) {
+    return result;
+  }
+  auto offset_records = file_records->second.lower_bound(begin_offset);
+  if (!allow_at_interval_start &&
+      offset_records != file_records->second.end() &&
+      offset_records->first == begin_offset) {
+    ++offset_records;
+  }
+  for (; offset_records != file_records->second.end() &&
+         offset_records->first < end_offset;
+       ++offset_records) {
+    for (const RecordedDirectiveRef &record : offset_records->second) {
+      const auto position =
+          p_preprocessor_record_positions.find(record.preprocessing_info);
+      if (record.file_info == nullptr || record.preprocessing_info == nullptr ||
+          position == p_preprocessor_record_positions.end() ||
+          position->second.file_id != file_id ||
+          position->second.file_offset != offset_records->first) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[recorded-directive-range]: %s has "
+                "an inconsistent physical directive index\n",
+                contract);
+        ROSE_ABORT();
+      }
+      result.push_back(record);
+    }
+  }
+  return result;
+}
+
 std::vector<clang::SourceLocation>
 SagePreprocessorRecord::includeDirectiveLocationsWithin(
     clang::SourceRange source_range, bool allow_at_interval_start) const {
@@ -6988,56 +5632,29 @@ SagePreprocessorRecord::includeDirectiveLocationsWithin(
     ROSE_ABORT();
   }
 
-  std::vector<std::pair<unsigned, clang::SourceLocation>> included_locations;
-  for (const auto &record : p_preprocessor_record_list) {
-    PreprocessingInfo *info = record.second;
-    if (info == nullptr) {
-      continue;
-    }
-    const PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
-    if (type != PreprocessingInfo::CpreprocessorIncludeDeclaration &&
-        type != PreprocessingInfo::CpreprocessorIncludeNextDeclaration) {
-      continue;
-    }
-    const auto position = p_preprocessor_record_positions.find(info);
-    if (position == p_preprocessor_record_positions.end()) {
-      if (p_removed_preprocessor_records.find(info) !=
-          p_removed_preprocessor_records.end()) {
-        continue;
-      }
-      fprintf(stderr,
-              "REX_FRONTEND_INVARIANT[initializer-include-range]: recorded "
-              "include has no exact source position\n");
-      ROSE_ABORT();
-    }
-    if (position->second.file_id != file_id ||
-        position->second.file_offset < begin_offset ||
-        (!allow_at_interval_start &&
-         position->second.file_offset == begin_offset) ||
-        position->second.file_offset >= end_offset) {
-      continue;
-    }
-    included_locations.emplace_back(position->second.file_offset,
-                                    position->second.file_location);
-  }
-
-  std::sort(
-      included_locations.begin(), included_locations.end(),
-      [](const auto &lhs, const auto &rhs) { return lhs.first < rhs.first; });
-  for (size_t index = 1; index < included_locations.size(); ++index) {
-    if (included_locations[index - 1].first ==
-        included_locations[index].first) {
-      fprintf(stderr,
-              "REX_FRONTEND_INVARIANT[initializer-include-range]: multiple "
-              "include directives occupy one physical source offset\n");
-      ROSE_ABORT();
-    }
-  }
-
   std::vector<clang::SourceLocation> result;
-  result.reserve(included_locations.size());
-  for (const auto &entry : included_locations) {
-    result.push_back(entry.second);
+  const auto file_records =
+      p_include_records_by_file_offset.find(file_id.getHashValue());
+  if (file_records == p_include_records_by_file_offset.end()) {
+    return result;
+  }
+  const unsigned first_offset =
+      allow_at_interval_start ? begin_offset : begin_offset + 1;
+  for (auto record = file_records->second.lower_bound(first_offset);
+       record != file_records->second.end() && record->first < end_offset;
+       ++record) {
+    PreprocessingInfo *info = record->second.preprocessing_info;
+    const auto position = p_preprocessor_record_positions.find(info);
+    if (record->second.file_info == nullptr || info == nullptr ||
+        position == p_preprocessor_record_positions.end() ||
+        position->second.file_id != file_id ||
+        position->second.file_offset != record->first) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[initializer-include-range]: indexed "
+              "include has no exact physical source position\n");
+      ROSE_ABORT();
+    }
+    result.push_back(position->second.file_location);
   }
   return result;
 }
@@ -7054,6 +5671,97 @@ SagePreprocessorRecord::includeDirectiveLocationsAtStartOrStrictlyInside(
     clang::SourceRange source_range) const {
   return includeDirectiveLocationsWithin(source_range,
                                          /*allow_at_interval_start=*/true);
+}
+
+void SagePreprocessorRecord::transferRecordedDirectiveToBoundary(
+    RecordedDirectiveRef directive, SgLocatedNode *source_interval_owner,
+    SgLocatedNode *boundary_owner,
+    PreprocessingInfo::RelativePositionType relative_position,
+    bool allow_at_interval_start, const char *contract) {
+  if (directive.file_info == nullptr ||
+      directive.preprocessing_info == nullptr ||
+      source_interval_owner == nullptr || boundary_owner == nullptr ||
+      contract == nullptr || *contract == '\0') {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[directive-boundary-owner]: transfer "
+            "requires an exact directive, source interval, boundary, and "
+            "producer contract\n");
+    ROSE_ABORT();
+  }
+
+  Sg_File_Info *interval_start = source_interval_owner->get_startOfConstruct();
+  Sg_File_Info *interval_end = source_interval_owner->get_endOfConstruct();
+  Sg_File_Info *directive_info = directive.file_info;
+  auto source_less = [](Sg_File_Info *lhs, Sg_File_Info *rhs) {
+    return lhs->get_line() < rhs->get_line() ||
+           (lhs->get_line() == rhs->get_line() &&
+            lhs->get_col() < rhs->get_col());
+  };
+  if (interval_start == nullptr || interval_end == nullptr ||
+      interval_start->get_line() <= 0 || interval_start->get_col() <= 0 ||
+      interval_end->get_line() <= 0 || interval_end->get_col() <= 0 ||
+      directive_info->get_line() <= 0 || directive_info->get_col() <= 0 ||
+      interval_start->get_physical_file_id() < 0 ||
+      interval_end->get_physical_file_id() < 0 ||
+      directive_info->get_physical_file_id() < 0 ||
+      !interval_start->isSameFile(*interval_end) ||
+      !interval_start->isSameFile(*directive_info) ||
+      interval_start->get_physical_file_occurrence_id() !=
+          interval_end->get_physical_file_occurrence_id() ||
+      interval_start->get_physical_file_occurrence_id() !=
+          directive_info->get_physical_file_occurrence_id() ||
+      (!source_less(interval_start, directive_info) &&
+       !(allow_at_interval_start &&
+         interval_start->get_line() == directive_info->get_line() &&
+         interval_start->get_col() == directive_info->get_col())) ||
+      !source_less(directive_info, interval_end)) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[directive-boundary-owner]: %s directive "
+            "at %s:%d:%d occurrence %u is not strictly inside its "
+            "source-owner interval %s:%d:%d-%d:%d occurrence %u\n",
+            contract, directive_info->get_filenameString().c_str(),
+            directive_info->get_line(), directive_info->get_col(),
+            directive_info->get_physical_file_occurrence_id(),
+            interval_start != nullptr
+                ? interval_start->get_filenameString().c_str()
+                : "<missing>",
+            interval_start != nullptr ? interval_start->get_line() : -1,
+            interval_start != nullptr ? interval_start->get_col() : -1,
+            interval_end != nullptr ? interval_end->get_line() : -1,
+            interval_end != nullptr ? interval_end->get_col() : -1,
+            interval_start != nullptr
+                ? interval_start->get_physical_file_occurrence_id()
+                : 0);
+    ROSE_ABORT();
+  }
+
+  PreprocessingInfo *info = directive.preprocessing_info;
+  if (p_attached_preprocessor_records.find(info) !=
+          p_attached_preprocessor_records.end() ||
+      p_removed_preprocessor_records.find(info) !=
+          p_removed_preprocessor_records.end()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[directive-boundary-owner]: %s "
+            "directive was already claimed by another AST owner\n",
+            contract);
+    ROSE_ABORT();
+  }
+  info->setRelativePosition(relative_position);
+  markAttached(info);
+  boundary_owner->addToAttachedPreprocessingInfo(info);
+
+  AttachedPreprocessingInfoType *attached =
+      boundary_owner->getAttachedPreprocessingInfo();
+  if (attached == nullptr ||
+      std::count(attached->begin(), attached->end(), info) != 1 ||
+      info->getRelativePosition() != relative_position) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[directive-boundary-owner]: %s transfer "
+            "did not publish one exact typed boundary\n",
+            contract);
+    ROSE_ABORT();
+  }
+  markRecordedDirectiveRemoved(directive.file_info, info);
 }
 
 void SagePreprocessorRecord::transferIncludeDirectiveToBoundary(
@@ -7089,90 +5797,33 @@ void SagePreprocessorRecord::transferIncludeDirectiveToBoundary(
   }
   const unsigned file_offset = p_source_manager->getFileOffset(file_location);
 
-  std::vector<RecordedDirectiveRef> matches;
-  for (const auto &record : p_preprocessor_record_list) {
-    Sg_File_Info *file_info = record.first;
-    PreprocessingInfo *info = record.second;
-    if (file_info == nullptr || info == nullptr) {
-      continue;
-    }
-    const PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
-    if (type != PreprocessingInfo::CpreprocessorIncludeDeclaration &&
-        type != PreprocessingInfo::CpreprocessorIncludeNextDeclaration) {
-      continue;
-    }
-    const auto position = p_preprocessor_record_positions.find(info);
-    if (position != p_preprocessor_record_positions.end() &&
-        position->second.file_id == file_id &&
-        position->second.file_offset == file_offset) {
-      matches.push_back({file_info, info});
-    }
-  }
-  if (matches.size() != 1) {
+  const auto file_records =
+      p_include_records_by_file_offset.find(file_id.getHashValue());
+  const auto match =
+      file_records != p_include_records_by_file_offset.end()
+          ? file_records->second.find(file_offset)
+          : std::map<unsigned, RecordedDirectiveRef>::const_iterator{};
+  if (file_records == p_include_records_by_file_offset.end() ||
+      match == file_records->second.end()) {
     fprintf(stderr,
             "REX_FRONTEND_INVARIANT[include-boundary-owner]: %s expected one "
-            "include at physical offset %u, found %zu\n",
-            contract, file_offset, matches.size());
+            "include at physical offset %u, found none\n",
+            contract, file_offset);
+    ROSE_ABORT();
+  }
+  const RecordedDirectiveRef &matched_record = match->second;
+  if (matched_record.file_info == nullptr ||
+      matched_record.preprocessing_info == nullptr) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[include-boundary-owner]: %s indexed "
+            "include at physical offset %u is incomplete\n",
+            contract, file_offset);
     ROSE_ABORT();
   }
 
-  Sg_File_Info *interval_start = source_interval_owner->get_startOfConstruct();
-  Sg_File_Info *interval_end = source_interval_owner->get_endOfConstruct();
-  Sg_File_Info *include_info = matches.front().file_info;
-  auto source_less = [](Sg_File_Info *lhs, Sg_File_Info *rhs) {
-    return lhs->get_line() < rhs->get_line() ||
-           (lhs->get_line() == rhs->get_line() &&
-            lhs->get_col() < rhs->get_col());
-  };
-  if (interval_start == nullptr || interval_end == nullptr ||
-      include_info == nullptr || interval_start->get_line() <= 0 ||
-      interval_start->get_col() <= 0 || interval_end->get_line() <= 0 ||
-      interval_end->get_col() <= 0 || include_info->get_line() <= 0 ||
-      include_info->get_col() <= 0 ||
-      interval_start->get_physical_file_id() < 0 ||
-      interval_end->get_physical_file_id() < 0 ||
-      include_info->get_physical_file_id() < 0 ||
-      !interval_start->isSameFile(*interval_end) ||
-      !interval_start->isSameFile(*include_info) ||
-      (!source_less(interval_start, include_info) &&
-       !(allow_at_interval_start &&
-         interval_start->get_line() == include_info->get_line() &&
-         interval_start->get_col() == include_info->get_col())) ||
-      !source_less(include_info, interval_end)) {
-    fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[include-boundary-owner]: %s include is "
-            "not strictly inside its source-owner interval\n",
-            contract);
-    ROSE_ABORT();
-  }
-
-  PreprocessingInfo *info = matches.front().preprocessing_info;
-  if (p_attached_preprocessor_records.find(info) !=
-          p_attached_preprocessor_records.end() ||
-      p_removed_preprocessor_records.find(info) !=
-          p_removed_preprocessor_records.end()) {
-    fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[include-boundary-owner]: %s include was "
-            "already claimed by another AST owner\n",
-            contract);
-    ROSE_ABORT();
-  }
-  info->setRelativePosition(relative_position);
-  markAttached(info);
-  boundary_owner->addToAttachedPreprocessingInfo(info);
-
-  AttachedPreprocessingInfoType *attached =
-      boundary_owner->getAttachedPreprocessingInfo();
-  if (attached == nullptr ||
-      std::count(attached->begin(), attached->end(), info) != 1 ||
-      info->getRelativePosition() != relative_position) {
-    fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[include-boundary-owner]: %s include "
-            "transfer did not publish one exact typed boundary\n",
-            contract);
-    ROSE_ABORT();
-  }
-  markRecordedDirectiveRemoved(matches.front().file_info, info);
+  transferRecordedDirectiveToBoundary(matched_record, source_interval_owner,
+                                      boundary_owner, relative_position,
+                                      allow_at_interval_start, contract);
 }
 
 void SagePreprocessorRecord::transferIncludeDirectiveToInitializerBoundary(
@@ -7276,6 +5927,209 @@ void SagePreprocessorRecord::transferIncludeDirectiveToClassBoundary(
       /*allow_at_interval_start=*/false, "class-definition");
 }
 
+void SagePreprocessorRecord::transferDirectivesToExternalEnumBoundaries(
+    clang::SourceRange source_range, SgEnumDeclaration *enum_declaration,
+    const std::vector<std::pair<clang::SourceLocation, SgInitializedName *>>
+        &source_body_enumerators) {
+  if (p_source_manager == nullptr || enum_declaration == nullptr ||
+      enum_declaration->isForward()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[enum-directive-owner]: producer has no "
+            "exact defining enum declaration\n");
+    ROSE_ABORT();
+  }
+  std::vector<std::pair<unsigned, SgInitializedName *>> boundaries;
+  boundaries.reserve(source_body_enumerators.size());
+  clang::FileID boundary_file;
+  for (const auto &[location, enumerator] : source_body_enumerators) {
+    const clang::SourceLocation physical_location =
+        p_source_manager->getFileLoc(location);
+    if (physical_location.isInvalid() || enumerator == nullptr ||
+        enumerator->get_parent() != enum_declaration ||
+        enumerator->get_declptr() != enum_declaration ||
+        enumerator->get_enum_constant_source_ownership() !=
+            SgInitializedName::e_enum_constant_source_body ||
+        std::count(enum_declaration->get_enumerators().begin(),
+                   enum_declaration->get_enumerators().end(),
+                   enumerator) != 1) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[enum-directive-owner]: source-body "
+              "enumerator is not one exact direct child\n");
+      ROSE_ABORT();
+    }
+    const clang::FileID current_file =
+        p_source_manager->getFileID(physical_location);
+    if (!current_file.isValid() ||
+        (boundary_file.isValid() && current_file != boundary_file)) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[enum-directive-owner]: source-body "
+              "enumerators cross physical files\n");
+      ROSE_ABORT();
+    }
+    boundary_file = current_file;
+    const unsigned offset = p_source_manager->getFileOffset(physical_location);
+    if (!boundaries.empty() && offset < boundaries.back().first) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[enum-directive-owner]: source-body "
+              "enumerator offsets are retrograde\n");
+      ROSE_ABORT();
+    }
+    boundaries.emplace_back(offset, enumerator);
+  }
+
+  for (RecordedDirectiveRef directive :
+       recordedDirectivesWithin(source_range, /*allow_at_interval_start=*/false,
+                                "external-enumerator-definition")) {
+    const auto position =
+        p_preprocessor_record_positions.find(directive.preprocessing_info);
+    if (position == p_preprocessor_record_positions.end() ||
+        (boundary_file.isValid() &&
+         position->second.file_id != boundary_file)) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[enum-directive-owner]: directive has "
+              "no exact enum-body position\n");
+      ROSE_ABORT();
+    }
+    SgInitializedName *following_enumerator = nullptr;
+    for (const auto &[offset, enumerator] : boundaries) {
+      if (offset > position->second.file_offset) {
+        following_enumerator = enumerator;
+        break;
+      }
+    }
+    transferRecordedDirectiveToBoundary(
+        directive, enum_declaration,
+        following_enumerator != nullptr
+            ? static_cast<SgLocatedNode *>(following_enumerator)
+            : static_cast<SgLocatedNode *>(enum_declaration),
+        following_enumerator != nullptr ? PreprocessingInfo::before
+                                        : PreprocessingInfo::inside,
+        /*allow_at_interval_start=*/false, "external-enumerator-definition");
+  }
+}
+
+void SagePreprocessorRecord::transferDirectivesToFunctionBodyBoundary(
+    clang::SourceRange source_range,
+    SgFunctionDeclaration *function_declaration,
+    SgFunctionDefinition *function_definition) {
+  if (function_declaration == nullptr || function_definition == nullptr ||
+      function_declaration->get_definition() != function_definition ||
+      function_definition->get_declaration() != function_declaration ||
+      function_definition->get_parent() != function_declaration ||
+      function_definition->get_body() == nullptr ||
+      function_definition->get_body()->get_parent() != function_definition) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[function-directive-owner]: producer has "
+            "no reciprocal declaration/definition/body surface\n");
+    ROSE_ABORT();
+  }
+  for (RecordedDirectiveRef directive :
+       recordedDirectivesWithin(source_range, /*allow_at_interval_start=*/false,
+                                "function-definition-prefix")) {
+    transferRecordedDirectiveToBoundary(
+        directive, function_declaration, function_definition,
+        PreprocessingInfo::before,
+        /*allow_at_interval_start=*/false, "function-definition-prefix");
+  }
+}
+
+void SagePreprocessorRecord::transferDirectivesToDeclarationGroupBoundary(
+    clang::SourceRange source_range,
+    SgDeclarationGroupStatement *declaration_group,
+    SgDeclarationStatement *following_member) {
+  if (declaration_group == nullptr || following_member == nullptr ||
+      following_member->get_parent() != declaration_group ||
+      std::count(declaration_group->get_declarations().begin(),
+                 declaration_group->get_declarations().end(),
+                 following_member) != 1) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[declaration-group-directive-owner]: "
+            "producer has no exact following declaration-group member\n");
+    ROSE_ABORT();
+  }
+
+  // A variable member's declaration range begins at the group's shared
+  // declaration specifier.  Its SgInitializedName is the exact typed
+  // declarator occurrence that follows the separator, and the variable
+  // unparser reaches that child immediately after emitting the comma.  Using
+  // the broad declaration as the boundary would place a source comment after
+  // its purported `before` anchor whenever the declarator starts on a later
+  // line.
+  SgLocatedNode *boundary_owner = following_member;
+  if (SgVariableDeclaration *variable =
+          isSgVariableDeclaration(following_member)) {
+    if (variable->get_variables().size() != 1 ||
+        variable->get_variables().front() == nullptr ||
+        variable->get_variables().front()->get_parent() != variable) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[declaration-group-directive-owner]: "
+              "following variable member has no exact initialized-name "
+              "boundary\n");
+      ROSE_ABORT();
+    }
+    boundary_owner = variable->get_variables().front();
+  }
+  for (RecordedDirectiveRef directive :
+       recordedDirectivesWithin(source_range, /*allow_at_interval_start=*/false,
+                                "declaration-group-separator")) {
+    transferRecordedDirectiveToBoundary(
+        directive, declaration_group, boundary_owner, PreprocessingInfo::before,
+        /*allow_at_interval_start=*/false, "declaration-group-separator");
+  }
+}
+
+void SagePreprocessorRecord::transferDirectivesToDeclarationGroupTerminator(
+    clang::SourceRange source_range,
+    SgDeclarationGroupStatement *declaration_group,
+    SgDeclarationStatement *final_member) {
+  if (declaration_group == nullptr || final_member == nullptr ||
+      final_member->get_parent() != declaration_group ||
+      declaration_group->get_declarations().empty() ||
+      declaration_group->get_declarations().back() != final_member ||
+      std::count(declaration_group->get_declarations().begin(),
+                 declaration_group->get_declarations().end(),
+                 final_member) != 1) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[declaration-group-directive-owner]: "
+            "producer has no exact final declaration-group member\n");
+    ROSE_ABORT();
+  }
+
+  SgLocatedNode *boundary_owner = final_member;
+  if (SgVariableDeclaration *variable = isSgVariableDeclaration(final_member)) {
+    if (variable->get_variables().size() != 1 ||
+        variable->get_variables().front() == nullptr ||
+        variable->get_variables().front()->get_parent() != variable) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[declaration-group-directive-owner]: "
+              "final variable member has no exact initialized-name "
+              "boundary\n");
+      ROSE_ABORT();
+    }
+    boundary_owner = variable->get_variables().front();
+  }
+  for (RecordedDirectiveRef directive :
+       recordedDirectivesWithin(source_range, /*allow_at_interval_start=*/false,
+                                "declaration-group-terminator")) {
+    transferRecordedDirectiveToBoundary(
+        directive, declaration_group, boundary_owner, PreprocessingInfo::after,
+        /*allow_at_interval_start=*/false, "declaration-group-terminator");
+  }
+}
+
+bool SagePreprocessorRecord::sourceRangeContainsSkippedTokens(
+    clang::SourceRange source_range) const {
+  for (RecordedDirectiveRef directive :
+       recordedDirectivesWithin(source_range, /*allow_at_interval_start=*/false,
+                                "inactive-declaration-group-tail")) {
+    if (directive.preprocessing_info->getTypeOfDirective() ==
+        PreprocessingInfo::CSkippedToken) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void SagePreprocessorRecord::consumeIncludeDirectiveInFlattenedSyntax(
     clang::SourceLocation include_location,
     SgLocatedNode *source_interval_owner, const char *contract) {
@@ -7355,6 +6209,10 @@ void SagePreprocessorRecord::consumeIncludeDirectiveInFlattenedSyntax(
       include_info->get_physical_file_id() < 0 ||
       !interval_start->isSameFile(*interval_end) ||
       !interval_start->isSameFile(*include_info) ||
+      interval_start->get_physical_file_occurrence_id() !=
+          interval_end->get_physical_file_occurrence_id() ||
+      interval_start->get_physical_file_occurrence_id() !=
+          include_info->get_physical_file_occurrence_id() ||
       !source_less(interval_start, include_info) ||
       !source_less(include_info, interval_end)) {
     fprintf(stderr,
@@ -7388,56 +6246,94 @@ void SagePreprocessorRecord::sortRecordedDirectives() {
   }
   ROSE_ASSERT(p_source_manager != nullptr);
   const clang::FileID main_file_id = p_source_manager->getMainFileID();
-  auto by_location =
-      [&](const std::pair<Sg_File_Info *, PreprocessingInfo *> &lhs,
-          const std::pair<Sg_File_Info *, PreprocessingInfo *> &rhs) {
-        ROSE_ASSERT(lhs.first != nullptr && lhs.second != nullptr);
-        ROSE_ASSERT(rhs.first != nullptr && rhs.second != nullptr);
-        auto lhs_position = p_preprocessor_record_positions.find(lhs.second);
-        auto rhs_position = p_preprocessor_record_positions.find(rhs.second);
-        ROSE_ASSERT(lhs_position != p_preprocessor_record_positions.end());
-        ROSE_ASSERT(rhs_position != p_preprocessor_record_positions.end());
+  using Record = std::pair<Sg_File_Info *, PreprocessingInfo *>;
+  struct SortEntry {
+    Record record;
+    bool is_main_file = false;
+    std::string normalized_path;
+    unsigned file_offset = 0;
+  };
 
-        const bool lhs_is_main = lhs_position->second.file_id == main_file_id;
-        const bool rhs_is_main = rhs_position->second.file_id == main_file_id;
-        if (lhs_is_main != rhs_is_main) {
-          return lhs_is_main;
-        }
+  std::vector<SortEntry> entries;
+  entries.reserve(p_preprocessor_record_list.size() -
+                  p_preprocessor_record_cursor);
+  for (auto record =
+           p_preprocessor_record_list.begin() + p_preprocessor_record_cursor;
+       record != p_preprocessor_record_list.end(); ++record) {
+    if (record->first == nullptr || record->second == nullptr) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[preprocessor-record-order]: record "
+              "has no exact file information or preprocessing node\n");
+      ROSE_ABORT();
+    }
+    auto position = p_preprocessor_record_positions.find(record->second);
+    if (position == p_preprocessor_record_positions.end()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[preprocessor-record-order]: record=%p "
+              "has no exact physical source position\n",
+              static_cast<void *>(record->second));
+      ROSE_ABORT();
+    }
+    std::string normalized_path = FileHelper::normalizePathIfPossible(
+        record->first->get_filenameString());
+    if (normalized_path.empty()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[preprocessor-record-order]: record=%p "
+              "has an empty physical source path\n",
+              static_cast<void *>(record->second));
+      ROSE_ABORT();
+    }
+    entries.push_back({*record, position->second.file_id == main_file_id,
+                       std::move(normalized_path),
+                       position->second.file_offset});
+  }
 
-        const std::string lhs_path = FileHelper::normalizePathIfPossible(
-            lhs.first->get_filenameString());
-        const std::string rhs_path = FileHelper::normalizePathIfPossible(
-            rhs.first->get_filenameString());
-        if (lhs_path != rhs_path) {
-          return lhs_path < rhs_path;
-        }
-
-        return lhs_position->second.file_offset <
-               rhs_position->second.file_offset;
-      };
-
-  std::stable_sort(p_preprocessor_record_list.begin() +
-                       p_preprocessor_record_cursor,
-                   p_preprocessor_record_list.end(), by_location);
+  std::stable_sort(entries.begin(), entries.end(),
+                   [](const SortEntry &lhs, const SortEntry &rhs) {
+                     if (lhs.is_main_file != rhs.is_main_file) {
+                       return lhs.is_main_file;
+                     }
+                     if (lhs.normalized_path != rhs.normalized_path) {
+                       return lhs.normalized_path < rhs.normalized_path;
+                     }
+                     return lhs.file_offset < rhs.file_offset;
+                   });
+  auto destination =
+      p_preprocessor_record_list.begin() + p_preprocessor_record_cursor;
+  for (const SortEntry &entry : entries) {
+    *destination++ = entry.record;
+  }
   p_preprocessor_record_list_sorted = true;
 }
 
 SagePreprocessorRecord::IncludeOwnership
 SagePreprocessorRecord::includeOwnershipForPath(const std::string &path) const {
-  const std::string normalized =
-      path.empty() ? std::string() : FileHelper::normalizePathIfPossible(path);
-  if (normalized.empty()) {
+  auto cached = p_normalized_include_ownership_paths.find(path);
+  if (cached == p_normalized_include_ownership_paths.end()) {
+    const std::string normalized =
+        path.empty() ? std::string()
+                     : FileHelper::normalizePathIfPossible(path);
+    if (normalized.empty()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[include-ownership]: cannot classify "
+              "an empty physical path\n");
+      ROSE_ABORT();
+    }
+    cached =
+        p_normalized_include_ownership_paths.emplace(path, normalized).first;
+  }
+  if (cached->second.empty()) {
     fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[include-ownership]: cannot classify an "
-            "empty physical path\n");
+            "REX_FRONTEND_INVARIANT[include-ownership]: cached physical path "
+            "normalization is empty\n");
     ROSE_ABORT();
   }
-  auto found = p_include_ownership_paths.find(normalized);
+  auto found = p_include_ownership_paths.find(cached->second);
   if (found == p_include_ownership_paths.end()) {
     fprintf(stderr,
             "REX_FRONTEND_INVARIANT[include-ownership]: physical path=%s has "
             "no exact preprocessor ownership producer\n",
-            normalized.c_str());
+            cached->second.c_str());
     ROSE_ABORT();
   }
   return found->second;
@@ -7455,7 +6351,12 @@ SagePreprocessorRecord::includeOwnershipForLocation(
 
   clang::SourceLocation resolved = location;
   if (resolved.isMacroID()) {
-    resolved = p_source_manager->getSpellingLoc(resolved);
+    // Ownership follows the physical file that contributed the declaration
+    // token.  Clang's getFileLoc selects the spelling file for a macro-body
+    // token and the expansion file for a macro-argument token; blindly taking
+    // the spelling location can instead select the pathless scratch buffer
+    // used by token pasting.
+    resolved = p_source_manager->getFileLoc(resolved);
   }
   if (!resolved.isValid()) {
     fprintf(stderr,
@@ -7516,6 +6417,20 @@ void SagePreprocessorRecord::recordIncludeOwnershipPath(
             context != nullptr ? context : "<null>");
     ROSE_ABORT();
   }
+  auto cache_path = [&](const std::string &input) {
+    auto cached =
+        p_normalized_include_ownership_paths.emplace(input, normalized);
+    if (!cached.second && cached.first->second != normalized) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[include-ownership]: context=%s input "
+              "path=%s has conflicting normalized identities=%s/%s\n",
+              context, input.c_str(), cached.first->second.c_str(),
+              normalized.c_str());
+      ROSE_ABORT();
+    }
+  };
+  cache_path(path);
+  cache_path(normalized);
   if (ownership == IncludeOwnership::main_file ||
       ownership == IncludeOwnership::clang_pseudo_file) {
     fprintf(stderr,
@@ -7834,6 +6749,34 @@ void SagePreprocessorRecord::registerRecordedDirective(
           .push_back(entry);
   p_preprocessor_record_positions[preprocessing_info] = {file_id, file_location,
                                                          file_offset};
+  auto &physical_records =
+      p_preprocessor_records_by_file_offset[file_id.getHashValue()]
+                                           [file_offset];
+  if (std::any_of(physical_records.begin(), physical_records.end(),
+                  [&](const RecordedDirectiveRef &record) {
+                    return record.preprocessing_info == preprocessing_info;
+                  })) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[recorded-directive-index]: directive=%p "
+            "was indexed more than once\n",
+            static_cast<void *>(preprocessing_info));
+    ROSE_ABORT();
+  }
+  physical_records.push_back(entry);
+  const PreprocessingInfo::DirectiveType directive_type =
+      preprocessing_info->getTypeOfDirective();
+  if (directive_type == PreprocessingInfo::CpreprocessorIncludeDeclaration ||
+      directive_type ==
+          PreprocessingInfo::CpreprocessorIncludeNextDeclaration) {
+    auto &includes = p_include_records_by_file_offset[file_id.getHashValue()];
+    if (!includes.emplace(file_offset, entry).second) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[recorded-include-index]: multiple "
+              "include directives occupy physical FileID=%u offset=%u\n",
+              file_id.getHashValue(), file_offset);
+      ROSE_ABORT();
+    }
+  }
 
   auto &line_state = p_preprocessor_records_by_line[RecordedDirectiveLineKey{
       filename, static_cast<unsigned>(std::max(file_info->get_line(), 0)),
@@ -7855,6 +6798,73 @@ void SagePreprocessorRecord::unregisterRecordedDirective(
     Sg_File_Info *file_info, PreprocessingInfo *preprocessing_info) {
   if (file_info == nullptr || preprocessing_info == nullptr) {
     return;
+  }
+
+  const auto physical_position =
+      p_preprocessor_record_positions.find(preprocessing_info);
+  const PreprocessingInfo::DirectiveType directive_type =
+      preprocessing_info->getTypeOfDirective();
+  if (physical_position != p_preprocessor_record_positions.end() &&
+      (directive_type == PreprocessingInfo::CpreprocessorIncludeDeclaration ||
+       directive_type ==
+           PreprocessingInfo::CpreprocessorIncludeNextDeclaration)) {
+    const unsigned file_key = physical_position->second.file_id.getHashValue();
+    auto file_records = p_include_records_by_file_offset.find(file_key);
+    auto record =
+        file_records != p_include_records_by_file_offset.end()
+            ? file_records->second.find(physical_position->second.file_offset)
+            : std::map<unsigned, RecordedDirectiveRef>::iterator{};
+    if (file_records == p_include_records_by_file_offset.end() ||
+        record == file_records->second.end() ||
+        record->second.preprocessing_info != preprocessing_info) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[recorded-include-index]: include=%p "
+              "has no exact physical index entry\n",
+              static_cast<void *>(preprocessing_info));
+      ROSE_ABORT();
+    }
+    file_records->second.erase(record);
+    if (file_records->second.empty()) {
+      p_include_records_by_file_offset.erase(file_records);
+    }
+  }
+  if (physical_position != p_preprocessor_record_positions.end()) {
+    const unsigned file_key = physical_position->second.file_id.getHashValue();
+    auto file_records = p_preprocessor_records_by_file_offset.find(file_key);
+    auto offset_records =
+        file_records != p_preprocessor_records_by_file_offset.end()
+            ? file_records->second.find(physical_position->second.file_offset)
+            : std::map<unsigned, std::vector<RecordedDirectiveRef>>::iterator{};
+    if (file_records == p_preprocessor_records_by_file_offset.end() ||
+        offset_records == file_records->second.end()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[recorded-directive-index]: "
+              "directive=%p has no physical index entry\n",
+              static_cast<void *>(preprocessing_info));
+      ROSE_ABORT();
+    }
+    auto &records = offset_records->second;
+    const size_t old_size = records.size();
+    records.erase(std::remove_if(records.begin(), records.end(),
+                                 [&](const RecordedDirectiveRef &record) {
+                                   return record.preprocessing_info ==
+                                          preprocessing_info;
+                                 }),
+                  records.end());
+    if (records.size() + 1 != old_size) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[recorded-directive-index]: "
+              "directive=%p does not occur exactly once in its physical "
+              "index\n",
+              static_cast<void *>(preprocessing_info));
+      ROSE_ABORT();
+    }
+    if (records.empty()) {
+      file_records->second.erase(offset_records);
+    }
+    if (file_records->second.empty()) {
+      p_preprocessor_records_by_file_offset.erase(file_records);
+    }
   }
 
   const RecordedDirectiveLocationKey location_key{
@@ -9214,6 +8224,30 @@ std::pair<Sg_File_Info *, PreprocessingInfo *> SagePreprocessorRecord::top() {
   sortRecordedDirectives();
   ROSE_ASSERT(p_preprocessor_record_cursor < p_preprocessor_record_list.size());
   return p_preprocessor_record_list[p_preprocessor_record_cursor];
+}
+
+std::vector<std::pair<Sg_File_Info *, PreprocessingInfo *>>
+SagePreprocessorRecord::remainingRecords() const {
+  if (p_preprocessor_record_cursor > p_preprocessor_record_list.size()) {
+    fprintf(stderr, "REX_FRONTEND_INVARIANT[preprocessing-recorder]: residual "
+                    "record cursor exceeds the recorded directive list\n");
+    ROSE_ABORT();
+  }
+  std::vector<std::pair<Sg_File_Info *, PreprocessingInfo *>> records;
+  records.reserve(p_preprocessor_record_list.size() -
+                  p_preprocessor_record_cursor);
+  for (size_t i = p_preprocessor_record_cursor;
+       i < p_preprocessor_record_list.size(); ++i) {
+    const auto &record = p_preprocessor_record_list[i];
+    if (record.first == nullptr || record.second == nullptr) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[preprocessing-recorder]: residual "
+              "record has no exact location and directive pair\n");
+      ROSE_ABORT();
+    }
+    records.push_back(record);
+  }
+  return records;
 }
 
 bool SagePreprocessorRecord::pop() {

@@ -8514,13 +8514,10 @@ exactFunctionParameterSymbols(SgScopeStatement *scope,
   }
 
   std::vector<SgVariableSymbol *> result;
-  for (const auto &entry : *table->get_table()) {
-    SgSymbol *symbol = entry.second;
-    if (symbol == nullptr || symbol->get_symbol_basis() != parameter) {
-      continue;
-    }
+  for (SgSymbol *symbol : table->find_symbols_with_exact_basis(parameter)) {
     SgVariableSymbol *variableSymbol = isSgVariableSymbol(symbol);
-    if (variableSymbol == nullptr || variableSymbol->get_parent() != table) {
+    if (variableSymbol == nullptr || symbol->get_symbol_basis() != parameter ||
+        variableSymbol->get_parent() != table || !table->exists(symbol)) {
       fprintf(stderr,
               "REX_AST_INVARIANT[function-parameter-symbol-publication]: "
               "producer=%s parameter=%p/%s has non-variable or misowned "
@@ -9409,12 +9406,12 @@ actualFunction *SageBuilder::buildNondefiningFunctionDeclaration_T(
                 static_cast<void *>(symbol_scope));
         ROSE_ABORT();
       }
-      for (const auto &entry : *table->get_table()) {
-        if (entry.first != symbolTableKey) {
-          continue;
-        }
+      const auto exact_name_range =
+          table->get_table()->equal_range(symbolTableKey);
+      for (auto entry = exact_name_range.first;
+           entry != exact_name_range.second; ++entry) {
         SgFunctionSymbol *candidate =
-            exact_builder_overload_symbol(entry.second);
+            exact_builder_overload_symbol(entry->second);
         candidate = filterFunctionSymbolForBuilderScope(
             candidate, symbol_scope, ownership.getSourceLexicalOwner());
         if (candidate == nullptr) {
@@ -9782,7 +9779,10 @@ actualFunction *SageBuilder::buildNondefiningFunctionDeclaration_T(
     // bottom up style.  However this means that the symbol tables in the scope
     // of the returned function declaration will have to be setup separately.
     if (symbol_scope != NULL && canonicalSourceReplacement) {
+      SgNode *prior_basis = func_symbol->get_symbol_basis();
       func_symbol->set_declaration(isSgFunctionDeclaration(func));
+      symbol_scope->get_symbol_table()->reindex_symbol_basis(func_symbol,
+                                                             prior_basis);
       if (func_symbol->get_symbol_basis() != func ||
           func_symbol->get_parent() != symbol_scope->get_symbol_table() ||
           !symbol_scope->get_symbol_table()->exists(func_symbol)) {
@@ -10128,7 +10128,18 @@ actualFunction *SageBuilder::buildNondefiningFunctionDeclaration_T(
         ROSE_ABORT();
       }
       nondefiningDeclaration = func;
+      SgNode *prior_basis = function_symbol->get_symbol_basis();
       function_symbol->set_declaration(isSgFunctionDeclaration(func));
+      SgSymbolTable *symbol_table =
+          isSgSymbolTable(function_symbol->get_parent());
+      if (symbol_table == NULL) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[function-builder-declaration-chain]: "
+                "symbol=%p has no exact table during canonical replacement\n",
+                static_cast<void *>(function_symbol));
+        ROSE_ABORT();
+      }
+      symbol_table->reindex_symbol_basis(function_symbol, prior_basis);
       prevDecl->set_firstNondefiningDeclaration(func);
     }
 
@@ -11714,8 +11725,9 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
             static_cast<void *>(canonicalFirst));
     ROSE_ABORT();
   }
-  for (const auto &entry : *symbolTable->get_table()) {
-    SgFunctionSymbol *candidate = isSgFunctionSymbol(entry.second);
+  for (SgSymbol *indexed :
+       symbolTable->find_symbols_with_exact_basis(canonicalFirst)) {
+    SgFunctionSymbol *candidate = isSgFunctionSymbol(indexed);
     if (candidate != NULL && isSgRenameSymbol(candidate) == NULL &&
         candidate->get_symbol_basis() == canonicalFirst &&
         std::find(exactCanonicalSymbols.begin(), exactCanonicalSymbols.end(),
@@ -12421,8 +12433,9 @@ SageBuilder::completeSemanticFunctionDeclarationAsDefinition(
             static_cast<void *>(scope), static_cast<void *>(declaration));
     ROSE_ABORT();
   }
-  for (const auto &entry : *scope_symbols->get_table()) {
-    SgFunctionSymbol *symbol = isSgFunctionSymbol(entry.second);
+  for (SgSymbol *indexed :
+       scope_symbols->find_symbols_with_exact_basis(declaration)) {
+    SgFunctionSymbol *symbol = isSgFunctionSymbol(indexed);
     if (symbol != nullptr && isSgRenameSymbol(symbol) == nullptr &&
         symbol->get_symbol_basis() == declaration) {
       exact_symbols.push_back(symbol);
@@ -21894,7 +21907,9 @@ SgNamespaceDeclarationStatement *SageBuilder::buildNamespaceDeclaration_nfi(
               name.getString().c_str());
       ROSE_ABORT();
     }
+    SgNode *prior_basis = mysymbol->get_symbol_basis();
     mysymbol->set_declaration(defdecl);
+    scope->get_symbol_table()->reindex_symbol_basis(mysymbol, prior_basis);
     if (findCanonicalNamespaceSymbol() != mysymbol) {
       fprintf(stderr,
               "REX_AST_INVARIANT[namespace-builder-symbol-publication]: "

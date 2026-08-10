@@ -22605,29 +22605,6 @@ bool ClangToSageTranslator::VisitOverloadExpr(
   std::cerr << "ClangToSageTranslator::VisitOverloadExpr" << std::endl;
 #endif
   bool res = true;
-  auto should_materialize_overload_candidates =
-      [&](const clang::Expr *expr) -> bool {
-    if (expr == nullptr || p_compiler_instance == nullptr) {
-      return true;
-    }
-
-    clang::SourceManager &sm = p_compiler_instance->getSourceManager();
-    clang::SourceLocation loc = expr->getExprLoc();
-    if (loc.isMacroID()) {
-      clang::SourceLocation expansion_loc = sm.getExpansionLoc(loc);
-      if (expansion_loc.isValid() && !sm.isInSystemHeader(expansion_loc) &&
-          !sm.isWrittenInBuiltinFile(expansion_loc)) {
-        return true;
-      }
-      loc = sm.getSpellingLoc(loc);
-    }
-    if (!loc.isValid()) {
-      return true;
-    }
-
-    return !sm.isInSystemHeader(loc) && !sm.isWrittenInBuiltinFile(loc);
-  };
-
   if (overload_expr != nullptr) {
     if (*node == nullptr) {
       std::string name = getDeclarationNameAsString(overload_expr->getName());
@@ -22679,28 +22656,13 @@ bool ClangToSageTranslator::VisitOverloadExpr(
       SageBuilder::setTemplateArgumentParents(ref);
     }
 
-    if (should_materialize_overload_candidates(overload_expr)) {
-      for (auto it = overload_expr->decls_begin();
-           it != overload_expr->decls_end(); ++it) {
-        clang::NamedDecl *named_decl = llvm::dyn_cast_or_null<clang::NamedDecl>(
-            markClangDeclObjectDefinedByKind(
-                readClangApiValueDefined([&]() { return it.getDecl(); })));
-        if (named_decl == nullptr) {
-          continue;
-        }
-        if (clang::UsingShadowDecl *shadow =
-                llvm::dyn_cast<clang::UsingShadowDecl>(named_decl)) {
-          named_decl = llvm::dyn_cast_or_null<clang::NamedDecl>(
-              markClangDeclObjectDefinedByKind(readClangApiValueDefined(
-                  [&]() { return shadow->getTargetDecl(); })));
-        }
-        clang::Decl *decl = llvm::dyn_cast<clang::Decl>(named_decl);
-        if (decl == nullptr) {
-          continue;
-        }
-        TraverseOnDemand(decl);
-      }
-    }
+    // OverloadExpr owns a dependent/unresolved name, not structural edges to
+    // every lookup candidate.  Materializing the complete candidate set here
+    // translates disconnected declarations and makes one expression fan out
+    // into arbitrarily large declaration subgraphs.  A non-dependent lookup
+    // that has one exact candidate is lowered by VisitUnresolvedLookupExpr;
+    // all other lookups retain their typed nonreal identity until Clang
+    // resolves them in an instantiated expression.
   }
 
   return VisitExpr(overload_expr, node) && res;

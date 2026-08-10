@@ -652,6 +652,23 @@ void PreprocessingInfo::changeAttachedPosition(SgLocatedNode *owner,
   relativePosition = position;
 }
 
+void PreprocessingInfo::changeAttachedOutputPlacement(
+    SgLocatedNode *owner, OutputPlacementType placement) {
+  ASSERT_this();
+  if (owner == nullptr || attachedOwner != owner ||
+      (placement != attached_output_boundary &&
+       placement != attached_output_trailing_line)) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[preprocessing-output-placement]: record=%p "
+            "current-owner=%p requested-owner=%p cannot publish attached "
+            "placement=%d\n",
+            static_cast<void *>(this), static_cast<void *>(attachedOwner),
+            static_cast<void *>(owner), static_cast<int>(placement));
+    ROSE_ABORT();
+  }
+  outputPlacement = placement;
+}
+
 int PreprocessingInfo::getStringLength(void) const {
   ASSERT_this();
 

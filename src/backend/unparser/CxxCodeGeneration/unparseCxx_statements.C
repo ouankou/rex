@@ -374,7 +374,7 @@ bool cxxSourceGroupDeclarationSpecifierTypesMatch(SgType *lhs, SgType *rhs) {
 
 void validateCxxSourceDeclarationGroupContract(
     const CxxSourceDeclarationGroup &group) {
-  ROSE_ASSERT(group.members.size() >= 2);
+  ROSE_ASSERT(!group.members.empty());
   SgDeclarationStatement *first = group.members.front();
   ASSERT_not_null(first);
   SgType *firstBase = cxxSourceGroupDeclarationSpecifierType(first);
@@ -977,6 +977,24 @@ bool isConditionalPreprocessingDirective(
   default:
     return false;
   }
+}
+
+SgLocatedNode *
+sourceDeclarationGroupBoundaryOwner(SgDeclarationStatement *member) {
+  ASSERT_not_null(member);
+  if (SgVariableDeclaration *variable = isSgVariableDeclaration(member)) {
+    if (variable->get_variables().size() != 1 ||
+        variable->get_variables().front() == nullptr ||
+        variable->get_variables().front()->get_parent() != variable) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[source-declaration-group]: variable "
+              "member=%p has no exact initialized-name boundary\n",
+              static_cast<void *>(member));
+      ROSE_ABORT();
+    }
+    return variable->get_variables().front();
+  }
+  return member;
 }
 
 bool tokenLexemeSpellsConditionalPreprocessingDirective(
@@ -2794,44 +2812,21 @@ void Unparse_ExprStmt::unparseFunctionParameterDeclaration(
   }
 }
 
-static bool
-hasUnsafeParameterPreprocessingInfo(SgInitializedName *initializedName) {
-  if (initializedName == nullptr) {
-    return false;
-  }
-
-  AttachedPreprocessingInfoType *infos =
-      initializedName->getAttachedPreprocessingInfo();
-  if (infos == nullptr) {
-    return false;
-  }
-
-  for (size_t index = 0; index < infos->size(); ++index) {
-    PreprocessingInfo *info =
-        requiredAttachedPreprocessingInfoEntry(*infos, index);
-
-    switch (info->getTypeOfDirective()) {
-    case PreprocessingInfo::C_StyleComment:
-    case PreprocessingInfo::CplusplusStyleComment:
-    case PreprocessingInfo::FortranStyleComment:
-    case PreprocessingInfo::F90StyleComment:
-    case PreprocessingInfo::CpreprocessorBlankLine:
-      break;
-
-    default:
-      return true;
-    }
-  }
-
-  return false;
-}
-
 void Unparse_ExprStmt::unparseFunctionArgs(SgFunctionDeclaration *funcdecl_stmt,
                                            SgUnparse_Info &info) {
   ASSERT_not_null(funcdecl_stmt);
 
   // DQ (9/7/2014): These should have been setup to be the same.
   ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
+
+  SgFunctionParameterList *source_parameter_list =
+      funcdecl_stmt->get_parameterList_syntax();
+  if (source_parameter_list == nullptr) {
+    source_parameter_list = funcdecl_stmt->get_parameterList();
+  }
+  ASSERT_not_null(source_parameter_list);
+  unparseAttachedPreprocessingInfo(source_parameter_list, info,
+                                   PreprocessingInfo::inside);
 
   // DQ (1/18/2014): This is a better implementation than setting the source
   // position info on the function parameters.  See test2014_35.c for an example
@@ -2864,6 +2859,8 @@ void Unparse_ExprStmt::unparseFunctionArgs(SgFunctionDeclaration *funcdecl_stmt,
     p_syntax = paramSyntax->get_args().begin();
   }
 
+  bool separatorBelongsToCurrentParameter = false;
+
   while (p != funcdecl_stmt->get_args().end()) {
     // Liao 11/9/2010,
     // Skip duplicated unparsing of the attached information for C function
@@ -2871,9 +2868,15 @@ void Unparse_ExprStmt::unparseFunctionArgs(SgFunctionDeclaration *funcdecl_stmt,
     // unparsing the arguments which are outside of the parameter list are
     // outside of the parameter list See example code:
     // tests/nonsmoke/functional/CompileTests/C_tests/test2010_10.c
-    if (funcdecl_stmt->get_oldStyleDefinition() == false &&
-        !hasUnsafeParameterPreprocessingInfo(*p)) {
-      unparseAttachedPreprocessingInfo(*p, info, PreprocessingInfo::before);
+    SgInitializedName *source_parameter = use_param_syntax ? *p_syntax : *p;
+    ASSERT_not_null(source_parameter);
+    if (funcdecl_stmt->get_oldStyleDefinition() == false) {
+      unparseAttachedPreprocessingInfo(source_parameter, info,
+                                       PreprocessingInfo::before);
+    }
+    if (separatorBelongsToCurrentParameter) {
+      curprint(", ");
+      separatorBelongsToCurrentParameter = false;
     }
     // DQ (1/17/2014): Adding support in C to output function prototypes without
     // function parameters. unparseFunctionParameterDeclaration
@@ -2902,11 +2905,41 @@ void Unparse_ExprStmt::unparseFunctionArgs(SgFunctionDeclaration *funcdecl_stmt,
       p_syntax++;
     }
 
-    // Check if this is the last argument (output a "," separator if not)
+    // A conditional region beginning immediately before the following
+    // parameter owns that parameter's leading separator.  Emitting the comma
+    // before the opening directive would leave a trailing comma when the
+    // condition is false.  Closing directives do not defer the separator: a
+    // conditionally present leading parameter instead owns its trailing comma.
     if (p != funcdecl_stmt->get_args().end()) {
+      if (use_param_syntax &&
+          p_syntax == source_parameter_list->get_args().end()) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[function-parameter-syntax]: "
+                "function=%p semantic parameters outnumber syntax "
+                "parameters\n",
+                static_cast<void *>(funcdecl_stmt));
+        ROSE_ABORT();
+      }
+      SgInitializedName *next_source_parameter =
+          use_param_syntax ? *p_syntax : *p;
+      ASSERT_not_null(next_source_parameter);
+      separatorBelongsToCurrentParameter =
+          funcdecl_stmt->get_oldStyleDefinition() == false &&
+          locatedNodeHasConditionalRegionOpening(next_source_parameter,
+                                                 PreprocessingInfo::before);
+    }
+    if (p != funcdecl_stmt->get_args().end() &&
+        !separatorBelongsToCurrentParameter) {
       curprint(", ");
     }
+    if (funcdecl_stmt->get_oldStyleDefinition() == false) {
+      unparseAttachedPreprocessingInfo(source_parameter, info,
+                                       PreprocessingInfo::after);
+      unparseAttachedPreprocessingInfo(source_parameter, info,
+                                       PreprocessingInfo::after_syntax);
+    }
   }
+  ROSE_ASSERT(separatorBelongsToCurrentParameter == false);
 }
 
 void Unparse_ExprStmt::unparseOldStyleFunctionParameterDeclarations(
@@ -2928,10 +2961,8 @@ void Unparse_ExprStmt::unparseOldStyleFunctionParameterDeclarations(
     unp->u_sage->curprint_newline();
   }
   for (SgInitializedName *parameter : parameters) {
-    if (!hasUnsafeParameterPreprocessingInfo(parameter)) {
-      unparseAttachedPreprocessingInfo(parameter, info,
-                                       PreprocessingInfo::before);
-    }
+    unparseAttachedPreprocessingInfo(parameter, info,
+                                     PreprocessingInfo::before);
     unparseFunctionParameterDeclaration(funcdecl_stmt, parameter, true,
                                         parameter_info);
     curprint(";");
@@ -3155,8 +3186,15 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
          ++index) {
       SgDeclarationStatement *member = sourceDeclarationGroup.members[index];
       ASSERT_not_null(member);
+      bool separatorAfterOpeningDirective = false;
       if (index != 0) {
-        curprint(", ");
+        SgLocatedNode *boundaryOwner =
+            sourceDeclarationGroupBoundaryOwner(member);
+        separatorAfterOpeningDirective = locatedNodeHasConditionalRegionOpening(
+            boundaryOwner, PreprocessingInfo::before);
+        if (!separatorAfterOpeningDirective) {
+          curprint(", ");
+        }
         groupInfo.set_SkipBaseType();
       }
       // Each structural group member is an independent semantic use site even
@@ -3172,6 +3210,15 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
       // not search lexical siblings or reconstruct text from source ranges.
       unparseAttachedPreprocessingInfo(member, groupInfo,
                                        PreprocessingInfo::before);
+
+      // A non-variable member owns its preprocessing boundary directly, so
+      // its conditionally present leading comma belongs here.  Variable
+      // boundaries are exact SgInitializedName children; unparseVarDeclStmt
+      // emits their comma immediately after that child's opening directive.
+      if (separatorAfterOpeningDirective &&
+          isSgVariableDeclaration(member) == nullptr) {
+        curprint(", ");
+      }
 
       if (isSgVariableDeclaration(member) != nullptr) {
         unparseVarDeclStmt(member, groupInfo);
@@ -6782,11 +6829,11 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
 
     } else if (!ctor_inits.empty()) {
       auto it_ctor_init = ctor_inits.begin();
-      auto const first = it_ctor_init;
 #if DEBUG_unparseMFuncDeclStmt
       printf("  Preinitialization list:\n");
 #endif
       curprint(" : ");
+      bool separatorBelongsToCurrentInitializer = false;
       while (it_ctor_init != ctor_inits.end()) {
         SgInitializedName *ctor_init = *it_ctor_init;
         ASSERT_not_null(ctor_init);
@@ -6806,13 +6853,14 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
         SgUnparse_Info initializer_info(ninfo2);
         initializer_info.set_template_argument_qualification_context(
             ctor_initializer_list);
-        if (it_ctor_init != first) {
-          curprint(", ");
-        }
         it_ctor_init++;
 
         unparseAttachedPreprocessingInfo(ctor_init, info,
                                          PreprocessingInfo::before);
+        if (separatorBelongsToCurrentInitializer) {
+          curprint(", ");
+          separatorBelongsToCurrentInitializer = false;
+        }
 
         SgName nameQualifier(
             exactStatementNameQualification(unp, ctor_init, initializer_info)
@@ -6857,7 +6905,32 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
 
         if (output_parenthesis)
           curprint(string(")"));
+
+        if (it_ctor_init != ctor_inits.end()) {
+          SgInitializedName *next_initializer = *it_ctor_init;
+          ASSERT_not_null(next_initializer);
+          if (next_initializer->get_parent() != ctor_initializer_list) {
+            fprintf(stderr,
+                    "REX_UNPARSE_INVARIANT[constructor-initializer-owner]: "
+                    "following initializer=%p parent=%p/%s does not belong "
+                    "to list=%p\n",
+                    static_cast<void *>(next_initializer),
+                    static_cast<void *>(next_initializer->get_parent()),
+                    next_initializer->get_parent() != nullptr
+                        ? next_initializer->get_parent()->class_name().c_str()
+                        : "<null>",
+                    static_cast<void *>(ctor_initializer_list));
+            ROSE_ABORT();
+          }
+          separatorBelongsToCurrentInitializer =
+              locatedNodeHasConditionalRegionOpening(next_initializer,
+                                                     PreprocessingInfo::before);
+          if (!separatorBelongsToCurrentInitializer) {
+            curprint(", ");
+          }
+        }
       }
+      ROSE_ASSERT(separatorBelongsToCurrentInitializer == false);
     }
   }
 
@@ -7601,8 +7674,6 @@ SgStatement *Unparse_ExprStmt::unparseClassMembersWithSourceRoles(
     }
     return count;
   };
-  size_t classIncludeCount =
-      includeCount(classDefinition, PreprocessingInfo::inside);
   for (SgDeclarationStatement *member : classMembers) {
     if (member == nullptr || member->get_parent() != classDefinition) {
       fprintf(stderr,
@@ -7611,17 +7682,20 @@ SgStatement *Unparse_ExprStmt::unparseClassMembersWithSourceRoles(
               static_cast<void *>(classDefinition));
       ROSE_ABORT();
     }
-    classIncludeCount += includeCount(member, PreprocessingInfo::before);
   }
-  if ((classIncludeCount == 0 && !sourceMemberRoles.empty()) ||
-      (classIncludeCount != 0 &&
-       sourceMemberRoles.size() != classMembers.size())) {
+  // An attached include is not, by itself, evidence that a direct class
+  // member came from that include.  Includes can occur within base specifiers,
+  // nested declarators, or ordinary member boundaries without expanding a
+  // declaration into the class.  The frontend publishes this vector only when
+  // it has proved exact member ownership from Clang source locations.
+  if (!sourceMemberRoles.empty() &&
+      sourceMemberRoles.size() != classMembers.size()) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[class-member-source-role]: class=%p "
-            "includes=%zu members=%zu roles=%zu does not publish one exact "
+            "members=%zu roles=%zu does not publish one exact "
             "include-expansion ownership map\n",
-            static_cast<void *>(classDefinition), classIncludeCount,
-            classMembers.size(), sourceMemberRoles.size());
+            static_cast<void *>(classDefinition), classMembers.size(),
+            sourceMemberRoles.size());
     ROSE_ABORT();
   }
 

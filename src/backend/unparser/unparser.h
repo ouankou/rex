@@ -4,6 +4,7 @@
 #define UNPARSER_H
 
 #include <map>
+#include <unordered_map>
 
 #include "unparse_format.h"
 
@@ -180,6 +181,13 @@ private:
   };
   std::map<const PreprocessingInfo *, PreprocessingInfoReceipt>
       preprocessingInfoReceipts;
+  struct ExactChildOwnershipIndex {
+    std::unordered_map<const SgNode *, std::size_t> occurrences;
+  };
+  std::unordered_map<const SgNode *, ExactChildOwnershipIndex>
+      exactChildOwnershipIndices;
+  std::unordered_map<const SgNode *, SgAuxiliaryDeclarationList *>
+      exactAuxiliaryOwners;
   FortranDirectiveKind fortranDirectiveKind;
   void emitFortranRawText(const std::string &text);
 
@@ -209,6 +217,10 @@ public:
   const TokenUnparseFrontierFileContext &
   tokenUnparseFrontier(SgSourceFile *sourceFile) const;
   const TokenUnparseFrontierContext &tokenUnparseContext() const;
+  SgAuxiliaryDeclarationList *
+  requireExactAuxiliaryDeclarationOwner(SgNode *node, const char *contract);
+  void requireExactStatementChild(SgNode *parent, SgStatement *statement,
+                                  const char *contract);
 
   FortranDirectiveKind getFortranDirectiveKind() const;
   void setFortranDirectiveKind(FortranDirectiveKind kind);

@@ -5777,57 +5777,66 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
       // output unless we are trying to reproduce the operator function call
       // syntax e.g. "x.operator++(0)" or "x.operator++(1)").
       if ((printFunctionArguments == true) && (func_call->get_args() != NULL)) {
-        SgExpressionPtrList &list = func_call->get_args()->get_expressions();
-        SgExpressionPtrList::iterator arg = list.begin();
-        while (arg != list.end()) {
-          if (*arg == nullptr || (*arg)->get_file_info() == nullptr) {
-            fprintf(stderr,
-                    "REX_UNPARSE_INVARIANT[function-call-argument]: call=%p "
-                    "has a null argument or missing source provenance\n",
-                    static_cast<void *>(func_call));
-            ROSE_ABORT();
-          }
-          if ((*arg)->get_file_info()->isDefaultArgument()) {
-            fprintf(stderr,
-                    "REX_UNPARSE_INVARIANT[function-call-argument]: call=%p "
-                    "contains an implicit default argument instead of only "
-                    "source-explicit arguments\n",
-                    static_cast<void *>(func_call));
-            ROSE_ABORT();
-          }
+        const bool requiresSpecialArgumentSelection =
+            is_user_defined_literal_call ||
+            ((uses_operator_syntax == true) &&
+             (call_uses_unary_postfix_operator == true));
+        if (!requiresSpecialArgumentSelection) {
+          unparseExpression(func_call->get_args(), newinfo);
+        } else {
+          SgExpressionPtrList &list = func_call->get_args()->get_expressions();
+          SgExpressionPtrList::iterator arg = list.begin();
+          while (arg != list.end()) {
+            if (*arg == nullptr || (*arg)->get_file_info() == nullptr) {
+              fprintf(stderr,
+                      "REX_UNPARSE_INVARIANT[function-call-argument]: call=%p "
+                      "has a null argument or missing source provenance\n",
+                      static_cast<void *>(func_call));
+              ROSE_ABORT();
+            }
+            if ((*arg)->get_file_info()->isDefaultArgument()) {
+              fprintf(stderr,
+                      "REX_UNPARSE_INVARIANT[function-call-argument]: call=%p "
+                      "contains an implicit default argument instead of only "
+                      "source-explicit arguments\n",
+                      static_cast<void *>(func_call));
+              ROSE_ABORT();
+            }
 #if DEBUG_FUNCTION_CALL
-          printf("func_call->get_args() = %p = %s arg = %p = %s\n",
-                 func_call->get_args(),
-                 func_call->get_args()->class_name().c_str(), *arg,
-                 (*arg)->class_name().c_str());
+            printf("func_call->get_args() = %p = %s arg = %p = %s\n",
+                   func_call->get_args(),
+                   func_call->get_args()->class_name().c_str(), *arg,
+                   (*arg)->class_name().c_str());
 #endif
-          if (arg != list.begin()) {
-            curprint(", ");
-          }
+            if (arg != list.begin()) {
+              curprint(", ");
+            }
 
-          unparseExpression((*arg), newinfo);
-          if (is_user_defined_literal_call) {
-            break;
-          }
+            unparseExpression((*arg), newinfo);
+            if (is_user_defined_literal_call) {
+              break;
+            }
 
-          arg++;
+            arg++;
 
-          // DQ (1/2/2018): Supress the trailing function argument in the case
-          // of a postfix non-member function using operator syntax.
-          if ((uses_operator_syntax == true) &&
-              (call_uses_unary_postfix_operator == true)) {
+            // DQ (1/2/2018): Supress the trailing function argument in the case
+            // of a postfix non-member function using operator syntax.
+            if ((uses_operator_syntax == true) &&
+                (call_uses_unary_postfix_operator == true)) {
 #if DEBUG_FUNCTION_CALL
-            printf("Suppress the trailing argument of the unary postfix "
-                   "operator \n");
-            curprint("\n/* Suppress the trailing argument of the unary postfix "
-                     "operator in unparseFuncCall */ \n");
+              printf("Suppress the trailing argument of the unary postfix "
+                     "operator \n");
+              curprint(
+                  "\n/* Suppress the trailing argument of the unary postfix "
+                  "operator in unparseFuncCall */ \n");
 #endif
-            // DQ (2/12/2019): Debugging C++11 literal operators.
-            // ROSE_ASSERT(arg != list.end());
-            // arg++;
-            if (arg != list.end()) {
-              arg++;
-            } else {
+              // DQ (2/12/2019): Debugging C++11 literal operators.
+              // ROSE_ASSERT(arg != list.end());
+              // arg++;
+              if (arg != list.end()) {
+                arg++;
+              } else {
+              }
             }
           }
         }

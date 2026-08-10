@@ -1,0 +1,7 @@
+#define REX_PREPROCESSING_OCCURRENCE_NAME rex_preprocessing_first_occurrence
+#include "rex_frontend_preprocessing_include_occurrence_header.h"
+#undef REX_PREPROCESSING_OCCURRENCE_NAME
+
+#define REX_PREPROCESSING_OCCURRENCE_NAME rex_preprocessing_second_occurrence
+#include "rex_frontend_preprocessing_include_occurrence_header.h"
+#undef REX_PREPROCESSING_OCCURRENCE_NAME

@@ -16047,7 +16047,40 @@ void SgDeclarationGroupStatement::validate() const {
     }
     structural_scope = isSgScopeStatement(ancestor);
   }
-  if (p_declarations.size() < 2 || get_scope() == NULL ||
+  auto has_inactive_declarator_tail = [](SgLocatedNode *owner) {
+    if (owner == NULL) {
+      return false;
+    }
+    AttachedPreprocessingInfoType *records =
+        owner->getAttachedPreprocessingInfo();
+    if (records == NULL) {
+      return false;
+    }
+    for (PreprocessingInfo *record : *records) {
+      if (record != NULL && record->getAttachedOwner() == owner &&
+          record->getRelativePosition() == PreprocessingInfo::after &&
+          record->getTypeOfDirective() == PreprocessingInfo::CSkippedToken) {
+        return true;
+      }
+    }
+    return false;
+  };
+  bool singleton_has_inactive_declarator_tail = false;
+  if (p_declarations.size() == 1 && p_declarations.front() != NULL) {
+    SgDeclarationStatement *member = p_declarations.front();
+    SgLocatedNode *boundary = member;
+    if (SgVariableDeclaration *variable = isSgVariableDeclaration(member)) {
+      if (variable->get_variables().size() == 1 &&
+          variable->get_variables().front() != NULL) {
+        boundary = variable->get_variables().front();
+      }
+    }
+    singleton_has_inactive_declarator_tail =
+        has_inactive_declarator_tail(boundary);
+  }
+  if (p_declarations.empty() ||
+      (p_declarations.size() == 1 && !singleton_has_inactive_declarator_tail) ||
+      get_scope() == NULL ||
       (get_parent() != NULL && structural_scope != get_scope()) ||
       (get_source_terminator() != e_source_terminator_file_semicolon &&
        get_source_terminator() != e_source_terminator_macro_semicolon) ||

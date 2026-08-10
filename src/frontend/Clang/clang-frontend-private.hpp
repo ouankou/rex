@@ -212,6 +212,309 @@ struct ClangTemplateParameterIdentity {
 };
 using ClangTemplateParameterNameMap =
     std::map<std::pair<unsigned, unsigned>, ClangTemplateParameterIdentity>;
+
+class ClangTemplateParameterNameContextStack {
+public:
+  using container_type = std::vector<ClangTemplateParameterNameMap>;
+  using reverse_iterator = container_type::reverse_iterator;
+  using const_reverse_iterator = container_type::const_reverse_iterator;
+
+  bool empty() const { return contexts_.empty(); }
+  std::size_t size() const { return contexts_.size(); }
+
+  ClangTemplateParameterNameMap &back() { return contexts_.back(); }
+  const ClangTemplateParameterNameMap &back() const { return contexts_.back(); }
+
+  reverse_iterator rbegin() { return contexts_.rbegin(); }
+  reverse_iterator rend() { return contexts_.rend(); }
+  const_reverse_iterator rbegin() const { return contexts_.rbegin(); }
+  const_reverse_iterator rend() const { return contexts_.rend(); }
+
+  void push_back(ClangTemplateParameterNameMap context) {
+    if (next_context_id_ == std::numeric_limits<std::uint64_t>::max()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[template-name-context]: exhausted "
+              "exact translation context identities\n");
+      ROSE_ABORT();
+    }
+    contexts_.push_back(std::move(context));
+    context_ids_.push_back(++next_context_id_);
+  }
+
+  void pop_back() {
+    if (contexts_.empty() || contexts_.size() != context_ids_.size()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[template-name-context]: cannot pop an "
+              "empty or unbalanced exact translation context\n");
+      ROSE_ABORT();
+    }
+    contexts_.pop_back();
+    context_ids_.pop_back();
+  }
+
+  std::uint64_t contextId() const {
+    if (contexts_.size() != context_ids_.size()) {
+      fprintf(stderr, "REX_FRONTEND_INVARIANT[template-name-context]: exact "
+                      "translation context identities are unbalanced\n");
+      ROSE_ABORT();
+    }
+    return context_ids_.empty() ? 0 : context_ids_.back();
+  }
+
+private:
+  container_type contexts_;
+  std::vector<std::uint64_t> context_ids_;
+  std::uint64_t next_context_id_ = 0;
+};
+
+class ClangDeclTranslationMap {
+public:
+  using map_type = std::unordered_map<clang::Decl *, SgNode *>;
+  // Cache consumers may inspect entries, but every mutation must pass through
+  // the indexed operations below so entries_ and reverse_ remain one exact
+  // bidirectional relation.
+  using iterator = map_type::const_iterator;
+  using const_iterator = map_type::const_iterator;
+
+  class Slot {
+  public:
+    Slot(ClangDeclTranslationMap &owner, clang::Decl *key)
+        : owner_(owner), key_(key) {}
+
+    Slot &operator=(SgNode *value) {
+      owner_.set(key_, value);
+      return *this;
+    }
+
+    operator SgNode *() const {
+      auto found = owner_.entries_.find(key_);
+      return found != owner_.entries_.end() ? found->second : nullptr;
+    }
+
+  private:
+    ClangDeclTranslationMap &owner_;
+    clang::Decl *key_;
+  };
+
+  iterator begin() { return entries_.cbegin(); }
+  iterator end() { return entries_.cend(); }
+  const_iterator begin() const { return entries_.begin(); }
+  const_iterator end() const { return entries_.end(); }
+
+  iterator find(clang::Decl *key) { return entries_.find(key); }
+  const_iterator find(clang::Decl *key) const { return entries_.find(key); }
+  std::size_t count(clang::Decl *key) const { return entries_.count(key); }
+  std::size_t size() const { return entries_.size(); }
+  bool empty() const { return entries_.empty(); }
+
+  Slot operator[](clang::Decl *key) { return Slot(*this, key); }
+
+  std::pair<iterator, bool> emplace(clang::Decl *key, SgNode *value) {
+    auto inserted = entries_.emplace(key, value);
+    if (inserted.second) {
+      addReverse(key, value);
+    }
+    return {inserted.first, inserted.second};
+  }
+
+  std::pair<iterator, bool>
+  insert(const std::pair<clang::Decl *, SgNode *> &entry) {
+    return emplace(entry.first, entry.second);
+  }
+
+  iterator erase(iterator position) {
+    if (position == entries_.end()) {
+      fprintf(stderr, "REX_FRONTEND_INVARIANT[declaration-translation-index]: "
+                      "cannot erase the end iterator\n");
+      ROSE_ABORT();
+    }
+    removeReverse(position->first, position->second);
+    return entries_.erase(position);
+  }
+
+  std::size_t erase(clang::Decl *key) {
+    auto found = entries_.find(key);
+    if (found == entries_.end()) {
+      return 0;
+    }
+    erase(found);
+    return 1;
+  }
+
+  void set(clang::Decl *key, SgNode *value) {
+    auto found = entries_.find(key);
+    if (found == entries_.end()) {
+      entries_.emplace(key, value);
+      addReverse(key, value);
+      return;
+    }
+    if (found->second == value) {
+      return;
+    }
+    removeReverse(key, found->second);
+    found->second = value;
+    addReverse(key, value);
+  }
+
+  void replaceAllAliases(SgNode *old_value, SgNode *new_value,
+                         const char *context) {
+    if (old_value == nullptr || new_value == nullptr ||
+        old_value == new_value || context == nullptr || *context == '\0') {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[declaration-translation-index]: "
+              "context=%s cannot replace aliases old=%p new=%p\n",
+              context != nullptr ? context : "<null>",
+              static_cast<void *>(old_value), static_cast<void *>(new_value));
+      ROSE_ABORT();
+    }
+    auto aliases = reverse_.find(old_value);
+    if (aliases == reverse_.end() || aliases->second.empty()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[declaration-translation-index]: "
+              "context=%s old value=%p has no exact aliases\n",
+              context, static_cast<void *>(old_value));
+      ROSE_ABORT();
+    }
+    std::vector<clang::Decl *> keys(aliases->second.begin(),
+                                    aliases->second.end());
+    reverse_.erase(aliases);
+    auto &replacement_aliases = reverse_[new_value];
+    for (clang::Decl *key : keys) {
+      auto entry = entries_.find(key);
+      if (entry == entries_.end() || entry->second != old_value ||
+          !replacement_aliases.insert(key).second) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[declaration-translation-index]: "
+                "context=%s alias key=%p does not map exactly from %p to %p\n",
+                context, static_cast<void *>(key),
+                static_cast<void *>(old_value), static_cast<void *>(new_value));
+        ROSE_ABORT();
+      }
+      entry->second = new_value;
+    }
+  }
+
+  void eraseAllAliases(SgNode *value, const char *context) {
+    if (value == nullptr || context == nullptr || *context == '\0') {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[declaration-translation-index]: "
+              "context=%s cannot erase aliases for value=%p\n",
+              context != nullptr ? context : "<null>",
+              static_cast<void *>(value));
+      ROSE_ABORT();
+    }
+    auto aliases = reverse_.find(value);
+    if (aliases == reverse_.end() || aliases->second.empty()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[declaration-translation-index]: "
+              "context=%s value=%p has no exact aliases\n",
+              context, static_cast<void *>(value));
+      ROSE_ABORT();
+    }
+    std::vector<clang::Decl *> keys(aliases->second.begin(),
+                                    aliases->second.end());
+    reverse_.erase(aliases);
+    for (clang::Decl *key : keys) {
+      auto entry = entries_.find(key);
+      if (entry == entries_.end() || entry->second != value) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[declaration-translation-index]: "
+                "context=%s alias key=%p does not map to erased value=%p\n",
+                context, static_cast<void *>(key), static_cast<void *>(value));
+        ROSE_ABORT();
+      }
+      entries_.erase(entry);
+    }
+  }
+
+  void validate(const char *context) const {
+    if (context == nullptr || *context == '\0') {
+      fprintf(stderr, "REX_FRONTEND_INVARIANT[declaration-translation-index]: "
+                      "validation requires an exact context\n");
+      ROSE_ABORT();
+    }
+    std::size_t reverse_alias_count = 0;
+    for (const auto &entry : reverse_) {
+      if (entry.first == nullptr || entry.second.empty()) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[declaration-translation-index]: "
+                "context=%s has an empty/null reverse alias family\n",
+                context);
+        ROSE_ABORT();
+      }
+      reverse_alias_count += entry.second.size();
+      for (clang::Decl *key : entry.second) {
+        auto forward = entries_.find(key);
+        if (forward == entries_.end() || forward->second != entry.first) {
+          fprintf(stderr,
+                  "REX_FRONTEND_INVARIANT[declaration-translation-index]: "
+                  "context=%s reverse key=%p value=%p has no exact forward "
+                  "edge\n",
+                  context, static_cast<void *>(key),
+                  static_cast<void *>(entry.first));
+          ROSE_ABORT();
+        }
+      }
+    }
+    std::size_t nonnull_forward_count = 0;
+    for (const auto &entry : entries_) {
+      if (entry.second == nullptr) {
+        continue;
+      }
+      ++nonnull_forward_count;
+      auto aliases = reverse_.find(entry.second);
+      if (aliases == reverse_.end() ||
+          aliases->second.count(entry.first) != 1) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[declaration-translation-index]: "
+                "context=%s forward key=%p value=%p has no exact reverse "
+                "edge\n",
+                context, static_cast<void *>(entry.first),
+                static_cast<void *>(entry.second));
+        ROSE_ABORT();
+      }
+    }
+    if (nonnull_forward_count != reverse_alias_count) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[declaration-translation-index]: "
+              "context=%s forward/reverse cardinality=%zu/%zu differs\n",
+              context, nonnull_forward_count, reverse_alias_count);
+      ROSE_ABORT();
+    }
+  }
+
+private:
+  void addReverse(clang::Decl *key, SgNode *value) {
+    if (value != nullptr && !reverse_[value].insert(key).second) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[declaration-translation-index]: key=%p "
+              "was inserted twice for value=%p\n",
+              static_cast<void *>(key), static_cast<void *>(value));
+      ROSE_ABORT();
+    }
+  }
+
+  void removeReverse(clang::Decl *key, SgNode *value) {
+    if (value == nullptr) {
+      return;
+    }
+    auto aliases = reverse_.find(value);
+    if (aliases == reverse_.end() || aliases->second.erase(key) != 1) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[declaration-translation-index]: key=%p "
+              "value=%p has no exact reverse edge to remove\n",
+              static_cast<void *>(key), static_cast<void *>(value));
+      ROSE_ABORT();
+    }
+    if (aliases->second.empty()) {
+      reverse_.erase(aliases);
+    }
+  }
+
+  map_type entries_;
+  std::unordered_map<SgNode *, std::unordered_set<clang::Decl *>> reverse_;
+};
+
 std::string buildClangTemplateInstantiationNameForFrontend(
     const std::string &baseName,
     llvm::ArrayRef<clang::TemplateArgument> templateArguments,
@@ -3911,17 +4214,45 @@ public:
       ExpandedTokenBoundary boundary = ExpandedTokenBoundary::unique) const;
 
 protected:
+  struct RecordMemberAccessIndex {
+    std::unordered_set<clang::Decl *> direct_members;
+    std::unordered_map<clang::Decl *, clang::AccessSpecifier> effective_access;
+  };
+  std::unordered_map<clang::RecordDecl *, RecordMemberAccessIndex>
+      p_record_member_access_indices;
+  void publishExactEffectiveDeclarationAccess(clang::Decl *clang_decl,
+                                              SgDeclarationStatement *sage_decl,
+                                              const char *producer);
+  struct PhysicalSourceInterval {
+    unsigned begin = 0;
+    unsigned end = 0;
+  };
+  using PhysicalSourceIntervalIndex =
+      std::unordered_map<unsigned, std::vector<PhysicalSourceInterval>>;
+  std::unordered_map<clang::DeclContext *, PhysicalSourceIntervalIndex>
+      p_typed_decl_context_owner_intervals;
+  std::unordered_map<
+      clang::RecordDecl *,
+      std::unordered_map<const clang::TagDecl *, PhysicalSourceIntervalIndex>>
+      p_record_embedded_tag_intervals;
+  bool tagDefinitionWrittenInTypedDeclContextOwner(
+      clang::TagDecl *tag_decl, clang::CompilerInstance *compiler_instance);
+  bool isTagEmbeddedInField(clang::TagDecl *tag_decl,
+                            clang::RecordDecl *parent_decl,
+                            clang::SourceManager *source_manager);
+
   // Scope-child membership is performance-sensitive for large header scopes.
   // Keep the index owned by this translation invocation so AST/list addresses
   // cannot leak into a later project parsed by the same process.
-  DeclAttachmentSession p_decl_attachment_session;
-  std::unordered_map<clang::Decl *, SgNode *> p_decl_translation_map;
+  mutable DeclAttachmentSession p_decl_attachment_session;
+  ClangDeclTranslationMap p_decl_translation_map;
   enum class DeclarationGroupRole { source_lexical, semantic_body };
   struct SourceDeclarationGroupConstruction {
     clang::DeclContext *lexical_context = nullptr;
     SgScopeStatement *lexical_scope = nullptr;
     SgDeclarationGroupStatement *group = nullptr;
     DeclarationGroupRole role = DeclarationGroupRole::source_lexical;
+    bool owns_inactive_declarator_tail = false;
     std::vector<clang::Decl *> clang_members;
   };
   std::vector<SourceDeclarationGroupConstruction>
@@ -4203,7 +4534,7 @@ protected:
   std::unordered_map<const clang::Type *, SgNode *> p_type_translation_map;
   using ContextualTypeTranslationKey =
       std::tuple<uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, bool,
-                 std::vector<ClangTemplateParameterNameMap>>;
+                 std::uint64_t>;
   // Dependent types and member-owned typedef/using types cannot be keyed by
   // their Clang Type pointer alone: Clang shares those nodes across template
   // declarations while their exact Sage names and owners come from the active
@@ -4608,8 +4939,7 @@ protected:
     }
     return nullptr;
   }
-  std::vector<ClangTemplateParameterNameMap>
-      p_exact_template_parameter_name_stack;
+  ClangTemplateParameterNameContextStack p_exact_template_parameter_name_stack;
   // Clang can retain a member typedef from a class-template pattern as the
   // written result type of an instantiated member function when the typedef's
   // canonical type does not itself depend on template arguments.  Keep the
@@ -4688,6 +5018,9 @@ protected:
   // replacing the declaration-map entry with the concrete specialization.
   std::unordered_map<clang::FunctionDecl *, SgFunctionDeclaration *>
       p_suppressed_implicit_function_instantiation_placeholders;
+  std::unordered_map<SgFunctionDeclaration *,
+                     std::unordered_set<clang::FunctionDecl *>>
+      p_suppressed_implicit_function_instantiation_placeholder_aliases;
   std::unordered_map<clang::FunctionDecl *,
                      std::vector<SgTemplateFunctionRefExp *>>
       p_pending_deduced_template_function_references;
@@ -4774,6 +5107,17 @@ protected:
       clang::FieldDecl *field, SgNode *translation, const char *context) const;
   SgClassDefinition *exactClassDefinitionOwnerForFunctionTranslation(
       clang::Decl *function, SgNode *translation, const char *context);
+  bool declaration_has_exact_lexical_source_ownership(
+      SgDeclarationStatement *declaration) const;
+  bool declaration_has_exact_source_surface_ownership(
+      SgDeclarationStatement *declaration) const;
+  bool declaration_has_exact_auxiliary_ownership(
+      SgDeclarationStatement *declaration) const;
+  SgScopeStatement *
+  validate_exact_auxiliary_owner(SgDeclarationStatement *declaration,
+                                 const char *operation) const;
+  size_t exact_direct_structural_successor_count(SgNode *owner,
+                                                 SgNode *child) const;
   bool activeSourceFunctionBodyDeclStmtOwnsDeclaration(
       clang::Decl *decl, SgScopeStatement *structural_scope) const;
   SgDeclarationStatement *lookupContextualLocalTypeDeclaration(
@@ -5863,7 +6207,10 @@ public:
   std::pair<Sg_File_Info *, PreprocessingInfo *> preprocessor_top();
   bool preprocessor_pop();
   size_t preprocessor_list_size();
+  std::vector<std::pair<Sg_File_Info *, PreprocessingInfo *>>
+  preprocessor_remaining_records();
   void preprocessor_mark_attached(PreprocessingInfo *preprocessing_info);
+  void validateDeclarationAttachmentSession();
 
   SgAsmOp::asm_operand_modifier_enum
   get_sgAsmOperandModifier(std::string modifier);
@@ -5971,6 +6318,11 @@ protected:
       p_preprocessor_records_by_line;
   std::unordered_map<PreprocessingInfo *, RecordedDirectiveSourcePosition>
       p_preprocessor_record_positions;
+  std::unordered_map<unsigned,
+                     std::map<unsigned, std::vector<RecordedDirectiveRef>>>
+      p_preprocessor_records_by_file_offset;
+  std::unordered_map<unsigned, std::map<unsigned, RecordedDirectiveRef>>
+      p_include_records_by_file_offset;
   std::unordered_set<PreprocessingInfo *> p_removed_preprocessor_records;
   std::unordered_set<PreprocessingInfo *> p_attached_preprocessor_records;
   size_t p_preprocessor_record_cursor;
@@ -5978,6 +6330,8 @@ protected:
   bool p_record_directive_stream;
   bool p_record_application_header_directives;
   std::map<std::string, IncludeOwnership> p_include_ownership_paths;
+  mutable std::unordered_map<std::string, std::string>
+      p_normalized_include_ownership_paths;
   mutable std::unordered_map<unsigned, std::string>
       p_normalized_physical_paths_by_file_id;
   std::unordered_map<unsigned, unsigned>
@@ -6009,13 +6363,20 @@ protected:
   void recordIncludeOwnershipPath(const std::string &path,
                                   IncludeOwnership ownership,
                                   const char *context);
-  IncludeOwnership
-  includeOwnershipForLocation(clang::SourceLocation location) const;
   void transferIncludeDirectiveToBoundary(
       clang::SourceLocation include_location,
       SgLocatedNode *source_interval_owner, SgLocatedNode *boundary_owner,
       PreprocessingInfo::RelativePositionType relative_position,
       bool allow_at_interval_start, const char *contract);
+  void transferRecordedDirectiveToBoundary(
+      RecordedDirectiveRef directive, SgLocatedNode *source_interval_owner,
+      SgLocatedNode *boundary_owner,
+      PreprocessingInfo::RelativePositionType relative_position,
+      bool allow_at_interval_start, const char *contract);
+  std::vector<RecordedDirectiveRef>
+  recordedDirectivesWithin(clang::SourceRange source_range,
+                           bool allow_at_interval_start,
+                           const char *contract) const;
   std::vector<clang::SourceLocation>
   includeDirectiveLocationsWithin(clang::SourceRange source_range,
                                   bool allow_at_interval_start) const;
@@ -6046,9 +6407,28 @@ public:
       clang::SourceLocation include_location,
       SgClassDefinition *class_definition,
       SgDeclarationStatement *following_member);
+  void transferDirectivesToExternalEnumBoundaries(
+      clang::SourceRange source_range, SgEnumDeclaration *enum_declaration,
+      const std::vector<std::pair<clang::SourceLocation, SgInitializedName *>>
+          &source_body_enumerators);
+  void transferDirectivesToFunctionBodyBoundary(
+      clang::SourceRange source_range,
+      SgFunctionDeclaration *function_declaration,
+      SgFunctionDefinition *function_definition);
+  void transferDirectivesToDeclarationGroupBoundary(
+      clang::SourceRange source_range,
+      SgDeclarationGroupStatement *declaration_group,
+      SgDeclarationStatement *following_member);
+  void transferDirectivesToDeclarationGroupTerminator(
+      clang::SourceRange source_range,
+      SgDeclarationGroupStatement *declaration_group,
+      SgDeclarationStatement *final_member);
+  bool sourceRangeContainsSkippedTokens(clang::SourceRange source_range) const;
   void consumeIncludeDirectiveInFlattenedSyntax(
       clang::SourceLocation include_location,
       SgLocatedNode *source_interval_owner, const char *contract);
+  IncludeOwnership
+  includeOwnershipForLocation(clang::SourceLocation location) const;
   IncludeOwnership includeOwnershipForPath(const std::string &path) const;
   void recordFrontendSupportOwnershipPath(const std::string &path,
                                           const char *context);
@@ -6115,56 +6495,14 @@ public:
 
   std::pair<Sg_File_Info *, PreprocessingInfo *> top();
   bool pop();
+  std::vector<std::pair<Sg_File_Info *, PreprocessingInfo *>>
+  remainingRecords() const;
   size_t size() const {
     return p_preprocessor_record_cursor < p_preprocessor_record_list.size()
                ? p_preprocessor_record_list.size() -
                      p_preprocessor_record_cursor
                : 0;
   }
-};
-
-struct NextPreprocessorToInsert {
-  Sg_File_Info *cursor;
-  SgLocatedNode *candidat;
-  PreprocessingInfo *next_to_insert;
-  ClangToSageTranslator &translator;
-
-  NextPreprocessorToInsert(ClangToSageTranslator &);
-
-  bool advance();
-};
-
-class PreprocessorInserter
-    : public AstTopDownProcessing<NextPreprocessorToInsert *> {
-  struct LexicalBoundaryInfo {
-    SgNamespaceDeclarationStatement *namespace_closing_owner = nullptr;
-    uint64_t end = 0;
-  };
-
-  struct LexicalConditionalScopeInfo {
-    SgLocatedNode *scope = nullptr;
-    const SgStatementPtrList *statements = nullptr;
-    const SgDeclarationStatementPtrList *declarations = nullptr;
-    Sg_File_Info *start = nullptr;
-    Sg_File_Info *end = nullptr;
-  };
-
-  SgGlobal *cached_lexical_conditional_scope_ = nullptr;
-  std::vector<LexicalConditionalScopeInfo> cached_lexical_conditional_scopes_;
-  SgGlobal *cached_lexical_boundary_scope_ = nullptr;
-  std::map<std::string, std::vector<LexicalBoundaryInfo>>
-      cached_lexical_boundaries_;
-
-  void cacheLexicalBoundaries(SgGlobal *global_scope);
-  SgNamespaceDeclarationStatement *
-  findExactNamespaceClosingCommentOwner(SgGlobal *global_scope,
-                                        Sg_File_Info *comment_location,
-                                        const PreprocessingInfo *info);
-
-public:
-  NextPreprocessorToInsert *
-  evaluateInheritedAttribute(SgNode *astNode,
-                             NextPreprocessorToInsert *inheritedValue);
 };
 
 #endif /* _CLANG_FRONTEND_PRIVATE_HPP_ */

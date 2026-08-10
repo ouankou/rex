@@ -1290,7 +1290,16 @@ void SgLocatedNode::transferPreprocessingInfo(
             static_cast<void *>(record->getAttachedOwner()));
     ROSE_ABORT();
   }
-  record->setOutputPlacement(PreprocessingInfo::attached_output_boundary);
+  PreprocessingInfo::OutputPlacementType destinationPlacement =
+      record->getOutputPlacement();
+  if (destinationPlacement == PreprocessingInfo::source_position ||
+      (destinationPlacement ==
+           PreprocessingInfo::attached_output_trailing_line &&
+       destinationPosition != PreprocessingInfo::after &&
+       destinationPosition != PreprocessingInfo::after_syntax)) {
+    destinationPlacement = PreprocessingInfo::attached_output_boundary;
+  }
+  record->changeAttachedOutputPlacement(this, destinationPlacement);
   detachPreprocessingInfo(record);
   destination->attachPreprocessingInfo(record, destinationPosition, insertion);
 }

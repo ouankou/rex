@@ -167,9 +167,72 @@ private:
   // Traversal-local index for qualification of nested type components.
   NameQualificationMapOfMapsType &qualifiedNameMapForMapsOfTypes;
 
-  std::unique_ptr<NameQualificationUsingDirectiveOrderCache>
+  std::shared_ptr<NameQualificationUsingDirectiveOrderCache>
       usingDirectiveOrderCache;
-  SgUnorderedNodeSet visibleAliasCausalNodes;
+  class ScopedVisibilityNodeSet {
+  public:
+    using const_iterator = SgUnorderedNodeSet::const_iterator;
+    using iterator = SgUnorderedNodeSet::iterator;
+
+    ScopedVisibilityNodeSet()
+        : nodes_(std::make_shared<SgUnorderedNodeSet>()) {}
+    ScopedVisibilityNodeSet(const ScopedVisibilityNodeSet &other)
+        : nodes_(other.nodes_) {
+      ROSE_ASSERT(nodes_ != nullptr);
+    }
+    ScopedVisibilityNodeSet &operator=(const ScopedVisibilityNodeSet &other) {
+      if (this != &other) {
+        rollback();
+        nodes_ = other.nodes_;
+        ROSE_ASSERT(nodes_ != nullptr);
+      }
+      return *this;
+    }
+    ~ScopedVisibilityNodeSet() { rollback(); }
+
+    operator const SgUnorderedNodeSet &() const { return nodes(); }
+    const_iterator find(SgNode *node) const { return nodes().find(node); }
+    const_iterator end() const { return nodes().end(); }
+    std::size_t size() const { return nodes().size(); }
+
+    std::pair<iterator, bool> insert(SgNode *node) {
+      ROSE_ASSERT(node != nullptr);
+      std::pair<iterator, bool> inserted = nodes_->insert(node);
+      if (inserted.second) {
+        inserted_here_.push_back(node);
+      }
+      return inserted;
+    }
+
+  private:
+    std::shared_ptr<SgUnorderedNodeSet> nodes_;
+    std::vector<SgNode *> inserted_here_;
+
+    const SgUnorderedNodeSet &nodes() const {
+      ROSE_ASSERT(nodes_ != nullptr);
+      return *nodes_;
+    }
+
+    void rollback() {
+      if (nodes_ == nullptr) {
+        ROSE_ASSERT(inserted_here_.empty());
+        return;
+      }
+      for (auto node = inserted_here_.rbegin(); node != inserted_here_.rend();
+           ++node) {
+        if (nodes_->erase(*node) != 1) {
+          fprintf(stderr,
+                  "REX_NAME_QUALIFICATION_INVARIANT[alias-visibility-"
+                  "transaction]: node=%p is absent during exact rollback\n",
+                  static_cast<void *>(*node));
+          ROSE_ABORT();
+        }
+      }
+      inserted_here_.clear();
+    }
+  };
+
+  ScopedVisibilityNodeSet visibleAliasCausalNodes;
   NameQualificationContext &nameQualifications;
 
   SgStatement *

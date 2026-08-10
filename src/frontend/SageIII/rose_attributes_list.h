@@ -217,6 +217,8 @@ private:
   void releaseAttachedOwner(SgLocatedNode *owner);
   void changeAttachedPosition(SgLocatedNode *owner,
                               RelativePositionType position);
+  void changeAttachedOutputPlacement(SgLocatedNode *owner,
+                                     OutputPlacementType placement);
 
   // member functions
 public:

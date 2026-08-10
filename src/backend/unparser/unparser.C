@@ -1894,6 +1894,112 @@ Unparser::Unparser(ostream *nos, string fname, Unparser_Opt nopt,
   // ltu  = nline;
 }
 
+SgAuxiliaryDeclarationList *
+Unparser::requireExactAuxiliaryDeclarationOwner(SgNode *node,
+                                                const char *contract) {
+  ASSERT_not_null(node);
+  ASSERT_not_null(contract);
+
+  auto cached = exactAuxiliaryOwners.find(node);
+  if (cached != exactAuxiliaryOwners.end()) {
+    return cached->second;
+  }
+
+  std::vector<const SgNode *> uncached_path;
+  std::unordered_set<const SgNode *> visited;
+  SgAuxiliaryDeclarationList *owner = nullptr;
+  SgNode *child = node;
+  for (SgNode *parent = node->get_parent(); parent != nullptr;
+       child = parent, parent = parent->get_parent()) {
+    if (!visited.insert(parent).second) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: node=%p type=%s has a parent "
+              "cycle\n",
+              contract, static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
+    }
+    uncached_path.push_back(child);
+    auto known = exactAuxiliaryOwners.find(parent);
+    if (known != exactAuxiliaryOwners.end()) {
+      owner = known->second;
+      break;
+    }
+
+    SgAuxiliaryDeclarationList *container =
+        isSgAuxiliaryDeclarationList(parent);
+    if (container == nullptr) {
+      continue;
+    }
+    SgDeclarationStatement *declaration = isSgDeclarationStatement(child);
+    SgScopeStatement *scope = isSgScopeStatement(container->get_parent());
+    const SgDeclarationStatementPtrList &declarations =
+        container->get_declarations();
+    if (declaration == nullptr || scope == nullptr ||
+        scope->get_auxiliary_declarations() != container ||
+        std::count(declarations.begin(), declarations.end(), declaration) !=
+            1) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: node=%p type=%s has malformed "
+              "auxiliary declaration ownership\n",
+              contract, static_cast<void *>(node), node->class_name().c_str());
+      ROSE_ABORT();
+    }
+    owner = container;
+    uncached_path.push_back(container);
+    break;
+  }
+
+  uncached_path.push_back(node);
+  for (const SgNode *path_node : uncached_path) {
+    auto inserted = exactAuxiliaryOwners.emplace(path_node, owner);
+    if (!inserted.second && inserted.first->second != owner) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[%s]: node=%p has conflicting cached "
+              "auxiliary owners=%p/%p\n",
+              contract, static_cast<const void *>(path_node),
+              static_cast<void *>(inserted.first->second),
+              static_cast<void *>(owner));
+      ROSE_ABORT();
+    }
+  }
+  return owner;
+}
+
+void Unparser::requireExactStatementChild(SgNode *parent,
+                                          SgStatement *statement,
+                                          const char *contract) {
+  ASSERT_not_null(parent);
+  ASSERT_not_null(statement);
+  ASSERT_not_null(contract);
+
+  auto found = exactChildOwnershipIndices.find(parent);
+  if (found == exactChildOwnershipIndices.end()) {
+    ExactChildOwnershipIndex index;
+    const std::vector<SgNode *> successors =
+        parent->get_traversalSuccessorContainer();
+    index.occurrences.reserve(successors.size());
+    for (SgNode *successor : successors) {
+      if (successor != nullptr) {
+        ++index.occurrences[successor];
+      }
+    }
+    found = exactChildOwnershipIndices.emplace(parent, std::move(index)).first;
+  }
+
+  const auto occurrence = found->second.occurrences.find(statement);
+  const std::size_t count =
+      occurrence != found->second.occurrences.end() ? occurrence->second : 0;
+  if (count != 1) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[%s]: lexical statement=%p type=%s is "
+            "owned %zu times by parent=%p type=%s; expected exactly one\n",
+            contract, static_cast<void *>(statement),
+            statement->class_name().c_str(), count, static_cast<void *>(parent),
+            parent->class_name().c_str());
+    ROSE_ABORT();
+  }
+}
+
 Unparser::FortranDirectiveKind Unparser::getFortranDirectiveKind() const {
   return fortranDirectiveKind;
 }
