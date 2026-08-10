@@ -5772,6 +5772,10 @@ void NameQualificationTraversal::generateNestedTraversalWithExplicitScope(
   // starting from empty state makes shared nested types ignore preceding
   // aliases and private-base accessibility.
   t.visibleAliasCausalNodes = visibleAliasCausalNodes;
+  // Using-directive order is an immutable property of the completed AST.
+  // Nested use-site traversals must reuse the exact parent cache instead of
+  // rescanning large global and namespace declaration lists independently.
+  t.usingDirectiveOrderCache = usingDirectiveOrderCache;
   t.namespaceAliasDeclarationMap = namespaceAliasDeclarationMap;
   t.privateBaseClassSets = privateBaseClassSets;
   t.inaccessibleClassSets = inaccessibleClassSets;
@@ -5902,7 +5906,7 @@ NameQualificationTraversal::NameQualificationTraversal(
       qualifiedNameMapForTypes(input_qualifiedNameMapForTypes),
       qualifiedNameMapForMapsOfTypes(input_qualifiedNameMapForMapsOfTypes),
       usingDirectiveOrderCache(
-          std::make_unique<NameQualificationUsingDirectiveOrderCache>()),
+          std::make_shared<NameQualificationUsingDirectiveOrderCache>()),
       nameQualifications(input_nameQualifications) {
   // Alias visibility is traversal order and is owned by this traversal.
 

@@ -1898,8 +1898,7 @@ static void publishSourceSpelledTemplateHeaderSeparator(
           : SgTemplateParameterList::e_source_header_separator_newline);
 }
 
-static void markClangDeclPointerMapKeysDefined(
-    std::unordered_map<clang::Decl *, SgNode *> &map) {
+static void markClangDeclPointerMapKeysDefined(ClangDeclTranslationMap &map) {
   (void)map;
 }
 
@@ -3079,9 +3078,8 @@ bool declIsFromApplicationHeader(clang::Decl *decl, clang::CompilerInstance *ci,
       sm.isWrittenInCommandLineFile(loc)) {
     return false;
   }
-  const std::string path = normalizedDeclFilePath(decl, sm);
   const SagePreprocessorRecord::IncludeOwnership ownership =
-      preprocessor_record->includeOwnershipForPath(path);
+      preprocessor_record->includeOwnershipForLocation(decl->getLocation());
   // The preprocessor callback transaction is the exact physical-file owner.
   // A macro-generated declaration can carry a spelling location whose Clang
   // characteristic differs from the file entered by InclusionDirective or a
@@ -3101,7 +3099,8 @@ bool declIsFromApplicationHeader(clang::Decl *decl, clang::CompilerInstance *ci,
     fprintf(stderr,
             "REX_FRONTEND_INVARIANT[application-header-provenance]: physical "
             "declaration=%p/%s path=%s has non-physical typed ownership=%u\n",
-            static_cast<void *>(decl), decl->getDeclKindName(), path.c_str(),
+            static_cast<void *>(decl), decl->getDeclKindName(),
+            normalizedDeclFilePath(decl, sm).c_str(),
             static_cast<unsigned>(ownership));
     ROSE_ABORT();
   }
@@ -3166,13 +3165,11 @@ requireFunctionFrontendSourceOwnership(
     return SgFunctionDeclaration::e_frontend_source_main_file;
   }
 
-  const std::string path =
-      exact_source_surface.has_value()
-          ? normalizedSourceLocationFilePath(
-                location, source_manager,
-                "requireFunctionFrontendSourceOwnership:source-surface")
-          : normalizedDeclFilePath(declaration, source_manager);
-  switch (preprocessor_record->includeOwnershipForPath(path)) {
+  const clang::SourceLocation ownership_location =
+      exact_source_surface.has_value() ? *exact_source_surface
+                                       : declaration->getLocation();
+  switch (
+      preprocessor_record->includeOwnershipForLocation(ownership_location)) {
   case SagePreprocessorRecord::IncludeOwnership::application_textual:
     return SgFunctionDeclaration::e_frontend_source_application_header;
   case SagePreprocessorRecord::IncludeOwnership::system_textual:
@@ -3188,7 +3185,11 @@ requireFunctionFrontendSourceOwnership(
             "REX_FRONTEND_INVARIANT[function-source-ownership]: non-main "
             "function=%p/%s path=%s has main-file ownership\n",
             static_cast<void *>(declaration),
-            declaration->getQualifiedNameAsString().c_str(), path.c_str());
+            declaration->getQualifiedNameAsString().c_str(),
+            normalizedSourceLocationFilePath(
+                location, source_manager,
+                "requireFunctionFrontendSourceOwnership:diagnostic")
+                .c_str());
     ROSE_ABORT();
   }
   ROSE_ABORT();
@@ -3317,7 +3318,7 @@ sageDeclShouldRemainVisibleInGeneratedSurface(SgDeclarationStatement *decl,
 static SgExprListExp *buildStructuredBindingPattern(
     const clang::DecompositionDecl *decomposition_decl,
     const std::vector<StructuredBindingComponent> &components,
-    SgScopeStatement *scope) {
+    SgScopeStatement *scope, bool semantic_function_body) {
   ASSERT_not_null(decomposition_decl);
   ROSE_ASSERT(scope != nullptr);
 
@@ -3334,8 +3335,32 @@ static SgExprListExp *buildStructuredBindingPattern(
               static_cast<const void *>(decomposition_decl));
       ROSE_ABORT();
     }
+    SgVariableSymbol *binding_symbol = isSgVariableSymbol(
+        component.initialized_name->get_symbol_from_symbol_table());
+    if (binding_symbol == nullptr ||
+        binding_symbol->get_declaration() != component.initialized_name ||
+        binding_symbol->get_scope() != scope) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[structured-binding-component]: "
+              "decomposition=%p binding=%p/%s has no exact symbol in "
+              "scope=%p\n",
+              static_cast<const void *>(decomposition_decl),
+              static_cast<void *>(component.initialized_name),
+              component.initialized_name->get_name().str(),
+              static_cast<void *>(scope));
+      ROSE_ABORT();
+    }
+    // Phase-C bodies are semantic instantiations.  Their structured-binding
+    // references must be born with the NFI state so applySourceRange can
+    // publish the one semantic provenance role.  The transformation builder
+    // preclassifies the reference and makes that later publication an invalid
+    // source-to-semantic rewrite.
     SgExpression *element =
-        SageBuilder::buildVarRefExp(component.initialized_name, scope);
+        semantic_function_body
+            ? static_cast<SgExpression *>(
+                  SageBuilder::buildVarRefExp_nfi(binding_symbol))
+            : static_cast<SgExpression *>(
+                  SageBuilder::buildVarRefExp(binding_symbol));
     ROSE_ASSERT(element != nullptr);
 
     SageInterface::appendExpression(pattern, element);
@@ -8341,7 +8366,8 @@ static clang::SourceRange extendDeclSourceRangeWithTrailingSemicolon(
 
 static clang::SourceRange requireDeclarationGroupTrailingSemicolon(
     clang::SourceRange range, clang::SourceManager &sm,
-    const clang::LangOptions &lang_opts, const clang::Decl *last_member) {
+    const clang::LangOptions &lang_opts, const clang::Decl *last_member,
+    bool allow_inactive_top_level_comma = false) {
   if (!range.isValid() || !range.getEnd().isValid() ||
       range.getEnd().isMacroID() || last_member == nullptr) {
     fprintf(stderr, "REX_FRONTEND_INVARIANT[source-declaration-group-range]: "
@@ -8395,8 +8421,8 @@ static clang::SourceRange requireDeclarationGroupTrailingSemicolon(
       range.setEnd(token.getLocation());
       return range;
     }
-    if (token.is(clang::tok::comma) && paren_depth == 0 && bracket_depth == 0 &&
-        brace_depth == 0) {
+    if (!allow_inactive_top_level_comma && token.is(clang::tok::comma) &&
+        paren_depth == 0 && bracket_depth == 0 && brace_depth == 0) {
       fprintf(stderr,
               "REX_FRONTEND_INVARIANT[source-declaration-group-range]: "
               "final Clang member=%p/%s is followed by an unowned top-level "
@@ -10283,24 +10309,7 @@ static bool is_frontend_support_location(
     return false;
   }
 
-  std::string path;
-  const clang::FileID file_id = source_manager.getFileID(location);
-  if (const clang::FileEntry *file_entry =
-          source_manager.getFileEntryForID(file_id)) {
-    path = file_entry->tryGetRealPathName().str();
-  }
-  if (path.empty()) {
-    path = source_manager.getFilename(location).str();
-  }
-  path =
-      path.empty() ? std::string() : FileHelper::normalizePathIfPossible(path);
-  if (path.empty()) {
-    fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[frontend-support-ownership]: physical "
-            "source location has no exact path\n");
-    ROSE_ABORT();
-  }
-  return preprocessor_record->includeOwnershipForPath(path) ==
+  return preprocessor_record->includeOwnershipForLocation(location) ==
          SagePreprocessorRecord::IncludeOwnership::frontend_support;
 }
 
@@ -11480,8 +11489,8 @@ static void ensureFunctionParameterSymbols(ClangToSageTranslator &translator,
               static_cast<void *>(parameter), parameter->get_name().str());
       ROSE_ABORT();
     }
-    for (const auto &entry : *table->get_table()) {
-      SgVariableSymbol *candidate = isSgVariableSymbol(entry.second);
+    for (SgSymbol *indexed : table->find_symbols_with_exact_basis(parameter)) {
+      SgVariableSymbol *candidate = isSgVariableSymbol(indexed);
       if (candidate != nullptr && candidate->get_symbol_basis() == parameter) {
         result.push_back(candidate);
       }
@@ -16482,7 +16491,7 @@ ClangToSageTranslator::translateTemplateParameterList(
         std::move(exact_parameter_names));
   }
   struct ExactTemplateParameterNameGuard {
-    std::vector<ClangTemplateParameterNameMap> &stack;
+    ClangTemplateParameterNameContextStack &stack;
     bool active;
     ~ExactTemplateParameterNameGuard() {
       if (active) {
@@ -16737,7 +16746,7 @@ ClangToSageTranslator::translateDetachedTemplateParameterList(
         std::move(exact_parameter_names));
   }
   struct ExactTemplateParameterNameGuard {
-    std::vector<ClangTemplateParameterNameMap> &stack;
+    ClangTemplateParameterNameContextStack &stack;
     bool active;
     ~ExactTemplateParameterNameGuard() {
       if (active) {
@@ -16850,15 +16859,18 @@ void requireDeclAttachmentEntry(SgDeclarationStatement *declaration,
 
 void DeclAttachmentSession::rebuild(MembershipIndex &index,
                                     DeclarationList *declarations,
-                                    SgScopeStatement *owner) {
+                                    SgNode *structural_owner,
+                                    SgScopeStatement *semantic_owner) {
   requireDeclAttachmentPointer(declarations, "rebuild", "declaration-list");
-  requireDeclAttachmentPointer(owner, "rebuild", "owner");
-  index.owner = owner;
-  index.members.clear();
+  requireDeclAttachmentPointer(structural_owner, "rebuild", "structural-owner");
+  index.structural_owner = structural_owner;
+  index.semantic_owner = semantic_owner;
+  index.occurrences.clear();
+  index.occurrences.reserve(declarations->size());
   for (std::size_t i = 0; i < declarations->size(); ++i) {
     SgDeclarationStatement *declaration = declarations->at(i);
     requireDeclAttachmentEntry(declaration, i, "rebuild");
-    index.members.insert(declaration);
+    ++index.occurrences[declaration];
   }
   index.indexed_count = declarations->size();
   index.last_indexed_declaration =
@@ -16867,12 +16879,14 @@ void DeclAttachmentSession::rebuild(MembershipIndex &index,
 
 DeclAttachmentSession::MembershipIndex &
 DeclAttachmentSession::indexFor(DeclarationList *declarations,
-                                SgScopeStatement *owner) {
+                                SgNode *structural_owner,
+                                SgScopeStatement *semantic_owner) {
   requireDeclAttachmentPointer(declarations, "index", "declaration-list");
-  requireDeclAttachmentPointer(owner, "index", "owner");
+  requireDeclAttachmentPointer(structural_owner, "index", "structural-owner");
 
   MembershipIndex &index = p_membership_indices[declarations];
-  const bool owner_changed = index.owner != owner;
+  const bool owner_changed = index.structural_owner != structural_owner ||
+                             index.semantic_owner != semantic_owner;
   const bool shrank = index.indexed_count > declarations->size();
   const bool indexed_prefix_changed =
       index.indexed_count > 0 && index.indexed_count <= declarations->size() &&
@@ -16883,14 +16897,14 @@ DeclAttachmentSession::indexFor(DeclarationList *declarations,
       declarations->back() != index.last_indexed_declaration;
   if (owner_changed || shrank || indexed_prefix_changed ||
       same_size_tail_changed) {
-    rebuild(index, declarations, owner);
+    rebuild(index, declarations, structural_owner, semantic_owner);
     return index;
   }
 
   for (std::size_t i = index.indexed_count; i < declarations->size(); ++i) {
     SgDeclarationStatement *declaration = declarations->at(i);
     requireDeclAttachmentEntry(declaration, i, "index");
-    index.members.insert(declaration);
+    ++index.occurrences[declaration];
   }
   index.indexed_count = declarations->size();
   index.last_indexed_declaration =
@@ -16901,27 +16915,47 @@ DeclAttachmentSession::indexFor(DeclarationList *declarations,
 bool DeclAttachmentSession::contains(DeclarationList *declarations,
                                      SgScopeStatement *owner,
                                      SgDeclarationStatement *declaration) {
+  requireDeclAttachmentPointer(owner, "index", "owner");
   requireDeclAttachmentPointer(declaration, "contains", "declaration");
-  MembershipIndex &index = indexFor(declarations, owner);
-  return index.members.find(declaration) != index.members.end();
+  MembershipIndex &index = indexFor(declarations, owner, nullptr);
+  auto found = index.occurrences.find(declaration);
+  const std::size_t occurrences =
+      found != index.occurrences.end() ? found->second : 0;
+  if (occurrences > 1) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[declaration-child-list-cardinality]: "
+            "operation=contains declaration occurs %zu times; expected at "
+            "most one\n",
+            occurrences);
+    ROSE_ABORT();
+  }
+  return occurrences == 1;
 }
 
 bool DeclAttachmentSession::containsExactly(DeclarationList *declarations,
                                             SgScopeStatement *owner,
                                             SgDeclarationStatement *declaration,
                                             const char *operation) {
+  return containsExactlyOwned(declarations, owner, nullptr, declaration,
+                              operation);
+}
+
+bool DeclAttachmentSession::containsExactlyOwned(
+    DeclarationList *declarations, SgNode *structural_owner,
+    SgScopeStatement *semantic_owner, SgDeclarationStatement *declaration,
+    const char *operation) {
   requireDeclAttachmentPointer(declarations, "contains-exactly",
                                "declaration-list");
-  requireDeclAttachmentPointer(owner, "contains-exactly", "owner");
+  requireDeclAttachmentPointer(structural_owner, "contains-exactly",
+                               "structural-owner");
   requireDeclAttachmentPointer(declaration, "contains-exactly", "declaration");
   requireDeclAttachmentPointer(operation, "contains-exactly", "operation");
 
-  std::size_t occurrences = 0;
-  for (std::size_t index = 0; index < declarations->size(); ++index) {
-    SgDeclarationStatement *entry = declarations->at(index);
-    requireDeclAttachmentEntry(entry, index, operation);
-    occurrences += entry == declaration ? 1 : 0;
-  }
+  MembershipIndex &membership =
+      indexFor(declarations, structural_owner, semantic_owner);
+  const auto indexed = membership.occurrences.find(declaration);
+  const std::size_t occurrences =
+      indexed != membership.occurrences.end() ? indexed->second : 0;
   if (occurrences > 1) {
     fprintf(stderr,
             "REX_FRONTEND_INVARIANT[declaration-child-list-cardinality]: "
@@ -16931,9 +16965,7 @@ bool DeclAttachmentSession::containsExactly(DeclarationList *declarations,
     ROSE_ABORT();
   }
 
-  SgScopeStatement *structural_parent =
-      isSgScopeStatement(declaration->get_parent());
-  if ((occurrences == 1) != (structural_parent == owner)) {
+  if ((occurrences == 1) != (declaration->get_parent() == structural_owner)) {
     fprintf(stderr,
             "REX_FRONTEND_INVARIANT[declaration-child-list-owner]: "
             "operation=%s declaration=%p type=%s occurrences=%zu parent=%p/%s "
@@ -16944,14 +16976,22 @@ bool DeclAttachmentSession::containsExactly(DeclarationList *declarations,
             declaration->get_parent() != nullptr
                 ? declaration->get_parent()->class_name().c_str()
                 : "<null>",
-            static_cast<void *>(owner), owner->class_name().c_str());
+            static_cast<void *>(structural_owner),
+            structural_owner->class_name().c_str());
     ROSE_ABORT();
   }
-  if (occurrences == 1 && declaration->get_scope() == nullptr) {
+  const bool semantic_scope_is_malformed =
+      occurrences == 1 &&
+      (semantic_owner != nullptr ? declaration->get_scope() != semantic_owner
+                                 : declaration->get_scope() == nullptr);
+  if (semantic_scope_is_malformed) {
     fprintf(stderr,
             "REX_FRONTEND_INVARIANT[declaration-child-list-scope]: "
-            "operation=%s attached declaration has no semantic scope\n",
-            operation);
+            "operation=%s attached declaration=%p has semantic scope=%p; "
+            "expected=%p\n",
+            operation, static_cast<void *>(declaration),
+            static_cast<void *>(declaration->get_scope()),
+            static_cast<void *>(semantic_owner));
     ROSE_ABORT();
   }
   return occurrences == 1;
@@ -17073,7 +17113,15 @@ void DeclAttachmentSession::recordInsertion(
     invalidate(declarations);
     return;
   }
-  index.members.insert(declaration);
+  const std::size_t occurrences = ++index.occurrences[declaration];
+  if (occurrences != 1) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[declaration-child-list-cardinality]: "
+            "record-insertion declaration=%p/%s occurs %zu times\n",
+            static_cast<void *>(declaration), declaration->class_name().c_str(),
+            occurrences);
+    ROSE_ABORT();
+  }
   index.indexed_count = declarations->size();
   index.last_indexed_declaration =
       declarations->empty() ? nullptr : declarations->back();
@@ -17096,9 +17144,26 @@ void DeclAttachmentSession::recordErasure(DeclarationList *declarations,
     return;
   }
   if (declaration_remains) {
-    index.members.insert(declaration);
+    auto indexed = index.occurrences.find(declaration);
+    if (indexed == index.occurrences.end() || indexed->second != 1) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[declaration-attachment-session]: "
+              "record-erasure retained declaration=%p/%s without one exact "
+              "indexed occurrence\n",
+              static_cast<void *>(declaration),
+              declaration->class_name().c_str());
+      ROSE_ABORT();
+    }
   } else {
-    index.members.erase(declaration);
+    if (index.occurrences.erase(declaration) != 1) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[declaration-attachment-session]: "
+              "record-erasure declaration=%p/%s has no exact indexed "
+              "occurrence\n",
+              static_cast<void *>(declaration),
+              declaration->class_name().c_str());
+      ROSE_ABORT();
+    }
   }
   index.indexed_count = declarations->size();
   index.last_indexed_declaration =
@@ -17124,8 +17189,13 @@ void DeclAttachmentSession::recordReplacement(
     invalidate(declarations);
     return;
   }
-  index.members.erase(existing_declaration);
-  index.members.insert(replacement_declaration);
+  if (index.occurrences.erase(existing_declaration) != 1 ||
+      !index.occurrences.emplace(replacement_declaration, 1).second) {
+    fprintf(stderr, "REX_FRONTEND_INVARIANT[declaration-attachment-session]: "
+                    "record-replacement does not replace one exact indexed "
+                    "declaration\n");
+    ROSE_ABORT();
+  }
   index.last_indexed_declaration =
       declarations->empty() ? nullptr : declarations->back();
 }
@@ -17139,7 +17209,99 @@ void DeclAttachmentSession::invalidate(DeclarationList *declarations) {
   }
   found->second.indexed_count = 0;
   found->second.last_indexed_declaration = nullptr;
-  found->second.members.clear();
+  found->second.occurrences.clear();
+}
+
+void DeclAttachmentSession::retire(DeclarationList *declarations) {
+  requireDeclAttachmentPointer(declarations, "retire", "declaration-list");
+  p_source_line_indices.erase(declarations);
+  p_membership_indices.erase(declarations);
+}
+
+void DeclAttachmentSession::validateAll() {
+  for (auto &entry : p_membership_indices) {
+    DeclarationList *declarations = entry.first;
+    MembershipIndex &stored = entry.second;
+    requireDeclAttachmentPointer(declarations, "final-audit",
+                                 "declaration-list");
+    requireDeclAttachmentPointer(stored.structural_owner, "final-audit",
+                                 "structural-owner");
+
+    // SageBuilder is the authoritative owner for generic AST construction and
+    // can append to a declaration list outside the Clang-specific mutation
+    // helpers. Consume any append-only suffix through the same cardinality
+    // checker used by construction-time lookups, then compare the complete
+    // index against an independently rebuilt snapshot below. A replacement,
+    // erasure, duplicate, or malformed owner still fails hard.
+    MembershipIndex &actual =
+        indexFor(declarations, stored.structural_owner, stored.semantic_owner);
+
+    MembershipIndex expected;
+    rebuild(expected, declarations, actual.structural_owner,
+            actual.semantic_owner);
+    for (const auto &[declaration, occurrences] : expected.occurrences) {
+      if (occurrences != 1) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[declaration-child-list-cardinality]: "
+                "operation=final-audit declaration=%p/%s occurs %zu times; "
+                "expected exactly one indexed attachment\n",
+                static_cast<void *>(declaration),
+                declaration->class_name().c_str(), occurrences);
+        ROSE_ABORT();
+      }
+    }
+    if (actual.indexed_count != expected.indexed_count ||
+        actual.last_indexed_declaration != expected.last_indexed_declaration ||
+        actual.occurrences != expected.occurrences) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[declaration-attachment-final-audit]: "
+              "list=%p owner=%p/%s has a stale exact membership index: "
+              "count=%zu/%zu last=%p/%p distinct=%zu/%zu\n",
+              static_cast<void *>(declarations),
+              static_cast<void *>(actual.structural_owner),
+              actual.structural_owner->class_name().c_str(),
+              actual.indexed_count, expected.indexed_count,
+              static_cast<void *>(actual.last_indexed_declaration),
+              static_cast<void *>(expected.last_indexed_declaration),
+              actual.occurrences.size(), expected.occurrences.size());
+      for (std::size_t i = 0; i < declarations->size(); ++i) {
+        SgDeclarationStatement *declaration = declarations->at(i);
+        Sg_File_Info *location = declaration->get_file_info();
+        fprintf(stderr,
+                "  declaration[%zu]=%p/%s parent=%p scope=%p source=%s:%d\n", i,
+                static_cast<void *>(declaration),
+                declaration->class_name().c_str(),
+                static_cast<void *>(declaration->get_parent()),
+                static_cast<void *>(declaration->get_scope()),
+                location != nullptr ? location->get_filenameString().c_str()
+                                    : "<null>",
+                location != nullptr ? location->get_line() : -1);
+      }
+      ROSE_ABORT();
+    }
+    for (SgDeclarationStatement *declaration : *declarations) {
+      const bool exact_structural_owner =
+          declaration->get_parent() == actual.structural_owner;
+      const bool exact_semantic_owner =
+          actual.semantic_owner != nullptr
+              ? declaration->get_scope() == actual.semantic_owner
+              : declaration->get_scope() != nullptr;
+      if (!exact_structural_owner || !exact_semantic_owner) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[declaration-attachment-final-audit]: "
+                "list=%p declaration=%p/%s has structural owner=%p "
+                "expected=%p or semantic owner=%p expected=%p\n",
+                static_cast<void *>(declarations),
+                static_cast<void *>(declaration),
+                declaration->class_name().c_str(),
+                static_cast<void *>(declaration->get_parent()),
+                static_cast<void *>(actual.structural_owner),
+                static_cast<void *>(declaration->get_scope()),
+                static_cast<void *>(actual.semantic_owner));
+        ROSE_ABORT();
+      }
+    }
+  }
 }
 
 void DeclAttachmentSession::clear() {
@@ -19317,6 +19479,137 @@ static bool declaration_has_exact_source_surface_ownership(
   // distinguish an in-flight group from an accidentally orphaned one.
   return false;
 }
+
+} // namespace
+
+bool ClangToSageTranslator::declaration_has_exact_lexical_source_ownership(
+    SgDeclarationStatement *declaration) const {
+  if (declaration == nullptr || !declaration_has_real_source(declaration)) {
+    return false;
+  }
+  SgScopeStatement *owner = isSgScopeStatement(declaration->get_parent());
+  if (owner == nullptr || declaration->get_scope() == nullptr) {
+    return false;
+  }
+  if (SgDeclarationStatementPtrList *declarations =
+          get_scope_declaration_list(owner)) {
+    return p_decl_attachment_session.containsExactly(
+        declarations, owner, declaration,
+        "declaration_has_exact_lexical_source_ownership");
+  }
+  if (!scope_supports_statement_list(owner)) {
+    return false;
+  }
+  return std::count(owner->getStatementList().begin(),
+                    owner->getStatementList().end(), declaration) == 1;
+}
+
+bool ClangToSageTranslator::declaration_has_exact_auxiliary_ownership(
+    SgDeclarationStatement *declaration) const {
+  if (declaration == nullptr) {
+    return false;
+  }
+  SgAuxiliaryDeclarationList *container =
+      isSgAuxiliaryDeclarationList(declaration->get_parent());
+  SgScopeStatement *owner = container != nullptr
+                                ? isSgScopeStatement(container->get_parent())
+                                : nullptr;
+  if (owner == nullptr || owner->get_auxiliary_declarations() != container ||
+      declaration->get_scope() != owner) {
+    return false;
+  }
+  return p_decl_attachment_session.containsExactlyOwned(
+      &container->get_declarations(), container, owner, declaration,
+      "declaration_has_exact_auxiliary_ownership");
+}
+
+SgScopeStatement *ClangToSageTranslator::validate_exact_auxiliary_owner(
+    SgDeclarationStatement *declaration, const char *operation) const {
+  ROSE_ASSERT(declaration != nullptr);
+  ROSE_ASSERT(operation != nullptr);
+  SgAuxiliaryDeclarationList *container =
+      isSgAuxiliaryDeclarationList(declaration->get_parent());
+  if (container == nullptr) {
+    return nullptr;
+  }
+  SgScopeStatement *owner = isSgScopeStatement(container->get_parent());
+  if (owner == nullptr || owner->get_auxiliary_declarations() != container ||
+      declaration->get_scope() != owner ||
+      !p_decl_attachment_session.containsExactlyOwned(
+          &container->get_declarations(), container, owner, declaration,
+          operation)) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[declaration-auxiliary-owner]: "
+            "operation=%s declaration has malformed auxiliary ownership\n",
+            operation);
+    ROSE_ABORT();
+  }
+  return owner;
+}
+
+bool ClangToSageTranslator::declaration_has_exact_source_surface_ownership(
+    SgDeclarationStatement *declaration) const {
+  if (declaration_has_exact_lexical_source_ownership(declaration)) {
+    return true;
+  }
+  if (declaration == nullptr || !declaration_has_real_source(declaration)) {
+    return false;
+  }
+
+  SgDeclarationGroupStatement *group =
+      isSgDeclarationGroupStatement(declaration->get_parent());
+  if (group == nullptr || group->get_scope() == nullptr ||
+      declaration->get_scope() == nullptr ||
+      std::count(group->get_declarations().begin(),
+                 group->get_declarations().end(), declaration) != 1) {
+    return false;
+  }
+  if (exact_lexical_declaration_group_reference_count(declaration->get_scope(),
+                                                      declaration) != 0 ||
+      exact_lexical_declaration_group_reference_count(group->get_scope(),
+                                                      declaration) != 0) {
+    return false;
+  }
+  if (SgScopeStatement *direct_owner =
+          isSgScopeStatement(group->get_parent())) {
+    return direct_owner == group->get_scope() &&
+           declaration_has_exact_lexical_source_ownership(group);
+  }
+  if (SgForInitStatement *for_init =
+          isSgForInitStatement(group->get_parent())) {
+    SgForStatement *for_statement = isSgForStatement(for_init->get_parent());
+    return for_statement != nullptr && group->get_scope() == for_statement &&
+           for_statement->get_for_init_stmt() == for_init &&
+           std::count(for_init->get_init_stmt().begin(),
+                      for_init->get_init_stmt().end(), group) == 1;
+  }
+  return false;
+}
+
+size_t ClangToSageTranslator::exact_direct_structural_successor_count(
+    SgNode *owner, SgNode *child) const {
+  if (owner == nullptr || child == nullptr) {
+    return 0;
+  }
+  SgScopeStatement *scope = isSgScopeStatement(owner);
+  SgDeclarationStatement *declaration = isSgDeclarationStatement(child);
+  if (scope != nullptr && declaration != nullptr) {
+    if (SgDeclarationStatementPtrList *declarations =
+            get_scope_declaration_list(scope)) {
+      return p_decl_attachment_session.containsExactly(
+                 declarations, scope, declaration,
+                 "exact_direct_structural_successor_count")
+                 ? 1
+                 : 0;
+    }
+  }
+  const std::vector<SgNode *> successors =
+      owner->get_traversalSuccessorContainer();
+  return static_cast<size_t>(
+      std::count(successors.begin(), successors.end(), child));
+}
+
+namespace {
 
 static Sg_File_Info *get_decl_sort_file_info(SgDeclarationStatement *decl);
 
@@ -22513,10 +22806,11 @@ static SgTemplateClassDeclaration *requireCanonicalFriendTemplateOwner(
   return canonical_owner;
 }
 
-static void
-publishExactEffectiveDeclarationAccess(clang::Decl *clang_decl,
-                                       SgDeclarationStatement *sage_decl,
-                                       const char *producer) {
+} // namespace
+
+void ClangToSageTranslator::publishExactEffectiveDeclarationAccess(
+    clang::Decl *clang_decl, SgDeclarationStatement *sage_decl,
+    const char *producer) {
   if (clang_decl == nullptr || sage_decl == nullptr || producer == nullptr) {
     fprintf(stderr,
             "REX_FRONTEND_INVARIANT[declaration-access]: producer=%s "
@@ -22551,20 +22845,76 @@ publishExactEffectiveDeclarationAccess(clang::Decl *clang_decl,
       sage_decl->get_declarationModifier().get_accessModifier();
   size_t exact_friend_owner_count = 0;
   bool exact_direct_lexical_member = false;
+  RecordMemberAccessIndex *lexical_member_index = nullptr;
   if (lexical_record_context != nullptr) {
-    for (clang::Decl *member : lexical_record_context->decls()) {
-      member = markClangDeclObjectDefinedByKind(member);
-      clang::Decl *templated_member = nullptr;
-      if (clang::TemplateDecl *member_template =
-              llvm::dyn_cast_or_null<clang::TemplateDecl>(member)) {
-        templated_member =
-            markClangDeclObjectDefinedByKind(readClangApiValueDefined(
-                [&]() { return member_template->getTemplatedDecl(); }));
+    auto [index, inserted] = p_record_member_access_indices.try_emplace(
+        lexical_record_context, RecordMemberAccessIndex{});
+    lexical_member_index = &index->second;
+    if (inserted) {
+      clang::AccessSpecifier effective_access = readClangApiValueDefined([&]() {
+        return lexical_record_context->isClass();
+      })
+                                                    ? clang::AS_private
+                                                    : clang::AS_public;
+      for (clang::Decl *member : lexical_record_context->decls()) {
+        member = markClangDeclObjectDefinedByKind(member);
+        if (member == nullptr) {
+          fprintf(stderr,
+                  "REX_FRONTEND_INVARIANT[declaration-access-index]: record=%p "
+                  "contains a null member\n",
+                  static_cast<void *>(lexical_record_context));
+          ROSE_ABORT();
+        }
+        if (clang::AccessSpecDecl *access =
+                llvm::dyn_cast<clang::AccessSpecDecl>(member)) {
+          effective_access =
+              readClangApiValueDefined([&]() { return access->getAccess(); });
+          if (effective_access == clang::AS_none) {
+            fprintf(stderr,
+                    "REX_FRONTEND_INVARIANT[declaration-access-index]: "
+                    "record=%p has an access label without an exact access "
+                    "kind\n",
+                    static_cast<void *>(lexical_record_context));
+            ROSE_ABORT();
+          }
+        }
+        auto publish_member = [&](clang::Decl *identity) {
+          if (identity == nullptr ||
+              !lexical_member_index->direct_members.insert(identity).second ||
+              !lexical_member_index->effective_access
+                   .emplace(identity, effective_access)
+                   .second) {
+            fprintf(stderr,
+                    "REX_FRONTEND_INVARIANT[declaration-access-index]: "
+                    "record=%p member=%p/%s does not have one exact direct "
+                    "position\n",
+                    static_cast<void *>(lexical_record_context),
+                    static_cast<void *>(identity),
+                    identity != nullptr ? identity->getDeclKindName()
+                                        : "<null>");
+            ROSE_ABORT();
+          }
+        };
+        publish_member(member);
+        if (clang::TemplateDecl *member_template =
+                llvm::dyn_cast<clang::TemplateDecl>(member)) {
+          clang::Decl *templated_member =
+              markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+                  [&]() { return member_template->getTemplatedDecl(); }));
+          publish_member(templated_member);
+        }
       }
-      if (member == clang_decl || templated_member == clang_decl) {
-        exact_direct_lexical_member = true;
-        break;
-      }
+    }
+    exact_direct_lexical_member =
+        lexical_member_index->direct_members.count(clang_decl) != 0;
+    if (exact_direct_lexical_member &&
+        lexical_member_index->effective_access.count(clang_decl) != 1) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[declaration-access-index]: producer=%s "
+              "direct member=%p/%s has no exact effective access\n",
+              producer, static_cast<void *>(clang_decl),
+              clang_decl->getDeclKindName());
+      ROSE_ABORT();
     }
   }
   if (lexical_record_context != nullptr && !exact_direct_lexical_member) {
@@ -22744,10 +23094,6 @@ publishExactEffectiveDeclarationAccess(clang::Decl *clang_decl,
         ROSE_ABORT();
       }
 
-      clang::AccessSpecifier effective_access =
-          readClangApiValueDefined([&]() { return lexical_record->isClass(); })
-              ? clang::AS_private
-              : clang::AS_public;
       clang::Decl *lexical_member_identity = clang_decl;
       if (clang::TemplateDecl *template_decl =
               llvm::dyn_cast<clang::TemplateDecl>(clang_decl)) {
@@ -22762,35 +23108,16 @@ publishExactEffectiveDeclarationAccess(clang::Decl *clang_decl,
           ROSE_ABORT();
         }
       }
-      bool found_exact_member = false;
-      for (clang::Decl *member : lexical_record->decls()) {
-        member = markClangDeclObjectDefinedByKind(member);
-        if (member == nullptr) {
-          fprintf(stderr,
-                  "REX_FRONTEND_INVARIANT[declaration-access]: producer=%s "
-                  "lexical record=%p contains a null member\n",
-                  producer, static_cast<void *>(lexical_record));
-          ROSE_ABORT();
-        }
-        if (clang::AccessSpecDecl *access =
-                llvm::dyn_cast<clang::AccessSpecDecl>(member)) {
-          effective_access =
-              readClangApiValueDefined([&]() { return access->getAccess(); });
-          if (effective_access == clang::AS_none) {
-            fprintf(stderr,
-                    "REX_FRONTEND_INVARIANT[declaration-access]: producer=%s "
-                    "lexical record=%p has an access label without an exact "
-                    "access kind\n",
-                    producer, static_cast<void *>(lexical_record));
-            ROSE_ABORT();
-          }
-        }
-        if (member == clang_decl || member == lexical_member_identity) {
-          found_exact_member = true;
-          break;
-        }
+      if (lexical_member_index == nullptr) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[declaration-access-index]: "
+                "producer=%s lexical record=%p has no exact member index\n",
+                producer, static_cast<void *>(lexical_record));
+        ROSE_ABORT();
       }
-      if (!found_exact_member) {
+      auto effective_access =
+          lexical_member_index->effective_access.find(lexical_member_identity);
+      if (effective_access == lexical_member_index->effective_access.end()) {
         fprintf(stderr,
                 "REX_FRONTEND_INVARIANT[declaration-access]: producer=%s "
                 "Clang %p/%s name=%s with unset access is neither an exact "
@@ -22807,7 +23134,7 @@ publishExactEffectiveDeclarationAccess(clang::Decl *clang_decl,
         ROSE_ABORT();
       }
 
-      switch (effective_access) {
+      switch (effective_access->second) {
       case clang::AS_public:
         sage_access.setPublic();
         break;
@@ -22832,6 +23159,8 @@ publishExactEffectiveDeclarationAccess(clang::Decl *clang_decl,
           static_cast<int>(clang_access));
   ROSE_ABORT();
 }
+
+namespace {
 
 // Prefer the lexical namespace scope for declarations that are attached to a
 // re-entrant namespace definition. This keeps name qualification consistent
@@ -23694,38 +24023,68 @@ find_function_symbols_in_scope(SgScopeStatement *scope,
     return sym_decl;
   };
 
-  if (rose_hash_multimap *symtab = table->get_table()) {
-    std::unordered_set<SgSymbol *> seen;
-    for (const auto &entry : *symtab) {
-      SgSymbol *candidate = entry.second;
-      if (candidate == nullptr || !seen.insert(candidate).second) {
-        continue;
-      }
-      SgFunctionDeclaration *candidate_declaration =
-          declaration_for_candidate(candidate);
-      if (candidate_declaration == nullptr) {
-        continue;
-      }
-      SgFunctionDeclaration *candidate_first = isSgFunctionDeclaration(
-          candidate_declaration->get_firstNondefiningDeclaration());
-      if (candidate_first == nullptr) {
-        candidate_first = candidate_declaration;
-      }
-      if (candidate_first == decl_first) {
-        exact_matches.push_back(candidate);
-      } else if (sameFunctionDeclChainOrMangledIdentity(candidate_first,
-                                                        decl_first)) {
-        equivalent_matches.push_back(candidate);
+  std::unordered_set<SgSymbol *> candidates;
+  auto add_basis_candidates = [&](SgFunctionDeclaration *basis) {
+    if (basis == nullptr) {
+      return;
+    }
+    for (SgSymbol *symbol : table->find_symbols_with_exact_basis(basis)) {
+      if (symbol != nullptr) {
+        candidates.insert(symbol);
       }
     }
+  };
+  add_basis_candidates(decl);
+  add_basis_candidates(decl_first);
+  add_basis_candidates(
+      isSgFunctionDeclaration(decl->get_definingDeclaration()));
+  add_basis_candidates(
+      isSgFunctionDeclaration(decl_first->get_definingDeclaration()));
 
-    // The table key is a publication detail, not callable identity.  Template
-    // instantiations, conversion operators, and generated special members can
-    // be keyed by a complete semantic name or mangled identity rather than by
-    // SgFunctionDeclaration::get_name().  A name-bucket-only search therefore
-    // reports that an exact builder-published symbol is missing and tempts
-    // callers to manufacture a duplicate.  Scan the one exact symbol table
-    // and match the typed declaration family instead.
+  // Exact declaration-basis buckets are authoritative.  When a builder is
+  // still completing a declaration family, consult only the small semantic
+  // key buckets needed for equivalent-identity matching.  The former
+  // implementation scanned every entry in the enclosing symbol table for
+  // every function, making translation quadratic in large global scopes.
+  if (candidates.empty()) {
+    std::vector<SgName> candidate_keys;
+    auto add_key = [&](const SgName &key) {
+      if (std::find(candidate_keys.begin(), candidate_keys.end(), key) ==
+          candidate_keys.end()) {
+        candidate_keys.push_back(key);
+      }
+    };
+    add_key(decl->get_symbol_table_key());
+    add_key(decl_first->get_symbol_table_key());
+    add_key(decl->get_name());
+    add_key(decl_first->get_name());
+    for (const SgName &key : candidate_keys) {
+      const auto range = table->get_table()->equal_range(key);
+      for (auto current = range.first; current != range.second; ++current) {
+        if (current->second != nullptr) {
+          candidates.insert(current->second);
+        }
+      }
+    }
+  }
+
+  for (SgSymbol *candidate : candidates) {
+    SgFunctionDeclaration *candidate_declaration =
+        declaration_for_candidate(candidate);
+    if (candidate_declaration == nullptr) {
+      continue;
+    }
+    SgFunctionDeclaration *candidate_first = isSgFunctionDeclaration(
+        candidate_declaration->get_firstNondefiningDeclaration());
+    if (candidate_first == nullptr) {
+      candidate_first = candidate_declaration;
+    }
+    if (candidate_first == decl_first) {
+      exact_matches.push_back(candidate);
+    } else if (sameFunctionDeclChainOrMangledIdentity(candidate_first,
+                                                      decl_first)) {
+      equivalent_matches.push_back(candidate);
+    }
   }
 
   // A concrete Sage declaration chain is the authoritative identity.  A
@@ -24353,7 +24712,9 @@ static bool tagDefinitionWrittenInRange(const clang::TagDecl *tag_decl,
   return sourceRangeContainsLocation(range, tag_begin, source_manager);
 }
 
-static bool tagDefinitionWrittenInTypedDeclContextOwner(
+} // namespace
+
+bool ClangToSageTranslator::tagDefinitionWrittenInTypedDeclContextOwner(
     clang::TagDecl *tag_decl, clang::CompilerInstance *compiler_instance) {
   tag_decl = markClangSpecificDeclDefined(tag_decl);
   if (tag_decl == nullptr || compiler_instance == nullptr ||
@@ -24374,28 +24735,84 @@ static bool tagDefinitionWrittenInTypedDeclContextOwner(
   }
 
   clang::SourceManager &source_manager = compiler_instance->getSourceManager();
-  for (clang::Decl *raw_candidate : context->decls()) {
-    clang::Decl *candidate = markClangDeclObjectDefinedByKind(raw_candidate);
-    if (candidate == nullptr || candidate == tag_decl ||
-        (!llvm::isa<clang::VarDecl>(candidate) &&
-         !llvm::isa<clang::FieldDecl>(candidate) &&
-         !llvm::isa<clang::TypedefNameDecl>(candidate) &&
-         !llvm::isa<clang::FunctionDecl>(candidate))) {
-      continue;
+  auto [context_intervals, inserted] =
+      p_typed_decl_context_owner_intervals.try_emplace(context);
+  if (inserted) {
+    for (clang::Decl *raw_candidate : context->decls()) {
+      clang::Decl *candidate = markClangDeclObjectDefinedByKind(raw_candidate);
+      if (candidate == nullptr ||
+          (!llvm::isa<clang::VarDecl>(candidate) &&
+           !llvm::isa<clang::FieldDecl>(candidate) &&
+           !llvm::isa<clang::TypedefNameDecl>(candidate) &&
+           !llvm::isa<clang::FunctionDecl>(candidate))) {
+        continue;
+      }
+      clang::SourceRange range = readClangApiValueDefined(
+          [&]() { return candidate->getSourceRange(); });
+      if (!range.isValid()) {
+        continue;
+      }
+      clang::SourceLocation begin =
+          resolveLocationForMainFileEmission(range.getBegin(), source_manager);
+      clang::SourceLocation end =
+          resolveLocationForMainFileEmission(range.getEnd(), source_manager);
+      if (!begin.isValid() || !end.isValid() ||
+          source_manager.getFileID(begin) != source_manager.getFileID(end)) {
+        continue;
+      }
+      unsigned begin_offset = source_manager.getFileOffset(begin);
+      unsigned end_offset = source_manager.getFileOffset(end);
+      if (begin_offset > end_offset) {
+        std::swap(begin_offset, end_offset);
+      }
+      context_intervals->second[source_manager.getFileID(begin).getHashValue()]
+          .push_back({begin_offset, end_offset});
     }
-    if (tagDefinitionWrittenInRange(tag_decl, readClangApiValueDefined([&]() {
-                                      return candidate->getSourceRange();
-                                    }),
-                                    &source_manager)) {
-      return true;
+    for (auto &file_intervals : context_intervals->second) {
+      std::vector<PhysicalSourceInterval> &intervals = file_intervals.second;
+      std::sort(intervals.begin(), intervals.end(),
+                [](const PhysicalSourceInterval &lhs,
+                   const PhysicalSourceInterval &rhs) {
+                  return std::tie(lhs.begin, lhs.end) <
+                         std::tie(rhs.begin, rhs.end);
+                });
+      std::vector<PhysicalSourceInterval> merged;
+      merged.reserve(intervals.size());
+      for (const PhysicalSourceInterval &interval : intervals) {
+        if (merged.empty() || interval.begin > merged.back().end) {
+          merged.push_back(interval);
+        } else if (interval.end > merged.back().end) {
+          merged.back().end = interval.end;
+        }
+      }
+      intervals = std::move(merged);
     }
   }
-  return false;
+
+  clang::SourceLocation tag_begin = resolveLocationForMainFileEmission(
+      readClangApiValueDefined([&]() { return tag_decl->getBeginLoc(); }),
+      source_manager);
+  if (!tag_begin.isValid()) {
+    return false;
+  }
+  auto file_intervals = context_intervals->second.find(
+      source_manager.getFileID(tag_begin).getHashValue());
+  if (file_intervals == context_intervals->second.end()) {
+    return false;
+  }
+  const unsigned tag_offset = source_manager.getFileOffset(tag_begin);
+  auto candidate = std::upper_bound(
+      file_intervals->second.begin(), file_intervals->second.end(), tag_offset,
+      [](unsigned offset, const PhysicalSourceInterval &interval) {
+        return offset < interval.begin;
+      });
+  return candidate != file_intervals->second.begin() &&
+         tag_offset <= std::prev(candidate)->end;
 }
 
-static bool isTagEmbeddedInField(clang::TagDecl *tag_decl,
-                                 clang::RecordDecl *parent_decl,
-                                 clang::SourceManager *source_manager) {
+bool ClangToSageTranslator::isTagEmbeddedInField(
+    clang::TagDecl *tag_decl, clang::RecordDecl *parent_decl,
+    clang::SourceManager *source_manager) {
   markClangValueDefined(tag_decl);
   markClangValueDefined(parent_decl);
   if (tag_decl == nullptr || parent_decl == nullptr) {
@@ -24408,71 +24825,135 @@ static bool isTagEmbeddedInField(clang::TagDecl *tag_decl,
     return false;
   }
 
-  clang::SourceLocation tag_begin =
-      readClangApiValueDefined([&]() { return tag_decl->getBeginLoc(); });
-  clang::DeclContext::decl_iterator field_it =
-      readClangApiValueDefined([&]() { return parent_decl->decls_begin(); });
-  clang::DeclContext::decl_iterator field_end =
-      readClangApiValueDefined([&]() { return parent_decl->decls_end(); });
-  for (; field_it != field_end; field_it = readClangApiValueDefined([&]() {
-                                  clang::DeclContext::decl_iterator next =
-                                      field_it;
-                                  ++next;
-                                  return next;
-                                })) {
-    clang::Decl *raw_decl = markClangDeclObjectDefinedByKind(
-        readClangApiValueDefined([&]() { return *field_it; }));
-    clang::FieldDecl *field_decl =
-        llvm::dyn_cast_or_null<clang::FieldDecl>(raw_decl);
-    if (field_decl == nullptr) {
-      continue;
-    }
-    clang::QualType field_qual_type = markClangQualTypeDefined(
-        readClangApiValueDefined([&]() { return field_decl->getType(); }));
-    const clang::Type *field_type = stripFieldType(field_qual_type);
-    clang::TagDecl *field_tag = nullptr;
-    if (auto *record_type =
-            llvm::dyn_cast_or_null<clang::RecordType>(field_type)) {
-      field_tag = markClangSpecificDeclDefined(
-          readClangApiValueDefined([&]() { return record_type->getDecl(); }));
-    } else if (auto *enum_type =
-                   llvm::dyn_cast_or_null<clang::EnumType>(field_type)) {
-      field_tag = markClangSpecificDeclDefined(
-          readClangApiValueDefined([&]() { return enum_type->getDecl(); }));
-    }
+  if (source_manager == nullptr) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[embedded-tag-index]: record=%p tag=%p "
+            "has no exact SourceManager\n",
+            static_cast<void *>(parent_decl), static_cast<void *>(tag_decl));
+    ROSE_ABORT();
+  }
+  auto [record_intervals, inserted] =
+      p_record_embedded_tag_intervals.try_emplace(parent_decl);
+  if (inserted) {
+    for (clang::Decl *raw_decl : parent_decl->decls()) {
+      clang::FieldDecl *field_decl = llvm::dyn_cast_or_null<clang::FieldDecl>(
+          markClangDeclObjectDefinedByKind(raw_decl));
+      if (field_decl == nullptr) {
+        continue;
+      }
+      clang::QualType field_qual_type = markClangQualTypeDefined(
+          readClangApiValueDefined([&]() { return field_decl->getType(); }));
+      const clang::Type *field_type = stripFieldType(field_qual_type);
+      clang::TagDecl *field_tag = nullptr;
+      if (auto *record_type =
+              llvm::dyn_cast_or_null<clang::RecordType>(field_type)) {
+        field_tag = markClangSpecificDeclDefined(
+            readClangApiValueDefined([&]() { return record_type->getDecl(); }));
+      } else if (auto *enum_type =
+                     llvm::dyn_cast_or_null<clang::EnumType>(field_type)) {
+        field_tag = markClangSpecificDeclDefined(
+            readClangApiValueDefined([&]() { return enum_type->getDecl(); }));
+      }
+      if (field_tag == nullptr) {
+        continue;
+      }
+      const clang::TagDecl *field_canonical =
+          markClangSpecificDeclDefined(readClangApiValueDefined(
+              [&]() { return field_tag->getCanonicalDecl(); }));
+      if (field_canonical == nullptr) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[embedded-tag-index]: field=%p has no "
+                "exact canonical tag\n",
+                static_cast<void *>(field_decl));
+        ROSE_ABORT();
+      }
 
-    if (field_tag == nullptr) {
-      continue;
+      clang::SourceRange field_range = readClangApiValueDefined(
+          [&]() { return field_decl->getSourceRange(); });
+      if (clang::TypeSourceInfo *tsi =
+              markClangTypeSourceInfoDefined(readClangApiValueDefined(
+                  [&]() { return field_decl->getTypeSourceInfo(); }))) {
+        clang::TypeLoc type_loc =
+            readClangApiValueDefined([&]() { return tsi->getTypeLoc(); });
+        markClangTypeLocDataDefined(type_loc);
+        clang::SourceRange type_range = readClangApiValueDefined(
+            [&]() { return type_loc.getSourceRange(); });
+        if (type_range.isValid()) {
+          field_range = type_range;
+        }
+      }
+      if (!field_range.isValid()) {
+        continue;
+      }
+      clang::SourceLocation begin = resolveLocationForMainFileEmission(
+          field_range.getBegin(), *source_manager);
+      clang::SourceLocation end = resolveLocationForMainFileEmission(
+          field_range.getEnd(), *source_manager);
+      if (!begin.isValid() || !end.isValid() ||
+          source_manager->getFileID(begin) != source_manager->getFileID(end)) {
+        continue;
+      }
+      unsigned begin_offset = source_manager->getFileOffset(begin);
+      unsigned end_offset = source_manager->getFileOffset(end);
+      if (begin_offset > end_offset) {
+        std::swap(begin_offset, end_offset);
+      }
+      record_intervals
+          ->second[field_canonical]
+                  [source_manager->getFileID(begin).getHashValue()]
+          .push_back({begin_offset, end_offset});
     }
-
-    clang::SourceRange field_range = readClangApiValueDefined(
-        [&]() { return field_decl->getSourceRange(); });
-    if (clang::TypeSourceInfo *tsi =
-            markClangTypeSourceInfoDefined(readClangApiValueDefined(
-                [&]() { return field_decl->getTypeSourceInfo(); }))) {
-      clang::TypeLoc type_loc =
-          readClangApiValueDefined([&]() { return tsi->getTypeLoc(); });
-      markClangTypeLocDataDefined(type_loc);
-      clang::SourceRange type_range =
-          readClangApiValueDefined([&]() { return type_loc.getSourceRange(); });
-      if (type_range.isValid()) {
-        field_range = type_range;
+    for (auto &tag_intervals : record_intervals->second) {
+      for (auto &file_intervals : tag_intervals.second) {
+        std::vector<PhysicalSourceInterval> &intervals = file_intervals.second;
+        std::sort(intervals.begin(), intervals.end(),
+                  [](const PhysicalSourceInterval &lhs,
+                     const PhysicalSourceInterval &rhs) {
+                    return std::tie(lhs.begin, lhs.end) <
+                           std::tie(rhs.begin, rhs.end);
+                  });
+        std::vector<PhysicalSourceInterval> merged;
+        merged.reserve(intervals.size());
+        for (const PhysicalSourceInterval &interval : intervals) {
+          if (merged.empty() || interval.begin > merged.back().end) {
+            merged.push_back(interval);
+          } else if (interval.end > merged.back().end) {
+            merged.back().end = interval.end;
+          }
+        }
+        intervals = std::move(merged);
       }
     }
-
-    clang::TagDecl *field_canonical =
-        markClangSpecificDeclDefined(readClangApiValueDefined(
-            [&]() { return field_tag->getCanonicalDecl(); }));
-    const clang::TagDecl *tag_canonical =
-        markClangSpecificDeclDefined(readClangApiValueDefined(
-            [&]() { return tag_decl->getCanonicalDecl(); }));
-    if (field_canonical == tag_canonical &&
-        sourceRangeContainsLocation(field_range, tag_begin, source_manager)) {
-      return true;
-    }
   }
-  return false;
+
+  const clang::TagDecl *tag_canonical = markClangSpecificDeclDefined(
+      readClangApiValueDefined([&]() { return tag_decl->getCanonicalDecl(); }));
+  auto tag_intervals = record_intervals->second.find(tag_canonical);
+  if (tag_intervals == record_intervals->second.end()) {
+    return false;
+  }
+  clang::SourceLocation tag_begin = resolveLocationForMainFileEmission(
+      readClangApiValueDefined([&]() { return tag_decl->getBeginLoc(); }),
+      *source_manager);
+  if (!tag_begin.isValid()) {
+    return false;
+  }
+  auto file_intervals = tag_intervals->second.find(
+      source_manager->getFileID(tag_begin).getHashValue());
+  if (file_intervals == tag_intervals->second.end()) {
+    return false;
+  }
+  const unsigned tag_offset = source_manager->getFileOffset(tag_begin);
+  auto candidate = std::upper_bound(
+      file_intervals->second.begin(), file_intervals->second.end(), tag_offset,
+      [](unsigned offset, const PhysicalSourceInterval &interval) {
+        return offset < interval.begin;
+      });
+  return candidate != file_intervals->second.begin() &&
+         tag_offset <= std::prev(candidate)->end;
 }
+
+namespace {
 
 clang::SourceLocation
 projectInitializerElementToPhysicalFile(clang::SourceManager &source_manager,
@@ -24588,7 +25069,7 @@ void ClangToSageTranslator::populateClassDefinition(
          record_sage_declaration});
   }
   struct ClassDefinitionTemplateContextGuard {
-    std::vector<ClangTemplateParameterNameMap> &name_stack;
+    ClangTemplateParameterNameContextStack &name_stack;
     std::vector<const clang::DeclContext *> &context_stack;
     std::vector<TemplateParameterSurfaceFrame> &surface_stack;
     const clang::TemplateParameterList *clang_parameters;
@@ -24985,7 +25466,8 @@ void ClangToSageTranslator::populateClassDefinition(
       return nullptr;
     }
 
-    auto decl_is_semantic_only = [](SgFunctionDeclaration *candidate) -> bool {
+    auto decl_is_semantic_only =
+        [this](SgFunctionDeclaration *candidate) -> bool {
       if (candidate == nullptr) {
         return true;
       }
@@ -25725,9 +26207,6 @@ void ClangToSageTranslator::populateClassDefinition(
 
     auto is_in_progress = [&](clang::FunctionDecl *key) {
       key = markClangSpecificDeclDefined(key);
-      for (clang::Decl *active : p_decl_translation_in_progress) {
-        markClangDeclObjectDefinedByKind(active);
-      }
       return key != nullptr && p_decl_translation_in_progress.count(key) != 0;
     };
 
@@ -30044,50 +30523,57 @@ ClangToSageTranslator::exactClassDefinitionOwnerForFunctionTranslation(
   };
   std::set<clang::FunctionDecl *> exact_function_origins;
   std::vector<clang::FunctionDecl *> pending_function_origins;
+  bool exact_function_origins_populated = false;
   auto enqueue_function_origin = [&](clang::FunctionDecl *origin) {
     origin = markClangFunctionTemplateStateDefined(origin);
     if (origin != nullptr && exact_function_origins.insert(origin).second) {
       pending_function_origins.push_back(origin);
     }
   };
-  enqueue_function_origin(function_decl);
-  for (size_t origin_index = 0; origin_index < pending_function_origins.size();
-       ++origin_index) {
-    clang::FunctionDecl *origin = pending_function_origins[origin_index];
-    for (auto redeclaration = readClangApiValueDefined(
-                  [&]() { return origin->redecls_begin(); }),
-              redeclaration_end = readClangApiValueDefined(
-                  [&]() { return origin->redecls_end(); });
-         redeclaration != redeclaration_end; readClangApiValueDefined([&]() {
-           ++redeclaration;
-           return true;
-         })) {
-      enqueue_function_origin(markClangSpecificDeclDefined(
-          readClangApiValueDefined([&]() { return *redeclaration; })));
+  auto populate_exact_function_origins = [&]() {
+    if (exact_function_origins_populated) {
+      return;
     }
-    enqueue_function_origin(
-        clangFunctionTemplateInstantiationPatternDefined(origin));
-    enqueue_function_origin(
-        clangFunctionInstantiatedFromMemberFunctionDefined(origin));
-    clang::FunctionTemplateDecl *primary_template =
-        markClangSpecificDeclDefined(readClangApiValueDefined(
-            [&]() { return origin->getPrimaryTemplate(); }));
-    if (primary_template != nullptr) {
+    exact_function_origins_populated = true;
+    enqueue_function_origin(function_decl);
+    for (size_t origin_index = 0;
+         origin_index < pending_function_origins.size(); ++origin_index) {
+      clang::FunctionDecl *origin = pending_function_origins[origin_index];
+      for (auto redeclaration = readClangApiValueDefined(
+                    [&]() { return origin->redecls_begin(); }),
+                redeclaration_end = readClangApiValueDefined(
+                    [&]() { return origin->redecls_end(); });
+           redeclaration != redeclaration_end; readClangApiValueDefined([&]() {
+             ++redeclaration;
+             return true;
+           })) {
+        enqueue_function_origin(markClangSpecificDeclDefined(
+            readClangApiValueDefined([&]() { return *redeclaration; })));
+      }
       enqueue_function_origin(
-          markClangSpecificDeclDefined(readClangApiValueDefined(
-              [&]() { return primary_template->getTemplatedDecl(); })));
-    }
-    clang::FunctionTemplateDecl *described_template =
-        markClangSpecificDeclDefined(readClangApiValueDefined(
-            [&]() { return origin->getDescribedFunctionTemplate(); }));
-    if (clang::FunctionTemplateDecl *member_template =
-            clangFunctionTemplateInstantiatedFromMemberTemplateDefined(
-                described_template)) {
+          clangFunctionTemplateInstantiationPatternDefined(origin));
       enqueue_function_origin(
+          clangFunctionInstantiatedFromMemberFunctionDefined(origin));
+      clang::FunctionTemplateDecl *primary_template =
           markClangSpecificDeclDefined(readClangApiValueDefined(
-              [&]() { return member_template->getTemplatedDecl(); })));
+              [&]() { return origin->getPrimaryTemplate(); }));
+      if (primary_template != nullptr) {
+        enqueue_function_origin(
+            markClangSpecificDeclDefined(readClangApiValueDefined(
+                [&]() { return primary_template->getTemplatedDecl(); })));
+      }
+      clang::FunctionTemplateDecl *described_template =
+          markClangSpecificDeclDefined(readClangApiValueDefined(
+              [&]() { return origin->getDescribedFunctionTemplate(); }));
+      if (clang::FunctionTemplateDecl *member_template =
+              clangFunctionTemplateInstantiatedFromMemberTemplateDefined(
+                  described_template)) {
+        enqueue_function_origin(
+            markClangSpecificDeclDefined(readClangApiValueDefined(
+                [&]() { return member_template->getTemplatedDecl(); })));
+      }
     }
-  }
+  };
   auto exact_mapped_source_producer_owns_candidate =
       [&](SgFunctionDeclaration *candidate, SgClassDefinition *candidate_owner,
           SgScopeStatement *structural_scope, SgStatement *structural_statement,
@@ -30098,6 +30584,8 @@ ClangToSageTranslator::exactClassDefinitionOwnerForFunctionTranslation(
         !declaration_has_exact_source_surface_ownership(candidate)) {
       return false;
     }
+
+    populate_exact_function_origins();
 
     clang::FunctionDecl *first_source_producer = nullptr;
     for (clang::FunctionDecl *origin : exact_function_origins) {
@@ -33292,7 +33780,7 @@ translate_decl:
           }
           require_exact_source_provenance(
               source_parameter, "Traverse:source-parameter-cache-publication");
-          prior->second = source_parameter;
+          p_decl_translation_map.set(parameter_decl, source_parameter);
           published_source_parameter_replacement = true;
         }
       }
@@ -33532,7 +34020,46 @@ ClangToSageTranslator::prepareExactSourceDeclarationGroup(
 
   clang::Decl *next_member =
       markClangDeclObjectDefinedByKind(first_member->getNextDeclInContext());
-  if (!declarationsShareSourceDeclaration(first_member, next_member)) {
+  const bool shares_visible_source_declaration =
+      declarationsShareSourceDeclaration(first_member, next_member);
+  bool owns_inactive_declarator_tail = false;
+  if (!shares_visible_source_declaration &&
+      requested_role == DeclarationGroupRole::source_lexical &&
+      supported_member(first_member) &&
+      p_sage_preprocessor_recorder != nullptr &&
+      p_compiler_instance != nullptr && first_member->getEndLoc().isValid() &&
+      !first_member->getEndLoc().isMacroID()) {
+    clang::FunctionDecl *function =
+        llvm::dyn_cast<clang::FunctionDecl>(first_member);
+    const bool plain_declarator =
+        function == nullptr || !function->doesThisDeclarationHaveABody();
+    if (plain_declarator) {
+      clang::SourceManager &source_manager =
+          p_compiler_instance->getSourceManager();
+      const clang::LangOptions &lang_opts = p_compiler_instance->getLangOpts();
+      clang::SourceLocation after_member = clang::Lexer::getLocForEndOfToken(
+          first_member->getEndLoc(), 0, source_manager, lang_opts);
+      after_member = source_manager.getFileLoc(after_member);
+      clang::Token next_token;
+      if (after_member.isValid() &&
+          !clang::Lexer::getRawToken(after_member, next_token, source_manager,
+                                     lang_opts, /*IgnoreWhiteSpace=*/true) &&
+          next_token.is(clang::tok::hash)) {
+        clang::SourceLocation begin =
+            source_manager.getFileLoc(first_member->getBeginLoc());
+        clang::SourceLocation end =
+            source_manager.getFileLoc(first_member->getEndLoc());
+        clang::SourceRange provisional_group =
+            requireDeclarationGroupTrailingSemicolon(
+                clang::SourceRange(begin, end), source_manager, lang_opts,
+                first_member, /*allow_inactive_top_level_comma=*/true);
+        owns_inactive_declarator_tail =
+            p_sage_preprocessor_recorder->sourceRangeContainsSkippedTokens(
+                clang::SourceRange(end, provisional_group.getEnd()));
+      }
+    }
+  }
+  if (!shares_visible_source_declaration && !owns_inactive_declarator_tail) {
     return nullptr;
   }
   if (!supported_member(first_member)) {
@@ -33577,6 +34104,7 @@ ClangToSageTranslator::prepareExactSourceDeclarationGroup(
   construction.lexical_scope = lexical_scope;
   construction.group = new SgDeclarationGroupStatement();
   construction.role = requested_role;
+  construction.owns_inactive_declarator_tail = owns_inactive_declarator_tail;
   construction.group->set_scope(lexical_scope);
   if (requested_role == DeclarationGroupRole::semantic_body) {
     setSynthesizedFileInfo(construction.group);
@@ -33626,13 +34154,16 @@ ClangToSageTranslator::prepareExactSourceDeclarationGroup(
     next_member =
         markClangDeclObjectDefinedByKind(next_member->getNextDeclInContext());
   }
-  if (construction.clang_members.size() < 2 ||
+  if (construction.clang_members.size() <
+          (owns_inactive_declarator_tail ? 1u : 2u) ||
+      (owns_inactive_declarator_tail &&
+       construction.clang_members.size() != 1) ||
       construction.group->get_parent() != nullptr ||
       exact_lexical_declaration_group_reference_count(
           lexical_scope, construction.group) != 0) {
     fprintf(stderr,
             "REX_FRONTEND_INVARIANT[source-declaration-group-prepare]: "
-            "new group=%p is not an exact detached multi-member owner\n",
+            "new group=%p is not an exact detached active-member owner\n",
             static_cast<void *>(construction.group));
     ROSE_ABORT();
   }
@@ -34159,7 +34690,9 @@ ClangToSageTranslator::completeExactSourceDeclarationGroupMember(
   if (!macro_owns_terminator) {
     group_range = requireDeclarationGroupTrailingSemicolon(
         group_range, source_manager, p_compiler_instance->getLangOpts(),
-        last_clang);
+        last_clang,
+        /*allow_inactive_top_level_comma=*/
+        construction.owns_inactive_declarator_tail);
   } else {
     group->set_source_terminator(
         SgDeclarationGroupStatement::e_source_terminator_macro_semicolon);
@@ -34179,6 +34712,33 @@ ClangToSageTranslator::completeExactSourceDeclarationGroupMember(
   applySourceRange(group, group_range);
   require_exact_source_provenance(group, "atomic source declaration group");
   validate_output_role(group, "atomic source declaration group");
+
+  if (p_sage_preprocessor_recorder != nullptr) {
+    for (size_t index = 1; index < construction.clang_members.size(); ++index) {
+      clang::SourceLocation previous_end =
+          source_manager.getFileLoc(source_manager.getExpansionLoc(
+              construction.clang_members[index - 1]->getEndLoc()));
+      clang::SourceLocation current_name =
+          source_manager.getFileLoc(source_manager.getExpansionLoc(
+              construction.clang_members[index]->getLocation()));
+      if (previous_end.isValid() && current_name.isValid() &&
+          source_manager.getFileID(previous_end) ==
+              source_manager.getFileID(current_name) &&
+          source_manager.isBeforeInTranslationUnit(previous_end,
+                                                   current_name)) {
+        p_sage_preprocessor_recorder
+            ->transferDirectivesToDeclarationGroupBoundary(
+                clang::SourceRange(previous_end, current_name), group,
+                published_members[index]);
+      }
+    }
+    if (!macro_owns_terminator) {
+      p_sage_preprocessor_recorder
+          ->transferDirectivesToDeclarationGroupTerminator(
+              clang::SourceRange(last_clang->getEndLoc(), group_range.getEnd()),
+              group, published_members.back());
+    }
+  }
   group->validate();
 
   const std::vector<clang::Decl *> completed_clang_members =
@@ -36974,7 +37534,7 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
         std::move(exact_friend_type_parameter_names));
   }
   struct ExactFriendTypeParameterGuard {
-    std::vector<ClangTemplateParameterNameMap> &stack;
+    ClangTemplateParameterNameContextStack &stack;
     bool active;
     ~ExactFriendTypeParameterGuard() {
       if (active) {
@@ -40132,7 +40692,7 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
             exact_written_parameter_names);
       }
       struct ExactWrittenFriendArgumentGuard {
-        std::vector<ClangTemplateParameterNameMap> &stack;
+        ClangTemplateParameterNameContextStack &stack;
         bool active;
         ~ExactWrittenFriendArgumentGuard() {
           if (active) {
@@ -41466,7 +42026,7 @@ bool ClangToSageTranslator::VisitFriendTemplateDecl(
   p_exact_template_parameter_name_stack.push_back(
       std::move(exact_friend_template_parameter_names));
   struct ExactFriendTemplateParameterGuard {
-    std::vector<ClangTemplateParameterNameMap> &stack;
+    ClangTemplateParameterNameContextStack &stack;
     ~ExactFriendTemplateParameterGuard() {
       ROSE_ASSERT(!stack.empty());
       stack.pop_back();
@@ -43022,7 +43582,8 @@ bool ClangToSageTranslator::VisitNamespaceDecl(
                 namespace_decl->getQualifiedNameAsString().c_str());
         ROSE_ABORT();
       }
-      p_decl_attachment_session.invalidate(scope_declarations);
+      p_decl_attachment_session.recordInsertion(scope_declarations,
+                                                sg_namespace_decl);
     }
   }
 
@@ -44213,7 +44774,7 @@ bool ClangToSageTranslator::VisitConceptDecl(clang::ConceptDecl *concept_decl,
           std::move(exact_concept_parameter_names));
     }
     struct ExactConceptParameterNameGuard {
-      std::vector<ClangTemplateParameterNameMap> &stack;
+      ClangTemplateParameterNameContextStack &stack;
       bool active;
       ~ExactConceptParameterNameGuard() {
         if (active) {
@@ -44496,7 +45057,7 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
       std::move(exact_class_parameter_names));
   p_template_parameter_decl_context_stack.push_back(templated_decl);
   struct ClassTemplateParameterContextGuard {
-    std::vector<ClangTemplateParameterNameMap> &name_stack;
+    ClangTemplateParameterNameContextStack &name_stack;
     std::vector<const clang::DeclContext *> &context_stack;
     ~ClassTemplateParameterContextGuard() {
       ROSE_ASSERT(!name_stack.empty());
@@ -48453,7 +49014,7 @@ bool ClangToSageTranslator::VisitTypeAliasTemplateDecl(
         {param_list, owned_alias_template_parameters, template_typedef});
   }
   struct TypeAliasTemplateParameterSurfaceGuard {
-    std::vector<ClangTemplateParameterNameMap> &name_stack;
+    ClangTemplateParameterNameContextStack &name_stack;
     std::vector<TemplateParameterSurfaceFrame> &surface_stack;
     const clang::TemplateParameterList *clang_parameters;
     const SgTemplateParameterPtrList *sage_parameters;
@@ -48749,7 +49310,7 @@ bool ClangToSageTranslator::VisitVarTemplateDecl(
   p_template_parameter_surface_stack.push_back(
       {var_template_parameters, &var_decl->get_templateParameters(), var_decl});
   struct VarTemplateParameterSurfaceGuard {
-    std::vector<ClangTemplateParameterNameMap> &name_stack;
+    ClangTemplateParameterNameContextStack &name_stack;
     std::vector<TemplateParameterSurfaceFrame> &surface_stack;
     const clang::TemplateParameterList *clang_parameters;
     const SgTemplateParameterPtrList *sage_parameters;
@@ -54510,8 +55071,14 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     SgNode **node) {
   const double slow_template_spec_trace_threshold_ms =
       roseSlowTemplateSpecTraceThresholdMs();
-  const auto slow_template_spec_start = std::chrono::steady_clock::now();
+  const auto slow_template_spec_start =
+      slow_template_spec_trace_threshold_ms > 0.0
+          ? std::chrono::steady_clock::now()
+          : std::chrono::steady_clock::time_point();
   auto slow_template_spec_elapsed_ms = [&]() -> double {
+    if (slow_template_spec_trace_threshold_ms <= 0.0) {
+      return 0.0;
+    }
     return std::chrono::duration<double, std::milli>(
                std::chrono::steady_clock::now() - slow_template_spec_start)
         .count();
@@ -56734,7 +57301,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
 
     auto find_scope_local_anchor =
         [&](SgDeclarationStatement *seed) -> SgDeclarationStatement * {
-      auto is_exact_source_anchor = [](SgDeclarationStatement *candidate) {
+      auto is_exact_source_anchor = [this](SgDeclarationStatement *candidate) {
         return declaration_has_exact_lexical_source_ownership(candidate);
       };
       if (seed == nullptr || ordering_scope == nullptr) {
@@ -57689,7 +58256,7 @@ bool ClangToSageTranslator::VisitClassTemplatePartialSpecializationDecl(
   p_template_parameter_surface_stack.push_back(
       {partial_template_parameters, template_params.get(), nonDefiningDecl});
   struct PartialSpecializationParameterSurfaceGuard {
-    std::vector<ClangTemplateParameterNameMap> &name_stack;
+    ClangTemplateParameterNameContextStack &name_stack;
     std::vector<TemplateParameterSurfaceFrame> &surface_stack;
     const clang::TemplateParameterList *clang_parameters;
     const SgTemplateParameterPtrList *sage_parameters;
@@ -59059,6 +59626,9 @@ bool ClangToSageTranslator::VisitEnumDecl(clang::EnumDecl *enum_decl,
       enum_body_file =
           exactExpandedEnumBodyFile(enum_decl, p_compiler_instance);
     }
+    std::vector<std::pair<clang::SourceLocation, SgInitializedName *>>
+        source_body_enumerators;
+    bool has_external_enumerator = false;
 
     clang::EnumDecl::enumerator_iterator it;
     for (it = enum_decl->enumerator_begin(); it != enum_decl->enumerator_end();
@@ -59086,8 +59656,35 @@ bool ClangToSageTranslator::VisitEnumDecl(clang::EnumDecl *enum_decl,
                 clang_enumerator->getNameAsString().c_str());
         ROSE_ABORT();
       }
+      has_external_enumerator |=
+          expected_role == SgInitializedName::e_enum_constant_source_external;
       sg_enum_decl->append_enumerator(enumerator);
       ensure_enum_field_symbol(enumerator, enum_scope, sg_enum_decl);
+      if (expected_role == SgInitializedName::e_enum_constant_source_body) {
+        clang::SourceManager &source_manager =
+            p_compiler_instance->getSourceManager();
+        const clang::SourceLocation location =
+            source_manager.getExpansionLoc(readClangApiValueDefined(
+                [&]() { return clang_enumerator->getLocation(); }));
+        if (location.isInvalid() ||
+            source_manager.getFileID(location) != enum_body_file) {
+          fprintf(stderr,
+                  "REX_FRONTEND_INVARIANT[enum-source-ownership]: "
+                  "source-body enumerator=%s has no exact body-file "
+                  "position\n",
+                  clang_enumerator->getNameAsString().c_str());
+          ROSE_ABORT();
+        }
+        source_body_enumerators.emplace_back(location, enumerator);
+      }
+    }
+
+    if (!semantic_only_enum && has_external_enumerator &&
+        p_sage_preprocessor_recorder != nullptr) {
+      const clang::SourceRange brace_range = readClangApiValueDefined(
+          [&]() { return enum_decl->getBraceRange(); });
+      p_sage_preprocessor_recorder->transferDirectivesToExternalEnumBoundaries(
+          brace_range, sg_enum_decl, source_body_enumerators);
     }
   } else if (sg_prev_enum_decl != nullptr) {
     SgEnumDeclaration *first_nondef = isSgEnumDeclaration(
@@ -62732,21 +63329,12 @@ SgNode *ClangToSageTranslator::lookupUsingDeclTargetNode(clang::Decl *decl) {
   }
 
   decl = markClangDeclObjectDefinedByKind(decl);
-  auto mark_translation_keys = [&]() {
-    markClangDeclObjectDefinedByKind(decl);
-    for (const auto &entry : p_decl_translation_map) {
-      markClangDeclObjectDefinedByKind(entry.first);
-    }
-  };
 
   clang::Decl *map_key = decl;
   if (clang::NamespaceDecl *ns_decl =
           llvm::dyn_cast<clang::NamespaceDecl>(decl)) {
     clang::NamespaceDecl *canonical_ns = getCanonicalNamespaceDecl(ns_decl);
     canonical_ns = markClangSpecificDeclDefined(canonical_ns);
-    for (const auto &entry : p_namespace_canonical_decl_map) {
-      markClangSpecificDeclDefined(entry.first);
-    }
     auto canonical_it = p_namespace_canonical_decl_map.find(canonical_ns);
     if (canonical_it != p_namespace_canonical_decl_map.end() &&
         canonical_it->second != nullptr) {
@@ -62766,13 +63354,11 @@ SgNode *ClangToSageTranslator::lookupUsingDeclTargetNode(clang::Decl *decl) {
   }
 
   map_key = markClangDeclObjectDefinedByKind(map_key);
-  mark_translation_keys();
   auto it = p_decl_translation_map.find(map_key);
   if (it != p_decl_translation_map.end() && it->second != nullptr) {
     return it->second;
   }
   if (map_key != decl) {
-    mark_translation_keys();
     it = p_decl_translation_map.find(decl);
     if (it != p_decl_translation_map.end() && it->second != nullptr) {
       return it->second;
@@ -62789,12 +63375,6 @@ SgNode *ClangToSageTranslator::resolveUsingDeclTargetNode(clang::Decl *decl) {
     target_decl = markClangDeclObjectDefinedByKind(target_decl);
     if (SgNode *node = lookupUsingDeclTargetNode(target_decl)) {
       return node;
-    }
-    for (const auto &entry : p_decl_translation_in_progress) {
-      markClangDeclObjectDefinedByKind(entry);
-    }
-    for (const auto &entry : p_decl_translation_on_demand) {
-      markClangDeclObjectDefinedByKind(entry);
     }
     if (p_decl_translation_in_progress.find(target_decl) ==
             p_decl_translation_in_progress.end() &&
@@ -63221,9 +63801,6 @@ bool ClangToSageTranslator::VisitUsingDecl(clang::UsingDecl *using_decl,
           ROSE_ABORT();
         }
       };
-  for (const auto &entry : p_decl_translation_map) {
-    markClangDeclObjectDefinedByKind(entry.first);
-  }
   auto existing_it = p_decl_translation_map.find(using_decl);
   if (existing_it != p_decl_translation_map.end()) {
     SgUsingDeclarationStatement *existing =
@@ -64249,7 +64826,7 @@ ClangToSageTranslator::ensureNamespaceDeclaration(
               ns_decl->getQualifiedNameAsString().c_str());
       ROSE_ABORT();
     }
-    p_decl_attachment_session.invalidate(scope_declarations);
+    p_decl_attachment_session.recordInsertion(scope_declarations, sg_ns_decl);
   }
 
   SgNamespaceDeclarationStatement *actual_canonical_sg_decl =
@@ -68729,7 +69306,20 @@ SgFunctionDeclaration *ClangToSageTranslator::publishHiddenFriendCallable(
       // family.  Finalizing that family must update the symbol's typed
       // declaration edge at the same transaction boundary; retaining the
       // pre-merge surface makes name lookup return a noncanonical identity.
+      SgFunctionDeclaration *prior_basis = function_symbol->get_declaration();
+      SgSymbolTable *symbol_table =
+          isSgSymbolTable(function_symbol->get_parent());
       function_symbol->set_declaration(canonical);
+      if (symbol_table == nullptr || prior_basis == nullptr) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[hidden-friend-callable-symbol]: "
+                "function=%s symbol=%p has no exact table or prior basis "
+                "during canonical replacement\n",
+                clang_decl->getQualifiedNameAsString().c_str(),
+                static_cast<void *>(symbol));
+        ROSE_ABORT();
+      }
+      symbol_table->reindex_symbol_basis(function_symbol, prior_basis);
       if (function_symbol->get_declaration() != canonical ||
           function_symbol->get_symbol_basis() != canonical) {
         fprintf(stderr,
@@ -70071,9 +70661,6 @@ SgClassDeclaration *ClangToSageTranslator::lookupRecordTypePlaceholderDecl(
       return nullptr;
     }
     lookup_key = markClangSpecificDeclDefined(lookup_key);
-    for (const auto &entry : p_record_type_placeholder_decl_map) {
-      markClangSpecificDeclDefined(entry.first);
-    }
     auto it = p_record_type_placeholder_decl_map.find(lookup_key);
     if (it == p_record_type_placeholder_decl_map.end()) {
       return nullptr;
@@ -70136,12 +70723,6 @@ void ClangToSageTranslator::cacheRecordTypePlaceholderDecl(
       return;
     }
     key = markClangSpecificDeclDefined(key);
-    for (const auto &entry : p_record_type_placeholder_decl_map) {
-      markClangSpecificDeclDefined(entry.first);
-    }
-    for (const auto &entry : p_record_decl_type_map) {
-      markClangSpecificDeclDefined(entry.first);
-    }
     auto [placeholder_position, placeholder_inserted] =
         p_record_type_placeholder_decl_map.emplace(key, decl);
     if (!placeholder_inserted) {
@@ -70986,9 +71567,19 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   const bool semantic_declaration_group =
       source_group_owner != nullptr &&
       activeExactDeclarationGroupIsSemantic(function_decl);
-  auto function_translation_start = std::chrono::steady_clock::now();
+  const double slow_function_threshold_ms = roseSlowFunctionTraceThresholdMs();
+  const bool trace_slow_function = slow_function_threshold_ms > 0.0;
+  auto function_trace_time = [&]() {
+    return trace_slow_function ? std::chrono::steady_clock::now()
+                               : std::chrono::steady_clock::time_point();
+  };
+  auto function_translation_start = function_trace_time();
   auto elapsed_ms_since =
-      [](std::chrono::steady_clock::time_point start_time) -> long long {
+      [trace_slow_function](
+          std::chrono::steady_clock::time_point start_time) -> long long {
+    if (!trace_slow_function) {
+      return 0;
+    }
     return std::chrono::duration_cast<std::chrono::milliseconds>(
                std::chrono::steady_clock::now() - start_time)
         .count();
@@ -71823,7 +72414,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     __builtin_unreachable();
   };
   auto mapped_function_decl_is_semantic_only =
-      [](SgFunctionDeclaration *decl) -> bool {
+      [this](SgFunctionDeclaration *decl) -> bool {
     if (decl == nullptr) {
       return true;
     }
@@ -73148,7 +73739,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     }
   }
   auto function_decl_is_semantic_only =
-      [](SgFunctionDeclaration *decl) -> bool {
+      [this](SgFunctionDeclaration *decl) -> bool {
     return !declaration_has_exact_source_surface_ownership(decl);
   };
   auto clang_decl_spelled_in_user_main_file = [&](clang::FunctionDecl *decl) {
@@ -74547,7 +75138,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   }
 
   decl_setup_elapsed_ms = elapsed_ms_since(function_translation_start);
-  signature_translation_start = std::chrono::steady_clock::now();
+  signature_translation_start = function_trace_time();
 
   const clang::Type *funcType = funcQualType.getTypePtr();
 
@@ -81973,27 +82564,76 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           return;
         }
 
+        std::unordered_set<SgNode *> old_body_nodes;
+        std::unordered_set<DeclAttachmentSession::DeclarationList *>
+            old_body_declaration_lists;
+        std::unordered_set<SgDeclarationStatement *> old_body_type_decls;
+        struct OldBodyIndex : public AstSimpleProcessing {
+          std::unordered_set<SgNode *> &nodes;
+          std::unordered_set<DeclAttachmentSession::DeclarationList *>
+              &declaration_lists;
+          std::unordered_set<SgDeclarationStatement *> &type_declarations;
+
+          OldBodyIndex(
+              std::unordered_set<SgNode *> &body_nodes,
+              std::unordered_set<DeclAttachmentSession::DeclarationList *>
+                  &body_declaration_lists,
+              std::unordered_set<SgDeclarationStatement *>
+                  &body_type_declarations)
+              : nodes(body_nodes), declaration_lists(body_declaration_lists),
+                type_declarations(body_type_declarations) {}
+
+          static bool isTypeOwningDeclaration(SgDeclarationStatement *decl) {
+            return isSgClassDeclaration(decl) != nullptr ||
+                   isSgTemplateClassDeclaration(decl) != nullptr ||
+                   isSgTemplateInstantiationDecl(decl) != nullptr ||
+                   isSgEnumDeclaration(decl) != nullptr ||
+                   isSgTypedefDeclaration(decl) != nullptr ||
+                   isSgTemplateTypedefDeclaration(decl) != nullptr ||
+                   isSgNonrealDecl(decl) != nullptr;
+          }
+
+          void recordTypeDeclaration(SgDeclarationStatement *decl) {
+            if (decl == nullptr || !isTypeOwningDeclaration(decl)) {
+              return;
+            }
+            type_declarations.insert(decl);
+            if (SgDeclarationStatement *first =
+                    decl->get_firstNondefiningDeclaration()) {
+              type_declarations.insert(first);
+            }
+            if (SgDeclarationStatement *defining =
+                    decl->get_definingDeclaration()) {
+              type_declarations.insert(defining);
+            }
+          }
+
+          void visit(SgNode *node) override {
+            if (node == nullptr) {
+              fprintf(stderr,
+                      "REX_FRONTEND_INVARIANT[function-body-cache-domain]: "
+                      "old body traversal produced a null node\n");
+              ROSE_ABORT();
+            }
+            nodes.insert(node);
+            recordTypeDeclaration(isSgDeclarationStatement(node));
+            if (SgScopeStatement *scope = isSgScopeStatement(node)) {
+              if (DeclAttachmentSession::DeclarationList *declarations =
+                      get_scope_declaration_list(scope)) {
+                declaration_lists.insert(declarations);
+              }
+            }
+          }
+        } old_body_index{old_body_nodes, old_body_declaration_lists,
+                         old_body_type_decls};
+        if (function_root != nullptr) {
+          old_body_index.traverse(function_root, preorder);
+        } else if (root != nullptr) {
+          old_body_index.traverse(root, preorder);
+        }
+
         auto is_in_old_body = [&](SgNode *node) -> bool {
-          if (node == nullptr) {
-            return false;
-          }
-          if (root != nullptr) {
-            if (node == root) {
-              return true;
-            }
-            if (SageInterface::isAncestor(root, node)) {
-              return true;
-            }
-          }
-          if (function_root != nullptr) {
-            if (node == function_root) {
-              return true;
-            }
-            if (SageInterface::isAncestor(function_root, node)) {
-              return true;
-            }
-          }
-          return false;
+          return node != nullptr && old_body_nodes.count(node) != 0;
         };
 
         auto decl_in_old_body = [&](SgDeclarationStatement *decl) -> bool {
@@ -82016,48 +82656,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           }
           return false;
         };
-
-        std::unordered_set<SgDeclarationStatement *> old_body_type_decls;
-        if (root != nullptr) {
-          struct TypeDeclCollector : public AstSimpleProcessing {
-            std::unordered_set<SgDeclarationStatement *> &decls;
-
-            explicit TypeDeclCollector(
-                std::unordered_set<SgDeclarationStatement *> &type_decls)
-                : decls(type_decls) {}
-
-            static bool isTypeOwningDeclaration(SgDeclarationStatement *decl) {
-              return isSgClassDeclaration(decl) != nullptr ||
-                     isSgTemplateClassDeclaration(decl) != nullptr ||
-                     isSgTemplateInstantiationDecl(decl) != nullptr ||
-                     isSgEnumDeclaration(decl) != nullptr ||
-                     isSgTypedefDeclaration(decl) != nullptr ||
-                     isSgTemplateTypedefDeclaration(decl) != nullptr ||
-                     isSgNonrealDecl(decl) != nullptr;
-            }
-
-            void record(SgDeclarationStatement *decl) {
-              if (decl == nullptr || !isTypeOwningDeclaration(decl)) {
-                return;
-              }
-              decls.insert(decl);
-              if (SgDeclarationStatement *first =
-                      decl->get_firstNondefiningDeclaration()) {
-                decls.insert(first);
-              }
-              if (SgDeclarationStatement *def =
-                      decl->get_definingDeclaration()) {
-                decls.insert(def);
-              }
-            }
-
-            void visit(SgNode *node) override {
-              record(isSgDeclarationStatement(node));
-            }
-          } type_decl_collector(old_body_type_decls);
-
-          type_decl_collector.traverse(root, preorder);
-        }
 
         for (auto it = p_stmt_translation_map.begin();
              it != p_stmt_translation_map.end();) {
@@ -82093,10 +82691,14 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           }
         }
 
-        // These indexes own addresses of scope-local declaration vectors and
-        // their members.  Body replacement invalidates those addresses as one
-        // transaction; surviving lists are indexed lazily on their next use.
-        p_decl_attachment_session.clear();
+        // Retire only declaration vectors owned by the body transaction.
+        // Clearing the complete invocation index here forced every surviving
+        // global/class declaration list to be rescanned after each template
+        // body rebuild.
+        for (DeclAttachmentSession::DeclarationList *declarations :
+             old_body_declaration_lists) {
+          p_decl_attachment_session.retire(declarations);
+        }
 
         // DeclContext and record caches are semantic indexes into the same
         // Sage subtree.  Leaving one of these edges alive after deleting a
@@ -82678,6 +83280,77 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                 static_cast<void *>(body));
         ROSE_ABORT();
       }
+      if (definition_owns_source_surface &&
+          p_sage_preprocessor_recorder != nullptr) {
+        clang::SourceManager &source_manager =
+            p_compiler_instance->getSourceManager();
+        const clang::SourceLocation body_source_begin =
+            readClangApiValueDefined(
+                [&]() { return body_stmt->getBeginLoc(); });
+        const clang::SourceLocation declaration_source_begin =
+            readClangApiValueDefined(
+                [&]() { return function_decl->getBeginLoc(); });
+        if (body_source_begin.isInvalid() ||
+            declaration_source_begin.isInvalid()) {
+          fprintf(stderr,
+                  "REX_FRONTEND_INVARIANT[function-directive-boundary]: "
+                  "source definition=%s has no declaration/body source "
+                  "location\n",
+                  function_decl->getQualifiedNameAsString().c_str());
+          ROSE_ABORT();
+        }
+        const clang::SourceLocation body_expansion_begin =
+            source_manager.getExpansionLoc(body_source_begin);
+        const clang::SourceLocation declaration_expansion_begin =
+            source_manager.getExpansionLoc(declaration_source_begin);
+        if (body_expansion_begin.isInvalid() ||
+            declaration_expansion_begin.isInvalid()) {
+          fprintf(stderr,
+                  "REX_FRONTEND_INVARIANT[function-directive-boundary]: "
+                  "source definition=%s has no exact physical expansion "
+                  "boundary\n",
+                  function_decl->getQualifiedNameAsString().c_str());
+          ROSE_ABORT();
+        }
+        const bool whole_function_macro_expansion =
+            body_source_begin.isMacroID() &&
+            declaration_source_begin.isMacroID() &&
+            source_manager.getFileID(body_expansion_begin) ==
+                source_manager.getFileID(declaration_expansion_begin) &&
+            source_manager.getFileOffset(body_expansion_begin) ==
+                source_manager.getFileOffset(declaration_expansion_begin);
+        if (!whole_function_macro_expansion) {
+          const clang::SourceLocation body_begin =
+              source_manager.getFileLoc(body_expansion_begin);
+          const std::optional<clang::Token> declarator_end_token =
+              clang::Lexer::findPreviousToken(
+                  body_begin, source_manager,
+                  p_compiler_instance->getLangOpts(),
+                  /*IncludeComments=*/false);
+          const clang::SourceLocation declarator_end =
+              declarator_end_token.has_value()
+                  ? source_manager.getFileLoc(
+                        declarator_end_token->getLocation())
+                  : clang::SourceLocation();
+          if (body_begin.isInvalid() || declarator_end.isInvalid() ||
+              source_manager.getFileID(declarator_end) !=
+                  source_manager.getFileID(body_begin) ||
+              source_manager.getFileOffset(declarator_end) >=
+                  source_manager.getFileOffset(body_begin)) {
+            fprintf(stderr,
+                    "REX_FRONTEND_INVARIANT[function-directive-boundary]: "
+                    "source definition=%s has no exact completed-declarator "
+                    "boundary before its body\n",
+                    function_decl->getQualifiedNameAsString().c_str());
+            ROSE_ABORT();
+          }
+          const clang::SourceRange post_declarator_range(declarator_end,
+                                                         body_begin);
+          p_sage_preprocessor_recorder
+              ->transferDirectivesToFunctionBodyBoundary(
+                  post_declarator_range, defining_decl, function_definition);
+        }
+      }
       if (!definition_owns_source_surface) {
         if (exact_source_body != nullptr &&
             !semantic_source_function_owns_analysis_body &&
@@ -82737,11 +83410,11 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
   signature_translation_elapsed_ms =
       elapsed_ms_since(signature_translation_start);
-  function_build_start = std::chrono::steady_clock::now();
+  function_build_start = function_trace_time();
 
   auto translate_function_body_with_timing =
       [&](SgFunctionDeclaration *defining_decl) {
-        auto body_translation_start = std::chrono::steady_clock::now();
+        auto body_translation_start = function_trace_time();
         bool body_res = translate_function_body(defining_decl);
         function_body_translation_elapsed_ms +=
             elapsed_ms_since(body_translation_start);
@@ -83204,14 +83877,9 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
             // is not the concrete class-instantiation declaration.  Retire
             // every cache alias after signature construction so the builder
             // below creates the required typed instantiation identity.
-            for (auto mapped = p_decl_translation_map.begin();
-                 mapped != p_decl_translation_map.end();) {
-              if (mapped->second == phase_c_canonical) {
-                mapped = p_decl_translation_map.erase(mapped);
-              } else {
-                ++mapped;
-              }
-            }
+            p_decl_translation_map.eraseAllAliases(
+                phase_c_canonical,
+                "translateFunctionDeclCommon:reentrant-suppressed-member");
             phase_c_canonical = nullptr;
           }
         }
@@ -84627,8 +85295,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                 static_cast<void *>(symbol_scope));
         ROSE_ABORT();
       }
-      for (const auto &entry : *symbol_table->get_table()) {
-        SgSymbol *candidate = entry.second;
+      for (SgSymbol *candidate :
+           symbol_table->find_symbols_with_exact_basis(canonical)) {
         if (isSgAliasSymbol(candidate) == nullptr &&
             function_declaration_from_symbol(candidate) == canonical &&
             function_symbol_can_bind_to_declaration(
@@ -85342,12 +86010,11 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
           SgTemplateFunctionSymbol *exact_symbol = nullptr;
           SgTemplateFunctionDeclaration *exact_canonical = nullptr;
-          for (const auto &entry : *table->get_table()) {
-            if (entry.first != name) {
-              continue;
-            }
+          const auto exact_name_range = table->get_table()->equal_range(name);
+          for (auto entry = exact_name_range.first;
+               entry != exact_name_range.second; ++entry) {
             SgTemplateFunctionSymbol *candidate_symbol =
-                isSgTemplateFunctionSymbol(entry.second);
+                isSgTemplateFunctionSymbol(entry->second);
             SgTemplateFunctionDeclaration *candidate =
                 candidate_symbol != nullptr
                     ? isSgTemplateFunctionDeclaration(
@@ -85724,11 +86391,12 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         };
         SgFunctionSymbol *symbol = nullptr;
         SgFunctionDeclaration *canonical = nullptr;
-        for (const auto &entry : *table->get_table()) {
-          if (entry.first != symbol_key) {
-            continue;
-          }
-          SgFunctionSymbol *candidate_symbol = isSgFunctionSymbol(entry.second);
+        const auto exact_name_range =
+            table->get_table()->equal_range(symbol_key);
+        for (auto entry = exact_name_range.first;
+             entry != exact_name_range.second; ++entry) {
+          SgFunctionSymbol *candidate_symbol =
+              isSgFunctionSymbol(entry->second);
           SgFunctionDeclaration *candidate =
               function_declaration_from_symbol(candidate_symbol);
           if (candidate_symbol == nullptr || candidate == nullptr ||
@@ -86265,8 +86933,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                   static_cast<void *>(symbol_scope));
           ROSE_ABORT();
         }
-        for (const auto &entry : *symbol_table->get_table()) {
-          SgSymbol *candidate = entry.second;
+        for (SgSymbol *candidate :
+             symbol_table->find_symbols_with_exact_basis(canonical)) {
           if (isSgAliasSymbol(candidate) == nullptr &&
               function_declaration_from_symbol(candidate) == canonical &&
               function_symbol_can_bind_to_declaration(
@@ -86797,8 +87465,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
     function_build_pre_finalize_elapsed_ms =
         elapsed_ms_since(function_build_start);
-    auto function_build_declaration_finalize_start =
-        std::chrono::steady_clock::now();
+    auto function_build_declaration_finalize_start = function_trace_time();
 
     auto skip_linkage_context = [](clang::DeclContext *ctx) {
       ctx = markClangDeclContextObjectDefined(ctx);
@@ -88365,7 +89032,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   }
 
   {
-    auto normalize_scope_start = std::chrono::steady_clock::now();
+    auto normalize_scope_start = function_trace_time();
     if (!use_builder_member_symbol_fast_path) {
       publish_function_declaration_owner(sg_function_decl);
       publish_function_declaration_owner(isSgFunctionDeclaration(
@@ -88373,23 +89040,18 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       publish_function_declaration_owner(
           isSgFunctionDeclaration(sg_function_decl->get_definingDeclaration()));
 
-      auto ensure_symbol_start = std::chrono::steady_clock::now();
+      auto ensure_symbol_start = function_trace_time();
       require_exact_function_symbol(sg_function_decl);
       require_exact_function_symbol(isSgFunctionDeclaration(
           sg_function_decl->get_firstNondefiningDeclaration()));
       require_exact_function_symbol(
           isSgFunctionDeclaration(sg_function_decl->get_definingDeclaration()));
-      ensure_function_symbol_elapsed_ms =
-          std::chrono::duration_cast<std::chrono::milliseconds>(
-              std::chrono::steady_clock::now() - ensure_symbol_start)
-              .count();
+      ensure_function_symbol_elapsed_ms = elapsed_ms_since(ensure_symbol_start);
     }
     normalize_function_scope_elapsed_ms =
-        std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - normalize_scope_start)
-            .count();
+        elapsed_ms_since(normalize_scope_start);
   }
-  auto function_build_scope_finalize_start = std::chrono::steady_clock::now();
+  auto function_build_scope_finalize_start = function_trace_time();
 
   auto has_class_like_lexical_parent = [](SgFunctionDeclaration *decl) {
     SgScopeStatement *parent_scope =
@@ -90166,7 +90828,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
   function_build_scope_finalize_elapsed_ms =
       elapsed_ms_since(function_build_scope_finalize_start);
-  auto function_build_source_range_start = std::chrono::steady_clock::now();
+  auto function_build_source_range_start = function_trace_time();
   if (current_declaration_has_source_surface) {
     validate_current_function_source_publication(
         sg_function_decl,
@@ -90309,8 +90971,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   }
   function_build_source_range_elapsed_ms =
       elapsed_ms_since(function_build_source_range_start);
-  auto function_build_post_range_finalize_start =
-      std::chrono::steady_clock::now();
+  auto function_build_post_range_finalize_start = function_trace_time();
 
   if (SgMemberFunctionDeclaration *member_decl =
           isSgMemberFunctionDeclaration(sg_function_decl)) {
@@ -91495,7 +92156,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   }
 
   {
-    auto ensure_parameter_symbols_start = std::chrono::steady_clock::now();
+    auto ensure_parameter_symbols_start = function_trace_time();
     ensureFunctionParameterSymbols(*this, sg_function_decl);
     parameter_symbol_elapsed_ms =
         elapsed_ms_since(ensure_parameter_symbols_start);
@@ -91534,7 +92195,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   }
 
   *node = sg_function_decl;
-  auto visit_declarator_start = std::chrono::steady_clock::now();
+  auto visit_declarator_start = function_trace_time();
   bool visit_res = false;
   {
     FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
@@ -91542,7 +92203,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     visit_res = VisitDeclaratorDecl(function_decl, node) && res;
   }
   visit_declarator_elapsed_ms = elapsed_ms_since(visit_declarator_start);
-  post_visit_start = std::chrono::steady_clock::now();
+  post_visit_start = function_trace_time();
 
   auto is_instantiated_member_from_template_pattern = [&]() -> bool {
     if (p_compiler_instance == nullptr) {
@@ -93100,6 +93761,20 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
               static_cast<void *>(placeholder));
       ROSE_ABORT();
     }
+    auto reverse_inserted =
+        p_suppressed_implicit_function_instantiation_placeholder_aliases
+            [placeholder]
+                .insert(function_decl);
+    if (inserted.second != reverse_inserted.second) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[function-instantiation-placeholder]: "
+              "Clang specialization=%p/%s forward/reverse publication "
+              "disagrees for placeholder=%p\n",
+              static_cast<void *>(function_decl),
+              function_decl->getQualifiedNameAsString().c_str(),
+              static_cast<void *>(placeholder));
+      ROSE_ABORT();
+    }
   }
 
   if (on_demand_translation && !current_declaration_has_source_surface &&
@@ -93605,8 +94280,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     ROSE_ABORT();
   }
 
-  const double slow_function_threshold_ms = roseSlowFunctionTraceThresholdMs();
-  if (slow_function_threshold_ms > 0.0) {
+  if (trace_slow_function) {
     const double total_elapsed_ms =
         std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - function_translation_start)
@@ -95847,7 +96521,7 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
         std::move(exact_written_variable_parameter_names));
   }
   struct ExactWrittenVariableParameterGuard {
-    std::vector<ClangTemplateParameterNameMap> &stack;
+    ClangTemplateParameterNameContextStack &stack;
     bool active;
     ~ExactWrittenVariableParameterGuard() {
       if (active) {
@@ -98756,8 +99430,34 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
     setSynthesizedFileInfo(init_name);
   } else {
     ASSERT_not_null(p_compiler_instance);
-    const clang::SourceRange variable_lexical_range = preferredDeclSourceRange(
+    clang::SourceRange variable_lexical_range = preferredDeclSourceRange(
         var_decl, sg_var_decl, &p_compiler_instance->getSourceManager());
+    if (exact_source_group != nullptr) {
+      clang::SourceLocation declarator_begin =
+          readClangApiValueDefined([&]() { return var_decl->getLocation(); });
+      clang::SourceLocation declarator_end = variable_lexical_range.getEnd();
+      clang::SourceManager &source_manager =
+          p_compiler_instance->getSourceManager();
+      clang::SourceLocation physical_begin = source_manager.getFileLoc(
+          source_manager.getExpansionLoc(declarator_begin));
+      clang::SourceLocation physical_end = source_manager.getFileLoc(
+          source_manager.getExpansionLoc(declarator_end));
+      if (declarator_begin.isInvalid() || declarator_end.isInvalid() ||
+          physical_begin.isInvalid() || physical_end.isInvalid() ||
+          source_manager.getFileID(physical_begin) !=
+              source_manager.getFileID(physical_end) ||
+          source_manager.isBeforeInTranslationUnit(physical_end,
+                                                   physical_begin)) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[declaration-group-declarator-range]: "
+                "variable=%s has no exact single-file initialized-name "
+                "occurrence\n",
+                name.getString().c_str());
+        ROSE_ABORT();
+      }
+      variable_lexical_range =
+          clang::SourceRange(declarator_begin, declarator_end);
+    }
     applySourceRange(init_name, variable_lexical_range);
   }
 
@@ -99535,7 +100235,8 @@ bool ClangToSageTranslator::VisitDecompositionDecl(
     if (!sg_var_decl->get_variables().empty()) {
       SgInitializedName *init_name = sg_var_decl->get_variables().front();
       SgExprListExp *pattern = buildStructuredBindingPattern(
-          decomposition_decl, components, init_name->get_scope());
+          decomposition_decl, components, init_name->get_scope(),
+          p_semantic_function_body_traversal_depth != 0);
       ASSERT_not_null(pattern);
       ASSERT_require(pattern->get_parent() == nullptr);
 
@@ -100968,7 +101669,7 @@ bool ClangToSageTranslator::VisitVarTemplatePartialSpecializationDecl(
   p_template_parameter_surface_stack.push_back(
       {param_list, &var_decl->get_templateParameters(), var_decl});
   struct VarTemplatePartialParameterSurfaceGuard {
-    std::vector<ClangTemplateParameterNameMap> &name_stack;
+    ClangTemplateParameterNameContextStack &name_stack;
     std::vector<TemplateParameterSurfaceFrame> &surface_stack;
     const clang::TemplateParameterList *clang_parameters;
     const SgTemplateParameterPtrList *sage_parameters;
@@ -102422,6 +103123,9 @@ bool ClangToSageTranslator::VisitTranslationUnitDecl(
     roseClangPhaseTrace(
         "clang_main.HandleTranslationUnit.tuDecl.phaseCFunctionBodies.begin");
     TraceOnlyPerformance timer("Clang TU Phase C function bodies:");
+    const bool trace_phase_c_functions =
+        getenv("ROSE_PHASE_C_FUNCTION_TRACE") != nullptr;
+    std::size_t phase_c_function_ordinal = 0;
     while (!p_pending_function_body_completions.empty()) {
       clang::FunctionDecl *pending = p_pending_function_body_completions.back();
       p_pending_function_body_completions.pop_back();
@@ -102430,6 +103134,20 @@ bool ClangToSageTranslator::VisitTranslationUnitDecl(
         continue;
       }
       pending = markClangSpecificDeclDefined(pending);
+      ++phase_c_function_ordinal;
+      const auto phase_c_function_start =
+          trace_phase_c_functions ? std::chrono::steady_clock::now()
+                                  : std::chrono::steady_clock::time_point();
+      if (trace_phase_c_functions) {
+        fprintf(stderr,
+                "ROSE_PHASE_C_FUNCTION begin ordinal=%zu remaining=%zu "
+                "kind=%s name=%s\n",
+                phase_c_function_ordinal,
+                p_pending_function_body_completions.size(),
+                static_cast<clang::Decl *>(pending)->getDeclKindName(),
+                pending->getQualifiedNameAsString().c_str());
+        fflush(stderr);
+      }
       const clang::TemplateSpecializationKind pending_kind =
           readClangApiValueDefined(
               [&]() { return pending->getTemplateSpecializationKind(); });
@@ -102712,21 +103430,41 @@ bool ClangToSageTranslator::VisitTranslationUnitDecl(
                   : 0);
           ROSE_ABORT();
         }
-        p_suppressed_implicit_function_instantiation_placeholders.erase(
-            placeholder);
-        for (auto suppressed =
-                 p_suppressed_implicit_function_instantiation_placeholders
-                     .begin();
-             suppressed !=
-             p_suppressed_implicit_function_instantiation_placeholders.end();) {
-          if (suppressed->second == suppressed_declaration) {
-            suppressed =
-                p_suppressed_implicit_function_instantiation_placeholders.erase(
-                    suppressed);
-          } else {
-            ++suppressed;
-          }
+        auto suppressed_aliases =
+            p_suppressed_implicit_function_instantiation_placeholder_aliases
+                .find(suppressed_declaration);
+        if (suppressed_aliases ==
+                p_suppressed_implicit_function_instantiation_placeholder_aliases
+                    .end() ||
+            suppressed_aliases->second.empty()) {
+          fprintf(stderr,
+                  "REX_FRONTEND_INVARIANT[function-instantiation-"
+                  "placeholder]: suppressed declaration=%p has no exact "
+                  "reverse Clang aliases\n",
+                  static_cast<void *>(suppressed_declaration));
+          ROSE_ABORT();
         }
+        for (clang::FunctionDecl *alias : suppressed_aliases->second) {
+          auto suppressed =
+              p_suppressed_implicit_function_instantiation_placeholders.find(
+                  alias);
+          if (suppressed ==
+                  p_suppressed_implicit_function_instantiation_placeholders
+                      .end() ||
+              suppressed->second != suppressed_declaration) {
+            fprintf(stderr,
+                    "REX_FRONTEND_INVARIANT[function-instantiation-"
+                    "placeholder]: reverse alias=%p does not map to exact "
+                    "suppressed declaration=%p\n",
+                    static_cast<void *>(alias),
+                    static_cast<void *>(suppressed_declaration));
+            ROSE_ABORT();
+          }
+          p_suppressed_implicit_function_instantiation_placeholders.erase(
+              suppressed);
+        }
+        p_suppressed_implicit_function_instantiation_placeholder_aliases.erase(
+            suppressed_aliases);
         if (exact_completed_placeholder_family ||
             exact_completed_placeholder_replacement) {
           // Population of an enclosing semantic class specialization can
@@ -102736,12 +103474,9 @@ bool ClangToSageTranslator::VisitTranslationUnitDecl(
           // earlier hidden shell.  Retire every stale shell alias and consume
           // the suppression transaction without rebuilding either completed
           // declaration.
-          for (auto mapped = p_decl_translation_map.begin();
-               mapped != p_decl_translation_map.end(); ++mapped) {
-            if (mapped->second == suppressed_declaration) {
-              mapped->second = completed_placeholder_declaration;
-            }
-          }
+          p_decl_translation_map.replaceAllAliases(
+              suppressed_declaration, completed_placeholder_declaration,
+              "Issue115 Phase C completed placeholder");
           inst_node = completed_placeholder_declaration;
         } else {
           // Clang can publish the specialization and its instantiated
@@ -102752,28 +103487,9 @@ bool ClangToSageTranslator::VisitTranslationUnitDecl(
           // however, no cache key may keep that incomplete ordinary-function
           // identity alive: such an alias makes Traverse re-enter through the
           // stale shell instead of constructing the typed instantiation.
-          for (auto mapped = p_decl_translation_map.begin();
-               mapped != p_decl_translation_map.end();) {
-            if (mapped->second == suppressed_declaration) {
-              mapped = p_decl_translation_map.erase(mapped);
-            } else {
-              ++mapped;
-            }
-          }
-          for (auto suppressed =
-                   p_suppressed_implicit_function_instantiation_placeholders
-                       .begin();
-               suppressed !=
-               p_suppressed_implicit_function_instantiation_placeholders
-                   .end();) {
-            if (suppressed->second == suppressed_declaration) {
-              suppressed =
-                  p_suppressed_implicit_function_instantiation_placeholders
-                      .erase(suppressed);
-            } else {
-              ++suppressed;
-            }
-          }
+          p_decl_translation_map.eraseAllAliases(
+              suppressed_declaration,
+              "Issue115 Phase C incomplete placeholder");
           inst_node = Traverse(pending);
         }
       } else if (existing != p_decl_translation_map.end()) {
@@ -103293,11 +104009,37 @@ bool ClangToSageTranslator::VisitTranslationUnitDecl(
       }
 
       p_pending_function_body_completions_set.erase(pending);
+      if (trace_phase_c_functions) {
+        const double elapsed_ms =
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - phase_c_function_start)
+                .count();
+        fprintf(stderr,
+                "ROSE_PHASE_C_FUNCTION end ordinal=%zu elapsed_ms=%.3f "
+                "remaining=%zu kind=%s name=%s\n",
+                phase_c_function_ordinal, elapsed_ms,
+                p_pending_function_body_completions.size(),
+                static_cast<clang::Decl *>(pending)->getDeclKindName(),
+                pending->getQualifiedNameAsString().c_str());
+        fflush(stderr);
+      }
     }
     if (!p_active_function_body_completions.empty()) {
       fprintf(stderr,
               "REX_FRONTEND_INVARIANT[function-instantiation-phase-c]: "
               "translation unit ended with an active body completion\n");
+      ROSE_ABORT();
+    }
+    p_decl_translation_map.validate("Phase C function body completion");
+    if (!p_suppressed_implicit_function_instantiation_placeholders.empty() ||
+        !p_suppressed_implicit_function_instantiation_placeholder_aliases
+             .empty()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[function-instantiation-placeholder]: "
+              "Phase C ended with forward/reverse suppressed aliases=%zu/%zu\n",
+              p_suppressed_implicit_function_instantiation_placeholders.size(),
+              p_suppressed_implicit_function_instantiation_placeholder_aliases
+                  .size());
       ROSE_ABORT();
     }
     if (!p_pending_deduced_template_function_references.empty()) {

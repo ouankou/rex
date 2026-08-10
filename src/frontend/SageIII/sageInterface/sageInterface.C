@@ -1398,19 +1398,18 @@ int SageInterface::set_name(SgInitializedName *initializedNameNode,
 
   SgSymbol *associated_symbol = (*found_it).second;
 
-  // erase the name from there
-  scope_stmt->get_symbol_table()->get_table()->erase(found_it);
-
-  // insert the new_name in the symbol table
-  found_it = scope_stmt->get_symbol_table()->get_table()->insert(
-      pair<SgName, SgSymbol *>(new_name, associated_symbol));
-  // if insertion failed
-  if (found_it == scope_stmt->get_symbol_table()->get_table()->end()) {
+  // A rename is a symbol-table mutation, not a raw hash-table edit.  Route it
+  // through the exact remove/insert transaction so the declaration-basis,
+  // signature, stored-name, and membership indexes stay synchronized.
+  SgSymbolTable *symbol_table = scope_stmt->get_symbol_table();
+  symbol_table->remove(associated_symbol);
+  if (associated_symbol->get_parent() != NULL ||
+      symbol_table->exists(associated_symbol)) {
     fprintf(stderr,
             "REX_SAGE_INTERFACE_INVARIANT[rename-symbol]: declaration=%p "
-            "new-name=%s could not insert its exact symbol into scope=%p\n",
-            static_cast<void *>(initializedNameNode), new_name.str(),
-            static_cast<void *>(scope_stmt));
+            "symbol=%p did not detach before rename\n",
+            static_cast<void *>(initializedNameNode),
+            static_cast<void *>(associated_symbol));
     ROSE_ABORT();
   }
 
@@ -1422,6 +1421,16 @@ int SageInterface::set_name(SgInitializedName *initializedNameNode,
 
   // p_name = new_name;
   initializedNameNode->set_name(new_name);
+  symbol_table->insert(new_name, associated_symbol);
+  if (associated_symbol->get_parent() != symbol_table ||
+      !symbol_table->exists(associated_symbol)) {
+    fprintf(stderr,
+            "REX_SAGE_INTERFACE_INVARIANT[rename-symbol]: declaration=%p "
+            "new-name=%s did not republish its exact symbol in scope=%p\n",
+            static_cast<void *>(initializedNameNode), new_name.str(),
+            static_cast<void *>(scope_stmt));
+    ROSE_ABORT();
+  }
 
   // DQ (11/30/2018): Mark the enclosing statement as modified, so that it will
   // be recognized in the header file unparsing as being a header file that
@@ -46558,7 +46567,19 @@ SgDeclarationStatement *SageInterface::replaceFunctionDefinitionWithDeclaration(
     prototype->set_firstNondefiningDeclaration(canonicalFirst);
     prototype->set_definingDeclaration(functionDefinition);
   }
+  SgNode *priorFunctionSymbolBasis = functionSymbol->get_symbol_basis();
   functionSymbol->set_declaration(canonicalFirst);
+  SgSymbolTable *functionSymbolTable =
+      isSgSymbolTable(functionSymbol->get_parent());
+  if (functionSymbolTable == NULL) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[function-definition-family]: symbol=%p has "
+            "no exact table during canonical replacement\n",
+            static_cast<void *>(functionSymbol));
+    ROSE_ABORT();
+  }
+  functionSymbolTable->reindex_symbol_basis(functionSymbol,
+                                            priorFunctionSymbolBasis);
 
   SgAuxiliaryDeclarationList *auxiliaryOwner =
       isSgAuxiliaryDeclarationList(functionDefinition->get_parent());

@@ -211,6 +211,9 @@ class AstQuery : public AST_Query_Base
       AstQueryReturnType;
   AstQueryReturnType listOfNodes;
 
+  void visitAndMerge(SgNode *node, std::false_type);
+  void visitAndMerge(SgNode *node, std::true_type);
+
 public:
   AstQuery();
 
@@ -264,6 +267,21 @@ void AstQuery<AST_Query_Base, NodeFunctional>::clear_listOfNodes() {
 };
 
 template <typename AST_Query_Base, typename NodeFunctional>
+void AstQuery<AST_Query_Base, NodeFunctional>::visitAndMerge(SgNode *node,
+                                                             std::false_type) {
+  AstQueryNamespace::Merge(listOfNodes, detail::invoke(*nodeFunc, node));
+}
+
+template <typename AST_Query_Base, typename NodeFunctional>
+void AstQuery<AST_Query_Base, NodeFunctional>::visitAndMerge(SgNode *node,
+                                                             std::true_type) {
+  // A void pointer is the legacy query API's explicit side-effect-only result
+  // type.  Merge(void*, void*) is necessarily a no-op, so do not make one
+  // external function call per visited AST node after invoking the predicate.
+  detail::invoke(*nodeFunc, node);
+}
+
+template <typename AST_Query_Base, typename NodeFunctional>
 void AstQuery<AST_Query_Base, NodeFunctional>::visit(SgNode *node) {
   ROSE_ASSERT(node != NULL);
   ROSE_ASSERT(nodeFunc != NULL);
@@ -277,7 +295,7 @@ void AstQuery<AST_Query_Base, NodeFunctional>::visit(SgNode *node) {
 
   // This function assemble the elements of the input list (a list of lists) to
   // form the output (a single list)
-  AstQueryNamespace::Merge(listOfNodes, detail::invoke(*nodeFunc, node));
+  visitAndMerge(node, std::is_same<AstQueryReturnType, void *>());
 }
 
 /********************************************************************************

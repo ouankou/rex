@@ -39,53 +39,20 @@ namespace {
 enum class StatementOutputOwnership { lexical, auxiliary };
 
 SgAuxiliaryDeclarationList *
-requireExactAuxiliaryDeclarationOwner(SgNode *node, const char *contract) {
-  ASSERT_not_null(node);
-  ASSERT_not_null(contract);
-
-  std::set<SgNode *> visited;
-  SgNode *child = node;
-  for (SgNode *parent = node->get_parent(); parent != nullptr;
-       child = parent, parent = parent->get_parent()) {
-    if (!visited.insert(parent).second) {
-      fprintf(stderr,
-              "REX_UNPARSE_INVARIANT[%s]: node=%p type=%s has a parent "
-              "cycle\n",
-              contract, static_cast<void *>(node), node->class_name().c_str());
-      ROSE_ABORT();
-    }
-
-    SgAuxiliaryDeclarationList *container =
-        isSgAuxiliaryDeclarationList(parent);
-    if (container == nullptr) {
-      continue;
-    }
-
-    SgDeclarationStatement *declaration = isSgDeclarationStatement(child);
-    SgScopeStatement *owner = isSgScopeStatement(container->get_parent());
-    const SgDeclarationStatementPtrList &declarations =
-        container->get_declarations();
-    if (declaration == nullptr || owner == nullptr ||
-        owner->get_auxiliary_declarations() != container ||
-        std::count(declarations.begin(), declarations.end(), declaration) !=
-            1) {
-      fprintf(stderr,
-              "REX_UNPARSE_INVARIANT[%s]: node=%p type=%s has malformed "
-              "auxiliary declaration ownership\n",
-              contract, static_cast<void *>(node), node->class_name().c_str());
-      ROSE_ABORT();
-    }
-    return container;
-  }
-  return nullptr;
+requireExactAuxiliaryDeclarationOwner(Unparser *unparser, SgNode *node,
+                                      const char *contract) {
+  ASSERT_not_null(unparser);
+  return unparser->requireExactAuxiliaryDeclarationOwner(node, contract);
 }
 
 StatementOutputOwnership
-requireExactStatementOutputOwnership(SgStatement *statement,
+requireExactStatementOutputOwnership(Unparser *unparser, SgStatement *statement,
                                      const char *contract) {
+  ASSERT_not_null(unparser);
   ASSERT_not_null(statement);
   ASSERT_not_null(contract);
-  if (requireExactAuxiliaryDeclarationOwner(statement, contract) != nullptr) {
+  if (requireExactAuxiliaryDeclarationOwner(unparser, statement, contract) !=
+      nullptr) {
     return StatementOutputOwnership::auxiliary;
   }
 
@@ -110,17 +77,7 @@ requireExactStatementOutputOwnership(SgStatement *statement,
             statement->class_name().c_str());
     ROSE_ABORT();
   }
-  const std::vector<SgNode *> successors =
-      parent->get_traversalSuccessorContainer();
-  if (std::count(successors.begin(), successors.end(), statement) != 1) {
-    fprintf(stderr,
-            "REX_UNPARSE_INVARIANT[%s]: lexical statement=%p type=%s is not "
-            "owned exactly once by parent=%p type=%s\n",
-            contract, static_cast<void *>(statement),
-            statement->class_name().c_str(), static_cast<void *>(parent),
-            parent->class_name().c_str());
-    ROSE_ABORT();
-  }
+  unparser->requireExactStatementChild(parent, statement, contract);
   return StatementOutputOwnership::lexical;
 }
 
@@ -1876,7 +1833,7 @@ bool UnparseLanguageIndependentConstructs::statementFromFile(
   }
 
   const StatementOutputOwnership ownership =
-      requireExactStatementOutputOwnership(stmt, "statement-output-owner");
+      requireExactStatementOutputOwnership(unp, stmt, "statement-output-owner");
   if (ownership == StatementOutputOwnership::auxiliary) {
     if (info.usedInUparseToStringFunction()) {
       fprintf(stderr, "REX_UNPARSE_INVARIANT[standalone-auxiliary-statement]: "
@@ -5948,8 +5905,45 @@ void UnparseLanguageIndependentConstructs::unparseStatement(
 //  still use the original unparse function because they don't have file_info
 //  and therefore, will not print out file information
 //-----------------------------------------------------------------------------------
+bool UnparseLanguageIndependentConstructs::
+    locatedNodeHasConditionalRegionOpening(
+        const SgLocatedNode *node,
+        PreprocessingInfo::RelativePositionType relativePosition) const {
+  AttachedPreprocessingInfoType *attached =
+      node != nullptr
+          ? const_cast<SgLocatedNode *>(node)->getAttachedPreprocessingInfo()
+          : nullptr;
+  if (attached == nullptr) {
+    return false;
+  }
+
+  for (size_t index = 0; index < attached->size(); ++index) {
+    PreprocessingInfo *info =
+        requiredAttachedPreprocessingInfoEntry(*attached, index);
+    if (info->getRelativePosition() != relativePosition) {
+      continue;
+    }
+    switch (info->getTypeOfDirective()) {
+    case PreprocessingInfo::CpreprocessorIfdefDeclaration:
+    case PreprocessingInfo::CpreprocessorIfndefDeclaration:
+    case PreprocessingInfo::CpreprocessorIfDeclaration:
+      return true;
+    default:
+      break;
+    }
+  }
+
+  return false;
+}
+
 void UnparseLanguageIndependentConstructs::unparseExpression(
     SgExpression *expr, SgUnparse_Info &info) {
+  unparseExpressionWithListSeparators(expr, info, {});
+}
+
+void UnparseLanguageIndependentConstructs::unparseExpressionWithListSeparators(
+    SgExpression *expr, SgUnparse_Info &info,
+    const ExpressionListSeparatorPlacement &separators) {
   // directives(expr);
 
   // DQ (3/21/2004): This assertion should have been in place before now!
@@ -6064,8 +6058,28 @@ void UnparseLanguageIndependentConstructs::unparseExpression(
       validatedOriginalExpressionSource(expr, "unparse-expression");
 
   if (source_expression != nullptr && !info.SkipConstantFoldedExpressions()) {
-    unparseExpression(source_expression, info);
+    // Separator placement belongs to the exact expression syntax that is
+    // emitted.  Source-expression provenance is an owned syntax edge, so pass
+    // the placement through the semantic wrapper instead of printing a comma
+    // before the source node's opening directives.
+    unparseExpressionWithListSeparators(source_expression, info, separators);
   } else {
+    if (separators.afterLeadingPreprocessing) {
+      if (!locatedNodeHasConditionalRegionOpening(expr,
+                                                  PreprocessingInfo::before)) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[expression-list-separator]: "
+                "expression=%p/%s requests a leading separator after "
+                "preprocessing without an exact conditional opening\n",
+                static_cast<void *>(expr), expr->class_name().c_str());
+        ROSE_ABORT();
+      }
+      curprint(", ");
+    }
+    if (separators.surroundElementWithParentheses) {
+      curprint("(");
+    }
+
     // DQ (5/21/2004): revised need_paren handling in legacy frontend/SAGE
     // III and within SAGE III IR) QY (7/9/2004): revised to use the new
     // unp->u_sage->PrintStartParen test
@@ -6169,6 +6183,13 @@ void UnparseLanguageIndependentConstructs::unparseExpression(
     if (printParen) {
       // Output the right paren
       curprint(")");
+    }
+
+    if (separators.surroundElementWithParentheses) {
+      curprint(")");
+    }
+    if (separators.beforeTrailingPreprocessing) {
+      curprint(", ");
     }
 
     // calls the logical_unparse function in the sage files
@@ -7237,6 +7258,7 @@ void UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
     infoSaysGoAhead = (infoSaysGoAhead == true) ||
                       (isSgExpression(stmt) != NULL) ||
                       (isSgInitializedName(stmt) != NULL) ||
+                      (isSgFunctionParameterList(stmt) != NULL) ||
                       (isSgHeaderFileBody(stmt) != NULL);
 
     // DQ (2/27/2019): Added assertions for debugging.
@@ -9017,11 +9039,25 @@ void UnparseLanguageIndependentConstructs::unparseExprList(
 #endif
 
   SgExpressionPtrList::iterator i = expr_list->get_expressions().begin();
+  bool separatorBelongsToCurrentExpression = false;
 
   if (i != expr_list->get_expressions().end()) {
     while (i != expr_list->get_expressions().end()) {
       SgExpression *argument_expr = *i;
       ASSERT_not_null(argument_expr);
+      if (argument_expr->get_parent() != expr_list) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[expression-list-owner]: list=%p "
+                "element=%p/%s has parent=%p/%s\n",
+                static_cast<void *>(expr_list),
+                static_cast<void *>(argument_expr),
+                argument_expr->class_name().c_str(),
+                static_cast<void *>(argument_expr->get_parent()),
+                argument_expr->get_parent() != nullptr
+                    ? argument_expr->get_parent()->class_name().c_str()
+                    : "<null>");
+        ROSE_ABORT();
+      }
       SgType *argument_type = nullptr;
       if (argument_expr->has_semantic_value_type()) {
         argument_type = argument_expr->get_type();
@@ -9083,22 +9119,56 @@ void UnparseLanguageIndependentConstructs::unparseExprList(
       printf("    needParen = %s\n", needParen ? "true" : "false");
 #endif
 
-      if (needParen)
-        curprint("(");
       SgUnparse_Info newinfo(info);
       // An expression-list element starts an independent expression grammar.
       // SkipBaseType is a comma-declarator state and must not leak into a
       // constructor argument, lambda, cast operand, or any other expression.
       newinfo.unset_SkipBaseType();
-      unparseExpression(*i, newinfo);
-      if (needParen)
-        curprint(")");
+      SgExpressionPtrList::iterator next = i;
+      ++next;
+      bool separatorBelongsToNextExpression = false;
+      if (next != expr_list->get_expressions().end()) {
+        SgExpression *next_expression = *next;
+        ASSERT_not_null(next_expression);
+        if (next_expression->get_parent() != expr_list) {
+          fprintf(stderr,
+                  "REX_UNPARSE_INVARIANT[expression-list-owner]: list=%p "
+                  "following element=%p/%s has parent=%p/%s\n",
+                  static_cast<void *>(expr_list),
+                  static_cast<void *>(next_expression),
+                  next_expression->class_name().c_str(),
+                  static_cast<void *>(next_expression->get_parent()),
+                  next_expression->get_parent() != nullptr
+                      ? next_expression->get_parent()->class_name().c_str()
+                      : "<null>");
+          ROSE_ABORT();
+        }
+        SgExpression *next_separator_owner = next_expression;
+        SgExpression *next_source_expression =
+            validatedOriginalExpressionSource(next_expression,
+                                              "expression-list-separator");
+        if (next_source_expression != nullptr &&
+            !newinfo.SkipConstantFoldedExpressions()) {
+          next_separator_owner = next_source_expression;
+        }
+        separatorBelongsToNextExpression =
+            locatedNodeHasConditionalRegionOpening(next_separator_owner,
+                                                   PreprocessingInfo::before);
+      }
+      ExpressionListSeparatorPlacement separators;
+      separators.afterLeadingPreprocessing =
+          separatorBelongsToCurrentExpression;
+      separators.beforeTrailingPreprocessing =
+          next != expr_list->get_expressions().end() &&
+          !separatorBelongsToNextExpression;
+      separators.surroundElementWithParentheses = needParen;
+      unparseExpressionWithListSeparators(argument_expr, newinfo, separators);
 
-      i++;
-      if (i != expr_list->get_expressions().end())
-        curprint(", ");
+      separatorBelongsToCurrentExpression = separatorBelongsToNextExpression;
+      i = next;
     }
   }
+  ROSE_ASSERT(separatorBelongsToCurrentExpression == false);
 
 #if DEBUG__unparseExprList
   printf("Leaving unparseExprList()\n");

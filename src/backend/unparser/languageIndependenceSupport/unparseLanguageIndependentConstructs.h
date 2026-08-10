@@ -78,6 +78,18 @@ protected:
   bool frontierRequiresPartialTokenUnparse(SgSourceFile *sourceFile,
                                            SgStatement *candidate);
 
+  struct ExpressionListSeparatorPlacement {
+    bool afterLeadingPreprocessing = false;
+    bool beforeTrailingPreprocessing = false;
+    bool surroundElementWithParentheses = false;
+  };
+  bool locatedNodeHasConditionalRegionOpening(
+      const SgLocatedNode *node,
+      PreprocessingInfo::RelativePositionType relativePosition) const;
+  void unparseExpressionWithListSeparators(
+      SgExpression *expr, SgUnparse_Info &info,
+      const ExpressionListSeparatorPlacement &separators);
+
 public:
   enum namespace_source_fragment_state_enum {
     e_namespace_source_fragment_complete,

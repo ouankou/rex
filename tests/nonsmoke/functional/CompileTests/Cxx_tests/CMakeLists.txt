@@ -33,6 +33,7 @@ set(CXX_TESTCODES
   rex_frontend_static_member_publication.cpp
   rex_frontend_template_redeclaration_parameter_spelling.cpp
   rex_frontend_namespace_source_fragments.cpp
+  rex_frontend_preprocessor_scope_gap.cpp
   rex_unparser_exact_source_surface_ownership.cpp
   rex_unparser_implicit_copy_and_arrow.cpp
   rex_unparser_macro_expansion_surface.cpp
@@ -59,6 +60,7 @@ set(CXX_TESTCODES
   rex_unparser_if_body_parenting.cpp
   rex_unparser_lambda_capture_parent.cpp
   rex_unparser_structured_binding_parent.cpp
+  rex_frontend_structured_binding_template_body.cpp
   rex_unparser_template_argument_ownership.cpp
   rex_unparser_inherited_typedef_parameter.C
   rex_unparser_anonymous_enum_declarator_group.cpp
@@ -3124,6 +3126,9 @@ list(APPEND CXX_TESTCODES
   test2013_09.C)
 list(REMOVE_DUPLICATES CXX_TESTCODES)
 
+list(APPEND CXX_TESTCODES_GNUXX17
+  rex_frontend_structured_binding_template_body.cpp)
+
 string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _rex_cxx_tests_processor)
 set(REX_CXX_TESTS_HOST_IS_X86 FALSE)
 if(_rex_cxx_tests_processor MATCHES "^(x86_64|amd64|i[3-6]86)$")
@@ -3836,6 +3841,16 @@ add_executable(
 )
 target_link_libraries(
   rex_frontend_implicit_control_flow_scope_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+add_executable(
+  rex_frontend_preprocessor_scope_gap_translator
+  rex_frontend_preprocessor_scope_gap_translator.cpp
+)
+target_link_libraries(
+  rex_frontend_preprocessor_scope_gap_translator
   ROSE_DLL
   ${link_with_libraries}
 )
@@ -5576,6 +5591,52 @@ set_tests_properties(
 rex_lock_test_for_input(
   Cxx_tests_rex_frontend_implicit_control_flow_scope_structure
   rex_frontend_implicit_control_flow_scope.cpp)
+
+add_test(
+  NAME Cxx_tests_rex_frontend_preprocessor_scope_gap_structure
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND
+    $<TARGET_FILE:rex_frontend_preprocessor_scope_gap_translator>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep -rose:skip_unparse
+    ${ROSE_INCLUDE_FLAGS}
+    -std=c++14
+    -DREX_FRONTEND_CONDITIONAL_ARGUMENT_ENABLED=1
+    -DREX_FRONTEND_CONDITIONAL_CTOR_ENABLED=1
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_preprocessor_scope_gap.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_frontend_preprocessor_scope_gap_structure
+  PROPERTIES LABELS "Cxx_tests;rex;CFE;frontend;contracts")
+rex_lock_test_for_input(
+  Cxx_tests_rex_frontend_preprocessor_scope_gap_structure
+  rex_frontend_preprocessor_scope_gap.cpp)
+
+set(_rex_preprocessor_conditional_separator_output
+  "${CMAKE_CURRENT_BINARY_DIR}/rex_frontend_preprocessor_conditional_separator.output.cpp")
+add_test(
+  NAME Cxx_tests_rex_frontend_preprocessor_conditional_separator_roundtrip
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "output=\"$1\"; shift; rm -f \"$output\"; \"$@\" && test -s \"$output\" && test \"$(grep -Fc '#if REX_FRONTEND_CONDITIONAL_ARGUMENT_ENABLED' \"$output\")\" -eq 1 && test \"$(grep -Fc '#if REX_FRONTEND_CONDITIONAL_CTOR_ENABLED' \"$output\")\" -eq 1 && '${CMAKE_CXX_COMPILER}' -std=gnu++14 -DREX_FRONTEND_CONDITIONAL_ARGUMENT_ENABLED=1 -DREX_FRONTEND_CONDITIONAL_CTOR_ENABLED=1 -fsyntax-only \"$output\" && '${CMAKE_CXX_COMPILER}' -std=gnu++14 -DREX_FRONTEND_CONDITIONAL_ARGUMENT_ENABLED=0 -DREX_FRONTEND_CONDITIONAL_CTOR_ENABLED=0 -fsyntax-only \"$output\""
+    dummy
+    "${_rex_preprocessor_conditional_separator_output}"
+    $<TARGET_FILE:testTranslator>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep
+    -rose:output "${_rex_preprocessor_conditional_separator_output}"
+    ${ROSE_INCLUDE_FLAGS}
+    -std=gnu++14
+    -DREX_FRONTEND_CONDITIONAL_ARGUMENT_ENABLED=1
+    -DREX_FRONTEND_CONDITIONAL_CTOR_ENABLED=1
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_preprocessor_scope_gap.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_frontend_preprocessor_conditional_separator_roundtrip
+  PROPERTIES LABELS "Cxx_tests;rex;CFE;UNPARSER;contracts")
+rex_lock_test_for_input(
+  Cxx_tests_rex_frontend_preprocessor_conditional_separator_roundtrip
+  rex_frontend_preprocessor_scope_gap.cpp)
 
 add_test(
   NAME Cxx_tests_rex_malformed_implicit_control_flow_scope_is_rejected

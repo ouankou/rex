@@ -115,9 +115,13 @@ void checkDeclaratorBoundaryCommentOwner(
     SgSourceFile *source,
     const std::map<std::string, SgVariableDeclaration *> &byName) {
   ROSE_ASSERT(source != nullptr);
-  SgVariableDeclaration *expectedOwner = byName.at("rex_group_comment_b");
-  SgDeclarationGroupStatement *group = requireGroup(expectedOwner);
-  ROSE_ASSERT(group->get_declarations().at(1) == expectedOwner);
+  SgVariableDeclaration *followingMember = byName.at("rex_group_comment_b");
+  SgDeclarationGroupStatement *group = requireGroup(followingMember);
+  ROSE_ASSERT(group->get_declarations().at(1) == followingMember);
+  ROSE_ASSERT(followingMember->get_variables().size() == 1);
+  SgInitializedName *expectedOwner = followingMember->get_variables().front();
+  ROSE_ASSERT(expectedOwner != nullptr);
+  ROSE_ASSERT(expectedOwner->get_parent() == followingMember);
 
   size_t matches = 0;
   for (SgNode *node : NodeQuery::querySubTree(source, V_SgLocatedNode)) {
@@ -137,6 +141,13 @@ void checkDeclaratorBoundaryCommentOwner(
       ++matches;
       ROSE_ASSERT(located == expectedOwner);
       ROSE_ASSERT(info->getRelativePosition() == PreprocessingInfo::before);
+      ROSE_ASSERT(info->getAttachedOwner() == expectedOwner);
+      ROSE_ASSERT(info->get_file_info() != nullptr);
+      ROSE_ASSERT(expectedOwner->get_startOfConstruct() != nullptr);
+      ROSE_ASSERT(info->get_file_info()->isSameFile(
+          *expectedOwner->get_startOfConstruct()));
+      ROSE_ASSERT(info->get_file_info()->get_line() <=
+                  expectedOwner->get_startOfConstruct()->get_line());
     }
   }
   ROSE_ASSERT(matches == 1);

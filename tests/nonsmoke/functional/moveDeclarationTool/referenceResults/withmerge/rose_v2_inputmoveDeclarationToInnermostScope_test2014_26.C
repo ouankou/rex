@@ -14,4 +14,4 @@ void foo() {
     int x = 4;
   }
 }
-}
+} // closing brace for namespace statement

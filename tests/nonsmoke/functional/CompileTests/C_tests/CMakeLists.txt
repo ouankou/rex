@@ -1215,6 +1215,8 @@ set(C_TESTCODES_SPECIAL
   rex_frontend_initializer_include_boundary.c
   rex_frontend_preprocessing_anchor_contract.c
   rex_frontend_preprocessing_empty_translation_unit.c
+  rex_frontend_preprocessing_include_occurrence.c
+  rex_frontend_preprocessing_parameter_boundary.c
   rex_frontend_preprocessing_terminal_directive.c
   test2003_12.c
   test2005_168.c
@@ -1609,6 +1611,8 @@ rex_lock_test_for_input(
 foreach(_rex_preprocessing_anchor_input IN ITEMS
     rex_frontend_preprocessing_anchor_contract.c
     rex_frontend_preprocessing_empty_translation_unit.c
+    rex_frontend_preprocessing_include_occurrence.c
+    rex_frontend_preprocessing_parameter_boundary.c
     rex_frontend_preprocessing_terminal_directive.c)
   get_filename_component(
     _rex_preprocessing_anchor_name
@@ -1617,12 +1621,24 @@ foreach(_rex_preprocessing_anchor_input IN ITEMS
   )
   set(_rex_preprocessing_anchor_test
     C_tests_${_rex_preprocessing_anchor_name}_structure)
+  set(_rex_preprocessing_anchor_flags)
+  if(_rex_preprocessing_anchor_input STREQUAL
+      "rex_frontend_preprocessing_parameter_boundary.c")
+    list(APPEND _rex_preprocessing_anchor_flags
+      -DREX_PREPROCESSING_TRAILING_PARAMETER_ENABLED=1
+      -DREX_PREPROCESSING_LEADING_PARAMETER_ENABLED=1)
+  elseif(_rex_preprocessing_anchor_input STREQUAL
+      "rex_frontend_preprocessing_anchor_contract.c")
+    list(APPEND _rex_preprocessing_anchor_flags
+      -DREX_PREPROCESSING_CONDITIONAL_DECLARATOR_ENABLED=1)
+  endif()
   add_test(
     NAME ${_rex_preprocessing_anchor_test}
     WORKING_DIRECTORY ${_c_tests_special_dir}
     COMMAND
       $<TARGET_FILE:rex_frontend_preprocessing_anchor_contract_translator>
       ${C_TEST_ROSE_FLAGS} -std=c11
+      ${_rex_preprocessing_anchor_flags}
       -rose:collectAllCommentsAndDirectives -rose:skipfinalCompileStep
       -c ${CMAKE_CURRENT_SOURCE_DIR}/${_rex_preprocessing_anchor_input}
   )
@@ -1633,6 +1649,51 @@ foreach(_rex_preprocessing_anchor_input IN ITEMS
     ${_rex_preprocessing_anchor_test}
     ${_rex_preprocessing_anchor_input})
 endforeach()
+
+add_test(
+  NAME C_tests_rex_frontend_preprocessing_parameter_boundary_roundtrip
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "rm -rf rex_frontend_preprocessing_parameter_boundary && \
+     mkdir rex_frontend_preprocessing_parameter_boundary && \
+     cd rex_frontend_preprocessing_parameter_boundary && \
+     ${C_TEST_TRANSLATOR} ${_c_tests_rose_flags_str} -std=c11 -DREX_PREPROCESSING_TRAILING_PARAMETER_ENABLED=1 -DREX_PREPROCESSING_LEADING_PARAMETER_ENABLED=1 -rose:collectAllCommentsAndDirectives -rose:skipfinalCompileStep ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_preprocessing_parameter_boundary.c && \
+     test \"\$(grep -Fxc '#if REX_PREPROCESSING_PARAMETER_ENABLED' rose_rex_frontend_preprocessing_parameter_boundary.c)\" -eq 1 && \
+     test \"\$(grep -Fxc '#if REX_PREPROCESSING_EMPTY_PARAMETER_ENABLED' rose_rex_frontend_preprocessing_parameter_boundary.c)\" -eq 1 && \
+     test \"\$(grep -Fxc '#if REX_PREPROCESSING_TRAILING_PARAMETER_ENABLED' rose_rex_frontend_preprocessing_parameter_boundary.c)\" -eq 1 && \
+     test \"\$(grep -Fxc '#if REX_PREPROCESSING_LEADING_PARAMETER_ENABLED' rose_rex_frontend_preprocessing_parameter_boundary.c)\" -eq 1 && \
+     test \"\$(grep -Fxc '#endif' rose_rex_frontend_preprocessing_parameter_boundary.c)\" -eq 4 && \
+     awk '/#if REX_PREPROCESSING_PARAMETER_ENABLED/{opening=NR} /int rex_preprocessing_parameter/{parameter=NR} /^#endif/ && closing == 0 {closing=NR} /^\)/ && declarator_end == 0 {declarator_end=NR} END{exit !(opening < parameter && parameter < closing && closing < declarator_end)}' rose_rex_frontend_preprocessing_parameter_boundary.c && \
+     ${CMAKE_C_COMPILER} -std=c11 -DREX_PREPROCESSING_TRAILING_PARAMETER_ENABLED=1 -DREX_PREPROCESSING_LEADING_PARAMETER_ENABLED=1 -fsyntax-only rose_rex_frontend_preprocessing_parameter_boundary.c && \
+     ${CMAKE_C_COMPILER} -std=c11 -DREX_PREPROCESSING_TRAILING_PARAMETER_ENABLED=0 -DREX_PREPROCESSING_LEADING_PARAMETER_ENABLED=0 -fsyntax-only rose_rex_frontend_preprocessing_parameter_boundary.c"
+)
+set_tests_properties(
+  C_tests_rex_frontend_preprocessing_parameter_boundary_roundtrip
+  PROPERTIES LABELS "rex;CFE;UNPARSER;C_tests")
+rex_lock_test_for_input(
+  C_tests_rex_frontend_preprocessing_parameter_boundary_roundtrip
+  rex_frontend_preprocessing_parameter_boundary.c)
+
+add_test(
+  NAME C_tests_rex_frontend_preprocessing_conditional_declarator_roundtrip
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "rm -rf rex_frontend_preprocessing_conditional_declarator && \
+     mkdir rex_frontend_preprocessing_conditional_declarator && \
+     cd rex_frontend_preprocessing_conditional_declarator && \
+     ${C_TEST_TRANSLATOR} ${_c_tests_rose_flags_str} -std=c11 -DREX_PREPROCESSING_CONDITIONAL_DECLARATOR_ENABLED=1 -rose:collectAllCommentsAndDirectives -rose:skipfinalCompileStep ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_preprocessing_anchor_contract.c && \
+     test \"\$(grep -Fc '#if REX_PREPROCESSING_CONDITIONAL_DECLARATOR_ENABLED' rose_rex_frontend_preprocessing_anchor_contract.c)\" -eq 1 && \
+     test \"\$(grep -Fc '#endif // REX_PREPROCESSING_CONDITIONAL_DECLARATOR_CLOSE' rose_rex_frontend_preprocessing_anchor_contract.c)\" -eq 1 && \
+     ${CMAKE_C_COMPILER} -std=c11 -DREX_PREPROCESSING_CONDITIONAL_DECLARATOR_ENABLED=1 -fsyntax-only rose_rex_frontend_preprocessing_anchor_contract.c && \
+     ${CMAKE_C_COMPILER} -std=c11 -DREX_PREPROCESSING_CONDITIONAL_DECLARATOR_ENABLED=0 -fsyntax-only rose_rex_frontend_preprocessing_anchor_contract.c && \
+     $<TARGET_FILE:rex_frontend_preprocessing_anchor_contract_translator> ${_c_tests_rose_flags_str} -std=c11 -DREX_PREPROCESSING_CONDITIONAL_DECLARATOR_ENABLED=0 -rose:collectAllCommentsAndDirectives -rose:skipfinalCompileStep -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_preprocessing_anchor_contract.c"
+)
+set_tests_properties(
+  C_tests_rex_frontend_preprocessing_conditional_declarator_roundtrip
+  PROPERTIES LABELS "rex;CFE;UNPARSER;C_tests")
+rex_lock_test_for_input(
+  C_tests_rex_frontend_preprocessing_conditional_declarator_roundtrip
+  rex_frontend_preprocessing_anchor_contract.c)
 
 add_test(
   NAME C_tests_rex_frontend_preprocessing_terminal_directive_roundtrip

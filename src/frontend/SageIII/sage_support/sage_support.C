@@ -5863,6 +5863,27 @@ SgFunctionSymbol *SgFunctionCallExp::getAssociatedFunctionSymbol() const {
     }
     return symbol;
   };
+  auto requireIndirectCallableSymbol = [](SgVarRefExp *reference,
+                                          const char *role) {
+    SgVariableSymbol *symbol =
+        reference != nullptr ? reference->get_symbol() : nullptr;
+    SgInitializedName *declaration =
+        symbol != nullptr ? symbol->get_declaration() : nullptr;
+    if (reference == nullptr || symbol == nullptr || declaration == nullptr ||
+        symbol->get_symbol_basis() != declaration ||
+        reference->get_type() == nullptr) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[indirect-callee-symbol]: %s reference=%p "
+              "symbol=%p declaration=%p type=%p has no exact variable-symbol "
+              "ownership\n",
+              role != nullptr ? role : "<unknown>",
+              static_cast<void *>(reference), static_cast<void *>(symbol),
+              static_cast<void *>(declaration),
+              reference != nullptr ? static_cast<void *>(reference->get_type())
+                                   : nullptr);
+      ROSE_ABORT();
+    }
+  };
   auto unwrapMacroExpansion = [&]() {
     while (SgMacroExpansionExp *macro = isSgMacroExpansionExp(functionExp)) {
       if (macro->get_parent() != functionExpOwner) {
@@ -6254,9 +6275,39 @@ SgFunctionSymbol *SgFunctionCallExp::getAssociatedFunctionSymbol() const {
 
       // DQ (2/8/2009): Can we assert this! What about pointers to functions?
       ASSERT_not_null(returnSymbol);
+    } else if (SgTemplateMemberFunctionRefExp *templateReference =
+                   isSgTemplateMemberFunctionRefExp(
+                       arrayExp->get_rhs_operand())) {
+      returnSymbol = templateReference->get_symbol();
+      ASSERT_not_null(returnSymbol);
+    } else if (SgFunctionRefExp *functionReference =
+                   isSgFunctionRefExp(arrayExp->get_rhs_operand())) {
+      returnSymbol = functionReference->get_symbol();
+      ASSERT_not_null(returnSymbol);
+    } else if (SgTemplateFunctionRefExp *templateReference =
+                   isSgTemplateFunctionRefExp(arrayExp->get_rhs_operand())) {
+      returnSymbol = templateReference->get_symbol();
+      ASSERT_not_null(returnSymbol);
+    } else if (SgVarRefExp *variableReference =
+                   isSgVarRefExp(arrayExp->get_rhs_operand())) {
+      requireIndirectCallableSymbol(variableReference,
+                                    "arrow indirect callable");
+      returnSymbol = nullptr;
     } else if (SgNonrealRefExp *nonreal =
                    isSgNonrealRefExp(arrayExp->get_rhs_operand())) {
       returnSymbol = resolvedNonrealFunctionSymbol(nonreal);
+    } else if (isSgPseudoDestructorRefExp(arrayExp->get_rhs_operand()) !=
+               nullptr) {
+      // A pseudo-destructor call has an exact callable expression but no
+      // function declaration or symbol by language definition.
+      returnSymbol = nullptr;
+    } else {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[associated-function-symbol]: arrow call "
+              "rhs=%p/%s has no typed callable-symbol role\n",
+              static_cast<void *>(arrayExp->get_rhs_operand()),
+              arrayExp->get_rhs_operand()->class_name().c_str());
+      ROSE_ABORT();
     }
     break;
   }
@@ -6286,23 +6337,28 @@ SgFunctionSymbol *SgFunctionCallExp::getAssociatedFunctionSymbol() const {
               SgNonrealRefExp *nrRefExp =
                   isSgNonrealRefExp(dotExp->get_rhs_operand());
               if (nrRefExp == nullptr) {
-                dotExp->get_rhs_operand()->get_file_info()->display(
-                    "In SgFunctionCallExp::getAssociatedFunctionSymbol(): case "
-                    "of SgDotExp: templateMemberFunctionRefExp == NULL: debug");
-                printf(
-                    "In SgFunctionCallExp::getAssociatedFunctionSymbol(): case "
-                    "of SgDotExp: dotExp->get_rhs_operand() = %p = %s \n",
-                    dotExp->get_rhs_operand(),
-                    dotExp->get_rhs_operand()->class_name().c_str());
+                if (isSgPseudoDestructorRefExp(dotExp->get_rhs_operand()) !=
+                    nullptr) {
+                  // A pseudo-destructor call has no associated function
+                  // declaration or symbol.
+                  returnSymbol = nullptr;
+                } else {
+                  fprintf(stderr,
+                          "REX_AST_INVARIANT[associated-function-symbol]: dot "
+                          "call rhs=%p/%s has no typed callable-symbol role\n",
+                          static_cast<void *>(dotExp->get_rhs_operand()),
+                          dotExp->get_rhs_operand()->class_name().c_str());
+                  ROSE_ABORT();
+                }
               } else {
                 returnSymbol = resolvedNonrealFunctionSymbol(nrRefExp);
               }
             } else {
               ASSERT_not_null(varRefExp);
-
-              // DQ (8/20/2013): This is not a SgFunctionSymbol so we can't
-              // return a valid symbol from this case of a function call from a
-              // pointer to a function. returnSymbol = varRefExp->get_symbol();
+              requireIndirectCallableSymbol(varRefExp, "dot indirect callable");
+              // An indirect callable has an exact variable symbol, but cannot
+              // truthfully answer this function-symbol query.
+              returnSymbol = nullptr;
             }
           } else {
             // I am unclear when this is possible, but STL code exercises it.
@@ -6417,6 +6473,8 @@ SgFunctionSymbol *SgFunctionCallExp::getAssociatedFunctionSymbol() const {
     // DQ (2/22/2013): added case to support something reported in
     // test2013_68.C, but not yet verified.
   case V_SgVarRefExp: {
+    requireIndirectCallableSymbol(isSgVarRefExp(functionExp),
+                                  "indirect callable");
     break;
   }
 

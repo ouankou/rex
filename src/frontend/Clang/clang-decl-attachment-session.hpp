@@ -7,6 +7,7 @@
 #include <vector>
 
 class SgDeclarationStatement;
+class SgNode;
 class SgScopeStatement;
 class Sg_File_Info;
 
@@ -23,6 +24,11 @@ public:
   bool containsExactly(DeclarationList *declarations, SgScopeStatement *owner,
                        SgDeclarationStatement *declaration,
                        const char *operation);
+  bool containsExactlyOwned(DeclarationList *declarations,
+                            SgNode *structural_owner,
+                            SgScopeStatement *semantic_owner,
+                            SgDeclarationStatement *declaration,
+                            const char *operation);
   void eraseExactly(DeclarationList *declarations, SgScopeStatement *owner,
                     SgDeclarationStatement *declaration, const char *operation);
   void replaceExactly(DeclarationList *declarations, SgScopeStatement *owner,
@@ -38,6 +44,8 @@ public:
                          SgDeclarationStatement *existing_declaration,
                          SgDeclarationStatement *replacement_declaration);
   void invalidate(DeclarationList *declarations);
+  void retire(DeclarationList *declarations);
+  void validateAll();
   void clear();
   const std::vector<SgDeclarationStatement *> *
   lookupDeclarationsOnSameSourceLine(DeclarationList *declarations,
@@ -45,10 +53,15 @@ public:
 
 private:
   struct MembershipIndex {
-    SgScopeStatement *owner = nullptr;
+    SgNode *structural_owner = nullptr;
+    SgScopeStatement *semantic_owner = nullptr;
     std::size_t indexed_count = 0;
     SgDeclarationStatement *last_indexed_declaration = nullptr;
-    std::unordered_set<SgDeclarationStatement *> members;
+    // Exact occurrence counts are the authoritative construction-time
+    // cardinality index.  An unordered_set cannot distinguish a valid single
+    // attachment from a malformed duplicate and forced containsExactly() to
+    // rescan the complete declaration list after every append.
+    std::unordered_map<SgDeclarationStatement *, std::size_t> occurrences;
   };
 
   std::unordered_map<DeclarationList *, MembershipIndex> p_membership_indices;
@@ -81,9 +94,11 @@ private:
   std::unordered_map<DeclarationList *, SourceLineIndex> p_source_line_indices;
 
   static void rebuild(MembershipIndex &index, DeclarationList *declarations,
-                      SgScopeStatement *owner);
+                      SgNode *structural_owner,
+                      SgScopeStatement *semantic_owner);
   MembershipIndex &indexFor(DeclarationList *declarations,
-                            SgScopeStatement *owner);
+                            SgNode *structural_owner,
+                            SgScopeStatement *semantic_owner);
   void invalidateSourceCaches(DeclarationList *declarations);
 };
 

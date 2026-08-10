@@ -582,6 +582,11 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
 
     unp->u_exprStmt->unparseAttachedPreprocessingInfo(
         decl_item, info, PreprocessingInfo::before);
+    if (is_typed_declaration_group_member && ninfo.SkipBaseType() &&
+        locatedNodeHasConditionalRegionOpening(decl_item,
+                                               PreprocessingInfo::before)) {
+      curprint(", ");
+    }
 
     if (is_first_decl_item && !ninfo.SkipBaseType()) {
       // FIXME block below before while loop: does it break preprocessor

@@ -4544,6 +4544,10 @@ struct FunctionSymbolExactKey {
   SgName name;
   const SgType *type = NULL;
 
+  bool operator==(const FunctionSymbolExactKey &rhs) const {
+    return name == rhs.name && type == rhs.type;
+  }
+
   bool operator<(const FunctionSymbolExactKey &rhs) const {
     if (name < rhs.name)
       return true;
@@ -4555,6 +4559,7 @@ struct FunctionSymbolExactKey {
 
 typedef std::map<FunctionSymbolExactKey, std::vector<SgSymbol *>>
     FunctionSymbolExactIndex;
+typedef std::map<const SgNode *, std::vector<SgSymbol *>> SymbolBasisExactIndex;
 typedef std::map<const SgSymbol *, SgName> SymbolStoredNameMap;
 
 /*! \brief Name equality operator support for symbol tables within ROSE.
@@ -4699,6 +4704,7 @@ SgSymbolTable(int sz);
 
 private:
 FunctionSymbolExactIndex p_functionSymbolExactIndex;
+SymbolBasisExactIndex p_symbolBasisExactIndex;
 SymbolStoredNameMap p_symbolStoredNameMap;
 
 public:
@@ -4710,8 +4716,28 @@ const FunctionSymbolExactIndex &get_functionSymbolExactIndex() const {
   return p_functionSymbolExactIndex;
 }
 
+SymbolBasisExactIndex &get_symbolBasisExactIndex() {
+  return p_symbolBasisExactIndex;
+}
+
+const SymbolBasisExactIndex &get_symbolBasisExactIndex() const {
+  return p_symbolBasisExactIndex;
+}
+
+const std::vector<SgSymbol *> &
+find_symbols_with_exact_basis(const SgNode *basis) const;
+
+// A published symbol's declaration edge is part of the symbol-table index.
+// Producers that intentionally replace that edge must update the index in the
+// same transaction instead of leaving lookup to rediscover the mutation by a
+// linear scan.
+void reindex_symbol_basis(SgSymbol *symbol, const SgNode *prior_basis);
+
+void validate_exact_symbol_indexes() const;
+
 void clear_functionSymbolExactIndex() {
   p_functionSymbolExactIndex.clear();
+  p_symbolBasisExactIndex.clear();
   p_symbolStoredNameMap.clear();
 }
 
@@ -7819,6 +7845,9 @@ void recordFunctionSymbolForExactLookup(SgSymbolTable *table,
                                         const SgName &name, SgSymbol *symbol);
 void eraseFunctionSymbolFromExactLookup(SgSymbolTable *table,
                                         const SgName &name, SgSymbol *symbol);
+void recordSymbolBasisForExactLookup(SgSymbolTable *table, SgSymbol *symbol);
+void eraseSymbolBasisFromExactLookup(SgSymbolTable *table, SgSymbol *symbol,
+                                     const SgNode *basis);
 } // namespace
 
 // This function was moved to be defined outside of eqstr so that we could
@@ -8374,6 +8403,7 @@ void SgSymbolTable::insert(const SgName &nm, SgSymbol *sp) {
   p_symbolSet.insert(sp);
   p_symbolStoredNameMap[sp] = nm;
   recordFunctionSymbolForExactLookup(this, nm, sp);
+  recordSymbolBasisForExactLookup(this, sp);
 
   // DQ (11/20/2012): Make error checking dependent upon
   // SYMBOL_TABLE_ERROR_CHECKING macro. DQ (12/3/2011): Turning on symbol table
@@ -8780,6 +8810,8 @@ void SgSymbolTable::remove(const SgSymbol *symbol) {
   // get_table()->erase(elementToDelete);
 
   eraseFunctionSymbolFromExactLookup(this, storedName, storedSymbol);
+  eraseSymbolBasisFromExactLookup(this, storedSymbol,
+                                  storedSymbol->get_symbol_basis());
 
   // DQ (3/10/2007): Remove the symbol from the symbol set used to test for if
   // the symbol exists p_symbolSet.erase(symbol);
@@ -10221,6 +10253,51 @@ void eraseFunctionSymbolFromExactLookup(SgSymbolTable *table,
     table->get_functionSymbolExactIndex().erase(key_it);
 }
 
+void recordSymbolBasisForExactLookup(SgSymbolTable *table, SgSymbol *symbol) {
+  SgNode *basis = symbol != NULL ? symbol->get_symbol_basis() : NULL;
+  if (table == NULL || symbol == NULL || basis == NULL)
+    return;
+
+  std::vector<SgSymbol *> &symbols = table->get_symbolBasisExactIndex()[basis];
+  if (std::find(symbols.begin(), symbols.end(), symbol) != symbols.end()) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[symbol-basis-index-insert]: table=%p "
+            "symbol=%p/%s basis=%p was indexed more than once\n",
+            static_cast<void *>(table), static_cast<void *>(symbol),
+            symbol->class_name().c_str(), static_cast<void *>(basis));
+    ROSE_ABORT();
+  }
+  symbols.push_back(symbol);
+}
+
+void eraseSymbolBasisFromExactLookup(SgSymbolTable *table, SgSymbol *symbol,
+                                     const SgNode *basis) {
+  if (table == NULL || symbol == NULL || basis == NULL)
+    return;
+
+  SymbolBasisExactIndex::iterator found =
+      table->get_symbolBasisExactIndex().find(basis);
+  const size_t occurrences =
+      found == table->get_symbolBasisExactIndex().end()
+          ? 0
+          : static_cast<size_t>(
+                std::count(found->second.begin(), found->second.end(), symbol));
+  if (occurrences != 1) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[symbol-basis-index-erase]: table=%p "
+            "symbol=%p/%s basis=%p has %zu indexed occurrences\n",
+            static_cast<void *>(table), static_cast<void *>(symbol),
+            symbol->class_name().c_str(), static_cast<const void *>(basis),
+            occurrences);
+    ROSE_ABORT();
+  }
+  std::vector<SgSymbol *> &symbols = found->second;
+  symbols.erase(std::remove(symbols.begin(), symbols.end(), symbol),
+                symbols.end());
+  if (symbols.empty())
+    table->get_symbolBasisExactIndex().erase(found);
+}
+
 bool canUseFunctionSymbolExactLookup(VariantT returnTypeVariant) {
   return returnTypeVariant == V_SgFunctionSymbol ||
          returnTypeVariant == V_SgMemberFunctionSymbol ||
@@ -10276,6 +10353,118 @@ ReturnType *findFunctionSymbolWithExactLookup(
   return NULL;
 }
 } // namespace
+
+const std::vector<SgSymbol *> &
+SgSymbolTable::find_symbols_with_exact_basis(const SgNode *basis) const {
+  static const std::vector<SgSymbol *> no_symbols;
+  if (basis == NULL)
+    return no_symbols;
+  SymbolBasisExactIndex::const_iterator found =
+      p_symbolBasisExactIndex.find(basis);
+  return found != p_symbolBasisExactIndex.end() ? found->second : no_symbols;
+}
+
+void SgSymbolTable::reindex_symbol_basis(SgSymbol *symbol,
+                                         const SgNode *prior_basis) {
+  if (symbol == NULL || prior_basis == NULL ||
+      symbol->get_symbol_basis() == NULL || symbol->get_parent() != this ||
+      !exists(symbol)) {
+    fprintf(
+        stderr,
+        "REX_AST_INVARIANT[symbol-basis-reindex]: table=%p symbol=%p "
+        "prior=%p current=%p parent=%p does not identify one published "
+        "basis replacement\n",
+        static_cast<void *>(this), static_cast<void *>(symbol),
+        static_cast<const void *>(prior_basis),
+        static_cast<void *>(symbol != NULL ? symbol->get_symbol_basis() : NULL),
+        static_cast<void *>(symbol != NULL ? symbol->get_parent() : NULL));
+    ROSE_ABORT();
+  }
+
+  SymbolStoredNameMap::const_iterator stored_name =
+      p_symbolStoredNameMap.find(symbol);
+  if (stored_name == p_symbolStoredNameMap.end()) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[symbol-basis-reindex]: table=%p symbol=%p has "
+            "no exact stored-name identity\n",
+            static_cast<void *>(this), static_cast<void *>(symbol));
+    ROSE_ABORT();
+  }
+
+  // The function signature index is keyed by the declaration's type. Remove
+  // the old signature explicitly before observing the replacement basis.
+  FunctionSymbolExactIndex::iterator old_function_entry =
+      p_functionSymbolExactIndex.end();
+  if (const SgFunctionDeclaration *prior_function =
+          isSgFunctionDeclaration(const_cast<SgNode *>(prior_basis))) {
+    old_function_entry = p_functionSymbolExactIndex.find(FunctionSymbolExactKey{
+        stored_name->second, prior_function->get_type()});
+    if (old_function_entry != p_functionSymbolExactIndex.end()) {
+      std::vector<SgSymbol *> &symbols = old_function_entry->second;
+      const size_t occurrences = static_cast<size_t>(
+          std::count(symbols.begin(), symbols.end(), symbol));
+      if (occurrences != 1) {
+        fprintf(stderr,
+                "REX_AST_INVARIANT[function-symbol-signature-reindex]: "
+                "table=%p symbol=%p prior=%p has %zu indexed occurrences\n",
+                static_cast<void *>(this), static_cast<void *>(symbol),
+                static_cast<const void *>(prior_basis), occurrences);
+        ROSE_ABORT();
+      }
+      symbols.erase(std::remove(symbols.begin(), symbols.end(), symbol),
+                    symbols.end());
+      if (symbols.empty())
+        p_functionSymbolExactIndex.erase(old_function_entry);
+    }
+  }
+
+  eraseSymbolBasisFromExactLookup(this, symbol, prior_basis);
+  recordSymbolBasisForExactLookup(this, symbol);
+  recordFunctionSymbolForExactLookup(this, stored_name->second, symbol);
+}
+
+void SgSymbolTable::validate_exact_symbol_indexes() const {
+  std::map<const SgNode *, std::vector<SgSymbol *>> expected_basis_index;
+  std::map<FunctionSymbolExactKey, std::vector<SgSymbol *>>
+      expected_function_index;
+  SymbolStoredNameMap expected_stored_names;
+  for (const auto &entry : *p_table) {
+    SgSymbol *symbol = entry.second;
+    if (symbol == NULL || symbol->get_parent() != this ||
+        !expected_stored_names.emplace(symbol, entry.first).second) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[symbol-exact-index-audit]: table=%p "
+              "contains a null, misowned, or multiply stored symbol=%p\n",
+              static_cast<const void *>(this), static_cast<void *>(symbol));
+      ROSE_ABORT();
+    }
+    if (SgNode *basis = symbol->get_symbol_basis())
+      expected_basis_index[basis].push_back(symbol);
+    if (const SgType *type = getFunctionSymbolExactLookupType(symbol))
+      expected_function_index[FunctionSymbolExactKey{entry.first, type}]
+          .push_back(symbol);
+  }
+
+  auto normalize = [](auto &index) {
+    for (auto &entry : index)
+      std::sort(entry.second.begin(), entry.second.end());
+  };
+  normalize(expected_basis_index);
+  normalize(expected_function_index);
+  SymbolBasisExactIndex actual_basis_index = p_symbolBasisExactIndex;
+  FunctionSymbolExactIndex actual_function_index = p_functionSymbolExactIndex;
+  normalize(actual_basis_index);
+  normalize(actual_function_index);
+  if (expected_basis_index != actual_basis_index ||
+      expected_function_index != actual_function_index ||
+      expected_stored_names != p_symbolStoredNameMap) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[symbol-exact-index-audit]: table=%p has "
+            "stale basis, signature, or stored-name indexes\n",
+            static_cast<const void *>(this));
+    ROSE_ABORT();
+  }
+}
 
 // DQ (4/14/2017): Added explicit control to filer symbols associated with
 // templates (see test2017_30.C for where this is required). DQ (7/31/2013):
