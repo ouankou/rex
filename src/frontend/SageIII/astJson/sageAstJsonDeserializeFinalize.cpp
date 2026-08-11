@@ -4462,6 +4462,7 @@ SgSourceFile *reconstructSourceFile(const AstFileRecord &ast,
 
   publishTemplateParameterCanonicalTypes(ast, nodes);
   restoreAvailableSourcePositionsAndScopes(ast, nodes);
+  restoreAvailableAuxiliaryNamespaceOwnership(ast, nodes);
   std::unordered_set<uint64_t> restored_declaration_identities;
   restoreDeclarationIdentityEdges(ast, nodes, project,
                                   restored_declaration_identities, false);

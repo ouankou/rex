@@ -9,7 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
-from typing import NoReturn
+from typing import Any, NoReturn
 
 
 def fail(message: str) -> NoReturn:
@@ -36,7 +36,9 @@ def read_manifest(path: Path) -> list[str]:
     return names
 
 
-def ctest_inventory(ctest: str, test_dir: Path, extra: list[str]) -> list[str]:
+def ctest_records(
+    ctest: str, test_dir: Path, extra: list[str]
+) -> list[dict[str, Any]]:
     command = [
         ctest,
         "--test-dir",
@@ -55,13 +57,64 @@ def ctest_inventory(ctest: str, test_dir: Path, extra: list[str]) -> list[str]:
     tests = document.get("tests")
     if not isinstance(tests, list):
         fail("CTest JSON inventory has no test list")
-    names: list[str] = []
+    records: list[dict[str, Any]] = []
     for index, test in enumerate(tests, 1):
         name = test.get("name") if isinstance(test, dict) else None
         if not isinstance(name, str) or not name:
             fail(f"CTest JSON inventory has an invalid test at index {index}")
-        names.append(name)
-    return names
+        records.append(test)
+    return records
+
+
+def ctest_inventory(ctest: str, test_dir: Path, extra: list[str]) -> list[str]:
+    return [test["name"] for test in ctest_records(ctest, test_dir, extra)]
+
+
+def fixture_property(test: dict[str, Any], name: str) -> set[str]:
+    properties = test.get("properties", [])
+    if not isinstance(properties, list):
+        fail(f"CTest test {test['name']} has malformed properties")
+    result: set[str] = set()
+    for prop in properties:
+        if not isinstance(prop, dict) or prop.get("name") != name:
+            continue
+        value = prop.get("value")
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) and item for item in value
+        ):
+            fail(f"CTest test {test['name']} has malformed {name}")
+        result.update(value)
+    return result
+
+
+def fixture_selection_closure(
+    registry: list[dict[str, Any]], directly_selected: set[str]
+) -> set[str]:
+    """Return the tests CTest must add to satisfy selected fixtures exactly."""
+
+    by_name = {test["name"]: test for test in registry}
+    selected = set(directly_selected)
+    while True:
+        required: set[str] = set()
+        for name in selected:
+            test = by_name.get(name)
+            if test is None:
+                fail(f"fixture closure references absent CTest test: {name}")
+            required.update(fixture_property(test, "FIXTURES_REQUIRED"))
+
+        support = {
+            test["name"]
+            for test in registry
+            if required
+            & (
+                fixture_property(test, "FIXTURES_SETUP")
+                | fixture_property(test, "FIXTURES_CLEANUP")
+            )
+        }
+        expanded = selected | support
+        if expanded == selected:
+            return selected
+        selected = expanded
 
 
 def main() -> int:
@@ -89,7 +142,8 @@ def main() -> int:
     manifest = args.manifest.resolve(strict=True)
     requested = read_manifest(manifest)
 
-    registry_names = ctest_inventory(args.ctest, test_dir, [])
+    registry_records = ctest_records(args.ctest, test_dir, [])
+    registry_names = [test["name"] for test in registry_records]
     registry: dict[str, int] = {}
     duplicates: list[str] = []
     for index, name in enumerate(registry_names, 1):
@@ -118,15 +172,31 @@ def main() -> int:
         selection_options = ["-I", handle.name]
         regex_names: list[str] = []
         if args.include_regex:
+            # Ask CTest for direct regex matches without its automatic fixture
+            # expansion.  The exact expansion is computed and checked below.
             regex_names = ctest_inventory(
-                args.ctest, test_dir, ["-R", args.include_regex]
+                args.ctest,
+                test_dir,
+                [
+                    "-R",
+                    args.include_regex,
+                    "-FA",
+                    ".*",
+                    "-FS",
+                    ".*",
+                    "-FC",
+                    ".*",
+                ],
             )
             selection_options.extend(["-R", args.include_regex, "-U"])
         selected_names = ctest_inventory(
             args.ctest, test_dir, selection_options
         )
         requested_set = set(requested)
-        expected_set = requested_set | set(regex_names)
+        directly_selected = requested_set | set(regex_names)
+        expected_set = fixture_selection_closure(
+            registry_records, directly_selected
+        )
         selected_set = set(selected_names)
         if selected_set != expected_set or len(selected_names) != len(expected_set):
             missing_from_selection = sorted(expected_set - selected_set)
@@ -140,6 +210,7 @@ def main() -> int:
         print(
             "Validated exact CTest selection: "
             f"manifest={len(requested)}, regex={len(regex_names)}, "
+            f"fixture_support={len(expected_set - directly_selected)}, "
             f"union={len(expected_set)}, source={manifest}",
             flush=True,
         )

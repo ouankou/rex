@@ -1257,6 +1257,15 @@ void Unparse_ExprStmt::unparseRequiresExpr(SgExpression *expr,
       curprint("requires ");
       unparseExpression(nested->get_constraint(), requirement_info);
       curprint("; ");
+    } else if (SgRequirementSubstitutionFailure *failure =
+                   isSgRequirementSubstitutionFailure(requirement)) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[requirement-substitution-failure]: "
+              "semantic-only failure kind=%d entity=%s has no source "
+              "expression to emit\n",
+              static_cast<int>(failure->get_failure_kind()),
+              failure->get_substituted_entity().c_str());
+      ROSE_ABORT();
     } else {
       fprintf(stderr,
               "REX_UNPARSE_INVARIANT[requires-requirement]: unsupported "

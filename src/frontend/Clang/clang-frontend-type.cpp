@@ -9945,6 +9945,23 @@ bool ClangToSageTranslator::VisitBuiltinType(clang::BuiltinType *builtin_type,
   std::cerr << "ClangToSageTranslator::VisitBuiltinType" << std::endl;
 #endif
 
+  auto build_target_builtin = [&](SgTypeTargetBuiltin::target_family_enum
+                                      target_family) {
+    if (p_compiler_instance == nullptr) {
+      failExactTypeTranslation("target-builtin-compiler-state", builtin_type);
+    }
+    clang::PrintingPolicy policy(p_compiler_instance->getLangOpts());
+    const std::string spelling = builtin_type->getName(policy).str();
+    if (spelling.empty() || spelling.front() == '<' || spelling.back() == '>') {
+      std::cerr << "REX_FRONTEND_INVARIANT[target-builtin-type]: Clang kind="
+                << static_cast<unsigned>(builtin_type->getKind())
+                << " has no exact target source spelling" << std::endl;
+      ROSE_ABORT();
+    }
+    *node =
+        SageBuilder::buildTargetBuiltinType(SgName(spelling), target_family);
+  };
+
   switch (builtin_type->getKind()) {
   case clang::BuiltinType::Void:
     *node = SageBuilder::buildVoidType();
@@ -10072,6 +10089,50 @@ bool ClangToSageTranslator::VisitBuiltinType(clang::BuiltinType *builtin_type,
     *node = nrtype;
     break;
   }
+
+  case clang::BuiltinType::OCLSampler:
+  case clang::BuiltinType::OCLEvent:
+  case clang::BuiltinType::OCLClkEvent:
+  case clang::BuiltinType::OCLQueue:
+  case clang::BuiltinType::OCLReserveID:
+#define IMAGE_TYPE(ImgType, Id, SingletonId, Access, Suffix)                   \
+  case clang::BuiltinType::Id:
+#include <clang/Basic/OpenCLImageTypes.def>
+#define EXT_OPAQUE_TYPE(ExtType, Id, Ext) case clang::BuiltinType::Id:
+#include <clang/Basic/OpenCLExtensionTypes.def>
+    build_target_builtin(SgTypeTargetBuiltin::e_target_builtin_opencl);
+    break;
+
+#define SVE_TYPE(Name, Id, SingletonId) case clang::BuiltinType::Id:
+#include <clang/Basic/AArch64ACLETypes.def>
+    build_target_builtin(SgTypeTargetBuiltin::e_target_builtin_aarch64);
+    break;
+
+#define PPC_VECTOR_TYPE(Name, Id, Size) case clang::BuiltinType::Id:
+#include <clang/Basic/PPCTypes.def>
+    build_target_builtin(SgTypeTargetBuiltin::e_target_builtin_powerpc);
+    break;
+
+#define RVV_TYPE(Name, Id, SingletonId) case clang::BuiltinType::Id:
+#include <clang/Basic/RISCVVTypes.def>
+    build_target_builtin(SgTypeTargetBuiltin::e_target_builtin_riscv);
+    break;
+
+#define WASM_TYPE(Name, Id, SingletonId) case clang::BuiltinType::Id:
+#include <clang/Basic/WebAssemblyReferenceTypes.def>
+    build_target_builtin(SgTypeTargetBuiltin::e_target_builtin_webassembly);
+    break;
+
+#define AMDGPU_TYPE(Name, Id, SingletonId, Width, Align)                       \
+  case clang::BuiltinType::Id:
+#include <clang/Basic/AMDGPUTypes.def>
+    build_target_builtin(SgTypeTargetBuiltin::e_target_builtin_amdgpu);
+    break;
+
+#define HLSL_INTANGIBLE_TYPE(Name, Id, SingletonId) case clang::BuiltinType::Id:
+#include <clang/Basic/HLSLIntangibleTypes.def>
+    build_target_builtin(SgTypeTargetBuiltin::e_target_builtin_hlsl);
+    break;
 
   case clang::BuiltinType::ObjCId:
   case clang::BuiltinType::ObjCClass:

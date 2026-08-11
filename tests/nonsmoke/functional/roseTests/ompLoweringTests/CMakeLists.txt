@@ -738,7 +738,7 @@ if(ENABLE-C)
       NAME omp_lowering_rex_simd_length_${_name}
       WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
       COMMAND ${BASH_EXECUTABLE} -c
-        "set -e; output=\"$1\"; expected=\"$2\"; shift 2; rm -f \"$output\"; \"$@\" -rose:simd:intel-avx -rose:openmp:lowering -rose:skipfinalCompileStep -rose:verbose 0 -rose:output \"$output\" -c \"${_omp_test_dir}/${_source}\"; test -s \"$output\"; grep -Fq \"$expected\" \"$output\""
+        "set -e; output=\"$1\"; expected=\"$2\"; shift 2; rm -f \"$output\"; \"$@\" -target x86_64-unknown-linux-gnu -rose:simd:intel-avx -rose:openmp:lowering -rose:skipfinalCompileStep -rose:verbose 0 -rose:output \"$output\" -c \"${_omp_test_dir}/${_source}\"; test -s \"$output\"; grep -Fq \"$expected\" \"$output\""
         dummy
         ${_output}
         ${_intrinsic}
@@ -754,7 +754,7 @@ if(ENABLE-C)
     NAME omp_lowering_rex_simd_two_region_reduction_ownership
     WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
     COMMAND ${BASH_EXECUTABLE} -c
-      "set -e; output=\"$1\"; shift; rm -f \"$output\"; MALLOC_PERTURB_=165 \"$@\" -rose:simd:intel-avx -rose:openmp:lowering -rose:skipfinalCompileStep -rose:verbose 0 -rose:output \"$output\" -c \"${_omp_test_dir}/rex_omp_simd_two_region_reduction.c\"; test -s \"$output\"; test \"$(grep -Fc '_mm512_setzero_ps' \"$output\")\" -eq 2"
+      "set -e; output=\"$1\"; shift; rm -f \"$output\"; MALLOC_PERTURB_=165 \"$@\" -target x86_64-unknown-linux-gnu -rose:simd:intel-avx -rose:openmp:lowering -rose:skipfinalCompileStep -rose:verbose 0 -rose:output \"$output\" -c \"${_omp_test_dir}/rex_omp_simd_two_region_reduction.c\"; test -s \"$output\"; test \"$(grep -Fc '_mm512_setzero_ps' \"$output\")\" -eq 2"
       dummy
       ${_omp_simd_two_region_output}
       $<TARGET_FILE:rex_omp_simd_addr3_translator>)
@@ -782,13 +782,43 @@ if(ENABLE-C)
       NAME omp_lowering_rex_simd_${_name}_is_rejected
       WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
       COMMAND ${BASH_EXECUTABLE} -c
-        "ulimit -c 0; log=rex_simd_${_name}.log; set +e; \"$@\" -rose:simd:intel-avx -rose:openmp:lowering -rose:skipfinalCompileStep -rose:verbose 0 -c \"${_omp_test_dir}/${_source}\" >\"$log\" 2>&1; status=$?; set -e; test $status -eq 134; test \"$(grep -Ec '${_expected_diagnostic}' \"$log\")\" -eq 1"
+        "ulimit -c 0; log=rex_simd_${_name}.log; set +e; \"$@\" -target x86_64-unknown-linux-gnu -rose:simd:intel-avx -rose:openmp:lowering -rose:skipfinalCompileStep -rose:verbose 0 -c \"${_omp_test_dir}/${_source}\" >\"$log\" 2>&1; status=$?; set -e; test $status -eq 134; test \"$(grep -Ec '${_expected_diagnostic}' \"$log\")\" -eq 1"
         dummy
         $<TARGET_FILE:rex_omp_simd_addr3_translator>)
     set_tests_properties(
       omp_lowering_rex_simd_${_name}_is_rejected
       PROPERTIES LABELS "rex;death;OMPLOWERING;OMPLOWERING_SIMD")
   endforeach()
+
+  execute_process(
+    COMMAND ${CMAKE_CXX_COMPILER} -print-resource-dir
+    RESULT_VARIABLE _clang_resource_dir_status
+    OUTPUT_VARIABLE _clang_resource_dir
+    ERROR_VARIABLE _clang_resource_dir_error
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(NOT _clang_resource_dir_status EQUAL 0 OR _clang_resource_dir STREQUAL "")
+    message(FATAL_ERROR
+      "Clang resource directory query failed: ${_clang_resource_dir_error}")
+  endif()
+  set(_clang_immintrin_header
+    "${_clang_resource_dir}/include/immintrin.h")
+  if(NOT EXISTS "${_clang_immintrin_header}")
+    message(FATAL_ERROR
+      "Clang resource directory has no immintrin.h: ${_clang_resource_dir}")
+  endif()
+  file(RELATIVE_PATH _clang_immintrin_relative
+    "${_omp_lowering_test_output_dir}" "${_clang_immintrin_header}")
+
+  add_test(
+    NAME omp_lowering_rex_simd_intel_target_mismatch_is_rejected
+    WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+    COMMAND ${BASH_EXECUTABLE} -c
+      "ulimit -c 0; set -euo pipefail; translator=\"$1\"; source=\"${_omp_test_dir}/rex_omp_simd_length_absent.c\"; expected=\"REX_FRONTEND_INVARIANT[intel-simd-target]: forced immintrin.h requires an exact x86 or x86_64 frontend target, but Clang selected 'aarch64-unknown-linux-gnu'\"; run_case() { name=\"$1\"; shift; log=\"rex_simd_intel_target_mismatch_$name.log\"; rm -f \"$log\"; set +e; \"$translator\" -target aarch64-unknown-linux-gnu \"$@\" -rose:openmp:lowering -rose:skipfinalCompileStep -rose:verbose 0 -c \"$source\" >\"$log\" 2>&1; status=$?; set -e; test $status -eq 134; test \"$(grep -Fxc \"$expected\" \"$log\")\" -eq 1; }; run_case injected -rose:simd:intel-avx; run_case basename -include immintrin.h; run_case relative -include \"${_clang_immintrin_relative}\"; run_case absolute -include \"${_clang_immintrin_header}\"; run_case joined \"-include${_clang_immintrin_header}\""
+      dummy
+      $<TARGET_FILE:rex_omp_simd_addr3_translator>)
+  set_tests_properties(
+    omp_lowering_rex_simd_intel_target_mismatch_is_rejected
+    PROPERTIES LABELS "rex;death;CFE;OMPLOWERING;OMPLOWERING_SIMD")
 
   set(_omp_integral_constant_death_cases
     "plain_char|rex_omp_unroll_plain_char_invalid.c|^REX_OMP_LOWERING_INVARIANT\\[integral-constant-abi\\]: type=0x[[:xdigit:]]+ kind=SgTypeChar has no persisted target signedness contract$"

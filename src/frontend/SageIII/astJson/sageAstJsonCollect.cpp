@@ -510,7 +510,21 @@ rawTypeJson(SgType *type,
           rawBoolField("has_type_kind_star", type->get_hasTypeKindStar()));
     }
 
-    if (SgAutoType *auto_type = isSgAutoType(type)) {
+    if (SgTypeTargetBuiltin *target_builtin = isSgTypeTargetBuiltin(type)) {
+      if (target_builtin->get_spelling().is_null() ||
+          target_builtin->get_target_family() <
+              SgTypeTargetBuiltin::e_target_builtin_aarch64 ||
+          target_builtin->get_target_family() >
+              SgTypeTargetBuiltin::e_target_builtin_hlsl) {
+        throw std::runtime_error(
+            "AST JSON target builtin type has invalid exact identity");
+      }
+      fields.push_back(rawStringField(
+          "spelling", target_builtin->get_spelling().getString()));
+      fields.push_back(rawIntegerField(
+          "target_family",
+          static_cast<int64_t>(target_builtin->get_target_family())));
+    } else if (SgAutoType *auto_type = isSgAutoType(type)) {
       const bool is_constrained = auto_type->get_is_constrained();
       const std::string &source_constraint_spelling =
           auto_type->get_source_constraint_spelling();

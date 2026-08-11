@@ -67,6 +67,7 @@ bool SgExpression::has_semantic_value_type() const {
          isSgSimpleRequirement(this) == nullptr &&
          isSgTypeRequirement(this) == nullptr &&
          isSgCompoundRequirement(this) == nullptr &&
+         isSgRequirementSubstitutionFailure(this) == nullptr &&
          isSgNestedRequirement(this) == nullptr &&
          isSgTypeExpression(this) == nullptr &&
          isSgNullExpression(this) == nullptr &&

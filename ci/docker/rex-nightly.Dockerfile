@@ -23,6 +23,21 @@ ENV LD_LIBRARY_PATH=${REX_INSTALL_DIR}/lib:/usr/lib/llvm-${LLVM_VERSION}/lib
 FROM rex-base AS builder
 
 ARG REX_BUILD_NUM_JOBS=4
+ARG REX_ENABLE_VALGRIND=0
+
+# CMake registers the Memcheck-only tests only when Valgrind is present at
+# configure time.  Install it in the builder as well as the final test image
+# so the copied build tree and its runtime tools have one exact contract.
+RUN set -eux; \
+    case "${REX_ENABLE_VALGRIND}" in \
+      0) ;; \
+      1) \
+        apt-get update; \
+        apt-get install -y --no-install-recommends valgrind; \
+        rm -rf /var/lib/apt/lists/*; \
+        ;; \
+      *) echo "REX_ENABLE_VALGRIND must be 0 or 1" >&2; exit 2 ;; \
+    esac
 
 WORKDIR ${REX_SOURCE_DIR}
 COPY . ${REX_SOURCE_DIR}

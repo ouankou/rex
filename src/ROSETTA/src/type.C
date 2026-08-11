@@ -57,6 +57,8 @@ void Grammar::setUpTypes() {
   NEW_TERMINAL_MACRO(TypeComplex, "TypeComplex", "T_COMPLEX");
   NEW_TERMINAL_MACRO(TypeImaginary, "TypeImaginary", "T_IMAGINARY");
   NEW_TERMINAL_MACRO(TypeDefault, "TypeDefault", "T_DEFAULT");
+  NEW_TERMINAL_MACRO(TypeTargetBuiltin, "TypeTargetBuiltin",
+                     "T_TARGET_BUILTIN");
   NEW_TERMINAL_MACRO(TypeFortranAssumed, "TypeFortranAssumed",
                      "T_FORTRAN_ASSUMED");
   NEW_TERMINAL_MACRO(TypeFortranUnlimitedPolymorphic,
@@ -232,10 +234,10 @@ void Grammar::setUpTypes() {
       TypeUnknown | TypeVoid | TypeGlobalVoid | TypeString | PointerType |
           ReferenceType | NamedType | ModifierType | FunctionType | ArrayType |
           TypeEllipse | TemplateType | QualifiedNameType | TypeComplex |
-          TypeImaginary | TypeDefault | TypeCAFTeam | TypeCrayPointer |
-          TypeLabel | TypeFortranAssumed | TypeFortranUnlimitedPolymorphic |
-          RvalueReferenceType | TypeNullptr | DeclType | TypeOfType | AutoType |
-          IntegralType | FloatingPointType,
+          TypeImaginary | TypeDefault | TypeTargetBuiltin | TypeCAFTeam |
+          TypeCrayPointer | TypeLabel | TypeFortranAssumed |
+          TypeFortranUnlimitedPolymorphic | RvalueReferenceType | TypeNullptr |
+          DeclType | TypeOfType | AutoType | IntegralType | FloatingPointType,
       "Type", "TypeTag", false);
 
   // ***********************************************************************
@@ -396,6 +398,11 @@ void Grammar::setUpTypes() {
                                          "../Grammar/Type.code");
   TypeImaginary.excludeFunctionSource("SOURCE_COMMON_CREATE_TYPE",
                                       "../Grammar/Type.code");
+
+  TypeTargetBuiltin.excludeFunctionPrototype("HEADER_COMMON_CREATE_TYPE",
+                                             "../Grammar/Type.code");
+  TypeTargetBuiltin.excludeFunctionSource("SOURCE_COMMON_CREATE_TYPE",
+                                          "../Grammar/Type.code");
 
   // DQ (8/17/2010): Don't use the static builtin type for the SgTypeString IR
   // node.
@@ -1137,6 +1144,20 @@ void Grammar::setUpTypes() {
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
 
+  // Target-defined Clang builtin types (SVE, RVV, PPC MMA, WebAssembly,
+  // AMDGPU, OpenCL, and HLSL) are semantic types in their own right.  They
+  // must not be collapsed to a scalar, vector, or unknown-type surrogate.
+  TypeTargetBuiltin.setFunctionPrototype("HEADER_TYPE_TARGET_BUILTIN_TYPE",
+                                         "../Grammar/Type.code");
+  TypeTargetBuiltin.setDataPrototype(
+      "SgName", "spelling", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  TypeTargetBuiltin.setDataPrototype(
+      "SgTypeTargetBuiltin::target_family_enum", "target_family",
+      "= SgTypeTargetBuiltin::e_target_builtin_aarch64",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+
   // DQ (2/1/2011): Added label type to support Fortran alternative return
   // arguments in function declarations.
   TypeLabel.setFunctionPrototype("HEADER_TYPE_LABEL_TYPE",
@@ -1387,6 +1408,11 @@ void Grammar::setUpTypes() {
                                     "../Grammar/Type.code");
   TypeDefault.setFunctionSource("SOURCE_TYPE_DEFAULT_TYPE",
                                 "../Grammar/Type.code");
+
+  TypeTargetBuiltin.excludeFunctionSource("SOURCE_GET_MANGLED",
+                                          "../Grammar/Type.code");
+  TypeTargetBuiltin.setFunctionSource("SOURCE_TYPE_TARGET_BUILTIN_TYPE",
+                                      "../Grammar/Type.code");
   // TypeDefault.setFunctionSource         ( "SOURCE_GET_MANGLED_STRING_TYPE",
   // "../Grammar/Type.code");
 

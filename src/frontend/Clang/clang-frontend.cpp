@@ -711,7 +711,6 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     }
     raw_clang_args.push_back(argv[i]);
   }
-
   unsigned missing_arg_index = 0;
   unsigned missing_arg_count = 0;
   llvm::opt::InputArgList parsed_clang_args =
@@ -1685,6 +1684,26 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
            "invocation has no target triple\n";
     ROSE_ABORT();
   }
+  const clang::PreprocessorOptions &parsed_preprocessor_opts =
+      invocation.getPreprocessorOpts();
+  const bool forces_intel_intrinsics = std::any_of(
+      parsed_preprocessor_opts.Includes.begin(),
+      parsed_preprocessor_opts.Includes.end(),
+      [](const std::string &forced_include) {
+        return llvm::sys::path::filename(forced_include) == "immintrin.h";
+      });
+  if (forces_intel_intrinsics) {
+    const llvm::Triple target_triple(target_opts.Triple);
+    if (target_triple.getArch() != llvm::Triple::x86 &&
+        target_triple.getArch() != llvm::Triple::x86_64) {
+      llvm::errs()
+          << "REX_FRONTEND_INVARIANT[intel-simd-target]: forced "
+             "immintrin.h requires an exact x86 or x86_64 frontend target, "
+             "but Clang selected '"
+          << target_opts.Triple << "'\n";
+      ROSE_ABORT();
+    }
+  }
   // CreateFromArgs must retain the exact resource and system-header state
   // selected by the validated driver job. Validate that state below; do not
   // rebuild it from host defaults.
@@ -1915,6 +1934,20 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   }
 
   compiler_instance->setASTConsumer(std::move(translator_ptr));
+
+  // FrontendAction eagerly loads every unnamed module file before Sema starts.
+  // REX owns the equivalent in-process lifecycle, so it must perform the same
+  // step explicitly; named prebuilt modules load lazily, but C++20 header-unit
+  // files in FrontendOptions::ModuleFiles do not.
+  for (const std::string &module_file : fe_opts.ModuleFiles) {
+    clang::serialization::ModuleFile *loaded_module = nullptr;
+    if (!compiler_instance->loadModuleFile(module_file, loaded_module)) {
+      llvm::errs() << "REX_FRONTEND_INVARIANT[clang-module-file]: cannot load "
+                      "exact frontend module file '"
+                   << module_file << "'\n";
+      ROSE_ABORT();
+    }
+  }
 
   if (!compiler_instance->hasSema())
     compiler_instance->createSema(clang::TU_Complete, NULL);

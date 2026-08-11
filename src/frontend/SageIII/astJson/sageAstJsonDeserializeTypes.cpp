@@ -887,6 +887,23 @@ SgType *primitiveTypeFromKind(const std::string &kind) {
   return nullptr;
 }
 
+SgTypeTargetBuiltin *targetBuiltinTypeFromJson(const JsonValue &json) {
+  const int64_t family = json.requiredInt("target_family");
+  if (family < SgTypeTargetBuiltin::e_target_builtin_aarch64 ||
+      family > SgTypeTargetBuiltin::e_target_builtin_hlsl) {
+    throw std::runtime_error(
+        "AST JSON target builtin type has invalid target family");
+  }
+  const std::string spelling = json.requiredString("spelling");
+  if (spelling.empty()) {
+    throw std::runtime_error(
+        "AST JSON target builtin type has empty exact spelling");
+  }
+  return SageBuilder::buildTargetBuiltinType(
+      SgName(spelling),
+      static_cast<SgTypeTargetBuiltin::target_family_enum>(family));
+}
+
 SgAutoType *autoTypeFromJson(const JsonValue &json) {
   const bool is_constrained = json.requiredBool("is_constrained");
   const std::string source_constraint_spelling =
@@ -910,6 +927,9 @@ SgType *earlyTypeFromJson(const JsonValue &type) {
   const std::string kind = type.requiredString("kind");
   if (kind == "SgTypeDefault") {
     return SgTypeDefault::createType();
+  }
+  if (kind == "SgTypeTargetBuiltin") {
+    return targetBuiltinTypeFromJson(type);
   }
   if (kind == "SgTypeFortranAssumed") {
     if (type.requiredBool("fortran_source_syntax")) {
@@ -3446,6 +3466,9 @@ SgType *typeFromJsonUncached(const JsonValue &json, const NodeMap &nodes) {
   }
   if (kind == "SgTypeDefault") {
     return SgTypeDefault::createType();
+  }
+  if (kind == "SgTypeTargetBuiltin") {
+    return targetBuiltinTypeFromJson(json);
   }
   if (kind == "SgTypeFortranAssumed") {
     if (fortran_source_syntax) {

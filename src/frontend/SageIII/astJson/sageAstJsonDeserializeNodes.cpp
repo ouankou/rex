@@ -1275,6 +1275,25 @@ SgNode *createNodeFromRecordImpl(const NodeRecord &record, SgProject *project,
     return new SgSimpleRequirement(static_cast<Sg_File_Info *>(nullptr),
                                    static_cast<SgExpression *>(nullptr));
   }
+  if (kind == "SgRequirementSubstitutionFailure") {
+    const int64_t failure_kind = p.requiredInt("failure_kind");
+    const std::string substituted_entity =
+        p.requiredString("substituted_entity");
+    if (failure_kind <
+            SgRequirementSubstitutionFailure::e_simple_expression_failure ||
+        failure_kind >
+            SgRequirementSubstitutionFailure::e_compound_return_type_failure ||
+        substituted_entity.empty()) {
+      throw std::runtime_error(
+          "AST JSON SgRequirementSubstitutionFailure has malformed exact "
+          "semantic state");
+    }
+    return new SgRequirementSubstitutionFailure(
+        static_cast<Sg_File_Info *>(nullptr),
+        static_cast<SgRequirementSubstitutionFailure::failure_kind_enum>(
+            failure_kind),
+        substituted_entity, p.requiredString("diagnostic_message"));
+  }
   if (kind == "SgTypeRequirement") {
     return new SgTypeRequirement(static_cast<Sg_File_Info *>(nullptr),
                                  static_cast<SgType *>(nullptr));
@@ -3926,6 +3945,76 @@ void restoreAvailableSourcePositionsAndScopes(const AstFileRecord &ast,
   }
 }
 
+void restoreAvailableAuxiliaryNamespaceOwnership(const AstFileRecord &ast,
+                                                 const NodeMap &nodes) {
+  std::unordered_map<uint64_t, const NodeRecord *> records;
+  records.reserve(ast.nodes.size());
+  for (const NodeRecord &record : ast.nodes) {
+    if (!records.emplace(record.id, &record).second) {
+      throw std::runtime_error(
+          "AST JSON auxiliary namespace ownership pass found a duplicate "
+          "node ID");
+    }
+  }
+
+  for (const NodeRecord &record : ast.nodes) {
+    auto restored = nodes.find(record.id);
+    if (restored == nodes.end() ||
+        isSgNamespaceDeclarationStatement(restored->second) == nullptr) {
+      continue;
+    }
+    const uint64_t container_id = singleEdgeTarget(record, "parent");
+    auto container_node = nodes.find(container_id);
+    SgAuxiliaryDeclarationList *container =
+        container_node != nodes.end()
+            ? isSgAuxiliaryDeclarationList(container_node->second)
+            : nullptr;
+    if (container == nullptr) {
+      continue;
+    }
+
+    auto container_record = records.find(container_id);
+    if (container_record == records.end()) {
+      throw std::runtime_error(
+          "AST JSON auxiliary namespace references an unknown container");
+    }
+    const uint64_t owner_id =
+        requiredSingleEdgeTarget(*container_record->second, "parent");
+    SgScopeStatement *owner = nodeByIdAs<SgScopeStatement>(nodes, owner_id);
+    auto owner_record = records.find(owner_id);
+    if (owner_record == records.end() ||
+        requiredSingleEdgeTarget(*owner_record->second,
+                                 "auxiliary_declarations") != container_id) {
+      throw std::runtime_error(
+          "AST JSON auxiliary namespace container disagrees with its exact "
+          "scope owner");
+    }
+    if ((owner->get_auxiliary_declarations() != nullptr &&
+         owner->get_auxiliary_declarations() != container) ||
+        container->get_parent() != owner ||
+        restored->second->get_parent() != container) {
+      throw std::runtime_error(
+          "AST JSON auxiliary namespace has conflicting early structural "
+          "ownership");
+    }
+    owner->set_auxiliary_declarations(container);
+
+    SgDeclarationStatement *declaration =
+        isSgDeclarationStatement(restored->second);
+    SgDeclarationStatementPtrList &declarations = container->get_declarations();
+    const size_t occurrences =
+        std::count(declarations.begin(), declarations.end(), declaration);
+    if (occurrences > 1) {
+      throw std::runtime_error(
+          "AST JSON auxiliary namespace was published more than once during "
+          "early ownership restoration");
+    }
+    if (occurrences == 0) {
+      declarations.push_back(declaration);
+    }
+  }
+}
+
 void attachPreprocessingInfo(SgNode *node, const NodeRecord &record) {
   if (record.preprocessing.kind != JsonValue::Kind::Array) {
     throw std::runtime_error(
@@ -4170,6 +4259,12 @@ void linkNodeEdges(const NodeRecord &record, const NodeMap &nodes) {
     if (uint64_t target = singleEdgeTarget(record, "auxiliary_declarations")) {
       SgAuxiliaryDeclarationList *container =
           nodeByIdAs<SgAuxiliaryDeclarationList>(nodes, target);
+      if (scope->get_auxiliary_declarations() != nullptr &&
+          scope->get_auxiliary_declarations() != container) {
+        throw std::runtime_error(
+            "AST JSON scope has conflicting auxiliary declaration "
+            "containers");
+      }
       scope->set_auxiliary_declarations(container);
       container->set_parent(scope);
     }
@@ -4184,6 +4279,25 @@ void linkNodeEdges(const NodeRecord &record, const NodeMap &nodes) {
   }
   if (SgAuxiliaryDeclarationList *container =
           isSgAuxiliaryDeclarationList(node)) {
+    const std::vector<EdgeRecord> serialized_edges =
+        edgesFor(record, "declarations");
+    size_t serialized_index = 0;
+    for (SgDeclarationStatement *existing : container->get_declarations()) {
+      while (serialized_index < serialized_edges.size() &&
+             nodeByIdAs<SgDeclarationStatement>(
+                 nodes, serialized_edges[serialized_index].target) !=
+                 existing) {
+        ++serialized_index;
+      }
+      if (existing == nullptr || existing->get_parent() != container ||
+          serialized_index == serialized_edges.size()) {
+        throw std::runtime_error(
+            "AST JSON early auxiliary declaration ownership is not an exact "
+            "ordered subset of its serialized list");
+      }
+      ++serialized_index;
+    }
+    container->get_declarations().clear();
     appendEdgeList<SgDeclarationStatementPtrList, SgDeclarationStatement>(
         container->get_declarations(), record, "declarations", nodes, container,
         false);

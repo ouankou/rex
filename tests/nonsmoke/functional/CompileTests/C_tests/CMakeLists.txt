@@ -16,6 +16,7 @@ if(NOT BASH_EXECUTABLE)
 endif()
 
 set(C_TESTCODES
+  rex_frontend_aarch64_wide_literal_semantic_type.c
   rex_frontend_designated_initializer_chain.c
   rex_frontend_expression_tag_ownership.c
   rex_frontend_if_asm_source_provenance.c
@@ -1190,6 +1191,22 @@ list(REMOVE_ITEM C_TESTCODES test2012_145.c test2015_153.c)
 foreach(file_to_test ${C_TESTCODES})
   compile_test(${file_to_test} "C_tests")
 endforeach()
+
+add_test(
+  NAME C_tests_rex_frontend_aarch64_wide_literal_semantic_type
+  WORKING_DIRECTORY ${_c_tests_special_dir}
+  COMMAND ${C_TEST_TRANSLATOR}
+    ${C_TEST_ROSE_FLAGS}
+    -rose:skipfinalCompileStep
+    -rose:skip_unparse
+    -target aarch64-unknown-linux-gnu
+    -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_aarch64_wide_literal_semantic_type.c
+)
+set_tests_properties(
+  C_tests_rex_frontend_aarch64_wide_literal_semantic_type
+  PROPERTIES LABELS "C_tests;rex;CFE"
+)
 
 foreach(file_to_test ${C_TESTCODES_NEGATIVE})
   if(file_to_test STREQUAL "test2017_02.c")

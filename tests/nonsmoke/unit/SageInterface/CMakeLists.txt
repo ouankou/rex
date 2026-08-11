@@ -87,6 +87,27 @@ add_test(
 set_tests_properties(rex_ci_llvm_version_contract
   PROPERTIES LABELS "rex;build-system;CI")
 
+add_test(
+  NAME rex_nightly_image_registration_contract
+  COMMAND ${BASH_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_nightly_image_registration_contract.sh
+    ${ROSE_TOP_SRC_DIR}/.dockerignore
+    ${ROSE_TOP_SRC_DIR}/ci/docker/rex-nightly.Dockerfile)
+set_tests_properties(rex_nightly_image_registration_contract
+  PROPERTIES LABELS "rex;build-system;CI")
+
+add_test(
+  NAME rex_ctest_name_set_fixture_contract
+  COMMAND ${BASH_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_ctest_name_set_fixture_contract.sh
+    ${ROSE_TOP_SRC_DIR}/scripts/run_ctest_name_set.py
+    ${CMAKE_COMMAND}
+    ${CMAKE_CTEST_COMMAND}
+    ${CMAKE_CURRENT_SOURCE_DIR}/ctest_name_set_fixture_project
+    ${CMAKE_CURRENT_BINARY_DIR}/ctest_name_set_fixture_contract)
+set_tests_properties(rex_ctest_name_set_fixture_contract
+  PROPERTIES LABELS "rex;build-system;CI")
+
 set(_openmp_specimens_path
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/OpenMP_tests)
 set(_dataracebench_path ${_openmp_specimens_path}/dataRaceBench)

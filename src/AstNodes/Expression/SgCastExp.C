@@ -190,14 +190,15 @@ void SgCastExp::validate_semantic_conversion() const {
     }
   }
   if (get_cast_type() == e_builtin_bit_cast &&
+      get_semantic_conversion_kind() != e_semantic_conversion_Dependent &&
       get_semantic_conversion_kind() !=
           e_semantic_conversion_LValueToRValueBitCast) {
     fprintf(stderr,
             "REX_AST_INVARIANT[checked-cast]: __builtin_bit_cast surface\n");
     fprintf(stderr,
             "REX_AST_DETAIL[checked-cast]: __builtin_bit_cast surface "
-            "has conversion=%d instead of LLVM 22 "
-            "CK_LValueToRValueBitCast\n",
+            "has conversion=%d outside LLVM 22's exact dependent/concrete "
+            "bit-cast states\n",
             static_cast<int>(get_semantic_conversion_kind()));
     ROSE_ABORT();
   }

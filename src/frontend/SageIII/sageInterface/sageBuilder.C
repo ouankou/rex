@@ -18303,6 +18303,15 @@ SgTypeFloat64 *SageBuilder::buildFloat64Type() {
   return result;
 }
 
+SgTypeTargetBuiltin *SageBuilder::buildTargetBuiltinType(
+    const SgName &spelling,
+    SgTypeTargetBuiltin::target_family_enum target_family) {
+  SgTypeTargetBuiltin *result =
+      SgTypeTargetBuiltin::createType(spelling, target_family);
+  ROSE_ASSERT(result != nullptr);
+  return result;
+}
+
 SgTypeSignedInt *SageBuilder::buildSignedIntType() {
   SgTypeSignedInt *result = SgTypeSignedInt::createType();
   ROSE_ASSERT(result);
@@ -19317,6 +19326,30 @@ SageBuilder::buildCompoundRequirement_nfi(SgExpression *expression,
   expression->set_parent(result);
   if (type_constraint != nullptr)
     type_constraint->set_parent(result);
+  setOneSourcePositionNull(result);
+  return result;
+}
+
+SgRequirementSubstitutionFailure *
+SageBuilder::buildRequirementSubstitutionFailure_nfi(
+    SgRequirementSubstitutionFailure::failure_kind_enum failure_kind,
+    const std::string &substituted_entity,
+    const std::string &diagnostic_message) {
+  if (failure_kind <
+          SgRequirementSubstitutionFailure::e_simple_expression_failure ||
+      failure_kind >
+          SgRequirementSubstitutionFailure::e_compound_return_type_failure ||
+      substituted_entity.empty()) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[requirement-substitution-failure]: invalid "
+            "kind=%d or empty substituted entity\n",
+            static_cast<int>(failure_kind));
+    ROSE_ABORT();
+  }
+  SgRequirementSubstitutionFailure *result =
+      new SgRequirementSubstitutionFailure(
+          NULL, failure_kind, substituted_entity, diagnostic_message);
+  ROSE_ASSERT(result != nullptr);
   setOneSourcePositionNull(result);
   return result;
 }
