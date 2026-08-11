@@ -4218,6 +4218,16 @@ target_link_libraries(
 )
 
 add_executable(
+  rex_frontend_support_namespace_semantic_root_translator
+  rex_frontend_support_namespace_semantic_root_translator.cpp
+)
+target_link_libraries(
+  rex_frontend_support_namespace_semantic_root_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+add_executable(
   rex_frontend_injected_class_nttp_provenance_translator
   rex_frontend_injected_class_nttp_provenance_translator.cpp
 )
@@ -4982,6 +4992,27 @@ set_tests_properties(
 rex_lock_test_for_input(
   Cxx_tests_rex_frontend_namespace_source_fragments_structure
   rex_frontend_namespace_source_fragments.cpp)
+
+add_test(
+  NAME Cxx_tests_rex_frontend_support_namespace_semantic_root
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND
+    $<TARGET_FILE:rex_frontend_support_namespace_semantic_root_translator>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep
+    ${ROSE_INCLUDE_FLAGS}
+    -std=c++17
+    -target aarch64-unknown-linux-gnu
+    -rose:output
+    ${CMAKE_CURRENT_BINARY_DIR}/rose_rex_frontend_support_namespace_semantic_root.cpp
+    -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_support_namespace_semantic_root.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_frontend_support_namespace_semantic_root
+  PROPERTIES LABELS "Cxx_tests;rex;CFE;UNPARSER")
+rex_lock_test_for_input(
+  Cxx_tests_rex_frontend_support_namespace_semantic_root
+  rex_frontend_support_namespace_semantic_root.cpp)
 
 add_test(
   NAME Cxx_tests_rex_frontend_dependent_member_typedef_identity

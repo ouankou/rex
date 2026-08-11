@@ -16405,6 +16405,39 @@ bool ClangToSageTranslator::VisitRequiresExpr(
   ROSE_ASSERT(requirements != nullptr);
   applySourceRange(requirements, requires_expr->getSourceRange());
 
+  auto build_substitution_failure =
+      [&](clang::concepts::Requirement::SubstitutionDiagnostic *diagnostic,
+          SgRequirementSubstitutionFailure::failure_kind_enum failure_kind)
+      -> SgRequirementSubstitutionFailure * {
+    if (diagnostic == nullptr) {
+      std::cerr << "REX_FRONTEND_INVARIANT[requirement-substitution-"
+                   "failure]: Clang reported a substitution failure without "
+                   "its exact diagnostic record"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    const std::string substituted_entity = readClangApiValueDefined(
+        [&]() { return diagnostic->SubstitutedEntity.str(); });
+    const std::string diagnostic_message = readClangApiValueDefined(
+        [&]() { return diagnostic->DiagMessage.str(); });
+    const clang::SourceLocation diagnostic_location =
+        readClangApiValueDefined([&]() { return diagnostic->DiagLoc; });
+    if (substituted_entity.empty() || diagnostic_location.isInvalid()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[requirement-substitution-failure]: "
+              "kind=%d has empty substituted entity or invalid diagnostic "
+              "location\n",
+              static_cast<int>(failure_kind));
+      ROSE_ABORT();
+    }
+    SgRequirementSubstitutionFailure *failure =
+        SageBuilder::buildRequirementSubstitutionFailure_nfi(
+            failure_kind, substituted_entity, diagnostic_message);
+    applySourceRange(
+        failure, clang::SourceRange(diagnostic_location, diagnostic_location));
+    return failure;
+  };
+
   for (clang::concepts::Requirement *requirement :
        requires_expr->getRequirements()) {
     if (local_parameter_scope != nullptr) {
@@ -16422,10 +16455,16 @@ bool ClangToSageTranslator::VisitRequiresExpr(
     case clang::concepts::Requirement::RK_Type: {
       clang::concepts::TypeRequirement *type_requirement =
           llvm::cast<clang::concepts::TypeRequirement>(requirement);
-      if (type_requirement->isSubstitutionFailure() ||
-          type_requirement->getType() == nullptr) {
+      if (type_requirement->isSubstitutionFailure()) {
+        translated_requirement = build_substitution_failure(
+            type_requirement->getSubstitutionDiagnostic(),
+            SgRequirementSubstitutionFailure::e_type_requirement_failure);
+        break;
+      }
+      if (type_requirement->getType() == nullptr) {
         std::cerr << "REX_FRONTEND_INVARIANT[type-requirement]: Clang type "
-                     "requirement has no exact source type"
+                     "requirement has neither an exact source type nor an "
+                     "explicit substitution failure"
                   << std::endl;
         ROSE_ABORT();
       }
@@ -16457,10 +16496,13 @@ bool ClangToSageTranslator::VisitRequiresExpr(
       clang::concepts::ExprRequirement *expr_requirement =
           llvm::cast<clang::concepts::ExprRequirement>(requirement);
       if (expr_requirement->isExprSubstitutionFailure()) {
-        std::cerr << "REX_FRONTEND_INVARIANT[expression-requirement]: Clang "
-                     "requirement has no exact expression"
-                  << std::endl;
-        ROSE_ABORT();
+        translated_requirement = build_substitution_failure(
+            expr_requirement->getExprSubstitutionDiagnostic(),
+            expr_requirement->isSimple()
+                ? SgRequirementSubstitutionFailure::e_simple_expression_failure
+                : SgRequirementSubstitutionFailure::
+                      e_compound_expression_failure);
+        break;
       }
       clang::Expr *clang_expression = expr_requirement->getExpr();
       SgExpression *sage_expression =
@@ -16482,87 +16524,94 @@ bool ClangToSageTranslator::VisitRequiresExpr(
         const clang::concepts::ExprRequirement::ReturnTypeRequirement
             &return_requirement = expr_requirement->getReturnTypeRequirement();
         if (!return_requirement.isEmpty()) {
-          if (return_requirement.isSubstitutionFailure() ||
-              !return_requirement.isTypeConstraint()) {
+          if (return_requirement.isSubstitutionFailure()) {
+            type_constraint = build_substitution_failure(
+                return_requirement.getSubstitutionDiagnostic(),
+                SgRequirementSubstitutionFailure::
+                    e_compound_return_type_failure);
+          } else if (!return_requirement.isTypeConstraint()) {
             std::cerr << "REX_FRONTEND_INVARIANT[compound-requirement]: "
-                         "return type requirement has no exact type constraint"
+                         "return type requirement has neither an exact type "
+                         "constraint nor an explicit substitution failure"
                       << std::endl;
             ROSE_ABORT();
-          }
-          const clang::TypeConstraint *clang_constraint =
-              return_requirement.getTypeConstraint();
-          const clang::ConceptReference *concept_reference =
-              clang_constraint != nullptr
-                  ? clang_constraint->getConceptReference()
-                  : nullptr;
-          clang::TemplateDecl *named_concept =
-              concept_reference != nullptr
-                  ? concept_reference->getNamedConcept()
-                  : nullptr;
-          if (concept_reference == nullptr || named_concept == nullptr) {
-            std::cerr << "REX_FRONTEND_INVARIANT[compound-requirement]: "
-                         "type constraint has no exact named concept"
-                      << std::endl;
-            ROSE_ABORT();
-          }
-
-          auto concept_translation = p_decl_translation_map.find(named_concept);
-          if (concept_translation == p_decl_translation_map.end() &&
-              p_decl_translation_in_progress.find(named_concept) ==
-                  p_decl_translation_in_progress.end() &&
-              p_decl_translation_on_demand.find(named_concept) ==
-                  p_decl_translation_on_demand.end()) {
-            TraverseOnDemand(named_concept);
-            concept_translation = p_decl_translation_map.find(named_concept);
-          }
-          SgNonrealDecl *sage_concept =
-              concept_translation != p_decl_translation_map.end()
-                  ? isSgNonrealDecl(concept_translation->second)
-                  : nullptr;
-          SgNonrealSymbol *concept_symbol =
-              sage_concept != nullptr
-                  ? isSgNonrealSymbol(
-                        sage_concept->get_symbol_from_symbol_table())
-                  : nullptr;
-          if (concept_symbol == nullptr) {
-            std::cerr
-                << "REX_FRONTEND_INVARIANT[compound-requirement]: concept="
-                << named_concept->getNameAsString()
-                << " has no exact translated SgNonrealSymbol" << std::endl;
-            ROSE_ABORT();
-          }
-
-          SgNonrealRefExp *sage_constraint =
-              SageBuilder::buildNonrealRefExp_nfi(concept_symbol);
-          const clang::ASTTemplateArgumentListInfo *written_arguments =
-              concept_reference->getTemplateArgsAsWritten();
-          if (written_arguments != nullptr) {
-            if (!written_arguments->getLAngleLoc().isValid() ||
-                !written_arguments->getRAngleLoc().isValid()) {
+          } else {
+            const clang::TypeConstraint *clang_constraint =
+                return_requirement.getTypeConstraint();
+            const clang::ConceptReference *concept_reference =
+                clang_constraint != nullptr
+                    ? clang_constraint->getConceptReference()
+                    : nullptr;
+            clang::TemplateDecl *named_concept =
+                concept_reference != nullptr
+                    ? concept_reference->getNamedConcept()
+                    : nullptr;
+            if (concept_reference == nullptr || named_concept == nullptr) {
               std::cerr << "REX_FRONTEND_INVARIANT[compound-requirement]: "
-                           "explicit type constraint arguments have no exact "
-                           "angle-bracket range"
+                           "type constraint has no exact named concept"
                         << std::endl;
               ROSE_ABORT();
             }
-            SgTemplateArgumentPtrList exact_arguments;
-            for (const clang::TemplateArgumentLoc &argument :
-                 written_arguments->arguments()) {
-              appendTemplateArguments(exact_arguments, argument, true);
+
+            auto concept_translation =
+                p_decl_translation_map.find(named_concept);
+            if (concept_translation == p_decl_translation_map.end() &&
+                p_decl_translation_in_progress.find(named_concept) ==
+                    p_decl_translation_in_progress.end() &&
+                p_decl_translation_on_demand.find(named_concept) ==
+                    p_decl_translation_on_demand.end()) {
+              TraverseOnDemand(named_concept);
+              concept_translation = p_decl_translation_map.find(named_concept);
             }
-            sage_constraint->get_templateArguments() =
-                std::move(exact_arguments);
-            sage_constraint->set_explicit_template_argument_list(true);
-            SageBuilder::setTemplateArgumentParents(sage_constraint);
+            SgNonrealDecl *sage_concept =
+                concept_translation != p_decl_translation_map.end()
+                    ? isSgNonrealDecl(concept_translation->second)
+                    : nullptr;
+            SgNonrealSymbol *concept_symbol =
+                sage_concept != nullptr
+                    ? isSgNonrealSymbol(
+                          sage_concept->get_symbol_from_symbol_table())
+                    : nullptr;
+            if (concept_symbol == nullptr) {
+              std::cerr
+                  << "REX_FRONTEND_INVARIANT[compound-requirement]: concept="
+                  << named_concept->getNameAsString()
+                  << " has no exact translated SgNonrealSymbol" << std::endl;
+              ROSE_ABORT();
+            }
+
+            SgNonrealRefExp *sage_constraint =
+                SageBuilder::buildNonrealRefExp_nfi(concept_symbol);
+            const clang::ASTTemplateArgumentListInfo *written_arguments =
+                concept_reference->getTemplateArgsAsWritten();
+            if (written_arguments != nullptr) {
+              if (!written_arguments->getLAngleLoc().isValid() ||
+                  !written_arguments->getRAngleLoc().isValid()) {
+                std::cerr << "REX_FRONTEND_INVARIANT[compound-requirement]: "
+                             "explicit type constraint arguments have no "
+                             "exact angle-bracket range"
+                          << std::endl;
+                ROSE_ABORT();
+              }
+              SgTemplateArgumentPtrList exact_arguments;
+              for (const clang::TemplateArgumentLoc &argument :
+                   written_arguments->arguments()) {
+                appendTemplateArguments(exact_arguments, argument, true);
+              }
+              sage_constraint->get_templateArguments() =
+                  std::move(exact_arguments);
+              sage_constraint->set_explicit_template_argument_list(true);
+              SageBuilder::setTemplateArgumentParents(sage_constraint);
+            }
+            const clang::NestedNameSpecifierLoc qualifier =
+                concept_reference->getNestedNameSpecifierLoc();
+            attachExplicitQualifierFromNestedName(
+                sage_constraint, qualifier.getNestedNameSpecifier(),
+                qualifier ? &qualifier : nullptr, p_compiler_instance);
+            applySourceRange(sage_constraint,
+                             concept_reference->getSourceRange());
+            type_constraint = sage_constraint;
           }
-          const clang::NestedNameSpecifierLoc qualifier =
-              concept_reference->getNestedNameSpecifierLoc();
-          attachExplicitQualifierFromNestedName(
-              sage_constraint, qualifier.getNestedNameSpecifier(),
-              qualifier ? &qualifier : nullptr, p_compiler_instance);
-          applySourceRange(sage_constraint,
-                           concept_reference->getSourceRange());
-          type_constraint = sage_constraint;
         }
         translated_requirement = SageBuilder::buildCompoundRequirement_nfi(
             sage_expression, expr_requirement->hasNoexceptRequirement(),

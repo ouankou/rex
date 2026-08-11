@@ -3120,18 +3120,38 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
       }
       ROSE_ABORT();
     }
-    for (const auto &childAttribute : synthesizedAttributeList) {
-      if (childAttribute.node != nullptr || childAttribute.isFrontier ||
-          childAttribute.unparseUsingTokenStream ||
-          childAttribute.unparseFromTheAST ||
-          childAttribute.containsNodesToBeUnparsedFromTheAST ||
-          childAttribute.containsNodesToBeUnparsedFromTheTokenStream ||
-          childAttribute.sourceFile != inheritedAttribute.sourceFile) {
+    for (size_t childIndex = 0; childIndex < synthesizedAttributeList.size();
+         ++childIndex) {
+      const auto &childAttribute = synthesizedAttributeList[childIndex];
+      const bool neutralSemanticChild =
+          childAttribute.node == nullptr && !childAttribute.isFrontier &&
+          !childAttribute.unparseUsingTokenStream &&
+          !childAttribute.unparseFromTheAST &&
+          !childAttribute.containsNodesToBeUnparsedFromTheAST &&
+          !childAttribute.containsNodesToBeUnparsedFromTheTokenStream;
+      const bool exactOrAbsentSourceContext =
+          childAttribute.sourceFile == nullptr ||
+          childAttribute.sourceFile == inheritedAttribute.sourceFile;
+      if (!neutralSemanticChild || !exactOrAbsentSourceContext) {
         fprintf(stderr,
                 "REX_UNPARSE_INVARIANT[frontier-auxiliary-emission]: "
-                "node=%p/%s has a non-neutral semantic child frontier "
-                "attribute\n",
-                static_cast<void *>(n), n->class_name().c_str());
+                "node=%p/%s child-index=%zu child=%p/%s has a non-neutral "
+                "semantic child frontier attribute "
+                "[node=%p,frontier=%d,tokens=%d,ast=%d,contains-ast=%d,"
+                "contains-tokens=%d,source=%p,expected-source=%p]\n",
+                static_cast<void *>(n), n->class_name().c_str(), childIndex,
+                static_cast<void *>(traversalSuccessors[childIndex]),
+                traversalSuccessors[childIndex] != nullptr
+                    ? traversalSuccessors[childIndex]->class_name().c_str()
+                    : "<null>",
+                static_cast<void *>(childAttribute.node),
+                childAttribute.isFrontier,
+                childAttribute.unparseUsingTokenStream,
+                childAttribute.unparseFromTheAST,
+                childAttribute.containsNodesToBeUnparsedFromTheAST,
+                childAttribute.containsNodesToBeUnparsedFromTheTokenStream,
+                static_cast<void *>(childAttribute.sourceFile),
+                static_cast<void *>(inheritedAttribute.sourceFile));
         ROSE_ABORT();
       }
     }
@@ -3142,6 +3162,8 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
     returnAttribute.unparseFromTheAST = false;
     returnAttribute.containsNodesToBeUnparsedFromTheAST = false;
     returnAttribute.containsNodesToBeUnparsedFromTheTokenStream = false;
+    returnAttribute.sourceFile = inheritedAttribute.sourceFile;
+    ASSERT_not_null(returnAttribute.sourceFile);
     return returnAttribute;
   }
 

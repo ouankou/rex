@@ -1030,7 +1030,28 @@ void SgLocatedNode::fixupCopy_references(SgNode *copy, SgCopyHelp &help) const {
               copied_symbol->get_declaration() != copied_source) {
             fprintf(stderr,
                     "REX_AST_INVARIANT[template-function-copy-reference]: "
-                    "copied source template has no exact copied symbol\n");
+                    "source=%p/%s name=%s scope=%p parent=%p copy=%p/%s "
+                    "scope=%p parent=%p symbol=%p declaration=%p has no "
+                    "exact copied symbol\n",
+                    static_cast<void *>(original_source),
+                    original_source->class_name().c_str(),
+                    original_source->get_name().getString().c_str(),
+                    static_cast<void *>(original_source->get_scope()),
+                    static_cast<void *>(original_source->get_parent()),
+                    static_cast<void *>(copied_source),
+                    copied_source != nullptr
+                        ? copied_source->class_name().c_str()
+                        : "<null>",
+                    static_cast<void *>(copied_source != nullptr
+                                            ? copied_source->get_scope()
+                                            : nullptr),
+                    static_cast<void *>(copied_source != nullptr
+                                            ? copied_source->get_parent()
+                                            : nullptr),
+                    static_cast<void *>(copied_symbol),
+                    static_cast<void *>(copied_symbol != nullptr
+                                            ? copied_symbol->get_declaration()
+                                            : nullptr));
             ROSE_ABORT();
           }
           reference->set_symbol(copied_symbol);

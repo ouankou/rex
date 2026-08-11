@@ -1091,6 +1091,13 @@ std::string getTypeName(SgType *type) {
   case V_SgTypeDefault:
     typeName = "default";
     break;
+  case V_SgTypeTargetBuiltin: {
+    SgTypeTargetBuiltin *targetBuiltin = isSgTypeTargetBuiltin(type);
+    ROSE_ASSERT(targetBuiltin != nullptr);
+    ROSE_ASSERT(!targetBuiltin->get_spelling().is_null());
+    typeName = targetBuiltin->get_spelling().getString();
+    break;
+  }
   case V_SgTypeFortranAssumed:
     typeName = "type(*)";
     break;
@@ -1613,6 +1620,7 @@ bool isDefaultConstructible(SgType *type) {
     // using new automated generation of builtin functions for ROSE.
   case V_SgTypeSigned128bitInteger:
   case V_SgTypeUnsigned128bitInteger:
+  case V_SgTypeTargetBuiltin:
 
     // DQ (8/27/2006): Changed name of SgComplex to make it more consistant with
     // other type names and added SgTypeImaginary IR node (for C99 complex
@@ -1778,6 +1786,7 @@ bool isCopyConstructible(SgType *type) {
     // using new automated generation of builtin functions for ROSE.
   case V_SgTypeSigned128bitInteger:
   case V_SgTypeUnsigned128bitInteger:
+  case V_SgTypeTargetBuiltin:
 
   case V_SgReferenceType:
   case V_SgRvalueReferenceType:
@@ -1927,6 +1936,7 @@ bool isAssignable(SgType *type) {
     // using new automated generation of builtin functions for ROSE.
   case V_SgTypeSigned128bitInteger:
   case V_SgTypeUnsigned128bitInteger:
+  case V_SgTypeTargetBuiltin:
 
   case V_SgTypeComplex: // C99 complex is assignable
   case V_SgTypeImaginary:

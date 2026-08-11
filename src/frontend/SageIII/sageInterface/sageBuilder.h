@@ -158,6 +158,9 @@ ROSE_DLL_API SgTypeFloat32x *buildFloat32xType();
 ROSE_DLL_API SgTypeFloat64x *buildFloat64xType();
 ROSE_DLL_API SgTypeFloat32 *buildFloat32Type();
 ROSE_DLL_API SgTypeFloat64 *buildFloat64Type();
+ROSE_DLL_API SgTypeTargetBuiltin *
+buildTargetBuiltinType(const SgName &spelling,
+                       SgTypeTargetBuiltin::target_family_enum target_family);
 
 //! DQ (8/21/2010): We want to move to the new buildStringType(
 //! SgExpression*,size_t) function over the older buildStringType() function.
@@ -1108,6 +1111,11 @@ ROSE_DLL_API SgTypeRequirement *buildTypeRequirement_nfi(SgType *required_type);
 ROSE_DLL_API SgCompoundRequirement *
 buildCompoundRequirement_nfi(SgExpression *expression, bool noexcept_required,
                              SgExpression *type_constraint);
+ROSE_DLL_API SgRequirementSubstitutionFailure *
+buildRequirementSubstitutionFailure_nfi(
+    SgRequirementSubstitutionFailure::failure_kind_enum failure_kind,
+    const std::string &substituted_entity,
+    const std::string &diagnostic_message);
 ROSE_DLL_API SgNestedRequirement *
 buildNestedRequirement_nfi(SgExpression *constraint);
 

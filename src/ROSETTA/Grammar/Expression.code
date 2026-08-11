@@ -2044,6 +2044,17 @@ void set_global_qualification_required(
     bool global_qualification_required) override;
 HEADER_TYPE_REQUIREMENT_END
 
+HEADER_REQUIREMENT_SUBSTITUTION_FAILURE_START
+
+enum failure_kind_enum {
+  e_simple_expression_failure = 0,
+  e_compound_expression_failure,
+  e_type_requirement_failure,
+  e_compound_return_type_failure
+};
+
+HEADER_REQUIREMENT_SUBSTITUTION_FAILURE_END
+
 // NOTES: SgAggregateInitializer, SgConstructorInitializer, and
 //        SgAssignInitializer all have different set_type functions
 //        (is this a bug?).

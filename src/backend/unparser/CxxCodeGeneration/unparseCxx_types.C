@@ -1091,6 +1091,25 @@ void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
     ROSE_ABORT();
   }
 
+  case T_TARGET_BUILTIN: {
+    if ((info.isWithType() && info.SkipBaseType()) || info.isTypeSecondPart()) {
+      break;
+    }
+    SgTypeTargetBuiltin *target_type = isSgTypeTargetBuiltin(type);
+    if (target_type == nullptr || target_type->get_spelling().is_null() ||
+        target_type->get_target_family() <
+            SgTypeTargetBuiltin::e_target_builtin_aarch64 ||
+        target_type->get_target_family() >
+            SgTypeTargetBuiltin::e_target_builtin_hlsl) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[target-builtin-type]: malformed exact "
+              "target builtin type\n");
+      ROSE_ABORT();
+    }
+    printTypeToken(this, target_type->get_spelling().getString(), info);
+    break;
+  }
+
   case T_IMAGINARY: {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[imaginary-type]: legacy imaginary type "

@@ -125,6 +125,7 @@ set(CXX20_TESTCODES
   test2020_119.C
   test2020_121.C
   rex_cxx20_char8_type_identity.cpp
+  rex_frontend_dependent_builtin_bit_cast.cpp
   rex_frontend_constrained_overload_identity.cpp
   rex_frontend_range_init_declarator_identity.cpp
   rex_test2026_coreturn_valgrind_defined_reads.cpp
@@ -237,6 +238,66 @@ rex_lock_test_for_input(
   test2020_45.C
 )
 
+set(_rex_unowned_namespace_source
+    "${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_unowned_imported_namespace.cpp")
+set(_rex_unowned_namespace_header
+    "${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_unowned_imported_namespace.hpp")
+set(_rex_unowned_namespace_module_dir
+    "${CMAKE_CURRENT_BINARY_DIR}/rex_frontend_unowned_imported_namespace_modules")
+set(_rex_unowned_namespace_module_pcm
+    "${_rex_unowned_namespace_module_dir}/rex_frontend_unowned_imported_namespace.pcm")
+
+string(CONCAT _rex_unowned_namespace_command
+  "set -eu; "
+  "module_dir=\"${_rex_unowned_namespace_module_dir}\"; "
+  "mkdir -p \"$module_dir\"; "
+  "${CMAKE_CXX_COMPILER} -std=c++20 -fmodule-header=user "
+  "\"${_rex_unowned_namespace_header}\" "
+  "-o \"${_rex_unowned_namespace_module_pcm}\"; "
+  "translator=\"$1\"; shift; "
+  "exec \"$translator\" "
+  "-fmodule-file=\"${_rex_unowned_namespace_module_pcm}\" \"$@\"")
+
+add_executable(
+  rex_frontend_unowned_imported_namespace_translator
+  rex_frontend_unowned_imported_namespace_translator.cpp
+)
+target_include_directories(
+  rex_frontend_unowned_imported_namespace_translator
+  PRIVATE ${ROSE_TOP_SRC_DIR}/src/frontend/Clang
+)
+rose_force_system_include_dirs(
+  rex_frontend_unowned_imported_namespace_translator
+  ${LLVM_INCLUDE_DIRS}
+  ${CLANG_INCLUDE_DIRS}
+)
+target_link_libraries(
+  rex_frontend_unowned_imported_namespace_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+add_test(
+  NAME Cxx20_tests_rex_frontend_unowned_imported_namespace
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND
+    sh -c
+    "${_rex_unowned_namespace_command}"
+    dummy
+    $<TARGET_FILE:rex_frontend_unowned_imported_namespace_translator>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep -rose:skip_unparse
+    ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${_rex_unowned_namespace_source}
+)
+set_tests_properties(
+  Cxx20_tests_rex_frontend_unowned_imported_namespace
+  PROPERTIES LABELS "rex;CFE;Cxx20_tests"
+)
+rex_lock_test_for_input(
+  Cxx20_tests_rex_frontend_unowned_imported_namespace
+  rex_frontend_unowned_imported_namespace.cpp
+)
+
 set(_rex_export_context_source
     "${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_export_context_scope.cpp")
 set(_rex_export_context_module_source
@@ -290,6 +351,75 @@ target_link_libraries(
   ROSE_DLL
   ${link_with_libraries}
 )
+
+add_executable(
+  rex_frontend_target_builtin_type_translator
+  rex_frontend_target_builtin_type_translator.cpp
+)
+target_link_libraries(
+  rex_frontend_target_builtin_type_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+add_executable(
+  rex_frontend_requirement_substitution_failure_translator
+  rex_frontend_requirement_substitution_failure_translator.cpp
+)
+target_link_libraries(
+  rex_frontend_requirement_substitution_failure_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+add_test(
+  NAME Cxx20_tests_rex_frontend_requirement_substitution_failure
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND
+    $<TARGET_FILE:rex_frontend_requirement_substitution_failure_translator>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep -rose:skip_unparse
+    -rex:ast-json-checkpoint=pre-omp-construction
+    -rex:ast-json-dir=rex_frontend_requirement_substitution_failure_json
+    -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_requirement_substitution_failure.cpp
+)
+set_tests_properties(
+  Cxx20_tests_rex_frontend_requirement_substitution_failure
+  PROPERTIES LABELS "Cxx20_tests;rex;CFE;ASTJSON"
+)
+rex_lock_test_for_input(
+  Cxx20_tests_rex_frontend_requirement_substitution_failure
+  rex_frontend_requirement_substitution_failure.cpp
+)
+
+set(_rex_target_builtin_type_source
+    "${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_target_builtin_type.cpp")
+foreach(_rex_target_builtin_arch IN ITEMS aarch64 riscv64)
+  if(_rex_target_builtin_arch STREQUAL "aarch64")
+    set(_rex_target_builtin_triple aarch64-unknown-linux-gnu)
+  else()
+    set(_rex_target_builtin_triple riscv64-unknown-linux-gnu)
+  endif()
+  add_test(
+    NAME Cxx20_tests_rex_frontend_target_builtin_type_${_rex_target_builtin_arch}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND
+      $<TARGET_FILE:rex_frontend_target_builtin_type_translator>
+      ${ROSE_FLAGS} -rose:skipfinalCompileStep -rose:skip_unparse
+      -rex:ast-json-checkpoint=pre-omp-construction
+      -rex:ast-json-dir=rex_frontend_target_builtin_type_${_rex_target_builtin_arch}_json
+      -target ${_rex_target_builtin_triple}
+      -c ${_rex_target_builtin_type_source}
+  )
+  set_tests_properties(
+    Cxx20_tests_rex_frontend_target_builtin_type_${_rex_target_builtin_arch}
+    PROPERTIES LABELS "Cxx20_tests;rex;CFE;ASTJSON"
+  )
+  rex_lock_test_for_input(
+    Cxx20_tests_rex_frontend_target_builtin_type_${_rex_target_builtin_arch}
+    rex_frontend_target_builtin_type.cpp
+  )
+endforeach()
 
 add_executable(
   rex_frontend_constrained_overload_identity_translator
@@ -600,7 +730,8 @@ add_test(
     "${_rex_unparser_asm_clobber_command}"
     dummy
     $<TARGET_FILE:${translator}>
-    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    ${ROSE_FLAGS} -target x86_64-unknown-linux-gnu
+    -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${_rex_unparser_asm_clobber_source}
 )

@@ -1037,11 +1037,24 @@ void SgGlobal::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
   SgGlobal *global_copy = isSgGlobal(copy);
   ROSE_ASSERT(global_copy != NULL);
 
+  // Rebuild the global scope and its auxiliary semantic scopes before
+  // visiting source-emission declarations.  A namespace reopening mirrors
+  // its local symbols into the namespace's global definition.  When that
+  // global definition is an auxiliary declaration (for example the frontend
+  // support namespace), processing reopenings first would leave a non-empty
+  // but incomplete destination table.  The generic scope fixup quite
+  // deliberately treats a non-empty table as an already completed copy, so
+  // that partial publication would prevent the exact source inventory from
+  // ever being installed.
+  //
+  // The copied-node map is complete before symbol fixup starts.  Therefore
+  // the exact symbol-table builder can materialize every auxiliary symbol and
+  // its copied basis now; subsequent namespace-fragment mirroring is
+  // idempotent and must find those same basis identities.
+  SgScopeStatement::fixupCopy_symbols(copy, help);
+
   fixupCanonicalDeclarationCopiesForSymbols(this->getDeclarationList(),
                                             global_copy, help);
-
-  // Call the base class fixupCopy member function
-  SgScopeStatement::fixupCopy_symbols(copy, help);
 
   // printf ("\nLeaving SgGlobal::fixupCopy_symbols() this = %p = %s  copy = %p
   // \n",this,this->class_name().c_str(),copy);

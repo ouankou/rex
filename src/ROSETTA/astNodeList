@@ -297,6 +297,7 @@ SgNewExp
 SgNode
 SgNoexceptOp
 SgRequiresExpr
+SgRequirementSubstitutionFailure
 SgSimpleRequirement
 SgTypeRequirement
 SgCompoundRequirement
@@ -708,6 +709,7 @@ SgTypeSignedLong
 SgTypeSignedLongLong
 SgTypeSignedShort
 SgTypeString
+SgTypeTargetBuiltin
 SgTypeUnknown
 SgTypeUnsigned128bitInteger
 SgTypeUnsignedChar

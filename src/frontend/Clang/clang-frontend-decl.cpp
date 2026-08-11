@@ -52,6 +52,37 @@
 
 #include <vector>
 
+const clang::Module *clangFrontendImportedNamespaceModule(
+    const clang::NamespaceDecl *namespace_decl) {
+  if (namespace_decl == nullptr || !namespace_decl->isFromASTFile()) {
+    return nullptr;
+  }
+
+  const clang::Module *module = namespace_decl->getImportedOwningModule();
+  const std::string module_name =
+      module != nullptr
+          ? module->getFullModuleName(/*AllowStringLiterals=*/true)
+          : std::string();
+  if (namespace_decl->hasOwningModule() &&
+      (module == nullptr || module_name.empty())) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[namespace-module-owner]: imported "
+            "namespace=%s advertises module ownership but has no exact "
+            "owning module\n",
+            namespace_decl->getQualifiedNameAsString().c_str());
+    ROSE_ABORT();
+  }
+  if (!namespace_decl->hasOwningModule() && module != nullptr) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[namespace-module-owner]: imported "
+            "namespace=%s has a module pointer without Clang module "
+            "ownership\n",
+            namespace_decl->getQualifiedNameAsString().c_str());
+    ROSE_ABORT();
+  }
+  return module;
+}
+
 namespace {
 
 static bool clangFrontendRunningOnValgrind() {
@@ -3023,10 +3054,11 @@ bool declIsFromApplicationHeader(clang::Decl *decl, clang::CompilerInstance *ci,
         module != nullptr
             ? module->getFullModuleName(/*AllowStringLiterals=*/true)
             : std::string();
-    if (module == nullptr || module_name.empty()) {
+    if (decl->hasOwningModule() && (module == nullptr || module_name.empty())) {
       fprintf(stderr,
               "REX_FRONTEND_INVARIANT[module-ownership]: imported "
-              "declaration=%p/%s has no exact owning module\n",
+              "declaration=%p/%s advertises module ownership but has no "
+              "exact owning module\n",
               static_cast<void *>(decl), decl->getDeclKindName());
       ROSE_ABORT();
     }
@@ -3041,6 +3073,20 @@ bool declIsFromApplicationHeader(clang::Decl *decl, clang::CompilerInstance *ci,
       preprocessor_record->recordExternalOwnershipPath(
           normalizedDeclFilePath(decl, sm),
           "declIsFromApplicationHeader:imported-declaration-source");
+    } else if (module == nullptr) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[module-ownership]: unowned imported "
+              "declaration=%p/%s has no exact physical source identity\n",
+              static_cast<void *>(decl), decl->getDeclKindName());
+      ROSE_ABORT();
+    }
+    if (module == nullptr) {
+      // Clang explicitly permits a declaration loaded from an AST file to
+      // retain ModuleOwnershipKind::Unowned.  Header units use this for
+      // declarations in their global module fragment.  Their exact physical
+      // source path above is the ownership identity; inventing an owning
+      // module would misrepresent Clang's semantic state.
+      return false;
     }
     if (auto ast_file = module->getASTFile()) {
       std::string ast_path =
@@ -8756,6 +8802,53 @@ preferredDeclSourceRange(clang::Decl *decl, SgNode *node,
 
   clang::SourceRange range =
       readClangApiValueDefined([&]() { return decl->getSourceRange(); });
+  if (clang::ImportDecl *import_decl = llvm::dyn_cast<clang::ImportDecl>(decl);
+      import_decl != nullptr && source_manager != nullptr && !range.isValid() &&
+      range.getBegin().isValid()) {
+    // Clang 22 represents a source-written header-unit import with the exact
+    // `import` location but an invalid ImportDecl endpoint.  Recover the one
+    // missing endpoint from the terminating token in the same physical file;
+    // the declaration remains a lexical source surface rather than being
+    // misclassified as an implicit semantic declaration.
+    clang::SourceManager &mutable_source_manager =
+        const_cast<clang::SourceManager &>(*source_manager);
+    clang::SourceLocation begin =
+        mutable_source_manager.getFileLoc(range.getBegin());
+    const clang::LangOptions &language_options =
+        import_decl->getASTContext().getLangOpts();
+    clang::SourceLocation cursor = begin;
+    std::optional<clang::Token> token;
+    while (cursor.isValid()) {
+      token = clang::Lexer::findNextToken(cursor, mutable_source_manager,
+                                          language_options,
+                                          /*IncludeComments=*/false);
+      if (!token.has_value() || !token->getLocation().isValid()) {
+        break;
+      }
+      clang::SourceLocation token_location =
+          mutable_source_manager.getFileLoc(token->getLocation());
+      if (!token_location.isValid() ||
+          !mutable_source_manager.isWrittenInSameFile(begin, token_location) ||
+          !mutable_source_manager.isBeforeInTranslationUnit(cursor,
+                                                            token_location)) {
+        break;
+      }
+      cursor = token_location;
+      if (token->is(clang::tok::semi)) {
+        return clang::SourceRange(range.getBegin(), token->getLocation());
+      }
+    }
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[import-declaration-source-range]: "
+            "source-written import=%s has no exact same-file terminating "
+            "semicolon\n",
+            import_decl->getImportedModule() != nullptr
+                ? import_decl->getImportedModule()
+                      ->getFullModuleName(/*AllowStringLiterals=*/true)
+                      .c_str()
+                : "<null>");
+    ROSE_ABORT();
+  }
   if (!llvm::isa<clang::VarDecl>(decl) || source_manager == nullptr ||
       !range.isValid() || !range.getBegin().isValid() ||
       !range.getEnd().isValid()) {
@@ -23859,30 +23952,42 @@ static SgNamespaceDefinitionStatement *selectNamespaceFragmentBySourceOrder(
   return selected;
 }
 
-static const clang::Module *
-importedNamespaceModule(const clang::NamespaceDecl *namespace_decl) {
-  if (namespace_decl == nullptr || !namespace_decl->isFromASTFile()) {
-    return nullptr;
+static bool
+isFrontendSupportNamespace(const clang::NamespaceDecl *namespace_decl,
+                           const clang::CompilerInstance *compiler_instance,
+                           const SagePreprocessorRecord *preprocessor_record) {
+  if (namespace_decl == nullptr || namespace_decl->isFromASTFile()) {
+    return false;
   }
 
-  const clang::Module *module = namespace_decl->getImportedOwningModule();
-  const std::string module_name =
-      module != nullptr
-          ? module->getFullModuleName(/*AllowStringLiterals=*/true)
-          : std::string();
-  if (module == nullptr || module_name.empty()) {
+  const clang::SourceLocation begin = namespace_decl->getBeginLoc();
+  if (!is_frontend_support_location(begin, compiler_instance,
+                                    preprocessor_record)) {
+    return false;
+  }
+
+  const clang::SourceLocation close = namespace_decl->getRBraceLoc();
+  const clang::SourceLocation name = namespace_decl->getLocation();
+  if (!close.isValid() ||
+      !is_frontend_support_location(close, compiler_instance,
+                                    preprocessor_record) ||
+      (!namespace_decl->isAnonymousNamespace() &&
+       (!name.isValid() ||
+        !is_frontend_support_location(name, compiler_instance,
+                                      preprocessor_record)))) {
     fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[namespace-module-owner]: imported "
-            "namespace=%s has no exact owning module\n",
+            "REX_FRONTEND_INVARIANT[namespace-frontend-support-owner]: "
+            "namespace=%s crosses or lacks its exact registered "
+            "frontend-support source owner\n",
             namespace_decl->getQualifiedNameAsString().c_str());
     ROSE_ABORT();
   }
-  return module;
+  return true;
 }
 
 static SgScopeStatement *validateImportedNamespaceOwnership(
-    SgNamespaceDeclarationStatement *namespace_decl,
-    const clang::Module *module, const char *context) {
+    const clang::NamespaceDecl *clang_namespace,
+    SgNamespaceDeclarationStatement *namespace_decl, const char *context) {
   SgAuxiliaryDeclarationList *container =
       namespace_decl != nullptr
           ? isSgAuxiliaryDeclarationList(namespace_decl->get_parent())
@@ -23890,11 +23995,14 @@ static SgScopeStatement *validateImportedNamespaceOwnership(
   SgScopeStatement *owner = container != nullptr
                                 ? isSgScopeStatement(container->get_parent())
                                 : nullptr;
-  const std::string module_name =
+  const clang::Module *module =
+      clangFrontendImportedNamespaceModule(clang_namespace);
+  const std::string owner_name =
       module != nullptr
           ? module->getFullModuleName(/*AllowStringLiterals=*/true)
-          : std::string();
-  if (namespace_decl == nullptr || module == nullptr || module_name.empty() ||
+          : "<physical-source>";
+  if (clang_namespace == nullptr || !clang_namespace->isFromASTFile() ||
+      namespace_decl == nullptr || owner_name.empty() ||
       namespace_decl->get_definition() == nullptr ||
       namespace_decl->get_definition()->get_parent() != namespace_decl ||
       namespace_decl->has_source_fragments() || container == nullptr ||
@@ -23903,9 +24011,9 @@ static SgScopeStatement *validateImportedNamespaceOwnership(
       std::count(container->get_declarations().begin(),
                  container->get_declarations().end(), namespace_decl) != 1) {
     fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[namespace-module-owner]: context=%s "
-            "module=%s namespace=%p has malformed semantic-only ownership\n",
-            context != nullptr ? context : "<unknown>", module_name.c_str(),
+            "REX_FRONTEND_INVARIANT[namespace-import-owner]: context=%s "
+            "owner=%s namespace=%p has malformed semantic-only ownership\n",
+            context != nullptr ? context : "<unknown>", owner_name.c_str(),
             static_cast<void *>(namespace_decl));
     ROSE_ABORT();
   }
@@ -23915,6 +24023,39 @@ static SgScopeStatement *validateImportedNamespaceOwnership(
   validate_semantic_provenance(
       namespace_decl->get_definition(), true,
       "validateImportedNamespaceOwnership:definition-provenance");
+  return owner;
+}
+
+static SgScopeStatement *validateFrontendSupportNamespaceOwnership(
+    SgNamespaceDeclarationStatement *namespace_decl, const char *context) {
+  SgAuxiliaryDeclarationList *container =
+      namespace_decl != nullptr
+          ? isSgAuxiliaryDeclarationList(namespace_decl->get_parent())
+          : nullptr;
+  SgScopeStatement *owner = container != nullptr
+                                ? isSgScopeStatement(container->get_parent())
+                                : nullptr;
+  if (namespace_decl == nullptr ||
+      namespace_decl->get_definition() == nullptr ||
+      namespace_decl->get_definition()->get_parent() != namespace_decl ||
+      namespace_decl->has_source_fragments() || container == nullptr ||
+      owner == nullptr || owner->get_auxiliary_declarations() != container ||
+      namespace_decl->get_scope() != owner ||
+      std::count(container->get_declarations().begin(),
+                 container->get_declarations().end(), namespace_decl) != 1) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[namespace-frontend-support-owner]: "
+            "context=%s namespace=%p has malformed semantic-only ownership\n",
+            context != nullptr ? context : "<unknown>",
+            static_cast<void *>(namespace_decl));
+    ROSE_ABORT();
+  }
+  validate_semantic_provenance(
+      namespace_decl, true,
+      "validateFrontendSupportNamespaceOwnership:declaration-provenance");
+  validate_semantic_provenance(
+      namespace_decl->get_definition(), true,
+      "validateFrontendSupportNamespaceOwnership:definition-provenance");
   return owner;
 }
 
@@ -36191,11 +36332,9 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl *decl, SgNode **node) {
               decl != nullptr ? decl->getDeclKindName() : "<null>");
       ROSE_ABORT();
     }
-    const clang::Module *imported_module =
-        importedNamespaceModule(clang_namespace);
-    if (imported_module != nullptr) {
-      (void)validateImportedNamespaceOwnership(namespace_statement,
-                                               imported_module, "VisitDecl");
+    if (clang_namespace->isFromASTFile()) {
+      (void)validateImportedNamespaceOwnership(
+          clang_namespace, namespace_statement, "VisitDecl");
     } else {
       if (!namespace_statement->has_source_fragments()) {
         fprintf(stderr,
@@ -42916,9 +43055,9 @@ ClangToSageTranslator::namespaceSourceRanges(
             "and compiler instance are required\n");
     ROSE_ABORT();
   }
-  if (importedNamespaceModule(namespace_decl) != nullptr) {
+  if (namespace_decl->isFromASTFile()) {
     fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[namespace-module-owner]: imported "
+            "REX_FRONTEND_INVARIANT[namespace-import-owner]: imported "
             "namespace=%s cannot consume the importing translation unit's "
             "expanded token stream\n",
             namespace_decl->getQualifiedNameAsString().c_str());
@@ -43175,7 +43314,7 @@ void ClangToSageTranslator::applyNamespaceSourceFragments(
   sage_declaration->validate_source_fragments();
 }
 
-void ClangToSageTranslator::publishImportedNamespaceModuleProvenance(
+void ClangToSageTranslator::publishImportedNamespaceProvenance(
     const clang::NamespaceDecl *clang_declaration,
     SgNamespaceDeclarationStatement *sage_declaration) {
   if (sage_declaration == nullptr ||
@@ -43191,7 +43330,7 @@ void ClangToSageTranslator::publishImportedNamespaceModuleProvenance(
       p_lexical_source_nodes.count(sage_declaration->get_definition()) != 0 ||
       p_synthesized_source_nodes.count(sage_declaration->get_definition()) !=
           0) {
-    fprintf(stderr, "REX_FRONTEND_INVARIANT[namespace-module-owner]: imported "
+    fprintf(stderr, "REX_FRONTEND_INVARIANT[namespace-import-owner]: imported "
                     "namespace producer did not provide one fresh semantic "
                     "declaration/definition pair\n");
     ROSE_ABORT();
@@ -43201,37 +43340,65 @@ void ClangToSageTranslator::publishImportedNamespaceModuleProvenance(
   mark_compiler_generated_frontend_specific(sage_declaration);
   setSynthesizedFileInfo(sage_declaration->get_definition());
   mark_compiler_generated_frontend_specific(sage_declaration->get_definition());
-  validateImportedNamespaceModuleProvenance(clang_declaration,
-                                            sage_declaration);
+  validateImportedNamespaceProvenance(clang_declaration, sage_declaration);
 }
 
-void ClangToSageTranslator::validateImportedNamespaceModuleProvenance(
+void ClangToSageTranslator::validateImportedNamespaceProvenance(
     const clang::NamespaceDecl *clang_declaration,
     SgNamespaceDeclarationStatement *sage_declaration) {
-  const clang::Module *module = importedNamespaceModule(clang_declaration);
-  if (module == nullptr || sage_declaration == nullptr ||
+  const clang::Module *module =
+      clangFrontendImportedNamespaceModule(clang_declaration);
+  if (clang_declaration == nullptr || !clang_declaration->isFromASTFile() ||
+      sage_declaration == nullptr ||
       sage_declaration->get_definition() == nullptr ||
       sage_declaration->has_source_fragments() ||
-      p_compiler_instance == nullptr) {
+      p_compiler_instance == nullptr ||
+      p_sage_preprocessor_recorder == nullptr) {
     fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[namespace-module-owner]: imported "
+            "REX_FRONTEND_INVARIANT[namespace-import-owner]: imported "
             "namespace has no exact semantic declaration/definition pair\n");
+    ROSE_ABORT();
+  }
+
+  if (declIsFromApplicationHeader(
+          const_cast<clang::NamespaceDecl *>(clang_declaration),
+          p_compiler_instance, p_sage_preprocessor_recorder)) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[namespace-import-owner]: imported "
+            "namespace=%s was misclassified as an application textual "
+            "header declaration\n",
+            clang_declaration->getQualifiedNameAsString().c_str());
     ROSE_ABORT();
   }
 
   const clang::SourceRange source_range = clang_declaration->getSourceRange();
   clang::SourceManager &source_manager =
       p_compiler_instance->getSourceManager();
-  if (!source_range.isValid() ||
-      !source_manager.getFileLoc(source_range.getBegin()).isValid() ||
-      !source_manager.getFileLoc(source_range.getEnd()).isValid() ||
-      source_manager.isWrittenInMainFile(source_range.getBegin()) ||
-      source_manager.isWrittenInMainFile(source_range.getEnd())) {
+  const clang::SourceLocation physical_begin =
+      source_manager.getFileLoc(source_range.getBegin());
+  const clang::SourceLocation physical_end =
+      source_manager.getFileLoc(source_range.getEnd());
+  const std::string physical_path =
+      normalizedDeclFilePath(clang_declaration, source_manager);
+  const std::string owner_name =
+      module != nullptr
+          ? module->getFullModuleName(/*AllowStringLiterals=*/true)
+          : physical_path;
+  if (!source_range.isValid() || !physical_begin.isValid() ||
+      !physical_end.isValid() ||
+      source_manager.getFileID(physical_begin).isInvalid() ||
+      source_manager.getFileID(physical_begin) !=
+          source_manager.getFileID(physical_end) ||
+      source_manager.isWrittenInMainFile(physical_begin) ||
+      source_manager.isWrittenInMainFile(physical_end) ||
+      physical_path.empty() || owner_name.empty() ||
+      p_sage_preprocessor_recorder->includeOwnershipForPath(physical_path) !=
+          SagePreprocessorRecord::IncludeOwnership::external) {
     fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[namespace-module-owner]: module=%s "
+            "REX_FRONTEND_INVARIANT[namespace-import-owner]: owner=%s "
             "namespace=%s does not identify exact non-importer source "
             "provenance\n",
-            module->getFullModuleName(/*AllowStringLiterals=*/true).c_str(),
+            owner_name.c_str(),
             clang_declaration->getQualifiedNameAsString().c_str());
     ROSE_ABORT();
   }
@@ -43242,19 +43409,84 @@ void ClangToSageTranslator::validateImportedNamespaceModuleProvenance(
       p_synthesized_source_nodes.count(sage_declaration->get_definition()) !=
           1) {
     fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[namespace-module-owner]: module=%s "
+            "REX_FRONTEND_INVARIANT[namespace-import-owner]: owner=%s "
             "namespace=%s does not own one exact synthesized semantic "
             "declaration/definition role\n",
-            module->getFullModuleName(/*AllowStringLiterals=*/true).c_str(),
+            owner_name.c_str(),
             clang_declaration->getQualifiedNameAsString().c_str());
     ROSE_ABORT();
   }
   validate_semantic_provenance(
       sage_declaration, true,
-      "validateImportedNamespaceModuleProvenance:declaration");
+      "validateImportedNamespaceProvenance:declaration");
   validate_semantic_provenance(
       sage_declaration->get_definition(), true,
-      "validateImportedNamespaceModuleProvenance:definition");
+      "validateImportedNamespaceProvenance:definition");
+}
+
+void ClangToSageTranslator::publishFrontendSupportNamespaceProvenance(
+    const clang::NamespaceDecl *clang_declaration,
+    SgNamespaceDeclarationStatement *sage_declaration) {
+  if (sage_declaration == nullptr ||
+      sage_declaration->get_definition() == nullptr ||
+      sage_declaration->get_file_info() != nullptr ||
+      sage_declaration->get_startOfConstruct() != nullptr ||
+      sage_declaration->get_endOfConstruct() != nullptr ||
+      sage_declaration->get_definition()->get_file_info() != nullptr ||
+      sage_declaration->get_definition()->get_startOfConstruct() != nullptr ||
+      sage_declaration->get_definition()->get_endOfConstruct() != nullptr ||
+      p_lexical_source_nodes.count(sage_declaration) != 0 ||
+      p_synthesized_source_nodes.count(sage_declaration) != 0 ||
+      p_lexical_source_nodes.count(sage_declaration->get_definition()) != 0 ||
+      p_synthesized_source_nodes.count(sage_declaration->get_definition()) !=
+          0) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[namespace-frontend-support-owner]: "
+            "frontend-support namespace producer did not provide one fresh "
+            "semantic declaration/definition pair\n");
+    ROSE_ABORT();
+  }
+
+  setSynthesizedFileInfo(sage_declaration);
+  mark_compiler_generated_frontend_specific(sage_declaration);
+  setSynthesizedFileInfo(sage_declaration->get_definition());
+  mark_compiler_generated_frontend_specific(sage_declaration->get_definition());
+  validateFrontendSupportNamespaceProvenance(clang_declaration,
+                                             sage_declaration);
+}
+
+void ClangToSageTranslator::validateFrontendSupportNamespaceProvenance(
+    const clang::NamespaceDecl *clang_declaration,
+    SgNamespaceDeclarationStatement *sage_declaration) {
+  if (!isFrontendSupportNamespace(clang_declaration, p_compiler_instance,
+                                  p_sage_preprocessor_recorder) ||
+      sage_declaration == nullptr ||
+      sage_declaration->get_definition() == nullptr ||
+      sage_declaration->has_source_fragments()) {
+    fprintf(stderr, "REX_FRONTEND_INVARIANT[namespace-frontend-support-owner]: "
+                    "frontend-support namespace has no exact semantic "
+                    "declaration/definition pair\n");
+    ROSE_ABORT();
+  }
+
+  if (p_lexical_source_nodes.count(sage_declaration) != 0 ||
+      p_synthesized_source_nodes.count(sage_declaration) != 1 ||
+      p_lexical_source_nodes.count(sage_declaration->get_definition()) != 0 ||
+      p_synthesized_source_nodes.count(sage_declaration->get_definition()) !=
+          1) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[namespace-frontend-support-owner]: "
+            "namespace=%s does not own one exact synthesized semantic "
+            "declaration/definition role\n",
+            clang_declaration->getQualifiedNameAsString().c_str());
+    ROSE_ABORT();
+  }
+  validate_semantic_provenance(
+      sage_declaration, true,
+      "validateFrontendSupportNamespaceProvenance:declaration");
+  validate_semantic_provenance(
+      sage_declaration->get_definition(), true,
+      "validateFrontendSupportNamespaceProvenance:definition");
 }
 
 namespace {
@@ -43425,8 +43657,9 @@ bool ClangToSageTranslator::VisitNamespaceDecl(
             << std::endl;
 #endif
 
-  const clang::Module *imported_module =
-      importedNamespaceModule(namespace_decl);
+  const bool imported_namespace = namespace_decl->isFromASTFile();
+  const bool frontend_support_namespace = isFrontendSupportNamespace(
+      namespace_decl, p_compiler_instance, p_sage_preprocessor_recorder);
 
   // Capture any existing namespace declaration for this canonical namespace so
   // we can wire up first-nondefining links across re-openings.
@@ -43464,7 +43697,7 @@ bool ClangToSageTranslator::VisitNamespaceDecl(
   if (existing_it != p_namespace_canonical_decl_map.end()) {
     canonical_sg_decl = existing_it->second;
   } else if (canonical_ns != nullptr && canonical_ns != namespace_decl &&
-             imported_module == nullptr) {
+             !imported_namespace) {
     canonical_sg_decl = ensureNamespaceDeclaration(canonical_ns);
   }
   canonical_sg_decl = resolveCanonicalNamespaceRoot(
@@ -43493,13 +43726,17 @@ bool ClangToSageTranslator::VisitNamespaceDecl(
     // - Setting up global_definition to link all instances
     // - Inserting the symbol (only for first declaration)
     // We don't need to manually duplicate any of this logic
-    if (imported_module != nullptr) {
+    if (imported_namespace || frontend_support_namespace) {
       sg_namespace_decl = SageBuilder::buildNamespaceDeclaration_nfi(
           name, isAnonymous, scope,
           SageBuilder::e_namespace_declaration_semantic_auxiliary, nullptr,
           nullptr, nullptr, std::nullopt);
-      publishImportedNamespaceModuleProvenance(namespace_decl,
-                                               sg_namespace_decl);
+      if (imported_namespace) {
+        publishImportedNamespaceProvenance(namespace_decl, sg_namespace_decl);
+      } else {
+        publishFrontendSupportNamespaceProvenance(namespace_decl,
+                                                  sg_namespace_decl);
+      }
     } else {
       const NamespaceSourceRanges ranges =
           namespaceSourceRanges(namespace_decl);
@@ -43626,22 +43863,29 @@ bool ClangToSageTranslator::VisitNamespaceDecl(
   // The _nfi suffix means "no file info" not "no insertion"
   // REMOVED: SageInterface::appendStatement(sg_namespace_decl, scope);
 
-  if (imported_module != nullptr) {
-    validateImportedNamespaceModuleProvenance(namespace_decl,
-                                              sg_namespace_decl);
-    if (validateImportedNamespaceOwnership(sg_namespace_decl, imported_module,
+  if (imported_namespace) {
+    validateImportedNamespaceProvenance(namespace_decl, sg_namespace_decl);
+    if (validateImportedNamespaceOwnership(namespace_decl, sg_namespace_decl,
                                            "VisitNamespaceDecl") != scope) {
+      ROSE_ABORT();
+    }
+  } else if (frontend_support_namespace) {
+    validateFrontendSupportNamespaceProvenance(namespace_decl,
+                                               sg_namespace_decl);
+    if (validateFrontendSupportNamespaceOwnership(
+            sg_namespace_decl, "VisitNamespaceDecl") != scope) {
       ROSE_ABORT();
     }
   } else {
     applyNamespaceSourceFragments(namespace_decl, sg_namespace_decl);
   }
 
-  if (imported_module != nullptr) {
-    // Imported module declarations contribute semantic lookup state, not
-    // lexical source children of the importing translation unit.  Individual
-    // referenced declarations are translated on demand under this exact
-    // auxiliary namespace scope.
+  if (imported_namespace || frontend_support_namespace) {
+    // Deserialized and registered frontend-support declarations contribute
+    // semantic lookup state, not lexical source children of this translation
+    // unit. Individual referenced declarations are translated on demand under
+    // this exact auxiliary namespace scope. A deserialized declaration's exact
+    // owner is either its Clang module or its recorded physical source path.
     *node = sg_namespace_decl;
     return VisitNamedDecl(namespace_decl, node);
   }
@@ -64643,7 +64887,9 @@ ClangToSageTranslator::ensureNamespaceDeclaration(
                     "construction requires a nonnull Clang NamespaceDecl\n");
     ROSE_ABORT();
   }
-  const clang::Module *imported_module = importedNamespaceModule(ns_decl);
+  const bool imported_namespace = ns_decl->isFromASTFile();
+  const bool frontend_support_namespace = isFrontendSupportNamespace(
+      ns_decl, p_compiler_instance, p_sage_preprocessor_recorder);
 
   auto exact_it = p_decl_translation_map.find(ns_decl);
   if (exact_it != p_decl_translation_map.end()) {
@@ -64656,9 +64902,14 @@ ClangToSageTranslator::ensureNamespaceDeclaration(
               ns_decl->getQualifiedNameAsString().c_str());
       ROSE_ABORT();
     }
-    if (imported_module != nullptr) {
+    if (imported_namespace) {
+      validateImportedNamespaceProvenance(ns_decl, existing);
       (void)validateImportedNamespaceOwnership(
-          existing, imported_module, "ensureNamespaceDeclaration:cached");
+          ns_decl, existing, "ensureNamespaceDeclaration:cached");
+    } else if (frontend_support_namespace) {
+      validateFrontendSupportNamespaceProvenance(ns_decl, existing);
+      (void)validateFrontendSupportNamespaceOwnership(
+          existing, "ensureNamespaceDeclaration:cached");
     } else {
       if (!existing->has_source_fragments()) {
         fprintf(stderr,
@@ -64745,12 +64996,16 @@ ClangToSageTranslator::ensureNamespaceDeclaration(
   // Create the namespace stub using SageBuilder
   // This will handle symbol table lookups and creating/reusing definitions
   SgNamespaceDeclarationStatement *sg_ns_decl = nullptr;
-  if (imported_module != nullptr) {
+  if (imported_namespace || frontend_support_namespace) {
     sg_ns_decl = SageBuilder::buildNamespaceDeclaration_nfi(
         name, isAnonymous, scope,
         SageBuilder::e_namespace_declaration_semantic_auxiliary, nullptr,
         nullptr, nullptr, std::nullopt);
-    publishImportedNamespaceModuleProvenance(ns_decl, sg_ns_decl);
+    if (imported_namespace) {
+      publishImportedNamespaceProvenance(ns_decl, sg_ns_decl);
+    } else {
+      publishFrontendSupportNamespaceProvenance(ns_decl, sg_ns_decl);
+    }
   } else {
     const NamespaceSourceRanges ranges = namespaceSourceRanges(ns_decl);
     SgNamespaceSourceFragment *opening_introducer = nullptr;
@@ -64846,11 +65101,15 @@ ClangToSageTranslator::ensureNamespaceDeclaration(
   sg_ns_decl->set_isInlinedNamespace(
       readClangApiValueDefined([&]() { return ns_decl->isInline(); }));
 
-  if (imported_module != nullptr) {
-    // A deserialized namespace belongs to its imported module.  It provides
-    // semantic lookup state but has no lexical source fragment in this
-    // importing translation unit.
-    validateImportedNamespaceModuleProvenance(ns_decl, sg_ns_decl);
+  if (imported_namespace) {
+    // A deserialized namespace provides semantic lookup state but has no
+    // lexical source fragment in this importing translation unit. Its exact
+    // owner is either its Clang module or its recorded physical source path.
+    validateImportedNamespaceProvenance(ns_decl, sg_ns_decl);
+  } else if (frontend_support_namespace) {
+    // The mandatory frontend preinclude contributes semantic lookup state but
+    // is not a lexical fragment of the user's translation unit.
+    validateFrontendSupportNamespaceProvenance(ns_decl, sg_ns_decl);
   } else {
     // A local Clang NamespaceDecl denotes one exact source fragment. Missing
     // source locations are malformed frontend input, not permission to publish
@@ -64862,10 +65121,14 @@ ClangToSageTranslator::ensureNamespaceDeclaration(
   publishCanonicalNamespaceMapping(p_namespace_canonical_decl_map, canonical_ns,
                                    actual_canonical_sg_decl, name,
                                    "ensureNamespaceDeclaration:publish");
-  if (imported_module != nullptr) {
-    if (validateImportedNamespaceOwnership(sg_ns_decl, imported_module,
-                                           "ensureNamespaceDeclaration") !=
-        scope) {
+  if (imported_namespace) {
+    if (validateImportedNamespaceOwnership(
+            ns_decl, sg_ns_decl, "ensureNamespaceDeclaration") != scope) {
+      ROSE_ABORT();
+    }
+  } else if (frontend_support_namespace) {
+    if (validateFrontendSupportNamespaceOwnership(
+            sg_ns_decl, "ensureNamespaceDeclaration") != scope) {
       ROSE_ABORT();
     }
   }
@@ -83499,7 +83762,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       std::optional<clang::TemplateArgumentListInfo>
           exact_current_written_arguments;
       if (args_as_written != nullptr) {
-        bool arguments_belong_to_current_source = true;
+        bool arguments_belong_to_current_source =
+            current_declaration_has_source_surface;
         if (explicit_instantiation_source_surface.has_value()) {
           arguments_belong_to_current_source = false;
           if (explicit_instantiation_source_surface->template_id_was_written) {

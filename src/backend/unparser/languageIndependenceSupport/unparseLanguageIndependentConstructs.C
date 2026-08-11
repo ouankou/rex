@@ -15696,6 +15696,7 @@ UnparseLanguageIndependentConstructs::getPrecedence(SgExpression *expr) {
   case V_SgSimpleRequirement:
   case V_SgTypeRequirement:
   case V_SgCompoundRequirement:
+  case V_SgRequirementSubstitutionFailure:
   case V_SgNestedRequirement:
     precedence_value = 0;
     break;

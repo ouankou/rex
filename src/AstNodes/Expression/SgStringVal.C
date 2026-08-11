@@ -50,7 +50,10 @@ SgType *SgStringVal::get_type(void) const {
                                 isSgTypeSignedChar(elementType) != nullptr ||
                                 isSgTypeUnsignedChar(elementType) != nullptr;
   const bool wideCodeUnit = isSgTypeWchar(elementType) != nullptr ||
-                            isSgTypeInt(elementType) != nullptr;
+                            isSgTypeShort(elementType) != nullptr ||
+                            isSgTypeUnsignedShort(elementType) != nullptr ||
+                            isSgTypeInt(elementType) != nullptr ||
+                            isSgTypeUnsignedInt(elementType) != nullptr;
   const bool utf16CodeUnit = isSgTypeChar16(elementType) != nullptr ||
                              isSgTypeUnsignedShort(elementType) != nullptr;
   const bool utf32CodeUnit = isSgTypeChar32(elementType) != nullptr ||

@@ -853,6 +853,8 @@ void setNodeSourcePosition(SgNode *node, const NodeRecord &record);
 void setNodeFlags(SgNode *node, const NodeRecord &record);
 void restoreAvailableSourcePositionsAndScopes(const AstFileRecord &ast,
                                               const NodeMap &nodes);
+void restoreAvailableAuxiliaryNamespaceOwnership(const AstFileRecord &ast,
+                                                 const NodeMap &nodes);
 void attachPreprocessingInfo(SgNode *node, const NodeRecord &record);
 void attachAstAttributes(SgNode *node, const NodeRecord &record);
 void restoreFunctionCallSourceMetadata(SgFunctionCallExp *call,

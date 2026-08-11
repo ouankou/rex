@@ -3627,6 +3627,23 @@ rawNodeProperties(SgNode *node,
       throw std::runtime_error(
           "AST JSON SgSimpleRequirement has no exact owned expression");
     }
+  } else if (SgRequirementSubstitutionFailure *failure =
+                 isSgRequirementSubstitutionFailure(node)) {
+    if (failure->get_failure_kind() <
+            SgRequirementSubstitutionFailure::e_simple_expression_failure ||
+        failure->get_failure_kind() >
+            SgRequirementSubstitutionFailure::e_compound_return_type_failure ||
+        failure->get_substituted_entity().empty()) {
+      throw std::runtime_error(
+          "AST JSON SgRequirementSubstitutionFailure has malformed exact "
+          "semantic state");
+    }
+    fields.push_back(
+        rawIntegerField("failure_kind", failure->get_failure_kind()));
+    fields.push_back(rawStringField("substituted_entity",
+                                    failure->get_substituted_entity()));
+    fields.push_back(rawStringField("diagnostic_message",
+                                    failure->get_diagnostic_message()));
   } else if (SgTypeRequirement *requirement = isSgTypeRequirement(node)) {
     if (requirement->get_required_type() == nullptr) {
       throw std::runtime_error(

@@ -676,6 +676,24 @@ static SgTypeDefault *createType(const SgName &nameOfType);
 
 HEADER_TYPE_DEFAULT_TYPE_END
 
+HEADER_TYPE_TARGET_BUILTIN_TYPE_START
+
+enum target_family_enum {
+  e_target_builtin_aarch64 = 0,
+  e_target_builtin_powerpc,
+  e_target_builtin_riscv,
+  e_target_builtin_webassembly,
+  e_target_builtin_amdgpu,
+  e_target_builtin_opencl,
+  e_target_builtin_hlsl
+};
+
+//! Intern one exact target-defined compiler builtin type.
+static SgTypeTargetBuiltin *createType(const SgName &spelling,
+                                       target_family_enum targetFamily);
+
+HEADER_TYPE_TARGET_BUILTIN_TYPE_END
+
 HEADER_TYPE_LABEL_TYPE_START
 
 // Generated a mangled name that accounts for the stored name internally.
@@ -2001,6 +2019,61 @@ SgTypeDefault *SgTypeDefault::createType(const SgName &nameOfType) {
 }
 
 SOURCE_TYPE_DEFAULT_TYPE_END
+
+SOURCE_TYPE_TARGET_BUILTIN_TYPE_START
+
+SgName SgTypeTargetBuiltin::get_mangled(void) const {
+  if (p_spelling.is_null() ||
+      p_target_family < e_target_builtin_aarch64 ||
+      p_target_family > e_target_builtin_hlsl) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[target-builtin-type]: type=%p has invalid "
+            "spelling or target family=%d\n",
+            static_cast<const void *>(this), static_cast<int>(p_target_family));
+    ROSE_ABORT();
+  }
+
+  const std::string spelling = p_spelling.getString();
+  SgName mangled_name;
+  mangled_name << "__target_builtin_" << static_cast<int>(p_target_family)
+               << "_" << spelling.size() << "_" << spelling;
+  return mangled_name;
+}
+
+SgTypeTargetBuiltin *SgTypeTargetBuiltin::createType(
+    const SgName &spelling, target_family_enum targetFamily) {
+  if (spelling.is_null() || targetFamily < e_target_builtin_aarch64 ||
+      targetFamily > e_target_builtin_hlsl) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[target-builtin-type]: cannot intern empty "
+            "spelling or invalid target family=%d\n",
+            static_cast<int>(targetFamily));
+    ROSE_ABORT();
+  }
+
+  SgTypeTargetBuiltin *candidate = new SgTypeTargetBuiltin();
+  candidate->set_spelling(spelling);
+  candidate->set_target_family(targetFamily);
+  const SgName mangled = candidate->get_mangled();
+  SgType *existing = get_globalTypeTable()->lookup_type(mangled);
+  if (existing == nullptr) {
+    get_globalTypeTable()->insert_type(mangled, candidate);
+    return candidate;
+  }
+
+  SgTypeTargetBuiltin *result = isSgTypeTargetBuiltin(existing);
+  if (result == nullptr || result->get_spelling() != spelling ||
+      result->get_target_family() != targetFamily) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[target-builtin-type]: mangled identity "
+            "collision for spelling=%s family=%d\n",
+            spelling.getString().c_str(), static_cast<int>(targetFamily));
+    ROSE_ABORT();
+  }
+  return result;
+}
+
+SOURCE_TYPE_TARGET_BUILTIN_TYPE_END
 
 SOURCE_TYPE_LABEL_TYPE_START
 

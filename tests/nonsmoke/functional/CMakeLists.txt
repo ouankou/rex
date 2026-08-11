@@ -66,6 +66,12 @@ function(rex_get_cxx_specimen_extra_flags out_var specimen)
   if(specimen STREQUAL "rex_test2025_issue148_system_header_mutation.cpp")
     list(APPEND _flags -isystem ${REX_FUNCTIONAL_SYSTEM_HEADER_LIKE_DIR})
   endif()
+  if(_specimen_name STREQUAL "rex_unparser_asm_clobber_identity.cpp")
+    # This specimen intentionally names x86 registers.  Keep that source
+    # contract explicit so it exercises the same frontend semantics on every
+    # architecture runner.
+    list(APPEND _flags -target x86_64-unknown-linux-gnu)
+  endif()
   set(${out_var} "${_flags}" PARENT_SCOPE)
 endfunction()
 

@@ -67,6 +67,8 @@ void requireClangFunctionDeclSourceProvenanceForFrontend(
     const SagePreprocessorRecord *preprocessor_record);
 bool clangFrontendDeclarationHasExactCompletedSourceSurfaceOwnership(
     SgDeclarationStatement *declaration);
+const clang::Module *clangFrontendImportedNamespaceModule(
+    const clang::NamespaceDecl *namespace_decl);
 
 struct ClangOrderedDeclarationProvenance {
   enum class Kind { e_source_lexical, e_canonical_generated_namespace_shell };
@@ -5457,10 +5459,16 @@ protected:
   void applyNamespaceSourceFragments(
       const clang::NamespaceDecl *clang_declaration,
       SgNamespaceDeclarationStatement *sage_declaration);
-  void publishImportedNamespaceModuleProvenance(
+  void publishImportedNamespaceProvenance(
       const clang::NamespaceDecl *clang_declaration,
       SgNamespaceDeclarationStatement *sage_declaration);
-  void validateImportedNamespaceModuleProvenance(
+  void validateImportedNamespaceProvenance(
+      const clang::NamespaceDecl *clang_declaration,
+      SgNamespaceDeclarationStatement *sage_declaration);
+  void publishFrontendSupportNamespaceProvenance(
+      const clang::NamespaceDecl *clang_declaration,
+      SgNamespaceDeclarationStatement *sage_declaration);
+  void validateFrontendSupportNamespaceProvenance(
       const clang::NamespaceDecl *clang_declaration,
       SgNamespaceDeclarationStatement *sage_declaration);
 

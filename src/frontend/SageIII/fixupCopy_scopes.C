@@ -4087,6 +4087,7 @@ bool isGloballyCanonicalBuiltinType(const SgNode *node) {
   case V_SgTypeChar32:
   case V_SgTypeChar8:
   case V_SgTypeNullptr:
+  case V_SgTypeTargetBuiltin:
     return true;
 
   default:

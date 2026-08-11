@@ -2242,6 +2242,30 @@ void Grammar::setUpExpressions() {
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
       OPTIONAL_TRAVERSAL_MEMBER);
 
+  // A failed template substitution has no Clang expression/type node to
+  // translate.  Preserve that semantic state as its own typed requirement
+  // record instead of manufacturing a null child or recovering source text.
+  NEW_TERMINAL_MACRO(RequirementSubstitutionFailure,
+                     "RequirementSubstitutionFailure",
+                     "REQUIREMENT_SUBSTITUTION_FAILURE");
+  RequirementSubstitutionFailure.setFunctionSource(
+      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "../Grammar/Expression.code");
+  RequirementSubstitutionFailure.setFunctionSource(
+      "SOURCE_SYNTAX_ONLY_GET_TYPE", "../Grammar/Expression.code");
+  RequirementSubstitutionFailure.setFunctionPrototype(
+      "HEADER_REQUIREMENT_SUBSTITUTION_FAILURE", "../Grammar/Expression.code");
+  RequirementSubstitutionFailure.setDataPrototype(
+      "SgRequirementSubstitutionFailure::failure_kind_enum", "failure_kind",
+      "= SgRequirementSubstitutionFailure::e_simple_expression_failure",
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  RequirementSubstitutionFailure.setDataPrototype(
+      "std::string", "substituted_entity", "= \"\"", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  RequirementSubstitutionFailure.setDataPrototype(
+      "std::string", "diagnostic_message", "= \"\"", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
   NEW_TERMINAL_MACRO(NestedRequirement, "NestedRequirement",
                      "NESTED_REQUIREMENT");
   NestedRequirement.setFunctionSource(
@@ -4286,9 +4310,9 @@ void Grammar::setUpExpressions() {
           RangeExp | TypeTraitBuiltinOperator | CompoundLiteralExp |
           TypeExpression | ClassExp | FunctionParameterRefExp | LambdaExp |
           NoexceptOp | RequiresExpr | SimpleRequirement | TypeRequirement |
-          CompoundRequirement | NestedRequirement | NonrealRefExp |
-          FoldExpression | Designator | PackExpansionExpr | AwaitExpression |
-          ChooseExpression,
+          CompoundRequirement | RequirementSubstitutionFailure |
+          NestedRequirement | NonrealRefExp | FoldExpression | Designator |
+          PackExpansionExpr | AwaitExpression | ChooseExpression,
       "Expression", "ExpressionTag", false);
 
   // DQ (5/20/2004): Add need_paren to all expression objects so that we can
