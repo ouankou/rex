@@ -117,10 +117,9 @@ void AstUtilInterface::ComputeAstSideEffects(
         const auto sig_first = AstInterface::GetVariableSignature(first);
         AstNodePtr base;
         if (AstInterface::IsAddressOfOp(second, &base)) {
-          alias_map["_deref_" + sig_first] = base;
-        } else {
-          alias_map[sig_first] = second;
+          alias_map["_deref_(" + sig_first + ")"] = base;
         }
+        alias_map[sig_first] = second;
         if (collect != 0) {
           (*collect)(first, second, OperatorSideEffect::Alias);
         }
@@ -149,7 +148,6 @@ void AstUtilInterface::ComputeAstSideEffects(
               AstInterface::IsLocalRef(memory_ref, body, &is_unknown_ref);
           AstNodePtr array;
           if (AstInterface::IsArrayAccess(memory_ref, &array)) {
-            memory_ref = array;
             is_local_ref = false;
             DebugAstUtil([&memory_ref]() {
               return "Finding array reference:" +
