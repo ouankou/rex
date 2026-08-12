@@ -174,29 +174,54 @@ void WholeProgramDependenceAnalysis::ComputeDependences(SgNode *input,
                 << " root=" << root << std::endl;
       ROSE_ABORT();
     }
-    AstInterface::AstNodeList variables;
-    AstInterface::AstNodeList initializers;
-    const bool recognized =
-        AstInterface::IsVariableDecl(input, &variables, &initializers);
-    ROSE_ASSERT(recognized);
-    ROSE_ASSERT(variables.size() == initializers.size());
-    for (size_t i = 0; i < variables.size(); ++i) {
-      const AstNodePtr &variable = variables[i];
-      const AstNodePtr &initializer = initializers[i];
-      if (initializer == AST_NULL)
+    for (SgInitializedName *initialized_name : declaration->get_variables()) {
+      ASSERT_not_null(initialized_name);
+      SgInitializer *initializer = initialized_name->get_initializer();
+      if (initializer == nullptr)
         continue;
 
-      ASSERT_not_null(variable.get_ptr());
+      const AstNodePtr variable(initialized_name);
       const std::string variable_signature =
           AstInterface::GetVariableSignature(variable);
-      const std::string initializer_signature =
-          AstInterface::GetVariableSignature(initializer);
-      if (!variable_signature.empty() &&
-          initializer_signature.find("_UNKNOWN_") == std::string::npos) {
-        main_table.SaveOperatorSideEffect(
-            variable.get_ptr(), initializer,
-            AstUtilInterface::OperatorSideEffect::Init);
+      if (variable_signature.empty() ||
+          variable_signature.find("_UNKNOWN_") != std::string::npos) {
+        std::cerr << "REX_DEPENDENCE_INVARIANT[initializer-target]: "
+                  << initialized_name->class_name()
+                  << " has no exact variable signature" << std::endl;
+        ROSE_ABORT();
       }
+
+      std::function<bool(const AstNodePtr &, const AstNodePtr &,
+                         AstUtilInterface::OperatorSideEffect)>
+          save_initializer_input =
+              [this, &variable](const AstNodePtr &referenced_entity,
+                                const AstNodePtr &details,
+                                AstUtilInterface::OperatorSideEffect relation) {
+                switch (relation) {
+                case AstUtilInterface::OperatorSideEffect::Read:
+                case AstUtilInterface::OperatorSideEffect::ReadUnknown:
+                case AstUtilInterface::OperatorSideEffect::Call:
+                case AstUtilInterface::OperatorSideEffect::CallUnknown:
+                  if (referenced_entity == AST_NULL) {
+                    std::cerr << "REX_DEPENDENCE_INVARIANT[initializer-input]: "
+                                 "typed initializer traversal produced a null "
+                                 "referenced entity"
+                              << std::endl;
+                    ROSE_ABORT();
+                  }
+                  main_table.SaveOperatorSideEffect(
+                      variable.get_ptr(), referenced_entity,
+                      AstUtilInterface::OperatorSideEffect::Init,
+                      details.get_ptr());
+                  break;
+                default:
+                  break;
+                }
+                return true;
+              };
+      AstUtilInterface::ComputeAstSideEffects(initializer,
+                                              &save_initializer_input,
+                                              /*add_to_dep_analysis=*/nullptr);
     }
   }
 }

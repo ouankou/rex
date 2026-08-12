@@ -2006,6 +2006,7 @@ bool AstInterface::IsVariableDecl(const AstNodePtr &_s, AstNodeList *vars,
     }
     return true;
   }
+
   if (SgInitializedName *var = isSgInitializedName(s)) {
     DebugDecl([&_s]() { return "Finding variable decl:" + AstToString(_s); });
     if (vars == 0 && init == 0)
@@ -2016,19 +2017,6 @@ bool AstInterface::IsVariableDecl(const AstNodePtr &_s, AstNodeList *vars,
       case V_SgAssignInitializer:
         def = isSgAssignInitializer(def)->get_operand();
         break;
-      case V_SgAggregateInitializer: {
-        SgExprListExp *initializers =
-            isSgAggregateInitializer(def)->get_initializers();
-        ASSERT_not_null(initializers);
-        for (SgExpression *element : initializers->get_expressions()) {
-          ASSERT_not_null(element);
-          DebugDecl([element]() {
-            return "Checking aggregate variable decl:" + AstToString(element);
-          });
-          IsVariableDecl(element, vars, init);
-        }
-        break;
-      }
       default:
         break;
       }
@@ -2039,20 +2027,7 @@ bool AstInterface::IsVariableDecl(const AstNodePtr &_s, AstNodeList *vars,
       init->push_back(def);
     return true;
   }
-  if (SgDesignatedInitializer *designated = isSgDesignatedInitializer(s)) {
-    DebugDecl([&_s]() { return "Finding variable decl:" + AstToString(_s); });
-    SgExprListExp *designator_list = designated->get_designatorList();
-    ASSERT_not_null(designator_list);
-    const SgExpressionPtrList &designators = designator_list->get_expressions();
-    ROSE_ASSERT(!designators.empty());
-    SgInitializer *initializer = designated->get_memberInit();
-    ASSERT_not_null(initializer);
-    if (vars != 0)
-      vars->push_back(designators.front());
-    if (init != 0)
-      init->push_back(initializer);
-    return true;
-  }
+
   return false;
 }
 
@@ -4889,6 +4864,17 @@ AstNodePtr AstInterface::CreateUnaryOP(OperatorEnum op, const AstNodePtr &_a0) {
   AstNodePtrImpl a0(_a0);
   assert(HasNullParent(a0.get_ptr()));
   SgExpression *e = ToExpression(*impl, a0.get_ptr());
+  auto require_exact_operand_type = [&]() -> SgType * {
+    SgType *type = e->get_type();
+    if (type == nullptr || isSgTypeUnknown(type) != nullptr ||
+        isSgTypeDefault(type) != nullptr) {
+      std::cerr << "REX_AST_INVARIANT[unary-result-type-producer]: operator="
+                << AstInterface::toString(op) << " has no exact operand type"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    return type;
+  };
   SgNode *result = 0;
   switch (op) {
   case UOP_ADDR:
@@ -4900,6 +4886,28 @@ AstNodePtr AstInterface::CreateUnaryOP(OperatorEnum op, const AstNodePtr &_a0) {
   case UOP_NOT:
     result = new SgNotOp(GetFileInfo(), e, logicalOperatorResultType());
     break;
+  case UOP_BIT_COMPLEMENT:
+    result =
+        new SgBitComplementOp(GetFileInfo(), e, require_exact_operand_type());
+    break;
+  case UOP_INCR1:
+  case UOP_INCR1_POST: {
+    SgPlusPlusOp *increment =
+        new SgPlusPlusOp(GetFileInfo(), e, require_exact_operand_type());
+    increment->set_mode(op == UOP_INCR1 ? SgUnaryOp::Sgop_mode::prefix
+                                        : SgUnaryOp::Sgop_mode::postfix);
+    result = increment;
+    break;
+  }
+  case UOP_DECR1:
+  case UOP_DECR1_POST: {
+    SgMinusMinusOp *decrement =
+        new SgMinusMinusOp(GetFileInfo(), e, require_exact_operand_type());
+    decrement->set_mode(op == UOP_DECR1 ? SgUnaryOp::Sgop_mode::prefix
+                                        : SgUnaryOp::Sgop_mode::postfix);
+    result = decrement;
+    break;
+  }
   case UOP_DEREF:
     result = new SgPointerDerefExp(
         GetFileInfo(), e,
@@ -4961,6 +4969,16 @@ AstNodePtr AstInterface::CreateBinaryOP(OperatorEnum op, const AstNodePtr &_a0,
     }
     return lhs_type;
   };
+  auto require_matching_integral_type = [&](const char *producer) -> SgType * {
+    SgType *result_type = require_matching_arithmetic_type(producer);
+    if (!result_type->stripTypedefsAndModifiers()->isIntegerType()) {
+      std::cerr << "REX_AST_INVARIANT[binary-result-type-producer]: "
+                << producer << " requires an exact integral result type"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    return result_type;
+  };
   auto require_additive_type = [&](bool subtraction) -> SgType * {
     SgType *lhs_type = require_exact_type(
         e0->get_type(), "AstInterface::CreateBinaryOP additive operator");
@@ -5004,6 +5022,11 @@ AstNodePtr AstInterface::CreateBinaryOP(OperatorEnum op, const AstNodePtr &_a0,
         GetFileInfo(), e0, e1,
         require_matching_arithmetic_type("AstInterface::CreateBinaryOP *"));
     break;
+  case BOP_MOD:
+    n = new SgModOp(
+        GetFileInfo(), e0, e1,
+        require_matching_integral_type("AstInterface::CreateBinaryOP %"));
+    break;
   case BOP_PLUS:
     n = new SgAddOp(GetFileInfo(), e0, e1, require_additive_type(false));
     break;
@@ -5034,6 +5057,16 @@ AstNodePtr AstInterface::CreateBinaryOP(OperatorEnum op, const AstNodePtr &_a0,
     break;
   case BOP_OR:
     n = new SgOrOp(GetFileInfo(), e0, e1, logicalOperatorResultType());
+    break;
+  case BOP_BIT_AND:
+    n = new SgBitAndOp(
+        GetFileInfo(), e0, e1,
+        require_matching_integral_type("AstInterface::CreateBinaryOP &"));
+    break;
+  case BOP_BIT_OR:
+    n = new SgBitOrOp(
+        GetFileInfo(), e0, e1,
+        require_matching_integral_type("AstInterface::CreateBinaryOP |"));
     break;
   case BOP_BIT_RSHIFT:
     n = new SgRshiftOp(

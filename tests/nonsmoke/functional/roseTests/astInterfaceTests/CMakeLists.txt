@@ -394,6 +394,17 @@ add_test(
     --reject-replacement-arity)
 set_tests_properties(astInterface_rex_annotation_replacement_arity_is_rejected
   PROPERTIES LABELS "astInterface;rex;annotation;death")
+
+add_test(
+  NAME astInterface_rex_untyped_symbolic_allocation_is_rejected
+  COMMAND ${BASH_EXECUTABLE} -c
+    "ulimit -c 0; log=astInterface_rex_untyped_symbolic_allocation_is_rejected.log; rm -f \"\$log\"; set +e; \"\$@\" >\"\$log\" 2>&1; status=\$?; set -e; test \"\$status\" -eq 134; test \"\$(grep -Ec -- '^REX_SYMBOLIC_INVARIANT\\[operator-kind\\]: operator=UOP_ALLOCATE requires an exact typed AST representation$' \"\$log\")\" -eq 1"
+    dummy
+    $<TARGET_FILE:rex_symbolic_annotation_contract>
+    --reject-untyped-allocation)
+set_tests_properties(astInterface_rex_untyped_symbolic_allocation_is_rejected
+  PROPERTIES LABELS "astInterface;rex;annotation;death")
+
 add_test(
   NAME astInterface_rex_empty_preprocessing_move_detached_destination
   COMMAND $<TARGET_FILE:rex_sageinterface_producer_contract>

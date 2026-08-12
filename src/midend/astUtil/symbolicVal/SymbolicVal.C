@@ -488,7 +488,10 @@ SymbolicVal SymbolicValGenerator::GetSymbolicVal(
   }
   case AstInterface::UOP_ALLOCATE:
     requireSymbolicOperatorArity(operation, arguments, 1);
-    return new SymbolicFunction(operation, "new", arguments);
+    std::cerr << "REX_SYMBOLIC_INVARIANT[operator-kind]: operator="
+              << AstInterface::toString(operation)
+              << " requires an exact typed AST representation" << std::endl;
+    ROSE_ABORT();
   case AstInterface::UOP_NOT:
     requireSymbolicOperatorArity(operation, arguments, 1);
     return new SymbolicFunction(operation, "!", arguments);
@@ -570,6 +573,8 @@ SymbolicVal SymbolicValGenerator ::GetSymbolicVal(AstInterface &fa,
     SymbolicVal v1 = GetSymbolicVal(fa, s1), v2 = GetSymbolicVal(fa, s2);
     return GetSymbolicVal(opr, {v1, v2});
   } else if (fa.IsUnaryOp(exp, &opr, &s1)) {
+    if (opr == AstInterface::UOP_ALLOCATE)
+      return new SymbolicAstWrap(exp);
     SymbolicVal v = GetSymbolicVal(fa, s1);
     return GetSymbolicVal(opr, {v});
   } else if (fa.IsFunctionCall(exp, &s1, &l)) {

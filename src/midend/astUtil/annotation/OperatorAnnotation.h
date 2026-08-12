@@ -10,6 +10,8 @@
 
 #include "CommandOptions.h"
 
+#include "ROSE_ABORT.h"
+
 #include <iostream>
 
 #include <list>
