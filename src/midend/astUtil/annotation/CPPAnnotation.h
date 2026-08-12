@@ -54,10 +54,11 @@ std::string CPPTypeCollection<Descriptor>::is_known_member_function(
     SymbolicFunction::Arguments *argsp, Descriptor *descp) {
   std::string op1, op2;
   SymbolicFunction::Arguments arg1, arg2;
-  if (!exp.isFunction(op1, &arg1))
+  if (!exp.isFunction(0, &op1, &arg1))
     return "";
-  if (op1 != "FunctionPtrCall" || !arg1.front().isFunction(op2, &arg2) ||
-      op2 != "." || arg2.size() != 2)
+  if (op1 != "FunctionPtrCall" || arg1.empty() ||
+      !arg1.front().isFunction(0, &op2, &arg2) || op2 != "." ||
+      arg2.size() != 2)
     return "";
   AstNodePtr obj;
   if (!arg2.front().isAstWrap(obj) || !cp->known_type(fa, obj, descp))

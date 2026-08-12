@@ -125,20 +125,112 @@ AstNodePtr SymbolicFunction::CodeGen(AstInterface &_fa) const {
   if (t == AstInterface::OP_NONE) {
     return _fa.CreateFunctionCall(op.CodeGen(_fa), l.begin(), l.end());
   } else if (t == AstInterface::OP_ARRAY_ACCESS) {
+    if (l.size() < 2) {
+      std::cerr << "REX_SYMBOLIC_INVARIANT[codegen-arity]: operator="
+                << AstInterface::toString(t) << " arguments=" << l.size()
+                << std::endl;
+      ROSE_ABORT();
+    }
     AstNodeList::const_iterator b = l.begin();
     AstNodePtr arr = *b;
     for (++b; b != l.end(); ++b) {
       arr = _fa.CreateArrayAccess(arr, *b);
     }
     return arr;
-  } else if (t == AstInterface::OP_ASSIGN && l.size() == 2) {
+  } else if (t == AstInterface::OP_ASSIGN) {
+    if (l.size() != 2) {
+      std::cerr << "REX_SYMBOLIC_INVARIANT[codegen-arity]: operator="
+                << AstInterface::toString(t) << " arguments=" << l.size()
+                << std::endl;
+      ROSE_ABORT();
+    }
     return _fa.CreateAssignment(l.front(), l.back());
-  } else if (l.size() == 2)
+  } else if (t >= AstInterface::BOP_DOT_ACCESS &&
+             t <= AstInterface::BOP_BIT_LSHIFT) {
+    if (l.size() != 2) {
+      std::cerr << "REX_SYMBOLIC_INVARIANT[codegen-arity]: operator="
+                << AstInterface::toString(t) << " arguments=" << l.size()
+                << std::endl;
+      ROSE_ABORT();
+    }
     return _fa.CreateBinaryOP(t, l.front(), l.back());
-  else {
-    assert(l.size() == 1);
+  } else if (t >= AstInterface::UOP_MINUS &&
+             t <= AstInterface::UOP_BIT_COMPLEMENT) {
+    if (l.size() != 1) {
+      std::cerr << "REX_SYMBOLIC_INVARIANT[codegen-arity]: operator="
+                << AstInterface::toString(t) << " arguments=" << l.size()
+                << std::endl;
+      ROSE_ABORT();
+    }
+    if (t == AstInterface::UOP_SEMANTIC_CONVERSION ||
+        (t >= AstInterface::UOP_CAST_C &&
+         t <= AstInterface::UOP_CAST_FUNCTIONAL_LIST)) {
+      std::cerr << "REX_SYMBOLIC_INVARIANT[codegen-conversion]: operator="
+                << AstInterface::toString(t)
+                << " requires an exact typed conversion representation"
+                << std::endl;
+      ROSE_ABORT();
+    }
     return _fa.CreateUnaryOP(t, l.front());
   }
+  std::cerr << "REX_SYMBOLIC_INVARIANT[codegen-operator]: operator="
+            << AstInterface::toString(t) << std::endl;
+  ROSE_ABORT();
+}
+
+SymbolicSemanticConversion::SymbolicSemanticConversion(
+    const AstNodePtr &prototype, const SymbolicVal &operand)
+    : SymbolicFunction(AstInterface::UOP_SEMANTIC_CONVERSION,
+                       SymbolicVal(SymbolicAstWrap(prototype)),
+                       Arguments{operand}),
+      prototype(prototype) {
+  SgCastExp *cast = isSgCastExp(prototype.get_ptr());
+  if (cast == nullptr) {
+    std::cerr << "REX_SYMBOLIC_INVARIANT[cast-prototype]: node="
+              << prototype.get_ptr() << " is not an exact SgCastExp"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  cast->validate_semantic_conversion();
+}
+
+AstNodePtr SymbolicSemanticConversion::CodeGen(AstInterface &fa) const {
+  if (NumOfArgs() != 1) {
+    std::cerr << "REX_SYMBOLIC_INVARIANT[cast-arity]: prototype="
+              << prototype.get_ptr() << " arguments=" << NumOfArgs()
+              << std::endl;
+    ROSE_ABORT();
+  }
+  SgCastExp *original = isSgCastExp(prototype.get_ptr());
+  SgCastExp *copy = isSgCastExp(fa.CopyAstTree(prototype).get_ptr());
+  SgExpression *operand = isSgExpression(first_arg().CodeGen(fa).get_ptr());
+  if (original == nullptr || copy == nullptr || operand == nullptr ||
+      copy->get_operand() == nullptr ||
+      !SageInterface::isEquivalentType(original->get_operand()->get_type(),
+                                       operand->get_type())) {
+    std::cerr << "REX_SYMBOLIC_INVARIANT[cast-rebuild]: prototype="
+              << prototype.get_ptr() << " copy=" << copy
+              << " operand=" << operand
+              << " does not preserve the exact conversion operand type"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  copy->get_operand()->set_parent(nullptr);
+  copy->set_operand_i(operand);
+  operand->set_parent(copy);
+  copy->validate_semantic_conversion();
+  return AstNodePtr(copy);
+}
+
+SymbolicVal
+SymbolicSemanticConversion::cloneFunction(const Arguments &arguments) const {
+  if (arguments.size() != 1) {
+    std::cerr << "REX_SYMBOLIC_INVARIANT[cast-arity]: prototype="
+              << prototype.get_ptr() << " arguments=" << arguments.size()
+              << std::endl;
+    ROSE_ABORT();
+  }
+  return new SymbolicSemanticConversion(prototype, arguments.front());
 }
 
 AstNodePtr SymbolicSelect::CodeGen(AstInterface &fa) const {
@@ -299,6 +391,150 @@ bool SymbolicValGenerator::IsFortranLoop(AstInterface &fa, const AstNodePtr &s,
   return true;
 }
 
+namespace {
+
+void requireSymbolicOperatorArity(AstInterface::OperatorEnum operation,
+                                  const std::vector<SymbolicVal> &arguments,
+                                  size_t expected) {
+  if (arguments.size() == expected)
+    return;
+  std::cerr << "REX_SYMBOLIC_INVARIANT[operator-arity]: operator="
+            << AstInterface::toString(operation) << " expected=" << expected
+            << " actual=" << arguments.size() << std::endl;
+  ROSE_ABORT();
+}
+
+} // namespace
+
+SymbolicVal SymbolicValGenerator::GetSymbolicVal(
+    AstInterface::OperatorEnum operation,
+    const std::vector<SymbolicVal> &arguments) {
+  switch (operation) {
+  case AstInterface::BOP_TIMES:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return arguments[0] * arguments[1];
+  case AstInterface::BOP_PLUS:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return arguments[0] + arguments[1];
+  case AstInterface::BOP_MINUS:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return arguments[0] - arguments[1];
+  case AstInterface::BOP_MOD:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return new SymbolicFunction(operation, "%", arguments);
+  case AstInterface::BOP_DOT_ACCESS:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return new SymbolicFunction(operation, ".", arguments);
+  case AstInterface::BOP_ARROW_ACCESS:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return new SymbolicFunction(operation, "->", arguments);
+  case AstInterface::BOP_DIVIDE:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return new SymbolicFunction(operation, "/", arguments);
+  case AstInterface::BOP_EQ:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return new SymbolicFunction(operation, "==", arguments);
+  case AstInterface::BOP_LE:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return new SymbolicFunction(operation, "<=", arguments);
+  case AstInterface::BOP_LT:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return new SymbolicFunction(operation, "<", arguments);
+  case AstInterface::BOP_NE:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return new SymbolicFunction(operation, "!=", arguments);
+  case AstInterface::BOP_GT:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return new SymbolicFunction(operation, ">", arguments);
+  case AstInterface::BOP_GE:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return new SymbolicFunction(operation, ">=", arguments);
+  case AstInterface::BOP_AND:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return new SymbolicFunction(operation, "&&", arguments);
+  case AstInterface::BOP_OR:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return new SymbolicFunction(operation, "||", arguments);
+  case AstInterface::BOP_BIT_RSHIFT:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return new SymbolicFunction(operation, ">>", arguments);
+  case AstInterface::BOP_BIT_LSHIFT:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return new SymbolicFunction(operation, "<<", arguments);
+  case AstInterface::BOP_BIT_AND:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return new SymbolicFunction(operation, "&", arguments);
+  case AstInterface::BOP_BIT_OR:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return new SymbolicFunction(operation, "|", arguments);
+  case AstInterface::UOP_MINUS:
+    requireSymbolicOperatorArity(operation, arguments, 1);
+    return new SymbolicFunction(operation, "-", arguments);
+  case AstInterface::UOP_ADDR:
+  case AstInterface::UOP_DEREF: {
+    requireSymbolicOperatorArity(operation, arguments, 1);
+    AstInterface::OperatorEnum nestedOperation = AstInterface::OP_NONE;
+    std::vector<SymbolicVal> nestedArguments;
+    if (arguments[0].isFunction(&nestedOperation, 0, &nestedArguments) &&
+        ((operation == AstInterface::UOP_ADDR &&
+          nestedOperation == AstInterface::UOP_DEREF) ||
+         (operation == AstInterface::UOP_DEREF &&
+          nestedOperation == AstInterface::UOP_ADDR))) {
+      requireSymbolicOperatorArity(nestedOperation, nestedArguments, 1);
+      return nestedArguments[0];
+    }
+    return new SymbolicFunction(
+        operation, operation == AstInterface::UOP_ADDR ? "&" : "*", arguments);
+  }
+  case AstInterface::UOP_ALLOCATE:
+    requireSymbolicOperatorArity(operation, arguments, 1);
+    return new SymbolicFunction(operation, "new", arguments);
+  case AstInterface::UOP_NOT:
+    requireSymbolicOperatorArity(operation, arguments, 1);
+    return new SymbolicFunction(operation, "!", arguments);
+  case AstInterface::UOP_BIT_COMPLEMENT:
+    requireSymbolicOperatorArity(operation, arguments, 1);
+    return new SymbolicFunction(operation, "~", arguments);
+  case AstInterface::UOP_SEMANTIC_CONVERSION:
+  case AstInterface::UOP_CAST_C:
+  case AstInterface::UOP_CAST_REINTERP:
+  case AstInterface::UOP_CAST_STATIC:
+  case AstInterface::UOP_CAST_DYNAMIC:
+  case AstInterface::UOP_CAST_CONST:
+  case AstInterface::UOP_CAST_BUILTIN_BIT:
+  case AstInterface::UOP_CAST_FUNCTIONAL:
+  case AstInterface::UOP_CAST_FUNCTIONAL_LIST:
+    std::cerr << "REX_SYMBOLIC_INVARIANT[cast-transparency]: cast operator "
+                 "escaped exact semantic conversion handling"
+              << std::endl;
+    ROSE_ABORT();
+  case AstInterface::UOP_DECR1:
+  case AstInterface::UOP_DECR1_POST:
+    requireSymbolicOperatorArity(operation, arguments, 1);
+    return new SymbolicFunction(operation, "--", arguments);
+  case AstInterface::UOP_INCR1:
+  case AstInterface::UOP_INCR1_POST:
+    requireSymbolicOperatorArity(operation, arguments, 1);
+    return new SymbolicFunction(operation, "++", arguments);
+  case AstInterface::OP_ARRAY_ACCESS:
+    if (arguments.size() < 2) {
+      std::cerr << "REX_SYMBOLIC_INVARIANT[operator-arity]: operator="
+                << AstInterface::toString(operation)
+                << " expected-at-least=2 actual=" << arguments.size()
+                << std::endl;
+      ROSE_ABORT();
+    }
+    return new SymbolicFunction(operation, "[]", arguments);
+  case AstInterface::OP_ASSIGN:
+    requireSymbolicOperatorArity(operation, arguments, 2);
+    return new SymbolicFunction(operation, "=", arguments);
+  default:
+    std::cerr << "REX_SYMBOLIC_INVARIANT[operator-kind]: unsupported operator="
+              << AstInterface::toString(operation) << std::endl;
+    ROSE_ABORT();
+  }
+}
+
 SymbolicVal SymbolicValGenerator ::GetSymbolicVal(AstInterface &fa,
                                                   const AstNodePtr &exp) {
   std::string name;
@@ -309,108 +545,34 @@ SymbolicVal SymbolicValGenerator ::GetSymbolicVal(AstInterface &fa,
   AstInterface::OperatorEnum opr = (AstInterface::OperatorEnum)0;
   if (SgCastExp *cast = isSgCastExp(exp.get_ptr())) {
     cast->validate_semantic_conversion();
+    SymbolicVal operand = GetSymbolicVal(fa, AstNodePtr(cast->get_operand()));
     switch (cast->get_semantic_conversion_kind()) {
     case SgCastExp::e_semantic_conversion_NoOp:
     case SgCastExp::e_semantic_conversion_LValueToRValue:
-      return GetSymbolicVal(fa, AstNodePtr(cast->get_operand()));
+      return operand;
     default:
-      std::cerr << "REX_SYMBOLIC_INVARIANT[cast-transparency]: cast=" << cast
-                << " surface=" << static_cast<int>(cast->get_cast_type())
-                << " semantic-kind="
-                << static_cast<int>(cast->get_semantic_conversion_kind())
-                << " cannot be represented by SymbolicVal without changing its "
-                   "meaning"
-                << std::endl;
+      return new SymbolicSemanticConversion(AstNodePtr(cast), operand);
+    }
+  } else if (SgPntrArrRefExp *arrayAccess = isSgPntrArrRefExp(exp.get_ptr())) {
+    if (arrayAccess->get_lhs_operand() == nullptr ||
+        arrayAccess->get_rhs_operand() == nullptr) {
+      std::cerr << "REX_SYMBOLIC_INVARIANT[array-access-operands]: access="
+                << arrayAccess << " has a null exact operand" << std::endl;
       ROSE_ABORT();
     }
+    return GetSymbolicVal(
+        AstInterface::OP_ARRAY_ACCESS,
+        {GetSymbolicVal(fa, AstNodePtr(arrayAccess->get_lhs_operand())),
+         GetSymbolicVal(fa, AstNodePtr(arrayAccess->get_rhs_operand()))});
   } else if (fa.IsConstInt(exp, &val)) {
     return new SymbolicConst(val);
   } else if (fa.IsBinaryOp(exp, &opr, &s1, &s2)) {
     SymbolicVal v1 = GetSymbolicVal(fa, s1), v2 = GetSymbolicVal(fa, s2);
-    switch (opr) {
-    case AstInterface::BOP_TIMES:
-      return v1 * v2;
-    case AstInterface::BOP_PLUS:
-      return v1 + v2;
-    case AstInterface::BOP_MINUS:
-      return v1 - v2;
-    case AstInterface::BOP_MOD:
-      return new SymbolicFunction(opr, "%", v1, v2);
-    case AstInterface::BOP_DOT_ACCESS:
-    case AstInterface::BOP_ARROW_ACCESS:
-      return new SymbolicAstWrap(exp);
-    case AstInterface::BOP_DIVIDE:
-      return new SymbolicFunction(opr, "/", v1, v2);
-    case AstInterface::BOP_EQ:
-      return new SymbolicFunction(opr, "==", v1, v2);
-    case AstInterface::BOP_LE:
-      return new SymbolicFunction(opr, "<=", v1, v2);
-    case AstInterface::BOP_LT:
-      return new SymbolicFunction(opr, "<", v1, v2);
-    case AstInterface::BOP_NE:
-      return new SymbolicFunction(opr, "!=", v1, v2);
-    case AstInterface::BOP_GT:
-      return new SymbolicFunction(opr, ">", v1, v2);
-    case AstInterface::BOP_GE:
-      return new SymbolicFunction(opr, ">=", v1, v2);
-    case AstInterface::BOP_AND:
-      return new SymbolicFunction(opr, "&&", v1, v2);
-    case AstInterface::BOP_OR:
-      return new SymbolicFunction(opr, "||", v1, v2);
-    case AstInterface::BOP_BIT_RSHIFT:
-      return new SymbolicFunction(opr, ">>", v1, v2);
-    case AstInterface::BOP_BIT_LSHIFT:
-      return new SymbolicFunction(opr, "<<", v1, v2);
-    case AstInterface::BOP_BIT_AND:
-      return new SymbolicFunction(opr, "&", v1, v2);
-    case AstInterface::BOP_BIT_OR:
-      return new SymbolicFunction(opr, "|", v1, v2);
-    default: {
-      cerr << "Error in SymbolicValGenerator::GetSymbolicVal(): unhandled type "
-              "of binary operator "
-           << AstInterface::toString(opr) << endl;
-      ROSE_ABORT();
-    }
-    }
+    return GetSymbolicVal(opr, {v1, v2});
   } else if (fa.IsUnaryOp(exp, &opr, &s1)) {
     SymbolicVal v = GetSymbolicVal(fa, s1);
-    switch (opr) {
-    case AstInterface::UOP_MINUS:
-      return (-1) * v;
-    case AstInterface::UOP_ADDR:
-      return new SymbolicFunction(opr, "&", v);
-    case AstInterface::UOP_DEREF:
-      return new SymbolicFunction(opr, "*", v);
-    case AstInterface::UOP_ALLOCATE:
-      return new SymbolicFunction(opr, "new", v);
-    case AstInterface::UOP_NOT:
-      return new SymbolicFunction(opr, "!", v);
-    case AstInterface::UOP_SEMANTIC_CONVERSION:
-    case AstInterface::UOP_CAST_C:
-    case AstInterface::UOP_CAST_REINTERP:
-    case AstInterface::UOP_CAST_STATIC:
-    case AstInterface::UOP_CAST_DYNAMIC:
-    case AstInterface::UOP_CAST_CONST:
-    case AstInterface::UOP_CAST_BUILTIN_BIT:
-    case AstInterface::UOP_CAST_FUNCTIONAL:
-    case AstInterface::UOP_CAST_FUNCTIONAL_LIST:
-      std::cerr << "REX_SYMBOLIC_INVARIANT[cast-transparency]: cast operator "
-                   "escaped exact semantic conversion handling"
-                << std::endl;
-      ROSE_ABORT();
-    case AstInterface::UOP_DECR1:
-    case AstInterface::UOP_DECR1_POST:
-      return new SymbolicFunction(opr, "--", v);
-    case AstInterface::UOP_INCR1:
-    case AstInterface::UOP_INCR1_POST:
-      return new SymbolicFunction(opr, "++", v);
-    default:
-      std::cerr << "Cannot handle " << AstInterface::AstToString(exp) << ":"
-                << opr << "\n";
-      ROSE_ABORT();
-    }
-  } else if (fa.IsFunctionCall(exp, &s1, &l) ||
-             fa.IsArrayAccess(exp, &s1, &l)) {
+    return GetSymbolicVal(opr, {v});
+  } else if (fa.IsFunctionCall(exp, &s1, &l)) {
     bool ismin = fa.IsMin(s1), ismax = fa.IsMax(s1);
     AstInterface::AstNodeList::const_iterator p = l.begin();
     if (ismin || ismax) {

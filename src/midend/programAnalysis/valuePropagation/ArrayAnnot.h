@@ -132,6 +132,11 @@ public:
     }
     second.replace_val(repl);
   }
+  void replace_val(ReplaceParams &repl) {
+    for (SymbolicValDescriptor &target : first)
+      repl.replace_target(target);
+    second.replace_val(repl);
+  }
 };
 
 class ArrayModifyDescriptor
@@ -145,6 +150,10 @@ class ArrayModifyDescriptor
 public:
   void replace_val(MapObject<SymbolicVal, SymbolicVal> &repl) {
     first.replace_val(repl);
+    second.replace_val(repl);
+  }
+  void replace_val(ReplaceParams &repl) {
+    repl.replace_target(first);
     second.replace_val(repl);
   }
 };

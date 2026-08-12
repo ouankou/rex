@@ -65,15 +65,23 @@ void RestrictValueOpDescriptor ::replace_val(
   }
 }
 
+void RestrictValueOpDescriptor::replace_val(ReplaceParams &repl) {
+  for (RestrictValueDescriptor &current : *this) {
+    repl.replace_target(current.first);
+    current.second.replace_val(repl);
+  }
+}
+
 std::string HasValueCollection::is_known_member_function(
     AstInterface &fa, const SymbolicVal &exp, AstNodePtr *objp,
     SymbolicFunction::Arguments *argsp, HasValueDescriptor *descp) {
   std::string op1, op2;
   SymbolicFunction::Arguments arg1, arg2;
-  if (!exp.isFunction(op1, &arg1))
+  if (!exp.isFunction(0, &op1, &arg1))
     return "";
-  if (op1 != "FunctionPtrCall" || !arg1.front().isFunction(op2, &arg2) ||
-      op2 != "." || arg2.size() != 2)
+  if (op1 != "FunctionPtrCall" || arg1.empty() ||
+      !arg1.front().isFunction(0, &op2, &arg2) || op2 != "." ||
+      arg2.size() != 2)
     return "";
   AstNodePtr obj;
   if (!arg2.front().isAstWrap(obj) || !known_type(fa, obj, descp))
@@ -181,10 +189,9 @@ public:
 bool ValueAnnotation::is_value_restrict_op(
     AstInterface &fa, const AstNodePtr &exp,
     Collect2Object<AstNodePtr, HasValueDescriptor> *descp,
-    MapObject<SymbolicVal, SymbolicVal> *valMap,
-    Map2Object<AstInterface *, AstNodePtr, AstNodePtr> *astcodegen) {
+    MapObject<SymbolicVal, SymbolicVal> *valMap) {
   RestrictValueOpDescriptor desc;
-  if (!valueRestrict.known_operator(fa, exp, 0, &desc, true, astcodegen))
+  if (!valueRestrict.known_operator(fa, exp, 0, &desc, true))
     return false;
   if (descp == 0)
     return true;

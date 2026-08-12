@@ -233,7 +233,9 @@ public:
     }
     return false;
   }
-  bool isFunction(std::string &name, std::vector<SymbolicVal> *argp = 0) const;
+  bool isFunction(AstInterface::OperatorEnum *operation = 0,
+                  std::string *name = 0,
+                  std::vector<SymbolicVal> *arguments = 0) const;
 
   SymbolicValType GetValType() const {
     return (ConstPtr() == 0) ? VAL_BASE : ConstRef().GetValType();
@@ -284,6 +286,7 @@ public:
   virtual void Visit(SymbolicVisitor *v) const { v->VisitFunction(*this); }
   bool operator==(const SymbolicFunction &that) const;
   SymbolicVal GetOp() const { return op; }
+  virtual OpType GetAstOpType() const { return t; }
   const Arguments &get_args() const { return args; }
   SymbolicVal get_arg(int index) const { return args[index]; }
   const_iterator args_begin() const { return args.begin(); }
@@ -294,19 +297,38 @@ public:
   virtual SymbolicVal GetUnknownOpds() const { return SymbolicVal(); }
   virtual bool GetConstOpd(int &, int &) const { return false; }
   SymbolicValImpl *Clone() const { return new SymbolicFunction(*this); }
-  virtual SymbolicFunction *cloneFunction(const Arguments &args) const {
-    return new SymbolicFunction(t, op, args);
-  }
+  virtual SymbolicVal cloneFunction(const Arguments &args) const;
 };
 
-inline bool SymbolicVal::isFunction(std::string &name,
-                                    std::vector<SymbolicVal> *argp) const {
+class SymbolicSemanticConversion : public SymbolicFunction {
+  AstNodePtr prototype;
+
+  SymbolicValImpl *Clone() const {
+    return new SymbolicSemanticConversion(*this);
+  }
+
+public:
+  SymbolicSemanticConversion(const AstNodePtr &prototype,
+                             const SymbolicVal &operand);
+  SymbolicSemanticConversion(const SymbolicSemanticConversion &that)
+      : SymbolicFunction(that), prototype(that.prototype) {}
+
+  AstNodePtr CodeGen(AstInterface &fa) const;
+  SymbolicVal cloneFunction(const Arguments &arguments) const;
+};
+
+inline bool SymbolicVal::isFunction(AstInterface::OperatorEnum *operation,
+                                    std::string *name,
+                                    std::vector<SymbolicVal> *arguments) const {
   if (ConstPtr() != 0 && ConstRef().GetValType() == VAL_FUNCTION) {
     const SymbolicFunction &c =
         static_cast<const SymbolicFunction &>(ConstRef());
-    name = c.GetOp().toString();
-    if (argp != 0)
-      *argp = c.get_args();
+    if (operation != 0)
+      *operation = c.GetAstOpType();
+    if (name != 0)
+      *name = c.GetOp().toString();
+    if (arguments != 0)
+      *arguments = c.get_args();
     return true;
   }
   return false;
@@ -325,9 +347,8 @@ public:
     return last_arg().isConstInt(val1, val2);
   }
   SymbolicValImpl *Clone() const { return new SymbolicPow(*this); }
-  virtual SymbolicFunction *cloneFunction(const Arguments &args) const {
-    SymbolicFunction *r = new SymbolicPow(args);
-    return r;
+  virtual SymbolicVal cloneFunction(const Arguments &args) const {
+    return new SymbolicPow(args);
   }
 };
 
@@ -336,6 +357,8 @@ public:
 class SymbolicValGenerator {
 public:
   static SymbolicVal GetSymbolicVal(AstInterface &fa, const AstNodePtr &exp);
+  static SymbolicVal GetSymbolicVal(AstInterface::OperatorEnum operation,
+                                    const std::vector<SymbolicVal> &arguments);
   static SymbolicVal GetSymbolicVal(const std::string &sig);
   static SymbolicVal get_null() { return SymbolicVal(); }
   static SymbolicVal get_unknown() { return new SymbolicValImpl(); }
@@ -344,6 +367,14 @@ public:
                             SymbolicVal *ub = 0, SymbolicVal *step = 0,
                             AstNodePtr *body = 0);
 };
+
+inline SymbolicVal
+SymbolicFunction::cloneFunction(const Arguments &arguments) const {
+  if (t == AstInterface::OP_NONE || t == AstInterface::OP_ARRAY_ACCESS ||
+      t == AstInterface::OP_ASSIGN)
+    return new SymbolicFunction(t, op, arguments);
+  return SymbolicValGenerator::GetSymbolicVal(t, arguments);
+}
 
 SymbolicVal ApplyBinOP(SymOpType t, const SymbolicVal &v1,
                        const SymbolicVal &v2);
