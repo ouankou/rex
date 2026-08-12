@@ -39,6 +39,8 @@ dependenceLabel(AstUtilInterface::OperatorSideEffect relation) {
     return {"read", "unknown"};
   case OperatorSideEffect::CallUnknown:
     return {"call", "unknown"};
+  case OperatorSideEffect::Init:
+    return {"read", "init"};
   default:
     return {AstUtilInterface::OperatorSideEffectName(relation), ""};
   }

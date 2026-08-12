@@ -118,7 +118,7 @@ public:
     AstNodePtr scope;
     std::pair<AstNodePtr, AstNodePtr> mod(mod_first, mod_second);
     if (fa.IsVarRef(mod.first, 0, &varname, &scope)) {
-      assert(mod.second != AST_NULL);
+      ROSE_ASSERT(mod.second != AST_NULL);
       defvars[varname] =
           std::pair<AstNodePtr, std::pair<AstNodePtr, AstNodePtr>>(scope, mod);
     } else {
