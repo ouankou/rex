@@ -118,8 +118,9 @@ void AstUtilInterface::ComputeAstSideEffects(
         AstNodePtr base;
         if (AstInterface::IsAddressOfOp(second, &base)) {
           alias_map["_deref_(" + sig_first + ")"] = base;
+        } else {
+          alias_map[sig_first] = second;
         }
-        alias_map[sig_first] = second;
         if (collect != 0) {
           (*collect)(first, second, OperatorSideEffect::Alias);
         }
@@ -144,8 +145,11 @@ void AstUtilInterface::ComputeAstSideEffects(
         for (AstNodePtr &subref : subrefs) {
           AstNodePtr memory_ref = subref;
           bool is_unknown_ref = false;
-          bool is_local_ref =
-              AstInterface::IsLocalRef(memory_ref, body, &is_unknown_ref);
+          bool is_local_ref = false;
+          if (is_function) {
+            is_local_ref =
+                AstInterface::IsLocalRef(memory_ref, body, &is_unknown_ref);
+          }
           AstNodePtr array;
           if (AstInterface::IsArrayAccess(memory_ref, &array)) {
             is_local_ref = false;

@@ -1,6 +1,7 @@
 #include "rose.h"
 
 #include "AstInterface_ROSE.h"
+#include "AstUtilInterface.h"
 #include "RoseAst.h"
 #include "dependence_analysis.h"
 
@@ -9,6 +10,18 @@
 #include <string>
 
 namespace {
+
+bool requireInitializationInput(const std::string &dependences,
+                                const std::string &target,
+                                const std::string &input) {
+  const std::string expected = target + " : [ read ] " + input + " = init ;";
+  if (dependences.find(expected) != std::string::npos)
+    return true;
+  std::cerr << "missing global initializer input dependence '" << expected
+            << "':\n"
+            << dependences;
+  return false;
+}
 
 bool rejectInitializationTarget(const std::string &dependences,
                                 const std::string &target) {
@@ -20,6 +33,19 @@ bool rejectInitializationTarget(const std::string &dependences,
             << unexpected << "':\n"
             << dependences;
   return false;
+}
+
+SgVariableDeclaration *findVariableDeclaration(SgProject *project,
+                                               const std::string &name) {
+  RoseAst ast(project);
+  for (RoseAst::iterator node = ast.begin(); node != ast.end(); ++node) {
+    SgVariableDeclaration *declaration = isSgVariableDeclaration(*node);
+    if (declaration != nullptr && declaration->get_variables().size() == 1 &&
+        declaration->get_variables().front()->get_name().getString() == name)
+      return declaration;
+  }
+  std::cerr << "declaration '" << name << "' was not found" << std::endl;
+  return nullptr;
 }
 
 SgTemplateVariableDeclaration *
@@ -37,7 +63,7 @@ findTemplateVariableDeclaration(SgProject *project, const std::string &name) {
   return nullptr;
 }
 
-bool requireDerivedVariableDeclaration(SgVariableDeclaration *declaration) {
+bool requireExactDeclarationEffects(SgVariableDeclaration *declaration) {
   ASSERT_not_null(declaration);
   ASSERT_require(declaration->get_variables().size() == 1);
   SgInitializedName *target = declaration->get_variables().front();
@@ -48,8 +74,32 @@ bool requireDerivedVariableDeclaration(SgVariableDeclaration *declaration) {
   if (!AstInterface::IsVariableDecl(declaration, &variables, &initializers) ||
       variables.size() != 1 || initializers.size() != 1 ||
       AstNodePtrImpl(variables.front()).get_ptr() != target) {
-    std::cerr << "declaration '" << target->get_name().getString()
-              << "' was not recognized through its variable declaration base"
+    std::cerr << "declaration list for '" << target->get_name().getString()
+              << "' contains aggregate designators or lost its exact target"
+              << std::endl;
+    return false;
+  }
+
+  bool saw_target_declaration = false;
+  bool saw_spurious_declaration = false;
+  std::function<bool(const AstNodePtr &, const AstNodePtr &,
+                     AstUtilInterface::OperatorSideEffect)>
+      collect = [target, &saw_target_declaration, &saw_spurious_declaration](
+                    const AstNodePtr &node, const AstNodePtr &,
+                    AstUtilInterface::OperatorSideEffect relation) {
+        if (relation != AstUtilInterface::OperatorSideEffect::Decl)
+          return true;
+        if (AstNodePtrImpl(node).get_ptr() == target) {
+          saw_target_declaration = true;
+        } else {
+          saw_spurious_declaration = true;
+        }
+        return true;
+      };
+  AstUtilInterface::ComputeAstSideEffects(declaration, &collect, nullptr);
+  if (!saw_target_declaration || saw_spurious_declaration) {
+    std::cerr << "declaration effects for '" << target->get_name().getString()
+              << "' did not contain exactly the initialized object"
               << std::endl;
     return false;
   }
@@ -65,7 +115,13 @@ int main(int argc, char **argv) {
   SgTemplateVariableDeclaration *template_variable =
       findTemplateVariableDeclaration(project, "rex_template_variable");
   if (template_variable == nullptr ||
-      !requireDerivedVariableDeclaration(template_variable))
+      !requireExactDeclarationEffects(template_variable))
+    return 1;
+
+  SgVariableDeclaration *designated_pair =
+      findVariableDeclaration(project, "designated_pair");
+  if (designated_pair == nullptr ||
+      !requireExactDeclarationEffects(designated_pair))
     return 1;
 
   AstUtilInterface::WholeProgramDependenceAnalysis analysis;
@@ -83,13 +139,20 @@ int main(int argc, char **argv) {
   std::ostringstream output;
   analysis.OutputDependences(output);
   const std::string dependences = output.str();
-  if (dependences.find("init") == std::string::npos ||
+  if (!requireInitializationInput(dependences, "target", "source") ||
+      !requireInitializationInput(dependences, "target", "delta") ||
+      !requireInitializationInput(dependences, "positional_pair", "source") ||
+      !requireInitializationInput(dependences, "positional_pair", "delta") ||
+      !requireInitializationInput(dependences, "designated_pair", "source") ||
+      !requireInitializationInput(dependences, "designated_pair", "delta") ||
+      !requireInitializationInput(dependences, "rex_nested::nested_target",
+                                  "source") ||
+      !requireInitializationInput(dependences, "rex_nested::nested_target",
+                                  "delta") ||
       !rejectInitializationTarget(dependences,
                                   "read_local_initializer::local") ||
       !rejectInitializationTarget(dependences,
                                   "read_local_initializer::function_static")) {
-    std::cerr << "global initializer dependence was not recorded:\n"
-              << dependences;
     return 1;
   }
 

@@ -1,4 +1,5 @@
 #include "AstInterface_ROSE.h"
+#include "AstUtilInterface.h"
 #include "RoseAst.h"
 #include "StmtInfoCollect.h"
 #include "rose.h"
@@ -18,15 +19,25 @@ bool isDirectCallableIdentity(SgNode *node) {
          isSgNonrealRefExp(node) != nullptr;
 }
 
-SgFunctionDefinition *findTestFunction(SgProject *project) {
+SgFunctionDefinition *findTestFunction(SgProject *project,
+                                       const std::string &name) {
   RoseAst ast(project);
   for (RoseAst::iterator node = ast.begin(); node != ast.end(); ++node) {
     SgFunctionDefinition *definition = isSgFunctionDefinition(*node);
     if (definition != nullptr &&
-        definition->get_declaration()->get_name().getString() ==
-            "rex_test_callable_channels") {
+        definition->get_declaration()->get_name().getString() == name) {
       return definition;
     }
+  }
+  return nullptr;
+}
+
+SgInitializedName *findVariable(SgNode *root, const std::string &name) {
+  RoseAst ast(root);
+  for (RoseAst::iterator node = ast.begin(); node != ast.end(); ++node) {
+    SgInitializedName *variable = isSgInitializedName(*node);
+    if (variable != nullptr && variable->get_name().getString() == name)
+      return variable;
   }
   return nullptr;
 }
@@ -50,7 +61,8 @@ int main(int argc, char *argv[]) {
   SgProject *project = frontend(argc, argv);
   ROSE_ASSERT(project != nullptr);
 
-  SgFunctionDefinition *testFunction = findTestFunction(project);
+  SgFunctionDefinition *testFunction =
+      findTestFunction(project, "rex_test_callable_channels");
   if (testFunction == nullptr) {
     return fail("test function definition is missing");
   }
@@ -130,6 +142,45 @@ int main(int argc, char *argv[]) {
   if (!contains(reads, indirectCallee)) {
     return fail(
         "indirect callable memory was absent from the object-read channel");
+  }
+
+  SgFunctionDefinition *pointerFunction =
+      findTestFunction(project, "rex_test_pointer_alias_channel");
+  if (pointerFunction == nullptr) {
+    return fail("pointer-alias test function definition is missing");
+  }
+  SgInitializedName *pointer = findVariable(pointerFunction, "pointer");
+  if (pointer == nullptr) {
+    return fail("pointer declaration is missing");
+  }
+  bool sawPointerValueRead = false;
+  bool aliasedPointerValueToPointee = false;
+  std::function<bool(const AstNodePtr &, const AstNodePtr &,
+                     AstUtilInterface::OperatorSideEffect)>
+      collectComputedEffects =
+          [pointer, &sawPointerValueRead, &aliasedPointerValueToPointee](
+              const AstNodePtr &node, const AstNodePtr &,
+              AstUtilInterface::OperatorSideEffect relation) {
+            if (relation != AstUtilInterface::OperatorSideEffect::Read)
+              return true;
+            SgNode *sageNode = AstNodePtrImpl(node).get_ptr();
+            SgVarRefExp *reference = isSgVarRefExp(sageNode);
+            if ((reference != nullptr && reference->get_symbol() != nullptr &&
+                 reference->get_symbol()->get_declaration() == pointer) ||
+                sageNode == pointer)
+              sawPointerValueRead = true;
+            if (isSgAddressOfOp(sageNode) != nullptr)
+              aliasedPointerValueToPointee = true;
+            return true;
+          };
+  AstUtilInterface::ComputeAstSideEffects(pointerFunction,
+                                          &collectComputedEffects,
+                                          /*add_to_dep_analysis=*/nullptr);
+  if (!sawPointerValueRead) {
+    return fail("pointer-value read was replaced by its pointee alias");
+  }
+  if (aliasedPointerValueToPointee) {
+    return fail("pointer-value read was reported as address-of pointee");
   }
 
   return 0;

@@ -5,6 +5,8 @@
 
 #include "FunctionObject.h"
 
+#include "ROSE_ASSERT.h"
+
 #include "SymbolicVal.h"
 
 #include <list>
