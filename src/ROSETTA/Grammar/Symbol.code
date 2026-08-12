@@ -1046,7 +1046,7 @@ SgAliasSymbol::get_declaration() const
      return returnValue;
    }
 
-SgAliasSymbol::SgAliasSymbol( const SgAliasSymbol & X )
+SgAliasSymbol::SgAliasSymbol( const SgAliasSymbol & X ) : SgSymbol()
    {
   // DQ (2/28/2015): Added copy constructor to make sure that the causal_nodes is preserved across copies (used in SgScopeStatement::insert_symbol() function).
   // This is a fix for Tristan's use of the copy constructor in the SgScopeStatement::insert_symbol() function).

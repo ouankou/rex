@@ -14874,7 +14874,6 @@ void SgTypedefDeclaration::post_construction_initialization() {
   // DQ (2/27/2018): Since we don't build the typedef type here, we have to
   // modify this assertion. ROSE_ASSERT
   // (get_base_type()->get_typedefs()->get_typedefs().size() > 0);
-  ROSE_ASSERT(get_base_type()->get_typedefs()->get_typedefs().size() >= 0);
 }
 
 // SgStatement *get_next(int&) const;
@@ -15575,7 +15574,6 @@ void SgTemplateTypedefDeclaration::post_construction_initialization() {
   // constructor call (or the post_construction_initialization() function called
   // by the constructor). ROSE_ASSERT
   // (get_base_type()->get_typedefs()->get_typedefs().size() > 0);
-  ROSE_ASSERT(get_base_type()->get_typedefs()->get_typedefs().size() >= 0);
 }
 
 SOURCE_TEMPLATE_TYPEDEF_DECLARATION_STATEMENT_END
@@ -15621,7 +15619,6 @@ void SgTemplateInstantiationTypedefDeclaration::
   // uniformally consistant in where types are set accross all declarations), we
   // have to modify this assertion. ROSE_ASSERT
   // (get_base_type()->get_typedefs()->get_typedefs().size() > 0);
-  ROSE_ASSERT(get_base_type()->get_typedefs()->get_typedefs().size() >= 0);
 }
 
 // DQ (2/28/2018): Added support for getting the symbol from the declaration.

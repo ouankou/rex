@@ -2546,7 +2546,7 @@ SOURCE_ATTRIBUTE_SUPPORT_END
 
 SOURCE_MODIFIER_START
 
-SgModifier::SgModifier(const SgModifier & /*X*/) {
+SgModifier::SgModifier(const SgModifier & /*X*/) : SgSupport() {
   // DQ (4/13/2004): Nothing to do here, but this function prevents the
   // SgSupport copy constructor from being called and we would like to keep that
   // copy constructor private so that we can enforce error checking via the type
@@ -2596,7 +2596,9 @@ SOURCE_MODIFIER_NODES_END
 
 SOURCE_CV_TYPE_MODIFIER_START
 
-$CLASSNAME::$CLASSNAME(const $CLASSNAME &X) { p_modifier = X.p_modifier; }
+$CLASSNAME::$CLASSNAME(const $CLASSNAME &X) : SgModifier() {
+  p_modifier = X.p_modifier;
+}
 
 $CLASSNAME &$CLASSNAME::operator=(const $CLASSNAME &X) {
   p_modifier = X.p_modifier;
@@ -2673,7 +2675,7 @@ SOURCE_CV_TYPE_MODIFIER_END
 SOURCE_STORAGE_MODIFIER_START
 
 // Copy constructor
-$CLASSNAME::$CLASSNAME(const $CLASSNAME &X) {
+$CLASSNAME::$CLASSNAME(const $CLASSNAME &X) : SgModifier() {
   p_modifier = X.p_modifier;
   p_thread_local_storage = X.p_thread_local_storage;
 }
@@ -2873,7 +2875,7 @@ SOURCE_STORAGE_MODIFIER_END
 SOURCE_ACCESS_MODIFIER_START
 
 // Copy constructor
-SgAccessModifier::SgAccessModifier(const SgAccessModifier &X) {
+SgAccessModifier::SgAccessModifier(const SgAccessModifier &X) : SgModifier() {
   p_modifier = X.p_modifier;
   p_is_explicit = X.p_is_explicit;
 }
@@ -2959,7 +2961,7 @@ SOURCE_ACCESS_MODIFIER_END
 
 SOURCE_FUNCTION_MODIFIER_START
 // Copy constructor
-SgFunctionModifier::$CLASSNAME(const SgFunctionModifier &X) {
+SgFunctionModifier::$CLASSNAME(const SgFunctionModifier &X) : SgModifier() {
   p_modifierVector = X.p_modifierVector;
   p_gnu_attribute_constructor_destructor_priority =
       X.p_gnu_attribute_constructor_destructor_priority;
@@ -3497,7 +3499,7 @@ SOURCE_FUNCTION_MODIFIER_END
 SOURCE_SPECIAL_FUNCTION_MODIFIER_START
 
 // Copy constructor
-$CLASSNAME::$CLASSNAME(const $CLASSNAME &X) {
+$CLASSNAME::$CLASSNAME(const $CLASSNAME &X) : SgModifier() {
   p_modifierVector = X.p_modifierVector;
 }
 
@@ -3634,7 +3636,8 @@ SOURCE_SPECIAL_FUNCTION_MODIFIER_END
 SOURCE_DECLARATION_MODIFIER_START
 
 // Copy constructor
-SgDeclarationModifier::SgDeclarationModifier(const SgDeclarationModifier &X) {
+SgDeclarationModifier::SgDeclarationModifier(const SgDeclarationModifier &X)
+    : SgModifier() {
   p_modifierVector = X.p_modifierVector;
   p_typeModifier = X.p_typeModifier;
   p_accessModifier = X.p_accessModifier;
@@ -3848,7 +3851,7 @@ SOURCE_DECLARATION_MODIFIER_END
 SOURCE_TYPE_MODIFIER_START
 
 // Copy constructor
-SgTypeModifier::SgTypeModifier(const SgTypeModifier &X) {
+SgTypeModifier::SgTypeModifier(const SgTypeModifier &X) : SgModifier() {
   p_modifierVector = X.p_modifierVector;
   p_constVolatileModifier = X.p_constVolatileModifier;
   p_elaboratedTypeModifier = X.p_elaboratedTypeModifier;
@@ -4312,7 +4315,9 @@ SOURCE_TYPE_MODIFIER_END
 SOURCE_ELABORATED_TYPE_MODIFIER_START
 
 // Copy constructor
-$CLASSNAME::$CLASSNAME(const $CLASSNAME &X) { p_modifier = X.p_modifier; }
+$CLASSNAME::$CLASSNAME(const $CLASSNAME &X) : SgModifier() {
+  p_modifier = X.p_modifier;
+}
 
 $CLASSNAME &$CLASSNAME::operator=(const $CLASSNAME &X) {
   p_modifier = X.p_modifier;
@@ -4390,7 +4395,9 @@ SOURCE_ELABORATED_TYPE_MODIFIER_END
 SOURCE_LINKAGE_MODIFIER_START
 
 // Copy constructor
-$CLASSNAME::$CLASSNAME(const $CLASSNAME &X) { p_modifier = X.p_modifier; }
+$CLASSNAME::$CLASSNAME(const $CLASSNAME &X) : SgModifier() {
+  p_modifier = X.p_modifier;
+}
 
 $CLASSNAME &$CLASSNAME::operator=(const $CLASSNAME &X) {
   p_modifier = X.p_modifier;
@@ -4460,7 +4467,7 @@ SOURCE_LINKAGE_MODIFIER_END
 SOURCE_BASECLASS_MODIFIER_START
 
 // Copy constructor
-$CLASSNAME::$CLASSNAME(const $CLASSNAME &X) {
+$CLASSNAME::$CLASSNAME(const $CLASSNAME &X) : SgModifier() {
   p_modifier = X.p_modifier;
   p_accessModifier = X.p_accessModifier;
 }
@@ -11717,7 +11724,7 @@ void SgBaseClass::post_construction_initialization() {
   p_global_qualification_required = false;
 }
 
-SgBaseClass::SgBaseClass(const SgBaseClass &X) {
+SgBaseClass::SgBaseClass(const SgBaseClass &X) : SgSupport() {
   // these are the old names
   // p_specifier = ptr.p_specifier;
   // p_ptr       = ptr.p_ptr;
@@ -12540,7 +12547,7 @@ SgName::SgName(const char *str) : p_char(str ? str : "") {
 // I always wanted this and it was a pain that it didn't exist previously!
 SgName::SgName(const std::string &str) : p_char(str) {}
 
-SgName::SgName(const SgName &n) : p_char(n.p_char) {}
+SgName::SgName(const SgName &n) : SgSupport(), p_char(n.p_char) {}
 
 // SgName::SgName(const char *str, int n): p_char(str, n) {} // get first n
 // chars in the string
@@ -13318,7 +13325,8 @@ Sg_File_Info::Sg_File_Info(const std::string &filename, int line, int col)
 
 // DQ (2/15/2003): added copy constructor
 Sg_File_Info::Sg_File_Info(const Sg_File_Info &X)
-    : p_file_id(validate_file_id_registration(X.p_file_id)), p_line(X.p_line),
+    : SgSupport(), p_file_id(validate_file_id_registration(X.p_file_id)),
+      p_line(X.p_line),
       p_col(X.p_col), p_classificationBitField(X.p_classificationBitField),
       p_physical_file_id(validate_file_id_registration(X.p_physical_file_id)),
       p_physical_line(X.p_physical_line),
@@ -20249,7 +20257,9 @@ SOURCE_FORMAT_ITEM_LIST_END
 SOURCE_OPENCL_ACCESS_MODE_MODIFIER_START
 
 // Copy constructor
-$CLASSNAME::$CLASSNAME(const $CLASSNAME &X) { p_modifier = X.p_modifier; }
+$CLASSNAME::$CLASSNAME(const $CLASSNAME &X) : SgModifier() {
+  p_modifier = X.p_modifier;
+}
 
 $CLASSNAME &$CLASSNAME::operator=(const $CLASSNAME &X) {
   p_modifier = X.p_modifier;
