@@ -1015,7 +1015,8 @@ SgType::SgType()
 }
 
 SgType::SgType(const SgType &X)
-    : p_substitutedForTemplateParam(X.p_substitutedForTemplateParam),
+    : SgNode(),
+      p_substitutedForTemplateParam(X.p_substitutedForTemplateParam),
       p_ref_to(X.p_ref_to), p_ptr_to(X.p_ptr_to), p_modifiers(X.p_modifiers),
       p_typedefs(X.p_typedefs), p_rvalue_ref_to(X.p_rvalue_ref_to),
       p_decltype_ref_to(X.p_decltype_ref_to),
@@ -2319,7 +2320,7 @@ SOURCE_NAMED_TYPE_START
 // the SgQualifiedNameType constructor SgQualifiedNamePtrList
 // SgNamedType::p_defaultQualifiedNamePtrList;
 
-SgNamedType::SgNamedType(const SgNamedType &X) {
+SgNamedType::SgNamedType(const SgNamedType &X) : SgType() {
   p_declaration = X.p_declaration;
   p_autonomous_declaration = X.p_autonomous_declaration;
 
