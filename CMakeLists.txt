@@ -2554,9 +2554,6 @@ else()
   if(RT_LIB)
     list(APPEND link_with_libraries rt)
   endif()
-  if(HAVE_QUADMATH_COMPILE)
-    list(APPEND link_with_libraries quadmath)
-  endif()
 endif()
 
 # Check compilers and version numbers. The module is located in src/cmake/modules.
