@@ -38,51 +38,55 @@ public:
       Descriptor new_annot;
       new_annot.get_param_decl() = op.get_param_info();
       result = add_annot(op, new_annot);
-      assert(result != 0 && result->get_param_decl().num_of_params() ==
-                                op.get_param_info().num_of_params());
-    } else {
-      if (result != 0 && result->get_param_decl().num_of_params() <
+      if (result == 0 || result->get_param_decl().num_of_params() !=
                              op.get_param_info().num_of_params()) {
-        debugAnnot([]() {
-          return "Unexpected Error: mismatching parameters and arguments in "
-                 "found annotation! Return 0 to be safe.";
-        });
-        // Return 0 to be safe.
-        return 0;
+        std::cerr << "REX_ANNOTATION_INVARIANT[descriptor-insertion]: "
+                     "annotation="
+                  << op.ToString()
+                  << " did not retain its exact parameter declaration"
+                  << std::endl;
+        ROSE_ABORT();
+      }
+    } else {
+      if (result != 0 && result->get_param_decl().num_of_params() !=
+                             op.get_param_info().num_of_params()) {
+        std::cerr << "REX_ANNOTATION_INVARIANT[descriptor-arity]: annotation="
+                  << op.ToString()
+                  << " descriptor=" << result->get_param_decl().num_of_params()
+                  << " operation=" << op.get_param_info().num_of_params()
+                  << std::endl;
+        ROSE_ABORT();
       }
     }
     return result;
   }
   template <class CollectObject>
-  bool CollectAnnotation(
-      AstInterface &fa, const AstNodePtr &fc, CollectObject *collect_f,
-      Map2Object<AstInterface *, AstNodePtr, AstNodePtr> *astcodegen = 0) {
+  bool CollectAnnotation(AstInterface &fa, const AstNodePtr &fc,
+                         CollectObject *collect_f) {
     DebugLog debugAnnot("-debugannot");
     AstInterface::AstNodeList args;
     OperatorDeclaration op(fa, fc, &args);
-    // QY: This is not supposed to happen, but skip this case for now.
-    if (op.get_param_info().num_of_params() != args.size()) {
-      debugAnnot(
-          []() { return "Error: mismatching parameters and arguments."; });
-      return false;
-    }
     Descriptor *annot = get_annot_descriptor(op);
-    if (annot != 0) {
-      debugAnnot([&op]() {
-        return "Found recognized operation annotation:" + op.ToString();
-      });
-      if (collect_f != 0) {
-        annot->collect(fa, args, *collect_f, astcodegen);
-      }
-      return true;
+    if (annot == 0)
+      return false;
+    if (op.get_param_info().num_of_params() != args.size()) {
+      std::cerr << "REX_ANNOTATION_INVARIANT[call-arity]: operation="
+                << op.ToString()
+                << " parameters=" << op.get_param_info().num_of_params()
+                << " arguments=" << args.size() << std::endl;
+      ROSE_ABORT();
     }
-    return false;
+    debugAnnot([&op]() {
+      return "Found recognized operation annotation:" + op.ToString();
+    });
+    if (collect_f != 0) {
+      annot->collect(fa, args, *collect_f);
+    }
+    return true;
   }
-  bool known_operator(
-      AstInterface &fa, const AstNodePtr &exp,
-      AstInterface::AstNodeList *argp = 0, Descriptor *desc = 0,
-      bool replpar = false,
-      Map2Object<AstInterface *, AstNodePtr, AstNodePtr> *astcodegen = 0) {
+  bool known_operator(AstInterface &fa, const AstNodePtr &exp,
+                      AstInterface::AstNodeList *argp = 0, Descriptor *desc = 0,
+                      bool replpar = false) {
     DebugLog debugAnnot("-debugannot");
     AstInterface::AstNodeList args;
     OperatorDeclaration op(fa, exp, &args);
@@ -97,7 +101,7 @@ public:
     if (desc != 0) {
       *desc = *original_descriptor;
       if (replpar) {
-        ReplaceParams repl = desc->GenReplaceParams(args, astcodegen);
+        ReplaceParams repl = desc->GenReplaceParams(fa, args);
         desc->replace_val(repl);
       }
     }

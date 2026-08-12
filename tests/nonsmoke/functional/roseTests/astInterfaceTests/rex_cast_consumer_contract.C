@@ -149,15 +149,31 @@ int exercisePositiveContracts(int argc, char **argv) {
   ROSE_ABORT();
 }
 
-[[noreturn]] void rejectSymbolicIntegralCast(int argc, char **argv) {
+int preserveSymbolicIntegralCast(int argc, char **argv) {
   SgProject *project = parseProject(argc, argv, 2);
   SgCastExp *cast = requireNestedConversion(
       findFunction(project, "rex_cast_static_surface"),
       SgCastExp::e_static_cast, SgCastExp::e_semantic_conversion_IntegralCast);
   AstInterfaceImpl implementation(cast);
   AstInterface interface(&implementation);
-  (void)SymbolicValGenerator::GetSymbolicVal(interface, AstNodePtr(cast));
-  ROSE_ABORT();
+  SymbolicVal converted =
+      SymbolicValGenerator::GetSymbolicVal(interface, AstNodePtr(cast));
+  AstInterface::OperatorEnum operation = AstInterface::OP_NONE;
+  std::vector<SymbolicVal> arguments;
+  ROSE_ASSERT(converted.isFunction(&operation, nullptr, &arguments));
+  ROSE_ASSERT(operation == AstInterface::UOP_SEMANTIC_CONVERSION);
+  ROSE_ASSERT(arguments.size() == 1);
+
+  SgCastExp *rebuilt = isSgCastExp(converted.CodeGen(interface).get_ptr());
+  ROSE_ASSERT(rebuilt != nullptr);
+  rebuilt->validate_semantic_conversion();
+  ROSE_ASSERT(rebuilt->get_cast_type() == cast->get_cast_type());
+  ROSE_ASSERT(rebuilt->get_semantic_conversion_kind() ==
+              cast->get_semantic_conversion_kind());
+  ROSE_ASSERT(rebuilt->get_value_category() == cast->get_value_category());
+  ROSE_ASSERT(
+      SageInterface::isEquivalentType(rebuilt->get_type(), cast->get_type()));
+  return 0;
 }
 
 [[noreturn]] void rejectLoopCastDiscard(int argc, char **argv) {
@@ -200,8 +216,8 @@ int main(int argc, char **argv) {
   const std::string mode = argv[1];
   if (mode == "--reject-unary-cast-rebuild")
     rejectUnaryCastRebuild();
-  if (mode == "--reject-symbolic-integral-cast")
-    rejectSymbolicIntegralCast(argc, argv);
+  if (mode == "--preserve-symbolic-integral-cast")
+    return preserveSymbolicIntegralCast(argc, argv);
   if (mode == "--reject-loop-cast-discard")
     rejectLoopCastDiscard(argc, argv);
   if (mode == "--reject-dependent-cast-target")

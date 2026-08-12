@@ -51,18 +51,9 @@ public:
       : valmap(_m), fa(_fa), usedefault(_usedefault) {}
 };
 
-class HasValueCodeGen
-    : public Map2Object<AstInterface *, AstNodePtr, AstNodePtr> {
-  std::map<AstNodePtr, AstNodePtr> astmap;
-
-public:
-  AstNodePtr operator()(AstInterface *const &fa, const AstNodePtr &orig);
-};
-
 class ValuePropagate : public DefUseChain<ValuePropagateNode> {
   std::map<AstNodePtr, ValuePropagateNode *> nodemap;
   HasValueMap valmap;
-  HasValueCodeGen astmap;
 
   virtual ValuePropagateNode *CreateNode(AstInterface &fa,
                                          const AstNodePtr &ref,

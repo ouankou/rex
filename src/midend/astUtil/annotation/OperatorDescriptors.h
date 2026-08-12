@@ -53,21 +53,21 @@ class ReplaceParams : public MapObject<SymbolicVal, SymbolicVal>,
   virtual void VisitVar(const SymbolicVar &v);
   virtual SymbolicVal operator()(const SymbolicVal &v);
 
-  std::map<std::string, SymbolicAstWrap> parmap;
+  std::map<std::string, SymbolicVal> parmap;
+  std::map<std::string, AstNodePtr> exact_arguments;
   std::map<std::string, TypeDescriptor> partypemap;
   SymbolicVal cur;
 
 public:
-  class MisMatchError {};
-  ReplaceParams(
-      const ParameterDeclaration &decl, const AstInterface::AstNodeList &args,
-      Map2Object<AstInterface *, AstNodePtr, AstNodePtr> *codegen = 0);
-  void add(const std::string &par, const AstNodePtr &arg,
-           Map2Object<AstInterface *, AstNodePtr, AstNodePtr> *codegen = 0) {
-    parmap[par] = SymbolicAstWrap(arg, codegen);
+  ReplaceParams(AstInterface &fa, const ParameterDeclaration &decl,
+                const AstInterface::AstNodeList &args);
+  void add(AstInterface &fa, const std::string &par, const AstNodePtr &arg) {
+    parmap[par] = SymbolicValGenerator::GetSymbolicVal(fa, arg);
+    exact_arguments[par] = arg;
   }
   void operator()(SymbolicValDescriptor &result);
-  SymbolicAstWrap find(const std::string &parname);
+  void replace_target(SymbolicValDescriptor &target);
+  SymbolicVal find(const std::string &parname);
 };
 //! Representation for an operator (function)
 class OperatorDeclaration : public TypeDescriptor {
@@ -115,10 +115,9 @@ public:
   }
   void Dump() const { write(std::cerr); }
 
-  ReplaceParams GenReplaceParams(
-      const AstInterface::AstNodeList &args,
-      Map2Object<AstInterface *, AstNodePtr, AstNodePtr> *astcodegen = 0) {
-    ReplaceParams paramMap(get_param_decl(), args, astcodegen);
+  ReplaceParams GenReplaceParams(AstInterface &fa,
+                                 const AstInterface::AstNodeList &args) {
+    ReplaceParams paramMap(fa, get_param_decl(), args);
     return paramMap;
   }
 
@@ -163,11 +162,9 @@ public:
     return size() > param_num;
   }
   template <class CollectObject>
-  void
-  collect(AstInterface &fa, AstInterface::AstNodeList &args,
-          CollectObject &collect_f,
-          Map2Object<AstInterface *, AstNodePtr, AstNodePtr> *astcodegen = 0) {
-    ReplaceParams paramMap = BaseClass::GenReplaceParams(args, astcodegen);
+  void collect(AstInterface &fa, AstInterface::AstNodeList &args,
+               CollectObject &collect_f) {
+    ReplaceParams paramMap = BaseClass::GenReplaceParams(fa, args);
     for (const_iterator p = begin(); p != BaseClass::end(); ++p) {
       BaseDescriptor exp = (*p), arg = exp;
       arg.replace_val(paramMap);

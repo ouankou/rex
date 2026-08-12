@@ -81,6 +81,7 @@ set(noinst_programs
   rex_unparser_subtree_context
   rex_loop_core_contracts
   rex_cast_consumer_contract
+  rex_symbolic_annotation_contract
   rex_expression_mangling_contract
 )
 
@@ -312,10 +313,13 @@ add_rex_cast_consumer_death_test(
   astInterface_rex_unary_semantic_conversion_rebuild_is_rejected
   --reject-unary-cast-rebuild
   "^REX_AST_INVARIANT\\[unary-cast-rebuild\\]: AstInterface unary operators do not carry an exact cast target type, semantic conversion kind, or value category$")
-add_rex_cast_consumer_death_test(
-  astInterface_rex_symbolic_integral_cast_discard_is_rejected
-  --reject-symbolic-integral-cast
-  "^REX_SYMBOLIC_INVARIANT\\[cast-transparency\\]: cast=0x[[:xdigit:]]+ surface=6 semantic-kind=28 cannot be represented by SymbolicVal without changing its meaning$")
+add_test(
+  NAME astInterface_rex_symbolic_integral_cast_is_preserved
+  COMMAND $<TARGET_FILE:rex_cast_consumer_contract>
+          --preserve-symbolic-integral-cast
+          ${TEST_CXXFLAGS} -c ${_rex_cast_consumer_input})
+set_tests_properties(astInterface_rex_symbolic_integral_cast_is_preserved
+  PROPERTIES LABELS "astInterface;rex")
 add_rex_cast_consumer_death_test(
   astInterface_rex_loop_integral_cast_discard_is_rejected
   --reject-loop-cast-discard
@@ -328,6 +332,68 @@ add_rex_cast_consumer_death_test(
   astInterface_rex_unsupported_cast_precision_policy_is_rejected
   --reject-unsupported-precision-policy
   "^REX_AST_INVARIANT\\[cast-precision-policy\\]: cast=0x[[:xdigit:]]+ conversion=[0-9]+ source-type=0x[[:xdigit:]]+ target-type=0x[[:xdigit:]]+ has no exact numeric precision policy$")
+
+set(_rex_symbolic_annotation_input
+  ${CMAKE_CURRENT_SOURCE_DIR}/rex_symbolic_annotation_contract_input.C)
+add_test(
+  NAME astInterface_rex_symbolic_annotation_contract
+  COMMAND $<TARGET_FILE:rex_symbolic_annotation_contract>
+          ${TEST_CXXFLAGS} -c ${_rex_symbolic_annotation_input})
+set_tests_properties(astInterface_rex_symbolic_annotation_contract
+  PROPERTIES LABELS "astInterface;rex;annotation")
+
+add_test(
+  NAME astInterface_rex_symbolic_unsigned_minus_preserves_type
+  COMMAND $<TARGET_FILE:rex_symbolic_annotation_contract>
+          --check-unsigned-minus
+          ${TEST_CXXFLAGS} -c ${_rex_symbolic_annotation_input})
+set_tests_properties(astInterface_rex_symbolic_unsigned_minus_preserves_type
+  PROPERTIES LABELS "astInterface;rex;annotation")
+
+add_test(
+  NAME astInterface_rex_symbolic_floating_grouping_is_exact
+  COMMAND $<TARGET_FILE:rex_symbolic_annotation_contract>
+          --check-floating-grouping
+          ${TEST_CXXFLAGS} -c ${_rex_symbolic_annotation_input})
+set_tests_properties(astInterface_rex_symbolic_floating_grouping_is_exact
+  PROPERTIES LABELS "astInterface;rex;annotation")
+
+add_test(
+  NAME astInterface_rex_symbolic_array_access_preserves_operator
+  COMMAND $<TARGET_FILE:rex_symbolic_annotation_contract>
+          --check-array-access
+          ${TEST_CXXFLAGS} -c ${_rex_symbolic_annotation_input})
+set_tests_properties(astInterface_rex_symbolic_array_access_preserves_operator
+  PROPERTIES LABELS "astInterface;rex;annotation")
+
+add_test(
+  NAME astInterface_rex_symbolic_complex_floating_grouping_is_exact
+  COMMAND $<TARGET_FILE:rex_symbolic_annotation_contract>
+          --check-complex-floating-grouping
+          ${TEST_CXXFLAGS} -c ${_rex_symbolic_annotation_input})
+set_tests_properties(
+  astInterface_rex_symbolic_complex_floating_grouping_is_exact
+  PROPERTIES LABELS "astInterface;rex;annotation")
+
+add_test(
+  NAME astInterface_rex_symbolic_operator_arity_is_rejected
+  COMMAND ${BASH_EXECUTABLE} -c
+    "ulimit -c 0; log=astInterface_rex_symbolic_operator_arity_is_rejected.log; rm -f \"\$log\"; set +e; \"\$@\" >\"\$log\" 2>&1; status=\$?; set -e; test \"\$status\" -eq 134; test \"\$(grep -Ec -- '^REX_SYMBOLIC_INVARIANT\\[operator-arity\\]: operator=BOP_PLUS expected=2 actual=1$' \"\$log\")\" -eq 1"
+    dummy
+    $<TARGET_FILE:rex_symbolic_annotation_contract>
+    --reject-operator-arity)
+set_tests_properties(astInterface_rex_symbolic_operator_arity_is_rejected
+  PROPERTIES LABELS "astInterface;rex;annotation;death")
+
+add_test(
+  NAME astInterface_rex_annotation_replacement_arity_is_rejected
+  COMMAND ${BASH_EXECUTABLE} -c
+    "ulimit -c 0; log=astInterface_rex_annotation_replacement_arity_is_rejected.log; rm -f \"\$log\"; set +e; \"\$@\" >\"\$log\" 2>&1; status=\$?; set -e; test \"\$status\" -eq 134; test \"\$(grep -Ec -- '^REX_ANNOTATION_INVARIANT\\[replacement-arity\\]: parameters=1 arguments=0$' \"\$log\")\" -eq 1"
+    dummy
+    $<TARGET_FILE:rex_symbolic_annotation_contract>
+    --reject-replacement-arity)
+set_tests_properties(astInterface_rex_annotation_replacement_arity_is_rejected
+  PROPERTIES LABELS "astInterface;rex;annotation;death")
 add_test(
   NAME astInterface_rex_empty_preprocessing_move_detached_destination
   COMMAND $<TARGET_FILE:rex_sageinterface_producer_contract>

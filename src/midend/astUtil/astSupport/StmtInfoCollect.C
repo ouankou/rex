@@ -336,7 +336,7 @@ public:
   CollectReadRefWrap(AstInterface &_fa, FunctionSideEffectInterface *f,
                      const AstNodePtr &_stmt, CollectObject *c)
       : collect(c), func(f), stmt(_stmt), fa(_fa) {}
-  bool operator()(const AstInterface::AstNodePtr &ref) {
+  bool operator()(const AstInterface::AstNodePtr &ref) override {
     AstInterface::AstNodeList args;
     AstInterface::AstNodePtr callee;
     if (fa.IsArrayAccess(ref, 0, &args)) {
@@ -373,7 +373,7 @@ public:
       : collect(c), func(f), stmt(_stmt), fa(_fa) {
     ROSE_ASSERT(collect != 0);
   }
-  bool operator()(const AstInterface::AstNodePtr &ref) {
+  bool operator()(const AstInterface::AstNodePtr &ref) override {
     AstInterface::AstNodeList args;
     AstInterface::AstNodePtr callee;
     if (fa.IsFunctionCall(ref, &callee)) {
@@ -410,8 +410,12 @@ public:
         read(*p);
       }
     }
-    if (mod != 0)
-      (*mod)(AstNodePtrImpl(ref).get_ptr(), stmt);
+    if (mod != 0) {
+      DebugLocalInfoCollect([&ref]() {
+        return "collecting modification:" + AstInterface::AstToString(ref);
+      });
+      (*mod)(ref, stmt);
+    }
     return true;
   }
 };

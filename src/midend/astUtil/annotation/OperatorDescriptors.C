@@ -1,17 +1,23 @@
 
 #include "AstInterface.h"
+#include "AstInterface_ROSE.h"
 
 #include "CommandOptions.h"
 
 #include "OperatorDescriptors.h"
 
 #include "sage3basic.h"
+#include "sageInterface.h"
 
 #include <cctype>
 
 #include <cstring>
 
 #include <string>
+
+#include <unordered_set>
+
+#include <vector>
 
 using namespace std;
 
@@ -24,36 +30,98 @@ std::string StripLeadingGlobalQualifier(std::string name) {
   }
   return name;
 }
+
+bool RequiresExactEvaluation(const AstNodePtr &argument) {
+  SgExpression *root = isSgExpression(AstNodePtrImpl(argument).get_ptr());
+  if (root == nullptr) {
+    std::cerr << "REX_ANNOTATION_INVARIANT[argument-expression]: node="
+              << AstNodePtrImpl(argument).get_ptr()
+              << " is not an exact expression" << std::endl;
+    ROSE_ABORT();
+  }
+  std::vector<SgExpression *> pending{root};
+  std::unordered_set<SgExpression *> visited;
+  while (!pending.empty()) {
+    SgExpression *expression = pending.back();
+    pending.pop_back();
+    if (!visited.insert(expression).second) {
+      std::cerr << "REX_ANNOTATION_INVARIANT[argument-expression-tree]: "
+                << "expression=" << expression
+                << " is reachable through more than one exact child edge"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    if (isSgFunctionCallExp(expression) != nullptr ||
+        isSgAssignOp(expression) != nullptr ||
+        isSgCompoundAssignOp(expression) != nullptr ||
+        isSgPlusPlusOp(expression) != nullptr ||
+        isSgMinusMinusOp(expression) != nullptr ||
+        isSgNewExp(expression) != nullptr ||
+        isSgDeleteExp(expression) != nullptr ||
+        isSgThrowOp(expression) != nullptr ||
+        isSgAwaitExpression(expression) != nullptr ||
+        isSgStatementExpression(expression) != nullptr ||
+        isSgConstructorInitializer(expression) != nullptr)
+      return true;
+    SgType *expressionType = expression->get_type();
+    if (expressionType == nullptr) {
+      std::cerr << "REX_ANNOTATION_INVARIANT[argument-expression-type]: "
+                << "expression=" << expression << " has no exact type"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    if (SageInterface::isVolatileType(expressionType))
+      return true;
+    SgType *semanticType = expressionType->stripTypedefsAndModifiers();
+    if (semanticType == nullptr) {
+      std::cerr << "REX_ANNOTATION_INVARIANT[argument-expression-type]: "
+                << "expression=" << expression << " has no exact semantic type"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    if (semanticType->isFloatType() ||
+        isSgTypeComplex(semanticType) != nullptr ||
+        isSgTypeImaginary(semanticType) != nullptr)
+      return true;
+    for (SgNode *child : expression->get_traversalSuccessorContainer()) {
+      if (SgExpression *childExpression = isSgExpression(child)) {
+        if (childExpression->get_parent() != expression) {
+          std::cerr << "REX_ANNOTATION_INVARIANT[argument-expression-edge]: "
+                    << "parent=" << expression << " child=" << childExpression
+                    << " actual-parent=" << childExpression->get_parent()
+                    << std::endl;
+          ROSE_ABORT();
+        }
+        pending.push_back(childExpression);
+      }
+    }
+  }
+  return false;
+}
 } // namespace
 
-ReplaceParams::ReplaceParams(
-    const ParameterDeclaration &decl, const AstInterface::AstNodeList &args,
-    Map2Object<AstInterface *, AstNodePtr, AstNodePtr> *codegen) {
-  if (decl.get_params().size() < args.size()) {
-    std::cerr << "Error: mismatching numbers of parameters and arguments in "
-                 "annotation."
-              << decl.get_params().size() << " vs " << args.size() << "\n";
-    assert(false);
-    throw MisMatchError();
+ReplaceParams::ReplaceParams(AstInterface &fa, const ParameterDeclaration &decl,
+                             const AstInterface::AstNodeList &args) {
+  if (decl.get_params().size() != args.size()) {
+    std::cerr << "REX_ANNOTATION_INVARIANT[replacement-arity]: parameters="
+              << decl.get_params().size() << " arguments=" << args.size()
+              << std::endl;
+    ROSE_ABORT();
   }
   int index = 0;
   for (AstInterface::AstNodeList::const_iterator p1 = args.begin();
        p1 != args.end(); ++p1, ++index) {
     AstNodePtr curAst = *p1;
     string curpar = decl.get_params()[index];
-    SymbolicAstWrap curarg(curAst, codegen);
+    SymbolicVal curarg = RequiresExactEvaluation(curAst)
+                             ? SymbolicVal(SymbolicAstWrap(curAst))
+                             : SymbolicValGenerator::GetSymbolicVal(fa, curAst);
     parmap[curpar] = curarg;
+    exact_arguments[curpar] = curAst;
     partypemap[curpar] = decl.get_param_types()[index];
     DebugOperatorDescriptor([&]() {
       return "Operator parameter " + curpar + "->" + curarg.toString();
     });
-  }
-  if (decl.get_params().size() > args.size()) {
-    std::cerr << "Error: mismatching numbers of parameters and arguments in "
-                 "annotation."
-              << decl.get_params().size() << " vs " << args.size() << "\n";
-    assert(false);
-    throw MisMatchError();
   }
 }
 
@@ -63,8 +131,8 @@ SymbolicVal ReplaceParams::operator()(const SymbolicVal &v) {
   return cur;
 }
 
-SymbolicAstWrap ReplaceParams::find(const string &varname) {
-  map<string, SymbolicAstWrap>::const_iterator p = parmap.find(varname);
+SymbolicVal ReplaceParams::find(const string &varname) {
+  map<string, SymbolicVal>::const_iterator p = parmap.find(varname);
   if (p != parmap.end()) {
     return (*p).second;
   }
@@ -72,13 +140,13 @@ SymbolicAstWrap ReplaceParams::find(const string &varname) {
     return "Cannot find argument for parameter: " + varname +
            ". Returning empty!";
   });
-  return SymbolicAstWrap();
+  return SymbolicVal();
 }
 
 void ReplaceParams::VisitVar(const SymbolicVar &var) {
   string varname = var.GetVarName();
-  SymbolicAstWrap ast = find(varname);
-  if (ast.get_ast() != AST_NULL)
+  SymbolicVal ast = find(varname);
+  if (!ast.IsNIL())
     cur = ast;
   else
     cur = var;
@@ -86,6 +154,23 @@ void ReplaceParams::VisitVar(const SymbolicVar &var) {
 
 void ReplaceParams::operator()(SymbolicValDescriptor &v) {
   v.replace_val(*this);
+}
+
+void ReplaceParams::replace_target(SymbolicValDescriptor &target) {
+  std::string parameter;
+  if (!target.get_val().isVar(parameter)) {
+    std::cerr << "REX_ANNOTATION_INVARIANT[target-parameter]: target="
+              << target.toString() << " is not a direct operator parameter"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  const auto replacement = exact_arguments.find(parameter);
+  if (replacement == exact_arguments.end()) {
+    std::cerr << "REX_ANNOTATION_INVARIANT[target-parameter]: parameter="
+              << parameter << " has no exact call argument" << std::endl;
+    ROSE_ABORT();
+  }
+  target = SymbolicAstWrap(replacement->second);
 }
 
 // Returns signature for exp. Modifies argp with parameter values if exp is a

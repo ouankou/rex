@@ -55,21 +55,21 @@ AliasAnnotAnal(AstInterface &fa,
   if (!aliasInfo.known_operator(fa, fc, &args, &desc, false))
     return false;
   if (desc.get_param_decl().get_params().size() != args.size()) {
-    DebugOperatorAnnotation([]() {
-      return "AliasAnnotationAnalysis: Parameter and argument sizes are "
-             "different. Return false.";
-    });
-    return false;
+    std::cerr << "REX_ANNOTATION_INVARIANT[alias-arity]: parameters="
+              << desc.get_param_decl().get_params().size()
+              << " arguments=" << args.size() << std::endl;
+    ROSE_ABORT();
   }
-  ReplaceParams paramMap(desc.get_param_decl(), args);
-  paramMap.add("result", result);
+  ReplaceParams paramMap(fa, desc.get_param_decl(), args);
+  if (result != AST_NULL)
+    paramMap.add(fa, "result", result);
   int index = 0;
   for (OperatorAliasDescriptor::const_iterator p1 = desc.begin();
        p1 != desc.end(); ++p1, ++index) {
     const NameGroup &cur = *p1;
     for (NameGroup::const_iterator p2 = cur.begin(); p2 != cur.end(); ++p2) {
       std::string varname = *p2;
-      AstNodePtr arg = paramMap.find(varname).get_ast();
+      AstNodePtr arg = paramMap.find(varname).CodeGen(fa);
       if (arg != AST_NULL) {
         collectalias(std::pair<AstNodePtr, int>(arg, index));
       } else {

@@ -59,7 +59,7 @@ class SymbolicDotExp : public SymbolicFunction {
 public:
   SymbolicDotExp(const Arguments &v)
       : SymbolicFunction(AstInterface::BOP_DOT_ACCESS, ".", v) {
-    assert(v.size() == 2);
+    ROSE_ASSERT(v.size() == 2);
   }
   SymbolicDotExp(const SymbolicVal &obj, const SymbolicVal &field)
       : SymbolicFunction(AstInterface::BOP_DOT_ACCESS, ".", obj, field) {}
@@ -70,7 +70,7 @@ public:
 
   virtual AstNodePtr CodeGen(AstInterface &fa) const;
   virtual SymbolicValImpl *Clone() const { return new SymbolicDotExp(*this); }
-  virtual SymbolicFunction *cloneFunction(const Arguments &args) const {
+  virtual SymbolicVal cloneFunction(const Arguments &args) const {
     return new SymbolicDotExp(args);
   }
 };
@@ -86,21 +86,21 @@ public:
   virtual SymbolicValImpl *Clone() const {
     return new SymbolicFunctionPtrCall(*this);
   }
-  virtual SymbolicFunction *cloneFunction(const Arguments &args) const {
+  virtual SymbolicVal cloneFunction(const Arguments &args) const {
     return new SymbolicFunctionPtrCall(args);
   }
 };
 
 class SymbolicExtendVar : public SymbolicFunction {
   SymbolicValImpl *Clone() const { return new SymbolicExtendVar(*this); }
-  virtual SymbolicFunction *cloneFunction(const Arguments &v) const {
+  virtual SymbolicVal cloneFunction(const Arguments &v) const {
     return new SymbolicExtendVar(v);
   }
 
 public:
   SymbolicExtendVar(const Arguments &v)
       : SymbolicFunction(AstInterface::OP_NONE, "$", v) {
-    assert(v.size() == 2);
+    ROSE_ASSERT(v.size() == 2);
   }
   SymbolicExtendVar(const std::string &varname, int index)
       : SymbolicFunction(AstInterface::OP_NONE, "$",

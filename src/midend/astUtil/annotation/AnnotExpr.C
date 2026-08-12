@@ -471,7 +471,7 @@ bool SymbolicFunctionDeclarationGroup::get_val(
   for (AstInterface::AstNodeList::const_iterator p = argList.begin();
        p != argList.end(); ++p, ++index) {
     AstNodePtr cur = *p;
-    argVal.push_back(SymbolicAstWrap(cur));
+    argVal.push_back(SymbolicValGenerator::GetSymbolicVal(fa, cur));
   }
   SymbolicVal result;
   if (!get_val(argVal, result))

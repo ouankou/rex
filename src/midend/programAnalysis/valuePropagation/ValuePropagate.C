@@ -52,27 +52,6 @@ void HasValueMap::set_val(const AstNodePtr &ast,
   }
 }
 
-AstNodePtr HasValueCodeGen ::operator()(AstInterface *const &fa,
-                                        const AstNodePtr &orig) {
-  if (fa->IsConstant(orig))
-    return fa->CopyAstTree(orig);
-  std::map<AstNodePtr, AstNodePtr>::const_iterator p = astmap.find(orig);
-  if (p != astmap.end()) {
-    AstNodePtr r = (*p).second;
-    return fa->CopyAstTree(r);
-  }
-  AstNodeType valtype;
-  if (!fa->IsExpression(orig, &valtype))
-    ROSE_ABORT();
-  std::string varname = fa->NewVar(valtype);
-  AstNodePtr var = fa->CreateVarRef(varname);
-  astmap[orig] = var;
-  AstNodePtr assign =
-      fa->CreateAssignment(fa->CopyAstTree(var), fa->CopyAstTree(orig));
-  fa->ReplaceAst(orig, assign);
-  return var;
-}
-
 SymbolicVal HasValueMapReplace ::operator()(const SymbolicVal &v) {
   repl = SymbolicVal();
   v.Visit(this);
@@ -140,18 +119,17 @@ public:
 
 class CollectKnownValue : public ProcessAstNode<AstNodePtr> {
   HasValueMap &valmap;
-  HasValueCodeGen &astcodegen;
   AppendValueNode &append;
   SymbolicVal repl;
 
 public:
-  CollectKnownValue(HasValueMap &m, HasValueCodeGen &cg, AppendValueNode &p)
-      : valmap(m), astcodegen(cg), append(p) {}
+  CollectKnownValue(HasValueMap &m, AppendValueNode &p)
+      : valmap(m), append(p) {}
   virtual bool Traverse(AstInterface &fa, const AstNodePtr &s,
                         AstInterface::TraversalVisitType) {
     HasValueMapReplace valrepl(fa, valmap, false);
-    if (ValueAnnotation::get_inst()->is_value_restrict_op(
-            fa, s, &append, &valrepl, &astcodegen))
+    if (ValueAnnotation::get_inst()->is_value_restrict_op(fa, s, &append,
+                                                          &valrepl))
       return true;
     AstNodePtr lhs, rhs;
     AstInterface::AstNodeList vars, args;
@@ -185,19 +163,18 @@ public:
 class UpdateValuePropagateNode
     : public UpdateDefUseChainNode<ValuePropagateNode> {
   HasValueMap &valmap;
-  HasValueCodeGen &astcodegen;
   AppendValueNode valappend;
   AstInterface &fa;
   AstNodePtr head;
 
 public:
   UpdateValuePropagateNode(AstInterface &_fa, const AstNodePtr &h,
-                           HasValueMap &vm, HasValueCodeGen &cg,
+                           HasValueMap &vm,
                            const std::map<AstNodePtr, ValuePropagateNode *> &m)
-      : valmap(vm), astcodegen(cg), valappend(m, valmap), fa(_fa), head(h) {}
+      : valmap(vm), valappend(m, valmap), fa(_fa), head(h) {}
   void init(CollectObject<ValuePropagateNode *> &append) {
     valappend.set_node_collect(append);
-    CollectKnownValue op(valmap, astcodegen, valappend);
+    CollectKnownValue op(valmap, valappend);
     op.collect(fa, head);
   }
 
@@ -206,7 +183,7 @@ public:
     if (def->get_desc().merge(use->get_desc())) {
       valmap.set_val(def->get_ref(), def->get_desc());
       valappend.set_node_collect(append);
-      CollectKnownValue op(valmap, astcodegen, valappend);
+      CollectKnownValue op(valmap, valappend);
       op.collect(fa, def->get_stmt());
       return true;
     }
@@ -217,7 +194,7 @@ public:
     if (use->get_desc().merge(def->get_desc())) {
       valmap.set_val(use->get_ref(), use->get_desc());
       valappend.set_node_collect(append);
-      CollectKnownValue op(valmap, astcodegen, valappend);
+      CollectKnownValue op(valmap, valappend);
       op.collect(fa, use->get_stmt());
       return true;
     }
@@ -253,7 +230,7 @@ void ValuePropagate::build(AstInterface &fa, const AstNodePtr &h,
     std::cerr << "finshed building def-use chain\n";
     std::cerr << "propagating values on def-use chain\n";
   }
-  UpdateValuePropagateNode update(fa, h, valmap, astmap, nodemap);
+  UpdateValuePropagateNode update(fa, h, valmap, nodemap);
   PropagateDefUseChainUpdate(this, update);
   if (DebugValuePropogate())
     std::cerr << "\nfinished propagating values on def-use chain\n"
