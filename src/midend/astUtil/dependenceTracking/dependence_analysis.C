@@ -142,6 +142,62 @@ void WholeProgramDependenceAnalysis::ComputeDependences(SgNode *input,
       AstNodePtr current = *p;
       ComputeDependences(current.get_ptr(), root);
     }
+  } else if (AstInterface::IsVariableDecl(input)) {
+    SgVariableDeclaration *declaration = isSgVariableDeclaration(input);
+    if (declaration == nullptr) {
+      std::cerr << "REX_DEPENDENCE_INVARIANT[variable-declaration]: "
+                << input->class_name()
+                << " was classified as a declaration but is not an exact "
+                   "SgVariableDeclaration"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    SgScopeStatement *declaration_scope = declaration->get_scope();
+    if (declaration_scope == nullptr) {
+      std::cerr << "REX_DEPENDENCE_INVARIANT[initializer-scope]: declaration="
+                << declaration->unparseToString() << " has no scope"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    if (isSgGlobal(declaration_scope) == nullptr &&
+        isSgNamespaceDefinitionStatement(declaration_scope) == nullptr)
+      return;
+
+    SgScopeStatement *owning_scope = declaration_scope;
+    while (isSgNamespaceDefinitionStatement(owning_scope) != nullptr)
+      owning_scope = owning_scope->get_scope();
+    if (owning_scope == nullptr || owning_scope != root ||
+        isSgGlobal(owning_scope) == nullptr) {
+      std::cerr << "REX_DEPENDENCE_INVARIANT[initializer-root]: declaration="
+                << declaration->unparseToString()
+                << " scope=" << declaration_scope->class_name()
+                << " root=" << root << std::endl;
+      ROSE_ABORT();
+    }
+    AstInterface::AstNodeList variables;
+    AstInterface::AstNodeList initializers;
+    const bool recognized =
+        AstInterface::IsVariableDecl(input, &variables, &initializers);
+    ROSE_ASSERT(recognized);
+    ROSE_ASSERT(variables.size() == initializers.size());
+    for (size_t i = 0; i < variables.size(); ++i) {
+      const AstNodePtr &variable = variables[i];
+      const AstNodePtr &initializer = initializers[i];
+      if (initializer == AST_NULL)
+        continue;
+
+      ASSERT_not_null(variable.get_ptr());
+      const std::string variable_signature =
+          AstInterface::GetVariableSignature(variable);
+      const std::string initializer_signature =
+          AstInterface::GetVariableSignature(initializer);
+      if (!variable_signature.empty() &&
+          initializer_signature.find("_UNKNOWN_") == std::string::npos) {
+        main_table.SaveOperatorSideEffect(
+            variable.get_ptr(), initializer,
+            AstUtilInterface::OperatorSideEffect::Init);
+      }
+    }
   }
 }
 

@@ -114,6 +114,7 @@ namespace {
 DebugLog DebugVariable("-debugvariable");
 DebugLog DebugScope("-debugscope");
 DebugLog DebugDiff("-debugdiff");
+DebugLog DebugDecl("-debugdecl");
 static std::function<std::string(const SgFunctionDeclaration *)>
     function_name_mangling_;
 
@@ -1992,23 +1993,64 @@ bool AstInterface::IsVariableDecl(const AstNodePtr &_s, AstNodeList *vars,
   SgNode *s = AstNodePtrImpl(_s).get_ptr();
   if (s == 0)
     return false;
-  SgVariableDeclaration *decl = isSgVariableDeclaration(s);
-  if (decl != 0) {
+
+  if (SgVariableDeclaration *decl = isSgVariableDeclaration(s)) {
+    DebugDecl([&_s]() { return "Finding variable decl:" + AstToString(_s); });
     if (vars == 0 && init == 0)
       return true;
     SgInitializedNamePtrList &names = decl->get_variables();
-    for (SgInitializedNamePtrList::iterator p = names.begin(); p != names.end();
-         ++p) {
-      SgInitializedName *var = (*p);
-      SgExpression *def = var->get_initializer();
-      if (def != 0 && def->variantT() == V_SgAssignInitializer) {
-        def = isSgAssignInitializer(def)->get_operand();
-      }
-      if (vars != 0)
-        vars->push_back(var);
-      if (init != 0)
-        init->push_back(def);
+    for (SgInitializedName *name : names) {
+      ASSERT_not_null(name);
+      const bool recognized = IsVariableDecl(name, vars, init);
+      ROSE_ASSERT(recognized);
     }
+    return true;
+  }
+  if (SgInitializedName *var = isSgInitializedName(s)) {
+    DebugDecl([&_s]() { return "Finding variable decl:" + AstToString(_s); });
+    if (vars == 0 && init == 0)
+      return true;
+    SgExpression *def = var->get_initializer();
+    if (def != 0) {
+      switch (def->variantT()) {
+      case V_SgAssignInitializer:
+        def = isSgAssignInitializer(def)->get_operand();
+        break;
+      case V_SgAggregateInitializer: {
+        SgExprListExp *initializers =
+            isSgAggregateInitializer(def)->get_initializers();
+        ASSERT_not_null(initializers);
+        for (SgExpression *element : initializers->get_expressions()) {
+          ASSERT_not_null(element);
+          DebugDecl([element]() {
+            return "Checking aggregate variable decl:" + AstToString(element);
+          });
+          IsVariableDecl(element, vars, init);
+        }
+        break;
+      }
+      default:
+        break;
+      }
+    }
+    if (vars != 0)
+      vars->push_back(var);
+    if (init != 0)
+      init->push_back(def);
+    return true;
+  }
+  if (SgDesignatedInitializer *designated = isSgDesignatedInitializer(s)) {
+    DebugDecl([&_s]() { return "Finding variable decl:" + AstToString(_s); });
+    SgExprListExp *designator_list = designated->get_designatorList();
+    ASSERT_not_null(designator_list);
+    const SgExpressionPtrList &designators = designator_list->get_expressions();
+    ROSE_ASSERT(!designators.empty());
+    SgInitializer *initializer = designated->get_memberInit();
+    ASSERT_not_null(initializer);
+    if (vars != 0)
+      vars->push_back(designators.front());
+    if (init != 0)
+      init->push_back(initializer);
     return true;
   }
   return false;
@@ -5745,6 +5787,8 @@ std::string AstInterface::GetVariableSignature(const AstNodePtr &_variable) {
   case V_SgClassDefinition:
     return GetVariableSignature(
         isSgClassDefinition(variable)->get_declaration());
+  case V_SgAssignInitializer:
+    return GetVariableSignature(isSgAssignInitializer(variable)->get_operand());
   case V_SgConstructorInitializer: {
     SgConstructorInitializer *ctor_init = isSgConstructorInitializer(variable);
     if (SgMemberFunctionDeclaration *decl = ctor_init->get_declaration()) {

@@ -32,6 +32,19 @@ target_link_libraries(collectFunctionSideEffect ROSE_DLL ${link_with_libraries})
 add_executable(performAliasAnalysis performAliasAnalysis.C)
 target_link_libraries(performAliasAnalysis ROSE_DLL ${link_with_libraries})
 
+add_executable(rex_global_initialization_dependence
+  rex_global_initialization_dependence.cpp)
+target_include_directories(rex_global_initialization_dependence PRIVATE
+  ${ROSE_TOP_SRC_DIR}/src/midend/astUtil)
+target_link_libraries(rex_global_initialization_dependence
+  ROSE_DLL ${link_with_libraries})
+add_test(
+  NAME rex_global_initialization_dependence
+  COMMAND rex_global_initialization_dependence
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_global_initialization_dependence_input.cpp)
+set_tests_properties(rex_global_initialization_dependence
+  PROPERTIES LABELS "rex;analysis;dependence")
+
 add_executable(rex_integer_width_contract rex_integer_width_contract.cpp)
 target_include_directories(rex_integer_width_contract PRIVATE
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/sageInterface)

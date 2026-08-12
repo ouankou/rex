@@ -305,8 +305,8 @@ public:
   static AstList GetChildrenList(const AstNodePtr &n);
 
   bool IsDecls(const AstNodePtr &s);
-  bool IsVariableDecl(const AstNodePtr &exp, AstList *vars = 0,
-                      AstList *inits = 0);
+  static bool IsVariableDecl(const AstNodePtr &exp, AstList *vars = 0,
+                             AstList *inits = 0);
   //! Check if exp declares a set of variables to be aliased to non-local
   //! storages, represented by the returned global_signatures.
   bool IsAliasingDecl(const AstNodePtr &exp, AstList *vars = 0,

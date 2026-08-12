@@ -32,7 +32,8 @@ enum OperatorSideEffect {
   Allocate,
   Free,
   Parameter,
-  Return
+  Return,
+  Init
 };
 inline std::string OperatorSideEffectName(OperatorSideEffect what) {
   switch (what) {
@@ -54,6 +55,8 @@ inline std::string OperatorSideEffectName(OperatorSideEffect what) {
     return "parameter";
   case OperatorSideEffect::Return:
     return "return";
+  case OperatorSideEffect::Init:
+    return "init";
   case OperatorSideEffect::Decl:
     return "decl";
   case OperatorSideEffect::Allocate:
