@@ -1,8 +1,10 @@
 #include "rose.h"
 
+#include "IncludeDirective.h"
 #include "attachPreprocessingInfo.h"
 
 #include <cstdio>
+#include <map>
 #include <set>
 #include <string>
 
@@ -20,6 +22,55 @@ PreprocessingInfo makeDirective(PreprocessingInfo::DirectiveType type,
 
 int main(int argc, char **argv) {
   if (argc == 1) {
+    {
+      IncludeDirective angled(
+          "#include <bits/stl_function.h> // less<void>, equal_to<void>\n");
+      ROSE_ASSERT(angled.getIncludedPath() == "bits/stl_function.h");
+      ROSE_ASSERT(!angled.isQuotedInclude());
+    }
+    {
+      IncludeDirective quoted(
+          "  # include_next \"rex/path.hpp\" // \"not-the-target\"\n");
+      ROSE_ASSERT(quoted.getIncludedPath() == "rex/path.hpp");
+      ROSE_ASSERT(quoted.isQuotedInclude());
+    }
+    {
+      IncludeDirective macro(
+          "#include REX_HEADER(rex, path) /* not part of the target */\n");
+      ROSE_ASSERT(macro.getIncludedPath() == "REX_HEADER(rex, path)");
+      ROSE_ASSERT(!macro.isQuotedInclude());
+      ROSE_ASSERT(macro.getTargetLength() == macro.getIncludedPath().size());
+    }
+    {
+      const std::string spelling =
+          "#include REX_HEADER(/* exact internal trivia */ rex, \\\n"
+          "path) /* trailing trivia */\n";
+      IncludeDirective macro(spelling);
+      ROSE_ASSERT(macro.getIncludedPath() ==
+                  "REX_HEADER(/* exact internal trivia */ rex, path)");
+      ROSE_ASSERT(!macro.isQuotedInclude());
+      ROSE_ASSERT(
+          spelling.substr(macro.getTargetStartPos(), macro.getTargetLength()) ==
+          "REX_HEADER(/* exact internal trivia */ rex, \\\npath)");
+    }
+    {
+      const std::string spelling = "#inclu\\\nde_\\\nnext \"rex/path.hpp\"";
+      IncludeDirective splicedKeyword(spelling);
+      ROSE_ASSERT(splicedKeyword.getIncludedPath() == "rex/path.hpp");
+      ROSE_ASSERT(splicedKeyword.isQuotedInclude());
+      ROSE_ASSERT(spelling.substr(splicedKeyword.getTargetStartPos(),
+                                  splicedKeyword.getTargetLength()) ==
+                  "\"rex/path.hpp\"");
+    }
+    {
+      const std::string spelling = "#include_next <rex/long\\\r\n/path.hpp>";
+      IncludeDirective splicedTarget(spelling);
+      ROSE_ASSERT(splicedTarget.getIncludedPath() == "rex/long/path.hpp");
+      ROSE_ASSERT(!splicedTarget.isQuotedInclude());
+      ROSE_ASSERT(spelling.substr(splicedTarget.getTargetStartPos(),
+                                  splicedTarget.getTargetLength()) ==
+                  "<rex/long\\\r\n/path.hpp>");
+    }
     PreprocessingInfo functionLike = makeDirective(
         PreprocessingInfo::CpreprocessorDefineDeclaration,
         "  # define /* exact trivia */ REX_FUNCTION(value) ((value) + 1)");
@@ -73,6 +124,12 @@ int main(int argc, char **argv) {
     PreprocessingInfo comment =
         makeDirective(PreprocessingInfo::CplusplusStyleComment, "// comment");
     (void)comment.getMacroName();
+  } else if (mode == "unterminated-angled-include") {
+    (void)IncludeDirective("#include <rex/missing.hpp");
+  } else if (mode == "tokens-after-header-name") {
+    (void)IncludeDirective("#include <rex/path.hpp> REX_EXTRA");
+  } else if (mode == "missing-include-target") {
+    (void)IncludeDirective("#include");
   } else if (mode == "missing-separator-after-splice") {
     (void)makeDirective(PreprocessingInfo::CpreprocessorDefineDeclaration,
                         "#define\\"
@@ -123,6 +180,30 @@ int main(int argc, char **argv) {
     }
     ROSE_ASSERT(actual == expected);
     ROSE_ASSERT(sawRawLineSplice);
+    delete attributes;
+    return 0;
+  } else if (mode == "scan-include-directives") {
+    ROSE_ASSERT(argc == 3);
+    ROSEAttributesList *attributes =
+        getPreprocessorDirectives(argv[2], argv[2]);
+    ROSE_ASSERT(attributes != NULL);
+    const std::map<std::string, PreprocessingInfo::DirectiveType> expected{
+        {"rex_regular.hpp", PreprocessingInfo::CpreprocessorIncludeDeclaration},
+        {"rex_next.hpp",
+         PreprocessingInfo::CpreprocessorIncludeNextDeclaration},
+        {"rex_spliced_next.hpp",
+         PreprocessingInfo::CpreprocessorIncludeNextDeclaration}};
+    std::map<std::string, PreprocessingInfo::DirectiveType> actual;
+    for (PreprocessingInfo *entry : attributes->getList()) {
+      ROSE_ASSERT(entry != NULL);
+      const PreprocessingInfo::DirectiveType type = entry->getTypeOfDirective();
+      ROSE_ASSERT(type == PreprocessingInfo::CpreprocessorIncludeDeclaration ||
+                  type ==
+                      PreprocessingInfo::CpreprocessorIncludeNextDeclaration);
+      IncludeDirective directive(entry->getString());
+      ROSE_ASSERT(actual.emplace(directive.getIncludedPath(), type).second);
+    }
+    ROSE_ASSERT(actual == expected);
     delete attributes;
     return 0;
   } else if (mode == "scan-fortran-source") {

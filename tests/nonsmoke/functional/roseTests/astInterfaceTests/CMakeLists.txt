@@ -189,6 +189,15 @@ foreach(test ${group1_tests})
 endforeach()
 
 add_test(
+  NAME astInterface_rex_interface_function_coverage_memcheck
+  COMMAND $<TARGET_FILE:interfaceFunctionCoverage> ${TEST_CXXFLAGS} -c
+          ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_interface_function_coverage_memcheck.cpp
+)
+set_tests_properties(
+  astInterface_rex_interface_function_coverage_memcheck
+  PROPERTIES LABELS "astInterface;rex")
+
+add_test(
   NAME astInterface_rex_on_demand_qualification_missing_use_site_is_rejected
   COMMAND ${BASH_EXECUTABLE} -c
     "ulimit -c 0; log=astInterface_rex_on_demand_qualification_missing_use_site.log; rm -f \"\$log\"; set +e; \"\$@\" >\"\$log\" 2>&1; status=\$?; set -e; test \"\$status\" -eq 134; test \"\$(grep -Ec '^REX_UNPARSE_INVARIANT\\[unparse-to-string-type-use-site\\]: contextual type=0x[[:xdigit:]]+/SgNonrealType requires an exact emitted qualification context and reference identity$' \"\$log\")\" -eq 1"
@@ -1026,6 +1035,11 @@ add_test(
 add_test(
   NAME astInterface_rex_test2026_stl_regex
   COMMAND rex_test2026_stl_regex ${TEST_CXXFLAGS} -std=c++20 -c ${CMAKE_CURRENT_SOURCE_DIR}/inputrex_test2026_stl_regex.C
+)
+
+add_test(
+  NAME astInterface_rex_template_instantiation_memcheck
+  COMMAND rex_test2026_stl_regex ${TEST_CXXFLAGS} -std=c++20 -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_interface_template_instantiation_memcheck.cpp
 )
 
 add_test(

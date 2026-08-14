@@ -148,7 +148,8 @@ inline bool sourceQualificationIsSemanticMacroExpansionFragment(
     clang::NestedNameSpecifierLoc qualifier_loc,
     clang::SourceManager &source_manager,
     const clang::LangOptions &lang_options) {
-  const clang::SourceRange source_range = qualifier_loc.getSourceRange();
+  const clang::SourceRange source_range = readClangNnsApiValueDefined(
+      [&]() { return qualifier_loc.getSourceRange(); });
   if (source_range.isInvalid()) {
     return false;
   }

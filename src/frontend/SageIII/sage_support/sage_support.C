@@ -631,60 +631,6 @@ static SgGlobal *findHeaderEmissionGlobalScope(SgSourceFile *translationUnit,
   return emissionGlobal;
 }
 
-static bool
-includeDirectiveNamesPhysicalPath(PreprocessingInfo *preprocessingInfo,
-                                  const std::string &normalizedIncludingPath,
-                                  const std::string &normalizedIncludedPath) {
-  if (preprocessingInfo == nullptr ||
-      preprocessingInfo->get_file_info() == nullptr) {
-    fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[include-owner]: included=%s contains an "
-            "incomplete preprocessing-info candidate\n",
-            normalizedIncludedPath.c_str());
-    ROSE_ABORT();
-  }
-  const PreprocessingInfo::DirectiveType directiveType =
-      preprocessingInfo->getTypeOfDirective();
-  if (directiveType != PreprocessingInfo::CpreprocessorIncludeDeclaration &&
-      directiveType != PreprocessingInfo::CpreprocessorIncludeNextDeclaration) {
-    return false;
-  }
-  if (FileHelper::getNormalizedContainingFileName(preprocessingInfo) !=
-      normalizedIncludingPath) {
-    return false;
-  }
-
-  IncludeDirective directive(preprocessingInfo->getString());
-  std::string spelling = directive.getIncludedPath();
-  while (spelling.rfind("./", 0) == 0) {
-    spelling.erase(0, 2);
-  }
-  if (spelling.empty()) {
-    fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[include-owner]: directive=%s from=%s has "
-            "no include spelling\n",
-            preprocessingInfo->getString().c_str(),
-            normalizedIncludingPath.c_str());
-    ROSE_ABORT();
-  }
-
-  if (FileHelper::isAbsolutePath(spelling)) {
-    return FileHelper::normalizePathIfPossible(spelling) ==
-           normalizedIncludedPath;
-  }
-  const std::string relativeCandidate =
-      FileHelper::normalizePathIfPossible(FileHelper::concatenatePaths(
-          FileHelper::getParentFolder(normalizedIncludingPath), spelling));
-  if (relativeCandidate == normalizedIncludedPath) {
-    return true;
-  }
-  const std::string suffix = "/" + spelling;
-  return normalizedIncludedPath.size() >= suffix.size() &&
-         normalizedIncludedPath.compare(normalizedIncludedPath.size() -
-                                            suffix.size(),
-                                        suffix.size(), suffix) == 0;
-}
-
 static PreprocessingInfo *findIncludingPreprocessingInfo(
     SgProject *project,
     const map<string, set<PreprocessingInfo *>> &includingPreprocessingInfosMap,
@@ -711,37 +657,10 @@ static PreprocessingInfo *findIncludingPreprocessingInfo(
   }
 
   std::set<PreprocessingInfo *> candidates;
-  std::set<PreprocessingInfo *> compilerResolvedCandidates;
   map<string, set<PreprocessingInfo *>>::const_iterator mapIt =
       includingPreprocessingInfosMap.find(normalizedIncludedPath);
-  if (mapIt == includingPreprocessingInfosMap.end()) {
-    mapIt = includingPreprocessingInfosMap.find(includedPath);
-  }
   if (mapIt != includingPreprocessingInfosMap.end()) {
     candidates.insert(mapIt->second.begin(), mapIt->second.end());
-    compilerResolvedCandidates.insert(mapIt->second.begin(),
-                                      mapIt->second.end());
-  }
-
-  ROSEAttributesListContainerPtr filePreprocInfo =
-      includingSourceFile->get_preprocessorDirectivesAndCommentsList();
-  if (filePreprocInfo == nullptr) {
-    fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[include-owner]: including=%s has no "
-            "preprocessing inventory while resolving=%s\n",
-            normalizedIncludingPath.c_str(), normalizedIncludedPath.c_str());
-    ROSE_ABORT();
-  }
-  for (const auto &entry : filePreprocInfo->getList()) {
-    if (entry.second == nullptr) {
-      fprintf(stderr,
-              "REX_FRONTEND_INVARIANT[include-owner]: including=%s has a null "
-              "preprocessing list while resolving=%s\n",
-              normalizedIncludingPath.c_str(), normalizedIncludedPath.c_str());
-      ROSE_ABORT();
-    }
-    candidates.insert(entry.second->getList().begin(),
-                      entry.second->getList().end());
   }
 
   PreprocessingInfo *selected = nullptr;
@@ -750,27 +669,29 @@ static PreprocessingInfo *findIncludingPreprocessingInfo(
   PreprocessingInfo::DirectiveType selectedType =
       PreprocessingInfo::CpreprocessorUnknownDeclaration;
   for (PreprocessingInfo *preprocessingInfo : candidates) {
-    const bool compilerResolved =
-        compilerResolvedCandidates.count(preprocessingInfo) != 0;
-    const bool ownedByIncludingFile =
-        preprocessingInfo != nullptr &&
-        preprocessingInfo->get_file_info() != nullptr &&
-        FileHelper::getNormalizedContainingFileName(preprocessingInfo) ==
-            normalizedIncludingPath;
-    const bool isIncludeDirective =
-        preprocessingInfo != nullptr &&
-        (preprocessingInfo->getTypeOfDirective() ==
-             PreprocessingInfo::CpreprocessorIncludeDeclaration ||
-         preprocessingInfo->getTypeOfDirective() ==
-             PreprocessingInfo::CpreprocessorIncludeNextDeclaration);
-    if (!(compilerResolved && ownedByIncludingFile && isIncludeDirective) &&
-        !includeDirectiveNamesPhysicalPath(preprocessingInfo,
-                                           normalizedIncludingPath,
-                                           normalizedIncludedPath)) {
-      continue;
+    if (preprocessingInfo == nullptr ||
+        preprocessingInfo->get_file_info() == nullptr) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[include-owner]: target=%s contains "
+              "an incomplete Clang callback directive owner\n",
+              normalizedIncludedPath.c_str());
+      ROSE_ABORT();
     }
     const PreprocessingInfo::DirectiveType directiveType =
         preprocessingInfo->getTypeOfDirective();
+    if (directiveType != PreprocessingInfo::CpreprocessorIncludeDeclaration &&
+        directiveType !=
+            PreprocessingInfo::CpreprocessorIncludeNextDeclaration) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[include-owner]: target=%s contains "
+              "non-include Clang callback directive type=%d\n",
+              normalizedIncludedPath.c_str(), static_cast<int>(directiveType));
+      ROSE_ABORT();
+    }
+    if (FileHelper::getNormalizedContainingFileName(preprocessingInfo) !=
+        normalizedIncludingPath) {
+      continue;
+    }
     IncludeDirective directive(preprocessingInfo->getString());
     const std::string spelling = directive.getIncludedPath();
     if (spelling.empty()) {
@@ -810,8 +731,8 @@ static PreprocessingInfo *findIncludingPreprocessingInfo(
 
   if (selected == nullptr) {
     fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[include-owner]: including=%s has no owned "
-            "active directive resolving to %s\n",
+            "REX_FRONTEND_INVARIANT[include-owner]: including=%s has no "
+            "exact Clang callback directive resolving to %s\n",
             normalizedIncludingPath.c_str(), normalizedIncludedPath.c_str());
     ROSE_ABORT();
   }
@@ -2721,32 +2642,6 @@ int SgProject::parse() {
     }
   }
 
-  // negara1 (06/23/2011): Collect information about the included files to
-  // support unparsing of those that are modified. In the first step, get the
-  // include search paths, which will be used while attaching include
-  // preprocessing infos. Proceed only if there are input files and they require
-  // header files unparsing.
-  if (unparse_header_files) {
-    if (SgProject::get_verbose() >= 1) {
-      cout << endl << "***HEADER FILES ANALYSIS***" << endl << endl;
-    }
-    CompilerOutputParser compilerOutputParser(this);
-    const pair<list<string>, list<string>> &includedFilesSearchPaths =
-        compilerOutputParser.collectIncludedFilesSearchPaths();
-    set_quotedIncludesSearchPaths(includedFilesSearchPaths.first);
-    set_bracketedIncludesSearchPaths(includedFilesSearchPaths.second);
-
-    if (SgProject::get_verbose() >= 1) {
-      // DQ (11/7/2018): Output the list of quotedIncludesSearchPaths and
-      // bracketedIncludesSearchPaths include paths.
-      CollectionHelper::printList(get_quotedIncludesSearchPaths(),
-                                  "\nQuoted includes search paths:", "Path:");
-      CollectionHelper::printList(
-          get_bracketedIncludesSearchPaths(),
-          "\nBracketed includes search paths:", "Path:");
-    }
-  }
-
   // GB (9/4/2009): Moved the secondary pass over source files (which
   // attaches the preprocessing information) to this point. This way, the
   // secondary pass over each file runs after all fixes have been done. This
@@ -2765,20 +2660,18 @@ int SgProject::parse() {
                 false);
   }
 
-  // negara1 (06/23/2011): Collect information about the included files to
-  // support unparsing of those that are modified. In the second step (after
-  // preprocessing infos are already attached), collect the including files map.
-  // Proceed only if there are input files and they require header files
-  // unparsing.
+  // Header unparsing consumes the exact active include graph that the Clang
+  // frontend published with its preprocessing records.  A second compiler
+  // invocation cannot reconstruct this graph: forced includes, macro state,
+  // modules, and resource headers are part of the original frontend session.
   if (unparse_header_files) {
-    CompilerOutputParser compilerOutputParser(this);
-    const map<string, set<string>> &includedFilesMap =
-        compilerOutputParser.collectIncludedFilesMap();
     IncludingPreprocessingInfosCollector includingPreprocessingInfosCollector(
-        this, includedFilesMap);
+        this);
     const map<string, set<PreprocessingInfo *>>
         &includingPreprocessingInfosMap =
             includingPreprocessingInfosCollector.collect();
+    const map<string, set<string>> &includedFilesMap =
+        includingPreprocessingInfosCollector.getIncludedFilesMap();
     set_includingPreprocessingInfosMap(includingPreprocessingInfosMap);
 
     std::map<std::string, SgSourceFile *> sourceFilesByPath;
@@ -2798,6 +2691,11 @@ int SgProject::parse() {
       }
       insertFrontendSourceFile(sourceFilesByPath, normalizedPath, sourceFile,
                                "project-files");
+      // A translation unit owns its include-tree root independently of
+      // whether Clang observed any active outgoing include edges.  Do not
+      // make root identity conditional on membership in includedFilesMap:
+      // zero-edge translation units are still exact project-owned sources.
+      ensureSourceFileIncludeRoot(this, sourceFile);
     }
     for (SgFile *file : get_fileList()) {
       SgSourceFile *sourceFile = isSgSourceFile(file);
@@ -3100,62 +2998,6 @@ int SgProject::parse() {
 
   return errorCode;
 } // end parse(;
-
-string SgProject::findIncludedFile(PreprocessingInfo *preprocessingInfo) {
-  ASSERT_not_null(preprocessingInfo);
-  ASSERT_not_null(preprocessingInfo->get_file_info());
-  const PreprocessingInfo::DirectiveType directiveType =
-      preprocessingInfo->getTypeOfDirective();
-  if (directiveType != PreprocessingInfo::CpreprocessorIncludeDeclaration &&
-      directiveType != PreprocessingInfo::CpreprocessorIncludeNextDeclaration) {
-    fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[include-resolution]: preprocessing "
-            "record type=%s is not an include directive\n",
-            PreprocessingInfo::directiveTypeName(directiveType).c_str());
-    ROSE_ABORT();
-  }
-  IncludeDirective includeDirective(preprocessingInfo->getString());
-  const string &includedPath = includeDirective.getIncludedPath();
-  if (includedPath.empty()) {
-    fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[include-resolution]: directive=%s has no "
-            "included path\n",
-            preprocessingInfo->getString().c_str());
-    ROSE_ABORT();
-  }
-  if (FileHelper::isAbsolutePath(includedPath)) {
-    if (FileHelper::fileExists(includedPath)) {
-      return FileHelper::normalizePath(includedPath);
-    }
-    fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[include-resolution]: absolute include=%s "
-            "does not exist\n",
-            includedPath.c_str());
-    ROSE_ABORT();
-  }
-  if (includeDirective.isQuotedInclude()) {
-    string currentFolder = FileHelper::getParentFolder(
-        preprocessingInfo->get_file_info()->get_filenameString());
-    list<string> quotedSearchPaths = p_quotedIncludesSearchPaths;
-    quotedSearchPaths.push_front(currentFolder);
-    string includedFilePath =
-        FileHelper::getIncludedFilePath(quotedSearchPaths, includedPath);
-    if (!includedFilePath.empty()) {
-      return FileHelper::normalizePath(includedFilePath);
-    }
-  }
-  const string includedFilePath = FileHelper::getIncludedFilePath(
-      p_bracketedIncludesSearchPaths, includedPath);
-  if (includedFilePath.empty()) {
-    fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[include-resolution]: directive=%s from=%s "
-            "did not resolve through frontend include paths\n",
-            preprocessingInfo->getString().c_str(),
-            preprocessingInfo->get_file_info()->get_filenameString().c_str());
-    ROSE_ABORT();
-  }
-  return FileHelper::normalizePath(includedFilePath);
-}
 
 void SgSourceFile::doSetupForConstructor(const vector<string> &argv,
                                          SgProject *project) {

@@ -128,6 +128,8 @@ set(CXX20_TESTCODES
   rex_frontend_dependent_builtin_bit_cast.cpp
   rex_frontend_constrained_overload_identity.cpp
   rex_frontend_range_init_declarator_identity.cpp
+  rex_frontend_variable_template_explicit_instantiation_semantic_initializer.cpp
+  rex_frontend_variable_template_semantic_cross_file_constraint.cpp
   rex_test2026_coreturn_valgrind_defined_reads.cpp
   rex_test2026_cxx20_paren_list_init_valgrind_defined_reads.cpp
   rex_test2026_concepts_requires.cpp
@@ -176,14 +178,23 @@ set(_test2020_45_module_source "${CMAKE_CURRENT_SOURCE_DIR}/test2020_45_module.C
 set(_test2020_45_module_dir "${CMAKE_CURRENT_BINARY_DIR}/test2020_45_modules")
 set(_test2020_45_iostream_pcm "${_test2020_45_module_dir}/iostream.pcm")
 set(_test2020_45_module_pcm "${_test2020_45_module_dir}/test2020_45_module.pcm")
+if(NOT ROSE_LLVM_CLANG_CXX_DRIVER OR
+   NOT IS_ABSOLUTE "${ROSE_LLVM_CLANG_CXX_DRIVER}" OR
+   NOT EXISTS "${ROSE_LLVM_CLANG_CXX_DRIVER}")
+  message(FATAL_ERROR
+    "C++ module tests require the exact Clang++ driver owned by the loaded "
+    "frontend package: '${ROSE_LLVM_CLANG_CXX_DRIVER}'")
+endif()
 
 string(CONCAT _test2020_45_command
   "set -eu; "
   "module_dir=\"${_test2020_45_module_dir}\"; "
   "mkdir -p \"$module_dir\"; "
-  "${CMAKE_CXX_COMPILER} -std=c++20 -xc++-system-header --precompile iostream "
+  "\"${ROSE_LLVM_CLANG_CXX_DRIVER}\" -std=c++20 "
+  "-xc++-system-header --precompile iostream "
   "-o \"${_test2020_45_iostream_pcm}\"; "
-  "${CMAKE_CXX_COMPILER} -std=c++20 -x c++-module --precompile "
+  "\"${ROSE_LLVM_CLANG_CXX_DRIVER}\" -std=c++20 "
+  "-x c++-module --precompile "
   "\"${_test2020_45_module_source}\" "
   "-fmodule-file=\"${_test2020_45_iostream_pcm}\" "
   "-o \"${_test2020_45_module_pcm}\"; "
@@ -251,7 +262,8 @@ string(CONCAT _rex_unowned_namespace_command
   "set -eu; "
   "module_dir=\"${_rex_unowned_namespace_module_dir}\"; "
   "mkdir -p \"$module_dir\"; "
-  "${CMAKE_CXX_COMPILER} -std=c++20 -fmodule-header=user "
+  "\"${ROSE_LLVM_CLANG_CXX_DRIVER}\" -std=c++20 "
+  "-fmodule-header=user "
   "\"${_rex_unowned_namespace_header}\" "
   "-o \"${_rex_unowned_namespace_module_pcm}\"; "
   "translator=\"$1\"; shift; "
@@ -311,7 +323,8 @@ string(CONCAT _rex_export_context_command
   "set -eu; "
   "module_dir=\"${_rex_export_context_module_dir}\"; "
   "mkdir -p \"$module_dir\"; "
-  "${CMAKE_CXX_COMPILER} -std=c++20 -x c++-module --precompile "
+  "\"${ROSE_LLVM_CLANG_CXX_DRIVER}\" -std=c++20 "
+  "-x c++-module --precompile "
   "\"${_rex_export_context_module_source}\" "
   "-o \"${_rex_export_context_module_pcm}\"; "
   "translator=\"$1\"; shift; "
@@ -350,6 +363,36 @@ target_link_libraries(
   rex_frontend_requires_typed_contract_translator
   ROSE_DLL
   ${link_with_libraries}
+)
+
+add_executable(
+  rex_frontend_variable_template_explicit_instantiation_semantic_initializer_translator
+  rex_frontend_variable_template_explicit_instantiation_semantic_initializer_translator.cpp
+)
+target_link_libraries(
+  rex_frontend_variable_template_explicit_instantiation_semantic_initializer_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+add_test(
+  NAME Cxx20_tests_rex_frontend_variable_template_explicit_instantiation_semantic_initializer_structure
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND
+    $<TARGET_FILE:rex_frontend_variable_template_explicit_instantiation_semantic_initializer_translator>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep
+    ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_variable_template_explicit_instantiation_semantic_initializer.cpp
+)
+set_tests_properties(
+  Cxx20_tests_rex_frontend_variable_template_explicit_instantiation_semantic_initializer_structure
+  PROPERTIES LABELS "Cxx20_tests;rex;CFE"
+)
+rex_lock_test_for_input(
+  Cxx20_tests_rex_frontend_variable_template_explicit_instantiation_semantic_initializer_structure
+  rex_frontend_variable_template_explicit_instantiation_semantic_initializer.cpp
 )
 
 add_executable(

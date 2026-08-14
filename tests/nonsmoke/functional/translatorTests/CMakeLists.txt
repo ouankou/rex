@@ -10,8 +10,10 @@ if(ENABLE-C)
   add_executable(label_stmt_file_info_translator label_stmt_file_info_translator.C)
   add_executable(testConstDeclarations testConstDeclarations.C)
   add_executable(testDataMemberOfConst testDataMemberOfConst.C)
-  add_executable(testFortranParameter testFortranParameter.C)
-  add_executable(testFortranProtected testFortranProtected.C)
+  if(ENABLE-FORTRAN)
+    add_executable(testFortranParameter testFortranParameter.C)
+    add_executable(testFortranProtected testFortranProtected.C)
+  endif()
   add_executable(testPragmaInBody testPragmaInBody.C)
   add_executable(rex_genericPragma rex_genericPragma.C)
   add_executable(querySubTree querySubTree.C)
@@ -36,8 +38,10 @@ if(ENABLE-C)
   target_link_libraries(label_stmt_file_info_translator ROSE_DLL ${link_with_libraries})
   target_link_libraries(testConstDeclarations ROSE_DLL ${link_with_libraries})
   target_link_libraries(testDataMemberOfConst ROSE_DLL ${link_with_libraries})
-  target_link_libraries(testFortranParameter ROSE_DLL ${link_with_libraries})
-  target_link_libraries(testFortranProtected ROSE_DLL ${link_with_libraries})
+  if(ENABLE-FORTRAN)
+    target_link_libraries(testFortranParameter ROSE_DLL ${link_with_libraries})
+    target_link_libraries(testFortranProtected ROSE_DLL ${link_with_libraries})
+  endif()
   target_link_libraries(testPragmaInBody ROSE_DLL ${link_with_libraries})
   target_link_libraries(rex_genericPragma ROSE_DLL ${link_with_libraries})
   target_link_libraries(querySubTree ROSE_DLL ${link_with_libraries})
@@ -163,27 +167,29 @@ if(ENABLE-C)
       -c ${_translator_input_dir}/input_testPlugins.C
   )
 
-  add_test(
-    NAME Translator_testFortranParameter
-    COMMAND testFortranParameter
-      ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/parameter.f
-      -o /dev/null
-  )
+  if(ENABLE-FORTRAN)
+    add_test(
+      NAME Translator_testFortranParameter
+      COMMAND testFortranParameter
+        ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/parameter.f
+        -o /dev/null
+    )
 
-  set(_fortran_protected_module
-      "${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected_mod.f03")
-  set(_fortran_protected_input
-      "${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected.f03")
-  set(_fortran_protected_command
-      "${BACKEND_FORTRAN_COMPILER} -c ${_fortran_protected_module} && $<TARGET_FILE:testFortranProtected> ${_fortran_protected_input} -o /dev/null")
-  if(NOT ROSE_USE_SANITIZER AND NOT ROSE_USE_VALGRIND)
+    set(_fortran_protected_module
+        "${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected_mod.f03")
+    set(_fortran_protected_input
+        "${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected.f03")
     set(_fortran_protected_command
-        "${BACKEND_FORTRAN_COMPILER} -c ${_fortran_protected_module} && gdb -nx -batch --return-child-result -ex 'set pagination off' -ex 'set debuginfod enabled off' -ex 'run' --args $<TARGET_FILE:testFortranProtected> ${_fortran_protected_input} -o /dev/null || { status=$?; gdb -nx -batch -ex 'set pagination off' -ex 'set debuginfod enabled off' -ex 'run' -ex 'bt' --args $<TARGET_FILE:testFortranProtected> ${_fortran_protected_input} -o /dev/null; exit $status; }")
+        "${BACKEND_FORTRAN_COMPILER} -c ${_fortran_protected_module} && $<TARGET_FILE:testFortranProtected> ${_fortran_protected_input} -o /dev/null")
+    if(NOT ROSE_USE_SANITIZER AND NOT ROSE_USE_VALGRIND)
+      set(_fortran_protected_command
+          "${BACKEND_FORTRAN_COMPILER} -c ${_fortran_protected_module} && gdb -nx -batch --return-child-result -ex 'set pagination off' -ex 'set debuginfod enabled off' -ex 'run' --args $<TARGET_FILE:testFortranProtected> ${_fortran_protected_input} -o /dev/null || { status=$?; gdb -nx -batch -ex 'set pagination off' -ex 'set debuginfod enabled off' -ex 'run' -ex 'bt' --args $<TARGET_FILE:testFortranProtected> ${_fortran_protected_input} -o /dev/null; exit $status; }")
+    endif()
+    add_test(
+      NAME Translator_testFortranProtected
+      COMMAND sh -c "${_fortran_protected_command}"
+    )
   endif()
-  add_test(
-    NAME Translator_testFortranProtected
-    COMMAND sh -c "${_fortran_protected_command}"
-  )
 
   set(_translator_output_dir ${CMAKE_CURRENT_BINARY_DIR}/rose_test_output)
   file(MAKE_DIRECTORY ${_translator_output_dir})
@@ -211,9 +217,12 @@ if(ENABLE-C)
     Translator_testTranslator2018_01
     Translator_testTranslator2018_02
     Translator_testPlugins
-    Translator_testFortranParameter
-    Translator_testFortranProtected
   )
+  if(ENABLE-FORTRAN)
+    list(APPEND _translator_tests
+      Translator_testFortranParameter
+      Translator_testFortranProtected)
+  endif()
   set_tests_properties(${_translator_tests} PROPERTIES
     ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_translator_output_dir}")
 

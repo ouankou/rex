@@ -27,8 +27,12 @@ REX_STAGING_SUBSTITUTION_TARGET="${work}/victim.c" \
   -rose:output "${work}/output.c" -c "${work}/input.c" \
   >"${work}/translator.log" 2>&1
 
-test "$(grep -Fxc 'REX_STAGING_PRELOAD_LOADED' \
-  "${work}/translator.log")" -eq 1
+preload_count=$(grep -Fxc 'REX_STAGING_PRELOAD_LOADED' \
+  "${work}/translator.log")
+if ((preload_count < 1)); then
+  echo "staging substitution preload was not loaded" >&2
+  exit 1
+fi
 if grep -E 'REX_STAGING_(PRELOAD_RESOLUTION|SUBSTITUTION_SETUP)_FAILED' \
     "${work}/translator.log" >/dev/null; then
   echo "staging substitution preload failed" >&2

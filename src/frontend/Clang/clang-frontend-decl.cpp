@@ -580,34 +580,112 @@ exactEnumConstantSourceRole(clang::EnumConstantDecl *enum_constant,
              : SgInitializedName::e_enum_constant_source_external;
 }
 
-static void markClangDeclAttrsDefined(const clang::Decl *decl) {
+using ClangDeclAttrSnapshot = std::vector<const clang::Attr *>;
+
+static ClangDeclAttrSnapshot clangDeclAttrsDefined(const clang::Decl *decl) {
+  ClangDeclAttrSnapshot result;
 #if ROSE_USE_VALGRIND
   decl = markClangAstObjectDefined(decl);
-  if (!clangFrontendRunningOnValgrind() || decl == nullptr) {
-    return;
-  }
+  if (clangFrontendRunningOnValgrind()) {
+    if (decl == nullptr) {
+      return result;
+    }
 
-  const bool has_attrs =
-      readClangApiValueDefined([&]() { return decl->hasAttrs(); });
-  if (!has_attrs) {
-    return;
-  }
+    bool has_attrs = false;
+    VALGRIND_DISABLE_ERROR_REPORTING;
+    has_attrs = decl->hasAttrs();
+    VALGRIND_ENABLE_ERROR_REPORTING;
+    VALGRIND_MAKE_MEM_DEFINED(&has_attrs, sizeof(has_attrs));
+    if (!has_attrs) {
+      return result;
+    }
 
-  VALGRIND_DISABLE_ERROR_REPORTING;
-  const clang::AttrVec &attrs = decl->getAttrs();
-  VALGRIND_ENABLE_ERROR_REPORTING;
-  VALGRIND_MAKE_MEM_DEFINED(const_cast<clang::AttrVec *>(&attrs),
-                            sizeof(attrs));
-  if (!attrs.empty()) {
-    VALGRIND_MAKE_MEM_DEFINED(const_cast<clang::Attr **>(attrs.data()),
-                              attrs.size() * sizeof(clang::Attr *));
+    // Clang stores declaration attributes in ASTContext::DeclAttrs.  Its
+    // DenseMap lookup can inspect padding in the separately built Clang DSO,
+    // so take one explicit foreign-library snapshot and only traverse the
+    // REX-owned copy after this boundary.
+    const clang::AttrVec *attrs = nullptr;
+    size_t attr_count = 0;
+    VALGRIND_DISABLE_ERROR_REPORTING;
+    attrs = &decl->getAttrs();
+    attr_count = attrs->size();
+    VALGRIND_ENABLE_ERROR_REPORTING;
+    VALGRIND_MAKE_MEM_DEFINED(&attrs, sizeof(attrs));
+    VALGRIND_MAKE_MEM_DEFINED(&attr_count, sizeof(attr_count));
+    ROSE_ASSERT(attrs != nullptr);
+
+    result.reserve(attr_count);
+    for (size_t index = 0; index < attr_count; ++index) {
+      const clang::Attr *attr = nullptr;
+      VALGRIND_DISABLE_ERROR_REPORTING;
+      attr = (*attrs)[index];
+      VALGRIND_ENABLE_ERROR_REPORTING;
+      VALGRIND_MAKE_MEM_DEFINED(&attr, sizeof(attr));
+      result.push_back(markClangAstObjectDefined(attr));
+    }
+    return result;
   }
-  for (const clang::Attr *attr : attrs) {
-    markClangAstObjectDefined(attr);
-  }
-#else
-  (void)decl;
 #endif
+
+  if (decl != nullptr && decl->hasAttrs()) {
+    const clang::AttrVec &attrs = decl->getAttrs();
+    result.assign(attrs.begin(), attrs.end());
+  }
+  return result;
+}
+
+static clang::Decl *markClangDeclObjectDefinedByKind(clang::Decl *decl);
+
+static clang::DeclGroupRef
+markClangDeclGroupRefStorageDefined(clang::DeclGroupRef group) {
+#if ROSE_USE_VALGRIND
+  markClangValueDefined(group);
+  if (!clangFrontendRunningOnValgrind() || group.isNull()) {
+    return group;
+  }
+
+  if (group.isSingleDecl()) {
+    markClangDeclObjectDefinedByKind(
+        readClangApiValueDefined([&]() { return group.getSingleDecl(); }));
+    return group;
+  }
+
+  clang::DeclGroup *decl_group_ptr = nullptr;
+  VALGRIND_DISABLE_ERROR_REPORTING;
+  decl_group_ptr = &group.getDeclGroup();
+  VALGRIND_ENABLE_ERROR_REPORTING;
+  markClangValueDefined(decl_group_ptr);
+  ROSE_ASSERT(decl_group_ptr != nullptr);
+  clang::DeclGroup &decl_group = *decl_group_ptr;
+  VALGRIND_MAKE_MEM_DEFINED(&decl_group, sizeof(decl_group));
+  const unsigned count =
+      readClangApiValueDefined([&]() { return decl_group.size(); });
+  clang::Decl **begin =
+      readClangApiValueDefined([&]() { return group.begin(); });
+  if (begin != nullptr && count != 0) {
+    VALGRIND_MAKE_MEM_DEFINED(begin, count * sizeof(clang::Decl *));
+    for (unsigned i = 0; i < count; ++i) {
+      markClangDeclObjectDefinedByKind(begin[i]);
+    }
+  }
+#endif
+  return group;
+}
+
+static const clang::DeclStmt *
+markClangDeclStmtStorageDefined(const clang::DeclStmt *stmt) {
+#if ROSE_USE_VALGRIND
+  if (!clangFrontendRunningOnValgrind() || stmt == nullptr) {
+    return stmt;
+  }
+
+  stmt = markClangAstObjectDefined(stmt);
+  markClangDeclGroupRefStorageDefined(
+      readClangApiValueDefined([&]() { return stmt->getDeclGroup(); }));
+  readClangApiValueDefined([&]() { return stmt->getBeginLoc(); });
+  readClangApiValueDefined([&]() { return stmt->getEndLoc(); });
+#endif
+  return stmt;
 }
 
 static const clang::Type *
@@ -633,15 +711,15 @@ markClangCXXRecordTemplateOrInstantiationStateDefined(
 static clang::ClassTemplateDecl *
 markClangClassTemplateDeclForPrintingDefined(clang::ClassTemplateDecl *decl);
 
-static void
-markClangDeclarationNameForPrintingDefined(const clang::NamedDecl *decl) {
+static void markClangNamedDeclNameForPrintingDefinedForFrontendImpl(
+    const clang::NamedDecl *decl) {
 #if ROSE_USE_VALGRIND
   decl = markClangAstObjectDefined(decl);
   if (!clangFrontendRunningOnValgrind() || decl == nullptr) {
     return;
   }
-  static std::unordered_set<const clang::NamedDecl *> marked_names;
-  if (!marked_names.insert(decl).second) {
+  if (!markClangFrontendValgrindPublicationOnce(
+          ClangFrontendValgrindPublicationKind::DeclNamedDeclaration, decl)) {
     return;
   }
 
@@ -675,7 +753,7 @@ clangNamedDeclNameAsStringDefinedForFrontend(const clang::NamedDecl *decl) {
     return "";
   }
 
-  markClangDeclarationNameForPrintingDefined(decl);
+  markClangNamedDeclNameForPrintingDefinedForFrontend(decl);
 
 #if ROSE_USE_VALGRIND
   VALGRIND_DISABLE_ERROR_REPORTING;
@@ -1291,11 +1369,12 @@ markClangFunctionTypeBoundaryDefined(clang::QualType type) {
     return type;
   }
 
-  static std::unordered_set<const clang::Type *> marked_function_boundaries;
   const clang::Type *root_type =
       readClangApiValueDefined([&]() { return type.getTypePtrOrNull(); });
   if (root_type == nullptr ||
-      !marked_function_boundaries.insert(root_type).second) {
+      !markClangFrontendValgrindPublicationOnce(
+          ClangFrontendValgrindPublicationKind::DeclFunctionTypeBoundary,
+          root_type)) {
     return type;
   }
 
@@ -1317,7 +1396,9 @@ markClangFunctionTypeBoundaryDefined(clang::QualType type) {
     return type;
   }
   if (type_ptr != root_type &&
-      !marked_function_boundaries.insert(type_ptr).second) {
+      !markClangFrontendValgrindPublicationOnce(
+          ClangFrontendValgrindPublicationKind::DeclFunctionTypeBoundary,
+          type_ptr)) {
     return type;
   }
 
@@ -1405,17 +1486,17 @@ static clang::Decl *markClangDeclObjectDefinedByKind(clang::Decl *decl) {
   }
   if (auto *specific = llvm::dyn_cast<clang::CXXConstructorDecl>(decl)) {
     specific = markClangAstObjectDefined(specific);
-    markClangDeclarationNameForPrintingDefined(specific);
+    markClangNamedDeclNameForPrintingDefinedForFrontend(specific);
     return specific;
   }
   if (auto *specific = llvm::dyn_cast<clang::CXXDestructorDecl>(decl)) {
     specific = markClangAstObjectDefined(specific);
-    markClangDeclarationNameForPrintingDefined(specific);
+    markClangNamedDeclNameForPrintingDefinedForFrontend(specific);
     return specific;
   }
   if (auto *specific = llvm::dyn_cast<clang::CXXConversionDecl>(decl)) {
     specific = markClangAstObjectDefined(specific);
-    markClangDeclarationNameForPrintingDefined(specific);
+    markClangNamedDeclNameForPrintingDefinedForFrontend(specific);
     return specific;
   }
   if (auto *specific = llvm::dyn_cast<clang::CXXMethodDecl>(decl)) {
@@ -1517,6 +1598,19 @@ markClangDeclObjectDefinedByKind(const clang::Decl *decl) {
   return markClangDeclObjectDefinedByKind(const_cast<clang::Decl *>(decl));
 }
 
+static clang::SourceRange
+clangVarDeclSourceRangeDefined(const clang::VarDecl *decl) {
+  decl = llvm::dyn_cast_or_null<clang::VarDecl>(
+      markClangDeclObjectDefinedByKind(decl));
+  if (decl == nullptr) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[clang-var-source-range]: exact VarDecl "
+            "source-range input is null\n");
+    ROSE_ABORT();
+  }
+  return readClangApiValueDefined([&]() { return decl->getSourceRange(); });
+}
+
 static clang::CXXRecordDecl *
 markClangCXXRecordTemplateOrInstantiationStateDefined(
     clang::CXXRecordDecl *record) {
@@ -1525,8 +1619,9 @@ markClangCXXRecordTemplateOrInstantiationStateDefined(
   if (!clangFrontendRunningOnValgrind() || record == nullptr) {
     return record;
   }
-  static std::unordered_set<const clang::CXXRecordDecl *> marked_records;
-  if (!marked_records.insert(record).second) {
+  if (!markClangFrontendValgrindPublicationOnce(
+          ClangFrontendValgrindPublicationKind::DeclRecordTemplateState,
+          record)) {
     return record;
   }
 
@@ -1536,8 +1631,10 @@ markClangCXXRecordTemplateOrInstantiationStateDefined(
     clang::TemplateParameterList *params = readClangApiValueDefined(
         [&]() { return described_template->getTemplateParameters(); });
     markClangTemplateParameterListDefined(params);
-    markClangTemplateParameterInjectedArgumentsForPrintingDefined(
-        params, record->getASTContext());
+    const clang::ASTContext *context =
+        readClangApiValueDefined([&]() { return &record->getASTContext(); });
+    markClangTemplateParameterInjectedArgumentsForPrintingDefined(params,
+                                                                  *context);
   }
 
   if (clang::MemberSpecializationInfo *member_info = readClangApiValueDefined(
@@ -1557,8 +1654,8 @@ markClangClassTemplateDeclForPrintingDefined(clang::ClassTemplateDecl *decl) {
   if (!clangFrontendRunningOnValgrind() || decl == nullptr) {
     return decl;
   }
-  static std::unordered_set<const clang::ClassTemplateDecl *> marked_templates;
-  if (!marked_templates.insert(decl).second) {
+  if (!markClangFrontendValgrindPublicationOnce(
+          ClangFrontendValgrindPublicationKind::DeclClassTemplateState, decl)) {
     return decl;
   }
 
@@ -1571,8 +1668,10 @@ markClangClassTemplateDeclForPrintingDefined(clang::ClassTemplateDecl *decl) {
     templated_record = llvm::dyn_cast_or_null<clang::CXXRecordDecl>(
         markClangDeclObjectDefinedByKind(templated_record));
     if (templated_record != nullptr) {
-      markClangTemplateParameterInjectedArgumentsForPrintingDefined(
-          params, templated_record->getASTContext());
+      const clang::ASTContext *context = readClangApiValueDefined(
+          [&]() { return &templated_record->getASTContext(); });
+      markClangTemplateParameterInjectedArgumentsForPrintingDefined(params,
+                                                                    *context);
     }
   }
 #endif
@@ -1581,6 +1680,19 @@ markClangClassTemplateDeclForPrintingDefined(clang::ClassTemplateDecl *decl) {
 
 template <typename T> static T *markClangSpecificDeclDefined(T *decl) {
   return llvm::dyn_cast_or_null<T>(markClangDeclObjectDefinedByKind(decl));
+}
+
+template <typename TemplateDeclT>
+static TemplateDeclT *
+clangTemplateInstantiatedFromMemberTemplateDefined(TemplateDeclT *decl) {
+  decl = markClangSpecificDeclDefined(decl);
+  if (decl == nullptr) {
+    return nullptr;
+  }
+
+  TemplateDeclT *member_template = readClangApiValueDefined(
+      [&]() { return decl->getInstantiatedFromMemberTemplate(); });
+  return markClangSpecificDeclDefined(member_template);
 }
 
 static bool clangDeclIsImplicitDefined(const clang::Decl *decl) {
@@ -1649,6 +1761,18 @@ static bool clangCXXRecordIsLambdaDefined(const clang::CXXRecordDecl *decl) {
   return readClangApiValueDefined([&]() { return decl->isLambda(); });
 }
 
+static const clang::CXXRecordDecl *
+clangCXXMethodParentDefined(const clang::CXXMethodDecl *method) {
+  method = llvm::dyn_cast_or_null<clang::CXXMethodDecl>(
+      markClangDeclObjectDefinedByKind(method));
+  if (method == nullptr) {
+    return nullptr;
+  }
+
+  return markClangSpecificDeclDefined(
+      readClangApiValueDefined([&]() { return method->getParent(); }));
+}
+
 static bool
 clangCXXMethodIsLambdaCallOperatorDefined(const clang::FunctionDecl *decl) {
   const clang::CXXMethodDecl *method =
@@ -1660,8 +1784,7 @@ clangCXXMethodIsLambdaCallOperatorDefined(const clang::FunctionDecl *decl) {
     return false;
   }
 
-  const clang::CXXRecordDecl *parent = markClangSpecificDeclDefined(
-      readClangApiValueDefined([&]() { return method->getParent(); }));
+  const clang::CXXRecordDecl *parent = clangCXXMethodParentDefined(method);
   return clangCXXRecordIsLambdaDefined(parent);
 }
 
@@ -1710,19 +1833,6 @@ clangCXXRecordTemplateInstantiationPatternDefined(clang::CXXRecordDecl *decl) {
   clang::CXXRecordDecl *pattern = readClangApiValueDefined(
       [&]() { return decl->getTemplateInstantiationPattern(); });
   return markClangSpecificDeclDefined(pattern);
-}
-
-static clang::FunctionTemplateDecl *
-clangFunctionTemplateInstantiatedFromMemberTemplateDefined(
-    clang::FunctionTemplateDecl *decl) {
-  decl = markClangSpecificDeclDefined(decl);
-  if (decl == nullptr) {
-    return nullptr;
-  }
-
-  clang::FunctionTemplateDecl *member_template = readClangApiValueDefined(
-      [&]() { return decl->getInstantiatedFromMemberTemplate(); });
-  return markClangSpecificDeclDefined(member_template);
 }
 
 static clang::NamedDecl *
@@ -2138,8 +2248,10 @@ markInjectedClassNameTypePrinterInputsDefined(const clang::Type *type) {
     markClangDeclObjectDefinedByKind(template_decl);
     clang::TemplateParameterList *params = readClangApiValueDefined(
         [&]() { return template_decl->getTemplateParameters(); });
-    markClangTemplateParameterInjectedArgumentsForPrintingDefined(
-        params, decl->getASTContext());
+    const clang::ASTContext *context =
+        readClangApiValueDefined([&]() { return &decl->getASTContext(); });
+    markClangTemplateParameterInjectedArgumentsForPrintingDefined(params,
+                                                                  *context);
   }
 
   if (clang::ClassTemplateSpecializationDecl *specialization =
@@ -2153,8 +2265,10 @@ markInjectedClassNameTypePrinterInputsDefined(const clang::Type *type) {
     markClangDeclObjectDefinedByKind(described_template);
     clang::TemplateParameterList *params = readClangApiValueDefined(
         [&]() { return described_template->getTemplateParameters(); });
-    markClangTemplateParameterInjectedArgumentsForPrintingDefined(
-        params, decl->getASTContext());
+    const clang::ASTContext *context =
+        readClangApiValueDefined([&]() { return &decl->getASTContext(); });
+    markClangTemplateParameterInjectedArgumentsForPrintingDefined(params,
+                                                                  *context);
   }
 #else
   (void)type;
@@ -2168,11 +2282,12 @@ static void markClangTemplateArgumentTypeDefined(clang::QualType qual_type) {
     return;
   }
 
-  static std::unordered_set<const clang::Type *> marked_template_argument_types;
   const clang::Type *root_type =
       readClangApiValueDefined([&]() { return qual_type.getTypePtrOrNull(); });
   if (root_type == nullptr ||
-      !marked_template_argument_types.insert(root_type).second) {
+      !markClangFrontendValgrindPublicationOnce(
+          ClangFrontendValgrindPublicationKind::DeclTemplateArgumentType,
+          root_type)) {
     return;
   }
 
@@ -2190,7 +2305,9 @@ static void markClangTemplateArgumentTypeDefined(clang::QualType qual_type) {
       return;
     }
     if (current_root != root_type &&
-        !marked_template_argument_types.insert(current_root).second) {
+        !markClangFrontendValgrindPublicationOnce(
+            ClangFrontendValgrindPublicationKind::DeclTemplateArgumentType,
+            current_root)) {
       return;
     }
 
@@ -2203,7 +2320,9 @@ static void markClangTemplateArgumentTypeDefined(clang::QualType qual_type) {
     }
     if (type != current_root) {
       if (!visited.insert(type).second ||
-          !marked_template_argument_types.insert(type).second) {
+          !markClangFrontendValgrindPublicationOnce(
+              ClangFrontendValgrindPublicationKind::DeclTemplateArgumentType,
+              type)) {
         return;
       }
     }
@@ -2270,33 +2389,43 @@ markClangTemplateArgumentDefined(const clang::TemplateArgument &arg) {
     return arg;
   }
 
-  switch (arg.getKind()) {
+  switch (readClangApiValueDefined([&]() { return arg.getKind(); })) {
   case clang::TemplateArgument::Type:
-    markClangTemplateArgumentTypeDefined(arg.getAsType());
+    markClangTemplateArgumentTypeDefined(
+        readClangApiValueDefined([&]() { return arg.getAsType(); }));
     break;
   case clang::TemplateArgument::Declaration:
-    markClangDeclObjectDefinedByKind(arg.getAsDecl());
-    markClangTemplateArgumentTypeDefined(arg.getParamTypeForDecl());
+    markClangDeclObjectDefinedByKind(
+        readClangApiValueDefined([&]() { return arg.getAsDecl(); }));
+    markClangTemplateArgumentTypeDefined(
+        readClangApiValueDefined([&]() { return arg.getParamTypeForDecl(); }));
     break;
   case clang::TemplateArgument::NullPtr:
-    markClangTemplateArgumentTypeDefined(arg.getNullPtrType());
+    markClangTemplateArgumentTypeDefined(
+        readClangApiValueDefined([&]() { return arg.getNullPtrType(); }));
     break;
   case clang::TemplateArgument::Integral:
-    markClangTemplateArgumentTypeDefined(arg.getIntegralType());
+    markClangTemplateArgumentTypeDefined(
+        readClangApiValueDefined([&]() { return arg.getIntegralType(); }));
     break;
   case clang::TemplateArgument::StructuralValue:
-    markClangLocalObjectDefined(&arg.getAsStructuralValue());
-    markClangTemplateArgumentTypeDefined(arg.getStructuralValueType());
+    markClangLocalObjectDefined(readClangApiValueDefined(
+        [&]() { return &arg.getAsStructuralValue(); }));
+    markClangTemplateArgumentTypeDefined(readClangApiValueDefined(
+        [&]() { return arg.getStructuralValueType(); }));
     break;
   case clang::TemplateArgument::Template:
   case clang::TemplateArgument::TemplateExpansion:
-    markClangTemplateNameDefined(arg.getAsTemplateOrTemplatePattern());
+    markClangTemplateNameDefined(readClangApiValueDefined(
+        [&]() { return arg.getAsTemplateOrTemplatePattern(); }));
     break;
   case clang::TemplateArgument::Expression:
-    markClangStmtObjectDefinedByClass(arg.getAsExpr());
+    markClangStmtObjectDefinedByClass(
+        readClangApiValueDefined([&]() { return arg.getAsExpr(); }));
     break;
   case clang::TemplateArgument::Pack:
-    (void)markClangTemplateArgumentArrayDefined(arg.pack_elements());
+    (void)markClangTemplateArgumentArrayDefined(
+        readClangApiValueDefined([&]() { return arg.pack_elements(); }));
     break;
   case clang::TemplateArgument::Null:
     break;
@@ -2355,7 +2484,8 @@ markClangTemplateArgumentListDefined(const clang::TemplateArgumentList *args) {
   }
 
   args = markClangAstObjectDefined(args);
-  (void)markClangTemplateArgumentArrayDefined(args->asArray());
+  (void)markClangTemplateArgumentArrayDefined(
+      readClangApiValueDefined([&]() { return args->asArray(); }));
 #endif
   return args;
 }
@@ -2507,27 +2637,63 @@ markClangFunctionTemplateStateDefined(clang::FunctionDecl *decl) {
     return decl;
   }
 
+  const clang::QualType function_type = markClangFunctionTypeBoundaryDefined(
+      readClangApiValueDefined([&]() { return decl->getType(); }));
+  if (!function_type.isNull()) {
+    markClangFunctionTypeBoundaryDefined(function_type);
+  }
+  const clang::QualType return_type = markClangFunctionTypeBoundaryDefined(
+      readClangApiValueDefined([&]() { return decl->getReturnType(); }));
+  if (!return_type.isNull()) {
+    markClangTypeObjectDefinedByClass(return_type.getTypePtrOrNull());
+  }
+  const unsigned parameter_count =
+      readClangApiValueDefined([&]() { return decl->getNumParams(); });
+  for (unsigned index = 0; index < parameter_count; ++index) {
+    clang::ParmVarDecl *parameter = markClangSpecificDeclDefined(
+        readClangApiValueDefined([&]() { return decl->getParamDecl(index); }));
+    if (parameter == nullptr) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[clang-function-parameter]: "
+              "function=%p parameter-index=%u of %u is null\n",
+              static_cast<void *>(decl), index, parameter_count);
+      ROSE_ABORT();
+    }
+    markClangFunctionTypeBoundaryDefined(
+        readClangApiValueDefined([&]() { return parameter->getType(); }));
+    markClangTypeSourceInfoDefined(readClangApiValueDefined(
+        [&]() { return parameter->getTypeSourceInfo(); }));
+  }
+  markClangTypeSourceInfoDefined(
+      readClangApiValueDefined([&]() { return decl->getTypeSourceInfo(); }));
+
   if (clang::FunctionTemplateSpecializationInfo *specialization_info =
-          decl->getTemplateSpecializationInfo()) {
+          readClangApiValueDefined(
+              [&]() { return decl->getTemplateSpecializationInfo(); })) {
     specialization_info = markClangAstObjectDefined(specialization_info);
-    markClangDeclObjectDefinedByKind(specialization_info->getTemplate());
+    markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+        [&]() { return specialization_info->getTemplate(); }));
     markClangTemplateArgumentListDefined(
         specialization_info->TemplateArguments);
     markClangASTTemplateArgumentListInfoDefined(
         specialization_info->TemplateArgumentsAsWritten);
     if (clang::MemberSpecializationInfo *member_info =
-            specialization_info->getMemberSpecializationInfo()) {
+            readClangApiValueDefined([&]() {
+              return specialization_info->getMemberSpecializationInfo();
+            })) {
       markClangAstObjectDefined(member_info);
-      markClangDeclObjectDefinedByKind(member_info->getInstantiatedFrom());
+      markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+          [&]() { return member_info->getInstantiatedFrom(); }));
     }
   }
-  if (clang::MemberSpecializationInfo *member_info =
-          decl->getMemberSpecializationInfo()) {
+  if (clang::MemberSpecializationInfo *member_info = readClangApiValueDefined(
+          [&]() { return decl->getMemberSpecializationInfo(); })) {
     markClangAstObjectDefined(member_info);
-    markClangDeclObjectDefinedByKind(member_info->getInstantiatedFrom());
+    markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+        [&]() { return member_info->getInstantiatedFrom(); }));
   }
-  markClangASTTemplateArgumentListInfoDefined(
-      decl->getTemplateSpecializationArgsAsWritten());
+  markClangASTTemplateArgumentListInfoDefined(readClangApiValueDefined(
+      [&]() { return decl->getTemplateSpecializationArgsAsWritten(); }));
 #endif
   return decl;
 }
@@ -2580,9 +2746,8 @@ static clang::ClassTemplateSpecializationDecl *
 markClangClassTemplateSpecializationStateDefined(
     clang::ClassTemplateSpecializationDecl *decl) {
 #if ROSE_USE_VALGRIND
-  static std::unordered_set<const clang::ClassTemplateSpecializationDecl *>
-      marked_specializations;
-  static std::unordered_set<const clang::ClassTemplateSpecializationDecl *>
+  static thread_local std::unordered_set<
+      const clang::ClassTemplateSpecializationDecl *>
       active_specializations;
   clang::ClassTemplateSpecializationDecl *active_key = decl;
   if (active_key != nullptr &&
@@ -2598,13 +2763,15 @@ markClangClassTemplateSpecializationStateDefined(
     }
     return decl;
   }
-  if (!marked_specializations.insert(decl).second) {
+  if (!markClangFrontendValgrindPublicationOnce(
+          ClangFrontendValgrindPublicationKind::
+              DeclClassTemplateSpecializationState,
+          decl)) {
     if (active_key != nullptr) {
       active_specializations.erase(active_key);
     }
     return decl;
   }
-
   markClangTemplateArgumentListForPrintingDefined(&decl->getTemplateArgs());
   markClangTemplateArgumentListForPrintingDefined(
       &decl->getTemplateInstantiationArgs());
@@ -2801,6 +2968,10 @@ struct StructuredBindingComponent {
 
 SgInitializedName *
 exactInitializedNameFromTranslatedVariableNode(SgNode *translated) {
+  if (SgTemplateInstantiationDirectiveStatement *directive =
+          isSgTemplateInstantiationDirectiveStatement(translated)) {
+    translated = directive->get_declaration();
+  }
   if (SgInitializedName *initialized_name = isSgInitializedName(translated)) {
     return initialized_name;
   }
@@ -2914,6 +3085,11 @@ std::string normalizedSourceLocationFilePath(clang::SourceLocation location,
 }
 
 } // namespace
+
+void markClangNamedDeclNameForPrintingDefinedForFrontend(
+    const clang::NamedDecl *decl) {
+  markClangNamedDeclNameForPrintingDefinedForFrontendImpl(decl);
+}
 
 SgTemplateType::canonical_source_identity
 ClangToSageTranslator::requireCanonicalTemplateParameterSourceIdentity(
@@ -3073,7 +3249,7 @@ bool declIsFromApplicationHeader(clang::Decl *decl, clang::CompilerInstance *ci,
       preprocessor_record->recordExternalOwnershipPath(
           normalizedDeclFilePath(decl, sm),
           "declIsFromApplicationHeader:imported-declaration-source");
-    } else if (module == nullptr) {
+    } else if (module == nullptr && !decl->isImplicit()) {
       fprintf(stderr,
               "REX_FRONTEND_INVARIANT[module-ownership]: unowned imported "
               "declaration=%p/%s has no exact physical source identity\n",
@@ -3083,9 +3259,12 @@ bool declIsFromApplicationHeader(clang::Decl *decl, clang::CompilerInstance *ci,
     if (module == nullptr) {
       // Clang explicitly permits a declaration loaded from an AST file to
       // retain ModuleOwnershipKind::Unowned.  Header units use this for
-      // declarations in their global module fragment.  Their exact physical
-      // source path above is the ownership identity; inventing an owning
-      // module would misrepresent Clang's semantic state.
+      // declarations in their global module fragment.  Source-written
+      // declarations retain an exact physical path above.  Target-specific
+      // builtin typedefs are implicit and intentionally have no source
+      // location; their implicit Clang identity is the exact frontend-support
+      // provenance.  Inventing either a physical path or an owning module for
+      // those declarations would misrepresent Clang's semantic state.
       return false;
     }
     if (auto ast_file = module->getASTFile()) {
@@ -3440,36 +3619,50 @@ clang::TypeLoc peelDirectInlineTagTypeLoc(clang::TypeLoc type_loc) {
     markClangTypeObjectDefinedByClass(current.getTypePtr());
     if (clang::QualifiedTypeLoc qualified_loc =
             current.getAs<clang::QualifiedTypeLoc>()) {
-      current = qualified_loc.getUnqualifiedLoc();
+      markClangTypeLocDataDefined(qualified_loc);
+      current = readClangTypeLocDefined(
+          [&]() { return qualified_loc.getUnqualifiedLoc(); });
       continue;
     }
     if (clang::ParenTypeLoc paren_loc = current.getAs<clang::ParenTypeLoc>()) {
-      current = paren_loc.getInnerLoc();
+      markClangTypeLocDataDefined(paren_loc);
+      current =
+          readClangTypeLocDefined([&]() { return paren_loc.getInnerLoc(); });
       continue;
     }
     if (clang::AttributedTypeLoc attributed_loc =
             current.getAs<clang::AttributedTypeLoc>()) {
-      current = attributed_loc.getModifiedLoc();
+      markClangTypeLocDataDefined(attributed_loc);
+      current = readClangTypeLocDefined(
+          [&]() { return attributed_loc.getModifiedLoc(); });
       continue;
     }
     if (clang::BTFTagAttributedTypeLoc btf_tag_loc =
             current.getAs<clang::BTFTagAttributedTypeLoc>()) {
-      current = btf_tag_loc.getWrappedLoc();
+      markClangTypeLocDataDefined(btf_tag_loc);
+      current = readClangTypeLocDefined(
+          [&]() { return btf_tag_loc.getWrappedLoc(); });
       continue;
     }
     if (clang::HLSLAttributedResourceTypeLoc hlsl_attr_loc =
             current.getAs<clang::HLSLAttributedResourceTypeLoc>()) {
-      current = hlsl_attr_loc.getWrappedLoc();
+      markClangTypeLocDataDefined(hlsl_attr_loc);
+      current = readClangTypeLocDefined(
+          [&]() { return hlsl_attr_loc.getWrappedLoc(); });
       continue;
     }
     if (clang::MacroQualifiedTypeLoc macro_qualified_loc =
             current.getAs<clang::MacroQualifiedTypeLoc>()) {
-      current = macro_qualified_loc.getInnerLoc();
+      markClangTypeLocDataDefined(macro_qualified_loc);
+      current = readClangTypeLocDefined(
+          [&]() { return macro_qualified_loc.getInnerLoc(); });
       continue;
     }
     if (clang::AdjustedTypeLoc adjusted_loc =
             current.getAs<clang::AdjustedTypeLoc>()) {
-      current = adjusted_loc.getOriginalLoc();
+      markClangTypeLocDataDefined(adjusted_loc);
+      current = readClangTypeLocDefined(
+          [&]() { return adjusted_loc.getOriginalLoc(); });
       continue;
     }
     if (clang::PointerTypeLoc pointer_loc =
@@ -3509,7 +3702,9 @@ clang::TypeLoc peelDirectInlineTagTypeLoc(clang::TypeLoc type_loc) {
       continue;
     }
     if (clang::ArrayTypeLoc array_loc = current.getAs<clang::ArrayTypeLoc>()) {
-      current = array_loc.getElementLoc();
+      markClangTypeLocDataDefined(array_loc);
+      current =
+          readClangTypeLocDefined([&]() { return array_loc.getElementLoc(); });
       continue;
     }
     return current;
@@ -7324,15 +7519,21 @@ static unsigned countEnclosingClassTemplateSpecializationLevels(
 
 static unsigned countWrittenExplicitTemplateSpecializationHeaders(
     const clang::DeclaratorDecl *decl) {
+  decl = llvm::dyn_cast_or_null<clang::DeclaratorDecl>(
+      markClangDeclObjectDefinedByKind(decl));
   if (decl == nullptr) {
     return 0;
   }
 
   unsigned count = 0;
-  for (unsigned i = 0; i < decl->getNumTemplateParameterLists(); ++i) {
+  const unsigned header_count = readClangApiValueDefined(
+      [&]() { return decl->getNumTemplateParameterLists(); });
+  for (unsigned i = 0; i < header_count; ++i) {
     const clang::TemplateParameterList *params =
-        decl->getTemplateParameterList(i);
-    if (params != nullptr && params->size() == 0) {
+        markClangTemplateParameterListDefined(readClangApiValueDefined(
+            [&]() { return decl->getTemplateParameterList(i); }));
+    if (params != nullptr &&
+        readClangApiValueDefined([&]() { return params->size(); }) == 0) {
       ++count;
     }
   }
@@ -7540,6 +7741,7 @@ static clang::SourceRange extendDeclSourceRangeWithTrailingSemicolon(
     clang::SourceRange range, clang::SourceManager &sm,
     const clang::LangOptions &lang_opts, clang::Preprocessor &preprocessor,
     const clang::Decl *decl) {
+  decl = markClangDeclObjectDefinedByKind(decl);
   if (!range.isValid() || !range.getBegin().isValid() ||
       !range.getEnd().isValid()) {
     fprintf(stderr,
@@ -7559,7 +7761,9 @@ static clang::SourceRange extendDeclSourceRangeWithTrailingSemicolon(
   begin = sm.getFileLoc(begin);
   end = sm.getFileLoc(end);
   const clang::SourceLocation declaration_end =
-      decl != nullptr ? decl->getEndLoc() : clang::SourceLocation();
+      decl != nullptr
+          ? readClangApiValueDefined([&]() { return decl->getEndLoc(); })
+          : clang::SourceLocation();
   clang::SourceLocation declaration_spelling_end =
       declaration_end.isValid() && declaration_end.isMacroID()
           ? sm.getFileLoc(sm.getSpellingLoc(declaration_end))
@@ -7570,17 +7774,29 @@ static clang::SourceRange extendDeclSourceRangeWithTrailingSemicolon(
   if (!scans_macro_spelling_terminator) {
     if (const clang::VarDecl *variable =
             llvm::dyn_cast_or_null<clang::VarDecl>(decl)) {
-      for (const clang::DynTypedNode &parent :
-           variable->getASTContext().getParents(*variable)) {
-        const clang::DeclStmt *declaration_statement =
-            parent.get<clang::DeclStmt>();
+      const clang::DeclStmt *declaration_statement =
+          readClangApiValueDefined([&]() -> const clang::DeclStmt * {
+            for (const clang::DynTypedNode &parent :
+                 variable->getASTContext().getParents(*variable)) {
+              if (const clang::DeclStmt *statement =
+                      parent.get<clang::DeclStmt>()) {
+                return statement;
+              }
+            }
+            return nullptr;
+          });
+      if (declaration_statement != nullptr) {
+        declaration_statement =
+            markClangAstObjectDefined(declaration_statement);
         if (declaration_statement == nullptr ||
             !declaration_statement->isSingleDecl() ||
             declaration_statement->getSingleDecl() != variable) {
-          continue;
+          declaration_statement = nullptr;
         }
-        clang::SourceLocation statement_end =
-            declaration_statement->getEndLoc();
+      }
+      if (declaration_statement != nullptr) {
+        clang::SourceLocation statement_end = readClangApiValueDefined(
+            [&]() { return declaration_statement->getEndLoc(); });
         if (statement_end.isMacroID() &&
             sm.isMacroArgExpansion(statement_end)) {
           // A macro argument can provide the exact semicolon that terminates
@@ -7623,7 +7839,6 @@ static clang::SourceRange extendDeclSourceRangeWithTrailingSemicolon(
           }
           end = sm.getFileLoc(statement_end_token.getLocation());
         }
-        break;
       }
     }
     const clang::TypeSourceInfo *type_source = nullptr;
@@ -7635,7 +7850,8 @@ static clang::SourceRange extendDeclSourceRangeWithTrailingSemicolon(
       type_source = typedef_name->getTypeSourceInfo();
     }
     if (type_source != nullptr) {
-      clang::SourceLocation type_end = type_source->getTypeLoc().getEndLoc();
+      clang::SourceLocation type_end = readClangApiValueDefined(
+          [&]() { return type_source->getTypeLoc().getEndLoc(); });
       if (type_end.isMacroID()) {
         type_end = sm.getExpansionLoc(type_end);
       }
@@ -7909,7 +8125,9 @@ static clang::SourceRange extendDeclSourceRangeWithTrailingSemicolon(
   // the exact Attr source ranges to advance the semantic endpoint; do not
   // guess past arbitrary identifiers while looking for a semicolon.
   if (decl != nullptr && !scans_macro_spelling_terminator) {
-    for (const clang::Attr *attribute : decl->attrs()) {
+    const ClangDeclAttrSnapshot attributes = clangDeclAttrsDefined(decl);
+    for (const clang::Attr *raw_attribute : attributes) {
+      const clang::Attr *attribute = markClangAstObjectDefined(raw_attribute);
       if (attribute == nullptr) {
         fprintf(stderr,
                 "REX_FRONTEND_INVARIANT[declaration-terminator]: declaration "
@@ -7917,7 +8135,9 @@ static clang::SourceRange extendDeclSourceRangeWithTrailingSemicolon(
                 decl->getDeclKindName());
         ROSE_ABORT();
       }
-      clang::SourceLocation raw_attribute_end = attribute->getRange().getEnd();
+      const clang::SourceRange raw_attribute_range =
+          readClangApiValueDefined([&]() { return attribute->getRange(); });
+      clang::SourceLocation raw_attribute_end = raw_attribute_range.getEnd();
       if (raw_attribute_end.isMacroID()) {
         raw_attribute_end = sm.getExpansionRange(raw_attribute_end).getEnd();
       }
@@ -8369,7 +8589,7 @@ static clang::SourceRange extendDeclSourceRangeWithTrailingSemicolon(
               ? following_spelling.c_str()
               : "<none>");
   if (decl != nullptr) {
-    for (const clang::Attr *attribute : decl->attrs()) {
+    for (const clang::Attr *attribute : clangDeclAttrsDefined(decl)) {
       clang::SourceLocation attribute_begin =
           attribute != nullptr ? attribute->getRange().getBegin()
                                : clang::SourceLocation();
@@ -9008,33 +9228,42 @@ decl_range_should_consume_trailing_semicolon(const clang::Decl *decl,
     // directly in another statement instead own only their declarator syntax:
     // catch parameters, condition variables, range-for variables, and similar
     // statement-local roles are terminated by their enclosing statement.
-    for (const clang::DynTypedNode &parent :
-         ast_context.getParents(*var_decl)) {
-      if (const clang::Stmt *statement = parent.get<clang::Stmt>()) {
-        const clang::DeclStmt *declaration_statement =
-            llvm::dyn_cast<clang::DeclStmt>(statement);
-        if (declaration_statement == nullptr) {
-          return false;
-        }
-        for (const clang::DynTypedNode &statement_parent :
-             ast_context.getParents(*declaration_statement)) {
-          if (const clang::Stmt *owner = statement_parent.get<clang::Stmt>()) {
-            if (llvm::isa<clang::CompoundStmt>(owner)) {
-              return true;
-            }
-            if (const clang::ForStmt *for_statement =
-                    llvm::dyn_cast<clang::ForStmt>(owner)) {
-              // The DeclStmt in the initializer slot owns the first
-              // semicolon in the for header.  A condition declaration is
-              // delimited by the enclosing ForStmt instead.
-              return for_statement->getInit() == declaration_statement;
-            }
+    return readClangApiValueDefined([&]() {
+      for (const clang::DynTypedNode &parent :
+           ast_context.getParents(*var_decl)) {
+        if (const clang::Stmt *statement = parent.get<clang::Stmt>()) {
+          const clang::DeclStmt *declaration_statement =
+              llvm::dyn_cast<clang::DeclStmt>(statement);
+          if (declaration_statement == nullptr) {
             return false;
           }
+          for (const clang::DynTypedNode &statement_parent :
+               ast_context.getParents(*declaration_statement)) {
+            if (const clang::Stmt *owner =
+                    statement_parent.get<clang::Stmt>()) {
+              if (llvm::isa<clang::CompoundStmt>(owner)) {
+                return true;
+              }
+              if (const clang::ForStmt *for_statement =
+                      llvm::dyn_cast<clang::ForStmt>(owner)) {
+                // The DeclStmt in the initializer slot owns the first
+                // semicolon in the for header.  A condition declaration is
+                // delimited by the enclosing ForStmt instead.
+                return for_statement->getInit() == declaration_statement;
+              }
+              return false;
+            }
+          }
+          return true;
         }
-        return true;
       }
-    }
+      // A namespace- or translation-unit-scope variable is not nested in a
+      // statement.  Its declaration is therefore the lexical owner of the
+      // trailing semicolon just like a local DeclStmt.  Returning false here
+      // leaves Clang's range ending in an included initializer file and
+      // publishes an impossible cross-file Sage declaration range.
+      return true;
+    });
   }
 
   if (const clang::FunctionDecl *function_decl =
@@ -9103,7 +9332,7 @@ decl_range_should_consume_trailing_semicolon(const clang::Decl *decl,
             })));
     if (!independent_explicit_source_surface) {
       if (clang::FunctionTemplateDecl *member_template =
-              clangFunctionTemplateInstantiatedFromMemberTemplateDefined(
+              clangTemplateInstantiatedFromMemberTemplateDefined(
                   described_template)) {
         clang::FunctionDecl *member_pattern =
             llvm::dyn_cast_or_null<clang::FunctionDecl>(
@@ -9251,48 +9480,58 @@ expression_references_template_parameter_pack(const clang::Expr *expr) {
 static bool
 template_argument_needs_pack_ellipsis(const clang::TemplateArgument &arg) {
   markClangTemplateArgumentDefined(arg);
-  if (arg.isPackExpansion() || arg.containsUnexpandedParameterPack()) {
+  if (readClangApiValueDefined([&]() {
+        return arg.isPackExpansion() || arg.containsUnexpandedParameterPack();
+      })) {
     return true;
   }
 
-  switch (arg.getKind()) {
+  switch (readClangApiValueDefined([&]() { return arg.getKind(); })) {
   case clang::TemplateArgument::Type: {
-    clang::QualType qt = markClangFunctionTypeBoundaryDefined(arg.getAsType());
+    clang::QualType qt = markClangFunctionTypeBoundaryDefined(
+        readClangApiValueDefined([&]() { return arg.getAsType(); }));
     const clang::Type *type_ptr =
         markClangTypeObjectDefinedByClass(qt.getTypePtrOrNull());
-    return type_ptr != nullptr && type_ptr->containsUnexpandedParameterPack();
+    return type_ptr != nullptr && readClangApiValueDefined([&]() {
+             return type_ptr->containsUnexpandedParameterPack();
+           });
   }
 
   case clang::TemplateArgument::Expression:
     return expression_references_template_parameter_pack(
-        llvm::dyn_cast_or_null<clang::Expr>(
-            markClangStmtObjectDefinedByClass(arg.getAsExpr())));
+        llvm::dyn_cast_or_null<clang::Expr>(markClangStmtObjectDefinedByClass(
+            readClangApiValueDefined([&]() { return arg.getAsExpr(); }))));
 
   case clang::TemplateArgument::Declaration: {
     const clang::ValueDecl *value_decl =
         llvm::dyn_cast_or_null<clang::ValueDecl>(
-            markClangDeclObjectDefinedByKind(arg.getAsDecl()));
+            markClangDeclObjectDefinedByKind(
+                readClangApiValueDefined([&]() { return arg.getAsDecl(); })));
     if (value_decl == nullptr) {
       return false;
     }
     if (const clang::NonTypeTemplateParmDecl *non_type_param =
             llvm::dyn_cast<clang::NonTypeTemplateParmDecl>(value_decl)) {
-      return non_type_param->isParameterPack();
+      return readClangApiValueDefined(
+          [&]() { return non_type_param->isParameterPack(); });
     }
     if (const clang::TemplateTypeParmDecl *type_param =
             llvm::dyn_cast<clang::TemplateTypeParmDecl>(value_decl)) {
-      return type_param->isParameterPack();
+      return readClangApiValueDefined(
+          [&]() { return type_param->isParameterPack(); });
     }
     if (const clang::TemplateTemplateParmDecl *template_param =
             llvm::dyn_cast<clang::TemplateTemplateParmDecl>(value_decl)) {
-      return template_param->isParameterPack();
+      return readClangApiValueDefined(
+          [&]() { return template_param->isParameterPack(); });
     }
     return false;
   }
 
   case clang::TemplateArgument::Pack:
     for (const clang::TemplateArgument &pack_arg :
-         markClangTemplateArgumentArrayDefined(arg.pack_elements())) {
+         markClangTemplateArgumentArrayDefined(
+             readClangApiValueDefined([&]() { return arg.pack_elements(); }))) {
       if (template_argument_needs_pack_ellipsis(pack_arg)) {
         return true;
       }
@@ -10457,9 +10696,15 @@ static ClangDeclarationContainerRole requireDeclarationContainerContract(
       ROSE_ABORT();
     }
     const clang::FunctionDecl *builtin =
-        llvm::dyn_cast<clang::FunctionDecl>(*linkage->decls_begin());
+        llvm::dyn_cast_or_null<clang::FunctionDecl>(
+            markClangDeclObjectDefinedByKind(*linkage->decls_begin()));
+    const unsigned builtin_id = builtin != nullptr
+                                    ? readClangApiValueDefined([&]() {
+                                        return builtin->getBuiltinID();
+                                      })
+                                    : clang::Builtin::NotBuiltin;
     if (builtin == nullptr || !builtin->isImplicit() ||
-        (builtin->getBuiltinID() == clang::Builtin::NotBuiltin &&
+        (builtin_id == clang::Builtin::NotBuiltin &&
          !clangDeclHasBuiltinAttrDefinedForFrontend(builtin))) {
       std::cerr << "REX_FRONTEND_INVARIANT[declaration-container]: implicit "
                    "linkage container does not own one exact Clang built-in "
@@ -10764,14 +11009,26 @@ static void normalize_standalone_template_variable_declaration(
     return;
   }
 
-  // A template declaration declares a single entity. Reusing the generic
-  // declaration-list links merges later redeclarations/specializations into an
-  // invalid comma-separated declaration during unparsing.
+  // A template declaration declares a single entity.  Keep it independent of
+  // the generic comma-separated declaration-list representation.  An exact
+  // initialized-name predecessor, when present, is instead Clang's typed
+  // redeclaration identity and must survive normalization.
   decl->set_isAssociatedWithDeclarationList(false);
 
   for (SgInitializedName *init_name : decl->get_variables()) {
-    if (init_name != nullptr && init_name->get_prev_decl_item() != nullptr) {
-      init_name->set_prev_decl_item(nullptr);
+    if (init_name == nullptr) {
+      continue;
+    }
+    if (SgInitializedName *previous = init_name->get_prev_decl_item()) {
+      if (isSgTemplateVariableDeclaration(previous->get_parent()) == nullptr ||
+          previous->get_name() != init_name->get_name() ||
+          previous->get_scope() != init_name->get_scope()) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[template-variable-redeclaration]: "
+                "normalization found a predecessor outside the exact "
+                "template-variable entity\n");
+        ROSE_ABORT();
+      }
     }
   }
 }
@@ -11281,9 +11538,7 @@ static bool is_semantic_template_instantiation_type_alias_template(
       direct_record_instantiation || enclosing_record_instantiation;
 
   clang::TypeAliasTemplateDecl *source_pattern =
-      markClangSpecificDeclDefined(readClangApiValueDefined([&]() {
-        return alias_template->getInstantiatedFromMemberTemplate();
-      }));
+      clangTemplateInstantiatedFromMemberTemplateDefined(alias_template);
   if (!record_is_semantic_instantiation) {
     if (source_pattern != nullptr) {
       fprintf(stderr,
@@ -12150,12 +12405,14 @@ clangDeclHasNonBuiltinSourceLocation(const clang::CompilerInstance *ci,
   if (ci == nullptr || decl == nullptr) {
     return false;
   }
+  decl = markClangDeclObjectDefinedByKind(decl);
 
   clang::SourceManager &sm = ci->getSourceManager();
   // Declarator names can be token-pasted into Clang's synthetic scratch
   // buffer. Source ownership belongs to the declaration introducer, whose
   // expansion occurrence is the exact physical surface.
-  clang::SourceLocation loc = decl->getBeginLoc();
+  clang::SourceLocation loc =
+      readClangApiValueDefined([&]() { return decl->getBeginLoc(); });
   if (loc.isMacroID()) {
     // Source ownership follows the physical macro invocation. The spelling
     // location can be Clang's synthetic <scratch space> buffer for a pasted
@@ -13008,6 +13265,7 @@ static bool functionTemplateHasExplicitInstantiationPointInMainFile(
 
 static bool shouldEagerlyTraverseMainFileDecl(clang::Decl *decl,
                                               clang::SourceManager &sm) {
+  decl = markClangDeclObjectDefinedByKind(decl);
   if (decl == nullptr) {
     return false;
   }
@@ -13016,10 +13274,14 @@ static bool shouldEagerlyTraverseMainFileDecl(clang::Decl *decl,
     return true;
   }
 
-  clang::SourceRange source_range = decl->getSourceRange();
-  clang::SourceLocation begin = source_range.getBegin();
-  clang::SourceLocation end = source_range.getEnd();
-  clang::SourceLocation name_loc = decl->getLocation();
+  clang::SourceRange source_range =
+      readClangApiValueDefined([&]() { return decl->getSourceRange(); });
+  clang::SourceLocation begin =
+      readClangApiValueDefined([&]() { return source_range.getBegin(); });
+  clang::SourceLocation end =
+      readClangApiValueDefined([&]() { return source_range.getEnd(); });
+  clang::SourceLocation name_loc =
+      readClangApiValueDefined([&]() { return decl->getLocation(); });
   if (begin.isValid() && end.isValid() && name_loc.isValid() &&
       !begin.isMacroID() && !end.isMacroID()) {
     clang::SourceLocation begin_file_loc = sm.getFileLoc(begin);
@@ -13584,9 +13846,13 @@ static void appendTemplateInstantiationArg(
     markClangPrintedStringDefined(arg_str);
 
     if (defined_single_arg.getKind() == clang::TemplateArgument::Type) {
-      clang::QualType argument_type = defined_single_arg.getAsType();
+      clang::QualType argument_type =
+          markClangQualTypeDefined(readClangApiValueDefined(
+              [&]() { return defined_single_arg.getAsType(); }));
       if (const clang::TemplateTypeParmType *parameter_type =
-              argument_type->getAs<clang::TemplateTypeParmType>()) {
+              readClangApiValueDefined([&]() {
+                return argument_type->getAs<clang::TemplateTypeParmType>();
+              })) {
         std::string declared_name;
         if (const clang::TemplateTypeParmDecl *parameter_decl =
                 parameter_type->getDecl()) {
@@ -13654,14 +13920,17 @@ static void appendTemplateInstantiationArg(
 
   const clang::TemplateArgument &defined_arg =
       markClangTemplateArgumentDefined(arg);
-  if (defined_arg.getKind() == clang::TemplateArgument::Pack) {
+  if (readClangApiValueDefined([&]() { return defined_arg.getKind(); }) ==
+      clang::TemplateArgument::Pack) {
     auto elements =
-        markClangTemplateArgumentArrayDefined(defined_arg.pack_elements());
+        markClangTemplateArgumentArrayDefined(readClangApiValueDefined(
+            [&]() { return defined_arg.pack_elements(); }));
     const bool force_pack_ellipsis =
-        elements.size() == 1 &&
-        (defined_arg.containsUnexpandedParameterPack() ||
-         defined_arg.isInstantiationDependent() ||
-         elements.front().isInstantiationDependent());
+        elements.size() == 1 && readClangApiValueDefined([&]() {
+          return defined_arg.containsUnexpandedParameterPack() ||
+                 defined_arg.isInstantiationDependent() ||
+                 elements.front().isInstantiationDependent();
+        });
     for (const clang::TemplateArgument &pack_arg : elements) {
       append_single_arg(pack_arg, force_pack_ellipsis);
     }
@@ -13706,21 +13975,27 @@ static std::string buildTemplateInstantiationName(
     const ClangTemplateParameterNameMap *exact_written_parameter_names =
         nullptr) {
   return buildTemplateInstantiationName(
-      base_name, args.asArray(), language_options, template_parameter_context,
+      base_name, readClangApiValueDefined([&]() { return args.asArray(); }),
+      language_options, template_parameter_context,
       exact_written_parameter_names);
 }
 
 static SgName
 semanticFunctionInstantiationName(clang::FunctionDecl *function_decl,
                                   const SgName &template_name) {
+  function_decl = llvm::dyn_cast_or_null<clang::FunctionDecl>(
+      markClangDeclObjectDefinedByKind(function_decl));
   ASSERT_not_null(function_decl);
   ROSE_ASSERT(template_name.is_null() == false);
 
   if (const clang::TemplateArgumentList *args =
           clangFunctionTemplateSpecializationArgsDefined(function_decl)) {
-    return SgName(buildTemplateInstantiationName(
-        template_name.getString(), *args,
-        function_decl->getASTContext().getLangOpts(), function_decl));
+    const clang::ASTContext *context = readClangApiValueDefined(
+        [&]() { return &function_decl->getASTContext(); });
+    ASSERT_not_null(context);
+    return SgName(buildTemplateInstantiationName(template_name.getString(),
+                                                 *args, context->getLangOpts(),
+                                                 function_decl));
   }
 
   // An ordinary member of a class-template specialization has no function
@@ -13831,11 +14106,14 @@ std::string buildClangCurrentInstantiationNameForFrontend(
 bool clangFunctionDeclIsBuiltinSupportForFrontend(
     const clang::FunctionDecl *decl, const clang::CompilerInstance *ci,
     const SagePreprocessorRecord *preprocessor_record) {
+  decl = llvm::dyn_cast_or_null<clang::FunctionDecl>(
+      markClangDeclObjectDefinedByKind(decl));
   if (decl == nullptr) {
     return false;
   }
 
-  if (decl->getBuiltinID() != clang::Builtin::NotBuiltin ||
+  if (readClangApiValueDefined([&]() { return decl->getBuiltinID(); }) !=
+          clang::Builtin::NotBuiltin ||
       clangDeclHasBuiltinAttrDefinedForFrontend(decl)) {
     return true;
   }
@@ -14838,6 +15116,366 @@ ClangToSageTranslator::activeClassDefinitionOwnerForDeclaration(
              : nullptr;
 }
 
+SgScopeStatement *
+ClangToSageTranslator::resolveExplicitInstantiationSourceScope(
+    clang::SourceLocation point_of_instantiation, const char *entity_kind,
+    const std::string &entity_name) {
+  if (p_compiler_instance == nullptr || entity_kind == nullptr ||
+      *entity_kind == '\0' || entity_name.empty()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[explicit-instantiation-source-scope]: "
+            "entity=%s name=%s has an incomplete source-scope request\n",
+            entity_kind != nullptr ? entity_kind : "<null>",
+            entity_name.c_str());
+    ROSE_ABORT();
+  }
+
+  clang::SourceManager &sm = p_compiler_instance->getSourceManager();
+  clang::SourceLocation source_location =
+      sm.getExpansionLoc(point_of_instantiation);
+  if (!source_location.isValid() || !source_location.isFileID()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[explicit-instantiation-source-scope]: "
+            "%s=%s has no exact source location\n",
+            entity_kind, entity_name.c_str());
+    ROSE_ABORT();
+  }
+
+  clang::TranslationUnitDecl *translation_unit = markClangSpecificDeclDefined(
+      p_compiler_instance->getASTContext().getTranslationUnitDecl());
+  if (translation_unit == nullptr) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[explicit-instantiation-source-scope]: "
+            "%s=%s has no Clang translation unit\n",
+            entity_kind, entity_name.c_str());
+    ROSE_ABORT();
+  }
+
+  clang::NamespaceDecl *containing_namespace = nullptr;
+  std::function<void(clang::DeclContext *)> find_containing_namespace =
+      [&](clang::DeclContext *context) {
+        context = markClangDeclContextObjectDefined(context);
+        if (context == nullptr) {
+          fprintf(stderr,
+                  "REX_FRONTEND_INVARIANT[explicit-instantiation-source-"
+                  "scope]: %s=%s reached a null lexical context\n",
+                  entity_kind, entity_name.c_str());
+          ROSE_ABORT();
+        }
+
+        clang::NamespaceDecl *matching_child = nullptr;
+        for (clang::Decl *candidate : context->decls()) {
+          clang::NamespaceDecl *namespace_decl =
+              llvm::dyn_cast_or_null<clang::NamespaceDecl>(
+                  markClangDeclObjectDefinedByKind(candidate));
+          if (namespace_decl == nullptr) {
+            continue;
+          }
+
+          clang::SourceRange range = readClangApiValueDefined(
+              [&]() { return namespace_decl->getSourceRange(); });
+          if (!range.isValid()) {
+            continue;
+          }
+          clang::SourceLocation begin = sm.getExpansionLoc(range.getBegin());
+          clang::SourceLocation end = sm.getExpansionLoc(range.getEnd());
+          if (!begin.isValid() || !end.isValid() || !begin.isFileID() ||
+              !end.isFileID() ||
+              !sm.isWrittenInSameFile(begin, source_location) ||
+              !sm.isWrittenInSameFile(end, source_location)) {
+            continue;
+          }
+          const bool contains_source =
+              !sm.isBeforeInTranslationUnit(source_location, begin) &&
+              !sm.isBeforeInTranslationUnit(end, source_location);
+          if (!contains_source) {
+            continue;
+          }
+          if (matching_child != nullptr && matching_child != namespace_decl) {
+            fprintf(stderr,
+                    "REX_FRONTEND_INVARIANT[explicit-instantiation-source-"
+                    "scope]: %s=%s source position is contained by two "
+                    "sibling namespace fragments\n",
+                    entity_kind, entity_name.c_str());
+            ROSE_ABORT();
+          }
+          matching_child = namespace_decl;
+        }
+
+        if (matching_child != nullptr) {
+          containing_namespace = matching_child;
+          find_containing_namespace(matching_child);
+        }
+      };
+  find_containing_namespace(translation_unit);
+
+  if (containing_namespace == nullptr) {
+    SgGlobal *global_scope = getGlobalScope();
+    if (global_scope == nullptr) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[explicit-instantiation-source-scope]: "
+              "%s=%s has no exact global source scope\n",
+              entity_kind, entity_name.c_str());
+      ROSE_ABORT();
+    }
+    return global_scope;
+  }
+
+  SgNamespaceDeclarationStatement *sage_namespace =
+      ensureNamespaceDeclaration(containing_namespace);
+  SgNamespaceDefinitionStatement *source_scope =
+      sage_namespace != nullptr ? sage_namespace->get_definition() : nullptr;
+  if (source_scope == nullptr) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[explicit-instantiation-source-scope]: "
+            "%s=%s containing namespace=%s has no exact Sage definition\n",
+            entity_kind, entity_name.c_str(),
+            containing_namespace->getQualifiedNameAsString().c_str());
+    ROSE_ABORT();
+  }
+  Sg_File_Info *scope_start = source_scope->get_startOfConstruct();
+  if (scope_start == nullptr || scope_start->get_line() <= 0 ||
+      scope_start->get_filenameString().empty()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[explicit-instantiation-source-scope]: "
+            "%s=%s containing namespace=%s lacks an exact source position\n",
+            entity_kind, entity_name.c_str(),
+            containing_namespace->getQualifiedNameAsString().c_str());
+    ROSE_ABORT();
+  }
+  return source_scope;
+}
+
+SourceQualification ClangToSageTranslator::exactExpandedDeclaratorQualifier(
+    std::size_t declaration_begin_index, std::size_t name_index,
+    const char *entity_kind, const std::string &entity_name,
+    std::size_t *qualification_begin_index) {
+  if (p_compiler_instance == nullptr || entity_kind == nullptr ||
+      *entity_kind == '\0' || entity_name.empty() ||
+      declaration_begin_index >= name_index ||
+      name_index >= p_expanded_tokens.size()) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[explicit-instantiation-qualification]: "
+            "entity=%s name=%s has malformed expanded bounds [%zu,%zu) of "
+            "%zu\n",
+            entity_kind != nullptr ? entity_kind : "<null>",
+            entity_name.c_str(), declaration_begin_index, name_index,
+            p_expanded_tokens.size());
+    ROSE_ABORT();
+  }
+
+  clang::SourceManager &source_manager =
+      p_compiler_instance->getSourceManager();
+  auto token_spelling = [&](std::size_t index) {
+    if (index >= p_expanded_tokens.size()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[explicit-instantiation-"
+              "qualification]: %s=%s requested token=%zu outside size=%zu\n",
+              entity_kind, entity_name.c_str(), index,
+              p_expanded_tokens.size());
+      ROSE_ABORT();
+    }
+    const ExpandedTokenRecord &record = p_expanded_tokens[index];
+    if (!record.identifier_spelling.empty()) {
+      return record.identifier_spelling;
+    }
+    bool invalid = false;
+    std::string spelling =
+        clang::Lexer::getSpelling(record.token, source_manager,
+                                  p_compiler_instance->getLangOpts(), &invalid);
+    if (invalid || spelling.empty()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[explicit-instantiation-"
+              "qualification]: %s=%s token=%zu kind=%u has no exact "
+              "spelling\n",
+              entity_kind, entity_name.c_str(), index,
+              static_cast<unsigned int>(record.kind));
+      ROSE_ABORT();
+    }
+    spelling.erase(std::remove_if(spelling.begin(), spelling.end(),
+                                  [](unsigned char character) {
+                                    return std::isspace(character) != 0;
+                                  }),
+                   spelling.end());
+    return spelling;
+  };
+
+  auto parse_component = [&](std::size_t component_end)
+      -> std::optional<std::pair<std::size_t, std::string>> {
+    if (component_end < declaration_begin_index ||
+        component_end >= name_index) {
+      return std::nullopt;
+    }
+
+    const clang::tok::TokenKind terminal_kind =
+        p_expanded_tokens[component_end].kind;
+    if (terminal_kind == clang::tok::identifier ||
+        terminal_kind == clang::tok::raw_identifier) {
+      return std::make_pair(component_end, token_spelling(component_end));
+    }
+
+    if (terminal_kind == clang::tok::r_paren) {
+      unsigned int paren_balance = 1;
+      unsigned int square_balance = 0;
+      unsigned int brace_balance = 0;
+      for (std::size_t index = component_end;
+           index-- > declaration_begin_index;) {
+        const clang::tok::TokenKind kind = p_expanded_tokens[index].kind;
+        if (kind == clang::tok::r_square) {
+          ++square_balance;
+        } else if (kind == clang::tok::l_square) {
+          if (square_balance == 0) {
+            return std::nullopt;
+          }
+          --square_balance;
+        } else if (kind == clang::tok::r_brace) {
+          ++brace_balance;
+        } else if (kind == clang::tok::l_brace) {
+          if (brace_balance == 0) {
+            return std::nullopt;
+          }
+          --brace_balance;
+        } else if (square_balance == 0 && brace_balance == 0 &&
+                   kind == clang::tok::r_paren) {
+          ++paren_balance;
+        } else if (square_balance == 0 && brace_balance == 0 &&
+                   kind == clang::tok::l_paren) {
+          if (--paren_balance != 0) {
+            continue;
+          }
+          if (index == declaration_begin_index ||
+              p_expanded_tokens[index - 1].kind != clang::tok::kw_decltype) {
+            return std::nullopt;
+          }
+          const std::size_t component_begin = index - 1;
+          std::string spelling;
+          for (std::size_t token_index = component_begin;
+               token_index <= component_end; ++token_index) {
+            spelling += token_spelling(token_index);
+          }
+          return std::make_pair(component_begin, spelling);
+        }
+      }
+      return std::nullopt;
+    }
+
+    auto template_closer_count = [](clang::tok::TokenKind kind) {
+      switch (kind) {
+      case clang::tok::greater:
+        return 1U;
+      case clang::tok::greatergreater:
+        return 2U;
+      case clang::tok::greatergreatergreater:
+        return 3U;
+      default:
+        return 0U;
+      }
+    };
+    unsigned int angle_balance = template_closer_count(terminal_kind);
+    if (angle_balance == 0) {
+      return std::nullopt;
+    }
+
+    unsigned int paren_balance = 0;
+    unsigned int square_balance = 0;
+    unsigned int brace_balance = 0;
+    for (std::size_t index = component_end;
+         index-- > declaration_begin_index;) {
+      const clang::tok::TokenKind kind = p_expanded_tokens[index].kind;
+      if (kind == clang::tok::r_paren) {
+        ++paren_balance;
+      } else if (kind == clang::tok::l_paren) {
+        if (paren_balance == 0) {
+          return std::nullopt;
+        }
+        --paren_balance;
+      } else if (kind == clang::tok::r_square) {
+        ++square_balance;
+      } else if (kind == clang::tok::l_square) {
+        if (square_balance == 0) {
+          return std::nullopt;
+        }
+        --square_balance;
+      } else if (kind == clang::tok::r_brace) {
+        ++brace_balance;
+      } else if (kind == clang::tok::l_brace) {
+        if (brace_balance == 0) {
+          return std::nullopt;
+        }
+        --brace_balance;
+      } else if (paren_balance == 0 && square_balance == 0 &&
+                 brace_balance == 0) {
+        const unsigned int closer_count = template_closer_count(kind);
+        if (closer_count != 0) {
+          angle_balance += closer_count;
+        } else if (kind == clang::tok::less) {
+          if (angle_balance == 0) {
+            return std::nullopt;
+          }
+          --angle_balance;
+          if (angle_balance != 0) {
+            continue;
+          }
+          if (index == declaration_begin_index) {
+            return std::nullopt;
+          }
+          const std::size_t identifier_index = index - 1;
+          const clang::tok::TokenKind identifier_kind =
+              p_expanded_tokens[identifier_index].kind;
+          if (identifier_kind != clang::tok::identifier &&
+              identifier_kind != clang::tok::raw_identifier) {
+            return std::nullopt;
+          }
+          std::size_t component_begin = identifier_index;
+          if (component_begin > declaration_begin_index &&
+              p_expanded_tokens[component_begin - 1].kind ==
+                  clang::tok::kw_template) {
+            --component_begin;
+          }
+          std::string spelling;
+          for (std::size_t token_index = component_begin;
+               token_index <= component_end; ++token_index) {
+            spelling += token_spelling(token_index);
+          }
+          return std::make_pair(component_begin, spelling);
+        }
+      }
+    }
+    return std::nullopt;
+  };
+
+  SourceQualification qualification;
+  std::size_t cursor = name_index;
+  while (cursor > declaration_begin_index &&
+         p_expanded_tokens[cursor - 1].kind == clang::tok::coloncolon) {
+    const std::size_t colon_index = cursor - 1;
+    if (colon_index == declaration_begin_index) {
+      qualification.global = true;
+      cursor = colon_index;
+      break;
+    }
+    const std::optional<std::pair<std::size_t, std::string>> component =
+        parse_component(colon_index - 1);
+    if (!component || component->second.empty()) {
+      fprintf(
+          stderr,
+          "REX_FRONTEND_INVARIANT[explicit-instantiation-"
+          "qualification]: %s=%s has an unparseable exact qualifier "
+          "component ending at token=%zu kind=%u\n",
+          entity_kind, entity_name.c_str(), colon_index - 1,
+          static_cast<unsigned int>(p_expanded_tokens[colon_index - 1].kind));
+      ROSE_ABORT();
+    }
+    qualification.tokens.insert(qualification.tokens.begin(),
+                                component->second + "::");
+    cursor = component->first;
+  }
+  if (qualification_begin_index != nullptr) {
+    *qualification_begin_index = cursor;
+  }
+  return qualification;
+}
+
 SgScopeStatement *ClangToSageTranslator::resolveScopeFromDeclContext(
     clang::DeclContext *context) {
   context = markClangDeclContextObjectDefined(context);
@@ -15488,6 +16126,15 @@ SgDeclarationStatement *ClangToSageTranslator::resolveTemplateParameterOwner(
                                         template_decl->getTemplateParameters());
                 if (clang::Decl *templated_decl =
                         template_decl->getTemplatedDecl()) {
+                  if (clang::DeclaratorDecl *declarator =
+                          llvm::dyn_cast<clang::DeclaratorDecl>(
+                              templated_decl)) {
+                    for (unsigned i = 0;
+                         i < declarator->getNumTemplateParameterLists(); ++i) {
+                      register_parameter_list(
+                          declarator, declarator->getTemplateParameterList(i));
+                    }
+                  }
                   if (clang::DeclContext *templated_context =
                           llvm::dyn_cast<clang::DeclContext>(templated_decl)) {
                     index_context(templated_context);
@@ -15623,7 +16270,7 @@ SgDeclarationStatement *ClangToSageTranslator::resolveTemplateParameterOwner(
   clang::DeclaratorDecl *written_declarator_owner =
       llvm::dyn_cast_or_null<clang::DeclaratorDecl>(owner_key);
   if (contains_parameter && written_declarator_owner != nullptr &&
-      written_declarator_owner->getDescribedTemplate() == nullptr) {
+      parameters != written_declarator_owner->getDescribedTemplateParams()) {
     std::vector<clang::TemplateDecl *> enclosing_templates;
     for (clang::DeclContext *owner_context = markClangDeclContextObjectDefined(
              written_declarator_owner->getDeclContext());
@@ -16550,6 +17197,172 @@ ClangToSageTranslator::lookupPublishedTemplateTypeParameterFamily(
     ROSE_ABORT();
   }
   return sage_parameter;
+}
+
+clang::TemplateTypeParmDecl *
+ClangToSageTranslator::resolveActiveTemplateTypeParameterSourceCounterpart(
+    const clang::TemplateTypeParmDecl *semantic_parameter,
+    const char *consumer) {
+  auto *parameter = const_cast<clang::TemplateTypeParmDecl *>(
+      llvm::dyn_cast_or_null<clang::TemplateTypeParmDecl>(
+          markClangDeclObjectDefinedByKind(
+              const_cast<clang::TemplateTypeParmDecl *>(semantic_parameter))));
+  if (parameter == nullptr || consumer == nullptr || *consumer == '\0') {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[template-parameter-source-"
+            "counterpart]: consumer=%s parameter=%p is not one exact "
+            "lookup request\n",
+            consumer != nullptr ? consumer : "<null>",
+            static_cast<const void *>(semantic_parameter));
+    ROSE_ABORT();
+  }
+
+  auto *canonical_parameter =
+      llvm::dyn_cast_or_null<clang::TemplateTypeParmDecl>(
+          markClangDeclObjectDefinedByKind(parameter->getCanonicalDecl()));
+  if (canonical_parameter == nullptr) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[template-parameter-source-"
+            "counterpart]: consumer=%s parameter=%p name='%s' has no exact "
+            "canonical family\n",
+            consumer, static_cast<void *>(parameter),
+            parameter->getNameAsString().c_str());
+    ROSE_ABORT();
+  }
+
+  // An out-of-line header can use a distinct Clang parameter declaration for
+  // the source spelling while the TypeLoc still refers to the semantic
+  // declaration family.  The active surface frame records that exact
+  // source/semantic pairing.  Depth and index are only a search filter: Clang
+  // reuses those coordinates for every nested parameter list, so they can
+  // never establish declaration identity by themselves.
+  SgTemplateParameter *expected_semantic_parameter =
+      lookupPublishedTemplateTypeParameterFamily(parameter, consumer,
+                                                 /*require_exact_owner=*/false);
+
+  for (auto frame = p_template_parameter_surface_stack.rbegin();
+       frame != p_template_parameter_surface_stack.rend(); ++frame) {
+    const clang::TemplateParameterList *clang_parameters =
+        markClangTemplateParameterListDefined(
+            const_cast<clang::TemplateParameterList *>(
+                frame->clang_parameters));
+    const SgTemplateParameterPtrList *source_parameters =
+        frame->sage_parameters;
+    const SgTemplateParameterPtrList *semantic_parameters =
+        frame->semantic_parameters;
+    if (clang_parameters == nullptr || source_parameters == nullptr ||
+        source_parameters->size() > clang_parameters->size() ||
+        (semantic_parameters != nullptr &&
+         semantic_parameters->size() != clang_parameters->size())) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[template-parameter-source-"
+              "counterpart-stack]: consumer=%s active Clang/source/semantic "
+              "lists=%p/%p/%p have incompatible cardinality=%u/%zu/%zu\n",
+              consumer, static_cast<const void *>(clang_parameters),
+              static_cast<const void *>(source_parameters),
+              static_cast<const void *>(semantic_parameters),
+              clang_parameters != nullptr ? clang_parameters->size() : 0,
+              source_parameters != nullptr ? source_parameters->size() : 0,
+              semantic_parameters != nullptr ? semantic_parameters->size() : 0);
+      ROSE_ABORT();
+    }
+
+    clang::TemplateTypeParmDecl *frame_match = nullptr;
+    for (unsigned parameter_index = 0;
+         parameter_index < clang_parameters->size(); ++parameter_index) {
+      auto *candidate = const_cast<clang::TemplateTypeParmDecl *>(
+          llvm::dyn_cast_or_null<clang::TemplateTypeParmDecl>(
+              markClangDeclObjectDefinedByKind(
+                  clang_parameters->getParam(parameter_index))));
+      if (candidate == nullptr ||
+          candidate->getDepth() != parameter->getDepth() ||
+          candidate->getIndex() != parameter->getIndex()) {
+        continue;
+      }
+
+      auto *canonical_candidate =
+          llvm::dyn_cast_or_null<clang::TemplateTypeParmDecl>(
+              markClangDeclObjectDefinedByKind(candidate->getCanonicalDecl()));
+      const bool same_clang_family =
+          candidate == parameter || canonical_candidate == canonical_parameter;
+      const bool exact_semantic_pair =
+          expected_semantic_parameter != nullptr &&
+          semantic_parameters != nullptr &&
+          (*semantic_parameters)[parameter_index] ==
+              expected_semantic_parameter;
+      if (!same_clang_family && !exact_semantic_pair) {
+        continue;
+      }
+
+      if (frame_match != nullptr && frame_match != candidate) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[template-parameter-source-"
+                "counterpart-ambiguity]: consumer=%s semantic=%p name='%s' "
+                "depth=%u index=%u resolves to two source declarations="
+                "%p/%p in one active surface\n",
+                consumer, static_cast<void *>(parameter),
+                parameter->getNameAsString().c_str(), parameter->getDepth(),
+                parameter->getIndex(), static_cast<void *>(frame_match),
+                static_cast<void *>(candidate));
+        ROSE_ABORT();
+      }
+      if (parameter_index >= source_parameters->size() ||
+          (*source_parameters)[parameter_index] == nullptr) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[template-parameter-source-"
+                "counterpart-ordering]: consumer=%s source=%p name='%s' "
+                "index=%u was referenced before its exact Sage syntax node "
+                "was constructed\n",
+                consumer, static_cast<void *>(candidate),
+                candidate->getNameAsString().c_str(), parameter_index);
+        ROSE_ABORT();
+      }
+
+      SgTemplateParameter *source_parameter =
+          (*source_parameters)[parameter_index];
+      SgTemplateType *source_type =
+          isSgTemplateType(source_parameter->get_type());
+      const SgTemplateType::canonical_source_identity source_identity =
+          requireCanonicalTemplateParameterSourceIdentity(candidate, consumer);
+      const bool source_identity_matches =
+          source_type != nullptr &&
+          source_type->get_canonical_source_identity().has_value() &&
+          *source_type->get_canonical_source_identity() == source_identity;
+      if (source_parameter->get_parameterType() !=
+              SgTemplateParameter::type_parameter ||
+          source_type == nullptr ||
+          source_type->get_template_parameter() != source_parameter ||
+          source_type->get_template_parameter_depth() !=
+              static_cast<int>(candidate->getDepth()) ||
+          source_type->get_template_parameter_position() !=
+              static_cast<int>(candidate->getIndex()) ||
+          source_type->get_packed() != candidate->isParameterPack() ||
+          !source_identity_matches) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[template-parameter-source-"
+                "counterpart-owner]: consumer=%s semantic=%p source=%p "
+                "name='%s' depth=%u index=%u Sage=%p type=%p "
+                "source-identity=%d source-match=%d does not preserve one "
+                "exact source parameter\n",
+                consumer, static_cast<void *>(parameter),
+                static_cast<void *>(candidate),
+                candidate->getNameAsString().c_str(), candidate->getDepth(),
+                candidate->getIndex(), static_cast<void *>(source_parameter),
+                static_cast<void *>(source_type),
+                source_type != nullptr &&
+                        source_type->get_canonical_source_identity().has_value()
+                    ? 1
+                    : 0,
+                source_identity_matches ? 1 : 0);
+        ROSE_ABORT();
+      }
+      frame_match = candidate;
+    }
+    if (frame_match != nullptr) {
+      return frame_match;
+    }
+  }
+  return nullptr;
 }
 
 std::unique_ptr<SgTemplateParameterPtrList>
@@ -18664,14 +19477,21 @@ build_and_publish_explicit_instantiation_directive(
     DeclAttachmentSession &attachment_session,
     SgDeclarationStatement *declaration, SgScopeStatement *lexical_scope,
     bool do_not_instantiate, const char *context) {
+  const bool declaration_has_explicit_scope =
+      declaration != nullptr && declaration->hasExplicitScope();
+  SgScopeStatement *semantic_scope =
+      declaration_has_explicit_scope ? declaration->get_scope() : nullptr;
   if (declaration == nullptr || lexical_scope == nullptr ||
+      (declaration_has_explicit_scope && semantic_scope == nullptr) ||
       declaration->get_parent() != nullptr) {
     fprintf(
         stderr,
         "REX_FRONTEND_INVARIANT[explicit-instantiation-construction]: "
-        "context=%s declaration=%p lexical-scope=%p parent=%p\n",
+        "context=%s declaration=%p semantic-scope=%p lexical-scope=%p "
+        "parent=%p\n",
         context != nullptr ? context : "<unknown>",
-        static_cast<void *>(declaration), static_cast<void *>(lexical_scope),
+        static_cast<void *>(declaration), static_cast<void *>(semantic_scope),
+        static_cast<void *>(lexical_scope),
         declaration != nullptr ? static_cast<void *>(declaration->get_parent())
                                : nullptr);
     ROSE_ABORT();
@@ -18695,8 +19515,19 @@ build_and_publish_explicit_instantiation_directive(
   // that exact parent/list edge before any scope validation occurs.
   publish_fresh_decl_in_scope_child_list(attachment_session, directive,
                                          lexical_scope, context);
+  // Explicitly scoped declarations retain their independently established
+  // semantic scope after the lexical owner edge is complete. Structurally
+  // scoped variable declarations derive this lexical scope from the directive;
+  // their initialized names retain the distinct semantic symbol scope.
+  if (declaration_has_explicit_scope) {
+    declaration->set_scope(semantic_scope);
+  }
   if (directive->get_declaration() != declaration ||
       declaration->get_parent() != directive ||
+      (declaration_has_explicit_scope &&
+       declaration->get_scope() != semantic_scope) ||
+      (!declaration_has_explicit_scope &&
+       declaration->get_scope() != lexical_scope) ||
       directive->get_parent() != lexical_scope ||
       directive->get_scope() != lexical_scope ||
       !is_decl_attached_to_scope_child_list(attachment_session, lexical_scope,
@@ -19167,6 +19998,7 @@ static void set_declaration_scope_preserving_auxiliary_ownership(
   if (old_scope == new_scope) {
     return;
   }
+  SgSymbol *declaration_symbol = declaration->get_symbol_from_symbol_table();
   SgAuxiliaryDeclarationList *container =
       isSgAuxiliaryDeclarationList(declaration->get_parent());
   if (container == nullptr) {
@@ -19186,6 +20018,29 @@ static void set_declaration_scope_preserving_auxiliary_ownership(
             declaration->class_name().c_str());
     ROSE_ABORT();
   }
+  SgSymbolTable *old_symbol_table = old_owner->get_symbol_table();
+  SgSymbolTable *new_symbol_table = new_scope->get_symbol_table();
+  SgSymbolTable *declaration_symbol_table = isSgSymbolTable(
+      declaration_symbol != nullptr ? declaration_symbol->get_parent()
+                                    : nullptr);
+  if (declaration_symbol != nullptr &&
+      (old_symbol_table == nullptr || new_symbol_table == nullptr ||
+       (declaration_symbol_table != old_symbol_table &&
+        declaration_symbol_table != new_symbol_table) ||
+       !symbol_present_in_table(declaration_symbol_table,
+                                declaration_symbol))) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[semantic-declaration-symbol-scope]: "
+            "context=%s declaration=%p type=%s symbol=%p table=%p old=%p "
+            "new=%p has no exact migratable symbol owner\n",
+            context != nullptr ? context : "<unknown>",
+            static_cast<void *>(declaration), declaration->class_name().c_str(),
+            static_cast<void *>(declaration_symbol),
+            static_cast<void *>(declaration_symbol_table),
+            static_cast<void *>(old_symbol_table),
+            static_cast<void *>(new_symbol_table));
+    ROSE_ABORT();
+  }
   if (!SageBuilder::detachAuxiliaryDeclaration(old_owner, declaration) ||
       declaration->get_parent() != nullptr) {
     fprintf(stderr,
@@ -19195,6 +20050,43 @@ static void set_declaration_scope_preserving_auxiliary_ownership(
             static_cast<void *>(declaration),
             declaration->class_name().c_str());
     ROSE_ABORT();
+  }
+  declaration->set_scope(new_scope);
+  if (declaration->get_scope() != new_scope) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[semantic-declaration-scope]: context=%s "
+            "declaration=%p type=%s did not acquire target scope=%p/%s\n",
+            context != nullptr ? context : "<unknown>",
+            static_cast<void *>(declaration), declaration->class_name().c_str(),
+            static_cast<void *>(new_scope), new_scope->class_name().c_str());
+    ROSE_ABORT();
+  }
+  if (declaration_symbol != nullptr &&
+      declaration_symbol_table == old_symbol_table) {
+    old_owner->remove_symbol(declaration_symbol);
+    if (symbol_present_in_table(old_symbol_table, declaration_symbol) ||
+        declaration_symbol->get_parent() != nullptr) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[semantic-declaration-symbol-scope]: "
+              "context=%s declaration=%p type=%s symbol=%p remained in its "
+              "old scope after exact removal\n",
+              context != nullptr ? context : "<unknown>",
+              static_cast<void *>(declaration),
+              declaration->class_name().c_str(),
+              static_cast<void *>(declaration_symbol));
+      ROSE_ABORT();
+    }
+    SgName symbol_key = declaration_symbol->get_name();
+    if (SgFunctionDeclaration *function =
+            isSgFunctionDeclaration(declaration)) {
+      symbol_key = function->get_symbol_table_key();
+    }
+    new_scope->insert_symbol(symbol_key, declaration_symbol);
+  }
+  if (declaration_symbol != nullptr) {
+    require_symbol_in_exact_scope(
+        declaration_symbol, new_scope,
+        "set-declaration-scope-preserving-auxiliary-ownership");
   }
   SageBuilder::attachAuxiliaryDeclaration(new_scope, declaration);
 }
@@ -23338,16 +24230,54 @@ static void require_symbol_in_declaration_scope(SgSymbol *symbol,
   require_symbol_in_exact_scope(symbol, owner_scope, context);
 }
 
-static bool isSourceWrittenVariableTemplateSpecialization(
+static bool variableTemplateSpecializationHasSourceWrittenShell(
     const clang::VarTemplateSpecializationDecl *specialization) {
   if (specialization == nullptr) {
     return false;
   }
   const clang::TemplateSpecializationKind kind =
       specialization->getTemplateSpecializationKind();
-  return kind == clang::TSK_ExplicitSpecialization ||
-         kind == clang::TSK_ExplicitInstantiationDeclaration ||
-         kind == clang::TSK_ExplicitInstantiationDefinition;
+  if (kind == clang::TSK_ExplicitSpecialization) {
+    return true;
+  }
+  if (kind != clang::TSK_ExplicitInstantiationDeclaration &&
+      kind != clang::TSK_ExplicitInstantiationDefinition) {
+    return false;
+  }
+
+  // Clang propagates an explicit-instantiation kind and the written template
+  // argument locations to the semantic member declaration created inside an
+  // instantiated class. Only the later namespace-scope redeclaration owns the
+  // explicit-instantiation syntax. C++ requires that syntax at namespace
+  // scope, so its lexical DeclContext is exact ownership evidence; a record
+  // lexical context identifies the semantic member, regardless of its copied
+  // source anchors or specialization kind.
+  const clang::DeclContext *lexical_context =
+      markClangDeclContextObjectDefined(readClangApiValueDefined(
+          [&]() { return specialization->getLexicalDeclContext(); }));
+  while (lexical_context != nullptr) {
+    const clang::Decl *lexical_decl = markClangDeclObjectDefinedByKind(
+        clang::Decl::castFromDeclContext(lexical_context));
+    if (llvm::isa<clang::LinkageSpecDecl>(lexical_decl) ||
+        llvm::isa<clang::ExportDecl>(lexical_decl)) {
+      lexical_context =
+          markClangDeclContextObjectDefined(readClangApiValueDefined(
+              [&]() { return lexical_context->getParent(); }));
+      continue;
+    }
+    return readClangApiValueDefined([&]() {
+      return lexical_context->isTranslationUnit() ||
+             lexical_context->isNamespace();
+    });
+  }
+  return false;
+}
+
+static bool variableTemplateSpecializationHasSourceWrittenInitializer(
+    const clang::VarTemplateSpecializationDecl *specialization) {
+  return specialization != nullptr &&
+         specialization->getTemplateSpecializationKind() ==
+             clang::TSK_ExplicitSpecialization;
 }
 
 static SgClassDeclaration *
@@ -23985,6 +24915,36 @@ isFrontendSupportNamespace(const clang::NamespaceDecl *namespace_decl,
   return true;
 }
 
+static bool
+isClangSynthesizedNamespace(const clang::NamespaceDecl *namespace_decl) {
+  if (namespace_decl == nullptr || namespace_decl->isFromASTFile() ||
+      !namespace_decl->isImplicit()) {
+    return false;
+  }
+
+  const clang::SourceLocation begin = namespace_decl->getBeginLoc();
+  const clang::SourceLocation name = namespace_decl->getLocation();
+  const clang::SourceLocation close = namespace_decl->getRBraceLoc();
+  const clang::DeclContext *semantic = namespace_decl->getDeclContext();
+  const clang::DeclContext *lexical = namespace_decl->getLexicalDeclContext();
+  const clang::NamespaceDecl *canonical = namespace_decl->getCanonicalDecl();
+  if (begin.isValid() || name.isValid() || close.isValid() ||
+      semantic == nullptr || lexical == nullptr ||
+      !semantic->isTranslationUnit() || !lexical->isTranslationUnit() ||
+      canonical != namespace_decl ||
+      namespace_decl->getPreviousDecl() != nullptr ||
+      namespace_decl->isAnonymousNamespace() ||
+      namespace_decl->getIdentifier() == nullptr) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[namespace-clang-synthesized-owner]: "
+            "implicit namespace=%s does not identify one fresh, locationless "
+            "translation-unit semantic namespace\n",
+            namespace_decl->getQualifiedNameAsString().c_str());
+    ROSE_ABORT();
+  }
+  return true;
+}
+
 static SgScopeStatement *validateImportedNamespaceOwnership(
     const clang::NamespaceDecl *clang_namespace,
     SgNamespaceDeclarationStatement *namespace_decl, const char *context) {
@@ -24343,14 +25303,28 @@ static void bind_lexical_hidden_friend_decl_to_canonical_chain(
 
 static bool
 clangFunctionDeclHasDynamicNoneExceptionSpec(const clang::FunctionDecl *decl) {
-  if (decl == nullptr) {
+  clang::FunctionDecl *defined_decl = markClangFunctionTemplateStateDefined(
+      const_cast<clang::FunctionDecl *>(decl));
+  if (defined_decl == nullptr) {
     return false;
   }
 
+  const clang::QualType function_type = markClangFunctionTypeBoundaryDefined(
+      readClangApiValueDefined([&]() { return defined_decl->getType(); }));
+  const clang::Type *function_type_ptr =
+      markClangTypeObjectDefinedByClass(function_type.getTypePtrOrNull());
   const clang::FunctionProtoType *proto_type =
-      decl->getType()->getAs<clang::FunctionProtoType>();
-  return proto_type != nullptr &&
-         proto_type->getExceptionSpecType() == clang::EST_DynamicNone;
+      function_type_ptr != nullptr
+          ? llvm::dyn_cast_or_null<clang::FunctionProtoType>(
+                markClangTypeObjectDefinedByClass(
+                    readClangApiValueDefined([&]() {
+                      return function_type_ptr
+                          ->getAs<clang::FunctionProtoType>();
+                    })))
+          : nullptr;
+  return proto_type != nullptr && readClangApiValueDefined([&]() {
+                                    return proto_type->getExceptionSpecType();
+                                  }) == clang::EST_DynamicNone;
 }
 
 static void
@@ -25359,14 +26333,13 @@ void ClangToSageTranslator::populateClassDefinition(
     }
 
     if (auto *class_template = llvm::dyn_cast<clang::ClassTemplateDecl>(decl)) {
-      return markClangSpecificDeclDefined(
-          class_template->getInstantiatedFromMemberTemplate());
+      return clangTemplateInstantiatedFromMemberTemplateDefined(class_template);
     }
 
     if (auto *variable_template =
             llvm::dyn_cast<clang::VarTemplateDecl>(decl)) {
-      return markClangSpecificDeclDefined(
-          variable_template->getInstantiatedFromMemberTemplate());
+      return clangTemplateInstantiatedFromMemberTemplateDefined(
+          variable_template);
     }
 
     auto *function_template = llvm::dyn_cast<clang::FunctionTemplateDecl>(decl);
@@ -25377,7 +26350,7 @@ void ClangToSageTranslator::populateClassDefinition(
     }
 
     if (clang::FunctionTemplateDecl *member_template =
-            clangFunctionTemplateInstantiatedFromMemberTemplateDefined(
+            clangTemplateInstantiatedFromMemberTemplateDefined(
                 function_template)) {
       return member_template;
     }
@@ -29360,6 +30333,7 @@ void ClangToSageTranslator::materializeCapturedOpenMPReferencedEnumConstants(
 }
 
 SgNode *ClangToSageTranslator::TraverseOnDemand(clang::Decl *decl) {
+  decl = markClangDeclObjectDefinedByKind(decl);
   if (decl == nullptr) {
     return nullptr;
   }
@@ -29381,9 +30355,8 @@ SgNode *ClangToSageTranslator::TraverseOnDemand(clang::Decl *decl) {
         markClangDeclContextObjectDefined(
             class_template_decl->getLexicalDeclContext()) == owner_context;
     const bool source_member_template =
-        markClangSpecificDeclDefined(
-            class_template_decl->getInstantiatedFromMemberTemplate()) ==
-        nullptr;
+        clangTemplateInstantiatedFromMemberTemplateDefined(
+            class_template_decl) == nullptr;
     bool exact_owner_decl_context_child = false;
     if (owner != nullptr) {
       for (clang::Decl *member : owner->decls()) {
@@ -29617,7 +30590,7 @@ SgNode *ClangToSageTranslator::TraverseOnDemand(clang::Decl *decl) {
     auto exact_function = p_decl_translation_map.find(decl);
     const bool is_instantiated_member_function_template =
         requested_function_template != nullptr &&
-        clangFunctionTemplateInstantiatedFromMemberTemplateDefined(
+        clangTemplateInstantiatedFromMemberTemplateDefined(
             requested_function_template) != nullptr;
     if (requested_function_template != nullptr &&
         !is_instantiated_member_function_template &&
@@ -30707,7 +31680,7 @@ ClangToSageTranslator::exactClassDefinitionOwnerForFunctionTranslation(
           markClangSpecificDeclDefined(readClangApiValueDefined(
               [&]() { return origin->getDescribedFunctionTemplate(); }));
       if (clang::FunctionTemplateDecl *member_template =
-              clangFunctionTemplateInstantiatedFromMemberTemplateDefined(
+              clangTemplateInstantiatedFromMemberTemplateDefined(
                   described_template)) {
         enqueue_function_origin(
             markClangSpecificDeclDefined(readClangApiValueDefined(
@@ -31232,7 +32205,8 @@ SgNode *ClangToSageTranslator::lookupCachedTranslationForTraverse(
         return false;
       }
       const clang::ClassTemplateSpecializationDecl *enclosing_specialization =
-          find_enclosing_class_template_specialization(method->getParent());
+          find_enclosing_class_template_specialization(
+              clangCXXMethodParentDefined(method));
       return enclosing_specialization != nullptr &&
              is_template_instantiation_kind(
                  enclosing_specialization->getTemplateSpecializationKind());
@@ -32048,7 +33022,7 @@ SgNode *ClangToSageTranslator::lookupCachedTranslationForTraverse(
             llvm::dyn_cast<clang::VarTemplateSpecializationDecl>(var_decl);
     const bool semantic_variable_template_instantiation =
         variable_template_specialization != nullptr &&
-        !isSourceWrittenVariableTemplateSpecialization(
+        !variableTemplateSpecializationHasSourceWrittenShell(
             variable_template_specialization);
     if (!var_decl->isImplicit() &&
         clangDeclHasNonBuiltinSourceLocation(p_compiler_instance, var_decl) &&
@@ -32984,16 +33958,19 @@ translate_decl:
       clang::RedeclarableTemplateDecl *member_template_pattern = nullptr;
       if (clang::ClassTemplateDecl *clang_class_template =
               llvm::dyn_cast<clang::ClassTemplateDecl>(decl)) {
-        member_template_pattern = markClangSpecificDeclDefined(
-            clang_class_template->getInstantiatedFromMemberTemplate());
+        member_template_pattern =
+            clangTemplateInstantiatedFromMemberTemplateDefined(
+                clang_class_template);
       } else if (clang::FunctionTemplateDecl *clang_function_template =
                      llvm::dyn_cast<clang::FunctionTemplateDecl>(decl)) {
-        member_template_pattern = markClangSpecificDeclDefined(
-            clang_function_template->getInstantiatedFromMemberTemplate());
+        member_template_pattern =
+            clangTemplateInstantiatedFromMemberTemplateDefined(
+                clang_function_template);
       } else if (clang::VarTemplateDecl *clang_variable_template =
                      llvm::dyn_cast<clang::VarTemplateDecl>(decl)) {
-        member_template_pattern = markClangSpecificDeclDefined(
-            clang_variable_template->getInstantiatedFromMemberTemplate());
+        member_template_pattern =
+            clangTemplateInstantiatedFromMemberTemplateDefined(
+                clang_variable_template);
       }
       const bool inherited_member_template_alias =
           member_template_pattern != nullptr;
@@ -33988,13 +34965,16 @@ bool ClangToSageTranslator::declarationsShareSourceDeclaration(
       p_compiler_instance == nullptr) {
     return false;
   }
+  previous = markClangDeclObjectDefinedByKind(previous);
+  current = markClangDeclObjectDefinedByKind(current);
   // Implicit declarations can inherit a source range from the declaration
   // that caused Clang to synthesize them.  Constructor-derived deduction
   // guides are a common example: multiple implicit FunctionTemplateDecls can
   // point at one constructor whose initializer contains commas.  They have no
   // independent lexical grammar surface and therefore cannot participate in a
   // source declaration group.
-  if (previous->isImplicit() || current->isImplicit()) {
+  if (readClangApiValueDefined([&]() { return previous->isImplicit(); }) ||
+      readClangApiValueDefined([&]() { return current->isImplicit(); })) {
     return false;
   }
 
@@ -34025,8 +35005,10 @@ bool ClangToSageTranslator::declarationsShareSourceDeclaration(
     return sm.getFileLoc(location);
   };
 
-  const clang::SourceLocation previous_raw_begin = previous->getBeginLoc();
-  const clang::SourceLocation current_raw_begin = current->getBeginLoc();
+  const clang::SourceLocation previous_raw_begin =
+      readClangApiValueDefined([&]() { return previous->getBeginLoc(); });
+  const clang::SourceLocation current_raw_begin =
+      readClangApiValueDefined([&]() { return current->getBeginLoc(); });
   const bool macro_surface =
       previous_raw_begin.isMacroID() || current_raw_begin.isMacroID();
   if (macro_surface &&
@@ -34056,12 +35038,16 @@ bool ClangToSageTranslator::declarationsShareSourceDeclaration(
     }
   }
 
+  const clang::SourceLocation previous_raw_end =
+      readClangApiValueDefined([&]() { return previous->getEndLoc(); });
+  const clang::SourceLocation current_raw_name =
+      readClangApiValueDefined([&]() { return current->getLocation(); });
   clang::SourceLocation previous_end =
-      macro_surface ? sm.getFileLoc(sm.getSpellingLoc(previous->getEndLoc()))
-                    : expansion_file_location(previous->getEndLoc());
+      macro_surface ? sm.getFileLoc(sm.getSpellingLoc(previous_raw_end))
+                    : expansion_file_location(previous_raw_end);
   clang::SourceLocation current_name =
-      macro_surface ? sm.getFileLoc(sm.getSpellingLoc(current->getLocation()))
-                    : expansion_file_location(current->getLocation());
+      macro_surface ? sm.getFileLoc(sm.getSpellingLoc(current_raw_name))
+                    : expansion_file_location(current_raw_name);
   if (!previous_end.isValid() || !current_name.isValid() ||
       !sm.isWrittenInSameFile(previous_end, current_name) ||
       !sm.isBeforeInTranslationUnit(previous_end, current_name)) {
@@ -34160,16 +35146,19 @@ ClangToSageTranslator::prepareExactSourceDeclarationGroup(
   }
 
   clang::Decl *next_member =
-      markClangDeclObjectDefinedByKind(first_member->getNextDeclInContext());
+      markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+          [&]() { return first_member->getNextDeclInContext(); }));
   const bool shares_visible_source_declaration =
       declarationsShareSourceDeclaration(first_member, next_member);
+  const clang::SourceLocation first_member_end =
+      readClangApiValueDefined([&]() { return first_member->getEndLoc(); });
   bool owns_inactive_declarator_tail = false;
   if (!shares_visible_source_declaration &&
       requested_role == DeclarationGroupRole::source_lexical &&
       supported_member(first_member) &&
       p_sage_preprocessor_recorder != nullptr &&
-      p_compiler_instance != nullptr && first_member->getEndLoc().isValid() &&
-      !first_member->getEndLoc().isMacroID()) {
+      p_compiler_instance != nullptr && first_member_end.isValid() &&
+      !first_member_end.isMacroID()) {
     clang::FunctionDecl *function =
         llvm::dyn_cast<clang::FunctionDecl>(first_member);
     const bool plain_declarator =
@@ -34179,7 +35168,7 @@ ClangToSageTranslator::prepareExactSourceDeclarationGroup(
           p_compiler_instance->getSourceManager();
       const clang::LangOptions &lang_opts = p_compiler_instance->getLangOpts();
       clang::SourceLocation after_member = clang::Lexer::getLocForEndOfToken(
-          first_member->getEndLoc(), 0, source_manager, lang_opts);
+          first_member_end, 0, source_manager, lang_opts);
       after_member = source_manager.getFileLoc(after_member);
       clang::Token next_token;
       if (after_member.isValid() &&
@@ -34187,9 +35176,9 @@ ClangToSageTranslator::prepareExactSourceDeclarationGroup(
                                      lang_opts, /*IgnoreWhiteSpace=*/true) &&
           next_token.is(clang::tok::hash)) {
         clang::SourceLocation begin =
-            source_manager.getFileLoc(first_member->getBeginLoc());
-        clang::SourceLocation end =
-            source_manager.getFileLoc(first_member->getEndLoc());
+            source_manager.getFileLoc(readClangApiValueDefined(
+                [&]() { return first_member->getBeginLoc(); }));
+        clang::SourceLocation end = source_manager.getFileLoc(first_member_end);
         clang::SourceRange provisional_group =
             requireDeclarationGroupTrailingSemicolon(
                 clang::SourceRange(begin, end), source_manager, lang_opts,
@@ -34926,6 +35915,30 @@ SgVariableDeclaration *
 ClangToSageTranslator::requireExactVariableDeclaratorSurface(
     clang::Decl *clang_decl, SgNode *sage_node, const char *context) const {
   SgVariableDeclaration *surface = isSgVariableDeclaration(sage_node);
+  if (SgTemplateInstantiationDirectiveStatement *directive =
+          isSgTemplateInstantiationDirectiveStatement(sage_node)) {
+    clang::VarTemplateSpecializationDecl *specialization =
+        llvm::dyn_cast_or_null<clang::VarTemplateSpecializationDecl>(
+            clang_decl);
+    const clang::TemplateSpecializationKind kind =
+        specialization != nullptr
+            ? specialization->getTemplateSpecializationKind()
+            : clang::TSK_Undeclared;
+    surface = isSgVariableDeclaration(directive->get_declaration());
+    if ((kind != clang::TSK_ExplicitInstantiationDeclaration &&
+         kind != clang::TSK_ExplicitInstantiationDefinition) ||
+        surface == nullptr || surface->get_parent() != directive ||
+        directive->get_declaration() != surface) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[variable-declarator-identity]: %s "
+              "directive=%p does not exactly wrap the explicit variable-"
+              "template instantiation for Clang declaration=%p/%s\n",
+              context != nullptr ? context : "<unknown>",
+              static_cast<void *>(directive), static_cast<void *>(clang_decl),
+              clang_decl != nullptr ? clang_decl->getDeclKindName() : "<null>");
+      ROSE_ABORT();
+    }
+  }
   const bool is_variable_declarator =
       llvm::isa_and_nonnull<clang::VarDecl>(clang_decl) ||
       llvm::isa_and_nonnull<clang::FieldDecl>(clang_decl);
@@ -34946,14 +35959,14 @@ ClangToSageTranslator::requireExactVariableDeclaratorSurface(
   }
 
   auto mapping = p_decl_translation_map.find(clang_decl);
-  if (mapping == p_decl_translation_map.end() || mapping->second != surface) {
+  if (mapping == p_decl_translation_map.end() || mapping->second != sage_node) {
     fprintf(stderr,
             "REX_FRONTEND_INVARIANT[variable-declarator-identity]: "
             "%s Clang declaration=%p/%s has no stable exact Sage surface "
-            "mapping (surface=%p mapped=%p)\n",
+            "mapping (surface=%p owner=%p mapped=%p)\n",
             context != nullptr ? context : "<unknown>",
             static_cast<void *>(clang_decl), clang_decl->getDeclKindName(),
-            static_cast<void *>(surface),
+            static_cast<void *>(surface), static_cast<void *>(sage_node),
             mapping != p_decl_translation_map.end()
                 ? static_cast<void *>(mapping->second)
                 : nullptr);
@@ -35109,10 +36122,24 @@ bool ClangToSageTranslator::TraverseForDeclContext(
           llvm::dyn_cast_or_null<clang::NamespaceDecl>(
               markClangDeclObjectDefinedByKind(
                   llvm::dyn_cast_or_null<clang::Decl>(decl_context)));
+      const clang::NamespaceDecl *range_ns = nullptr;
+      if (current_ns != nullptr) {
+        if (current_ns->getRBraceLoc().isValid()) {
+          range_ns = current_ns;
+        } else {
+          for (clang::NamespaceDecl *candidate : current_ns->redecls()) {
+            candidate = markClangSpecificDeclDefined(candidate);
+            if (candidate != nullptr && candidate->getRBraceLoc().isValid()) {
+              range_ns = candidate;
+              break;
+            }
+          }
+        }
+      }
       const clang::DeclContext *lexical_ctx = readClangApiValueDefined(
           [&]() { return decl->getLexicalDeclContext(); });
       lexical_ctx = markClangDeclContextObjectDefined(lexical_ctx);
-      if (current_ns != nullptr) {
+      if (range_ns != nullptr) {
         bool belongs_to_current_fragment = false;
         if (const clang::NamespaceDecl *lexical_ns =
                 llvm::dyn_cast_or_null<clang::NamespaceDecl>(lexical_ctx)) {
@@ -35149,10 +36176,10 @@ bool ClangToSageTranslator::TraverseForDeclContext(
             // token stream can: membership is exactly the strict interval
             // between this reopening's two brace occurrences.
             const NamespaceSourceRanges namespace_ranges =
-                namespaceSourceRanges(current_ns);
+                namespaceSourceRanges(range_ns);
             const std::string occurrence_context =
                 "namespace declaration member " +
-                current_ns->getQualifiedNameAsString();
+                range_ns->getQualifiedNameAsString();
             const unsigned int declaration_order =
                 requireExpandedTokenSourceOrder(decl_loc,
                                                 occurrence_context.c_str(),
@@ -35167,7 +36194,7 @@ bool ClangToSageTranslator::TraverseForDeclContext(
                     "source declaration=%p/%s in logical namespace=%s has "
                     "no exact declaration occurrence\n",
                     static_cast<void *>(decl), decl->getDeclKindName(),
-                    current_ns->getQualifiedNameAsString().c_str());
+                    range_ns->getQualifiedNameAsString().c_str());
             ROSE_ABORT();
           }
         } else {
@@ -36281,7 +37308,7 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl *decl, SgNode **node) {
   std::cerr << "ClangToSageTranslator::VisitDecl" << std::endl;
 #endif
   decl = markClangDeclObjectDefinedByKind(decl);
-  markClangDeclAttrsDefined(decl);
+  const ClangDeclAttrSnapshot decl_attributes = clangDeclAttrsDefined(decl);
   if (*node == nullptr) {
 #if DEBUG_VISIT_DECL
     const char *kind_name = decl ? decl->getDeclKindName() : "Unknown";
@@ -36366,7 +37393,7 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl *decl, SgNode **node) {
     bool source_written_variable_template_specialization = false;
     if (variable_template_specialization != nullptr) {
       source_written_variable_template_specialization =
-          isSourceWrittenVariableTemplateSpecialization(
+          variableTemplateSpecializationHasSourceWrittenShell(
               variable_template_specialization);
     }
     const bool semantic_variable_template_instantiation =
@@ -37054,8 +38081,9 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl *decl, SgNode **node) {
     };
 
     std::optional<SageVisibility> source_visibility;
-    for (const clang::VisibilityAttr *visibility_attr :
-         decl->specific_attrs<clang::VisibilityAttr>()) {
+    for (const clang::Attr *attribute : decl_attributes) {
+      const clang::VisibilityAttr *visibility_attr =
+          llvm::dyn_cast_or_null<clang::VisibilityAttr>(attribute);
       if (visibility_attr == nullptr || visibility_attr->isInherited() ||
           visibility_attr->isImplicit()) {
         continue;
@@ -37087,8 +38115,9 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl *decl, SgNode **node) {
     }
 
     std::optional<SageVisibility> source_type_visibility;
-    for (const clang::TypeVisibilityAttr *visibility_attr :
-         decl->specific_attrs<clang::TypeVisibilityAttr>()) {
+    for (const clang::Attr *attribute : decl_attributes) {
+      const clang::TypeVisibilityAttr *visibility_attr =
+          llvm::dyn_cast_or_null<clang::TypeVisibilityAttr>(attribute);
       if (visibility_attr == nullptr || visibility_attr->isInherited() ||
           visibility_attr->isImplicit()) {
         continue;
@@ -37155,9 +38184,12 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl *decl, SgNode **node) {
             p_exact_qualified_namespace_source_declarations.count(
                 source_declaration) == 1;
         const clang::FunctionDecl *source_function =
-            llvm::dyn_cast<clang::FunctionDecl>(decl);
+            llvm::dyn_cast_or_null<clang::FunctionDecl>(
+                markClangDeclObjectDefinedByKind(decl));
         const bool exact_c_language_linkage_surface =
-            source_function != nullptr && source_function->isExternC() &&
+            source_function != nullptr && readClangApiValueDefined([&]() {
+              return source_function->isExternC();
+            }) &&
             (isSgNamespaceDefinitionStatement(semantic_scope) != nullptr ||
              isSgGlobal(semantic_scope) != nullptr) &&
             (isSgNamespaceDefinitionStatement(lexical_scope) != nullptr ||
@@ -37174,22 +38206,11 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl *decl, SgNode **node) {
   if (decl != nullptr) {
     int max_alignment = -1;
     bool has_aligned_attr = false;
-    const bool has_attrs =
-        readClangApiValueDefined([&]() { return decl->hasAttrs(); });
-    if (has_attrs) {
-#if ROSE_USE_VALGRIND
-      markClangDeclAttrsDefined(decl);
-      VALGRIND_DISABLE_ERROR_REPORTING;
-#endif
-      const clang::AttrVec &attrs = decl->getAttrs();
-#if ROSE_USE_VALGRIND
-      VALGRIND_ENABLE_ERROR_REPORTING;
-#endif
-      const size_t attr_count =
-          readClangApiValueDefined([&]() { return attrs.size(); });
+    if (!decl_attributes.empty()) {
+      const size_t attr_count = decl_attributes.size();
       for (size_t attr_index = 0; attr_index < attr_count; ++attr_index) {
-        const clang::Attr *attr = markClangAstObjectDefined(
-            readClangApiValueDefined([&]() { return attrs[attr_index]; }));
+        const clang::Attr *attr =
+            markClangAstObjectDefined(decl_attributes[attr_index]);
         const clang::AlignedAttr *aligned_attr =
             llvm::dyn_cast_or_null<clang::AlignedAttr>(attr);
         aligned_attr = markClangAstObjectDefined(aligned_attr);
@@ -37197,12 +38218,16 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl *decl, SgNode **node) {
           continue;
         }
         has_aligned_attr = true;
-        if (aligned_attr == nullptr || p_compiler_instance == nullptr) {
-          continue;
+        if (p_compiler_instance == nullptr) {
+          fprintf(stderr,
+                  "REX_FRONTEND_INVARIANT[aligned-attribute-context]: "
+                  "declaration=%p/%s has an aligned attribute without an "
+                  "active Clang compiler instance\n",
+                  static_cast<const void *>(decl), decl->getDeclKindName());
+          ROSE_ABORT();
         }
         clang::ASTContext &ast_context = p_compiler_instance->getASTContext();
 
-        int alignment_candidate = -1;
         if (readClangApiValueDefined(
                 [&]() { return aligned_attr->isAlignmentDependent(); }) ||
             readClangApiValueDefined(
@@ -37210,50 +38235,38 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl *decl, SgNode **node) {
           continue;
         }
 
-        if (readClangApiValueDefined(
-                [&]() { return aligned_attr->isAlignmentExpr(); })) {
-          const clang::Expr *alignment_expr =
-              markClangAstObjectDefined(readClangApiValueDefined(
-                  [&]() { return aligned_attr->getAlignmentExpr(); }));
-          if (alignment_expr != nullptr) {
-            alignment_expr = markClangAstObjectDefined(readClangApiValueDefined(
-                [&]() { return alignment_expr->IgnoreParenImpCasts(); }));
-            if (readClangApiValueDefined([&]() {
-                  return alignment_expr->isEvaluatable(ast_context);
-                })) {
-              const llvm::APSInt value = readClangApiValueDefined([&]() {
-                return alignment_expr->EvaluateKnownConstInt(ast_context);
-              });
-              if (value.isNonNegative()) {
-                const int64_t alignment_value_64 = value.getSExtValue();
-                if (alignment_value_64 <= std::numeric_limits<int>::max()) {
-                  alignment_candidate = static_cast<int>(alignment_value_64);
-                }
-              }
-            }
-          }
-        } else {
-          clang::TypeSourceInfo *alignment_type =
-              markClangAstObjectDefined(aligned_attr->getAlignmentType());
-          if (alignment_type != nullptr) {
-            const clang::QualType qual_type = alignment_type->getType();
-            markClangValueDefined(qual_type);
-            markClangTypeObjectDefinedByClass(qual_type.getTypePtrOrNull());
-            if (!qual_type.isNull() && !qual_type->isDependentType() &&
-                !qual_type->isInstantiationDependentType()) {
-              const clang::CharUnits align_chars =
-                  ast_context.getTypeAlignInChars(qual_type);
-              if (!align_chars.isZero()) {
-                const auto quantity = align_chars.getQuantity();
-                if (quantity > 0 &&
-                    quantity <= static_cast<decltype(quantity)>(
-                                    std::numeric_limits<int>::max())) {
-                  alignment_candidate = static_cast<int>(quantity);
-                }
-              }
-            }
-          }
+        // Consume Clang Sema's exact semantic result.  In particular, type
+        // alignments may already have been normalized and cached during
+        // template instantiation; recomputing them here bypasses those
+        // semantics and can query incompletely initialized lazy AST state.
+        const unsigned alignment_bits = aligned_attr->getAlignment(ast_context);
+        // Alignment is a target-data-model quantity.  Querying
+        // ASTContext::getCharWidth() sizes ASTContext::CharTy and therefore
+        // enters lazy type-layout state that is unrelated to this conversion.
+        // Use the target's character width directly, just as Clang's target
+        // layout does when interpreting an alignment expressed in bits.
+        const unsigned char_width = ast_context.getTargetInfo().getCharWidth();
+        if (char_width == 0 || alignment_bits % char_width != 0) {
+          fprintf(stderr,
+                  "REX_FRONTEND_INVARIANT[aligned-attribute-units]: "
+                  "declaration=%p/%s has alignment=%u bits with an invalid "
+                  "Clang character width=%u\n",
+                  static_cast<const void *>(decl), decl->getDeclKindName(),
+                  alignment_bits, char_width);
+          ROSE_ABORT();
         }
+        const unsigned alignment_bytes = alignment_bits / char_width;
+        if (alignment_bytes >
+            static_cast<unsigned>(std::numeric_limits<int>::max())) {
+          fprintf(stderr,
+                  "REX_FRONTEND_INVARIANT[aligned-attribute-range]: "
+                  "declaration=%p/%s has alignment=%u bytes, which exceeds "
+                  "the Sage alignment field range\n",
+                  static_cast<const void *>(decl), decl->getDeclKindName(),
+                  alignment_bytes);
+          ROSE_ABORT();
+        }
+        const int alignment_candidate = static_cast<int>(alignment_bytes);
 
         if (alignment_candidate > max_alignment) {
           max_alignment = alignment_candidate;
@@ -37300,10 +38313,10 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl *decl, SgNode **node) {
         init_name->set_gnu_attribute_alignment(
             normalize_zero_alignment(init_name->get_gnu_attribute_alignment()));
       }
-    } else if (SgTypedefDeclaration *typedef_decl =
-                   isSgTypedefDeclaration(*node)) {
+    } else if (SgDeclarationStatement *declaration =
+                   isSgDeclarationStatement(*node)) {
       SgTypeModifier &type_mod =
-          typedef_decl->get_declarationModifier().get_typeModifier();
+          declaration->get_declarationModifier().get_typeModifier();
       if (has_aligned_attr) {
         type_mod.set_gnu_attribute_alignment(alignment_value);
       } else if (type_mod.get_gnu_attribute_alignment() == 0) {
@@ -37567,7 +38580,6 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
   }
   friend_decl = llvm::cast<clang::FriendDecl>(
       markClangDeclObjectDefinedByKind(friend_decl));
-  markClangDeclAttrsDefined(friend_decl);
   clang::Decl *friend_target = markClangDeclObjectDefinedByKind(
       readClangApiValueDefined([&]() { return friend_decl->getFriendDecl(); }));
   clang::SourceRange exact_friend_source_range =
@@ -38125,6 +39137,8 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
   };
   auto exact_qualified_owner_method =
       [&](clang::CXXMethodDecl *friend_method) -> clang::CXXMethodDecl * {
+    friend_method = llvm::dyn_cast_or_null<clang::CXXMethodDecl>(
+        markClangFunctionTemplateStateDefined(friend_method));
     clang::CXXRecordDecl *owner_record =
         friend_member_qualified_owner_record(friend_method);
     if (owner_record == nullptr) {
@@ -38147,22 +39161,30 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
                   candidate_template->getTemplatedDecl()));
         }
       }
-      if (candidate == nullptr ||
-          candidate->getDeclName() != friend_method->getDeclName()) {
+      candidate = llvm::dyn_cast_or_null<clang::CXXMethodDecl>(
+          markClangFunctionTemplateStateDefined(candidate));
+      if (candidate == nullptr || readClangApiValueDefined([&]() {
+                                    return candidate->getDeclName();
+                                  }) != readClangApiValueDefined([&]() {
+                                    return friend_method->getDeclName();
+                                  })) {
         continue;
       }
 
       const clang::QualType candidate_type =
           markClangFunctionTypeBoundaryDefined(
               readClangApiValueDefined([&]() { return candidate->getType(); }));
-      if (!friend_method->getASTContext().hasSameType(friend_type,
-                                                      candidate_type)) {
+      if (!readClangApiValueDefined([&]() {
+            return friend_method->getASTContext().hasSameType(friend_type,
+                                                              candidate_type);
+          })) {
         continue;
       }
 
       clang::CXXMethodDecl *candidate_first =
           llvm::dyn_cast_or_null<clang::CXXMethodDecl>(
-              markClangDeclObjectDefinedByKind(candidate->getFirstDecl()));
+              markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+                  [&]() { return candidate->getFirstDecl(); })));
       if (candidate_first == nullptr) {
         candidate_first = candidate;
       }
@@ -38184,6 +39206,8 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
       [&](clang::CXXMethodDecl *method_decl,
           SgMemberFunctionDeclaration *translated_decl)
       -> SgMemberFunctionDeclaration * {
+    method_decl = llvm::dyn_cast_or_null<clang::CXXMethodDecl>(
+        markClangFunctionTemplateStateDefined(method_decl));
     if (method_decl == nullptr || translated_decl == nullptr ||
         current_scope == nullptr ||
         (isSgClassDefinition(current_scope) == nullptr &&
@@ -38191,7 +39215,8 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
       return nullptr;
     }
 
-    clang::CXXRecordDecl *owner_record = method_decl->getParent();
+    clang::CXXRecordDecl *owner_record = markClangSpecificDeclDefined(
+        readClangApiValueDefined([&]() { return method_decl->getParent(); }));
     if (owner_record == nullptr) {
       return nullptr;
     }
@@ -38321,7 +39346,9 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
       return_type = translated_type->get_return_type();
     }
     if (return_type == nullptr) {
-      return_type = buildTypeFromQualifiedType(method_decl->getReturnType());
+      return_type = buildTypeFromQualifiedType(
+          markClangFunctionTypeBoundaryDefined(readClangApiValueDefined(
+              [&]() { return method_decl->getReturnType(); })));
     }
     if (return_type == nullptr) {
       return nullptr;
@@ -38620,6 +39647,7 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
   auto build_lexical_friend_function_specialization =
       [&](clang::FunctionDecl *function_decl,
           SgFunctionDeclaration *translated_decl) -> SgFunctionDeclaration * {
+    function_decl = markClangFunctionTemplateStateDefined(function_decl);
     if (function_decl == nullptr || current_scope == nullptr ||
         isSgClassDefinition(current_scope) == nullptr &&
             isSgTemplateClassDefinition(current_scope) == nullptr) {
@@ -38628,10 +39656,14 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
     const clang::TemplateArgumentList *clang_args =
         clangFunctionTemplateSpecializationArgsDefined(function_decl);
     const clang::ASTTemplateArgumentListInfo *args_as_written =
-        function_decl->getTemplateSpecializationArgsAsWritten();
+        markClangASTTemplateArgumentListInfoDefined(
+            readClangApiValueDefined([&]() {
+              return function_decl->getTemplateSpecializationArgsAsWritten();
+            }));
     if (clang_args == nullptr && args_as_written == nullptr &&
-        function_decl->getTemplateSpecializationKind() ==
-            clang::TSK_Undeclared) {
+        readClangApiValueDefined([&]() {
+          return function_decl->getTemplateSpecializationKind();
+        }) == clang::TSK_Undeclared) {
       return nullptr;
     }
 
@@ -38642,7 +39674,9 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
       }
     }
     if (return_type == nullptr) {
-      return_type = buildTypeFromQualifiedType(function_decl->getReturnType());
+      return_type = buildTypeFromQualifiedType(
+          markClangFunctionTypeBoundaryDefined(readClangApiValueDefined(
+              [&]() { return function_decl->getReturnType(); })));
     }
     if (return_type == nullptr) {
       fprintf(stderr,
@@ -39032,6 +40066,7 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
   auto build_lexical_friend_function_redeclaration =
       [&](clang::FunctionDecl *function_decl,
           SgFunctionDeclaration *translated_decl) -> SgFunctionDeclaration * {
+    function_decl = markClangFunctionTemplateStateDefined(function_decl);
     if (function_decl == nullptr || current_scope == nullptr ||
         (isSgClassDefinition(current_scope) == nullptr &&
          isSgTemplateClassDefinition(current_scope) == nullptr)) {
@@ -39051,7 +40086,8 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
     // parameter list here used to manufacture a second source declaration and
     // discard declarator-owned tag declarations.
     const unsigned int friend_source_order = requireExpandedTokenSourceOrder(
-        friend_decl->getBeginLoc(), "FriendDeclFunction:source-owner");
+        readClangApiValueDefined([&]() { return friend_decl->getBeginLoc(); }),
+        "FriendDeclFunction:source-owner");
     const std::optional<unsigned int> translated_source_order =
         translated_decl != nullptr
             ? translated_decl->get_translation_unit_source_order()
@@ -39191,7 +40227,9 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
       }
     }
     if (return_type == nullptr) {
-      return_type = buildTypeFromQualifiedType(function_decl->getReturnType());
+      return_type = buildTypeFromQualifiedType(
+          markClangFunctionTypeBoundaryDefined(readClangApiValueDefined(
+              [&]() { return function_decl->getReturnType(); })));
       if (return_type == nullptr) {
         fprintf(stderr,
                 "REX_FRONTEND_INVARIANT[friend-function-return-type]: "
@@ -39210,7 +40248,14 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
       source_parameter_frame.declaration_scope = source_declarator_scope;
       p_function_parameter_construction_stack.push_back(source_parameter_frame);
       SageBuilder::pushScopeStack(source_declarator_scope);
-      for (clang::ParmVarDecl *param_decl : function_decl->parameters()) {
+      const unsigned parameter_count = readClangApiValueDefined(
+          [&]() { return function_decl->getNumParams(); });
+      for (unsigned parameter_index = 0; parameter_index < parameter_count;
+           ++parameter_index) {
+        clang::ParmVarDecl *param_decl =
+            markClangSpecificDeclDefined(readClangApiValueDefined([&]() {
+              return function_decl->getParamDecl(parameter_index);
+            }));
         if (param_decl == nullptr) {
           fprintf(stderr,
                   "REX_FRONTEND_INVARIANT[friend-function-parameter]: "
@@ -39221,8 +40266,10 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
 
         SgType *param_type = nullptr;
         if (clang::TypeSourceInfo *type_info =
-                param_decl->getTypeSourceInfo()) {
-          clang::TypeLoc type_loc = type_info->getTypeLoc();
+                markClangTypeSourceInfoDefined(readClangApiValueDefined(
+                    [&]() { return param_decl->getTypeSourceInfo(); }))) {
+          clang::TypeLoc type_loc = readClangTypeLocDefined(
+              [&]() { return type_info->getTypeLoc(); });
           if (clang::TagDecl *introduced_tag =
                   typeLocSpellsDirectTagDecl(type_loc)) {
             if (p_compiler_instance == nullptr) {
@@ -39293,7 +40340,9 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
           param_type = buildTypeFromTypeLoc(type_loc);
         }
         if (param_type == nullptr) {
-          param_type = buildTypeFromQualifiedType(param_decl->getType());
+          param_type = buildTypeFromQualifiedType(
+              markClangFunctionTypeBoundaryDefined(readClangApiValueDefined(
+                  [&]() { return param_decl->getType(); })));
         }
         if (param_type == nullptr) {
           fprintf(stderr,
@@ -39306,10 +40355,13 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
 
         SgInitializedName *param = SageBuilder::buildInitializedName_nfi(
             SgName(param_decl->getNameAsString()), param_type, nullptr);
-        param->set_is_parameter_pack(param_decl->isParameterPack());
+        param->set_is_parameter_pack(readClangApiValueDefined(
+            [&]() { return param_decl->isParameterPack(); }));
         param->set_parent(param_list);
         param_list->append_arg(param);
-        applySourceRange(param, param_decl->getSourceRange());
+        applySourceRange(param, readClangApiValueDefined([&]() {
+                           return param_decl->getSourceRange();
+                         }));
       }
       SageBuilder::popScopeStack();
       if (p_function_parameter_construction_stack.empty() ||
@@ -39324,7 +40376,9 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
         ROSE_ABORT();
       }
       p_function_parameter_construction_stack.pop_back();
-      applySourceRange(param_list, function_decl->getSourceRange());
+      applySourceRange(param_list, readClangApiValueDefined([&]() {
+                         return function_decl->getSourceRange();
+                       }));
     }
 
     SgFunctionDeclaration *translated_canonical =
@@ -39455,7 +40509,8 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
         translated_decl->get_parent() == current_scope;
 
     clang::FunctionDecl *templated_decl =
-        function_template_decl->getTemplatedDecl();
+        markClangFunctionTemplateStateDefined(readClangApiValueDefined(
+            [&]() { return function_template_decl->getTemplatedDecl(); }));
     if (templated_decl == nullptr) {
       return nullptr;
     }
@@ -43489,6 +44544,67 @@ void ClangToSageTranslator::validateFrontendSupportNamespaceProvenance(
       "validateFrontendSupportNamespaceProvenance:definition");
 }
 
+void ClangToSageTranslator::publishClangSynthesizedNamespaceProvenance(
+    const clang::NamespaceDecl *clang_declaration,
+    SgNamespaceDeclarationStatement *sage_declaration) {
+  if (!isClangSynthesizedNamespace(clang_declaration) ||
+      sage_declaration == nullptr ||
+      sage_declaration->get_definition() == nullptr ||
+      sage_declaration->get_file_info() != nullptr ||
+      sage_declaration->get_startOfConstruct() != nullptr ||
+      sage_declaration->get_endOfConstruct() != nullptr ||
+      sage_declaration->get_definition()->get_file_info() != nullptr ||
+      sage_declaration->get_definition()->get_startOfConstruct() != nullptr ||
+      sage_declaration->get_definition()->get_endOfConstruct() != nullptr ||
+      p_lexical_source_nodes.count(sage_declaration) != 0 ||
+      p_synthesized_source_nodes.count(sage_declaration) != 0 ||
+      p_lexical_source_nodes.count(sage_declaration->get_definition()) != 0 ||
+      p_synthesized_source_nodes.count(sage_declaration->get_definition()) !=
+          0) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[namespace-clang-synthesized-owner]: "
+            "Clang-synthesized namespace producer did not provide one fresh "
+            "semantic declaration/definition pair\n");
+    ROSE_ABORT();
+  }
+
+  setSynthesizedFileInfo(sage_declaration);
+  mark_compiler_generated_frontend_specific(sage_declaration);
+  setSynthesizedFileInfo(sage_declaration->get_definition());
+  mark_compiler_generated_frontend_specific(sage_declaration->get_definition());
+  validateClangSynthesizedNamespaceProvenance(clang_declaration,
+                                              sage_declaration);
+}
+
+void ClangToSageTranslator::validateClangSynthesizedNamespaceProvenance(
+    const clang::NamespaceDecl *clang_declaration,
+    SgNamespaceDeclarationStatement *sage_declaration) {
+  if (!isClangSynthesizedNamespace(clang_declaration) ||
+      sage_declaration == nullptr ||
+      sage_declaration->get_definition() == nullptr ||
+      sage_declaration->has_source_fragments() ||
+      p_lexical_source_nodes.count(sage_declaration) != 0 ||
+      p_synthesized_source_nodes.count(sage_declaration) != 1 ||
+      p_lexical_source_nodes.count(sage_declaration->get_definition()) != 0 ||
+      p_synthesized_source_nodes.count(sage_declaration->get_definition()) !=
+          1) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[namespace-clang-synthesized-owner]: "
+            "namespace=%s does not own one exact synthesized semantic "
+            "declaration/definition role\n",
+            clang_declaration != nullptr
+                ? clang_declaration->getQualifiedNameAsString().c_str()
+                : "<null>");
+    ROSE_ABORT();
+  }
+  validate_semantic_provenance(
+      sage_declaration, true,
+      "validateClangSynthesizedNamespaceProvenance:declaration");
+  validate_semantic_provenance(
+      sage_declaration->get_definition(), true,
+      "validateClangSynthesizedNamespaceProvenance:definition");
+}
+
 namespace {
 
 SgNamespaceDeclarationStatement *
@@ -43660,6 +44776,8 @@ bool ClangToSageTranslator::VisitNamespaceDecl(
   const bool imported_namespace = namespace_decl->isFromASTFile();
   const bool frontend_support_namespace = isFrontendSupportNamespace(
       namespace_decl, p_compiler_instance, p_sage_preprocessor_recorder);
+  const bool clang_synthesized_namespace =
+      isClangSynthesizedNamespace(namespace_decl);
 
   // Capture any existing namespace declaration for this canonical namespace so
   // we can wire up first-nondefining links across re-openings.
@@ -43718,6 +44836,7 @@ bool ClangToSageTranslator::VisitNamespaceDecl(
     }
   }
 
+  const bool namespace_definition = namespace_decl->getRBraceLoc().isValid();
   if (sg_namespace_decl == nullptr) {
     // Build namespace declaration using SageBuilder
     // This function handles:
@@ -43726,16 +44845,22 @@ bool ClangToSageTranslator::VisitNamespaceDecl(
     // - Setting up global_definition to link all instances
     // - Inserting the symbol (only for first declaration)
     // We don't need to manually duplicate any of this logic
-    if (imported_namespace || frontend_support_namespace) {
+    if (imported_namespace || frontend_support_namespace ||
+        clang_synthesized_namespace || !namespace_definition) {
       sg_namespace_decl = SageBuilder::buildNamespaceDeclaration_nfi(
           name, isAnonymous, scope,
           SageBuilder::e_namespace_declaration_semantic_auxiliary, nullptr,
           nullptr, nullptr, std::nullopt);
       if (imported_namespace) {
         publishImportedNamespaceProvenance(namespace_decl, sg_namespace_decl);
-      } else {
+      } else if (frontend_support_namespace) {
         publishFrontendSupportNamespaceProvenance(namespace_decl,
                                                   sg_namespace_decl);
+      } else if (clang_synthesized_namespace) {
+        publishClangSynthesizedNamespaceProvenance(namespace_decl,
+                                                   sg_namespace_decl);
+      } else {
+        // Non-defining namespace declarations have no source surface.
       }
     } else {
       const NamespaceSourceRanges ranges =
@@ -43876,11 +45001,20 @@ bool ClangToSageTranslator::VisitNamespaceDecl(
             sg_namespace_decl, "VisitNamespaceDecl") != scope) {
       ROSE_ABORT();
     }
-  } else {
+  } else if (clang_synthesized_namespace) {
+    validateClangSynthesizedNamespaceProvenance(namespace_decl,
+                                                sg_namespace_decl);
+    if (validateFrontendSupportNamespaceOwnership(
+            sg_namespace_decl, "VisitNamespaceDecl:clang-synthesized") !=
+        scope) {
+      ROSE_ABORT();
+    }
+  } else if (namespace_definition) {
     applyNamespaceSourceFragments(namespace_decl, sg_namespace_decl);
   }
 
-  if (imported_namespace || frontend_support_namespace) {
+  if (imported_namespace || frontend_support_namespace ||
+      clang_synthesized_namespace || !namespace_definition) {
     // Deserialized and registered frontend-support declarations contribute
     // semantic lookup state, not lexical source children of this translation
     // unit. Individual referenced declarations are translated on demand under
@@ -45083,8 +46217,9 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
   // the exact source owner is the member-template pattern.  Publish the
   // semantic Clang keys against that already-owned declaration instead of
   // manufacturing a second Sage declaration and parameter subtree.
-  if (clang::ClassTemplateDecl *member_pattern = markClangSpecificDeclDefined(
-          class_template_decl->getInstantiatedFromMemberTemplate())) {
+  if (clang::ClassTemplateDecl *member_pattern =
+          clangTemplateInstantiatedFromMemberTemplateDefined(
+              class_template_decl)) {
     SgTemplateClassDeclaration *translated_pattern =
         isSgTemplateClassDeclaration(lookupSgDeclarationForClangDecl(
             member_pattern, /*allow_on_demand=*/true));
@@ -46012,8 +47147,10 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
     }
   }
 
-  if (is_definition && templated_decl->getQualifier() &&
-      semantic_context != nullptr &&
+  const clang::NestedNameSpecifier templated_qualifier =
+      markClangNestedNameSpecifierDefined(readClangApiValueDefined(
+          [&]() { return templated_decl->getQualifier(); }));
+  if (is_definition && templated_qualifier && semantic_context != nullptr &&
       llvm::isa<clang::CXXRecordDecl>(semantic_context)) {
     clang::DeclContext *visible_context = lexical_context;
     for (; visible_context != nullptr;
@@ -46778,14 +47915,34 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
       written_outer_template_param_clang_lists;
   std::vector<const SgTemplateParameterPtrList *>
       written_outer_template_semantic_param_lists;
-  if (is_definition && templated_decl->getQualifier()) {
-    const unsigned written_template_header_count =
-        templated_decl->getNumTemplateParameterLists();
+  // NestedNameSpecifier carries ABI padding.  Reduce the Clang API result to
+  // the only value this branch consumes while the read is inside the defined
+  // frontend boundary; evaluating the returned object directly lets that
+  // padding escape into Memcheck's conditional-value analysis.
+  const bool has_written_qualifier = readClangApiValueDefined(
+      [&]() { return static_cast<bool>(templated_decl->getQualifier()); });
+  if (is_definition && has_written_qualifier) {
+    const unsigned written_template_header_count = readClangApiValueDefined(
+        [&]() { return templated_decl->getNumTemplateParameterLists(); });
     if (written_template_header_count > 0) {
       unsigned outer_template_header_count = written_template_header_count;
+      clang::TemplateParameterList *innermost_written_header =
+          markClangTemplateParameterListDefined(readClangApiValueDefined([&]() {
+            return templated_decl->getTemplateParameterList(
+                written_template_header_count - 1);
+          }));
+      if (innermost_written_header == nullptr) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[class-template-outer-header]: "
+                "template=%s has a null innermost written header at index "
+                "%u of %u\n",
+                class_template_decl->getQualifiedNameAsString().c_str(),
+                written_template_header_count - 1,
+                written_template_header_count);
+        ROSE_ABORT();
+      }
       if (decl_template_params != nullptr &&
-          templated_decl->getTemplateParameterList(
-              written_template_header_count - 1) != decl_template_params) {
+          innermost_written_header != decl_template_params) {
         outer_template_header_count = written_template_header_count;
       } else if (outer_template_header_count > 0) {
         --outer_template_header_count;
@@ -46794,19 +47951,31 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
       for (unsigned header_index = 0;
            header_index < outer_template_header_count; ++header_index) {
         clang::TemplateParameterList *written_outer_params =
-            templated_decl->getTemplateParameterList(header_index);
+            markClangTemplateParameterListDefined(
+                readClangApiValueDefined([&]() {
+                  return templated_decl->getTemplateParameterList(header_index);
+                }));
         if (written_outer_params == nullptr) {
-          continue;
+          fprintf(stderr,
+                  "REX_FRONTEND_INVARIANT[class-template-outer-header]: "
+                  "template=%s has a null written header at index %u of %u\n",
+                  class_template_decl->getQualifiedNameAsString().c_str(),
+                  header_index, written_template_header_count);
+          ROSE_ABORT();
         }
 
         const SgTemplateParameterPtrList *semantic_parameters = nullptr;
+        const unsigned written_outer_parameter_count = readClangApiValueDefined(
+            [&]() { return written_outer_params->size(); });
         for (unsigned parameter_index = 0;
-             parameter_index < written_outer_params->size();
+             parameter_index < written_outer_parameter_count;
              ++parameter_index) {
           clang::NamedDecl *written_parameter =
               llvm::dyn_cast_or_null<clang::NamedDecl>(
                   markClangDeclObjectDefinedByKind(
-                      written_outer_params->getParam(parameter_index)));
+                      readClangApiValueDefined([&]() {
+                        return written_outer_params->getParam(parameter_index);
+                      })));
           SgDeclarationStatement *semantic_owner =
               resolveTemplateParameterOwner(written_parameter,
                                             /*allow_on_demand=*/false);
@@ -46820,7 +47989,7 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
                   : nullptr;
           if (written_parameter == nullptr || semantic_parameter == nullptr ||
               owner_parameters == nullptr ||
-              owner_parameters->size() != written_outer_params->size() ||
+              owner_parameters->size() != written_outer_parameter_count ||
               parameter_index >= owner_parameters->size() ||
               (*owner_parameters)[parameter_index] != semantic_parameter ||
               (semantic_parameters != nullptr &&
@@ -49388,6 +50557,110 @@ bool ClangToSageTranslator::VisitTypeAliasTemplateDecl(
   return true;
 }
 
+static clang::SourceRange requireExactVariableTemplateSourceEnvelope(
+    clang::CompilerInstance *compiler,
+    const clang::VarTemplateDecl *var_template_decl,
+    const clang::VarDecl *templated_decl) {
+  if (compiler == nullptr || var_template_decl == nullptr ||
+      templated_decl == nullptr) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[variable-template-source-envelope]: "
+            "compiler=%p template=%p variable=%p cannot publish an exact "
+            "source envelope\n",
+            static_cast<void *>(compiler),
+            static_cast<const void *>(var_template_decl),
+            static_cast<const void *>(templated_decl));
+    ROSE_ABORT();
+  }
+
+  const clang::SourceRange template_range = readClangApiValueDefined(
+      [&]() { return var_template_decl->getSourceRange(); });
+  const clang::SourceRange variable_range = readClangApiValueDefined(
+      [&]() { return templated_decl->getSourceRange(); });
+  clang::SourceManager &source_manager = compiler->getSourceManager();
+
+  struct PhysicalRange {
+    clang::SourceLocation begin;
+    clang::SourceLocation end;
+    clang::FileID file;
+    unsigned begin_offset;
+    unsigned end_offset;
+  };
+  auto require_physical_range = [&](clang::SourceRange range,
+                                    const char *producer) -> PhysicalRange {
+    if (!range.isValid() || !range.getBegin().isValid() ||
+        !range.getEnd().isValid()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[variable-template-source-envelope]: "
+              "template=%s %s has no exact source endpoint pair\n",
+              var_template_decl->getQualifiedNameAsString().c_str(), producer);
+      ROSE_ABORT();
+    }
+
+    auto physical_endpoint = [&](clang::SourceLocation location, bool is_end) {
+      if (location.isMacroID()) {
+        location = is_end ? source_manager.getExpansionRange(location).getEnd()
+                          : source_manager.getExpansionLoc(location);
+      }
+      return source_manager.getFileLoc(location);
+    };
+    const clang::SourceLocation begin =
+        physical_endpoint(range.getBegin(), false);
+    const clang::SourceLocation end = physical_endpoint(range.getEnd(), true);
+    if (!begin.isValid() || !end.isValid()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[variable-template-source-envelope]: "
+              "template=%s %s cannot resolve physical source endpoints\n",
+              var_template_decl->getQualifiedNameAsString().c_str(), producer);
+      ROSE_ABORT();
+    }
+    const clang::FileID begin_file = source_manager.getFileID(begin);
+    const clang::FileID end_file = source_manager.getFileID(end);
+    if (begin_file.isInvalid() || end_file.isInvalid() ||
+        begin_file != end_file) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[variable-template-source-envelope]: "
+              "template=%s %s does not own one exact physical source file\n",
+              var_template_decl->getQualifiedNameAsString().c_str(), producer);
+      ROSE_ABORT();
+    }
+
+    const unsigned begin_offset = source_manager.getFileOffset(begin);
+    const unsigned end_offset = source_manager.getFileOffset(end);
+    if (end_offset < begin_offset) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[variable-template-source-envelope]: "
+              "template=%s %s has inverted physical endpoints\n",
+              var_template_decl->getQualifiedNameAsString().c_str(), producer);
+      ROSE_ABORT();
+    }
+    return {begin, end, begin_file, begin_offset, end_offset};
+  };
+
+  const PhysicalRange template_physical =
+      require_physical_range(template_range, "VarTemplateDecl range");
+  const PhysicalRange variable_physical =
+      require_physical_range(variable_range, "templated VarDecl range");
+  if (template_physical.file != variable_physical.file) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[variable-template-source-envelope]: "
+            "template=%s wrapper and templated declaration occupy distinct "
+            "physical files\n",
+            var_template_decl->getQualifiedNameAsString().c_str());
+    ROSE_ABORT();
+  }
+
+  const clang::SourceLocation envelope_begin =
+      template_physical.begin_offset <= variable_physical.begin_offset
+          ? template_range.getBegin()
+          : variable_range.getBegin();
+  const clang::SourceLocation envelope_end =
+      template_physical.end_offset > variable_physical.end_offset
+          ? template_range.getEnd()
+          : variable_range.getEnd();
+  return clang::SourceRange(envelope_begin, envelope_end);
+}
+
 bool ClangToSageTranslator::VisitVarTemplateDecl(
     clang::VarTemplateDecl *var_template_decl, SgNode **node) {
 
@@ -49423,8 +50696,9 @@ bool ClangToSageTranslator::VisitVarTemplateDecl(
     ROSE_ABORT();
   }
 
-  if (clang::VarTemplateDecl *source_pattern = markClangSpecificDeclDefined(
-          var_template_decl->getInstantiatedFromMemberTemplate())) {
+  if (clang::VarTemplateDecl *source_pattern =
+          clangTemplateInstantiatedFromMemberTemplateDefined(
+              var_template_decl)) {
     SgTemplateVariableDeclaration *source_declaration =
         isSgTemplateVariableDeclaration(lookupSgDeclarationForClangDecl(
             source_pattern, /*allow_on_demand=*/true));
@@ -49498,6 +50772,26 @@ bool ClangToSageTranslator::VisitVarTemplateDecl(
               << std::endl;
     ROSE_ABORT();
   }
+  SgScopeStatement *lexical_scope = scope;
+  if (!imported_external_var_template) {
+    clang::DeclContext *lexical_context =
+        markClangDeclContextObjectDefined(readClangApiValueDefined(
+            [&]() { return templated_decl->getLexicalDeclContext(); }));
+    if (lexical_context == nullptr) {
+      std::cerr << "REX_FRONTEND_INVARIANT[variable-template-lexical-owner]: "
+                   "source variable template has no exact lexical context"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    lexical_scope = resolveScopeFromDeclContext(lexical_context);
+    if (lexical_scope == nullptr) {
+      std::cerr << "REX_FRONTEND_INVARIANT[variable-template-lexical-owner]: "
+                   "source variable template lexical context has no exact "
+                   "Sage scope"
+                << std::endl;
+      ROSE_ABORT();
+    }
+  }
 
   SgName name(templated_decl->getNameAsString());
   if (name.getString().empty()) {
@@ -49507,19 +50801,98 @@ bool ClangToSageTranslator::VisitVarTemplateDecl(
     ROSE_ABORT();
   }
 
+  SgInitializedName *previous_template_name = nullptr;
+  SgTemplateVariableDeclaration *previous_sage_template = nullptr;
+  clang::VarTemplateDecl *previous_template =
+      markClangSpecificDeclDefined(readClangApiValueDefined(
+          [&]() { return var_template_decl->getPreviousDecl(); }));
+  if (previous_template != nullptr) {
+    auto previous_translation = p_decl_translation_map.find(previous_template);
+    SgNode *translated_previous =
+        previous_translation != p_decl_translation_map.end()
+            ? previous_translation->second
+            : nullptr;
+    if (translated_previous == nullptr) {
+      if (p_decl_translation_in_progress.count(previous_template) != 0 ||
+          p_decl_translation_on_demand.count(previous_template) != 0) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[variable-template-redeclaration-"
+                "order]: template=%s predecessor=%p is unpublished while "
+                "its exact translation is already in progress\n",
+                var_template_decl->getQualifiedNameAsString().c_str(),
+                static_cast<void *>(previous_template));
+        ROSE_ABORT();
+      }
+      translated_previous = TraverseOnDemand(previous_template);
+      previous_translation = p_decl_translation_map.find(previous_template);
+      if (previous_translation != p_decl_translation_map.end()) {
+        translated_previous = previous_translation->second;
+      }
+    }
+    previous_sage_template =
+        isSgTemplateVariableDeclaration(translated_previous);
+    previous_template_name =
+        exactInitializedNameFromTranslatedVariableNode(translated_previous);
+    if (previous_sage_template == nullptr ||
+        previous_template_name == nullptr ||
+        previous_template_name->get_parent() != previous_sage_template ||
+        previous_template_name->get_name() != name ||
+        previous_template_name->get_scope() != scope) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[variable-template-redeclaration]: "
+              "template=%s predecessor=%p did not resolve to the exact same "
+              "Sage template-variable entity\n",
+              var_template_decl->getQualifiedNameAsString().c_str(),
+              static_cast<void *>(previous_template));
+      ROSE_ABORT();
+    }
+  }
+
   SgType *construction_type = SageBuilder::buildUnknownType();
   ASSERT_not_null(construction_type);
   SgTemplateVariableDeclaration *var_decl =
       imported_external_var_template
           ? SageBuilder::buildTemplateVariableDeclaration(
                 SageBuilder::declaration_ownership::semanticAuxiliary(), name,
-                construction_type, nullptr, scope)
+                construction_type, nullptr, scope,
+                SageBuilder::template_variable_entity_kind::primary_template,
+                previous_template_name)
           : SageBuilder::buildTemplateVariableDeclaration_nfi(
-                name, construction_type, nullptr, scope);
+                name, construction_type, nullptr, scope,
+                SageBuilder::template_variable_entity_kind::primary_template,
+                previous_template_name);
   ASSERT_not_null(var_decl);
   normalize_standalone_template_variable_declaration(var_decl);
 
-  auto map_owner = [&](clang::Decl *key) {
+  SgTemplateVariableDeclaration *canonical_sage_template = var_decl;
+  if (previous_template_name != nullptr) {
+    std::set<SgInitializedName *> exact_family;
+    SgInitializedName *canonical_name = previous_template_name;
+    while (canonical_name->get_prev_decl_item() != nullptr) {
+      if (!exact_family.insert(canonical_name).second) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[variable-template-redeclaration]: "
+                "template=%s predecessor chain contains a cycle\n",
+                var_template_decl->getQualifiedNameAsString().c_str());
+        ROSE_ABORT();
+      }
+      canonical_name = canonical_name->get_prev_decl_item();
+    }
+    canonical_sage_template =
+        isSgTemplateVariableDeclaration(canonical_name->get_parent());
+    if (canonical_sage_template == nullptr ||
+        canonical_name->get_name() != name ||
+        canonical_name->get_scope() != scope) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[variable-template-redeclaration]: "
+              "template=%s has a malformed canonical predecessor\n",
+              var_template_decl->getQualifiedNameAsString().c_str());
+      ROSE_ABORT();
+    }
+    var_decl->set_firstNondefiningDeclaration(canonical_sage_template);
+  }
+
+  auto map_exact_owner = [&](clang::Decl *key) {
     if (key == nullptr) {
       return;
     }
@@ -49531,24 +50904,209 @@ bool ClangToSageTranslator::VisitVarTemplateDecl(
       ROSE_ABORT();
     }
   };
-  map_owner(var_template_decl);
-  map_owner(var_template_decl->getCanonicalDecl());
-  map_owner(templated_decl);
-  map_owner(templated_decl->getCanonicalDecl());
+  map_exact_owner(var_template_decl);
+  map_exact_owner(templated_decl);
 
-  std::unique_ptr<SgTemplateParameterPtrList> template_params =
-      translateTemplateParameterList(var_template_decl->getTemplateParameters(),
-                                     var_decl);
-  ASSERT_not_null(template_params);
-  var_decl->get_templateParameters() = *template_params;
-  finalize_attached_template_parameters(var_decl);
+  canonical_sage_template = isSgTemplateVariableDeclaration(
+      var_decl->get_firstNondefiningDeclaration());
+  if (canonical_sage_template == nullptr) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[variable-template-redeclaration]: "
+            "template=%s has no exact canonical Sage declaration\n",
+            var_template_decl->getQualifiedNameAsString().c_str());
+    ROSE_ABORT();
+  }
+  auto map_canonical_owner = [&](clang::Decl *key) {
+    if (key == nullptr) {
+      return;
+    }
+    auto [it, inserted] =
+        p_decl_translation_map.emplace(key, canonical_sage_template);
+    if (!inserted && it->second != canonical_sage_template) {
+      std::cerr << "REX_FRONTEND_INVARIANT[variable-template-owner]: Clang "
+                   "canonical declaration maps outside its exact "
+                   "redeclaration family"
+                << std::endl;
+      ROSE_ABORT();
+    }
+  };
+  map_canonical_owner(var_template_decl->getCanonicalDecl());
+  map_canonical_owner(templated_decl->getCanonicalDecl());
 
   clang::TemplateParameterList *var_template_parameters =
       markClangTemplateParameterListDefined(
           var_template_decl->getTemplateParameters());
+  std::vector<clang::TemplateParameterList *> written_outer_headers;
+  if (!imported_external_var_template) {
+    const clang::SourceRange declaration_range = readClangApiValueDefined(
+        [&]() { return templated_decl->getSourceRange(); });
+    const unsigned header_count = readClangApiValueDefined(
+        [&]() { return templated_decl->getNumTemplateParameterLists(); });
+    for (unsigned header_index = 0; header_index < header_count;
+         ++header_index) {
+      clang::TemplateParameterList *header =
+          markClangTemplateParameterListDefined(readClangApiValueDefined([&]() {
+            return templated_decl->getTemplateParameterList(header_index);
+          }));
+      if (header == nullptr) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[variable-template-header]: "
+                "template=%s outer header=%u/%u is null\n",
+                var_template_decl->getQualifiedNameAsString().c_str(),
+                header_index, header_count);
+        ROSE_ABORT();
+      }
+      if (header == var_template_parameters) {
+        continue;
+      }
+      const clang::SourceLocation template_location =
+          readClangApiValueDefined([&]() { return header->getTemplateLoc(); });
+      if (!template_location.isValid() ||
+          !sourceRangeContainsLocation(
+              declaration_range, template_location,
+              &p_compiler_instance->getSourceManager())) {
+        continue;
+      }
+      written_outer_headers.push_back(header);
+    }
+  }
+
+  std::vector<const SgTemplateParameterPtrList *>
+      written_outer_semantic_parameters;
+  std::vector<std::unique_ptr<SgTemplateParameterPtrList>>
+      translated_written_outer_headers;
+  written_outer_semantic_parameters.reserve(written_outer_headers.size());
+  translated_written_outer_headers.reserve(written_outer_headers.size());
+  for (size_t header_index = 0; header_index < written_outer_headers.size();
+       ++header_index) {
+    clang::TemplateParameterList *header = written_outer_headers[header_index];
+    const SgTemplateParameterPtrList *semantic_parameters = nullptr;
+    for (unsigned parameter_index = 0; parameter_index < header->size();
+         ++parameter_index) {
+      clang::NamedDecl *written_parameter =
+          llvm::dyn_cast_or_null<clang::NamedDecl>(
+              markClangDeclObjectDefinedByKind(
+                  header->getParam(parameter_index)));
+      SgDeclarationStatement *semantic_owner =
+          resolveTemplateParameterOwner(written_parameter,
+                                        /*allow_on_demand=*/false);
+      SgTemplateParameter *semantic_parameter =
+          requirePublishedTemplateParameter(
+              written_parameter, semantic_owner,
+              "VisitVarTemplateDecl:source-spelled-outer-header");
+      SgTemplateParameterPtrList *owner_parameters =
+          semantic_owner != nullptr
+              ? SageBuilder::getTemplateParameterList(semantic_owner)
+              : nullptr;
+      if (written_parameter == nullptr || semantic_parameter == nullptr ||
+          owner_parameters == nullptr ||
+          owner_parameters->size() != header->size() ||
+          parameter_index >= owner_parameters->size() ||
+          (*owner_parameters)[parameter_index] != semantic_parameter ||
+          (semantic_parameters != nullptr &&
+           semantic_parameters != owner_parameters)) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[variable-template-header-owner]: "
+                "template=%s header=%zu parameter=%u has no exact "
+                "source-to-semantic parameter pair\n",
+                var_template_decl->getQualifiedNameAsString().c_str(),
+                header_index, parameter_index);
+        ROSE_ABORT();
+      }
+      semantic_parameters = owner_parameters;
+    }
+
+    std::unique_ptr<SgTemplateParameterPtrList> translated_header =
+        semantic_parameters != nullptr
+            ? translateDetachedTemplateParameterList(
+                  header, scope, semantic_parameters,
+                  "VisitVarTemplateDecl:source-spelled-outer-header")
+            : translateDetachedTemplateParameterList(header, scope);
+    if (translated_header == nullptr ||
+        translated_header->size() != header->size()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[variable-template-header]: "
+              "template=%s header=%zu translated %zu of %u parameters\n",
+              var_template_decl->getQualifiedNameAsString().c_str(),
+              header_index,
+              translated_header != nullptr ? translated_header->size() : 0,
+              header->size());
+      ROSE_ABORT();
+    }
+    clearTranslatedTemplateParameterDefaults(*translated_header, header, false);
+    written_outer_semantic_parameters.push_back(semantic_parameters);
+    translated_written_outer_headers.push_back(std::move(translated_header));
+  }
+
+  const size_t outer_surface_base = p_template_parameter_surface_stack.size();
+  for (size_t header_index = 0;
+       header_index < translated_written_outer_headers.size(); ++header_index) {
+    p_template_parameter_surface_stack.push_back(
+        {written_outer_headers[header_index],
+         translated_written_outer_headers[header_index].get(), nullptr,
+         written_outer_semantic_parameters[header_index]});
+  }
+  struct VarTemplateOuterSurfaceGuard {
+    std::vector<TemplateParameterSurfaceFrame> &stack;
+    const std::vector<clang::TemplateParameterList *> &clang_headers;
+    const std::vector<std::unique_ptr<SgTemplateParameterPtrList>>
+        &sage_headers;
+    size_t base_size;
+    ~VarTemplateOuterSurfaceGuard() {
+      if (clang_headers.size() != sage_headers.size() ||
+          stack.size() != base_size + clang_headers.size()) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[variable-template-parameter-"
+                "surface]: outer header transaction lost its exact active "
+                "surface count\n");
+        ROSE_ABORT();
+      }
+      for (size_t index = 0; index < clang_headers.size(); ++index) {
+        if (stack[base_size + index].clang_parameters != clang_headers[index] ||
+            stack[base_size + index].sage_parameters !=
+                sage_headers[index].get()) {
+          fprintf(stderr,
+                  "REX_FRONTEND_INVARIANT[variable-template-parameter-"
+                  "surface]: outer header=%zu lost its exact Clang/Sage "
+                  "identity\n",
+                  index);
+          ROSE_ABORT();
+        }
+      }
+      stack.resize(base_size);
+    }
+  } var_template_outer_surface_guard{
+      p_template_parameter_surface_stack, written_outer_headers,
+      translated_written_outer_headers, outer_surface_base};
+
+  std::unique_ptr<SgTemplateParameterPtrList> template_params =
+      translateTemplateParameterList(var_template_parameters, var_decl);
+  ASSERT_not_null(template_params);
+  var_decl->get_templateParameters() = *template_params;
+  finalize_attached_template_parameters(var_decl);
+
   ClangTemplateParameterNameMap exact_var_parameter_names =
       collectExactTemplateParameterNames(var_template_parameters,
                                          "variable template declaration");
+  for (clang::TemplateParameterList *outer_header : written_outer_headers) {
+    ClangTemplateParameterNameMap outer_names =
+        collectExactTemplateParameterNames(
+            outer_header, "variable template outer declaration header");
+    for (auto &[coordinate, identity] : outer_names) {
+      auto inserted = exact_var_parameter_names.emplace(coordinate, identity);
+      if (!inserted.second &&
+          (inserted.first->second.name != identity.name ||
+           inserted.first->second.declaration != identity.declaration)) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[variable-template-header]: "
+                "template=%s has conflicting parameters at depth=%u "
+                "index=%u\n",
+                var_template_decl->getQualifiedNameAsString().c_str(),
+                coordinate.first, coordinate.second);
+        ROSE_ABORT();
+      }
+    }
+  }
   p_exact_template_parameter_name_stack.push_back(
       std::move(exact_var_parameter_names));
   p_template_parameter_surface_stack.push_back(
@@ -49576,6 +51134,30 @@ bool ClangToSageTranslator::VisitVarTemplateDecl(
   } var_template_parameter_surface_guard{
       p_exact_template_parameter_name_stack, p_template_parameter_surface_stack,
       var_template_parameters, &var_decl->get_templateParameters(), var_decl};
+
+  for (size_t header_index = 0;
+       header_index < translated_written_outer_headers.size(); ++header_index) {
+    clang::TemplateParameterList *clang_header =
+        written_outer_headers[header_index];
+    SgTemplateParameterList *source_header = new SgTemplateParameterList();
+    source_header->set_args(*translated_written_outer_headers[header_index]);
+    source_header->set_parent(var_decl);
+    publishSourceSpelledTemplateHeaderSeparator(
+        source_header, clang_header, p_compiler_instance,
+        "VisitVarTemplateDecl:source-spelled-outer-header");
+    for (SgTemplateParameter *parameter : source_header->get_args()) {
+      if (parameter == nullptr) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[variable-template-header]: "
+                "template=%s header=%zu contains a null parameter\n",
+                var_template_decl->getQualifiedNameAsString().c_str(),
+                header_index);
+        ROSE_ABORT();
+      }
+      parameter->set_parent(source_header);
+    }
+    var_decl->get_sourceSpelledTemplateHeaders().push_back(source_header);
+  }
 
   clang::TypeLoc type_loc;
   if (!imported_external_var_template) {
@@ -49619,6 +51201,21 @@ bool ClangToSageTranslator::VisitVarTemplateDecl(
   SgInitializedName *initialized_name = var_decl->get_variables().front();
   ASSERT_not_null(initialized_name);
   initialized_name->set_type(type);
+  if (!imported_external_var_template) {
+    clang::NestedNameSpecifierLoc qualifier_loc =
+        markClangNestedNameSpecifierLocDefined(readClangApiValueDefined(
+            [&]() { return templated_decl->getQualifierLoc(); }));
+    preserveExplicitInitializedNameQualifier(initialized_name, qualifier_loc,
+                                             p_compiler_instance,
+                                             "VisitVarTemplateDecl:name");
+    SourceQualification declaration_qualification;
+    declaration_qualification.global =
+        initialized_name->get_source_name_global_qualification();
+    declaration_qualification.tokens =
+        initialized_name->get_source_name_qualification_tokens();
+    preserveSourceNameQualification(var_decl, declaration_qualification,
+                                    "VisitVarTemplateDecl:name");
+  }
 
   SgInitializer *init = nullptr;
   clang::Expr *source_init_expr = nullptr;
@@ -49709,15 +51306,13 @@ bool ClangToSageTranslator::VisitVarTemplateDecl(
   requireExactDeclarationAccess(var_decl, "VisitVarTemplateDecl");
 
   if (!imported_external_var_template) {
-    clang::SourceRange template_var_range = var_template_decl->getSourceRange();
-    if (template_var_range.isValid()) {
-      template_var_range = extendDeclSourceRangeWithTrailingSemicolon(
-          template_var_range, p_compiler_instance->getSourceManager(),
-          p_compiler_instance->getLangOpts(),
-          p_compiler_instance->getPreprocessor(), var_template_decl);
-    } else {
-      template_var_range = templated_decl->getSourceRange();
-    }
+    clang::SourceRange template_var_range =
+        requireExactVariableTemplateSourceEnvelope(
+            p_compiler_instance, var_template_decl, templated_decl);
+    template_var_range = extendDeclSourceRangeWithTrailingSemicolon(
+        template_var_range, p_compiler_instance->getSourceManager(),
+        p_compiler_instance->getLangOpts(),
+        p_compiler_instance->getPreprocessor(), templated_decl);
     applySourceRange(var_decl, template_var_range);
   }
 
@@ -49823,10 +51418,20 @@ bool ClangToSageTranslator::VisitVarTemplateDecl(
         var_decl, "VisitVarTemplateDecl:external-semantic-owner");
   } else {
     publish_fresh_decl_in_scope_child_list(p_decl_attachment_session, var_decl,
-                                           scope,
+                                           lexical_scope,
                                            "VisitVarTemplateDecl:construction");
-    ensureDeclInScopeChildList(var_decl, scope,
+    ensureDeclInScopeChildList(var_decl, lexical_scope,
                                "VisitVarTemplateDecl:ordering");
+    if (var_decl->get_parent() != lexical_scope ||
+        var_decl->get_scope() != lexical_scope ||
+        initialized_name->get_scope() != scope) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[variable-template-lexical-owner]: "
+              "template=%s lost its exact lexical declaration scope or "
+              "semantic initialized-name scope\n",
+              var_template_decl->getQualifiedNameAsString().c_str());
+      ROSE_ABORT();
+    }
   }
   registerDeclarationSymbol(var_decl);
 
@@ -55565,12 +57170,9 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
   std::unordered_set<clang::ClassTemplateDecl *> member_template_chain;
   while (primary_template_pattern != nullptr &&
          member_template_chain.insert(primary_template_pattern).second) {
-    clang::ClassTemplateDecl *instantiated_from = markClangSpecificDeclDefined(
-        llvm::dyn_cast_or_null<clang::ClassTemplateDecl>(
-            readClangApiValueDefined([&]() {
-              return primary_template_pattern
-                  ->getInstantiatedFromMemberTemplate();
-            })));
+    clang::ClassTemplateDecl *instantiated_from =
+        clangTemplateInstantiatedFromMemberTemplateDefined(
+            primary_template_pattern);
     if (instantiated_from == nullptr) {
       break;
     }
@@ -55578,8 +57180,8 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
   }
   if (primary_template_pattern != nullptr &&
       !member_template_chain.insert(primary_template_pattern).second &&
-      primary_template_pattern->getInstantiatedFromMemberTemplate() !=
-          nullptr) {
+      clangTemplateInstantiatedFromMemberTemplateDefined(
+          primary_template_pattern) != nullptr) {
     std::cerr << "REX_FRONTEND_INVARIANT[primary-template-identity]: Clang "
                  "member-template instantiation chain contains a cycle"
               << std::endl;
@@ -57160,8 +58762,12 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     // `template<> struct N::X<int>` is N, while its defining declaration is
     // lexically owned by the global scope; neither relationship can
     // reconstruct the written syntax after parsing.
-    const unsigned written_header_count =
-        class_tpl_spec_decl->getNumTemplateParameterLists();
+    class_tpl_spec_decl =
+        llvm::dyn_cast_or_null<clang::ClassTemplateSpecializationDecl>(
+            markClangDeclObjectDefinedByKind(class_tpl_spec_decl));
+    ASSERT_not_null(class_tpl_spec_decl);
+    const unsigned written_header_count = readClangApiValueDefined(
+        [&]() { return class_tpl_spec_decl->getNumTemplateParameterLists(); });
     if (written_header_count == 0) {
       fprintf(stderr,
               "REX_FRONTEND_INVARIANT[explicit-specialization-header]: "
@@ -57170,16 +58776,22 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
       ROSE_ABORT();
     }
     clang::TemplateParameterList *specialization_header =
-        markClangTemplateParameterListDefined(
-            class_tpl_spec_decl->getTemplateParameterList(written_header_count -
-                                                          1));
-    if (specialization_header == nullptr || !specialization_header->empty()) {
+        markClangTemplateParameterListDefined(readClangApiValueDefined([&]() {
+          return class_tpl_spec_decl->getTemplateParameterList(
+              written_header_count - 1);
+        }));
+    const unsigned specialization_parameter_count =
+        specialization_header != nullptr ? readClangApiValueDefined([&]() {
+          return specialization_header->size();
+        })
+                                         : 0;
+    if (specialization_header == nullptr ||
+        specialization_parameter_count != 0) {
       fprintf(stderr,
               "REX_FRONTEND_INVARIANT[explicit-specialization-header]: "
               "specialization=%s terminal source header has %u parameters\n",
               class_tpl_spec_decl->getQualifiedNameAsString().c_str(),
-              specialization_header != nullptr ? specialization_header->size()
-                                               : 0);
+              specialization_parameter_count);
       ROSE_ABORT();
     }
     if (written_header_count > 1) {
@@ -59462,8 +61074,7 @@ bool ClangToSageTranslator::VisitEnumDecl(clang::EnumDecl *enum_decl,
       if (var_decl == nullptr || var_decl->isInvalidDecl()) {
         continue;
       }
-      clang::SourceRange var_range = readClangApiValueDefined(
-          [&]() { return var_decl->getSourceRange(); });
+      clang::SourceRange var_range = clangVarDeclSourceRangeDefined(var_decl);
       if (clang::TypeSourceInfo *tsi =
               markClangTypeSourceInfoDefined(readClangApiValueDefined(
                   [&]() { return var_decl->getTypeSourceInfo(); }))) {
@@ -64543,9 +66154,8 @@ bool ClangToSageTranslator::VisitUsingDecl(clang::UsingDecl *using_decl,
     if (clang::FunctionTemplateDecl *function_template =
             llvm::dyn_cast_or_null<clang::FunctionTemplateDecl>(target)) {
       if (clang::FunctionTemplateDecl *pattern =
-              markClangSpecificDeclDefined(readClangApiValueDefined([&]() {
-                return function_template->getInstantiatedFromMemberTemplate();
-              }))) {
+              clangTemplateInstantiatedFromMemberTemplateDefined(
+                  function_template)) {
         return pattern;
       }
     }
@@ -64890,9 +66500,11 @@ ClangToSageTranslator::ensureNamespaceDeclaration(
   const bool imported_namespace = ns_decl->isFromASTFile();
   const bool frontend_support_namespace = isFrontendSupportNamespace(
       ns_decl, p_compiler_instance, p_sage_preprocessor_recorder);
+  const bool clang_synthesized_namespace = isClangSynthesizedNamespace(ns_decl);
 
   auto exact_it = p_decl_translation_map.find(ns_decl);
   if (exact_it != p_decl_translation_map.end()) {
+    const bool namespace_definition = ns_decl->getRBraceLoc().isValid();
     SgNamespaceDeclarationStatement *existing =
         isSgNamespaceDeclarationStatement(exact_it->second);
     if (existing == nullptr || existing->get_definition() == nullptr) {
@@ -64910,7 +66522,11 @@ ClangToSageTranslator::ensureNamespaceDeclaration(
       validateFrontendSupportNamespaceProvenance(ns_decl, existing);
       (void)validateFrontendSupportNamespaceOwnership(
           existing, "ensureNamespaceDeclaration:cached");
-    } else {
+    } else if (clang_synthesized_namespace) {
+      validateClangSynthesizedNamespaceProvenance(ns_decl, existing);
+      (void)validateFrontendSupportNamespaceOwnership(
+          existing, "ensureNamespaceDeclaration:cached-clang-synthesized");
+    } else if (namespace_definition) {
       if (!existing->has_source_fragments()) {
         fprintf(stderr,
                 "REX_FRONTEND_INVARIANT[namespace-source-fragment]: exact "
@@ -64996,15 +66612,21 @@ ClangToSageTranslator::ensureNamespaceDeclaration(
   // Create the namespace stub using SageBuilder
   // This will handle symbol table lookups and creating/reusing definitions
   SgNamespaceDeclarationStatement *sg_ns_decl = nullptr;
-  if (imported_namespace || frontend_support_namespace) {
+  const bool namespace_definition = ns_decl->getRBraceLoc().isValid();
+  if (imported_namespace || frontend_support_namespace ||
+      clang_synthesized_namespace || !namespace_definition) {
     sg_ns_decl = SageBuilder::buildNamespaceDeclaration_nfi(
         name, isAnonymous, scope,
         SageBuilder::e_namespace_declaration_semantic_auxiliary, nullptr,
         nullptr, nullptr, std::nullopt);
     if (imported_namespace) {
       publishImportedNamespaceProvenance(ns_decl, sg_ns_decl);
-    } else {
+    } else if (frontend_support_namespace) {
       publishFrontendSupportNamespaceProvenance(ns_decl, sg_ns_decl);
+    } else if (clang_synthesized_namespace) {
+      publishClangSynthesizedNamespaceProvenance(ns_decl, sg_ns_decl);
+    } else {
+      // Non-defining namespace declarations have no source surface.
     }
   } else {
     const NamespaceSourceRanges ranges = namespaceSourceRanges(ns_decl);
@@ -65110,7 +66732,12 @@ ClangToSageTranslator::ensureNamespaceDeclaration(
     // The mandatory frontend preinclude contributes semantic lookup state but
     // is not a lexical fragment of the user's translation unit.
     validateFrontendSupportNamespaceProvenance(ns_decl, sg_ns_decl);
-  } else {
+  } else if (clang_synthesized_namespace) {
+    // A source-less NamespaceDecl created by Clang Sema contributes semantic
+    // lookup state only.  It is the canonical root for any later, genuinely
+    // source-spelled reopening and must never acquire fabricated fragments.
+    validateClangSynthesizedNamespaceProvenance(ns_decl, sg_ns_decl);
+  } else if (namespace_definition) {
     // A local Clang NamespaceDecl denotes one exact source fragment. Missing
     // source locations are malformed frontend input, not permission to publish
     // a generated namespace shell.
@@ -65129,6 +66756,12 @@ ClangToSageTranslator::ensureNamespaceDeclaration(
   } else if (frontend_support_namespace) {
     if (validateFrontendSupportNamespaceOwnership(
             sg_ns_decl, "ensureNamespaceDeclaration") != scope) {
+      ROSE_ABORT();
+    }
+  } else if (clang_synthesized_namespace) {
+    if (validateFrontendSupportNamespaceOwnership(
+            sg_ns_decl, "ensureNamespaceDeclaration:clang-synthesized") !=
+        scope) {
       ROSE_ABORT();
     }
   }
@@ -71059,17 +72692,15 @@ void ClangToSageTranslator::linkSpecializedTemplateDeclaration(
             llvm::dyn_cast<clang::ClassTemplateDecl>(specialized_decl)) {
       std::unordered_set<clang::ClassTemplateDecl *> visited;
       while (visited.insert(class_template).second) {
-        clang::ClassTemplateDecl *pattern = markClangSpecificDeclDefined(
-            llvm::dyn_cast_or_null<clang::ClassTemplateDecl>(
-                readClangApiValueDefined([&]() {
-                  return class_template->getInstantiatedFromMemberTemplate();
-                })));
+        clang::ClassTemplateDecl *pattern =
+            clangTemplateInstantiatedFromMemberTemplateDefined(class_template);
         if (pattern == nullptr) {
           break;
         }
         class_template = pattern;
       }
-      if (class_template->getInstantiatedFromMemberTemplate() != nullptr &&
+      if (clangTemplateInstantiatedFromMemberTemplateDefined(class_template) !=
+              nullptr &&
           visited.find(class_template) != visited.end()) {
         std::cerr << "REX_FRONTEND_INVARIANT[specialized-template-link]: Clang "
                      "class member-template pattern chain contains a cycle"
@@ -71115,7 +72746,7 @@ void ClangToSageTranslator::linkSpecializedTemplateDeclaration(
       if (clang::FunctionTemplateDecl *function_template =
               llvm::dyn_cast<clang::FunctionTemplateDecl>(specialized_decl)) {
         clang::FunctionTemplateDecl *member_pattern =
-            clangFunctionTemplateInstantiatedFromMemberTemplateDefined(
+            clangTemplateInstantiatedFromMemberTemplateDefined(
                 function_template);
         if (member_pattern != nullptr) {
           SgTemplateMemberFunctionDeclaration *translated_pattern =
@@ -72166,7 +73797,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     ~TranslationGuard() { in_progress.erase(decl); }
   } translation_guard(p_decl_translation_in_progress, function_decl);
 
-  markClangDeclAttrsDefined(function_decl);
   const clang::QualType funcQualType = markClangFunctionTypeBoundaryDefined(
       readClangApiValueDefined([&]() { return function_decl->getType(); }));
   const clang::FunctionType::ExtInfo func_ext_info =
@@ -72262,7 +73892,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     return std::string();
   });
   const clang::DeviceKernelAttr *device_kernel_attr =
-      function_decl->getAttr<clang::DeviceKernelAttr>();
+      markClangAstObjectDefined(readClangApiValueDefined(
+          [&]() { return function_decl->getAttr<clang::DeviceKernelAttr>(); }));
   const bool is_opencl_kernel =
       device_kernel_attr != nullptr &&
       clang::DeviceKernelAttr::isOpenCLSpelling(*device_kernel_attr);
@@ -72275,7 +73906,9 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
   SgType *opencl_vec_type = nullptr;
   if (const clang::VecTypeHintAttr *attr =
-          function_decl->getAttr<clang::VecTypeHintAttr>()) {
+          markClangAstObjectDefined(readClangApiValueDefined([&]() {
+            return function_decl->getAttr<clang::VecTypeHintAttr>();
+          }))) {
     clang::TypeSourceInfo *type_info = attr->getTypeHintLoc();
     if (type_info != nullptr) {
       opencl_vec_type = buildTypeFromTypeLoc(type_info->getTypeLoc());
@@ -72304,9 +73937,13 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   };
 
   const clang::WorkGroupSizeHintAttr *work_group_size_hint_attr =
-      function_decl->getAttr<clang::WorkGroupSizeHintAttr>();
+      markClangAstObjectDefined(readClangApiValueDefined([&]() {
+        return function_decl->getAttr<clang::WorkGroupSizeHintAttr>();
+      }));
   const clang::ReqdWorkGroupSizeAttr *required_work_group_size_attr =
-      function_decl->getAttr<clang::ReqdWorkGroupSizeAttr>();
+      markClangAstObjectDefined(readClangApiValueDefined([&]() {
+        return function_decl->getAttr<clang::ReqdWorkGroupSizeAttr>();
+      }));
   SgFunctionModifier::opencl_work_group_size_t opencl_work_group_size = {0, 0,
                                                                          0};
   if (work_group_size_hint_attr != nullptr) {
@@ -81231,222 +82868,13 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
     // The reused FunctionDecl can retain the primary template's qualifier
     // location (or no qualifier at all), neither of which describes this
-    // explicit-instantiation declaration.  Recover the qualifier from the
-    // same exact expanded-token transaction that owns the directive. Each
-    // component retains its exact mandatory trailing `::`; the backend
-    // concatenates this payload directly and must never synthesize punctuation
-    // or a semantic qualifier after source construction.
-    auto parse_expanded_qualifier_component = [&](size_t component_end)
-        -> std::optional<std::pair<size_t, std::string>> {
-      if (component_end < declaration_begin_index ||
-          component_end >= point_index) {
-        fprintf(stderr,
-                "REX_FRONTEND_INVARIANT[function-instantiation-"
-                "qualification]: function=%s qualifier component end=%zu is "
-                "outside its exact declaration transaction [%zu,%zu)\n",
-                function_decl->getQualifiedNameAsString().c_str(),
-                component_end, declaration_begin_index, point_index);
-        ROSE_ABORT();
-      }
-
-      const clang::tok::TokenKind terminal_kind =
-          p_expanded_tokens[component_end].kind;
-      if (terminal_kind == clang::tok::identifier ||
-          terminal_kind == clang::tok::raw_identifier) {
-        const std::string spelling = expanded_token_spelling(component_end);
-        return std::make_pair(component_end, spelling);
-      }
-
-      if (terminal_kind == clang::tok::r_paren) {
-        unsigned int paren_balance = 1;
-        unsigned int square_balance = 0;
-        unsigned int brace_balance = 0;
-        for (size_t index = component_end; index-- > declaration_begin_index;) {
-          const clang::tok::TokenKind kind = p_expanded_tokens[index].kind;
-          if (kind == clang::tok::r_square) {
-            ++square_balance;
-          } else if (kind == clang::tok::l_square) {
-            if (square_balance == 0) {
-              return std::nullopt;
-            }
-            --square_balance;
-          } else if (kind == clang::tok::r_brace) {
-            ++brace_balance;
-          } else if (kind == clang::tok::l_brace) {
-            if (brace_balance == 0) {
-              return std::nullopt;
-            }
-            --brace_balance;
-          } else if (square_balance == 0 && brace_balance == 0 &&
-                     kind == clang::tok::r_paren) {
-            ++paren_balance;
-          } else if (square_balance == 0 && brace_balance == 0 &&
-                     kind == clang::tok::l_paren) {
-            if (--paren_balance != 0) {
-              continue;
-            }
-            if (index == declaration_begin_index ||
-                p_expanded_tokens[index - 1].kind != clang::tok::kw_decltype) {
-              return std::nullopt;
-            }
-            const size_t component_begin = index - 1;
-            std::string spelling;
-            for (size_t token_index = component_begin;
-                 token_index <= component_end; ++token_index) {
-              spelling += expanded_token_spelling(token_index);
-            }
-            return std::make_pair(component_begin, spelling);
-          }
-        }
-        return std::nullopt;
-      }
-
-      auto template_closer_count =
-          [](clang::tok::TokenKind kind) -> unsigned int {
-        switch (kind) {
-        case clang::tok::greater:
-          return 1;
-        case clang::tok::greatergreater:
-          return 2;
-        case clang::tok::greatergreatergreater:
-          return 3;
-        default:
-          return 0;
-        }
-      };
-      unsigned int angle_balance = template_closer_count(terminal_kind);
-      if (angle_balance == 0) {
-        return std::nullopt;
-      }
-
-      unsigned int paren_balance = 0;
-      unsigned int square_balance = 0;
-      unsigned int brace_balance = 0;
-      for (size_t index = component_end; index-- > declaration_begin_index;) {
-        const clang::tok::TokenKind kind = p_expanded_tokens[index].kind;
-        if (kind == clang::tok::r_paren) {
-          ++paren_balance;
-          continue;
-        }
-        if (kind == clang::tok::l_paren) {
-          if (paren_balance == 0) {
-            return std::nullopt;
-          }
-          --paren_balance;
-          continue;
-        }
-        if (kind == clang::tok::r_square) {
-          ++square_balance;
-          continue;
-        }
-        if (kind == clang::tok::l_square) {
-          if (square_balance == 0) {
-            return std::nullopt;
-          }
-          --square_balance;
-          continue;
-        }
-        if (kind == clang::tok::r_brace) {
-          ++brace_balance;
-          continue;
-        }
-        if (kind == clang::tok::l_brace) {
-          if (brace_balance == 0) {
-            return std::nullopt;
-          }
-          --brace_balance;
-          continue;
-        }
-        if (paren_balance != 0 || square_balance != 0 || brace_balance != 0) {
-          continue;
-        }
-
-        const unsigned int closer_count = template_closer_count(kind);
-        if (closer_count != 0) {
-          angle_balance += closer_count;
-          continue;
-        }
-        if (kind != clang::tok::less) {
-          continue;
-        }
-        if (angle_balance == 0) {
-          return std::nullopt;
-        }
-        --angle_balance;
-        if (angle_balance != 0) {
-          continue;
-        }
-        if (index == declaration_begin_index) {
-          return std::nullopt;
-        }
-        const size_t identifier_index = index - 1;
-        const clang::tok::TokenKind identifier_kind =
-            p_expanded_tokens[identifier_index].kind;
-        if (identifier_kind != clang::tok::identifier &&
-            identifier_kind != clang::tok::raw_identifier) {
-          return std::nullopt;
-        }
-        size_t component_begin = identifier_index;
-        if (component_begin > declaration_begin_index &&
-            p_expanded_tokens[component_begin - 1].kind ==
-                clang::tok::kw_template) {
-          --component_begin;
-        }
-        std::string spelling;
-        for (size_t token_index = component_begin; token_index <= component_end;
-             ++token_index) {
-          spelling += expanded_token_spelling(token_index);
-        }
-        return std::make_pair(component_begin, spelling);
-      }
-      return std::nullopt;
-    };
-
+    // explicit-instantiation declaration. Recover the qualifier from the same
+    // exact expanded-token transaction used for variable-template explicit
+    // instantiations. Each component retains its mandatory trailing `::`.
     size_t qualifier_cursor = point_index;
-    while (qualifier_cursor > declaration_begin_index &&
-           p_expanded_tokens[qualifier_cursor - 1].kind ==
-               clang::tok::coloncolon) {
-      const size_t colon_index = qualifier_cursor - 1;
-      if (colon_index == declaration_begin_index) {
-        surface.source_name_qualification.global = true;
-        qualifier_cursor = colon_index;
-        break;
-      }
-
-      const std::optional<std::pair<size_t, std::string>> component =
-          parse_expanded_qualifier_component(colon_index - 1);
-      if (!component) {
-        const clang::tok::TokenKind terminal_kind =
-            p_expanded_tokens[colon_index - 1].kind;
-        if (terminal_kind == clang::tok::greater ||
-            terminal_kind == clang::tok::greatergreater ||
-            terminal_kind == clang::tok::greatergreatergreater ||
-            terminal_kind == clang::tok::r_paren) {
-          fprintf(stderr,
-                  "REX_FRONTEND_INVARIANT[function-instantiation-"
-                  "qualification]: function=%s has a malformed exact "
-                  "expanded qualifier component ending in token kind=%u\n",
-                  function_decl->getQualifiedNameAsString().c_str(),
-                  static_cast<unsigned int>(terminal_kind));
-          ROSE_ABORT();
-        }
-        surface.source_name_qualification.global = true;
-        qualifier_cursor = colon_index;
-        break;
-      }
-      if (component->second.empty()) {
-        fprintf(stderr,
-                "REX_FRONTEND_INVARIANT[function-instantiation-"
-                "qualification]: function=%s has a qualifier component "
-                "without exact expanded spelling\n",
-                function_decl->getQualifiedNameAsString().c_str());
-        ROSE_ABORT();
-      }
-      surface.source_name_qualification.tokens.insert(
-          surface.source_name_qualification.tokens.begin(),
-          component->second + "::");
-      qualifier_cursor = component->first;
-    }
+    surface.source_name_qualification = exactExpandedDeclaratorQualifier(
+        declaration_begin_index, point_index, "function",
+        function_decl->getQualifiedNameAsString(), &qualifier_cursor);
 
     const bool source_spells_return_type =
         !llvm::isa<clang::CXXConstructorDecl>(function_decl) &&
@@ -90266,139 +91694,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   if (current_declaration_has_source_surface &&
       handled_template_instantiation && is_explicit_instantiation &&
       !explicit_member_instantiation_covered_by_enclosing_class_directive) {
-    auto resolve_explicit_instantiation_scope =
-        [&](clang::SourceLocation point_of_instantiation)
-        -> SgScopeStatement * {
-      if (p_compiler_instance == nullptr) {
-        fprintf(stderr,
-                "REX_FRONTEND_INVARIANT[function-instantiation-scope]: "
-                "function=%s has no Clang compiler instance\n",
-                function_decl->getQualifiedNameAsString().c_str());
-        ROSE_ABORT();
-      }
-
-      clang::SourceManager &sm = p_compiler_instance->getSourceManager();
-      clang::SourceLocation source_location =
-          sm.getExpansionLoc(point_of_instantiation);
-      if (!source_location.isValid() || !source_location.isFileID()) {
-        fprintf(stderr,
-                "REX_FRONTEND_INVARIANT[function-instantiation-scope]: "
-                "function=%s has no exact source location\n",
-                function_decl->getQualifiedNameAsString().c_str());
-        ROSE_ABORT();
-      }
-
-      clang::TranslationUnitDecl *translation_unit =
-          markClangSpecificDeclDefined(
-              p_compiler_instance->getASTContext().getTranslationUnitDecl());
-      if (translation_unit == nullptr) {
-        fprintf(stderr,
-                "REX_FRONTEND_INVARIANT[function-instantiation-scope]: "
-                "function=%s has no Clang translation unit\n",
-                function_decl->getQualifiedNameAsString().c_str());
-        ROSE_ABORT();
-      }
-
-      clang::NamespaceDecl *containing_namespace = nullptr;
-      std::function<void(clang::DeclContext *)> find_containing_namespace =
-          [&](clang::DeclContext *context) {
-            context = markClangDeclContextObjectDefined(context);
-            if (context == nullptr) {
-              fprintf(stderr,
-                      "REX_FRONTEND_INVARIANT[function-instantiation-scope]: "
-                      "function=%s reached a null lexical context\n",
-                      function_decl->getQualifiedNameAsString().c_str());
-              ROSE_ABORT();
-            }
-
-            clang::NamespaceDecl *matching_child = nullptr;
-            for (clang::Decl *candidate : context->decls()) {
-              clang::NamespaceDecl *namespace_decl =
-                  llvm::dyn_cast_or_null<clang::NamespaceDecl>(
-                      markClangDeclObjectDefinedByKind(candidate));
-              if (namespace_decl == nullptr) {
-                continue;
-              }
-
-              clang::SourceRange range = readClangApiValueDefined(
-                  [&]() { return namespace_decl->getSourceRange(); });
-              if (!range.isValid()) {
-                continue;
-              }
-              clang::SourceLocation begin =
-                  sm.getExpansionLoc(range.getBegin());
-              clang::SourceLocation end = sm.getExpansionLoc(range.getEnd());
-              if (!begin.isValid() || !end.isValid() || !begin.isFileID() ||
-                  !end.isFileID() ||
-                  !sm.isWrittenInSameFile(begin, source_location) ||
-                  !sm.isWrittenInSameFile(end, source_location)) {
-                continue;
-              }
-              const bool contains_source =
-                  !sm.isBeforeInTranslationUnit(source_location, begin) &&
-                  !sm.isBeforeInTranslationUnit(end, source_location);
-              if (!contains_source) {
-                continue;
-              }
-              if (matching_child != nullptr &&
-                  matching_child != namespace_decl) {
-                fprintf(stderr,
-                        "REX_FRONTEND_INVARIANT[function-instantiation-scope]: "
-                        "function=%s source position is contained by two "
-                        "sibling namespace fragments\n",
-                        function_decl->getQualifiedNameAsString().c_str());
-                ROSE_ABORT();
-              }
-              matching_child = namespace_decl;
-            }
-
-            if (matching_child != nullptr) {
-              containing_namespace = matching_child;
-              find_containing_namespace(matching_child);
-            }
-          };
-      find_containing_namespace(translation_unit);
-
-      if (containing_namespace == nullptr) {
-        SgGlobal *global_scope = getGlobalScope();
-        if (global_scope == nullptr) {
-          fprintf(stderr,
-                  "REX_FRONTEND_INVARIANT[function-instantiation-scope]: "
-                  "function=%s has no exact global source scope\n",
-                  function_decl->getQualifiedNameAsString().c_str());
-          ROSE_ABORT();
-        }
-        return global_scope;
-      }
-
-      SgNamespaceDeclarationStatement *sage_namespace =
-          ensureNamespaceDeclaration(containing_namespace);
-      SgNamespaceDefinitionStatement *directive_scope =
-          sage_namespace != nullptr ? sage_namespace->get_definition()
-                                    : nullptr;
-      if (directive_scope == nullptr) {
-        fprintf(stderr,
-                "REX_FRONTEND_INVARIANT[function-instantiation-scope]: "
-                "function=%s containing namespace=%s has no exact Sage "
-                "definition\n",
-                function_decl->getQualifiedNameAsString().c_str(),
-                containing_namespace->getQualifiedNameAsString().c_str());
-        ROSE_ABORT();
-      }
-      Sg_File_Info *scope_start = directive_scope->get_startOfConstruct();
-      if (scope_start == nullptr || scope_start->get_line() <= 0 ||
-          scope_start->get_filenameString().empty()) {
-        fprintf(stderr,
-                "REX_FRONTEND_INVARIANT[function-instantiation-scope]: "
-                "function=%s containing namespace=%s lacks an exact source "
-                "position\n",
-                function_decl->getQualifiedNameAsString().c_str(),
-                containing_namespace->getQualifiedNameAsString().c_str());
-        ROSE_ABORT();
-      }
-      return directive_scope;
-    };
-
     if (SgDeclarationStatement *inst_decl =
             isSgDeclarationStatement(sg_function_decl)) {
       if (!explicit_instantiation_source_surface.has_value()) {
@@ -90418,7 +91713,9 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       explicit_instantiation_directive =
           isSgTemplateInstantiationDirectiveStatement(inst_decl->get_parent());
       SgScopeStatement *directive_scope =
-          resolve_explicit_instantiation_scope(point_of_instantiation);
+          resolveExplicitInstantiationSourceScope(
+              point_of_instantiation, "function",
+              function_decl->getQualifiedNameAsString());
       if (directive_scope == nullptr) {
         fprintf(stderr,
                 "REX_FRONTEND_INVARIANT[function-instantiation-scope]: "
@@ -96403,8 +97700,7 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
     if (tagIsSemanticTemplateInstantiation(tag_decl)) {
       return false;
     }
-    clang::SourceRange decl_range =
-        readClangApiValueDefined([&]() { return var_decl->getSourceRange(); });
+    clang::SourceRange decl_range = clangVarDeclSourceRangeDefined(var_decl);
     if (clang::TypeSourceInfo *tsi =
             markClangTypeSourceInfoDefined(readClangApiValueDefined(
                 [&]() { return var_decl->getTypeSourceInfo(); }))) {
@@ -96437,10 +97733,21 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
     auto exact_decl_stmt_parent =
         [&](const clang::Decl *declaration,
             const char *role) -> const clang::DeclStmt * {
+      declaration = markClangDeclObjectDefinedByKind(declaration);
+      if (declaration == nullptr) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[semantic-declarator-tag-owner]: "
+                "variable=%s %s declaration is null\n",
+                name.getString().c_str(), role);
+        ROSE_ABORT();
+      }
       const clang::DeclStmt *result = nullptr;
       for (const clang::DynTypedNode &parent :
            ast_context.getParents(*declaration)) {
-        const clang::DeclStmt *candidate = parent.get<clang::DeclStmt>();
+        markClangValueDefined(parent);
+        const clang::DeclStmt *candidate =
+            markClangDeclStmtStorageDefined(readClangApiValueDefined(
+                [&]() { return parent.get<clang::DeclStmt>(); }));
         if (candidate == nullptr) {
           continue;
         }
@@ -96467,6 +97774,7 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
         tag_owner != variable_owner) {
       return false;
     }
+    tag_owner = markClangDeclStmtStorageDefined(tag_owner);
 
     // Clang does not preserve TagDecl::isEmbeddedInDeclarator on the cloned
     // local tag produced while instantiating a function template. The common
@@ -96479,7 +97787,10 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
     unsigned tag_occurrences = 0;
     unsigned variable_occurrences = 0;
     clang::VarDecl *first_exact_declarator = nullptr;
-    for (clang::Decl *member : tag_owner->decls()) {
+    const clang::DeclGroupRef tag_owner_group =
+        markClangDeclGroupRefStorageDefined(readClangApiValueDefined(
+            [&]() { return tag_owner->getDeclGroup(); }));
+    for (clang::Decl *member : tag_owner_group) {
       member = markClangDeclObjectDefinedByKind(member);
       if (member == tag_decl) {
         saw_tag = true;
@@ -96713,9 +98024,8 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
     }
     if (p_compiler_instance != nullptr &&
         !sourceRangeContainsLocation(
-            readClangApiValueDefined(
-                [&]() { return var_decl->getSourceRange(); }),
-            template_loc, &p_compiler_instance->getSourceManager())) {
+            clangVarDeclSourceRangeDefined(var_decl), template_loc,
+            &p_compiler_instance->getSourceManager())) {
       continue;
     }
     written_template_headers.push_back(clang_header);
@@ -97643,7 +98953,8 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
           }
 
           clang::SourceManager &sm = p_compiler_instance->getSourceManager();
-          clang::SourceRange owner_range = var_decl->getSourceRange();
+          clang::SourceRange owner_range =
+              clangVarDeclSourceRangeDefined(var_decl);
           clang::SourceLocation tag_loc =
               sm.getSpellingLoc(tag_decl->getBeginLoc());
           clang::SourceLocation range_begin =
@@ -98582,7 +99893,7 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
               var_decl->getQualifiedNameAsString().c_str(),
               clangQualTypeAsStringDefinedForFrontend(
                   written_owner_type_loc.getType(),
-                  var_decl->getASTContext().getLangOpts())
+                  p_compiler_instance->getLangOpts())
                   .c_str(),
               static_cast<void *>(translated_source_owner),
               translated_source_owner != nullptr
@@ -98608,7 +99919,7 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
   if (var_is_constexpr) {
     sg_var_decl->set_is_constexpr(true);
   }
-  if (var_decl->getASTContext().getLangOpts().CPlusPlus &&
+  if (p_compiler_instance->getLangOpts().CPlusPlus &&
       !written_type_spells_elaborated_keyword) {
     sg_var_decl->setSkipElaborateType();
   }
@@ -98750,7 +100061,7 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
         }
       } else if (SgInitializer *existing_init = isSgInitializer(expr)) {
         init = existing_init;
-      } else if (var_decl->getASTContext().getLangOpts().CPlusPlus &&
+      } else if (p_compiler_instance->getLangOpts().CPlusPlus &&
                  var_is_direct_init &&
                  var_init_style != clang::VarDecl::ListInit) {
         SgExprListExp *args = SageBuilder::buildExprListExp_nfi();
@@ -98803,11 +100114,13 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
               ? computeAssignmentInitializerLexicalSurface(
                     p_compiler_instance->getSourceManager(),
                     p_compiler_instance->getLangOpts(),
-                    var_decl->getSourceRange(), init_expr->getSourceRange())
+                    clangVarDeclSourceRangeDefined(var_decl),
+                    init_expr->getSourceRange())
                     .range
               : computeInitializerLexicalRange(
                     p_compiler_instance->getSourceManager(),
-                    var_decl->getSourceRange(), init_expr->getSourceRange());
+                    clangVarDeclSourceRangeDefined(var_decl),
+                    init_expr->getSourceRange());
       applySourceRange(init, init_range);
     }
   }
@@ -98820,7 +100133,8 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
     const AssignmentInitializerLexicalSurface initializer_surface =
         computeAssignmentInitializerLexicalSurface(
             source_manager, p_compiler_instance->getLangOpts(),
-            var_decl->getSourceRange(), init_expr->getSourceRange());
+            clangVarDeclSourceRangeDefined(var_decl),
+            init_expr->getSourceRange());
     const clang::SourceRange initializer_range = initializer_surface.range;
     const bool complete_include_expansion =
         initializer_surface.source_form ==
@@ -98977,7 +100291,7 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
     clang::SourceManager &source_manager =
         p_compiler_instance->getSourceManager();
     clang::SourceRange initializer_range = computeInitializerLexicalRange(
-        source_manager, var_decl->getSourceRange(),
+        source_manager, clangVarDeclSourceRangeDefined(var_decl),
         init_expr->getSourceRange());
     std::vector<clang::SourceLocation> initializer_includes =
         p_sage_preprocessor_recorder->includeDirectiveLocationsStrictlyInside(
@@ -100127,7 +101441,7 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
       ROSE_ABORT();
     }
     const clang::SourceRange variable_source_range =
-        readClangApiValueDefined([&]() { return var_decl->getSourceRange(); });
+        clangVarDeclSourceRangeDefined(var_decl);
     const bool preserve_suppressed_header_lexical_surface =
         suppress_var && suppress_var_due_to_non_main_file &&
         !readClangApiValueDefined([&]() { return var_decl->isImplicit(); }) &&
@@ -100714,8 +102028,8 @@ bool ClangToSageTranslator::VisitParmVarDecl(clang::ParmVarDecl *param_var_decl,
       build_semantic_parameter && !build_explicit_template_id_type_use &&
       parameter_type_info != nullptr && !param_var_decl->isImplicit() &&
       !param_var_decl->isFromASTFile() &&
-      sourceRangeOwnsPhysicalSource(readClangApiValueDefined(
-          [&]() { return param_var_decl->getSourceRange(); }));
+      sourceRangeOwnsPhysicalSource(
+          clangVarDeclSourceRangeDefined(param_var_decl));
   if (semantic_parameter_has_exact_source_spelling) {
     clang::TypeLoc type_loc = readClangApiValueDefined(
         [&]() { return parameter_type_info->getTypeLoc(); });
@@ -100782,9 +102096,9 @@ bool ClangToSageTranslator::VisitParmVarDecl(clang::ParmVarDecl *param_var_decl,
       for (clang::TagDecl *tag_decl : written_parameter_tags) {
         tag_decl = markClangSpecificDeclDefined(tag_decl);
         if (tag_decl == nullptr ||
-            !sourceRangeContainsLocation(param_var_decl->getSourceRange(),
-                                         tag_decl->getBeginLoc(),
-                                         &source_manager)) {
+            !sourceRangeContainsLocation(
+                clangVarDeclSourceRangeDefined(param_var_decl),
+                tag_decl->getBeginLoc(), &source_manager)) {
           continue;
         }
         clang::TagDecl *canonical_tag =
@@ -100818,7 +102132,7 @@ bool ClangToSageTranslator::VisitParmVarDecl(clang::ParmVarDecl *param_var_decl,
       clang::SourceManager &source_manager =
           p_compiler_instance->getSourceManager();
       written_parameter_declares_tag = sourceRangeContainsLocation(
-          param_var_decl->getSourceRange(),
+          clangVarDeclSourceRangeDefined(param_var_decl),
           written_parameter_tag_decl->getBeginLoc(), &source_manager);
       if (written_parameter_declares_tag) {
         SgDeclarationScope *signature_scope = active_signature_scope;
@@ -100937,7 +102251,7 @@ bool ClangToSageTranslator::VisitParmVarDecl(clang::ParmVarDecl *param_var_decl,
     const bool inline_tag_definition =
         materialize_inline_tag_definition_for_qual_type(
             type_info->getTypeLoc(), param_var_decl->getType(),
-            param_var_decl->getSourceRange());
+            clangVarDeclSourceRangeDefined(param_var_decl));
     const bool preserve_written_nonreal_type =
         written_type_qualification_length > 0 ||
         written_type_has_explicit_global_qualifier;
@@ -101007,9 +102321,9 @@ bool ClangToSageTranslator::VisitParmVarDecl(clang::ParmVarDecl *param_var_decl,
 
     clang::SourceManager &source_manager =
         p_compiler_instance->getSourceManager();
-    if (!sourceRangeContainsLocation(param_var_decl->getSourceRange(),
-                                     tag_decl->getBeginLoc(),
-                                     &source_manager)) {
+    if (!sourceRangeContainsLocation(
+            clangVarDeclSourceRangeDefined(param_var_decl),
+            tag_decl->getBeginLoc(), &source_manager)) {
       fprintf(stderr,
               "REX_FRONTEND_INVARIANT[parameter-tag-owner]: parameter=%s "
               "first tag='%s' is not in the exact parameter source range\n",
@@ -101241,7 +102555,8 @@ bool ClangToSageTranslator::VisitParmVarDecl(clang::ParmVarDecl *param_var_decl,
     init->set_parent(param_init_name);
   }
   if (!build_semantic_parameter) {
-    applySourceRange(param_init_name, param_var_decl->getSourceRange());
+    applySourceRange(param_init_name,
+                     clangVarDeclSourceRangeDefined(param_var_decl));
   }
   clear_anonymous_name_qualification(param_init_name);
   if (param_var_decl->isParameterPack()) {
@@ -101448,6 +102763,20 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(
   markClangTypeObjectDefinedByClass(qual_type.getTypePtrOrNull());
   SgType *type = buildTypeFromQualifiedType(qual_type);
 
+  const clang::TemplateSpecializationKind specialization_kind =
+      var_template_specialization_decl->getTemplateSpecializationKind();
+  const bool explicit_instantiation_kind =
+      specialization_kind == clang::TSK_ExplicitInstantiationDeclaration ||
+      specialization_kind == clang::TSK_ExplicitInstantiationDefinition;
+  const bool source_written_specialization =
+      variableTemplateSpecializationHasSourceWrittenShell(
+          var_template_specialization_decl);
+  const bool explicit_instantiation =
+      explicit_instantiation_kind && source_written_specialization;
+  const bool source_written_initializer =
+      variableTemplateSpecializationHasSourceWrittenInitializer(
+          var_template_specialization_decl);
+
   // Get initializer if present
   SgInitializer *init = nullptr;
   clang::Expr *source_init_expr = nullptr;
@@ -101459,7 +102788,12 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(
         var_template_specialization_decl->getInit());
     if (init_expr != nullptr) {
       source_init_expr = init_expr;
-      SgNode *tmp_node = Traverse(init_expr);
+      SgNode *tmp_node =
+          source_written_initializer
+              ? Traverse(init_expr)
+              : translateSemanticExpressionSubtree(
+                    init_expr, "VisitVarTemplateSpecializationDecl:semantic-"
+                               "initializer-expression");
       SgExpression *sg_init_expr = isSgExpression(tmp_node);
       if (sg_init_expr != nullptr) {
         sg_init_expr = prepareExpressionForAttachment(sg_init_expr);
@@ -101531,10 +102865,69 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(
     scope = getGlobalScope();
   }
 
+  SgInitializedName *previous_specialization_name = nullptr;
+  clang::VarTemplateSpecializationDecl *previous_specialization =
+      llvm::dyn_cast_or_null<clang::VarTemplateSpecializationDecl>(
+          markClangDeclObjectDefinedByKind(readClangApiValueDefined([&]() {
+            return var_template_specialization_decl->getPreviousDecl();
+          })));
+  if (previous_specialization != nullptr) {
+    auto previous_translation =
+        p_decl_translation_map.find(previous_specialization);
+    if (previous_translation != p_decl_translation_map.end()) {
+      previous_specialization_name =
+          exactInitializedNameFromTranslatedVariableNode(
+              previous_translation->second);
+    }
+    if (previous_specialization_name == nullptr) {
+      if (p_decl_translation_in_progress.count(previous_specialization) != 0 ||
+          p_decl_translation_on_demand.count(previous_specialization) != 0) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[variable-template-redeclaration-"
+                "order]: specialization=%s predecessor=%p is unpublished "
+                "while its exact translation is already in progress\n",
+                var_template_specialization_decl->getQualifiedNameAsString()
+                    .c_str(),
+                static_cast<void *>(previous_specialization));
+        ROSE_ABORT();
+      }
+      SgNode *translated_previous = TraverseOnDemand(previous_specialization);
+      previous_translation =
+          p_decl_translation_map.find(previous_specialization);
+      if (previous_translation != p_decl_translation_map.end()) {
+        previous_specialization_name =
+            exactInitializedNameFromTranslatedVariableNode(
+                previous_translation->second);
+      }
+      if (previous_specialization_name == nullptr) {
+        previous_specialization_name =
+            exactInitializedNameFromTranslatedVariableNode(translated_previous);
+      }
+    }
+    SgTemplateVariableDeclaration *previous_sage_specialization =
+        isSgTemplateVariableDeclaration(
+            previous_specialization_name != nullptr
+                ? previous_specialization_name->get_parent()
+                : nullptr);
+    if (previous_sage_specialization == nullptr ||
+        previous_specialization_name->get_name() != name ||
+        previous_specialization_name->get_scope() != scope) {
+      fprintf(
+          stderr,
+          "REX_FRONTEND_INVARIANT[variable-template-redeclaration]: "
+          "specialization=%s predecessor=%p did not resolve to the "
+          "exact same Sage template-variable entity\n",
+          var_template_specialization_decl->getQualifiedNameAsString().c_str(),
+          static_cast<void *>(previous_specialization));
+      ROSE_ABORT();
+    }
+  }
+
   SgTemplateVariableDeclaration *var_decl =
       SageBuilder::buildTemplateVariableDeclaration_nfi(
           name, type, init, scope,
-          SageBuilder::template_variable_entity_kind::specialization);
+          SageBuilder::template_variable_entity_kind::specialization,
+          previous_specialization_name);
   normalize_standalone_template_variable_declaration(var_decl);
   if (var_decl == nullptr || var_decl->get_variables().size() != 1 ||
       var_decl->get_variables().front() == nullptr) {
@@ -101566,12 +102959,11 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(
       p_compiler_instance, var_template_specialization_decl, p_sage_source_file,
       /*on_demand_translation=*/false,
       var_template_specialization_decl->getTemplateSpecializationKind()));
-  if (var_template_specialization_decl->isConstexpr()) {
+  if (var_template_specialization_decl->isConstexpr() &&
+      !explicit_instantiation) {
     var_decl->set_is_constexpr(true);
   }
 
-  clang::TemplateSpecializationKind specialization_kind =
-      var_template_specialization_decl->getTemplateSpecializationKind();
   const bool specialization_is_partial =
       readClangApiValueDefined([&]() {
         return var_template_specialization_decl
@@ -101594,8 +102986,162 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(
   llvm::ArrayRef<clang::TemplateArgument> instantiation_args =
       markClangTemplateArgumentArrayDefined(instantiation_args_ptr->asArray());
 
-  clang::SourceRange var_template_specialization_range =
-      var_template_specialization_decl->getSourceRange();
+  if (source_written_specialization && args_as_written == nullptr) {
+    std::cerr
+        << "REX_FRONTEND_INVARIANT[variable-template-specialization-args]: "
+           "source-written specialization '"
+        << var_template_specialization_decl->getQualifiedNameAsString()
+        << "' has no exact written template-argument list" << std::endl;
+    ROSE_ABORT();
+  }
+
+  clang::SourceRange var_template_specialization_range;
+  clang::SourceRange explicit_instantiation_directive_range;
+  clang::SourceLocation explicit_instantiation_point;
+  size_t explicit_instantiation_declaration_begin_index =
+      p_expanded_tokens.size();
+  size_t explicit_instantiation_name_index = p_expanded_tokens.size();
+  if (explicit_instantiation) {
+    const clang::SourceLocation point_of_instantiation =
+        readClangApiValueDefined([&]() {
+          return var_template_specialization_decl->getPointOfInstantiation();
+        });
+    explicit_instantiation_point = point_of_instantiation;
+    const clang::SourceLocation left_angle = readClangApiValueDefined(
+        [&]() { return args_as_written->getLAngleLoc(); });
+    const clang::SourceLocation right_angle = readClangApiValueDefined(
+        [&]() { return args_as_written->getRAngleLoc(); });
+    if (!point_of_instantiation.isValid() || !left_angle.isValid() ||
+        !right_angle.isValid()) {
+      std::cerr << "REX_FRONTEND_INVARIANT[variable-template-explicit-"
+                   "instantiation-source]: explicit instantiation '"
+                << var_template_specialization_decl->getQualifiedNameAsString()
+                << "' has no exact point and written template-id source "
+                   "anchors"
+                << std::endl;
+      ROSE_ABORT();
+    }
+
+    const unsigned int point_order = requireExpandedTokenSourceOrder(
+        point_of_instantiation,
+        "VisitVarTemplateSpecializationDecl:explicit-instantiation-point");
+    const unsigned int left_order = requireExpandedTokenSourceOrder(
+        left_angle,
+        "VisitVarTemplateSpecializationDecl:explicit-instantiation-left-"
+        "angle");
+    const unsigned int right_order = requireExpandedTokenSourceOrder(
+        right_angle,
+        "VisitVarTemplateSpecializationDecl:explicit-instantiation-right-"
+        "angle");
+    if (point_order == 0 || point_order >= left_order ||
+        left_order >= right_order || right_order > p_expanded_tokens.size() ||
+        p_expanded_tokens[left_order - 1].kind != clang::tok::less ||
+        (p_expanded_tokens[right_order - 1].kind != clang::tok::greater &&
+         p_expanded_tokens[right_order - 1].kind !=
+             clang::tok::greatergreater &&
+         p_expanded_tokens[right_order - 1].kind !=
+             clang::tok::greatergreatergreater)) {
+      std::cerr << "REX_FRONTEND_INVARIANT[variable-template-explicit-"
+                   "instantiation-source]: explicit instantiation '"
+                << var_template_specialization_decl->getQualifiedNameAsString()
+                << "' has malformed ordered expanded source anchors point="
+                << point_order << " left=" << left_order
+                << " right=" << right_order << std::endl;
+      ROSE_ABORT();
+    }
+
+    const size_t point_index = static_cast<size_t>(point_order - 1);
+    size_t introducer_index = p_expanded_tokens.size();
+    unsigned int paren_depth = 0;
+    unsigned int square_depth = 0;
+    unsigned int brace_depth = 0;
+    for (size_t index = point_index; index-- > 0;) {
+      const clang::tok::TokenKind kind = p_expanded_tokens[index].kind;
+      if (kind == clang::tok::r_paren) {
+        ++paren_depth;
+      } else if (kind == clang::tok::r_square) {
+        ++square_depth;
+      } else if (kind == clang::tok::r_brace) {
+        ++brace_depth;
+      } else if (kind == clang::tok::l_paren && paren_depth != 0) {
+        --paren_depth;
+      } else if (kind == clang::tok::l_square && square_depth != 0) {
+        --square_depth;
+      } else if (kind == clang::tok::l_brace) {
+        if (brace_depth != 0) {
+          --brace_depth;
+        } else if (paren_depth == 0 && square_depth == 0) {
+          break;
+        }
+      }
+
+      const bool at_declaration_level =
+          paren_depth == 0 && square_depth == 0 && brace_depth == 0;
+      if (at_declaration_level && kind == clang::tok::semi) {
+        break;
+      }
+      if (!at_declaration_level || kind != clang::tok::kw_template) {
+        continue;
+      }
+      const clang::tok::TokenKind predecessor =
+          index != 0 ? p_expanded_tokens[index - 1].kind : clang::tok::unknown;
+      if (predecessor == clang::tok::coloncolon ||
+          predecessor == clang::tok::period ||
+          predecessor == clang::tok::arrow) {
+        continue;
+      }
+      introducer_index = index;
+      break;
+    }
+    if (introducer_index == p_expanded_tokens.size()) {
+      std::cerr << "REX_FRONTEND_INVARIANT[variable-template-explicit-"
+                   "instantiation-source]: explicit instantiation '"
+                << var_template_specialization_decl->getQualifiedNameAsString()
+                << "' has no exact expanded template introducer" << std::endl;
+      ROSE_ABORT();
+    }
+    const size_t directive_begin_index =
+        introducer_index != 0 && p_expanded_tokens[introducer_index - 1].kind ==
+                                     clang::tok::kw_extern
+            ? introducer_index - 1
+            : introducer_index;
+    const size_t declaration_begin_index = introducer_index + 1;
+    if (declaration_begin_index >= point_index ||
+        p_expanded_tokens[declaration_begin_index].kind == clang::tok::semi) {
+      std::cerr << "REX_FRONTEND_INVARIANT[variable-template-explicit-"
+                   "instantiation-source]: explicit instantiation '"
+                << var_template_specialization_decl->getQualifiedNameAsString()
+                << "' has no exact nested declaration transaction" << std::endl;
+      ROSE_ABORT();
+    }
+    explicit_instantiation_declaration_begin_index = declaration_begin_index;
+    explicit_instantiation_name_index = point_index;
+    const clang::SourceLocation source_begin =
+        p_expanded_tokens[directive_begin_index].location;
+    const clang::SourceLocation declaration_begin =
+        p_expanded_tokens[declaration_begin_index].location;
+    if (!source_begin.isValid() || !declaration_begin.isValid()) {
+      std::cerr << "REX_FRONTEND_INVARIANT[variable-template-explicit-"
+                   "instantiation-source]: explicit instantiation '"
+                << var_template_specialization_decl->getQualifiedNameAsString()
+                << "' has an expanded source transaction without exact "
+                   "locations"
+                << std::endl;
+      ROSE_ABORT();
+    }
+    var_template_specialization_range =
+        clang::SourceRange(declaration_begin, right_angle);
+    explicit_instantiation_directive_range =
+        extendDeclSourceRangeWithTrailingSemicolon(
+            clang::SourceRange(source_begin, right_angle),
+            p_compiler_instance->getSourceManager(),
+            p_compiler_instance->getLangOpts(),
+            p_compiler_instance->getPreprocessor(),
+            var_template_specialization_decl);
+  } else {
+    var_template_specialization_range =
+        var_template_specialization_decl->getSourceRange();
+  }
   markClangValueDefined(var_template_specialization_range);
 
   ConstraintSatisfactionResult constraint_result;
@@ -101625,18 +103171,6 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(
           constraint_owner, constraints, constraint_args,
           var_template_specialization_range);
     }
-  }
-
-  const bool source_written_specialization =
-      isSourceWrittenVariableTemplateSpecialization(
-          var_template_specialization_decl);
-  if (source_written_specialization && args_as_written == nullptr) {
-    std::cerr
-        << "REX_FRONTEND_INVARIANT[variable-template-specialization-args]: "
-           "source-written specialization '"
-        << var_template_specialization_decl->getQualifiedNameAsString()
-        << "' has no exact written template-argument list" << std::endl;
-    ROSE_ABORT();
   }
 
   // This list is the declaration's source surface. Preserve written argument
@@ -101724,7 +103258,7 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(
     applySourceRange(specialization_name, var_template_specialization_range);
     applySourceRange(specialization_definition,
                      var_template_specialization_range);
-    if (init != nullptr) {
+    if (init != nullptr && source_written_initializer) {
       if (source_init_expr == nullptr) {
         fprintf(stderr,
                 "REX_FRONTEND_INVARIANT[variable-template-specialization-"
@@ -101739,6 +103273,12 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(
               var_template_specialization_range,
               source_init_expr->getSourceRange());
       applySourceRange(init, initializer_range);
+    } else if (init != nullptr) {
+      setSynthesizedFileInfo(init);
+      mark_compiler_generated_frontend_specific(init);
+      validate_semantic_provenance(
+          init, true,
+          "VisitVarTemplateSpecializationDecl:semantic-initializer");
     }
     require_complete_file_info_provenance(
         specialization_name,
@@ -101746,13 +103286,13 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(
     require_complete_file_info_provenance(
         specialization_definition,
         "VisitVarTemplateSpecializationDecl:variable-definition");
-    if (init != nullptr) {
+    if (init != nullptr && source_written_initializer) {
       require_complete_file_info_provenance(
           init, "VisitVarTemplateSpecializationDecl:initializer");
     }
   } else {
-    // An implicit/explicit instantiation owns semantic identity only.  Publish
-    // the declaration shell and both variable components atomically here;
+    // An implicit instantiation owns semantic identity only.  Publish the
+    // declaration shell and both variable components atomically here;
     // VisitDecl must never repair child provenance after the producer returns.
     setSynthesizedFileInfo(var_decl);
     setSynthesizedFileInfo(specialization_name);
@@ -101799,7 +103339,52 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(
     }
     var_decl->set_explicitTemplateSpecializationHeaderCount(header_count);
   }
-  if (source_written_specialization) {
+  SgTemplateInstantiationDirectiveStatement *explicit_instantiation_directive =
+      nullptr;
+  if (source_written_specialization && explicit_instantiation) {
+    SgScopeStatement *directive_scope = resolveExplicitInstantiationSourceScope(
+        explicit_instantiation_point, "variable",
+        var_template_specialization_decl->getQualifiedNameAsString());
+    explicit_instantiation_directive =
+        build_and_publish_explicit_instantiation_directive(
+            p_decl_attachment_session, var_decl, directive_scope,
+            specialization_kind == clang::TSK_ExplicitInstantiationDeclaration,
+            "VisitVarTemplateSpecializationDecl:explicit-instantiation");
+    applySourceRange(explicit_instantiation_directive,
+                     explicit_instantiation_directive_range);
+    explicit_instantiation_directive->set_firstNondefiningDeclaration(
+        explicit_instantiation_directive);
+    explicit_instantiation_directive->set_definingDeclaration(
+        explicit_instantiation_directive);
+    insert_decl_in_scope_child_list_by_source_position(
+        p_decl_attachment_session, explicit_instantiation_directive,
+        directive_scope,
+        "VisitVarTemplateSpecializationDecl:explicit-instantiation-order");
+    if (var_decl->get_scope() != directive_scope ||
+        specialization_name->get_scope() != scope ||
+        explicit_instantiation_directive->get_scope() != directive_scope ||
+        explicit_instantiation_directive->get_parent() != directive_scope ||
+        var_decl->get_parent() != explicit_instantiation_directive) {
+      fprintf(
+          stderr,
+          "REX_FRONTEND_INVARIANT[variable-template-explicit-"
+          "instantiation-owner]: variable=%s lost its distinct initialized-"
+          "name semantic scope or exact lexical directive owner "
+          "variable-scope=%p name-semantic=%p expected-semantic=%p directive-"
+          "scope=%p expected-lexical=%p directive-parent=%p variable-parent=%p "
+          "expected-directive=%p\n",
+          var_template_specialization_decl->getQualifiedNameAsString().c_str(),
+          static_cast<void *>(var_decl->get_scope()),
+          static_cast<void *>(specialization_name->get_scope()),
+          static_cast<void *>(scope),
+          static_cast<void *>(explicit_instantiation_directive->get_scope()),
+          static_cast<void *>(directive_scope),
+          static_cast<void *>(explicit_instantiation_directive->get_parent()),
+          static_cast<void *>(var_decl->get_parent()),
+          static_cast<void *>(explicit_instantiation_directive));
+      ROSE_ABORT();
+    }
+  } else if (source_written_specialization) {
     publish_fresh_decl_in_scope_child_list(
         p_decl_attachment_session, var_decl, scope,
         "VisitVarTemplateSpecializationDecl:construction");
@@ -101824,12 +103409,105 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(
   }
   registerDeclarationSymbol(var_decl);
 
-  *node = var_decl;
-
-  FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-      p_declaration_with_finalized_provenance, var_decl);
-  const bool visit_res =
-      VisitDeclaratorDecl(var_template_specialization_decl, node) && res;
+  SgNode *visited_declaration = var_decl;
+  bool visit_res = false;
+  {
+    FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
+        p_declaration_with_finalized_provenance, var_decl);
+    visit_res = VisitDeclaratorDecl(var_template_specialization_decl,
+                                    &visited_declaration) &&
+                res;
+  }
+  if (visited_declaration != var_decl) {
+    std::cerr
+        << "REX_FRONTEND_INVARIANT[variable-template-specialization-result]: "
+           "generic declaration traversal replaced its exact producer result"
+        << std::endl;
+    ROSE_ABORT();
+  }
+  if (source_written_specialization) {
+    if (!specialization_name->get_source_name_qualification_present()) {
+      fprintf(
+          stderr,
+          "REX_FRONTEND_INVARIANT[variable-template-specialization-"
+          "qualification]: specialization=%s has no exact declarator-id "
+          "qualification decision\n",
+          var_template_specialization_decl->getQualifiedNameAsString().c_str());
+      ROSE_ABORT();
+    }
+    SourceQualification source_qualification;
+    if (explicit_instantiation) {
+      source_qualification = exactExpandedDeclaratorQualifier(
+          explicit_instantiation_declaration_begin_index,
+          explicit_instantiation_name_index, "variable",
+          var_template_specialization_decl->getQualifiedNameAsString());
+      clang::NestedNameSpecifierLoc clang_qualifier =
+          markClangNestedNameSpecifierLocDefined(
+              readClangApiValueDefined([&]() {
+                return var_template_specialization_decl->getQualifierLoc();
+              }));
+      if (clang_qualifier) {
+        clang::NestedNameSpecifier semantic_qualifier =
+            markClangNestedNameSpecifierDefined(readClangApiValueDefined(
+                [&]() { return clang_qualifier.getNestedNameSpecifier(); }));
+        const int semantic_component_count =
+            nestedNameSpecifierComponentCount(semantic_qualifier);
+        const bool semantic_global =
+            nestedNameSpecifierHasGlobal(semantic_qualifier);
+        if (!semantic_qualifier || semantic_component_count <= 0 ||
+            source_qualification.tokens.size() !=
+                static_cast<size_t>(semantic_component_count) ||
+            source_qualification.global != semantic_global) {
+          fprintf(stderr,
+                  "REX_FRONTEND_INVARIANT[variable-template-explicit-"
+                  "instantiation-qualification]: specialization=%s exact "
+                  "expanded qualifier shape=%zu/global=%d disagrees with "
+                  "Clang semantic shape=%d/global=%d\n",
+                  var_template_specialization_decl->getQualifiedNameAsString()
+                      .c_str(),
+                  source_qualification.tokens.size(),
+                  source_qualification.global ? 1 : 0, semantic_component_count,
+                  semantic_global ? 1 : 0);
+          ROSE_ABORT();
+        }
+      }
+      if (!clang_qualifier &&
+          (specialization_name->get_source_name_global_qualification() ||
+           !specialization_name->get_source_name_qualification_tokens()
+                .empty())) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[variable-template-explicit-"
+                "instantiation-qualification]: specialization=%s has a "
+                "qualifier payload without a Clang qualifier location\n",
+                var_template_specialization_decl->getQualifiedNameAsString()
+                    .c_str());
+        ROSE_ABORT();
+      }
+      specialization_name->set_source_name_global_qualification(
+          source_qualification.global);
+      specialization_name->get_source_name_qualification_tokens() =
+          source_qualification.tokens;
+      specialization_name->set_name_qualification_length(
+          static_cast<int>(source_qualification.tokens.size()));
+      specialization_name->set_global_qualification_required(
+          source_qualification.global);
+    } else {
+      source_qualification.global =
+          specialization_name->get_source_name_global_qualification();
+      source_qualification.tokens =
+          specialization_name->get_source_name_qualification_tokens();
+    }
+    var_decl->set_name_qualification_length(
+        specialization_name->get_name_qualification_length());
+    var_decl->set_global_qualification_required(
+        specialization_name->get_global_qualification_required());
+    preserveSourceNameQualification(
+        var_decl, source_qualification,
+        "VisitVarTemplateSpecializationDecl:source-name-qualification");
+  }
+  *node = explicit_instantiation_directive != nullptr
+              ? static_cast<SgNode *>(explicit_instantiation_directive)
+              : static_cast<SgNode *>(var_decl);
 
   return visit_res;
 }

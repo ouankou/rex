@@ -1331,6 +1331,7 @@ set(REX_CXX_TRANSFORMATION_TEST_SOURCES
   test2013_milind_01.C
   test2020_44.C
   rex_extract_function_arguments_condition_insertion_scope.cpp
+  rex_frontend_semantic_lambda_parent.cpp
   rex_test2025_issue148_system_header_mutation.cpp
   rex_test2026_template_instantiation_basic.cpp
   rex_test2026_template_features.cpp

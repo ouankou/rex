@@ -343,11 +343,10 @@ void Grammar::setUpSupport() {
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (11/27/2010): data member to force case sensitive or case insensitive
-  // semantics (default is case sensitive).
-  SymbolTable.setDataPrototype("bool", "case_insensitive", "= false",
-                               NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                               NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+  // Case sensitivity is owned by the live rose_hash_multimap.  Do not publish
+  // a second generated boolean: the custom SgSymbolTable constructors and
+  // setCaseInsensitive() never used it, so it was both uninitialized and able
+  // to disagree with the table that performs lookup.
 
   // DQ (7/22/2010): Added type table to support stricter uniqueness of types
   // and proper sharing.
@@ -1035,6 +1034,16 @@ void Grammar::setUpSupport() {
       "SgStringList", "frontendSystemIncludeOwnershipPathList", "",
       NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
+  // Exact active include edges reported by Clang.  The key is the resolved
+  // physical target and each value is the source directive that produced that
+  // edge.  Keep this on the translation-unit source file because the records
+  // are frontend-owned until secondary preprocessing attachment completes;
+  // header-tree construction must consume this typed relation instead of
+  // resolving raw directive spellings a second time.
+  SourceFile.setDataPrototype(
+      "std::map<std::string, std::set<PreprocessingInfo*> >",
+      "frontendResolvedIncludeDirectivesMap", "", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   // Physical dependencies whose declarations must not be mutated in place.
   // This includes system headers and imported Fortran module files.  Keeping
   // it separate from the include lists avoids pretending that every frontend
@@ -2326,18 +2335,6 @@ void Grammar::setUpSupport() {
       "std::map<std::string, std::set<PreprocessingInfo*> >",
       "includingPreprocessingInfosMap", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // negara1 (07/29/2011): The following two fields track include paths that
-  // compiler searches for quoted and bracketed includes correspondingly.
-  Project.setDataPrototype("std::list<std::string>",
-                           "quotedIncludesSearchPaths", "",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                           NO_TRAVERSAL, NO_DELETE);
-
-  Project.setDataPrototype("std::list<std::string>",
-                           "bracketedIncludesSearchPaths", "",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                           NO_TRAVERSAL, NO_DELETE);
 
   // negara1 (08/17/2011): Added to permit specifying an optional root folder
   // for header files unparsing.

@@ -1469,12 +1469,26 @@ void Unparse_MOD_SAGE::outputTemplateSpecializationSpecifier(
     }
   };
 
-  // DQ (1/3/2016): Adding support for template variable declarations.
-  // TV (03/31/2022): FIXME that is broken: we need to find a predicate for
-  // template variable instantiation in the absence of specialized node
   if (isSgTemplateVariableDeclaration(decl_stmt) != NULL) {
     SgTemplateVariableDeclaration *tvdecl =
         (SgTemplateVariableDeclaration *)decl_stmt;
+    SgTemplateInstantiationDirectiveStatement *instantiation_directive =
+        isSgTemplateInstantiationDirectiveStatement(tvdecl->get_parent());
+    if (instantiation_directive != NULL) {
+      if (instantiation_directive->get_declaration() != tvdecl ||
+          tvdecl->get_specialization() !=
+              SgDeclarationStatement::e_no_specialization ||
+          tvdecl->get_explicitTemplateSpecializationHeaderCount() != 0) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[variable-instantiation-header]: "
+                "template-variable=%p has a malformed explicit-"
+                "instantiation directive identity\n",
+                static_cast<void *>(tvdecl));
+        ROSE_ABORT();
+      }
+      curprint("template ");
+      return;
+    }
 
     SgSourceFile *sourcefile = info.get_current_source_file();
     bool unparse_template_from_ast =
@@ -2277,7 +2291,11 @@ void Unparse_MOD_SAGE::printAttributes(SgDeclarationStatement *decl_stmt,
 
   // DQ (3/1/2013): The default value is changed from zero to -1 (and the type
   // was make to be a short (signed) value).
-  if (alignmentValue >= 0) {
+  // A class declaration owns this attribute in its decl-specifier sequence,
+  // between the class-key and class name.  Emitting it through this generic
+  // post-declarator path produces invalid defining syntax
+  // (`struct Name __attribute__((aligned(N))) {}`).
+  if (alignmentValue >= 0 && isSgClassDeclaration(decl_stmt) == nullptr) {
     // DQ (7/26/2014): Fixed error in using "align" (mistake), changed to
     // "aligned". curprint(" __attribute__((align(N)))"); curprint("
     // __attribute__((align(");

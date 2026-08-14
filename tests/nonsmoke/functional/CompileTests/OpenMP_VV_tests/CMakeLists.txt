@@ -46,17 +46,19 @@ endif()
 
 set(OMPVV_NEGATIVE_OUTPUT_ROOT "${CMAKE_CURRENT_BINARY_DIR}/negative-test-output")
 file(MAKE_DIRECTORY "${OMPVV_NEGATIVE_OUTPUT_ROOT}")
-add_test(
-  NAME OMPVV_negative_bad_fortran_directive_parse_failure
-  WORKING_DIRECTORY "${OMPVV_NEGATIVE_OUTPUT_ROOT}"
-  COMMAND ${BASH_EXECUTABLE} "${OMPVV_NEGATIVE_PARSE_SCRIPT}"
-          "$<TARGET_FILE:parseOmp>"
-          "${CMAKE_CURRENT_SOURCE_DIR}/negative/bad_openmp_directive.F90"
-          "REX_FLANG_INVARIANT[source-stream-directive]: REX OpenMP parser did not produce one typed Fortran directive"
-          "  1:32: syntax error, unexpected EXPR_STRING")
-set_tests_properties(OMPVV_negative_bad_fortran_directive_parse_failure
-  PROPERTIES LABELS "OMPVV;OMPVV_negative"
-             ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${OMPVV_NEGATIVE_OUTPUT_ROOT}")
+if(ENABLE-FORTRAN)
+  add_test(
+    NAME OMPVV_negative_bad_fortran_directive_parse_failure
+    WORKING_DIRECTORY "${OMPVV_NEGATIVE_OUTPUT_ROOT}"
+    COMMAND ${BASH_EXECUTABLE} "${OMPVV_NEGATIVE_PARSE_SCRIPT}"
+            "$<TARGET_FILE:parseOmp>"
+            "${CMAKE_CURRENT_SOURCE_DIR}/negative/bad_openmp_directive.F90"
+            "REX_FLANG_INVARIANT[source-stream-directive]: REX OpenMP parser did not produce one typed Fortran directive"
+            "  1:32: syntax error, unexpected EXPR_STRING")
+  set_tests_properties(OMPVV_negative_bad_fortran_directive_parse_failure
+    PROPERTIES LABELS "OMPVV;OMPVV_negative"
+               ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${OMPVV_NEGATIVE_OUTPUT_ROOT}")
+endif()
 
 set(OMPVV_EXTRACTOR_OUTPUT_ROOT
     "${CMAKE_CURRENT_BINARY_DIR}/extractor-test-output")
@@ -87,21 +89,31 @@ function(add_ompvv_version_tests version)
     message(FATAL_ERROR "OpenMP_VV reference tree not found: ${reference_root}")
   endif()
 
-  file(GLOB_RECURSE version_tests CONFIGURE_DEPENDS
-       RELATIVE "${source_root}"
-       "${source_root}/*.c"
-       "${source_root}/*.cc"
-       "${source_root}/*.cpp"
-       "${source_root}/*.cxx"
-       "${source_root}/*.C"
-       "${source_root}/*.f"
-       "${source_root}/*.F"
-       "${source_root}/*.f90"
-       "${source_root}/*.F90")
+  set(version_tests)
+  if(ENABLE-C)
+    file(GLOB_RECURSE c_version_tests CONFIGURE_DEPENDS
+         RELATIVE "${source_root}"
+         "${source_root}/*.c"
+         "${source_root}/*.cc"
+         "${source_root}/*.cpp"
+         "${source_root}/*.cxx"
+         "${source_root}/*.C")
+    list(APPEND version_tests ${c_version_tests})
+  endif()
+  if(ENABLE-FORTRAN)
+    file(GLOB_RECURSE fortran_version_tests CONFIGURE_DEPENDS
+         RELATIVE "${source_root}"
+         "${source_root}/*.f"
+         "${source_root}/*.F"
+         "${source_root}/*.f90"
+         "${source_root}/*.F90")
+    list(APPEND version_tests ${fortran_version_tests})
+  endif()
   list(SORT version_tests)
 
   if(version_tests STREQUAL "")
-    message(FATAL_ERROR "No OpenMP_VV ${version} test sources found under ${source_root}")
+    message(FATAL_ERROR
+      "No OpenMP_VV ${version} test sources found for the enabled REX languages under ${source_root}")
   endif()
 
   file(MAKE_DIRECTORY "${output_root}")

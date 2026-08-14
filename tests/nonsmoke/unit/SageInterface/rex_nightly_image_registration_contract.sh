@@ -55,3 +55,13 @@ if [ "$test_stage_arg_count" -ne 1 ]; then
   echo "nightly test stage must consume the same Valgrind selection" >&2
   exit 1
 fi
+
+if [ "$(grep -Ec '^ARG REX_ENABLE_X86_SIMD_TESTS=OFF$' "$dockerfile")" -ne 2 ] ||
+   [ "$(grep -Fc 'REX_ENABLE_X86_SIMD_TESTS="${REX_ENABLE_X86_SIMD_TESTS}"' \
+       "$dockerfile")" -ne 1 ] ||
+   [ "$(grep -Fc 'libc6-dev-amd64-cross' "$dockerfile")" -ne 2 ] ||
+   [ "$(grep -Fc '/usr/x86_64-linux-gnu/include/bits/libc-header-start.h' \
+       "$dockerfile")" -ne 2 ]; then
+  echo "nightly development image lacks its explicit x86 SIMD sysroot contract" >&2
+  exit 1
+fi

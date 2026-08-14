@@ -1531,6 +1531,52 @@
    fun:_ZNK5clang10ASTContext28getSubstTemplateTypeParmTypeENS_8QualTypeEPNS_4DeclEjNS_14UnsignedOrNoneEb
 }
 
+# Clang 22 leaves padding in FoldingSetNodeID inputs undefined while parsing
+# template type-ids.  Directly running the Ubuntu Clang 22 driver under
+# MemCheck on the preprocessed libstdc++ constructor-family fixture reproduces
+# this ASTContext/FoldingSet defect without REX.  REX's exact written-type
+# transaction legitimately reaches the same Clang parser path after the
+# translation-unit parse.  Keep these suppressions restricted to the exact
+# upstream type constructors, ParseTypeName, and REX's typed translation
+# boundary; memory errors in REX-owned frames remain unsuppressed.
+# The first ellipsis accounts for the optional inlined FoldingSet wrapper that
+# source-built LLVM reports separately but the Ubuntu shared library folds
+# into the next mandatory ASTContext constructor frame.
+{
+   rex_upstream_clang22_parse_type_name_subst_typeparm_folding_cond
+   Memcheck:Cond
+   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
+   ...
+   fun:_ZNK5clang10ASTContext28getSubstTemplateTypeParmTypeENS_8QualTypeEPNS_4DeclEjNS_14UnsignedOrNoneEb
+   ...
+   fun:_ZN5clang6Parser13ParseTypeNameEPNS_11SourceRangeENS_17DeclaratorContextENS_15AccessSpecifierEPPNS_4DeclEPNS_16ParsedAttributesE
+   fun:*ClangToSageTranslator*translateFunctionDeclCommon*
+}
+
+{
+   rex_upstream_clang22_parse_type_name_pointer_folding_cond
+   Memcheck:Cond
+   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
+   ...
+   fun:_ZNK5clang10ASTContext14getPointerTypeENS_8QualTypeE
+   fun:_ZN5clang4Sema16BuildPointerTypeENS_8QualTypeENS_14SourceLocationENS_15DeclarationNameE
+   ...
+   fun:_ZN5clang6Parser13ParseTypeNameEPNS_11SourceRangeENS_17DeclaratorContextENS_15AccessSpecifierEPPNS_4DeclEPNS_16ParsedAttributesE
+   fun:*ClangToSageTranslator*translateFunctionDeclCommon*
+}
+
+{
+   rex_upstream_clang22_parse_type_name_lvalue_reference_folding_cond
+   Memcheck:Cond
+   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
+   ...
+   fun:_ZNK5clang10ASTContext22getLValueReferenceTypeENS_8QualTypeEb
+   fun:_ZN5clang4Sema18BuildReferenceTypeENS_8QualTypeEbNS_14SourceLocationENS_15DeclarationNameE
+   ...
+   fun:_ZN5clang6Parser13ParseTypeNameEPNS_11SourceRangeENS_17DeclaratorContextENS_15AccessSpecifierEPPNS_4DeclEPNS_16ParsedAttributesE
+   fun:*ClangToSageTranslator*translateFunctionDeclCommon*
+}
+
 {
    rex_upstream_clang22_astcontext_typedef_type_folding_cond
    Memcheck:Cond
@@ -1575,4 +1621,119 @@
    fun:_ZN4llvm14FoldingSetBase15GetOrInsertNodeEPNS0_4NodeERKNS0_14FoldingSetInfoE
    ...
    fun:*clang*
+}
+
+{
+   rex_upstream_flang22_unwrap_whole_symbol_data_ref_cond
+   Memcheck:Cond
+   fun:_ZN7Fortran8evaluate24UnwrapWholeSymbolDataRefERKSt8optionalINS0_7DataRefEE
+   ...
+   fun:_ZN7Fortran9semantics9Semantics7PerformEv
+   fun:_Z14CompileFortranRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKN7Fortran6parser7OptionsERK13DriverOptionsS6_
+}
+
+{
+   rex_upstream_flang22_module_reader_owned_semantics_leak
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   ...
+   fun:_ZN7Fortran9semantics13ModFileReader4ReadENS_6parser9CharBlockESt8optionalIbEPNS0_5ScopeEb
+}
+
+# LLVM 22's Flang semantic resolver retains interior pointers to the following
+# allocations at process exit, so MemCheck classifies them as "possibly lost".
+# Directly instrumenting `/usr/lib/llvm-22/bin/flang -fc1` reproduces every
+# allocation family below without REX.  Keep these entries anchored both to the
+# exact upstream allocation site and to REX's synchronous CompileFortran call;
+# REX-owned builder allocations occur after Semantics::Perform and therefore
+# remain hard MemCheck errors.
+{
+   rex_upstream_flang22_semantics_integer32_constant_possible_leak
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN7Fortran8evaluate12ConstantBaseINS0_4TypeILNS_6common12TypeCategoryE0ELi4EEENS0_5value7IntegerILi32ELb1ELi32EjmLi32EEEEC2ERKS9_
+   ...
+   fun:_ZN7Fortran9semantics9Semantics7PerformEv
+   fun:_Z14CompileFortranRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKN7Fortran6parser7OptionsERK13DriverOptionsS6_
+}
+
+{
+   rex_upstream_flang22_semantics_integer64_constant_possible_leak
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN7Fortran8evaluate12ConstantBaseINS0_4TypeILNS_6common12TypeCategoryE0ELi8EEENS0_5value7IntegerILi64ELb1ELi32EjmLi64EEEEC2ERKS9_
+   ...
+   fun:_ZN7Fortran9semantics9Semantics7PerformEv
+   fun:_Z14CompileFortranRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKN7Fortran6parser7OptionsERK13DriverOptionsS6_
+}
+
+{
+   rex_upstream_flang22_semantics_fold_operation_possible_leak
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:*Fortran*evaluate*FoldOperation*
+   ...
+   fun:_ZN7Fortran9semantics9Semantics7PerformEv
+   fun:_Z14CompileFortranRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKN7Fortran6parser7OptionsERK13DriverOptionsS6_
+}
+
+{
+   rex_upstream_flang22_semantics_derived_component_possible_leak
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN7Fortran9semantics18DerivedTypeDetails13add_componentERKNS0_6SymbolE
+   ...
+   fun:_ZN7Fortran9semantics9Semantics7PerformEv
+   fun:_Z14CompileFortranRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKN7Fortran6parser7OptionsERK13DriverOptionsS6_
+}
+
+{
+   rex_upstream_flang22_semantics_dummy_argument_possible_leak
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN7Fortran9semantics17SubprogramVisitor19CreateDummyArgumentERNS0_17SubprogramDetailsERKNS_6parser4NameE
+   ...
+   fun:_ZN7Fortran9semantics9Semantics7PerformEv
+   fun:_Z14CompileFortranRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKN7Fortran6parser7OptionsERK13DriverOptionsS6_
+}
+
+{
+   rex_upstream_flang22_semantics_shape_storage_possible_leak
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZNSt6vectorIN7Fortran9semantics9ShapeSpecESaIS2_EE17_M_realloc_appendIJRKS2_EEEvDpOT_
+   ...
+   fun:_ZN7Fortran9semantics9Semantics7PerformEv
+   fun:_Z14CompileFortranRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKN7Fortran6parser7OptionsERK13DriverOptionsS6_
+}
+
+{
+   rex_upstream_flang22_semantics_bind_name_possible_leak
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZNSt15__new_allocatorIcE8allocateEmPKv
+   ...
+   fun:_ZN7Fortran9semantics12AttrsVisitor13SetBindNameOnERNS0_6SymbolE
+   ...
+   fun:_ZN7Fortran9semantics9Semantics7PerformEv
+   fun:_Z14CompileFortranRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKN7Fortran6parser7OptionsERK13DriverOptionsS6_
+}
+
+{
+   rex_upstream_flang22_semantics_common_block_possible_leak
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN7Fortran9semantics19ResolveNamesVisitor24CreateCommonBlockSymbolsERKNS_6parser10CommonStmtE
+   ...
+   fun:_ZN7Fortran9semantics9Semantics7PerformEv
+   fun:_Z14CompileFortranRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKN7Fortran6parser7OptionsERK13DriverOptionsS6_
 }

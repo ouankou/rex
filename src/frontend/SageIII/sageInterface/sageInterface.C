@@ -28,6 +28,7 @@
 
 #include "SgNodeHelper.h" //Markus's helper functions
 
+#include "IncludeDirective.h"
 #include "integerWidth.h"
 #include "sageInterface.h"
 
@@ -30800,6 +30801,85 @@ SageInterface::collectCppDirectiveSnapshot(SgSourceFile *file) {
   return snapshot;
 }
 
+std::map<std::string, bool>
+SageInterface::collectDirectIncludeSystemRoles(SgSourceFile *file) {
+  if (file == NULL) {
+    fprintf(
+        stderr,
+        "REX_OUTLINER_INVARIANT[direct-include-role]: source file is null\n");
+    ROSE_ABORT();
+  }
+  SgIncludeFile *includeRoot = file->get_associated_include_file();
+  std::map<std::string, bool> roles;
+  if (includeRoot == NULL) {
+    // The frontend materializes an include-graph root lazily.  A translation
+    // unit with no source includes therefore has an exact empty role map and
+    // no root node.  Prove that representation from the primary-file
+    // preprocessing stream; an absent root must never hide a real include.
+    for (const PreprocessingInfo &info : collectCppDirectiveSnapshot(file)) {
+      const PreprocessingInfo::DirectiveType type = info.getTypeOfDirective();
+      const bool isInclude =
+          type == PreprocessingInfo::CpreprocessorIncludeDeclaration ||
+          type == PreprocessingInfo::CpreprocessorIncludeNextDeclaration;
+      if (isInclude && !info.isTransformation()) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[direct-include-role]: source=%s has "
+                "directive=%s but no include-graph root\n",
+                file->getFileName().c_str(), info.getString().c_str());
+        ROSE_ABORT();
+      }
+    }
+    return roles;
+  }
+  if (includeRoot->get_source_file() != file ||
+      includeRoot->get_parent_include_file() != NULL) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[direct-include-role]: source=%s has no "
+            "exact root include ownership\n",
+            file->getFileName().c_str());
+    ROSE_ABORT();
+  }
+
+  for (SgIncludeFile *includeFile : includeRoot->get_include_file_list()) {
+    if (includeFile == NULL ||
+        includeFile->get_parent_include_file() != includeRoot ||
+        includeFile->get_including_source_file() != file ||
+        includeFile->get_isSystemInclude() ==
+            includeFile->get_isApplicationFile()) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[direct-include-role]: source=%s has a "
+              "direct include without one exact typed system/application "
+              "role\n",
+              file->getFileName().c_str());
+      ROSE_ABORT();
+    }
+    if (includeFile->get_isPreinclude()) {
+      continue;
+    }
+    const std::string spelling =
+        includeFile->get_name_used_in_include_directive().getString();
+    if (spelling.empty()) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[direct-include-role]: include=%s from "
+              "source=%s has no exact source spelling\n",
+              includeFile->get_filename().getString().c_str(),
+              file->getFileName().c_str());
+      ROSE_ABORT();
+    }
+    const bool isSystem = includeFile->get_isSystemInclude();
+    const std::pair<std::map<std::string, bool>::iterator, bool> inserted =
+        roles.insert(std::make_pair(spelling, isSystem));
+    if (!inserted.second && inserted.first->second != isSystem) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[direct-include-role]: spelling=%s from "
+              "source=%s resolves to both system and application headers\n",
+              spelling.c_str(), file->getFileName().c_str());
+      ROSE_ABORT();
+    }
+  }
+  return roles;
+}
+
 vector<PreprocessingInfo *> collectCppDirectives(SgLocatedNode *n) {
   // This function is used to collect include directives from specific dependent
   // declarations.
@@ -36134,17 +36214,35 @@ void SageInterface::appendStatementWithDependentDeclaration(
   // DQ (2/22/2009): We need all the declarations! (moreTest3.cpp demonstrates
   // this, since it drops the "#define SIMPLE 1" which causes it to be treated a
   // "0" (causing errors in the generated code).
+  const std::map<std::string, bool> directIncludeSystemRoles =
+      excludeHeaderFiles ? SageInterface::collectDirectIncludeSystemRoles(
+                               originalStatementFile)
+                         : std::map<std::string, bool>();
   auto keepDirectiveWhenExcludingHeaders =
-      [](const PreprocessingInfo &info) -> bool {
+      [&directIncludeSystemRoles](const PreprocessingInfo &info) -> bool {
     switch (info.getTypeOfDirective()) {
     case PreprocessingInfo::CpreprocessorIncludeDeclaration:
-    case PreprocessingInfo::CpreprocessorIncludeNextDeclaration:
-      // Excluding headers and reconstructing their declarations are one
-      // dependency strategy.  Retaining a source include at the same time
-      // duplicates those declarations.  Only a transformation-owned include
-      // is a new dependency introduced by the outliner itself and must survive
-      // into the generated translation unit.
-      return info.isTransformation();
+    case PreprocessingInfo::CpreprocessorIncludeNextDeclaration: {
+      // Application-header declarations are copied below.  System-header
+      // declarations are deliberately not copied, so their exact direct include
+      // must be retained independently of the source AST node that happened to
+      // own the preprocessing record before outlining.
+      if (info.isTransformation()) {
+        return true;
+      }
+      IncludeDirective directive(info.getString());
+      const std::string spelling = directive.getIncludedPath();
+      const std::map<std::string, bool>::const_iterator role =
+          directIncludeSystemRoles.find(spelling);
+      if (spelling.empty() || role == directIncludeSystemRoles.end()) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[direct-include-role]: directive=%s "
+                "has no exact direct include-graph role\n",
+                info.getString().c_str());
+        ROSE_ABORT();
+      }
+      return role->second;
+    }
 
     case PreprocessingInfo::CpreprocessorDefineDeclaration:
     case PreprocessingInfo::CpreprocessorUndefDeclaration:
@@ -36746,19 +36844,37 @@ void SageInterface::appendStatementWithDependentDeclaration(
   retargetPhysicalFileId(decl);
   addMessageStatement(decl, "/* OUTLINED FUNCTION */");
 
-  // Insert the dependent declarations ahead of the input "decl".
-  SgStatement *firstStatmentInFile = decl;
-  for (SgDeclarationStatement *dependentDeclaration :
-       dependentDeclarationList) {
-    if (dependentDeclaration != NULL &&
-        isSgAuxiliaryDeclarationList(dependentDeclaration->get_parent()) ==
-            NULL) {
-      firstStatmentInFile = dependentDeclaration;
-      break;
+  // Preprocessing dependencies must precede every destination declaration that
+  // can use a macro.  The dependency list describes semantic copy order, not
+  // the final lexical order after prototypes and copied declarations are
+  // published. Select the first exact output-owned declaration from the
+  // destination scope itself.
+  SgStatement *firstStatmentInFile = NULL;
+  for (SgDeclarationStatement *candidate : scope->get_declarations()) {
+    if (candidate == NULL || candidate->get_file_info() == NULL ||
+        candidate->get_file_info()->get_physical_file_id() !=
+            outlined_physical_file_id) {
+      continue;
     }
+    if (candidate->get_parent() != scope || candidate->get_scope() != scope ||
+        !scope->statementExistsInScope(candidate) ||
+        !candidate->get_file_info()->isOutputInCodeGeneration()) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[directive-anchor]: declaration=%p/%s "
+              "does not have exact destination lexical ownership\n",
+              static_cast<void *>(candidate), candidate->class_name().c_str());
+      ROSE_ABORT();
+    }
+    firstStatmentInFile = candidate;
+    break;
   }
-
-  ROSE_ASSERT(firstStatmentInFile != NULL);
+  if (firstStatmentInFile == NULL) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[directive-anchor]: destination scope=%p "
+            "has no output-owned declaration\n",
+            static_cast<void *>(scope));
+    ROSE_ABORT();
+  }
 
   // Add a message to the top of the dependent declarations that have been added
   addMessageStatement(firstStatmentInFile,
@@ -37618,6 +37734,19 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
     std::vector<SgNode *> nodes;
     std::unordered_set<SgNode *> seen;
 
+    static void deleteNode(SgNode *node) {
+      ROSE_ASSERT(node != nullptr && SgNode::isLiveNode(node));
+      // ROSETTA marks the attribute-mechanism field NO_DELETE, so the
+      // generated node destructor only nulls it.  deleteAST is the subtree
+      // owner and must release container-owned attributes before destroying
+      // the node, just as tearDownAst does for the remaining memory pools.
+      if (AstAttributeMechanism *attributes = node->get_attributeMechanism()) {
+        delete attributes;
+        node->set_attributeMechanism(nullptr);
+      }
+      delete node;
+    }
+
     void queueNode(SgNode *node) {
       if (node == nullptr) {
         return;
@@ -37633,7 +37762,7 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
 
     void deleteQueued() {
       for (SgNode *node : nodes) {
-        delete node;
+        deleteNode(node);
       }
       nodes.clear();
       seen.clear();
@@ -37646,7 +37775,7 @@ void SageInterface::deleteAST(SgNode *n, DeleteAstMode mode) {
             protected_nodes->find(node) != protected_nodes->end()) {
           continue;
         }
-        delete node;
+        deleteNode(node);
       }
       nodes.clear();
       seen.clear();

@@ -49,6 +49,11 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  AstTests::runAllTests(project);
+  if (!AstTests::isCorrectAst(project)) {
+    fprintf(stderr,
+            "The using-terminal fixture failed the exact AST consistency "
+            "contract.\n");
+    ROSE_ABORT();
+  }
   return 0;
 }

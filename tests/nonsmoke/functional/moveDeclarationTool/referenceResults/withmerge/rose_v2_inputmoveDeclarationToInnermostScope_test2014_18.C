@@ -1788,7 +1788,7 @@ typedef struct {
     int __mask_was_saved;
   } __cancel_jmp_buf[1];
   void *__pad[4];
-} __pthread_unwind_buf_t;
+} __pthread_unwind_buf_t __attribute__((aligned(16)));
 struct __pthread_cleanup_frame {
   void (*__cancel_routine)(void *);
   void *__cancel_arg;

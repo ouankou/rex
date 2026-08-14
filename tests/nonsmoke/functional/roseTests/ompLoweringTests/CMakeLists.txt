@@ -267,68 +267,118 @@ set(_omp_legacy_labels
 
 set(_omp_sanitizer_test_environment)
 set(_omp_fortran_sanitizer_test_environment)
+
+function(_omp_require_clang_runtime out_variable runtime_name)
+  execute_process(
+    COMMAND "${CMAKE_C_COMPILER}" --print-target-triple
+    RESULT_VARIABLE _target_query_status
+    OUTPUT_VARIABLE _target_triple
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_VARIABLE _target_query_error)
+  if(NOT _target_query_status EQUAL 0 OR
+     NOT _target_triple MATCHES "^([A-Za-z0-9_]+)-")
+    string(STRIP "${_target_query_error}" _target_query_error)
+    message(FATAL_ERROR
+      "Clang did not publish one target triple for sanitizer runtime "
+      "selection: status=${_target_query_status} "
+      "triple='${_target_triple}' error='${_target_query_error}'")
+  endif()
+  set(_target_arch "${CMAKE_MATCH_1}")
+
+  if(runtime_name MATCHES "\\.a\\.syms$")
+    string(REGEX REPLACE "\\.a\\.syms$" "-${_target_arch}.a.syms"
+           _target_runtime_name "${runtime_name}")
+  elseif(runtime_name MATCHES "\\.a$")
+    string(REGEX REPLACE "\\.a$" "-${_target_arch}.a"
+           _target_runtime_name "${runtime_name}")
+  else()
+    message(FATAL_ERROR
+      "unsupported Clang sanitizer runtime name '${runtime_name}'")
+  endif()
+
+  set(_runtime_candidates
+      "${runtime_name}"
+      "${_target_runtime_name}")
+  list(REMOVE_DUPLICATES _runtime_candidates)
+  set(_runtime_matches)
+  set(_runtime_query_results)
+  foreach(_runtime_candidate_name IN LISTS _runtime_candidates)
+    execute_process(
+      COMMAND "${CMAKE_C_COMPILER}"
+              "--print-file-name=${_runtime_candidate_name}"
+      RESULT_VARIABLE _runtime_query_status
+      OUTPUT_VARIABLE _runtime_candidate
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_VARIABLE _runtime_query_error)
+    string(STRIP "${_runtime_query_error}" _runtime_query_error)
+    if(NOT _runtime_query_status EQUAL 0)
+      message(FATAL_ERROR
+        "Clang failed to query sanitizer runtime "
+        "'${_runtime_candidate_name}': status=${_runtime_query_status} "
+        "error='${_runtime_query_error}'")
+    endif()
+    list(APPEND _runtime_query_results
+         "${_runtime_candidate_name}='${_runtime_candidate}'")
+    if(IS_ABSOLUTE "${_runtime_candidate}" AND
+       EXISTS "${_runtime_candidate}" AND
+       NOT IS_DIRECTORY "${_runtime_candidate}")
+      list(APPEND _runtime_matches "${_runtime_candidate}")
+    endif()
+  endforeach()
+  list(REMOVE_DUPLICATES _runtime_matches)
+  list(LENGTH _runtime_matches _runtime_match_count)
+  if(NOT _runtime_match_count EQUAL 1)
+    message(FATAL_ERROR
+      "Clang resolved ${_runtime_match_count} exact target-ABI matches for "
+      "'${runtime_name}' (target '${_target_triple}'); candidates: "
+      "${_runtime_query_results}")
+  endif()
+  list(GET _runtime_matches 0 _runtime_path)
+  set(${out_variable} "${_runtime_path}" PARENT_SCOPE)
+endfunction()
+
 if(ROSE_USE_SANITIZER AND ROSE_SANITIZERS)
   string(REPLACE ";" "," _omp_sanitizer_test_list "${ROSE_SANITIZERS}")
   list(APPEND _omp_sanitizer_test_environment
        "ROSE_TEST_SANITIZER_FLAGS=-fsanitize=${_omp_sanitizer_test_list}")
 
   if(CMAKE_C_COMPILER_ID STREQUAL "Clang")
-    execute_process(
-      COMMAND "${CMAKE_C_COMPILER}" -print-resource-dir
-      OUTPUT_VARIABLE _omp_clang_resource_dir
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-      ERROR_QUIET)
-    execute_process(
-      COMMAND "${CMAKE_C_COMPILER}" -dumpmachine
-      OUTPUT_VARIABLE _omp_clang_target_triple
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-      ERROR_QUIET)
-
-    set(_omp_clang_runtime_dir "")
-    if(_omp_clang_resource_dir AND _omp_clang_target_triple AND
-       IS_DIRECTORY "${_omp_clang_resource_dir}/lib/${_omp_clang_target_triple}")
-      set(_omp_clang_runtime_dir "${_omp_clang_resource_dir}/lib/${_omp_clang_target_triple}")
-    endif()
-
     set(_omp_fortran_sanitizer_link_flags)
-    if(_omp_clang_runtime_dir)
-      if("address" IN_LIST ROSE_SANITIZERS OR "leak" IN_LIST ROSE_SANITIZERS)
-        set(_omp_asan_static "${_omp_clang_runtime_dir}/libclang_rt.asan_static.a")
-        set(_omp_asan "${_omp_clang_runtime_dir}/libclang_rt.asan.a")
-        set(_omp_asan_syms "${_omp_clang_runtime_dir}/libclang_rt.asan.a.syms")
-        if(EXISTS "${_omp_asan_static}" AND EXISTS "${_omp_asan}" AND
-           EXISTS "${_omp_asan_syms}")
-          list(APPEND _omp_fortran_sanitizer_link_flags
-               -Wl,--whole-archive
-               "${_omp_asan_static}"
-               "${_omp_asan}"
-               -Wl,--no-whole-archive
-               "-Wl,--dynamic-list=${_omp_asan_syms}"
-               -pthread
-               -lrt
-               -lm
-               -ldl
-               -lresolv)
-        endif()
-      elseif("undefined" IN_LIST ROSE_SANITIZERS)
-        set(_omp_ubsan "${_omp_clang_runtime_dir}/libclang_rt.ubsan_standalone.a")
-        set(_omp_ubsan_syms "${_omp_clang_runtime_dir}/libclang_rt.ubsan_standalone.a.syms")
-        if(EXISTS "${_omp_ubsan}" AND EXISTS "${_omp_ubsan_syms}")
-          list(APPEND _omp_fortran_sanitizer_link_flags
-               -Wl,--whole-archive
-               "${_omp_ubsan}"
-               -Wl,--no-whole-archive
-               "-Wl,--dynamic-list=${_omp_ubsan_syms}"
-               -pthread
-               -lrt
-               -lm
-               -ldl
-               -lresolv)
-        endif()
-      endif()
+    if("address" IN_LIST ROSE_SANITIZERS OR "leak" IN_LIST ROSE_SANITIZERS)
+      _omp_require_clang_runtime(
+        _omp_asan_static libclang_rt.asan_static.a)
+      _omp_require_clang_runtime(_omp_asan libclang_rt.asan.a)
+      _omp_require_clang_runtime(_omp_asan_syms libclang_rt.asan.a.syms)
+      list(APPEND _omp_fortran_sanitizer_link_flags
+           -Wl,--whole-archive
+           "${_omp_asan_static}"
+           "${_omp_asan}"
+           -Wl,--no-whole-archive
+           "-Wl,--dynamic-list=${_omp_asan_syms}")
+    # Clang's AddressSanitizer runtime supplies the compatible undefined-
+    # behavior handlers when both families are enabled.  The standalone UBSan
+    # archive owns a second sanitizer_common implementation and is valid only
+    # when ASan/LSan is absent; whole-archiving both creates duplicate runtime
+    # definitions instead of the link plan emitted by the Clang driver.
+    elseif("undefined" IN_LIST ROSE_SANITIZERS)
+      _omp_require_clang_runtime(
+        _omp_ubsan libclang_rt.ubsan_standalone.a)
+      _omp_require_clang_runtime(
+        _omp_ubsan_syms libclang_rt.ubsan_standalone.a.syms)
+      list(APPEND _omp_fortran_sanitizer_link_flags
+           -Wl,--whole-archive
+           "${_omp_ubsan}"
+           -Wl,--no-whole-archive
+           "-Wl,--dynamic-list=${_omp_ubsan_syms}")
     endif()
 
     if(_omp_fortran_sanitizer_link_flags)
+      list(APPEND _omp_fortran_sanitizer_link_flags
+           -pthread
+           -lrt
+           -lm
+           -ldl
+           -lresolv)
       list(JOIN _omp_fortran_sanitizer_link_flags " "
            _omp_fortran_sanitizer_link_flags_string)
       list(APPEND _omp_fortran_sanitizer_test_environment
@@ -688,34 +738,69 @@ foreach(testcode IN LISTS OMP_CXX_ALL_CASES)
 endforeach()
 
 set(_omp_c_semantic_enabled ON)
-if(NOT CMAKE_C_COMPILER_ID STREQUAL "Clang")
-  message(WARNING "Legacy C lowering semantic tests require Clang; using translate-only mode")
-  set(_omp_c_semantic_enabled OFF)
+if(NOT ROSE_LLVM_CLANG_C_DRIVER OR
+   NOT IS_ABSOLUTE "${ROSE_LLVM_CLANG_C_DRIVER}" OR
+   NOT EXISTS "${ROSE_LLVM_CLANG_C_DRIVER}")
+  message(FATAL_ERROR
+    "Legacy C lowering semantic tests require the exact Clang driver owned "
+    "by the loaded frontend package: '${ROSE_LLVM_CLANG_C_DRIVER}'")
 endif()
 if(NOT ROSE_LLVM_OPENMP_INCLUDE_DIR OR NOT EXISTS "${ROSE_LLVM_OPENMP_INCLUDE_DIR}/omp.h")
-  message(WARNING "LLVM OpenMP include directory unavailable; using translate-only mode for legacy C semantic tests")
-  set(_omp_c_semantic_enabled OFF)
+  message(FATAL_ERROR
+    "Legacy lowering semantic tests require the exact frontend OpenMP header: "
+    "'${ROSE_LLVM_OPENMP_INCLUDE_DIR}/omp.h'")
 endif()
 if(NOT ROSE_LLVM_OPENMP_RUNTIME_DIR)
-  message(WARNING "LLVM OpenMP runtime directory unavailable; using translate-only mode for legacy C semantic tests")
-  set(_omp_c_semantic_enabled OFF)
+  message(FATAL_ERROR
+    "Legacy lowering semantic tests require the exact frontend OpenMP "
+    "runtime directory")
 endif()
 
 set(_omp_cxx_semantic_enabled ON)
-if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-  message(WARNING "Legacy C++ lowering semantic tests require Clang; using translate-only mode")
-  set(_omp_cxx_semantic_enabled OFF)
-endif()
-if(NOT _omp_c_semantic_enabled)
-  set(_omp_cxx_semantic_enabled OFF)
+if(NOT ROSE_LLVM_CLANG_CXX_DRIVER OR
+   NOT IS_ABSOLUTE "${ROSE_LLVM_CLANG_CXX_DRIVER}" OR
+   NOT EXISTS "${ROSE_LLVM_CLANG_CXX_DRIVER}")
+  message(FATAL_ERROR
+    "Legacy C++ lowering semantic tests require the exact Clang++ driver "
+    "owned by the loaded frontend package: "
+    "'${ROSE_LLVM_CLANG_CXX_DRIVER}'")
 endif()
 
-if(ENABLE-C)
+set(_omp_x86_simd_tests_default ON)
+if(NOT CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+  set(_omp_x86_simd_tests_default OFF)
+endif()
+option(REX_ENABLE_X86_SIMD_TESTS
+  "Register the x86-target SIMD lowering tests"
+  ${_omp_x86_simd_tests_default})
+set(REX_X86_SIMD_TEST_SYSROOT "" CACHE PATH
+  "x86_64 target sysroot for SIMD lowering tests on non-x86 hosts")
+
+if(ENABLE-C AND REX_ENABLE_X86_SIMD_TESTS)
+  set(_omp_simd_x86_target_args
+    -target x86_64-unknown-linux-gnu)
+  if(NOT CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+    if(NOT IS_ABSOLUTE "${REX_X86_SIMD_TEST_SYSROOT}")
+      message(FATAL_ERROR
+        "REX_ENABLE_X86_SIMD_TESTS requires an absolute "
+        "REX_X86_SIMD_TEST_SYSROOT on ${CMAKE_HOST_SYSTEM_PROCESSOR}")
+    endif()
+    if(NOT EXISTS "${REX_X86_SIMD_TEST_SYSROOT}/include/stdlib.h" OR
+       NOT EXISTS
+         "${REX_X86_SIMD_TEST_SYSROOT}/include/bits/libc-header-start.h")
+      message(FATAL_ERROR
+        "REX_X86_SIMD_TEST_SYSROOT is not an exact x86_64 target sysroot: "
+        "${REX_X86_SIMD_TEST_SYSROOT}")
+    endif()
+    list(APPEND _omp_simd_x86_target_args
+      "--sysroot=${REX_X86_SIMD_TEST_SYSROOT}")
+  endif()
+
   if(_omp_c_semantic_enabled)
     add_omp_semantic_test(
       omp_lowering_c_semantic_rex_omp_simd_ordered_runtime_c
       $<TARGET_FILE:rex_omp_simd_addr3_translator>
-      ${CMAKE_C_COMPILER}
+      ${ROSE_LLVM_CLANG_C_DRIVER}
       rex_omp_simd_ordered_runtime.c
       exact
       c
@@ -738,11 +823,12 @@ if(ENABLE-C)
       NAME omp_lowering_rex_simd_length_${_name}
       WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
       COMMAND ${BASH_EXECUTABLE} -c
-        "set -e; output=\"$1\"; expected=\"$2\"; shift 2; rm -f \"$output\"; \"$@\" -target x86_64-unknown-linux-gnu -rose:simd:intel-avx -rose:openmp:lowering -rose:skipfinalCompileStep -rose:verbose 0 -rose:output \"$output\" -c \"${_omp_test_dir}/${_source}\"; test -s \"$output\"; grep -Fq \"$expected\" \"$output\""
+        "set -e; output=\"$1\"; expected=\"$2\"; shift 2; rm -f \"$output\"; \"$@\" -rose:simd:intel-avx -rose:openmp:lowering -rose:skipfinalCompileStep -rose:verbose 0 -rose:output \"$output\" -c \"${_omp_test_dir}/${_source}\"; test -s \"$output\"; grep -Fq \"$expected\" \"$output\""
         dummy
         ${_output}
         ${_intrinsic}
-        $<TARGET_FILE:rex_omp_simd_addr3_translator>)
+        $<TARGET_FILE:rex_omp_simd_addr3_translator>
+        ${_omp_simd_x86_target_args})
     set_tests_properties(
       omp_lowering_rex_simd_length_${_name}
       PROPERTIES LABELS "rex;OMPLOWERING;OMPLOWERING_SIMD")
@@ -754,10 +840,11 @@ if(ENABLE-C)
     NAME omp_lowering_rex_simd_two_region_reduction_ownership
     WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
     COMMAND ${BASH_EXECUTABLE} -c
-      "set -e; output=\"$1\"; shift; rm -f \"$output\"; MALLOC_PERTURB_=165 \"$@\" -target x86_64-unknown-linux-gnu -rose:simd:intel-avx -rose:openmp:lowering -rose:skipfinalCompileStep -rose:verbose 0 -rose:output \"$output\" -c \"${_omp_test_dir}/rex_omp_simd_two_region_reduction.c\"; test -s \"$output\"; test \"$(grep -Fc '_mm512_setzero_ps' \"$output\")\" -eq 2"
+      "set -e; output=\"$1\"; shift; rm -f \"$output\"; MALLOC_PERTURB_=165 \"$@\" -rose:simd:intel-avx -rose:openmp:lowering -rose:skipfinalCompileStep -rose:verbose 0 -rose:output \"$output\" -c \"${_omp_test_dir}/rex_omp_simd_two_region_reduction.c\"; test -s \"$output\"; test \"$(grep -Fc '_mm512_setzero_ps' \"$output\")\" -eq 2"
       dummy
       ${_omp_simd_two_region_output}
-      $<TARGET_FILE:rex_omp_simd_addr3_translator>)
+      $<TARGET_FILE:rex_omp_simd_addr3_translator>
+      ${_omp_simd_x86_target_args})
   set_tests_properties(
     omp_lowering_rex_simd_two_region_reduction_ownership
     PROPERTIES LABELS "rex;OMPLOWERING;OMPLOWERING_SIMD")
@@ -782,16 +869,17 @@ if(ENABLE-C)
       NAME omp_lowering_rex_simd_${_name}_is_rejected
       WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
       COMMAND ${BASH_EXECUTABLE} -c
-        "ulimit -c 0; log=rex_simd_${_name}.log; set +e; \"$@\" -target x86_64-unknown-linux-gnu -rose:simd:intel-avx -rose:openmp:lowering -rose:skipfinalCompileStep -rose:verbose 0 -c \"${_omp_test_dir}/${_source}\" >\"$log\" 2>&1; status=$?; set -e; test $status -eq 134; test \"$(grep -Ec '${_expected_diagnostic}' \"$log\")\" -eq 1"
+        "ulimit -c 0; log=rex_simd_${_name}.log; set +e; \"$@\" -rose:simd:intel-avx -rose:openmp:lowering -rose:skipfinalCompileStep -rose:verbose 0 -c \"${_omp_test_dir}/${_source}\" >\"$log\" 2>&1; status=$?; set -e; test $status -eq 134; test \"$(grep -Ec '${_expected_diagnostic}' \"$log\")\" -eq 1"
         dummy
-        $<TARGET_FILE:rex_omp_simd_addr3_translator>)
+        $<TARGET_FILE:rex_omp_simd_addr3_translator>
+        ${_omp_simd_x86_target_args})
     set_tests_properties(
       omp_lowering_rex_simd_${_name}_is_rejected
       PROPERTIES LABELS "rex;death;OMPLOWERING;OMPLOWERING_SIMD")
   endforeach()
 
   execute_process(
-    COMMAND ${CMAKE_CXX_COMPILER} -print-resource-dir
+    COMMAND ${ROSE_LLVM_CLANG_CXX_DRIVER} -print-resource-dir
     RESULT_VARIABLE _clang_resource_dir_status
     OUTPUT_VARIABLE _clang_resource_dir
     ERROR_VARIABLE _clang_resource_dir_error
@@ -819,7 +907,9 @@ if(ENABLE-C)
   set_tests_properties(
     omp_lowering_rex_simd_intel_target_mismatch_is_rejected
     PROPERTIES LABELS "rex;death;CFE;OMPLOWERING;OMPLOWERING_SIMD")
+endif()
 
+if(ENABLE-C)
   set(_omp_integral_constant_death_cases
     "plain_char|rex_omp_unroll_plain_char_invalid.c|^REX_OMP_LOWERING_INVARIANT\\[integral-constant-abi\\]: type=0x[[:xdigit:]]+ kind=SgTypeChar has no persisted target signedness contract$"
     "wchar|rex_omp_unroll_wchar_invalid.cpp|^REX_OMP_LOWERING_INVARIANT\\[integral-constant-abi\\]: type=0x[[:xdigit:]]+ kind=SgTypeWchar has no persisted target signedness contract$"
@@ -854,10 +944,10 @@ if(ENABLE-C)
     set(_compiler "")
     if(_language STREQUAL "c")
       set(_semantic_enabled ${_omp_c_semantic_enabled})
-      set(_compiler ${CMAKE_C_COMPILER})
+      set(_compiler ${ROSE_LLVM_CLANG_C_DRIVER})
     elseif(_language STREQUAL "cxx")
       set(_semantic_enabled ${_omp_cxx_semantic_enabled})
-      set(_compiler ${CMAKE_CXX_COMPILER})
+      set(_compiler ${ROSE_LLVM_CLANG_CXX_DRIVER})
     else()
       message(FATAL_ERROR "Unexpected language '${_language}' in OMP_LEGACY_CASE_MATRIX")
     endif()
@@ -921,7 +1011,7 @@ if(ENABLE-C)
   endif()
   add_test(
     NAME omp_lowering_c_generated_compile_${_loop_transform_ownership_name}
-    COMMAND ${CMAKE_C_COMPILER}
+    COMMAND ${ROSE_LLVM_CLANG_C_DRIVER}
             -std=c11
             -fsyntax-only
             -I${_omp_lowering_inc}

@@ -1835,6 +1835,39 @@ static bool representOneLogicalNamespaceScope(SgScopeStatement *lexicalScope,
          (semanticFirst != nullptr ? semanticFirst : semanticDeclaration);
 }
 
+static bool
+lexicallyEnclosesLogicalNamespaceScope(SgScopeStatement *lexicalScope,
+                                       SgScopeStatement *semanticScope) {
+  if (lexicalScope == nullptr || semanticScope == nullptr ||
+      (isSgGlobal(lexicalScope) == nullptr &&
+       isSgNamespaceDefinitionStatement(lexicalScope) == nullptr) ||
+      (isSgGlobal(semanticScope) == nullptr &&
+       isSgNamespaceDefinitionStatement(semanticScope) == nullptr)) {
+    return false;
+  }
+
+  std::set<SgScopeStatement *> visited;
+  SgScopeStatement *current = semanticScope;
+  while (current != nullptr && visited.insert(current).second) {
+    if (representOneLogicalNamespaceScope(lexicalScope, current)) {
+      return true;
+    }
+    SgNamespaceDefinitionStatement *currentNamespace =
+        isSgNamespaceDefinitionStatement(current);
+    if (currentNamespace == nullptr) {
+      return false;
+    }
+    SgNamespaceDeclarationStatement *currentDeclaration =
+        currentNamespace->get_namespaceDeclaration();
+    if (currentDeclaration == nullptr ||
+        currentDeclaration->get_parent() == nullptr) {
+      return false;
+    }
+    current = currentDeclaration->get_scope();
+  }
+  return false;
+}
+
 static void
 reportTemplateReferenceArgumentMismatch(const char *kind,
                                         const SgNonrealRefExp *reference,
@@ -1980,10 +2013,19 @@ SgInitializedName *SageInterface::requireResolvedVariableTemplateReference(
   SgScopeStatement *resolved_lexical_scope = resolved->get_scope();
   SgScopeStatement *resolved_semantic_scope =
       resolved_name != nullptr ? resolved_name->get_scope() : nullptr;
+  SgTemplateInstantiationDirectiveStatement *resolved_directive =
+      isSgTemplateInstantiationDirectiveStatement(resolved->get_parent());
+  const bool exact_explicit_instantiation_scope_pair =
+      resolved_directive != nullptr &&
+      resolved_directive->get_declaration() == resolved &&
+      resolved_directive->get_scope() == resolved_lexical_scope &&
+      lexicallyEnclosesLogicalNamespaceScope(resolved_lexical_scope,
+                                             resolved_semantic_scope);
   if (resolved_name == nullptr || resolved_name->get_parent() != resolved ||
       resolved_name->get_type() == nullptr ||
-      !representOneLogicalNamespaceScope(resolved_lexical_scope,
-                                         resolved_semantic_scope)) {
+      (!representOneLogicalNamespaceScope(resolved_lexical_scope,
+                                          resolved_semantic_scope) &&
+       !exact_explicit_instantiation_scope_pair)) {
     fail("does not resolve to one exactly owned, typed initialized name and "
          "one exact lexical/semantic scope entity");
   }
@@ -19702,8 +19744,13 @@ void SageBuilder::attachAuxiliaryDeclaration(
     ROSE_ABORT();
   }
   if (!hasExactSemanticScope()) {
-    std::cerr << "[REX-AST-AUXILIARY-DECLARATION-SCOPE-MISMATCH] declaration "
-                 "does not identify the exact semantic owner\n";
+    std::cerr << "[REX-AST-AUXILIARY-DECLARATION-SCOPE-MISMATCH] declaration="
+              << declaration << " type=" << declaration->class_name()
+              << " owner=" << owner << " owner-type=" << owner->class_name()
+              << " explicit-scope=" << declaration->hasExplicitScope()
+              << " declaration-scope=" << declaration->get_scope()
+              << " parent=" << declaration->get_parent()
+              << " does not identify the exact semantic owner\n";
     ROSE_ABORT();
   }
   if (container == nullptr) {

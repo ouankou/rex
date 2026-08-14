@@ -52,17 +52,17 @@ jobs:
     - name: Build and Install (Debug)
       run: |
         cd "$GITHUB_WORKSPACE"
-        source scripts/ci-llvm-env "${LLVM_VERSION}"
-        export CC="clang-${LLVM_VERSION}"
-        export CXX="clang++-${LLVM_VERSION}"
-        export FC="flang-${LLVM_VERSION}"
+        source scripts/ci-llvm-env "${{ env.LLVM_VERSION }}"
+        export CC="clang-${{ env.LLVM_VERSION }}"
+        export CXX="clang++-${{ env.LLVM_VERSION }}"
+        export FC="flang-${{ env.LLVM_VERSION }}"
         ./build-rex.sh "$GITHUB_WORKSPACE/rex_install" Debug
 
     # Run frontend-related tests
     - name: Run core and OpenMP tests
       run: |
         cd "$GITHUB_WORKSPACE"
-        source scripts/ci-llvm-env "${LLVM_VERSION}"
+        source scripts/ci-llvm-env "${{ env.LLVM_VERSION }}"
         CTEST_JOBS="$(nproc)"
 
         # Single CI sweep: core + OpenMP AST + OpenMP lowering suites.
@@ -92,15 +92,15 @@ jobs:
 
     - name: Build REX (Debug)
       run: |
-        source scripts/ci-llvm-env "${LLVM_VERSION}"
-        export CC="clang-${LLVM_VERSION}"
-        export CXX="clang++-${LLVM_VERSION}"
-        export FC="flang-${LLVM_VERSION}"
+        source scripts/ci-llvm-env "${{ env.LLVM_VERSION }}"
+        export CC="clang-${{ env.LLVM_VERSION }}"
+        export CXX="clang++-${{ env.LLVM_VERSION }}"
+        export FC="flang-${{ env.LLVM_VERSION }}"
         ./build-rex.sh "$GITHUB_WORKSPACE/rex_install" Debug
 
     - name: Run retained fast tests
       run: |
-        source scripts/ci-llvm-env "${LLVM_VERSION}"
+        source scripts/ci-llvm-env "${{ env.LLVM_VERSION }}"
         python3 scripts/run_ctest_name_set.py \
           --test-dir build \
           --manifest tests/fragile/unparser_hardening_fast.txt \

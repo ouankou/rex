@@ -15,6 +15,11 @@ exclude-patterns:
   - "docs/_build/*"
   - "*/.git/*"
   - "src/util/nlohmann/*"
+exclude-symbols:
+  # Clang types occur in a small number of REX implementation-facing APIs.
+  # Keep those type names in the owning REX signatures, but do not publish
+  # dependency pages for declarations outside this project's source tree.
+  - "clang::*"
 file-patterns:
   - '*.h'
   - '*.hh'

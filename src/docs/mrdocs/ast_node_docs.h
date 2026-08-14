@@ -6,6 +6,10 @@
 // Doc-only forward declarations for AST node classes and related types.
 // These comments are attached to the classes for MrDocs.
 
+// Flang's public builder interface mentions ENTRY statements before the
+// generated Sage declarations are included by its implementation unit.
+class SgEntryStatement;
+
 /** @brief Class holding static data and functions supporting File I/O.
  *
  * - Todo: Consider making this a namespace.

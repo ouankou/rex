@@ -109,23 +109,53 @@ foreach(specimen IN LISTS _test03_specimens)
   )
 endforeach()
 
-file(GLOB _test04_answer_files
-  "${CMAKE_CURRENT_SOURCE_DIR}/test04-answers/*.C.cg.dmp")
 set(_test04_conf ${CMAKE_CURRENT_SOURCE_DIR}/test04.conf)
 set(_test04_answers ${CMAKE_CURRENT_SOURCE_DIR}/test04-answers)
+set(_test04_answer_manifest
+  ${CMAKE_CURRENT_SOURCE_DIR}/test04-answer-manifest.txt)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${_test04_answer_manifest}")
 set(_test04_spec_dir
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests)
-foreach(answer_file IN LISTS _test04_answer_files)
-  get_filename_component(_answer_name ${answer_file} NAME)
+set(_test04_expected_answer_count 436)
+# This checked-in inventory is the registration authority. Directory globs
+# silently produced an empty test04 registry during a full ARM configuration;
+# the runtime contract below independently rejects inventory/directory drift.
+file(STRINGS "${_test04_answer_manifest}" _test04_answer_names)
+list(LENGTH _test04_answer_names _test04_answer_count)
+if(NOT _test04_answer_count EQUAL _test04_expected_answer_count)
+  message(FATAL_ERROR
+    "Callgraph test04 answer registry has ${_test04_answer_count} files; "
+    "expected exactly ${_test04_expected_answer_count}")
+endif()
+set(_test04_sorted_answer_names ${_test04_answer_names})
+list(SORT _test04_sorted_answer_names)
+list(REMOVE_DUPLICATES _test04_sorted_answer_names)
+if(NOT "${_test04_answer_names}" STREQUAL "${_test04_sorted_answer_names}")
+  message(FATAL_ERROR
+    "Callgraph test04 answer manifest must be sorted and contain no duplicates")
+endif()
+
+set(_test04_registered_tests "")
+foreach(_answer_name IN LISTS _test04_answer_names)
+  if(NOT _answer_name MATCHES "^[A-Za-z0-9_.+-]+[.]C[.]cg[.]dmp$")
+    message(FATAL_ERROR
+      "Malformed callgraph test04 answer manifest entry: ${_answer_name}")
+  endif()
+  set(answer_file "${_test04_answers}/${_answer_name}")
+  if(NOT EXISTS "${answer_file}")
+    message(FATAL_ERROR
+      "Callgraph test04 answer manifest entry does not exist: ${answer_file}")
+  endif()
   string(REPLACE ".cg.dmp" "" _specimen ${_answer_name})
   if(NOT EXISTS "${_test04_spec_dir}/${_specimen}")
-    message(STATUS
-      "Skipping callgraph test04 answer without source: ${_specimen}")
-    continue()
+    message(FATAL_ERROR
+      "Callgraph test04 answer has no source specimen: ${_specimen}")
   endif()
   string(REPLACE "." "_" _name ${_specimen})
   get_filename_component(_base ${_specimen} NAME_WE)
   rex_get_cxx_specimen_standard_flag(_callgraph_standard_flag ${_specimen})
+  list(APPEND _test04_registered_tests callgraph_test04_${_name})
   add_test(
     NAME callgraph_test04_${_name}
     WORKING_DIRECTORY ${_callgraph_output_dir}
@@ -141,6 +171,24 @@ foreach(answer_file IN LISTS _test04_answer_files)
       test04_${_name}.passed
   )
 endforeach()
+list(LENGTH _test04_registered_tests _test04_registered_count)
+if(NOT _test04_registered_count EQUAL _test04_expected_answer_count)
+  message(FATAL_ERROR
+    "Callgraph test04 registered ${_test04_registered_count} tests; "
+    "expected exactly ${_test04_expected_answer_count}")
+endif()
+
+add_test(
+  NAME rex_callgraph_test04_answer_manifest_contract
+  COMMAND bash
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_callgraph_test04_answer_manifest_contract.sh
+    ${_test04_answer_manifest}
+    ${_test04_answers}
+    ${_test04_spec_dir}
+    ${_test04_expected_answer_count}
+)
+set_tests_properties(rex_callgraph_test04_answer_manifest_contract PROPERTIES
+  LABELS "rex;CALLGRAPH;contracts")
 
 add_test(
   NAME callgraph_new_01

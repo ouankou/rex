@@ -61,9 +61,11 @@ jobs:
         target: runtime
         pull: true
         provenance: false
+        labels: org.opencontainers.image.revision=${{ github.sha }}
         build-args: |
           BASE_IMAGE=${{ env.IMAGE_REPO }}:base
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
     - name: Build REX runtime image locally (${{ env.TARGET_ARCH }})
@@ -77,9 +79,11 @@ jobs:
         target: runtime
         pull: false
         provenance: false
+        labels: org.opencontainers.image.revision=${{ github.sha }}
         build-args: |
           BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
         load: true
         tags: ${{ env.LOCAL_IMAGE_REPO }}:runtime-${{ env.TARGET_ARCH }}-local
 
@@ -94,10 +98,12 @@ jobs:
         target: test
         pull: true
         provenance: false
+        labels: org.opencontainers.image.revision=${{ github.sha }}
         build-args: |
           BASE_IMAGE=${{ env.IMAGE_REPO }}:base
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
           REX_ENABLE_VALGRIND=1
+          REX_ENABLE_X86_SIMD_TESTS=ON
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
     - name: Build REX dev image locally (${{ env.TARGET_ARCH }})
@@ -111,10 +117,12 @@ jobs:
         target: test
         pull: false
         provenance: false
+        labels: org.opencontainers.image.revision=${{ github.sha }}
         build-args: |
           BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
           REX_ENABLE_VALGRIND=1
+          REX_ENABLE_X86_SIMD_TESTS=ON
         load: true
         tags: ${{ env.LOCAL_IMAGE_REPO }}:dev-${{ env.TARGET_ARCH }}-local
 
@@ -190,9 +198,11 @@ jobs:
         target: runtime
         pull: true
         provenance: false
+        labels: org.opencontainers.image.revision=${{ github.sha }}
         build-args: |
           BASE_IMAGE=${{ env.IMAGE_REPO }}:base
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
     - name: Build REX runtime image locally (${{ env.TARGET_ARCH }})
@@ -206,9 +216,11 @@ jobs:
         target: runtime
         pull: false
         provenance: false
+        labels: org.opencontainers.image.revision=${{ github.sha }}
         build-args: |
           BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
         load: true
         tags: ${{ env.LOCAL_IMAGE_REPO }}:runtime-${{ env.TARGET_ARCH }}-local
 
@@ -223,9 +235,12 @@ jobs:
         target: test
         pull: true
         provenance: false
+        labels: org.opencontainers.image.revision=${{ github.sha }}
         build-args: |
           BASE_IMAGE=${{ env.IMAGE_REPO }}:base
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
+          REX_ENABLE_X86_SIMD_TESTS=ON
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
     - name: Build REX dev image locally (${{ env.TARGET_ARCH }})
@@ -239,9 +254,12 @@ jobs:
         target: test
         pull: false
         provenance: false
+        labels: org.opencontainers.image.revision=${{ github.sha }}
         build-args: |
           BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
+          REX_ENABLE_X86_SIMD_TESTS=ON
         load: true
         tags: ${{ env.LOCAL_IMAGE_REPO }}:dev-${{ env.TARGET_ARCH }}-local
 
@@ -317,9 +335,11 @@ jobs:
         target: runtime
         pull: true
         provenance: false
+        labels: org.opencontainers.image.revision=${{ github.sha }}
         build-args: |
           BASE_IMAGE=${{ env.IMAGE_REPO }}:base
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
     - name: Build REX runtime image locally (${{ env.TARGET_ARCH }})
@@ -333,9 +353,11 @@ jobs:
         target: runtime
         pull: false
         provenance: false
+        labels: org.opencontainers.image.revision=${{ github.sha }}
         build-args: |
           BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
         load: true
         tags: ${{ env.LOCAL_IMAGE_REPO }}:runtime-${{ env.TARGET_ARCH }}-local
 
@@ -350,9 +372,12 @@ jobs:
         target: test
         pull: true
         provenance: false
+        labels: org.opencontainers.image.revision=${{ github.sha }}
         build-args: |
           BASE_IMAGE=${{ env.IMAGE_REPO }}:base
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
+          REX_ENABLE_X86_SIMD_TESTS=ON
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
     - name: Build REX dev image locally (${{ env.TARGET_ARCH }})
@@ -366,9 +391,12 @@ jobs:
         target: test
         pull: false
         provenance: false
+        labels: org.opencontainers.image.revision=${{ github.sha }}
         build-args: |
           BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
+          REX_ENABLE_X86_SIMD_TESTS=ON
         load: true
         tags: ${{ env.LOCAL_IMAGE_REPO }}:dev-${{ env.TARGET_ARCH }}-local
 
@@ -444,9 +472,11 @@ jobs:
         target: runtime
         pull: true
         provenance: false
+        labels: org.opencontainers.image.revision=${{ github.sha }}
         build-args: |
           BASE_IMAGE=${{ env.IMAGE_REPO }}:base
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
     - name: Build REX runtime image locally (${{ env.TARGET_ARCH }})
@@ -460,9 +490,11 @@ jobs:
         target: runtime
         pull: false
         provenance: false
+        labels: org.opencontainers.image.revision=${{ github.sha }}
         build-args: |
           BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
         load: true
         tags: ${{ env.LOCAL_IMAGE_REPO }}:runtime-${{ env.TARGET_ARCH }}-local
 
@@ -477,9 +509,12 @@ jobs:
         target: test
         pull: true
         provenance: false
+        labels: org.opencontainers.image.revision=${{ github.sha }}
         build-args: |
           BASE_IMAGE=${{ env.IMAGE_REPO }}:base
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
+          REX_ENABLE_X86_SIMD_TESTS=ON
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
     - name: Build REX dev image locally (${{ env.TARGET_ARCH }})
@@ -493,9 +528,12 @@ jobs:
         target: test
         pull: false
         provenance: false
+        labels: org.opencontainers.image.revision=${{ github.sha }}
         build-args: |
           BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
+          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
+          REX_ENABLE_X86_SIMD_TESTS=ON
         load: true
         tags: ${{ env.LOCAL_IMAGE_REPO }}:dev-${{ env.TARGET_ARCH }}-local
 
@@ -555,6 +593,7 @@ jobs:
         set -euo pipefail
         docker buildx imagetools create \
           -t "${IMAGE_REPO}:${REX_RUNTIME_TAG}" \
+          -t "${IMAGE_REPO}:${REX_RUNTIME_TAG}-${GITHUB_SHA}" \
           "${IMAGE_REPO}@${{ needs.build-amd64.outputs.runtime_digest }}" \
           "${IMAGE_REPO}@${{ needs.build-arm64.outputs.runtime_digest }}" \
           "${IMAGE_REPO}@${{ needs.build-riscv64.outputs.runtime_digest }}" \
@@ -567,6 +606,7 @@ jobs:
         set -euo pipefail
         docker buildx imagetools create \
           -t "${IMAGE_REPO}:${REX_DEV_TAG}" \
+          -t "${IMAGE_REPO}:${REX_DEV_TAG}-${GITHUB_SHA}" \
           "${IMAGE_REPO}@${{ needs.build-amd64.outputs.dev_digest }}" \
           "${IMAGE_REPO}@${{ needs.build-arm64.outputs.dev_digest }}" \
           "${IMAGE_REPO}@${{ needs.build-riscv64.outputs.dev_digest }}" \

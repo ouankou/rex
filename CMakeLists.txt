@@ -1749,37 +1749,16 @@ endif()
 if(VALGRIND_INCLUDE_PATH AND NOT EXISTS "${VALGRIND_INCLUDE_PATH}/valgrind/valgrind.h")
   message(FATAL_ERROR "valgrind.h is missing, can't compile with Valgrind")
 endif()
+include(cmake/rex_uninitialized_field_tests.cmake)
 
 set(_rose_memcheck_valgrind "")
-if(VALGRIND_BINARY)
+if(ROSE_VALGRIND_REQUESTED)
   set(_rose_memcheck_valgrind "${VALGRIND_BINARY}")
-endif()
-if(NOT _rose_memcheck_valgrind)
-  find_program(_rose_memcheck_valgrind valgrind
-    PATHS ENV PATH /usr/bin /usr/local/bin
-    NO_CMAKE_FIND_ROOT_PATH)
-  if(_rose_memcheck_valgrind)
-    message(STATUS "Found Valgrind for CTest memcheck: ${_rose_memcheck_valgrind}")
-  endif()
-endif()
-if(NOT _rose_memcheck_valgrind AND UNIX)
-  execute_process(
-    COMMAND /bin/sh -c "command -v valgrind"
-    RESULT_VARIABLE _rose_valgrind_status
-    OUTPUT_VARIABLE _rose_memcheck_valgrind
-    ERROR_QUIET
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-  if(_rose_valgrind_status EQUAL 0 AND _rose_memcheck_valgrind)
-    message(STATUS "Found Valgrind for CTest memcheck: ${_rose_memcheck_valgrind}")
-  else()
-    set(_rose_memcheck_valgrind "")
-  endif()
-  unset(_rose_valgrind_status)
 endif()
 
 set(ROSE_CTEST_EXPLICIT_TIMEOUT_SCALE 1)
 set(ROSE_CTEST_RTH_TIMEOUT_SCALE 1)
-if(ROSE_USE_VALGRIND)
+if(ROSE_VALGRIND_REQUESTED)
   set(ROSE_CTEST_EXPLICIT_TIMEOUT_SCALE 4)
   set(ROSE_CTEST_RTH_TIMEOUT_SCALE 4)
   if(REX_EXTENDED_TEST_TIMEOUTS)
@@ -1794,6 +1773,47 @@ set(ROSE_CTEST_MEMCHECK_TYPE "")
 if(_rose_memcheck_valgrind)
   set(ROSE_REAL_VALGRIND "${_rose_memcheck_valgrind}")
   set(ROSE_CTEST_MEMCHECK_RTH_TIMEOUT_SCALE ${ROSE_CTEST_RTH_TIMEOUT_SCALE})
+  if(NOT EXISTS "/usr/bin/env")
+    message(FATAL_ERROR
+      "CTest MemCheck requires the absolute shebang interpreter /usr/bin/env.")
+  endif()
+  execute_process(
+    COMMAND /usr/bin/env --version
+    RESULT_VARIABLE _rose_memcheck_env_status
+    OUTPUT_VARIABLE _rose_memcheck_env_version
+    ERROR_VARIABLE _rose_memcheck_env_error)
+  string(CONCAT _rose_memcheck_env_diagnostic
+    "${_rose_memcheck_env_version}" "${_rose_memcheck_env_error}")
+  if(NOT _rose_memcheck_env_status EQUAL 0 OR
+     NOT _rose_memcheck_env_diagnostic MATCHES "GNU coreutils")
+    message(FATAL_ERROR
+      "CTest MemCheck requires standalone GNU /usr/bin/env because Valgrind "
+      "child tracing supplies a synthetic argv[0] to executable-script "
+      "interpreters. Install Ubuntu's coreutils-from-gnu alternative before "
+      "configuration. Detected: ${_rose_memcheck_env_diagnostic}")
+  endif()
+  unset(_rose_memcheck_env_status)
+  unset(_rose_memcheck_env_version)
+  unset(_rose_memcheck_env_error)
+  unset(_rose_memcheck_env_diagnostic)
+  function(_rose_resolve_memcheck_compiler _rose_compiler _rose_output)
+    if(NOT _rose_compiler OR NOT IS_ABSOLUTE "${_rose_compiler}" OR
+       NOT EXISTS "${_rose_compiler}")
+      message(FATAL_ERROR
+        "CTest memcheck requires an existing absolute compiler path, got '${_rose_compiler}'.")
+    endif()
+    file(REAL_PATH "${_rose_compiler}" _rose_compiler_real)
+    set(${_rose_output} "${_rose_compiler_real}" PARENT_SCOPE)
+  endfunction()
+  _rose_resolve_memcheck_compiler("${CMAKE_C_COMPILER}"
+    ROSE_CTEST_MEMCHECK_C_COMPILER)
+  _rose_resolve_memcheck_compiler("${CMAKE_CXX_COMPILER}"
+    ROSE_CTEST_MEMCHECK_CXX_COMPILER)
+  set(ROSE_CTEST_MEMCHECK_FORTRAN_COMPILER "")
+  if(CMAKE_Fortran_COMPILER)
+    _rose_resolve_memcheck_compiler("${CMAKE_Fortran_COMPILER}"
+      ROSE_CTEST_MEMCHECK_FORTRAN_COMPILER)
+  endif()
   set(ROSE_CTEST_MEMCHECK_WRAPPER
       "${CMAKE_BINARY_DIR}/scripts/rex-ctest-valgrind-wrapper")
   file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/scripts")
@@ -1871,9 +1891,13 @@ if(_rose_memcheck_valgrind)
       tee
       timeout
       touch
+      chmod
+      sha256sum
+      stat
       wc
       xargs
-      install)
+      install
+      coreutils)
   foreach(_rose_memcheck_harness_tool IN LISTS _rose_memcheck_harness_tools)
     list(APPEND _rose_memcheck_trace_children_skip "*/${_rose_memcheck_harness_tool}")
   endforeach()
@@ -1914,7 +1938,7 @@ set(CTEST_MEMORYCHECK_COMMAND "${ROSE_CTEST_MEMCHECK_COMMAND}")
 set(CTEST_MEMORYCHECK_COMMAND_OPTIONS "${ROSE_CTEST_MEMCHECK_OPTIONS}")
 set(CTEST_MEMORYCHECK_SUPPRESSIONS_FILE "${ROSE_CTEST_MEMCHECK_SUPPRESSIONS}")
 set(ROSE_CTEST_CUSTOM_ENVIRONMENT "")
-if(ROSE_USE_VALGRIND)
+if(ROSE_VALGRIND_REQUESTED)
   set(ROSE_CTEST_CUSTOM_ENVIRONMENT
       "set(CTEST_CUSTOM_ENVIRONMENT \"ROSE_TEST_TIMEOUT_SCALE=${ROSE_CTEST_RTH_TIMEOUT_SCALE}\")")
   # Memcheck can exceed CTest's default 1500-second timeout on parser-heavy tests.
@@ -1950,6 +1974,8 @@ include(CTest)
 set(ROSE_LLVM_OPENMP_RUNTIME_DIR "")
 set(ROSE_LLVM_OPENMP_RUNTIME_LIBRARY "")
 set(ROSE_LLVM_OPENMP_INCLUDE_DIR "")
+set(ROSE_LLVM_CLANG_C_DRIVER "")
+set(ROSE_LLVM_CLANG_CXX_DRIVER "")
 if(REX_ENABLE_WASM AND ENABLE-C)
   set(ROSE_LLVM_OPENMP_INCLUDE_DIR "/rex/lib/clang/${CLANG_VERSION_MAJOR}/include")
   set(LLVM_OPENMP_INCLUDE_PATH "${ROSE_LLVM_OPENMP_INCLUDE_DIR}")
@@ -2012,6 +2038,57 @@ elseif(ENABLE-C)
       "'${_rose_llvm_openmp_driver_version}', error "
       "'${_rose_llvm_openmp_driver_error}'.")
   endif()
+  set(ROSE_LLVM_CLANG_C_DRIVER "${_rose_llvm_openmp_driver}")
+  set(ROSE_LLVM_CLANG_C_DRIVER
+    "${ROSE_LLVM_CLANG_C_DRIVER}" CACHE INTERNAL
+    "Exact Clang C driver owned by the loaded LLVM package" FORCE)
+
+  set(_rose_llvm_clang_cxx_driver "")
+  foreach(_rose_llvm_clang_cxx_driver_name IN ITEMS
+      clang++-${CLANG_VERSION_MAJOR} clang++)
+    if(EXISTS
+       "${LLVM_TOOLS_BINARY_DIR}/${_rose_llvm_clang_cxx_driver_name}" AND
+       NOT IS_DIRECTORY
+       "${LLVM_TOOLS_BINARY_DIR}/${_rose_llvm_clang_cxx_driver_name}")
+      set(_rose_llvm_clang_cxx_driver
+        "${LLVM_TOOLS_BINARY_DIR}/${_rose_llvm_clang_cxx_driver_name}")
+      break()
+    endif()
+  endforeach()
+  if(NOT _rose_llvm_clang_cxx_driver)
+    message(FATAL_ERROR
+      "The loaded LLVM package has no Clang++ ${CLANG_VERSION_MAJOR} driver "
+      "in its tools directory: ${LLVM_TOOLS_BINARY_DIR}")
+  endif()
+  file(REAL_PATH "${_rose_llvm_clang_cxx_driver}"
+    _rose_llvm_clang_cxx_driver_real)
+  get_filename_component(_rose_llvm_clang_cxx_driver_dir
+    "${_rose_llvm_clang_cxx_driver_real}" DIRECTORY)
+  if(NOT _rose_llvm_clang_cxx_driver_dir STREQUAL
+     _rose_llvm_openmp_tools_dir)
+    message(FATAL_ERROR
+      "Clang++ frontend driver must belong to the loaded LLVM package. Got "
+      "'${_rose_llvm_clang_cxx_driver}' and tools directory "
+      "'${_rose_llvm_openmp_tools_dir}'.")
+  endif()
+  execute_process(
+    COMMAND "${_rose_llvm_clang_cxx_driver}" -dumpversion
+    OUTPUT_VARIABLE _rose_llvm_clang_cxx_driver_version
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_VARIABLE _rose_llvm_clang_cxx_driver_error
+    RESULT_VARIABLE _rose_llvm_clang_cxx_driver_status)
+  string(REGEX MATCH "^[0-9]+" _rose_llvm_clang_cxx_driver_major
+    "${_rose_llvm_clang_cxx_driver_version}")
+  if(NOT _rose_llvm_clang_cxx_driver_status EQUAL 0 OR
+     NOT _rose_llvm_clang_cxx_driver_major STREQUAL
+         "${CLANG_VERSION_MAJOR}")
+    message(FATAL_ERROR
+      "Clang++ frontend driver '${_rose_llvm_clang_cxx_driver}' must report "
+      "Clang major ${CLANG_VERSION_MAJOR}. Got status "
+      "'${_rose_llvm_clang_cxx_driver_status}', version "
+      "'${_rose_llvm_clang_cxx_driver_version}', error "
+      "'${_rose_llvm_clang_cxx_driver_error}'.")
+  endif()
 
   execute_process(
     COMMAND "${_rose_llvm_openmp_driver}" --print-resource-dir
@@ -2031,6 +2108,92 @@ elseif(ENABLE-C)
   endif()
   file(REAL_PATH "${_rose_clang_resource_dir}"
     _rose_clang_resource_dir)
+
+  # REX records the configured C and C++ compilers as the backend drivers used
+  # for final compilation.  The frontend also adds headers from the loaded
+  # Clang package to those commands.  Mixing a backend Clang from another
+  # installation with that resource directory is invalid even when both
+  # installations report major version 22: the resource headers are a matched
+  # part of the driver toolchain.  Reject the configuration before any REX
+  # binary can emit a cross-install final-compilation command.
+  function(_rose_validate_backend_clang_resource _rose_language)
+    if(NOT CMAKE_${_rose_language}_COMPILER_ID STREQUAL "Clang")
+      message(FATAL_ERROR
+        "REX C/C++ final compilation requires Clang ${CLANG_VERSION_MAJOR} "
+        "from the loaded LLVM/Clang installation. The configured "
+        "${_rose_language} compiler is '${CMAKE_${_rose_language}_COMPILER}' "
+        "with compiler ID '${CMAKE_${_rose_language}_COMPILER_ID}'.")
+    endif()
+    string(REGEX MATCH "^[0-9]+" _rose_backend_clang_major
+      "${CMAKE_${_rose_language}_COMPILER_VERSION}")
+    if(NOT _rose_backend_clang_major STREQUAL "${CLANG_VERSION_MAJOR}")
+      message(FATAL_ERROR
+        "REX C/C++ final compilation requires Clang ${CLANG_VERSION_MAJOR}. "
+        "The configured ${_rose_language} compiler "
+        "'${CMAKE_${_rose_language}_COMPILER}' reports version "
+        "'${CMAKE_${_rose_language}_COMPILER_VERSION}'.")
+    endif()
+    execute_process(
+      COMMAND "${CMAKE_${_rose_language}_COMPILER}" --print-resource-dir
+      OUTPUT_VARIABLE _rose_backend_clang_resource_dir
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_VARIABLE _rose_backend_clang_resource_error
+      RESULT_VARIABLE _rose_backend_clang_resource_status)
+    if(NOT _rose_backend_clang_resource_status EQUAL 0 OR
+       NOT IS_ABSOLUTE "${_rose_backend_clang_resource_dir}" OR
+       NOT EXISTS "${_rose_backend_clang_resource_dir}")
+      message(FATAL_ERROR
+        "Could not resolve the Clang resource directory for configured "
+        "${_rose_language} backend '${CMAKE_${_rose_language}_COMPILER}': "
+        "status '${_rose_backend_clang_resource_status}', output "
+        "'${_rose_backend_clang_resource_dir}', error "
+        "'${_rose_backend_clang_resource_error}'.")
+    endif()
+    file(REAL_PATH "${_rose_backend_clang_resource_dir}"
+      _rose_backend_clang_resource_dir)
+    if(NOT _rose_backend_clang_resource_dir STREQUAL
+       _rose_clang_resource_dir)
+      message(FATAL_ERROR
+        "The configured ${_rose_language} backend compiler and loaded "
+        "LLVM/Clang frontend package must own the same resource directory. "
+        "Backend '${CMAKE_${_rose_language}_COMPILER}' owns "
+        "'${_rose_backend_clang_resource_dir}', while the frontend package "
+        "owns '${_rose_clang_resource_dir}'.")
+    endif()
+  endfunction()
+  _rose_validate_backend_clang_resource(C)
+  _rose_validate_backend_clang_resource(CXX)
+  unset(_rose_validate_backend_clang_resource)
+
+  execute_process(
+    COMMAND "${_rose_llvm_clang_cxx_driver}" --print-resource-dir
+    OUTPUT_VARIABLE _rose_llvm_clang_cxx_resource_dir
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_VARIABLE _rose_llvm_clang_cxx_resource_error
+    RESULT_VARIABLE _rose_llvm_clang_cxx_resource_status)
+  if(NOT _rose_llvm_clang_cxx_resource_status EQUAL 0 OR
+     NOT IS_ABSOLUTE "${_rose_llvm_clang_cxx_resource_dir}" OR
+     NOT EXISTS "${_rose_llvm_clang_cxx_resource_dir}")
+    message(FATAL_ERROR
+      "Clang++ resource directory resolution failed for exact driver "
+      "'${_rose_llvm_clang_cxx_driver}': status "
+      "'${_rose_llvm_clang_cxx_resource_status}', output "
+      "'${_rose_llvm_clang_cxx_resource_dir}', error "
+      "'${_rose_llvm_clang_cxx_resource_error}'.")
+  endif()
+  file(REAL_PATH "${_rose_llvm_clang_cxx_resource_dir}"
+    _rose_llvm_clang_cxx_resource_dir)
+  if(NOT _rose_llvm_clang_cxx_resource_dir STREQUAL
+     _rose_clang_resource_dir)
+    message(FATAL_ERROR
+      "The exact Clang C and C++ frontend drivers must publish one resource "
+      "directory. Got C '${_rose_clang_resource_dir}' and C++ "
+      "'${_rose_llvm_clang_cxx_resource_dir}'.")
+  endif()
+  set(ROSE_LLVM_CLANG_CXX_DRIVER "${_rose_llvm_clang_cxx_driver}")
+  set(ROSE_LLVM_CLANG_CXX_DRIVER
+    "${ROSE_LLVM_CLANG_CXX_DRIVER}" CACHE INTERNAL
+    "Exact Clang C++ driver owned by the loaded LLVM package" FORCE)
 
   set(_rose_llvm_openmp_package_root "${ROSE_LLVM_PACKAGE_ROOT}")
   set(_rose_expected_resource_dirs
@@ -2229,6 +2392,17 @@ elseif(ENABLE-C)
   unset(_rose_llvm_openmp_driver_dir)
   unset(_rose_llvm_openmp_tools_dir)
   unset(_rose_llvm_openmp_driver_name)
+  unset(_rose_llvm_clang_cxx_driver)
+  unset(_rose_llvm_clang_cxx_driver_dir)
+  unset(_rose_llvm_clang_cxx_driver_error)
+  unset(_rose_llvm_clang_cxx_driver_major)
+  unset(_rose_llvm_clang_cxx_driver_name)
+  unset(_rose_llvm_clang_cxx_driver_real)
+  unset(_rose_llvm_clang_cxx_driver_status)
+  unset(_rose_llvm_clang_cxx_driver_version)
+  unset(_rose_llvm_clang_cxx_resource_dir)
+  unset(_rose_llvm_clang_cxx_resource_error)
+  unset(_rose_llvm_clang_cxx_resource_status)
   unset(_rose_llvm_openmp_runtime_candidates)
   unset(_rose_llvm_openmp_runtime_names)
   unset(_rose_explicit_openmp_runtime_dir)

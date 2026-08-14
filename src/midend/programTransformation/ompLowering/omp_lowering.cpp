@@ -17745,6 +17745,12 @@ void lower_omp(SgSourceFile *file) {
             target_outlined_source_function.size());
     ROSE_ABORT();
   }
+  if (target_outlined_function_list != nullptr) {
+    fprintf(stderr,
+            "REX_OMP_LOWERING_INVARIANT[target-outline-session]: a new "
+            "lowering run retained its predecessor's target function list\n");
+    ROSE_ABORT();
+  }
   target_outlined_function_list = new std::vector<SgFunctionDeclaration *>();
 
   Rose_STL_Container<SgNode *> omp_nodes;
@@ -18120,6 +18126,8 @@ void lower_omp(SgSourceFile *file) {
   // post processing
   post_processing(file);
   clearClauseVariableRenamingRecord();
+  delete target_outlined_function_list;
+  target_outlined_function_list = nullptr;
   SageBuilder::symbol_table_case_insensitive_semantics = saved_case_insensitive;
 }
 

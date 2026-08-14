@@ -2,8 +2,14 @@
 set -euo pipefail
 
 real_valgrind="@ROSE_REAL_VALGRIND@"
+configured_compilers=(
+  "@ROSE_CTEST_MEMCHECK_C_COMPILER@"
+  "@ROSE_CTEST_MEMCHECK_CXX_COMPILER@"
+  "@ROSE_CTEST_MEMCHECK_FORTRAN_COMPILER@"
+)
 if [[ -z "${real_valgrind}" || ! -x "${real_valgrind}" ]]; then
-  real_valgrind=valgrind
+  echo "configured Valgrind executable is missing or not executable: ${real_valgrind}" >&2
+  exit 1
 fi
 
 args=("$@")
@@ -25,6 +31,26 @@ if (( cmd_index >= ${#args[@]} )); then
 fi
 
 tool="${args[cmd_index]}"
+
+# CTest wraps every test command with its memory checker. Some contract tests
+# intentionally invoke the configured compiler directly and contain no REX
+# process. Child-process filtering cannot help because the compiler is the
+# primary command in that case. Keep those compiler-only fixtures functional,
+# while every command that can execute REX remains under Valgrind.
+tool_path=""
+if [[ "${tool}" == */* && -e "${tool}" ]]; then
+  tool_path="$(readlink -f -- "${tool}")"
+elif resolved_tool="$(command -v -- "${tool}" 2>/dev/null)" &&
+     [[ -e "${resolved_tool}" ]]; then
+  tool_path="$(readlink -f -- "${resolved_tool}")"
+fi
+for configured_compiler in "${configured_compilers[@]}"; do
+  if [[ -n "${configured_compiler}" &&
+        "${tool_path}" == "${configured_compiler}" ]]; then
+    exec "${args[@]:cmd_index}"
+  fi
+done
+
 if [[ "${tool}" == */rth_run.pl ]]; then
   rth_timeout_scale="@ROSE_CTEST_MEMCHECK_RTH_TIMEOUT_SCALE@"
   if [[ -z "${ROSE_TEST_TIMEOUT_SCALE:-}" && "${rth_timeout_scale}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
@@ -35,6 +61,88 @@ if [[ "${tool}" == */rth_run.pl ]]; then
   printf -v valgrind_command "%q " "${valgrind_words[@]}"
   valgrind_command="${valgrind_command% }"
   exec "${tool}" "VALGRIND=${valgrind_command}" "${args[@]:cmd_index + 1}"
+fi
+
+# Valgrind executes its primary program itself instead of asking the kernel to
+# dispatch an executable script.  On Ubuntu 26.04, passing an
+# `#!/usr/bin/env bash` script directly therefore gives the Rust coreutils
+# multicall binary Valgrind's synthetic argv[0] (`memcheck-<arch>-linux`).  The
+# multicall dispatcher rejects that name before the script can run.  Resolve
+# the same shebang boundary explicitly so that Valgrind's primary executable
+# is the real interpreter and both the script and its traced children remain
+# instrumented.
+if [[ -n "${tool_path}" && -f "${tool_path}" ]]; then
+  shebang_line=""
+  if ! IFS= read -r shebang_line <"${tool_path}" &&
+     [[ -z "${shebang_line}" ]]; then
+    echo "cannot read possible executable script: ${tool_path}" >&2
+    exit 1
+  fi
+
+  if [[ "${shebang_line}" == '#!'* ]]; then
+    shebang_spec="${shebang_line:2}"
+    if [[ "${shebang_spec}" == *$'\r'* ]]; then
+      echo "executable script has a carriage return in its shebang: ${tool_path}" >&2
+      exit 1
+    fi
+    while [[ "${shebang_spec}" =~ ^[[:blank:]] ]]; do
+      shebang_spec="${shebang_spec:1}"
+    done
+    while [[ "${shebang_spec}" =~ [[:blank:]]$ ]]; do
+      shebang_spec="${shebang_spec:0:${#shebang_spec} - 1}"
+    done
+    if [[ -z "${shebang_spec}" ]]; then
+      echo "executable script has an empty shebang interpreter: ${tool_path}" >&2
+      exit 1
+    fi
+
+    shebang_interpreter="${shebang_spec%%[[:blank:]]*}"
+    shebang_argument="${shebang_spec:${#shebang_interpreter}}"
+    while [[ "${shebang_argument}" =~ ^[[:blank:]] ]]; do
+      shebang_argument="${shebang_argument:1}"
+    done
+    if [[ "${shebang_interpreter}" != /* ]]; then
+      echo "executable script shebang interpreter is not absolute: ${tool_path}: ${shebang_interpreter}" >&2
+      exit 1
+    fi
+    if [[ ! -x "${shebang_interpreter}" ]]; then
+      echo "executable script shebang interpreter is missing or not executable: ${tool_path}: ${shebang_interpreter}" >&2
+      exit 1
+    fi
+
+    interpreter_words=()
+    if [[ "$(basename -- "${shebang_interpreter}")" == "env" ]]; then
+      if [[ -z "${shebang_argument}" ]]; then
+        echo "env shebang does not name an interpreter: ${tool_path}" >&2
+        exit 1
+      fi
+      if [[ "${shebang_argument}" =~ [[:blank:]] ]]; then
+        echo "env shebang must name exactly one interpreter without options: ${tool_path}: ${shebang_argument}" >&2
+        exit 1
+      fi
+      if [[ "${shebang_argument}" == -* ||
+            "${shebang_argument}" == *=* ]]; then
+        echo "env shebang options and assignments are unsupported at the Valgrind boundary: ${tool_path}: ${shebang_argument}" >&2
+        exit 1
+      fi
+      resolved_interpreter="$(command -v -- "${shebang_argument}" 2>/dev/null || true)"
+      if [[ -z "${resolved_interpreter}" || ! -x "${resolved_interpreter}" ]]; then
+        echo "env shebang interpreter is missing or not executable: ${tool_path}: ${shebang_argument}" >&2
+        exit 1
+      fi
+      interpreter_words+=("$(readlink -f -- "${resolved_interpreter}")")
+    else
+      interpreter_words+=("$(readlink -f -- "${shebang_interpreter}")")
+      if [[ -n "${shebang_argument}" ]]; then
+        # Linux passes the entire optional shebang argument as one argv entry.
+        interpreter_words+=("${shebang_argument}")
+      fi
+    fi
+
+    exec "${real_valgrind}" "${args[@]:0:cmd_index}" \
+      "${interpreter_words[@]}" "${tool_path}" \
+      "${args[@]:cmd_index + 1}"
+  fi
 fi
 
 exec "${real_valgrind}" "$@"

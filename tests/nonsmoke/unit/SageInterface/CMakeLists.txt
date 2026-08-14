@@ -4,6 +4,7 @@ find_program(BASH_EXECUTABLE bash)
 if(NOT BASH_EXECUTABLE)
   message(FATAL_ERROR "bash not found; SageInterface death tests require bash")
 endif()
+find_program(REX_TEST_PYTHON_EXECUTABLE NAMES python3 REQUIRED)
 
 file(GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test_output_path.h CONTENT [=[
 #pragma once
@@ -44,6 +45,16 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_global_initialization_dependence_input.cpp)
 set_tests_properties(rex_global_initialization_dependence
   PROPERTIES LABELS "rex;analysis;dependence")
+
+add_executable(rex_sageinterface_delete_ast_attribute_ownership
+  rex_sageinterface_delete_ast_attribute_ownership.cpp)
+target_link_libraries(rex_sageinterface_delete_ast_attribute_ownership
+  ROSE_DLL ${link_with_libraries})
+add_test(
+  NAME rex_sageinterface_delete_ast_attribute_ownership
+  COMMAND rex_sageinterface_delete_ast_attribute_ownership)
+set_tests_properties(rex_sageinterface_delete_ast_attribute_ownership
+  PROPERTIES LABELS "rex;SageInterface;sanitizer")
 
 add_executable(rex_integer_width_contract rex_integer_width_contract.cpp)
 target_include_directories(rex_integer_width_contract PRIVATE
@@ -101,6 +112,41 @@ set_tests_properties(rex_ci_llvm_version_contract
   PROPERTIES LABELS "rex;build-system;CI")
 
 add_test(
+  NAME rex_frontend_toolchain_ownership_contract
+  COMMAND ${BASH_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_toolchain_ownership_contract.sh
+    ${ROSE_TOP_SRC_DIR}/CMakeLists.txt
+    ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Cxx20_tests/CMakeLists.txt
+    ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/uninitializedField_tests/CMakeLists.txt
+    ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/roseTests/ompLoweringTests/CMakeLists.txt
+    ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/roseTests/ompLoweringTests/scripts/run_semantic_compare.sh)
+set_tests_properties(rex_frontend_toolchain_ownership_contract
+  PROPERTIES LABELS "rex;build-system;CFE;OMPLOWERING")
+
+if(ENABLE-FORTRAN)
+  set(_rex_fortran_registration_enabled 1)
+else()
+  set(_rex_fortran_registration_enabled 0)
+endif()
+add_test(
+  NAME rex_fortran_test_registration_contract
+  COMMAND ${BASH_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_test_registration_contract.sh
+    ${CMAKE_CTEST_COMMAND}
+    ${CMAKE_BINARY_DIR}
+    ${_rex_fortran_registration_enabled})
+set_tests_properties(rex_fortran_test_registration_contract
+  PROPERTIES LABELS "rex;build-system;Fortran")
+
+add_test(
+  NAME rex_frontend_include_graph_authority_contract
+  COMMAND ${BASH_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_include_graph_authority_contract.sh
+    ${ROSE_TOP_SRC_DIR})
+set_tests_properties(rex_frontend_include_graph_authority_contract
+  PROPERTIES LABELS "rex;headers;CFE")
+
+add_test(
   NAME rex_nightly_image_registration_contract
   COMMAND ${BASH_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/rex_nightly_image_registration_contract.sh
@@ -108,6 +154,41 @@ add_test(
     ${ROSE_TOP_SRC_DIR}/ci/docker/rex-nightly.Dockerfile)
 set_tests_properties(rex_nightly_image_registration_contract
   PROPERTIES LABELS "rex;build-system;CI")
+
+add_test(
+  NAME rex_uninitialized_field_ci_contract
+  COMMAND ${BASH_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_uninitialized_field_ci_contract.sh
+    ${CMAKE_COMMAND}
+    ${ROSE_TOP_SRC_DIR}/CMakeLists.txt
+    ${ROSE_TOP_SRC_DIR}/cmake/rex_uninitialized_field_tests.cmake
+    ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/CMakeLists.txt
+    ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/uninitializedField_tests/CMakeLists.txt
+    ${ROSE_TOP_SRC_DIR}/build-rex.sh
+    ${ROSE_TOP_SRC_DIR}/ci/docker/rex-nightly.Dockerfile
+    ${ROSE_TOP_SRC_DIR}/.github/workflows
+    ${ROSE_TOP_SRC_DIR}/scripts/ci-install-deps)
+set_tests_properties(rex_uninitialized_field_ci_contract
+  PROPERTIES LABELS "rex;build-system;CI;memory")
+
+add_test(
+  NAME rex_nightly_multiarch_workflow_contract
+  COMMAND ${BASH_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_nightly_multiarch_workflow_contract.sh
+    ${ROSE_TOP_SRC_DIR}/.github/workflows
+    ${ROSE_TOP_SRC_DIR}/tests/fragile
+    ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/C_tests/CMakeLists.txt)
+set_tests_properties(rex_nightly_multiarch_workflow_contract
+  PROPERTIES LABELS "rex;build-system;CI")
+
+add_test(
+  NAME rex_policy_submodule_snapshot_contract
+  COMMAND ${BASH_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_policy_submodule_snapshot_contract.sh
+    ${ROSE_TOP_SRC_DIR}/scripts/policies/NoTabCharacters.pl
+    ${CMAKE_CURRENT_BINARY_DIR}/policy_submodule_snapshot_contract)
+set_tests_properties(rex_policy_submodule_snapshot_contract
+  PROPERTIES LABELS "rex;build-system;CI;policy")
 
 add_test(
   NAME rex_ctest_name_set_fixture_contract
@@ -120,6 +201,49 @@ add_test(
     ${CMAKE_CURRENT_BINARY_DIR}/ctest_name_set_fixture_contract)
 set_tests_properties(rex_ctest_name_set_fixture_contract
   PROPERTIES LABELS "rex;build-system;CI")
+
+add_test(
+  NAME rex_docs_cpp_compilation_db_contract
+  COMMAND ${BASH_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_docs_cpp_compilation_db_contract.sh
+    ${ROSE_TOP_SRC_DIR}/scripts/build-docs-compilation-db.py
+    ${ROSE_TOP_SRC_DIR}/scripts/generate-api-documentation
+    ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_BINARY_DIR}/docs_header_compilation_db_contract)
+set_tests_properties(rex_docs_cpp_compilation_db_contract
+  PROPERTIES LABELS "rex;build-system;CI;docs")
+
+add_test(
+  NAME rex_weekly_memory_workflow_contract
+  COMMAND ${BASH_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_weekly_memory_workflow_contract.sh
+    ${ROSE_TOP_SRC_DIR}/.github/workflows
+    ${ROSE_TOP_SRC_DIR})
+set_tests_properties(rex_weekly_memory_workflow_contract
+  PROPERTIES LABELS "rex;build-system;CI;sanitizer")
+
+add_test(
+  NAME rex_act_artifact_workflow_contract
+  COMMAND ${BASH_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_act_artifact_workflow_contract.sh
+    ${ROSE_TOP_SRC_DIR}/.github/workflows)
+set_tests_properties(rex_act_artifact_workflow_contract
+  PROPERTIES LABELS "rex;build-system;CI")
+
+if(ROSE_CTEST_MEMCHECK_WRAPPER AND CMAKE_Fortran_COMPILER)
+  add_test(
+    NAME rex_ctest_valgrind_wrapper_contract
+    COMMAND ${BASH_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_ctest_valgrind_wrapper_contract.sh
+      ${ROSE_CTEST_MEMCHECK_WRAPPER}
+      ${BASH_EXECUTABLE}
+      ${CMAKE_C_COMPILER}
+      ${CMAKE_CXX_COMPILER}
+      ${CMAKE_Fortran_COMPILER}
+      ${CMAKE_CURRENT_BINARY_DIR}/ctest_valgrind_wrapper_contract)
+  set_tests_properties(rex_ctest_valgrind_wrapper_contract
+    PROPERTIES LABELS "rex;build-system;CI;memcheck")
+endif()
 
 set(_openmp_specimens_path
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/OpenMP_tests)

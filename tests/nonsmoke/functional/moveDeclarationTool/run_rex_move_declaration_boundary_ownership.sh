@@ -50,6 +50,14 @@ run_mode v2 -rose:merge_decl_assign
 run_mode v3 \
   -rose:merge_decl_assign
 
+for output in "${work}/v1.C" "${work}/v2.C" "${work}/v3.C"; do
+  if grep -Eq '(struct|union|enum)[[:space:]]+__anonymous_0x' "${output}"; then
+    echo "REX_MOVE_DECLARATION_INVARIANT[anonymous-tag]: generated identity leaked into ${output}" >&2
+    exit 1
+  fi
+  test "$(grep -Ec 'union[[:space:]]*\{' "${output}")" -eq 1
+done
+
 # Transformation tracking records metadata; it must not choose a different
 # source-formatting path.  Hold token replay and the transformation constant,
 # then prove that enabling tracking cannot change the generated source.
@@ -68,5 +76,5 @@ cmp -s "${work}/v2.C" "${no_tracking_output}"
 # The non-merge mode must preserve the complete spelled macro invocation.
 # Compiling catches malformed if headers; this assertion distinguishes a
 # complete invocation from semantic AST spelling in the merge modes.
-grep -Eq 'REX_MOVE_DECLARATION_VALUE[[:space:]]*\([[:space:]]*index[[:space:]]*\)[[:space:]]*;' \
+grep -Eq 'result[[:space:]]*=[[:space:]]*REX_MOVE_DECLARATION_VALUE[[:space:]]*\([[:space:]]*index[[:space:]]*\)[[:space:]]*\+[[:space:]]*tagged_value\.integer_value[[:space:]]*;' \
   "${work}/v1.C"

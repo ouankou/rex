@@ -37,10 +37,17 @@ struct MacroDirectiveFixture {
     declaration->set_endOfConstruct(end);
   }
 
+  ~MacroDirectiveFixture() {
+    ROSE_ASSERT(source_file != nullptr &&
+                source_file->get_project() != nullptr);
+    SageInterface::deleteAST(source_file->get_project());
+  }
+
   void setDirectiveList(ROSEAttributesList *list) {
-    ROSEAttributesListContainer *container = new ROSEAttributesListContainer();
+    ROSEAttributesListContainer *container =
+        source_file->get_preprocessorDirectivesAndCommentsList();
+    ROSE_ASSERT(container != nullptr);
     container->addList(filename, list);
-    source_file->set_preprocessorDirectivesAndCommentsList(container);
   }
 
   void unparse() {
@@ -383,6 +390,10 @@ int exercisePositiveContracts() {
     fixture.setDirectiveList(list);
     fixture.unparse();
   }
+
+  SgProject *ownedStatementProject = ownedStatementSourceFile()->get_project();
+  ROSE_ASSERT(ownedStatementProject != nullptr);
+  SageInterface::deleteAST(ownedStatementProject);
 
   return 0;
 }

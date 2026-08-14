@@ -685,6 +685,95 @@ std::string resolveUnparseOutputToTestDir(SgFile *file,
   return Rose::TestOutput::resolvePath(filename, output_dir);
 }
 
+static void prepareUnparseOutputFilename(SgFile *file) {
+  ASSERT_not_null(file);
+  if (!file->get_unparse_output_filename().empty()) {
+    return;
+  }
+
+  std::string outputFilename;
+  switch (file->get_outputLanguage()) {
+  case SgFile::e_error_language:
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[output-language]: file=%s has error "
+            "output language\n",
+            file->getFileName().c_str());
+    ROSE_ABORT();
+  case SgFile::e_default_language:
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[output-language]: file=%s has default "
+            "output language\n",
+            file->getFileName().c_str());
+    ROSE_ABORT();
+  case SgFile::e_C_language:
+  case SgFile::e_Cxx_language:
+    if (file->get_sourceFileNameWithoutPath().empty()) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[output-name]: C/C++ file=%s has no "
+              "source basename\n",
+              file->getFileName().c_str());
+      ROSE_ABORT();
+    }
+    outputFilename = "rose_" + file->get_sourceFileNameWithoutPath();
+    if (file->get_Cuda_only()) {
+      outputFilename =
+          Rose::StringUtility::stripFileSuffixFromFileName(outputFilename) +
+          ".cu";
+    }
+    break;
+  case SgFile::e_Fortran_language:
+    if (file->get_sourceFileNameWithoutPath().empty()) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[output-name]: Fortran file=%s has no "
+              "source basename\n",
+              file->getFileName().c_str());
+      ROSE_ABORT();
+    }
+    outputFilename = "rose_" + file->get_sourceFileNameWithoutPath();
+    break;
+  case SgFile::e_last_language:
+  default:
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[output-language]: file=%s has unsupported "
+            "output language=%d\n",
+            file->getFileName().c_str(),
+            static_cast<int>(file->get_outputLanguage()));
+    ROSE_ABORT();
+  }
+
+  SgProject *project = SageInterface::getProject(file);
+  if (project == nullptr) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[missing-project]: file=%s source file has "
+            "no associated project\n",
+            file->getFileName().c_str());
+    ROSE_ABORT();
+  }
+  if (project->get_unparse_in_same_directory_as_input_file()) {
+    const std::filesystem::path inputPath(file->get_sourceFileNameWithPath());
+    outputFilename = (inputPath.parent_path() /
+                      ("rose_" + file->get_sourceFileNameWithoutPath()))
+                         .string();
+  }
+  if (SgSourceFile *sourceFile = isSgSourceFile(file)) {
+    if (project->get_unparser__clobber_input_file()) {
+      outputFilename = sourceFile->get_sourceFileNameWithPath();
+      std::cout << "[WARN] [Unparser] Clobbering the original input file: "
+                << outputFilename << std::endl;
+    }
+  }
+
+  outputFilename = resolveUnparseOutputToTestDir(file, outputFilename);
+  if (outputFilename.empty()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[output-name]: file=%s produced an empty "
+            "output path\n",
+            file->getFileName().c_str());
+    ROSE_ABORT();
+  }
+  file->set_unparse_output_filename(outputFilename);
+}
+
 class FileDescriptorOutputBuffer final : public std::streambuf {
 public:
   explicit FileDescriptorOutputBuffer(int descriptor)
@@ -4675,115 +4764,10 @@ void unparseFile(
     ROSE_ABORT();
   }
 
-  // If we did unparse an intermediate file then we want to compile that file
-  // instead of the original source file.
-  if (!hasOutputFilenameOverride &&
-      file->get_unparse_output_filename().empty() == true) {
-
-    switch (file->get_outputLanguage()) {
-    case SgFile::e_error_language: {
-      printf("Error: SgFile::e_error_language detected in unparser \n");
-      ROSE_ABORT();
-    }
-
-    case SgFile::e_default_language: {
-      fprintf(stderr,
-              "REX_UNPARSE_INVARIANT[output-language]: file=%s has default "
-              "output language\n",
-              file->getFileName().c_str());
-      ROSE_ABORT();
-    }
-
-    case SgFile::e_C_language:
-    case SgFile::e_Cxx_language: {
-      // printf ("Error: SgFile::e_C_language or SgFile::e_Cxx_language detected
-      // in unparser (unparser not implemented, unparsing ignored) \n"); DQ
-      // (9/17/2018): When used withouth header file unparsing, this is a valid
-      // string.  So likely in needs to be setup else where so that we have
-      // consistancy of how it is setup independent of if the header file
-      // unparsing is used or not.
-      // ROSE_ASSERT(file->get_sourceFileNameWithoutPath().empty() == true);
-      ROSE_ASSERT(file->get_sourceFileNameWithoutPath().empty() == false);
-
-      outputFilename = "rose_" + file->get_sourceFileNameWithoutPath();
-
-      // Liao 12/29/2010, generate cuda source files
-      if (file->get_Cuda_only() == true) {
-        outputFilename =
-            StringUtility::stripFileSuffixFromFileName(outputFilename);
-        outputFilename += ".cu";
-      }
-
-      break;
-    }
-
-    case SgFile::e_Fortran_language: {
-      // printf ("Error: SgFile::e_Fortran_language detected in unparser
-      // (unparser not implemented, unparsing ignored) \n");
-
-      outputFilename = "rose_" + file->get_sourceFileNameWithoutPath();
-      break;
-    }
-
-    case SgFile::e_last_language: {
-      printf("Error: SgFile::e_last_language detected in unparser \n");
-      ROSE_ABORT();
-    }
-
-    default: {
-      printf("Error: default reached in unparser (unknown output language "
-             "specified) \n");
-      ROSE_ABORT();
-    }
-    }
-
-    // DQ (9/7/2017): Added support for generated file to be placed into the
-    // same directory as the source file.
-    SgProject *project = SageInterface::getProject(file);
-
-    if (project != NULL) {
-      if (project->get_unparse_in_same_directory_as_input_file() == true) {
-        const std::filesystem::path inputPath(
-            file->get_sourceFileNameWithPath());
-        outputFilename = (inputPath.parent_path() /
-                          ("rose_" + file->get_sourceFileNameWithoutPath()))
-                             .string();
-      }
-    } else if (isSgSourceFile(file) != nullptr) {
-      fprintf(stderr,
-              "REX_UNPARSE_INVARIANT[missing-project]: file=%s source file "
-              "has no associated project\n",
-              file->getFileName().c_str());
-      ROSE_ABORT();
-    }
-
-    // DQ (9/15/2013): Added assertion.
-    ROSE_ASSERT(file->get_unparse_output_filename().empty() == true);
-
-    SgSourceFile *source_file = isSgSourceFile(file);
-    if (source_file != NULL) {
-      ASSERT_not_null(project);
-      if (project->get_unparser__clobber_input_file()) {
-        // TOO1 (3/20/2014): Clobber the original input source file X_X
-        //
-        //            **CAUTION**RED*ALERT**CAUTION**
-        //
-
-        outputFilename = source_file->get_sourceFileNameWithPath();
-        std::cout << "[WARN] [Unparser] Clobbering the original input file: "
-                  << outputFilename << std::endl;
-      }
-    }
-
-    // string outputFilename = "rose_" + file->get_sourceFileNameWithoutPath();
-
-    outputFilename = resolveUnparseOutputToTestDir(file, outputFilename);
-
-    // Set the output filename in the SgFile IR node.
-    file->set_unparse_output_filename(outputFilename);
-
-    ROSE_ASSERT(file->get_unparse_output_filename().empty() == false);
-    // assert(file->get_unparse_output_filename().empty() == false);
+  // Header-output planning also needs this exact path so include rewrites can
+  // be relative to the generated includer rather than depend on -I ordering.
+  if (!hasOutputFilenameOverride) {
+    prepareUnparseOutputFilename(file);
   }
   if (hasOutputFilenameOverride) {
     outputFilename = resolveUnparseOutputToTestDir(file, outputFilename);
@@ -6662,6 +6646,22 @@ void unparseIncludedFiles(
   if (headerSourceFile != nullptr) {
     if (SgProject::get_verbose() >= 1) {
       cout << endl << "***HEADER FILES UNPARSING***" << endl << endl;
+    }
+
+    // Include rewriting is an output-graph operation.  Publish every
+    // translation-unit output before planning header destinations so each
+    // rewritten directive can name its generated target relative to its
+    // generated includer without guessing the later backend filename.
+    for (SgFile *projectFile : project->get_fileList()) {
+      if (projectFile == nullptr) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[header-project]: project contains a "
+                "null file while preparing output paths\n");
+        ROSE_ABORT();
+      }
+      if (!projectFile->get_skip_unparse()) {
+        prepareUnparseOutputFilename(projectFile);
+      }
     }
 
     IncludedFilesUnparser includedFilesUnparser(project);

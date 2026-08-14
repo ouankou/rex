@@ -515,6 +515,7 @@ int exercisePositiveContracts() {
   ROSE_ASSERT(
       occurrenceRecord->get_file_info()->get_physical_file_occurrence_id() ==
       secondOccurrence);
+  delete occurrenceRecord;
 
   // Frontend placeholders for absent for-header syntax are semantic edges,
   // not generated output surfaces.  Publishing an enclosing transformed loop
@@ -766,6 +767,7 @@ int exercisePositiveContracts() {
               replacement->get_file_info()->get_physical_file_id());
   ROSE_ASSERT(generatedRecordInfo->get_physical_filename() ==
               replacement->get_file_info()->get_physical_filename());
+  delete generatedRecord;
 
   PreprocessingInfo *comment = SageInterface::attachComment(
       replacement, "generated comment", PreprocessingInfo::C_StyleComment);

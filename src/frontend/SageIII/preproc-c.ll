@@ -937,6 +937,7 @@ prefixtrivia            ({horizontal}|{linesplice}|{blockcomment})
 lineprefix              ^{prefixtrivia}*"#"{prefixtrivia}*
 splice                  ({linesplice})*
 includekeyword          i{splice}n{splice}c{splice}l{splice}u{splice}d{splice}e
+includenextkeyword      i{splice}n{splice}c{splice}l{splice}u{splice}d{splice}e{splice}_{splice}n{splice}e{splice}x{splice}t
 definekeyword           d{splice}e{splice}f{splice}i{splice}n{splice}e
 undefkeyword            u{splice}n{splice}d{splice}e{splice}f
 linekeyword             l{splice}i{splice}n{splice}e
@@ -1300,7 +1301,8 @@ BEGIN NORMAL;
                 }
     */
 
-<NORMAL>{lineprefix}{includekeyword}   { macrotype=PreprocessingInfo::CpreprocessorIncludeDeclaration; HANDLEMACROSTART }
+<NORMAL>{lineprefix}{includenextkeyword} { macrotype=PreprocessingInfo::CpreprocessorIncludeNextDeclaration; HANDLEMACROSTART }
+<NORMAL>{lineprefix}{includekeyword}     { macrotype=PreprocessingInfo::CpreprocessorIncludeDeclaration; HANDLEMACROSTART }
 <NORMAL>{lineprefix}{definekeyword}    { macrotype=PreprocessingInfo::CpreprocessorDefineDeclaration; HANDLEMACROSTART }
 <NORMAL>{lineprefix}{undefkeyword}     { macrotype=PreprocessingInfo::CpreprocessorUndefDeclaration; HANDLEMACROSTART }
 <NORMAL>{lineprefix}{linekeyword}      { macrotype=PreprocessingInfo::CpreprocessorLineDeclaration; HANDLEMACROSTART }
