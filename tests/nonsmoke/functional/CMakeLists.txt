@@ -29,6 +29,7 @@ set(CXX_TESTCODES_GNUXX17
   rex_test2026_deduction_guide.cpp
   rex_test2026_std_filesystem.cpp
   rex_test2026_std_variant_visit.cpp
+  rex_frontend_semantic_lambda_parent.cpp
   test2010_02.C
   test2017_99.C
 )

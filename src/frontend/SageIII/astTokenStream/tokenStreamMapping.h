@@ -169,6 +169,7 @@ private:
   static void requireDirectOwnerInterval(
       SgNode *node, const char *source_file,
       std::optional<TokenStreamHalfOpenInterval> interval);
+  static void retireDetachedMapping(TokenStreamSequenceToNodeMapping *mapping);
 
   void publishHalfOpenIntervals(size_t token_count);
 

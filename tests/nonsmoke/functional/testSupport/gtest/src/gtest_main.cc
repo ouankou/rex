@@ -43,6 +43,13 @@
 GTEST_API_ int main(int argc, char **argv) {
   printf("Running main() from gtest_main.cc\n");
   testing::InitGoogleTest(&argc, argv);
+  // This vendored GoogleTest release launches Linux death-test children with
+  // clone() and a one-page private stack by default.  Modern glibc dynamic
+  // symbol resolution can exceed that stack before the child reaches the
+  // assertion, producing a loader SIGSEGV and hiding the hard diagnostic.
+  // GoogleTest's own fork path preserves the process stack and then executes
+  // the same fast or threadsafe death-test protocol.
+  testing::GTEST_FLAG(death_test_use_fork) = true;
 #if defined(ROSE_USE_VALGRIND) && ROSE_USE_VALGRIND
   testing::GTEST_FLAG(death_test_style) = "threadsafe";
 #elif defined(ROSE_GTEST_HAS_VALGRIND)

@@ -332,34 +332,8 @@ config-bool() {
 ####################################################################################################################################
 compiler-from-db() {
     local db="$1"
-    "$PYTHON_BIN" - "$db" <<'PY'
-import json
-import os
-import shlex
-import sys
-
-db = sys.argv[1]
-with open(db, "r", encoding="utf-8") as fh:
-    data = json.load(fh)
-if not isinstance(data, list) or not data:
-    raise SystemExit("compile_commands.json is empty")
-
-entry = data[0]
-args = entry.get("arguments")
-if not isinstance(args, list) or not args:
-    cmd = entry.get("command")
-    if not isinstance(cmd, str):
-        raise SystemExit("compile_commands entry missing command/arguments")
-    args = shlex.split(cmd)
-if not args:
-    raise SystemExit("compile_commands entry has empty command")
-
-wrappers = {"ccache", "sccache", "distcc", "icecc", "buildcache"}
-tool = args[0]
-if os.path.basename(tool) in wrappers and len(args) > 1:
-    tool = args[1]
-print(tool)
-PY
+    "$PYTHON_BIN" "$(rose-source)/scripts/build-docs-compilation-db.py" \
+        --print-cmake-cxx-compiler "$db"
 }
 
 resolve-compiler() {
@@ -379,60 +353,10 @@ resolve-compiler() {
 
 collect-include-paths() {
     local compiler="$1"
-    "$PYTHON_BIN" - "$compiler" <<'PY'
-import subprocess
-import sys
-
-compiler = sys.argv[1]
-proc = subprocess.run(
-    [compiler, "-E", "-x", "c++", "-", "-v"],
-    input=b"",
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE,
-    check=True,
-)
-text = proc.stderr.decode("utf-8")
-
-paths = []
-in_block = False
-for line in text.splitlines():
-    if line.strip() == "#include <...> search starts here:":
-        in_block = True
-        continue
-    if in_block:
-        if line.strip() == "End of search list.":
-            break
-        line = line.strip()
-        if not line or line.startswith("("):
-            continue
-        paths.append(line)
-
-seen = set()
-deduped = []
-for path in paths:
-    if path in seen:
-        continue
-    seen.add(path)
-    deduped.append(path)
-
-libc = []
-stdlib = []
-system = []
-for path in deduped:
-    if "/lib/clang/" in path or "/llvm" in path:
-        system.append(path)
-    elif "/include/c++/" in path or "/c++/" in path:
-        stdlib.append(path)
-    else:
-        libc.append(path)
-
-for path in libc:
-    print(f"libc:{path}")
-for path in stdlib:
-    print(f"stdlib:{path}")
-for path in system:
-    print(f"system:{path}")
-PY
+    local compile_db="$2"
+    "$PYTHON_BIN" "$(rose-source)/scripts/build-docs-compilation-db.py" \
+        --print-compiler-include-paths "$compiler" \
+        --compile-db "$compile_db"
 }
 
 ####################################################################################################################################
@@ -440,397 +364,23 @@ build-docs-compilation-db() {
     local config="$1"
     local out_dir="$2"
     local compiler="$3"
-    local build_dir="$4"
-    local compile_db="$5"
-    local overlay_dir="${6-}"
+    local compile_db="$4"
+    local overlay_dir="${5-}"
     local root
+    local stdlib_include_args=()
     root="$(rose-source)"
+    while IFS=: read -r kind path; do
+        if [ "$kind" = "stdlib" ] && [ -n "$path" ]; then
+            stdlib_include_args+=(--stdlib-include "$path")
+        fi
+    done < <(collect-include-paths "$compiler" "$compile_db")
     "$PYTHON_BIN" "$root/scripts/build-docs-compilation-db.py" \
         --config "$config" \
         --out-dir "$out_dir" \
         --compiler "$compiler" \
-        --build-dir "$build_dir" \
         --compile-db "$compile_db" \
-        --overlay-dir "$overlay_dir"
-}
-
-####################################################################################################################################
-filter-compilation-db() {
-    local config="$1"
-    local compile_db="$2"
-    local out_dir="$3"
-    local overlay="${4-}"
-"$PYTHON_BIN" - "$config" "$compile_db" "$out_dir" "$overlay" <<'PY'
-import fnmatch
-import json
-import os
-import sys
-from pathlib import Path
-
-config_path = Path(sys.argv[1])
-compile_db_path = Path(sys.argv[2])
-out_dir = Path(sys.argv[3])
-overlay_path = Path(sys.argv[4]) if len(sys.argv) > 4 and sys.argv[4] else None
-
-lines = config_path.read_text(encoding="utf-8").splitlines()
-
-def parse_scalar(key: str) -> str | None:
-    for line in lines:
-        stripped = line.lstrip()
-        if stripped.startswith(f"{key}:"):
-            value = stripped.split(":", 1)[1].strip()
-            if value:
-                return value.strip("\"'")
-    return None
-
-def parse_list(key: str) -> list[str]:
-    items = []
-    in_block = False
-    indent = None
-    for line in lines:
-        stripped = line.lstrip()
-        if not in_block:
-            if stripped.startswith(f"{key}:"):
-                in_block = True
-                indent = len(line) - len(stripped) + 2
-            continue
-        if not stripped:
-            continue
-        leading = len(line) - len(stripped)
-        if leading < (indent or 0):
-            break
-        if stripped.startswith("- "):
-            item = stripped[2:].strip().strip("\"'")
-            if item:
-                items.append(item)
-    return items
-
-config_dir = config_path.parent
-use_system_stdlib_value = parse_scalar("use-system-stdlib")
-use_system_stdlib = (use_system_stdlib_value or "").lower() == "true"
-source_root_value = parse_scalar("source-root")
-if source_root_value:
-    source_root_path = Path(source_root_value)
-    if not source_root_path.is_absolute():
-        source_root_path = (config_dir / source_root_path).resolve()
-    else:
-        source_root_path = source_root_path.resolve()
-else:
-    source_root_path = config_dir.resolve()
-
-input_items = parse_list("input") or [str(source_root_path / "src")]
-input_paths = []
-for item in input_items:
-    path = Path(item)
-    if not path.is_absolute():
-        path = (config_dir / path).resolve()
-    else:
-        path = path.resolve()
-    input_paths.append(path)
-
-exclude_items = parse_list("exclude")
-exclude_paths = []
-for item in exclude_items:
-    path = Path(item)
-    if not path.is_absolute():
-        path = (config_dir / path).resolve()
-    else:
-        path = path.resolve()
-    exclude_paths.append(path)
-exclude_patterns = parse_list("exclude-patterns")
-
-def matches_exclude_patterns(path: Path) -> bool:
-    if not exclude_patterns:
-        return False
-    path_posix = path.as_posix()
-    for pat in exclude_patterns:
-        if fnmatch.fnmatch(path_posix, pat):
-            return True
-    try:
-        rel = path.resolve().relative_to(source_root_path)
-    except ValueError:
-        return False
-    rel_posix = rel.as_posix()
-    for pat in exclude_patterns:
-        if fnmatch.fnmatch(rel_posix, pat):
-            return True
-    return False
-
-def is_excluded(path: Path) -> bool:
-    for ex in exclude_paths:
-        try:
-            path.relative_to(ex)
-            return True
-        except ValueError:
-            continue
-    return matches_exclude_patterns(path)
-
-def is_in_inputs(path: Path) -> bool:
-    if not input_paths:
-        return True
-    for base in input_paths:
-        try:
-            path.relative_to(base)
-            return True
-        except ValueError:
-            continue
-    return False
-
-def is_cmake_pch_arg(arg: str) -> bool:
-    return arg.rsplit("/", 1)[-1].startswith("cmake_pch.")
-
-def strip_cmake_pch_args(argv: list[str]) -> list[str]:
-    if not any(is_cmake_pch_arg(arg) for arg in argv):
-        return list(argv)
-
-    cleaned = []
-    i = 0
-    while i < len(argv):
-        arg = argv[i]
-
-        if arg in {"-Winvalid-pch", "-fpch-instantiate-templates"}:
-            i += 1
-            continue
-
-        if arg == "-include-pch" and i + 1 < len(argv) and is_cmake_pch_arg(argv[i + 1]):
-            i += 2
-            continue
-
-        if arg == "-include" and i + 1 < len(argv) and is_cmake_pch_arg(argv[i + 1]):
-            i += 2
-            continue
-
-        if (
-            arg in {"-I", "-isystem", "-iquote", "-idirafter"}
-            and i + 1 < len(argv)
-            and is_cmake_pch_arg(argv[i + 1])
-        ):
-            i += 2
-            continue
-
-        if arg == "-Xclang" and i + 1 < len(argv):
-            xclang_arg = argv[i + 1]
-            if xclang_arg == "-include-pch":
-                if (
-                    i + 3 < len(argv)
-                    and argv[i + 2] == "-Xclang"
-                    and is_cmake_pch_arg(argv[i + 3])
-                ):
-                    i += 4
-                    continue
-                if i + 2 < len(argv) and is_cmake_pch_arg(argv[i + 2]):
-                    i += 3
-                    continue
-            if xclang_arg == "-include":
-                if (
-                    i + 3 < len(argv)
-                    and argv[i + 2] == "-Xclang"
-                    and is_cmake_pch_arg(argv[i + 3])
-                ):
-                    i += 4
-                    continue
-                if i + 2 < len(argv) and is_cmake_pch_arg(argv[i + 2]):
-                    i += 3
-                    continue
-
-        if is_cmake_pch_arg(arg):
-            i += 1
-            continue
-
-        cleaned.append(arg)
-        i += 1
-    return cleaned
-
-def is_stdlib_include_path(value: str) -> bool:
-    return "/include/c++/" in value or "/c++/" in value
-
-def strip_stdlib_include_args(argv: list[str]) -> list[str]:
-    cleaned = []
-    i = 0
-    include_prefixes = ("-I", "-isystem", "-iquote", "-idirafter")
-    while i < len(argv):
-        arg = argv[i]
-
-        if (
-            arg in include_prefixes
-            and i + 1 < len(argv)
-            and is_stdlib_include_path(argv[i + 1])
-        ):
-            i += 2
-            continue
-
-        removed = False
-        for prefix in include_prefixes:
-            if arg.startswith(prefix) and arg != prefix:
-                path = arg[len(prefix):]
-                if is_stdlib_include_path(path):
-                    removed = True
-                break
-        if removed:
-            i += 1
-            continue
-
-        cleaned.append(arg)
-        i += 1
-
-    return cleaned
-
-data = json.loads(compile_db_path.read_text(encoding="utf-8"))
-if not isinstance(data, list):
-    raise SystemExit("compile_commands.json is not a list")
-
-filtered = []
-for entry in data:
-    file_value = entry.get("file")
-    if not file_value:
-        continue
-    file_path = Path(file_value)
-    if not file_path.is_absolute():
-        directory = entry.get("directory")
-        base_dir = Path(directory) if directory else source_root_path
-        file_path = (base_dir / file_path).resolve()
-    else:
-        file_path = file_path.resolve()
-    if is_excluded(file_path):
-        continue
-    if not is_in_inputs(file_path):
-        continue
-    if file_path.name.startswith("cmake_pch."):
-        continue
-    new_entry = dict(entry)
-    new_entry["file"] = str(file_path)
-    if "directory" in new_entry and new_entry["directory"]:
-        new_entry["directory"] = str(Path(new_entry["directory"]).resolve())
-    args = new_entry.get("arguments")
-    if not isinstance(args, list) or not args:
-        cmd = new_entry.get("command")
-        if isinstance(cmd, str):
-            import shlex
-            args = shlex.split(cmd)
-    if isinstance(args, list) and args:
-        args = strip_cmake_pch_args(args)
-
-        def is_cpp_source(path: Path, argv: list[str]) -> bool:
-            suffix = path.suffix
-            suffix_lower = suffix.lower()
-            if suffix == ".C":
-                return True
-            if suffix_lower in {".cc", ".cpp", ".cxx", ".c++", ".cp"}:
-                return True
-            if suffix_lower == ".c":
-                return False
-            it = iter(range(len(argv)))
-            i = 0
-            while i < len(argv):
-                arg = argv[i]
-                if arg == "-x" and i + 1 < len(argv):
-                    if "c++" in argv[i + 1]:
-                        return True
-                    i += 1
-                elif arg.startswith("-x") and "c++" in arg:
-                    return True
-                i += 1
-            return False
-
-        if is_cpp_source(file_path, args):
-            if not use_system_stdlib:
-                args = strip_stdlib_include_args(args)
-            if not use_system_stdlib and "-nostdinc++" not in args:
-                args.insert(1, "-nostdinc++")
-            if overlay_path and overlay_path.is_dir():
-                overlay_args = [args[i:i + 2] for i in range(len(args) - 1)]
-                if ["-I", str(overlay_path)] not in overlay_args and ["-isystem", str(overlay_path)] not in overlay_args:
-                    insert_at = 2 if len(args) > 1 and args[1] == "-nostdinc++" else 1
-                    args[insert_at:insert_at] = ["-I", str(overlay_path)]
-            prelude_arg = None
-            doc_prelude = source_root_path / "src" / "docs" / "mrdocs" / "doc_prelude.h"
-            if not doc_prelude.is_file():
-                doc_prelude = source_root_path / "src" / "docs" / "mrdocs" / "ast_node_docs.h"
-            if doc_prelude.is_file():
-                prelude_arg = str(doc_prelude.resolve())
-                if ["-include", prelude_arg] not in [args[i:i+2] for i in range(len(args) - 1)]:
-                    insert_at = 1
-                    while insert_at < len(args):
-                        if args[insert_at] == "-nostdinc++":
-                            insert_at += 1
-                            continue
-                        if overlay_path and overlay_path.is_dir():
-                            if args[insert_at] in {"-I", "-isystem"} and insert_at + 1 < len(args) and args[insert_at + 1] == str(overlay_path):
-                                insert_at += 2
-                                continue
-                        break
-                    args[insert_at:insert_at] = ["-include", prelude_arg]
-            if "-DROSE_DOCGEN" not in args:
-                insert_at = 1
-                while insert_at < len(args):
-                    if args[insert_at] == "-nostdinc++":
-                        insert_at += 1
-                        continue
-                    if overlay_path and overlay_path.is_dir():
-                        if args[insert_at] in {"-I", "-isystem"} and insert_at + 1 < len(args) and args[insert_at + 1] == str(overlay_path):
-                            insert_at += 2
-                            continue
-                    if prelude_arg and args[insert_at] == "-include" and insert_at + 1 < len(args) and args[insert_at + 1] == prelude_arg:
-                        insert_at += 2
-                        continue
-                    break
-                args.insert(insert_at, "-DROSE_DOCGEN")
-        new_entry["arguments"] = args
-        new_entry.pop("command", None)
-    filtered.append(new_entry)
-
-if not filtered:
-    raise SystemExit("no compile_commands entries matched documentation input")
-
-out_path = out_dir / "compile_commands.json"
-out_path.write_text(json.dumps(filtered, indent=2), encoding="utf-8")
-print(out_path)
-PY
-}
-
-merge-compilation-db() {
-    local base_db="$1"
-    local extra_db="$2"
-    local out_path="$3"
-    "$PYTHON_BIN" - "$base_db" "$extra_db" "$out_path" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-base_db = Path(sys.argv[1])
-extra_db = Path(sys.argv[2])
-out_path = Path(sys.argv[3])
-
-def load(path: Path):
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, list):
-        raise SystemExit(f"compile_commands.json is not a list: {path}")
-    return data
-
-base = load(base_db)
-extra = load(extra_db)
-
-seen = set()
-merged = []
-for entry in base + extra:
-    if not isinstance(entry, dict):
-        continue
-    file_value = entry.get("file")
-    directory = entry.get("directory")
-    arguments = entry.get("arguments")
-    key = (
-        str(directory or ""),
-        str(file_value or ""),
-        tuple(arguments) if isinstance(arguments, list) else (),
-    )
-    if key in seen:
-        continue
-    seen.add(key)
-    merged.append(entry)
-
-out_path.write_text(json.dumps(merged, indent=2), encoding="utf-8")
-print(out_path)
-PY
+        --overlay-dir "$overlay_dir" \
+        "${stdlib_include_args[@]}"
 }
 
 ####################################################################################################################################
@@ -849,7 +399,7 @@ build-include-overlay() {
             fi
             include_paths+=("$path")
         fi
-    done < <(collect-include-paths "$compiler")
+    done < <(collect-include-paths "$compiler" "$compile_db")
 
     if [ -n "$compile_db" ] && [ -f "$compile_db" ]; then
         while IFS=: read -r kind path; do
@@ -1051,10 +601,16 @@ else
     stdlib_args+=("--stdlib-includes" "$mrdocs_root/share/mrdocs/headers/clang")
 fi
 
-compiler="$(resolve-compiler "$(compiler-from-db "$compilation_db")")"
+configured_compiler="$(compiler-from-db "$compilation_db")"
+compiler="$(resolve-compiler "$configured_compiler")"
 docs_dir="$(mktemp -d)"
 include_overlay="$(build-include-overlay "$compiler" "$docs_dir" "$compilation_db" "$use_system_stdlib")"
-docs_db="$(filter-compilation-db "$CONFIG" "$compilation_db" "$docs_dir" "$include_overlay")"
+docs_db="$(build-docs-compilation-db \
+    "$CONFIG" \
+    "$docs_dir" \
+    "$compiler" \
+    "$compilation_db" \
+    "$include_overlay")"
 
 output_args=()
 if [ -n "${MRDOCS_OUTPUT_DIR-}" ]; then

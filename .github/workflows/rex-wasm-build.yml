@@ -135,39 +135,39 @@ jobs:
 
       - name: Inspect wasm LLVM cache contents
         run: |
-          source scripts/ci-llvm-env "${LLVM_VERSION}"
+          source scripts/ci-llvm-env "${{ env.LLVM_VERSION }}"
           scripts/ci-rex-wasm-build-dist llvm-status
 
       - name: Validate exact restored wasm LLVM/Clang cache
         if: ${{ steps.restore-llvm-wasm.outputs.cache-hit == 'true' }}
         run: |
-          source scripts/ci-llvm-env "${LLVM_VERSION}"
+          source scripts/ci-llvm-env "${{ env.LLVM_VERSION }}"
           scripts/ci-rex-wasm-build-dist verify-llvm-cache
 
       - name: Build wasm LLVM/Clang after an exact cache miss
         if: ${{ steps.restore-llvm-wasm.outputs.cache-hit != 'true' }}
         run: |
-          source scripts/ci-llvm-env "${LLVM_VERSION}"
+          source scripts/ci-llvm-env "${{ env.LLVM_VERSION }}"
           scripts/ci-rex-wasm-build-dist llvm
 
       - name: Configure REX WASM
         run: |
-          source scripts/ci-llvm-env "${LLVM_VERSION}"
+          source scripts/ci-llvm-env "${{ env.LLVM_VERSION }}"
           scripts/ci-rex-wasm-build-dist configure-rex
 
       - name: Build REX WASM target
         run: |
-          source scripts/ci-llvm-env "${LLVM_VERSION}"
+          source scripts/ci-llvm-env "${{ env.LLVM_VERSION }}"
           scripts/ci-rex-wasm-build-dist build-rex
 
       - name: Run REX WASM smoke tests
         run: |
-          source scripts/ci-llvm-env "${LLVM_VERSION}"
+          source scripts/ci-llvm-env "${{ env.LLVM_VERSION }}"
           scripts/ci-rex-wasm-build-dist test
 
       - name: Assemble static REX WASM site
         run: |
-          source scripts/ci-llvm-env "${LLVM_VERSION}"
+          source scripts/ci-llvm-env "${{ env.LLVM_VERSION }}"
           scripts/ci-rex-wasm-build-dist dist
 
       - name: Save wasm LLVM cache
@@ -178,7 +178,7 @@ jobs:
           key: ${{ steps.restore-llvm-wasm.outputs.cache-primary-key }}
 
       - name: Upload REX WASM dist
-        if: ${{ inputs.upload-artifact }}
+        if: ${{ inputs.upload-artifact && !env.ACT }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.REX_WASM_ARTIFACT }}

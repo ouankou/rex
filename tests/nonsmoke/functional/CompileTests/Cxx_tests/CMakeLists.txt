@@ -2,6 +2,8 @@ set(CXX_TESTCODES
   rex_unparser_frontier_child_identity.cpp
   rex_frontend_static_assert_typed_message.cpp
   rex_frontend_scalar_value_init.cpp
+  rex_frontend_aligned_attribute_semantics.cpp
+  rex_frontend_semantic_lambda_parent.cpp
   rex_frontend_typedef_tag_owner.cpp
   rex_frontend_base_specifier_identity.cpp
   rex_frontend_access_label_lexical_ownership.cpp
@@ -27,6 +29,7 @@ set(CXX_TESTCODES
   rex_frontend_operator_surface_contract.cpp
   rex_frontend_udl_structural_ownership.cpp
   rex_frontend_using_terminal_provenance.cpp
+  rex_frontend_lazy_bounded_system_header_fields.cpp
   rex_frontend_lazy_system_header_fields.cpp
   rex_frontend_local_class_template_constructor_field_identity.cpp
   rex_frontend_standard_template_specialization_transaction.cpp
@@ -4941,7 +4944,7 @@ add_test(
 )
 set_tests_properties(
   Cxx_tests_rex_frontend_cross_file_source_range_is_rejected
-  PROPERTIES LABELS "Cxx_tests;rex;CFE;DEATH")
+  PROPERTIES LABELS "Cxx_tests;rex;CFE;death")
 rex_lock_test_for_input(
   Cxx_tests_rex_frontend_cross_file_source_range_is_rejected
   rex_frontend_cross_file_source_range.cpp)
@@ -5136,7 +5139,7 @@ add_test(
 )
 set_tests_properties(
   Cxx_tests_rex_frontend_statement_attributes_reject_unsupported
-  PROPERTIES LABELS "Cxx_tests;rex;CFE;DEATH")
+  PROPERTIES LABELS "Cxx_tests;rex;CFE;death")
 rex_lock_test_for_input(
   Cxx_tests_rex_frontend_statement_attributes_reject_unsupported
   rex_frontend_statement_attributes_unsupported.cpp)
@@ -5159,7 +5162,7 @@ add_test(
 )
 set_tests_properties(
   Cxx_tests_rex_frontend_ms_property_hard_error
-  PROPERTIES LABELS "Cxx_tests;rex;CFE;DEATH")
+  PROPERTIES LABELS "Cxx_tests;rex;CFE;death")
 rex_lock_test_for_input(
   Cxx_tests_rex_frontend_ms_property_hard_error
   rex_frontend_ms_property_hard_error.cpp)
@@ -5201,7 +5204,7 @@ add_test(
 )
 set_tests_properties(
   Cxx_tests_rex_unparser_malformed_access_label_is_rejected
-  PROPERTIES LABELS "Cxx_tests;rex;CFE;UNPARSER;DEATH")
+  PROPERTIES LABELS "Cxx_tests;rex;CFE;UNPARSER;death")
 rex_lock_test_for_input(
   Cxx_tests_rex_unparser_malformed_access_label_is_rejected
   rex_frontend_access_label_lexical_ownership.cpp)
@@ -5567,7 +5570,7 @@ add_test(
 )
 set_tests_properties(
   Cxx_tests_rex_unparser_visibility_macro_conflict_is_rejected
-  PROPERTIES LABELS "Cxx_tests;rex;CFE;DEATH")
+  PROPERTIES LABELS "Cxx_tests;rex;CFE;death")
 rex_lock_test_for_input(
   Cxx_tests_rex_unparser_visibility_macro_conflict_is_rejected
   rex_unparser_visibility_macro_conflict.cpp)
@@ -5683,7 +5686,7 @@ add_test(
 )
 set_tests_properties(
   Cxx_tests_rex_malformed_implicit_control_flow_scope_is_rejected
-  PROPERTIES LABELS "Cxx_tests;rex;CFE;UNPARSER;DEATH")
+  PROPERTIES LABELS "Cxx_tests;rex;CFE;UNPARSER;death")
 rex_lock_test_for_input(
   Cxx_tests_rex_malformed_implicit_control_flow_scope_is_rejected
   rex_frontend_implicit_control_flow_scope.cpp)
@@ -5721,7 +5724,7 @@ add_test(
 )
 set_tests_properties(
   Cxx_tests_rex_malformed_new_constructor_source_form_is_rejected
-  PROPERTIES LABELS "Cxx_tests;rex;CFE;UNPARSER;DEATH")
+  PROPERTIES LABELS "Cxx_tests;rex;CFE;UNPARSER;death")
 rex_lock_test_for_input(
   Cxx_tests_rex_malformed_new_constructor_source_form_is_rejected
   rex_frontend_new_initializer_source_form.cpp)
@@ -5761,7 +5764,7 @@ add_test(
 )
 set_tests_properties(
   Cxx_tests_rex_malformed_gnu_binary_conditional_is_rejected
-  PROPERTIES LABELS "Cxx_tests;rex;CFE;UNPARSER;DEATH")
+  PROPERTIES LABELS "Cxx_tests;rex;CFE;UNPARSER;death")
 rex_lock_test_for_input(
   Cxx_tests_rex_malformed_gnu_binary_conditional_is_rejected
   rex_frontend_gnu_binary_conditional.cpp)
@@ -6519,7 +6522,7 @@ foreach(malformed_case template_header enclosing_template_header ctor_owner)
   )
   set_tests_properties(
     Cxx_tests_rex_unparser_typed_owner_rejects_${malformed_case}
-    PROPERTIES LABELS "Cxx_tests;rex;CFE;UNPARSER;DEATH")
+    PROPERTIES LABELS "Cxx_tests;rex;CFE;UNPARSER;death")
   rex_lock_test_for_input(
     Cxx_tests_rex_unparser_typed_owner_rejects_${malformed_case}
     rex_unparser_typed_owner_contracts.cpp)
@@ -6595,6 +6598,11 @@ rex_add_cxx_unparse_check_test(
 rex_add_cxx_unparse_check_test(
   "rex_frontend_new_initializer_source_form"
   "grep -E 'rex_default[[:space:]]*=[[:space:]]*new[[:space:]]+RexNewObject[[:space:]]*;' rose_rex_frontend_new_initializer_source_form.cpp && grep -E 'rex_value[[:space:]]*=[[:space:]]*new[[:space:]]+RexNewObject[[:space:]]*[(][[:space:]]*[)];' rose_rex_frontend_new_initializer_source_form.cpp && grep -E 'rex_braced[[:space:]]*=[[:space:]]*new[[:space:]]+RexNewObject[[:space:]]*[{][[:space:]]*[}];' rose_rex_frontend_new_initializer_source_form.cpp && grep -E 'rex_argument[[:space:]]*=[[:space:]]*new[[:space:]]+RexNewObject[[:space:]]*[(][[:space:]]*1[[:space:]]*[)];' rose_rex_frontend_new_initializer_source_form.cpp && grep -E 'rex_scalar_value[[:space:]]*=[[:space:]]*new[[:space:]]+int[[:space:]]*[(][[:space:]]*[)];' rose_rex_frontend_new_initializer_source_form.cpp && ! grep -F '(())' rose_rex_frontend_new_initializer_source_form.cpp && ${CMAKE_CXX_COMPILER} -std=gnu++14 -fsyntax-only rose_rex_frontend_new_initializer_source_form.cpp"
+)
+
+rex_add_cxx_unparse_check_test(
+  "rex_frontend_lazy_bounded_system_header_fields"
+  "! grep -E 'type-parameter-|type_parameter_' rose_rex_frontend_lazy_bounded_system_header_fields.cpp && ${CMAKE_CXX_COMPILER} -std=gnu++17 -I${CMAKE_CURRENT_SOURCE_DIR} -c rose_rex_frontend_lazy_bounded_system_header_fields.cpp"
 )
 
 rex_add_cxx_unparse_check_test(
@@ -8592,7 +8600,7 @@ function(rex_add_unsupported_clang_surface_death_test
   )
   set_tests_properties(
     ${test_name}
-    PROPERTIES LABELS "Cxx_tests;rex;CFE;DEATH")
+    PROPERTIES LABELS "Cxx_tests;rex;CFE;death")
   rex_lock_test_for_input(${test_name} ${input_file})
 endfunction()
 

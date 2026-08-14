@@ -76,66 +76,7 @@ bool isStructurallyOwnedBy(const SgNode *root, const SgNode *node) {
   return false;
 }
 
-std::map<std::string, bool>
-buildDirectIncludeSystemRoleMap(SgSourceFile *input_source) {
-  if (input_source == NULL) {
-    fprintf(stderr,
-            "REX_OUTLINER_INVARIANT[excluded-source-include]: input source is "
-            "null while resolving direct include roles\n");
-    ROSE_ABORT();
-  }
-  SgIncludeFile *include_root = input_source->get_associated_include_file();
-  if (include_root == NULL || include_root->get_source_file() != input_source ||
-      include_root->get_parent_include_file() != NULL) {
-    fprintf(stderr,
-            "REX_OUTLINER_INVARIANT[excluded-source-include]: input=%s has no "
-            "exact root include ownership\n",
-            input_source->getFileName().c_str());
-    ROSE_ABORT();
-  }
-
-  std::map<std::string, bool> direct_roles;
-  for (SgIncludeFile *include_file : include_root->get_include_file_list()) {
-    if (include_file == NULL ||
-        include_file->get_parent_include_file() != include_root ||
-        include_file->get_including_source_file() != input_source ||
-        include_file->get_isSystemInclude() ==
-            include_file->get_isApplicationFile()) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[excluded-source-include]: input=%s has "
-              "a direct include without one exact typed system/application "
-              "role\n",
-              input_source->getFileName().c_str());
-      ROSE_ABORT();
-    }
-    if (include_file->get_isPreinclude()) {
-      continue;
-    }
-    const std::string spelling =
-        include_file->get_name_used_in_include_directive().getString();
-    if (spelling.empty()) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[excluded-source-include]: direct "
-              "include=%s from input=%s has no exact source spelling\n",
-              include_file->get_filename().getString().c_str(),
-              input_source->getFileName().c_str());
-      ROSE_ABORT();
-    }
-    const bool is_system = include_file->get_isSystemInclude();
-    const std::pair<std::map<std::string, bool>::iterator, bool> inserted =
-        direct_roles.insert(std::make_pair(spelling, is_system));
-    if (!inserted.second && inserted.first->second != is_system) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[excluded-source-include]: spelling=%s "
-              "from input=%s resolves to both system and application headers\n",
-              spelling.c_str(), input_source->getFileName().c_str());
-      ROSE_ABORT();
-    }
-  }
-  return direct_roles;
-}
-
-bool requireDirectIncludeSystemRole(
+void validateDirectIncludeSystemRole(
     const PreprocessingInfo *info,
     const std::map<std::string, bool> &direct_include_roles) {
   if (!isIncludeDirective(info)) {
@@ -155,7 +96,6 @@ bool requireDirectIncludeSystemRole(
             info->getString().c_str());
     ROSE_ABORT();
   }
-  return role->second;
 }
 
 void publishCopiedPrimaryPreprocessing(SgSourceFile *generated_source,
@@ -248,6 +188,113 @@ void publishCopiedPrimaryPreprocessing(SgSourceFile *generated_source,
   }
 }
 
+using ResolvedIncludeOwnerCache =
+    std::map<PreprocessingInfo *, std::set<std::string>>;
+
+void eraseResolvedFrontendIncludeOwner(
+    SgSourceFile *source_file,
+    std::map<std::string, std::set<PreprocessingInfo *>> &resolved_directives,
+    ResolvedIncludeOwnerCache &directive_owner_cache,
+    PreprocessingInfo *directive, const char *mutation) {
+  if (source_file == NULL || directive == NULL || mutation == NULL ||
+      !isIncludeDirective(directive)) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[resolved-include-mutation]: "
+            "mutation=%s source=%p directive=%p has incomplete identity\n",
+            mutation != NULL ? mutation : "<null>",
+            static_cast<void *>(source_file), static_cast<void *>(directive));
+    ROSE_ABORT();
+  }
+
+  if (resolved_directives.empty() && !directive->isTransformation()) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[resolved-include-mutation]: mutation=%s "
+            "source=%s could not initialize include owner cache\n",
+            mutation, source_file->getFileName().c_str());
+    ROSE_ABORT();
+  }
+
+  size_t expected = 0;
+  size_t erased = 0;
+  if (!directive->isTransformation()) {
+    ResolvedIncludeOwnerCache::const_iterator owner =
+        directive_owner_cache.find(directive);
+    if (owner == directive_owner_cache.end() || owner->second.empty()) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[resolved-include-mutation]: "
+              "mutation=%s source=%s directive=%s has no cached resolved "
+              "owner\n",
+              mutation, source_file->getFileName().c_str(),
+              directive->getString().c_str());
+      ROSE_ABORT();
+    }
+
+    expected = owner->second.size();
+    for (const std::string &target_path : owner->second) {
+      std::map<std::string, std::set<PreprocessingInfo *>>::iterator target_it =
+          resolved_directives.find(target_path);
+      if (target_it == resolved_directives.end()) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[resolved-include-mutation]: "
+                "mutation=%s source=%s directive=%s missing target path "
+                "cache=%s\n",
+                mutation, source_file->getFileName().c_str(),
+                directive->getString().c_str(), target_path.c_str());
+        ROSE_ABORT();
+      }
+      erased += target_it->second.erase(directive);
+      if (target_it->second.empty()) {
+        resolved_directives.erase(target_it);
+      }
+    }
+    directive_owner_cache.erase(owner);
+  }
+
+  if (erased != expected) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[resolved-include-mutation]: "
+            "mutation=%s source=%s directive=%s transformation=%d erased=%zu "
+            "expected=%zu\n",
+            mutation, source_file->getFileName().c_str(),
+            directive->getString().c_str(),
+            directive->isTransformation() ? 1 : 0, erased, expected);
+    ROSE_ABORT();
+  }
+}
+
+ResolvedIncludeOwnerCache buildResolvedIncludeOwnerCache(
+    const std::map<std::string, std::set<PreprocessingInfo *>> &directives) {
+  ResolvedIncludeOwnerCache owner_cache;
+  for (const auto &entry : directives) {
+    if (entry.first.empty() || entry.second.empty()) {
+      fprintf(stderr,
+              "REX_OUTLINER_INVARIANT[resolved-include-owner-cache]: "
+              "target=%s has no exact path or directive owners\n",
+              entry.first.c_str());
+      ROSE_ABORT();
+    }
+    for (PreprocessingInfo *directive : entry.second) {
+      if (directive == NULL) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[resolved-include-owner-cache]: "
+                "target=%s contains a null directive owner\n",
+                entry.first.c_str());
+        ROSE_ABORT();
+      }
+      const std::pair<std::set<std::string>::iterator, bool> inserted =
+          owner_cache[directive].insert(entry.first);
+      if (!inserted.second) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[resolved-include-owner-cache]: "
+                "directive=%s repeats target=%s\n",
+                directive->getString().c_str(), entry.first.c_str());
+        ROSE_ABORT();
+      }
+    }
+  }
+  return owner_cache;
+}
+
 void removeExcludedSourceIncludes(SgSourceFile *generated_source,
                                   SgSourceFile *input_source) {
   if (generated_source == NULL || generated_source->get_file_info() == NULL ||
@@ -263,8 +310,10 @@ void removeExcludedSourceIncludes(SgSourceFile *generated_source,
   // buildSourceFile publishes the output translation unit before its
   // preprocessing pass.  Primary-file records are therefore attached with the
   // generated file's physical identity; included-file records retain their own
-  // physical identities.  Purge exactly the former so nested header
-  // preprocessing remains intact.
+  // physical identities.  Purge every primary-file include so none remains
+  // coupled to an AST owner that dependency reconstruction may replace.  The
+  // stable source-order snapshot later republishes system includes explicitly;
+  // application-header declarations are copied instead.
   const int input_physical_file_id =
       input_source->get_file_info()->get_physical_file_id();
   const int primary_physical_file_id =
@@ -277,7 +326,7 @@ void removeExcludedSourceIncludes(SgSourceFile *generated_source,
     ROSE_ABORT();
   }
   const std::map<std::string, bool> direct_include_roles =
-      buildDirectIncludeSystemRoleMap(input_source);
+      SageInterface::collectDirectIncludeSystemRoles(input_source);
   auto is_excluded_source_include =
       [primary_physical_file_id,
        &direct_include_roles](const PreprocessingInfo *info) {
@@ -286,9 +335,16 @@ void removeExcludedSourceIncludes(SgSourceFile *generated_source,
             info->get_file_info() != NULL &&
             info->get_file_info()->get_physical_file_id() ==
                 primary_physical_file_id;
-        return primary_source_include &&
-               !requireDirectIncludeSystemRole(info, direct_include_roles);
+        if (primary_source_include) {
+          validateDirectIncludeSystemRole(info, direct_include_roles);
+        }
+        return primary_source_include;
       };
+
+  std::map<std::string, std::set<PreprocessingInfo *>> resolved_directives =
+      generated_source->get_frontendResolvedIncludeDirectivesMap();
+  ResolvedIncludeOwnerCache directive_owner_cache =
+      buildResolvedIncludeOwnerCache(resolved_directives);
 
   RoseAst ast(generated_source);
   for (RoseAst::iterator node = ast.begin(); node != ast.end(); ++node) {
@@ -312,6 +368,9 @@ void removeExcludedSourceIncludes(SgSourceFile *generated_source,
         ROSE_ABORT();
       }
       if (is_excluded_source_include(*info)) {
+        eraseResolvedFrontendIncludeOwner(generated_source, resolved_directives,
+                                          directive_owner_cache, *info,
+                                          "exclude-source-include");
         delete *info;
         info = infos->erase(info);
       } else {
@@ -319,6 +378,9 @@ void removeExcludedSourceIncludes(SgSourceFile *generated_source,
       }
     }
   }
+
+  generated_source->set_frontendResolvedIncludeDirectivesMap(
+      resolved_directives);
 
   RoseAst verification(generated_source);
   for (RoseAst::iterator node = verification.begin();
@@ -905,8 +967,27 @@ static void validateFriendClassDeclarations(SgProject *project) {
 }
 
 static void dedupeIncludeDirectives(SgGlobal *glob_scope) {
-  if (glob_scope == NULL)
-    return;
+  if (glob_scope == NULL || glob_scope->get_file_info() == NULL ||
+      glob_scope->get_file_info()->isShared() ||
+      glob_scope->get_file_info()->get_physical_file_id() < 0) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[include-deduplication-owner]: output "
+            "global scope has no exact physical file identity\n");
+    ROSE_ABORT();
+  }
+  const int outputPhysicalFileId =
+      glob_scope->get_file_info()->get_physical_file_id();
+  SgSourceFile *sourceFile = SageInterface::getEnclosingSourceFile(glob_scope);
+  if (sourceFile == NULL) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[include-deduplication-owner]: output "
+            "global scope has no exact source-file owner\n");
+    ROSE_ABORT();
+  }
+  std::map<std::string, std::set<PreprocessingInfo *>> resolved_directives =
+      sourceFile->get_frontendResolvedIncludeDirectivesMap();
+  ResolvedIncludeOwnerCache directive_owner_cache =
+      buildResolvedIncludeOwnerCache(resolved_directives);
 
   std::set<std::string> seen;
 
@@ -930,6 +1011,19 @@ static void dedupeIncludeDirectives(SgGlobal *glob_scope) {
           (type == PreprocessingInfo::CpreprocessorIncludeDeclaration ||
            type == PreprocessingInfo::CpreprocessorIncludeNextDeclaration);
       if (is_include) {
+        Sg_File_Info *includeInfo = info->get_file_info();
+        if (includeInfo == NULL || includeInfo->isShared() ||
+            includeInfo->get_physical_file_id() < 0) {
+          fprintf(stderr,
+                  "REX_OUTLINER_INVARIANT[include-deduplication-owner]: "
+                  "directive=%s has no exact physical file identity\n",
+                  info->getString().c_str());
+          ROSE_ABORT();
+        }
+        if (includeInfo->get_physical_file_id() != outputPhysicalFileId) {
+          filtered.push_back(info);
+          continue;
+        }
         std::string key = extractIncludeKey(info->getString());
         if (!key.empty() && seen.count(key) != 0) {
           removed.push_back(info);
@@ -942,6 +1036,9 @@ static void dedupeIncludeDirectives(SgGlobal *glob_scope) {
     }
     infos->swap(filtered);
     for (PreprocessingInfo *info : removed) {
+      eraseResolvedFrontendIncludeOwner(sourceFile, resolved_directives,
+                                        directive_owner_cache, info,
+                                        "deduplicate-source-include");
       delete info;
     }
   };
@@ -954,6 +1051,18 @@ static void dedupeIncludeDirectives(SgGlobal *glob_scope) {
     SgDeclarationStatement *decl = *it;
     if (SgIncludeDirectiveStatement *include_stmt =
             isSgIncludeDirectiveStatement(decl)) {
+      Sg_File_Info *includeInfo = include_stmt->get_file_info();
+      if (includeInfo == NULL || includeInfo->isShared() ||
+          includeInfo->get_physical_file_id() < 0) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[include-deduplication-owner]: typed "
+                "include statement has no exact physical file identity\n");
+        ROSE_ABORT();
+      }
+      if (includeInfo->get_physical_file_id() != outputPhysicalFileId) {
+        ++it;
+        continue;
+      }
       std::string key = extractIncludeKey(include_stmt->get_directiveString());
       if (key.empty()) {
         key = extractIncludeKey(
@@ -971,6 +1080,8 @@ static void dedupeIncludeDirectives(SgGlobal *glob_scope) {
     prune_info(decl);
     ++it;
   }
+
+  sourceFile->set_frontendResolvedIncludeDirectivesMap(resolved_directives);
 }
 
 static void copyIncludeFileMetadata(SgIncludeFile *target,

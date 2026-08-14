@@ -3179,6 +3179,7 @@ require_exact_declaration_use_site(SgDeclarationStatement *declaration) {
           isSgTemplateInstantiationDirectiveStatement(
               declaration->get_parent())) {
     SgDeclarationStatement *templatePattern = nullptr;
+    SgTemplateVariableDeclaration *variableInstantiation = nullptr;
     if (SgTemplateInstantiationDecl *instantiation =
             isSgTemplateInstantiationDecl(declaration)) {
       templatePattern = instantiation->get_templateDeclaration();
@@ -3188,14 +3189,36 @@ require_exact_declaration_use_site(SgDeclarationStatement *declaration) {
     } else if (SgTemplateInstantiationMemberFunctionDecl *instantiation =
                    isSgTemplateInstantiationMemberFunctionDecl(declaration)) {
       templatePattern = instantiation->get_templateDeclaration();
+    } else if (SgTemplateVariableDeclaration *instantiation =
+                   isSgTemplateVariableDeclaration(declaration)) {
+      variableInstantiation = instantiation;
+      templatePattern = instantiation->get_specializedTemplateDeclaration();
     }
     SgScopeStatement *lexicalScope =
         isSgScopeStatement(directive->get_parent());
-    SgScopeStatement *semanticScope = declaration->get_scope();
+    SgScopeStatement *structuralDeclarationScope = declaration->get_scope();
+    SgScopeStatement *semanticScope = structuralDeclarationScope;
+    bool exactVariableInstantiationOwner = variableInstantiation == nullptr;
+    if (variableInstantiation != nullptr) {
+      const SgInitializedNamePtrList &variables =
+          variableInstantiation->get_variables();
+      SgInitializedName *initializedName =
+          variables.size() == 1 ? variables.front() : nullptr;
+      semanticScope =
+          initializedName != nullptr ? initializedName->get_scope() : nullptr;
+      exactVariableInstantiationOwner =
+          initializedName != nullptr &&
+          initializedName->get_parent() == variableInstantiation &&
+          structuralDeclarationScope == lexicalScope &&
+          semanticScope != nullptr;
+    }
     SgScopeStatement *patternScope =
         templatePattern != nullptr ? templatePattern->get_scope() : nullptr;
     bool exactInstantiatedMemberScope = false;
-    if (isSgTemplateInstantiationMemberFunctionDecl(declaration) != nullptr) {
+    const bool instantiatedMemberFunction =
+        isSgTemplateInstantiationMemberFunctionDecl(declaration) != nullptr;
+    const bool instantiatedMemberVariable = variableInstantiation != nullptr;
+    if (instantiatedMemberFunction || instantiatedMemberVariable) {
       SgTemplateInstantiationDefn *instantiatedClass =
           isSgTemplateInstantiationDefn(semanticScope);
       SgTemplateClassDefinition *patternClass =
@@ -3219,21 +3242,40 @@ require_exact_declaration_use_site(SgDeclarationStatement *declaration) {
           canonicalPatternClass != nullptr &&
           instantiatedClassDeclaration->get_templateDeclaration() ==
               canonicalPatternClass;
+      if (instantiatedMemberVariable) {
+        SgTemplateVariableDeclaration *patternVariable =
+            isSgTemplateVariableDeclaration(templatePattern);
+        SgInitializedName *patternName =
+            patternVariable != nullptr &&
+                    patternVariable->get_variables().size() == 1
+                ? patternVariable->get_variables().front()
+                : nullptr;
+        exactInstantiatedMemberScope =
+            exactInstantiatedMemberScope && patternVariable != nullptr &&
+            patternName != nullptr &&
+            patternName->get_parent() == patternVariable &&
+            patternName->get_scope() == patternScope &&
+            variableInstantiation->get_specializedTemplateDeclaration() ==
+                patternVariable;
+      }
     }
     if (directive->get_declaration() != declaration ||
         lexicalScope == nullptr || directive->get_scope() != lexicalScope ||
-        semanticScope == nullptr || patternScope == nullptr ||
+        !exactVariableInstantiationOwner || semanticScope == nullptr ||
+        patternScope == nullptr ||
         (!scopes_are_equivalent_for_name_qualification(semanticScope,
                                                        patternScope) &&
          !exactInstantiatedMemberScope)) {
       fprintf(stderr,
               "REX_UNPARSE_INVARIANT[declaration-owner]: declaration=%p/%s "
-              "directive=%p lexical-scope=%p semantic-scope=%p "
+              "directive=%p lexical-scope=%p structural-scope=%p semantic-"
+              "scope=%p "
               "template-pattern=%p pattern-scope=%p has malformed "
               "instantiation-directive ownership\n",
               static_cast<void *>(declaration),
               declaration->class_name().c_str(), static_cast<void *>(directive),
               static_cast<void *>(lexicalScope),
+              static_cast<void *>(structuralDeclarationScope),
               static_cast<void *>(semanticScope),
               static_cast<void *>(templatePattern),
               static_cast<void *>(patternScope));
@@ -9517,25 +9559,32 @@ int NameQualificationTraversal::nameQualificationDepth(
         MLOG_WARN_C(MLOG_UNPARSER, "variableSymbol = %p = %s \n",
                     variableSymbol, symbol->class_name().c_str());
 #endif
-        // DQ (7/22/2017): Added test for
-        // SgTemplateInstantiationDirectiveStatement, so that we can process the
-        // template arguments correctly (using the scope of the
-        // SgTemplateInstantiationDirectiveStatement instead of the scope of the
-        // SgTemplateInstantiationVariableDeclaration (which can be different)).
-        // DQ (6/3/2017): Add test to check if this is part of a template
-        // instantiation directive. However, I think that out use of name
-        // qualification is independent of this result.
         SgTemplateInstantiationDirectiveStatement
             *templateInstantiationDirectiveStatement =
                 isSgTemplateInstantiationDirectiveStatement(
                     variableDeclaration->get_parent());
         if (templateInstantiationDirectiveStatement != NULL) {
-          MLOG_ERROR_C(
-              MLOG_UNPARSER,
-              "REX_AST_INVARIANT[variable-instantiation-directive-scope]: "
-              "variable template instantiation is directly owned by an "
-              "explicit-instantiation directive\n");
-          ROSE_ABORT();
+          SgTemplateVariableDeclaration *templateVariable =
+              isSgTemplateVariableDeclaration(variableDeclaration);
+          SgScopeStatement *directiveScope =
+              templateInstantiationDirectiveStatement->get_scope();
+          SgScopeStatement *semanticScope = variableDeclaration->get_scope();
+          if (templateVariable == NULL ||
+              templateInstantiationDirectiveStatement->get_declaration() !=
+                  variableDeclaration ||
+              directiveScope == NULL || semanticScope == NULL ||
+              templateInstantiationDirectiveStatement->get_parent() !=
+                  directiveScope ||
+              (!scopes_are_equivalent_for_name_qualification(directiveScope,
+                                                             semanticScope))) {
+            MLOG_ERROR_C(
+                MLOG_UNPARSER,
+                "REX_AST_INVARIANT[variable-instantiation-directive-scope]: "
+                "directive=%p variable=%p has malformed exact source or "
+                "semantic ownership\n",
+                templateInstantiationDirectiveStatement, variableDeclaration);
+            ROSE_ABORT();
+          }
         }
 
         if (variableSymbol == NULL) {
@@ -14547,6 +14596,43 @@ void NameQualificationTraversal::
     const bool exactSemanticDefinitionProvenance =
         has_exact_semantic_type_declaration_provenance(definingDeclaration) &&
         hasExactSemanticDefinitionProvenance(definition);
+    SgLambdaExp *definingLambda =
+        definingDeclaration != nullptr
+            ? isSgLambdaExp(definingDeclaration->get_parent())
+            : nullptr;
+    SgVariableDeclaration *lambdaUseVariable =
+        isSgVariableDeclaration(currentStatement);
+    SgInitializer *lambdaUseInitializer =
+        initializedName != nullptr ? initializedName->get_initializer()
+                                   : nullptr;
+    const bool exactLambdaDefinitionOwner =
+        definingLambda != nullptr && lambdaUseVariable != nullptr &&
+        definingLambda->get_lambda_closure_class() == definingDeclaration &&
+        definingUseSite.scope == semanticScope &&
+        definingUseSite.statement == currentStatement &&
+        !definingUseSite.emitted &&
+        initializedName->get_parent() == lambdaUseVariable &&
+        initializedName->get_scope() == semanticScope &&
+        std::count(lambdaUseVariable->get_variables().begin(),
+                   lambdaUseVariable->get_variables().end(),
+                   initializedName) == 1 &&
+        lambdaUseInitializer != nullptr &&
+        lambdaUseInitializer->get_parent() == initializedName &&
+        SageInterface::isAncestor(lambdaUseInitializer, definingLambda) &&
+        type_graph_references_exact_declaration(type, classDeclaration);
+    // A normalization may materialize an expression as a variable whose
+    // initializer is the original lambda.  The closure definition remains the
+    // typed semantic child of that exact SgLambdaExp, not a declaration-list
+    // member.  Prove the complete declarator-to-lambda ownership chain before
+    // treating the closure type as available at its owning variable.
+    const bool exactLambdaDefinitionFamily =
+        exactOwner && exactTypeIdentity && exactProvenance &&
+        exactDefinitionChain && exactLambdaDefinitionOwner &&
+        exactSemanticDefinitionProvenance && exactDefinitionSymbol &&
+        exactVisibility;
+    if (exactLambdaDefinitionFamily) {
+      return;
+    }
     const bool exactSemanticDefinitionFamily =
         exactOwner && exactTypeIdentity && exactProvenance &&
         exactDefinitionChain && exactSemanticDefiningOwner &&
@@ -14712,7 +14798,8 @@ void NameQualificationTraversal::
           "definition-order=%d introduction-interval=%d type-contract=%d "
           "provenance=%d definition-provenance=%d semantic-owner=%d "
           "semantic-definition-provenance=%d symbol-contract=%d "
-          "definition-symbol=%d visibility=%d qualification-depth=%d "
+          "definition-symbol=%d visibility=%d lambda-definition-owner=%d "
+          "qualification-depth=%d "
           "active-definition=%d complete-enclosing-class=%d "
           "generated-after-definition=(%d,%s:%ld,%s:%ld) "
           "current-scope=%p current-statement=%p current-parent=%p "
@@ -14736,7 +14823,8 @@ void NameQualificationTraversal::
           exactSemanticDefiningOwner ? 1 : 0,
           exactSemanticDefinitionProvenance ? 1 : 0, exactSymbol ? 1 : 0,
           exactDefinitionSymbol ? 1 : 0, exactVisibility ? 1 : 0,
-          qualificationDepth, exactActiveClassDefinition ? 1 : 0,
+          exactLambdaDefinitionOwner ? 1 : 0, qualificationDepth,
+          exactActiveClassDefinition ? 1 : 0,
           exactCompleteEnclosingClassScope ? 1 : 0,
           exactGeneratedAfterSourceDefinition ? 1 : 0,
           directDefiningStatement != nullptr

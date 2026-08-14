@@ -1,0 +1,1 @@
+cmd = cd ${TARGET} && ${TEST_UNPARSE_HEADERS} ${ROSE_SWITCHES} ${HDR_ROOT_SWITCHES} ${srcdir}/${TARGET}/rex_unparse_system_header_directive_ownership.cpp

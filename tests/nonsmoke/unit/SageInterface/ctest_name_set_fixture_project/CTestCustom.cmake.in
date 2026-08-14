@@ -1,0 +1,1 @@
+set(CTEST_CUSTOM_MEMCHECK_IGNORE rex_memcheck_ignored)

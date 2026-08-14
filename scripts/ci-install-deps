@@ -64,7 +64,8 @@ case "$mode" in
       llvm-"${llvm_version}"-dev \
       mold \
       openjdk-25-jdk \
-      pkg-config
+      pkg-config \
+      valgrind
     ;;
   docs)
     install_packages \

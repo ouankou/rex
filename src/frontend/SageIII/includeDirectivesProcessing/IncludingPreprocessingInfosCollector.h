@@ -14,9 +14,10 @@ private:
   map<string, set<string>> normalizedIncludedFilesMap;
 
   map<string, set<PreprocessingInfo *>> includingPreprocessingInfosMap;
+  set<PreprocessingInfo *> observedIncludePreprocessingInfos;
   set<SgSourceFile *> processedSourceFiles;
 
-  void addIncludingPreprocessingInfoToMap(PreprocessingInfo *preprocessingInfo);
+  void observeIncludePreprocessingInfo(PreprocessingInfo *preprocessingInfo);
   void collectFromSourceFile(SgSourceFile *sourceFile);
 
 protected:
@@ -24,7 +25,7 @@ protected:
 
 public:
   ~IncludingPreprocessingInfosCollector();
-  IncludingPreprocessingInfosCollector(
-      SgProject *projectNode, const map<string, set<string>> &includedFilesMap);
+  explicit IncludingPreprocessingInfosCollector(SgProject *projectNode);
   map<string, set<PreprocessingInfo *>> collect();
+  const map<string, set<string>> &getIncludedFilesMap() const;
 };

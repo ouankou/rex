@@ -1,0 +1,2 @@
+rex_fixture_consumer
+rex_architecture_specific_absence

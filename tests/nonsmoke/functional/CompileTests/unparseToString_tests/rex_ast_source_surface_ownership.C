@@ -17,7 +17,12 @@ int main(int argc, char *argv[]) {
     }
 
     declaration->unsetOutputInCodeGeneration();
-    AstTests::runAllTests(project);
+    if (!AstTests::isCorrectAst(project)) {
+      fprintf(stderr,
+              "The source-surface fixture failed the exact AST consistency "
+              "contract.\n");
+      ROSE_ABORT();
+    }
     fprintf(stderr,
             "A directly owned source declaration was allowed to hide its "
             "output surface.\n");

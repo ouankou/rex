@@ -32,6 +32,18 @@ mkdir -p "${workdir}"
 rm -f "${workdir}"/orig.exe "${workdir}"/lowered.exe
 rm -f "${workdir}"/rose_* "${workdir}"/rex_lib_* "${workdir}"/lower.log
 
+if [[ ! -f "${omp_header_dir}/omp.h" ]]; then
+  echo "ERROR(${case_name}): exact OpenMP header is missing: ${omp_header_dir}/omp.h" >&2
+  exit 1
+fi
+compiler_resource_dir="$("${compiler}" --print-resource-dir)"
+compiler_resource_include="$(realpath -e "${compiler_resource_dir}/include")"
+omp_header_dir_real="$(realpath -e "${omp_header_dir}")"
+if [[ "${compiler_resource_include}" != "${omp_header_dir_real}" ]]; then
+  echo "ERROR(${case_name}): compiler resource include '${compiler_resource_include}' does not match exact OpenMP header owner '${omp_header_dir_real}'" >&2
+  exit 1
+fi
+
 source_name="${input_file##*/}"
 rose_file="${workdir}/rose_${source_name}"
 
@@ -41,7 +53,8 @@ compile_flags=(
   -g
   -U_OPENMP
   "-D_OPENMP=${openmp_version}"
-  "-I${omp_header_dir}"
+  -idirafter
+  "${omp_header_dir}"
   "-L${omp_runtime_dir}"
   "-Wl,-rpath,${omp_runtime_dir}"
 )

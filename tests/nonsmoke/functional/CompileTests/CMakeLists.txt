@@ -319,7 +319,7 @@ rex_register_clang_frontend_negative_diagnostic(
   [=[error: no matching constructor for initialization of 'X<int>']=]
   Cxx11_tests/test2016_36.C)
 rex_register_clang_frontend_negative_diagnostic(
-  [=[error: no template named 'initializer_list']=]
+  [=[error: no member named 'equal_to' in namespace 'std']=]
   Cxx11_tests/test2018_100.C)
 rex_register_clang_frontend_negative_diagnostic(
   [=[error: invalid operands to binary expression ('int X::*' and 'int')]=]
@@ -1136,8 +1136,9 @@ if(ENABLE-C)
   add_subdirectory(RoseExample_tests)
   add_subdirectory(unparseToString_tests)
   add_subdirectory(sourcePosition_tests)
-  # requires Valgrind
-  add_subdirectory(uninitializedField_tests)
+  if(REX_ENABLE_UNINITIALIZED_FIELD_TESTS)
+    add_subdirectory(uninitializedField_tests)
+  endif()
   add_subdirectory(OvertureCode)
   add_subdirectory(ExpressionTemplateExample_tests)
   add_subdirectory(hiddenTypeAndDeclarationListTests)

@@ -49,6 +49,11 @@ namespace testing {
 // after forking.
 GTEST_DECLARE_string_(death_test_style);
 
+// Selects fork() instead of the legacy Linux clone() launcher.  This flag is
+// parsed by GoogleTest's public command-line interface and is also configured
+// by REX's test main for compatibility with modern libc dynamic loaders.
+GTEST_DECLARE_bool_(death_test_use_fork);
+
 #if GTEST_HAS_DEATH_TEST
 
 namespace internal {

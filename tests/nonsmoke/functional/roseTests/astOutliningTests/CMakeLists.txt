@@ -236,6 +236,8 @@ set(OUTLINE_CXX_TESTS
 
 set(OUTLINE_CXX2_TESTS
   print.cpp
+  rex_outliner_repeated_macro_include_owner.cpp
+  rex_outliner_system_header_dependency.cpp
   rex_outliner_generated_output_ownership.cpp
   test_42_2020.cpp
   test_20_2019.cpp

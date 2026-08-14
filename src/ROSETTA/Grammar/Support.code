@@ -6833,8 +6833,6 @@ const SgStringList &get_excludeFileList() const;
 void set_excludeFileList(const SgStringList &excludeFileList);
 
 // negara1 (07/29/2011)
-std::string findIncludedFile(PreprocessingInfo *preprocessingInfo);
-
 int get_detect_dangling_pointers(void) const;
 
 #if ROSE_USING_OLD_PROJECT_FILE_LIST_SUPPORT

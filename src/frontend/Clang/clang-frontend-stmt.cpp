@@ -753,6 +753,14 @@ markClangValueDeclObjectDefinedByKind(clang::ValueDecl *decl) {
   }
 
   decl = markClangAstObjectDefined(decl);
+  if (auto *specific =
+          llvm::dyn_cast<clang::VarTemplatePartialSpecializationDecl>(decl)) {
+    return markClangAstObjectDefined(specific);
+  }
+  if (auto *specific =
+          llvm::dyn_cast<clang::VarTemplateSpecializationDecl>(decl)) {
+    return markClangAstObjectDefined(specific);
+  }
   if (auto *specific = llvm::dyn_cast<clang::ParmVarDecl>(decl)) {
     return markClangAstObjectDefined(specific);
   }
@@ -789,6 +797,9 @@ markClangValueDeclObjectDefinedByKind(clang::ValueDecl *decl) {
 #endif
 }
 
+static const clang::TemplateArgument &
+markClangTemplateArgumentKindsDefined(const clang::TemplateArgument &argument);
+
 static const clang::TemplateArgumentList *
 markClangTemplateArgumentListDefined(const clang::TemplateArgumentList *args) {
 #if ROSE_USE_VALGRIND
@@ -800,10 +811,15 @@ markClangTemplateArgumentListDefined(const clang::TemplateArgumentList *args) {
   }
 
   args = markClangAstObjectDefined(args);
-  const unsigned count = args->size();
-  if (const clang::TemplateArgument *data = args->data()) {
+  const unsigned count =
+      readClangApiValueDefined([&]() { return args->size(); });
+  if (const clang::TemplateArgument *data =
+          readClangApiValueDefined([&]() { return args->data(); })) {
     VALGRIND_MAKE_MEM_DEFINED(const_cast<clang::TemplateArgument *>(data),
                               count * sizeof(clang::TemplateArgument));
+    for (unsigned index = 0; index < count; ++index) {
+      markClangTemplateArgumentKindsDefined(data[index]);
+    }
   }
 #endif
   return args;
@@ -7858,27 +7874,37 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
       std::set<const clang::TagDecl *> inline_tag_decls;
       auto get_tag_decl_from_type =
           [&](clang::QualType qual_type) -> clang::TagDecl * {
-        const clang::Type *type = qual_type.getTypePtr();
+        qual_type = markClangQualTypeDefined(qual_type);
+        const clang::Type *type =
+            markClangTypeObjectDefinedByClass(qual_type.getTypePtrOrNull());
         while (type != nullptr) {
           if (auto *record_type = llvm::dyn_cast<clang::RecordType>(type)) {
-            return record_type->getDecl();
+            return llvm::dyn_cast_or_null<clang::TagDecl>(
+                markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+                    [&]() { return record_type->getDecl(); })));
           }
           if (auto *enum_type = llvm::dyn_cast<clang::EnumType>(type)) {
-            return enum_type->getDecl();
+            return llvm::dyn_cast_or_null<clang::TagDecl>(
+                markClangDeclObjectDefinedByKind(readClangApiValueDefined(
+                    [&]() { return enum_type->getDecl(); })));
           }
 
           clang::QualType next_qual_type;
           if (qualifiedTypeHasQualifier(type)) {
-            next_qual_type = qual_type.getCanonicalType();
+            next_qual_type = markClangQualTypeDefined(readClangApiValueDefined(
+                [&]() { return qual_type.getCanonicalType(); }));
           } else if (auto *ptr = llvm::dyn_cast<clang::PointerType>(type)) {
-            next_qual_type = ptr->getPointeeType();
+            next_qual_type = markClangQualTypeDefined(readClangApiValueDefined(
+                [&]() { return ptr->getPointeeType(); }));
           } else if (auto *array = llvm::dyn_cast<clang::ArrayType>(type)) {
-            next_qual_type = array->getElementType();
+            next_qual_type = markClangQualTypeDefined(readClangApiValueDefined(
+                [&]() { return array->getElementType(); }));
           } else {
             break;
           }
 
-          const clang::Type *next_type = next_qual_type.getTypePtrOrNull();
+          const clang::Type *next_type = markClangTypeObjectDefinedByClass(
+              next_qual_type.getTypePtrOrNull());
           if (next_type == nullptr || next_type == type) {
             break;
           }
@@ -9445,6 +9471,7 @@ bool ClangToSageTranslator::VisitAttributedStmt(
   };
 
   for (const clang::Attr *clang_attribute : clang_attributes) {
+    clang_attribute = markClangAstObjectDefined(clang_attribute);
     if (clang_attribute == nullptr) {
       std::cerr << "REX_FRONTEND_INVARIANT[statement-attribute-explicit]: "
                    "AttributedStmt contains a null attribute"
@@ -9721,14 +9748,19 @@ bool ClangToSageTranslator::VisitAttributedStmt(
     }
 
     ROSE_ASSERT(sage_attribute != nullptr);
-    applySourceRange(sage_attribute, clang_attribute->getRange());
+    const clang::SourceRange attribute_range =
+        readClangApiValueDefined([&]() { return clang_attribute->getRange(); });
+    applySourceRange(sage_attribute, attribute_range);
     sage_statement->append_attribute(sage_attribute);
   }
 
-  applySourceRange(
-      sage_statement->get_attribute_list(),
-      clang::SourceRange(clang_attributes.front()->getRange().getBegin(),
-                         clang_attributes.back()->getRange().getEnd()));
+  const clang::SourceRange first_attribute_range = readClangApiValueDefined(
+      [&]() { return clang_attributes.front()->getRange(); });
+  const clang::SourceRange last_attribute_range = readClangApiValueDefined(
+      [&]() { return clang_attributes.back()->getRange(); });
+  applySourceRange(sage_statement->get_attribute_list(),
+                   clang::SourceRange(first_attribute_range.getBegin(),
+                                      last_attribute_range.getEnd()));
   sage_statement->validate();
   *node = sage_statement;
   if (!VisitStmt(attributed_stmt, node)) {
@@ -13510,7 +13542,9 @@ bool ClangToSageTranslator::VisitCXXFunctionalCastExpr(
     clang::TypeLoc written_loc = written_type_info->getTypeLoc();
     markClangTypeLocDataDefined(written_loc);
     source_type_loc = written_loc;
-    clang::QualType written_type = written_type_info->getType();
+    clang::QualType written_type =
+        markClangQualTypeDefined(readClangApiValueDefined(
+            [&]() { return written_type_info->getType(); }));
     const clang::TemplateSpecializationType *written_template_id =
         written_type.isNull()
             ? nullptr
@@ -13519,8 +13553,15 @@ bool ClangToSageTranslator::VisitCXXFunctionalCastExpr(
                       written_type.getTypePtrOrNull()));
     const bool written_alias_template_id =
         written_template_id != nullptr && written_template_id->isTypeAlias();
+    clang::TagDecl *written_tag = !written_type.isNull()
+                                      ? readClangApiValueDefined([&]() {
+                                          return written_type->getAsTagDecl();
+                                        })
+                                      : nullptr;
+    written_tag = llvm::dyn_cast_or_null<clang::TagDecl>(
+        markClangDeclObjectDefinedByKind(written_tag));
     if (!written_type.isNull() && !written_type->isDependentType() &&
-        written_type->getAsTagDecl() != nullptr && !written_alias_template_id) {
+        written_tag != nullptr && !written_alias_template_id) {
       // A concrete class functional cast has one semantic class identity.
       // Building an unqualified SgNonrealType for its written template-id
       // split that identity from the SgConstructorInitializer's SgClassType.
@@ -13937,9 +13978,12 @@ bool ClangToSageTranslator::VisitImplicitCastExpr(
     const clang::QualType clang_target =
         markClangQualTypeDefined(readClangApiValueDefined(
             [&]() { return implicit_cast_expr->getType(); }));
+    const clang::Type *clang_target_type =
+        markClangTypeObjectDefinedByClass(clang_target.getTypePtrOrNull());
     const clang::PointerType *clang_pointer =
-        clang_target.isNull() ? nullptr
-                              : clang_target->getAs<clang::PointerType>();
+        llvm::dyn_cast_or_null<clang::PointerType>(clang_target_type);
+    clang_pointer = static_cast<const clang::PointerType *>(
+        markClangTypeObjectDefinedByClass(clang_pointer));
     SgType *source_type = expr->get_type();
     SgType *source_value_type = source_type != nullptr
                                     ? source_type->stripTypedefsAndModifiers()
@@ -13957,12 +14001,22 @@ bool ClangToSageTranslator::VisitImplicitCastExpr(
     const clang::QualType clang_source =
         markClangQualTypeDefined(readClangApiValueDefined(
             [&]() { return implicit_cast_expr->getSubExpr()->getType(); }));
+    const clang::QualType clang_pointee =
+        clang_pointer != nullptr
+            ? markClangQualTypeDefined(readClangApiValueDefined(
+                  [&]() { return clang_pointer->getPointeeType(); }))
+            : clang::QualType();
     const bool exact_clang_decay =
-        clang_pointer != nullptr &&
-        clang_pointer->getPointeeType()->isFunctionType() &&
-        clang_source->isFunctionType() && p_compiler_instance != nullptr &&
-        p_compiler_instance->getASTContext().hasSameType(
-            clang_source, clang_pointer->getPointeeType());
+        clang_pointer != nullptr && !clang_pointee.isNull() &&
+        readClangApiValueDefined(
+            [&]() { return clang_pointee->isFunctionType(); }) &&
+        !clang_source.isNull() && readClangApiValueDefined([&]() {
+          return clang_source->isFunctionType();
+        }) &&
+        p_compiler_instance != nullptr && readClangApiValueDefined([&]() {
+          return p_compiler_instance->getASTContext().hasSameType(
+              clang_source, clang_pointee);
+        });
     if (clang_pointer == nullptr || !exact_clang_decay ||
         source_function == nullptr) {
       std::cerr
@@ -13992,14 +14046,17 @@ bool ClangToSageTranslator::VisitImplicitCastExpr(
           << (!clang_source.isNull() && clang_source->isFunctionType() ? "yes"
                                                                        : "no")
           << " clang-pointee-function="
-          << (clang_pointer != nullptr &&
-                      clang_pointer->getPointeeType()->isFunctionType()
+          << (!clang_pointee.isNull() && readClangApiValueDefined([&]() {
+               return clang_pointee->isFunctionType();
+             })
                   ? "yes"
                   : "no")
           << " clang-same-type="
-          << (p_compiler_instance != nullptr && clang_pointer != nullptr
-                  ? (p_compiler_instance->getASTContext().hasSameType(
-                         clang_source, clang_pointer->getPointeeType())
+          << (p_compiler_instance != nullptr && !clang_pointee.isNull()
+                  ? (readClangApiValueDefined([&]() {
+                      return p_compiler_instance->getASTContext().hasSameType(
+                          clang_source, clang_pointee);
+                    })
                          ? "yes"
                          : "no")
                   : "unavailable")
@@ -14027,10 +14084,12 @@ bool ClangToSageTranslator::VisitImplicitCastExpr(
             [&]() { return implicit_cast_expr->getType(); }));
     const clang::PointerType *clang_pointer =
         clang_target->getAs<clang::PointerType>();
-    const bool clang_function_result = clang_target->isFunctionType();
+    const bool clang_function_result = readClangApiValueDefined(
+        [&]() { return clang_target->isFunctionType(); });
     const bool clang_function_pointer_result =
-        clang_pointer != nullptr &&
-        clang_pointer->getPointeeType()->isFunctionType();
+        clang_pointer != nullptr && readClangApiValueDefined([&]() {
+          return clang_pointer->getPointeeType()->isFunctionType();
+        });
     SgType *source_type = expr->get_type();
     SgType *source_callable = source_type != nullptr
                                   ? source_type->stripTypedefsAndModifiers()
@@ -14077,10 +14136,12 @@ bool ClangToSageTranslator::VisitImplicitCastExpr(
     SgType *stripped_target = target_type->stripTypedefsAndModifiers();
     const clang::PointerType *clang_pointer =
         clang_target->getAs<clang::PointerType>();
-    const bool clang_function_result = clang_target->isFunctionType();
+    const bool clang_function_result = readClangApiValueDefined(
+        [&]() { return clang_target->isFunctionType(); });
     const bool clang_function_pointer_result =
-        clang_pointer != nullptr &&
-        clang_pointer->getPointeeType()->isFunctionType();
+        clang_pointer != nullptr && readClangApiValueDefined([&]() {
+          return clang_pointer->getPointeeType()->isFunctionType();
+        });
     SgPointerType *sage_pointer = isSgPointerType(stripped_target);
     const bool sage_function_result =
         isSgFunctionType(stripped_target) != nullptr;
@@ -15783,8 +15844,13 @@ bool ClangToSageTranslator::VisitCXXFoldExpr(clang::CXXFoldExpr *cxx_fold_expr,
   bool res = true;
 
   // CXXFoldExpr represents C++17 fold expressions like (... && args)
-  clang::Expr *lhs = cxx_fold_expr->getLHS();
-  clang::Expr *rhs = cxx_fold_expr->getRHS();
+  cxx_fold_expr = llvm::dyn_cast_or_null<clang::CXXFoldExpr>(
+      markClangExprObjectDefinedByClass(cxx_fold_expr));
+  ASSERT_not_null(cxx_fold_expr);
+  clang::Expr *lhs = markClangExprObjectDefinedByClass(
+      readClangApiValueDefined([&]() { return cxx_fold_expr->getLHS(); }));
+  clang::Expr *rhs = markClangExprObjectDefinedByClass(
+      readClangApiValueDefined([&]() { return cxx_fold_expr->getRHS(); }));
   auto translate_fold_operand = [&](clang::Expr *operand,
                                     const char *role) -> SgExpression * {
     if (operand == nullptr) {
@@ -15826,14 +15892,21 @@ bool ClangToSageTranslator::VisitCXXFoldExpr(clang::CXXFoldExpr *cxx_fold_expr,
     ROSE_ABORT();
   }
 
+  const clang::BinaryOperatorKind fold_operator =
+      readClangApiValueDefined([&]() { return cxx_fold_expr->getOperator(); });
   clang::StringRef op_spelling =
-      clang::BinaryOperator::getOpcodeStr(cxx_fold_expr->getOperator());
+      clang::BinaryOperator::getOpcodeStr(fold_operator);
   std::string op_token = op_spelling.str();
 
-  SgType *result_type = buildTypeFromQualifiedType(cxx_fold_expr->getType());
+  SgType *result_type = buildTypeFromQualifiedType(
+      readClangApiValueDefined([&]() { return cxx_fold_expr->getType(); }));
+  const bool is_left_fold =
+      readClangApiValueDefined([&]() { return cxx_fold_expr->isLeftFold(); });
   SgFoldExpression *fold_expr = SageBuilder::buildFoldExpression_nfi(
-      operands, op_token, cxx_fold_expr->isLeftFold(), result_type);
-  applySourceRange(fold_expr, cxx_fold_expr->getSourceRange());
+      operands, op_token, is_left_fold, result_type);
+  applySourceRange(fold_expr, readClangApiValueDefined([&]() {
+                     return cxx_fold_expr->getSourceRange();
+                   }));
   *node = fold_expr;
 
   return VisitExpr(cxx_fold_expr, node) && res;
@@ -17557,8 +17630,8 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           p_compiler_instance->getSourceManager();
       const clang::LangOptions &lang_options =
           p_compiler_instance->getLangOpts();
-      const clang::SourceRange local_range =
-          decl_ref_qualifier_loc_ptr->getLocalSourceRange();
+      const clang::SourceRange local_range = readClangApiValueDefined(
+          [&]() { return decl_ref_qualifier_loc_ptr->getLocalSourceRange(); });
       const clang::SourceLocation source_begin =
           sourceQualificationFileLoc(source_manager, local_range.getBegin());
       const clang::SourceLocation source_end =
@@ -17656,8 +17729,8 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           llvm::dyn_cast<clang::FunctionDecl>(decl_ref_decl)) {
     func_decl = llvm::cast<clang::FunctionDecl>(
         markClangDeclObjectDefinedByKind(func_decl));
-    clang::TemplateSpecializationKind kind =
-        func_decl->getTemplateSpecializationKind();
+    clang::TemplateSpecializationKind kind = readClangApiValueDefined(
+        [&]() { return func_decl->getTemplateSpecializationKind(); });
     if (kind == clang::TSK_ImplicitInstantiation ||
         kind == clang::TSK_ExplicitInstantiationDeclaration ||
         kind == clang::TSK_ExplicitInstantiationDefinition) {
@@ -17679,11 +17752,14 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
   const clang::TemplateArgumentList *reference_semantic_arguments = nullptr;
   if (clang::FunctionDecl *function_decl =
           llvm::dyn_cast<clang::FunctionDecl>(decl_ref_decl)) {
-    reference_semantic_arguments = markClangTemplateArgumentListDefined(
-        function_decl->getTemplateSpecializationArgs());
+    reference_semantic_arguments =
+        markClangTemplateArgumentListDefined(readClangApiValueDefined(
+            [&]() { return function_decl->getTemplateSpecializationArgs(); }));
     if (reference_semantic_arguments == nullptr) {
       if (const clang::FunctionTemplateSpecializationInfo *specialization =
-              function_decl->getTemplateSpecializationInfo()) {
+              readClangApiValueDefined([&]() {
+                return function_decl->getTemplateSpecializationInfo();
+              })) {
         specialization = markClangAstObjectDefined(specialization);
         reference_semantic_arguments = markClangTemplateArgumentListDefined(
             specialization->TemplateArguments);
@@ -17692,7 +17768,10 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
   } else if (clang::VarTemplateSpecializationDecl *variable_decl =
                  llvm::dyn_cast<clang::VarTemplateSpecializationDecl>(
                      decl_ref_decl)) {
-    reference_semantic_arguments = &variable_decl->getTemplateArgs();
+    variable_decl = markClangSpecificDeclDefined(variable_decl);
+    reference_semantic_arguments =
+        markClangTemplateArgumentListDefined(readClangApiValueDefined(
+            [&]() { return &variable_decl->getTemplateArgs(); }));
   }
 
   // Clang's per-reference written-template metadata is authoritative.  Source
@@ -17721,14 +17800,18 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
             [&](auto &&self, const clang::TemplateArgument &argument) -> void {
           const clang::TemplateArgument &defined =
               markClangTemplateArgumentKindsDefined(argument);
-          if (defined.getKind() == clang::TemplateArgument::Pack) {
-            for (const clang::TemplateArgument &element :
-                 defined.pack_elements()) {
+          const clang::TemplateArgument::ArgKind kind =
+              readClangApiValueDefined([&]() { return defined.getKind(); });
+          if (kind == clang::TemplateArgument::Pack) {
+            llvm::ArrayRef<clang::TemplateArgument> elements =
+                readClangApiValueDefined(
+                    [&]() { return defined.pack_elements(); });
+            for (const clang::TemplateArgument &element : elements) {
               self(self, element);
             }
             return;
           }
-          semantic_argument_kinds.push_back(defined.getKind());
+          semantic_argument_kinds.push_back(kind);
         };
         for (const clang::TemplateArgument &argument :
              reference_semantic_arguments->asArray()) {
@@ -17818,14 +17901,17 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     written_arguments.reserve(argument_info.size());
     for (const clang::TemplateArgumentLoc &argument_loc :
          argument_info.arguments()) {
-      written_arguments.push_back(argument_loc.getArgument());
+      markClangValueDefined(argument_loc);
+      written_arguments.push_back(readClangApiValueDefined(
+          [&]() { return argument_loc.getArgument(); }));
     }
 
     llvm::ArrayRef<clang::TemplateArgument> semantic_arguments;
     if (reference_semantic_arguments != nullptr) {
       semantic_arguments = reference_semantic_arguments->asArray();
     } else {
-      if (!decl_ref_expr->isInstantiationDependent()) {
+      if (!readClangApiValueDefined(
+              [&]() { return decl_ref_expr->isInstantiationDependent(); })) {
         std::cerr
             << "REX_FRONTEND_INVARIANT[explicit-template-reference-semantic-"
                "arguments]: resolved template-id '"

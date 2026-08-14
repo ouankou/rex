@@ -5,6 +5,7 @@
 #include "clang-decl-attachment-session.hpp"
 #include "clang-expanded-token-order.hpp"
 #include "clang-frontend.hpp"
+#include "clang-source-qualification.hpp"
 
 #include "AstAttributeMechanism.h"
 #include "Cxx_Grammar.h"
@@ -197,7 +198,27 @@ requireClangOrderedDeclarationProvenanceForFrontend(
 
 void markClangAstStorageRangeDefinedForFrontend(const void *address,
                                                 std::size_t size);
+enum class ClangFrontendValgrindPublicationKind {
+  DeclNamedDeclaration,
+  DeclFunctionTypeBoundary,
+  DeclRecordTemplateState,
+  DeclClassTemplateState,
+  DeclTemplateArgumentType,
+  DeclClassTemplateSpecializationState,
+  TypeNamedDeclaration,
+  TypeRecordTemplateState,
+  TypeClassTemplateState,
+  TypeClassTemplateSpecializationState,
+  TypePrinting,
+  Count
+};
+void beginClangFrontendValgrindPublicationSession();
+void endClangFrontendValgrindPublicationSession();
+bool markClangFrontendValgrindPublicationOnce(
+    ClangFrontendValgrindPublicationKind kind, const void *address);
 void markClangQualTypeForPrintingDefinedForFrontend(clang::QualType type);
+void markClangNamedDeclNameForPrintingDefinedForFrontend(
+    const clang::NamedDecl *decl);
 void mark_compiler_generated_frontend_specific(SgNode *node);
 struct ClangTemplateParameterIdentity {
   std::string name;
@@ -3953,22 +3974,42 @@ public:
                    "function and output storage are required\n";
       ROSE_ABORT();
     }
+    if (declare_variant_functions_by_clang_name.empty()) {
+      return false;
+    }
+    clang::SourceLocation function_location =
+        p_source_manager.getExpansionLoc(function->getLocation());
+    if (!function_location.isValid()) {
+      return false;
+    }
+    const clang::FileID function_file_id =
+        p_source_manager.getFileID(function_location);
+    const unsigned function_line =
+        p_source_manager.getSpellingLineNumber(function_location);
+    const bool lies_in_declare_variant_region =
+        std::any_of(declare_variant_functions_by_clang_name.begin(),
+                    declare_variant_functions_by_clang_name.end(),
+                    [function_file_id, function_line](const auto &entry) {
+                      const DeclareVariantFunctionIdentity &identity =
+                          entry.second;
+                      return function_file_id == identity.file_id &&
+                             function_line > identity.begin_line &&
+                             function_line < identity.end_line;
+                    });
+    if (!lies_in_declare_variant_region) {
+      return false;
+    }
+    markClangNamedDeclNameForPrintingDefinedForFrontend(function);
     const std::string clang_name = function->getNameAsString();
     auto found = declare_variant_functions_by_clang_name.find(clang_name);
     if (found == declare_variant_functions_by_clang_name.end()) {
       return false;
     }
-    clang::SourceLocation function_location =
-        p_source_manager.getExpansionLoc(function->getLocation());
-    if (!function_location.isValid() ||
-        p_source_manager.getFileID(function_location) !=
-            found->second.file_id) {
+    if (function_file_id != found->second.file_id) {
       std::cerr << "REX_CFE_OMP_INVARIANT[variant-identity-query]: Clang "
                    "variant function has no exact region file identity\n";
       ROSE_ABORT();
     }
-    const unsigned function_line =
-        p_source_manager.getSpellingLineNumber(function_location);
     if (function_line <= found->second.begin_line ||
         function_line >= found->second.end_line) {
       std::cerr << "REX_CFE_OMP_INVARIANT[variant-identity-query]: Clang "
@@ -5065,6 +5106,13 @@ protected:
   SgSymbol *GetSymbolFromSymbolTable(clang::NamedDecl *decl);
 
   SgScopeStatement *resolveScopeFromDeclContext(clang::DeclContext *context);
+  SgScopeStatement *resolveExplicitInstantiationSourceScope(
+      clang::SourceLocation point_of_instantiation, const char *entity_kind,
+      const std::string &entity_name);
+  SourceQualification exactExpandedDeclaratorQualifier(
+      std::size_t declaration_begin_index, std::size_t name_index,
+      const char *entity_kind, const std::string &entity_name,
+      std::size_t *qualification_begin_index = nullptr);
   SgScopeStatement *
   resolveMethodEnclosingScope(clang::CXXMethodDecl *method_decl);
 
@@ -5342,6 +5390,11 @@ protected:
   resolveActiveTemplateTypeParameterSurface(unsigned depth, unsigned index,
                                             const char *consumer);
 
+  clang::TemplateTypeParmDecl *
+  resolveActiveTemplateTypeParameterSourceCounterpart(
+      const clang::TemplateTypeParmDecl *semantic_parameter,
+      const char *consumer);
+
   SgTemplateParameter *lookupActiveSemanticTemplateParameterSurface(
       const clang::NamedDecl *param_decl, const char *consumer);
 
@@ -5469,6 +5522,14 @@ protected:
       const clang::NamespaceDecl *clang_declaration,
       SgNamespaceDeclarationStatement *sage_declaration);
   void validateFrontendSupportNamespaceProvenance(
+      const clang::NamespaceDecl *clang_declaration,
+      SgNamespaceDeclarationStatement *sage_declaration);
+
+  void publishClangSynthesizedNamespaceProvenance(
+      const clang::NamespaceDecl *clang_declaration,
+      SgNamespaceDeclarationStatement *sage_declaration);
+
+  void validateClangSynthesizedNamespaceProvenance(
       const clang::NamespaceDecl *clang_declaration,
       SgNamespaceDeclarationStatement *sage_declaration);
 
@@ -6336,8 +6397,10 @@ protected:
   size_t p_preprocessor_record_cursor;
   bool p_preprocessor_record_list_sorted;
   bool p_record_directive_stream;
-  bool p_record_application_header_directives;
+  bool p_record_header_directives;
   std::map<std::string, IncludeOwnership> p_include_ownership_paths;
+  std::map<std::string, std::set<PreprocessingInfo *>>
+      p_resolved_include_directives;
   mutable std::unordered_map<std::string, std::string>
       p_normalized_include_ownership_paths;
   mutable std::unordered_map<unsigned, std::string>
@@ -6365,9 +6428,10 @@ protected:
   void releaseRecordedDirective(
       std::pair<Sg_File_Info *, PreprocessingInfo *> &record);
   void compactRemovedRecordedDirectives();
-  void recordDirective(clang::SourceLocation loc,
-                       PreprocessingInfo::DirectiveType directive_type,
-                       const std::string &text);
+  PreprocessingInfo *
+  recordDirective(clang::SourceLocation loc,
+                  PreprocessingInfo::DirectiveType directive_type,
+                  const std::string &text);
   void recordIncludeOwnershipPath(const std::string &path,
                                   IncludeOwnership ownership,
                                   const char *context);
@@ -6393,7 +6457,7 @@ public:
   SagePreprocessorRecord(clang::SourceManager *source_manager,
                          clang::Preprocessor *preprocessor,
                          bool record_directive_stream,
-                         bool record_application_header_directives);
+                         bool record_header_directives);
   ~SagePreprocessorRecord() override;
   unsigned requirePhysicalFileOccurrence(clang::FileID file_id,
                                          const char *context);

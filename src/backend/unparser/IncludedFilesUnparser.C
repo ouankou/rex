@@ -1432,9 +1432,7 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
   // Build invocation-local derived include data. Planning output must not
   // rewrite the project merely because transformations changed an include.
   {
-    map<string, set<string>> emptyIncludedFilesMap;
-    IncludingPreprocessingInfosCollector collector(projectNode,
-                                                   emptyIncludedFilesMap);
+    IncludingPreprocessingInfosCollector collector(projectNode);
     includingPreprocessingInfos = collector.collect();
   }
 
@@ -2120,10 +2118,86 @@ void IncludedFilesUnparser::updatePreprocessingInfoPaths(
     string replacementIncludeString;
 
     if (includedFileUnparseMapEntry != unparseMap.end()) {
-      // Included file is unparsed, make the include directive bracketed and
-      // relative to the unparse root.
-      replacementIncludeString =
-          "<" + includedFileUnparseMapEntry->second + ">";
+      // Both endpoints have an exact output plan.  Name the generated target
+      // relative to the generated includer and quote it so the preprocessor
+      // resolves that edge before any user -I directory with a colliding
+      // basename.  A bracketed path relative to the common unparse root loses
+      // this ownership and can silently bind to a different user header.
+      auto requireProjectInputOutput = [&](const string &inputPath) {
+        for (SgFile *projectFile : projectNode->get_fileList()) {
+          SgSourceFile *sourceFile = isSgSourceFile(projectFile);
+          if (sourceFile == nullptr ||
+              FileHelper::normalizePathIfPossible(sourceFile->getFileName()) !=
+                  inputPath) {
+            continue;
+          }
+          const string configuredOutput =
+              sourceFile->get_unparse_output_filename();
+          const string outputPath = FileHelper::normalizePathIfPossible(
+              FileHelper::isAbsolutePath(configuredOutput)
+                  ? configuredOutput
+                  : FileHelper::concatenatePaths(workingDirectory,
+                                                 configuredOutput));
+          if (outputPath.empty()) {
+            fprintf(stderr,
+                    "REX_UNPARSE_INVARIANT[include-rewrite]: CLI input=%s "
+                    "has no exact generated output path\n",
+                    inputPath.c_str());
+            ROSE_ABORT();
+          }
+          return outputPath;
+        }
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[include-rewrite]: CLI input=%s has "
+                "no owning project source file\n",
+                inputPath.c_str());
+        ROSE_ABORT();
+      };
+      auto requireGeneratedOutput =
+          [&](const string &inputPath,
+              map<string, string>::const_iterator outputPlan) {
+            if (isInputFile(inputPath)) {
+              return requireProjectInputOutput(inputPath);
+            }
+            if (outputPlan == unparseMap.end() || outputPlan->second.empty()) {
+              fprintf(stderr,
+                      "REX_UNPARSE_INVARIANT[include-rewrite]: header=%s has "
+                      "no exact generated output plan\n",
+                      inputPath.c_str());
+              ROSE_ABORT();
+            }
+            return FileHelper::normalizePathIfPossible(
+                FileHelper::concatenatePaths(unparseRootPath,
+                                             outputPlan->second));
+          };
+
+      const auto includingFileUnparseMapEntry =
+          unparseMap.find(normalizedIncludingFileName);
+      const string includingOutput = requireGeneratedOutput(
+          normalizedIncludingFileName, includingFileUnparseMapEntry);
+      const string includedOutput =
+          requireGeneratedOutput(includedFile, includedFileUnparseMapEntry);
+      string includingOutputFolder =
+          FileHelper::getParentFolder(includingOutput);
+      if (includingOutput.empty() || includedOutput.empty() ||
+          includingOutputFolder.empty()) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[include-rewrite]: edge from=%s to=%s "
+                "has incomplete generated output identity\n",
+                normalizedIncludingFileName.c_str(), includedFile.c_str());
+        ROSE_ABORT();
+      }
+      const string relativeIncludedOutput =
+          FileHelper::getRelativePath(includingOutputFolder, includedOutput);
+      if (relativeIncludedOutput.empty() ||
+          FileHelper::isAbsolutePath(relativeIncludedOutput)) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[include-rewrite]: generated edge "
+                "from=%s to=%s has no exact relative spelling\n",
+                includingOutput.c_str(), includedOutput.c_str());
+        ROSE_ABORT();
+      }
+      replacementIncludeString = "\"" + relativeIncludedOutput + "\"";
     } else {
       // Included file is not unparsed, make the include directive quoted and
       // relative to the unparsed including file's containing folder. If the
@@ -2164,8 +2238,8 @@ void IncludedFilesUnparser::updatePreprocessingInfoPaths(
     IncludeDirective includeDirective(includeString);
     // Replace the original include directive with the new one, using a relative
     // path and brackets.
-    includeString.replace(includeDirective.getStartPos() - 1,
-                          includeDirective.getIncludedPath().size() + 2,
+    includeString.replace(includeDirective.getTargetStartPos(),
+                          includeDirective.getTargetLength(),
                           replacementIncludeString);
     if (includeString != originalIncludeString) {
       includeRewrites[includingPreprocessingInfo] = includeString;

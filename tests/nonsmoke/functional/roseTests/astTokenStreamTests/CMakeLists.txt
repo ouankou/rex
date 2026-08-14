@@ -330,21 +330,6 @@ set(TOKEN_C_ADDITIONAL_TESTCODES
   test2012_163.c
 )
 
-set(TOKEN_C_GNU89_VALIDATION_TESTCODES
-  testCvsCpp.c
-  testAnsiC.c
-  test2003_12.c
-  test2012_21.c
-  test2012_27.c
-  test2012_32.c
-  test2012_116.c
-  test2012_131.c
-  test2012_141.c
-  test2013_25.c
-  test2013_46.c
-  test2013_79.c
-)
-
 set(TOKEN_CXX_TESTCODES_REQUIRED
   rex_unparser_frontier_child_identity.cpp
   test_CplusplusMacro_Cpp.C
@@ -1192,7 +1177,6 @@ set(TOKEN_CXX_TESTCODES_X86_ONLY
 if(NOT REX_TOKEN_TESTS_HOST_IS_X86)
   list(REMOVE_ITEM TOKEN_C_TESTCODES_REQUIRED ${TOKEN_C_TESTCODES_X86_ONLY})
   list(REMOVE_ITEM TOKEN_C_ADDITIONAL_TESTCODES ${TOKEN_C_TESTCODES_X86_ONLY})
-  list(REMOVE_ITEM TOKEN_C_GNU89_VALIDATION_TESTCODES ${TOKEN_C_TESTCODES_X86_ONLY})
   list(REMOVE_ITEM TOKEN_CXX_TESTCODES_REQUIRED ${TOKEN_CXX_TESTCODES_X86_ONLY})
   list(REMOVE_ITEM TOKEN_CXX_ADDITIONAL_TESTCODES ${TOKEN_CXX_TESTCODES_X86_ONLY})
   list(REMOVE_ITEM TOKEN_CXX_GNU48_ADDITIONAL_TESTCODES ${TOKEN_CXX_TESTCODES_X86_ONLY})
@@ -1246,19 +1230,15 @@ foreach(file_to_test IN LISTS TOKEN_C_TESTCODES_REQUIRED)
   string(REPLACE "." "_" _name ${file_to_test})
   set(_target ${file_to_test}.mapping.passed)
   set(_token_mapping_extra_flags)
-  set(_token_mapping_c_std_flags)
   set(_mapping_output
       ${_ast_token_stream_output_dir}/tokenStreamMapping_${file_to_test})
   set(_mapping_object
       ${_ast_token_stream_output_dir}/tokenStreamMapping_${_name}.o)
-  if(file_to_test IN_LIST TOKEN_C_GNU89_VALIDATION_TESTCODES)
-    set(_token_mapping_c_std_flags -std=gnu89)
-  endif()
   add_test(
     NAME tokenStreamMapping_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="${CMAKE_COMMAND} -E rm -f ${_mapping_output} ${_mapping_object} && \"$<TARGET_FILE:tokenStreamMapping>\" ${_rose_flags_str} ${_token_mapping_extra_flags} -rose:output ${_mapping_output} -o ${_mapping_object} -c ${_c_test_dir}/${file_to_test} && gcc ${_token_mapping_c_std_flags} -I${_c_test_dir} -c ${_mapping_output} -o ${_mapping_object}"
+      CMD="${CMAKE_COMMAND} -E rm -f ${_mapping_output} ${_mapping_object} && \"$<TARGET_FILE:tokenStreamMapping>\" ${_rose_flags_str} ${_token_mapping_extra_flags} -rose:output ${_mapping_output} -o ${_mapping_object} -c ${_c_test_dir}/${file_to_test} && \"${CMAKE_C_COMPILER}\" -std=gnu89 -I${_c_test_dir} -c ${_mapping_output} -o ${_mapping_object}"
       ${_exit_status}
       ${_target}
   )
@@ -1279,7 +1259,7 @@ add_test(
      test \"\$(grep -Fc 'rex_continued_marker' ${_pragma_boundary_frontier_output})\" -eq 1 && \
      test \"\$(grep -Fc 'rex_braced_case_marker' ${_pragma_boundary_frontier_output})\" -eq 1 && \
      test \"\$(grep -Fc 'rex_default_block_marker' ${_pragma_boundary_frontier_output})\" -eq 1 && \
-     gcc -c ${_pragma_boundary_frontier_output} -o ${_pragma_boundary_frontier_object}"
+     \"${CMAKE_C_COMPILER}\" -std=gnu89 -c ${_pragma_boundary_frontier_output} -o ${_pragma_boundary_frontier_object}"
 )
 set_tests_properties(rex_token_frontier_pragma_boundary_ownership PROPERTIES
   LABELS "rex;UNPARSER;TOKEN_STREAM")
@@ -1425,7 +1405,7 @@ add_test(
   NAME test_binary_after_token_unparsing
   WORKING_DIRECTORY ${_ast_token_stream_output_dir}
   COMMAND bash -c
-    "gcc -std=gnu89 -c ${_c_test_dir}/test2003_12.c -o gcc_test2003_12.o && \"$<TARGET_FILE:defaultTranslator>\" ${_rose_flags_str} -rose:output test2003_12.c -c ${_c_test_dir}/test2003_12.c && gcc -std=gnu89 -c test2003_12.c -o rose_test2003_12.o && diff ${_c_test_dir}/test2003_12.c test2003_12.c && diff gcc_test2003_12.o rose_test2003_12.o"
+    "\"${CMAKE_C_COMPILER}\" -std=gnu89 -c ${_c_test_dir}/test2003_12.c -o compiler_test2003_12.o && \"$<TARGET_FILE:defaultTranslator>\" ${_rose_flags_str} -rose:output test2003_12.c -c ${_c_test_dir}/test2003_12.c && \"${CMAKE_C_COMPILER}\" -std=gnu89 -c test2003_12.c -o rose_test2003_12.o && diff ${_c_test_dir}/test2003_12.c test2003_12.c && diff compiler_test2003_12.o rose_test2003_12.o"
 )
 
 install(

@@ -463,3 +463,10 @@ foreach(testcode ${_copyast_additional_local_tests})
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${testcode})
   set_tests_properties(copyAST_${basename} PROPERTIES  LABELS COPYASTTEST)
 endforeach()
+
+# This specimen is a generated parser body and exercises a legitimately large
+# copy transaction.  It has completed successfully in 1,224 seconds on the
+# hosted weekly runner and 1,790 seconds in the matching local ACT container,
+# beyond CTest's 1,500-second dashboard default.  Keep the semantic test intact
+# and give that measured workload an explicit per-test boundary.
+set_tests_properties(copyAST_copytest2007_48 PROPERTIES TIMEOUT 3600)

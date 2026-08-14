@@ -22,6 +22,46 @@ set(CTEST_CUSTOM_MEMCHECK_IGNORE
   # transformation executable in Memcheck.
   singleStatementToBlockNormalization_test2013_231.C
 
+  # Real libstdc++ map/regex integration remains in regular and
+  # sanitizer CTest.  The shared frontend traversal for these inputs was
+  # reproduced above Memcheck's five-and-a-half-hour boundary before the
+  # tool-specific logic could complete; every listed variant parses one of
+  # those same inputs before entering its distinct consumer.
+  # The bounded lazy-system-header specimen exercises the same Clang
+  # system-header field publication through testTranslator,
+  # testUninitializedFields, and comment collection.  The bounded
+  # normalization contracts exercise both transformation executables.  The
+  # selected C++14 template-argument test retains real libstdc++ traversal and
+  # the frontend's nested TemplateArgument defined-read coverage under
+  # Valgrind.
+  Cxx_tests_rex_frontend_lazy_system_header_fields_cpp
+  Cxx_tests_rex_frontend_lazy_system_header_fields_unparse
+  uninit_fields_cxx_Cxx_tests_rex_frontend_lazy_system_header_fields_cpp
+  compiler_options_collect_comments_Cxx_tests_rex_frontend_lazy_system_header_fields_cpp
+  Cxx_tests_rex_test2026_stl_map_cpp
+  uninit_fields_cxx_Cxx_tests_rex_test2026_stl_map_cpp
+  normalizationTranslator_rex_test2026_stl_map.cpp
+  singleStatementToBlockNormalization_rex_test2026_stl_map.cpp
+  compiler_options_collect_comments_Cxx_tests_rex_test2026_stl_map_cpp
+  Cxx_tests_rex_test2026_stl_regex_cpp
+  uninit_fields_cxx_Cxx_tests_rex_test2026_stl_regex_cpp
+  normalizationTranslator_rex_test2026_stl_regex.cpp
+  singleStatementToBlockNormalization_rex_test2026_stl_regex.cpp
+  compiler_options_collect_comments_Cxx_tests_rex_test2026_stl_regex_cpp
+  astInterface_rex_test2026_stl_regex
+
+  # These integration tests remain in regular and sanitizer CTest.  Under
+  # Memcheck, interfaceFunctionCoverage spends more than four hours translating
+  # standard-library headers before its SageInterface traversal, while each
+  # anonymous-tag contract pulls a roughly 12,000-line preprocessed specimen
+  # through three serialized move-declaration modes.  The bounded interface
+  # specimen runs the same coverage executable over the relevant AST shapes.
+  # The bounded move-declaration contract runs the same three tool modes and
+  # hard-checks anonymous-tag identity without unrelated library declarations.
+  astInterface_interfaceFunctionCoverage
+  moveDecl_rex_anonymous_tag_identity_inputmoveDeclarationToInnermostScope_test2014_18_C
+  moveDecl_rex_anonymous_tag_identity_inputmoveDeclarationToInnermostScope_test2014_22_C
+
   # These large preprocessed C++ header specimens remain regular and sanitizer
   # CTest coverage. Under Memcheck they spend hours in the instrumented Clang
   # frontend before reaching the generated compile, unfolded-constants,

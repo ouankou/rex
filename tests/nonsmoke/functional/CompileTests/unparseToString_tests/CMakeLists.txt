@@ -519,6 +519,9 @@ set(_frontend_preprocessing_modes
   missing-define-keyword
   missing-macro-name
   wrong-directive-kind
+  unterminated-angled-include
+  tokens-after-header-name
+  missing-include-target
   missing-separator-after-splice
   unknown-hash-directive
   empty-hash-directive
@@ -529,6 +532,9 @@ set(_frontend_preprocessing_diagnostics
   "REX_FRONTEND_INVARIANT[macro-definition-spelling]: reason=missing-define-keyword spelling=#undef REX_BROKEN"
   "REX_FRONTEND_INVARIANT[macro-definition-spelling]: reason=missing-macro-name spelling=#define /* nothing */"
   "REX_FRONTEND_INVARIANT[macro-definition-kind]: directive=CplusplusStyleComment cannot provide a #define macro name"
+  "REX_FRONTEND_INVARIANT[include-directive-spelling]: reason=unterminated-angled-target spelling=#include <rex/missing.hpp"
+  "REX_FRONTEND_INVARIANT[include-directive-spelling]: reason=tokens-after-header-name spelling=#include <rex/path.hpp> REX_EXTRA"
+  "REX_FRONTEND_INVARIANT[include-directive-spelling]: reason=missing-target spelling=#include"
   [=[REX_FRONTEND_INVARIANT[macro-definition-spelling]: reason=missing-name-separator spelling=#define\\nREX_BROKEN 1]=]
   "REX_FRONTEND_INVARIANT[preprocessing-directive-kind]: unsupported hash directive=rex_unknown"
   "REX_FRONTEND_INVARIANT[preprocessing-directive-kind]: hash directive has no identifier"
@@ -586,6 +592,15 @@ add_test(
     ${_frontend_preprocessing_fixture_dir}/rex_frontend_macro_splice_contract.cpp)
 set_tests_properties(
   rex_frontend_preprocessing_spliced_directive_scanner_contract
+  PROPERTIES LABELS "rex;CFE")
+
+add_test(
+  NAME rex_frontend_preprocessing_include_next_scanner_contract
+  COMMAND $<TARGET_FILE:rex_frontend_preprocessing_hard_contract>
+    scan-include-directives
+    ${_frontend_preprocessing_fixture_dir}/rex_frontend_include_next_scanner_contract.cpp)
+set_tests_properties(
+  rex_frontend_preprocessing_include_next_scanner_contract
   PROPERTIES LABELS "rex;CFE")
 
 add_test(
@@ -2007,7 +2022,7 @@ add_test(
   COMMAND rex_unparser_dirty_header_contract
 )
 set_tests_properties(rex_unparser_dirty_header_requires_frontend_ast
-  PROPERTIES LABELS "rex;UNPARSER;UNPARSEHEADERTEST")
+  PROPERTIES LABELS "rex;UNPARSER;UNPARSEHEADERTEST;death")
 
 add_test(
   NAME rex_unparser_malformed_nonreal_template_is_rejected

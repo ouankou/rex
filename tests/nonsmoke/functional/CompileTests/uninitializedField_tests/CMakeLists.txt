@@ -1,34 +1,18 @@
 include_directories(${ROSE_INCLUDES})
 
-find_path(VALGRIND_INCLUDE_DIR valgrind/valgrind.h)
-set(_uninit_skip_all FALSE)
-set(_uninit_skip_reason "")
-if(NOT VALGRIND_INCLUDE_DIR)
-  set(_uninit_skip_all TRUE)
-  set(_uninit_skip_reason "valgrind headers not found")
+if(NOT ROSE_USE_VALGRIND)
+  message(FATAL_ERROR
+    "uninitializedField_tests were registered without Valgrind support")
+endif()
+if(NOT VALGRIND_INCLUDE_PATH OR
+   NOT EXISTS "${VALGRIND_INCLUDE_PATH}/valgrind/valgrind.h")
+  message(FATAL_ERROR
+    "uninitializedField_tests require the validated root Valgrind headers")
 endif()
 
-file(READ ${CMAKE_BINARY_DIR}/rose_config.h _rose_config)
-string(FIND "${_rose_config}" "#define ROSE_USE_VALGRIND" _valgrind_define)
-if(_valgrind_define EQUAL -1)
-  set(_uninit_skip_all TRUE)
-  if(_uninit_skip_reason)
-    set(_uninit_skip_reason "${_uninit_skip_reason}; ROSE_USE_VALGRIND unavailable")
-  else()
-    set(_uninit_skip_reason "ROSE_USE_VALGRIND unavailable")
-  endif()
-endif()
-
-if(_uninit_skip_all)
-  message(STATUS "Not registering uninitializedField_tests (${_uninit_skip_reason})")
-  add_executable(testUninitializedFields EXCLUDE_FROM_ALL testUninitializedFields.C)
-else()
-  add_executable(testUninitializedFields testUninitializedFields.C)
-endif()
+add_executable(testUninitializedFields testUninitializedFields.C)
 target_link_libraries(testUninitializedFields ROSE_DLL ${link_with_libraries})
-if(VALGRIND_INCLUDE_DIR)
-  target_include_directories(testUninitializedFields PRIVATE ${VALGRIND_INCLUDE_DIR})
-endif()
+target_include_directories(testUninitializedFields PRIVATE ${VALGRIND_INCLUDE_PATH})
 
 find_program(BASH_EXECUTABLE bash)
 if(NOT BASH_EXECUTABLE)
@@ -149,6 +133,13 @@ function(rex_add_uninit_c_copy_tests prefix property_name frontend_negative)
 endfunction()
 
 function(rex_add_uninit_cxx20_module_test)
+  if(NOT ROSE_LLVM_CLANG_CXX_DRIVER OR
+     NOT IS_ABSOLUTE "${ROSE_LLVM_CLANG_CXX_DRIVER}" OR
+     NOT EXISTS "${ROSE_LLVM_CLANG_CXX_DRIVER}")
+    message(FATAL_ERROR
+      "C++ module tests require the exact Clang++ driver owned by the loaded "
+      "frontend package: '${ROSE_LLVM_CLANG_CXX_DRIVER}'")
+  endif()
   set(_source_rel Cxx20_tests/test2020_45.C)
   set(_source_path ${REX_COMPILE_TESTS_SOURCE_DIR}/${_source_rel})
   set(_module_source ${REX_COMPILE_TESTS_SOURCE_DIR}/Cxx20_tests/test2020_45_module.C)
@@ -162,9 +153,11 @@ function(rex_add_uninit_cxx20_module_test)
     "set -eu; "
     "module_dir=\"${_module_dir}\"; "
     "mkdir -p \"$module_dir\"; "
-    "${CMAKE_CXX_COMPILER} -std=c++20 -xc++-system-header --precompile "
+    "\"${ROSE_LLVM_CLANG_CXX_DRIVER}\" -std=c++20 "
+    "-xc++-system-header --precompile "
     "iostream -o \"${_iostream_pcm}\"; "
-    "${CMAKE_CXX_COMPILER} -std=c++20 -x c++-module --precompile "
+    "\"${ROSE_LLVM_CLANG_CXX_DRIVER}\" -std=c++20 "
+    "-x c++-module --precompile "
     "\"${_module_source}\" "
     "-fmodule-file=\"${_iostream_pcm}\" "
     "-o \"${_module_pcm}\"; "
@@ -221,177 +214,172 @@ function(rex_filter_negative_sources out_property source_property negative_prope
   set_property(GLOBAL PROPERTY ${out_property} ${_sources})
 endfunction()
 
-if(NOT _uninit_skip_all)
-  rex_filter_negative_sources(REX_UNINIT_CXX_TESTS_DEFAULT_POSITIVE_SOURCES
-    REX_CXX_TESTS_DEFAULT_SOURCES
-    REX_CXX_TESTS_NEGATIVE_SOURCES)
-  rex_add_uninit_cxx_tests(REX_UNINIT_CXX_TESTS_DEFAULT_POSITIVE_SOURCES FALSE
-    -std=gnu++14)
-  rex_add_uninit_cxx_tests(REX_CXX_TESTS_NEGATIVE_SOURCES TRUE
-    -std=gnu++14)
-  rex_add_uninit_cxx_tests(REX_CXX_TESTS_GNUXX03_SOURCES FALSE -std=gnu++03)
-  rex_add_uninit_cxx_tests(REX_CXX_TESTS_GNUXX17_SOURCES FALSE -std=gnu++17)
-  rex_add_uninit_cxx_tests(REX_CXX_TESTS_GNUXX20_SOURCES FALSE -std=gnu++20)
-  rex_add_uninit_cxx_tests(REX_CXX03_TESTS_SOURCES FALSE -std=c++03)
-  rex_filter_negative_sources(REX_UNINIT_CXX11_TESTS_CXX11_POSITIVE_SOURCES
-    REX_CXX11_TESTS_CXX11_SOURCES
-    REX_CXX11_TESTS_NEGATIVE_SOURCES)
-  rex_add_uninit_cxx_tests(REX_UNINIT_CXX11_TESTS_CXX11_POSITIVE_SOURCES FALSE
-    -std=c++11)
-  rex_add_uninit_cxx_tests(REX_UNINIT_CXX11_TESTS_NEGATIVE_SOURCES TRUE -std=c++11)
-  rex_add_uninit_cxx_tests(REX_CXX11_TESTS_CXX03_SOURCES FALSE -std=c++03)
-  rex_add_uninit_cxx_tests(REX_CXX14_TESTS_SOURCES FALSE -std=c++14)
-  rex_filter_negative_sources(REX_UNINIT_CXX17_TESTS_POSITIVE_SOURCES
-    REX_CXX17_TESTS_SOURCES
-    REX_CXX17_TESTS_NEGATIVE_SOURCES)
-  rex_add_uninit_cxx_tests(REX_UNINIT_CXX17_TESTS_POSITIVE_SOURCES FALSE
-    -std=c++17)
-  rex_add_uninit_cxx_tests(REX_CXX17_TESTS_NEGATIVE_SOURCES TRUE -std=c++17)
-  rex_filter_negative_sources(REX_UNINIT_CXX20_TESTS_POSITIVE_SOURCES
-    REX_CXX20_TESTS_SOURCES
-    REX_CXX20_TESTS_NEGATIVE_SOURCES)
-  rex_get_registered_compile_source_set(_cxx20_uninit_positive
-    REX_UNINIT_CXX20_TESTS_POSITIVE_SOURCES)
-  list(REMOVE_ITEM _cxx20_uninit_positive Cxx20_tests/test2020_45.C)
-  set_property(GLOBAL PROPERTY REX_UNINIT_CXX20_TESTS_POSITIVE_SOURCES
-    ${_cxx20_uninit_positive})
-  rex_add_uninit_cxx_tests(REX_UNINIT_CXX20_TESTS_POSITIVE_SOURCES FALSE
-    -std=c++20)
-  if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    rex_add_uninit_cxx20_module_test()
-  endif()
-  rex_add_uninit_cxx_tests(REX_CXX20_TESTS_NEGATIVE_SOURCES TRUE -std=c++20)
+rex_filter_negative_sources(REX_UNINIT_CXX_TESTS_DEFAULT_POSITIVE_SOURCES
+  REX_CXX_TESTS_DEFAULT_SOURCES
+  REX_CXX_TESTS_NEGATIVE_SOURCES)
+rex_add_uninit_cxx_tests(REX_UNINIT_CXX_TESTS_DEFAULT_POSITIVE_SOURCES FALSE
+  -std=gnu++14)
+rex_add_uninit_cxx_tests(REX_CXX_TESTS_NEGATIVE_SOURCES TRUE
+  -std=gnu++14)
+rex_add_uninit_cxx_tests(REX_CXX_TESTS_GNUXX03_SOURCES FALSE -std=gnu++03)
+rex_add_uninit_cxx_tests(REX_CXX_TESTS_GNUXX17_SOURCES FALSE -std=gnu++17)
+rex_add_uninit_cxx_tests(REX_CXX_TESTS_GNUXX20_SOURCES FALSE -std=gnu++20)
+rex_add_uninit_cxx_tests(REX_CXX03_TESTS_SOURCES FALSE -std=c++03)
+rex_filter_negative_sources(REX_UNINIT_CXX11_TESTS_CXX11_POSITIVE_SOURCES
+  REX_CXX11_TESTS_CXX11_SOURCES
+  REX_CXX11_TESTS_NEGATIVE_SOURCES)
+rex_add_uninit_cxx_tests(REX_UNINIT_CXX11_TESTS_CXX11_POSITIVE_SOURCES FALSE
+  -std=c++11)
+rex_add_uninit_cxx_tests(REX_UNINIT_CXX11_TESTS_NEGATIVE_SOURCES TRUE -std=c++11)
+rex_add_uninit_cxx_tests(REX_CXX11_TESTS_CXX03_SOURCES FALSE -std=c++03)
+rex_add_uninit_cxx_tests(REX_CXX14_TESTS_SOURCES FALSE -std=c++14)
+rex_filter_negative_sources(REX_UNINIT_CXX17_TESTS_POSITIVE_SOURCES
+  REX_CXX17_TESTS_SOURCES
+  REX_CXX17_TESTS_NEGATIVE_SOURCES)
+rex_add_uninit_cxx_tests(REX_UNINIT_CXX17_TESTS_POSITIVE_SOURCES FALSE
+  -std=c++17)
+rex_add_uninit_cxx_tests(REX_CXX17_TESTS_NEGATIVE_SOURCES TRUE -std=c++17)
+rex_filter_negative_sources(REX_UNINIT_CXX20_TESTS_POSITIVE_SOURCES
+  REX_CXX20_TESTS_SOURCES
+  REX_CXX20_TESTS_NEGATIVE_SOURCES)
+rex_get_registered_compile_source_set(_cxx20_uninit_positive
+  REX_UNINIT_CXX20_TESTS_POSITIVE_SOURCES)
+list(REMOVE_ITEM _cxx20_uninit_positive Cxx20_tests/test2020_45.C)
+set_property(GLOBAL PROPERTY REX_UNINIT_CXX20_TESTS_POSITIVE_SOURCES
+  ${_cxx20_uninit_positive})
+rex_add_uninit_cxx_tests(REX_UNINIT_CXX20_TESTS_POSITIVE_SOURCES FALSE
+  -std=c++20)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  rex_add_uninit_cxx20_module_test()
+endif()
+rex_add_uninit_cxx_tests(REX_CXX20_TESTS_NEGATIVE_SOURCES TRUE -std=c++20)
 
-  rex_get_registered_compile_source_set(_all_c_sources REX_C_TESTS_SOURCES)
-  rex_get_registered_compile_source_set(_c_negative_sources REX_C_TESTS_NEGATIVE_SOURCES)
-  if(_c_negative_sources)
-    list(REMOVE_ITEM _all_c_sources ${_c_negative_sources})
-  endif()
-  rex_get_registered_compile_source_set(_c89_sources REX_C89_TESTS_SOURCES)
-  rex_get_registered_compile_source_set(_c89_gnu89_sources REX_C89_GNU89_SOURCES)
-  if(_c89_gnu89_sources)
-    list(REMOVE_ITEM _c89_sources ${_c89_gnu89_sources})
-  endif()
-  rex_get_registered_compile_source_set(_c89_negative_sources
-    REX_C89_TESTS_NEGATIVE_SOURCES)
-  if(_c89_negative_sources)
-    list(REMOVE_ITEM _c89_sources ${_c89_negative_sources})
-  endif()
-  if(_c89_sources)
-    list(REMOVE_ITEM _all_c_sources ${_c89_sources})
-  endif()
-  set_property(GLOBAL PROPERTY REX_UNINIT_C_TESTS_DEFAULT_SOURCES ${_all_c_sources})
-  set_property(GLOBAL PROPERTY REX_UNINIT_C_TESTS_NEGATIVE_SOURCES ${_c_negative_sources})
-  set_property(GLOBAL PROPERTY REX_UNINIT_C89_STRICT_SOURCES ${_c89_sources})
+rex_get_registered_compile_source_set(_all_c_sources REX_C_TESTS_SOURCES)
+rex_get_registered_compile_source_set(_c_negative_sources REX_C_TESTS_NEGATIVE_SOURCES)
+if(_c_negative_sources)
+  list(REMOVE_ITEM _all_c_sources ${_c_negative_sources})
+endif()
+rex_get_registered_compile_source_set(_c89_sources REX_C89_TESTS_SOURCES)
+rex_get_registered_compile_source_set(_c89_gnu89_sources REX_C89_GNU89_SOURCES)
+if(_c89_gnu89_sources)
+  list(REMOVE_ITEM _c89_sources ${_c89_gnu89_sources})
+endif()
+rex_get_registered_compile_source_set(_c89_negative_sources
+  REX_C89_TESTS_NEGATIVE_SOURCES)
+if(_c89_negative_sources)
+  list(REMOVE_ITEM _c89_sources ${_c89_negative_sources})
+endif()
+if(_c89_sources)
+  list(REMOVE_ITEM _all_c_sources ${_c89_sources})
+endif()
+set_property(GLOBAL PROPERTY REX_UNINIT_C_TESTS_DEFAULT_SOURCES ${_all_c_sources})
+set_property(GLOBAL PROPERTY REX_UNINIT_C_TESTS_NEGATIVE_SOURCES ${_c_negative_sources})
+set_property(GLOBAL PROPERTY REX_UNINIT_C89_STRICT_SOURCES ${_c89_sources})
 
-  rex_add_uninit_c_copy_tests(uninit_fields_c REX_UNINIT_C_TESTS_DEFAULT_SOURCES FALSE)
-  rex_add_uninit_c_copy_tests(uninit_fields_c REX_UNINIT_C_TESTS_NEGATIVE_SOURCES TRUE)
-  rex_add_uninit_c_copy_tests(uninit_fields_c89 REX_UNINIT_C89_STRICT_SOURCES FALSE -std=c89)
-  rex_add_uninit_c_copy_tests(uninit_fields_c89 REX_C89_GNU89_SOURCES FALSE -std=gnu89)
-  rex_add_uninit_c_copy_tests(uninit_fields_c REX_C_SUBSET_OF_CXX_SOURCES FALSE)
-  rex_filter_negative_sources(REX_UNINIT_C99_POSITIVE_SOURCES
-    REX_C99_TESTS_SOURCES
-    REX_C99_TESTS_NEGATIVE_SOURCES)
-  rex_add_uninit_c_copy_tests(uninit_fields_c99 REX_UNINIT_C99_POSITIVE_SOURCES FALSE -std=gnu99)
-  rex_add_uninit_c_copy_tests(uninit_fields_c99 REX_C99_TESTS_NEGATIVE_SOURCES TRUE -std=gnu99)
+rex_add_uninit_c_copy_tests(uninit_fields_c REX_UNINIT_C_TESTS_DEFAULT_SOURCES FALSE)
+rex_add_uninit_c_copy_tests(uninit_fields_c REX_UNINIT_C_TESTS_NEGATIVE_SOURCES TRUE)
+rex_add_uninit_c_copy_tests(uninit_fields_c89 REX_UNINIT_C89_STRICT_SOURCES FALSE -std=c89)
+rex_add_uninit_c_copy_tests(uninit_fields_c89 REX_C89_GNU89_SOURCES FALSE -std=gnu89)
+rex_add_uninit_c_copy_tests(uninit_fields_c REX_C_SUBSET_OF_CXX_SOURCES FALSE)
+rex_filter_negative_sources(REX_UNINIT_C99_POSITIVE_SOURCES
+  REX_C99_TESTS_SOURCES
+  REX_C99_TESTS_NEGATIVE_SOURCES)
+rex_add_uninit_c_copy_tests(uninit_fields_c99 REX_UNINIT_C99_POSITIVE_SOURCES FALSE -std=gnu99)
+rex_add_uninit_c_copy_tests(uninit_fields_c99 REX_C99_TESTS_NEGATIVE_SOURCES TRUE -std=gnu99)
 
 if(enable-fortran)
-    rex_filter_negative_sources(REX_UNINIT_FORTRAN_F90_POSITIVE_SOURCES
-      REX_FORTRAN_F90_SOURCES
-      REX_FORTRAN_F90_NEGATIVE_SOURCES)
-    rex_get_registered_compile_source_set(_fortran_f2018_frontend_only_sources
-      REX_FORTRAN_F2018_FRONTEND_ONLY_SOURCES)
-    rex_get_registered_compile_source_set(_fortran_f90_positive_sources
-      REX_UNINIT_FORTRAN_F90_POSITIVE_SOURCES)
-    if(_fortran_f2018_frontend_only_sources)
-      list(REMOVE_ITEM _fortran_f90_positive_sources
-        ${_fortran_f2018_frontend_only_sources})
-      set_property(GLOBAL PROPERTY REX_UNINIT_FORTRAN_F90_POSITIVE_SOURCES
-        ${_fortran_f90_positive_sources})
-    endif()
-    rex_add_uninit_fortran_tests(uninit_fields_f90
-      REX_UNINIT_FORTRAN_F90_POSITIVE_SOURCES
-      -rose:fortran_std=f90)
-    rex_add_uninit_fortran_tests(uninit_fields_f90
-      REX_FORTRAN_F2018_FRONTEND_ONLY_SOURCES
-      -rose:skipfinalCompileStep
-      -rose:fortran_std=f2018)
-    rex_filter_negative_sources(REX_UNINIT_FORTRAN_F77_POSITIVE_SOURCES
-      REX_FORTRAN_F77_SOURCES
-      REX_FORTRAN_F77_NEGATIVE_SOURCES)
-    rex_add_uninit_fortran_tests(uninit_fields_f77
-      REX_UNINIT_FORTRAN_F77_POSITIVE_SOURCES
-      -rose:fortran_std=f77)
-    rex_filter_negative_sources(REX_UNINIT_FORTRAN_F03_POSITIVE_SOURCES
-      REX_FORTRAN_F03_SOURCES
-      REX_FORTRAN_F03_NEGATIVE_SOURCES)
-    rex_add_uninit_fortran_tests(uninit_fields_f03
-      REX_UNINIT_FORTRAN_F03_POSITIVE_SOURCES
-      -rose:skipfinalCompileStep
-      -rose:fortran_std=f2003)
+  rex_filter_negative_sources(REX_UNINIT_FORTRAN_F90_POSITIVE_SOURCES
+    REX_FORTRAN_F90_SOURCES
+    REX_FORTRAN_F90_NEGATIVE_SOURCES)
+  rex_get_registered_compile_source_set(_fortran_f2018_frontend_only_sources
+    REX_FORTRAN_F2018_FRONTEND_ONLY_SOURCES)
+  rex_get_registered_compile_source_set(_fortran_f90_positive_sources
+    REX_UNINIT_FORTRAN_F90_POSITIVE_SOURCES)
+  if(_fortran_f2018_frontend_only_sources)
+    list(REMOVE_ITEM _fortran_f90_positive_sources
+      ${_fortran_f2018_frontend_only_sources})
+    set_property(GLOBAL PROPERTY REX_UNINIT_FORTRAN_F90_POSITIVE_SOURCES
+      ${_fortran_f90_positive_sources})
+  endif()
+  rex_add_uninit_fortran_tests(uninit_fields_f90
+    REX_UNINIT_FORTRAN_F90_POSITIVE_SOURCES
+    -rose:fortran_std=f90)
+  rex_add_uninit_fortran_tests(uninit_fields_f90
+    REX_FORTRAN_F2018_FRONTEND_ONLY_SOURCES
+    -rose:skipfinalCompileStep
+    -rose:fortran_std=f2018)
+  rex_filter_negative_sources(REX_UNINIT_FORTRAN_F77_POSITIVE_SOURCES
+    REX_FORTRAN_F77_SOURCES
+    REX_FORTRAN_F77_NEGATIVE_SOURCES)
+  rex_add_uninit_fortran_tests(uninit_fields_f77
+    REX_UNINIT_FORTRAN_F77_POSITIVE_SOURCES
+    -rose:fortran_std=f77)
+  rex_filter_negative_sources(REX_UNINIT_FORTRAN_F03_POSITIVE_SOURCES
+    REX_FORTRAN_F03_SOURCES
+    REX_FORTRAN_F03_NEGATIVE_SOURCES)
+  rex_add_uninit_fortran_tests(uninit_fields_f03
+    REX_UNINIT_FORTRAN_F03_POSITIVE_SOURCES
+    -rose:skipfinalCompileStep
+    -rose:fortran_std=f2003)
 endif()
 
-if(NOT _uninit_skip_all)
-  get_property(_uninit_registered_tests DIRECTORY PROPERTY TESTS)
-  foreach(_test IN LISTS _uninit_registered_tests)
-    if(_test MATCHES "^uninit_fields_")
-      set(_test_output_dir ${_uninit_output_dir}/${_test})
-      file(MAKE_DIRECTORY ${_test_output_dir})
-      set_tests_properties(${_test} PROPERTIES
-        WORKING_DIRECTORY ${_test_output_dir}
-        ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_test_output_dir}")
+get_property(_uninit_registered_tests DIRECTORY PROPERTY TESTS)
+foreach(_test IN LISTS _uninit_registered_tests)
+  if(_test MATCHES "^uninit_fields_")
+    set(_test_output_dir ${_uninit_output_dir}/${_test})
+    file(MAKE_DIRECTORY ${_test_output_dir})
+    set_tests_properties(${_test} PROPERTIES
+      WORKING_DIRECTORY ${_test_output_dir}
+      ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_test_output_dir}")
+  endif()
+endforeach()
+
+get_property(
+  _fortran_module_chains GLOBAL PROPERTY REX_FORTRAN_MODULE_CHAINS)
+get_property(
+  _uninit_fortran_test_records
+  GLOBAL PROPERTY REX_UNINIT_FORTRAN_TEST_RECORDS)
+foreach(_chain IN LISTS _fortran_module_chains)
+  string(REPLACE "|" ";" _chain_fields "${_chain}")
+  list(GET _chain_fields 0 _producer_source)
+  list(GET _chain_fields 1 _consumer_source)
+  list(GET _chain_fields 2 _fixture)
+  set(_uninit_fixture rex_uninit_${_fixture})
+  unset(_producer_test)
+  unset(_consumer_test)
+
+  foreach(_record IN LISTS _uninit_fortran_test_records)
+    string(REPLACE "|" ";" _record_fields "${_record}")
+    list(GET _record_fields 0 _record_source)
+    list(GET _record_fields 1 _record_test)
+    if("${_record_source}" STREQUAL "${_producer_source}")
+      set(_producer_test ${_record_test})
+    elseif("${_record_source}" STREQUAL "${_consumer_source}")
+      set(_consumer_test ${_record_test})
     endif()
   endforeach()
 
-  get_property(
-    _fortran_module_chains GLOBAL PROPERTY REX_FORTRAN_MODULE_CHAINS)
-  get_property(
-    _uninit_fortran_test_records
-    GLOBAL PROPERTY REX_UNINIT_FORTRAN_TEST_RECORDS)
-  foreach(_chain IN LISTS _fortran_module_chains)
-    string(REPLACE "|" ";" _chain_fields "${_chain}")
-    list(GET _chain_fields 0 _producer_source)
-    list(GET _chain_fields 1 _consumer_source)
-    list(GET _chain_fields 2 _fixture)
-    set(_uninit_fixture rex_uninit_${_fixture})
-    unset(_producer_test)
-    unset(_consumer_test)
+  if(NOT _producer_test OR NOT _consumer_test)
+    message(FATAL_ERROR
+      "Uninitialized-field module chain '${_fixture}' has no exact "
+      "producer and consumer tests")
+  endif()
 
-    foreach(_record IN LISTS _uninit_fortran_test_records)
-      string(REPLACE "|" ";" _record_fields "${_record}")
-      list(GET _record_fields 0 _record_source)
-      list(GET _record_fields 1 _record_test)
-      if("${_record_source}" STREQUAL "${_producer_source}")
-        set(_producer_test ${_record_test})
-      elseif("${_record_source}" STREQUAL "${_consumer_source}")
-        set(_consumer_test ${_record_test})
-      endif()
-    endforeach()
-
-    if(NOT _producer_test OR NOT _consumer_test)
-      message(FATAL_ERROR
-        "Uninitialized-field module chain '${_fixture}' has no exact "
-        "producer and consumer tests")
-    endif()
-
-    set(_chain_output_dir
-        ${_uninit_output_dir}/module-chains/${_uninit_fixture})
-    file(MAKE_DIRECTORY ${_chain_output_dir})
-    set_tests_properties(
-      ${_producer_test}
-      PROPERTIES
-        WORKING_DIRECTORY ${_chain_output_dir}
-        ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_chain_output_dir}"
-        FIXTURES_SETUP ${_uninit_fixture}
-        RESOURCE_LOCK ${_uninit_fixture})
-    set_tests_properties(
-      ${_consumer_test}
-      PROPERTIES
-        WORKING_DIRECTORY ${_chain_output_dir}
-        ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_chain_output_dir}"
-        FIXTURES_REQUIRED ${_uninit_fixture}
-        RESOURCE_LOCK ${_uninit_fixture})
-  endforeach()
-endif()
-
-endif()
+  set(_chain_output_dir
+      ${_uninit_output_dir}/module-chains/${_uninit_fixture})
+  file(MAKE_DIRECTORY ${_chain_output_dir})
+  set_tests_properties(
+    ${_producer_test}
+    PROPERTIES
+      WORKING_DIRECTORY ${_chain_output_dir}
+      ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_chain_output_dir}"
+      FIXTURES_SETUP ${_uninit_fixture}
+      RESOURCE_LOCK ${_uninit_fixture})
+  set_tests_properties(
+    ${_consumer_test}
+    PROPERTIES
+      WORKING_DIRECTORY ${_chain_output_dir}
+      ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_chain_output_dir}"
+      FIXTURES_REQUIRED ${_uninit_fixture}
+      RESOURCE_LOCK ${_uninit_fixture})
+endforeach()

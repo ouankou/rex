@@ -7,6 +7,8 @@
 
 #include <functional>
 
+#include <map>
+
 #include <optional>
 
 #include <utility>
@@ -2797,6 +2799,14 @@ ROSE_DLL_API void appendStatementList(const std::vector<SgStatement *> &stmt,
 //! source order.  The returned values are independent of later AST mutations.
 ROSE_DLL_API std::vector<PreprocessingInfo>
 collectCppDirectiveSnapshot(SgSourceFile *file);
+
+//! Return the exact system/application role of every direct textual include in
+//! a source file, keyed by its source spelling.  A lazily absent graph root is
+//! accepted only when the exact primary preprocessing stream proves that the
+//! source has no includes.  Conflicting or incomplete include-graph ownership
+//! is a frontend invariant violation.
+ROSE_DLL_API std::map<std::string, bool>
+collectDirectIncludeSystemRoles(SgSourceFile *file);
 
 // DQ (2/6/2009): Added function to support outlining into separate file.
 //! Append a copy ('decl') of a function ('original_statement') into a

@@ -678,6 +678,8 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
 #endif
   }
 
+  beginClangFrontendValgrindPublicationSession();
+
   // 0 - Analyse Cmd Line
 
   std::vector<std::string> sys_dirs_list;
@@ -1271,6 +1273,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     const std::string cmake_suffix = "/lib/cmake/llvm";
     const std::string cmake_suffix_version =
         "/lib/cmake/llvm-" + std::to_string(LLVM_VERSION_MAJOR);
+    const std::string packaged_cmake_suffix = "/cmake";
     llvm::StringRef dir_ref(llvm_dir);
     if (dir_ref.ends_with(cmake_suffix) ||
         dir_ref.ends_with(cmake_suffix_version)) {
@@ -1278,6 +1281,13 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       root_ref = llvm::sys::path::parent_path(root_ref);
       root_ref = llvm::sys::path::parent_path(root_ref);
       return root_ref.str();
+    }
+    // Debian-family LLVM packages publish LLVMConfig.cmake directly under
+    // <llvm-root>/cmake while keeping the exact compiler drivers under
+    // <llvm-root>/bin.  LLVM_DIR denotes the package directory, never the
+    // executable root itself.
+    if (dir_ref.ends_with(packaged_cmake_suffix)) {
+      return llvm::sys::path::parent_path(dir_ref).str();
     }
     return llvm_dir;
   };
@@ -2150,6 +2160,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
 
   roseClangPhaseTrace("clang_main.end");
   destroy_clang_compiler_instance();
+  endClangFrontendValgrindPublicationSession();
   return 0; // Success - AST was built
 }
 
@@ -5431,7 +5442,7 @@ unsigned lineDirectiveEndOffset(clang::SourceManager *source_manager,
 
 SagePreprocessorRecord::SagePreprocessorRecord(
     clang::SourceManager *source_manager, clang::Preprocessor *preprocessor,
-    bool record_directive_stream, bool record_application_header_directives)
+    bool record_directive_stream, bool record_header_directives)
     : p_source_manager(source_manager), p_preprocessor(preprocessor),
       p_preprocessor_record_list(), p_preprocessor_records_by_location(),
       p_preprocessor_records_by_line(), p_preprocessor_record_positions(),
@@ -5440,9 +5451,9 @@ SagePreprocessorRecord::SagePreprocessorRecord(
       p_attached_preprocessor_records(), p_preprocessor_record_cursor(0),
       p_preprocessor_record_list_sorted(true),
       p_record_directive_stream(record_directive_stream),
-      p_record_application_header_directives(
-          record_application_header_directives),
-      p_include_ownership_paths(), p_normalized_physical_paths_by_file_id(),
+      p_record_header_directives(record_header_directives),
+      p_include_ownership_paths(), p_resolved_include_directives(),
+      p_normalized_physical_paths_by_file_id(),
       p_physical_occurrences_by_clang_file_id() {}
 
 SagePreprocessorRecord::~SagePreprocessorRecord() {
@@ -6565,6 +6576,7 @@ void SagePreprocessorRecord::publishIncludeOwnership(
       source_file->get_frontendSystemIncludeOwnershipPathList();
   SgStringList &external_paths =
       source_file->get_frontendExternalOwnershipPathList();
+  std::map<std::string, std::set<PreprocessingInfo *>> resolved_directives;
   paths.clear();
   system_paths.clear();
   external_paths.clear();
@@ -6609,6 +6621,35 @@ void SagePreprocessorRecord::publishIncludeOwnership(
       break;
     }
   }
+
+  for (const auto &[included_path, directives] :
+       p_resolved_include_directives) {
+    const std::string normalized =
+        FileHelper::normalizePathIfPossible(included_path);
+    if (normalized.empty() || normalized != included_path ||
+        !FileHelper::fileExists(normalized) || directives.empty()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[resolved-include-edge]: target=%s has "
+              "no exact physical path or owning directives\n",
+              included_path.c_str());
+      ROSE_ABORT();
+    }
+    for (PreprocessingInfo *directive : directives) {
+      if (directive == nullptr || directive->get_file_info() == nullptr ||
+          (directive->getTypeOfDirective() !=
+               PreprocessingInfo::CpreprocessorIncludeDeclaration &&
+           directive->getTypeOfDirective() !=
+               PreprocessingInfo::CpreprocessorIncludeNextDeclaration)) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[resolved-include-edge]: target=%s "
+                "has an incomplete or non-include owner=%p\n",
+                normalized.c_str(), static_cast<void *>(directive));
+        ROSE_ABORT();
+      }
+      resolved_directives[normalized].insert(directive);
+    }
+  }
+  source_file->set_frontendResolvedIncludeDirectivesMap(resolved_directives);
 }
 
 bool SagePreprocessorRecord::shouldRecordDirective(
@@ -6638,10 +6679,28 @@ bool SagePreprocessorRecord::shouldRecordDirective(
   if (ownership == IncludeOwnership::clang_pseudo_file) {
     return false;
   }
-  if (!p_record_application_header_directives) {
+  if (!p_record_header_directives) {
     return false;
   }
-  return ownership == IncludeOwnership::application_textual;
+  switch (ownership) {
+  case IncludeOwnership::application_textual:
+  case IncludeOwnership::system_textual:
+  case IncludeOwnership::external:
+  case IncludeOwnership::frontend_support:
+    return true;
+  case IncludeOwnership::main_file:
+  case IncludeOwnership::clang_pseudo_file:
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[preprocessor-directive-ownership]: "
+            "ownership=%u escaped its dedicated directive policy\n",
+            static_cast<unsigned>(ownership));
+    ROSE_ABORT();
+  }
+  fprintf(stderr,
+          "REX_FRONTEND_INVARIANT[preprocessor-directive-ownership]: "
+          "unknown ownership=%u\n",
+          static_cast<unsigned>(ownership));
+  ROSE_ABORT();
 }
 
 std::string SagePreprocessorRecord::getFilenameForLocation(
@@ -7185,11 +7244,11 @@ std::string collectDirectiveTextFromSource(clang::SourceManager *source_manager,
 
 } // namespace
 
-void SagePreprocessorRecord::recordDirective(
+PreprocessingInfo *SagePreprocessorRecord::recordDirective(
     clang::SourceLocation loc, PreprocessingInfo::DirectiveType directive_type,
     const std::string &text) {
   if (!shouldRecordDirective(loc)) {
-    return;
+    return nullptr;
   }
   if (p_removed_preprocessor_records.size() > 256) {
     compactRemovedRecordedDirectives();
@@ -7224,7 +7283,9 @@ void SagePreprocessorRecord::recordDirective(
     resolved = p_source_manager->getSpellingLoc(resolved);
   }
   if (!resolved.isValid()) {
-    return;
+    fprintf(stderr, "REX_FRONTEND_INVARIANT[preprocessor-directive-ownership]: "
+                    "recorded directive has no exact spelling location\n");
+    ROSE_ABORT();
   }
 
   clang::SourceLocation file_loc = p_source_manager->getFileLoc(resolved);
@@ -7260,7 +7321,7 @@ void SagePreprocessorRecord::recordDirective(
       }
       if (inside_skipped_range &&
           !isStructuralConditionalDirective(directive_type)) {
-        return;
+        return nullptr;
       }
     }
   }
@@ -7389,7 +7450,7 @@ void SagePreprocessorRecord::recordDirective(
     for (const RecordedDirectiveRef &existing : location_it->second) {
       if (existing.preprocessing_info != nullptr &&
           existing.preprocessing_info->getString() == content) {
-        return;
+        return existing.preprocessing_info;
       }
     }
   }
@@ -7402,7 +7463,7 @@ void SagePreprocessorRecord::recordDirective(
       line_it != p_preprocessor_records_by_line.end()) {
     if (isCommentDirectiveType(directive_type)) {
       if (line_it->second.non_comment_count > 0) {
-        return;
+        return nullptr;
       }
     } else if (!line_it->second.comment_records.empty()) {
       const std::vector<RecordedDirectiveRef> comments_to_remove =
@@ -7432,6 +7493,7 @@ void SagePreprocessorRecord::recordDirective(
       std::pair<Sg_File_Info *, PreprocessingInfo *>(file_info, preproc_info));
   registerRecordedDirective(file_info, preproc_info, file_loc);
   p_preprocessor_record_list_sorted = false;
+  return preproc_info;
 }
 
 void SagePreprocessorRecord::recordSourceDirective(
@@ -7565,7 +7627,18 @@ void SagePreprocessorRecord::InclusionDirective(
     include_text = directive + include_target;
   }
 
-  recordDirective(HashLoc, directive_type, include_text);
+  PreprocessingInfo *record =
+      recordDirective(HashLoc, directive_type, include_text);
+  if (File) {
+    if (record == nullptr || included_path.empty()) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[resolved-include-edge]: active "
+              "include=%s has no exact preprocessing record or target\n",
+              include_text.c_str());
+      ROSE_ABORT();
+    }
+    p_resolved_include_directives[included_path].insert(record);
+  }
 }
 
 void SagePreprocessorRecord::FileChanged(

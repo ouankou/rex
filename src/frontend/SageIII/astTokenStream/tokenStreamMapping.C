@@ -133,6 +133,10 @@ public:
     TokenStreamSequenceToNodeMapping::requireDirectOwnerInterval(
         node, source_file, std::move(interval));
   }
+
+  static void retireDetachedMapping(TokenStreamSequenceToNodeMapping *mapping) {
+    TokenStreamSequenceToNodeMapping::retireDetachedMapping(mapping);
+  }
 };
 
 using namespace std;
@@ -204,23 +208,7 @@ void detachExactTokenMappingAssociation(
     return;
   }
 
-  size_t poolEntries = 0;
-  for (auto entry = TokenStreamSequenceToNodeMapping::tokenSequencePool.begin();
-       entry != TokenStreamSequenceToNodeMapping::tokenSequencePool.end();) {
-    if (entry->second == mapping) {
-      entry = TokenStreamSequenceToNodeMapping::tokenSequencePool.erase(entry);
-      ++poolEntries;
-    } else {
-      ++entry;
-    }
-  }
-  if (poolEntries != 1) {
-    fprintf(stderr,
-            "REX_TOKEN_INVARIANT[mapping-detachment]: retired mapping=%p "
-            "owned %zu token-pool entries instead of one\n",
-            static_cast<void *>(mapping), poolEntries);
-    ROSE_ABORT();
-  }
+  TokenStreamMappingConstructionAccess::retireDetachedMapping(mapping);
 }
 
 } // namespace
@@ -1501,6 +1489,38 @@ TokenStreamSequenceToNodeMapping::createTokenInterval(
   }
 
   return newTokenSequence;
+}
+
+void TokenStreamSequenceToNodeMapping::retireDetachedMapping(
+    TokenStreamSequenceToNodeMapping *mapping) {
+  if (mapping == nullptr || !mapping->nodeVector.empty()) {
+    fprintf(stderr,
+            "REX_TOKEN_INVARIANT[mapping-detachment]: retired mapping=%p "
+            "retains %zu reverse associations\n",
+            static_cast<void *>(mapping),
+            mapping != nullptr ? mapping->nodeVector.size() : 0);
+    ROSE_ABORT();
+  }
+
+  auto ownedEntry = tokenSequencePool.end();
+  size_t poolEntries = 0;
+  for (auto entry = tokenSequencePool.begin(); entry != tokenSequencePool.end();
+       ++entry) {
+    if (entry->second == mapping) {
+      ownedEntry = entry;
+      ++poolEntries;
+    }
+  }
+  if (poolEntries != 1) {
+    fprintf(stderr,
+            "REX_TOKEN_INVARIANT[mapping-detachment]: retired mapping=%p "
+            "owned %zu token-pool entries instead of one\n",
+            static_cast<void *>(mapping), poolEntries);
+    ROSE_ABORT();
+  }
+
+  tokenSequencePool.erase(ownedEntry);
+  delete mapping;
 }
 
 // DQ (11/25/2018): This name appears to collide silently at link time with any

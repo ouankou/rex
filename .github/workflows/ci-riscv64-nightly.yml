@@ -13,6 +13,10 @@ concurrency:
 jobs:
   test-riscv64:
     runs-on: ubuntu-26.04
+    permissions:
+      actions: read
+      contents: read
+      packages: read
 
     defaults:
       run:
@@ -30,25 +34,42 @@ jobs:
       with:
         platforms: ${{ env.TARGET_ARCH }}
 
-    - name: Run core tests from prebuilt image (${{ env.TARGET_ARCH }} via QEMU)
+    - name: Run retained fast and architecture contracts from prebuilt image (${{ env.TARGET_ARCH }} via QEMU)
       if: ${{ !env.ACT }}
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
-        docker pull --platform="${TARGET_PLATFORM}" "${IMAGE_REPO}:dev"
+        source_sha="$(gh api \
+          "repos/${GITHUB_REPOSITORY}/actions/workflows/nightly-rex-images.yml/runs?branch=main&status=success&per_page=1" \
+          --jq '.workflow_runs[0].head_sha')"
+        if [[ ! "${source_sha}" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "Latest successful nightly image run has no exact source revision: '${source_sha}'" >&2
+          exit 1
+        fi
+        image_ref="${IMAGE_REPO}:dev-${source_sha}"
+        docker pull --platform="${TARGET_PLATFORM}" "${image_ref}"
+        image_revision="$(docker image inspect "${image_ref}" \
+          --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
+        if [[ "${image_revision}" != "${source_sha}" ]]; then
+          echo "Nightly image revision '${image_revision}' does not match immutable tag '${source_sha}'" >&2
+          exit 1
+        fi
+        echo "Testing ${image_ref} ($(docker image inspect "${image_ref}" --format '{{ index .RepoDigests 0 }}'))"
         docker run --rm --platform="${TARGET_PLATFORM}" \
-          "${IMAGE_REPO}:dev" \
+          "${image_ref}" \
           bash -lc '
             set -euo pipefail
             cd /opt/rex/src
-            CTEST_JOBS="$(nproc)"
-            ctest --test-dir build \
-              --no-tests=error \
-              -R "rex|astInterface|OMPLOWERING_RODINIA_" \
-              --output-on-failure \
-              -j"${CTEST_JOBS}"
+            python3 scripts/run_ctest_name_set.py \
+              --test-dir build \
+              --manifest tests/fragile/unparser_hardening_fast.txt \
+              --expected-absent-manifest tests/fragile/unparser_hardening_fast_non_x86_absent.txt \
+              --include-regex "^(Cxx20_tests_rex_frontend_(module_external_ownership_structure|unowned_imported_namespace|variable_template_semantic_cross_file_constraint_cpp|target_builtin_type_(aarch64|riscv64))|Cxx_tests_rex_frontend_support_namespace_semantic_root|Cxx_tests_rex_test2026_stl_map_cpp|astInterface_rex_test2026_stl_regex|omp_lowering_rex_simd_.*)$" \
+              --jobs "$(nproc)"
           '
 
-    - name: Run core tests from local dev image (${{ env.TARGET_ARCH }} via QEMU)
+    - name: Run retained fast and architecture contracts from local dev image (${{ env.TARGET_ARCH }} via QEMU)
       if: ${{ env.ACT }}
       run: |
         set -euo pipefail
@@ -57,10 +78,10 @@ jobs:
           bash -lc '
             set -euo pipefail
             cd /opt/rex/src
-            CTEST_JOBS="$(nproc)"
-            ctest --test-dir build \
-              --no-tests=error \
-              -R "rex|astInterface|OMPLOWERING_RODINIA_" \
-              --output-on-failure \
-              -j"${CTEST_JOBS}"
+            python3 scripts/run_ctest_name_set.py \
+              --test-dir build \
+              --manifest tests/fragile/unparser_hardening_fast.txt \
+              --expected-absent-manifest tests/fragile/unparser_hardening_fast_non_x86_absent.txt \
+              --include-regex "^(Cxx20_tests_rex_frontend_(module_external_ownership_structure|unowned_imported_namespace|variable_template_semantic_cross_file_constraint_cpp|target_builtin_type_(aarch64|riscv64))|Cxx_tests_rex_frontend_support_namespace_semantic_root|Cxx_tests_rex_test2026_stl_map_cpp|astInterface_rex_test2026_stl_regex|omp_lowering_rex_simd_.*)$" \
+              --jobs "$(nproc)"
           '

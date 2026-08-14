@@ -54,14 +54,16 @@ jobs:
       run: cmake --build build -j"$(nproc)"
 
     - name: Run full tests
+      env:
+        ROSE_TEST_TIMEOUT_SCALE: "2"
       run: |
         set +e
-        ctest --test-dir build --no-tests=error -j"$(nproc)" --output-on-failure --output-junit ctest.junit.xml 2>&1 | tee ctest-full.log
+        ctest --test-dir build --no-tests=error -j"$(nproc)" --timeout 3000 --output-on-failure --output-junit ctest.junit.xml 2>&1 | tee ctest-full.log
         ctest_status=${PIPESTATUS[0]}
         echo "${ctest_status}" > ctest_exit_code.txt
 
     - name: Upload full test log
-      if: ${{ always() }}
+      if: ${{ always() && !env.ACT }}
       uses: actions/upload-artifact@v7
       with:
         name: full-tests-log
@@ -76,6 +78,25 @@ jobs:
 
   memcheck:
     runs-on: ubuntu-26.04
+
+    env:
+      REX_MEMCHECK_CTEST_MAX_JOBS: 8
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # The reviewed MemCheck selection requires multiple runner-hours under
+        # Valgrind and cannot fit GitHub's six-hour per-job limit. Partition the
+        # filtered CTest registry into eight stable name-hash shards; their
+        # direct union is exactly the regex-selected MemCheck registry. The
+        # explicit multiple-files test exercises two consecutive Clang
+        # ASTContext lifetimes in one REX process, which is the publication
+        # cache's required invalidation boundary. Each
+        # shard is expanded to the transitive DEPENDS and fixture closure before
+        # execution, so a
+        # producer and its consumer can never be separated by the partition.
+        # Support tests may therefore repeat in more than one shard.
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
 
     defaults:
       run:
@@ -94,7 +115,20 @@ jobs:
     - name: Install dependencies
       run: |
         scripts/ci-install-deps native "${{ env.LLVM_VERSION }}"
-        sudo apt-get install -y valgrind
+        # Ubuntu 26.04 selects the uutils multicall implementation of env(1).
+        # Valgrind gives a traced shebang interpreter its synthetic argv[0],
+        # which a multicall binary interprets as an unknown utility name before
+        # the script can run.  Select Ubuntu's standalone GNU coreutils
+        # alternative atomically so nested executable scripts stay inside the
+        # MemCheck child-tracing boundary.
+        sudo apt-get install -y --allow-remove-essential \
+          coreutils-from-gnu \
+          coreutils-from-uutils-
+        env_version="$(/usr/bin/env --version 2>&1)"
+        if [[ "${env_version}" != *"GNU coreutils"* ]]; then
+          echo "MemCheck requires standalone GNU /usr/bin/env, got: ${env_version}" >&2
+          exit 1
+        fi
 
     - name: Configure (Debug + Valgrind)
       run: |
@@ -109,23 +143,44 @@ jobs:
           -DENABLE-FORTRAN=ON \
           -DCMAKE_CXX_STANDARD=17 \
           -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+          -DREX_EXTENDED_TEST_TIMEOUTS=ON \
           -DWITH-VALGRIND=/usr
 
     - name: Build
-      run: cmake --build build -j"$(nproc)"
+      run: |
+        BUILD_JOBS="$(nproc)"
+        if (( BUILD_JOBS > REX_MEMCHECK_CTEST_MAX_JOBS )); then
+          BUILD_JOBS="${REX_MEMCHECK_CTEST_MAX_JOBS}"
+        fi
+        echo "Building with ${BUILD_JOBS} workers"
+        cmake --build build -j"${BUILD_JOBS}"
 
     - name: Run memcheck on CI selection
       env:
-        ROSE_TEST_TIMEOUT_SCALE: "4"
+        ROSE_TEST_TIMEOUT_SCALE: "24"
       run: |
         set -o pipefail
-        ctest --test-dir build --no-tests=error -T memcheck -R "astInterface|testQuery|rex" -LE death -j"$(nproc)" --timeout 5400 --output-on-failure 2>&1 | tee ctest-memcheck.log
+        CTEST_JOBS="$(nproc)"
+        if (( CTEST_JOBS > REX_MEMCHECK_CTEST_MAX_JOBS )); then
+          CTEST_JOBS="${REX_MEMCHECK_CTEST_MAX_JOBS}"
+        fi
+        echo "Running ${CTEST_JOBS} MemCheck workers"
+        python3 scripts/run_ctest_name_set.py \
+          --test-dir build \
+          --include-regex "astInterface|testQuery|rex|Cxx_tests_test_multiple_files_2" \
+          --exclude-label death \
+          --shard-index "${{ matrix.shard }}" \
+          --shard-count 8 \
+          --jobs "${CTEST_JOBS}" \
+          --memcheck \
+          --timeout 19800 \
+          2>&1 | tee ctest-memcheck.log
 
     - name: Upload memcheck logs
-      if: ${{ always() }}
+      if: ${{ always() && !env.ACT }}
       uses: actions/upload-artifact@v7
       with:
-        name: memcheck-logs
+        name: memcheck-logs-${{ matrix.shard }}-of-8
         path: |
           ctest-memcheck.log
           build/Testing/Temporary/MemoryChecker.*.log
@@ -174,12 +229,13 @@ jobs:
     - name: Run sanitizer on CI selection
       env:
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/scripts/rex-suppressions-for-lsan
+        ROSE_TEST_TIMEOUT_SCALE: "4"
       run: |
         set -o pipefail
-        ctest --test-dir build --no-tests=error -R "astInterface|testQuery|rex" -LE death -j"$(nproc)" --output-on-failure 2>&1 | tee ctest-sanitizer.log
+        ctest --test-dir build --no-tests=error -R "astInterface|testQuery|rex" -LE death -j"$(nproc)" --timeout 6000 --output-on-failure 2>&1 | tee ctest-sanitizer.log
 
     - name: Upload sanitizer log
-      if: ${{ always() }}
+      if: ${{ always() && !env.ACT }}
       uses: actions/upload-artifact@v7
       with:
         name: sanitizer-log

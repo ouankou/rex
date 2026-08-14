@@ -30,8 +30,6 @@
 
 #include "CollectionHelper.h"
 
-#include "CompilerOutputParser.h"
-
 #include "IncludeDirective.h"
 
 #include "IncludingPreprocessingInfosCollector.h"

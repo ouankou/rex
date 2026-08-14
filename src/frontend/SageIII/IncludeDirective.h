@@ -4,14 +4,15 @@ using namespace std;
 
 class IncludeDirective {
 private:
-  size_t startPos;
-  string directiveText;
   string includedPath;
   bool isQuotedIncludeDirective;
+  size_t targetStartPos;
+  size_t targetLength;
 
 public:
   IncludeDirective(const string &directiveText);
-  string getIncludedPath();
-  bool isQuotedInclude();
-  size_t getStartPos();
+  const string &getIncludedPath() const;
+  bool isQuotedInclude() const;
+  size_t getTargetStartPos() const;
+  size_t getTargetLength() const;
 };

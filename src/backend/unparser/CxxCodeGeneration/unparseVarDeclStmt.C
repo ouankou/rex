@@ -534,6 +534,19 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
     // dispatcher.  Carry the exact owner through both type halves and the
     // initializer instead of retaining the first declaration as a group-wide
     // context.
+    SgTemplateInstantiationDirectiveStatement *instantiation_directive =
+        isSgTemplateInstantiationDirectiveStatement(
+            decl_item_owner->get_parent());
+    if (instantiation_directive != nullptr &&
+        (instantiation_directive->get_declaration() != decl_item_owner ||
+         decl_item_owner->get_parent() != instantiation_directive)) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[variable-instantiation-context]: "
+              "directive=%p does not exactly own variable=%p\n",
+              static_cast<void *>(instantiation_directive),
+              static_cast<void *>(decl_item_owner));
+      ROSE_ABORT();
+    }
     ninfo.set_template_argument_qualification_context(decl_item_owner);
 
     SgType *semantic_decl_type = decl_item->get_type();
@@ -673,6 +686,10 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
       if (!spec_args.empty()) {
         SgUnparse_Info tinfo(ninfo);
         tinfo.set_declstatement_ptr(template_var_decl);
+        if (instantiation_directive != nullptr) {
+          tinfo.set_template_argument_qualification_context(
+              instantiation_directive);
+        }
         unparseTemplateArgumentList(
             spec_args, tinfo,
             TemplateArgumentEmission::complete_typed_identity);

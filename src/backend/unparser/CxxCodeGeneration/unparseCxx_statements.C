@@ -4198,16 +4198,29 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
     // DQ (2/2/2018): Added case for currently unimplemented unparsing support
     // for template variable declarations.
   case V_SgTemplateVariableDeclaration: {
-    // printf ("Unparsing of SgTemplateVariableDeclaration in
-    // unparseTemplateInstantiationDirectiveStmt not implemented \n");
-    // ROSE_ASSERT(false);
-
     SgTemplateVariableDeclaration *variableDeclaration =
         isSgTemplateVariableDeclaration(declarationStatement);
     ASSERT_not_null(variableDeclaration);
+    if (variableDeclaration->get_parent() != templateInstantiationDirective ||
+        variableDeclaration->get_specialization() !=
+            SgDeclarationStatement::e_no_specialization ||
+        variableDeclaration->get_explicitTemplateSpecializationHeaderCount() !=
+            0) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[variable-instantiation-directive]: "
+              "directive=%p variable=%p has malformed exact ownership or "
+              "template identity\n",
+              static_cast<void *>(templateInstantiationDirective),
+              static_cast<void *>(variableDeclaration));
+      ROSE_ABORT();
+    }
 
     SgUnparse_Info ninfo(declarationInfo);
     ninfo.unset_unparsedPartiallyUsingTokenStream();
+    // The instantiated initializer is a semantic analysis subtree copied from
+    // the template pattern.  An explicit-instantiation directive owns no
+    // initializer syntax and must never emit that semantic child.
+    ninfo.set_SkipInitializer();
     unparseTemplateVariableDeclStmt(variableDeclaration, ninfo);
     break;
   }
@@ -7422,6 +7435,18 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
         // post-declarator attribute path.
         unp->u_sage->printGnuVisibilityAttributes(classdecl_stmt,
                                                   /*leading_space=*/false);
+        // GNU class alignment is a decl-specifier attribute.  This position is
+        // valid for both forward declarations and definitions and is the one
+        // source-emission owner for SgClassDeclaration alignment; the generic
+        // post-name and post-body paths deliberately exclude class alignment.
+        const short alignmentValue = classdecl_stmt->get_declarationModifier()
+                                         .get_typeModifier()
+                                         .get_gnu_attribute_alignment();
+        if (alignmentValue >= 0) {
+          curprint("__attribute__((aligned(");
+          curprint(StringUtility::numberToString((int)alignmentValue));
+          curprint("))) ");
+        }
       }
 
       /* have to make sure if it needs qualifier or not */
@@ -8009,21 +8034,11 @@ void Unparse_ExprStmt::unparseTypeAttributes(
     curprint(" __attribute__((packed))");
   }
 
-  // DQ (7/24/2014): Added support to unparse the alignment attribute.
-  short alignmentValue = declaration->get_declarationModifier()
-                             .get_typeModifier()
-                             .get_gnu_attribute_alignment();
-
-  // DQ (7/24/2014): The default value is changed from zero to -1 (and the type
-  // was make to be a short (signed) value).
-  if (alignmentValue >= 0) {
-    // DQ (7/27/2014): Fixed attribute to have correct spelling.
-    // curprint(" __attribute__((align(N)))");
-    // curprint(" __attribute__((align(");
-    curprint(" __attribute__((aligned(");
-    curprint(StringUtility::numberToString((int)alignmentValue));
-    curprint(")))");
-  }
+  // Alignment has one declaration-kind-specific emission owner.  A class
+  // emits it in the decl-specifier sequence before its name; a typedef emits
+  // it through printAttributes after its declarator.  Repeating it here after
+  // an embedded definition duplicates typedef alignment and previously also
+  // gave class definitions two competing attribute positions.
 }
 
 void Unparse_ExprStmt::unparseEnumDeclStmt(SgStatement *stmt,

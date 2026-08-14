@@ -31,7 +31,8 @@ endfunction()
 set(_test_specs
   test0 test1 test2 test3 test4 test5 test6 test7 test8 test9 test10 test11
   test12 test13 test14 test15 test18 test20 test21 test22 test23 test24
-  rex_implicit_control_flow_header_plan)
+  rex_implicit_control_flow_header_plan
+  rex_system_header_directive_ownership)
 
 rex_add_clang_frontend_negative_test(
   unparse_headers_test19_frontend_negative
@@ -52,6 +53,10 @@ foreach(spec IN LISTS _test_specs)
   rex_get_unparse_headers_source(_source_rel ${spec})
   get_filename_component(_source_name "${_source_rel}" NAME)
   rex_get_cxx_specimen_extra_flags(_extra_frontend_flags ${_source_name})
+  if(spec STREQUAL "rex_system_header_directive_ownership")
+    list(APPEND _extra_frontend_flags
+      -isystem ${CMAKE_CURRENT_SOURCE_DIR}/${spec}/system)
+  endif()
   string(JOIN " " _extra_frontend_switches ${_extra_frontend_flags})
   set(_rose_switches
     "${_rose_switches_base} ${_extra_frontend_switches} -rose:applicationRootDirectory ${CMAKE_CURRENT_SOURCE_DIR}/${spec}")
@@ -97,6 +102,9 @@ foreach(spec IN LISTS _test_specs)
     set_property(TEST unparse_headers_${spec}
       APPEND PROPERTY LABELS "rex")
   elseif(spec STREQUAL "rex_implicit_control_flow_header_plan")
+    set_property(TEST unparse_headers_${spec}
+      APPEND PROPERTY LABELS "rex;CFE;UNPARSER;headers")
+  elseif(spec STREQUAL "rex_system_header_directive_ownership")
     set_property(TEST unparse_headers_${spec}
       APPEND PROPERTY LABELS "rex;CFE;UNPARSER;headers")
   endif()

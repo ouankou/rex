@@ -1,0 +1,4 @@
+# These retained tests exercise x86-specific source constructs and CMake
+# deliberately does not register them in non-x86 CTest registries.
+C_tests_test2015_141_c
+C_tests_test2015_142_c

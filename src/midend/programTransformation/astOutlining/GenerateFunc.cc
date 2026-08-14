@@ -22,6 +22,8 @@
 
 #include <map>
 
+#include <memory>
+
 #include <set>
 
 #include <sstream>
@@ -1098,6 +1100,31 @@ static bool isTypedefVisibleFromScope(SgTypedefDeclaration *typedef_decl,
   return isScopeVisibleFromScope(typedef_decl->get_scope(), scope);
 }
 
+static bool
+isCopiedClassTypedefBaseVisibleFromScope(SgTypedefDeclaration *typedef_decl,
+                                         SgScopeStatement *scope) {
+  ROSE_ASSERT(typedef_decl != NULL);
+  ROSE_ASSERT(typedef_decl->get_base_type() != NULL);
+  ROSE_ASSERT(scope != NULL);
+
+  SgType *root_type = typedef_decl->get_base_type()->stripType();
+  ROSE_ASSERT(root_type != NULL);
+  SgNamedType *named_type = isSgNamedType(root_type);
+  if (named_type == NULL)
+    return true;
+
+  SgDeclarationStatement *base_decl = named_type->get_declaration();
+  if (base_decl == NULL || base_decl->get_scope() == NULL) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[class-typedef-base-owner]: "
+            "typedef=%s base-type=%p has no exact declaration scope\n",
+            typedef_decl->get_name().getString().c_str(),
+            static_cast<void *>(root_type));
+    ROSE_ABORT();
+  }
+  return isScopeVisibleFromScope(base_decl->get_scope(), scope);
+}
+
 static SgArrayType *
 getNonFortranGlobalArrayType(const SgInitializedName *name) {
   if (name == NULL || SageInterface::is_Fortran_language() ||
@@ -1158,6 +1185,25 @@ addMissingLocalTypedefAliases(SgFunctionDeclaration *func) {
     if (typedef_decl == NULL || typedef_decl->get_base_type() == NULL)
       continue;
     if (isTypedefVisibleFromScope(typedef_decl, func_body))
+      continue;
+
+    const bool function_owned = SageInterface::getEnclosingFunctionDeclaration(
+                                    typedef_decl, true) != NULL;
+    const bool class_owned =
+        isSgClassDefinition(typedef_decl->get_scope()) != NULL;
+
+    // Function-local aliases cease to exist when the selected statement moves
+    // to the generated global function, so reproduce their declaration chain
+    // locally.  An unqualified class-member alias used as an expression (for
+    // example `Xstar(0)`) needs the same treatment only when its underlying
+    // named type is itself visible at the destination.  Never detach a class
+    // alias whose base still names a private class scope: libstdc++ iterators,
+    // for example, can have a base such as `_Node_traits::_Iterator`; copying
+    // only the outer alias would manufacture invalid source.  Namespace-owned
+    // aliases retain their exact qualified source type at the moved use site.
+    if (!function_owned &&
+        (!class_owned ||
+         !isCopiedClassTypedefBaseVisibleFromScope(typedef_decl, func_body)))
       continue;
 
     std::string name = typedef_decl->get_name().getString();
@@ -4069,24 +4115,27 @@ private:
     }
     const std::pair<SgScopeStatement *, SgScopeStatement *> key(sf1, sf2);
     std::map<std::pair<SgScopeStatement *, SgScopeStatement *>,
-             SymbolMapOfTwoFiles *>::const_iterator found = instances.find(key);
+             std::unique_ptr<SymbolMapOfTwoFiles>>::const_iterator found =
+        instances.find(key);
     if (found != instances.end())
-      return found->second;
+      return found->second.get();
 
-    SymbolMapOfTwoFiles *created = new SymbolMapOfTwoFiles(sf1, sf2);
-    if (!instances.emplace(key, created).second) {
+    std::unique_ptr<SymbolMapOfTwoFiles> created(
+        new SymbolMapOfTwoFiles(sf1, sf2));
+    SymbolMapOfTwoFiles *result = created.get();
+    if (!instances.emplace(key, std::move(created)).second) {
       fprintf(stderr, "REX_OUTLINER_INVARIANT[copied-symbol-map]: source and "
                       "destination scope pair was published more than once\n");
       ROSE_ABORT();
     }
-    return created;
+    return result;
   }
 
   std::map<SgSymbol *, SgSymbol *> dict; // symbol from file1 to file 2
   SgScopeStatement *destination_root;
 
   static std::map<std::pair<SgScopeStatement *, SgScopeStatement *>,
-                  SymbolMapOfTwoFiles *>
+                  std::unique_ptr<SymbolMapOfTwoFiles>>
       instances;
   static SgSymbol *requireUniqueDestinationSymbol(SgScopeStatement *root,
                                                   const std::string &key) {
@@ -4288,7 +4337,7 @@ private:
 }; // end SymbolMapOfTwoFiles
 
 std::map<std::pair<SgScopeStatement *, SgScopeStatement *>,
-         SymbolMapOfTwoFiles *>
+         std::unique_ptr<SymbolMapOfTwoFiles>>
     SymbolMapOfTwoFiles::instances;
 
 class MovedBodyClassTypeEdgeCollector : public SimpleReferenceToPointerHandler {
