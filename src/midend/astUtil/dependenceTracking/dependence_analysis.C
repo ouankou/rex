@@ -55,14 +55,6 @@ void WholeProgramDependenceAnalysis::ComputeDependences() {
       SgNode *func = *p;
       if (func == 0)
         continue;
-      Sg_File_Info *info = func->get_file_info();
-      if (info == nullptr) {
-        continue;
-      }
-      std::string defn_file_name = info->get_raw_filename();
-      if (defn_file_name != fname) {
-        continue;
-      }
       Log.push("Analyzing declaration " + func->unparseToString() + " in " +
                fname);
       ComputeDependences(func, root);

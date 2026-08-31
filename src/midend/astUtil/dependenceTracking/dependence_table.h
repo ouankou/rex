@@ -50,14 +50,7 @@ public:
   }
   bool first_is_function() const { return true; }
   bool second_is_function() const { return type_entry() == "call"; }
-  bool output_data_dependence(std::ostream &output) {
-    if (attr_entry() != "") {
-      output << second_entry() << " : [ " << type_entry() << " ] "
-             << attr_entry() << " ;\n";
-      return true;
-    }
-    return false;
-  }
+  bool output_data_dependence(std::ostream &output) const;
 };
 
 std::ostream &operator<<(std::ostream &output, const DependenceEntry &e);
