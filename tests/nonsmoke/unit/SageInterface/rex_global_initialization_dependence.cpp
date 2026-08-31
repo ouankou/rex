@@ -4,12 +4,75 @@
 #include "AstUtilInterface.h"
 #include "RoseAst.h"
 #include "dependence_analysis.h"
+#include "dependence_table.h"
 
 #include <iostream>
 #include <sstream>
 #include <string>
 
 namespace {
+
+bool requireDependenceTokenBoundaries() {
+  const std::vector<std::string> operator_names = {
+      "operator[]",        "operator()",      "operator new",
+      "operator new[]",    "operator delete", "operator delete[]",
+      "operator co_await", "operator+",       "operator-",
+      "operator*",         "operator/",       "operator%",
+      "operator^",         "operator&",       "operator|",
+      "operator~",         "operator!",       "operator=",
+      "operator<",         "operator>",       "operator+=",
+      "operator-=",        "operator*=",      "operator/=",
+      "operator%=",        "operator^=",      "operator&=",
+      "operator|=",        "operator<<",      "operator>>",
+      "operator>>=",       "operator<<=",     "operator==",
+      "operator!=",        "operator<=",      "operator>=",
+      "operator<=>",       "operator&&",      "operator||",
+      "operator++",        "operator--",      "operator,",
+      "operator->*",       "operator->",      "operator bool",
+      "operator\"\"_tag",  "rex::operator[]", "rex::operator=="};
+
+  std::ostringstream serialized;
+  for (const std::string &name : operator_names) {
+    serialized << AstUtilInterface::DependenceEntry(name, "source", "call",
+                                                    "exact")
+               << '\n';
+  }
+  serialized << AstUtilInterface::DependenceEntry("cooperator", "source",
+                                                  "read", "exact")
+             << '\n'
+             << AstUtilInterface::DependenceEntry("target", "cooperator",
+                                                  "read", "exact")
+             << '\n';
+
+  std::istringstream input(serialized.str());
+  AstUtilInterface::SelectDependences dependences;
+  dependences.CollectFromFile(input);
+
+  const std::vector<AstUtilInterface::DependenceEntry> &entries =
+      dependences.get_result();
+  const auto contains = [&entries](const std::string &first,
+                                   const std::string &second,
+                                   const std::string &type) {
+    for (const AstUtilInterface::DependenceEntry &entry : entries) {
+      if (entry.first_entry() == first && entry.second_entry() == second &&
+          entry.type_entry() == type && entry.attr_entry() == "exact")
+        return true;
+    }
+    return false;
+  };
+  bool complete = entries.size() == operator_names.size() + 2 &&
+                  contains("cooperator", "source", "read") &&
+                  contains("target", "cooperator", "read");
+  for (const std::string &name : operator_names)
+    complete = complete && contains(name, "source", "call");
+  if (complete)
+    return true;
+
+  std::cerr << "dependence-table operator and identifier boundaries did not "
+               "round-trip exactly"
+            << std::endl;
+  return false;
+}
 
 bool requireInitializationInput(const std::string &dependences,
                                 const std::string &target,
@@ -109,6 +172,9 @@ bool requireExactDeclarationEffects(SgVariableDeclaration *declaration) {
 } // namespace
 
 int main(int argc, char **argv) {
+  if (!requireDependenceTokenBoundaries())
+    return 1;
+
   SgProject *project = frontend(argc, argv);
   ASSERT_not_null(project);
 

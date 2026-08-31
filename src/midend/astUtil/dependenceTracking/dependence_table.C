@@ -28,6 +28,73 @@ std::string wrap_string(const std::string &s) {
   return new_string;
 }
 
+bool requiresQuotedDependenceToken(const std::string &token) {
+  if (token.empty()) {
+    return true;
+  }
+  for (std::string::size_type i = 0; i < token.size(); ++i) {
+    switch (token[i]) {
+    case ' ':
+    case '\t':
+    case '\n':
+    case '\r':
+    case '\\':
+    case '"':
+    case '=':
+    case '[':
+    case ']':
+    case '{':
+    case '}':
+    case ';':
+      return true;
+    case ':':
+      if (i + 1 < token.size() && token[i + 1] == ':') {
+        ++i;
+      } else {
+        return true;
+      }
+      break;
+    default:
+      break;
+    }
+  }
+  return false;
+}
+
+void writeDependenceToken(std::ostream &output, const std::string &token) {
+  // The table grammar uses whitespace and punctuation as structural tokens.
+  // Quote opaque payloads whenever their spelling overlaps that grammar.
+  if (!requiresQuotedDependenceToken(token)) {
+    output << token;
+    return;
+  }
+
+  output << '"';
+  for (char c : token) {
+    switch (c) {
+    case '\\':
+      output << "\\\\";
+      break;
+    case '"':
+      output << "\\\"";
+      break;
+    case '\n':
+      output << "\\n";
+      break;
+    case '\r':
+      output << "\\r";
+      break;
+    case '\t':
+      output << "\\t";
+      break;
+    default:
+      output << c;
+      break;
+    }
+  }
+  output << '"';
+}
+
 std::pair<std::string, std::string>
 dependenceLabel(AstUtilInterface::OperatorSideEffect relation) {
   using AstUtilInterface::OperatorSideEffect;
@@ -60,14 +127,50 @@ std::string CollectDependences::local_read_string(std::istream &input_file) {
         return next_string;
       }
       break;
-    case '"':
-      next_string.push_back(c);
-      while ((input_file >> c).good() && c != '"') {
-        next_string.push_back(c);
+    case '"': {
+      if (!next_string.empty()) {
+        Log.fatal("Quoted dependence token must start at a token boundary");
       }
-      next_string.push_back(c);
+      // Quoted payloads are decoded with unformatted reads so whitespace and
+      // grammar punctuation remain part of the exact dependence signature.
+      bool escaped = false;
+      bool closed = false;
+      while (input_file.get(c)) {
+        if (escaped) {
+          switch (c) {
+          case '\\':
+          case '"':
+            next_string.push_back(c);
+            break;
+          case 'n':
+            next_string.push_back('\n');
+            break;
+          case 'r':
+            next_string.push_back('\r');
+            break;
+          case 't':
+            next_string.push_back('\t');
+            break;
+          default:
+            Log.fatal(std::string("Unsupported dependence token escape \\") +
+                      c);
+          }
+          escaped = false;
+        } else if (c == '\\') {
+          escaped = true;
+        } else if (c == '"') {
+          closed = true;
+          break;
+        } else {
+          next_string.push_back(c);
+        }
+      }
+      if (!closed) {
+        Log.fatal("Unterminated quoted dependence token");
+      }
       Log.push("reading quoted string " + next_string);
       return next_string;
+    }
     case ' ':
     case '\n':
     case '\r':
@@ -87,14 +190,23 @@ std::string CollectDependences::local_read_string(std::istream &input_file) {
         Log.push("Seeing `::'. continue reading token " + next_string);
         break;
       }
-      [[fallthrough]]; // Explicitly indicates intentional fall-through.
+      if (!next_string.empty()) {
+        // This starts a new token. Return the current one.
+        input_file.putback(c);
+        Log.push("Seeing separator. Finished reading token " + next_string);
+      } else {
+        // Found a token. Return it.
+        next_string.push_back(c);
+        Log.push("reading separator token " + next_string);
+      }
+      return next_string;
     }
+    case '=':
     case '[':
     case ']':
     case '{':
     case '}':
     case ';':
-    case '=':
       if (!next_string.empty()) {
         // This starts a new token. Return the current one.
         input_file.putback(c);
@@ -275,17 +387,35 @@ void DependenceTable ::OutputDataDependences(std::ostream &output) {
 }
 
 std::ostream &operator<<(std::ostream &output, const DependenceEntry &e) {
-  output << e.first_entry() << " : ";
+  writeDependenceToken(output, e.first_entry());
+  output << " : ";
   if (e.type_entry() != "") {
-    output << "[ " << e.type_entry() << " ] ";
+    output << "[ ";
+    writeDependenceToken(output, e.type_entry());
+    output << " ] ";
   }
-  output << e.second_entry();
+  writeDependenceToken(output, e.second_entry());
   if (e.attr_entry() != "") {
-    output << " = " << e.attr_entry() << " ;";
+    output << " = ";
+    writeDependenceToken(output, e.attr_entry());
+    output << " ;";
   } else {
     output << " ;";
   }
   return output;
+}
+
+bool DependenceEntry::output_data_dependence(std::ostream &output) const {
+  if (attr_entry().empty()) {
+    return false;
+  }
+  writeDependenceToken(output, second_entry());
+  output << " : [ ";
+  writeDependenceToken(output, type_entry());
+  output << " ] ";
+  writeDependenceToken(output, attr_entry());
+  output << " ;\n";
+  return true;
 }
 
 /************************************/
