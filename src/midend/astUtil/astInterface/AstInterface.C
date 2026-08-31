@@ -1779,6 +1779,8 @@ AstNodePtr GetFunctionDecl(const AstNodePtr &_s) {
     return AstNodePtrImpl(isSgConstructorInitializer(s)->get_declaration());
   case V_SgDotExp:
     return GetFunctionDecl(AstNodePtrImpl(isSgDotExp(s)->get_rhs_operand()));
+  case V_SgNonrealDecl:
+    return _s;
   }
   MLOG_ERROR_CXX("astInterface")
       << "Error: not recognizable function type: " << s->sage_class_name()

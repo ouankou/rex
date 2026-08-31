@@ -227,6 +227,7 @@ bool StmtInfoCollect ::ProcessTree(AstInterface &fa,
       }
     } else if (fa.IsVariableDecl(s, &vars, &args)) {
       DebugLocalInfoCollect([]() { return "Is variable declaration."; });
+      ROSE_ASSERT(vars.size() == args.size());
       AstInterface::AstNodeList::const_iterator pv = vars.begin();
       AstInterface::AstNodeList::const_iterator pa = args.begin();
       modstack.push_back(s);
