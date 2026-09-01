@@ -10,171 +10,54 @@ concurrency:
   group: nightly-rex-images-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
+  LOCAL_IMAGE_REPO: rex-local
+  REX_IMAGE_BUILD_JOBS: 4
+
 jobs:
-  build-amd64:
+  build:
+    name: Build ${{ matrix.arch }} images
     runs-on: ubuntu-26.04
     permissions:
       contents: read
       packages: write
-    outputs:
-      runtime_digest: ${{ steps.build-runtime.outputs.digest }}
-      dev_digest: ${{ steps.build-dev.outputs.digest }}
-
-    defaults:
-      run:
-        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - arch: amd64
+          platform: linux/amd64
+          valgrind: 1
+          uninitialized_fields: "ON"
+        - arch: arm64
+          platform: linux/arm64
+          valgrind: 0
+          uninitialized_fields: "OFF"
+        - arch: riscv64
+          platform: linux/riscv64
+          valgrind: 0
+          uninitialized_fields: "OFF"
+        - arch: loong64
+          platform: linux/loong64
+          valgrind: 0
+          uninitialized_fields: "OFF"
 
     env:
-      IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
-      LOCAL_IMAGE_REPO: rex-local
-      REX_RUNTIME_TAG: latest
-      REX_DEV_TAG: dev
-      REX_IMAGE_BUILD_JOBS: 4
-      TARGET_ARCH: amd64
-      TARGET_PLATFORM: linux/amd64
+      TARGET_ARCH: ${{ matrix.arch }}
+      TARGET_PLATFORM: ${{ matrix.platform }}
 
     steps:
     - uses: actions/checkout@v7
       with:
-        submodules: 'recursive'
+        submodules: recursive
         persist-credentials: false
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v4
-
-    - name: Log in to GHCR
-      if: ${{ !env.ACT }}
-      uses: docker/login-action@v4
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Build and push REX runtime image (${{ env.TARGET_ARCH }})
-      if: ${{ !env.ACT }}
-      id: build-runtime
-      uses: docker/build-push-action@v7
-      with:
-        context: .
-        file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ env.TARGET_PLATFORM }}
-        target: runtime
-        pull: true
-        provenance: false
-        labels: org.opencontainers.image.revision=${{ github.sha }}
-        build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
-          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
-          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
-        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
-
-    - name: Build REX runtime image locally (${{ env.TARGET_ARCH }})
-      if: ${{ env.ACT }}
-      uses: docker/build-push-action@v7
-      with:
-        builder: default
-        context: .
-        file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ env.TARGET_PLATFORM }}
-        target: runtime
-        pull: false
-        provenance: false
-        labels: org.opencontainers.image.revision=${{ github.sha }}
-        build-args: |
-          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
-          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
-          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
-        load: true
-        tags: ${{ env.LOCAL_IMAGE_REPO }}:runtime-${{ env.TARGET_ARCH }}-local
-
-    - name: Build and push REX dev image (${{ env.TARGET_ARCH }})
-      if: ${{ !env.ACT }}
-      id: build-dev
-      uses: docker/build-push-action@v7
-      with:
-        context: .
-        file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ env.TARGET_PLATFORM }}
-        target: test
-        pull: true
-        provenance: false
-        labels: org.opencontainers.image.revision=${{ github.sha }}
-        build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
-          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
-          REX_ENABLE_VALGRIND=1
-          REX_ENABLE_X86_SIMD_TESTS=ON
-        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
-
-    - name: Build REX dev image locally (${{ env.TARGET_ARCH }})
-      if: ${{ env.ACT }}
-      uses: docker/build-push-action@v7
-      with:
-        builder: default
-        context: .
-        file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ env.TARGET_PLATFORM }}
-        target: test
-        pull: false
-        provenance: false
-        labels: org.opencontainers.image.revision=${{ github.sha }}
-        build-args: |
-          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
-          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
-          REX_ENABLE_VALGRIND=1
-          REX_ENABLE_X86_SIMD_TESTS=ON
-        load: true
-        tags: ${{ env.LOCAL_IMAGE_REPO }}:dev-${{ env.TARGET_ARCH }}-local
-
-    - name: Verify local REX dev image (${{ env.TARGET_ARCH }})
-      if: ${{ env.ACT }}
-      run: |
-        set -euo pipefail
-        docker run --rm --platform="${TARGET_PLATFORM}" \
-          "${LOCAL_IMAGE_REPO}:dev-${TARGET_ARCH}-local" \
-          bash -lc '
-            set -euo pipefail
-            cd /opt/rex/src
-            CTEST_JOBS="$(nproc)"
-            ctest --test-dir build \
-              --no-tests=error \
-              -R "rex|astInterface|OMPLOWERING_RODINIA_" \
-              --output-on-failure \
-              -j"${CTEST_JOBS}"
-          '
-
-  build-arm64:
-    runs-on: ubuntu-26.04
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      runtime_digest: ${{ steps.build-runtime.outputs.digest }}
-      dev_digest: ${{ steps.build-dev.outputs.digest }}
-
-    defaults:
-      run:
-        shell: bash
-
-    env:
-      IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
-      LOCAL_IMAGE_REPO: rex-local
-      REX_RUNTIME_TAG: latest
-      REX_DEV_TAG: dev
-      REX_IMAGE_BUILD_JOBS: 4
-      TARGET_ARCH: arm64
-      TARGET_PLATFORM: linux/arm64
-
-    steps:
-    - uses: actions/checkout@v7
-      with:
-        submodules: 'recursive'
-        persist-credentials: false
-
-    - name: Set up QEMU (${{ env.TARGET_ARCH }})
+    - name: Set up QEMU
+      if: ${{ matrix.arch != 'amd64' }}
       uses: docker/setup-qemu-action@v4
       with:
-        platforms: ${{ env.TARGET_ARCH }}
+        platforms: ${{ matrix.arch }}
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v4
@@ -187,14 +70,14 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Build and push REX runtime image (${{ env.TARGET_ARCH }})
+    - name: Build and push runtime image
       if: ${{ !env.ACT }}
-      id: build-runtime
+      id: runtime
       uses: docker/build-push-action@v7
       with:
         context: .
         file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ env.TARGET_PLATFORM }}
+        platforms: ${{ matrix.platform }}
         target: runtime
         pull: true
         provenance: false
@@ -205,33 +88,33 @@ jobs:
           REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
-    - name: Build REX runtime image locally (${{ env.TARGET_ARCH }})
+    - name: Build runtime image locally
       if: ${{ env.ACT }}
       uses: docker/build-push-action@v7
       with:
         builder: default
         context: .
         file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ env.TARGET_PLATFORM }}
+        platforms: ${{ matrix.platform }}
         target: runtime
         pull: false
         provenance: false
         labels: org.opencontainers.image.revision=${{ github.sha }}
         build-args: |
-          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
+          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ matrix.arch }}-local
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
           REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
         load: true
-        tags: ${{ env.LOCAL_IMAGE_REPO }}:runtime-${{ env.TARGET_ARCH }}-local
+        tags: ${{ env.LOCAL_IMAGE_REPO }}:runtime-${{ matrix.arch }}-local
 
-    - name: Build and push REX dev image (${{ env.TARGET_ARCH }})
+    - name: Build and push development image
       if: ${{ !env.ACT }}
-      id: build-dev
+      id: dev
       uses: docker/build-push-action@v7
       with:
         context: .
         file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ env.TARGET_PLATFORM }}
+        platforms: ${{ matrix.platform }}
         target: test
         pull: true
         provenance: false
@@ -239,342 +122,75 @@ jobs:
         build-args: |
           BASE_IMAGE=${{ env.IMAGE_REPO }}:base
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
-          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
+          REX_ENABLE_VALGRIND=${{ matrix.valgrind }}
+          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=${{ matrix.uninitialized_fields }}
           REX_ENABLE_X86_SIMD_TESTS=ON
         outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
-    - name: Build REX dev image locally (${{ env.TARGET_ARCH }})
+    - name: Build development image locally
       if: ${{ env.ACT }}
       uses: docker/build-push-action@v7
       with:
         builder: default
         context: .
         file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ env.TARGET_PLATFORM }}
+        platforms: ${{ matrix.platform }}
         target: test
         pull: false
         provenance: false
         labels: org.opencontainers.image.revision=${{ github.sha }}
         build-args: |
-          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
+          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ matrix.arch }}-local
           REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
-          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
+          REX_ENABLE_VALGRIND=${{ matrix.valgrind }}
+          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=${{ matrix.uninitialized_fields }}
           REX_ENABLE_X86_SIMD_TESTS=ON
         load: true
-        tags: ${{ env.LOCAL_IMAGE_REPO }}:dev-${{ env.TARGET_ARCH }}-local
+        tags: ${{ env.LOCAL_IMAGE_REPO }}:dev-${{ matrix.arch }}-local
 
-    - name: Verify local REX dev image (${{ env.TARGET_ARCH }})
-      if: ${{ env.ACT }}
+    - name: Save image digests
+      if: ${{ !env.ACT }}
+      env:
+        RUNTIME_DIGEST: ${{ steps.runtime.outputs.digest }}
+        DEV_DIGEST: ${{ steps.dev.outputs.digest }}
       run: |
         set -euo pipefail
-        docker run --rm --platform="${TARGET_PLATFORM}" \
-          "${LOCAL_IMAGE_REPO}:dev-${TARGET_ARCH}-local" \
-          bash -lc '
-            set -euo pipefail
-            cd /opt/rex/src
-            CTEST_JOBS="$(nproc)"
-            ctest --test-dir build \
-              --no-tests=error \
-              -R "rex|astInterface|OMPLOWERING_RODINIA_" \
-              --output-on-failure \
-              -j"${CTEST_JOBS}"
-          '
+        mkdir -p /tmp/rex-digests/runtime /tmp/rex-digests/dev
+        touch "/tmp/rex-digests/runtime/${RUNTIME_DIGEST#sha256:}"
+        touch "/tmp/rex-digests/dev/${DEV_DIGEST#sha256:}"
 
-  build-riscv64:
+    - name: Upload image digests
+      if: ${{ !env.ACT }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: image-digests-${{ matrix.arch }}
+        path: /tmp/rex-digests
+        if-no-files-found: error
+        retention-days: 1
+
+  publish:
+    name: Publish multi-architecture manifests
+    needs: build
     runs-on: ubuntu-26.04
     permissions:
+      actions: read
       contents: read
       packages: write
-    outputs:
-      runtime_digest: ${{ steps.build-runtime.outputs.digest }}
-      dev_digest: ${{ steps.build-dev.outputs.digest }}
-
-    defaults:
-      run:
-        shell: bash
-
-    env:
-      IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
-      LOCAL_IMAGE_REPO: rex-local
-      REX_RUNTIME_TAG: latest
-      REX_DEV_TAG: dev
-      REX_IMAGE_BUILD_JOBS: 4
-      TARGET_ARCH: riscv64
-      TARGET_PLATFORM: linux/riscv64
 
     steps:
     - uses: actions/checkout@v7
+      if: ${{ !env.ACT }}
       with:
-        submodules: 'recursive'
         persist-credentials: false
 
-    - name: Set up QEMU (${{ env.TARGET_ARCH }})
-      uses: docker/setup-qemu-action@v4
-      with:
-        platforms: ${{ env.TARGET_ARCH }}
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v4
-
-    - name: Log in to GHCR
+    - name: Download image digests
       if: ${{ !env.ACT }}
-      uses: docker/login-action@v4
+      uses: actions/download-artifact@v8
       with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        pattern: image-digests-*
+        path: /tmp/rex-digests
+        merge-multiple: true
 
-    - name: Build and push REX runtime image (${{ env.TARGET_ARCH }})
-      if: ${{ !env.ACT }}
-      id: build-runtime
-      uses: docker/build-push-action@v7
-      with:
-        context: .
-        file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ env.TARGET_PLATFORM }}
-        target: runtime
-        pull: true
-        provenance: false
-        labels: org.opencontainers.image.revision=${{ github.sha }}
-        build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
-          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
-          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
-        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
-
-    - name: Build REX runtime image locally (${{ env.TARGET_ARCH }})
-      if: ${{ env.ACT }}
-      uses: docker/build-push-action@v7
-      with:
-        builder: default
-        context: .
-        file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ env.TARGET_PLATFORM }}
-        target: runtime
-        pull: false
-        provenance: false
-        labels: org.opencontainers.image.revision=${{ github.sha }}
-        build-args: |
-          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
-          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
-          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
-        load: true
-        tags: ${{ env.LOCAL_IMAGE_REPO }}:runtime-${{ env.TARGET_ARCH }}-local
-
-    - name: Build and push REX dev image (${{ env.TARGET_ARCH }})
-      if: ${{ !env.ACT }}
-      id: build-dev
-      uses: docker/build-push-action@v7
-      with:
-        context: .
-        file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ env.TARGET_PLATFORM }}
-        target: test
-        pull: true
-        provenance: false
-        labels: org.opencontainers.image.revision=${{ github.sha }}
-        build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
-          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
-          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
-          REX_ENABLE_X86_SIMD_TESTS=ON
-        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
-
-    - name: Build REX dev image locally (${{ env.TARGET_ARCH }})
-      if: ${{ env.ACT }}
-      uses: docker/build-push-action@v7
-      with:
-        builder: default
-        context: .
-        file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ env.TARGET_PLATFORM }}
-        target: test
-        pull: false
-        provenance: false
-        labels: org.opencontainers.image.revision=${{ github.sha }}
-        build-args: |
-          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
-          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
-          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
-          REX_ENABLE_X86_SIMD_TESTS=ON
-        load: true
-        tags: ${{ env.LOCAL_IMAGE_REPO }}:dev-${{ env.TARGET_ARCH }}-local
-
-    - name: Verify local REX dev image (${{ env.TARGET_ARCH }})
-      if: ${{ env.ACT }}
-      run: |
-        set -euo pipefail
-        docker run --rm --platform="${TARGET_PLATFORM}" \
-          "${LOCAL_IMAGE_REPO}:dev-${TARGET_ARCH}-local" \
-          bash -lc '
-            set -euo pipefail
-            cd /opt/rex/src
-            CTEST_JOBS="$(nproc)"
-            ctest --test-dir build \
-              --no-tests=error \
-              -R "rex|astInterface|OMPLOWERING_RODINIA_" \
-              --output-on-failure \
-              -j"${CTEST_JOBS}"
-          '
-
-  build-loong64:
-    runs-on: ubuntu-26.04
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      runtime_digest: ${{ steps.build-runtime.outputs.digest }}
-      dev_digest: ${{ steps.build-dev.outputs.digest }}
-
-    defaults:
-      run:
-        shell: bash
-
-    env:
-      IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
-      LOCAL_IMAGE_REPO: rex-local
-      REX_RUNTIME_TAG: latest
-      REX_DEV_TAG: dev
-      REX_IMAGE_BUILD_JOBS: 4
-      TARGET_ARCH: loong64
-      TARGET_PLATFORM: linux/loong64
-
-    steps:
-    - uses: actions/checkout@v7
-      with:
-        submodules: 'recursive'
-        persist-credentials: false
-
-    - name: Set up QEMU (${{ env.TARGET_ARCH }})
-      uses: docker/setup-qemu-action@v4
-      with:
-        platforms: ${{ env.TARGET_ARCH }}
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v4
-
-    - name: Log in to GHCR
-      if: ${{ !env.ACT }}
-      uses: docker/login-action@v4
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Build and push REX runtime image (${{ env.TARGET_ARCH }})
-      if: ${{ !env.ACT }}
-      id: build-runtime
-      uses: docker/build-push-action@v7
-      with:
-        context: .
-        file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ env.TARGET_PLATFORM }}
-        target: runtime
-        pull: true
-        provenance: false
-        labels: org.opencontainers.image.revision=${{ github.sha }}
-        build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
-          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
-          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
-        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
-
-    - name: Build REX runtime image locally (${{ env.TARGET_ARCH }})
-      if: ${{ env.ACT }}
-      uses: docker/build-push-action@v7
-      with:
-        builder: default
-        context: .
-        file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ env.TARGET_PLATFORM }}
-        target: runtime
-        pull: false
-        provenance: false
-        labels: org.opencontainers.image.revision=${{ github.sha }}
-        build-args: |
-          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
-          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
-          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
-        load: true
-        tags: ${{ env.LOCAL_IMAGE_REPO }}:runtime-${{ env.TARGET_ARCH }}-local
-
-    - name: Build and push REX dev image (${{ env.TARGET_ARCH }})
-      if: ${{ !env.ACT }}
-      id: build-dev
-      uses: docker/build-push-action@v7
-      with:
-        context: .
-        file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ env.TARGET_PLATFORM }}
-        target: test
-        pull: true
-        provenance: false
-        labels: org.opencontainers.image.revision=${{ github.sha }}
-        build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
-          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
-          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
-          REX_ENABLE_X86_SIMD_TESTS=ON
-        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
-
-    - name: Build REX dev image locally (${{ env.TARGET_ARCH }})
-      if: ${{ env.ACT }}
-      uses: docker/build-push-action@v7
-      with:
-        builder: default
-        context: .
-        file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ env.TARGET_PLATFORM }}
-        target: test
-        pull: false
-        provenance: false
-        labels: org.opencontainers.image.revision=${{ github.sha }}
-        build-args: |
-          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ env.TARGET_ARCH }}-local
-          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
-          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
-          REX_ENABLE_X86_SIMD_TESTS=ON
-        load: true
-        tags: ${{ env.LOCAL_IMAGE_REPO }}:dev-${{ env.TARGET_ARCH }}-local
-
-    - name: Verify local REX dev image (${{ env.TARGET_ARCH }})
-      if: ${{ env.ACT }}
-      run: |
-        set -euo pipefail
-        docker run --rm --platform="${TARGET_PLATFORM}" \
-          "${LOCAL_IMAGE_REPO}:dev-${TARGET_ARCH}-local" \
-          bash -lc '
-            set -euo pipefail
-            cd /opt/rex/src
-            CTEST_JOBS="$(nproc)"
-            ctest --test-dir build \
-              --no-tests=error \
-              -R "rex|astInterface|OMPLOWERING_RODINIA_" \
-              --output-on-failure \
-              -j"${CTEST_JOBS}"
-          '
-
-  publish-manifests:
-    runs-on: ubuntu-26.04
-    needs:
-    - build-amd64
-    - build-arm64
-    - build-riscv64
-    - build-loong64
-    permissions:
-      contents: read
-      packages: write
-
-    defaults:
-      run:
-        shell: bash
-
-    env:
-      IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
-      REX_RUNTIME_TAG: latest
-      REX_DEV_TAG: dev
-
-    steps:
     - name: Set up Docker Buildx
       if: ${{ !env.ACT }}
       uses: docker/setup-buildx-action@v4
@@ -587,28 +203,6 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Publish multi-arch runtime manifest (latest tag)
+    - name: Publish manifests
       if: ${{ !env.ACT }}
-      run: |
-        set -euo pipefail
-        docker buildx imagetools create \
-          -t "${IMAGE_REPO}:${REX_RUNTIME_TAG}" \
-          -t "${IMAGE_REPO}:${REX_RUNTIME_TAG}-${GITHUB_SHA}" \
-          "${IMAGE_REPO}@${{ needs.build-amd64.outputs.runtime_digest }}" \
-          "${IMAGE_REPO}@${{ needs.build-arm64.outputs.runtime_digest }}" \
-          "${IMAGE_REPO}@${{ needs.build-riscv64.outputs.runtime_digest }}" \
-          "${IMAGE_REPO}@${{ needs.build-loong64.outputs.runtime_digest }}"
-        docker buildx imagetools inspect "${IMAGE_REPO}:${REX_RUNTIME_TAG}"
-
-    - name: Publish multi-arch dev manifest (dev tag)
-      if: ${{ !env.ACT }}
-      run: |
-        set -euo pipefail
-        docker buildx imagetools create \
-          -t "${IMAGE_REPO}:${REX_DEV_TAG}" \
-          -t "${IMAGE_REPO}:${REX_DEV_TAG}-${GITHUB_SHA}" \
-          "${IMAGE_REPO}@${{ needs.build-amd64.outputs.dev_digest }}" \
-          "${IMAGE_REPO}@${{ needs.build-arm64.outputs.dev_digest }}" \
-          "${IMAGE_REPO}@${{ needs.build-riscv64.outputs.dev_digest }}" \
-          "${IMAGE_REPO}@${{ needs.build-loong64.outputs.dev_digest }}"
-        docker buildx imagetools inspect "${IMAGE_REPO}:${REX_DEV_TAG}"
+      run: scripts/ci-publish-nightly-images "${IMAGE_REPO}" "${GITHUB_SHA}" /tmp/rex-digests

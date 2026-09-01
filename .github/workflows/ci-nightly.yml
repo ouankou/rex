@@ -1,0 +1,79 @@
+name: Nightly CI
+
+on:
+  workflow_run:
+    workflows:
+    - Nightly REX Images
+    types:
+    - completed
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Immutable nightly image source SHA (latest successful run if omitted)
+        required: false
+        type: string
+
+concurrency:
+  group: nightly-ci-${{ github.event.workflow_run.id || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Test ${{ matrix.arch }} image
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-26.04
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - arch: amd64
+          platform: linux/amd64
+          suite: full
+        - arch: arm64
+          platform: linux/arm64
+          suite: cross
+        - arch: riscv64
+          platform: linux/riscv64
+          suite: cross
+        - arch: loong64
+          platform: linux/loong64
+          suite: cross
+
+    env:
+      IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
+      LOCAL_IMAGE_REPO: rex-local
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha || inputs.source_sha }}
+
+    steps:
+    - name: Check out published source revision
+      if: ${{ !env.ACT }}
+      uses: actions/checkout@v7
+      with:
+        ref: ${{ github.event.workflow_run.head_sha || inputs.source_sha || github.sha }}
+        persist-credentials: false
+
+    - name: Check out local source for act
+      if: ${{ env.ACT }}
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: Set up QEMU
+      if: ${{ matrix.arch != 'amd64' }}
+      uses: docker/setup-qemu-action@v4
+      with:
+        platforms: ${{ matrix.arch }}
+
+    - name: Test published development image
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        scripts/ci-test-nightly-image \
+          "${{ matrix.arch }}" \
+          "${{ matrix.platform }}" \
+          "${{ matrix.suite }}" \
+          "${SOURCE_SHA}"

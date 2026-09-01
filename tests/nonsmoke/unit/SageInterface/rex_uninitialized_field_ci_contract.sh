@@ -96,7 +96,7 @@ if [ "$(grep -Fc 'REX_ENABLE_UNINITIALIZED_FIELD_TESTS' "$build_rex")" -ne 4 ] |
   exit 1
 fi
 
-if [ "$(grep -Fxc 'ARG REX_ENABLE_UNINITIALIZED_FIELD_TESTS' \
+if [ "$(grep -Fxc 'ARG REX_ENABLE_UNINITIALIZED_FIELD_TESTS=' \
      "$nightly_dockerfile")" -ne 1 ] ||
    [ "$(grep -Fxc '      ""|OFF|ON) ;; \' \
      "$nightly_dockerfile")" -ne 1 ] ||
@@ -123,18 +123,23 @@ for workflow in "$image_workflow" "$ci_workflow" "$memory_workflow"; do
   fi
 done
 
-amd64_job=$(sed -n '/^  build-amd64:/,/^  build-arm64:/p' "$image_workflow")
-emulated_jobs=$(sed -n '/^  build-arm64:/,/^  publish-manifests:/p' \
-  "$image_workflow")
+build_matrix=$(sed -n '/^      matrix:$/,/^    env:$/p' "$image_workflow")
 if [ "$(grep -Fc 'REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF' \
-     <<<"$amd64_job")" -ne 2 ] ||
-   [ "$(grep -Fc 'REX_ENABLE_VALGRIND=1' <<<"$amd64_job")" -ne 2 ]; then
-  echo "amd64 runtime images must opt out, while both amd64 dev images retain Valgrind coverage" >&2
+     "$image_workflow")" -ne 2 ] ||
+   [ "$(grep -Fc 'REX_ENABLE_UNINITIALIZED_FIELD_TESTS=${{ matrix.uninitialized_fields }}' \
+     "$image_workflow")" -ne 2 ]; then
+  echo "runtime and development image templates lack distinct uninitialized-field contracts" >&2
   exit 1
 fi
-if [ "$(grep -Fc 'REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF' \
-     <<<"$emulated_jobs")" -ne 12 ]; then
-  echo "each Valgrind-unavailable emulated runtime and dev image must explicitly opt out" >&2
+if [ "$(grep -Fxc '          uninitialized_fields: "ON"' \
+     <<<"$build_matrix")" -ne 1 ] ||
+   [ "$(grep -Fxc '          uninitialized_fields: "OFF"' \
+     <<<"$build_matrix")" -ne 3 ] ||
+   [ "$(grep -Fxc '          valgrind: 1' <<<"$build_matrix")" -ne 1 ] ||
+   [ "$(grep -Fxc '          valgrind: 0' <<<"$build_matrix")" -ne 3 ] ||
+   [ "$(grep -Fc 'REX_ENABLE_VALGRIND=${{ matrix.valgrind }}' \
+     "$image_workflow")" -ne 2 ]; then
+  echo "amd64 development images must enable Valgrind coverage while emulated images opt out" >&2
   exit 1
 fi
 if grep -Fq 'REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF' "$ci_workflow" ||
