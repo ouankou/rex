@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if (( $# != 3 )); then
+    echo "Usage: $0 IMAGE_REPO SOURCE_SHA DIGEST_DIRECTORY" >&2
+    exit 2
+fi
+
+image_repo=$1
+source_sha=$2
+digest_directory=$3
+
+if [[ ! "$source_sha" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "Invalid source SHA: '$source_sha'" >&2
+    exit 2
+fi
+
+publish_manifest() {
+    local directory=$1
+    local tag=$2
+    local -a digests=()
+    local -a references=()
+
+    mapfile -t digests < <(find "$directory" -maxdepth 1 -type f -printf '%f\n' | sort)
+    if (( ${#digests[@]} != 4 )); then
+        echo "Expected four $tag image digests, found ${#digests[@]} in $directory" >&2
+        exit 1
+    fi
+
+    for digest in "${digests[@]}"; do
+        if [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Invalid $tag image digest: '$digest'" >&2
+            exit 1
+        fi
+        references+=("${image_repo}@sha256:${digest}")
+    done
+
+    docker buildx imagetools create \
+        -t "${image_repo}:${tag}" \
+        -t "${image_repo}:${tag}-${source_sha}" \
+        "${references[@]}"
+    docker buildx imagetools inspect "${image_repo}:${tag}-${source_sha}"
+}
+
+publish_manifest "${digest_directory}/runtime" latest
+publish_manifest "${digest_directory}/dev" dev

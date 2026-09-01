@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if (( $# != 4 )); then
+    echo "Usage: $0 ARCH PLATFORM SUITE SOURCE_SHA" >&2
+    exit 2
+fi
+
+target_arch=$1
+target_platform=$2
+test_suite=$3
+source_sha=$4
+
+case "$test_suite" in
+    full|cross) ;;
+    *)
+        echo "Unknown nightly test suite: '$test_suite'" >&2
+        exit 2
+        ;;
+esac
+
+if [[ -n "${ACT:-}" ]]; then
+    image_ref="${LOCAL_IMAGE_REPO:?}:dev-${target_arch}-local"
+    test_jobs=${ACT_CTEST_JOBS:-8}
+    source_root=$(git rev-parse --show-toplevel)
+    local_docker_args=(
+        --volume "${source_root}/tests/fragile:/opt/rex/src/tests/fragile:ro"
+    )
+else
+    if [[ -z "$source_sha" ]]; then
+        source_sha=$(gh api \
+            "repos/${GITHUB_REPOSITORY:?}/actions/workflows/nightly-rex-images.yml/runs?branch=main&status=success&per_page=1" \
+            --jq '.workflow_runs[0].head_sha')
+    fi
+    if [[ ! "$source_sha" =~ ^[0-9a-f]{40}$ ]]; then
+        echo "Nightly image run has no exact source revision: '$source_sha'" >&2
+        exit 1
+    fi
+
+    image_ref="${IMAGE_REPO:?}:dev-${source_sha}"
+    docker pull --platform="$target_platform" "$image_ref"
+    image_revision=$(docker image inspect "$image_ref" \
+        --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')
+    if [[ "$image_revision" != "$source_sha" ]]; then
+        echo "Nightly image revision '$image_revision' does not match immutable tag '$source_sha'" >&2
+        exit 1
+    fi
+    test_jobs=$(nproc)
+    local_docker_args=()
+fi
+
+if [[ ! "$test_jobs" =~ ^[1-9][0-9]*$ ]]; then
+    echo "Nightly test parallelism must be a positive integer: '$test_jobs'" >&2
+    exit 2
+fi
+
+echo "Testing $image_ref on $target_platform"
+docker_args=(
+    run --rm
+    --platform="$target_platform"
+    "${local_docker_args[@]}"
+    -e REX_NIGHTLY_TEST_SUITE="$test_suite"
+    -e REX_NIGHTLY_TEST_JOBS="$test_jobs"
+    "$image_ref"
+    bash -lc
+)
+
+docker "${docker_args[@]}" '
+    set -euo pipefail
+    cd /opt/rex/src
+    common_args=(
+        --test-dir build
+        --jobs "$REX_NIGHTLY_TEST_JOBS"
+    )
+    case "$REX_NIGHTLY_TEST_SUITE" in
+        full)
+            python3 scripts/run_ctest_name_set.py \
+                "${common_args[@]}" \
+                --manifest tests/fragile/unparser_hardening_full.txt \
+                --include-regex "rex|astInterface|OMPLOWERING_RODINIA_"
+            ;;
+        cross)
+            python3 scripts/run_ctest_name_set.py \
+                "${common_args[@]}" \
+                --manifest tests/fragile/rex_nightly_cross_architecture.txt \
+                --expected-absent-manifest tests/fragile/unparser_hardening_fast_non_x86_absent.txt
+            ;;
+    esac
+'
