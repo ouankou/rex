@@ -2,7 +2,6 @@ name: Weekly Base Images
 
 on:
   schedule:
-    # Every Wednesday at 00:00 UTC
     - cron: "0 0 * * 3"
   workflow_dispatch:
 
@@ -10,200 +9,86 @@ concurrency:
   group: weekly-base-images-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
+  LOCAL_IMAGE_REPO: rex-local
+
 jobs:
-  build-images:
-    runs-on: ubuntu-26.04
+  build:
+    name: Build ${{ matrix.arch }} base image
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-26.04-arm' || 'ubuntu-26.04' }}
     permissions:
       contents: read
       packages: write
-
-    defaults:
-      run:
-        shell: bash
-
-    env:
-      LLVM_VERSION: 22
-      IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
-      BASE_TAG: base
-      LOCAL_IMAGE_REPO: rex-local
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          - arm64
+          - riscv64
+          - loong64
 
     steps:
-    - uses: actions/checkout@v7
-      with:
-        persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-    - name: Set up QEMU (arm64, riscv64, loong64)
-      uses: docker/setup-qemu-action@v4
-      with:
-        platforms: arm64,riscv64,loong64
+      - name: Set up QEMU
+        if: ${{ matrix.arch == 'riscv64' || matrix.arch == 'loong64' }}
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: ${{ matrix.arch }}
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@v4
 
-    - name: Log in to GHCR
-      if: ${{ !env.ACT }}
-      uses: docker/login-action@v4
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to GHCR
+        if: ${{ !env.ACT }}
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Build and push base image (amd64)
-      if: ${{ !env.ACT }}
-      id: build-amd64
-      uses: docker/build-push-action@v7
-      with:
-        context: .
-        file: ci/docker/rex-amd64.Dockerfile
-        platforms: linux/amd64
-        build-args: |
-          LLVM_VERSION=${{ env.LLVM_VERSION }}
-        pull: true
-        provenance: false
-        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+      - name: Build base image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ci/docker/rex-base.Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          pull: true
+          push: ${{ !env.ACT }}
+          load: ${{ env.ACT != '' }}
+          provenance: false
+          tags: ${{ env.ACT && format('{0}:base-{1}-local', env.LOCAL_IMAGE_REPO, matrix.arch) || format('{0}:base-{1}-{2}', env.IMAGE_REPO, github.sha, matrix.arch) }}
+          build-args: BASE_IMAGE=${{ matrix.arch == 'loong64' && 'ghcr.io/loong64/debian:sid' || 'debian:sid' }}
 
-    - name: Build base image locally (amd64)
-      if: ${{ env.ACT }}
-      uses: docker/build-push-action@v7
-      with:
-        builder: default
-        context: .
-        file: ci/docker/rex-amd64.Dockerfile
-        platforms: linux/amd64
-        build-args: |
-          LLVM_VERSION=${{ env.LLVM_VERSION }}
-        pull: true
-        provenance: false
-        load: true
-        tags: ${{ env.LOCAL_IMAGE_REPO }}:base-amd64-local
+  publish:
+    name: Publish base manifest
+    needs: build
+    runs-on: ubuntu-26.04
+    permissions:
+      packages: write
 
-    - name: Build and push base image (arm64)
-      if: ${{ !env.ACT }}
-      id: build-arm64
-      uses: docker/build-push-action@v7
-      with:
-        context: .
-        file: ci/docker/rex-arm64.Dockerfile
-        platforms: linux/arm64
-        build-args: |
-          LLVM_VERSION=${{ env.LLVM_VERSION }}
-        pull: true
-        provenance: false
-        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+    steps:
+      - if: ${{ !env.ACT }}
+        uses: docker/setup-buildx-action@v4
 
-    - name: Build base image locally (arm64)
-      if: ${{ env.ACT }}
-      uses: docker/build-push-action@v7
-      with:
-        builder: default
-        context: .
-        file: ci/docker/rex-arm64.Dockerfile
-        platforms: linux/arm64
-        build-args: |
-          LLVM_VERSION=${{ env.LLVM_VERSION }}
-        pull: true
-        provenance: false
-        load: true
-        tags: ${{ env.LOCAL_IMAGE_REPO }}:base-arm64-local
+      - name: Log in to GHCR
+        if: ${{ !env.ACT }}
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Build and push base image (riscv64)
-      if: ${{ !env.ACT }}
-      id: build-riscv64
-      uses: docker/build-push-action@v7
-      with:
-        context: .
-        file: ci/docker/rex-riscv64.Dockerfile
-        platforms: linux/riscv64
-        build-args: |
-          LLVM_VERSION=${{ env.LLVM_VERSION }}
-        pull: true
-        provenance: false
-        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
-
-    - name: Build base image locally (riscv64)
-      if: ${{ env.ACT }}
-      uses: docker/build-push-action@v7
-      with:
-        builder: default
-        context: .
-        file: ci/docker/rex-riscv64.Dockerfile
-        platforms: linux/riscv64
-        build-args: |
-          LLVM_VERSION=${{ env.LLVM_VERSION }}
-        pull: true
-        provenance: false
-        load: true
-        tags: ${{ env.LOCAL_IMAGE_REPO }}:base-riscv64-local
-
-    - name: Build and push base image (loong64)
-      if: ${{ !env.ACT }}
-      id: build-loong64
-      uses: docker/build-push-action@v7
-      with:
-        context: .
-        file: ci/docker/rex-loongarch64.Dockerfile
-        platforms: linux/loong64
-        build-args: |
-          LLVM_VERSION=${{ env.LLVM_VERSION }}
-        pull: true
-        provenance: false
-        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
-
-    - name: Build base image locally (loong64)
-      if: ${{ env.ACT }}
-      uses: docker/build-push-action@v7
-      with:
-        builder: default
-        context: .
-        file: ci/docker/rex-loongarch64.Dockerfile
-        platforms: linux/loong64
-        build-args: |
-          LLVM_VERSION=${{ env.LLVM_VERSION }}
-        pull: true
-        provenance: false
-        load: true
-        tags: ${{ env.LOCAL_IMAGE_REPO }}:base-loong64-local
-
-    - name: Publish multi-arch manifest (base tag only)
-      if: ${{ !env.ACT }}
-      run: |
-        set -euo pipefail
-        docker buildx imagetools create \
-          -t "${IMAGE_REPO}:${BASE_TAG}" \
-          "${IMAGE_REPO}@${{ steps.build-amd64.outputs.digest }}" \
-          "${IMAGE_REPO}@${{ steps.build-arm64.outputs.digest }}" \
-          "${IMAGE_REPO}@${{ steps.build-riscv64.outputs.digest }}" \
-          "${IMAGE_REPO}@${{ steps.build-loong64.outputs.digest }}"
-        docker buildx imagetools inspect "${IMAGE_REPO}:${BASE_TAG}"
-
-    - name: Verify local base images
-      if: ${{ env.ACT }}
-      run: |
-        set -euo pipefail
-        declare -A platforms=(
-          [amd64]=linux/amd64
-          [arm64]=linux/arm64
-          [riscv64]=linux/riscv64
-          [loong64]=linux/loong64
-        )
-
-        for arch in amd64 arm64 riscv64 loong64; do
-          docker run --rm --platform="${platforms[$arch]}" \
-            -e LLVM_VERSION="${LLVM_VERSION}" \
-            "${LOCAL_IMAGE_REPO}:base-${arch}-local" \
-            bash -lc '
-              set -euo pipefail
-              javac -version
-              dpkg-query -W \
-                openjdk-25-jdk-headless \
-                antlr4 \
-                clang-${LLVM_VERSION} \
-                flang-${LLVM_VERSION} \
-                lld-${LLVM_VERSION} \
-                libclang-rt-${LLVM_VERSION}-dev \
-                mold \
-                gdb
-              printf "      end\n" >/tmp/rex_fortran_smoke.f
-              flang-${LLVM_VERSION} -fuse-ld=lld /tmp/rex_fortran_smoke.f -o /tmp/rex_fortran_smoke
-            '
-        done
+      - name: Publish manifest
+        if: ${{ !env.ACT }}
+        run: |
+          docker buildx imagetools create \
+            -t "${IMAGE_REPO}:base" \
+            -t "${IMAGE_REPO}:base-${GITHUB_SHA}" \
+            "${IMAGE_REPO}:base-${GITHUB_SHA}-amd64" \
+            "${IMAGE_REPO}:base-${GITHUB_SHA}-arm64" \
+            "${IMAGE_REPO}:base-${GITHUB_SHA}-riscv64" \
+            "${IMAGE_REPO}:base-${GITHUB_SHA}-loong64"

@@ -2,7 +2,6 @@ name: Nightly REX Images
 
 on:
   schedule:
-    # Every day at 08:00 UTC (01:00 PDT)
     - cron: "0 8 * * *"
   workflow_dispatch:
 
@@ -18,191 +17,110 @@ env:
 jobs:
   build:
     name: Build ${{ matrix.arch }} images
-    runs-on: ubuntu-26.04
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-26.04-arm' || 'ubuntu-26.04' }}
     permissions:
       contents: read
       packages: write
     strategy:
       fail-fast: false
       matrix:
-        include:
-        - arch: amd64
-          platform: linux/amd64
-          valgrind: 1
-          uninitialized_fields: "ON"
-        - arch: arm64
-          platform: linux/arm64
-          valgrind: 0
-          uninitialized_fields: "OFF"
-        - arch: riscv64
-          platform: linux/riscv64
-          valgrind: 0
-          uninitialized_fields: "OFF"
-        - arch: loong64
-          platform: linux/loong64
-          valgrind: 0
-          uninitialized_fields: "OFF"
-
-    env:
-      TARGET_ARCH: ${{ matrix.arch }}
-      TARGET_PLATFORM: ${{ matrix.platform }}
+        arch:
+          - amd64
+          - arm64
+          - riscv64
+          - loong64
 
     steps:
-    - uses: actions/checkout@v7
-      with:
-        submodules: recursive
-        persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          persist-credentials: false
 
-    - name: Set up QEMU
-      if: ${{ matrix.arch != 'amd64' }}
-      uses: docker/setup-qemu-action@v4
-      with:
-        platforms: ${{ matrix.arch }}
+      - name: Set up QEMU
+        if: ${{ matrix.arch == 'riscv64' || matrix.arch == 'loong64' }}
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: ${{ matrix.arch }}
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@v4
 
-    - name: Log in to GHCR
-      if: ${{ !env.ACT }}
-      uses: docker/login-action@v4
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to GHCR
+        if: ${{ !env.ACT }}
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Build and push runtime image
-      if: ${{ !env.ACT }}
-      id: runtime
-      uses: docker/build-push-action@v7
-      with:
-        context: .
-        file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ matrix.platform }}
-        target: runtime
-        pull: true
-        provenance: false
-        labels: org.opencontainers.image.revision=${{ github.sha }}
-        build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
-          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
-          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
-        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+      - name: Build development image
+        uses: docker/build-push-action@v7
+        with:
+          builder: ${{ env.ACT && 'default' || '' }}
+          context: .
+          file: ci/docker/rex-nightly.Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          target: test
+          pull: ${{ !env.ACT }}
+          push: ${{ !env.ACT }}
+          load: ${{ env.ACT != '' }}
+          provenance: false
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          tags: ${{ env.ACT && format('{0}:dev-{1}-local', env.LOCAL_IMAGE_REPO, matrix.arch) || format('{0}:dev-{1}-{2}', env.IMAGE_REPO, github.sha, matrix.arch) }}
+          build-args: |
+            BASE_IMAGE=${{ env.ACT && format('{0}:base-{1}-local', env.LOCAL_IMAGE_REPO, matrix.arch) || format('{0}:base', env.IMAGE_REPO) }}
+            REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
 
-    - name: Build runtime image locally
-      if: ${{ env.ACT }}
-      uses: docker/build-push-action@v7
-      with:
-        builder: default
-        context: .
-        file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ matrix.platform }}
-        target: runtime
-        pull: false
-        provenance: false
-        labels: org.opencontainers.image.revision=${{ github.sha }}
-        build-args: |
-          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ matrix.arch }}-local
-          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
-          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=OFF
-        load: true
-        tags: ${{ env.LOCAL_IMAGE_REPO }}:runtime-${{ matrix.arch }}-local
-
-    - name: Build and push development image
-      if: ${{ !env.ACT }}
-      id: dev
-      uses: docker/build-push-action@v7
-      with:
-        context: .
-        file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ matrix.platform }}
-        target: test
-        pull: true
-        provenance: false
-        labels: org.opencontainers.image.revision=${{ github.sha }}
-        build-args: |
-          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
-          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
-          REX_ENABLE_VALGRIND=${{ matrix.valgrind }}
-          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=${{ matrix.uninitialized_fields }}
-          REX_ENABLE_X86_SIMD_TESTS=ON
-        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
-
-    - name: Build development image locally
-      if: ${{ env.ACT }}
-      uses: docker/build-push-action@v7
-      with:
-        builder: default
-        context: .
-        file: ci/docker/rex-nightly.Dockerfile
-        platforms: ${{ matrix.platform }}
-        target: test
-        pull: false
-        provenance: false
-        labels: org.opencontainers.image.revision=${{ github.sha }}
-        build-args: |
-          BASE_IMAGE=${{ env.LOCAL_IMAGE_REPO }}:base-${{ matrix.arch }}-local
-          REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
-          REX_ENABLE_VALGRIND=${{ matrix.valgrind }}
-          REX_ENABLE_UNINITIALIZED_FIELD_TESTS=${{ matrix.uninitialized_fields }}
-          REX_ENABLE_X86_SIMD_TESTS=ON
-        load: true
-        tags: ${{ env.LOCAL_IMAGE_REPO }}:dev-${{ matrix.arch }}-local
-
-    - name: Save image digests
-      if: ${{ !env.ACT }}
-      env:
-        RUNTIME_DIGEST: ${{ steps.runtime.outputs.digest }}
-        DEV_DIGEST: ${{ steps.dev.outputs.digest }}
-      run: |
-        set -euo pipefail
-        mkdir -p /tmp/rex-digests/runtime /tmp/rex-digests/dev
-        touch "/tmp/rex-digests/runtime/${RUNTIME_DIGEST#sha256:}"
-        touch "/tmp/rex-digests/dev/${DEV_DIGEST#sha256:}"
-
-    - name: Upload image digests
-      if: ${{ !env.ACT }}
-      uses: actions/upload-artifact@v7
-      with:
-        name: image-digests-${{ matrix.arch }}
-        path: /tmp/rex-digests
-        if-no-files-found: error
-        retention-days: 1
+      - name: Build runtime image
+        uses: docker/build-push-action@v7
+        with:
+          builder: ${{ env.ACT && 'default' || '' }}
+          context: .
+          file: ci/docker/rex-nightly.Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          target: runtime
+          pull: ${{ !env.ACT }}
+          push: ${{ !env.ACT }}
+          load: ${{ env.ACT != '' }}
+          provenance: false
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          tags: ${{ env.ACT && format('{0}:runtime-{1}-local', env.LOCAL_IMAGE_REPO, matrix.arch) || format('{0}:runtime-{1}-{2}', env.IMAGE_REPO, github.sha, matrix.arch) }}
+          build-args: |
+            BASE_IMAGE=${{ env.ACT && format('{0}:base-{1}-local', env.LOCAL_IMAGE_REPO, matrix.arch) || format('{0}:base', env.IMAGE_REPO) }}
+            REX_BUILD_NUM_JOBS=${{ env.REX_IMAGE_BUILD_JOBS }}
 
   publish:
     name: Publish multi-architecture manifests
     needs: build
     runs-on: ubuntu-26.04
     permissions:
-      actions: read
-      contents: read
       packages: write
 
     steps:
-    - uses: actions/checkout@v7
-      if: ${{ !env.ACT }}
-      with:
-        persist-credentials: false
+      - if: ${{ !env.ACT }}
+        uses: docker/setup-buildx-action@v4
 
-    - name: Download image digests
-      if: ${{ !env.ACT }}
-      uses: actions/download-artifact@v8
-      with:
-        pattern: image-digests-*
-        path: /tmp/rex-digests
-        merge-multiple: true
+      - name: Log in to GHCR
+        if: ${{ !env.ACT }}
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Set up Docker Buildx
-      if: ${{ !env.ACT }}
-      uses: docker/setup-buildx-action@v4
-
-    - name: Log in to GHCR
-      if: ${{ !env.ACT }}
-      uses: docker/login-action@v4
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Publish manifests
-      if: ${{ !env.ACT }}
-      run: scripts/ci-publish-nightly-images "${IMAGE_REPO}" "${GITHUB_SHA}" /tmp/rex-digests
+      - name: Publish manifests
+        if: ${{ !env.ACT }}
+        run: |
+          docker buildx imagetools create \
+            -t "${IMAGE_REPO}:latest" \
+            -t "${IMAGE_REPO}:latest-${GITHUB_SHA}" \
+            "${IMAGE_REPO}:runtime-${GITHUB_SHA}-amd64" \
+            "${IMAGE_REPO}:runtime-${GITHUB_SHA}-arm64" \
+            "${IMAGE_REPO}:runtime-${GITHUB_SHA}-riscv64" \
+            "${IMAGE_REPO}:runtime-${GITHUB_SHA}-loong64"
+          docker buildx imagetools create \
+            -t "${IMAGE_REPO}:dev" \
+            -t "${IMAGE_REPO}:dev-${GITHUB_SHA}" \
+            "${IMAGE_REPO}:dev-${GITHUB_SHA}-amd64" \
+            "${IMAGE_REPO}:dev-${GITHUB_SHA}-arm64" \
+            "${IMAGE_REPO}:dev-${GITHUB_SHA}-riscv64" \
+            "${IMAGE_REPO}:dev-${GITHUB_SHA}-loong64"

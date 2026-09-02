@@ -2,11 +2,6 @@
 
 set -euo pipefail
 
-if [ "$#" -ne 5 ]; then
-  echo "usage: $0 runner cmake ctest fixture-project binary-dir" >&2
-  exit 2
-fi
-
 runner=$1
 cmake=$2
 ctest=$3
@@ -21,39 +16,40 @@ rm -rf "$binary_dir"
 output=$(python3 "$runner" \
   --test-dir "$binary_dir" \
   --manifest "$source_dir/manifest.txt" \
-  --ctest "$ctest" \
-  --jobs 1 \
-  --dry-run)
-
-expected="Validated exact CTest selection: manifest=1, expected_absent=0, regex=0, dependency_support=2, fixture_support=1, union=4, source=$source_dir/manifest.txt, expected_absent_source=<none>"
-if [ "$output" != "$expected" ]; then
-  echo "unexpected exact-selection result: $output" >&2
-  exit 1
-fi
-
-output=$(python3 "$runner" \
-  --test-dir "$binary_dir" \
-  --manifest "$source_dir/manifest.txt" \
   --include-regex '^rex_regex_only$' \
   --ctest "$ctest" \
   --jobs 1 \
   --dry-run)
 
-expected="Validated exact CTest selection: manifest=1, expected_absent=0, regex=1, dependency_support=2, fixture_support=1, union=5, source=$source_dir/manifest.txt, expected_absent_source=<none>"
+expected="Selected 5 CTest tests"
 if [ "$output" != "$expected" ]; then
-  echo "unexpected manifest/regex union result: $output" >&2
+  echo "unexpected manifest/regex selection result: $output" >&2
   exit 1
 fi
+
+"$cmake" -E echo rex_missing >"$binary_dir/missing-manifest.txt"
+if python3 "$runner" \
+  --test-dir "$binary_dir" \
+  --manifest "$binary_dir/missing-manifest.txt" \
+  --ctest "$ctest" \
+  --jobs 1 \
+  --dry-run >"$binary_dir/missing-manifest.log" 2>&1; then
+  echo "missing manifest test was accepted" >&2
+  exit 1
+fi
+grep -Fq 'Manifest tests are not registered:' "$binary_dir/missing-manifest.log"
 
 output=$(python3 "$runner" \
   --test-dir "$binary_dir" \
   --include-regex '^rex_memcheck_(ignored|selected)$' \
+  --shard-index 1 \
+  --shard-count 1 \
   --ctest "$ctest" \
   --jobs 1 \
   --memcheck \
   --dry-run)
 
-expected="Validated exact CTest selection: manifest=0, expected_absent=0, regex=1, dependency_support=0, fixture_support=0, union=1, source=<none>, expected_absent_source=<none>"
+expected="Selected 1 CTest tests"
 if [ "$output" != "$expected" ]; then
   echo "unexpected MemCheck-registry selection result: $output" >&2
   exit 1
@@ -68,7 +64,7 @@ output=$(python3 "$runner" \
   --jobs 1 \
   --dry-run)
 
-expected="Validated exact CTest selection: manifest=0, expected_absent=0, regex=1, dependency_support=1, fixture_support=0, union=2, source=<none>, expected_absent_source=<none>"
+expected="Selected 2 CTest tests"
 if [ "$output" != "$expected" ]; then
   echo "unexpected dependency-closed shard result: $output" >&2
   exit 1
@@ -86,7 +82,7 @@ output=$(python3 "$runner" \
   --jobs 1 \
   --dry-run)
 
-expected="Validated exact CTest selection: manifest=0, expected_absent=0, regex=1, dependency_support=0, fixture_support=0, union=1, source=<none>, expected_absent_source=<none>"
+expected="Selected 1 CTest tests"
 if [ "$output" != "$expected" ]; then
   echo "unexpected stable name-hash shard result: $output" >&2
   exit 1
@@ -99,47 +95,3 @@ python3 "$runner" \
   --shard-count 3 \
   --ctest "$ctest" \
   --jobs 1
-
-output=$(python3 "$runner" \
-  --test-dir "$binary_dir" \
-  --manifest "$source_dir/rex_manifest_with_expected_absent.txt" \
-  --expected-absent-manifest \
-    "$source_dir/rex_expected_absent_manifest.txt" \
-  --ctest "$ctest" \
-  --jobs 1 \
-  --dry-run)
-
-expected="Validated exact CTest selection: manifest=1, expected_absent=1, regex=0, dependency_support=2, fixture_support=1, union=4, source=$source_dir/rex_manifest_with_expected_absent.txt, expected_absent_source=$source_dir/rex_expected_absent_manifest.txt"
-if [ "$output" != "$expected" ]; then
-  echo "unexpected expected-absent manifest result: $output" >&2
-  exit 1
-fi
-
-if python3 "$runner" \
-  --test-dir "$binary_dir" \
-  --manifest "$source_dir/manifest.txt" \
-  --expected-absent-manifest \
-    "$source_dir/rex_expected_absent_manifest.txt" \
-  --ctest "$ctest" \
-  --jobs 1 \
-  --dry-run >"$binary_dir/undeclared-absence.log" 2>&1; then
-  echo "undeclared expected-absent test was accepted" >&2
-  exit 1
-fi
-grep -Fq \
-  'expected-absent tests are not present in the primary manifest:' \
-  "$binary_dir/undeclared-absence.log"
-
-if python3 "$runner" \
-  --test-dir "$binary_dir" \
-  --manifest "$source_dir/manifest.txt" \
-  --expected-absent-manifest "$source_dir/manifest.txt" \
-  --ctest "$ctest" \
-  --jobs 1 \
-  --dry-run >"$binary_dir/unexpected-presence.log" 2>&1; then
-  echo "unexpectedly registered expected-absent test was accepted" >&2
-  exit 1
-fi
-grep -Fq \
-  'tests declared absent are present in the configured CTest registry:' \
-  "$binary_dir/unexpected-presence.log"

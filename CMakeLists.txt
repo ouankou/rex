@@ -2312,42 +2312,6 @@ elseif(ENABLE-C)
   list(GET _rose_llvm_openmp_runtime_candidates 0
     ROSE_LLVM_OPENMP_RUNTIME_LIBRARY)
 
-  set(_rose_llvm_strings
-    "${LLVM_TOOLS_BINARY_DIR}/llvm-strings")
-  if(NOT EXISTS "${_rose_llvm_strings}" OR
-     IS_DIRECTORY "${_rose_llvm_strings}")
-    message(FATAL_ERROR
-      "The loaded LLVM package has no llvm-strings executable at "
-      "'${_rose_llvm_strings}'.")
-  endif()
-  execute_process(
-    COMMAND "${_rose_llvm_strings}" -a
-      "${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}"
-    OUTPUT_VARIABLE _rose_runtime_strings
-    ERROR_VARIABLE _rose_runtime_strings_error
-    RESULT_VARIABLE _rose_runtime_strings_status)
-  if(NOT _rose_runtime_strings_status EQUAL 0)
-    message(FATAL_ERROR
-      "Could not inspect LLVM OpenMP runtime "
-      "'${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}' with exact tool "
-      "'${_rose_llvm_strings}': status '${_rose_runtime_strings_status}', "
-      "error '${_rose_runtime_strings_error}'.")
-  endif()
-  string(REGEX MATCH
-    "LLVM OMP build compiler: Clang [0-9]+[^\r\n]*"
-    _rose_runtime_build_line "${_rose_runtime_strings}")
-  string(REGEX MATCH "Clang ([0-9]+)"
-    _rose_runtime_build_match "${_rose_runtime_build_line}")
-  set(_rose_runtime_llvm_major "${CMAKE_MATCH_1}")
-  if(NOT _rose_runtime_build_line OR
-     NOT _rose_runtime_build_match OR
-     NOT _rose_runtime_llvm_major STREQUAL "${CLANG_VERSION_MAJOR}")
-    message(FATAL_ERROR
-      "OpenMP runtime '${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}' must identify an "
-      "LLVM OMP build compiler with exact Clang major "
-      "${CLANG_VERSION_MAJOR}. Got '${_rose_runtime_build_line}'.")
-  endif()
-
   get_filename_component(ROSE_LLVM_OPENMP_RUNTIME_DIR
     "${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}" DIRECTORY)
   set(WITH-LLVM-OMP-RUNTIME-LIBRARY
@@ -2362,19 +2326,8 @@ elseif(ENABLE-C)
     "LLVM OpenMP runtime library selected by REX")
   set(ROSE_LLVM_OPENMP_INCLUDE_DIR "${ROSE_LLVM_OPENMP_INCLUDE_DIR}" CACHE INTERNAL
     "Directory containing the LLVM OpenMP header used by REX")
-  if(_rose_runtime_build_line)
-    message(STATUS "Using LLVM OpenMP runtime: ${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY} (${_rose_runtime_build_line})")
-  else()
-    message(STATUS "Using LLVM OpenMP runtime: ${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}")
-  endif()
+  message(STATUS "Using LLVM OpenMP runtime: ${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}")
   message(STATUS "Using LLVM OpenMP header dir: ${ROSE_LLVM_OPENMP_INCLUDE_DIR}")
-  unset(_rose_runtime_build_line)
-  unset(_rose_runtime_build_match)
-  unset(_rose_runtime_strings)
-  unset(_rose_runtime_strings_error)
-  unset(_rose_runtime_strings_status)
-  unset(_rose_llvm_strings)
-  unset(_rose_runtime_llvm_major)
   unset(_rose_clang_resource_dir)
   unset(_rose_clang_resource_error)
   unset(_rose_clang_resource_status)

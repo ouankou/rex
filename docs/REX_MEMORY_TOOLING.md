@@ -15,10 +15,10 @@ both executable Valgrind and its development headers; otherwise it defaults to
 probes, which become no-ops outside Valgrind, but compiling the executable still
 requires those headers. Explicitly selecting the suite with
 `-DREX_ENABLE_UNINITIALIZED_FIELD_TESTS=ON` without complete Valgrind support is
-a hard configuration error. Native CI installs the dependency and therefore
-keeps the availability-derived suite enabled. Runtime-only image builds and the
-three architectures for which Debian does not publish Valgrind explicitly set
-the option to `OFF`. Finding Valgrind does not enable CTest MemCheck or its
+a hard configuration error. Native source CI installs the dependency and
+therefore keeps the availability-derived suite enabled. Standard nightly images
+omit optional Valgrind tooling, so the suite remains disabled there without an
+architecture switch. Finding Valgrind does not enable CTest MemCheck or its
 extended timeouts; MemCheck is enabled only by an explicit `WITH-VALGRIND`
 setting.
 

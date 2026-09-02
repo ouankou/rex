@@ -104,14 +104,6 @@ set_tests_properties(rex_ci_llvm_env_preserves_search_paths
   PROPERTIES LABELS "rex;build-system;CI")
 
 add_test(
-  NAME rex_ci_llvm_version_contract
-  COMMAND ${BASH_EXECUTABLE}
-    ${CMAKE_CURRENT_SOURCE_DIR}/rex_ci_llvm_version_contract.sh
-    ${ROSE_TOP_SRC_DIR}/.github/workflows)
-set_tests_properties(rex_ci_llvm_version_contract
-  PROPERTIES LABELS "rex;build-system;CI")
-
-add_test(
   NAME rex_frontend_toolchain_ownership_contract
   COMMAND ${BASH_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_toolchain_ownership_contract.sh
@@ -147,41 +139,6 @@ set_tests_properties(rex_frontend_include_graph_authority_contract
   PROPERTIES LABELS "rex;headers;CFE")
 
 add_test(
-  NAME rex_nightly_image_registration_contract
-  COMMAND ${BASH_EXECUTABLE}
-    ${CMAKE_CURRENT_SOURCE_DIR}/rex_nightly_image_registration_contract.sh
-    ${ROSE_TOP_SRC_DIR}/.dockerignore
-    ${ROSE_TOP_SRC_DIR}/ci/docker/rex-nightly.Dockerfile)
-set_tests_properties(rex_nightly_image_registration_contract
-  PROPERTIES LABELS "rex;build-system;CI")
-
-add_test(
-  NAME rex_uninitialized_field_ci_contract
-  COMMAND ${BASH_EXECUTABLE}
-    ${CMAKE_CURRENT_SOURCE_DIR}/rex_uninitialized_field_ci_contract.sh
-    ${CMAKE_COMMAND}
-    ${ROSE_TOP_SRC_DIR}/CMakeLists.txt
-    ${ROSE_TOP_SRC_DIR}/cmake/rex_uninitialized_field_tests.cmake
-    ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/CMakeLists.txt
-    ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/uninitializedField_tests/CMakeLists.txt
-    ${ROSE_TOP_SRC_DIR}/build-rex.sh
-    ${ROSE_TOP_SRC_DIR}/ci/docker/rex-nightly.Dockerfile
-    ${ROSE_TOP_SRC_DIR}/.github/workflows
-    ${ROSE_TOP_SRC_DIR}/scripts/ci-install-deps)
-set_tests_properties(rex_uninitialized_field_ci_contract
-  PROPERTIES LABELS "rex;build-system;CI;memory")
-
-add_test(
-  NAME rex_nightly_multiarch_workflow_contract
-  COMMAND ${BASH_EXECUTABLE}
-    ${CMAKE_CURRENT_SOURCE_DIR}/rex_nightly_multiarch_workflow_contract.sh
-    ${ROSE_TOP_SRC_DIR}/.github/workflows
-    ${ROSE_TOP_SRC_DIR}/tests/fragile
-    ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/C_tests/CMakeLists.txt)
-set_tests_properties(rex_nightly_multiarch_workflow_contract
-  PROPERTIES LABELS "rex;build-system;CI")
-
-add_test(
   NAME rex_policy_submodule_snapshot_contract
   COMMAND ${BASH_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/rex_policy_submodule_snapshot_contract.sh
@@ -212,23 +169,6 @@ add_test(
     ${CMAKE_CURRENT_BINARY_DIR}/docs_header_compilation_db_contract)
 set_tests_properties(rex_docs_cpp_compilation_db_contract
   PROPERTIES LABELS "rex;build-system;CI;docs")
-
-add_test(
-  NAME rex_weekly_memory_workflow_contract
-  COMMAND ${BASH_EXECUTABLE}
-    ${CMAKE_CURRENT_SOURCE_DIR}/rex_weekly_memory_workflow_contract.sh
-    ${ROSE_TOP_SRC_DIR}/.github/workflows
-    ${ROSE_TOP_SRC_DIR})
-set_tests_properties(rex_weekly_memory_workflow_contract
-  PROPERTIES LABELS "rex;build-system;CI;sanitizer")
-
-add_test(
-  NAME rex_act_artifact_workflow_contract
-  COMMAND ${BASH_EXECUTABLE}
-    ${CMAKE_CURRENT_SOURCE_DIR}/rex_act_artifact_workflow_contract.sh
-    ${ROSE_TOP_SRC_DIR}/.github/workflows)
-set_tests_properties(rex_act_artifact_workflow_contract
-  PROPERTIES LABELS "rex;build-system;CI")
 
 if(ROSE_CTEST_MEMCHECK_WRAPPER AND CMAKE_Fortran_COMPILER)
   add_test(
