@@ -416,6 +416,7 @@ add_subdirectory(RunTests)
 add_subdirectory(CompilerOptionsTests)
 add_subdirectory(translatorTests)
 add_subdirectory(Utility)
+add_subdirectory(roseCompiler)
 add_subdirectory(moveDeclarationTool)
 
 if(BASH_EXECUTABLE)

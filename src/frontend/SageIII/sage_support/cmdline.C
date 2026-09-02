@@ -1123,9 +1123,6 @@ void SgProject::processCommandLine(const vector<string> &input_argv) {
       sla_none(local_commandLineArgumentList, "--", "($)", "(h|help)", 1);
   if (optionCount > 0) {
     // printf ("option --help found \n");
-    // printf ("\nROSE (pre-release alpha version: %s) \n",VERSION);
-    // version();
-    // Rose::usage();
     cout << version_message() << endl;
     SgFile::usage();
     exit(0);
@@ -1141,7 +1138,6 @@ void SgProject::processCommandLine(const vector<string> &input_argv) {
       sla_none(local_commandLineArgumentList, "--", "($)", "(V|version)", 1);
   if (optionCount > 0) {
     // printf ("SgProject::processCommandLine(): option --version found \n");
-    // printf ("\nROSE (pre-release alpha version: %s) \n",VERSION);
     cout << version_message() << endl;
     exit(0);
   }
@@ -1974,8 +1970,8 @@ void Rose::Cmdline::Gnu::ProcessParam(SgProject * /*project*/,
  *  namespace SgFile {
  *---------------------------------------------------------------------------*/
 void SgFile::usage() {
-  // it would be nice to insert the version of ROSE being used (using the
-  // VERSION macro)
+  // Version details are emitted by command-line processing through
+  // version_message().
   fputs("\n"
         "This ROSE translator provides a means for operating on C, C++, and "
         "Fortran source code.\n"
@@ -2508,8 +2504,6 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
           true ||
       CommandlineProcessing::isOption(argv, "--", "(h|help)", true) == true ||
       CommandlineProcessing::isOption(argv, "-", "(h|help)", true) == true) {
-    // printf ("\nROSE (pre-release alpha version: %s) \n",VERSION);
-    // Rose::usage();
     cout << version_message() << endl;
     usage();
     exit(0);
@@ -2521,7 +2515,6 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
       true) {
     // function in SAGE III to access version number of frontend
     extern std::string frontendVersionString();
-    // printf ("\nROSE (pre-release alpha version: %s) \n",VERSION);
     cout << version_message() << endl;
     printf("     Using C/C++ frontend: %s \n", frontendVersionString().c_str());
   }

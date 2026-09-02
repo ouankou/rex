@@ -18,7 +18,12 @@ file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string 
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_BUILD_CLANG_INCLUDE_STAGING_DIR = \"${ROSE_TOP_BINARY_DIR}/include-staging\";\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_BUILD_LIB_DIR         = \"${CMAKE_LIBRARY_OUTPUT_DIRECTORY}\";\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "\n/* Additional interesting data to provide. */\n")
-file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_CONFIGURE_DATE     = \"@configure_date@\";\n")
+# Match the historical Autoconf meaning of configure_date. CMake honors
+# SOURCE_DATE_EPOCH for string(TIMESTAMP), which keeps reproducible builds
+# deterministic when their environment requests it.
+string(TIMESTAMP _rose_configure_date "%Y-%m-%d %H:%M:%S UTC" UTC)
+file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_CONFIGURE_DATE     = \"${_rose_configure_date}\";\n")
+unset(_rose_configure_date)
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_BUILD_OS           = \"${CMAKE_HOST_SYSTEM_VERSION}\";\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_BUILD_CPU          = \"${CMAKE_HOST_SYSTEM_PROCESSOR}\";\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "/* Numeric form of ROSE version -- assuming ROSE version x.y.zL \(where */\n")
