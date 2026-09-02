@@ -308,13 +308,13 @@ std::string version_message() {
 // DQ (11/1/2009): replaced "version()" with separate "version_number()" and
 // "version_message()" functions.
 std::string version_number() {
-#ifdef VERSION
-  // returns a string containing the current version number
-  // the VERSION macro is defined at compile time on the
-  // compile command line by the build system
-  return VERSION;
+#ifdef ROSE_PACKAGE_VERSION
+  // The ROSE_VERSION file is the single source of truth for package and tool
+  // versions. This avoids the generic VERSION macro that historical CMake
+  // builds left hard-coded at 0.9.10.
+  return ROSE_PACKAGE_VERSION;
 #else
-  ROSE_ASSERT(!"Expected CPP macro VERSION to be defined");
+  ROSE_ASSERT(!"Expected CPP macro ROSE_PACKAGE_VERSION to be defined");
 #endif
 }
 

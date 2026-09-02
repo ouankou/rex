@@ -7,9 +7,10 @@ main ( int argc, char* argv[] )
      int optionCount = sla(&argc, argv, "--", "($)", "(h|help)",1);
      if( optionCount > 0 )
         {
-          printf ("\nROSE (pre-release alpha version: %s) \n",VERSION);
-          Rose::usage();
-          exit(0);
+       printf("\nROSE (pre-release alpha version: %s) \n",
+              ROSE_PACKAGE_VERSION);
+       Rose::usage();
+       exit(0);
         }
 
   // option with parameter to option

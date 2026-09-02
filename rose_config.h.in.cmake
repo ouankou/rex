@@ -562,11 +562,6 @@
 /* CUDA toolkit header directory required by Clang's CUDA runtime wrapper. */
 #cmakedefine ROSE_CLANG_CUDA_RUNTIME_INCLUDE_DIR "@ROSE_CLANG_CUDA_RUNTIME_INCLUDE_DIR@"
 
-/* Version number of package */
-//AS Don't know what to do with this
-
-#define VERSION "0.9.10"
-
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first. */
 #if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
