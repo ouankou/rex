@@ -1,11 +1,12 @@
-FROM ghcr.io/loong64/debian:sid
+ARG BASE_IMAGE=debian:sid
+FROM ${BASE_IMAGE}
+
 LABEL org.opencontainers.image.source="https://github.com/ouankou/rex"
 
-ARG LLVM_VERSION=22
+ENV LLVM_VERSION=22
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN test "${LLVM_VERSION}" = "22" \
-    && apt-get update \
+RUN apt-get update \
     && apt-get install -y --no-install-recommends \
       antlr4 \
       bison \
@@ -37,5 +38,3 @@ RUN test "${LLVM_VERSION}" = "22" \
       openjdk-25-jdk-headless \
       pkg-config \
     && rm -rf /var/lib/apt/lists/*
-
-ENV LLVM_VERSION=${LLVM_VERSION}

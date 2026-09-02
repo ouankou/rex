@@ -527,39 +527,6 @@ if [ -n "$RESOLVED_FLANG_ROOT" ]; then
     CMAKE_ARGS+=(-DFLANG_ROOT="$RESOLVED_FLANG_ROOT")
 fi
 
-if [ -n "${REX_ENABLE_X86_SIMD_TESTS:-}" ]; then
-    case "$REX_ENABLE_X86_SIMD_TESTS" in
-        ON|OFF) ;;
-        *)
-            echo -e "${RED}Error: REX_ENABLE_X86_SIMD_TESTS must be ON or OFF.${NC}" >&2
-            exit 2
-            ;;
-    esac
-    CMAKE_ARGS+=(-DREX_ENABLE_X86_SIMD_TESTS="$REX_ENABLE_X86_SIMD_TESTS")
-fi
-if [ -n "${REX_ENABLE_UNINITIALIZED_FIELD_TESTS:-}" ]; then
-    case "$REX_ENABLE_UNINITIALIZED_FIELD_TESTS" in
-        ON|OFF) ;;
-        *)
-            echo -e "${RED}Error: REX_ENABLE_UNINITIALIZED_FIELD_TESTS must be ON or OFF.${NC}" >&2
-            exit 2
-            ;;
-    esac
-    CMAKE_ARGS+=(
-        -DREX_ENABLE_UNINITIALIZED_FIELD_TESTS="$REX_ENABLE_UNINITIALIZED_FIELD_TESTS"
-    )
-fi
-if [ -n "${REX_X86_SIMD_TEST_SYSROOT:-}" ]; then
-    case "$REX_X86_SIMD_TEST_SYSROOT" in
-        /*) ;;
-        *)
-            echo -e "${RED}Error: REX_X86_SIMD_TEST_SYSROOT must be absolute.${NC}" >&2
-            exit 2
-            ;;
-    esac
-    CMAKE_ARGS+=(-DREX_X86_SIMD_TEST_SYSROOT="$REX_X86_SIMD_TEST_SYSROOT")
-fi
-
 cmake "${CMAKE_GENERATOR_ARGS[@]}" .. "${CMAKE_ARGS[@]}"
 
 if [ $? -ne 0 ]; then

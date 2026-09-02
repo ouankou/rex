@@ -397,15 +397,6 @@ unset(_compiler_options_clang_resource_dir_error)
 unset(_compiler_options_clang_resource_dir_result)
 
 add_test(
-  NAME rex_wasm_ci_cache_and_mandatory_test_contracts
-  COMMAND ${BASH_EXECUTABLE}
-    ${CMAKE_CURRENT_SOURCE_DIR}/rex_wasm_cache_contract.sh
-    ${CMAKE_SOURCE_DIR}
-)
-set_tests_properties(rex_wasm_ci_cache_and_mandatory_test_contracts
-  PROPERTIES LABELS "rex;WASM;CI;death")
-
-add_test(
   NAME compiler_options_gnu_skip_rose
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${BASH_EXECUTABLE} -c

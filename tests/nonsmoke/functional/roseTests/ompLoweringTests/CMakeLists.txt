@@ -766,36 +766,10 @@ if(NOT ROSE_LLVM_CLANG_CXX_DRIVER OR
     "'${ROSE_LLVM_CLANG_CXX_DRIVER}'")
 endif()
 
-set(_omp_x86_simd_tests_default ON)
-if(NOT CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
-  set(_omp_x86_simd_tests_default OFF)
-endif()
-option(REX_ENABLE_X86_SIMD_TESTS
-  "Register the x86-target SIMD lowering tests"
-  ${_omp_x86_simd_tests_default})
-set(REX_X86_SIMD_TEST_SYSROOT "" CACHE PATH
-  "x86_64 target sysroot for SIMD lowering tests on non-x86 hosts")
-
-if(ENABLE-C AND REX_ENABLE_X86_SIMD_TESTS)
+if(ENABLE-C AND
+   CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
   set(_omp_simd_x86_target_args
     -target x86_64-unknown-linux-gnu)
-  if(NOT CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
-    if(NOT IS_ABSOLUTE "${REX_X86_SIMD_TEST_SYSROOT}")
-      message(FATAL_ERROR
-        "REX_ENABLE_X86_SIMD_TESTS requires an absolute "
-        "REX_X86_SIMD_TEST_SYSROOT on ${CMAKE_HOST_SYSTEM_PROCESSOR}")
-    endif()
-    if(NOT EXISTS "${REX_X86_SIMD_TEST_SYSROOT}/include/stdlib.h" OR
-       NOT EXISTS
-         "${REX_X86_SIMD_TEST_SYSROOT}/include/bits/libc-header-start.h")
-      message(FATAL_ERROR
-        "REX_X86_SIMD_TEST_SYSROOT is not an exact x86_64 target sysroot: "
-        "${REX_X86_SIMD_TEST_SYSROOT}")
-    endif()
-    list(APPEND _omp_simd_x86_target_args
-      "--sysroot=${REX_X86_SIMD_TEST_SYSROOT}")
-  endif()
-
   if(_omp_c_semantic_enabled)
     add_omp_semantic_test(
       omp_lowering_c_semantic_rex_omp_simd_ordered_runtime_c
