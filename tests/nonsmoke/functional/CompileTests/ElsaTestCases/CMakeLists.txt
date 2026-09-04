@@ -2,6 +2,9 @@ set(REX_ELSA_SEMANTIC_PROBE_FLAGS
   -include
   ${CMAKE_CURRENT_SOURCE_DIR}/rex_elsa_semantic_probe_compat.h)
 
+file(GLOB ELSA_TESTCODES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
+list(SORT ELSA_TESTCODES)
+
 add_subdirectory(ctests)
 add_subdirectory(big)
 add_subdirectory(gnu)
@@ -17,8 +20,6 @@ rex_assert_unique_ctest_names_across_directories(
 set(ROSE_FLAGS  -w -std=gnu++03)
 set(_elsa_output_dir ${CMAKE_CURRENT_BINARY_DIR}/rose_output)
 file(MAKE_DIRECTORY ${_elsa_output_dir})
-file(GLOB ELSA_TESTCODES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
-list(SORT ELSA_TESTCODES)
 
 set(ELSA_TESTCODES_NEGATIVE
   # Clang 22 rejects these original ELSA specimens in GNU++03 mode. Keep them

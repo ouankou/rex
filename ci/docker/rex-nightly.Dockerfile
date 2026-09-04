@@ -26,6 +26,10 @@ COPY . ${REX_SOURCE_DIR}
 RUN NUM_JOBS="${REX_BUILD_NUM_JOBS}" \
     ./build-rex.sh "${REX_INSTALL_DIR}" Debug
 
+FROM builder AS test
+
+WORKDIR ${REX_BUILD_DIR}
+
 FROM rex-base AS runtime
 
 COPY --from=builder ${REX_INSTALL_DIR} ${REX_INSTALL_DIR}
@@ -40,11 +44,5 @@ RUN set -eux; \
     ldconfig
 
 WORKDIR /
-
-FROM runtime AS test
-
-COPY --from=builder ${REX_SOURCE_DIR} ${REX_SOURCE_DIR}
-
-WORKDIR ${REX_BUILD_DIR}
 
 FROM runtime

@@ -2323,6 +2323,7 @@ SOURCE_NAMED_TYPE_START
 SgNamedType::SgNamedType(const SgNamedType &X) : SgType() {
   p_declaration = X.p_declaration;
   p_autonomous_declaration = X.p_autonomous_declaration;
+  p_is_from_template_parameter = X.p_is_from_template_parameter;
 
   ROSE_ASSERT(p_declaration != NULL);
 }
