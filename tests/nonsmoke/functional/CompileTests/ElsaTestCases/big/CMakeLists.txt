@@ -4,11 +4,9 @@ if(_elsa_big_output_dir STREQUAL "")
   set(_elsa_big_output_dir "${CMAKE_CURRENT_BINARY_DIR}/rose_output")
 endif()
 file(MAKE_DIRECTORY "${_elsa_big_output_dir}")
-file(GLOB _elsa_big_cpp_sources RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/..
-  ${CMAKE_CURRENT_SOURCE_DIR}/../*.cc)
 file(GLOB _elsa_big_c_sources RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/..
   ${CMAKE_CURRENT_SOURCE_DIR}/../ctests/*.c)
-set(ELSATEST_BIG_ALL_TESTCODES ${_elsa_big_cpp_sources})
+set(ELSATEST_BIG_ALL_TESTCODES ${ELSA_TESTCODES})
 foreach(_elsa_big_c_source IN LISTS _elsa_big_c_sources)
   string(REGEX REPLACE "^ctests/" "c/" _elsa_big_testcode
     "${_elsa_big_c_source}")

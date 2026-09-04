@@ -10,15 +10,13 @@ runs alone never remove a test from the retained campaign.
   validation-header, friend-template canonical-chain, and
   implicit-control-flow header-planning regressions. It runs on every push to
   `main` and every pull request targeting `main`.
-- `unparser_hardening_full.txt` contains the 2,354 retained and support tests
-  registered by the standard image. It runs in the daily x86_64 workflow.
-  Optional Valgrind-backed variants remain available in Valgrind-enabled
-  source builds instead of being duplicated in the standard nightly image.
+- `unparser_hardening_full.txt` contains 2,350 portable retained and support
+  tests. The native x86 policy also selects four x86-only registrations.
 
-The arm64, LoongArch64, and RISC-V nightly jobs run a small manifest of portable
-architecture-sensitive frontend, STL, and module tests. Intel SIMD tests remain
-native x86 tests. The complete retained manifest runs in the native x86_64
-nightly.
+The native amd64 and arm64 nightlies use the same large policy: a superset of
+main CI adding the full retained manifest, broad C/C++ and AST infrastructure
+suites, and OpenACC. The emulated LoongArch64 and RISC-V jobs instead run eight
+architecture-sensitive tests plus `rex_`, astInterface, and `OMPTEST_` tests.
 
 The selection runner validates that every manifest entry is registered, adds
 CTest dependencies and fixtures, and then runs the exact resulting set:

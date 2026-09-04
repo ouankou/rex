@@ -1,59 +1,53 @@
 name: Nightly CI
 
 on:
-  workflow_run:
-    workflows:
-      - Nightly REX Images
-    types:
-      - completed
+  schedule:
+    - cron: "0 15 * * *"
   workflow_dispatch:
-    inputs:
-      source_sha:
-        description: Immutable nightly image source SHA
-        required: true
-        type: string
 
 concurrency:
-  group: nightly-ci-${{ github.event.workflow_run.id || github.run_id }}
+  group: nightly-ci-${{ github.ref }}
   cancel-in-progress: false
 
 env:
   IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
   LOCAL_IMAGE_REPO: rex-local
-  SOURCE_SHA: ${{ github.event.workflow_run.head_sha || inputs.source_sha }}
 
 jobs:
   test:
     name: Test ${{ matrix.arch }} image
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-26.04-arm' || 'ubuntu-26.04' }}
     permissions:
       packages: read
     strategy:
       fail-fast: false
       matrix:
-        arch:
-          - amd64
-          - arm64
-          - riscv64
-          - loong64
+        arch: [amd64, arm64, riscv64, loong64]
 
     steps:
       - name: Set up QEMU
-        if: ${{ matrix.arch == 'riscv64' || matrix.arch == 'loong64' }}
+        if: ${{ matrix.arch != 'amd64' && (matrix.arch != 'arm64' || env.ACT) }}
         uses: docker/setup-qemu-action@v4
         with:
           platforms: ${{ matrix.arch }}
 
       - name: Run tests
         env:
-          IMAGE: ${{ env.ACT && format('{0}:dev-{1}-local', env.LOCAL_IMAGE_REPO, matrix.arch) || format('{0}:dev-{1}', env.IMAGE_REPO, env.SOURCE_SHA) }}
-          MANIFEST: ${{ matrix.arch == 'amd64' && 'unparser_hardening_full.txt' || 'rex_nightly_cross_architecture.txt' }}
-          INCLUDE_REGEX: ${{ matrix.arch == 'amd64' && 'rex|astInterface|OMPLOWERING_RODINIA_' || '' }}
+          ARCH: ${{ matrix.arch }}
+          IMAGE: ${{ env.ACT && format('{0}:dev-{1}-local', env.LOCAL_IMAGE_REPO, matrix.arch) || format('{0}:dev', env.IMAGE_REPO) }}
         run: |
-          docker run --rm --platform=linux/${{ matrix.arch }} \
-            "$IMAGE" python3 /opt/rex/src/scripts/run_ctest_name_set.py \
-              --test-dir /opt/rex/src/build \
-              --manifest "/opt/rex/src/tests/fragile/$MANIFEST" \
-              --include-regex "$INCLUDE_REGEX" \
-              --jobs 4
+          main_tests='rex|astInterface|testQuery|fortran|f90|f03|gfortran|OMPTEST_|OMPACCTEST_|OMPFORTRAN_|OMPANALYZE_|OMPVV_5_0_|OMPVV_4_5_|OMPVV_5_1_|OMPVV_5_2_|OMPVV_6_0_|omp_lowering_|OMPLOWERING_CPU_|OMPLOWERING_RODINIA_|^Cxx_tests_test2013_69_C$|^Cxx_tests_test2013_198_C$'
+          run_tests() {
+            docker run --rm --platform="linux/$ARCH" "$IMAGE" \
+              python3 /opt/rex/src/scripts/run_ctest_name_set.py \
+              --test-dir /opt/rex/src/build --jobs "${ACT_CTEST_JOBS:-4}" "$@"
+          }
+          if [[ "$ARCH" == amd64 || ( "$ARCH" == arm64 && -z "${ACT:-}" ) ]]; then
+            run_tests \
+              --manifest /opt/rex/src/tests/fragile/unparser_hardening_full.txt \
+              --include-regex "$main_tests|OpenACC|openacc|^tokenStreamMapping_test2012_173_c$|^(C|copyAST|MERGEASTTEST|SOURCEPOSITIONTEST|test(Static|Virtual|Interprocedural)CFG|ASTJSON|NAMEQUALIFICATIONTEST|HIDDENTYPETEST|rosetta|unparse|FORTRANTEST|GFORTRANSUITE)"
+          else
+            run_tests \
+              --manifest /opt/rex/src/tests/fragile/rex_nightly_cross_architecture.txt \
+              --include-regex '^rex_|astInterface|OMPTEST_'
+          fi

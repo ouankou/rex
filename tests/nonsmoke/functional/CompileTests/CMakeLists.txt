@@ -319,7 +319,7 @@ rex_register_clang_frontend_negative_diagnostic(
   [=[error: no matching constructor for initialization of 'X<int>']=]
   Cxx11_tests/test2016_36.C)
 rex_register_clang_frontend_negative_diagnostic(
-  [=[error: no member named 'equal_to' in namespace 'std']=]
+  [=[error: no member named '__is_noexcept_hash' in namespace 'std::__detail']=]
   Cxx11_tests/test2018_100.C)
 rex_register_clang_frontend_negative_diagnostic(
   [=[error: invalid operands to binary expression ('int X::*' and 'int')]=]

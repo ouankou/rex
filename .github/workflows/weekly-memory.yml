@@ -57,10 +57,8 @@ jobs:
       env:
         ROSE_TEST_TIMEOUT_SCALE: "2"
       run: |
-        set +e
+        set -o pipefail
         ctest --test-dir build --no-tests=error -j"$(nproc)" --timeout 3000 --output-on-failure --output-junit ctest.junit.xml 2>&1 | tee ctest-full.log
-        ctest_status=${PIPESTATUS[0]}
-        echo "${ctest_status}" > ctest_exit_code.txt
 
     - name: Upload full test log
       if: ${{ always() && !env.ACT }}
@@ -72,10 +70,6 @@ jobs:
           ctest.junit.xml
         if-no-files-found: warn
 
-    - name: Fail if full tests failed
-      run: |
-        exit "$(cat ctest_exit_code.txt)"
-
   memcheck:
     runs-on: ubuntu-26.04
 
@@ -85,17 +79,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The reviewed MemCheck selection requires multiple runner-hours under
-        # Valgrind and cannot fit GitHub's six-hour per-job limit. Partition the
-        # filtered CTest registry into eight stable name-hash shards; their
-        # direct union is exactly the regex-selected MemCheck registry. The
-        # explicit multiple-files test exercises two consecutive Clang
-        # ASTContext lifetimes in one REX process, which is the publication
-        # cache's required invalidation boundary. Each
-        # shard is expanded to the transitive DEPENDS and fixture closure before
-        # execution, so a
-        # producer and its consumer can never be separated by the partition.
-        # Support tests may therefore repeat in more than one shard.
+        # Stable name-hash shards keep the complete MemCheck selection below
+        # GitHub's six-hour job limit. Dependencies and fixtures are added after
+        # sharding, so support tests may repeat across shards.
         shard: [1, 2, 3, 4, 5, 6, 7, 8]
 
     defaults:
@@ -228,8 +214,10 @@ jobs:
 
     - name: Run sanitizer on CI selection
       env:
-        LSAN_OPTIONS: suppressions=${{ github.workspace }}/scripts/rex-suppressions-for-lsan
+        ASAN_OPTIONS: halt_on_error=1
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/scripts/rex-suppressions-for-lsan:halt_on_error=1
         ROSE_TEST_TIMEOUT_SCALE: "4"
+        UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
       run: |
         set -o pipefail
         ctest --test-dir build --no-tests=error -R "astInterface|testQuery|rex" -LE death -j"$(nproc)" --timeout 6000 --output-on-failure 2>&1 | tee ctest-sanitizer.log
