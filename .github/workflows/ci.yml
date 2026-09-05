@@ -23,8 +23,12 @@ env:
 
 jobs:
   build:
-    name: Build and test native
+    name: Build and test ${{ matrix.suite }}
     runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [core, fragile]
 
     defaults:
       run:
@@ -55,10 +59,14 @@ jobs:
       run: |
         source scripts/ci-llvm-env "${{ env.LLVM_VERSION }}"
         core_tests='rex|astInterface|testQuery|fortran|f90|f03|gfortran|OMPTEST_|OMPACCTEST_|OMPFORTRAN_|OMPANALYZE_|OMPVV_5_0_|OMPVV_4_5_|OMPVV_5_1_|OMPVV_5_2_|OMPVV_6_0_|omp_lowering_|OMPLOWERING_CPU_|OMPLOWERING_RODINIA_|^Cxx_tests_test2013_69_C$|^Cxx_tests_test2013_198_C$'
+        if [[ "${{ matrix.suite }}" == core ]]; then
+          selector=(--include-regex "$core_tests")
+        else
+          selector=(--manifest tests/fragile/unparser_hardening_fast.txt)
+        fi
         python3 scripts/run_ctest_name_set.py \
           --test-dir build \
-          --manifest tests/fragile/unparser_hardening_fast.txt \
-          --include-regex "$core_tests" \
+          "${selector[@]}" \
           --jobs "$(nproc)"
 
   rex-wasm:

@@ -13117,7 +13117,7 @@ void transOmpOrdered(SgNode *node) {
 //  work()
 //  GOMP_critical_name_end (&gomp_critical_user_aaa);
 //
-static const int kKmpCriticalNameWords = 8; // kmp_critical_name is int32_t[8]
+static const int kKmpCriticalNameBytes = 32; // kmp_critical_name is int32_t[8]
 static const int kKmpCriticalNameAlignment = alignof(void *);
 
 void transOmpCritical(SgNode *node) {
@@ -13178,9 +13178,10 @@ void transOmpCritical(SgNode *node) {
     };
 
     auto ensure_local_fortran_lock_symbol = [&]() -> SgVariableSymbol * {
-      SgExprListExp *lock_dims =
-          buildExprListExp(buildIntVal(kKmpCriticalNameWords));
-      SgType *lock_type = buildArrayType(buildKmpcInt32Type(), lock_dims);
+      // INTEGER(8) provides alignment for the runtime's embedded pointer.
+      SgExprListExp *lock_dims = buildExprListExp(
+          buildIntVal(kKmpCriticalNameBytes / sizeof(std::int64_t)));
+      SgType *lock_type = buildArrayType(buildKmpcInt64Type(), lock_dims);
       SgVariableDeclaration *vardecl =
           buildVariableDeclaration(g_lock_name, lock_type, NULL, proc_body);
       insert_fortran_declaration_into_procedure(vardecl, proc_body);
@@ -13251,8 +13252,9 @@ void transOmpCritical(SgNode *node) {
     ROSE_ASSERT(global != NULL);
     sym = lookupVariableSymbolInParentScopes(SgName(g_lock_name), global);
     if (sym == NULL) {
-      SgType *lock_type = buildArrayType(buildKmpcInt32Type(),
-                                         buildIntVal(kKmpCriticalNameWords));
+      SgType *lock_type = buildArrayType(
+          buildKmpcInt32Type(),
+          buildIntVal(kKmpCriticalNameBytes / sizeof(std::int32_t)));
       SgVariableDeclaration *vardecl =
           buildVariableDeclaration(g_lock_name, lock_type, NULL, global);
       if (SgInitializedName *lock_decl = getFirstInitializedName(vardecl)) {

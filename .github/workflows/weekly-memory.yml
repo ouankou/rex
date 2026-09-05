@@ -2,8 +2,8 @@ name: Weekly Memory CI
 
 on:
   schedule:
-    # Every Friday at 00:00 UTC
-    - cron: "0 0 * * 5"
+    # Every Friday at 00:18 UTC
+    - cron: "18 0 * * 5"
   workflow_dispatch:
 
 # Jobs run in parallel to stay within GitHub's 6-hour per-job limit.

@@ -1084,6 +1084,7 @@ set(C_TESTCODES_X86_ONLY
   test2015_154.c
   test2015_155.c
   test2017_03.c
+  test2018_26.c
 )
 if(NOT REX_C_TESTS_HOST_IS_X86)
   rex_register_compile_source_set(REX_C_TESTS_X86_ONLY_SOURCES
@@ -1179,6 +1180,13 @@ set(C_TESTCODES_NEGATIVE
   test2018_65.c
   zpagccp.c
 )
+if(NOT REX_C_TESTS_HOST_IS_X86)
+  list(REMOVE_ITEM C_TESTCODES_NEGATIVE ${C_TESTCODES_X86_ONLY})
+endif()
+if(_rex_c_tests_processor MATCHES "^(aarch64|arm64|riscv64|loongarch64|loong64)$")
+  # Clang rejects volatile va_list on these targets.
+  list(APPEND C_TESTCODES_NEGATIVE test2015_106.c)
+endif()
 list(REMOVE_ITEM C_TESTCODES ${C_TESTCODES_NEGATIVE})
 
 list(REMOVE_DUPLICATES C_TESTCODES)
@@ -1209,7 +1217,15 @@ set_tests_properties(
 )
 
 foreach(file_to_test ${C_TESTCODES_NEGATIVE})
-  if(file_to_test STREQUAL "test2017_02.c")
+  if(file_to_test STREQUAL "test2015_106.c")
+    set(_volatile_va_list_type "void *volatile")
+    if(_rex_c_tests_processor MATCHES "^(aarch64|arm64)$")
+      set(_volatile_va_list_type "volatile __builtin_va_list")
+    endif()
+    compile_exact_negative_test(
+      ${file_to_test} "C_tests"
+      "test2015_106.c:13:25: error: binding reference of type '__builtin_va_list' to value of type 'volatile va_list' (aka '${_volatile_va_list_type}') drops 'volatile' qualifier")
+  elseif(file_to_test STREQUAL "test2017_02.c")
     compile_exact_negative_test(
       ${file_to_test} "C_tests"
       "test2017_02.c:90:5: error: cannot redeclare builtin function '__builtin_classify_type'")
