@@ -5,6 +5,7 @@
 #include <clang/AST/Decl.h>
 #include <clang/Basic/Builtins.h>
 #include <clang/Tooling/Tooling.h>
+#include <llvm/ADT/ScopeExit.h>
 
 #include <cstring>
 #include <memory>
@@ -26,6 +27,9 @@ clang::FunctionDecl *makeFunctionDecl(clang::ASTContext &context,
 } // namespace
 
 int main(int argc, char **argv) {
+  beginClangFrontendValgrindPublicationSession();
+  llvm::scope_exit publication_scope(
+      [] { endClangFrontendValgrindPublicationSession(); });
   std::unique_ptr<clang::ASTUnit> ast = clang::tooling::buildASTFromCode(
       "", "rex_frontend_function_source_location_contract.cpp");
   if (ast == nullptr) {

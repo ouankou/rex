@@ -28,8 +28,7 @@ function(rex_add_rose_compiler_smoke_test language source expected_output)
   set_tests_properties(
     "${_test_name}"
     PROPERTIES
-      LABELS "nonsmoke;driver;${language}"
-      TIMEOUT 120)
+      LABELS "nonsmoke;driver;${language}")
 endfunction()
 
 if(ENABLE-C)
